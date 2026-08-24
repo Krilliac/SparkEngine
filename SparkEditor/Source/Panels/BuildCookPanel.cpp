@@ -6,12 +6,12 @@
  */
 
 #include "BuildCookPanel.h"
-#include <filesystem>
 #include <iostream>
 
 #include <imgui.h>
 
 #include "BuildPipeline.h"
+#include "../Core/ProjectManager.h"
 #include "../Core/EditorIcons.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 
@@ -192,42 +192,27 @@ namespace SparkEditor
     void BuildCookPanel::RenderPlatformSelector()
     {
         ImGui::Text(ICON_FA_GLOBE " Target Platform");
-        const char* platforms[] = {"Windows x64", "Windows x86", "Linux x64", "macOS x64", "macOS ARM64"};
-        int platformIdx = static_cast<int>(m_settings.platform);
-        ImGui::SetNextItemWidth(-1);
-        if (ImGui::Combo("##Platform", &platformIdx, platforms, 5))
-        {
-            m_settings.platform = static_cast<TargetPlatform>(platformIdx);
-        }
+        m_settings.platform = TargetPlatform::WindowsX64;
+        ImGui::Text("Windows x64");
+        ImGui::TextDisabled("Other targets require a matching native/cross toolchain and runtime host.");
     }
 
     void BuildCookPanel::RenderBuildOptions()
     {
         ImGui::Indent(8.0f);
-
-        ImGui::Text("Included Features:");
-        ImGui::Checkbox("Debug Symbols (.pdb)", &m_settings.includeDebugSymbols);
-        ImGui::Checkbox("Console (SparkConsole)", &m_settings.includeConsole);
-        ImGui::Checkbox("Profiler", &m_settings.includeProfiler);
-        ImGui::Checkbox("Developer Commands", &m_settings.includeDevCommands);
-        ImGui::Checkbox("Log System", &m_settings.includeLogSystem);
-        ImGui::Checkbox("Assertions", &m_settings.enableAsserts);
-        ImGui::Checkbox("Hot Reload", &m_settings.enableHotReload);
-        ImGui::Checkbox("Validation Layers (GPU)", &m_settings.enableValidationLayers);
-
-        ImGui::Separator();
-        ImGui::Text("Optimization:");
-        const char* optLevels[] = {"None (O0)", "Size (Os)", "Speed (O2)", "Full (O3 + LTO)"};
-        ImGui::Combo("Optimization Level", &m_settings.optimizationLevel, optLevels, 4);
+        ImGui::TextWrapped("The selected profile controls module optimization and debug information. "
+                           "Engine features are fixed by the installed SparkEngine SDK/runtime.");
+        ImGui::Checkbox("Package available debug symbols", &m_settings.includeDebugSymbols);
         ImGui::Checkbox("Link-Time Optimization (LTO)", &m_settings.enableLTO);
-        ImGui::Checkbox("Profile-Guided Optimization (PGO)", &m_settings.enablePGO);
-
         ImGui::Unindent(8.0f);
     }
 
     void BuildCookPanel::RenderStrippingOptions()
     {
         ImGui::Indent(8.0f);
+
+        ImGui::TextDisabled("Unavailable: runtime feature stripping is not implemented for standalone modules.");
+        ImGui::BeginDisabled();
 
         ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f),
                            ICON_FA_EXCLAMATION " Stripping removes features from the build.");
@@ -317,6 +302,7 @@ namespace SparkEditor
             ImGui::EndTable();
         }
 
+        ImGui::EndDisabled();
         ImGui::Unindent(8.0f);
     }
 
@@ -324,13 +310,17 @@ namespace SparkEditor
     {
         ImGui::Indent(8.0f);
 
-        ImGui::Checkbox("Cook Assets", &m_settings.cookAssets);
+        ImGui::Checkbox("Include Assets directory", &m_settings.cookAssets);
         if (!m_settings.cookAssets)
         {
-            ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.3f, 1.0f), "Assets will be used as-is (raw format).");
+            ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.3f, 1.0f), "Assets will be omitted from the package.");
             ImGui::Unindent(8.0f);
             return;
         }
+
+        ImGui::TextWrapped("Content packaging currently copies source assets unchanged. Platform texture, audio, "
+                           "mesh, mip, and LOD transforms are not implemented yet.");
+        ImGui::BeginDisabled();
 
         ImGui::Separator();
         ImGui::Text(ICON_FA_IMAGE " Textures:");
@@ -372,6 +362,7 @@ namespace SparkEditor
             ImGui::SliderInt("LOD Levels", &m_settings.lodLevels, 1, 6);
         }
 
+        ImGui::EndDisabled();
         ImGui::Unindent(8.0f);
     }
 
@@ -379,7 +370,7 @@ namespace SparkEditor
     {
         ImGui::Indent(8.0f);
 
-        ImGui::Text("Output:");
+        ImGui::Text("Output directory:");
         char outputDir[512];
         strncpy(outputDir, m_settings.outputDirectory.c_str(), sizeof(outputDir) - 1);
         outputDir[sizeof(outputDir) - 1] = '\0';
@@ -389,6 +380,7 @@ namespace SparkEditor
             m_settings.outputDirectory = outputDir;
         }
 
+        ImGui::Text("Executable name:");
         char exeName[256];
         strncpy(exeName, m_settings.executableName.c_str(), sizeof(exeName) - 1);
         exeName[sizeof(exeName) - 1] = '\0';
@@ -399,27 +391,15 @@ namespace SparkEditor
         }
 
         ImGui::Separator();
+        m_settings.compressPackage = false;
+        m_settings.createInstaller = false;
+        m_settings.signExecutable = false;
+        ImGui::TextDisabled("Unavailable: archives, installers, and code signing are not implemented.");
+        ImGui::BeginDisabled();
         ImGui::Checkbox("Compress Package", &m_settings.compressPackage);
-        if (m_settings.compressPackage)
-        {
-            ImGui::SliderInt("Compression Level", &m_settings.compressionLevel, 1, 9);
-        }
-
         ImGui::Checkbox("Create Installer", &m_settings.createInstaller);
-
-        ImGui::Separator();
         ImGui::Checkbox("Sign Executable", &m_settings.signExecutable);
-        if (m_settings.signExecutable)
-        {
-            char certPath[512];
-            strncpy(certPath, m_settings.signingCertificate.c_str(), sizeof(certPath) - 1);
-            certPath[sizeof(certPath) - 1] = '\0';
-            ImGui::SetNextItemWidth(-1);
-            if (ImGui::InputText("Certificate Path", certPath, sizeof(certPath)))
-            {
-                m_settings.signingCertificate = certPath;
-            }
-        }
+        ImGui::EndDisabled();
 
         ImGui::Unindent(8.0f);
     }
@@ -429,6 +409,19 @@ namespace SparkEditor
         ImGui::Text(ICON_FA_HAMMER " Actions");
         ImGui::Spacing();
 
+        const std::string projectRoot = ProjectManager::GetActiveProjectPath();
+        const bool hasOpenProject = !projectRoot.empty();
+        if (!hasOpenProject)
+        {
+            ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f),
+                               ICON_FA_EXCLAMATION " Open a project before building or cooking.");
+            ImGui::Spacing();
+        }
+        else
+        {
+            ImGui::TextDisabled("Project: %s", projectRoot.c_str());
+        }
+
         float halfWidth = (ImGui::GetContentRegionAvail().x - 4.0f) / 2.0f;
         ImVec2 btnSize(halfWidth, 36.0f);
 
@@ -436,7 +429,7 @@ namespace SparkEditor
         ImVec4 buildColor(0.2f, 0.55f, 0.2f, 1.0f);
         ImGui::PushStyleColor(ImGuiCol_Button, buildColor);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.65f, 0.3f, 1.0f));
-        bool canBuild = !m_isBuildRunning;
+        bool canBuild = !m_isBuildRunning && hasOpenProject;
         if (!canBuild)
             ImGui::BeginDisabled();
         if (ImGui::Button(ICON_FA_HAMMER " Build", btnSize))
@@ -447,7 +440,6 @@ namespace SparkEditor
                                       GetPlatformName(m_settings.platform) + "...",
                                   "info"});
             // Launch async build via BuildPipeline
-            std::string projectRoot = std::filesystem::current_path().string();
             if (m_pipeline->StartBuild(m_settings, projectRoot))
             {
                 m_isBuildRunning = true;
@@ -473,7 +465,6 @@ namespace SparkEditor
             m_buildLog.clear();
             m_buildLog.push_back(
                 {"Cooking assets for " + std::string(GetPlatformName(m_settings.platform)) + "...", "info"});
-            std::string projectRoot = std::filesystem::current_path().string();
             if (m_pipeline->StartCookOnly(m_settings, projectRoot))
             {
                 m_isBuildRunning = true;

@@ -430,6 +430,7 @@ add_executable(SparkTests
     TestGameModeReal.cpp
     # Editor, gameplay, LOD, AI debug
     TestEditorCommands.cpp
+    TestEditorDocumentTransition.cpp
     TestEditorWindowManager.cpp
     TestGameplayExtensionRegistry.cpp
     TestLODGenerator.cpp
@@ -437,6 +438,7 @@ add_executable(SparkTests
     TestAssertSuppression.cpp
     TestCrossSystemIntegration.cpp
     TestUndoRedoManager.cpp
+    TestUndoRedoManagerProduction.cpp
     TestPrefabManager.cpp
     TestEditorLayoutManager.cpp
     TestGizmoMath.cpp
@@ -562,7 +564,10 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLayoutManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorWindowManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectManager.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/BuildPipeline.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/BuildPipelineProcess.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPluginManager.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/UndoRedo/UndoRedoManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneFile.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneSerializer.cpp"
@@ -846,6 +851,7 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/AssetPipeline/AssetProcessors.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPanel.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorTheme.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/AssetBrowserPanel.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Search/CommandPalette.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/LevelStreaming/LevelStreamingSystem.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlSystem.cpp"

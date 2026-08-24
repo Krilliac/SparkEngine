@@ -652,7 +652,7 @@ class GraphicsEngine
     void Console_SetRenderPath(const std::string& path);
     void Console_EnableFeature(const std::string& feature, bool enabled);
     void Console_SetSetting(const std::string& setting, float value);
-    void Console_ReloadShaders();
+    bool Console_ReloadShaders();
     bool Console_Screenshot(const std::string& filename);
     std::string Console_GetSystemInfo() const;
     std::string Console_Benchmark(int seconds = 10);

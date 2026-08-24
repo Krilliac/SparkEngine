@@ -14,6 +14,15 @@
 #include <vector>
 #include <deque>
 
+#ifdef _WIN32
+#include <d3d11.h>
+#include <wrl/client.h>
+#include "Graphics/WorldBasicRenderer.h"
+#endif
+
+class GraphicsEngine;
+class World;
+
 namespace SparkEditor
 {
 
@@ -29,6 +38,18 @@ namespace SparkEditor
         void Render() override;
         void Shutdown() override;
         bool HandleEvent(const std::string& eventType, void* eventData) override;
+
+#ifdef _WIN32
+        void SetDevice(ID3D11Device* device, ID3D11DeviceContext* context);
+        void SetGraphics(GraphicsEngine* graphics) { m_graphics = graphics; }
+#endif
+        void SetWorld(World* world);
+        void SetPlaying(bool playing)
+        {
+            m_isPlaying = playing;
+            if (!playing)
+                m_isCursorCaptured = false;
+        }
 
         /** @brief Check if the game view is capturing input (cursor locked) */
         bool IsCursorCaptured() const { return m_isCursorCaptured; }
@@ -51,6 +72,10 @@ namespace SparkEditor
         void RenderScoreboard(float cx, float cy, float width, float height);
         void RenderLowHealthVignette(float x, float y, float w, float h);
         void RenderInteractionPrompt(float cx, float cy);
+#ifdef _WIN32
+        void CreateRenderTexture(int width, int height);
+        bool RenderWorldToTexture(int width, int height);
+#endif
 
         // Resolution presets
         enum class Resolution
@@ -150,6 +175,7 @@ namespace SparkEditor
 
         // Input state
         bool m_isCursorCaptured = false;
+        bool m_isPlaying = false;
         float m_cameraYaw = 0.0f;
         float m_cameraPitch = 0.0f;
         float m_cameraPosX = 128.5f;
@@ -158,6 +184,21 @@ namespace SparkEditor
         float m_moveSpeed = 5.0f;
         float m_mouseSensitivity = 0.003f;
         float m_lastDeltaTime = 0.016f;
+
+        World* m_world = nullptr; ///< Non-owning live editor document.
+#ifdef _WIN32
+        Microsoft::WRL::ComPtr<ID3D11Device> m_device;
+        Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_context;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> m_renderTarget;
+        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_rtv;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_srv;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> m_depthTexture;
+        Microsoft::WRL::ComPtr<ID3D11DepthStencilView> m_dsv;
+        GraphicsEngine* m_graphics = nullptr; ///< Non-owning editor renderer.
+        Spark::WorldMeshCache m_meshCache;
+        int m_renderTextureWidth = 0;
+        int m_renderTextureHeight = 0;
+#endif
     };
 
 } // namespace SparkEditor

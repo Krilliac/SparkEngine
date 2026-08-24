@@ -34,7 +34,9 @@ namespace SparkEditor
         }
 
         // Try to merge with the last command (e.g., continuous transform drags)
-        if (!m_undoStack.empty() && m_undoStack.back()->MergeWith(command.get()))
+        const bool atTransientBarrier =
+            m_transientSessionActive && m_undoStack.size() == m_transientUndoCheckpoint;
+        if (!atTransientBarrier && !m_undoStack.empty() && m_undoStack.back()->MergeWith(command.get()))
         {
             ++m_editSequence;
             NotifyStackChanged();
@@ -55,7 +57,9 @@ namespace SparkEditor
         m_redoStack.clear();
 
         // Trim if over capacity
-        TrimUndoStack();
+        // Trimming from the front would invalidate the play-mode checkpoint.
+        if (!m_transientSessionActive)
+            TrimUndoStack();
 
         NotifyStackChanged();
     }
@@ -64,7 +68,7 @@ namespace SparkEditor
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         SPARK_WARN_IF(Spark::LogCategory::Editor, m_undoStack.empty(), "Undo called on empty undo stack");
-        if (!CanUndo())
+        if (!CanUndo() || (m_transientSessionActive && m_undoStack.size() <= m_transientUndoCheckpoint))
         {
             return false;
         }
@@ -176,6 +180,49 @@ namespace SparkEditor
         // clearing the history does not revert document edits, so the
         // unsaved-changes state must survive a history clear.
         NotifyStackChanged();
+    }
+
+    bool UndoRedoManager::BeginTransientSession()
+    {
+        if (m_transientSessionActive)
+            return false;
+
+        m_transientSessionActive = true;
+        m_transientUndoCheckpoint = m_undoStack.size();
+        m_transientEditSequence = m_editSequence;
+        m_transientSavedSequence = m_savedSequence;
+        m_transientSavedRedoStack = std::move(m_redoStack);
+        NotifyStackChanged();
+        return true;
+    }
+
+    bool UndoRedoManager::RollbackTransientSession()
+    {
+        if (!m_transientSessionActive)
+            return false;
+
+        if (m_undoStack.size() > m_transientUndoCheckpoint)
+            m_undoStack.erase(m_undoStack.begin() + static_cast<std::ptrdiff_t>(m_transientUndoCheckpoint),
+                              m_undoStack.end());
+        m_redoStack = std::move(m_transientSavedRedoStack);
+        m_editSequence = m_transientEditSequence;
+        m_savedSequence = m_transientSavedSequence;
+        m_transientSessionActive = false;
+        TrimUndoStack();
+        NotifyStackChanged();
+        return true;
+    }
+
+    bool UndoRedoManager::CommitTransientSession()
+    {
+        if (!m_transientSessionActive)
+            return false;
+
+        m_transientSavedRedoStack.clear();
+        m_transientSessionActive = false;
+        TrimUndoStack();
+        NotifyStackChanged();
+        return true;
     }
 
     void UndoRedoManager::MarkSaved()

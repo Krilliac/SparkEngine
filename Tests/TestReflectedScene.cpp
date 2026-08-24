@@ -128,3 +128,125 @@ TEST(ReflectedScene_RoundTrip_EnumAndMaskFieldsSurvive)
     }
     EXPECT_TRUE(found);
 }
+
+TEST(ReflectedScene_LoadsLegacyProjectManagerSceneSchema)
+{
+    const std::string legacy = R"json({
+      "sceneVersion": 1,
+      "entities": [
+        {"id": 1, "name": "Directional Light", "components": [
+          {"type": "Transform", "position": [0, 10, 0], "rotation": [50, -30, 0], "scale": [1, 1, 1]},
+          {"type": "DirectionalLight", "color": [1, 0.95, 0.8], "intensity": 1.2}
+        ]},
+        {"id": 2, "name": "Main Camera", "components": [
+          {"type": "Transform", "position": [0, 2, -5], "rotation": [10, 0, 0], "scale": [1, 1, 1]},
+          {"type": "Camera", "fov": 70, "nearClip": 0.2, "farClip": 500}
+        ]},
+        {"id": 3, "name": "Player", "components": [
+          {"type": "CharacterController", "height": 1.9, "radius": 0.4}
+        ]}
+      ]
+    })json";
+
+    World world;
+    EXPECT_TRUE(Spark::DeserializeInto(world, legacy));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(3));
+    const auto lights = world.GetEntitiesWith<LightComponent>();
+    size_t lightCount = 0;
+    for ([[maybe_unused]] auto entity : lights)
+        ++lightCount;
+    EXPECT_EQ(lightCount, static_cast<size_t>(1));
+    EXPECT_EQ(static_cast<int>(lights.get<LightComponent>(*lights.begin()).type),
+              static_cast<int>(LightComponent::Type::Directional));
+    const auto cameras = world.GetEntitiesWith<Camera>();
+    size_t cameraCount = 0;
+    for ([[maybe_unused]] auto entity : cameras)
+        ++cameraCount;
+    EXPECT_EQ(cameraCount, static_cast<size_t>(1));
+    EXPECT_TRUE(cameras.get<Camera>(*cameras.begin()).isMainCamera);
+    EXPECT_NEAR(cameras.get<Camera>(*cameras.begin()).nearPlane, 0.2f, 0.001f);
+    size_t controllerCount = 0;
+    for ([[maybe_unused]] auto entity : world.GetEntitiesWith<CharacterControllerComponent>())
+        ++controllerCount;
+    EXPECT_EQ(controllerCount, static_cast<size_t>(1));
+}
+
+TEST(ReflectedScene_MixedExplicitAndImplicitIdsRemainDistinct)
+{
+    const std::string mixed = R"json({
+      "version": 1,
+      "entities": [
+        {"name": "Implicit", "parent": 7, "components": []},
+        {"id": 0, "name": "Explicit Zero", "parent": -1, "components": []},
+        {"id": 7, "name": "Parent", "parent": -1,
+         "components": [{"type": "Transform", "fields": {}}]}
+      ]
+    })json";
+
+    World world;
+    EXPECT_TRUE(Spark::DeserializeInto(world, mixed));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(3));
+
+    entt::entity implicit = entt::null;
+    entt::entity explicitZero = entt::null;
+    entt::entity parent = entt::null;
+    for (auto entity : world.GetEntitiesWith<NameComponent>())
+    {
+        const auto& name = *world.GetComponent<NameComponent>(entity);
+        if (name.name == "Implicit")
+            implicit = entity;
+        else if (name.name == "Explicit Zero")
+            explicitZero = entity;
+        else if (name.name == "Parent")
+            parent = entity;
+    }
+
+    EXPECT_TRUE(implicit != entt::null);
+    EXPECT_TRUE(explicitZero != entt::null);
+    EXPECT_TRUE(parent != entt::null);
+    EXPECT_TRUE(implicit != explicitZero);
+    EXPECT_EQ(static_cast<uint32_t>(explicitZero), 0u);
+    EXPECT_EQ(static_cast<uint32_t>(parent), 7u);
+    const Transform* implicitTransform = world.GetComponent<Transform>(implicit);
+    EXPECT_TRUE(implicitTransform != nullptr);
+    EXPECT_TRUE(implicitTransform->parent == parent);
+}
+
+TEST(ReflectedScene_RejectsDuplicateExplicitIdsWithoutMutation)
+{
+    const std::string duplicate = R"json({
+      "version": 1,
+      "entities": [
+        {"id": 3, "name": "First", "components": []},
+        {"id": 3, "name": "Second", "components": []}
+      ]
+    })json";
+
+    World world;
+    EXPECT_FALSE(Spark::DeserializeInto(world, duplicate));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(0));
+}
+
+TEST(World_DestroyEntityRepairsHierarchyLinks)
+{
+    World world;
+    const auto parent = world.CreateEntity("Parent");
+    const auto child = world.CreateEntity("Child");
+    const auto sibling = world.CreateEntity("Sibling");
+    auto& parentTransform = world.AddComponent<Transform>(parent);
+    auto& childTransform = world.AddComponent<Transform>(child);
+    auto& siblingTransform = world.AddComponent<Transform>(sibling);
+    parentTransform.children = {child, sibling};
+    childTransform.parent = parent;
+    siblingTransform.parent = parent;
+
+    world.DestroyEntity(child);
+    EXPECT_TRUE(world.GetRegistry().valid(parent));
+    EXPECT_TRUE(world.GetRegistry().valid(sibling));
+    const Transform* repairedParent = world.GetComponent<Transform>(parent);
+    EXPECT_EQ(repairedParent->children.size(), static_cast<size_t>(1));
+    EXPECT_TRUE(repairedParent->children.front() == sibling);
+
+    world.DestroyEntity(parent);
+    EXPECT_TRUE(world.GetComponent<Transform>(sibling)->parent == entt::null);
+}

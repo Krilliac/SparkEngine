@@ -156,15 +156,7 @@ static void LoadAndInitModules(LPWSTR lpCmdLine)
 
         auto* primary = GetEngineRuntime().moduleManager->GetPrimaryModule();
         if (primary)
-        {
-            auto info = primary->GetModuleInfo();
-            std::wstring title = L"Spark Engine - ";
-            std::string modName(info.name);
-            title.append(modName.begin(), modName.end());
-            HWND hWnd = FindWindowW(g_szClass, g_szTitle);
-            if (hWnd)
-                SetWindowTextW(hWnd, title.c_str());
-        }
+            ApplyRuntimeWindowCaption();
 
         console.LogSuccess("Loaded " + std::to_string(GetEngineRuntime().moduleManager->GetModuleCount()) +
                            " module(s)");
@@ -240,7 +232,7 @@ void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     if (GetEngineRuntime().graphics)
     {
         auto* gfx = GetEngineRuntime().graphics.get();
-        HWND hWnd = FindWindowW(g_szClass, nullptr);
+        HWND hWnd = g_mainWindow;
         if (Spark::GameImGui::Init(hWnd, gfx->GetDevice(), gfx->GetContext()))
         {
             void *imguiCtx = nullptr, *allocFn = nullptr, *freeFn = nullptr, *userData = nullptr;

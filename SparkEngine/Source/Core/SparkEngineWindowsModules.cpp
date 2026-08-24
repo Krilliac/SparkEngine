@@ -189,14 +189,7 @@ void ConsumeProjectSelectorChoice()
     rt.moduleManager->InitializeAll(EngineContext::Get());
 
     if (auto* primary = rt.moduleManager->GetPrimaryModule())
-    {
-        auto info = primary->GetModuleInfo();
-        std::wstring title = L"Spark Engine - ";
-        std::string modName(info.name);
-        title.append(modName.begin(), modName.end());
-        if (HWND hWnd = FindWindowW(g_szClass, nullptr))
-            SetWindowTextW(hWnd, title.c_str());
-    }
+        ApplyRuntimeWindowCaption();
 
     if (rt.moduleHotReload)
         rt.moduleHotReload->WatchAllLoadedModules();

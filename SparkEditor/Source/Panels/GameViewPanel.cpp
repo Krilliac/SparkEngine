@@ -10,6 +10,7 @@
 #include "../Core/EditorFonts.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include "Utils/LogMacros.h"
+#include "Engine/ECS/Components.h"
 #include <imgui.h>
 #include <iostream>
 #include <cmath>
@@ -208,11 +209,161 @@ namespace SparkEditor
     void GameViewPanel::Shutdown()
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Game View panel");
+#ifdef _WIN32
+        m_dsv.Reset();
+        m_depthTexture.Reset();
+        m_srv.Reset();
+        m_rtv.Reset();
+        m_renderTarget.Reset();
+        m_context.Reset();
+        m_device.Reset();
+#endif
     }
+
+#ifdef _WIN32
+    void GameViewPanel::SetDevice(ID3D11Device* device, ID3D11DeviceContext* context)
+    {
+        m_device = device;
+        m_context = context;
+        CreateRenderTexture(640, 360);
+    }
+
+    void GameViewPanel::CreateRenderTexture(int width, int height)
+    {
+        if (!m_device || width <= 0 || height <= 0 ||
+            (width == m_renderTextureWidth && height == m_renderTextureHeight && m_srv))
+            return;
+
+        m_dsv.Reset();
+        m_depthTexture.Reset();
+        m_srv.Reset();
+        m_rtv.Reset();
+        m_renderTarget.Reset();
+
+        D3D11_TEXTURE2D_DESC colorDesc{};
+        colorDesc.Width = static_cast<UINT>(width);
+        colorDesc.Height = static_cast<UINT>(height);
+        colorDesc.MipLevels = 1;
+        colorDesc.ArraySize = 1;
+        colorDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        colorDesc.SampleDesc.Count = 1;
+        colorDesc.Usage = D3D11_USAGE_DEFAULT;
+        colorDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+        if (FAILED(m_device->CreateTexture2D(&colorDesc, nullptr, &m_renderTarget)) ||
+            FAILED(m_device->CreateRenderTargetView(m_renderTarget.Get(), nullptr, &m_rtv)) ||
+            FAILED(m_device->CreateShaderResourceView(m_renderTarget.Get(), nullptr, &m_srv)))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "GameViewPanel: failed to create color render target");
+            return;
+        }
+
+        D3D11_TEXTURE2D_DESC depthDesc{};
+        depthDesc.Width = static_cast<UINT>(width);
+        depthDesc.Height = static_cast<UINT>(height);
+        depthDesc.MipLevels = 1;
+        depthDesc.ArraySize = 1;
+        depthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        depthDesc.SampleDesc.Count = 1;
+        depthDesc.Usage = D3D11_USAGE_DEFAULT;
+        depthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+        if (FAILED(m_device->CreateTexture2D(&depthDesc, nullptr, &m_depthTexture)) ||
+            FAILED(m_device->CreateDepthStencilView(m_depthTexture.Get(), nullptr, &m_dsv)))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "GameViewPanel: failed to create depth target");
+            return;
+        }
+
+        m_renderTextureWidth = width;
+        m_renderTextureHeight = height;
+    }
+
+    bool GameViewPanel::RenderWorldToTexture(int width, int height)
+    {
+        CreateRenderTexture(width, height);
+        if (!m_context || !m_graphics || !m_world || !m_rtv || !m_dsv)
+            return false;
+
+        auto cameras = m_world->GetRegistry().view<::Transform, ::Camera>();
+        EntityID cameraEntity = entt::null;
+        for (EntityID entity : cameras)
+        {
+            if (cameraEntity == entt::null)
+                cameraEntity = entity;
+            if (cameras.get<::Camera>(entity).isMainCamera)
+            {
+                cameraEntity = entity;
+                break;
+            }
+        }
+        if (cameraEntity == entt::null)
+            return false;
+
+        const auto& transform = cameras.get<::Transform>(cameraEntity);
+        const auto& camera = cameras.get<::Camera>(cameraEntity);
+        using namespace DirectX;
+        const XMMATRIX rotation = XMMatrixRotationRollPitchYaw(
+            XMConvertToRadians(transform.rotation.x), XMConvertToRadians(transform.rotation.y),
+            XMConvertToRadians(transform.rotation.z));
+        const XMVECTOR eye = XMLoadFloat3(&transform.position);
+        const XMVECTOR forward = XMVector3TransformNormal(XMVectorSet(0, 0, 1, 0), rotation);
+        const XMVECTOR up = XMVector3TransformNormal(XMVectorSet(0, 1, 0, 0), rotation);
+        const XMMATRIX view = XMMatrixLookAtLH(eye, XMVectorAdd(eye, forward), up);
+        const float aspect = static_cast<float>(width) / static_cast<float>(height);
+        const XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(camera.fov), aspect, camera.nearPlane,
+                                                       camera.farPlane);
+
+        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> previousRTV;
+        Microsoft::WRL::ComPtr<ID3D11DepthStencilView> previousDSV;
+        m_context->OMGetRenderTargets(1, previousRTV.GetAddressOf(), previousDSV.GetAddressOf());
+        UINT previousViewportCount = 1;
+        D3D11_VIEWPORT previousViewport{};
+        m_context->RSGetViewports(&previousViewportCount, &previousViewport);
+
+        ID3D11RenderTargetView* target = m_rtv.Get();
+        m_context->OMSetRenderTargets(1, &target, m_dsv.Get());
+        const float clear[4] = {0.08f, 0.1f, 0.15f, 1.0f};
+        m_context->ClearRenderTargetView(m_rtv.Get(), clear);
+        m_context->ClearDepthStencilView(m_dsv.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+        D3D11_VIEWPORT viewport{};
+        viewport.Width = static_cast<float>(width);
+        viewport.Height = static_cast<float>(height);
+        viewport.MinDepth = 0.0f;
+        viewport.MaxDepth = 1.0f;
+        m_context->RSSetViewports(1, &viewport);
+        Spark::RenderWorldBasic(*m_world, *m_graphics, m_meshCache, view, proj);
+
+        m_context->OMSetRenderTargets(1, previousRTV.GetAddressOf(), previousDSV.Get());
+        if (previousViewportCount)
+            m_context->RSSetViewports(1, &previousViewport);
+        return true;
+    }
+#endif
 
     bool GameViewPanel::HandleEvent(const std::string& eventType, void* eventData)
     {
         return false;
+    }
+
+    void GameViewPanel::SetWorld(World* world)
+    {
+        m_world = world;
+        if (!m_world)
+            return;
+        auto cameras = m_world->GetRegistry().view<::Transform, ::Camera>();
+        for (EntityID entity : cameras)
+        {
+            const auto& camera = cameras.get<::Camera>(entity);
+            if (!camera.isMainCamera && cameras.size_hint() > 1)
+                continue;
+            const auto& transform = cameras.get<::Transform>(entity);
+            m_cameraPosX = transform.position.x;
+            m_cameraPosY = transform.position.y;
+            m_cameraPosZ = transform.position.z;
+            m_cameraPitch = DirectX::XMConvertToRadians(transform.rotation.x);
+            m_cameraYaw = DirectX::XMConvertToRadians(transform.rotation.y);
+            break;
+        }
     }
 
     void GameViewPanel::RenderToolbar()
@@ -345,7 +496,7 @@ namespace SparkEditor
         bool isWindowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
 
         // Click inside the game view to capture cursor
-        if (isWindowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !m_isCursorCaptured)
+        if (m_isPlaying && isWindowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !m_isCursorCaptured)
         {
             // Only capture if the click is below the toolbar area (not on toolbar widgets)
             if (!io.WantCaptureMouse || isWindowFocused)
@@ -442,6 +593,22 @@ namespace SparkEditor
         m_cameraPosY += dy;
         m_cameraPosZ += dz;
 
+        if (m_world)
+        {
+            auto cameras = m_world->GetRegistry().view<::Transform, ::Camera>();
+            for (EntityID entity : cameras)
+            {
+                const auto& camera = cameras.get<::Camera>(entity);
+                if (!camera.isMainCamera && cameras.size_hint() > 1)
+                    continue;
+                auto& transform = cameras.get<::Transform>(entity);
+                transform.position = {m_cameraPosX, m_cameraPosY, m_cameraPosZ};
+                transform.rotation.x = DirectX::XMConvertToDegrees(m_cameraPitch);
+                transform.rotation.y = DirectX::XMConvertToDegrees(m_cameraYaw);
+                break;
+            }
+        }
+
         // Simulate reload on R key
         if (ImGui::IsKeyPressed(ImGuiKey_R) && !m_isReloading && m_ammo < m_maxAmmo)
         {
@@ -515,8 +682,22 @@ namespace SparkEditor
                                     IM_COL32(0, 0, 0, 255));
         }
 
-        // Dark game viewport background
-        drawList->AddRectFilled(pos, ImVec2(pos.x + viewportSize.x, pos.y + viewportSize.y), IM_COL32(20, 22, 28, 255));
+        bool renderedWorld = false;
+#ifdef _WIN32
+        renderedWorld = RenderWorldToTexture(std::max(1, static_cast<int>(viewportSize.x)),
+                                             std::max(1, static_cast<int>(viewportSize.y)));
+        if (renderedWorld && m_srv)
+        {
+            ImGui::SetCursorScreenPos(pos);
+            ImGui::Image(reinterpret_cast<ImTextureID>(m_srv.Get()), viewportSize);
+        }
+#endif
+
+        // Keep a useful preview when a scene has no main camera or graphics is unavailable.
+        if (!renderedWorld)
+        {
+            drawList->AddRectFilled(pos, ImVec2(pos.x + viewportSize.x, pos.y + viewportSize.y),
+                                    IM_COL32(20, 22, 28, 255));
 
         // Simulated sky gradient
         float horizonY = viewportSize.y * 0.55f;
@@ -562,11 +743,13 @@ namespace SparkEditor
             float sh = 15.0f + (float)((i * 23) % 30);
             drawList->AddRectFilled(ImVec2(sx, structY - sh), ImVec2(sx + sw, structY), IM_COL32(40, 45, 50, 150));
         }
+        }
 
         // "Game View" center text (subtle) — show capture hint when not captured
         if (!m_isCursorCaptured)
         {
-            const char* label = ICON_FA_GAMEPAD " Click to enter Game View";
+            const char* label = m_isPlaying ? ICON_FA_GAMEPAD " Click to enter Game View"
+                                            : ICON_FA_PLAY " Press F5 to play";
             ImVec2 textSize = ImGui::CalcTextSize(label);
             ImVec2 textPos(pos.x + (viewportSize.x - textSize.x) * 0.5f, pos.y + viewportSize.y * 0.45f);
             drawList->AddText(textPos, IM_COL32(80, 100, 120, 140), label);

@@ -54,6 +54,7 @@ extern void SetupCrashHandler();
 constexpr int MAX_LOADSTRING = 100;
 extern WCHAR g_szTitle[MAX_LOADSTRING];
 extern WCHAR g_szClass[MAX_LOADSTRING];
+extern HWND g_mainWindow;
 extern std::unique_ptr<Spark::LocalFileCache> g_fileCache;
 extern std::unique_ptr<Spark::WeatherSystem> g_weatherSystem;
 extern std::unique_ptr<Spark::UI::UISystem> g_uiSystem;
@@ -61,6 +62,9 @@ extern std::unique_ptr<Spark::DialogueSystem> g_dialogueSystem;
 extern std::unique_ptr<Spark::ModSystem> g_modSystem;
 extern std::string g_scenePath;   ///< -scene <path>: reflected-scene JSON rendered when no game module loads
 extern double g_testSecondsLimit; ///< -test-seconds N: exit after N wall seconds
+
+/// @brief Reapply the authoritative engine/project caption to the main window.
+void ApplyRuntimeWindowCaption();
 
 /// Bare-launch project selector candidates (defined in SparkEngineWindowsModules.cpp).
 extern std::vector<std::string> g_projectSelectorCandidates;

@@ -445,13 +445,8 @@ namespace SparkEditor
 
         if (ImGui::Button(ICON_FA_PLUS " Create Entity"))
         {
-            ::EntityID e = m_world->CreateEntity("Entity");
-            m_world->AddComponent<::Transform>(e);
             if (m_selectionSink)
-            {
-                m_selectionSink->SetSelectedEntity(e);
-            }
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Created ECS entity %u", static_cast<uint32_t>(e));
+                m_selectionSink->CreateDocumentEntity("Empty");
         }
 
         ImGui::SameLine();
@@ -463,12 +458,8 @@ namespace SparkEditor
             ImGui::BeginDisabled();
         if (ImGui::Button(ICON_FA_TRASH " Delete"))
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Destroying ECS entity %u", static_cast<uint32_t>(selected));
-            m_world->DestroyEntity(selected);
             if (m_selectionSink)
-            {
-                m_selectionSink->SetSelectedEntity(entt::null);
-            }
+                m_selectionSink->DeleteSelectedDocumentEntity();
         }
         if (!hasValidSelection)
             ImGui::EndDisabled();

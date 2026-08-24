@@ -44,6 +44,62 @@ struct ID3D11DeviceContext;
 namespace SparkEditor
 {
 
+    /// Destructive document operation waiting for unsaved-change confirmation.
+    enum class DocumentTransitionAction
+    {
+        None,
+        NewScene,
+        OpenSceneDialog,
+        Exit
+    };
+
+    enum class UnsavedChangesDecision
+    {
+        Save,
+        Discard,
+        Cancel
+    };
+
+    /// Small, UI-independent state machine used by every destructive document
+    /// transition. Keeping the decision logic separate makes it possible to
+    /// prove that Cancel and failed saves never release the pending action.
+    class DocumentTransitionGuard
+    {
+      public:
+        bool Request(DocumentTransitionAction action, bool documentDirty)
+        {
+            if (action == DocumentTransitionAction::None || m_pending != DocumentTransitionAction::None)
+                return false;
+            if (!documentDirty)
+                return true;
+            m_pending = action;
+            return false;
+        }
+
+        DocumentTransitionAction Resolve(UnsavedChangesDecision decision, bool saveSucceeded = true)
+        {
+            if (m_pending == DocumentTransitionAction::None)
+                return DocumentTransitionAction::None;
+            if (decision == UnsavedChangesDecision::Cancel)
+            {
+                m_pending = DocumentTransitionAction::None;
+                return DocumentTransitionAction::None;
+            }
+            if (decision == UnsavedChangesDecision::Save && !saveSucceeded)
+                return DocumentTransitionAction::None;
+
+            const DocumentTransitionAction ready = m_pending;
+            m_pending = DocumentTransitionAction::None;
+            return ready;
+        }
+
+        bool HasPending() const { return m_pending != DocumentTransitionAction::None; }
+        DocumentTransitionAction GetPending() const { return m_pending; }
+
+      private:
+        DocumentTransitionAction m_pending = DocumentTransitionAction::None;
+    };
+
     // Forward declarations
     class EditorPanel;
     class EditorPluginManager;
@@ -124,6 +180,17 @@ namespace SparkEditor
         void ShowOpenProjectDialog();
         void ShowProjectBrowser();
 
+        /// Document operations shared by menus, shortcuts, command palette,
+        /// and World-backed panels. These are the only scene model the editor
+        /// renders and serializes.
+        void NewScene();
+        void ShowOpenSceneDialog();
+        bool SaveScene();
+        bool CreateDocumentEntity(const std::string& name);
+        bool DeleteSelectedDocumentEntity();
+        std::string CaptureDocumentSnapshot() const;
+        bool RecordAppliedDocumentMutation(const std::string& before, const std::string& description);
+
         // Simple layout operations
         bool SaveLayout(const std::string& layoutName, const std::string& description = "");
         bool LoadLayout(const std::string& layoutName);
@@ -158,6 +225,11 @@ namespace SparkEditor
 
         // Exit request (set by File > Exit)
         bool IsExitRequested() const { return m_exitRequested; }
+        /// Request application shutdown through the same unsaved-document gate
+        /// used by New/Open. Returns true only when shutdown may proceed now.
+        bool RequestExitWithConfirmation();
+        /// Cancel a confirmed exit when final project persistence fails.
+        void ClearExitRequest() { m_exitRequested = false; }
 
 #ifdef _WIN32
         // Pass graphics device to panels that need it (SceneView)
@@ -228,6 +300,11 @@ namespace SparkEditor
         bool m_showDemoWindow = false;
         bool m_firstFrame = true;
         bool m_showWelcomeScreen = true;
+        // Dear ImGui docking settings must be loaded before any window is
+        // begun for the frame.  Menu actions run while the dockspace window
+        // is already active, so LoadLayout queues the ini file here and
+        // Render consumes it at the start of the following frame.
+        std::string m_pendingLayoutIniPath;
         uint64_t m_frameNumber = 0;
 
         // Statistics tracking
@@ -309,6 +386,7 @@ namespace SparkEditor
         // nothing is selected. Published by HierarchyPanel, consumed by
         // InspectorPanel (C3).
         ::EntityID m_selectedEntity = entt::null;
+        ::EntityID m_selectedEntityBeforePlay = entt::null;
 
 #ifdef _WIN32
         // GraphicsEngine attached to the editor's own D3D11 device (via
@@ -330,6 +408,8 @@ namespace SparkEditor
         std::string m_currentScenePath;
         std::string m_currentSceneName = "Untitled";
         bool m_sceneModified = false;
+        bool m_sceneModifiedBeforePlay = false;
+        DocumentTransitionGuard m_documentTransitionGuard;
 
         // Helper methods
         /// @brief Atomically replace the edited document World. Clears the
@@ -339,6 +419,11 @@ namespace SparkEditor
         /// RewirePanelsToWorld(). Both OpenScene() and the initial world
         /// creation in SetGraphicsDevice() route through it.
         void SwapWorld(std::unique_ptr<::World> newWorld);
+        bool RequestDocumentTransition(DocumentTransitionAction action);
+        void ExecuteDocumentTransition(DocumentTransitionAction action);
+        void NewSceneNow();
+        void ShowOpenSceneDialogNow();
+        void RenderUnsavedChangesDialog();
 
         /// @brief Re-point the panels that cache a raw ::World* (SceneView,
         /// Hierarchy) at the current m_world and clear selection. Must be
@@ -347,6 +432,7 @@ namespace SparkEditor
         /// the caching panels never dangle a pointer to a freed World.
         /// InspectorPanel needs no re-wire — it reads GetWorld() live.
         void RewirePanelsToWorld();
+        bool RestoreWorldSnapshot(const std::string& json, ::EntityID selection);
         void RenderMainMenuBar();
         void RenderFileMenu();
         void RenderFileSceneItems();

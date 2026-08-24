@@ -7,13 +7,11 @@
 
 #include "EditorFonts.h"
 #include "EditorIcons.h"
+#include "../Utils/EditorProcessLaunch.h"
 #include "Utils/Validate.h"
 #include <iostream>
 #include <filesystem>
-#ifdef __linux__
-#include <unistd.h>
-#include <limits.h>
-#endif
+#include <vector>
 
 #ifdef IMGUI_ENABLE_FREETYPE
 #include "misc/freetype/imgui_freetype.h"
@@ -39,29 +37,20 @@ namespace SparkEditor
         SPARK_WARN_IF(Spark::LogCategory::Editor, baseFontSize <= 0.0f, "Font size is non-positive");
         ImGuiIO& io = ImGui::GetIO();
 
-        // Build an exe-relative font path so fonts are found regardless of CWD.
-        std::string exeFontsPath;
-#ifdef __linux__
-        {
-            char exeBuf[PATH_MAX] = {};
-            if (readlink("/proc/self/exe", exeBuf, PATH_MAX - 1) > 0)
-            {
-                namespace fs = std::filesystem;
-                exeFontsPath = (fs::path(exeBuf).parent_path() / "EditorAssets/Fonts/").string();
-            }
-        }
-#endif
-
-        const char* fontPaths[] = {
-            exeFontsPath.c_str(), // next to binary (works regardless of CWD)
-            "EditorAssets/Fonts/", "Fonts/", "../SparkEditor/Fonts/", "../Fonts/",
+        // Always prefer assets next to SparkEditor.exe. The previous Windows
+        // path left this empty and depended on the process CWD, so launching
+        // the editor from Explorer/Codex/etc. silently dropped FontAwesome.
+        namespace fs = std::filesystem;
+        const std::vector<fs::path> fontPaths = {
+            fs::path(GetEditorExecutableDirectory()) / "EditorAssets" / "Fonts",
+            fs::path("EditorAssets") / "Fonts", fs::path("Fonts"), fs::path("../SparkEditor/Fonts"),
+            fs::path("../Fonts"),
         };
 
-        std::string fontDir;
-        for (const char* path : fontPaths)
+        fs::path fontDir;
+        for (const fs::path& path : fontPaths)
         {
-            if (std::filesystem::exists(std::string(path) + "Roboto-Regular.ttf") ||
-                std::filesystem::exists(std::string(path) + "IBMPlexSans-Regular.ttf"))
+            if (fs::exists(path / "Roboto-Regular.ttf") || fs::exists(path / "IBMPlexSans-Regular.ttf"))
             {
                 fontDir = path;
                 break;
@@ -75,22 +64,22 @@ namespace SparkEditor
             return;
         }
 
-        std::cout << "[EditorFonts] Loading fonts from: " << fontDir << "\n";
+        std::cout << "[EditorFonts] Loading fonts from: " << fontDir.string() << "\n";
 
         // Prefer IBM Plex Sans (matches SparkEditor hi-fi design); fall back to Roboto.
-        std::string regularPath = fontDir + "IBMPlexSans-Regular.ttf";
+        std::string regularPath = (fontDir / "IBMPlexSans-Regular.ttf").string();
         if (!std::filesystem::exists(regularPath))
-            regularPath = fontDir + "Roboto-Regular.ttf";
+            regularPath = (fontDir / "Roboto-Regular.ttf").string();
 
-        std::string boldFacePath = fontDir + "IBMPlexSans-SemiBold.ttf";
+        std::string boldFacePath = (fontDir / "IBMPlexSans-SemiBold.ttf").string();
         if (!std::filesystem::exists(boldFacePath))
-            boldFacePath = fontDir + "IBMPlexSans-Bold.ttf";
+            boldFacePath = (fontDir / "IBMPlexSans-Bold.ttf").string();
         if (!std::filesystem::exists(boldFacePath))
-            boldFacePath = fontDir + "Roboto-Bold.ttf";
+            boldFacePath = (fontDir / "Roboto-Bold.ttf").string();
 
         // Icon font config (merged into each primary font)
         static const ImWchar iconRanges[] = {ICON_FA_MIN, ICON_FA_MAX, 0};
-        std::string iconFontPath = fontDir + "fa-solid-900.ttf";
+        std::string iconFontPath = (fontDir / "fa-solid-900.ttf").string();
         bool hasIconFont = std::filesystem::exists(iconFontPath);
 
         // --- Default font: IBM Plex Sans / Roboto + FontAwesome ---
@@ -128,7 +117,7 @@ namespace SparkEditor
         }
 
         // --- Monospace font ---
-        std::string monoPath = fontDir + "JetBrainsMono-Regular.ttf";
+        std::string monoPath = (fontDir / "JetBrainsMono-Regular.ttf").string();
         if (std::filesystem::exists(monoPath))
         {
             ImFontConfig monoConfig;

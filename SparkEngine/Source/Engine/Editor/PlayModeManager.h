@@ -492,11 +492,27 @@ namespace Spark::Editor
         /// @brief Update the entity count (call before EnterPlayMode if registry changed).
         void SetEntityCount(uint32_t count) { m_entityCount = count; }
 
+        /// @brief Override snapshot persistence for hosts that own a richer scene model.
+        /// The editor uses this to round-trip every reflected World component, while
+        /// lightweight/headless users can continue using the binary registry serializer.
+        void SetSnapshotCallbacks(std::function<bool(std::vector<uint8_t>&)> save,
+                                  std::function<bool(const std::vector<uint8_t>&)> restore)
+        {
+            m_saveSnapshotCallback = std::move(save);
+            m_restoreSnapshotCallback = std::move(restore);
+        }
+
       private:
         bool SaveSnapshot()
         {
             m_snapshot.sceneName = "EditorScene";
             m_snapshot.sceneFilePath = "";
+
+            if (m_saveSnapshotCallback)
+            {
+                m_snapshot.serializedData.clear();
+                return m_saveSnapshotCallback(m_snapshot.serializedData) && !m_snapshot.serializedData.empty();
+            }
 
             if (m_registry && ComponentSerializerRegistry::Instance().Count() > 0)
             {
@@ -515,6 +531,14 @@ namespace Spark::Editor
         {
             if (!m_snapshot.IsValid())
                 return false;
+
+            if (m_restoreSnapshotCallback)
+            {
+                const bool ok = m_restoreSnapshotCallback(m_snapshot.serializedData);
+                m_snapshot.serializedData.clear();
+                m_snapshot.sceneName.clear();
+                return ok;
+            }
 
             if (m_registry && SceneSnapshotSerializer::Validate(m_snapshot.serializedData))
             {
@@ -556,6 +580,8 @@ namespace Spark::Editor
         // ECS registry for snapshot serialization
         void* m_registry = nullptr;
         uint32_t m_entityCount = 0;
+        std::function<bool(std::vector<uint8_t>&)> m_saveSnapshotCallback;
+        std::function<bool(const std::vector<uint8_t>&)> m_restoreSnapshotCallback;
     };
 
 } // namespace Spark::Editor

@@ -85,6 +85,7 @@
 #include "../LevelStreaming/LevelStreamingSystem.h"
 #include "../VersionControl/VersionControlSystem.h"
 #include <imgui.h>
+#include <algorithm>
 
 namespace SparkEditor
 {
@@ -323,6 +324,34 @@ namespace SparkEditor
         InitializePanelIcons();
         InitializePanelCategories();
         SetDefaultPanelVisibility();
+
+        // Register every production panel with the disk-backed layout manager
+        // after its default visibility has been established.  Previously the
+        // manager was initialized but never received a single panel, so named
+        // layout JSON files contained an empty `panels` array and loading a
+        // layout could not restore panel visibility.
+        if (m_layoutManager && m_layoutManager->IsInitialized())
+        {
+            std::vector<std::string> panelNames;
+            panelNames.reserve(m_panels.size());
+            for (const auto& [name, panel] : m_panels)
+                if (panel)
+                    panelNames.push_back(name);
+            std::sort(panelNames.begin(), panelNames.end());
+
+            for (const std::string& name : panelNames)
+            {
+                const auto& panel = m_panels.at(name);
+                PanelConfig config;
+                config.name = name;
+                config.displayName = panel->GetName();
+                panel->GetSize(config.sizeX, config.sizeY);
+                panel->GetPosition(config.posX, config.posY);
+                config.isVisible = panel->IsVisible();
+                config.canClose = panel->IsClosable();
+                m_layoutManager->RegisterPanel(config);
+            }
+        }
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Panel creation complete: %zu panels registered", m_panels.size());
         console.LogSuccess("Created " + std::to_string(m_panels.size()) + " editor panels");

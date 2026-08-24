@@ -508,3 +508,34 @@ TEST(PlayMode_ConsoleStatus_Extended)
 
     pm.ExitPlayMode();
 }
+
+TEST(PlayMode_CustomSnapshotCallbacks_RestoreOnStop)
+{
+    Spark::Editor::PlayModeManager pm;
+    int documentValue = 17;
+    int saveCalls = 0;
+    int restoreCalls = 0;
+    pm.SetSnapshotCallbacks(
+        [&](std::vector<uint8_t>& bytes)
+        {
+            ++saveCalls;
+            bytes.assign(reinterpret_cast<const uint8_t*>(&documentValue),
+                         reinterpret_cast<const uint8_t*>(&documentValue) + sizeof(documentValue));
+            return true;
+        },
+        [&](const std::vector<uint8_t>& bytes)
+        {
+            ++restoreCalls;
+            if (bytes.size() != sizeof(documentValue))
+                return false;
+            std::memcpy(&documentValue, bytes.data(), sizeof(documentValue));
+            return true;
+        });
+
+    EXPECT_TRUE(pm.EnterPlayMode());
+    documentValue = 99;
+    EXPECT_TRUE(pm.ExitPlayMode());
+    EXPECT_EQ(documentValue, 17);
+    EXPECT_EQ(saveCalls, 1);
+    EXPECT_EQ(restoreCalls, 1);
+}

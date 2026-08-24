@@ -21,14 +21,42 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <commdlg.h>
 #include <shellapi.h>
 #else
 #include <cstdlib>
 #include <unistd.h>
 #endif
 
-namespace SparkEditor
-{
+    namespace SparkEditor
+    {
+
+    void EditorUI::ShowOpenSceneDialog()
+    {
+        RequestDocumentTransition(DocumentTransitionAction::OpenSceneDialog);
+    }
+
+    void EditorUI::ShowOpenSceneDialogNow()
+    {
+#ifdef _WIN32
+        wchar_t pathBuffer[32768] = {};
+        std::wstring initialDirectory;
+        if (m_projectManager && m_projectManager->HasOpenProject())
+            initialDirectory = std::filesystem::path(m_projectManager->GetProjectScenesPath()).wstring();
+        const wchar_t filter[] = L"Spark Scenes (*.sparkscene)\0*.sparkscene\0All Files (*.*)\0*.*\0\0";
+        OPENFILENAMEW dialog{};
+        dialog.lStructSize = sizeof(dialog);
+        dialog.lpstrFile = pathBuffer;
+        dialog.nMaxFile = static_cast<DWORD>(std::size(pathBuffer));
+        dialog.lpstrFilter = filter;
+        dialog.lpstrInitialDir = initialDirectory.empty() ? nullptr : initialDirectory.c_str();
+        dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+        if (GetOpenFileNameW(&dialog) && !OpenScene(std::filesystem::path(pathBuffer).string()))
+            ShowNotification("Failed to open scene", "error");
+#else
+        ShowNotification("Open Scene dialog is not available on this platform", "warning");
+#endif
+    }
 
     void EditorUI::RenderMainMenuBar()
     {
@@ -56,50 +84,13 @@ namespace SparkEditor
     {
         if (ImGui::MenuItem("New Scene", "Ctrl+N"))
         {
-            auto it = m_panels.find("Hierarchy");
-            if (it != m_panels.end())
-            {
-                auto* hierarchy = dynamic_cast<HierarchyPanel*>(it->second.get());
-                if (hierarchy)
-                {
-                    hierarchy->ResetToDefault();
-                }
-            }
-            m_currentScenePath.clear();
-            m_currentSceneName = "Untitled";
-            m_sceneModified = false;
-
-            if (m_pluginManager)
-            {
-                m_pluginManager->NotifySceneLoad("Untitled");
-            }
-
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "New scene created");
-            ShowNotification("New scene created", "success");
+            NewScene();
         }
+        if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
+            ShowOpenSceneDialog();
         if (ImGui::MenuItem("Save Scene", "Ctrl+S"))
         {
-            if (m_projectManager && m_projectManager->HasOpenProject())
-            {
-                if (m_currentScenePath.empty())
-                {
-                    m_currentScenePath =
-                        m_projectManager->GetProjectScenesPath() + "/" + m_currentSceneName + ".sparkscene";
-                }
-                if (SaveCurrentScene(m_currentScenePath))
-                {
-                    m_sceneModified = false;
-                    ShowNotification("Scene saved: " + m_currentSceneName, "success");
-                }
-                else
-                {
-                    ShowNotification("Failed to save scene", "error");
-                }
-            }
-            else
-            {
-                ShowNotification("Open a project first before saving a scene", "warning");
-            }
+            SaveScene();
         }
     }
 
@@ -177,7 +168,7 @@ namespace SparkEditor
         if (ImGui::MenuItem("Exit", "Alt+F4"))
         {
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Exit requested via File menu");
-            m_exitRequested = true;
+            RequestExitWithConfirmation();
         }
         ImGui::EndMenu();
     }
@@ -287,18 +278,17 @@ namespace SparkEditor
         if (!ImGui::BeginMenu("2D Object"))
             return;
 
-        if (ImGui::MenuItem("Sprite"))
-            ShowNotification("Created Sprite!", "success");
-        if (ImGui::MenuItem("Animated Sprite"))
-            ShowNotification("Created Animated Sprite!", "success");
-        if (ImGui::MenuItem("Tilemap"))
-            ShowNotification("Created Tilemap!", "success");
-        if (ImGui::MenuItem("Camera 2D"))
-            ShowNotification("Created 2D Camera!", "success");
-        if (ImGui::MenuItem("Parallax Background"))
-            ShowNotification("Created Parallax Background!", "success");
-        if (ImGui::MenuItem("Nine-Slice Sprite"))
-            ShowNotification("Created Nine-Slice Sprite!", "success");
+        const char* items[] = {"Sprite", "Animated Sprite", "Tilemap", "Camera 2D", "Parallax Background",
+                               "Nine-Slice Sprite"};
+        for (const char* item : items)
+        {
+            if (ImGui::MenuItem(item))
+            {
+                const bool created = CreateDocumentEntity(item);
+                ShowNotification(created ? std::string("Created ") + item : std::string("Unsupported object: ") + item,
+                                 created ? "success" : "error");
+            }
+        }
         ImGui::EndMenu();
     }
 
@@ -415,22 +405,14 @@ namespace SparkEditor
 
         auto createObject = [this](const std::string& name)
         {
-            auto it = m_panels.find("Hierarchy");
-            if (it != m_panels.end())
-            {
-                auto* hierarchy = dynamic_cast<HierarchyPanel*>(it->second.get());
-                if (hierarchy)
-                {
-                    hierarchy->CreateObject(name);
-                    m_sceneModified = true;
-                }
-            }
-            ShowNotification("Created " + name, "success", 2.0f);
+            const bool created = CreateDocumentEntity(name);
+            ShowNotification(created ? "Created " + name : "Unsupported object: " + name,
+                             created ? "success" : "error", 2.0f);
         };
 
         if (ImGui::MenuItem("Create Empty"))
         {
-            createObject("Empty GameObject");
+            createObject("Empty");
         }
         if (ImGui::MenuItem(ICON_FA_CUBE " Create Prefab from Selection"))
         {
@@ -530,9 +512,33 @@ namespace SparkEditor
         }
         if (ImGui::MenuItem("Save Layout"))
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Layout saved: Custom Layout");
-            SaveLayout("Custom Layout");
-            ShowNotification("Layout saved!", "success");
+            if (SaveLayout("Custom Layout"))
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Layout saved: Custom Layout");
+                ShowNotification("Layout saved!", "success");
+            }
+            else
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Could not save layout: Custom Layout");
+                ShowNotification("Layout save failed", "error");
+            }
+        }
+        if (ImGui::BeginMenu("Load Layout"))
+        {
+            const auto layouts = m_layoutManager ? m_layoutManager->GetSavedLayouts() : std::vector<LayoutInfo>{};
+            if (layouts.empty())
+                ImGui::TextDisabled("No saved layouts");
+            for (const LayoutInfo& layout : layouts)
+            {
+                if (ImGui::MenuItem(layout.name.c_str()))
+                {
+                    const bool loaded = LoadLayout(layout.name);
+                    ShowNotification(loaded ? "Layout loaded: " + layout.name
+                                            : "Layout load failed: " + layout.name,
+                                     loaded ? "success" : "error");
+                }
+            }
+            ImGui::EndMenu();
         }
         ImGui::EndMenu();
     }

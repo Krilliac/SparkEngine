@@ -90,13 +90,41 @@ namespace SparkEditor
         /// @brief Human-readable status phrase ("Configuring...", "Compiling [12/48]", etc.).
         std::string GetStatusText() const;
 
+        /// @brief Validate an installed SparkEngine CMake package directory.
+        /// Build-tree-only configs are rejected because they do not contain
+        /// the exported targets and module helper required by game projects.
+        static bool IsSparkEnginePackageDirectory(const std::string& directory);
+
+        /// @brief Locate the installed SparkEngine CMake package used by builds.
+        /// Checks explicit environment configuration first, then bounded paths
+        /// relative to the running editor executable. Returns empty on failure.
+        static std::string FindSparkEnginePackageDirectory(const std::string& configuration = {});
+
+        /// @brief Construct the explicit project configure command arguments.
+        /// Exposed for deterministic regression testing and build diagnostics.
+        static std::vector<std::string> CreateConfigureArguments(const BuildSettings& settings,
+                                                                 const std::string& projectRoot,
+                                                                 const std::string& buildDir,
+                                                                 const std::string& sparkEngineDirectory,
+                                                                 const std::vector<std::string>& extraDefines);
+
+        /// @brief Assemble a runnable Windows package from already-built artifacts.
+        ///
+        /// The package contains two deliberately separate launch modes: the
+        /// renamed host plus module manifest for game-module execution, and an
+        /// isolated scene-preview host with no manifest so `-scene` is honored.
+        /// Exposed for focused filesystem regression tests.
+        static bool AssembleWindowsPackage(const BuildSettings& settings, const std::string& projectRoot,
+                                           const std::string& runtimeHost, const std::string& moduleBinary,
+                                           const std::string& outputDirectory, std::string* error = nullptr);
+
       private:
         /// Worker entry point — runs CMake configure then build.
-        void WorkerThread(std::string cmakePreset, std::string buildType, std::string buildDir, std::string projectRoot,
+        void WorkerThread(BuildSettings settings, std::string buildType, std::string buildDir, std::string projectRoot,
                           std::vector<std::string> extraDefines);
 
         /// Worker for cook-only (copies assets to output directory).
-        void CookWorkerThread(std::string outputDir, std::string projectRoot);
+        void CookWorkerThread(BuildSettings settings, std::string outputDir, std::string projectRoot);
 
         /// Execute a subprocess, read stdout/stderr line-by-line, feed to ParseLine.
         int RunCommand(const std::string& executable, const std::vector<std::string>& arguments);
@@ -106,9 +134,6 @@ namespace SparkEditor
 
         /// Append a log line (thread-safe).
         void PushLog(BuildLogLine::Level level, std::string text);
-
-        /// Map BuildSettings to a CMake preset name.
-        static std::string SettingsToPreset(const BuildSettings& settings);
 
         /// Map BuildSettings to CMake -D flags.
         static std::vector<std::string> SettingsToDefines(const BuildSettings& settings);

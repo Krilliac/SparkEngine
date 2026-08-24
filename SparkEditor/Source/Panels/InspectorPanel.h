@@ -18,6 +18,7 @@
 #include "Engine/ECS/Components.h"
 #include <string>
 #include <memory>
+#include <unordered_map>
 
 namespace SparkEditor
 {
@@ -187,7 +188,7 @@ namespace SparkEditor
          * @param data    Pointer to the start of the data struct.
          * @param fields  Vector of field descriptors (from TypeRegistry or inline).
          */
-        static void RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields);
+        static bool RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields);
 
       private:
         SceneFile* m_scene = nullptr;                     ///< Non-owning pointer to the active scene.
@@ -202,6 +203,8 @@ namespace SparkEditor
         // legacy SceneFile path above.
         EditorUI* m_editorUI = nullptr;
         bool m_showWorldAddComponentMenu = false; ///< Whether the World-backed Add-Component popup is open.
+        std::unordered_map<std::string, std::string> m_worldEditBaselines;
+        ::EntityID m_worldEditEntity = entt::null;
     };
 
 } // namespace SparkEditor

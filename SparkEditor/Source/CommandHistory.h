@@ -165,6 +165,32 @@ namespace Spark::Editor
             NotifyChange();
         }
 
+        bool BeginTransientSession()
+        {
+            const bool changed = m_manager.BeginTransientSession();
+            if (changed)
+                NotifyChange();
+            return changed;
+        }
+
+        bool RollbackTransientSession()
+        {
+            const bool changed = m_manager.RollbackTransientSession();
+            if (changed)
+                NotifyChange();
+            return changed;
+        }
+
+        bool CommitTransientSession()
+        {
+            const bool changed = m_manager.CommitTransientSession();
+            if (changed)
+                NotifyChange();
+            return changed;
+        }
+
+        bool IsTransientSessionActive() const { return m_manager.IsTransientSessionActive(); }
+
         /** @brief Set the maximum number of undo steps to retain. */
         void SetMaxHistory(size_t max) { m_manager.SetMaxStackDepth(max); }
 

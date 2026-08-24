@@ -124,6 +124,20 @@ class World
         }
         SPARK_LOG_TRACE(Spark::LogCategory::ECS, "Destroying entity %u", static_cast<uint32_t>(entity));
 
+        // Keep hierarchy links valid even when callers destroy through the
+        // generic World API. A stale parent handle can later be recycled by
+        // EnTT and make an unrelated entity appear to own the orphan.
+        auto transforms = m_registry.view<Transform>();
+        for (EntityID other : transforms)
+        {
+            if (other == entity)
+                continue;
+            Transform& transform = transforms.get<Transform>(other);
+            if (transform.parent == entity)
+                transform.parent = entt::null;
+            std::erase(transform.children, entity);
+        }
+
         // Clean up any per-entity event subscriptions before destroying
         Spark::EntityEventBus::Global().RemoveEntity(static_cast<Spark::EventEntityID>(entity));
 

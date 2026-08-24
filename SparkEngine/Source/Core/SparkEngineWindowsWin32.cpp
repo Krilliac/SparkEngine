@@ -257,8 +257,11 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
     int winW = g_windowWidthOverride > 0 ? g_windowWidthOverride : settings.Graphics().windowWidth;
     int winH = g_windowHeightOverride > 0 ? g_windowHeightOverride : settings.Graphics().windowHeight;
 
-    HWND hWnd = CreateWindowW(g_szClass, g_szTitle, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0, winW, winH, nullptr, nullptr,
-                              hInst, nullptr);
+    // Keep creation explicitly Unicode to match RegisterClassExW and the
+    // DefWindowProcW fallback below. Module startup replaces this caption
+    // with the project name when a game module is loaded.
+    HWND hWnd = CreateWindowW(g_szClass, L"Spark Engine", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0, winW, winH, nullptr,
+                              nullptr, hInst, nullptr);
 
     if (!hWnd)
     {
@@ -268,6 +271,8 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
         MessageBoxW(nullptr, buf, L"Fatal Error", MB_ICONERROR);
         return FALSE;
     }
+    g_mainWindow = hWnd;
+    SetWindowTextW(hWnd, L"Spark Engine");
 
     GetEngineRuntime().timer = std::make_unique<Timer>();
     ASSERT(GetEngineRuntime().timer);
@@ -357,11 +362,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         break;
 
     case WM_DESTROY:
+        if (hWnd == g_mainWindow)
+            g_mainWindow = nullptr;
         PostQuitMessage(0);
         return 0;
     }
 
-    return DefWindowProc(hWnd, msg, wParam, lParam);
+    // The class is registered with RegisterClassExW and every WM_* string
+    // payload must therefore reach the Unicode default procedure. Using the
+    // encoding-neutral macro here compiled to DefWindowProcA in non-UNICODE
+    // builds and truncated same-thread wide captions to their first letter.
+    return DefWindowProcW(hWnd, msg, wParam, lParam);
 }
 
 INT_PTR CALLBACK About(HWND hDlg, UINT msg, WPARAM wParam, LPARAM)

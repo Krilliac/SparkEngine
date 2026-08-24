@@ -107,6 +107,7 @@ namespace SparkEditor
         void Update(float deltaTime);
         void Render();
         void UpdatePerformanceMetrics();
+        bool SaveProjectForShutdown();
 
       private:
         // Configuration and state

@@ -122,6 +122,17 @@ namespace SparkEditor
          */
         void Clear();
 
+        /** Begin a reversible runtime-edit interval (for play-in-editor). */
+        bool BeginTransientSession();
+
+        /** Discard transient commands after the caller restores document state. */
+        bool RollbackTransientSession();
+
+        /** Keep transient commands/state and close the interval. */
+        bool CommitTransientSession();
+
+        bool IsTransientSessionActive() const { return m_transientSessionActive; }
+
         /**
          * @brief Mark the current state as the saved state
          */
@@ -174,6 +185,12 @@ namespace SparkEditor
         // a save — even undo-back-to-saved-then-branch — reports unsaved.
         uint64_t m_editSequence = 0;
         uint64_t m_savedSequence = 0;
+
+        bool m_transientSessionActive = false;
+        size_t m_transientUndoCheckpoint = 0;
+        uint64_t m_transientEditSequence = 0;
+        uint64_t m_transientSavedSequence = 0;
+        std::vector<std::unique_ptr<EditorCommand>> m_transientSavedRedoStack;
 
         std::function<void()> m_onStackChanged;
 

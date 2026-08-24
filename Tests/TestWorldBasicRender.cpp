@@ -13,6 +13,7 @@
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/CoreComponents.h"
 #include "Graphics/GraphicsEngine.h"
+#include "Graphics/Mesh.h"
 #include "Graphics/WorldBasicRenderer.h"
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -128,4 +129,41 @@ TEST(WorldBasicRender_DrawsGeometryIntoOffscreenRTV)
     ctx->Unmap(staging.Get(), 0);
     // A unit cube filling a chunk of a 256x256 view should color thousands of pixels.
     EXPECT_GT(differing, 500);
+}
+
+TEST(WorldMeshCache_ReservedPrimitivesUseDistinctProceduralTopology)
+{
+    ComPtr<ID3D11Device> dev;
+    ComPtr<ID3D11DeviceContext> ctx;
+    D3D_FEATURE_LEVEL featureLevel{};
+    HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION,
+                                   &dev, &featureLevel, &ctx);
+    if (FAILED(hr))
+        hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &dev,
+                               &featureLevel, &ctx);
+    EXPECT_TRUE(SUCCEEDED(hr));
+    if (FAILED(hr))
+        return;
+
+    GraphicsEngine graphics;
+    EXPECT_TRUE(SUCCEEDED(graphics.InitializeFromDevice(dev.Get(), ctx.Get())));
+    Spark::WorldMeshCache cache;
+
+    Mesh* cube = cache.GetOrLoad(graphics, "__spark_primitive_Cube.obj");
+    Mesh* sphere = cache.GetOrLoad(graphics, "__spark_primitive_Sphere.obj");
+    Mesh* cylinder = cache.GetOrLoad(graphics, "__spark_primitive_Cylinder.obj");
+    Mesh* plane = cache.GetOrLoad(graphics, "__spark_primitive_Plane.obj");
+
+    EXPECT_TRUE(cube != nullptr);
+    EXPECT_TRUE(sphere != nullptr);
+    EXPECT_TRUE(cylinder != nullptr);
+    EXPECT_TRUE(plane != nullptr);
+    if (!cube || !sphere || !cylinder || !plane)
+        return;
+
+    EXPECT_GT(cube->GetIndexCount(), 0u);
+    EXPECT_GT(sphere->GetIndexCount(), cube->GetIndexCount());
+    EXPECT_GT(cylinder->GetIndexCount(), cube->GetIndexCount());
+    EXPECT_TRUE(plane->GetIndexCount() != cube->GetIndexCount());
+    EXPECT_TRUE(sphere->GetIndexCount() != cylinder->GetIndexCount());
 }

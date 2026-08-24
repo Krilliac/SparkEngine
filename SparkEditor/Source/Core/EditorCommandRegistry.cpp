@@ -128,19 +128,27 @@ namespace SparkEditor
 
     void EditorUI::RegisterSceneCommands()
     {
-        m_commandPalette->RegisterAction("New Scene", "Scene",
-                                         [this]() { ShowNotification("New Scene created!", "success"); });
+        m_commandPalette->RegisterAction("New Scene", "Scene", [this]() { NewScene(); });
 
-        m_commandPalette->RegisterAction("Save Scene", "Scene",
-                                         [this]() { ShowNotification("Scene saved!", "success"); });
+        m_commandPalette->RegisterAction("Save Scene", "Scene", [this]() { SaveScene(); });
 
         // Play mode
         m_commandPalette->RegisterAction(
             "Play", "Command",
             [this]()
             {
-                m_playMode = PlayMode::Playing;
-                ShowNotification("Playing...", "success");
+                if (m_playModeManager.IsPaused())
+                    m_playModeManager.ResumePlayMode();
+                else if (m_playModeManager.IsStopped())
+                    m_playModeManager.EnterPlayMode();
+
+                m_playMode = m_playModeManager.IsPlaying()
+                                 ? PlayMode::Playing
+                                 : (m_playModeManager.IsSimulating() ? PlayMode::Simulating
+                                                                    : (m_playModeManager.IsPaused() ? PlayMode::Paused
+                                                                                                    : PlayMode::Stopped));
+                const bool running = m_playMode != PlayMode::Stopped;
+                ShowNotification(running ? "Running..." : "Unable to enter play mode", running ? "success" : "error");
             },
             "F5");
 
@@ -148,6 +156,7 @@ namespace SparkEditor
             "Stop", "Command",
             [this]()
             {
+                m_playModeManager.ExitPlayMode();
                 m_playMode = PlayMode::Stopped;
                 ShowNotification("Stopped", "info");
             },
@@ -160,8 +169,9 @@ namespace SparkEditor
         m_commandPalette->RegisterAction("Theme: Spark Fusion", "Command", [this]() { ApplyTheme("Spark Fusion"); });
         m_commandPalette->RegisterAction("Theme: Spark Professional", "Command",
                                          [this]() { ApplyTheme("Spark Professional"); });
-        m_commandPalette->RegisterAction("Theme: Dark", "Command", [this]() { ApplyTheme("Dark"); });
-        m_commandPalette->RegisterAction("Theme: Light", "Command", [this]() { ApplyTheme("Light"); });
+        m_commandPalette->RegisterAction("Theme: Spark Ember", "Command", [this]() { ApplyTheme("Spark Ember"); });
+        m_commandPalette->RegisterAction("Theme: Professional Light", "Command",
+                                         [this]() { ApplyTheme("Professional Light"); });
 
         // Transform tool commands
         m_commandPalette->RegisterAction(

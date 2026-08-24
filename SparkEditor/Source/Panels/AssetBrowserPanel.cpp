@@ -10,6 +10,7 @@
 #include <cctype>
 #include <filesystem>
 #include <iostream>
+#include <utility>
 
 #include <imgui.h>
 
@@ -20,6 +21,61 @@
 
 namespace SparkEditor
 {
+    namespace
+    {
+        namespace fs = std::filesystem;
+
+        std::string CanonicalDirectoryString(const fs::path& path, std::error_code& ec)
+        {
+            if (path.empty() || !fs::is_directory(path, ec) || ec)
+            {
+                return {};
+            }
+
+            fs::path canonical = fs::weakly_canonical(path, ec);
+            return ec ? std::string{} : canonical.string();
+        }
+
+        bool IsContainedPath(const fs::path& root, const fs::path& candidate)
+        {
+            std::error_code ec;
+            const fs::path canonicalRoot = fs::weakly_canonical(root, ec);
+            if (ec)
+                return false;
+
+            const fs::path canonicalCandidate = fs::weakly_canonical(candidate, ec);
+            if (ec)
+                return false;
+
+            const fs::path relative = fs::relative(canonicalCandidate, canonicalRoot, ec);
+            if (ec || relative.is_absolute())
+                return false;
+
+            for (const auto& component : relative)
+            {
+                if (component == "..")
+                    return false;
+            }
+            return true;
+        }
+
+        std::vector<fs::path> ChildDirectories(const fs::path& folder)
+        {
+            std::vector<fs::path> directories;
+            std::error_code ec;
+            for (fs::directory_iterator it(folder, fs::directory_options::skip_permission_denied, ec), end;
+                 !ec && it != end; it.increment(ec))
+            {
+                std::error_code typeError;
+                const fs::file_status linkStatus = it->symlink_status(typeError);
+                if (!typeError && !fs::is_symlink(linkStatus) && it->is_directory(typeError) && !typeError)
+                    directories.push_back(it->path());
+            }
+            std::sort(directories.begin(), directories.end(), [](const fs::path& lhs, const fs::path& rhs)
+                      { return lhs.filename().string() < rhs.filename().string(); });
+            return directories;
+        }
+    } // namespace
 
     AssetBrowserPanel::AssetBrowserPanel() : EditorPanel("Asset Browser", "asset_browser_panel") {}
 
@@ -84,10 +140,15 @@ namespace SparkEditor
         if (BeginPanel())
         {
             // Toolbar with icons
+            ImGui::BeginDisabled(!HasValidProjectRoot());
             if (ImGui::Button(ICON_FA_DOWNLOAD " Import"))
             {
                 ImGui::OpenPopup("ImportAssetPath");
             }
+            ImGui::EndDisabled();
+            if (!HasValidProjectRoot() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("Open a project before importing assets");
+
             // Simple path input popup for importing an asset
             if (ImGui::BeginPopup("ImportAssetPath"))
             {
@@ -101,16 +162,28 @@ namespace SparkEditor
                 {
                     if (importPathBuf[0] != '\0')
                     {
-                        ImportAsset(std::string(importPathBuf));
-                        importPathBuf[0] = '\0';
+                        if (ImportAsset(std::string(importPathBuf)))
+                        {
+                            importPathBuf[0] = '\0';
+                            ImGui::CloseCurrentPopup();
+                        }
                     }
-                    ImGui::CloseCurrentPopup();
+                    else
+                    {
+                        SetOperationResult(false, "Enter a source file path");
+                    }
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Cancel"))
                 {
                     importPathBuf[0] = '\0';
                     ImGui::CloseCurrentPopup();
+                }
+                if (!m_lastOperationMessage.empty())
+                {
+                    const ImVec4 color = m_lastOperationSucceeded ? ImVec4(0.45f, 0.85f, 0.5f, 1.0f)
+                                                                  : ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
+                    ImGui::TextColored(color, "%s", m_lastOperationMessage.c_str());
                 }
                 ImGui::EndPopup();
             }
@@ -154,9 +227,16 @@ namespace SparkEditor
                 std::string label = (i == 0) ? ICON_FA_HOME " Assets" : breadcrumbs[i].filename().string();
                 if (ImGui::SmallButton(label.c_str()))
                 {
-                    m_currentFolder = breadcrumbs[i].string();
-                    RefreshAssets();
+                    NavigateToFolder(breadcrumbs[i].string());
                 }
+            }
+
+            if (!m_lastOperationMessage.empty())
+            {
+                ImGui::SameLine();
+                const ImVec4 color = m_lastOperationSucceeded ? ImVec4(0.45f, 0.85f, 0.5f, 1.0f)
+                                                              : ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
+                ImGui::TextColored(color, "%s", m_lastOperationMessage.c_str());
             }
 
             ImGui::Separator();
@@ -196,9 +276,49 @@ namespace SparkEditor
     void AssetBrowserPanel::SetProjectPath(const std::string& projectPath)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Asset Browser: project path set to '%s'", projectPath.c_str());
-        m_projectPath = projectPath;
-        m_currentFolder = projectPath;
+        ClearProject();
+
+        std::error_code ec;
+        m_projectPath = CanonicalDirectoryString(std::filesystem::path(projectPath), ec);
+        if (m_projectPath.empty())
+        {
+            SetOperationResult(false, "Asset root is missing or inaccessible");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Asset Browser rejected invalid asset root: %s",
+                            projectPath.c_str());
+            return;
+        }
+
+        m_currentFolder = m_projectPath;
+        SetOperationResult(true, "Project assets ready");
         RefreshAssets();
+    }
+
+    void AssetBrowserPanel::ClearProject()
+    {
+        m_projectPath.clear();
+        m_currentFolder.clear();
+        m_assets.clear();
+        m_folders.clear();
+        m_selectedAsset.clear();
+        m_lastOperationMessage.clear();
+        m_lastOperationSucceeded = false;
+    }
+
+    bool AssetBrowserPanel::NavigateToFolder(const std::string& folderPath)
+    {
+        std::error_code ec;
+        const std::string canonical = CanonicalDirectoryString(std::filesystem::path(folderPath), ec);
+        if (canonical.empty() || !IsContainedByProject(canonical))
+        {
+            SetOperationResult(false, "Cannot leave the active project's Assets folder");
+            return false;
+        }
+
+        m_currentFolder = canonical;
+        m_selectedAsset.clear();
+        SetOperationResult(true, {});
+        RefreshAssets();
+        return true;
     }
 
     void AssetBrowserPanel::RenderFolderTree()
@@ -206,52 +326,56 @@ namespace SparkEditor
         ImGui::BeginChild("FolderTree");
 
         std::string rootLabel = std::string(ICON_FA_FOLDER) + "  Assets";
-        if (ImGui::TreeNodeEx(rootLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+        ImGuiTreeNodeFlags rootFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow;
+        if (m_currentFolder == m_projectPath && !m_projectPath.empty())
+            rootFlags |= ImGuiTreeNodeFlags_Selected;
+
+        const bool rootOpen = ImGui::TreeNodeEx((rootLabel + "###asset_root").c_str(), rootFlags);
+        if (ImGui::IsItemClicked() && HasValidProjectRoot())
+            NavigateToFolder(m_projectPath);
+
+        if (rootOpen)
         {
-            try
+            if (HasValidProjectRoot())
             {
-                if (!m_projectPath.empty() && std::filesystem::exists(m_projectPath))
-                {
-                    for (const auto& entry : std::filesystem::directory_iterator(m_projectPath))
-                    {
-                        if (entry.is_directory())
-                        {
-                            std::string folderName = entry.path().filename().string();
-                            bool isCurrentFolder = (entry.path().string() == m_currentFolder);
-                            std::string nodeLabel =
-                                std::string(isCurrentFolder ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER) + "  " + folderName;
-
-                            ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow;
-                            if (isCurrentFolder)
-                                nodeFlags |= ImGuiTreeNodeFlags_Selected;
-
-                            if (ImGui::TreeNodeEx(nodeLabel.c_str(), nodeFlags))
-                            {
-                                if (ImGui::IsItemClicked())
-                                {
-                                    m_currentFolder = entry.path().string();
-                                    RefreshAssets();
-                                }
-                                ImGui::TreePop();
-                            }
-                            else if (ImGui::IsItemClicked())
-                            {
-                                m_currentFolder = entry.path().string();
-                                RefreshAssets();
-                            }
-                        }
-                    }
-                }
+                for (const auto& folder : ChildDirectories(m_projectPath))
+                    RenderFolderNode(folder);
             }
-            catch (const std::exception&)
-            {
-                ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), ICON_FA_EXCLAMATION " Error reading folders");
-            }
-
             ImGui::TreePop();
         }
 
+        if (!HasValidProjectRoot())
+            ImGui::TextDisabled("Open a project to browse assets");
+
         ImGui::EndChild();
+    }
+
+    void AssetBrowserPanel::RenderFolderNode(const std::filesystem::path& folderPath)
+    {
+        if (!IsContainedByProject(folderPath))
+            return;
+
+        const auto children = ChildDirectories(folderPath);
+        const bool isCurrentFolder = std::filesystem::path(m_currentFolder) == folderPath;
+        std::string label = std::string(isCurrentFolder ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER) + "  " +
+                            folderPath.filename().string() + "###" + folderPath.string();
+
+        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+        if (children.empty())
+            flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+        if (isCurrentFolder)
+            flags |= ImGuiTreeNodeFlags_Selected;
+
+        const bool open = ImGui::TreeNodeEx(label.c_str(), flags);
+        if (ImGui::IsItemClicked())
+            NavigateToFolder(folderPath.string());
+
+        if (open && !children.empty())
+        {
+            for (const auto& child : children)
+                RenderFolderNode(child);
+            ImGui::TreePop();
+        }
     }
 
     void AssetBrowserPanel::RenderAssetGrid()
@@ -262,10 +386,44 @@ namespace SparkEditor
         float panelWidth = ImGui::GetContentRegionAvail().x;
         float cellWidth = m_thumbnailSize + 14.0f;
         int columns = std::max(1, (int)(panelWidth / cellWidth));
+        std::string requestedFolder;
 
         if (ImGui::BeginTable("AssetGridTable", columns))
         {
             int itemIndex = 0;
+            for (const auto& folder : m_folders)
+            {
+                if (itemIndex % columns == 0)
+                    ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(itemIndex % columns);
+
+                const std::filesystem::path folderPath(folder);
+                const std::string folderName = folderPath.filename().string();
+                const ImVec2 pos = ImGui::GetCursorScreenPos();
+                const ImVec2 size(m_thumbnailSize, m_thumbnailSize);
+                ImDrawList* drawList = ImGui::GetWindowDrawList();
+                drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(40, 43, 50, 255),
+                                        4.0f);
+                drawList->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(70, 75, 86, 255), 4.0f);
+
+                const char* icon = ICON_FA_FOLDER;
+                const ImVec2 iconSize = ImGui::CalcTextSize(icon);
+                drawList->AddText(ImVec2(pos.x + (size.x - iconSize.x) * 0.5f,
+                                         pos.y + (size.y - iconSize.y) * 0.5f - 4.0f),
+                                  IM_COL32(235, 190, 85, 255), icon);
+
+                ImGui::SetCursorScreenPos(pos);
+                ImGui::InvisibleButton(("##folder_" + folder).c_str(), size);
+                if (ImGui::IsItemClicked())
+                    requestedFolder = folder;
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Open folder: %s", folderName.c_str());
+
+                ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + size.y + 2.0f));
+                ImGui::TextWrapped("%s", folderName.c_str());
+                ++itemIndex;
+            }
+
             for (const auto& asset : m_assets)
             {
                 if (itemIndex % columns == 0)
@@ -349,6 +507,9 @@ namespace SparkEditor
             ImGui::EndTable();
         }
 
+        if (!requestedFolder.empty())
+            NavigateToFolder(requestedFolder);
+
         ImGui::EndChild();
     }
 
@@ -388,46 +549,91 @@ namespace SparkEditor
     void AssetBrowserPanel::RefreshAssets()
     {
         m_assets.clear();
+        m_folders.clear();
 
         try
         {
-            if (!m_currentFolder.empty() && std::filesystem::exists(m_currentFolder))
+            if (!HasValidProjectRoot())
+                return;
+
+            if (!IsContainedByProject(m_currentFolder) || !std::filesystem::is_directory(m_currentFolder))
             {
-                for (const auto& entry : std::filesystem::directory_iterator(m_currentFolder))
+                m_currentFolder = m_projectPath;
+                m_selectedAsset.clear();
+            }
+
+            for (const auto& entry : std::filesystem::directory_iterator(m_currentFolder))
+            {
+                if (entry.is_regular_file())
                 {
-                    if (entry.is_regular_file())
-                    {
-                        m_assets.push_back(entry.path().string());
-                    }
+                    m_assets.push_back(entry.path().string());
+                }
+                else if (!entry.is_symlink() && entry.is_directory() && IsContainedByProject(entry.path()))
+                {
+                    m_folders.push_back(entry.path().string());
                 }
             }
+
+            const auto byFilename = [](const std::string& lhs, const std::string& rhs)
+            { return std::filesystem::path(lhs).filename().string() < std::filesystem::path(rhs).filename().string(); };
+            std::sort(m_assets.begin(), m_assets.end(), byFilename);
+            std::sort(m_folders.begin(), m_folders.end(), byFilename);
         }
         catch (const std::exception& e)
         {
-            std::cerr << "Error refreshing assets: " << e.what() << std::endl;
+            SetOperationResult(false, std::string("Unable to read asset folder: ") + e.what());
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Error refreshing assets: %s", e.what());
         }
     }
 
-    void AssetBrowserPanel::ImportAsset(const std::string& filePath)
+    bool AssetBrowserPanel::ImportAsset(const std::string& filePath)
     {
-        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Editor, filePath);
+        if (filePath.empty())
+        {
+            SetOperationResult(false, "Import failed: source path is empty");
+            return false;
+        }
         std::filesystem::path sourcePath(filePath);
 
-        if (!std::filesystem::exists(sourcePath))
+        if (!HasValidProjectRoot())
         {
+            SetOperationResult(false, "Open a project before importing assets");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Import failed: no canonical project asset root");
+            return false;
+        }
+
+        std::error_code ec;
+        if (!std::filesystem::exists(sourcePath, ec) || ec)
+        {
+            SetOperationResult(false, "Import failed: source file does not exist");
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Import failed: file does not exist: %s", filePath.c_str());
-            return;
+            return false;
         }
 
-        if (!std::filesystem::is_regular_file(sourcePath))
+        if (!std::filesystem::is_regular_file(sourcePath, ec) || ec)
         {
+            SetOperationResult(false, "Import failed: source is not a regular file");
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Import failed: not a regular file: %s", filePath.c_str());
-            return;
+            return false;
         }
 
-        // Determine destination inside the current folder
-        std::filesystem::path destDir(m_currentFolder.empty() ? m_projectPath : m_currentFolder);
+        // Revalidate the destination every time. The current directory may have
+        // been removed or replaced by a symlink since the last UI frame.
+        std::filesystem::path destDir(m_currentFolder);
+        if (!std::filesystem::is_directory(destDir, ec) || ec || !IsContainedByProject(destDir))
+        {
+            SetOperationResult(false, "Import failed: destination is outside the active project");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Import rejected unsafe destination: %s",
+                            destDir.string().c_str());
+            return false;
+        }
+
         std::filesystem::path destPath = destDir / sourcePath.filename();
+        if (!IsContainedByProject(destPath))
+        {
+            SetOperationResult(false, "Import failed: destination is outside the active project");
+            return false;
+        }
 
         // Avoid overwriting: append a numeric suffix if a file with the same name exists
         if (std::filesystem::exists(destPath))
@@ -442,20 +648,49 @@ namespace SparkEditor
             } while (std::filesystem::exists(destPath));
         }
 
+        if (!IsContainedByProject(destPath))
+        {
+            SetOperationResult(false, "Import failed: destination is outside the active project");
+            return false;
+        }
+
         try
         {
-            std::filesystem::copy_file(sourcePath, destPath, std::filesystem::copy_options::overwrite_existing);
+            std::filesystem::copy_file(sourcePath, destPath, std::filesystem::copy_options::none);
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Imported asset: %s -> %s",
                            sourcePath.filename().string().c_str(), destPath.string().c_str());
         }
         catch (const std::exception& e)
         {
-            std::cerr << "Import failed: " << e.what() << std::endl;
-            return;
+            SetOperationResult(false, std::string("Import failed: ") + e.what());
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Import failed: %s", e.what());
+            return false;
         }
 
         // Refresh the file list so the newly imported asset appears in the grid
+        SetOperationResult(true, std::string("Imported ") + destPath.filename().string());
         RefreshAssets();
+        return true;
+    }
+
+    bool AssetBrowserPanel::HasValidProjectRoot() const
+    {
+        if (m_projectPath.empty())
+            return false;
+        std::error_code ec;
+        const std::string canonical = CanonicalDirectoryString(m_projectPath, ec);
+        return !canonical.empty() && std::filesystem::path(canonical) == std::filesystem::path(m_projectPath);
+    }
+
+    bool AssetBrowserPanel::IsContainedByProject(const std::filesystem::path& candidate) const
+    {
+        return HasValidProjectRoot() && IsContainedPath(m_projectPath, candidate);
+    }
+
+    void AssetBrowserPanel::SetOperationResult(bool succeeded, std::string message)
+    {
+        m_lastOperationSucceeded = succeeded;
+        m_lastOperationMessage = std::move(message);
     }
 
 } // namespace SparkEditor

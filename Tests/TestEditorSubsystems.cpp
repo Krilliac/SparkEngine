@@ -19,9 +19,16 @@
 #include "Core/EditorCrashHandler.h"
 #include "Core/ProjectManager.h"
 #include "Core/EditorPluginManager.h"
+#include "Panels/BuildPipeline.h"
+#include "SceneManager/ReflectedSceneSerializer.h"
+#include "Engine/ECS/Components.h"
+#include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
+#include <thread>
 
 using namespace SparkEditor;
 
@@ -765,6 +772,340 @@ TEST(ProjectManager_RecentProjects)
     pm.Shutdown();
 }
 
+TEST(ProjectManager_CreateProject_WritesLoadableReflectedScene)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path parent =
+        std::filesystem::temp_directory_path() / ("spark-project-test-" + std::to_string(stamp));
+    std::filesystem::create_directories(parent);
+
+    ProjectManager pm;
+    pm.Initialize();
+    EXPECT_TRUE(pm.CreateProject("Playable", parent.string(), ProjectTemplate::FirstPerson, "test"));
+    EXPECT_TRUE(pm.HasOpenProject());
+
+    const std::filesystem::path scene = parent / "Playable" / "Scenes" / "Default.sparkscene";
+    EXPECT_TRUE(std::filesystem::exists(scene));
+    World loaded;
+    EXPECT_TRUE(Spark::LoadWorld(loaded, scene.string()));
+    EXPECT_GT(loaded.GetEntityCount(), static_cast<size_t>(0));
+    size_t cameraCount = 0;
+    for ([[maybe_unused]] auto entity : loaded.GetEntitiesWith<Camera>())
+        ++cameraCount;
+    size_t controllerCount = 0;
+    for ([[maybe_unused]] auto entity : loaded.GetEntitiesWith<CharacterControllerComponent>())
+        ++controllerCount;
+    EXPECT_GT(cameraCount, static_cast<size_t>(0));
+    EXPECT_GT(controllerCount, static_cast<size_t>(0));
+
+    const std::filesystem::path projectRoot = parent / "Playable";
+    const std::filesystem::path cmakeFile = projectRoot / "CMakeLists.txt";
+    const std::filesystem::path moduleHeader = projectRoot / "Source" / "GameModule.h";
+    const std::filesystem::path moduleSource = projectRoot / "Source" / "GameModule.cpp";
+    EXPECT_TRUE(std::filesystem::is_regular_file(cmakeFile));
+    EXPECT_TRUE(std::filesystem::is_regular_file(moduleHeader));
+    EXPECT_TRUE(std::filesystem::is_regular_file(moduleSource));
+    EXPECT_TRUE(std::filesystem::is_regular_file(projectRoot / "spark.modules.json"));
+    EXPECT_EQ(ProjectManager::GetActiveProjectPath(), std::filesystem::absolute(projectRoot).string());
+
+    {
+        std::ifstream input(cmakeFile);
+        const std::string cmakeText((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        EXPECT_STR_CONTAINS(cmakeText, "find_package(SparkEngine CONFIG REQUIRED)");
+        EXPECT_STR_CONTAINS(cmakeText, "spark_add_game_module(Playable");
+    }
+    {
+        std::ifstream input(moduleHeader);
+        const std::string moduleText((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        EXPECT_STR_CONTAINS(moduleText, "#include <Graphics/GraphicsEngine.h>");
+        EXPECT_STR_CONTAINS(moduleText, "graphics->BeginFrame()");
+        EXPECT_STR_CONTAINS(moduleText, "graphics->EndFrame()");
+    }
+
+    // Opening an older generated project repairs missing scaffold files but
+    // must never overwrite an existing user-authored build script.
+    {
+        std::ofstream append(cmakeFile, std::ios::app);
+        append << "\n# user-cmake-preserved\n";
+    }
+    std::filesystem::remove(moduleSource);
+
+    pm.Shutdown();
+    EXPECT_TRUE(ProjectManager::GetActiveProjectPath().empty());
+
+    const std::string expectedProjectFile = (parent / "Playable" / "Playable.sparkproject").string();
+    ProjectManager reloaded;
+    reloaded.Initialize();
+    EXPECT_TRUE(reloaded.OpenProject(expectedProjectFile));
+    EXPECT_TRUE(std::filesystem::is_regular_file(moduleSource));
+    {
+        std::ifstream input(cmakeFile);
+        const std::string cmakeText((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        EXPECT_STR_CONTAINS(cmakeText, "# user-cmake-preserved");
+    }
+    const auto recent = reloaded.GetRecentProjects();
+    EXPECT_TRUE(std::any_of(recent.begin(), recent.end(),
+                            [&](const RecentProject& entry) { return entry.path == expectedProjectFile; }));
+    reloaded.RemoveRecentProject(expectedProjectFile);
+    reloaded.Shutdown();
+
+    std::error_code cleanupError;
+    std::filesystem::remove_all(parent, cleanupError);
+    EXPECT_FALSE(cleanupError);
+}
+
+TEST(ProjectManager_ProjectMetadataEscapesRoundTrip)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / ("spark-project-escapes-" + std::to_string(stamp));
+    std::filesystem::create_directories(root);
+    const std::filesystem::path projectFile = root / "Escapes.sparkproject";
+    {
+        std::ofstream file(projectFile);
+        file << R"json({
+  "name": "Recent \"Project\"\nLine\tTab Caf\u00E9 \uD83D\uDE80",
+  "version": "1.0.0",
+  "modules": ["C:\\Games\\Module", "Quote\"Module", "Back\bForm\fSlash\/", "Unicode\u00E9\uD83D\uDE80"],
+  "scenes": ["Scenes\\Default.sparkscene"]
+})json";
+    }
+
+    const std::string expectedName = std::string("Recent \"Project\"\nLine\tTab Caf") + "\xC3\xA9 \xF0\x9F\x9A\x80";
+    ProjectManager manager;
+    manager.Initialize();
+    EXPECT_TRUE(manager.OpenProject(projectFile.string()));
+    const ProjectInfo& info = manager.GetCurrentProject();
+    EXPECT_EQ(info.name, expectedName);
+    EXPECT_EQ(info.modules.size(), static_cast<size_t>(4));
+    EXPECT_EQ(info.modules[0], std::string("C:\\Games\\Module"));
+    EXPECT_EQ(info.modules[1], std::string("Quote\"Module"));
+    EXPECT_EQ(info.modules[2], std::string("Back\bForm\fSlash/"));
+    EXPECT_EQ(info.modules[3], std::string("Unicode") + "\xC3\xA9\xF0\x9F\x9A\x80");
+    manager.Shutdown();
+
+    ProjectManager roundTrip;
+    roundTrip.Initialize();
+    const auto recent = roundTrip.GetRecentProjects();
+    const auto found = std::find_if(recent.begin(), recent.end(),
+                                    [&](const RecentProject& entry) { return entry.path == projectFile.string(); });
+    EXPECT_TRUE(found != recent.end());
+    if (found != recent.end())
+        EXPECT_EQ(found->name, expectedName);
+    roundTrip.RemoveRecentProject(projectFile.string());
+    roundTrip.Shutdown();
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(ProjectManager_RecentProjectPathsNormalizeForAddAndRemove)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / ("spark-recent-path-test-" + std::to_string(stamp));
+    std::filesystem::create_directories(root / "nested");
+    const std::filesystem::path projectFile = root / "Normalized.sparkproject";
+    std::ofstream(projectFile) << "{\n  \"name\": \"Normalized\",\n  \"version\": \"1.0.0\"\n}\n";
+    const std::filesystem::path alternate = root / "nested" / ".." / "Normalized.sparkproject";
+
+    ProjectManager manager;
+    manager.Initialize();
+    EXPECT_TRUE(manager.OpenProject(alternate.string()));
+    EXPECT_TRUE(manager.OpenProject(projectFile.string()));
+
+    const std::filesystem::path normalized = std::filesystem::weakly_canonical(projectFile);
+    const auto recent = manager.GetRecentProjects();
+    const size_t matches = static_cast<size_t>(
+        std::count_if(recent.begin(), recent.end(), [&](const RecentProject& rp)
+                      { return std::filesystem::path(rp.path).lexically_normal() == normalized.lexically_normal(); }));
+    EXPECT_EQ(matches, static_cast<size_t>(1));
+
+    manager.RemoveRecentProject(alternate.string());
+    const auto afterRemove = manager.GetRecentProjects();
+    EXPECT_FALSE(
+        std::any_of(afterRemove.begin(), afterRemove.end(), [&](const RecentProject& rp)
+                    { return std::filesystem::path(rp.path).lexically_normal() == normalized.lexically_normal(); }));
+    manager.Shutdown();
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(ProjectManager_RecordOpenedScenePersistsProjectRelativePath)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path parent =
+        std::filesystem::temp_directory_path() / ("spark-record-scene-test-" + std::to_string(stamp));
+    ProjectManager manager;
+    manager.Initialize();
+    EXPECT_TRUE(manager.CreateProject("Recorded", parent.string(), ProjectTemplate::Blank3D));
+    const std::filesystem::path root = parent / "Recorded";
+    const std::filesystem::path scene = root / "Scenes" / "Sub" / "Saved.sparkscene";
+    std::filesystem::create_directories(scene.parent_path());
+    std::ofstream(scene) << "{\"entities\":[]}";
+    EXPECT_TRUE(manager.RecordOpenedScene(scene.string()));
+    EXPECT_EQ(manager.GetCurrentProject().lastOpenedScene, std::string("Scenes/Sub/Saved.sparkscene"));
+    EXPECT_TRUE(std::find(manager.GetCurrentProject().scenes.begin(), manager.GetCurrentProject().scenes.end(),
+                          "Scenes/Sub/Saved.sparkscene") != manager.GetCurrentProject().scenes.end());
+
+    const std::filesystem::path outside = parent / "Outside.sparkscene";
+    std::ofstream(outside) << "{}";
+    EXPECT_FALSE(manager.RecordOpenedScene(outside.string()));
+    manager.RemoveRecentProject((root / "Recorded.sparkproject").string());
+    manager.Shutdown();
+
+    ProjectManager reopened;
+    reopened.Initialize();
+    EXPECT_TRUE(reopened.OpenProject((root / "Recorded.sparkproject").string()));
+    EXPECT_EQ(reopened.GetCurrentProject().lastOpenedScene, std::string("Scenes/Sub/Saved.sparkscene"));
+    reopened.RemoveRecentProject((root / "Recorded.sparkproject").string());
+    reopened.Shutdown();
+
+    std::error_code ec;
+    std::filesystem::remove_all(parent, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(BuildPipeline_ConfigureUsesExplicitProjectAndInstalledPackage)
+{
+    BuildCookPanel::BuildSettings settings;
+    settings.platform = BuildCookPanel::TargetPlatform::WindowsX64;
+    settings.profile = BuildCookPanel::BuildProfile::Development;
+    const auto args =
+        BuildPipeline::CreateConfigureArguments(settings, "Project Root", "Project Root/build/RelWithDebInfo",
+                                                "SDK/lib/cmake/SparkEngine", {"ENABLE_EDITOR=OFF"});
+
+    EXPECT_TRUE(std::find(args.begin(), args.end(), "--preset") == args.end());
+    EXPECT_TRUE(std::find(args.begin(), args.end(), "-S") != args.end());
+    EXPECT_TRUE(std::find(args.begin(), args.end(), "-B") != args.end());
+    EXPECT_TRUE(std::find(args.begin(), args.end(), "Visual Studio 17 2022") != args.end());
+    EXPECT_TRUE(std::any_of(args.begin(), args.end(),
+                            [](const std::string& arg) { return arg.rfind("-DSparkEngine_DIR=", 0) == 0; }));
+}
+
+TEST(BuildPipeline_RejectsIncompleteBuildTreePackage)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / ("spark-sdk-test-" + std::to_string(stamp));
+    std::filesystem::create_directories(root);
+    for (const char* filename : {"SparkEngineConfig.cmake"})
+        std::ofstream(root / filename) << "# test\n";
+    EXPECT_FALSE(BuildPipeline::IsSparkEnginePackageDirectory(root.string()));
+
+    for (const char* filename : {"SparkEngineTargets.cmake", "SparkEngineTargets-release.cmake",
+                                 "SparkGameModule.cmake", "WriteSparkModuleABI.cmake"})
+        std::ofstream(root / filename) << "# test\n";
+    EXPECT_TRUE(BuildPipeline::IsSparkEnginePackageDirectory(root.string()));
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(BuildPipeline_CookPackagesAssetsScenesConfigAndMetadata)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / ("spark-cook-test-" + std::to_string(stamp));
+    std::filesystem::create_directories(root / "Assets");
+    std::filesystem::create_directories(root / "Scenes");
+    std::filesystem::create_directories(root / "Config");
+    std::ofstream(root / "Assets" / "asset.txt") << "asset";
+    std::ofstream(root / "Scenes" / "Default.sparkscene") << "{}";
+    std::ofstream(root / "Config" / "EditorSettings.json") << "{}";
+    std::ofstream(root / "Cookable.sparkproject") << "{}";
+    std::ofstream(root / "spark.modules.json") << "{}";
+
+    BuildCookPanel::BuildSettings settings;
+    settings.outputDirectory = "Cooked";
+    BuildPipeline pipeline;
+    EXPECT_TRUE(pipeline.StartCookOnly(settings, root.string()));
+    for (int i = 0; i < 500 && pipeline.IsRunning(); ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    EXPECT_FALSE(pipeline.IsRunning());
+    EXPECT_TRUE(pipeline.GetResult() == BuildResult::Success);
+    EXPECT_TRUE(std::filesystem::is_regular_file(root / "Cooked" / "Assets" / "asset.txt"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(root / "Cooked" / "Scenes" / "Default.sparkscene"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(root / "Cooked" / "Config" / "EditorSettings.json"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(root / "Cooked" / "Cookable.sparkproject"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(root / "Cooked" / "spark.modules.json"));
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(BuildPipeline_AssemblesRunnableModuleAndIsolatedScenePackage)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / ("spark-runnable-package-test-" + std::to_string(stamp));
+    const std::filesystem::path project = root / "Project";
+    const std::filesystem::path runtime = root / "Runtime";
+    const std::filesystem::path artifacts = root / "Artifacts";
+    const std::filesystem::path output = project / "Build" / "Output";
+    std::filesystem::create_directories(project / "Assets");
+    std::filesystem::create_directories(project / "Scenes");
+    std::filesystem::create_directories(project / "Config");
+    std::filesystem::create_directories(runtime / "Shaders");
+    std::filesystem::create_directories(artifacts);
+    std::ofstream(project / "Assets" / "asset.txt") << "asset";
+    std::ofstream(project / "Scenes" / "Default.sparkscene") << "{\"entities\":[]}";
+    std::ofstream(project / "Config" / "settings.json") << "{}";
+    std::ofstream(project / "Runnable.sparkproject") << "{}";
+    std::ofstream(project / "spark.modules.json") << "{\"modules\":[{\"path\":\"Stale.dll\"}]}";
+    std::ofstream(runtime / "SparkEngine.exe") << "host";
+    std::ofstream(runtime / "Shaders" / "Basic.hlsl") << "shader";
+    std::ofstream(artifacts / "Runnable.dll") << "module";
+    std::ofstream(artifacts / "Runnable.dll.sparkabi") << "abi";
+
+    BuildCookPanel::BuildSettings settings;
+    settings.executableName = "Playable Game";
+    settings.cookAssets = true;
+    std::string error;
+    EXPECT_TRUE(BuildPipeline::AssembleWindowsPackage(settings, project.string(),
+                                                      (runtime / "SparkEngine.exe").string(),
+                                                      (artifacts / "Runnable.dll").string(), output.string(), &error));
+    EXPECT_TRUE(error.empty());
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / "Playable Game.exe"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / "Runnable.dll"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / "Runnable.dll.sparkabi"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / "Shaders" / "Basic.hlsl"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / "Assets" / "asset.txt"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / "Startup.sparkscene"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / "ScenePreview" / "Playable Game Scene.exe"));
+
+    auto readText = [](const std::filesystem::path& path)
+    {
+        std::ifstream file(path, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    };
+    const std::string manifest = readText(output / "spark.modules.json");
+    EXPECT_STR_CONTAINS(manifest, "\"path\": \"Runnable.dll\"");
+    EXPECT_TRUE(manifest.find("Stale.dll") == std::string::npos);
+    const std::string gameLauncher = readText(output / "LaunchGame.cmd");
+    EXPECT_STR_CONTAINS(gameLauncher, "\"Playable Game.exe\"");
+    EXPECT_TRUE(gameLauncher.find("-scene") == std::string::npos);
+    const std::string sceneLauncher = readText(output / "LaunchScene.cmd");
+    EXPECT_STR_CONTAINS(sceneLauncher, "\"ScenePreview\\Playable Game Scene.exe\"");
+    EXPECT_STR_CONTAINS(sceneLauncher, "-scene Startup.sparkscene");
+    const std::string readme = readText(output / "PACKAGE_README.txt");
+    EXPECT_STR_CONTAINS(readme, "separate from module execution");
+
+    settings.executableName = "..\\Unsafe";
+    EXPECT_FALSE(BuildPipeline::AssembleWindowsPackage(
+        settings, project.string(), (runtime / "SparkEngine.exe").string(), (artifacts / "Runnable.dll").string(),
+        (project / "UnsafeOutput").string(), &error));
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
 // ============================================================================
 // EditorPluginManager Tests
 // ============================================================================
@@ -796,6 +1137,7 @@ TEST(PluginManager_GetPluginNull)
 
 #ifdef SPARK_TEST_HAS_IMGUI
 
+#include "Panels/AssetBrowserPanel.h"
 #include "Search/CommandPalette.h"
 
 // --- EditorTheme full method tests ---
@@ -966,6 +1308,98 @@ TEST(Gated_CommandPalette_ClearActions)
     palette.Open();
     EXPECT_TRUE(palette.IsOpen());
     palette.Close();
+}
+
+TEST(Gated_CommandPalette_KeyboardSelectionIsLimitedToVisibleResults)
+{
+    CommandPalette palette;
+    int executedIndex = -1;
+    for (int i = 0; i < 25; ++i)
+    {
+        palette.RegisterAction("Action " + std::to_string(i), "Command", [&, i]() { executedIndex = i; });
+    }
+
+    palette.Open();
+    EXPECT_EQ(palette.GetFilteredActionCount(), 25u);
+    EXPECT_EQ(palette.GetVisibleActionCount(), CommandPalette::MaxVisibleResults);
+
+    palette.MoveSelection(100);
+    EXPECT_EQ(palette.GetSelectedIndex(), 19);
+    EXPECT_TRUE(palette.ExecuteSelected());
+    EXPECT_EQ(executedIndex, 19);
+    EXPECT_FALSE(palette.IsOpen());
+}
+
+TEST(Gated_CommandPalette_CommandPrefixIncludesCommandLikeSurfacesOnly)
+{
+    CommandPalette palette;
+    palette.RegisterAction("Undo", "Command", []() {});
+    palette.RegisterAction("Save Scene", "Scene", []() {});
+    palette.RegisterAction("Reset Layout", "Layout", []() {});
+    palette.RegisterAction("Toggle Inspector", "Panel", []() {});
+    palette.RegisterAction("Player", "Entity", []() {});
+    palette.RegisterAction("player.png", "Asset", []() {});
+
+    palette.SetFilter(">");
+    EXPECT_EQ(palette.GetFilteredActionCount(), 3u);
+    palette.SetFilter("> save");
+    EXPECT_EQ(palette.GetFilteredActionCount(), 1u);
+
+    // '@' and '/' are ordinary query characters now; the UI no longer claims
+    // entity/file providers that the palette does not actually populate.
+    palette.SetFilter("@");
+    EXPECT_EQ(palette.GetFilteredActionCount(), 0u);
+    palette.SetFilter("/");
+    EXPECT_EQ(palette.GetFilteredActionCount(), 0u);
+}
+
+TEST(Gated_AssetBrowser_ProjectBoundaryNestedNavigationAndReset)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-asset-browser-" + std::to_string(stamp));
+    const fs::path assets = root / "Project" / "Assets";
+    const fs::path nested = assets / "Nested";
+    const fs::path deep = nested / "Deep";
+    const fs::path outside = root / "Outside";
+    fs::create_directories(deep);
+    fs::create_directories(outside);
+    {
+        std::ofstream(outside / "source.png") << "asset data";
+        std::ofstream(assets / "root.asset") << "root";
+    }
+
+    AssetBrowserPanel panel;
+    // Use a spelling containing '..' but still resolving to Assets, proving
+    // that the stored project asset root is canonical.
+    panel.SetProjectPath((assets / "Nested" / "..").string());
+    EXPECT_EQ(fs::path(panel.GetProjectPath()), fs::weakly_canonical(assets));
+    EXPECT_EQ(panel.GetFolders().size(), 1u);
+
+    EXPECT_TRUE(panel.NavigateToFolder(nested.string()));
+    EXPECT_EQ(panel.GetFolders().size(), 1u);
+    EXPECT_TRUE(panel.NavigateToFolder(deep.string()));
+    const std::string safeFolder = panel.GetCurrentFolder();
+    EXPECT_FALSE(panel.NavigateToFolder(outside.string()));
+    EXPECT_EQ(panel.GetCurrentFolder(), safeFolder);
+
+    EXPECT_TRUE(panel.ImportAsset((outside / "source.png").string()));
+    EXPECT_TRUE(fs::exists(deep / "source.png"));
+    EXPECT_TRUE(panel.LastOperationSucceeded());
+    EXPECT_FALSE(panel.ImportAsset((outside / "missing.png").string()));
+    EXPECT_FALSE(panel.LastOperationSucceeded());
+    EXPECT_TRUE(!panel.GetLastOperationMessage().empty());
+
+    panel.ClearProject();
+    EXPECT_TRUE(panel.GetProjectPath().empty());
+    EXPECT_TRUE(panel.GetCurrentFolder().empty());
+    EXPECT_TRUE(panel.GetAssets().empty());
+    EXPECT_TRUE(panel.GetFolders().empty());
+    EXPECT_FALSE(panel.ImportAsset((outside / "source.png").string()));
+
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
 }
 
 // --- LevelStreaming spatial method tests ---

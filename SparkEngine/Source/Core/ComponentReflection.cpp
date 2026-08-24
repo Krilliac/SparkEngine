@@ -369,6 +369,7 @@ SPARK_REFLECT_END(AudioSourceComponent)
 // --- Light ---
 
 SPARK_REFLECT_TYPE(LightComponent)
+SPARK_REFLECT_FIELD(LightComponent, type, "Type")
 SPARK_REFLECT_FIELD_AS(LightComponent, color, "Color", Spark::FieldType::Vector3)
 SPARK_REFLECT_FIELD(LightComponent, intensity, "Intensity")
 SPARK_REFLECT_FIELD(LightComponent, range, "Range")

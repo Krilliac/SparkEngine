@@ -4,6 +4,7 @@
 #include "Core/Platform.h"
 #endif
 #include <memory>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 class World;
@@ -11,6 +12,12 @@ class GraphicsEngine;
 class Mesh;
 namespace Spark
 {
+    struct WorldBasicRenderStats
+    {
+        uint32_t candidates = 0;
+        uint32_t visible = 0;
+        uint32_t drawn = 0;
+    };
     /**
  * @brief Per-path cache of device-loaded meshes for generic ECS rendering.
  *
@@ -42,7 +49,7 @@ namespace Spark
     // NOTE: '::World' (not bare 'World') — TUs that include a header declaring
     // 'namespace Spark::World' (e.g. TFWorldSetup.h) before this one would
     // otherwise resolve the unqualified name to that namespace (C2882).
-    void RenderWorldBasic(::World& world, GraphicsEngine& g, WorldMeshCache& cache, const DirectX::XMMATRIX& view,
-                          const DirectX::XMMATRIX& proj);
+    WorldBasicRenderStats RenderWorldBasic(::World& world, GraphicsEngine& g, WorldMeshCache& cache,
+                                           const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj);
 
 } // namespace Spark

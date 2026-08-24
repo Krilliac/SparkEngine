@@ -15,6 +15,9 @@
 #include "Utils/StackTrace.h"
 #include "Utils/Logger.h"
 
+#include <chrono>
+#include <filesystem>
+
 // ============================================================================
 // MemoryDebugger Tests
 // ============================================================================
@@ -612,6 +615,26 @@ TEST(FileLogger_InitializeShutdown)
 
     logger.SetMinimumLevel(Spark::FileLogLevel::Error);
     EXPECT_EQ(static_cast<int>(logger.GetMinimumLevel()), static_cast<int>(Spark::FileLogLevel::Error));
+}
+
+TEST(FileLogger_DirectoryWithoutTrailingSeparatorCreatesContainedLog)
+{
+    auto& logger = Spark::FileLogger::GetInstance();
+    logger.Shutdown();
+
+    const auto root = std::filesystem::temp_directory_path() /
+                      ("spark-filelogger-" +
+                       std::to_string(std::chrono::high_resolution_clock::now().time_since_epoch().count()));
+    const auto logs = root / "Logs";
+    EXPECT_TRUE(logger.Initialize(logs.string(), Spark::FileLogLevel::Debug));
+    const std::filesystem::path logPath = logger.GetCurrentFilePath();
+    EXPECT_EQ(logPath.parent_path().lexically_normal(), logs.lexically_normal());
+    EXPECT_TRUE(std::filesystem::is_regular_file(logPath));
+    logger.Shutdown();
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    EXPECT_FALSE(ec);
 }
 
 // ============================================================================

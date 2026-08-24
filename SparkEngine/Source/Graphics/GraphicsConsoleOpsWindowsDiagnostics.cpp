@@ -35,7 +35,7 @@
 // CONSOLE DIAGNOSTICS AND DEVICE OPERATIONS
 // ============================================================================
 
-void GraphicsEngine::Console_ReloadShaders()
+bool GraphicsEngine::Console_ReloadShaders()
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Reloading shaders via console", L"INFO");
 
@@ -49,10 +49,12 @@ void GraphicsEngine::Console_ReloadShaders()
     if (SUCCEEDED(hr))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Shaders reloaded successfully", L"SUCCESS");
+        return true;
     }
     else
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to reload shaders", L"ERROR");
+        return false;
     }
 }
 

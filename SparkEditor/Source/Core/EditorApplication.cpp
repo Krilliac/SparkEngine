@@ -177,7 +177,17 @@ namespace SparkEditor
             // Check if user requested exit via File > Exit
             if (m_ui->IsExitRequested())
             {
-                RequestExit();
+                if (SaveProjectForShutdown())
+                {
+                    RequestExit();
+                }
+                else
+                {
+                    // Keep the editor alive when final persistence fails. The
+                    // user can fix the problem and request exit again.
+                    m_ui->ClearExitRequest();
+                    m_ui->ShowNotification("Project save failed; exit cancelled", "error");
+                }
             }
         }
 
@@ -224,26 +234,37 @@ namespace SparkEditor
     bool EditorApplication::OnShutdownRequested()
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutdown requested by user");
-        auto& console = Spark::SimpleConsole::GetInstance();
+        if (m_ui && !m_ui->RequestExitWithConfirmation())
+            return false;
 
-        // Check for unsaved scene changes
-        if (m_ui && m_ui->IsSceneModified())
+        if (!SaveProjectForShutdown())
         {
-            console.LogWarning("Exiting with unsaved scene changes in: " + m_ui->GetCurrentSceneName());
-            // Allow exit but log the warning so user sees it in console
-        }
-
-        // Auto-save the project on close if one is open
-        if (m_ui)
-        {
-            auto* pm = m_ui->GetProjectManager();
-            if (pm && pm->HasOpenProject())
+            if (m_ui)
             {
-                pm->SaveProject();
-                console.LogInfo("Project auto-saved on exit");
+                m_ui->ClearExitRequest();
+                m_ui->ShowNotification("Project save failed; exit cancelled", "error");
             }
+            return false;
         }
+        return true;
+    }
 
+    bool EditorApplication::SaveProjectForShutdown()
+    {
+        if (!m_ui)
+            return true;
+
+        auto* pm = m_ui->GetProjectManager();
+        if (!pm || !pm->HasOpenProject())
+            return true;
+
+        auto& console = Spark::SimpleConsole::GetInstance();
+        if (!pm->SaveProject())
+        {
+            console.LogError("Failed to save project; shutdown cancelled");
+            return false;
+        }
+        console.LogInfo("Project auto-saved on exit");
         return true;
     }
 

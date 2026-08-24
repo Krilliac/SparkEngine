@@ -73,25 +73,25 @@ namespace SparkEditor
             int optimizationLevel = 2; ///< 0=None, 1=Size, 2=Speed, 3=Full.
 
             // Asset cooking
-            bool cookAssets = true;       ///< Convert assets to platform-optimized formats.
-            bool compressTextures = true; ///< Apply texture compression (BC/ASTC).
-            int textureMaxSize = 2048;    ///< Maximum texture dimension (pixels).
-            bool generateMipmaps = true;  ///< Auto-generate mipmap chains.
-            bool compressAudio = true;    ///< Compress audio to Vorbis/Opus.
-            int audioQuality = 80;        ///< Audio compression quality [0-100].
-            bool compressMeshes = true;   ///< Apply mesh quantization/compression.
-            bool generateLODs = false;    ///< Auto-generate LOD meshes.
-            int lodLevels = 3;            ///< Number of LOD levels to generate.
+            bool cookAssets = true;        ///< Convert assets to platform-optimized formats.
+            bool compressTextures = false; ///< Reserved: texture transforms are not yet connected.
+            int textureMaxSize = 2048;     ///< Maximum texture dimension (pixels).
+            bool generateMipmaps = false;  ///< Reserved: mip generation is not yet connected.
+            bool compressAudio = false;    ///< Reserved: audio transforms are not yet connected.
+            int audioQuality = 80;         ///< Audio compression quality [0-100].
+            bool compressMeshes = false;   ///< Reserved: mesh transforms are not yet connected.
+            bool generateLODs = false;     ///< Auto-generate LOD meshes.
+            int lodLevels = 3;             ///< Number of LOD levels to generate.
 
             // Packaging
-            bool createInstaller = false;                 ///< Generate a platform installer (NSIS/DMG).
-            bool compressPackage = true;                  ///< Compress the output package archive.
+            bool createInstaller = false;                 ///< Reserved: installer generation is not yet supported.
+            bool compressPackage = false;                 ///< Reserved: package archives are not yet supported.
             int compressionLevel = 6;                     ///< Compression strength [1-9].
             std::string outputDirectory = "Build/Output"; ///< Output directory for the build.
             std::string executableName = "SparkGame";     ///< Name of the output executable.
 
             // Code signing
-            bool signExecutable = false;    ///< Whether to digitally sign the executable.
+            bool signExecutable = false;    ///< Reserved: code signing is not yet supported.
             std::string signingCertificate; ///< Path to the signing certificate.
         };
 

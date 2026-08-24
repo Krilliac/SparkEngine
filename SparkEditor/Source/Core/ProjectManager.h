@@ -105,10 +105,20 @@ namespace SparkEditor
                                        const std::string& templateName = "EmptyProject");
         bool OpenProject(const std::string& sparkprojectPath);
         bool SaveProject();
+        /// @brief Persist a successfully opened/saved scene as project-relative state.
+        /// Rejects missing files and paths outside the current project root.
+        bool RecordOpenedScene(const std::string& scenePath);
         void CloseProject();
 
         bool HasOpenProject() const { return m_hasOpenProject; }
         const ProjectInfo& GetCurrentProject() const { return m_currentProject; }
+
+        /// @brief Process-wide path of the project currently open in the editor.
+        ///
+        /// Editor panels are factory-created independently of ProjectManager, so
+        /// build/cook surfaces use this read-only accessor instead of guessing
+        /// the project from the process working directory.
+        static std::string GetActiveProjectPath();
 
         void SetEngineRoot(const std::string& engineRoot) { m_engineRoot = engineRoot; }
         void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
@@ -145,7 +155,8 @@ namespace SparkEditor
         bool LoadProjectFile(const std::string& sparkprojectPath);
         bool SaveProjectFile();
         bool CreateProjectStructure(const std::string& projectPath, ProjectTemplate templateType);
-        void CreateDefaultScene(const std::string& scenePath, ProjectTemplate templateType);
+        bool CreateDefaultScene(const std::string& scenePath, ProjectTemplate templateType);
+        bool EnsureBuildScaffold(const std::string& projectPath, const std::string& projectName);
         void CreateDefaultEditorSettings(const std::string& configPath);
         bool CopyTemplate(const std::string& templatePath, const std::string& destPath, const std::string& projectName);
 
@@ -166,6 +177,9 @@ namespace SparkEditor
         ProjectCallback m_onProjectClosed;
 
         Spark::LocalFileCache* m_fileCache = nullptr;
+
+        static std::mutex s_activeProjectMutex;
+        static std::string s_activeProjectPath;
     };
 
 } // namespace SparkEditor

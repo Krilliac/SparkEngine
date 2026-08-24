@@ -31,7 +31,7 @@ namespace SparkEditor
     // ============================================================================
 
     // Render a single field widget based on its FieldInfo metadata.
-    static void RenderSingleField(const Spark::FieldInfo& field, char* dst)
+    static bool RenderSingleField(const Spark::FieldInfo& field, char* dst)
     {
         // Enum fields with names → combo dropdown
         if (field.type == Spark::FieldType::Enum || (field.type == Spark::FieldType::Int && !field.enumNames.empty()))
@@ -47,44 +47,40 @@ namespace SparkEditor
                     items += '\0';
                 }
                 items += '\0';
-                ImGui::Combo(field.name.c_str(), val, items.c_str());
+                return ImGui::Combo(field.name.c_str(), val, items.c_str());
             }
             else
             {
-                ImGui::DragInt(field.name.c_str(), val);
+                return ImGui::DragInt(field.name.c_str(), val);
             }
-            return;
         }
 
         switch (field.type)
         {
         case Spark::FieldType::Bool:
-            ImGui::Checkbox(field.name.c_str(), reinterpret_cast<bool*>(dst));
-            break;
+            return ImGui::Checkbox(field.name.c_str(), reinterpret_cast<bool*>(dst));
 
         case Spark::FieldType::Int:
             if (field.hasRange)
             {
-                ImGui::SliderInt(field.name.c_str(), reinterpret_cast<int*>(dst), static_cast<int>(field.rangeMin),
-                                 static_cast<int>(field.rangeMax));
+                return ImGui::SliderInt(field.name.c_str(), reinterpret_cast<int*>(dst),
+                                        static_cast<int>(field.rangeMin), static_cast<int>(field.rangeMax));
             }
             else
             {
-                ImGui::DragInt(field.name.c_str(), reinterpret_cast<int*>(dst));
+                return ImGui::DragInt(field.name.c_str(), reinterpret_cast<int*>(dst));
             }
-            break;
 
         case Spark::FieldType::Float:
             if (field.hasRange)
             {
-                ImGui::SliderFloat(field.name.c_str(), reinterpret_cast<float*>(dst), field.rangeMin, field.rangeMax,
-                                   "%.3f");
+                return ImGui::SliderFloat(field.name.c_str(), reinterpret_cast<float*>(dst), field.rangeMin,
+                                          field.rangeMax, "%.3f");
             }
             else
             {
-                ImGui::DragFloat(field.name.c_str(), reinterpret_cast<float*>(dst), 0.1f);
+                return ImGui::DragFloat(field.name.c_str(), reinterpret_cast<float*>(dst), 0.1f);
             }
-            break;
 
         case Spark::FieldType::Double:
         {
@@ -92,15 +88,16 @@ namespace SparkEditor
             if (ImGui::DragFloat(field.name.c_str(), &val, 0.1f))
             {
                 *reinterpret_cast<double*>(dst) = static_cast<double>(val);
+                return true;
             }
-            break;
+            return false;
         }
 
         case Spark::FieldType::String:
             // Editor data types use char[N] arrays; handle as fixed buffer
             if (field.size > sizeof(std::string))
             {
-                ImGui::InputText(field.name.c_str(), reinterpret_cast<char*>(dst), field.size);
+                return ImGui::InputText(field.name.c_str(), reinterpret_cast<char*>(dst), field.size);
             }
             else
             {
@@ -111,35 +108,36 @@ namespace SparkEditor
                 if (ImGui::InputText(field.name.c_str(), buf, sizeof(buf)))
                 {
                     *str = buf;
+                    return true;
                 }
+                return false;
             }
-            break;
 
         case Spark::FieldType::Vector2:
         {
             float* v = reinterpret_cast<float*>(dst);
-            ImGui::DragFloat2(field.name.c_str(), v, 0.1f);
-            break;
+            return ImGui::DragFloat2(field.name.c_str(), v, 0.1f);
         }
 
         case Spark::FieldType::Vector3:
         {
             float* v = reinterpret_cast<float*>(dst);
+            const DirectX::XMFLOAT3 before{v[0], v[1], v[2]};
             InspectorPanel::DrawVec3Control(field.name.c_str(), v, 0.0f, 0.1f);
-            break;
+            return before.x != v[0] || before.y != v[1] || before.z != v[2];
         }
 
         case Spark::FieldType::Vector4:
         {
             float* v = reinterpret_cast<float*>(dst);
-            ImGui::ColorEdit4(field.name.c_str(), v);
-            break;
+            return ImGui::ColorEdit4(field.name.c_str(), v);
         }
 
         default:
             ImGui::TextDisabled("%s (unsupported type)", field.name.c_str());
-            break;
+            return false;
         }
+        return false;
     }
 
     // Check if a field should be visible based on its visibleWhenField condition.
@@ -172,14 +170,16 @@ namespace SparkEditor
         return true; // Controlling field not found — show by default
     }
 
-    void InspectorPanel::RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields)
+    bool InspectorPanel::RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields)
     {
         if (!data)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Editor, "Inspector: RenderReflectedFields called with null data");
             ImGui::TextDisabled("(Component data unavailable)");
-            return;
+            return false;
         }
+
+        bool changed = false;
 
         // Check if any field has a category assigned
         bool hasCategories = false;
@@ -229,7 +229,11 @@ namespace SparkEditor
                         continue;
 
                     auto* dst = static_cast<char*>(data) + field.offset;
-                    RenderSingleField(field, dst);
+                    if (field.readOnly)
+                        ImGui::BeginDisabled();
+                    changed |= RenderSingleField(field, dst);
+                    if (field.readOnly)
+                        ImGui::EndDisabled();
 
                     if (!field.tooltip.empty() && ImGui::IsItemHovered())
                         ImGui::SetTooltip("%s", field.tooltip.c_str());
@@ -250,7 +254,11 @@ namespace SparkEditor
                 if (!IsFieldVisible(field, data, fields))
                     continue;
                 auto* dst = static_cast<char*>(data) + field.offset;
-                RenderSingleField(field, dst);
+                if (field.readOnly)
+                    ImGui::BeginDisabled();
+                changed |= RenderSingleField(field, dst);
+                if (field.readOnly)
+                    ImGui::EndDisabled();
 
                 if (!field.tooltip.empty() && ImGui::IsItemHovered())
                     ImGui::SetTooltip("%s", field.tooltip.c_str());
@@ -262,6 +270,7 @@ namespace SparkEditor
                 }
             }
         }
+        return changed;
     }
 
 } // namespace SparkEditor

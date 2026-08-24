@@ -34,6 +34,7 @@
 #include <atomic>
 #include <string>
 #include <fstream>
+#include <filesystem>
 #include <mutex>
 #include <cstdio>
 #include <ctime>
@@ -219,7 +220,18 @@ namespace Spark
             std::strftime(timeBuf, sizeof(timeBuf), "%Y%m%d_%H%M%S", std::localtime(&t));
 
             std::string ext = (m_config.format == LogFileFormat::CSV) ? ".csv" : ".log";
-            m_currentFilePath = m_config.outputDirectory + m_config.filenamePrefix + "_" + timeBuf + ext;
+            std::error_code directoryError;
+            const std::filesystem::path directory = m_config.outputDirectory;
+            if (!directory.empty())
+                std::filesystem::create_directories(directory, directoryError);
+            if (directoryError)
+            {
+                fprintf(stderr, "[FileLogger] Failed to create log directory: %s\n",
+                        directory.string().c_str());
+                return false;
+            }
+            m_currentFilePath =
+                (directory / (m_config.filenamePrefix + "_" + timeBuf + ext)).string();
 
             m_file.open(m_currentFilePath, std::ios::out | std::ios::trunc);
             if (!m_file.is_open())
@@ -254,8 +266,10 @@ namespace Spark
             std::strftime(timeBuf, sizeof(timeBuf), "%Y%m%d_%H%M%S", std::localtime(&t));
 
             std::string ext = (m_config.format == LogFileFormat::CSV) ? ".csv" : ".log";
-            m_currentFilePath = m_config.outputDirectory + m_config.filenamePrefix + "_" + timeBuf + "_" +
-                                std::to_string(m_fileIndex) + ext;
+            m_currentFilePath =
+                (std::filesystem::path(m_config.outputDirectory) /
+                 (m_config.filenamePrefix + "_" + timeBuf + "_" + std::to_string(m_fileIndex) + ext))
+                    .string();
 
             m_file.open(m_currentFilePath, std::ios::out | std::ios::trunc);
             m_currentFileSize = 0;

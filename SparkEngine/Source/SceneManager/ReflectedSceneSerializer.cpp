@@ -5,7 +5,9 @@
 
 #include <nlohmann_json.h>
 #include <fstream>
+#include <limits>
 #include <unordered_map>
+#include <unordered_set>
 
 using nlohmann::json;
 
@@ -51,6 +53,37 @@ namespace Spark
                 }
             }
             return fields;
+        }
+
+        std::string JsonFieldValueToString(const json& value)
+        {
+            if (value.is_string())
+                return value.get<std::string>();
+            if (value.is_array())
+            {
+                std::string result;
+                for (const json& item : value)
+                {
+                    if (!result.empty())
+                        result += ',';
+                    result += item.is_string() ? item.get<std::string>() : item.dump();
+                }
+                return result;
+            }
+            return value.dump();
+        }
+
+        const json* FindLegacyField(const json& fields, const std::string& type, const std::string& fieldName)
+        {
+            if (fields.contains(fieldName))
+                return &fields[fieldName];
+            if (type == "MeshRenderer" && fieldName == "meshPath" && fields.contains("mesh"))
+                return &fields["mesh"];
+            if (type == "Camera" && fieldName == "nearPlane" && fields.contains("nearClip"))
+                return &fields["nearClip"];
+            if (type == "Camera" && fieldName == "farPlane" && fields.contains("farClip"))
+                return &fields["farClip"];
+            return nullptr;
         }
     } // namespace
 
@@ -113,8 +146,58 @@ namespace Spark
             if (!root.contains("entities") || !root["entities"].is_array())
                 return false;
 
+            // SparkEditor versions before the reflected serializer shipped
+            // `sceneVersion` plus inline component values. Keep those projects
+            // loadable and migrate naturally on their next explicit save.
+            const bool legacyScene = root.contains("sceneVersion") && !root.contains("version");
+
             auto& factory = ComponentFactory::Get();
             std::unordered_map<uint32_t, entt::entity> idMap; // serialized id -> live entity
+            const auto& entities = root["entities"];
+
+            // Resolve every serialized ID before mutating the destination World.
+            // Older scenes may omit IDs for some entities, including scenes that
+            // mix explicit and implicit IDs.  The old single counter could hand
+            // an implicit entity an ID that a later explicit entity also used;
+            // idMap would then silently overwrite the first mapping and parent
+            // links could target the wrong entity.
+            std::vector<uint32_t> serializedIds(entities.size());
+            std::unordered_set<uint32_t> reservedIds;
+            for (size_t index = 0; index < entities.size(); ++index)
+            {
+                const json& ent = entities[index];
+                if (!ent.contains("id"))
+                    continue;
+                if (!ent["id"].is_number_integer() && !ent["id"].is_number_unsigned())
+                    return false;
+
+                const int64_t rawId = ent.value<int64_t>("id", -1);
+                if (rawId < 0 || static_cast<uint64_t>(rawId) > std::numeric_limits<uint32_t>::max())
+                    return false;
+                const uint32_t id = static_cast<uint32_t>(rawId);
+                if (static_cast<entt::entity>(id) == entt::null || !reservedIds.insert(id).second)
+                    return false;
+                serializedIds[index] = id;
+            }
+
+            uint32_t fallbackSerializedId = 0;
+            for (size_t index = 0; index < entities.size(); ++index)
+            {
+                if (entities[index].contains("id"))
+                    continue;
+                while (reservedIds.contains(fallbackSerializedId) ||
+                       static_cast<entt::entity>(fallbackSerializedId) == entt::null)
+                {
+                    if (fallbackSerializedId == std::numeric_limits<uint32_t>::max())
+                        return false;
+                    ++fallbackSerializedId;
+                }
+                serializedIds[index] = fallbackSerializedId;
+                reservedIds.insert(fallbackSerializedId);
+                if (fallbackSerializedId != std::numeric_limits<uint32_t>::max())
+                    ++fallbackSerializedId;
+            }
+
             struct PendingParent
             {
                 entt::entity child;
@@ -122,22 +205,30 @@ namespace Spark
             };
             std::vector<PendingParent> pending;
 
-            for (const json& ent : root["entities"])
+            size_t entityIndex = 0;
+            for (const json& ent : entities)
             {
                 const std::string name = ent.value("name", std::string());
-                entt::entity e = world.CreateEntity(name); // emplaces NameComponent when name non-empty
-                // Note: use int64_t (not "0u"/unsigned int) — the bundled json stub
-                // (ThirdParty/Utils/json/nlohmann_json.h) only specializes get<T>() for
-                // a fixed set of types and unsigned int isn't one of them, which is a
-                // link error (LNK2001), not a compile error.
-                const uint32_t sid = static_cast<uint32_t>(ent.value<int64_t>("id", 0));
-                idMap[sid] = e;
+                const uint32_t sid = serializedIds[entityIndex++];
+                auto& registry = world.GetRegistry();
+                const entt::entity hint = static_cast<entt::entity>(sid);
+                if (registry.valid(hint))
+                    return false;
+                const entt::entity e = registry.create(hint);
+                if (!name.empty())
+                    registry.emplace<NameComponent>(e, NameComponent{name});
+                idMap.emplace(sid, e);
 
                 if (ent.contains("components") && ent["components"].is_array())
                 {
                     for (const json& c : ent["components"])
                     {
-                        const std::string type = c.value("type", std::string());
+                        const std::string sourceType = c.value("type", std::string());
+                        std::string type = sourceType;
+                        if (legacyScene && sourceType == "DirectionalLight")
+                            type = "LightComponent";
+                        else if (legacyScene && sourceType == "CharacterController")
+                            type = "CharacterControllerComponent";
                         if (type.empty() || !factory.IsRegistered(type))
                         {
                             SPARK_LOG_WARN(Spark::LogCategory::Core,
@@ -150,17 +241,30 @@ namespace Spark
                         if (!comp)
                             continue;
                         const TypeInfo* ti = TypeRegistry::Get().FindTypeByName(type);
-                        if (!ti || !c.contains("fields"))
+                        if (!ti)
                             continue;
+                        const json& fields = c.contains("fields") ? c["fields"] : c;
                         for (const FieldInfo& f : ti->fields)
                         {
-                            if (!c["fields"].contains(f.fieldName))
+                            // In the legacy inline schema, c["type"] is the
+                            // component discriminator, not a reflected field.
+                            if (legacyScene && !c.contains("fields") && f.fieldName == "type")
                                 continue;
-                            const auto& fv = c["fields"][f.fieldName];
-                            if (!fv.is_string())
+                            const json* fieldValue = legacyScene ? FindLegacyField(fields, type, f.fieldName)
+                                                                 : (fields.contains(f.fieldName)
+                                                                        ? &fields[f.fieldName]
+                                                                        : nullptr);
+                            if (!fieldValue)
                                 continue;
-                            SetFieldFromString(comp, f, fv.get<std::string>());
+                            if (!legacyScene && !fieldValue->is_string())
+                                continue;
+                            SetFieldFromString(comp, f, JsonFieldValueToString(*fieldValue));
                         }
+
+                        if (legacyScene && sourceType == "DirectionalLight")
+                            static_cast<LightComponent*>(comp)->type = LightComponent::Type::Directional;
+                        if (legacyScene && type == "Camera" && name == "Main Camera")
+                            static_cast<Camera*>(comp)->isMainCamera = true;
                     }
                 }
                 const int parentId = ent.value("parent", -1);

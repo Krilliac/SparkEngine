@@ -34,7 +34,7 @@ namespace SparkEditor
      *
      * Renders as a centered floating input at the top of the screen.
      * Activated with Ctrl+P, supports fuzzy matching and category
-     * prefix filters (e.g., ">" for commands, "@" for entities).
+     * prefix filtering (">" for commands, scene actions, and layouts).
      */
     class CommandPalette
     {
@@ -86,10 +86,25 @@ namespace SparkEditor
          */
         void Render();
 
+        /** Set the query and recompute results. Useful to non-ImGui hosts too. */
+        void SetFilter(const std::string& filter);
+
+        /** Move within the results that are actually visible in the palette. */
+        void MoveSelection(int delta);
+
+        /** Execute the visible selection. Returns true when a callback ran. */
+        bool ExecuteSelected();
+
+        size_t GetFilteredActionCount() const { return m_filteredIndices.size(); }
+        size_t GetVisibleActionCount() const;
+        int GetSelectedIndex() const { return m_selectedIndex; }
+
+        static constexpr size_t MaxVisibleResults = 20;
+
       private:
         void FilterActions();
-        void ExecuteSelected();
         float CalculateMatchScore(const std::string& text, const std::string& query) const;
+        static bool IsCommandLikeCategory(const std::string& category);
 
         bool m_isOpen = false;
         bool m_focusInput = false;
@@ -102,8 +117,6 @@ namespace SparkEditor
 
         // Category prefix filters
         static constexpr char PREFIX_COMMAND = '>';
-        static constexpr char PREFIX_ENTITY = '@';
-        static constexpr char PREFIX_FILE = '/';
     };
 
 } // namespace SparkEditor

@@ -76,7 +76,8 @@ jobs:
           "schemaVersion": 1,
           "label": "tests",
           "message": "${{ steps.loc.outputs.formatted_tests }}",
-          "color": "brightgreen"
+          "color": "brightgreen",
+          "cacheSeconds": 300
         }
         EOF
 
@@ -87,8 +88,9 @@ jobs:
           "label": "C++ lines of code",
           "message": "${{ steps.loc.outputs.formatted_lines }}",
           "color": "blue",
-          "namedLogo": "cplusplus",
-          "logoColor": "white"
+          "logo": "cplusplus",
+          "logoColor": "white",
+          "cacheSeconds": 300
         }
         EOF
 
@@ -98,7 +100,8 @@ jobs:
           "schemaVersion": 1,
           "label": "source files",
           "message": "${{ steps.loc.outputs.formatted_files }}",
-          "color": "green"
+          "color": "green",
+          "cacheSeconds": 300
         }
         EOF
 

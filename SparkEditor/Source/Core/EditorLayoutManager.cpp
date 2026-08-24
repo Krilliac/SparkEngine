@@ -49,6 +49,17 @@ namespace SparkEditor
 
     namespace fs = std::filesystem;
 
+    namespace
+    {
+        bool IsSafeLayoutName(const std::string& name)
+        {
+            if (name.empty() || name == "." || name == "..")
+                return false;
+            return std::none_of(name.begin(), name.end(), [](unsigned char c)
+                                { return c < 0x20 || c == '/' || c == '\\' || c == ':'; });
+        }
+    } // namespace
+
     EditorLayoutManager::EditorLayoutManager() = default;
     EditorLayoutManager::~EditorLayoutManager() = default;
 
@@ -253,7 +264,7 @@ namespace SparkEditor
 
     bool EditorLayoutManager::SaveCurrentLayout(const std::string& name, const std::string& description)
     {
-        if (!m_initialized || name.empty())
+        if (!m_initialized || !IsSafeLayoutName(name))
             return false;
 
         std::error_code ec;
@@ -535,7 +546,7 @@ namespace SparkEditor
 
     bool EditorLayoutManager::LoadLayout(const std::string& name)
     {
-        if (!m_initialized || name.empty())
+        if (!m_initialized || !IsSafeLayoutName(name))
             return false;
 
         const std::string path = LayoutFilePath(name);
@@ -553,7 +564,7 @@ namespace SparkEditor
 
     bool EditorLayoutManager::DeleteLayout(const std::string& name)
     {
-        if (name.empty())
+        if (!m_initialized || !IsSafeLayoutName(name))
             return false;
 
         const std::string path = LayoutFilePath(name);

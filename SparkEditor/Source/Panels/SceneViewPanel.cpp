@@ -53,8 +53,21 @@ namespace SparkEditor
         if (!IsVisible())
             return;
 
+        // The first project/world swap is initiated from a modal.  Without an
+        // explicit one-shot focus request ImGui may display the dockspace
+        // background while neither Scene View nor Game View is the selected
+        // tab.  That surface is easily mistaken for a failed black render
+        // target (and no grid/diagnostic overlays appear because BeginPanel()
+        // returns false).  Selecting the tab is exactly what a manual click
+        // did in the live reproduction.  m_hasRenderedActiveFrame prevents
+        // subsequent scene/play-mode swaps from stealing focus.
+        if (m_requestFocusOnNextRender)
+            ImGui::SetNextWindowFocus();
+
         if (BeginPanel())
         {
+            m_requestFocusOnNextRender = false;
+            m_hasRenderedActiveFrame = true;
             RenderToolbar();
 
             // Get available space for scene rendering
@@ -77,6 +90,39 @@ namespace SparkEditor
                 if (m_srv)
                 {
                     ImGui::Image(static_cast<void*>(m_srv.Get()), viewportSize);
+
+                    const ImVec2 gridMin = ImGui::GetItemRectMin();
+                    const ImVec2 gridMax = ImGui::GetItemRectMax();
+                    ImDrawList* drawList = ImGui::GetWindowDrawList();
+                    if (m_showGrid)
+                    {
+                        constexpr float spacing = 40.0f;
+                        for (float x = gridMin.x; x < gridMax.x; x += spacing)
+                            drawList->AddLine({x, gridMin.y}, {x, gridMax.y}, IM_COL32(130, 140, 155, 24));
+                        for (float y = gridMin.y; y < gridMax.y; y += spacing)
+                            drawList->AddLine({gridMin.x, y}, {gridMax.x, y}, IM_COL32(130, 140, 155, 24));
+                    }
+
+#ifdef _WIN32
+                    if (!m_graphics || !m_world || m_lastRenderStats.drawn == 0)
+                    {
+                        std::string diagnostic;
+                        if (!m_graphics)
+                            diagnostic = "Viewport renderer unavailable";
+                        else if (!m_world)
+                            diagnostic = "No scene World attached";
+                        else if (m_lastRenderStats.candidates == 0)
+                            diagnostic = "No visible MeshRenderer entities";
+                        else
+                            diagnostic = "Mesh candidates found, but no geometry was drawable";
+                        const ImVec2 textSize = ImGui::CalcTextSize(diagnostic.c_str());
+                        const ImVec2 textPos{gridMin.x + (viewportSize.x - textSize.x) * 0.5f, gridMin.y + 18.0f};
+                        drawList->AddRectFilled({textPos.x - 8, textPos.y - 4},
+                                                {textPos.x + textSize.x + 8, textPos.y + textSize.y + 4},
+                                                IM_COL32(15, 18, 24, 210), 4.0f);
+                        drawList->AddText(textPos, IM_COL32(245, 190, 80, 255), diagnostic.c_str());
+                    }
+#endif
                 }
                 else
                 {
@@ -433,7 +479,7 @@ namespace SparkEditor
                 XMMATRIX proj;
                 ComputeCameraMatrices(view, proj);
 
-                Spark::RenderWorldBasic(*m_world, *m_graphics, m_meshCache, view, proj);
+                m_lastRenderStats = Spark::RenderWorldBasic(*m_world, *m_graphics, m_meshCache, view, proj);
             }
 
             // Restore the editor's render target so ImGui renders into the window.

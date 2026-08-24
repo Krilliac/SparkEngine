@@ -37,6 +37,7 @@ namespace SparkEditor
     {
         m_allActions.clear();
         m_filteredIndices.clear();
+        m_selectedIndex = 0;
     }
 
     void CommandPalette::Open()
@@ -115,25 +116,21 @@ namespace SparkEditor
 
             if (inputChanged)
             {
-                m_currentFilter = m_inputBuffer;
-                m_selectedIndex = 0;
-                FilterActions();
+                SetFilter(m_inputBuffer);
             }
 
             // Handle keyboard navigation
-            if (ImGui::IsKeyPressed(ImGuiKey_DownArrow) && !m_filteredIndices.empty())
-            {
-                m_selectedIndex = std::min(m_selectedIndex + 1, static_cast<int>(m_filteredIndices.size()) - 1);
-            }
+            if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+                MoveSelection(1);
             if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+                MoveSelection(-1);
+            if (ImGui::IsKeyPressed(ImGuiKey_Enter) && GetVisibleActionCount() > 0)
             {
-                m_selectedIndex = std::max(m_selectedIndex - 1, 0);
-            }
-            if (ImGui::IsKeyPressed(ImGuiKey_Enter) && !m_filteredIndices.empty())
-            {
-                ExecuteSelected();
-                ImGui::End();
-                return;
+                if (ExecuteSelected())
+                {
+                    ImGui::End();
+                    return;
+                }
             }
 
             ImGui::Separator();
@@ -141,14 +138,14 @@ namespace SparkEditor
             // Hint text
             if (m_currentFilter.empty())
             {
-                ImGui::TextDisabled("Type '>' for commands, '@' for entities, '/' for files");
+                ImGui::TextDisabled("Type '>' for commands, scene actions, and layouts");
             }
 
             // Results list
             float maxHeight = std::min(400.0f, displaySize.y * 0.5f);
             ImGui::BeginChild("PaletteResults", ImVec2(0, maxHeight), false);
 
-            for (size_t i = 0; i < m_filteredIndices.size() && i < 20; ++i)
+            for (size_t i = 0; i < GetVisibleActionCount(); ++i)
             {
                 const auto& action = m_allActions[m_filteredIndices[i]];
                 bool isSelected = (static_cast<int>(i) == m_selectedIndex);
@@ -204,9 +201,37 @@ namespace SparkEditor
 
             // Status bar
             ImGui::Separator();
-            ImGui::TextDisabled("%zu actions available", m_filteredIndices.size());
+            if (GetVisibleActionCount() < m_filteredIndices.size())
+                ImGui::TextDisabled("%zu of %zu actions shown", GetVisibleActionCount(), m_filteredIndices.size());
+            else
+                ImGui::TextDisabled("%zu actions available", m_filteredIndices.size());
         }
         ImGui::End();
+    }
+
+    void CommandPalette::SetFilter(const std::string& filter)
+    {
+        m_currentFilter = filter;
+        m_selectedIndex = 0;
+        FilterActions();
+    }
+
+    size_t CommandPalette::GetVisibleActionCount() const
+    {
+        return std::min(m_filteredIndices.size(), MaxVisibleResults);
+    }
+
+    void CommandPalette::MoveSelection(int delta)
+    {
+        const size_t visibleCount = GetVisibleActionCount();
+        if (visibleCount == 0)
+        {
+            m_selectedIndex = 0;
+            return;
+        }
+
+        const int lastVisibleIndex = static_cast<int>(visibleCount) - 1;
+        m_selectedIndex = std::clamp(m_selectedIndex + delta, 0, lastVisibleIndex);
     }
 
     void CommandPalette::FilterActions()
@@ -231,17 +256,7 @@ namespace SparkEditor
         {
             if (query[0] == PREFIX_COMMAND)
             {
-                categoryFilter = "Command";
-                query = query.substr(1);
-            }
-            else if (query[0] == PREFIX_ENTITY)
-            {
-                categoryFilter = "Entity";
-                query = query.substr(1);
-            }
-            else if (query[0] == PREFIX_FILE)
-            {
-                categoryFilter = "Asset";
+                categoryFilter = ">";
                 query = query.substr(1);
             }
         }
@@ -253,7 +268,8 @@ namespace SparkEditor
         }
 
         std::string lowerQuery = query;
-        std::transform(lowerQuery.begin(), lowerQuery.end(), lowerQuery.begin(), ::tolower);
+        std::transform(lowerQuery.begin(), lowerQuery.end(), lowerQuery.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
         // Score and filter
         struct ScoredIndex
@@ -268,7 +284,7 @@ namespace SparkEditor
             const auto& action = m_allActions[i];
 
             // Category filter
-            if (!categoryFilter.empty() && action.category != categoryFilter)
+            if (categoryFilter == ">" && !IsCommandLikeCategory(action.category))
             {
                 continue;
             }
@@ -294,29 +310,40 @@ namespace SparkEditor
         {
             m_filteredIndices.push_back(s.index);
         }
+
+        const int lastVisibleIndex = static_cast<int>(GetVisibleActionCount()) - 1;
+        m_selectedIndex = lastVisibleIndex >= 0 ? std::clamp(m_selectedIndex, 0, lastVisibleIndex) : 0;
     }
 
-    void CommandPalette::ExecuteSelected()
+    bool CommandPalette::ExecuteSelected()
     {
-        if (m_selectedIndex >= 0 && m_selectedIndex < static_cast<int>(m_filteredIndices.size()))
+        if (m_selectedIndex >= 0 && m_selectedIndex < static_cast<int>(GetVisibleActionCount()))
         {
             size_t actionIdx = m_filteredIndices[static_cast<size_t>(m_selectedIndex)];
             if (actionIdx >= m_allActions.size())
-                return;
+                return false;
             const auto& action = m_allActions[actionIdx];
             if (action.callback)
             {
                 SPARK_LOG_INFO(Spark::LogCategory::Editor, "Executing command: '%s'", action.name.c_str());
                 Close();
                 action.callback();
+                return true;
             }
         }
+        return false;
+    }
+
+    bool CommandPalette::IsCommandLikeCategory(const std::string& category)
+    {
+        return category == "Command" || category == "Scene" || category == "Layout";
     }
 
     float CommandPalette::CalculateMatchScore(const std::string& text, const std::string& query) const
     {
         std::string lowerText = text;
-        std::transform(lowerText.begin(), lowerText.end(), lowerText.begin(), ::tolower);
+        std::transform(lowerText.begin(), lowerText.end(), lowerText.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
         // Exact match
         if (lowerText == query)

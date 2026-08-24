@@ -197,7 +197,9 @@ namespace SparkEditor
             switch (event.type)
             {
             case SDL_QUIT:
-                return false;
+                if (OnShutdownRequested())
+                    return false;
+                break;
 
             case SDL_WINDOWEVENT:
                 if (event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(m_window))

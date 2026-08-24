@@ -93,14 +93,17 @@ void GraphicsEngine::Console_SetSetting(const std::string& setting, float value)
         SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Unknown setting: %s", setting.c_str());
 }
 
-void GraphicsEngine::Console_ReloadShaders()
+bool GraphicsEngine::Console_ReloadShaders()
 {
     auto& rhi = GetRHI();
     if (rhi.initialized)
     {
         rhi.bridge.GetShaderCache().ReloadAll(rhi.bridge.GetDevice());
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shaders reloaded");
+        return true;
     }
+    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Cannot reload shaders before RHI initialization");
+    return false;
 }
 
 bool GraphicsEngine::Console_Screenshot(const std::string& filename)

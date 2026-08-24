@@ -98,6 +98,16 @@ namespace SparkEditor
         void SetWorld(World* world)
         {
             m_world = world;
+            // Opening/replacing a document happens while the Project Browser
+            // modal still owns focus.  ImGui can consequently leave this dock
+            // node with no selected tab: its background looks like a black
+            // viewport, but SceneViewPanel::RenderSceneContent() never runs.
+            // Request focus once on the next frame so the first opened scene
+            // is visible immediately.  Once this panel has rendered an active
+            // frame, later World swaps (including play-mode rollback) preserve
+            // whichever viewport tab the user selected.
+            if (!m_hasRenderedActiveFrame)
+                m_requestFocusOnNextRender = true;
             m_gizmoDragging = false;
             m_gizmoDragAxis = -1;
             m_gizmoDragEntity = entt::null;
@@ -155,6 +165,7 @@ namespace SparkEditor
 
 #ifdef _WIN32
         Spark::WorldMeshCache m_meshCache;
+        Spark::WorldBasicRenderStats m_lastRenderStats;
 #endif
 
         // Camera controls
@@ -170,6 +181,8 @@ namespace SparkEditor
         // Scene state
         bool m_showGrid = true;
         bool m_showGizmos = true;
+        bool m_requestFocusOnNextRender = true;
+        bool m_hasRenderedActiveFrame = false;
         int m_renderTextureWidth = 512;
         int m_renderTextureHeight = 512;
 

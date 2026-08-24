@@ -1307,6 +1307,11 @@ namespace SparkEditor
     void InspectorPanel::RenderWorldBackedInspector(::World* world, ::EntityID entity)
     {
         const uint32_t rawEntity = static_cast<uint32_t>(entity);
+        if (m_worldEditEntity != entity)
+        {
+            m_worldEditBaselines.clear();
+            m_worldEditEntity = entity;
+        }
 
         // Entity header — name (from NameComponent, if present) + raw id,
         // for context. Renaming ECS entities is out of scope for this unit.
@@ -1334,7 +1339,33 @@ namespace SparkEditor
                 if (comp && ti)
                 {
                     ImGui::Indent(4);
-                    RenderReflectedFields(comp, ti->fields);
+                    const std::string editKey = std::to_string(rawEntity) + "|" + type;
+                    const std::string before = m_editorUI ? m_editorUI->CaptureDocumentSnapshot() : std::string{};
+                    const bool changed = RenderReflectedFields(comp, ti->fields);
+                    if (changed && !before.empty() && !m_worldEditBaselines.contains(editKey))
+                        m_worldEditBaselines.emplace(editKey, before);
+
+                    auto baseline = m_worldEditBaselines.find(editKey);
+                    if (baseline != m_worldEditBaselines.end() && !ImGui::IsAnyItemActive())
+                    {
+                        if (m_editorUI)
+                            m_editorUI->RecordAppliedDocumentMutation(baseline->second, "Edit " + type);
+                        m_worldEditBaselines.erase(baseline);
+                    }
+
+                    if (type != "NameComponent" && type != "Transform")
+                    {
+                        if (ImGui::SmallButton((ICON_FA_TRASH " Remove##" + type).c_str()))
+                        {
+                            const std::string removeBefore =
+                                m_editorUI ? m_editorUI->CaptureDocumentSnapshot() : std::string{};
+                            if (factory.RemoveComponent(type, world, rawEntity) && m_editorUI)
+                                m_editorUI->RecordAppliedDocumentMutation(removeBefore, "Remove " + type);
+                            ImGui::Unindent(4);
+                            ImGui::PopID();
+                            continue;
+                        }
+                    }
                     ImGui::Unindent(4);
                 }
                 else
@@ -1384,7 +1415,9 @@ namespace SparkEditor
                 bool has = factory.HasComponent(type, world, rawEntity);
                 if (ImGui::MenuItem(type.c_str(), nullptr, false, !has))
                 {
-                    factory.AddComponent(type, world, rawEntity);
+                    const std::string before = m_editorUI ? m_editorUI->CaptureDocumentSnapshot() : std::string{};
+                    if (factory.AddComponent(type, world, rawEntity) && m_editorUI)
+                        m_editorUI->RecordAppliedDocumentMutation(before, "Add " + type);
                     m_showWorldAddComponentMenu = false;
                     ImGui::CloseCurrentPopup();
                 }

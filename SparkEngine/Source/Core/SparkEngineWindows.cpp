@@ -17,7 +17,9 @@
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/Modding/ModSystem.h"
 #include "Engine/UI/UISystem.h"
+#include "EngineRuntime.h"
 #include "Graphics/WeatherSystem.h"
+#include "ModuleManager.h"
 #include "Utils/Assert.h"
 #include "Utils/FreezeDetector.h"
 #include "Utils/LocalFileCache.h"
@@ -169,12 +171,46 @@ static std::string ParseScenePathOverride(LPWSTR cmdLine)
 HINSTANCE g_hInst;
 WCHAR g_szTitle[MAX_LOADSTRING];
 WCHAR g_szClass[MAX_LOADSTRING];
+HWND g_mainWindow = nullptr;
 std::unique_ptr<Spark::LocalFileCache> g_fileCache;
 std::unique_ptr<Spark::WeatherSystem> g_weatherSystem;
 std::unique_ptr<Spark::UI::UISystem> g_uiSystem;
 std::unique_ptr<Spark::DialogueSystem> g_dialogueSystem;
 std::unique_ptr<Spark::ModSystem> g_modSystem;
 std::string g_scenePath; ///< -scene <path>: reflected-scene JSON rendered when no game module loads
+
+/**
+ * @brief Apply the authoritative engine/project caption to the main window.
+ *
+ * Module discovery can change the caption after InitInstance. Keeping title
+ * construction here also gives startup and the late project-selector path the
+ * same UTF-8-to-UTF-16 conversion and the same stored HWND.
+ */
+void ApplyRuntimeWindowCaption()
+{
+    std::wstring title = L"Spark Engine";
+    auto& runtime = GetEngineRuntime();
+    if (runtime.moduleManager)
+        if (auto* primary = runtime.moduleManager->GetPrimaryModule())
+        {
+            const auto info = primary->GetModuleInfo();
+            if (info.name && *info.name)
+            {
+                const int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, info.name, -1, nullptr, 0);
+                if (count > 1)
+                {
+                    std::wstring moduleName(static_cast<size_t>(count), L'\0');
+                    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, info.name, -1, moduleName.data(), count);
+                    moduleName.resize(static_cast<size_t>(count - 1));
+                    title += L" - ";
+                    title += moduleName;
+                }
+            }
+        }
+
+    if (g_mainWindow)
+        SetWindowTextW(g_mainWindow, title.c_str());
+}
 
 #ifdef SPARK_HEADLESS_SUPPORT
 /**
@@ -431,6 +467,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
     // Initialize all engine subsystems, load modules, register commands
     InitializeWindowedSubsystems(hInstance, lpCmdLine);
+    ApplyRuntimeWindowCaption();
 
     // Run the message pump + tick loop until WM_QUIT
     return RunWindowedMainLoop(hInstance);
