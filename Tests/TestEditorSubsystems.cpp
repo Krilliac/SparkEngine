@@ -34,6 +34,15 @@
 
 using namespace SparkEditor;
 
+namespace
+{
+    std::string TestPathUtf8(const std::filesystem::path& path)
+    {
+        const std::u8string utf8 = path.generic_u8string();
+        return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+    }
+} // namespace
+
 // ============================================================================
 // EditorTheme Data Tests (header-only struct tests)
 // ============================================================================
@@ -1392,6 +1401,28 @@ TEST(ProjectManager_RecordOpenedScenePersistsProjectRelativePath)
     EXPECT_FALSE(ec);
 }
 
+TEST(ProjectManager_RecordOpenedSceneSupportsUnicodeProjectPaths)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path parent = std::filesystem::temp_directory_path() /
+                                         std::filesystem::u8path("spark-unicode-\xC3\xA9-" + std::to_string(stamp));
+    ProjectManager manager;
+    manager.Initialize();
+    EXPECT_TRUE(manager.CreateProject("UnicodeProject", TestPathUtf8(parent), ProjectTemplate::Blank3D));
+
+    const std::filesystem::path root = parent / "UnicodeProject";
+    const std::filesystem::path scene = root / "Scenes" / std::filesystem::u8path("Caf\xC3\xA9.sparkscene");
+    std::ofstream(scene, std::ios::binary) << "{\"entities\":[]}";
+    EXPECT_TRUE(manager.RecordOpenedScene(TestPathUtf8(scene)));
+    EXPECT_EQ(manager.GetCurrentProject().lastOpenedScene, std::string("Scenes/Caf\xC3\xA9.sparkscene"));
+
+    manager.RemoveRecentProject(TestPathUtf8(root / "UnicodeProject.sparkproject"));
+    manager.Shutdown();
+    std::error_code ec;
+    std::filesystem::remove_all(parent, ec);
+    EXPECT_FALSE(ec);
+}
+
 TEST(BuildPipeline_ConfigureUsesExplicitProjectAndInstalledPackage)
 {
     BuildCookPanel::BuildSettings settings;
@@ -1562,6 +1593,9 @@ TEST(PluginManager_GetPluginNull)
 
 #include "Panels/AssetBrowserPanel.h"
 #include "Search/CommandPalette.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "Graphics/GraphicsEngine.h"
+#endif
 
 // --- EditorTheme full method tests ---
 
@@ -1789,10 +1823,25 @@ TEST(Gated_AssetBrowser_ProjectBoundaryNestedNavigationAndReset)
     fs::create_directories(outside);
     {
         std::ofstream(outside / "source.png") << "asset data";
+        std::ofstream(outside / "source.json") << R"({"tiling":[2.0,3.0]})";
         std::ofstream(assets / "root.asset") << "root";
     }
 
     AssetBrowserPanel panel;
+#ifdef SPARK_PLATFORM_WINDOWS
+    GraphicsEngine graphics;
+    panel.SetGraphics(&graphics);
+    const auto pathUtf8 = [](const fs::path& path)
+    {
+        const auto utf8 = path.generic_u8string();
+        return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+    };
+    const std::string projectRootUtf8 = pathUtf8(root / "Project");
+    constexpr const char* importedMaterialPath = "Assets/Nested/Deep/source.json";
+    // Seed the deterministic missing-file cache before the Asset Browser
+    // imports the material into that exact path.
+    EXPECT_TRUE(graphics.GetOrLoadBasicMaterial(importedMaterialPath, projectRootUtf8) == nullptr);
+#endif
     // Use a spelling containing '..' but still resolving to Assets, proving
     // that the stored project asset root is canonical.
     panel.SetProjectPath((assets / "Nested" / "..").string());
@@ -1809,6 +1858,18 @@ TEST(Gated_AssetBrowser_ProjectBoundaryNestedNavigationAndReset)
     EXPECT_TRUE(panel.ImportAsset((outside / "source.png").string()));
     EXPECT_TRUE(fs::exists(deep / "source.png"));
     EXPECT_TRUE(panel.LastOperationSucceeded());
+#ifdef SPARK_PLATFORM_WINDOWS
+    EXPECT_TRUE(panel.ImportAsset((outside / "source.json").string()));
+    EXPECT_TRUE(fs::exists(deep / "source.json"));
+    const GraphicsEngine::BasicMaterial* importedMaterial =
+        graphics.GetOrLoadBasicMaterial(importedMaterialPath, projectRootUtf8);
+    EXPECT_TRUE(importedMaterial != nullptr);
+    if (importedMaterial)
+    {
+        EXPECT_NEAR(importedMaterial->tiling.x, 2.0f, 0.001f);
+        EXPECT_NEAR(importedMaterial->tiling.y, 3.0f, 0.001f);
+    }
+#endif
     EXPECT_FALSE(panel.ImportAsset((outside / "missing.png").string()));
     EXPECT_FALSE(panel.LastOperationSucceeded());
     EXPECT_TRUE(!panel.GetLastOperationMessage().empty());

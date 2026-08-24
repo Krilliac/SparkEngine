@@ -114,6 +114,51 @@ class World
         return entity;
     }
 
+    /**
+     * Attach an entity to a parent while maintaining both Transform edges.
+     * Use this instead of assigning Transform::parent directly so destruction
+     * can repair hierarchy links without an O(entity-count) world scan.
+     */
+    bool SetParent(EntityID child, EntityID parent)
+    {
+        if (!m_registry.valid(child) || child == parent || (parent != entt::null && !m_registry.valid(parent)))
+            return false;
+
+        // Reject cycles before changing either side of the relationship.
+        EntityID ancestor = parent;
+        std::vector<EntityID> visited;
+        while (ancestor != entt::null)
+        {
+            if (ancestor == child)
+                return false;
+            if (std::find(visited.begin(), visited.end(), ancestor) != visited.end())
+                return false;
+            visited.push_back(ancestor);
+            const Transform* ancestorTransform = m_registry.try_get<Transform>(ancestor);
+            if (!ancestorTransform || ancestorTransform->parent == ancestor ||
+                !m_registry.valid(ancestorTransform->parent))
+                break;
+            ancestor = ancestorTransform->parent;
+        }
+
+        Transform& childTransform = m_registry.get_or_emplace<Transform>(child);
+        if (childTransform.parent != entt::null && m_registry.valid(childTransform.parent))
+        {
+            if (Transform* oldParent = m_registry.try_get<Transform>(childTransform.parent))
+                std::erase(oldParent->children, child);
+        }
+
+        childTransform.parent = parent;
+        if (parent != entt::null)
+        {
+            Transform& parentTransform = m_registry.get_or_emplace<Transform>(parent);
+            if (std::find(parentTransform.children.begin(), parentTransform.children.end(), child) ==
+                parentTransform.children.end())
+                parentTransform.children.push_back(child);
+        }
+        return true;
+    }
+
     void DestroyEntity(EntityID entity)
     {
         if (!m_registry.valid(entity))
@@ -124,18 +169,33 @@ class World
         }
         SPARK_LOG_TRACE(Spark::LogCategory::ECS, "Destroying entity %u", static_cast<uint32_t>(entity));
 
-        // Keep hierarchy links valid even when callers destroy through the
-        // generic World API. A stale parent handle can later be recycled by
-        // EnTT and make an unrelated entity appear to own the orphan.
-        auto transforms = m_registry.view<Transform>();
-        for (EntityID other : transforms)
+        // Repair the two hierarchy edges owned by this transform.  Walking
+        // every Transform here makes bulk destruction quadratic (100k
+        // independent entities previously required ~5 billion visits).
+        // Parent/children are maintained as reciprocal links by SetParent,
+        // so cleanup is proportional to this entity's
+        // immediate family instead of the entire world.
+        if (const Transform* transform = m_registry.try_get<Transform>(entity))
         {
-            if (other == entity)
-                continue;
-            Transform& transform = transforms.get<Transform>(other);
-            if (transform.parent == entity)
-                transform.parent = entt::null;
-            std::erase(transform.children, entity);
+            const EntityID parent = transform->parent;
+            const std::vector<EntityID> children = transform->children;
+
+            if (parent != entt::null && m_registry.valid(parent))
+            {
+                if (Transform* parentTransform = m_registry.try_get<Transform>(parent))
+                    std::erase(parentTransform->children, entity);
+            }
+
+            for (EntityID child : children)
+            {
+                if (child == entity || child == entt::null || !m_registry.valid(child))
+                    continue;
+                if (Transform* childTransform = m_registry.try_get<Transform>(child);
+                    childTransform && childTransform->parent == entity)
+                {
+                    childTransform->parent = entt::null;
+                }
+            }
         }
 
         // Clean up any per-entity event subscriptions before destroying

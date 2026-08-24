@@ -11,23 +11,39 @@
  * (docs/superpowers/plans/2026-07-06-terrafront-onboarding.md, Task 1 Step
  * 4 / Global Constraints), TFDatabase pivots straight to the atomic-JSON-file
  * pattern used by TFProgressionSystem (TFProgressionSystem.cpp:385-446) while
- * keeping this public interface identical to what Tasks 2-6 depend on.
+ * exposing write failures to Tasks 2-6 instead of reporting in-memory-only
+ * mutations as successful.
  *
- * Stores accounts[] + characters[] as JSON in a single file (default
- * "Saves/terrafront.db"). Every mutating call flushes to disk immediately
- * (tmp+rename) so Close() is not required for durability — a fresh
- * TFDatabase instance that re-Opens the same path sees prior writes.
+ * Stores accounts[] + characters[] as JSON in a single caller-selected file.
+ * TerraFront authority code passes SavePaths::File("terrafront.db"). Every
+ * mutating call flushes to disk immediately (tmp+rename) and rolls back its
+ * in-memory change if that write fails. Close() therefore only releases the
+ * authority lock; a fresh TFDatabase instance that re-Opens the same path sees
+ * every mutation that previously reported success.
  */
 #pragma once
+
+#include "Persistence/TFSavePaths.h"
 
 #include "Core/TFTypes.h" // FactionId
 
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
 namespace Terrafront
 {
+    enum class TFDatabaseStatus : uint8_t
+    {
+        Closed,
+        ReadyNew,
+        ReadyExisting,
+        Unreadable,
+        Corrupt,
+        Locked,
+        WriteFailed,
+    };
 
     struct TFAccountRecord
     {
@@ -73,15 +89,17 @@ namespace Terrafront
         TFDatabase() = default;
         ~TFDatabase();
 
-        bool Open(const std::string& path); // e.g. "Saves/terrafront.db"; false on failure
-        void Close();
+        bool Open(const std::filesystem::path& path); // false on missing parent/stat/read/parse failure
+        bool Close();                                 // releases the lock; successful mutations are already durable
         bool IsOpen() const { return m_open; }
+        TFDatabaseStatus LastStatus() const { return m_status; }
+        bool RecoveryLatched() const { return m_recoveryLatched; }
 
         // Accounts
         bool CreateAccount(const std::string& username, const std::string& salt, const std::string& hash,
                            TFAccountRecord& out);                                      // false if username taken
         bool FindAccountByUsername(const std::string& username, TFAccountRecord& out); // false if none
-        void TouchLogin(uint64_t accountId, int64_t nowMs);
+        bool TouchLogin(uint64_t accountId, int64_t nowMs);
 
         // Characters
         bool CreateCharacter(uint64_t accountId, const std::string& name, FactionId faction,
@@ -90,24 +108,33 @@ namespace Terrafront
         std::vector<TFCharacterRecord> ListCharacters(uint64_t accountId);
         bool FindCharacter(uint64_t charId, TFCharacterRecord& out);
         bool DeleteCharacter(uint64_t charId);
-        void SaveCharacterProgress(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux, int64_t lastPlayedMs);
+        bool SaveCharacterProgress(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux, int64_t lastPlayedMs);
 
         /// W6 progression expansion: overwrite the meta block (unlocks / loadout /
         /// per-weapon stats) of one character and flush. Additive counterpart to
         /// SaveCharacterProgress; no-op if charId is unknown.
         /// loadout-depth wave: grenade/suit are additive params appended at the
         /// end so this stays a pure extension of the W6 signature.
-        void SaveCharacterMeta(uint64_t charId, const std::vector<std::string>& unlocks,
+        bool SaveCharacterMeta(uint64_t charId, const std::vector<std::string>& unlocks,
                                const std::string& loadoutPrimary, const std::string& loadoutSecondary,
                                const std::string& loadoutTool, const std::string& loadoutGrenade,
                                const std::string& loadoutSuit, const std::vector<TFWeaponStatsRow>& stats);
 
       private:
-        bool LoadFromDisk();
+        enum class LoadResult : uint8_t
+        {
+            Loaded,
+            Unreadable,
+            Corrupt,
+        };
+        LoadResult LoadFromDisk();
         bool SaveToDisk() const;
 
-        std::string m_path;
+        std::filesystem::path m_path;
         bool m_open = false;
+        bool m_recoveryLatched = false;
+        TFDatabaseStatus m_status = TFDatabaseStatus::Closed;
+        SavePaths::ExclusiveFileLock m_fileLock;
 
         std::vector<TFAccountRecord> m_accounts;
         std::vector<TFCharacterRecord> m_characters;

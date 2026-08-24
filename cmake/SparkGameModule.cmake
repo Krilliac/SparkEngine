@@ -9,13 +9,45 @@
     spark_add_game_module(MyGame ${GAME_SOURCES})
 
   This creates a SHARED library with the correct definitions and links
-  against SparkEngineLib. The module will export CreateModule/DestroyModule
-  when you use SPARK_IMPLEMENT_MODULE(YourModuleClass) in a .cpp file.
+  against SparkEngineLib. SPARK_IMPLEMENT_MODULE(YourModuleClass) emits the
+  mandatory SparkGetModuleCompatibility/CreateModule/DestroyModule exports.
 #]=============================================================================]
 
 include_guard(GLOBAL)
 
 set(_SPARK_MODULE_ABI_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
+# Keep the pre-load sidecar in lockstep with the SDK header.  A numeric
+# fallback here is unsafe: changing IModule can otherwise leave every module
+# advertising the previous ABI until somebody manually reconfigures CMake.
+set(_spark_sdk_version_header "")
+set(_spark_sdk_version_candidates
+    "${CMAKE_SOURCE_DIR}/SparkSDK/Include/Spark/Version.h"
+    "${_SPARK_MODULE_ABI_CMAKE_DIR}/../SparkSDK/Include/Spark/Version.h")
+if(DEFINED SPARK_ENGINE_INCLUDE_DIR)
+    list(PREPEND _spark_sdk_version_candidates
+        "${SPARK_ENGINE_INCLUDE_DIR}/Spark/Version.h")
+endif()
+foreach(_candidate IN LISTS _spark_sdk_version_candidates)
+    if(EXISTS "${_candidate}")
+        set(_spark_sdk_version_header "${_candidate}")
+        break()
+    endif()
+endforeach()
+if(NOT _spark_sdk_version_header)
+    message(FATAL_ERROR
+        "SparkGameModule: could not locate Spark/Version.h to determine the module SDK ABI")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${_spark_sdk_version_header}")
+file(STRINGS "${_spark_sdk_version_header}" _spark_sdk_version_line
+    REGEX "^#[ \t]*define[ \t]+SPARK_SDK_VERSION[ \t]+[0-9]+")
+if(NOT _spark_sdk_version_line MATCHES
+   "SPARK_SDK_VERSION[ \t]+([0-9]+)")
+    message(FATAL_ERROR
+        "SparkGameModule: could not parse SPARK_SDK_VERSION from ${_spark_sdk_version_header}")
+endif()
+set_property(GLOBAL PROPERTY SPARK_MODULE_CURRENT_SDK_VERSION "${CMAKE_MATCH_1}")
 
 function(_spark_detect_cxx_language_abi OUTPUT_VARIABLE)
     if(DEFINED SPARK_MODULE_CXX_LANGUAGE_ABI)
@@ -68,7 +100,11 @@ function(spark_configure_module_abi TARGET_NAME)
 
     cmake_parse_arguments(SPARK_ABI "" "SDK_VERSION" "" ${ARGN})
     if(NOT SPARK_ABI_SDK_VERSION)
-        set(_sdk_version 2)
+        get_property(_sdk_version GLOBAL PROPERTY SPARK_MODULE_CURRENT_SDK_VERSION)
+        if(NOT _sdk_version)
+            message(FATAL_ERROR
+                "spark_configure_module_abi: Spark SDK version was not initialized")
+        endif()
     else()
         set(_sdk_version "${SPARK_ABI_SDK_VERSION}")
     endif()
@@ -138,7 +174,7 @@ function(spark_configure_module_abi TARGET_NAME)
             "-DRUNTIME_LIBRARY=${_runtime_library}"
             "-DITERATOR_DEBUG_LEVEL=${_iterator_debug_level}"
             "-DCMAKE_SIZEOF_VOID_P=${CMAKE_SIZEOF_VOID_P}"
-            -P "${_SPARK_MODULE_ABI_CMAKE_DIR}/WriteSparkModuleABI.cmake"
+            -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/WriteSparkModuleABI.cmake"
         COMMENT "Writing ${TARGET_NAME} pre-load ABI sidecar"
         VERBATIM)
 endfunction()

@@ -16,10 +16,13 @@
 #include "../Security/MemoryIntegrity.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/DebugHookManager.h"
+#include "../../Utils/ScopeGuard.h"
+#include "../../Utils/SecureMemory.h"
 #include "../../Utils/Validate.h"
 #include <sstream>
 #include <cstring>
 #include <algorithm>
+#include <utility>
 
 #ifdef SendMessage
 #undef SendMessage
@@ -263,6 +266,7 @@ namespace Spark::Net
         {
             std::lock_guard<std::mutex> lock(m_handlerMutex);
             m_handlers.clear();
+            m_sensitiveMessageTypes.clear();
         }
 
         m_peers.clear();
@@ -585,6 +589,12 @@ namespace Spark::Net
         }
 
         auto serialized = SerializeMessage(copy);
+        const auto clearSerialized = Spark::MakeScopeExit(
+            [sensitive = copy.sensitive, &serialized]
+            {
+                if (sensitive)
+                    Spark::SecureClear(serialized);
+            });
         SendRawTo(serialized, addrIt->second);
         m_stats.packetsSent++;
 #else
@@ -643,7 +653,31 @@ namespace Spark::Net
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         ASSERT_MSG(handler != nullptr, "NetworkManager::RegisterHandler — handler must not be null");
         std::lock_guard<std::mutex> lock(m_handlerMutex);
-        m_handlers[static_cast<uint16_t>(type)] = std::move(handler);
+        const uint16_t value = static_cast<uint16_t>(type);
+        // Complete the potentially-allocating handler insertion first. A
+        // normal registration replaces both the callback and its local
+        // classification; allocation failure must leave the old pair intact.
+        m_handlers[value] = std::move(handler);
+        m_sensitiveMessageTypes.erase(value);
+    }
+
+    void NetworkManager::RegisterSensitiveHandler(MessageType type, MessageHandler handler)
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        ASSERT_MSG(handler != nullptr, "NetworkManager::RegisterSensitiveHandler — handler must not be null");
+        std::lock_guard<std::mutex> lock(m_handlerMutex);
+        const uint16_t value = static_cast<uint16_t>(type);
+        const auto [sensitiveIt, inserted] = m_sensitiveMessageTypes.insert(value);
+        try
+        {
+            m_handlers[value] = std::move(handler);
+        }
+        catch (...)
+        {
+            if (inserted)
+                m_sensitiveMessageTypes.erase(sensitiveIt);
+            throw;
+        }
     }
 
     void NetworkManager::ClearHandlers()
@@ -651,6 +685,7 @@ namespace Spark::Net
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         std::lock_guard<std::mutex> lock(m_handlerMutex);
         m_handlers.clear();
+        m_sensitiveMessageTypes.clear();
     }
 
     // --------------------------------------------------------------------------
@@ -896,6 +931,10 @@ namespace Spark::Net
             int received = ReceiveRaw(rawData, senderAddr);
             if (received <= 0)
                 break;
+            // ReceiveRaw owns the first plaintext wire copy. Erase every
+            // datagram on scope exit so malformed/early-rejected sensitive
+            // packets are covered before their marker can be trusted.
+            const auto clearRawData = Spark::MakeScopeExit([&rawData] { Spark::SecureClear(rawData); });
 
             const NetworkRole role = GetRole();
             if (role == NetworkRole::Client && !IsSameEndpoint(senderAddr, m_serverAddress))
@@ -1045,6 +1084,12 @@ namespace Spark::Net
         if (instability.GetSettings().enabled)
         {
             auto readyPackets = instability.GetReadyPackets(currentTimeMs);
+            const auto clearReadyPackets = Spark::MakeScopeExit(
+                [&readyPackets]
+                {
+                    for (auto& data : readyPackets)
+                        Spark::SecureClear(data);
+                });
             for (auto& pktData : readyPackets)
             {
                 if (m_role == NetworkRole::Client)
@@ -1065,6 +1110,12 @@ namespace Spark::Net
         {
             const auto& msg = toSend.front();
             auto serialized = SerializeMessage(msg);
+            const auto clearSerialized = Spark::MakeScopeExit(
+                [sensitive = msg.sensitive, &serialized]
+                {
+                    if (sensitive)
+                        Spark::SecureClear(serialized);
+                });
             if (serialized.empty())
             {
                 m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
@@ -1090,7 +1141,7 @@ namespace Spark::Net
                 float delayMs = instability.GetDelayMs();
                 if (delayMs > 0.0f)
                 {
-                    instability.QueuePacket(serialized, currentTimeMs + delayMs);
+                    instability.QueuePacket(std::move(serialized), currentTimeMs + delayMs);
 
                     // Track reliable messages for retransmission
                     trackReliable(msg);
@@ -1201,6 +1252,12 @@ namespace Spark::Net
                 auto& retransmitMsg = it->second;
                 retransmitMsg.timestamp = m_serverTime; // Reset retransmit timer
                 auto serialized = SerializeMessage(retransmitMsg);
+                const auto clearSerialized = Spark::MakeScopeExit(
+                    [sensitive = retransmitMsg.sensitive, &serialized]
+                    {
+                        if (sensitive)
+                            Spark::SecureClear(serialized);
+                    });
                 SendRawTo(serialized, *destination);
             }
         }

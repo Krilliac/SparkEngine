@@ -260,7 +260,7 @@ namespace Terrafront
                         fac = fc->faction;
                     const auto pylon = world->CreateEntity("TF_AegisPylons");
                     Transform& pt = world->AddComponent<Transform>(pylon);
-                    pt.parent = e;
+                    world->SetParent(pylon, e);
                     MeshRenderer& pmr = world->AddComponent<MeshRenderer>(pylon);
                     pmr.meshPath = pylonPath;
                     pmr.materialPath = FactionStructureMaterial(*m_ctx, fac);

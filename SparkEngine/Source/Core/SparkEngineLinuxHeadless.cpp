@@ -99,12 +99,24 @@ int RunHeadlessLinux(int argc, char* argv[])
 
     int frameCount = 0;
 
-    while (!g_shutdownRequested)
+    while (true)
     {
+        if (g_shutdownRequested)
+        {
+            if (CanShutdownEngine())
+                break;
+            console.LogError("Shutdown request cancelled: a module could not checkpoint for safe unload");
+            g_shutdownRequested.store(false, std::memory_order_relaxed);
+        }
+
         if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
         {
-            console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
-            break;
+            if (CanShutdownEngine())
+            {
+                console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+                break;
+            }
+            console.LogError("[TEST] Exit postponed: a module could not checkpoint for unload");
         }
 
         SPARK_HEARTBEAT();
@@ -147,7 +159,7 @@ int RunHeadlessLinux(int argc, char* argv[])
             std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
     }
 
-    ShutdownLinux();
+    ShutdownLinuxAfterPreflight();
     Spark::SimpleConsole::GetInstance().LogInfo("Headless server shut down cleanly.");
     return 0;
 }
@@ -185,15 +197,33 @@ int RunNoSDL2Fallback(int argc, char* argv[])
 
     InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
 
-    // Minimal loop — process a few ticks to validate initialization, then exit
-    for (int frame = 0; frame < 10 && !g_shutdownRequested; ++frame)
+    // Minimal loop — process a few ticks to validate initialization, then
+    // exit only after every module reaches a safe unload checkpoint.  Keep
+    // ticking on a veto so transient persistence failures can be retried;
+    // returning from main would destroy runtime state despite the veto.
+    int frame = 0;
+    bool exitPostponedLogged = false;
+    while (true)
     {
+        if (g_shutdownRequested || frame >= 10)
+        {
+            if (CanShutdownEngine())
+                break;
+            if (!exitPostponedLogged)
+            {
+                noSdlConsole.LogError("Fallback exit postponed: a module could not checkpoint for safe unload");
+                exitPostponedLogged = true;
+            }
+            g_shutdownRequested.store(false, std::memory_order_relaxed);
+        }
+
         float dt = GetEngineRuntime().timer ? GetEngineRuntime().timer->GetDeltaTime() : 0.016f;
         TickFrame(dt);
+        ++frame;
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 
-    ShutdownLinux();
+    ShutdownLinuxAfterPreflight();
     return 0;
 }
 #endif // !SPARK_SDL2_AVAILABLE

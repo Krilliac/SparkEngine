@@ -48,6 +48,11 @@ namespace
             return !failOnLoad || failOnLoad[0] == '\0';
         }
         void OnUnload() override {}
+        bool CanUnload() override
+        {
+            const char* vetoUnload = std::getenv("SPARK_MODULE_ABI_VETO_UNLOAD");
+            return !vetoUnload || vetoUnload[0] == '\0';
+        }
         void OnUpdate(float) override {}
     };
 } // namespace

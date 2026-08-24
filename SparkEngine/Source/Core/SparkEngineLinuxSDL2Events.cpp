@@ -179,12 +179,24 @@ void RunSDL2MainLoop(bool pollSdlEvents)
 
     int frameCount = 0;
 
-    while (!g_shutdownRequested)
+    while (true)
     {
+        if (g_shutdownRequested)
+        {
+            if (CanShutdownEngine())
+                break;
+            console.LogError("Shutdown request cancelled: a module could not checkpoint for safe unload");
+            g_shutdownRequested.store(false, std::memory_order_relaxed);
+        }
+
         if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
         {
-            console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
-            break;
+            if (CanShutdownEngine())
+            {
+                console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+                break;
+            }
+            console.LogError("[TEST] Exit postponed: a module could not checkpoint for unload");
         }
 
         bool running = true;
@@ -203,7 +215,12 @@ void RunSDL2MainLoop(bool pollSdlEvents)
         }
 
         if (!running)
-            break;
+        {
+            if (CanShutdownEngine())
+                break;
+            console.LogError("Window close cancelled: a module could not checkpoint for safe unload");
+            continue;
+        }
 
         float dt = GetEngineRuntime().timer ? GetEngineRuntime().timer->GetDeltaTime() : 0.016f;
         TickFrame(dt);

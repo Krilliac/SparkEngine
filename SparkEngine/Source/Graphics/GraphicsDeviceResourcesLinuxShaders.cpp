@@ -12,6 +12,7 @@
 
 #include "GraphicsEngine.h"
 #include "GraphicsEngineRHI.h"
+#include "ProjectAssetPath.h"
 #include "RHI/RHI.h"
 #include "../Utils/Validate.h"
 
@@ -306,11 +307,45 @@ ID3D11ShaderResourceView* GraphicsEngine::GetOrLoadTextureSRV(const std::string&
     return nullptr;
 }
 
-// Mirrors the Windows one-liner: drop any cached parse for this material JSON
-// so a subsequent load re-reads it. Portable (plain unordered_map::erase).
-bool GraphicsEngine::InvalidateBasicMaterial(const std::string& jsonPath)
+bool GraphicsEngine::InvalidateBasicTexture(const std::string& path)
 {
-    return m_basicMaterialCache.erase(jsonPath) != 0;
+    const auto canonical = Spark::CanonicalizeFilesystemPath(path);
+    if (!canonical)
+        return false;
+    const size_t erasedSuccess = m_basicTextureCache.erase(canonical->cacheKey);
+    const size_t erasedFailure = m_failedBasicTexturePaths.erase(canonical->cacheKey);
+    return erasedSuccess != 0 || erasedFailure != 0;
+}
+
+bool GraphicsEngine::InvalidateBasicMaterial(const std::string& jsonPath, std::string_view projectRootUtf8)
+{
+    const auto canonical = Spark::ResolveProjectAssetPath(projectRootUtf8, jsonPath);
+    const auto root = Spark::CanonicalizeFilesystemPath(projectRootUtf8);
+    if (!canonical || !root)
+        return false;
+
+    const std::string materialCacheKey = root->cacheKey + '\n' + canonical->cacheKey;
+    bool erased = m_failedBasicMaterialPaths.erase(materialCacheKey) != 0;
+    for (auto it = m_basicMaterialCache.begin(); it != m_basicMaterialCache.end();)
+    {
+        if (it->second.jsonPath == canonical->cacheKey)
+        {
+            it = m_basicMaterialCache.erase(it);
+            erased = true;
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    for (auto it = m_basicMaterialAliases.begin(); it != m_basicMaterialAliases.end();)
+    {
+        if (!m_basicMaterialCache.contains(it->second))
+            it = m_basicMaterialAliases.erase(it);
+        else
+            ++it;
+    }
+    return erased;
 }
 
 #endif // !SPARK_PLATFORM_WINDOWS

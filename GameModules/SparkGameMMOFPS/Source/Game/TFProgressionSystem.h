@@ -20,8 +20,8 @@
  *    faction holds any flux-producing region). Wallet capped at
  *    kFluxWalletCap. ServerSpendFlux gates W3 vehicle/exosuit purchases.
  *  - Persistence: per-player {xp, rank, flux} under the "progression" key of
- *    Saves/terrafront_state.json (shared with territory state; this system
- *    read-modify-writes only its own key). Written atomically (tmp+rename)
+ *    `terrafront_state.<continent-key>.json` under SavePaths::Root(); territory uses its own
+ *    file. This system read-modify-writes only its own key. Written with tmp+rename
  *    on change (2 s debounce) and on shutdown; loaded on boot. NOTE:
  *    PlayerIds are session-scoped in W2, so persisted rows only re-attach
  *    within reconnects that reuse the same id (accounts are out of scope).
@@ -91,7 +91,8 @@ namespace Terrafront
         bool Initialize(TFGameContext& ctx, TFEventBus& events);
         void Update(float deltaTime);
         void FixedUpdate(float fixedDeltaTime);
-        void Shutdown();
+        bool Checkpoint(); ///< persist pending mutations without dismantling runtime state
+        bool Shutdown();   ///< false preserves dirty state after a failed final checkpoint
         void RenderDebugUI();
 
         // --- W2 cross-agent contract (frozen this wave) ------------------------
@@ -109,7 +110,7 @@ namespace Terrafront
         /// Cumulative XP threshold to hold `rank` (rank 1 -> 0). Clamped to 1..30.
         uint32_t XPForRank(uint16_t rank) const;
 
-        /// Flush progression to Saves/terrafront_state.json now (tmp+rename).
+        /// Flush progression to the active continent's qualified state file now.
         /// Public so the orchestrator can wire a tf_save console command.
         bool SaveNow();
 
@@ -265,6 +266,7 @@ namespace Terrafront
         float m_fluxAccum{0.0f}; ///< seconds toward the next flux income tick
         float m_sinceSave{0.0f}; ///< seconds since the last disk write
         bool m_dirty{false};
+        bool m_persistenceBlocked{false}; ///< qualified world save failed validation/read
         uint32_t m_awards{0};
         uint32_t m_saves{0};
         bool m_showDebug{false};

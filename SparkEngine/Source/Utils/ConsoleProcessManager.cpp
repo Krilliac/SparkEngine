@@ -77,8 +77,13 @@ namespace Spark
 
         m_commandRegistry->RegisterCommand(
             "quit",
-            [](const std::vector<std::string>& args) -> std::string
+            [this](const std::vector<std::string>& args) -> std::string
             {
+                if (m_shutdownRequestHandler)
+                {
+                    m_shutdownRequestHandler();
+                    return "Shutdown requested...";
+                }
 #ifdef SPARK_PLATFORM_WINDOWS
                 PostQuitMessage(0);
 #else
@@ -241,6 +246,7 @@ namespace Spark
     void ConsoleProcessManager::Shutdown()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+        m_shutdownRequestHandler = {};
         if (!m_initialized)
             return;
 

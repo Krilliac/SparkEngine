@@ -149,8 +149,27 @@ class ModuleManager
     /** @brief Call OnResize() on all modules */
     void ResizeAll(int width, int height);
 
-    /** @brief Shut down all modules in reverse load order, then unload DLLs */
-    void ShutdownAll();
+    /**
+     * @brief Non-destructively ask every initialized module whether shutdown is safe.
+     * @return false without changing module lifecycle state when any module vetoes.
+     */
+    bool CanShutdownAll();
+
+    /**
+     * @brief Shut down modules in reverse load order.
+     * @return true when every initialized module passed CanUnload and shut down.
+     * A false result leaves vetoing modules initialized and usable for retry.
+     */
+    bool ShutdownAll();
+
+    /**
+     * @brief Commit module shutdown after a successful CanShutdownAll preflight.
+     *
+     * This is the non-fallible phase of the two-phase shutdown contract. The
+     * caller must not tick modules or otherwise mutate persistent state
+     * between preflight and this call.
+     */
+    void ShutdownAllAfterPreflight();
 
     /**
      * @brief Reload a specific module by name (for hot-reload)
@@ -167,7 +186,7 @@ class ModuleManager
      */
     bool ReloadModule(const std::string& name, Spark::IEngineContext* context);
 
-    /** @brief Unload all modules and free all DLLs */
+    /** @brief Unload shut-down modules and free their DLLs. Active modules are retained. */
     void UnloadAll();
 
     /** @brief Get a module by name, or nullptr if not found */

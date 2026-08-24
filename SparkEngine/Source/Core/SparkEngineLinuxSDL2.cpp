@@ -424,7 +424,7 @@ int RunSDL2Windowed(int argc, char* argv[])
     InitializeSDL2Subsystems(window, argc, argv);
     RunSDL2MainLoop(/*pollSdlEvents=*/sdlInitOk);
 
-    ShutdownLinux();
+    ShutdownLinuxAfterPreflight();
     if (glContext)
         SDL_GL_DeleteContext(glContext);
     Spark::MacOS::DestroyMetalView(sdlMetalView);

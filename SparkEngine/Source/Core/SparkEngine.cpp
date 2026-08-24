@@ -258,15 +258,21 @@ void ShutdownPhysics()
 // unmapped memory and hung the process in the crash handler on shutdown.
 std::unique_ptr<::World> g_engineEcsWorld;
 
-void ShutdownEngine()
+bool CanShutdownEngine()
 {
+    auto& rt = GetEngineRuntime();
+    return !rt.moduleManager || rt.moduleManager->CanShutdownAll();
+}
+
+void ShutdownEngineAfterPreflight()
+{
+    auto& rt = GetEngineRuntime();
+
     // Stop the freeze detector first — we're intentionally tearing down,
     // don't let the watchdog interpret shutdown delays as a freeze.
     Spark::FreezeDetector::GetInstance().Stop();
 
     SPARK_DEBUG_HOOK(EnginePreShutdown, GetGameplayFrameCount(), 0.0f);
-
-    auto& rt = GetEngineRuntime();
 
     // Publish EngineShutdownEvent before tearing down systems
     if (rt.eventBus)
@@ -283,7 +289,11 @@ void ShutdownEngine()
 
     if (rt.moduleManager)
     {
-        rt.moduleManager->ShutdownAll();
+        // CanShutdownEngine already completed the only fallible phase. Never
+        // ask modules to checkpoint again after gameplay/debug teardown has
+        // begun: a second veto here used to strand a partially destroyed
+        // engine and let platform entry points exit anyway.
+        rt.moduleManager->ShutdownAllAfterPreflight();
 
         // Clear console commands and EventBus channels BEFORE dlclose()
         // unmaps module code. Command handlers and ChannelOf<E> vtables
@@ -360,6 +370,17 @@ void ShutdownEngine()
 
     SPARK_DEBUG_HOOK(EnginePostShutdown, GetGameplayFrameCount(), 0.0f);
     Spark::DebugHookManager::GetInstance().Clear();
+}
+
+void ShutdownEngine()
+{
+    if (!CanShutdownEngine())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                        "Engine shutdown postponed because a module could not reach a safe unload checkpoint");
+        return;
+    }
+    ShutdownEngineAfterPreflight();
 }
 
 // Test automation: exit after N frames (0 = run indefinitely).

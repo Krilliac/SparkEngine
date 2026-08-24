@@ -94,8 +94,13 @@ namespace Terrafront
         // W5 onboarding (Task 4): login -> char-select/create/delete -> enter-world.
         // Routed through RouteClientMessage so the socket path and the listen-host/
         // standalone loopback path (TFClientNet::RouteLoopback) share one dispatch.
-        for (TFMsg id : {TFMsg::LoginRequest, TFMsg::RegisterRequest, TFMsg::CharListRequest, TFMsg::CharCreateReq,
-                         TFMsg::CharDeleteReq, TFMsg::EnterWorldReq})
+        for (TFMsg id : {TFMsg::LoginRequest, TFMsg::RegisterRequest})
+        {
+            nm.RegisterSensitiveHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
+                                        [this, id](const NetworkMessage& m)
+                                        { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
+        }
+        for (TFMsg id : {TFMsg::CharListRequest, TFMsg::CharCreateReq, TFMsg::CharDeleteReq, TFMsg::EnterWorldReq})
         {
             route(id, [this, id](const NetworkMessage& m)
                   { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
@@ -219,8 +224,14 @@ namespace Terrafront
         if (auto cIt = m_activeCharacter.find(id); cIt != m_activeCharacter.end())
         {
             if (m_ctx->characters && m_ctx->progression)
-                m_ctx->characters->PersistProgress(cIt->second, m_ctx->progression->XPOf(id),
-                                                   m_ctx->progression->RankOf(id), m_ctx->progression->FluxOf(id));
+            {
+                const bool persisted =
+                    m_ctx->characters->PersistProgress(cIt->second, m_ctx->progression->XPOf(id),
+                                                       m_ctx->progression->RankOf(id), m_ctx->progression->FluxOf(id));
+                if (!persisted && !m_ctx->progression->SaveNow())
+                    SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                    "[TF] final progression persistence failed for disconnected player %u", id);
+            }
             m_activeCharacter.erase(cIt);
         }
         // final-review #2 (leak): drop the runtime progression record for

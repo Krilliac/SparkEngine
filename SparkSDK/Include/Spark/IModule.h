@@ -83,7 +83,8 @@ namespace Spark
      *   2. OnUpdate()     — called every frame (variable timestep)
      *   3. OnFixedUpdate() — called at fixed intervals for deterministic logic
      *   4. OnRender()     — called every frame after update
-     *   5. OnUnload()     — called before the DLL is unloaded
+     *   5. CanUnload()    — non-destructive durability/readiness gate
+     *   6. OnUnload()     — called only after CanUnload() succeeds
      *
      * Optional hooks (OnPause, OnResume, OnImGui, OnResize) are called when
      * the corresponding engine events occur.
@@ -105,6 +106,23 @@ namespace Spark
 
         /** @brief Called before the DLL is unloaded. Release all resources. */
         virtual void OnUnload() = 0;
+
+        /**
+         * @brief Non-destructive gate run before shutdown or hot reload.
+         *
+         * Return false when unloading now would lose state. The module must
+         * remain fully usable after a false result so the caller can repair
+         * the condition and retry. The default keeps existing stateless
+         * modules unloadable without extra code.
+         */
+        virtual bool CanUnload() { return true; }
+
+        /**
+         * @brief Whether a replacement image may initialize beside this one.
+         * Stateful modules holding exclusive external resources should return
+         * false and require a full restart instead of transactional hot reload.
+         */
+        virtual bool SupportsHotReload() const { return true; }
 
         /**
          * @brief Called every frame to update module state
@@ -157,9 +175,12 @@ namespace Spark
 /**
  * @brief Function signatures for module factory exports
  *
- * Every module DLL must export these two functions:
+ * Every module DLL must export these factory functions plus the compatibility
+ * descriptor declared by ModuleABI.h:
  *   extern "C" SPARK_MODULE_API Spark::IModule* CreateModule();
  *   extern "C" SPARK_MODULE_API void DestroyModule(Spark::IModule*);
+ *   extern "C" SPARK_MODULE_API const SparkModuleCompatibilityDescriptor*
+ *       SparkGetModuleCompatibility();
  */
 using CreateModuleFn = Spark::IModule* (*)();
 using DestroyModuleFn = void (*)(Spark::IModule*);

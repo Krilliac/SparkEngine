@@ -6,6 +6,8 @@
  */
 
 #include "AssetBrowserPanel.h"
+
+#include "Graphics/GraphicsEngine.h"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -25,6 +27,32 @@ namespace SparkEditor
     {
         namespace fs = std::filesystem;
 
+        std::string PathToUtf8(const fs::path& path) noexcept
+        {
+            try
+            {
+                const auto utf8 = path.generic_u8string();
+                return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+            }
+            catch (...)
+            {
+                return {};
+            }
+        }
+
+        fs::path PathFromUtf8(std::string_view value) noexcept
+        {
+            try
+            {
+                const auto* begin = reinterpret_cast<const char8_t*>(value.data());
+                return fs::path(std::u8string(begin, begin + value.size()));
+            }
+            catch (...)
+            {
+                return {};
+            }
+        }
+
         std::string CanonicalDirectoryString(const fs::path& path, std::error_code& ec)
         {
             if (path.empty() || !fs::is_directory(path, ec) || ec)
@@ -33,7 +61,7 @@ namespace SparkEditor
             }
 
             fs::path canonical = fs::weakly_canonical(path, ec);
-            return ec ? std::string{} : canonical.string();
+            return ec ? std::string{} : PathToUtf8(canonical);
         }
 
         bool IsContainedPath(const fs::path& root, const fs::path& candidate)
@@ -72,7 +100,7 @@ namespace SparkEditor
                     directories.push_back(it->path());
             }
             std::sort(directories.begin(), directories.end(), [](const fs::path& lhs, const fs::path& rhs)
-                      { return lhs.filename().string() < rhs.filename().string(); });
+                      { return PathToUtf8(lhs.filename()) < PathToUtf8(rhs.filename()); });
             return directories;
         }
     } // namespace
@@ -204,8 +232,8 @@ namespace SparkEditor
             ImGui::SameLine();
 
             // Build breadcrumb path
-            std::filesystem::path currentPath(m_currentFolder);
-            std::filesystem::path rootPath(m_projectPath);
+            std::filesystem::path currentPath = PathFromUtf8(m_currentFolder);
+            std::filesystem::path rootPath = PathFromUtf8(m_projectPath);
             std::vector<std::filesystem::path> breadcrumbs;
             std::filesystem::path tempPath = currentPath;
             while (tempPath != rootPath && tempPath.has_parent_path() && tempPath != tempPath.parent_path())
@@ -224,10 +252,10 @@ namespace SparkEditor
                     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), ICON_FA_CHEVRON_RIGHT);
                     ImGui::SameLine(0, 2);
                 }
-                std::string label = (i == 0) ? ICON_FA_HOME " Assets" : breadcrumbs[i].filename().string();
+                std::string label = (i == 0) ? ICON_FA_HOME " Assets" : PathToUtf8(breadcrumbs[i].filename());
                 if (ImGui::SmallButton(label.c_str()))
                 {
-                    NavigateToFolder(breadcrumbs[i].string());
+                    NavigateToFolder(PathToUtf8(breadcrumbs[i]));
                 }
             }
 
@@ -279,7 +307,7 @@ namespace SparkEditor
         ClearProject();
 
         std::error_code ec;
-        m_projectPath = CanonicalDirectoryString(std::filesystem::path(projectPath), ec);
+        m_projectPath = CanonicalDirectoryString(PathFromUtf8(projectPath), ec);
         if (m_projectPath.empty())
         {
             SetOperationResult(false, "Asset root is missing or inaccessible");
@@ -307,8 +335,8 @@ namespace SparkEditor
     bool AssetBrowserPanel::NavigateToFolder(const std::string& folderPath)
     {
         std::error_code ec;
-        const std::string canonical = CanonicalDirectoryString(std::filesystem::path(folderPath), ec);
-        if (canonical.empty() || !IsContainedByProject(canonical))
+        const std::string canonical = CanonicalDirectoryString(PathFromUtf8(folderPath), ec);
+        if (canonical.empty() || !IsContainedByProject(PathFromUtf8(canonical)))
         {
             SetOperationResult(false, "Cannot leave the active project's Assets folder");
             return false;
@@ -338,7 +366,7 @@ namespace SparkEditor
         {
             if (HasValidProjectRoot())
             {
-                for (const auto& folder : ChildDirectories(m_projectPath))
+                for (const auto& folder : ChildDirectories(PathFromUtf8(m_projectPath)))
                     RenderFolderNode(folder);
             }
             ImGui::TreePop();
@@ -356,9 +384,9 @@ namespace SparkEditor
             return;
 
         const auto children = ChildDirectories(folderPath);
-        const bool isCurrentFolder = std::filesystem::path(m_currentFolder) == folderPath;
+        const bool isCurrentFolder = PathFromUtf8(m_currentFolder) == folderPath;
         std::string label = std::string(isCurrentFolder ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER) + "  " +
-                            folderPath.filename().string() + "###" + folderPath.string();
+                            PathToUtf8(folderPath.filename()) + "###" + PathToUtf8(folderPath);
 
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
         if (children.empty())
@@ -368,7 +396,7 @@ namespace SparkEditor
 
         const bool open = ImGui::TreeNodeEx(label.c_str(), flags);
         if (ImGui::IsItemClicked())
-            NavigateToFolder(folderPath.string());
+            NavigateToFolder(PathToUtf8(folderPath));
 
         if (open && !children.empty())
         {
@@ -397,8 +425,8 @@ namespace SparkEditor
                     ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(itemIndex % columns);
 
-                const std::filesystem::path folderPath(folder);
-                const std::string folderName = folderPath.filename().string();
+                const std::filesystem::path folderPath = PathFromUtf8(folder);
+                const std::string folderName = PathToUtf8(folderPath.filename());
                 const ImVec2 pos = ImGui::GetCursorScreenPos();
                 const ImVec2 size(m_thumbnailSize, m_thumbnailSize);
                 ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -431,11 +459,11 @@ namespace SparkEditor
                 }
                 ImGui::TableSetColumnIndex(itemIndex % columns);
 
-                std::filesystem::path assetPath(asset);
-                std::string ext = assetPath.extension().string();
+                std::filesystem::path assetPath = PathFromUtf8(asset);
+                std::string ext = PathToUtf8(assetPath.extension());
                 std::transform(ext.begin(), ext.end(), ext.begin(),
                                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                std::string filename = assetPath.filename().string();
+                std::string filename = PathToUtf8(assetPath.filename());
                 const char* fileIcon = GetFileTypeIcon(ext);
                 ImU32 iconColor = GetFileTypeColor(ext);
 
@@ -475,9 +503,9 @@ namespace SparkEditor
                                        ext.empty() ? "Unknown" : ext.c_str());
                     try
                     {
-                        if (std::filesystem::exists(asset))
+                        if (std::filesystem::exists(assetPath))
                         {
-                            auto fsize = std::filesystem::file_size(asset);
+                            auto fsize = std::filesystem::file_size(assetPath);
                             if (fsize > 1024 * 1024)
                                 ImGui::Text("Size: %.1f MB", fsize / (1024.0f * 1024.0f));
                             else if (fsize > 1024)
@@ -518,17 +546,18 @@ namespace SparkEditor
 
         if (!m_selectedAsset.empty())
         {
-            ImGui::Text("Selected: %s", std::filesystem::path(m_selectedAsset).filename().string().c_str());
+            ImGui::Text("Selected: %s", PathToUtf8(PathFromUtf8(m_selectedAsset).filename()).c_str());
             ImGui::Text("Path: %s", m_selectedAsset.c_str());
 
             try
             {
-                if (std::filesystem::exists(m_selectedAsset))
+                const std::filesystem::path selectedPath = PathFromUtf8(m_selectedAsset);
+                if (std::filesystem::exists(selectedPath))
                 {
-                    auto fileSize = std::filesystem::file_size(m_selectedAsset);
+                    auto fileSize = std::filesystem::file_size(selectedPath);
                     ImGui::Text("Size: %ju bytes", static_cast<uintmax_t>(fileSize));
 
-                    (void)std::filesystem::last_write_time(m_selectedAsset);
+                    (void)std::filesystem::last_write_time(selectedPath);
                     ImGui::Text("Modified: [File timestamp]");
                 }
             }
@@ -555,26 +584,27 @@ namespace SparkEditor
             if (!HasValidProjectRoot())
                 return;
 
-            if (!IsContainedByProject(m_currentFolder) || !std::filesystem::is_directory(m_currentFolder))
+            if (!IsContainedByProject(PathFromUtf8(m_currentFolder)) ||
+                !std::filesystem::is_directory(PathFromUtf8(m_currentFolder)))
             {
                 m_currentFolder = m_projectPath;
                 m_selectedAsset.clear();
             }
 
-            for (const auto& entry : std::filesystem::directory_iterator(m_currentFolder))
+            for (const auto& entry : std::filesystem::directory_iterator(PathFromUtf8(m_currentFolder)))
             {
                 if (entry.is_regular_file())
                 {
-                    m_assets.push_back(entry.path().string());
+                    m_assets.push_back(PathToUtf8(entry.path()));
                 }
                 else if (!entry.is_symlink() && entry.is_directory() && IsContainedByProject(entry.path()))
                 {
-                    m_folders.push_back(entry.path().string());
+                    m_folders.push_back(PathToUtf8(entry.path()));
                 }
             }
 
             const auto byFilename = [](const std::string& lhs, const std::string& rhs)
-            { return std::filesystem::path(lhs).filename().string() < std::filesystem::path(rhs).filename().string(); };
+            { return PathToUtf8(PathFromUtf8(lhs).filename()) < PathToUtf8(PathFromUtf8(rhs).filename()); };
             std::sort(m_assets.begin(), m_assets.end(), byFilename);
             std::sort(m_folders.begin(), m_folders.end(), byFilename);
         }
@@ -592,7 +622,7 @@ namespace SparkEditor
             SetOperationResult(false, "Import failed: source path is empty");
             return false;
         }
-        std::filesystem::path sourcePath(filePath);
+        std::filesystem::path sourcePath = PathFromUtf8(filePath);
 
         if (!HasValidProjectRoot())
         {
@@ -618,12 +648,12 @@ namespace SparkEditor
 
         // Revalidate the destination every time. The current directory may have
         // been removed or replaced by a symlink since the last UI frame.
-        std::filesystem::path destDir(m_currentFolder);
+        std::filesystem::path destDir = PathFromUtf8(m_currentFolder);
         if (!std::filesystem::is_directory(destDir, ec) || ec || !IsContainedByProject(destDir))
         {
             SetOperationResult(false, "Import failed: destination is outside the active project");
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Import rejected unsafe destination: %s",
-                            destDir.string().c_str());
+                            PathToUtf8(destDir).c_str());
             return false;
         }
 
@@ -637,12 +667,12 @@ namespace SparkEditor
         // Avoid overwriting: append a numeric suffix if a file with the same name exists
         if (std::filesystem::exists(destPath))
         {
-            std::string stem = sourcePath.stem().string();
-            std::string ext = sourcePath.extension().string();
+            const std::string stem = PathToUtf8(sourcePath.stem());
+            const std::string ext = PathToUtf8(sourcePath.extension());
             int counter = 1;
             do
             {
-                destPath = destDir / (stem + "_" + std::to_string(counter) + ext);
+                destPath = destDir / PathFromUtf8(stem + "_" + std::to_string(counter) + ext);
                 ++counter;
             } while (std::filesystem::exists(destPath));
         }
@@ -656,8 +686,39 @@ namespace SparkEditor
         try
         {
             std::filesystem::copy_file(sourcePath, destPath, std::filesystem::copy_options::none);
+            if (m_graphics)
+            {
+                // std::filesystem::path::string() uses the active Windows code
+                // page and corrupts non-ASCII cache identities. Convert the
+                // native path explicitly to UTF-8 before crossing the graphics
+                // API boundary.
+                const std::string destinationUtf8 = PathToUtf8(destPath);
+                if (!destinationUtf8.empty())
+                    m_graphics->InvalidateBasicTexture(destinationUtf8);
+
+                std::string extension = PathToUtf8(destPath.extension());
+                std::transform(extension.begin(), extension.end(), extension.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                if (extension == ".json")
+                {
+                    const std::filesystem::path projectRoot = PathFromUtf8(m_projectPath).parent_path();
+                    std::error_code relativeError;
+                    const std::filesystem::path projectRelative =
+                        std::filesystem::relative(destPath, projectRoot, relativeError);
+                    if (!relativeError && !projectRelative.empty())
+                    {
+                        // Missing material JSONs are negatively cached. Clear
+                        // that marker as part of the import transaction so the
+                        // first render after import reparses the new file.
+                        const std::string relativeUtf8 = PathToUtf8(projectRelative);
+                        const std::string projectRootUtf8 = PathToUtf8(projectRoot);
+                        if (!relativeUtf8.empty() && !projectRootUtf8.empty())
+                            m_graphics->InvalidateBasicMaterial(relativeUtf8, projectRootUtf8);
+                    }
+                }
+            }
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Imported asset: %s -> %s",
-                           sourcePath.filename().string().c_str(), destPath.string().c_str());
+                           PathToUtf8(sourcePath.filename()).c_str(), PathToUtf8(destPath).c_str());
         }
         catch (const std::exception& e)
         {
@@ -667,7 +728,7 @@ namespace SparkEditor
         }
 
         // Refresh the file list so the newly imported asset appears in the grid
-        SetOperationResult(true, std::string("Imported ") + destPath.filename().string());
+        SetOperationResult(true, std::string("Imported ") + PathToUtf8(destPath.filename()));
         RefreshAssets();
         return true;
     }
@@ -677,13 +738,13 @@ namespace SparkEditor
         if (m_projectPath.empty())
             return false;
         std::error_code ec;
-        const std::string canonical = CanonicalDirectoryString(m_projectPath, ec);
-        return !canonical.empty() && std::filesystem::path(canonical) == std::filesystem::path(m_projectPath);
+        const std::string canonical = CanonicalDirectoryString(PathFromUtf8(m_projectPath), ec);
+        return !canonical.empty() && PathFromUtf8(canonical) == PathFromUtf8(m_projectPath);
     }
 
     bool AssetBrowserPanel::IsContainedByProject(const std::filesystem::path& candidate) const
     {
-        return HasValidProjectRoot() && IsContainedPath(m_projectPath, candidate);
+        return HasValidProjectRoot() && IsContainedPath(PathFromUtf8(m_projectPath), candidate);
     }
 
     void AssetBrowserPanel::SetOperationResult(bool succeeded, std::string message)

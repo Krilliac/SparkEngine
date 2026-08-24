@@ -60,7 +60,9 @@
 #include <chrono>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <atomic> // Thread-safe frame state management
 
@@ -851,28 +853,41 @@ class GraphicsEngine
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> normalSrv;    ///< Tangent-space normal map (null = flat)
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> roughnessSrv; ///< Roughness map or scalar (null = fully rough)
         DirectX::XMFLOAT2 tiling{1.0f, 1.0f};                          ///< UV tiling from the material
+        std::string jsonPath;      ///< Canonical JSON identity used for invalidation.
+        std::string projectRoot;   ///< Canonical root used to revalidate retry paths.
+        std::string albedoPath;    ///< Canonical confined albedo retry identity.
+        std::string normalPath;    ///< Canonical confined normal retry identity.
+        std::string roughnessPath; ///< Canonical confined roughness retry identity.
     };
 
     /**
      * @brief Load (or fetch cached) texture SRV from an image file via WIC, with mips.
-     * @param path Path to the image file (png/jpg/bmp)
-     * @return SRV or nullptr on failure. Cached per path.
+     * @param path UTF-8 path to the image file (png/jpg/bmp).
+     * @return SRV or nullptr on failure. Successes and deterministic file/decode
+     * failures are cached by canonical path; transient COM, allocator, and D3D
+     * resource failures remain retryable. Call InvalidateBasicTexture after
+     * importing/replacing a file.
      */
     ID3D11ShaderResourceView* GetOrLoadTextureSRV(const std::string& path);
 
+    /** @brief Clear a cached file texture or failed-load marker for an asset change. */
+    bool InvalidateBasicTexture(const std::string& path);
+
     /**
      * @brief Load (or fetch cached) a BasicMaterial from a material JSON file.
-     * @param jsonPath e.g. "Assets/Materials/MMOFPS/Terrain_Rock.json"
+     * @param jsonPath UTF-8 path, e.g. "Assets/Materials/MMOFPS/Terrain_Rock.json".
+     * @param projectRootUtf8 Required explicit root used to confine the JSON and its textures.
      * @return Cached material (srv may be null if textures missing); nullptr on parse failure.
      */
-    const BasicMaterial* GetOrLoadBasicMaterial(const std::string& jsonPath);
+    const BasicMaterial* GetOrLoadBasicMaterial(const std::string& jsonPath, std::string_view projectRootUtf8);
 
     /**
      * @brief Drop a cached BasicMaterial so the next GetOrLoadBasicMaterial re-parses its JSON.
-     * @param jsonPath Same key the material was loaded with (e.g. "Assets/Materials/MMOFPS/Terrain_Rock.json")
+     * @param jsonPath Project-relative JSON path.
+     * @param projectRootUtf8 Explicit project root used when it was loaded.
      * @return true if a cache entry was erased.
      */
-    bool InvalidateBasicMaterial(const std::string& jsonPath);
+    bool InvalidateBasicMaterial(const std::string& jsonPath, std::string_view projectRootUtf8);
 
     /**
      * @brief Update per-frame constants for lighting and camera
@@ -1134,7 +1149,10 @@ class GraphicsEngine
     ComPtr<ID3D11DepthStencilState> m_depthReadOnly;
     std::unordered_map<std::string, ComPtr<ID3D11ShaderResourceView>>
         m_basicTextureCache;                                             ///< WIC-loaded textures by path
+    std::unordered_set<std::string> m_failedBasicTexturePaths;           ///< Failed WIC loads pending invalidation
     std::unordered_map<std::string, BasicMaterial> m_basicMaterialCache; ///< Parsed basic materials by JSON path
+    std::unordered_map<std::string, std::string> m_basicMaterialAliases; ///< Declared root+path to canonical cache key
+    std::unordered_set<std::string> m_failedBasicMaterialPaths;          ///< Missing JSON pending invalidation
 
     // --- W12 decor-instancing: basic instanced draw path (lazy, default-off).
     //     Second VS permutation + instance input layout + dynamic instance

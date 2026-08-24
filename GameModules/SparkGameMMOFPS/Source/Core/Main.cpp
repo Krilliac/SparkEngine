@@ -52,6 +52,7 @@
 // logic and the client login/char-select/enter-world UI. See DESIGN.md
 // "W5 — Onboarding".
 #include "Persistence/TFDatabase.h"
+#include "Persistence/TFShutdownOrder.h"
 #include "Account/TFAccountSystem.h"
 #include "Account/TFCharacterSystem.h"
 #include "UI/TFLoginFlow.h"
@@ -233,6 +234,10 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         const char* name;
         bool ok;
     };
+    // From this point onward, every failure must run the same reverse-order
+    // teardown as a normal unload. Several Initialize methods install console
+    // and network callbacks that capture their owning system.
+    m_initialized = true;
     const Boot boots[] = {
         {"TFDataTables", m_data->Initialize(m_ctx, m_events)},
         {"TFWorldSetup", m_world->Initialize(m_ctx, m_events)},
@@ -306,6 +311,7 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         if (!b.ok)
         {
             console.LogError(std::string("[TF] Failed to initialize ") + b.name);
+            OnUnload();
             return false;
         }
     }
@@ -323,8 +329,24 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     RegisterConsoleCommands();
 
     console.LogInfo("[TF] TERRAFRONT loaded. Factions: Meridian Accord / Aurum Combine / Helix Covenant.");
-    console.LogInfo("[TF] Try: tf_status | tf_host | tf_connect <ip> | tf_faction <mra|auc|hlx>");
-    m_initialized = true;
+    console.LogInfo("[TF] Try: tf_status | tf_host | tf_connect <ip>; then complete the login/character flow.");
+    return true;
+}
+
+bool TerrafrontModule::CanUnload()
+{
+    if (!m_initialized)
+        return true;
+
+    // Persistence is the teardown gate. If any store cannot become durable,
+    // leave every system and callback intact so the caller can repair the I/O
+    // failure and retry OnUnload() without dangling cross-system references.
+    if (!CheckpointPersistenceBeforeTeardown(*m_social, *m_outfits, *m_progression, *m_regions))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                        "[TF] unload refused: persistence checkpoint failed; module remains initialized for retry");
+        return false;
+    }
     return true;
 }
 
@@ -333,7 +355,17 @@ void TerrafrontModule::OnUnload()
     if (!m_initialized)
         return;
 
+    // ModuleManager has already run CanUnload() for a normal shutdown. Do not
+    // repeat a fallible checkpoint after the manager has committed to teardown:
+    // a second failure could otherwise make this void callback return early
+    // while the manager still marks the module shut down. Failed OnLoad paths
+    // also call this directly and have no durable state that needs a gate.
+
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Unloading TERRAFRONT module");
+
+    // Remove module-level callbacks before tearing down any system they read.
+    // SimpleConsole serializes dispatch and unregister with its lifecycle lock.
+    UnregisterConsoleCommands();
 
     // reverse boot order
     // W5 onboarding (Task 6, additive): loginFlow/db were constructed last,
@@ -357,7 +389,6 @@ void TerrafrontModule::OnUnload()
     m_social->Shutdown();
 
     m_loginFlow->Shutdown();
-    m_db->Close();
 
     m_travel->Shutdown(); // continents lane
     m_scoreboard->Shutdown();
@@ -374,10 +405,10 @@ void TerrafrontModule::OnUnload()
     m_medals->Shutdown();     // medals-scoreboard lane (W10): unhooks the scoreboard pointer
     m_grenades->Shutdown();   // grenades lane (W10)
     m_abilities->Shutdown();  // class-abilities lane (W9): restores ghosted meshes + uninstalls the damage filter
-    m_outfits->Shutdown();    // outfits lane: flushes Saves/outfits.json
+    m_outfits->Shutdown();
     m_squads->Shutdown();
     m_directives->Shutdown(); // W6: before progression (reverse of init order)
-    m_progression->Shutdown();
+    FlushProgressionThenCloseDatabase(*m_progression, *m_db);
     m_deployables->Shutdown();
     m_colossus->Shutdown();
     m_vehicles->Shutdown();

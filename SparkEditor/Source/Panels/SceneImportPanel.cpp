@@ -64,7 +64,7 @@ namespace SparkEditor
         ///        Mesh::CreateCube(1.0f) — the same centered unit cube the game
         ///        instantiates for cube [Object]s — so a scaled cube looks
         ///        identical in the editor viewport and the runtime.
-        constexpr const char* kCubeMeshPath = "Assets/Models/cube.obj";
+        constexpr const char* kCubeMeshPath = "__spark_primitive_Cube.obj";
     } // namespace
 
     SceneImportPanel::SceneImportPanel() : EditorPanel("Scene Import", "scene_import_panel")

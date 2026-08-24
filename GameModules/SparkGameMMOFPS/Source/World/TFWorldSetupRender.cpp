@@ -8,6 +8,7 @@
  *        per the repo file-size rules — mirrors the TFRegionSystem/-Net split).
  */
 #include "World/TFWorldSetup.h"
+#include "World/TFAssetPaths.h"
 
 #include "Data/TFDataTables.h"
 #include "Game/TFWeaponSystem.h"
@@ -36,6 +37,16 @@
 
 namespace Terrafront
 {
+
+    namespace
+    {
+        ID3D11ShaderResourceView* LoadProjectTexture(GraphicsEngine& gfx, std::string_view root,
+                                                     std::string_view declaredPath)
+        {
+            const auto resolved = ResolveContentAssetPath(root, declaredPath);
+            return resolved ? gfx.GetOrLoadTextureSRV(resolved->cacheKey) : nullptr;
+        }
+    } // namespace
 
     void TFWorldSetup::RenderWorld()
     {
@@ -102,7 +113,7 @@ namespace Terrafront
                         continue;
 
                     const GraphicsEngine::BasicMaterial* mat =
-                        mr.materialPath.empty() ? nullptr : gfx->GetOrLoadBasicMaterial(mr.materialPath);
+                        mr.materialPath.empty() ? nullptr : gfx->GetOrLoadBasicMaterial(mr.materialPath, ContentRoot());
                     ID3D11ShaderResourceView* matSrv = mat ? mat->srv.Get() : nullptr;
                     const DirectX::XMFLOAT2 matTiling = mat ? mat->tiling : DirectX::XMFLOAT2{1.0f, 1.0f};
                     // W8 render-pbr-lite: per-material normal/roughness (defaults on nullptr).
@@ -139,7 +150,9 @@ namespace Terrafront
                         for (const MeshSubmesh& smesh : submeshes)
                         {
                             ID3D11ShaderResourceView* srv =
-                                smesh.diffuseTexture.empty() ? nullptr : gfx->GetOrLoadTextureSRV(smesh.diffuseTexture);
+                                smesh.diffuseTexture.empty()
+                                    ? nullptr
+                                    : LoadProjectTexture(*gfx, ContentRoot(), smesh.diffuseTexture);
                             DirectX::XMFLOAT2 tiling{1.0f, 1.0f};
                             if (!srv)
                             {

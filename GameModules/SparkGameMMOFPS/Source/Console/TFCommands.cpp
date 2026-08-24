@@ -47,6 +47,19 @@ namespace
 
     constexpr uint16_t kDefaultPort = 27020;
 
+    // Every command registered through TerrafrontModule's three TFCommands
+    // translation units. Kept in one teardown list so no callback retaining
+    // `this` survives module unload or a hot-reload.
+    constexpr const char* kModuleConsoleCommands[] = {
+        "tf_status",      "tf_host",     "tf_dedicated",   "tf_connect",   "tf_disconnect",  "tf_faction",
+        "tf_class",       "tf_spawn",    "tf_fire",        "tf_give",      "tf_reload_data", "tf_regions",
+        "tf_pos",         "tf_tp",       "tf_bots",        "tf_capture",   "tf_botinfo",     "tf_cam",
+        "tf_map",         "tf_deploy",   "tf_flux",        "tf_save",      "tf_debug",       "tf_perf",
+        "tf_vehicle",     "tf_colossus", "tf_place",       "tf_giveflux",  "tf_unlock",      "tf_chat",
+        "tf_register",    "tf_login",    "tf_char_create", "tf_char_list", "tf_enter",       "tf_selftest_onboarding",
+        "tf_cheat_stats",
+    };
+
     // Client-side class selection shared by tf_class / tf_spawn / tf_give.
     // File-static because TerrafrontModule's header is frozen (no new members).
     ClassId g_selectedClass = ClassId::Striker;
@@ -148,6 +161,9 @@ namespace
 
 void TerrafrontModule::RegisterConsoleCommands()
 {
+    if (m_consoleCommandsRegistered)
+        return;
+
     auto& console = Spark::SimpleConsole::GetInstance();
     const char* cat = "TERRAFRONT";
 
@@ -399,4 +415,17 @@ void TerrafrontModule::RegisterConsoleCommands()
             return os.str();
         },
         "Anti-cheat: dump per-player violation counters (authority only)", cat, "tf_cheat_stats");
+
+    m_consoleCommandsRegistered = true;
+}
+
+void TerrafrontModule::UnregisterConsoleCommands()
+{
+    if (!m_consoleCommandsRegistered)
+        return;
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    for (const char* command : kModuleConsoleCommands)
+        console.UnregisterCommand(command);
+    m_consoleCommandsRegistered = false;
 }

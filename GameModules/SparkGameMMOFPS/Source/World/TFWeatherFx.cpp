@@ -57,6 +57,38 @@ namespace Terrafront
         return s_instance;
     }
 
+    void TFWeatherFx::Shutdown()
+    {
+        if (m_debugCmd)
+        {
+            Spark::SimpleConsole::GetInstance().UnregisterCommand("tf_weather");
+            m_debugCmd = false;
+        }
+
+#ifdef ENABLE_NETWORKING
+        if (m_netHandler)
+        {
+            // NetworkManager has replacement semantics rather than an explicit
+            // unregister API. Remove the callback that captures this before the
+            // module DLL can unload.
+            Spark::Net::NetworkManager::GetInstance().RegisterHandler(
+                static_cast<Spark::Net::MessageType>(kTFMsgWeatherState), [](const Spark::Net::NetworkMessage&) {});
+            m_netHandler = false;
+        }
+#endif
+
+        m_ctx = nullptr;
+        m_flakes.clear();
+        m_quad.reset();
+        m_phase = Phase::Clear;
+        m_elapsedSec = 0.0f;
+        m_durationSec = 900.0f;
+        m_intensity = 0.0f;
+        m_netClock = 0.0;
+        m_nextBeat = 0.0;
+        m_lastRealTime = -1.0;
+    }
+
     float TFWeatherFx::Rand01()
     {
         return static_cast<float>(m_rng() & 0xFFFFu) / 65535.0f;
@@ -220,8 +252,8 @@ namespace Terrafront
                 },
                 "Dust-storm status; on the host, force a phase: tf_weather [clear|building|storm|clearing]",
                 "TERRAFRONT", "tf_weather [phase]");
+            m_debugCmd = true;
         }
-        m_debugCmd = true;
     }
 
     // ---------------------------------------------------------------------------

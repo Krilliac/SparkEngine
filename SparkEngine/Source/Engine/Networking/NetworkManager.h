@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
 #include <functional>
 #include <mutex>
@@ -156,12 +157,23 @@ namespace Spark::Net
 
     struct NetworkMessage
     {
-        MessageType type;                              ///< What kind of network event this message represents.
+        NetworkMessage() = default;
+        NetworkMessage(const NetworkMessage&) = default;
+        NetworkMessage(NetworkMessage&& other) noexcept;
+        NetworkMessage& operator=(const NetworkMessage& other);
+        NetworkMessage& operator=(NetworkMessage&& other) noexcept;
+        ~NetworkMessage();
+
+        /** Promptly overwrite an owned sensitive payload and revoke its sensitive marker. */
+        void ClearSensitivePayload() noexcept;
+
+        MessageType type = MessageType::UserDefined;   ///< What kind of network event this message represents.
         ChannelType channel = ChannelType::Unreliable; ///< Delivery guarantee (reliable ordered, unreliable, etc.).
         ClientID senderID = INVALID_CLIENT; ///< Client that originated this message (INVALID on server-sent).
         SequenceNumber sequence = 0;        ///< Monotonic counter for reliable-ordered delivery.
         std::vector<uint8_t> payload;       ///< Raw serialized message body.
         float timestamp = 0.0f;             ///< Server time when the message was created (seconds).
+        bool sensitive = false;             ///< Local-only ownership marker; never serialized onto the network.
     };
 
     // ============================================================================
@@ -203,6 +215,9 @@ namespace Spark::Net
             m_readPos = 0;
             m_error = false;
         }
+
+        /** Overwrite buffered bytes before resetting cursor and error state. */
+        void SecureReset() noexcept;
 
       private:
         std::vector<uint8_t> m_data;
@@ -388,6 +403,8 @@ namespace Spark::Net
         /// Register message handler
         using MessageHandler = std::function<void(const NetworkMessage&)>;
         void RegisterHandler(MessageType type, MessageHandler handler);
+        /** Register a handler whose received payload copies must be erased on release. */
+        void RegisterSensitiveHandler(MessageType type, MessageHandler handler);
         void ClearHandlers();
 
         // Entity replication
@@ -668,6 +685,7 @@ namespace Spark::Net
         std::queue<NetworkMessage> m_outgoingQueue;
         std::queue<NetworkMessage> m_incomingQueue;
         std::unordered_map<uint16_t, MessageHandler> m_handlers;
+        std::unordered_set<uint16_t> m_sensitiveMessageTypes;
         mutable std::mutex m_queueMutex;   ///< Protects m_outgoingQueue, m_incomingQueue
         mutable std::mutex m_handlerMutex; ///< Protects m_handlers (lowest in lock order)
 

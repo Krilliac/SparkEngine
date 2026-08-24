@@ -154,13 +154,19 @@ TEST(DedicatedServerRuntime_ConnectDisconnectCallbacks)
     EXPECT_EQ(runtime.startedPort, config.port);
     EXPECT_EQ(runtime.startedMaxClients, config.maxClients);
 
-    runtime.Dispatch({.type = MessageType::Connect, .senderID = 7});
+    NetworkMessage connect;
+    connect.type = MessageType::Connect;
+    connect.senderID = 7;
+    runtime.Dispatch(connect);
     EXPECT_TRUE(connectedCalled);
     EXPECT_EQ(connectedName, std::string("Alice"));
     EXPECT_EQ(server.GetStats().totalConnectionsServed, static_cast<uint32_t>(1));
     EXPECT_EQ(server.GetStats().currentPlayers, static_cast<uint32_t>(1));
 
-    runtime.Dispatch({.type = MessageType::Disconnect, .senderID = 7});
+    NetworkMessage disconnect;
+    disconnect.type = MessageType::Disconnect;
+    disconnect.senderID = 7;
+    runtime.Dispatch(disconnect);
     EXPECT_TRUE(disconnectedCalled);
     EXPECT_EQ(disconnectedClient, static_cast<ClientID>(7));
 

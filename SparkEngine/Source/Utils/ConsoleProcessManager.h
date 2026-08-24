@@ -48,6 +48,10 @@ namespace Spark
         void LogCrash(const std::string& crashInfo);
         void ProcessCommands();
 
+        /// Route the built-in quit command into the active platform loop.
+        /// Headless loops use an atomic request; windowed loops post WM_QUIT.
+        void SetShutdownRequestHandler(std::function<void()> handler) { m_shutdownRequestHandler = std::move(handler); }
+
         void RegisterCommand(const std::string& name,
                              std::function<std::string(const std::vector<std::string>&)> handler,
                              const std::string& description = "", const std::string& usage = "");
@@ -82,8 +86,9 @@ namespace Spark
         std::mutex m_messageMutex;              ///< Guards m_messageQueue (log output to child).
         std::queue<std::string> m_messageQueue; ///< Outgoing log messages queued for the child process.
 
-        std::mutex m_commandMutex;              ///< Guards m_commandQueue (commands from child).
-        std::queue<std::string> m_commandQueue; ///< Incoming commands read from the child process.
+        std::mutex m_commandMutex;                      ///< Guards m_commandQueue (commands from child).
+        std::queue<std::string> m_commandQueue;         ///< Incoming commands read from the child process.
+        std::function<void()> m_shutdownRequestHandler; ///< Main-thread quit routing hook.
     };
 
     /**

@@ -11,6 +11,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 #include "GraphicsEngine.h"
+#include "ProjectAssetPath.h"
 #include "../Utils/LogMacros.h"
 #include "../Utils/SparkConsole.h"
 
@@ -23,10 +24,51 @@
 #include <cstdint>
 #include <cstdio>
 #include <cmath> // sqrtf (GetOrCreateSoftCircleShadowSRV radial falloff)
+#include <new>
+#include <stdexcept>
 #include <vector>
 #include <wincodec.h>
 
 using Microsoft::WRL::ComPtr;
+
+namespace
+{
+    /**
+     * WIC decode failures are stable for a particular file until that file is
+     * replaced, but allocation failures can recover without any asset change.
+     * Keep the latter out of the negative cache so a later frame can retry.
+     */
+    bool IsTransientDecodeFailure(HRESULT result)
+    {
+        switch (result)
+        {
+        case E_OUTOFMEMORY:
+        case HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY):
+        case E_ABORT:
+        case E_PENDING:
+        case WINCODEC_ERR_NOTINITIALIZED:
+        case WINCODEC_ERR_COMPONENTINITIALIZEFAILURE:
+        case HRESULT_FROM_WIN32(ERROR_NOT_READY):
+        case HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION):
+        case HRESULT_FROM_WIN32(ERROR_LOCK_VIOLATION):
+        case HRESULT_FROM_WIN32(ERROR_BUSY):
+        case HRESULT_FROM_WIN32(ERROR_RETRY):
+        case HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED):
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    bool IsDeterministicD3DResourceFailure(HRESULT result)
+    {
+        // These report an invalid descriptor/call or a format/resource shape
+        // the current device cannot support. Retrying the same asset on every
+        // frame cannot make that request valid; device-loss, residency and
+        // allocation failures remain transient and are deliberately excluded.
+        return result == E_INVALIDARG || result == DXGI_ERROR_INVALID_CALL || result == DXGI_ERROR_UNSUPPORTED;
+    }
+} // namespace
 
 void GraphicsEngine::EnsureDefaultMaterialTextures()
 {
@@ -251,49 +293,95 @@ ID3D11ShaderResourceView* GraphicsEngine::GetOrLoadTextureSRV(const std::string&
     if (path.empty() || !m_device || !m_context)
         return nullptr;
 
-    auto it = m_basicTextureCache.find(path);
+    // Renderers pass canonical cache identities after their confinement
+    // check. Hit those directly so a cached texture does not perform
+    // weakly_canonical filesystem work on every draw of every frame.
+    if (const auto direct = m_basicTextureCache.find(path); direct != m_basicTextureCache.end())
+        return direct->second.Get();
+    if (m_failedBasicTexturePaths.contains(path))
+        return nullptr;
+
+    const auto canonicalPath = Spark::CanonicalizeFilesystemPath(path);
+    if (!canonicalPath)
+        return nullptr;
+
+    auto it = m_basicTextureCache.find(canonicalPath->cacheKey);
     if (it != m_basicTextureCache.end())
         return it->second.Get();
+    if (m_failedBasicTexturePaths.contains(canonicalPath->cacheKey))
+        return nullptr;
 
-    // Insert negative-cache entry up front so repeated failures don't re-hit disk
-    ComPtr<ID3D11ShaderResourceView>& slot = m_basicTextureCache[path];
+    auto rememberDeterministicFailure = [this, &canonicalPath]() -> ID3D11ShaderResourceView*
+    {
+        m_failedBasicTexturePaths.emplace(canonicalPath->cacheKey);
+        return nullptr;
+    };
+
+    auto handleDecodeFailure = [&rememberDeterministicFailure](HRESULT result) -> ID3D11ShaderResourceView*
+    { return IsTransientDecodeFailure(result) ? nullptr : rememberDeterministicFailure(); };
 
     // WIC decode to RGBA8
     ComPtr<IWICImagingFactory> factory;
     HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory));
     if (FAILED(hr))
-        return nullptr;
-
-    std::wstring wpath(path.begin(), path.end());
-    ComPtr<IWICBitmapDecoder> decoder;
-    hr = factory->CreateDecoderFromFilename(wpath.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad,
-                                            &decoder);
-    if (FAILED(hr))
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GetOrLoadTextureSRV: cannot open '%s' (HR=0x%08lX)", path.c_str(),
-                       static_cast<long>(hr));
+        // COM may not be initialized on this thread yet, and factory creation
+        // can fail under temporary memory pressure. Neither says anything
+        // deterministic about the asset itself.
         return nullptr;
     }
 
+    ComPtr<IWICBitmapDecoder> decoder;
+    hr = factory->CreateDecoderFromFilename(canonicalPath->nativePath.c_str(), nullptr, GENERIC_READ,
+                                            WICDecodeMetadataCacheOnLoad, &decoder);
+    if (FAILED(hr))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GetOrLoadTextureSRV: cannot open '%s' (HR=0x%08lX)",
+                       canonicalPath->cacheKey.c_str(), static_cast<long>(hr));
+        return handleDecodeFailure(hr);
+    }
+
     ComPtr<IWICBitmapFrameDecode> frame;
-    if (FAILED(decoder->GetFrame(0, &frame)))
-        return nullptr;
+    hr = decoder->GetFrame(0, &frame);
+    if (FAILED(hr))
+        return handleDecodeFailure(hr);
 
     ComPtr<IWICFormatConverter> converter;
     if (FAILED(factory->CreateFormatConverter(&converter)))
+    {
+        // Converter creation is an allocator/component-service operation, not
+        // evidence that the file is bad. Retry it rather than poisoning the
+        // asset's cache identity.
         return nullptr;
-    if (FAILED(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0f,
-                                     WICBitmapPaletteTypeMedianCut)))
-        return nullptr;
+    }
+    hr = converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0f,
+                               WICBitmapPaletteTypeMedianCut);
+    if (FAILED(hr))
+        return handleDecodeFailure(hr);
 
     UINT width = 0, height = 0;
-    frame->GetSize(&width, &height);
+    hr = frame->GetSize(&width, &height);
+    if (FAILED(hr))
+        return handleDecodeFailure(hr);
     if (width == 0 || height == 0 || width > 16384 || height > 16384)
-        return nullptr;
+        return rememberDeterministicFailure();
 
-    std::vector<BYTE> pixels(static_cast<size_t>(width) * height * 4);
-    if (FAILED(converter->CopyPixels(nullptr, width * 4, static_cast<UINT>(pixels.size()), pixels.data())))
+    std::vector<BYTE> pixels;
+    try
+    {
+        pixels.resize(static_cast<size_t>(width) * height * 4);
+    }
+    catch (const std::bad_alloc&)
+    {
         return nullptr;
+    }
+    catch (const std::length_error&)
+    {
+        return rememberDeterministicFailure();
+    }
+    hr = converter->CopyPixels(nullptr, width * 4, static_cast<UINT>(pixels.size()), pixels.data());
+    if (FAILED(hr))
+        return handleDecodeFailure(hr);
 
     // Create with a full mip chain and auto-generate mips (the basic sampler
     // is trilinear; without mips a 64x-tiled terrain shimmers badly).
@@ -311,7 +399,9 @@ ID3D11ShaderResourceView* GraphicsEngine::GetOrLoadTextureSRV(const std::string&
     ComPtr<ID3D11Texture2D> tex;
     hr = m_device->CreateTexture2D(&desc, nullptr, &tex);
     if (FAILED(hr))
-        return nullptr;
+    {
+        return IsDeterministicD3DResourceFailure(hr) ? rememberDeterministicFailure() : nullptr;
+    }
 
     m_context->UpdateSubresource(tex.Get(), 0, nullptr, pixels.data(), width * 4, 0);
 
@@ -323,14 +413,27 @@ ID3D11ShaderResourceView* GraphicsEngine::GetOrLoadTextureSRV(const std::string&
     ComPtr<ID3D11ShaderResourceView> srv;
     hr = m_device->CreateShaderResourceView(tex.Get(), &srvDesc, &srv);
     if (FAILED(hr))
-        return nullptr;
+        return IsDeterministicD3DResourceFailure(hr) ? rememberDeterministicFailure() : nullptr;
 
     m_context->GenerateMips(srv.Get());
 
-    slot = srv;
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GetOrLoadTextureSRV: loaded '%s' (%ux%u)", path.c_str(), width,
-                   height);
-    return slot.Get();
+    auto [inserted, wasInserted] = m_basicTextureCache.emplace(canonicalPath->cacheKey, srv);
+    if (!wasInserted)
+        inserted->second = srv;
+    m_failedBasicTexturePaths.erase(canonicalPath->cacheKey);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GetOrLoadTextureSRV: loaded '%s' (%ux%u)",
+                   canonicalPath->cacheKey.c_str(), width, height);
+    return inserted->second.Get();
+}
+
+bool GraphicsEngine::InvalidateBasicTexture(const std::string& path)
+{
+    const auto canonical = Spark::CanonicalizeFilesystemPath(path);
+    if (!canonical)
+        return false;
+    const size_t erasedSuccess = m_basicTextureCache.erase(canonical->cacheKey);
+    const size_t erasedFailure = m_failedBasicTexturePaths.erase(canonical->cacheKey);
+    return erasedSuccess != 0 || erasedFailure != 0;
 }
 
 HRESULT GraphicsEngine::CreateDefaultTexture()

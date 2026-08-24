@@ -28,11 +28,13 @@ bugs that plague cross-DLL C++ code.
 
 ### Required Exports
 
-Every module DLL must export exactly two `extern "C"` functions:
+Every module DLL must export three `extern "C"` functions:
 
 ```cpp
 extern "C" SPARK_MODULE_API Spark::IModule* CreateModule();
 extern "C" SPARK_MODULE_API void DestroyModule(Spark::IModule* mod);
+extern "C" SPARK_MODULE_API const SparkModuleCompatibilityDescriptor*
+    SparkGetModuleCompatibility();
 ```
 
 - `CreateModule` allocates and returns a heap-allocated `Spark::IModule`
@@ -40,9 +42,11 @@ extern "C" SPARK_MODULE_API void DestroyModule(Spark::IModule* mod);
 - `DestroyModule` frees the module instance. The engine calls this before
   unloading the DLL. The module DLL **must** delete the object because
   the module's allocator created it (see [Memory Ownership](#7-memory-ownership-rules)).
+- `SparkGetModuleCompatibility` exposes the runtime ABI descriptor checked
+  after the mandatory pre-load `.sparkabi` sidecar passes validation.
 
 Use the `SPARK_IMPLEMENT_MODULE` macro (from `Spark/ModuleRegistry.h`) to
-generate both exports, and include `Spark/ModuleDllMain.h` to emit the
+generate all three exports, and include `Spark/ModuleDllMain.h` to emit the
 canonical Windows DllMain (it is a no-op on other platforms):
 
 ```cpp
@@ -73,6 +77,8 @@ Optional virtual methods with default no-op implementations:
 | `OnResize(int w, int h)` | Window resize notification |
 | `OnPause()` / `OnResume()` | Game pause/resume events |
 | `OnImGui()` | Draw debug UI when the editor overlay is active |
+| `CanUnload()` | Non-destructive durability/readiness gate; return `false` to postpone unload safely |
+| `SupportsHotReload()` | Return `false` when a replacement image cannot initialize beside the live module |
 
 ### ModuleInfo
 
@@ -106,23 +112,25 @@ a compatibility adapter in ModuleManager. New modules should use `Spark::IModule
 ```
 Engine startup
   1. Discover module DLLs (GameModules/ directory, manifest, or command line)
-  2. LoadLibrary / dlopen each DLL
-  3. Resolve CreateModule() and DestroyModule() exports
-  4. Call CreateModule() to instantiate IModule
-  5. Call GetModuleInfo() to read metadata and SDK version
-  6. Verify SDK version compatibility (reject mismatched modules)
-  7. Sort modules by loadOrder + topological dependency sort
-  8. Call OnLoad(context) on each module in sorted order
+  2. Validate the sibling .sparkabi descriptor before loading executable code
+  3. LoadLibrary / dlopen the DLL
+  4. Resolve SparkGetModuleCompatibility(), CreateModule(), and DestroyModule()
+  5. Validate the in-image compatibility descriptor before calling the factory
+  6. Call CreateModule() to instantiate IModule
+  7. Call GetModuleInfo() to copy module metadata
+  8. Sort modules by loadOrder + topological dependency sort
+  9. Call OnLoad(context) on each module in sorted order
 
 Main loop (each frame)
-  9. OnUpdate(deltaTime) on all modules in load order
- 10. OnFixedUpdate(fixedDt) at fixed intervals
- 11. OnRender() on all modules in load order
+ 10. OnUpdate(deltaTime) on all modules in load order
+ 11. OnFixedUpdate(fixedDt) at fixed intervals
+ 12. OnRender() on all modules in load order
 
 Engine shutdown
- 12. OnUnload() on all modules in REVERSE load order
- 13. DestroyModule(instance) for each module
- 14. FreeLibrary / dlclose each DLL
+ 13. CanUnload() on all modules in REVERSE load order (abort non-destructively on veto)
+ 14. OnUnload() on all modules in REVERSE load order after the complete preflight succeeds
+ 15. DestroyModule(instance) for each module
+ 16. FreeLibrary / dlclose each DLL
 ```
 
 ### Key Rules
@@ -134,10 +142,16 @@ Engine shutdown
   safety net, not the primary cleanup path.
 - **Reverse shutdown order.** If module A depends on module B, then B is loaded
   first and unloaded last. Design teardown accordingly.
-- **Hot reload.** During development, the engine can call `OnUnload`, unload the
-  DLL, reload the new DLL, and call `OnLoad` again. Your module must tolerate
-  this cycle without leaking state. Persistent data must be re-acquired from the
-  engine context after reload.
+- **Shutdown is two-phase.** `CanUnload` may checkpoint durable state, but it
+  must not dismantle the live module. A `false` result leaves every module
+  initialized so the engine can keep running and retry. Once every module
+  passes, shutdown is committed and `OnUnload` cannot veto.
+- **Hot reload is opt-out.** The default `SupportsHotReload()` is `true` for
+  compatibility. Stateful modules and modules holding exclusive OS/service
+  resources should override it to return `false`. Reload asks the working
+  image's `CanUnload` gate before staging a replacement, then loads and
+  initializes the replacement beside it. A successful replacement commits
+  directly; a staging/load/init failure leaves the working image active.
 
 ---
 
@@ -239,7 +253,7 @@ inline constexpr bool IsSDKCompatible(uint32_t moduleSDKVersion)
 ```
 
 **This is an exact-match check**, not a range check. A module compiled against
-SDK version 1 will not load in an engine built with SDK version 2, even if the
+SDK version 2 will not load in an engine built with SDK version 3, even if the
 changes were "additive." This is intentional -- vtable layout changes silently
 corrupt virtual dispatch if versions mismatch.
 
@@ -338,7 +352,7 @@ target_compile_definitions(MyGame PRIVATE SPARK_MODULE_DLL)
 
 All `IModule` lifecycle methods are called on the **main thread**:
 
-- `OnLoad`, `OnUnload` -- main thread, during engine startup/shutdown
+- `OnLoad`, `CanUnload`, `SupportsHotReload`, `OnUnload` -- main thread, during engine startup/shutdown or reload
 - `OnUpdate`, `OnFixedUpdate`, `OnRender`, `OnImGui` -- main thread, during the frame loop
 - `OnResize`, `OnPause`, `OnResume` -- main thread, from the window message pump
 
@@ -544,32 +558,20 @@ SPARK_IMPLEMENT_MODULE(MyGameModule)
 
 ```cmake
 cmake_minimum_required(VERSION 3.25)
+project(MyGame LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+find_package(SparkEngine CONFIG REQUIRED)
 
 file(GLOB_RECURSE MY_SOURCES "Source/*.cpp" "Source/*.h")
-
-add_library(MyGame SHARED ${MY_SOURCES})
-
-target_compile_definitions(MyGame PRIVATE SPARK_MODULE_DLL)
-
-# Link engine library
-if(WIN32)
-    target_link_libraries(MyGame PRIVATE SparkEngineLib)
-elseif(TARGET SparkEngineInterface)
-    target_link_libraries(MyGame PRIVATE SparkEngineInterface)
-endif()
-
-target_include_directories(MyGame PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/Source
-    ${CMAKE_SOURCE_DIR}/SparkEngine/Source
-    ${CMAKE_SOURCE_DIR}/SparkSDK/Include
-)
+spark_add_game_module(MyGame ${MY_SOURCES})
+target_include_directories(MyGame PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Source")
 ```
 
-Place this directory under `GameModules/` and CMake will auto-discover it on
-the next configure. No edits to the root `CMakeLists.txt` are needed.
+`spark_add_game_module` supplies the SDK includes, link target, compile
+definitions, C++ level, and the mandatory post-build `.sparkabi` sidecar.
+When building in the engine tree, the root already loads this helper and
+auto-discovers directories under `GameModules/`; omit the standalone
+`find_package` line there.
 
 ---
 
@@ -577,12 +579,16 @@ the next configure. No edits to the root `CMakeLists.txt` are needed.
 
 Before shipping a module, verify:
 
-- [ ] Module exports `CreateModule` and `DestroyModule` (use `SPARK_IMPLEMENT_MODULE`)
+- [ ] Module exports compatibility, create, and destroy entry points (use `SPARK_IMPLEMENT_MODULE`)
+- [ ] Build uses `spark_add_game_module` or explicitly calls `spark_configure_module_abi`
+- [ ] A sibling `.sparkabi` sidecar is emitted beside every built module
 - [ ] `GetModuleInfo().sdkVersion` is set to `SPARK_SDK_VERSION`
 - [ ] `SPARK_MODULE_DLL` is defined in CMake compile definitions
 - [ ] All `const char*` returns in `ModuleInfo` are string literals or module-owned storage
 - [ ] No `std::string`, `std::vector`, or smart pointers cross the DLL boundary in your API
 - [ ] All resources are released in `OnUnload`, not just in the destructor
+- [ ] `CanUnload` is non-destructive and vetoes when durable state cannot be checkpointed
+- [ ] Stateful or exclusive-resource modules override `SupportsHotReload()` to return `false`
 - [ ] Console commands are registered in `OnLoad`, in a single registration function
 - [ ] Worker threads (if any) are joined before `OnUnload` returns
 - [ ] Engine pointers are treated as non-owning (never `delete` them)

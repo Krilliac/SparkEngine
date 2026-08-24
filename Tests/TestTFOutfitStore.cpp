@@ -35,6 +35,46 @@ namespace
         fs::create_directories(dir, ec);
         return (dir / (std::string(stem) + ".json")).string();
     }
+
+    void RemoveOutfitRecoveryArtifacts(const fs::path& path)
+    {
+        std::error_code ec;
+        fs::remove(path, ec);
+        const fs::path dir = path.parent_path();
+        const std::string prefix = path.filename().string() + ".corrupt-";
+        for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
+        {
+            if (it->path().filename().string().rfind(prefix, 0) == 0)
+                fs::remove(it->path(), ec);
+        }
+    }
+
+    void ExpectOutfitDocumentRejected(const char* stem, const std::string& document)
+    {
+        const fs::path path = TempStorePath(stem);
+        RemoveOutfitRecoveryArtifacts(path);
+        {
+            std::ofstream out(path, std::ios::binary | std::ios::trunc);
+            out << document;
+        }
+
+        TFOutfitStore store;
+        EXPECT_FALSE(store.Open(path));
+        EXPECT_FALSE(store.IsOpen());
+        // A rejected later row must not expose earlier rows through queries.
+        EXPECT_EQ(store.OutfitCount(), size_t{0});
+        EXPECT_EQ(store.FindById(1), nullptr);
+        EXPECT_TRUE(fs::exists(path));
+
+        int backups = 0;
+        std::error_code ec;
+        const std::string prefix = path.filename().string() + ".corrupt-";
+        for (fs::directory_iterator it(path.parent_path(), ec), end; !ec && it != end; it.increment(ec))
+            if (it->path().filename().string().rfind(prefix, 0) == 0)
+                ++backups;
+        EXPECT_EQ(backups, 1);
+        RemoveOutfitRecoveryArtifacts(path);
+    }
 } // namespace
 
 TEST(TFOutfitStore_CreateAndQuery)
@@ -205,6 +245,28 @@ TEST(TFOutfitStore_DiskRoundTrip)
     fs::remove(path);
 }
 
+TEST(TFOutfitStore_UnicodePathRoundTrip)
+{
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::path("Saves") / L"outfit_保存_тест";
+    const fs::path path = dir / L"战队.json";
+    fs::remove_all(dir);
+    {
+        TFOutfitStore store;
+        EXPECT_TRUE(store.Open(path));
+        EXPECT_TRUE(store.Create("Unicode Path", "UNI", 7001, "Leader", 1) != nullptr);
+        EXPECT_TRUE(store.SaveNow());
+        store.Close();
+    }
+    {
+        TFOutfitStore store;
+        EXPECT_TRUE(store.Open(path));
+        EXPECT_TRUE(store.FindByTag("UNI") != nullptr);
+        store.Close();
+    }
+    fs::remove_all(dir);
+}
+
 TEST(TFOutfitStore_DisbandAndUpdateMemberName)
 {
     const std::string path = TempStorePath("tfoutfit_disband");
@@ -295,8 +357,9 @@ TEST(TFOutfitStore_CorruptFileQuarantinedNotWiped)
     EXPECT_FALSE(store.Open(path)); // refused, never silently wiped
     EXPECT_FALSE(store.IsOpen());
 
-    // The unreadable file was quarantined to <path>.corrupt-<ms>.bak.
-    EXPECT_FALSE(fs::exists(path));
+    // Keep the corrupt primary in place so a fresh process cannot reinterpret
+    // its disappearance as an empty outfit database.
+    EXPECT_TRUE(fs::exists(path));
     int baks = 0;
     for (const auto& e : fs::directory_iterator(dir))
     {
@@ -309,10 +372,112 @@ TEST(TFOutfitStore_CorruptFileQuarantinedNotWiped)
     }
     EXPECT_EQ(baks, 1);
 
-    // A second Open on the now-clean path starts an empty store normally.
+    // Both the same instance and a fresh process fail closed until an operator
+    // explicitly restores or removes the corrupt primary.
+    EXPECT_FALSE(store.Open(path));
+    {
+        TFOutfitStore recoveredAfterRestart;
+        EXPECT_FALSE(recoveredAfterRestart.Open(path));
+    }
+    fs::remove(path);
+    {
+        TFOutfitStore missingPrimaryAfterLegacyQuarantine;
+        EXPECT_FALSE(missingPrimaryAfterLegacyQuarantine.Open(path));
+    }
+    for (const auto& e : fs::directory_iterator(dir))
+    {
+        if (e.path().filename().string().rfind(stem + ".corrupt-", 0) == 0)
+            fs::remove(e.path());
+    }
+    fs::remove(path);
+}
+
+TEST(TFOutfitStore_InvalidSchemaIsTransactionalAndRejectsRosterInvariants)
+{
+    ExpectOutfitDocumentRejected("tfoutfit_duplicate_name",
+                                 R"json({"nextOutfitId":3,"outfits":[
+          {"id":1,"name":"Iron Vultures","tag":"IVLT","createdAtMs":1,
+           "members":[{"charId":1001,"name":"Raska","rank":2,"joinedAtMs":1}]},
+          {"id":2,"name":"IRON VULTURES","tag":"SEAG","createdAtMs":2,
+           "members":[{"charId":1002,"name":"Vex","rank":2,"joinedAtMs":2}]}
+        ]})json");
+
+    ExpectOutfitDocumentRejected("tfoutfit_duplicate_tag",
+                                 R"json({"nextOutfitId":3,"outfits":[
+          {"id":1,"name":"Iron Vultures","tag":"IVLT","createdAtMs":1,
+           "members":[{"charId":1001,"name":"Raska","rank":2,"joinedAtMs":1}]},
+          {"id":2,"name":"Steel Eagles","tag":"ivlt","createdAtMs":2,
+           "members":[{"charId":1002,"name":"Vex","rank":2,"joinedAtMs":2}]}
+        ]})json");
+
+    ExpectOutfitDocumentRejected("tfoutfit_empty_roster",
+                                 R"json({"nextOutfitId":2,"outfits":[
+          {"id":1,"name":"Iron Vultures","tag":"IVLT","createdAtMs":1,"members":[]}
+        ]})json");
+
+    ExpectOutfitDocumentRejected("tfoutfit_missing_leader",
+                                 R"json({"nextOutfitId":2,"outfits":[
+          {"id":1,"name":"Iron Vultures","tag":"IVLT","createdAtMs":1,
+           "members":[{"charId":1001,"name":"Raska","rank":1,"joinedAtMs":1}]}
+        ]})json");
+
+    ExpectOutfitDocumentRejected("tfoutfit_multiple_leaders",
+                                 R"json({"nextOutfitId":2,"outfits":[
+          {"id":1,"name":"Iron Vultures","tag":"IVLT","createdAtMs":1,
+           "members":[{"charId":1001,"name":"Raska","rank":2,"joinedAtMs":1},
+                      {"charId":1002,"name":"Vex","rank":2,"joinedAtMs":2}]}
+        ]})json");
+
+    std::string oversizedRoster =
+        R"json({"nextOutfitId":2,"outfits":[{"id":1,"name":"Iron Vultures","tag":"IVLT","createdAtMs":1,"members":[)json";
+    for (uint32_t i = 0; i < 129; ++i)
+    {
+        if (i != 0)
+            oversizedRoster += ',';
+        oversizedRoster += "{\"charId\":" + std::to_string(1000 + i) +
+                           ",\"name\":\"Member\",\"rank\":" + (i == 0 ? "2" : "0") + ",\"joinedAtMs\":1}";
+    }
+    oversizedRoster += "]}]}";
+    ExpectOutfitDocumentRejected("tfoutfit_oversized_roster", oversizedRoster);
+}
+
+TEST(TFOutfitStore_ExclusivePersistenceLockRejectsSecondAuthority)
+{
+    const std::string path = TempStorePath("tfoutfit_exclusive_lock");
+    fs::remove(path);
+
+    TFOutfitStore first;
+    TFOutfitStore second;
+    EXPECT_TRUE(first.Open(path));
+    EXPECT_FALSE(second.Open(path));
+    EXPECT_TRUE(first.Close());
+    EXPECT_TRUE(second.Open(path));
+    EXPECT_TRUE(second.Close());
+
+    fs::remove(path);
+}
+
+TEST(TFOutfitStore_FailedClosePreservesDirtyOpenStateForRetry)
+{
+    const std::string path = TempStorePath("tfoutfit_close_retry");
+    const fs::path blocker = fs::path(path).wstring() + std::wstring(L".tmp");
+    fs::remove(path);
+    fs::remove_all(blocker);
+
+    TFOutfitStore store;
+    TFOutfitStore contender;
     EXPECT_TRUE(store.Open(path));
-    EXPECT_EQ(store.OutfitCount(), size_t{0});
-    store.Close();
+    EXPECT_NE(store.Create("Retry Guard", "RTGY", 7001, "Keeper", 1), nullptr);
+    EXPECT_TRUE(fs::create_directory(blocker));
+    EXPECT_FALSE(store.Close());
+    EXPECT_TRUE(store.IsOpen());
+    EXPECT_FALSE(contender.Open(path));
+
+    fs::remove_all(blocker);
+    EXPECT_TRUE(store.Close());
+    EXPECT_TRUE(contender.Open(path));
+    EXPECT_NE(contender.FindByName("Retry Guard"), nullptr);
+    EXPECT_TRUE(contender.Close());
     fs::remove(path);
 }
 
@@ -461,6 +626,55 @@ TEST(TFOutfitStore_ScoreDiskRoundTripAndAdditiveDefaults)
         store.Close();
     }
     fs::remove(path);
+}
+
+TEST(TFOutfitStore_MalformedAdditiveScoreFieldsAreRejected)
+{
+    const auto expectRejected = [](const char* stem, const char* scoreFields)
+    {
+        const std::string path = TempStorePath(stem);
+        const fs::path dir = fs::path(path).parent_path();
+        const std::string filename = fs::path(path).filename().string();
+        fs::remove(path);
+        for (const auto& entry : fs::directory_iterator(dir))
+        {
+            if (entry.path().filename().string().rfind(filename + ".corrupt-", 0) == 0)
+                fs::remove(entry.path());
+        }
+
+        {
+            std::ofstream f(path, std::ios::binary | std::ios::trunc);
+            f << "{\n  \"nextOutfitId\": 2,\n  \"outfits\": [{\n"
+                 "    \"id\": 1, \"name\": \"Old Guard\", \"tag\": \"OLDG\", \"createdAtMs\": 1000,\n"
+              << "    " << scoreFields << ",\n"
+              << "    \"members\": [{\"charId\": 1001, \"name\": \"Raska\", \"rank\": 2, "
+                 "\"joinedAtMs\": 1000}]\n"
+                 "  }]\n}\n";
+        }
+
+        TFOutfitStore store;
+        EXPECT_FALSE(store.Open(path));
+        EXPECT_FALSE(store.IsOpen());
+        EXPECT_TRUE(fs::exists(path));
+
+        int backups = 0;
+        for (const auto& entry : fs::directory_iterator(dir))
+        {
+            if (entry.path().filename().string().rfind(filename + ".corrupt-", 0) == 0)
+            {
+                ++backups;
+                fs::remove(entry.path());
+            }
+        }
+        EXPECT_EQ(backups, 1);
+        fs::remove(path);
+    };
+
+    expectRejected("tfoutfit_fractional_score", "\"weeklyScore\": 1.5");
+    expectRejected("tfoutfit_rounded_score", "\"weeklyScore\": 1.0000000000000001");
+    expectRejected("tfoutfit_negative_score", "\"allTimeScore\": -1");
+    expectRejected("tfoutfit_oversize_week", "\"weekKey\": 4294967296");
+    expectRejected("tfoutfit_string_score", "\"weeklyScore\": \"1\"");
 }
 
 TEST(TFOutfitStore_DebouncedFlush)

@@ -28,7 +28,23 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
+#include <cctype>
 #include <filesystem>
+
+/**
+ * Convert the loader's historical wide-string path to the platform-native
+ * filesystem representation.  Linux Mesh::LoadFromFile stores UTF-8 bytes in
+ * a wchar_t container for API compatibility, so constructing fs::path from
+ * that wstring would incorrectly transcode the bytes a second time.
+ */
+inline std::filesystem::path MeshFilesystemPathFromLoaderPath(const std::wstring& path)
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    return std::filesystem::path(path);
+#else
+    return std::filesystem::path(std::string(path.begin(), path.end()));
+#endif
+}
 
 /**
  * @brief Load a mesh from file, or generate a procedural placeholder on failure
@@ -67,14 +83,16 @@ inline void LoadOrPlaceholderMesh(Mesh& mesh, ID3D11Device* device, ID3D11Device
     bool loaded = false;
     if (!path.empty())
     {
-        bool fileExists = std::filesystem::exists(path);
+        const std::filesystem::path filePath = MeshFilesystemPathFromLoaderPath(path);
+        bool fileExists = std::filesystem::exists(filePath);
 
         if (fileExists)
         {
-            std::wstring ext = std::filesystem::path(path).extension().wstring();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
+            std::string ext = filePath.extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(),
+                           [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
 
-            if (ext == L".obj")
+            if (ext == ".obj")
             {
                 loaded = mesh.LoadFromFile(path);
                 if (!loaded)

@@ -71,7 +71,7 @@ yell scope before sending.
 
 ```
 tf_host                    # start an in-process listen server (port 27020)
-tf_faction hlx             # join the Helix Covenant
+# use the login screen to register/sign in, create a character, and enter
 tf_class striker           # pick a class
 tf_spawn                   # deploy at your skyanchor
 tf_bots 12                 # populate the war (authority only)
@@ -83,9 +83,9 @@ tf_status                  # module/net/session overview at any time
 
 | Role | Commands |
 |---|---|
-| Host (plays too) | `tf_host [port]` → pick faction/class → `tf_spawn` |
+| Host (plays too) | `tf_host [port]` → complete login/character flow → `tf_class …` → `tf_spawn` |
 | Dedicated server | `tf_dedicated [port]` (headless authoritative sim) |
-| Client | `tf_connect <ip[:port]>` → `tf_faction …` → `tf_class …` → `tf_spawn` |
+| Client | `tf_connect <ip[:port]>` → complete login/character flow → `tf_class …` → `tf_spawn` |
 | Leave | `tf_disconnect` |
 
 Default port is 27020/UDP. Territory and progression persist across restarts
@@ -99,6 +99,8 @@ Default port is 27020/UDP. Territory and progression persist across restarts
 | `tf_chat <region\|faction\|squad\|yell> <message>` | Send chat to the selected scope |
 | `tf_host [port]` / `tf_dedicated [port]` | Start listen host / headless server |
 | `tf_connect <ip[:port]>` / `tf_disconnect` | Join / leave a server |
+| `tf_register <user> <pass>` / `tf_login <user> <pass>` | Scripted onboarding fallback; arguments are redacted from console history |
+| `tf_char_create <name> <mra\|auc\|hlx>` / `tf_char_list` / `tf_enter <id\|index>` | Scripted character onboarding fallback |
 | `tf_faction <mra\|auc\|hlx>` | Choose your side |
 | `tf_class <ghost\|striker\|medtech\|fabricator\|bulwark>` | Choose loadout class |
 | `tf_spawn` / `tf_deploy` | Deploy at skyanchor / open the spawn screen |
@@ -116,6 +118,10 @@ Default port is 27020/UDP. Territory and progression persist across restarts
 | `tf_reload_data` | Hot-reload all JSON data tables |
 | `tf_pos` / `tf_tp <x> <z>` | Print / teleport pawn position (debug) |
 | `tf_debug <system>` | Toggle a per-system debug panel |
+
+Prefer the login UI for credentials. The console fallback is marked sensitive,
+redacts arguments from command history, and scrubs request copies after dispatch,
+but the passphrase is still visible while it is being typed into the console.
 
 ---
 
@@ -168,10 +174,11 @@ angles in 1/10000 rad); `TFMsg` is for events and commands only.
 
 ### Data tables
 
-All balance lives in `Assets/MMOFPS/Data/` — five JSON files validated on load
-(unique ids, closed vocabularies, conduit symmetry, complete initial
-ownership); any error aborts the load loudly. Hot-reload in-game with
-`tf_reload_data`.
+`Assets/MMOFPS/Data/` contains 11 JSON data files. The core data-table loader
+validates its required tables (unique ids, closed vocabularies, conduit
+symmetry, complete initial ownership) and fails the load loudly; supplemental
+tables are validated by their owning systems. Hot-reload the core set in-game
+with `tf_reload_data`.
 
 | File | Drives |
 |---|---|
@@ -180,13 +187,31 @@ ownership); any error aborts the load loudly. Hot-reload in-game with
 | `classes.json` | Class pools, speeds, abilities, allowed weapon slots |
 | `vehicles.json` | Health, speed, seats, weapons, Aegis deploy-spawn |
 | `regions.json` | The Cindral Wastes lattice: regions, conduits, initial ownership |
+| `regions_highlands.json` | The Veyra Highlands lattice |
+| `continents.json` | Continent registry, map ids, region-file selection, optional server endpoints |
+| `presentation.json` | Terrain, skyboxes, ambience, pawn/viewmodel and muzzle-FX presentation |
+| `deployables.json` | Per-deployable models and visual scale |
+| `decor.json` | Region-tier authored/scattered decor templates and collision parts |
+| `suits.json` | Loadout suit passives and unlock metadata |
 
 ### Save files
 
-Written next to the server executable, atomically (`tmp` + rename):
+Every TerraFront store resolves one process-stable root. Set `TF_SAVE_ROOT` to
+an absolute directory (recommended for servers) or a path relative to the
+process working directory. When unset, the root is `<working-directory>/Saves`.
+Normal writes use a temporary file followed by replacement.
 
-- `Saves/terrafront_territory.json` — region ownership (survives restart; Dominion resets seed from `regions.json`)
-- `Saves/terrafront_state.json` — per-player XP/rank/flux (progression)
+- `terrafront.db` — accounts, characters, durable per-character progression and loadouts (JSON despite the extension)
+- `terrafront_territory.<continent-key>.json` — region ownership, isolated by the stable key from `continents.json`
+- `terrafront_state.<continent-key>.json` — session progression mirror (XP/rank/flux), isolated by the same key
+- `outfits.json` — outfit registry and membership
+- `terrafront_social.json` — friends, blocks, and recent-player lists
+
+Corrupt stores may be quarantined beside the original with a
+`.corrupt-<timestamp>.bak` suffix. Configure `TF_SAVE_ROOT` before the first
+store access; its value is intentionally resolved once for the process. Legacy
+unqualified world files are migrated only when their stored continent identity
+matches the active continent; ambiguous legacy files are left untouched.
 
 ### Tests
 

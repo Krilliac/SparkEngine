@@ -12,11 +12,14 @@
 #include "../../Core/EngineContext.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/DebugHookManager.h"
+#include "../../Utils/ScopeGuard.h"
+#include "../../Utils/SecureMemory.h"
 #include "../../Utils/Validate.h"
 #include <sstream>
 #include <cstring>
 #include <algorithm>
 #include <thread>
+#include <utility>
 
 // Windows headers may redefine SendMessage after our includes.
 // Undefine it so NetworkManager::SendMessage compiles correctly.
@@ -27,6 +30,54 @@
 using namespace DirectX;
 namespace Spark::Net
 {
+
+    NetworkMessage::NetworkMessage(NetworkMessage&& other) noexcept
+        : type(other.type), channel(other.channel), senderID(other.senderID), sequence(other.sequence),
+          payload(std::move(other.payload)), timestamp(other.timestamp),
+          sensitive(std::exchange(other.sensitive, false))
+    {
+    }
+
+    NetworkMessage& NetworkMessage::operator=(const NetworkMessage& other)
+    {
+        if (this == &other)
+            return *this;
+
+        // Build the potentially-throwing payload copy before modifying this
+        // object. Moving the completed temporary is noexcept and securely
+        // clears any sensitive payload this object previously owned.
+        NetworkMessage copy(other);
+        *this = std::move(copy);
+        return *this;
+    }
+
+    NetworkMessage& NetworkMessage::operator=(NetworkMessage&& other) noexcept
+    {
+        if (this == &other)
+            return *this;
+
+        ClearSensitivePayload();
+        type = other.type;
+        channel = other.channel;
+        senderID = other.senderID;
+        sequence = other.sequence;
+        payload = std::move(other.payload);
+        timestamp = other.timestamp;
+        sensitive = std::exchange(other.sensitive, false);
+        return *this;
+    }
+
+    NetworkMessage::~NetworkMessage()
+    {
+        ClearSensitivePayload();
+    }
+
+    void NetworkMessage::ClearSensitivePayload() noexcept
+    {
+        if (sensitive)
+            Spark::SecureClear(payload);
+        sensitive = false;
+    }
 
     // ============================================================================
     // LagCompensator
@@ -280,8 +331,16 @@ namespace Spark::Net
         }
 
         NetBuffer buf;
+        const auto clearSensitiveWire = Spark::MakeScopeExit(
+            [&buf, &msg]
+            {
+                if (msg.sensitive)
+                    buf.SecureReset();
+            });
         buf.WriteUint32(0x5350524B); // Magic
         buf.WriteUint16(static_cast<uint16_t>(msg.type));
+        // Sensitivity is deliberately process-local ownership metadata. Keep
+        // the version-1 channel byte byte-for-byte compatible with older peers.
         buf.WriteUint8(static_cast<uint8_t>(msg.channel));
         buf.WriteUint32(msg.senderID);
         buf.WriteUint32(msg.sequence);
@@ -296,6 +355,10 @@ namespace Spark::Net
 
     bool NetworkManager::DeserializeMessage(const uint8_t* data, size_t length, NetworkMessage& outMsg) const
     {
+        // Callers may reuse an output object across receives. Never let a later
+        // packet assignment release an earlier sensitive payload un-scrubbed.
+        outMsg.ClearSensitivePayload();
+
         // Minimum header: magic(4) + type(2) + channel(1) + sender(4) + seq(4) + timestamp(4) + payloadLen(4) = 23
         if (length < NETWORK_WIRE_HEADER_SIZE)
         {
@@ -312,6 +375,7 @@ namespace Spark::Net
 
         NetBuffer buf;
         buf.WriteBytes(data, length);
+        const auto clearWireCopy = Spark::MakeScopeExit([&buf] { buf.SecureReset(); });
 
         uint32_t magic = buf.ReadUint32();
         if (magic != 0x5350524B)
@@ -328,6 +392,10 @@ namespace Spark::Net
             return false;
         }
         outMsg.channel = static_cast<ChannelType>(rawChannel);
+        {
+            std::lock_guard<std::mutex> lock(m_handlerMutex);
+            outMsg.sensitive = m_sensitiveMessageTypes.contains(static_cast<uint16_t>(outMsg.type));
+        }
         outMsg.senderID = buf.ReadUint32();
         outMsg.sequence = buf.ReadUint32();
         outMsg.timestamp = buf.ReadFloat();

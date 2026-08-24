@@ -149,17 +149,26 @@ namespace Terrafront
         }
     }
 
-    void TFRegionSystem::Shutdown()
+    bool TFRegionSystem::Checkpoint()
+    {
+        return !m_initialized || !m_ctx || !m_ctx->IsAuthority() || !m_dirty || PersistNow();
+    }
+
+    bool TFRegionSystem::Shutdown()
     {
         if (!m_initialized)
-            return;
+            return true;
+        if (!Checkpoint())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] region shutdown refused: territory checkpoint failed; state remains initialized");
+            return false;
+        }
         if (m_decor)
         {
             m_decor->Shutdown();
             m_decor.reset();
         }
-        if (m_ctx && m_ctx->IsAuthority() && m_dirty)
-            PersistNow();
         if (m_debugCmd)
         {
             Spark::SimpleConsole::GetInstance().UnregisterCommand("tf_capture_debug");
@@ -172,8 +181,10 @@ namespace Terrafront
 #endif
         m_state.clear();
         m_persistLoaded = false;
+        m_persistBlocked = false;
         m_domActive = false;
         m_initialized = false;
+        return true;
     }
 
     // ---------------------------------------------------------------------------

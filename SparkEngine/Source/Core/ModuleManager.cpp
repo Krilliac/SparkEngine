@@ -977,7 +977,34 @@ void ModuleManager::ResizeAll(int width, int height)
     }
 }
 
-void ModuleManager::ShutdownAll()
+bool ModuleManager::CanShutdownAll()
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+
+    for (auto it = m_modules.rbegin(); it != m_modules.rend(); ++it)
+    {
+        if (it->initialized && it->instance && !it->instance->CanUnload())
+        {
+            console.LogError("Module refused shutdown and remains initialized: " + it->name);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ModuleManager::ShutdownAll()
+{
+    // Two-phase shutdown: never dismantle some modules before discovering a
+    // later module cannot checkpoint. A veto leaves the complete dependency
+    // graph initialized and usable for retry.
+    if (!CanShutdownAll())
+        return false;
+
+    ShutdownAllAfterPreflight();
+    return true;
+}
+
+void ModuleManager::ShutdownAllAfterPreflight()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
 
@@ -1008,6 +1035,21 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         auto& entry = m_modules[index];
         if (entry.name != name)
             continue;
+
+        if (entry.instance && !entry.instance->SupportsHotReload())
+        {
+            console.LogError("Module does not support transactional hot reload; perform a full restart: " + name);
+            return false;
+        }
+
+        // A stateful module may need to checkpoint before an image swap. Run
+        // the non-destructive gate before staging a replacement so a veto
+        // leaves the working instance and all of its dependencies untouched.
+        if (entry.initialized && entry.instance && !entry.instance->CanUnload())
+        {
+            console.LogError("Module refused hot reload and remains active: " + name);
+            return false;
+        }
 
         const std::string savedPath = entry.path;
         const std::filesystem::path sourcePath(savedPath);
@@ -1119,9 +1161,20 @@ void ModuleManager::UnloadAll()
 
     SPARK_LOG_INFO(Spark::LogCategory::Core, "Unloading all modules (%zu loaded)", m_modules.size());
 
-    for (auto& entry : m_modules)
-        UnloadEntry(entry);
-    m_modules.clear();
+    auto entry = m_modules.begin();
+    while (entry != m_modules.end())
+    {
+        if (entry->initialized && entry->instance)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "Refusing to unload active module '%s'; call ShutdownAll and resolve any veto first",
+                            entry->name.c_str());
+            ++entry;
+            continue;
+        }
+        UnloadEntry(*entry);
+        entry = m_modules.erase(entry);
+    }
 }
 
 Spark::IModule* ModuleManager::GetModule(const std::string& name) const

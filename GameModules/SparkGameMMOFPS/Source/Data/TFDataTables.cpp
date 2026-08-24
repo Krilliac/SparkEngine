@@ -1,8 +1,9 @@
 /**
  * @file TFDataTables.cpp
- * @brief JSON data-table loaders (weapons/vehicles/classes/regions/factions).
+ * @brief JSON data-table loaders (factions, weapons, classes, vehicles,
+ *        regions, presentation, and deployables).
  *
- * Loads all five tables from Assets/MMOFPS/Data/, validates them (unique ids,
+ * Loads the seven core tables from Assets/MMOFPS/Data/, validates them (unique ids,
  * known slot/kind/tier strings, conduit symmetry, complete initial ownership)
  * and fails LOUD: any error aborts the load with a clear log message and no
  * half-loaded state. Parsing goes through Spark::Json (JsonUtils.h), which is
@@ -91,7 +92,13 @@ namespace Terrafront
         /// continents.json key -> region-lattice data file ("regions.json" for
         /// the default). Never fails: unknown keys fall back to the default
         /// with a loud log so a typo cannot boot a half-configured server.
-        std::string ResolveRegionsFile()
+        struct ContinentSelection
+        {
+            std::string key;
+            std::string regionsFile;
+        };
+
+        ContinentSelection ResolveContinentSelection()
         {
             std::string want = cv_tfContinent.Get();
             if (want == "cindral_wastes" || want.empty())
@@ -100,7 +107,7 @@ namespace Terrafront
                     want = env;
             }
             if (want == "cindral_wastes" || want.empty())
-                return "regions.json";
+                return {"cindral_wastes", "regions.json"};
 
             Value root;
             std::string err;
@@ -117,7 +124,7 @@ namespace Terrafront
                     {
                         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] tf_continent=%s -> %s", want.c_str(),
                                        file.c_str());
-                        return file;
+                        return {want, file};
                     }
                 }
             }
@@ -125,7 +132,7 @@ namespace Terrafront
                             "[TF] tf_continent '%s' unknown in continents.json (or entry lacks 'regions'); "
                             "falling back to Cindral Wastes",
                             want.c_str());
-            return "regions.json";
+            return {"cindral_wastes", "regions.json"};
         }
 
     } // namespace
@@ -212,8 +219,8 @@ namespace Terrafront
         // W12: region lattice selected by tf_continent/TF_CONTINENT, pinned for
         // the process lifetime; ReloadAll (tf_reload_data) re-reads the SAME
         // file — switching continents requires a server restart.
-        static const std::string kRegionsFile = ResolveRegionsFile();
-        if (!LoadJsonFile(kRegionsFile, jRegions, outError))
+        static const ContinentSelection kContinent = ResolveContinentSelection();
+        if (!LoadJsonFile(kContinent.regionsFile, jRegions, outError))
             return false;
         if (!LoadJsonFile("presentation.json", jPresentation, outError))
             return false;
@@ -238,6 +245,7 @@ namespace Terrafront
             return false;
         if (!ParseRegions(jRegions, continent, outError))
             return false;
+        continent.key = kContinent.key;
         if (!ParsePresentation(jPresentation, presentation, outError))
             return false;
         if (!ParseDeployables(jDeployables, deployableVisuals, outError))

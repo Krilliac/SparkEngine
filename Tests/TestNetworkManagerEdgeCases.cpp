@@ -19,6 +19,8 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include <type_traits>
+#include <utility>
 
 using namespace Spark::Net;
 
@@ -117,6 +119,21 @@ TEST(NetBufferEdge_ResetClearsAll)
     EXPECT_GT(buf.GetSize(), static_cast<size_t>(0));
 
     buf.Reset();
+    EXPECT_EQ(buf.GetSize(), static_cast<size_t>(0));
+    EXPECT_EQ(buf.GetReadPosition(), static_cast<size_t>(0));
+    EXPECT_FALSE(buf.HasError());
+}
+
+TEST(NetBufferEdge_SecureResetClearsAll)
+{
+    NetBuffer buf;
+    const std::vector<uint8_t> secret{'s', 'e', 'c', 'r', 'e', 't'};
+    buf.WriteBytes(secret.data(), secret.size());
+    (void)buf.ReadUint32();
+    (void)buf.ReadUint32(); // force the error state before resetting
+    EXPECT_TRUE(buf.HasError());
+
+    buf.SecureReset();
     EXPECT_EQ(buf.GetSize(), static_cast<size_t>(0));
     EXPECT_EQ(buf.GetReadPosition(), static_cast<size_t>(0));
     EXPECT_FALSE(buf.HasError());
@@ -284,6 +301,7 @@ TEST(NetworkMessage_DefaultValues)
     EXPECT_EQ(msg.senderID, INVALID_CLIENT);
     EXPECT_EQ(msg.sequence, static_cast<SequenceNumber>(0));
     EXPECT_TRUE(msg.payload.empty());
+    EXPECT_FALSE(msg.sensitive);
 }
 
 TEST(NetworkMessage_PayloadCopy)
@@ -296,6 +314,50 @@ TEST(NetworkMessage_PayloadCopy)
     EXPECT_EQ(msg2.payload.size(), static_cast<size_t>(3));
     EXPECT_EQ(msg2.payload[0], static_cast<uint8_t>(0x01));
     EXPECT_EQ(static_cast<int>(msg2.type), static_cast<int>(MessageType::ChatMessage));
+}
+
+TEST(NetworkMessage_SensitiveOwnershipSurvivesCopiesAndCanBeRevoked)
+{
+    static_assert(std::is_nothrow_move_constructible_v<NetworkMessage>);
+    static_assert(std::is_nothrow_move_assignable_v<NetworkMessage>);
+
+    NetworkMessage original;
+    original.type = MessageType::UserDefined;
+    original.channel = ChannelType::Reliable;
+    original.payload = {'s', 'e', 'c', 'r', 'e', 't'};
+    original.sensitive = true;
+
+    NetworkMessage copied = original;
+    EXPECT_TRUE(copied.sensitive);
+    EXPECT_TRUE(copied.payload == original.payload);
+
+    NetworkMessage assigned;
+    assigned = copied;
+    EXPECT_TRUE(assigned.sensitive);
+    EXPECT_TRUE(assigned.payload == original.payload);
+
+    NetworkMessage moved = std::move(assigned);
+    EXPECT_TRUE(moved.sensitive);
+    EXPECT_TRUE(moved.payload == original.payload);
+    EXPECT_FALSE(assigned.sensitive);
+
+    NetworkMessage moveAssigned;
+    moveAssigned.payload = {'o', 'l', 'd'};
+    moveAssigned.sensitive = true;
+    moveAssigned = std::move(moved);
+    EXPECT_TRUE(moveAssigned.sensitive);
+    EXPECT_TRUE(moveAssigned.payload == original.payload);
+    EXPECT_FALSE(moved.sensitive);
+
+    NetworkMessage plain;
+    plain.payload = {'p', 'l', 'a', 'i', 'n'};
+    moveAssigned = plain;
+    EXPECT_FALSE(moveAssigned.sensitive);
+    EXPECT_TRUE(moveAssigned.payload == plain.payload);
+
+    copied.ClearSensitivePayload();
+    EXPECT_FALSE(copied.sensitive);
+    EXPECT_TRUE(copied.payload.empty());
 }
 
 TEST(NetworkMessage_ChannelTypes)

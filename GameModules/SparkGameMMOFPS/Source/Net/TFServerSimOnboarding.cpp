@@ -11,6 +11,7 @@
 #include "Account/TFCharacterSystem.h" // W5 onboarding (Task 4)
 #include "Persistence/TFDatabase.h"
 #include "Persistence/TFPlayerMeta.h" // TFLoadout
+#include "Persistence/TFSavePaths.h"
 #include "Net/TFNetProtocol.h"
 #include "Data/TFDataTables.h"
 #include "Game/TFProgressionSystem.h" // W6 progression: loadout persistence + unlock purchases
@@ -20,6 +21,8 @@
 #include "Game/TFPingSystem.h"        // ping-system lane (W11): PingPlace routing
 #include "Game/TFSquadSystem.h"
 #include "Utils/LogMacros.h"
+#include "Utils/ScopeGuard.h"
+#include "Utils/SecureMemory.h"
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
@@ -227,8 +230,10 @@ namespace Terrafront
         }
         TF_AuthRequest req;
         std::memcpy(&req, data, sizeof(req));
+        const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
         const std::string user(req.user, strnlen(req.user, sizeof(req.user)));
-        const std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
+        std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
+        const auto clearPassword = Spark::MakeScopeExit([&] { Spark::SecureClear(pass); });
 
         TF_AuthReply rep{};
         if (!m_ctx->account || !EnsureAuthorityDatabaseOpen())
@@ -256,8 +261,10 @@ namespace Terrafront
         }
         TF_AuthRequest req;
         std::memcpy(&req, data, sizeof(req));
+        const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
         const std::string user(req.user, strnlen(req.user, sizeof(req.user)));
-        const std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
+        std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
+        const auto clearPassword = Spark::MakeScopeExit([&] { Spark::SecureClear(pass); });
 
         TF_AuthReply rep{};
         if (!m_ctx->account || !EnsureAuthorityDatabaseOpen())
@@ -282,12 +289,15 @@ namespace Terrafront
             return false;
         if (m_ctx->db->IsOpen())
             return true;
-        if (m_ctx->db->Open("Saves/terrafront.db"))
+        const std::filesystem::path path = SavePaths::File("terrafront.db");
+        if (!path.empty() && m_ctx->db->Open(path))
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] authority opened account database");
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] authority opened account database at %s",
+                           SavePaths::Utf8ForLog(path).c_str());
             return true;
         }
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] authority failed to open Saves/terrafront.db");
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] authority failed to open account database at %s",
+                        path.empty() ? "<invalid save path>" : SavePaths::Utf8ForLog(path).c_str());
         return false;
     }
 

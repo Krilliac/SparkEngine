@@ -536,6 +536,7 @@ add_executable(SparkTests
     # since SparkTests does not compile module sources by default.
     TestTFOnboarding.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFPlayerMeta.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp"
@@ -545,6 +546,8 @@ add_executable(SparkTests
     TestTFOutfitStore.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStoreDisk.cpp"
+    TestTFSocialStore.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp"
     TestTFSecondaryMotion.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.cpp"
     # W13 anti-cheat lane (TFServerValidation) -- movement-clamp, fire-origin,
@@ -610,7 +613,14 @@ foreach(_module_fixture IN ITEMS SparkMismatchedModuleFixture SparkCompatibleMod
     endif()
 endforeach()
 
-spark_configure_module_abi(SparkMismatchedModuleFixture SDK_VERSION 3)
+get_property(SPARK_TEST_CURRENT_SDK_VERSION GLOBAL PROPERTY SPARK_MODULE_CURRENT_SDK_VERSION)
+if(NOT SPARK_TEST_CURRENT_SDK_VERSION)
+    message(FATAL_ERROR "SparkTests: module SDK version global property is not initialized")
+endif()
+math(EXPR SPARK_TEST_MISMATCHED_SDK_VERSION
+    "${SPARK_TEST_CURRENT_SDK_VERSION} + 1")
+spark_configure_module_abi(SparkMismatchedModuleFixture
+    SDK_VERSION "${SPARK_TEST_MISMATCHED_SDK_VERSION}")
 spark_configure_module_abi(SparkCompatibleModuleFixture)
 
 add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture)
@@ -668,6 +678,7 @@ target_compile_definitions(SparkTests PRIVATE
     EDITOR_VERSION_MAJOR=1
     EDITOR_VERSION_MINOR=0
     EDITOR_VERSION_PATCH=0
+    SPARK_SOCIAL_STORE_TESTS
 )
 
 # Link with EnTT (header-only)

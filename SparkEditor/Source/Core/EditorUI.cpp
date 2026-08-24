@@ -66,6 +66,8 @@
 #include <filesystem>
 #include <fstream>
 #include <chrono>
+#include <limits>
+#include <stdexcept>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -76,6 +78,36 @@
 
 namespace SparkEditor
 {
+    namespace
+    {
+        std::filesystem::path PathFromUtf8(std::string_view value)
+        {
+#ifdef _WIN32
+            if (value.empty())
+                return {};
+            if (value.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+                throw std::runtime_error("UTF-8 path is too long");
+            const int sourceLength = static_cast<int>(value.size());
+            const int wideLength =
+                MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), sourceLength, nullptr, 0);
+            if (wideLength <= 0)
+                throw std::runtime_error("Path is not valid UTF-8");
+            std::wstring wide(static_cast<size_t>(wideLength), L'\0');
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), sourceLength, wide.data(),
+                                    wideLength) != wideLength)
+                throw std::runtime_error("Could not convert UTF-8 path");
+            return std::filesystem::path(wide);
+#else
+            return std::filesystem::path(value);
+#endif
+        }
+
+        std::string PathToUtf8(const std::filesystem::path& value)
+        {
+            const std::u8string utf8 = value.generic_u8string();
+            return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+        }
+    } // namespace
 
     EditorUI::EditorUI()
     {
@@ -356,7 +388,7 @@ namespace SparkEditor
                     !project.lastOpenedScene.empty() ? project.lastOpenedScene : project.defaultScene;
                 if (!relativeScene.empty())
                 {
-                    const std::string scenePath = (std::filesystem::path(project.path) / relativeScene).string();
+                    const std::string scenePath = PathToUtf8(PathFromUtf8(project.path) / PathFromUtf8(relativeScene));
                     if (!OpenScene(scenePath))
                     {
                         NewSceneNow();
@@ -1826,7 +1858,7 @@ namespace SparkEditor
         try
         {
             // Ensure parent directory exists
-            auto parentPath = std::filesystem::path(path).parent_path();
+            auto parentPath = PathFromUtf8(path).parent_path();
             if (!parentPath.empty())
             {
                 std::filesystem::create_directories(parentPath);
@@ -1893,7 +1925,7 @@ namespace SparkEditor
         SwapWorld(std::move(fresh));
 
         m_currentScenePath = path;
-        m_currentSceneName = std::filesystem::path(path).stem().string();
+        m_currentSceneName = PathToUtf8(PathFromUtf8(path).stem());
         m_sceneModified = false;
         Spark::Editor::CommandHistory::GetInstance().MarkSaved();
 
@@ -1946,9 +1978,9 @@ namespace SparkEditor
             ::EntityID e = fresh->CreateEntity("Soldier");
             fresh->AddComponent<::Transform>(e); // identity at origin
             ::MeshRenderer& mr = fresh->AddComponent<::MeshRenderer>(e);
-            // Non-empty path required — WorldMeshCache::GetOrLoad early-returns on
-            // an empty path.
-            mr.meshPath = "Assets/Models/MMOFPS/characters/soldier.obj";
+            // The test seed must also render when no project is open; reserved
+            // primitives are the only intentionally unrooted mesh identities.
+            mr.meshPath = "__spark_primitive_Cube.obj";
             SwapWorld(std::move(fresh));
         }
 
@@ -1992,6 +2024,13 @@ namespace SparkEditor
         {
             if (auto* basicMat = dynamic_cast<BasicMaterialEditorPanel*>(bmIt->second.get()))
                 basicMat->SetGraphics(m_graphics.get());
+        }
+
+        auto assetBrowserIt = m_panels.find("AssetBrowser");
+        if (assetBrowserIt != m_panels.end())
+        {
+            if (auto* assetBrowser = dynamic_cast<AssetBrowserPanel*>(assetBrowserIt->second.get()))
+                assetBrowser->SetGraphics(m_graphics.get());
         }
 
         // Wire the Hierarchy panel's selection sink (one-time; the panel

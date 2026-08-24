@@ -46,7 +46,9 @@ extern int g_windowHeightOverride;
 extern void InitPhysics();
 extern void InitConsole();
 extern void ShutdownPhysics();
+extern bool CanShutdownEngine();
 extern void ShutdownEngine();
+extern void ShutdownEngineAfterPreflight();
 extern void SetupCrashHandler();
 
 // Windows-specific globals (defined in SparkEngineWindows.cpp; g_hInst is

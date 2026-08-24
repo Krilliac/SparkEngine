@@ -8,8 +8,8 @@
  *
  * Design (mirrors TFSquadSystem: server registry + client mirror in one class):
  *  - SERVER (authority roles): owns the durable outfit registry via
- *    TFOutfitStore ("Saves/outfits.json", opened lazily like TFServerSim::
- *    EnsureAuthorityDatabaseOpen opens "Saves/terrafront.db"). Membership is
+ *    TFOutfitStore (`outfits.json` under SavePaths::Root(), opened lazily like
+ *    TFServerSim::EnsureAuthorityDatabaseOpen opens `terrafront.db`). Membership is
  *    keyed by the durable CHARACTER id (TFServerSim::ActiveCharacterOf), not
  *    the session PlayerId, so it survives reconnects. Player<->character
  *    binding is learned from ServerOnCharacterEntered (TFServerSim::
@@ -81,7 +81,8 @@ namespace Terrafront
         bool Initialize(TFGameContext& ctx, TFEventBus& events);
         void Update(float deltaTime);
         void FixedUpdate(float fixedDeltaTime);
-        void Shutdown();
+        bool Checkpoint(); ///< persist pending mutations without dismantling runtime state
+        bool Shutdown();   ///< false preserves dirty state after a failed final checkpoint
         void RenderDebugUI();
 
         // --- cross-system API ----------------------------------------------------

@@ -13,12 +13,13 @@
  * class only holds the per-PlayerId runtime records and knows how to seed
  * them from / persist them to the durable TFCharacterRecord.
  *
- * Keying: runtime records are keyed by the session PlayerId; stats and
+ * Keying: live runtime records are keyed by the session PlayerId; a failed
+ * disconnect write is detached into a retry map keyed by durable charId so a
+ * recycled PlayerId cannot inherit another account's metadata. Stats and
  * loadout entries are keyed by the durable weapons.json weapon KEY (not
  * WeaponId, which is a load-order index) so saved data survives table
- * reordering. Records seeded from a character carry that charId and persist
- * through TFDatabase::SaveCharacterMeta; records never seeded (bots,
- * pre-onboarding/standalone sessions) have charId 0 and stay session-only.
+ * reordering. Records never seeded (bots, pre-onboarding/standalone sessions)
+ * have charId 0 and stay session-only.
  */
 #pragma once
 
@@ -91,9 +92,18 @@ namespace Terrafront
         Meta* Find(PlayerId player);
         const Meta* Find(PlayerId player) const;
         void Erase(PlayerId player) { m_meta.erase(player); }
-        void Clear() { m_meta.clear(); }
+        void Clear()
+        {
+            m_meta.clear();
+            m_pendingByCharacter.clear();
+        }
+        bool IsDirty(PlayerId player) const;
         bool AnyDirty() const;
         size_t Count() const { return m_meta.size(); }
+
+        /// Remove a disconnected PlayerId without losing a failed durable
+        /// write or exposing its metadata if that transient id is reused.
+        bool Detach(PlayerId player, TFDatabase* db);
 
         /// Overwrite (not merge) this player's runtime meta from the durable
         /// character record — same replace semantics and call site as
@@ -105,7 +115,7 @@ namespace Terrafront
         bool PersistIfDirty(PlayerId player, TFDatabase& db);
 
         /// Persist every dirty character-bound record (SaveNow / Shutdown sweep).
-        void PersistAllDirty(TFDatabase& db);
+        bool PersistAllDirty(TFDatabase& db);
 
         /// Debug UI iteration only.
         const std::unordered_map<PlayerId, Meta>& AllMeta() const { return m_meta; }
@@ -114,6 +124,7 @@ namespace Terrafront
         static bool PersistOne(Meta& meta, TFDatabase& db);
 
         std::unordered_map<PlayerId, Meta> m_meta;
+        std::unordered_map<uint64_t, Meta> m_pendingByCharacter;
     };
 
 } // namespace Terrafront

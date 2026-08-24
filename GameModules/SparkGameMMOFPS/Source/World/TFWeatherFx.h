@@ -119,6 +119,10 @@ namespace Terrafront
         /// Process-wide instance (see the singleton note in the file header).
         static TFWeatherFx& Get();
 
+        /// Release callbacks and presentation resources owned by the singleton.
+        /// Must run before TFWorldSetup tears down networking or the module DLL.
+        void Shutdown();
+
         /// Advance the weather machine. Call once per frame on EVERY role
         /// (wired from TFWorldSetup::Update): authority roles run the cycle and
         /// broadcast 0x547C; pure clients poll-register the handler and

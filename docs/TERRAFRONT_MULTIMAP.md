@@ -1,13 +1,12 @@
 # TERRAFRONT Multi-Continent Hosting — Design + Current State
 
-**Lane:** multimap-plumbing (W13). **Owns:** `Game/TFTravelSystem.h/.cpp` (code),
-this doc (design). Server-authoritative follow-up pass additionally touched
-`Net/TFNetProtocol.h` and `Net/TFServerSim.h/.cpp` (contended, but the touch
-is additive/minimal — see §3). **Status:** design complete; the handshake in
-§2.2 is now fully shipped and server-authoritative; several PREREQUISITES
-documented below are still open in files this lane does not own (contended or
-out-of-scope) — do not treat "the hop button works" as "multi-continent
-hosting is done."
+**Lane:** multimap-plumbing (W13). **Status:** the redirect handshake is shipped
+and server-authoritative, but production multi-continent hosting is **not yet
+complete**. Global account, outfit, and social JSON stores deliberately take
+lifetime-exclusive authority locks. Two servers cannot safely share one
+`TF_SAVE_ROOT` until those stores move behind a transactional coordinator or
+multi-process database. Do not present the hop button as proof that shared
+character state works across live continent processes.
 
 ## 1. The question
 
@@ -150,35 +149,35 @@ Read the full chain: `TFServerSim::EnsureAuthorityDatabaseOpen()` →
   continent-level. `TFCharacterRecord` carries `xp`, `rank`, `flux`,
   `unlocks`, `loadoutPrimary/Secondary/Tool`, `weaponStats` — everything a
   player has earned. Outfit membership is a parallel `TFOutfitStore`
-  (`Saves/outfits.json`) also keyed by character/account, same pattern.
+  (`outfits.json`) also keyed by character/account, same pattern.
   **If** the two processes share the same backing files, a character that
   logs into continent B after traveling from continent A is bit-for-bit the
   same character: same rank, same unlocks, same loadout, same outfit.
 
-- **BUT**: `TFDatabase::Open` is called with a **hardcoded relative path**,
-  `"Saves/terrafront.db"` (`TFServerSim.cpp:1339`, inside
-  `EnsureAuthorityDatabaseOpen`), resolved against the process's working
-  directory. `TFOutfitStore` follows the identical pattern for
-  `"Saves/outfits.json"`. Two separately-launched `tf_dedicated` processes
-  each get their OWN local JSON file unless an operator explicitly makes
-  `Saves/` the same physical location for both (same machine + same cwd, a
-  symlink/junction, or a shared network path both processes mount at
-  `Saves/`).
+- All TerraFront stores now resolve through `SavePaths::Root()`. Set the
+  `TF_SAVE_ROOT` environment variable to an absolute directory before process
+  startup; when unset, it defaults to `<working-directory>/Saves`. On Windows
+  the environment value is read through the wide API, so Unicode and UNC
+  roots remain intact. Relative
+  override values are resolved against the working directory, and the result
+  is cached on first use. Two processes therefore share files only when they
+  are given the same physical `TF_SAVE_ROOT`.
 
-  **This is the load-bearing prerequisite for real multi-continent hosting.**
-  Without a shared `Saves/` directory, "travel to Veyra Highlands" logs the
+  **This is necessary but not sufficient for real multi-continent hosting.**
+  Without a shared account store, "travel to Veyra Highlands" logs the
   player into a brand-new, empty account on that server — no characters, no
-  progress, indistinguishable from playing on an unrelated server. No code
-  in this lane touches `TFDatabase.h/.cpp` (not contended, but also not
-  owned here, and the fix is an infrastructure/ops concern — point both
-  processes' `Saves/` at the same place — not a code change). Flagging it
-  here because it is the single most important fact for whoever stands up a
-  second continent server: **the two processes MUST share one `Saves/`
-  directory** (junction/symlink/shared mount), or migrate `TFDatabase` off
-  local-JSON-file storage entirely onto something inherently shared (a real
-  client-server DB, or at minimum a network file share with proper locking —
-  the current atomic tmp+rename write pattern is not safe against two
-  processes writing the same file over SMB without a locking layer on top).
+  progress, indistinguishable from playing on an unrelated server. However,
+  the current global JSON stores use lifetime-exclusive authority locks. A
+  second live authority pointed at the same root fails closed during startup
+  rather than risking last-writer-wins corruption. Territory and session
+  progression are now isolated as `terrafront_territory.<continent-key>.json`
+  and `terrafront_state.<continent-key>.json`; each document repeats and
+  validates its stable continent key. Legacy territory migrates only when its
+  saved continent identity exactly matches, so equal-sized maps cannot alias.
+  Account, outfit, and social data remain global. Real hosting still needs a
+  client-server account database or explicit persistence coordinator with
+  transactions before two authority processes can run concurrently. A shared
+  `TF_SAVE_ROOT` is not a supported two-process test configuration.
 
 ### 2.4 Boundary (repeated for emphasis)
 
@@ -245,10 +244,9 @@ dedicated design pass, not an incremental patch on top of this one.
 
 This is safe to ship with zero risk to the single-continent path (every new
 branch is gated behind `host`/`port` being configured on the SERVER side,
-which is never true today) and gives an operator who DOES stand up a second
-process (with a shared `Saves/`, per §2.3, and `host`/`port` configured in
-**each server's own** `continents.json` for the OTHER continent) a working,
-server-verified button with no further code changes.
+which is never true today) and exposes the redirect plumbing for isolated-root
+testing. It does not make two shared-state continent authorities
+production-ready; §2.3 remains a hard prerequisite.
 
 ## 4. Known gaps (found during investigation, NOT fixed by this lane)
 
@@ -256,8 +254,11 @@ These live in files this lane doesn't own (contended or simply out of the
 `Game/TFTravelSystem.*` scope) and are called out for whichever lane picks
 this up next:
 
-1. **Shared `Saves/` prerequisite** — §2.3. Infra/ops fix, or a `TFDatabase`
-   redesign; not a `TFTravelSystem` change.
+1. **Multi-process global persistence** — root selection is centralized and
+   world/session state is continent-qualified. Global JSON stores are protected
+   by lifetime-exclusive locks, so unsafe concurrent writers fail closed. A
+   transactional coordinator/database remains required before two continent
+   authorities may share accounts, outfits, and social state.
 
 2. **PARTIALLY FIXED (follow-up pass).** `TFClientNet::Disconnect()` doesn't
    touch the socket. It resets TF-level client state (`m_connected`,
@@ -362,14 +363,18 @@ Not implemented. See §1 Option B and §2.4. Do not build without a fresh
 design pass — this doc explicitly recommends against it for the requirements
 as understood today.
 
-## 6. How to try the plumbing today
+## 6. How to test the redirect plumbing today
 
-1. Stand up continent A: `tf_dedicated 27020` (default `tf_continent=
-   cindral_wastes`), from working directory `X`.
-2. Stand up continent B: `tf_dedicated 27021 -tf_continent veyra_highlands`
-   (or however the boot cvar is set), from working directory `Y` where
-   `Y/Saves` is the SAME physical location as `X/Saves` (symlink/junction) —
-   **required**, see §2.3, or character state won't carry over.
+This validates endpoint authorization, disconnect/reconnect, and onboarding;
+it does **not** validate shared live persistence. Use disposable, distinct save
+roots. If the same test character is needed on both sides, seed one root while
+all servers are stopped, copy the global JSON files to the second root, and
+accept that the two snapshots diverge after startup.
+
+1. Start continent A with `TF_SAVE_ROOT=<root-A>`:
+   `tf_dedicated 27020` (default `tf_continent=cindral_wastes`).
+2. Start continent B with `TF_SAVE_ROOT=<root-B>`:
+   `tf_dedicated 27021 -tf_continent veyra_highlands`.
 3. In BOTH copies of `continents.json` (client's and continent A's asset
    tree — continent B's own copy is never consulted by this handshake) add
    to the `veyra_highlands` entry: `"host": "127.0.0.1", "port": 27021`.

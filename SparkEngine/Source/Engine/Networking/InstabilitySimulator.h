@@ -117,6 +117,13 @@ namespace Spark::Net
         /// A packet waiting for its scheduled delivery time
         struct DelayedPacket
         {
+            DelayedPacket() = default;
+            DelayedPacket(const DelayedPacket&) = delete;
+            DelayedPacket& operator=(const DelayedPacket&) = delete;
+            DelayedPacket(DelayedPacket&&) noexcept = default;
+            DelayedPacket& operator=(DelayedPacket&& other) noexcept;
+            ~DelayedPacket();
+
             std::vector<uint8_t> data;
             float deliveryTimeMs = 0.0f; ///< Absolute time when this packet should be sent
         };

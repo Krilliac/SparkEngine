@@ -9,6 +9,7 @@
  *        header for the opt-in contract.
  */
 #include "World/TFRegionDecor.h"
+#include "World/TFAssetPaths.h"
 
 #include "Game/TFVisualUtils.h" // FactionStructureMaterial (neutral/faction tint)
 
@@ -19,6 +20,7 @@
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/WorldBasicRenderer.h" // Spark::WorldMeshCache (tinyobjloader path)
+#include "World/TFWorldSetup.h"
 
 #include <cstdio>
 #include <memory>
@@ -28,6 +30,16 @@
 
 namespace Terrafront
 {
+
+    namespace
+    {
+        ID3D11ShaderResourceView* LoadProjectTexture(GraphicsEngine& gfx, std::string_view root,
+                                                     std::string_view declaredPath)
+        {
+            const auto resolved = ResolveContentAssetPath(root, declaredPath);
+            return resolved ? gfx.GetOrLoadTextureSRV(resolved->cacheKey) : nullptr;
+        }
+    } // namespace
 
     // ---------------------------------------------------------------------------
     // Instanced rendering (W12 decor-instancing lane — SEPARATE section by
@@ -194,6 +206,7 @@ namespace Terrafront
         gfx->SetBasicShadersInstanced();
 
         bool drawFailed = false;
+        const std::string_view contentRoot = m_ctx && m_ctx->world ? m_ctx->world->ContentRoot() : std::string_view{};
         for (const DecorInstanceGroup& g : m_groups)
         {
             // Visible subset (spawn-order stable): the cull pass maintains
@@ -207,14 +220,14 @@ namespace Terrafront
             if (m_instScratch.empty())
                 continue;
 
-            Mesh* mesh = m_meshCache->GetOrLoad(*gfx, g.model);
+            Mesh* mesh = m_meshCache->GetOrLoad(*gfx, g.model, contentRoot);
             if (!mesh || mesh->GetIndexCount() == 0)
                 continue;
 
             // Material resolution mirrors the per-entity ECS loop in
             // TFWorldSetup::RenderWorld (decor materials are always JSON).
             const GraphicsEngine::BasicMaterial* mat =
-                g.material.empty() ? nullptr : gfx->GetOrLoadBasicMaterial(g.material);
+                g.material.empty() ? nullptr : gfx->GetOrLoadBasicMaterial(g.material, contentRoot);
             ID3D11ShaderResourceView* matSrv = mat ? mat->srv.Get() : nullptr;
             const DirectX::XMFLOAT2 matTiling = mat ? mat->tiling : DirectX::XMFLOAT2{1.0f, 1.0f};
             gfx->SetBasicMaterialTextures(mat ? mat->normalSrv.Get() : nullptr,
@@ -247,8 +260,9 @@ namespace Terrafront
                 // tinted by the MTL Kd), one instanced draw per range.
                 for (const MeshSubmesh& smesh : submeshes)
                 {
-                    ID3D11ShaderResourceView* srv =
-                        smesh.diffuseTexture.empty() ? nullptr : gfx->GetOrLoadTextureSRV(smesh.diffuseTexture);
+                    ID3D11ShaderResourceView* srv = smesh.diffuseTexture.empty()
+                                                        ? nullptr
+                                                        : LoadProjectTexture(*gfx, contentRoot, smesh.diffuseTexture);
                     DirectX::XMFLOAT2 tiling{1.0f, 1.0f};
                     if (!srv)
                     {

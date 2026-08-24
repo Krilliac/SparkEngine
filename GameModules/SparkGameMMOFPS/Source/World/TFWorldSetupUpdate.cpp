@@ -116,6 +116,7 @@ namespace Terrafront
     {
         if (!m_initialized)
             return;
+        TFWeatherFx::Get().Shutdown();
 #ifdef ENABLE_NETWORKING
         StopNetworking();
 #endif

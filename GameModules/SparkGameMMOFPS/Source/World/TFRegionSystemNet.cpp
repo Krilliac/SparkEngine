@@ -2,13 +2,15 @@
  * @file TFRegionSystemNet.cpp
  * @brief TFRegionSystem wire + persistence: TF_RegionState/TF_CaptureTick
  *        broadcasts, late-join full bursts, the client mirror handlers, and
- *        the atomic Saves/terrafront_territory.json territory save. Core
+ *        the temp-file-replaced terrafront_territory.<continent-key>.json save. Core
  *        capture loop lives in TFRegionSystem.cpp (same class, split per the
  *        repo file-size rules — mirrors the TFReplication/-Client split).
  */
 #include "World/TFRegionSystem.h"
 
 #include "Data/TFDataTables.h"
+#include "Persistence/TFSavePaths.h"
+#include "Persistence/TFWorldSave.h"
 #include "Utils/JsonUtils.h"
 #include "Utils/LogMacros.h"
 
@@ -16,15 +18,10 @@
 #include "Engine/Networking/NetworkManager.h"
 #endif
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
-#include <sstream>
 
 namespace Terrafront
 {
@@ -35,102 +32,204 @@ namespace Terrafront
     } // namespace
 
     // ---------------------------------------------------------------------------
-    // Persistence (authority only; JSON next to the exe, tmp+rename atomic)
+    // Persistence (authority only; shared Terrafront save root, tmp+rename atomic)
     // ---------------------------------------------------------------------------
 
-    std::string TFRegionSystem::SavePath() const
+    std::filesystem::path TFRegionSystem::SavePath() const
     {
-        namespace fs = std::filesystem;
-        std::error_code ec;
-        fs::path exeDir;
-#ifdef _WIN32
-        char buf[MAX_PATH]{};
-        const DWORD len = ::GetModuleFileNameA(nullptr, buf, MAX_PATH);
-        if (len > 0 && len < MAX_PATH)
-            exeDir = fs::path(std::string(buf, len)).parent_path();
-#endif
-        if (exeDir.empty())
-            exeDir = fs::current_path(ec); // non-Windows / lookup failure fallback
-        return (exeDir / "Saves" / "terrafront_territory.json").string();
+        if (!m_ctx || !m_ctx->data || !m_ctx->data->IsLoaded())
+            return {};
+        return SavePaths::ContinentFile("terrafront_territory", m_ctx->data->GetContinent().key);
     }
 
     bool TFRegionSystem::LoadPersisted()
     {
-        const std::string path = SavePath();
-        std::ifstream f(path, std::ios::binary);
-        if (!f.is_open())
-        {
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] no territory save at %s — seeding from regions.json",
-                           path.c_str());
-            return false;
-        }
-        std::ostringstream ss;
-        ss << f.rdbuf();
-
         using Spark::Json::Value;
-        const Value root = Spark::Json::Parse(ss.str());
-        if (!root.IsObject())
+        using WorldSave::ReadStatus;
+        const ContinentDef& continent = m_ctx->data->GetContinent();
+        const std::filesystem::path path = SavePath();
+        if (path.empty() || !SavePaths::IsValidContinentKey(continent.key))
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] territory save %s is malformed — ignored", path.c_str());
+            m_persistBlocked = true;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] territory persistence refused: invalid continent key");
             return false;
         }
+
+        Value root;
+        std::string detail;
+        ReadStatus status = WorldSave::ReadJson(path, continent.key, continent.name, false, root, detail);
+        bool migratingLegacy = false;
+        std::filesystem::path source = path;
+        if (status == ReadStatus::Missing)
+        {
+            const std::filesystem::path candidates[] = {SavePaths::File("terrafront_territory.json"),
+                                                        SavePaths::LegacyExecutableFile("terrafront_territory.json")};
+            for (const std::filesystem::path& candidate : candidates)
+            {
+                if (candidate.empty() || candidate == path || candidate == source)
+                    continue;
+                Value legacyRoot;
+                std::string legacyDetail;
+                const ReadStatus legacyStatus =
+                    WorldSave::ReadJson(candidate, continent.key, continent.name, true, legacyRoot, legacyDetail);
+                if (legacyStatus == ReadStatus::Loaded)
+                {
+                    root = std::move(legacyRoot);
+                    source = candidate;
+                    status = ReadStatus::Loaded;
+                    migratingLegacy = true;
+                    break;
+                }
+                if (legacyStatus != ReadStatus::Missing && legacyStatus != ReadStatus::WrongContinent)
+                    SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                   "[TF] legacy territory save %s was not migrated (%s); original preserved",
+                                   SavePaths::Utf8ForLog(candidate).c_str(), legacyDetail.c_str());
+            }
+        }
+
+        if (status == ReadStatus::Missing)
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] no matching territory save at %s — seeding defaults",
+                           SavePaths::Utf8ForLog(path).c_str());
+            return false;
+        }
+        if (status == ReadStatus::WrongContinent)
+        {
+            m_persistBlocked = true;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] qualified territory save %s belongs to another continent; writes latched off",
+                            SavePaths::Utf8ForLog(path).c_str());
+            return false;
+        }
+        if (status != ReadStatus::Loaded)
+        {
+            m_persistBlocked = true;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] territory save %s is unreadable/corrupt (%s); writes latched off",
+                            SavePaths::Utf8ForLog(path).c_str(), detail.c_str());
+            return false;
+        }
+
+        uint32_t saveVersion = 0;
+        if (root.HasKey("version") && !WorldSave::ReadUint32(root["version"], saveVersion))
+        {
+            m_persistBlocked = !migratingLegacy;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] territory save %s has an invalid schema version; %s",
+                            SavePaths::Utf8ForLog(source).c_str(),
+                            migratingLegacy ? "legacy preserved" : "writes latched off");
+            return false;
+        }
+        if (saveVersion > static_cast<uint32_t>(kSaveVersion))
+        {
+            m_persistBlocked = !migratingLegacy;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] territory save %s uses newer schema version %u (supported %d); %s",
+                            SavePaths::Utf8ForLog(source).c_str(), saveVersion, kSaveVersion,
+                            migratingLegacy ? "legacy preserved" : "writes latched off");
+            return false;
+        }
+        // Version 0 is the sole older schema: the pre-versioned layout has the
+        // same fields validated below and is rewritten as v1 only after every
+        // field has passed validation. No other downgrade is inferred.
+        const bool migratingSchema = saveVersion == 0;
 
         const size_t count = m_state.size();
         const Value& owners = root["owners"];
-        if (static_cast<size_t>(root["regionCount"].AsInt(-1)) != count || !owners.IsArray() || owners.Size() != count)
+        uint32_t persistedCount = 0;
+        if (!WorldSave::ReadUint32(root["regionCount"], persistedCount) || persistedCount != count ||
+            !owners.IsArray() || owners.Size() != count)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Game,
-                           "[TF] territory save %s does not match the region table "
-                           "(%zu regions) — reseeded from initialOwnership",
-                           path.c_str(), count);
+            m_persistBlocked = !migratingLegacy;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] territory save %s has an invalid region lattice; %s",
+                            SavePaths::Utf8ForLog(source).c_str(),
+                            migratingLegacy ? "legacy preserved" : "writes latched off");
             return false;
         }
 
-        const auto& regions = m_ctx->data->GetContinent().regions;
+        const auto& regions = continent.regions;
+        std::vector<FactionId> validatedOwners(count);
         for (size_t i = 0; i < count; ++i)
         {
-            const int raw = owners[i].AsInt(0);
-            FactionId owner =
-                (raw >= 0 && raw < static_cast<int>(FactionId::COUNT)) ? static_cast<FactionId>(raw) : FactionId::None;
+            uint32_t raw = 0;
+            if (!WorldSave::ReadUint32(owners[i], raw) || raw >= static_cast<uint32_t>(FactionId::COUNT))
+            {
+                m_persistBlocked = !migratingLegacy;
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] territory owner %zu is malformed; %s", i,
+                                migratingLegacy ? "legacy preserved" : "writes latched off");
+                return false;
+            }
+            FactionId owner = static_cast<FactionId>(raw);
             if (i < regions.size() && regions[i].tier == "skyanchor")
-                owner = regions[i].homeFaction; // homes never change hands
-            m_state[i].owner = owner;
+            {
+                if (owner != regions[i].homeFaction && !migratingLegacy && !migratingSchema)
+                {
+                    m_persistBlocked = true;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                    "[TF] territory skyanchor owner %zu conflicts with its home faction", i);
+                    return false;
+                }
+                owner = regions[i].homeFaction;
+            }
+            validatedOwners[i] = owner;
+        }
+        WorldSave::DominionState dominion;
+        if (!root.HasKey("dominion"))
+        {
+            if (!migratingSchema)
+            {
+                m_persistBlocked = !migratingLegacy;
+                return false;
+            }
+        }
+        else if (!WorldSave::ReadDominionState(root["dominion"], !migratingSchema,
+                                               static_cast<uint32_t>(FactionId::COUNT), dominion))
+        {
+            m_persistBlocked = !migratingLegacy;
+            return false;
+        }
+
+        for (size_t i = 0; i < count; ++i)
+        {
+            m_state[i].owner = validatedOwners[i];
             m_state[i].capturing = FactionId::None;
             m_state[i].progress = 0.0f;
             m_state[i].contested = false;
         }
 
-        const Value& dom = root["dominion"];
-        m_domActive = dom.IsObject() && dom["active"].AsBool(false);
-        if (m_domActive)
+        m_domActive = dominion.active;
+        m_domFaction = static_cast<FactionId>(dominion.faction);
+        m_domEndsAt = m_time + dominion.remainingSec;
+
+        if (migratingLegacy || migratingSchema)
         {
-            const int f = dom["faction"].AsInt(0);
-            if (f >= 1 && f < static_cast<int>(FactionId::COUNT))
+            m_dirty = true;
+            if (!PersistNow())
             {
-                m_domFaction = static_cast<FactionId>(f);
-                const double remaining = std::clamp(dom["remainingSec"].AsNumber(0.0), 0.0, 600.0);
-                m_domEndsAt = m_time + remaining;
-            }
-            else
-            {
-                m_domActive = false;
+                m_persistBlocked = true;
+                SPARK_LOG_ERROR(
+                    Spark::LogCategory::Game,
+                    "[TF] territory schema/location migration from %s could not be committed; writes latched off",
+                    SavePaths::Utf8ForLog(source).c_str());
+                return false;
             }
         }
 
         m_dirty = false;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] territory restored from %s (hash 0x%08X%s)", path.c_str(),
-                       TerritoryHash(), m_domActive ? ", dominion hold" : "");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] territory restored from %s (hash 0x%08X%s)",
+                       SavePaths::Utf8ForLog(source).c_str(), TerritoryHash(), m_domActive ? ", dominion hold" : "");
         return true;
     }
 
     bool TFRegionSystem::PersistNow()
     {
-        if (!m_ctx || !m_ctx->IsAuthority() || m_state.empty())
+        if (!m_ctx || !m_ctx->IsAuthority() || m_state.empty() || m_persistBlocked || !m_ctx->data ||
+            !m_ctx->data->IsLoaded())
             return false;
 
         using Spark::Json::Value;
         Value root = Value::MakeObject();
         root["version"] = Value(kSaveVersion);
+        root["continentKey"] = Value(m_ctx->data->GetContinent().key);
         root["continent"] =
             Value(m_ctx->data && m_ctx->data->IsLoaded() ? m_ctx->data->GetContinent().name : std::string());
         root["regionCount"] = Value(static_cast<int>(m_state.size()));
@@ -144,33 +243,12 @@ namespace Terrafront
         dom["remainingSec"] = Value(m_domActive ? std::max(0.0, m_domEndsAt - m_time) : 0.0);
         root["dominion"] = dom;
 
-        namespace fs = std::filesystem;
-        const std::string path = SavePath();
-        const std::string tmp = path + ".tmp";
-        std::error_code ec;
-        fs::create_directories(fs::path(path).parent_path(), ec);
-
+        const std::filesystem::path path = SavePath();
+        std::string detail;
+        if (!WorldSave::WriteJson(path, root, detail))
         {
-            std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
-            if (!f.is_open())
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] territory save failed: cannot write %s", tmp.c_str());
-                return false;
-            }
-            f << Spark::Json::StringifyPretty(root);
-            if (!f.good())
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] territory save failed: short write to %s", tmp.c_str());
-                return false;
-            }
-        }
-
-        fs::rename(tmp, path, ec); // atomic replace (MOVEFILE_REPLACE_EXISTING on Win)
-        if (ec)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] territory save failed: rename to %s (%s)", path.c_str(),
-                           ec.message().c_str());
-            fs::remove(tmp, ec);
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] territory save failed for %s (%s)",
+                            SavePaths::Utf8ForLog(path).c_str(), detail.c_str());
             return false;
         }
 

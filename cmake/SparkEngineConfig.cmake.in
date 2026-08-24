@@ -27,13 +27,14 @@ if(NOT TARGET SDL2::SDL2 AND NOT TARGET SDL2)
     find_package(SDL2 QUIET)
 endif()
 
-include("${CMAKE_CURRENT_LIST_DIR}/SparkEngineTargets.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/SparkGameModule.cmake")
-
-# Convenience variables
+# Define package paths before loading SparkGameModule.cmake: that helper reads
+# the installed Spark/Version.h immediately to derive the module ABI sidecar.
 set(SPARK_ENGINE_INCLUDE_DIR "${PACKAGE_PREFIX_DIR}/include")
 set(SPARK_ENGINE_SDK_DIR "${PACKAGE_PREFIX_DIR}/include/Spark")
 set(SPARK_ENGINE_LIBRARIES Spark::SparkEngineLib)
 set(SPARK_ENGINE_FOUND TRUE)
+
+include("${CMAKE_CURRENT_LIST_DIR}/SparkEngineTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/SparkGameModule.cmake")
 
 check_required_components(SparkEngine)

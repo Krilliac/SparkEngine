@@ -10,6 +10,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../Core/EditorUI.h"
+#include "../Core/ProjectManager.h"
 #include "../CommandHistory.h"
 #include "../Gizmos/SceneEditTools.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
@@ -479,7 +480,9 @@ namespace SparkEditor
                 XMMATRIX proj;
                 ComputeCameraMatrices(view, proj);
 
-                m_lastRenderStats = Spark::RenderWorldBasic(*m_world, *m_graphics, m_meshCache, view, proj);
+                const std::string projectRoot = ProjectManager::GetActiveProjectPath();
+                m_lastRenderStats =
+                    Spark::RenderWorldBasic(*m_world, *m_graphics, m_meshCache, view, proj, projectRoot);
             }
 
             // Restore the editor's render target so ImGui renders into the window.

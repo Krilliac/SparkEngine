@@ -420,6 +420,8 @@ TEST(ReliableChannel_MaxRetriesExceeded)
 #if defined(SPARK_TEST_HAS_NETWORKING) && defined(ENABLE_NETWORKING)
 
 #include "Engine/Networking/NetworkManager.h"
+#include "Utils/ScopeGuard.h"
+#include "Utils/SecureMemory.h"
 #include <chrono>
 #include <thread>
 
@@ -428,6 +430,7 @@ namespace TestReliablePerPeer
     namespace Net = Spark::Net;
 
     constexpr uint32_t kWireMagic = 0x5350524B; // "SPRK"
+    static_assert(Net::NETWORK_WIRE_HEADER_SIZE == 23, "version-1 wire header must remain byte-compatible");
 
     /// Raw UDP endpoint speaking the engine wire format — lets one test process
     /// simulate multiple independent clients against the singleton server.
@@ -465,12 +468,26 @@ namespace TestReliablePerPeer
         }
 
         bool Send(Net::MessageType type, Net::ChannelType channel, Net::SequenceNumber sequence,
-                  const std::vector<uint8_t>& payload)
+                  const std::vector<uint8_t>& payload, bool sensitive = false)
+        {
+            return SendRawChannel(type, static_cast<uint8_t>(channel), sequence, payload, sensitive);
+        }
+
+        bool SendRawChannel(Net::MessageType type, uint8_t wireChannel, Net::SequenceNumber sequence,
+                            const std::vector<uint8_t>& payload, bool sensitive = false)
         {
             Net::NetBuffer buf;
+            const auto clearSensitiveWire = Spark::MakeScopeExit(
+                [&buf, sensitive]
+                {
+                    if (sensitive)
+                        buf.SecureReset();
+                });
             buf.WriteUint32(kWireMagic);
             buf.WriteUint16(static_cast<uint16_t>(type));
-            buf.WriteUint8(static_cast<uint8_t>(channel));
+            // `sensitive` controls only sender-local buffer erasure. It must
+            // never alter this version-1 wire byte.
+            buf.WriteUint8(wireChannel);
             buf.WriteUint32(m_clientID);
             buf.WriteUint32(sequence);
             buf.WriteFloat(0.0f); // timestamp
@@ -488,20 +505,30 @@ namespace TestReliablePerPeer
         /// Non-blocking receive of one engine-format message. False = nothing waiting.
         bool TryReceive(Net::NetworkMessage& outMsg)
         {
+            outMsg.ClearSensitivePayload();
             std::vector<uint8_t> raw(Net::MAX_UDP_WIRE_DATAGRAM_SIZE);
+            const auto clearRaw = Spark::MakeScopeExit([&raw] { Spark::SecureClear(raw); });
             sockaddr_in from{};
             socklen_t fromLen = sizeof(from);
             int received = ::recvfrom(m_socket, reinterpret_cast<char*>(raw.data()), static_cast<int>(raw.size()), 0,
                                       reinterpret_cast<sockaddr*>(&from), &fromLen);
             if (received < static_cast<int>(Net::NETWORK_WIRE_HEADER_SIZE))
                 return false;
+            m_lastWireSize = static_cast<size_t>(received);
 
             Net::NetBuffer buf;
+            const auto clearWireCopy = Spark::MakeScopeExit([&buf] { buf.SecureReset(); });
             buf.WriteBytes(raw.data(), static_cast<size_t>(received));
             if (buf.ReadUint32() != kWireMagic)
                 return false;
             outMsg.type = static_cast<Net::MessageType>(buf.ReadUint16());
-            outMsg.channel = static_cast<Net::ChannelType>(buf.ReadUint8());
+            const uint8_t rawChannel = buf.ReadUint8();
+            m_lastWireChannel = rawChannel;
+            if (rawChannel > static_cast<uint8_t>(Net::ChannelType::ReliableOrdered))
+                return false;
+            outMsg.channel = static_cast<Net::ChannelType>(rawChannel);
+            // This raw peer has no locally registered sensitive message types.
+            outMsg.sensitive = false;
             outMsg.senderID = buf.ReadUint32();
             outMsg.sequence = buf.ReadUint32();
             outMsg.timestamp = buf.ReadFloat();
@@ -559,11 +586,15 @@ namespace TestReliablePerPeer
         }
 
         Net::ClientID GetClientID() const { return m_clientID; }
+        uint8_t GetLastWireChannel() const { return m_lastWireChannel; }
+        size_t GetLastWireSize() const { return m_lastWireSize; }
 
       private:
         SOCKET m_socket = INVALID_SOCKET;
         sockaddr_in m_serverAddr{};
         Net::ClientID m_clientID = 0;
+        uint8_t m_lastWireChannel = 0xFF;
+        size_t m_lastWireSize = 0;
     };
 
     /// Pump the server with real-time gaps so loopback datagrams land.
@@ -826,6 +857,87 @@ TEST(NetworkWire_5KiBReliableLoopbackReceiveIsNotTruncated)
 
     EXPECT_EQ(received.size(), expected.size());
     EXPECT_TRUE(received == expected);
+    nm.Shutdown();
+}
+
+TEST(NetworkWire_SensitiveOwnershipIsLocalAndHighChannelBitsAreRejected)
+{
+    auto& nm = Net::NetworkManager::GetInstance();
+    nm.Shutdown();
+    EXPECT_TRUE(nm.StartServer(28457, 2));
+
+    RawUdpClient client;
+    EXPECT_TRUE(client.Open(28457));
+    EXPECT_TRUE(client.Connect(nm, "SensitiveOwnershipClient"));
+
+    bool serverSawSensitive = false;
+    int serverDispatchCount = 0;
+    std::vector<uint8_t> serverPayload;
+    nm.RegisterSensitiveHandler(
+        Net::MessageType::UserDefined,
+        [&serverSawSensitive, &serverDispatchCount, &serverPayload](const Net::NetworkMessage& msg)
+        {
+            ++serverDispatchCount;
+            serverSawSensitive = msg.sensitive;
+            serverPayload = msg.payload;
+        });
+
+    std::vector<uint8_t> request{'p', 'l', 'a', 'i', 'n', 't', 'e', 'x', 't'};
+    // Version 1 reserves every channel value above 2. In particular, the
+    // formerly proposed 0x80 sensitivity bit must remain invalid so old and
+    // new peers enforce the same 23-byte format.
+    EXPECT_TRUE(client.SendRawChannel(Net::MessageType::UserDefined, 0x81, 1, request, true));
+    PumpServer(nm, 10);
+    EXPECT_EQ(serverDispatchCount, 0);
+
+    // The sender clears its local serialization buffer, while the receiver
+    // derives sensitive ownership exclusively from its registered type.
+    EXPECT_TRUE(client.Send(Net::MessageType::UserDefined, Net::ChannelType::Reliable, 1, request, true));
+    PumpServer(nm, 20);
+    EXPECT_EQ(serverDispatchCount, 1);
+    EXPECT_TRUE(serverSawSensitive);
+    EXPECT_TRUE(serverPayload == request);
+
+    // Classification follows the currently registered local handler. Replacing
+    // it with a normal handler must not leave a stale sensitive-type entry.
+    bool replacementSawSensitive = true;
+    nm.RegisterHandler(Net::MessageType::UserDefined, [&replacementSawSensitive](const Net::NetworkMessage& msg)
+                       { replacementSawSensitive = msg.sensitive; });
+    EXPECT_TRUE(client.Send(Net::MessageType::UserDefined, Net::ChannelType::Reliable, 2, request, true));
+    PumpServer(nm, 20);
+    EXPECT_FALSE(replacementSawSensitive);
+
+    Net::NetworkMessage reply;
+    reply.type = Net::MessageType::UserDefined;
+    reply.channel = Net::ChannelType::Reliable;
+    reply.payload = {'r', 'e', 'p', 'l', 'y'};
+    reply.sensitive = true;
+    nm.SendToClient(client.GetClientID(), reply);
+
+    Net::NetworkMessage received;
+    bool found = false;
+    for (int attempt = 0; attempt < 100 && !found; ++attempt)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        Net::NetworkMessage candidate;
+        while (client.TryReceive(candidate))
+        {
+            if (candidate.type == Net::MessageType::UserDefined)
+            {
+                received = candidate;
+                found = true;
+                break;
+            }
+        }
+    }
+
+    EXPECT_TRUE(found);
+    EXPECT_EQ(client.GetLastWireChannel(), static_cast<uint8_t>(Net::ChannelType::Reliable));
+    EXPECT_EQ(client.GetLastWireSize(), Net::NETWORK_WIRE_HEADER_SIZE + reply.payload.size());
+    EXPECT_FALSE(received.sensitive);
+    EXPECT_TRUE(received.payload == reply.payload);
+    Spark::SecureClear(request);
+    Spark::SecureClear(serverPayload);
     nm.Shutdown();
 }
 

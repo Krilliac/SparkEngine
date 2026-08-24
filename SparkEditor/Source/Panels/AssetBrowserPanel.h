@@ -13,6 +13,8 @@
 #include <vector>
 #include <memory>
 
+class GraphicsEngine;
+
 namespace SparkEditor
 {
 
@@ -90,6 +92,9 @@ namespace SparkEditor
          */
         bool ImportAsset(const std::string& filePath);
 
+        /// @brief Wire live basic-path cache invalidation after an import.
+        void SetGraphics(GraphicsEngine* graphics) { m_graphics = graphics; }
+
         const std::string& GetProjectPath() const { return m_projectPath; }
         const std::string& GetCurrentFolder() const { return m_currentFolder; }
         const std::vector<std::string>& GetAssets() const { return m_assets; }
@@ -116,6 +121,7 @@ namespace SparkEditor
         std::string m_lastOperationMessage;
         bool m_lastOperationSucceeded = false;
         float m_thumbnailSize = 64.0f;
+        GraphicsEngine* m_graphics = nullptr; ///< Non-owning; owned by EditorUI.
     };
 
 } // namespace SparkEditor

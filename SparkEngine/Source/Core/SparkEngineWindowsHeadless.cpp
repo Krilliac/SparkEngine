@@ -219,6 +219,8 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: SaveSystem initialized");
 
     InitConsole();
+    Spark::ConsoleProcessManager::GetInstance().SetShutdownRequestHandler(
+        [] { g_shutdownRequested.store(true, std::memory_order_relaxed); });
     SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: InitConsole returned");
 
     // Minimal-init mode skips module loading and all detector singletons.
@@ -276,8 +278,16 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     int frameCount = 0;
     bool quitPosted = false;
 
-    while (!g_shutdownRequested)
+    while (true)
     {
+        if (g_shutdownRequested)
+        {
+            if (CanShutdownEngine())
+                break;
+            console.LogError("Shutdown request cancelled: a module could not checkpoint for safe unload");
+            g_shutdownRequested = false;
+        }
+
         // Honor -test-frames N for automated smoke testing under Wine/CI.
         // Matches the behaviour already present in SparkEngineLinux.cpp's
         // RunHeadlessLinux — without this parity the Windows headless loop
@@ -285,9 +295,13 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         if ((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) ||
             (g_testSecondsLimit > 0.0 && ExecElapsedSeconds() >= g_testSecondsLimit))
         {
-            console.LogInfo(
-                std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount, ExecElapsedSeconds()));
-            break;
+            if (CanShutdownEngine())
+            {
+                console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount,
+                                            ExecElapsedSeconds()));
+                break;
+            }
+            console.LogError("[TEST] Exit postponed: a module could not checkpoint for unload");
         }
 
         SPARK_HEARTBEAT();
@@ -345,7 +359,7 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     g_uiSystem.reset();
     g_weatherSystem.reset();
     console.LogInfo("Headless server shutting down...");
-    ShutdownEngine();
+    ShutdownEngineAfterPreflight();
 
     // Only free the console if we successfully allocated one in
     // AllocHeadlessConsole. Calling FreeConsole on an inherited console

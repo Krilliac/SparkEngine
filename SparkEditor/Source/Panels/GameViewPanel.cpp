@@ -8,6 +8,7 @@
 #include "GameViewPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "../Core/ProjectManager.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include "Utils/LogMacros.h"
 #include "Engine/ECS/Components.h"
@@ -331,7 +332,8 @@ namespace SparkEditor
         viewport.MinDepth = 0.0f;
         viewport.MaxDepth = 1.0f;
         m_context->RSSetViewports(1, &viewport);
-        Spark::RenderWorldBasic(*m_world, *m_graphics, m_meshCache, view, proj);
+        const std::string projectRoot = ProjectManager::GetActiveProjectPath();
+        Spark::RenderWorldBasic(*m_world, *m_graphics, m_meshCache, view, proj, projectRoot);
 
         m_context->OMSetRenderTargets(1, previousRTV.GetAddressOf(), previousDSV.Get());
         if (previousViewportCount)

@@ -74,6 +74,23 @@ namespace Terrafront
         m_ctx = &ctx;
         m_events = &events;
 
+        std::error_code rootError;
+        const std::filesystem::path workingDirectory = std::filesystem::current_path(rootError);
+        if (rootError)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] content root unavailable: %s", rootError.message().c_str());
+            return false;
+        }
+        m_contentRoot = std::filesystem::canonical(workingDirectory, rootError);
+        if (rootError || m_contentRoot.empty())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] content root canonicalization failed: %s",
+                            rootError.message().c_str());
+            return false;
+        }
+        const auto contentRootUtf8 = m_contentRoot.generic_u8string();
+        m_contentRootUtf8.assign(contentRootUtf8.begin(), contentRootUtf8.end());
+
         m_origin = std::make_unique<Spark::World::WorldOriginSystem>();
         m_origin->SetRebasingThreshold(kOriginRebaseThreshold);
         m_origin->SetEnabled(true);

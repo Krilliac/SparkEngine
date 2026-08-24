@@ -23,6 +23,8 @@
 
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/ScopeGuard.h"
+#include "Utils/SecureMemory.h"
 
 #include <chrono>
 #include <cstdlib>
@@ -149,11 +151,13 @@ namespace
             static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) & 0xFFFFFFu;
         const std::string suffix = std::to_string(runId);
         const std::string user = "tf_accept_" + suffix;
-        const std::string pass = "tf_accept_pw1";
+        std::string pass = "tf_accept_pw1";
+        const auto clearAcceptancePassword = Spark::MakeScopeExit([&] { Spark::SecureClear(pass); });
         const std::string charName = "Acceptance" + suffix;
 
         {
             TF_AuthRequest reg{};
+            const auto clearRegister = Spark::MakeScopeExit([&] { Spark::SecureErase(&reg, sizeof(reg)); });
             std::strncpy(reg.user, user.c_str(), sizeof(reg.user) - 1);
             std::strncpy(reg.pass, pass.c_str(), sizeof(reg.pass) - 1);
             ctx.clientNet->SendMsg(TFMsg::RegisterRequest, &reg, sizeof(reg));
@@ -162,6 +166,7 @@ namespace
         }
         {
             TF_AuthRequest login{};
+            const auto clearLogin = Spark::MakeScopeExit([&] { Spark::SecureErase(&login, sizeof(login)); });
             std::strncpy(login.user, user.c_str(), sizeof(login.user) - 1);
             std::strncpy(login.pass, pass.c_str(), sizeof(login.pass) - 1);
             ctx.clientNet->SendMsg(TFMsg::LoginRequest, &login, sizeof(login));
@@ -259,6 +264,7 @@ namespace
 
             // Re-login (a fresh account session) then re-enter the SAME character.
             TF_AuthRequest relogin{};
+            const auto clearRelogin = Spark::MakeScopeExit([&] { Spark::SecureErase(&relogin, sizeof(relogin)); });
             std::strncpy(relogin.user, user.c_str(), sizeof(relogin.user) - 1);
             std::strncpy(relogin.pass, pass.c_str(), sizeof(relogin.pass) - 1);
             ctx.clientNet->SendMsg(TFMsg::LoginRequest, &relogin, sizeof(relogin));
@@ -324,7 +330,7 @@ void TerrafrontModule::RegisterConsoleCommandsNet()
     // (TFServerSim::SendToPlayer's local-player short-circuit, T7), so these
     // commands can report the outcome inline instead of "sent, check later".
 #ifdef ENABLE_NETWORKING
-    console.RegisterCommand(
+    console.RegisterSensitiveCommand(
         "tf_register",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -335,6 +341,7 @@ void TerrafrontModule::RegisterConsoleCommandsNet()
             if (!ClientConnected(m_ctx))
                 return "[TF] not connected - use tf_host or tf_connect first";
             TF_AuthRequest req{};
+            const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
             std::strncpy(req.user, args[0].c_str(), sizeof(req.user) - 1);
             std::strncpy(req.pass, args[1].c_str(), sizeof(req.pass) - 1);
             m_ctx.clientNet->SendMsg(TFMsg::RegisterRequest, &req, sizeof(req));
@@ -346,7 +353,7 @@ void TerrafrontModule::RegisterConsoleCommandsNet()
         },
         "Register a new account (onboarding)", cat, "tf_register <user> <pass>");
 
-    console.RegisterCommand(
+    console.RegisterSensitiveCommand(
         "tf_login",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -357,6 +364,7 @@ void TerrafrontModule::RegisterConsoleCommandsNet()
             if (!ClientConnected(m_ctx))
                 return "[TF] not connected - use tf_host or tf_connect first";
             TF_AuthRequest req{};
+            const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
             std::strncpy(req.user, args[0].c_str(), sizeof(req.user) - 1);
             std::strncpy(req.pass, args[1].c_str(), sizeof(req.pass) - 1);
             m_ctx.clientNet->SendMsg(TFMsg::LoginRequest, &req, sizeof(req));

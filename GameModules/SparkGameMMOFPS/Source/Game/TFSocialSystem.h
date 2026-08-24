@@ -16,8 +16,9 @@
  *    a self-registered NetworkManager handler (socket clients) or a direct call
  *    from ClientSendOp (listen-host/standalone local player), both gated on
  *    TFServerSim::IsEnteredWorld.
- *  - PERSISTENCE: own atomic-JSON file "Saves/terrafront_social.json" keyed by
- *    charId (TFDatabase tmp+rename pattern). TFDatabase itself is NOT touched —
+ *  - PERSISTENCE: own atomic-JSON file "terrafront_social.json" under the
+ *    shared TERRAFRONT save root, keyed by charId (TFDatabase tmp+rename
+ *    pattern). TFDatabase itself is NOT touched —
  *    it is contended and its record schema belongs to the onboarding lane.
  *  - RECENT PLAYERS: kill/death pairs (EvPlayerKilled) and squad joins
  *    (EvSquadChanged) record both characters on each other's recent list
@@ -31,9 +32,12 @@
 #include "Core/TFTypes.h"
 #include "Core/TFEvents.h"
 #include "Net/TFSocialProtocol.h"
+#include "Persistence/TFSavePaths.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -64,7 +68,10 @@ namespace Terrafront
         bool Initialize(TFGameContext& ctx, TFEventBus& events);
         void Update(float deltaTime);
         void FixedUpdate(float fixedDeltaTime);
-        void Shutdown();
+        /** Persist pending mutations without dismantling callbacks or runtime state. */
+        bool Checkpoint();
+        /** Flush persisted state and tear down. False leaves the initialized state intact for a retry. */
+        bool Shutdown();
         void RenderDebugUI();
 
         // --- client API (UI: TFChatWindow / TFSocialPanel) ---------------------
@@ -107,6 +114,19 @@ namespace Terrafront
         /// ClientSendOp on listen host / standalone.
         void ServerHandleSocialOpRaw(PlayerId sender, const void* data, size_t size);
 
+#ifdef SPARK_SOCIAL_STORE_TESTS
+        struct StoreLoadTestResult
+        {
+            bool accepted{false};
+            bool missing{false};
+            size_t recordCount{0};
+            std::string detail;
+        };
+
+        static bool ValidateStoreJsonForTesting(std::string_view text, std::string* detail = nullptr);
+        static StoreLoadTestResult LoadStoreForTesting(const std::filesystem::path& path);
+#endif
+
       private:
         // --- server store (persisted, keyed by charId) --------------------------
         struct RecentRec
@@ -119,6 +139,14 @@ namespace Terrafront
             std::vector<std::string> friends;
             std::vector<std::string> blocked;
             std::vector<RecentRec> recent;
+        };
+        enum class StoreLoadStatus : uint8_t
+        {
+            Missing,
+            Loaded,
+            Unreadable,
+            Corrupt,
+            RecoveryRequired,
         };
         struct OnlineInfo
         {
@@ -149,6 +177,11 @@ namespace Terrafront
         void SendOpReplyTo(PlayerId player, SocialOp op, SocialOpResult result, const std::string& name);
 
         // persistence (atomic JSON, TFDatabase tmp+rename pattern)
+        static bool ParseStoreDocument(std::string_view text, std::unordered_map<uint64_t, SocialRecord>& loaded,
+                                       std::string& detail);
+        static StoreLoadStatus LoadStoreFromPath(const std::filesystem::path& path,
+                                                 std::unordered_map<uint64_t, SocialRecord>& loaded,
+                                                 std::string& detail);
         bool StoreEnsureLoaded();
         bool StoreSaveToDisk() const;
         void StoreMarkDirty() { m_storeDirty = true; }
@@ -182,7 +215,8 @@ namespace Terrafront
         bool m_storeLoadFailed{false};
         mutable bool m_storeDirty{false};
         float m_saveAccum{0.0f};
-        std::string m_storePath{"Saves/terrafront_social.json"};
+        std::filesystem::path m_storePath;
+        SavePaths::ExclusiveFileLock m_storeLock;
 
         std::unordered_map<PlayerId, OnlineInfo> m_online;
         float m_pollAccum{0.0f};

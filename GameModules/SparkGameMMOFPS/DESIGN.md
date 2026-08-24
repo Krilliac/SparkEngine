@@ -143,8 +143,11 @@ everything else is server-local.
 `factions.json` (sp4: gained a per-faction `structureMaterial` tint-material path),
 `presentation.json` (sp4: skybox/terrain/ambient/viewmodel/muzzle-FX render constants +
 the shared pawn mesh path — see `WorldPresentationDef`), `deployables.json` (sp4: per-
-`DeployableKind` prop model + scale — see `DeployableVisualDef`). Schemas defined in
-`TFDataTables.h`; validation on load; hot-reloadable via console `tf_reload_data`.
+`DeployableKind` prop model + scale — see `DeployableVisualDef`), plus
+`continents.json`, `regions_highlands.json`, `decor.json`, and `suits.json` consumed by
+their owning continent/decor/progression systems. Core schemas are defined in
+`TFDataTables.h`; the core set is validated on load and hot-reloadable via
+console `tf_reload_data`. Supplemental tables are validated by their owning systems.
 
 **Wire protocol (`TFNetProtocol.h`):** app messages ride `NetworkManager::RegisterHandler`.
 `TFMsg` ids start at 0x5400. POD structs, explicit little-endian, `static_assert` sizes:
@@ -226,12 +229,14 @@ Login/Register -> CharSelect -> CharCreate -> EnteringWorld -> InWorld
   `SQLiteConnection` fallback is JSON-key-value and does not execute SQL) —
   pivoted to an atomic-JSON-file backing (tmp+rename, the same pattern as
   `TFProgressionSystem.cpp`), storing `accounts[]`/`characters[]` in
-  `Saves/terrafront.db`, behind the exact CRUD interface Tasks 2-6 depend on.
+  `terrafront.db` under the shared `SavePaths::Root()`, behind the exact CRUD
+  interface Tasks 2-6 depend on.
   Plain class, no `Initialize(ctx,events)` — see Boot note below.
 - **`TFAccountSystem`** (`Source/Account/TFAccountSystem.{h,cpp}`) —
   register/login core logic over a `TFDatabase*` (unit-testable standalone,
-  no `TFGameContext` coupling); salted-hash auth ported from
-  `MMOAccountSystem` (demo-grade, not cryptographic — DESIGN §6 non-goal);
+  no `TFGameContext` coupling); self-describing PBKDF2-HMAC-SHA256 hashes
+  (150,000 iterations, per-account salt, constant-time derived-key compare;
+  self-contained implementation pinned by known-answer tests);
   a `clientId -> accountId` session map (`BindSession`/`AccountForClient`/
   `ClearSession`).
 - **`TFCharacterSystem`** (`Source/Account/TFCharacterSystem.{h,cpp}`) —
@@ -290,10 +295,11 @@ TFCharacterSystem -> TFLoginFlow` after every W1-W4 system, additive to the
 existing boot table. `TFDatabase`/`TFAccountSystem`/`TFCharacterSystem` are
 plain core-logic classes (unit-tested standalone against a bare
 `TFDatabase*`, `Tests/TestTFOnboarding.cpp`) with no uniform
-`Initialize(ctx,events)` lifecycle, so `TFDatabase::Open("Saves/
-terrafront.db")` + `SetDatabase(...)` are called directly in `Main.cpp`
-`OnLoad` rather than through the Boot table (`TFDatabase`'s `Open` result
-still gates module boot success, matching every other system). `OnImGui`
+`Initialize(ctx,events)` lifecycle. `Main.cpp` constructs and wires them with
+`SetDatabase(...)`; authority roles lazily open
+`SavePaths::File("terrafront.db")` in
+`TFServerSim::EnsureAuthorityDatabaseOpen()` on the first register/login
+request. Pure clients never open or flush the authority database. `OnImGui`
 renders `TFLoginFlow::RenderUI()` unconditionally (a no-op once
 `InWorld()`), and additionally gates HUD/map/spawn/scoreboard behind
 `InWorld()` (they already gated on `HasLocalPlayer()`). `TFSpawnScreen`'s

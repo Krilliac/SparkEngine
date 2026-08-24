@@ -22,6 +22,7 @@
 
 #include "../Core/EditorPanel.h"
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -58,10 +59,10 @@ namespace SparkEditor
         /// @brief One material JSON document loaded into editable fields.
         struct MaterialDoc
         {
-            std::string diskPath;   ///< Filesystem path openable from the editor's cwd
-            std::string enginePath; ///< Canonical "Assets/Materials/..." cache key (forward slashes)
-            std::string group;      ///< Folder relative to Assets/Materials ("" = root)
-            std::string fileName;   ///< File name without directory (e.g. "Metal.json")
+            std::filesystem::path diskPath; ///< Native filesystem path (never round-tripped through ACP)
+            std::string enginePath;         ///< Canonical "Assets/Materials/..." cache key (forward slashes)
+            std::string group;              ///< Folder relative to Assets/Materials ("" = root)
+            std::string fileName;           ///< File name without directory (e.g. "Metal.json")
 
             char name[128] = {};
             char shader[32] = {};
@@ -87,6 +88,7 @@ namespace SparkEditor
         void ScanMaterials();
         bool LoadDoc(MaterialDoc& doc);
         bool SaveDoc(MaterialDoc& doc);
+        bool SaveAllModified();
 
         void RenderToolbar();
         void RenderMaterialList();
@@ -96,7 +98,7 @@ namespace SparkEditor
 
         /// @brief Map an asset-relative texture path ("Textures/x.png" or "Assets/Textures/x.png")
         ///        to a filesystem path openable from the editor's cwd.
-        std::string ResolveAssetDiskPath(const std::string& assetRelPath) const;
+        std::filesystem::path ResolveAssetDiskPath(const std::string& assetRelPath) const;
 
         /// @brief True if the texture path in @p buf resolves to an existing file (empty counts as valid).
         bool TexturePathExists(const char* buf) const;
@@ -105,8 +107,8 @@ namespace SparkEditor
         int m_selected = -1;
         char m_searchFilter[128] = {};
 
-        /// Path prefix such that (m_assetsPrefix + "Assets/Materials") exists ("", "../", ...).
-        std::string m_assetsPrefix;
+        /// Canonical active project root; empty while no project is open.
+        std::string m_projectRoot;
 
         GraphicsEngine* m_graphics = nullptr; ///< Non-owning; owned by EditorUI
         float m_thumbSize = 96.0f;

@@ -7,6 +7,7 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -44,6 +45,13 @@ namespace Spark
         for (auto& value : values)
             SecureClear(value);
         values.clear();
+    }
+
+    inline void SecureClear(std::vector<uint8_t>& value) noexcept
+    {
+        if (!value.empty())
+            SecureErase(value.data(), value.size());
+        value.clear();
     }
 
     /** Fixed-capacity, non-copyable text storage intended for UI credentials. */

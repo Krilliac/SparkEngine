@@ -15,41 +15,52 @@
 #include <string>
 #include <vector>
 
-namespace Terrafront {
-
-constexpr int kTFMaxCharSlots = 5;
-
-enum class TFCharErr : uint8_t { Ok = 0, SlotsFull, NameTaken, NameInvalid, NoSuchCharacter, NotYourCharacter, ServerError, NotLoggedIn };
-
-struct TFCharCreateResult
+namespace Terrafront
 {
-    bool        ok = false;
-    TFCharErr   err = TFCharErr::ServerError;
-    uint64_t    charId = 0;
-};
 
-class TFCharacterSystem
-{
-  public:
-    void SetDatabase(TFDatabase* db) { m_db = db; }
+    constexpr int kTFMaxCharSlots = 5;
 
-    std::vector<TFCharacterRecord> List(uint64_t accountId);
+    enum class TFCharErr : uint8_t
+    {
+        Ok = 0,
+        SlotsFull,
+        NameTaken,
+        NameInvalid,
+        NoSuchCharacter,
+        NotYourCharacter,
+        ServerError,
+        NotLoggedIn
+    };
 
-    // name 3..23, alnum+single-space (no lead/trail/double space), unique, valid faction, slot cap
-    TFCharCreateResult Create(uint64_t accountId, const std::string& name, FactionId faction);
+    struct TFCharCreateResult
+    {
+        bool ok = false;
+        TFCharErr err = TFCharErr::ServerError;
+        uint64_t charId = 0;
+    };
 
-    TFCharErr Delete(uint64_t accountId, uint64_t charId);   // ownership-checked
+    class TFCharacterSystem
+    {
+      public:
+        void SetDatabase(TFDatabase* db) { m_db = db; }
 
-    // enter-world binding (Task 4): returns the character (faction becomes authoritative)
-    bool EnterWorld(uint64_t accountId, uint64_t charId, TFCharacterRecord& out);
+        std::vector<TFCharacterRecord> List(uint64_t accountId);
 
-    void PersistProgress(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux);   // routes to db
+        // name 3..23, alnum+single-space (no lead/trail/double space), unique, valid faction, slot cap
+        TFCharCreateResult Create(uint64_t accountId, const std::string& name, FactionId faction);
 
-    // Exposed for reuse (net-layer validation in Task 4/5) and unit testing.
-    static bool ValidateCharacterName(const std::string& name, std::string& err);
+        TFCharErr Delete(uint64_t accountId, uint64_t charId); // ownership-checked
 
-  private:
-    TFDatabase* m_db = nullptr;
-};
+        // enter-world binding (Task 4): returns the character (faction becomes authoritative)
+        bool EnterWorld(uint64_t accountId, uint64_t charId, TFCharacterRecord& out);
+
+        bool PersistProgress(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux); // routes to db
+
+        // Exposed for reuse (net-layer validation in Task 4/5) and unit testing.
+        static bool ValidateCharacterName(const std::string& name, std::string& err);
+
+      private:
+        TFDatabase* m_db = nullptr;
+    };
 
 } // namespace Terrafront

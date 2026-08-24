@@ -91,6 +91,18 @@ namespace
             unsetenv("SPARK_MODULE_ABI_FAIL_ON_LOAD");
 #endif
     }
+
+    void SetVetoUnloadEnvironment(bool enabled)
+    {
+#ifdef _WIN32
+        _putenv_s("SPARK_MODULE_ABI_VETO_UNLOAD", enabled ? "1" : "");
+#else
+        if (enabled)
+            setenv("SPARK_MODULE_ABI_VETO_UNLOAD", "1", 1);
+        else
+            unsetenv("SPARK_MODULE_ABI_VETO_UNLOAD");
+#endif
+    }
 } // namespace
 
 TEST(ModuleABI_ExpectedDescriptorIsCompatible)
@@ -208,10 +220,11 @@ TEST(ModuleABI_FailedTransactionalReloadPreservesWorkingModule)
         std::ifstream input(modulePath.string() + ".sparkabi");
         sidecar.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
     }
-    const size_t sdkField = sidecar.find("sdk_version=2");
+    const std::string expectedSdk = "sdk_version=" + std::to_string(SPARK_SDK_VERSION);
+    const size_t sdkField = sidecar.find(expectedSdk);
     EXPECT_TRUE(sdkField != std::string::npos);
     if (sdkField != std::string::npos)
-        sidecar.replace(sdkField, std::string("sdk_version=2").size(), "sdk_version=3");
+        sidecar.replace(sdkField, expectedSdk.size(), "sdk_version=" + std::to_string(SPARK_SDK_VERSION + 1));
     {
         std::ofstream output(modulePath.string() + ".sparkabi", std::ios::trunc);
         output << sidecar;
@@ -223,6 +236,46 @@ TEST(ModuleABI_FailedTransactionalReloadPreservesWorkingModule)
 
     manager.ShutdownAll();
     manager.UnloadAll();
+    RemoveModuleCopy(modulePath);
+}
+
+TEST(ModuleABI_UnloadVetoPreservesInitializedWorkingModule)
+{
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkUnloadVetoModule");
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(modulePath.string()));
+    manager.InitializeAll(&context);
+
+    Spark::IModule* const workingInstance = manager.GetModule("Spark Compatible ABI Fixture");
+    SetVetoUnloadEnvironment(true);
+    EXPECT_FALSE(manager.ShutdownAll());
+    EXPECT_TRUE(manager.GetModule("Spark Compatible ABI Fixture") == workingInstance);
+    EXPECT_FALSE(manager.ReloadModule("Spark Compatible ABI Fixture", &context));
+    EXPECT_TRUE(manager.GetModule("Spark Compatible ABI Fixture") == workingInstance);
+
+    SetVetoUnloadEnvironment(false);
+    EXPECT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+    RemoveModuleCopy(modulePath);
+}
+
+TEST(ModuleABI_CommittedShutdownDoesNotRepeatFalliblePreflight)
+{
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkCommittedShutdownModule");
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(modulePath.string()));
+    manager.InitializeAll(&context);
+
+    SetVetoUnloadEnvironment(false);
+    ASSERT_TRUE(manager.CanShutdownAll());
+    // Once the owner commits shutdown, a later environmental change must not
+    // strand a partially torn-down dependency graph behind a second gate.
+    SetVetoUnloadEnvironment(true);
+    manager.ShutdownAllAfterPreflight();
+    manager.UnloadAll();
+    SetVetoUnloadEnvironment(false);
     RemoveModuleCopy(modulePath);
 }
 

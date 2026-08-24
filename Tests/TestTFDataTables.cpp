@@ -19,6 +19,9 @@
 
 #include "TestFramework.h"
 
+#include "Data/TFDataTablesInternal.h"
+#include "Persistence/TFSavePaths.h"
+#include "World/TFAssetPaths.h"
 #include "Utils/JsonUtils.h"
 
 #include <algorithm>
@@ -98,7 +101,7 @@ namespace
 } // namespace
 
 // ============================================================================
-// Parse smoke — all five files, expected top-level shape
+// Parse smoke — every JSON data file, expected top-level shape
 // ============================================================================
 
 TEST(TFData_RepoRootFound)
@@ -107,7 +110,7 @@ TEST(TFData_RepoRootFound)
     EXPECT_FALSE(RepoRoot().empty());
 }
 
-TEST(TFData_AllFiveTablesParse)
+TEST(TFData_AllDataFilesParse)
 {
     EXPECT_TRUE(LoadTable("weapons.json")["weapons"].IsArray());
     EXPECT_TRUE(LoadTable("vehicles.json")["vehicles"].IsArray());
@@ -118,6 +121,17 @@ TEST(TFData_AllFiveTablesParse)
     EXPECT_TRUE(regions["conduits"].IsArray());
     EXPECT_TRUE(regions["continent"].IsObject());
     EXPECT_TRUE(regions["initialOwnership"].IsObject());
+
+    const Value highlands = LoadTable("regions_highlands.json");
+    EXPECT_TRUE(highlands["regions"].IsArray());
+    EXPECT_TRUE(highlands["conduits"].IsArray());
+    EXPECT_TRUE(highlands["continent"].IsObject());
+    EXPECT_TRUE(highlands["initialOwnership"].IsObject());
+    EXPECT_TRUE(LoadTable("continents.json")["continents"].IsArray());
+    EXPECT_TRUE(LoadTable("presentation.json")["presentation"].IsObject());
+    EXPECT_TRUE(LoadTable("deployables.json")["deployables"].IsArray());
+    EXPECT_TRUE(LoadTable("decor.json")["templates"].IsObject());
+    EXPECT_TRUE(LoadTable("suits.json")["suits"].IsArray());
 }
 
 // ============================================================================
@@ -425,6 +439,165 @@ TEST(TFData_Presentation_ParsesAndAssetsExist)
     EXPECT_GT(Num(doc["presentation"]["terrain"], "uvTiles"), 0.0);
     EXPECT_GE(Num(doc["presentation"]["ambient"], "volume"), 0.0);
     EXPECT_LE(Num(doc["presentation"]["ambient"], "volume"), 1.0);
+}
+
+TEST(TFData_Presentation_ProductionParserHonorsRootSkyboxOverrides)
+{
+    const Value doc = LoadTable("presentation.json");
+    Terrafront::WorldPresentationDef parsed;
+    std::string error;
+    EXPECT_TRUE(Terrafront::DataTablesDetail::ParsePresentation(doc, parsed, error));
+    EXPECT_TRUE(error.empty());
+    EXPECT_EQ(parsed.skybox.faceTex[0], std::string("Textures/MMOFPS/sky/veyra_px.png"));
+    EXPECT_EQ(parsed.sanctuarySkybox.faceTex[0], std::string("Textures/MMOFPS/sky/sanctuary_px.png"));
+    for (const std::string& face : parsed.skybox.faceTex)
+        EXPECT_TRUE(AssetExists(face));
+    for (const std::string& face : parsed.sanctuarySkybox.faceTex)
+        EXPECT_TRUE(AssetExists(face));
+}
+
+TEST(TFData_Presentation_ProductionParserAcceptsNestedOnlySkyboxes)
+{
+    const Value doc = Spark::Json::Parse(R"json(
+        {
+          "presentation": {
+            "skybox": { "faceTex": ["a", "b", "c", "d", "e", "f"], "scale": 100.0 },
+            "sanctuarySkybox": { "faceTex": ["g", "h", "i", "j", "k", "l"], "scale": 80.0 }
+          }
+        }
+    )json");
+    Terrafront::WorldPresentationDef parsed;
+    std::string error;
+    EXPECT_TRUE(Terrafront::DataTablesDetail::ParsePresentation(doc, parsed, error));
+    EXPECT_EQ(parsed.skybox.faceTex[0], std::string("a"));
+    EXPECT_EQ(parsed.sanctuarySkybox.faceTex[5], std::string("l"));
+}
+
+TEST(TFData_ContinentsHaveUniquePersistenceSafeKeys)
+{
+    const Value document = LoadTable("continents.json");
+    const Value& continents = document["continents"];
+    std::set<std::string> keys;
+    for (size_t i = 0; i < continents.Size(); ++i)
+    {
+        const Value& row = continents[i];
+        const std::string key = Str(row, "key");
+        EXPECT_TRUE(Terrafront::SavePaths::IsValidContinentKey(key));
+        EXPECT_TRUE(keys.insert(key).second);
+        if (Str(row, "kind") == "continent")
+            EXPECT_FALSE(Str(row, "regions").empty());
+    }
+    EXPECT_TRUE(keys.count("cindral_wastes") == 1);
+    EXPECT_TRUE(keys.count("veyra_highlands") == 1);
+}
+
+TEST(TFData_Presentation_LegacyNestedSanctuaryAllowsPartialOverride)
+{
+    const Value doc = Spark::Json::Parse(R"json(
+        {
+          "presentation": {
+            "skybox": { "faceTex": ["a", "b", "c", "d", "e", "f"], "scale": 100.0 },
+            "sanctuarySkybox": { "faceTex": ["ignored-partial"], "scale": 77.0,
+                                  "tint": [0.1, 0.2, 0.3, 1.0] }
+          }
+        }
+    )json");
+    Terrafront::WorldPresentationDef parsed;
+    std::string error;
+    EXPECT_TRUE(Terrafront::DataTablesDetail::ParsePresentation(doc, parsed, error));
+    EXPECT_EQ(parsed.sanctuarySkybox.faceTex[0], std::string("a"));
+    EXPECT_NEAR(parsed.sanctuarySkybox.scale, 77.0f, 0.001f);
+    EXPECT_NEAR(parsed.sanctuarySkybox.tint[2], 0.3f, 0.001f);
+}
+
+TEST(TFData_Presentation_RootSanctuaryPrecedenceRemainsStrict)
+{
+    const Value doc = Spark::Json::Parse(R"json(
+        {
+          "presentation": {
+            "skybox": { "faceTex": ["a", "b", "c", "d", "e", "f"] },
+            "sanctuarySkybox": { "scale": 77.0 }
+          },
+          "sanctuarySkybox": { "scale": 88.0 }
+        }
+    )json");
+    Terrafront::WorldPresentationDef parsed;
+    std::string error;
+    EXPECT_FALSE(Terrafront::DataTablesDetail::ParsePresentation(doc, parsed, error));
+    EXPECT_TRUE(error.find("root sanctuarySkybox") != std::string::npos);
+}
+
+TEST(TFData_Presentation_MalformedRootOverrideFailsClosed)
+{
+    const Value doc = Spark::Json::Parse(R"json(
+        {
+          "presentation": {
+            "skybox": { "faceTex": ["a", "b", "c", "d", "e", "f"] }
+          },
+          "skybox": { "faceTex": ["incomplete"] }
+        }
+    )json");
+    Terrafront::WorldPresentationDef parsed;
+    std::string error;
+    EXPECT_FALSE(Terrafront::DataTablesDetail::ParsePresentation(doc, parsed, error));
+    EXPECT_TRUE(error.find("exactly 6") != std::string::npos);
+}
+
+TEST(TFSavePaths_OneRootAndLeafOnlyFiles)
+{
+    const fs::path cwd = fs::path("server-root");
+    EXPECT_TRUE(Terrafront::SavePaths::ResolveRoot({}, cwd) == (cwd / "Saves").lexically_normal());
+    EXPECT_TRUE(Terrafront::SavePaths::ResolveRoot("shared/terrafront", cwd) ==
+                (cwd / "shared" / "terrafront").lexically_normal());
+    EXPECT_TRUE(Terrafront::SavePaths::ResolveRoot({}, {}).empty());
+    EXPECT_TRUE(Terrafront::SavePaths::ResolveRoot("relative", {}).empty());
+
+    const fs::path account = Terrafront::SavePaths::File("terrafront.db");
+    const fs::path territory = Terrafront::SavePaths::File("terrafront_territory.json");
+    EXPECT_FALSE(account.empty());
+    EXPECT_TRUE(account.parent_path() == Terrafront::SavePaths::Root());
+    EXPECT_TRUE(territory.parent_path() == Terrafront::SavePaths::Root());
+    EXPECT_TRUE(Terrafront::SavePaths::File("../escape.json").empty());
+    EXPECT_TRUE(Terrafront::SavePaths::File("nested/escape.json").empty());
+    EXPECT_TRUE(Terrafront::SavePaths::File(".").empty());
+    EXPECT_TRUE(Terrafront::SavePaths::IsValidContinentKey("cindral_wastes"));
+    EXPECT_FALSE(Terrafront::SavePaths::IsValidContinentKey("../escape"));
+    const fs::path scoped = Terrafront::SavePaths::ContinentFile("terrafront_state", "cindral_wastes");
+    EXPECT_EQ(scoped.filename(), fs::path("terrafront_state.cindral_wastes.json"));
+
+#ifdef _WIN32
+    const fs::path unicodeRoot = Terrafront::SavePaths::ResolveRootWide(L"保存/данные", fs::path(L"D:/服务器"));
+    EXPECT_TRUE(unicodeRoot == (fs::path(L"D:/服务器") / L"保存/данные").lexically_normal());
+    const fs::path unc = Terrafront::SavePaths::ResolveRootWide(LR"(\\server\share\保存)", cwd);
+    EXPECT_TRUE(unc.is_absolute());
+    EXPECT_TRUE(unc.root_name() == fs::path(LR"(\\server\share)").root_name());
+#endif
+}
+
+TEST(TFAssetPaths_ConfinesRelativeAndLoaderResolvedAbsolutePaths)
+{
+    const fs::path canonicalRoot = fs::canonical(RepoRoot());
+    const auto rootUtf8Raw = canonicalRoot.generic_u8string();
+    const std::string rootUtf8(rootUtf8Raw.begin(), rootUtf8Raw.end());
+
+    const auto relative = Terrafront::ResolveContentAssetPath(rootUtf8, "Assets/MMOFPS/Data/presentation.json");
+    EXPECT_TRUE(relative.has_value());
+    if (!relative)
+        return;
+    EXPECT_TRUE(relative->nativePath == canonicalRoot / "Assets/MMOFPS/Data/presentation.json");
+
+    const auto absoluteRaw = (canonicalRoot / "Assets/MMOFPS/Data/presentation.json").generic_u8string();
+    const std::string absolute(absoluteRaw.begin(), absoluteRaw.end());
+    const auto loaderResolved = Terrafront::ResolveContentAssetPath(rootUtf8, absolute);
+    EXPECT_TRUE(loaderResolved.has_value());
+    if (!loaderResolved)
+        return;
+    EXPECT_TRUE(loaderResolved->cacheKey == relative->cacheKey);
+
+    EXPECT_FALSE(Terrafront::ResolveContentAssetPath(rootUtf8, "../outside.png").has_value());
+    const auto outsideRaw = (canonicalRoot.parent_path() / "outside.png").generic_u8string();
+    EXPECT_FALSE(
+        Terrafront::ResolveContentAssetPath(rootUtf8, std::string(outsideRaw.begin(), outsideRaw.end())).has_value());
 }
 
 TEST(TFData_Presentation_MuzzleFxSaneRanges)

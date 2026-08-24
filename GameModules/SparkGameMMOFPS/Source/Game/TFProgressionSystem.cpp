@@ -13,7 +13,7 @@
  * when the faction holds any flux-producing region; wallet capped.
  *
  * Split parts (repo file-size rules): JSON persistence (read-modify-write of
- * the "progression" key inside Saves/terrafront_state.json, tmp+rename) in
+ * the "progression" key in the continent-qualified state file) in
  * TFProgressionSystemPersist.cpp; W6 unlock tree / per-weapon stats /
  * loadout + the loadout-depth wave (grenade choice, suit slot) in
  * TFProgressionSystemMeta.cpp; shared helpers in
@@ -59,13 +59,22 @@ namespace Terrafront
     TFProgressionSystem::~TFProgressionSystem()
     {
         if (m_initialized)
-            Shutdown();
+        {
+            // The module manager owns lifecycle and must honor CanUnload(). A
+            // destructor cannot safely retry persistence because TFGameContext
+            // dependencies may already be tearing down. Keep this path
+            // diagnostic-only; normal destruction follows a successful
+            // Shutdown() and arrives with m_initialized == false.
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] progression system destroyed without a successful module unload checkpoint");
+        }
     }
 
     bool TFProgressionSystem::Initialize(TFGameContext& ctx, TFEventBus& events)
     {
         m_ctx = &ctx;
         m_events = &events;
+        m_persistenceBlocked = false;
 
         // Rank curve: cumulative XP to HOLD rank N. Rank 1 is the floor (0 XP);
         // rank N>=2 needs 500 * N^1.6 (precomputed once, DESIGN §4 "XP curve").
@@ -125,13 +134,28 @@ namespace Terrafront
         (void)fixedDeltaTime;
     }
 
-    void TFProgressionSystem::Shutdown()
+    bool TFProgressionSystem::Checkpoint()
     {
-        if (m_ctx && m_ctx->IsAuthority() && (m_dirty || m_meta.AnyDirty()))
-            SaveNow();
+        if (!m_initialized || !m_ctx || !m_ctx->IsAuthority() || (!m_dirty && !m_meta.AnyDirty()))
+            return true;
+        return SaveNow();
+    }
+
+    bool TFProgressionSystem::Shutdown()
+    {
+        if (!m_initialized)
+            return true;
+        if (!Checkpoint())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] progression shutdown checkpoint failed; in-memory state retained for retry");
+            return false;
+        }
         m_players.clear();
         m_meta.Clear();
+        m_persistenceBlocked = false;
         m_initialized = false;
+        return true;
     }
 
     // ---------------------------------------------------------------------------
@@ -265,9 +289,10 @@ namespace Terrafront
         // xp/rank/flux via PersistProgress but does not know about meta, and by
         // the time it calls us the m_activeCharacter binding is gone (we rely on
         // the charId cached in the meta record at seed time instead).
-        if (m_ctx && m_ctx->db)
-            m_meta.PersistIfDirty(player, *m_ctx->db);
-        m_meta.Erase(player);
+        if (!m_meta.Detach(player, m_ctx ? m_ctx->db : nullptr))
+            SPARK_LOG_ERROR(
+                Spark::LogCategory::Game,
+                "[TF] queued dirty metadata by character after disconnect persistence failure for player %u", player);
         m_players.erase(player);
     }
 

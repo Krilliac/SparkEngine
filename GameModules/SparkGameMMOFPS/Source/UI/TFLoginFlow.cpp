@@ -15,6 +15,8 @@
 #include "World/TFWorldSetup.h" // W11 server-browser: Connect() = the tf_connect path
 
 #include "Utils/LogMacros.h"
+#include "Utils/ScopeGuard.h"
+#include "Utils/SecureMemory.h"
 
 #include <algorithm>
 #include <cstring>
@@ -89,7 +91,7 @@ namespace Terrafront
 
         m_state = TFFlowState::Login;
         std::memset(m_username, 0, sizeof(m_username));
-        std::memset(m_password, 0, sizeof(m_password));
+        Spark::SecureErase(m_password, sizeof(m_password));
         std::memset(m_createName, 0, sizeof(m_createName));
         m_error.clear();
         m_chars.clear();
@@ -109,6 +111,7 @@ namespace Terrafront
     void TFLoginFlow::Shutdown()
     {
         m_lan.Shutdown(); // W11 server-browser lane
+        Spark::SecureErase(m_password, sizeof(m_password));
         m_initialized = false;
     }
 
@@ -118,7 +121,7 @@ namespace Terrafront
         // tf_disconnect or a continent hop) so the login screen reappears
         // instead of leaving the game UI believing it is still InWorld.
         m_state = TFFlowState::Login;
-        std::memset(m_password, 0, sizeof(m_password));
+        Spark::SecureErase(m_password, sizeof(m_password));
         m_error.clear();
         m_chars.clear();
         m_selectedIdx = -1;
@@ -250,9 +253,11 @@ namespace Terrafront
         if (!m_ctx || !m_ctx->clientNet)
             return;
         TF_AuthRequest req{};
+        const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
         std::strncpy(req.user, m_username, sizeof(req.user) - 1);
         std::strncpy(req.pass, m_password, sizeof(req.pass) - 1);
         m_ctx->clientNet->SendMsg(TFMsg::LoginRequest, &req, sizeof(req));
+        Spark::SecureErase(m_password, sizeof(m_password));
         m_pending = PendingOp::Login;
         m_error.clear();
     }
@@ -262,9 +267,11 @@ namespace Terrafront
         if (!m_ctx || !m_ctx->clientNet)
             return;
         TF_AuthRequest req{};
+        const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
         std::strncpy(req.user, m_username, sizeof(req.user) - 1);
         std::strncpy(req.pass, m_password, sizeof(req.pass) - 1);
         m_ctx->clientNet->SendMsg(TFMsg::RegisterRequest, &req, sizeof(req));
+        Spark::SecureErase(m_password, sizeof(m_password));
         m_pending = PendingOp::Register;
         m_error.clear();
     }

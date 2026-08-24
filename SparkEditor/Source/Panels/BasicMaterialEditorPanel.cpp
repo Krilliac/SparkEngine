@@ -18,20 +18,71 @@
 #include "BasicMaterialEditorPanel.h"
 
 #include "BasicMaterialEditorInternal.h"
+#include "Core/ProjectManager.h"
 #include "Graphics/GraphicsEngine.h"
+#include "Graphics/ProjectAssetPath.h"
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <sstream>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace fs = std::filesystem;
 
 namespace SparkEditor
 {
+    namespace
+    {
+        fs::path PathFromUtf8(std::string_view value)
+        {
+            const auto* begin = reinterpret_cast<const char8_t*>(value.data());
+            return fs::path(std::u8string(begin, begin + value.size()));
+        }
+
+        std::string PathToUtf8(const fs::path& value)
+        {
+            const auto utf8 = value.generic_u8string();
+            return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+        }
+
+        fs::path MakeTemporarySibling(const fs::path& destination)
+        {
+            static std::atomic<uint64_t> counter{0};
+            const auto nonce = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^
+                               counter.fetch_add(1, std::memory_order_relaxed);
+            return destination.parent_path() / (destination.filename().native() +
+#ifdef _WIN32
+                                                L".tmp." + std::to_wstring(nonce)
+#else
+                                                ".tmp." + std::to_string(nonce)
+#endif
+                                               );
+        }
+
+        bool ReplaceFileAtomically(const fs::path& temporary, const fs::path& destination, std::error_code& error)
+        {
+#ifdef _WIN32
+            if (::MoveFileExW(temporary.c_str(), destination.c_str(),
+                              MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+                return true;
+            error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            return false;
+#else
+            fs::rename(temporary, destination, error);
+            return !error;
+#endif
+        }
+    } // namespace
+
 
     namespace
     {
@@ -108,32 +159,51 @@ namespace SparkEditor
 
     bool BasicMaterialEditorPanel::Initialize()
     {
-        // The editor normally runs with the repo root as cwd (SceneViewPanel loads
-        // "Assets/Models/..." relative), but probe a few parents so the panel also
-        // works when launched from a build output directory.
-        m_assetsPrefix.clear();
-        for (const char* prefix : {"", "../", "../../", "../../../"})
-        {
-            std::error_code ec;
-            if (fs::exists(fs::path(prefix) / "Assets" / "Materials", ec))
-            {
-                m_assetsPrefix = prefix;
-                break;
-            }
-        }
-
+        m_projectRoot = ProjectManager::GetActiveProjectPath();
         ScanMaterials();
         SPARK_LOG_INFO(Spark::LogCategory::Editor,
-                       "BasicMaterialEditorPanel: found %d material JSON(s) under '%sAssets/Materials'",
-                       static_cast<int>(m_materials.size()), m_assetsPrefix.c_str());
+                       "BasicMaterialEditorPanel: found %d material JSON(s) under '%s/Assets/Materials'",
+                       static_cast<int>(m_materials.size()), m_projectRoot.c_str());
         return true;
     }
 
-    void BasicMaterialEditorPanel::Update(float /*deltaTime*/) {}
+    void BasicMaterialEditorPanel::Update(float /*deltaTime*/)
+    {
+        const std::string activeRoot = ProjectManager::GetActiveProjectPath();
+        if (activeRoot != m_projectRoot)
+        {
+            // Project transitions are driven outside this panel. Persist the
+            // old project's in-memory material documents before replacing the
+            // list so a close/switch cannot silently discard edits.
+            if (!SaveAllModified())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                                "BasicMaterialEditorPanel: project switch deferred in panel because modified "
+                                "materials could not be saved");
+                return;
+            }
+            m_projectRoot = activeRoot;
+            ScanMaterials();
+        }
+    }
 
     void BasicMaterialEditorPanel::Shutdown()
     {
+        if (!SaveAllModified())
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "BasicMaterialEditorPanel: one or more modified materials could not be saved at shutdown");
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Basic Materials panel");
+    }
+
+    bool BasicMaterialEditorPanel::SaveAllModified()
+    {
+        bool saved = true;
+        for (MaterialDoc& doc : m_materials)
+        {
+            if (doc.modified && !SaveDoc(doc))
+                saved = false;
+        }
+        return saved;
     }
 
     void BasicMaterialEditorPanel::ScanMaterials()
@@ -141,7 +211,7 @@ namespace SparkEditor
         m_materials.clear();
         m_selected = -1;
 
-        const fs::path matRoot = fs::path(m_assetsPrefix) / "Assets" / "Materials";
+        const fs::path matRoot = PathFromUtf8(m_projectRoot) / "Assets" / "Materials";
         std::error_code ec;
         if (!fs::exists(matRoot, ec))
             return;
@@ -153,15 +223,15 @@ namespace SparkEditor
             std::error_code fec;
             if (!it->is_regular_file(fec))
                 continue;
-            if (ToLower(it->path().extension().string()) != ".json")
+            if (ToLower(PathToUtf8(it->path().extension())) != ".json")
                 continue;
 
             MaterialDoc doc;
-            doc.diskPath = it->path().generic_string();
+            doc.diskPath = it->path();
             const fs::path rel = fs::relative(it->path(), matRoot, fec);
-            doc.enginePath = (fs::path("Assets/Materials") / rel).generic_string();
-            doc.group = rel.has_parent_path() ? rel.parent_path().generic_string() : std::string();
-            doc.fileName = it->path().filename().string();
+            doc.enginePath = PathToUtf8(fs::path("Assets/Materials") / rel);
+            doc.group = rel.has_parent_path() ? PathToUtf8(rel.parent_path()) : std::string();
+            doc.fileName = PathToUtf8(it->path().filename());
             LoadDoc(doc);
             m_materials.push_back(std::move(doc));
         }
@@ -359,15 +429,36 @@ namespace SparkEditor
         }
         out += "}\n";
 
-        std::ofstream file(doc.diskPath, std::ios::binary | std::ios::trunc);
+        const fs::path temporary = MakeTemporarySibling(doc.diskPath);
+        std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
         if (!file.is_open())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "BasicMaterialEditorPanel: cannot write '%s'",
-                            doc.diskPath.c_str());
+                            PathToUtf8(doc.diskPath).c_str());
             return false;
         }
         file << out;
+        file.flush();
+        const bool writeSucceeded = file.good();
         file.close();
+        if (!writeSucceeded || file.fail())
+        {
+            std::error_code ignored;
+            fs::remove(temporary, ignored);
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "BasicMaterialEditorPanel: incomplete write for '%s'",
+                            PathToUtf8(doc.diskPath).c_str());
+            return false;
+        }
+
+        std::error_code replaceError;
+        if (!ReplaceFileAtomically(temporary, doc.diskPath, replaceError))
+        {
+            std::error_code ignored;
+            fs::remove(temporary, ignored);
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "BasicMaterialEditorPanel: cannot replace '%s': %s",
+                            PathToUtf8(doc.diskPath).c_str(), replaceError.message().c_str());
+            return false;
+        }
         doc.modified = false;
 
         // Apply-live: drop the engine's cached parse so the Scene View re-reads the
@@ -376,12 +467,26 @@ namespace SparkEditor
         // path only differs when the editor runs outside the repo root.
         if (m_graphics)
         {
-            m_graphics->InvalidateBasicMaterial(doc.enginePath);
-            if (doc.diskPath != doc.enginePath)
-                m_graphics->InvalidateBasicMaterial(doc.diskPath);
+            m_graphics->InvalidateBasicMaterial(doc.enginePath, m_projectRoot);
+
+            const auto invalidateDeclaredTexture = [this](const char* declaredPath)
+            {
+                if (!declaredPath || !declaredPath[0])
+                    return;
+                std::string assetPath = declaredPath;
+                if (assetPath.rfind("Assets/", 0) != 0 && assetPath.rfind("Assets\\", 0) != 0)
+                    assetPath = "Assets/" + assetPath;
+                if (const auto resolved = Spark::ResolveProjectAssetPath(m_projectRoot, assetPath))
+                    m_graphics->InvalidateBasicTexture(resolved->cacheKey);
+            };
+            invalidateDeclaredTexture(doc.albedoPath);
+            invalidateDeclaredTexture(doc.normalPath);
+            if (doc.roughnessIsTexture)
+                invalidateDeclaredTexture(doc.roughnessPath);
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "BasicMaterialEditorPanel: saved '%s'", doc.diskPath.c_str());
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "BasicMaterialEditorPanel: saved '%s'",
+                       PathToUtf8(doc.diskPath).c_str());
         return true;
     }
 

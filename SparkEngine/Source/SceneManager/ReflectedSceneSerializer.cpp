@@ -278,12 +278,7 @@ namespace Spark
                 auto it = idMap.find(p.parentId);
                 if (it == idMap.end())
                     continue;
-                Transform* childT = world.GetComponent<Transform>(p.child);
-                if (!childT)
-                    childT = &world.AddComponent<Transform>(p.child);
-                childT->parent = it->second;
-                if (Transform* parentT = world.GetComponent<Transform>(it->second))
-                    parentT->children.push_back(p.child);
+                world.SetParent(p.child, it->second);
             }
             return true;
         }

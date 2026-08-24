@@ -144,6 +144,77 @@ TEST(ReflectedScene_RoundTrip_ParentChainAndChildrenRebuilt)
     EXPECT_NEAR(gt2->position.z, 2.0f, 0.001f);
 }
 
+TEST(World_DestroyEntityRepairsImmediateHierarchyLinks)
+{
+    World world;
+    const EntityID root = world.CreateEntity("Root");
+    const EntityID parent = world.CreateEntity("Parent");
+    const EntityID child = world.CreateEntity("Child");
+    world.AddComponent<Transform>(root);
+    world.AddComponent<Transform>(parent);
+    world.AddComponent<Transform>(child);
+
+    Transform* rootTransform = world.GetComponent<Transform>(root);
+    Transform* parentTransform = world.GetComponent<Transform>(parent);
+    Transform* childTransform = world.GetComponent<Transform>(child);
+    parentTransform->parent = root;
+    rootTransform->children.push_back(parent);
+    childTransform->parent = parent;
+    parentTransform->children.push_back(child);
+
+    world.DestroyEntity(parent);
+
+    EXPECT_FALSE(world.GetRegistry().valid(parent));
+    rootTransform = world.GetComponent<Transform>(root);
+    childTransform = world.GetComponent<Transform>(child);
+    EXPECT_TRUE(rootTransform != nullptr);
+    EXPECT_TRUE(childTransform != nullptr);
+    EXPECT_TRUE(std::find(rootTransform->children.begin(), rootTransform->children.end(), parent) ==
+                rootTransform->children.end());
+    EXPECT_TRUE(childTransform->parent == entt::null);
+}
+
+TEST(World_DestroyLeafRemovesEveryDuplicateParentBacklink)
+{
+    World world;
+    const EntityID parent = world.CreateEntity("Parent");
+    const EntityID child = world.CreateEntity("Child");
+    world.AddComponent<Transform>(parent);
+    world.AddComponent<Transform>(child);
+
+    Transform* parentTransform = world.GetComponent<Transform>(parent);
+    Transform* childTransform = world.GetComponent<Transform>(child);
+    childTransform->parent = parent;
+    parentTransform->children = {child, child};
+
+    world.DestroyEntity(child);
+
+    parentTransform = world.GetComponent<Transform>(parent);
+    EXPECT_TRUE(parentTransform != nullptr);
+    EXPECT_TRUE(parentTransform->children.empty());
+}
+
+TEST(World_SetParentMaintainsReciprocalLinksAndRejectsCycles)
+{
+    World world;
+    const EntityID root = world.CreateEntity("Root");
+    const EntityID other = world.CreateEntity("Other");
+    const EntityID child = world.CreateEntity("Child");
+
+    EXPECT_TRUE(world.SetParent(child, root));
+    const Transform* childTransform = world.GetComponent<Transform>(child);
+    const Transform* rootTransform = world.GetComponent<Transform>(root);
+    EXPECT_TRUE(childTransform && childTransform->parent == root);
+    EXPECT_TRUE(rootTransform && rootTransform->children == std::vector<EntityID>{child});
+
+    EXPECT_TRUE(world.SetParent(child, other));
+    rootTransform = world.GetComponent<Transform>(root);
+    const Transform* otherTransform = world.GetComponent<Transform>(other);
+    EXPECT_TRUE(rootTransform && rootTransform->children.empty());
+    EXPECT_TRUE(otherTransform && otherTransform->children == std::vector<EntityID>{child});
+    EXPECT_FALSE(world.SetParent(other, child));
+}
+
 // Regression pass for the W9 lane's item 3: Camera and Script registered
 // fields still round-trip (guards the field registrations the Inspector's
 // World-backed path renders from).

@@ -233,10 +233,15 @@ namespace Terrafront
                 return false;
             }
 
-            const Value& sky = pres["skybox"];
+            // Skybox overrides were added at the document root by the
+            // per-zone art pass while the original schema kept them under
+            // "presentation". Accept both layouts and give an explicit root
+            // override precedence; a malformed override must fail loudly
+            // instead of silently falling back to stale nested art.
+            const Value& sky = root.HasKey("skybox") ? root["skybox"] : pres["skybox"];
             if (!sky.IsObject() || !sky["faceTex"].IsArray() || sky["faceTex"].Size() != 6)
             {
-                err = "presentation.json: skybox.faceTex must have exactly 6 entries";
+                err = "presentation.json: skybox.faceTex (root or presentation.skybox) must have exactly 6 entries";
                 return false;
             }
             for (size_t i = 0; i < 6; ++i)
@@ -252,9 +257,35 @@ namespace Terrafront
             // optional "sanctuarySkybox" object (same shape). Faces are only
             // replaced when a full 6-face array is present.
             out.sanctuarySkybox = out.skybox;
-            if (pres.HasKey("sanctuarySkybox") && pres["sanctuarySkybox"].IsObject())
+            if (root.HasKey("sanctuarySkybox"))
             {
+                // The new root schema is a complete asset-set override and is
+                // therefore strict. It also deliberately wins over legacy nested data.
+                const Value& ssky = root["sanctuarySkybox"];
+                if (!ssky.IsObject() || !ssky["faceTex"].IsArray() || ssky["faceTex"].Size() != 6)
+                {
+                    err = "presentation.json: root sanctuarySkybox.faceTex must have exactly 6 entries";
+                    return false;
+                }
+                for (size_t i = 0; i < 6; ++i)
+                    out.sanctuarySkybox.faceTex[i] = ssky["faceTex"][i].AsString(out.sanctuarySkybox.faceTex[i]);
+                out.sanctuarySkybox.scale = GetNum(ssky, "scale", out.sanctuarySkybox.scale);
+                if (ssky["tint"].IsArray() && ssky["tint"].Size() == 4)
+                    for (size_t i = 0; i < 4; ++i)
+                        out.sanctuarySkybox.tint[i] =
+                            static_cast<float>(ssky["tint"][i].AsNumber(out.sanctuarySkybox.tint[i]));
+            }
+            else if (pres.HasKey("sanctuarySkybox"))
+            {
+                // Compatibility: the original nested schema allowed a partial
+                // scale/tint-only override and ignored faceTex unless all six
+                // faces were supplied.
                 const Value& ssky = pres["sanctuarySkybox"];
+                if (!ssky.IsObject())
+                {
+                    err = "presentation.json: presentation.sanctuarySkybox must be an object";
+                    return false;
+                }
                 if (ssky["faceTex"].IsArray() && ssky["faceTex"].Size() == 6)
                     for (size_t i = 0; i < 6; ++i)
                         out.sanctuarySkybox.faceTex[i] = ssky["faceTex"][i].AsString(out.sanctuarySkybox.faceTex[i]);

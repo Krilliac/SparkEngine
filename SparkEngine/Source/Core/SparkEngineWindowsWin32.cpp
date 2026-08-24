@@ -25,6 +25,7 @@
 #include "GameImGuiLayer.h"
 #include "GameplaySystemLifecycle.h"
 #include "Graphics/GraphicsEngine.h"
+#include "Graphics/ProjectAssetPath.h"
 #include "Graphics/WeatherSystem.h"
 #include "Graphics/WorldBasicRenderer.h" // -scene: Spark::RenderWorldBasic
 #include "Input/InputManager.h"
@@ -59,6 +60,7 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
     ASSERT(GetEngineRuntime().timer);
 
     auto& console = Spark::SimpleConsole::GetInstance();
+    Spark::ConsoleProcessManager::GetInstance().SetShutdownRequestHandler([] { PostQuitMessage(0); });
     console.LogInfo("Starting main engine loop...");
 
     // -scene <path>: load a reflected-scene JSON and render it via the
@@ -66,11 +68,17 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
     // File-scope statics so they outlive this stack frame for every tick.
     static World g_sceneWorld;
     static Spark::WorldMeshCache g_sceneCache;
+    std::string sceneProjectRoot;
     bool haveModules = GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules();
     if (!g_scenePath.empty() && !haveModules)
     {
         if (Spark::LoadWorld(g_sceneWorld, g_scenePath))
         {
+            if (const auto root = Spark::DeriveProjectRootFromScenePath(g_scenePath))
+                sceneProjectRoot = *root;
+            else
+                console.LogWarning("[-scene] Could not derive a project root from a canonical Scenes/... path; "
+                                   "relative assets are disabled");
             console.LogSuccess(std::format("[-scene] Loaded '{}' ({} entities)", g_scenePath,
                                            g_sceneWorld.GetRegistry().storage<entt::entity>().size()));
         }
@@ -90,7 +98,7 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
     // Win32 message pump: PeekMessage with PM_REMOVE gives us non-blocking
     // message processing — the engine ticks in the else branch whenever
     // there are no pending OS messages (resize, input, focus, etc.).
-    while (msg.message != WM_QUIT)
+    while (true)
     {
         // Test frame limit: post WM_QUIT once, then KEEP pumping messages so
         // the quit is actually consumed. The old `continue` skipped PeekMessage,
@@ -100,13 +108,35 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
              (g_testSecondsLimit > 0.0 && ExecElapsedSeconds() >= g_testSecondsLimit)) &&
             !quitPosted)
         {
-            console.LogInfo(
-                std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount, ExecElapsedSeconds()));
-            PostQuitMessage(0);
-            quitPosted = true;
+            if (CanShutdownEngine())
+            {
+                console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount,
+                                            ExecElapsedSeconds()));
+                PostQuitMessage(0);
+                quitPosted = true;
+            }
+            else
+            {
+                console.LogError("[TEST] Exit postponed: a module could not checkpoint for unload");
+            }
         }
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
         {
+            if (msg.message == WM_QUIT)
+            {
+                // PostQuitMessage is also used by the built-in console `quit`
+                // command. Consume a vetoed quit and resume the live loop so
+                // modules can retry their persistence checkpoint; returning
+                // from WinMain would destroy their state despite the veto.
+                if (!CanShutdownEngine())
+                {
+                    console.LogError("Quit postponed: a module could not checkpoint for safe unload");
+                    msg.message = WM_NULL;
+                    quitPosted = false;
+                    continue;
+                }
+                break;
+            }
             if (!TranslateAccelerator(msg.hwnd, accel, &msg))
             {
                 TranslateMessage(&msg);
@@ -167,7 +197,7 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
                     int fbH = g_windowHeightOverride > 0 ? g_windowHeightOverride : 720;
                     float aspect = static_cast<float>(fbW) / static_cast<float>(fbH);
                     XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(60.0f), aspect, 0.1f, 6000.0f);
-                    Spark::RenderWorldBasic(g_sceneWorld, *gfx, g_sceneCache, view, proj);
+                    Spark::RenderWorldBasic(g_sceneWorld, *gfx, g_sceneCache, view, proj, sceneProjectRoot);
                 }
                 gfx->EndFrame();
             }
@@ -218,7 +248,7 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
         GetEngineRuntime().graphics->SetPrePresentHook(nullptr, nullptr);
     Spark::GameImGui::Shutdown();
 
-    ShutdownEngine();
+    ShutdownEngineAfterPreflight();
 
     return static_cast<int>(msg.wParam);
 }
@@ -360,6 +390,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (GetEngineRuntime().eventBus)
             GetEngineRuntime().eventBus->Publish(Spark::WindowResizeEvent{LOWORD(lParam), HIWORD(lParam)});
         break;
+
+    case WM_CLOSE:
+        // Keep the window/resources alive until the main loop completes the
+        // one non-destructive shutdown preflight. A vetoed WM_QUIT is consumed
+        // there and the application continues normally.
+        PostQuitMessage(0);
+        return 0;
 
     case WM_DESTROY:
         if (hWnd == g_mainWindow)

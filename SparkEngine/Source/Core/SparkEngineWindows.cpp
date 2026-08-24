@@ -30,11 +30,13 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <format>
 #include <fstream>
 #include <memory>
+#include <shellapi.h>
 #include <string>
 #include <vector>
 
@@ -153,18 +155,39 @@ static void ParseWindowSizeOverride(LPWSTR cmdLine)
  */
 static std::string ParseScenePathOverride(LPWSTR cmdLine)
 {
-    std::wstring cmd(cmdLine);
-    auto pos = cmd.find(L"-scene");
-    if (pos == std::wstring::npos)
+    // lpCmdLine omits the executable. Prefix a dummy argv[0] so the system
+    // tokenizer applies normal quoting/backslash rules to every user argument.
+    const std::wstring fullCommandLine = L"SparkEngine.exe " + std::wstring(cmdLine ? cmdLine : L"");
+    int argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(fullCommandLine.c_str(), &argc);
+    if (!argv)
         return {};
-    pos += 6; // length of "-scene"
-    while (pos < cmd.size() && cmd[pos] == L' ')
-        ++pos;
-    if (pos >= cmd.size())
+
+    std::wstring wpath;
+    for (int i = 1; i + 1 < argc; ++i)
+    {
+        if (std::wstring_view(argv[i]) == L"-scene")
+        {
+            wpath = argv[i + 1];
+            break;
+        }
+    }
+    LocalFree(argv);
+    if (wpath.empty() || wpath.size() > static_cast<size_t>(INT_MAX))
         return {};
-    auto end = cmd.find(L' ', pos);
-    std::wstring wpath = cmd.substr(pos, end - pos);
-    return std::string(wpath.begin(), wpath.end());
+
+    const int inputLength = static_cast<int>(wpath.size());
+    const int utf8Length =
+        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wpath.data(), inputLength, nullptr, 0, nullptr, nullptr);
+    if (utf8Length <= 0)
+        return {};
+    std::string utf8(static_cast<size_t>(utf8Length), '\0');
+    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wpath.data(), inputLength, utf8.data(), utf8Length, nullptr,
+                            nullptr) != utf8Length)
+    {
+        return {};
+    }
+    return utf8;
 }
 
 // Windows-specific globals (MAX_LOADSTRING lives in SparkEngineWindowsInternal.h)

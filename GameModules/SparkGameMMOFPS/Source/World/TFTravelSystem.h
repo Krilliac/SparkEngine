@@ -238,6 +238,9 @@ namespace Terrafront
         bool m_clientHandlers{false};
 #endif
         bool m_showDebug{false};
+        bool m_travelCommandRegistered{false};
+        bool m_hopCommandRegistered{false};
+        bool m_debugCommandRegistered{false};
 
         // sanctuary-v2 lane (W10): sanctuary decor + class terminal and the
         // cosmetic firing range are owned + driven here (TFRegionSystem::

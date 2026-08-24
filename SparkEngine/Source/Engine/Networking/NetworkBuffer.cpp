@@ -8,12 +8,20 @@
 #include "NetworkManager.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/LogMacros.h"
+#include "../../Utils/SecureMemory.h"
 #include <cstring>
 #include <algorithm>
 
 using namespace DirectX;
 namespace Spark::Net
 {
+
+    void NetBuffer::SecureReset() noexcept
+    {
+        Spark::SecureClear(m_data);
+        m_readPos = 0;
+        m_error = false;
+    }
 
     // ============================================================================
     // NetBuffer — Write methods

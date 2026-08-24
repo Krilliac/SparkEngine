@@ -187,10 +187,15 @@ namespace Terrafront
 
     void TFOutfitSystem::FixedUpdate(float) {}
 
-    void TFOutfitSystem::Shutdown()
+    bool TFOutfitSystem::Checkpoint()
+    {
+        return !m_initialized || m_store.Checkpoint();
+    }
+
+    bool TFOutfitSystem::Shutdown()
     {
         if (!m_initialized)
-            return;
+            return true;
 
 #ifdef ENABLE_NETWORKING
         if (m_clientHandlers)
@@ -207,7 +212,12 @@ namespace Terrafront
             m_cmdsRegistered = false;
         }
 
-        m_store.Close(); // flushes if dirty
+        if (!m_store.Close())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] outfit shutdown checkpoint failed; in-memory state retained for retry");
+            return false;
+        }
         m_boundChars.clear();
         m_playerOfChar.clear();
         m_invites.clear();
@@ -216,6 +226,7 @@ namespace Terrafront
         m_lb = LeaderboardMirror{};
         m_lastWeekKey = 0; // a re-Initialize must re-run the load-time rollover sweep
         m_initialized = false;
+        return true;
     }
 
     // ---------------------------------------------------------------------------

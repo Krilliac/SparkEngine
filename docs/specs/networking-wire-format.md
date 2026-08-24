@@ -40,15 +40,24 @@ Each UDP packet contains one `NetworkMessage`:
 
 | Offset | Size | Type | Field | Description |
 |--------|------|------|-------|-------------|
-| 0 | 2 | `uint16_t` | `type` | Message type enum value |
-| 2 | 1 | `uint8_t` | `channel` | Channel type (0=Unreliable, 1=Reliable, 2=ReliableOrdered) |
-| 3 | 4 | `uint32_t` | `senderID` | Originating client ID |
-| 7 | 4 | `uint32_t` | `sequence` | Sequence number for reliable ordering |
-| 11 | 4 | `float` | `timestamp` | Server time when created |
-| 15 | 4 | `uint32_t` | `payloadSize` | Length of payload in bytes |
-| 19 | N | `uint8_t[]` | `payload` | Raw serialized message body |
+| 0 | 4 | `uint32_t` | `magic` | `0x5350524B` (`SPRK`) |
+| 4 | 2 | `uint16_t` | `type` | Message type enum value |
+| 6 | 1 | `uint8_t` | `channel` | Channel type (0=Unreliable, 1=Reliable, 2=ReliableOrdered) |
+| 7 | 4 | `uint32_t` | `senderID` | Originating client ID |
+| 11 | 4 | `uint32_t` | `sequence` | Sequence number for reliable ordering |
+| 15 | 4 | `float` | `timestamp` | Server time when created |
+| 19 | 4 | `uint32_t` | `payloadSize` | Length of payload in bytes |
+| 23 | N | `uint8_t[]` | `payload` | Raw serialized message body |
 
-**Total header size:** 19 bytes (fixed) + variable payload
+**Total header size:** 23 bytes (fixed) + variable payload
+
+Sensitive-payload ownership is intentionally absent from the wire format.
+Senders mark their local `NetworkMessage` copies with `sensitive`; receivers
+independently classify sensitive message types with `RegisterSensitiveHandler`.
+This promptly erases queue, retransmit, dispatch, and serialization buffers
+without changing the version-1 datagram or trusting sender-controlled metadata.
+All channel bytes other than 0, 1, and 2 (including values with high bits set)
+are rejected before dispatch.
 
 ## Channel Types
 

@@ -14,6 +14,7 @@
 #include "../Core/EditorIcons.h"
 #include "BasicMaterialEditorInternal.h"
 #include "Graphics/GraphicsEngine.h"
+#include "Graphics/ProjectAssetPath.h"
 
 #include <imgui.h>
 
@@ -28,6 +29,18 @@ namespace SparkEditor
 
     namespace
     {
+        fs::path PathFromUtf8(std::string_view value)
+        {
+            const auto* begin = reinterpret_cast<const char8_t*>(value.data());
+            return fs::path(std::u8string(begin, begin + value.size()));
+        }
+
+        std::string PathToUtf8(const fs::path& value)
+        {
+            const auto utf8 = value.generic_u8string();
+            return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+        }
+
         /// @brief Material texture paths are relative to Assets/ unless already prefixed
         ///        (same rule as GetOrLoadBasicMaterial's prefixAssets).
         std::string PrefixAssets(std::string p)
@@ -38,11 +51,12 @@ namespace SparkEditor
         }
     } // namespace
 
-    std::string BasicMaterialEditorPanel::ResolveAssetDiskPath(const std::string& assetRelPath) const
+    fs::path BasicMaterialEditorPanel::ResolveAssetDiskPath(const std::string& assetRelPath) const
     {
         if (assetRelPath.empty())
             return {};
-        return m_assetsPrefix + PrefixAssets(assetRelPath);
+        const auto resolved = Spark::ResolveProjectAssetPath(m_projectRoot, PrefixAssets(assetRelPath));
+        return resolved ? resolved->nativePath : fs::path{};
     }
 
     bool BasicMaterialEditorPanel::TexturePathExists(const char* buf) const
@@ -81,7 +95,8 @@ namespace SparkEditor
                 if (m_materials.empty())
                 {
                     ImGui::Spacing();
-                    ImGui::TextWrapped("No material JSONs found under '%sAssets/Materials'.", m_assetsPrefix.c_str());
+                    const std::string materialRoot = PathToUtf8(PathFromUtf8(m_projectRoot) / "Assets" / "Materials");
+                    ImGui::TextWrapped("No material JSONs found under '%s'.", materialRoot.c_str());
                 }
             }
             ImGui::EndChild();
@@ -183,7 +198,10 @@ namespace SparkEditor
             ImGui::SameLine();
             ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), ICON_FA_EXCLAMATION_TRIANGLE);
             if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("File not found: %s", ResolveAssetDiskPath(buf).c_str());
+            {
+                const std::string missingPath = PathToUtf8(ResolveAssetDiskPath(buf));
+                ImGui::SetTooltip("File not found: %s", missingPath.c_str());
+            }
         }
         return changed;
     }
@@ -194,13 +212,13 @@ namespace SparkEditor
         ImGui::BeginGroup();
         ImGui::TextDisabled("%s", label);
 
-        const std::string disk = ResolveAssetDiskPath(assetRelPath ? assetRelPath : "");
+        const fs::path disk = ResolveAssetDiskPath(assetRelPath ? assetRelPath : "");
         ID3D11ShaderResourceView* srv = nullptr;
         if (m_graphics && !disk.empty())
         {
             std::error_code ec;
             if (fs::exists(disk, ec))
-                srv = m_graphics->GetOrLoadTextureSRV(disk);
+                srv = m_graphics->GetOrLoadTextureSRV(PathToUtf8(disk));
         }
 
         if (srv)

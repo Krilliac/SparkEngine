@@ -45,6 +45,8 @@ class TerrafrontModule : public Spark::IModule
     // --- Spark::IModule interface ---
     Spark::ModuleInfo GetModuleInfo() const override;
     bool OnLoad(Spark::IEngineContext* context) override;
+    bool CanUnload() override;
+    bool SupportsHotReload() const override { return false; }
     void OnUnload() override;
     void OnUpdate(float deltaTime) override;
     void OnFixedUpdate(float fixedDeltaTime) override;
@@ -64,10 +66,12 @@ class TerrafrontModule : public Spark::IModule
     void RegisterConsoleCommands();
     void RegisterConsoleCommandsGameplay(); // Console/TFCommandsGameplay.cpp
     void RegisterConsoleCommandsNet();      // Console/TFCommandsNet.cpp
+    void UnregisterConsoleCommands();
 
     Spark::IEngineContext* m_context{nullptr};
     bool m_initialized{false};
     bool m_paused{false};
+    bool m_consoleCommandsRegistered{false};
 
   public:
     /// Master toggle for the aggregated "TERRAFRONT Debug" ImGui window

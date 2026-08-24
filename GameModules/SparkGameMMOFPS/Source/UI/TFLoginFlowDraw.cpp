@@ -15,6 +15,7 @@
 #include "Data/TFDataTables.h"
 #include "Game/TFLanDiscovery.h" // kTFLanBeaconPort, TFLanServerEntry
 #include "UI/TFUiCommon.h"
+#include "Utils/SecureMemory.h"
 
 #ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
@@ -259,7 +260,7 @@ namespace Terrafront
             m_accountId = 0;
             m_chars.clear();
             m_selectedIdx = -1;
-            std::memset(m_password, 0, sizeof(m_password));
+            Spark::SecureErase(m_password, sizeof(m_password));
             m_error.clear();
             m_pending = PendingOp::None;
             m_state = TFFlowState::Login;

@@ -133,6 +133,16 @@ namespace Terrafront
             m_sanctuaryDecor->Shutdown();
             m_sanctuaryDecor.reset();
         }
+        auto& console = Spark::SimpleConsole::GetInstance();
+        if (m_travelCommandRegistered)
+            console.UnregisterCommand("tf_travel");
+        if (m_hopCommandRegistered)
+            console.UnregisterCommand("tf_travel_hop");
+        if (m_debugCommandRegistered)
+            console.UnregisterCommand("tf_travel_debug");
+        m_travelCommandRegistered = false;
+        m_hopCommandRegistered = false;
+        m_debugCommandRegistered = false;
         TFRedeployRules::SetExtraRule({}); // capture-less, but clear for symmetry
 #ifdef ENABLE_NETWORKING
         if (m_serverHandlers)
@@ -256,6 +266,7 @@ namespace Terrafront
                 "Request travel to a map (server validates: alive, entered world, terminal proximity for "
                 "sanctuary departures)",
                 "TERRAFRONT", "tf_travel <sanctuary|cindral>");
+            m_travelCommandRegistered = true;
         }
 
         // multimap-plumbing lane (W13): console-testable hop to a continent
@@ -282,6 +293,7 @@ namespace Terrafront
                 },
                 "Hop to a different continent's server (needs continents.json host/port for that key)", "TERRAFRONT",
                 "tf_travel_hop <key>");
+            m_hopCommandRegistered = true;
         }
 
         if (!console.HasCommand("tf_travel_debug"))
@@ -294,6 +306,7 @@ namespace Terrafront
                     return "[TF] travel debug panel toggled (needs tf_debug panels on)";
                 },
                 "Toggle the TF Travel debug panel", "TERRAFRONT", "tf_travel_debug");
+            m_debugCommandRegistered = true;
         }
     }
 

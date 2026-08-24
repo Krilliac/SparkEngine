@@ -9,6 +9,7 @@
 #include "Game/TFOutfitSystem.h"
 
 #include "Game/TFOutfitSystemInternal.h"
+#include "Persistence/TFSavePaths.h"
 #include "Utils/LogMacros.h"
 
 #include <cstring>
@@ -30,17 +31,16 @@ namespace Terrafront
             return true;
         if (m_storeOpenFailed)
             return false; // quarantined/corrupt file: do not retry (and re-quarantine) every op
-        // Same working-dir-relative resolution as TFServerSim::
-        // EnsureAuthorityDatabaseOpen's "Saves/terrafront.db" — outfits.json
-        // lands next to the account database.
-        if (m_store.Open("Saves/outfits.json"))
+        const std::filesystem::path path = SavePaths::File("outfits.json");
+        if (!path.empty() && m_store.Open(path))
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] authority opened outfit store (%zu outfits)",
-                           m_store.OutfitCount());
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] authority opened outfit store at %s (%zu outfits)",
+                           SavePaths::Utf8ForLog(path).c_str(), m_store.OutfitCount());
             RolloverIfNeeded(); // server-load weekly rollover path (shared with the Update tick)
             return true;
         }
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] authority failed to open Saves/outfits.json");
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] authority failed to open outfit store at %s",
+                        path.empty() ? "<invalid save path>" : SavePaths::Utf8ForLog(path).c_str());
         m_storeOpenFailed = true;
         return false;
     }

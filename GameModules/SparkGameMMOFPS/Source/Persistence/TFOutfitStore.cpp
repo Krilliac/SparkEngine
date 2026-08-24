@@ -8,6 +8,7 @@
  * TU) so it links standalone into SparkTests the same way TFDatabase.cpp does.
  */
 #include "Persistence/TFOutfitStore.h"
+#include "Persistence/TFSavePaths.h"
 
 #include "Utils/LogMacros.h"
 
@@ -126,22 +127,35 @@ namespace Terrafront
 
     TFOutfitStore::~TFOutfitStore()
     {
-        if (m_open)
-            Close();
+        if (m_open && !Close())
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] outfit store destroyed after an unrecoverable final flush failure for %s",
+                            SavePaths::Utf8ForLog(m_path).c_str());
     }
 
-    bool TFOutfitStore::Open(const std::string& path)
+    bool TFOutfitStore::Open(const std::filesystem::path& path)
     {
+        if (m_open || m_recoveryLatched || path.empty())
+            return false;
         m_path = path;
 
         namespace fs = std::filesystem;
-        auto parentPath = fs::path(m_path).parent_path();
+        auto parentPath = m_path.parent_path();
         if (!parentPath.empty())
         {
             std::error_code ec;
             fs::create_directories(parentPath, ec);
             if (ec)
                 return false;
+        }
+
+        std::error_code lockEc;
+        if (!m_fileLock.TryLock(m_path, lockEc))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] outfit store open refused for %s: another authority owns the persistence lock (%s)",
+                            SavePaths::Utf8ForLog(m_path).c_str(), lockEc.message().c_str());
+            return false;
         }
 
         m_outfits.clear();
@@ -151,32 +165,78 @@ namespace Terrafront
 
         std::error_code existsEc;
         const bool fileExists = fs::exists(m_path, existsEc);
-        if (fileExists && !LoadFromDisk())
+        if (existsEc)
         {
-            // Present but unreadable (corrupt/truncated/foreign). Never fall
-            // through with an empty in-memory store: the next debounced flush
-            // would silently overwrite the unreadable file with an empty one.
-            // Quarantine + refuse instead (TFDatabase::Open pattern).
-            std::error_code renameEc;
-            const std::string backupPath = m_path + ".corrupt-" + std::to_string(NowMs()) + ".bak";
-            fs::rename(m_path, backupPath, renameEc);
-            SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                            "[TF] outfit store open refused: %s is unreadable/corrupt; backed up to %s (backup ok=%d)",
-                            m_path.c_str(), backupPath.c_str(), renameEc ? 0 : 1);
+            m_recoveryLatched = true;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] outfit store stat failed for %s: %s",
+                            SavePaths::Utf8ForLog(m_path).c_str(), existsEc.message().c_str());
+            m_fileLock.Unlock();
             return false;
+        }
+        if (!fileExists)
+        {
+            fs::path recoveryBackup;
+            std::error_code recoveryEc;
+            if (SavePaths::FindRecoveryBackup(m_path, recoveryBackup, recoveryEc))
+            {
+                m_recoveryLatched = true;
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "[TF] outfit primary %s is missing while recovery backup %s exists; recovery required",
+                                SavePaths::Utf8ForLog(m_path).c_str(), SavePaths::Utf8ForLog(recoveryBackup).c_str());
+                m_fileLock.Unlock();
+                return false;
+            }
+            if (recoveryEc)
+            {
+                m_recoveryLatched = true;
+                m_fileLock.Unlock();
+                return false;
+            }
+        }
+        if (fileExists)
+        {
+            const LoadResult result = LoadFromDisk();
+            if (result != LoadResult::Loaded)
+            {
+                m_recoveryLatched = true;
+                if (result == LoadResult::Corrupt)
+                {
+                    std::filesystem::path backupPath = m_path;
+                    backupPath += ".corrupt-" + std::to_string(NowMs()) + ".bak";
+                    std::error_code backupEc;
+                    fs::copy_file(m_path, backupPath, fs::copy_options::none, backupEc);
+                    SPARK_LOG_ERROR(
+                        Spark::LogCategory::Game,
+                        "[TF] corrupt outfit store %s retained; recovery backup %s created=%d; retries latched off",
+                        SavePaths::Utf8ForLog(m_path).c_str(), SavePaths::Utf8ForLog(backupPath).c_str(),
+                        backupEc ? 0 : 1);
+                }
+                else
+                    SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                    "[TF] unreadable outfit store %s left in place; retries latched off",
+                                    SavePaths::Utf8ForLog(m_path).c_str());
+                m_fileLock.Unlock();
+                return false;
+            }
         }
 
         m_open = true;
         return true;
     }
 
-    void TFOutfitStore::Close()
+    bool TFOutfitStore::Close()
     {
         if (!m_open)
-            return;
-        if (m_dirty)
-            SaveNow();
+            return true;
+        if (m_dirty && !SaveNow())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] outfit store close refused after flush failure; state and lock retained for retry");
+            return false;
+        }
         m_open = false;
+        m_fileLock.Unlock();
+        return true;
     }
 
     void TFOutfitStore::Tick(float dt)
@@ -188,9 +248,14 @@ namespace Terrafront
             SaveNow();
     }
 
+    bool TFOutfitStore::Checkpoint()
+    {
+        return !m_open || !m_dirty || SaveNow();
+    }
+
     bool TFOutfitStore::SaveNow()
     {
-        if (!m_open && m_path.empty())
+        if (!m_open || m_path.empty())
             return false;
         const bool ok = WriteToDisk();
         if (ok)
@@ -201,7 +266,7 @@ namespace Terrafront
         else
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] outfit store flush FAILED for %s (kept dirty)",
-                            m_path.c_str());
+                            SavePaths::Utf8ForLog(m_path).c_str());
         }
         return ok;
     }

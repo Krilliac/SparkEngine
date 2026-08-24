@@ -11,6 +11,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 #include "GraphicsEngine.h"
+#include "ProjectAssetPath.h"
 #include "Shader.h"
 #include "../Utils/LogMacros.h"
 
@@ -21,6 +22,7 @@
 #include <string>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 
@@ -291,19 +293,76 @@ void GraphicsEngine::SetBasicTexture(ID3D11ShaderResourceView* srv)
 // Minimal extraction of "albedo"/"normal" (strings), "roughness" (string or
 // scalar) and "tiling" ([x, y]) from the small material JSON files under
 // Assets/Materials. Not a general JSON parser.
-const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(const std::string& jsonPath)
+const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(const std::string& jsonPath,
+                                                                            std::string_view projectRootUtf8)
 {
-    if (jsonPath.empty())
+    if (jsonPath.empty() || projectRootUtf8.empty())
         return nullptr;
 
-    auto it = m_basicMaterialCache.find(jsonPath);
-    if (it != m_basicMaterialCache.end())
-        return &it->second;
+    auto loadTexture = [this, &jsonPath](std::string_view projectRoot,
+                                         std::string& declaredPath) -> ID3D11ShaderResourceView*
+    {
+        if (declaredPath.empty())
+            return nullptr;
+        const auto resolved = Spark::ResolveProjectAssetPath(projectRoot, declaredPath);
+        if (!resolved)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GetOrLoadBasicMaterial: rejected texture path '%s' declared by '%s'", declaredPath.c_str(),
+                           jsonPath.c_str());
+            declaredPath.clear();
+            return nullptr;
+        }
+        declaredPath = resolved->cacheKey;
+        return GetOrLoadTextureSRV(declaredPath);
+    };
 
-    std::ifstream file(jsonPath);
+    auto retryTextures = [this](BasicMaterial& material)
+    {
+        if (!material.srv && !material.albedoPath.empty())
+            material.srv = GetOrLoadTextureSRV(material.albedoPath);
+        if (!material.normalSrv && !material.normalPath.empty())
+            material.normalSrv = GetOrLoadTextureSRV(material.normalPath);
+        if (!material.roughnessSrv && !material.roughnessPath.empty())
+            material.roughnessSrv = GetOrLoadTextureSRV(material.roughnessPath);
+    };
+
+    const std::string declaredCacheKey = std::string(projectRootUtf8) + '\n' + jsonPath;
+    if (const auto alias = m_basicMaterialAliases.find(declaredCacheKey); alias != m_basicMaterialAliases.end())
+    {
+        if (auto cached = m_basicMaterialCache.find(alias->second); cached != m_basicMaterialCache.end())
+        {
+            retryTextures(cached->second);
+            return &cached->second;
+        }
+        if (m_failedBasicMaterialPaths.contains(alias->second))
+            return nullptr;
+        m_basicMaterialAliases.erase(alias);
+    }
+
+    const auto canonicalRoot = Spark::CanonicalizeFilesystemPath(projectRootUtf8);
+    const auto canonicalJson = Spark::ResolveProjectAssetPath(projectRootUtf8, jsonPath);
+    if (!canonicalRoot || !canonicalJson)
+        return nullptr;
+    const std::string materialCacheKey = canonicalRoot->cacheKey + '\n' + canonicalJson->cacheKey;
+
+    auto it = m_basicMaterialCache.find(materialCacheKey);
+    if (it != m_basicMaterialCache.end())
+    {
+        m_basicMaterialAliases[declaredCacheKey] = materialCacheKey;
+        retryTextures(it->second);
+        return &it->second;
+    }
+    if (m_failedBasicMaterialPaths.contains(materialCacheKey))
+        return nullptr;
+
+    std::ifstream file(canonicalJson->nativePath, std::ios::binary);
     if (!file.is_open())
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GetOrLoadBasicMaterial: cannot open '%s'", jsonPath.c_str());
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GetOrLoadBasicMaterial: cannot open '%s'",
+                       canonicalJson->cacheKey.c_str());
+        m_failedBasicMaterialPaths.emplace(materialCacheKey);
+        m_basicMaterialAliases[declaredCacheKey] = materialCacheKey;
         return nullptr;
     }
     std::stringstream ss;
@@ -311,6 +370,8 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
     const std::string content = ss.str();
 
     BasicMaterial mat{};
+    mat.jsonPath = canonicalJson->cacheKey;
+    mat.projectRoot = canonicalRoot->cacheKey;
 
     // "albedo" : "path"
     auto findStringValue = [&content](const char* key) -> std::string
@@ -330,9 +391,21 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
         return content.substr(q1 + 1, q2 - q1 - 1);
     };
 
-    // Material texture paths are relative to Assets/ unless already prefixed
-    auto prefixAssets = [](std::string p) -> std::string
+    // Material texture paths are relative to Assets/ unless already prefixed.
+    // When WorldBasicRenderer supplies a project root, resolve every declared
+    // file through the same project-confinement boundary as direct textures.
+    auto normalizeTexturePath = [](std::string p) -> std::string
     {
+        try
+        {
+            const std::filesystem::path declaredPath = std::filesystem::u8path(p);
+            if (declaredPath.is_absolute() || declaredPath.has_root_name() || declaredPath.has_root_directory())
+                return {};
+        }
+        catch (const std::filesystem::filesystem_error&)
+        {
+            return {};
+        }
         if (p.rfind("Assets/", 0) != 0 && p.rfind("Assets\\", 0) != 0)
             p = "Assets/" + p;
         return p;
@@ -340,13 +413,21 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
 
     std::string albedo = findStringValue("albedo");
     if (!albedo.empty())
-        mat.srv = GetOrLoadTextureSRV(prefixAssets(albedo));
+    {
+        mat.albedoPath = normalizeTexturePath(std::move(albedo));
+        if (!mat.albedoPath.empty())
+            mat.srv = loadTexture(mat.projectRoot, mat.albedoPath);
+    }
 
     // "normal" : "path" — tangent-space normal map, bound at t1 by
     // SetBasicMaterialTextures. Always a string in the shipped materials.
     std::string normalPath = findStringValue("normal");
     if (!normalPath.empty())
-        mat.normalSrv = GetOrLoadTextureSRV(prefixAssets(normalPath));
+    {
+        mat.normalPath = normalizeTexturePath(std::move(normalPath));
+        if (!mat.normalPath.empty())
+            mat.normalSrv = loadTexture(mat.projectRoot, mat.normalPath);
+    }
 
     // "roughness" : "path" OR scalar (e.g. 0.3) — the shipped materials use
     // both forms. findStringValue would misparse a scalar (it grabs the NEXT
@@ -364,7 +445,11 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
             {
                 size_t q2 = content.find('"', vp + 1);
                 if (q2 != std::string::npos && q2 > vp + 1)
-                    mat.roughnessSrv = GetOrLoadTextureSRV(prefixAssets(content.substr(vp + 1, q2 - vp - 1)));
+                {
+                    mat.roughnessPath = normalizeTexturePath(content.substr(vp + 1, q2 - vp - 1));
+                    if (!mat.roughnessPath.empty())
+                        mat.roughnessSrv = loadTexture(mat.projectRoot, mat.roughnessPath);
+                }
             }
             else
             {
@@ -402,7 +487,9 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
         }
     }
 
-    auto [ins, ok] = m_basicMaterialCache.emplace(jsonPath, std::move(mat));
+    auto ins = m_basicMaterialCache.emplace(materialCacheKey, std::move(mat)).first;
+    m_failedBasicMaterialPaths.erase(materialCacheKey);
+    m_basicMaterialAliases[declaredCacheKey] = materialCacheKey;
     return &ins->second;
 }
 
@@ -410,8 +497,34 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
 // unordered_map node never moves the other cached BasicMaterials, and the only
 // consumer (WorldBasicRenderer) re-fetches the pointer every draw, so dropping
 // an entry mid-frame is safe.
-bool GraphicsEngine::InvalidateBasicMaterial(const std::string& jsonPath)
+bool GraphicsEngine::InvalidateBasicMaterial(const std::string& jsonPath, std::string_view projectRootUtf8)
 {
-    return m_basicMaterialCache.erase(jsonPath) != 0;
+    const auto canonical = Spark::ResolveProjectAssetPath(projectRootUtf8, jsonPath);
+    const auto root = Spark::CanonicalizeFilesystemPath(projectRootUtf8);
+    if (!canonical || !root)
+        return false;
+
+    const std::string materialCacheKey = root->cacheKey + '\n' + canonical->cacheKey;
+    bool erased = m_failedBasicMaterialPaths.erase(materialCacheKey) != 0;
+    for (auto it = m_basicMaterialCache.begin(); it != m_basicMaterialCache.end();)
+    {
+        if (it->second.jsonPath == canonical->cacheKey)
+        {
+            it = m_basicMaterialCache.erase(it);
+            erased = true;
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    for (auto it = m_basicMaterialAliases.begin(); it != m_basicMaterialAliases.end();)
+    {
+        if (!m_basicMaterialCache.contains(it->second))
+            it = m_basicMaterialAliases.erase(it);
+        else
+            ++it;
+    }
+    return erased;
 }
 #endif // SPARK_PLATFORM_WINDOWS

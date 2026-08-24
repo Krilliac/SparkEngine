@@ -5,15 +5,33 @@
 
 #include "InstabilitySimulator.h"
 #include "../../Utils/LogMacros.h"
+#include "../../Utils/ScopeGuard.h"
+#include "../../Utils/SecureMemory.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
 #include <format>
 #include <random>
+#include <utility>
 
 namespace Spark::Net
 {
+
+    InstabilitySimulator::DelayedPacket& InstabilitySimulator::DelayedPacket::operator=(DelayedPacket&& other) noexcept
+    {
+        if (this == &other)
+            return *this;
+        Spark::SecureClear(data);
+        data = std::move(other.data);
+        deliveryTimeMs = other.deliveryTimeMs;
+        return *this;
+    }
+
+    InstabilitySimulator::DelayedPacket::~DelayedPacket()
+    {
+        Spark::SecureClear(data);
+    }
 
     // ========================================================================
     // Construction
@@ -138,6 +156,10 @@ namespace Spark::Net
 
     void InstabilitySimulator::QueuePacket(std::vector<uint8_t> data, float sendTimeMs)
     {
+        // The caller moves its serialized wire buffer into this parameter. If
+        // locking or insertion throws before DelayedPacket takes ownership,
+        // make sure that plaintext copy is still overwritten.
+        const auto clearInput = Spark::MakeScopeExit([&data] { Spark::SecureClear(data); });
         std::lock_guard lock(m_mutex);
 
         DelayedPacket packet;
@@ -157,6 +179,16 @@ namespace Spark::Net
         std::lock_guard lock(m_mutex);
 
         std::vector<std::vector<uint8_t>> ready;
+        bool releaseReady = false;
+        const auto clearReadyOnFailure = Spark::MakeScopeExit(
+            [&ready, &releaseReady]
+            {
+                if (!releaseReady)
+                {
+                    for (auto& data : ready)
+                        Spark::SecureClear(data);
+                }
+            });
 
         // Since the queue is sorted by delivery time, we can stop at the first
         // packet that isn't ready yet.
@@ -166,6 +198,7 @@ namespace Spark::Net
             m_delayedQueue.erase(m_delayedQueue.begin());
         }
 
+        releaseReady = true;
         return ready;
     }
 

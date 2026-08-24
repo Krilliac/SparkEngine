@@ -27,8 +27,10 @@
 #include "Core/Platform.h"
 #endif
 
+#include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -146,6 +148,10 @@ namespace Terrafront
         /// Static scene collision (null before Initialize; inactive without Jolt).
         TFWorldCollision* Collision() const { return m_collision.get(); }
 
+        /// Canonical UTF-8 root captured from the process working directory at
+        /// Initialize. Every render-time asset lookup is confined beneath it.
+        std::string_view ContentRoot() const { return m_contentRootUtf8; }
+
       private:
         void LoadSceneAndTerrain();
         void LoadSanctuaryScene(); ///< additive sanctuary_haven.scene visuals (continents lane)
@@ -169,6 +175,8 @@ namespace Terrafront
         TFGameContext* m_ctx{nullptr};
         TFEventBus* m_events{nullptr};
         bool m_initialized{false};
+        std::filesystem::path m_contentRoot;
+        std::string m_contentRootUtf8;
 
         std::string m_scenePath; // repo-relative, e.g. Assets/Scenes/MMOFPS/cindral_wastes.scene
         bool m_sceneLoaded{false};

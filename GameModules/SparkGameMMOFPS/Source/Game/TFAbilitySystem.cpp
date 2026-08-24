@@ -97,6 +97,14 @@ namespace Terrafront
             ReleaseClientHandlers();
 #endif
 
+        if (m_cmdsRegistered)
+        {
+            auto& console = Spark::SimpleConsole::GetInstance();
+            console.UnregisterCommand("tf_ability");
+            console.UnregisterCommand("tf_ability_status");
+            m_cmdsRegistered = false;
+        }
+
         // Never leave a replicated pawn mesh invisible across a shutdown/reload.
         for (const auto& [net, local] : m_hiddenMeshes)
         {

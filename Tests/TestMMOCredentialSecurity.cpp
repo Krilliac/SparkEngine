@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 namespace
 {
@@ -88,4 +89,8 @@ TEST(MMOCredentials_SecureClearOverwritesOwnedStringAndVectorStorage)
     std::vector<std::string> copies{"first-secret", "second-secret"};
     Spark::SecureClear(copies);
     EXPECT_TRUE(copies.empty());
+
+    std::vector<uint8_t> wireCopy{'w', 'i', 'r', 'e', '-', 's', 'e', 'c', 'r', 'e', 't'};
+    Spark::SecureClear(wireCopy);
+    EXPECT_TRUE(wireCopy.empty());
 }

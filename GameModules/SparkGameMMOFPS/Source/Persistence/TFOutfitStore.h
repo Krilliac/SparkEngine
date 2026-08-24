@@ -2,10 +2,8 @@
  * @file TFOutfitStore.h
  * @brief TERRAFRONT outfit (clan/guild) persistence — atomic-JSON-file backing.
  *
- * OWNERSHIP: outfits lane. Owns its OWN JSON file ("Saves/outfits.json",
- * resolved relative to the working directory exactly like TFDatabase's
- * "Saves/terrafront.db") because TFDatabase.h/.cpp is a contended file this
- * lane must not edit. Follows the same patterns:
+ * OWNERSHIP: outfits lane. Owns its OWN JSON file (`outfits.json` under the
+ * shared SavePaths root, alongside `terrafront.db`). Follows the same patterns:
  *  - atomic tmp+rename writes (TFDatabase::SaveToDisk),
  *  - corrupt-file quarantine on Open (TFDatabase::Open),
  *  - additive JSON keys, absent keys load as defaults,
@@ -19,7 +17,10 @@
  */
 #pragma once
 
+#include "Persistence/TFSavePaths.h"
+
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -86,18 +87,19 @@ namespace Terrafront
         TFOutfitStore() = default;
         ~TFOutfitStore();
 
-        /// e.g. "Saves/outfits.json" (same working-dir-relative resolution as
-        /// TFDatabase::Open("Saves/terrafront.db")). false on failure; a present
-        /// but unreadable file is quarantined to <path>.corrupt-<ms>.bak and the
-        /// open is refused (never silently wiped — TFDatabase pattern).
-        bool Open(const std::string& path);
-        void Close(); ///< flush + close (mutations after Close are rejected)
+        /// e.g. SavePaths::File("outfits.json"). false on failure; a present
+        /// corrupt file is retained and copied to <path>.corrupt-<ms>.bak; an
+        /// unreadable file is left in place. Retaining the primary makes a fresh
+        /// process fail closed until an operator explicitly recovers it.
+        bool Open(const std::filesystem::path& path);
+        bool Close(); ///< false keeps the store open, dirty, and locked so the caller can retry
         bool IsOpen() const { return m_open; }
 
         /// Debounced flush pump — call once per frame (authority only). Writes
         /// 2 s after the most recent mutation (TFProgressionSystem save spirit).
         void Tick(float dt);
-        bool SaveNow(); ///< immediate atomic flush (also clears the dirty flag)
+        bool Checkpoint(); ///< persist pending mutations without closing or releasing the ownership lock
+        bool SaveNow();    ///< immediate atomic flush (also clears the dirty flag)
 
         // --- queries (pointers valid until the next mutation; do not hold) ------
         const TFOutfitRecord* FindById(uint32_t id) const;
@@ -139,14 +141,22 @@ namespace Terrafront
         void UpdateMemberName(uint64_t charId, const std::string& name);
 
       private:
-        bool LoadFromDisk();
+        enum class LoadResult : uint8_t
+        {
+            Loaded,
+            Unreadable,
+            Corrupt,
+        };
+        LoadResult LoadFromDisk();
         bool WriteToDisk() const;
         void MarkDirty();
 
-        std::string m_path;
+        std::filesystem::path m_path;
         bool m_open = false;
+        bool m_recoveryLatched = false;
         bool m_dirty = false;
         float m_sinceDirty = 0.0f;
+        SavePaths::ExclusiveFileLock m_fileLock;
 
         std::vector<TFOutfitRecord> m_outfits;
         uint32_t m_nextOutfitId = 1;

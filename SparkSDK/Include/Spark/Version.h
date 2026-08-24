@@ -19,7 +19,8 @@
 // SDK ABI version — increment when IModule, IEngineContext, or any SDK
 // interface changes in a binary-incompatible way.
 // v2: Added 7 subsystem getters, IModule lifecycle hooks, ILogger, math/input/event types
-#define SPARK_SDK_VERSION 2
+// v3: Added IModule::CanUnload() as a non-destructive unload/hot-reload veto.
+#define SPARK_SDK_VERSION 3
 
 // Packed engine version for runtime comparisons: 0xMMmmpp
 #define SPARK_ENGINE_VERSION_PACKED                                                                                    \

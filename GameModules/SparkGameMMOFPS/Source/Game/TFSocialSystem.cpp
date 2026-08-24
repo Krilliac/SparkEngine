@@ -12,6 +12,7 @@
 #include "Game/TFSocialSystemInternal.h"
 #include "Net/TFClientNet.h"
 #include "Net/TFServerSim.h"
+#include "Persistence/TFSavePaths.h"
 
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
@@ -37,14 +38,41 @@ namespace Terrafront
     TFSocialSystem::TFSocialSystem() = default;
     TFSocialSystem::~TFSocialSystem()
     {
-        if (m_initialized)
-            Shutdown();
+        if (m_initialized && !Shutdown())
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] social system destroyed after its final persistence flush failed");
     }
 
     bool TFSocialSystem::Initialize(TFGameContext& ctx, TFEventBus& events)
     {
         m_ctx = &ctx;
         m_events = &events;
+        m_storePath = SavePaths::File("terrafront_social.json");
+        if (m_storePath.empty())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] social store path is invalid");
+            return false;
+        }
+        if (ctx.IsAuthority())
+        {
+            std::error_code directoryError;
+            std::filesystem::create_directories(m_storePath.parent_path(), directoryError);
+            if (directoryError)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] social store directory creation failed: %s",
+                                directoryError.message().c_str());
+                return false;
+            }
+            std::error_code lockError;
+            if (!m_storeLock.TryLock(m_storePath, lockError))
+            {
+                SPARK_LOG_ERROR(
+                    Spark::LogCategory::Game,
+                    "[TF] social store open refused: another authority owns the persistence lock for %s (%s)",
+                    SavePaths::Utf8ForLog(m_storePath).c_str(), lockError.message().c_str());
+                return false;
+            }
+        }
 
         // Recent-players sources (authority only; guarded inside the handlers).
         events.Subscribe<EvPlayerKilled>([this](const EvPlayerKilled& ev) { OnBusPlayerKilled(ev); });
@@ -96,10 +124,31 @@ namespace Terrafront
         (void)fixedDeltaTime;
     }
 
-    void TFSocialSystem::Shutdown()
+    bool TFSocialSystem::Checkpoint()
+    {
+        if (!m_initialized || !m_storeDirty)
+            return true;
+        if (!StoreSaveToDisk())
+            return false;
+        m_storeDirty = false;
+        m_saveAccum = 0.0f;
+        return true;
+    }
+
+    bool TFSocialSystem::Shutdown()
     {
         if (!m_initialized)
-            return;
+            return true;
+
+        // Do not dismantle handlers or discard the in-memory store until its
+        // dirty state is durable. A caller may fix the underlying I/O problem
+        // and call Shutdown() again.
+        if (!Checkpoint())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] social shutdown refused: persistence flush failed; state remains initialized");
+            return false;
+        }
 #ifdef ENABLE_NETWORKING
         if (m_clientHandlers)
             ReleaseClientHandlers();
@@ -116,16 +165,16 @@ namespace Terrafront
             Spark::SimpleConsole::GetInstance().UnregisterCommand("tf_block");
             m_blockCmd = false;
         }
-        if (m_storeDirty)
-        {
-            if (StoreSaveToDisk())
-                m_storeDirty = false;
-        }
         m_store.clear();
         m_online.clear();
         ResetMirror();
         m_storeLoaded = false;
+        m_storeLoadFailed = false;
+        m_saveAccum = 0.0f;
+        m_pollAccum = 0.0f;
         m_initialized = false;
+        m_storeLock.Unlock();
+        return true;
     }
 
     // ---------------------------------------------------------------------------

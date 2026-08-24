@@ -1407,11 +1407,11 @@ namespace SparkEditor
         if (!m_hasOpenProject || scenePath.empty())
             return false;
 
-        const fs::path projectRoot = NormalizeProjectPath(m_currentProject.path);
-        fs::path candidate(scenePath);
+        const fs::path projectRoot = PathFromUtf8(NormalizeProjectPath(m_currentProject.path));
+        fs::path candidate = PathFromUtf8(scenePath);
         if (candidate.is_relative())
             candidate = projectRoot / candidate;
-        candidate = NormalizeProjectPath(candidate.string());
+        candidate = PathFromUtf8(NormalizeProjectPath(PathToUtf8(candidate)));
         if (!fs::is_regular_file(candidate))
             return false;
 
@@ -1420,11 +1420,13 @@ namespace SparkEditor
         if (ec || relative.empty() || relative.is_absolute() || *relative.begin() == "..")
             return false;
 
-        const std::string storedPath = relative.generic_string();
+        std::string storedPath = PathToUtf8(relative);
+        std::replace(storedPath.begin(), storedPath.end(), '\\', '/');
         const ProjectInfo previous = m_currentProject;
         m_currentProject.lastOpenedScene = storedPath;
-        if (std::none_of(m_currentProject.scenes.begin(), m_currentProject.scenes.end(), [&](const std::string& scene)
-                         { return ProjectPathsEqual((projectRoot / fs::path(scene)).string(), candidate.string()); }))
+        if (std::none_of(
+                m_currentProject.scenes.begin(), m_currentProject.scenes.end(), [&](const std::string& scene)
+                { return ProjectPathsEqual(PathToUtf8(projectRoot / PathFromUtf8(scene)), PathToUtf8(candidate)); }))
         {
             m_currentProject.scenes.push_back(storedPath);
         }
@@ -1462,23 +1464,23 @@ namespace SparkEditor
     // ------------------------------------------------------------------
     std::string ProjectManager::GetProjectAssetsPath() const
     {
-        return (fs::path(m_currentProject.path) / "Assets").string();
+        return PathToUtf8(PathFromUtf8(m_currentProject.path) / "Assets");
     }
     std::string ProjectManager::GetProjectScenesPath() const
     {
-        return (fs::path(m_currentProject.path) / "Scenes").string();
+        return PathToUtf8(PathFromUtf8(m_currentProject.path) / "Scenes");
     }
     std::string ProjectManager::GetProjectScriptsPath() const
     {
-        return (fs::path(m_currentProject.path) / "Scripts").string();
+        return PathToUtf8(PathFromUtf8(m_currentProject.path) / "Scripts");
     }
     std::string ProjectManager::GetProjectConfigPath() const
     {
-        return (fs::path(m_currentProject.path) / "Config").string();
+        return PathToUtf8(PathFromUtf8(m_currentProject.path) / "Config");
     }
     std::string ProjectManager::GetProjectTempPath() const
     {
-        return (fs::path(m_currentProject.path) / "Temp").string();
+        return PathToUtf8(PathFromUtf8(m_currentProject.path) / "Temp");
     }
     std::string ProjectManager::GetProjectFilePath() const
     {

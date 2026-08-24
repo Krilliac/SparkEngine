@@ -8,6 +8,7 @@
  *        file-size rules — mirrors the TFRegionSystem/-Net split).
  */
 #include "World/TFWorldSetup.h"
+#include "World/TFAssetPaths.h"
 
 #include "World/TFSanctuaryZone.h"
 
@@ -31,6 +32,16 @@
 
 namespace Terrafront
 {
+
+    namespace
+    {
+        ID3D11ShaderResourceView* LoadProjectTexture(GraphicsEngine& gfx, std::string_view root,
+                                                     std::string_view declaredPath)
+        {
+            const auto resolved = ResolveContentAssetPath(root, declaredPath);
+            return resolved ? gfx.GetOrLoadTextureSRV(resolved->cacheKey) : nullptr;
+        }
+    } // namespace
 
     // ---------------------------------------------------------------------------
     // Rendering — the module owns the frame (TerrafrontModule::OnRender)
@@ -139,10 +150,12 @@ namespace Terrafront
             return nullptr;
 
         auto mesh = std::make_unique<Mesh>();
+        const auto resolvedMesh = ResolveContentAssetPath(ContentRoot(), meshPath);
+        if (!resolvedMesh)
+            return nullptr;
         // Same tinyobjloader path the scene geometry uses (device-direct); falls
         // back to a unit cube if the OBJ is missing/unparseable.
-        LoadOrPlaceholderMesh(*mesh, gfx->GetDevice(), gfx->GetContext(),
-                              std::wstring(meshPath.begin(), meshPath.end()));
+        LoadOrPlaceholderMesh(*mesh, gfx->GetDevice(), gfx->GetContext(), resolvedMesh->nativePath.wstring());
         Mesh* raw = mesh.get();
         m_ecsMeshCache.emplace(meshPath, std::move(mesh));
         return raw;
@@ -220,7 +233,7 @@ namespace Terrafront
         for (int i = 0; i < 6; ++i)
         {
             gfx->UpdateBasicConstants(world, view, proj, kSky, XMFLOAT2(1, 1));
-            gfx->SetBasicTexture(gfx->GetOrLoadTextureSRV("Assets/" + sky.faceTex[i]));
+            gfx->SetBasicTexture(LoadProjectTexture(*gfx, ContentRoot(), "Assets/" + sky.faceTex[i]));
             m_skyMesh->RenderRange(dc, static_cast<unsigned>(i * 6), 6);
         }
         gfx->SetBasicTexture(nullptr);
@@ -293,7 +306,7 @@ namespace Terrafront
 
         ID3D11DeviceContext* dc = gfx->GetContext();
         gfx->SetBasicShaders();
-        gfx->SetBasicTexture(gfx->GetOrLoadTextureSRV("Assets/" + Pres().terrain.texture));
+        gfx->SetBasicTexture(LoadProjectTexture(*gfx, ContentRoot(), "Assets/" + Pres().terrain.texture));
         gfx->UpdateBasicConstants(XMMatrixIdentity(), view, proj, XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f),
                                   XMFLOAT2(1.0f, 1.0f));
         m_terrainMesh->Render(dc);
@@ -328,7 +341,8 @@ namespace Terrafront
 
             // Scene material (material= key): albedo texture + UV tiling.
             const GraphicsEngine::BasicMaterial* sceneMat =
-                obj->GetMaterialPath().empty() ? nullptr : gfx->GetOrLoadBasicMaterial(obj->GetMaterialPath());
+                obj->GetMaterialPath().empty() ? nullptr
+                                               : gfx->GetOrLoadBasicMaterial(obj->GetMaterialPath(), ContentRoot());
             ID3D11ShaderResourceView* sceneSrv = sceneMat ? sceneMat->srv.Get() : nullptr;
             const DirectX::XMFLOAT2 sceneTiling = sceneMat ? sceneMat->tiling : DirectX::XMFLOAT2{1.0f, 1.0f};
             // W8 render-pbr-lite: bind the material's normal/roughness maps
@@ -357,7 +371,7 @@ namespace Terrafront
                     DirectX::XMFLOAT2 tiling{1.0f, 1.0f};
                     if (!smesh.diffuseTexture.empty())
                     {
-                        srv = gfx->GetOrLoadTextureSRV(smesh.diffuseTexture);
+                        srv = LoadProjectTexture(*gfx, ContentRoot(), smesh.diffuseTexture);
                     }
                     if (!srv)
                     {

@@ -160,7 +160,7 @@ namespace Terrafront
         {
             const auto child = world->CreateEntity(name);
             Transform& ct = world->AddComponent<Transform>(child);
-            ct.parent = parent;
+            world->SetParent(child, parent);
             ct.position = {pivot[0], pivot[1], pivot[2]};
             MeshRenderer& cmr = world->AddComponent<MeshRenderer>(child);
             cmr.meshPath = "Assets/" + meshAssetsRel;

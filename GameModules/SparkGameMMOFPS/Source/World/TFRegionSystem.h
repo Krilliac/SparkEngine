@@ -26,9 +26,9 @@
  *  - Dominion: one faction owns every non-skyanchor region => EvDominion +
  *    full state broadcast, 10 min hold (captures frozen), then soft-reset to
  *    regions.json initialOwnership and persist.
- *  - Persistence: Saves/terrafront_territory.json next to the exe, written
- *    atomically (tmp + rename) on every ownership change and every 30 s when
- *    dirty; loaded on boot (falls back to initialOwnership when absent/stale).
+ *  - Persistence: terrafront_territory.<continent-key>.json under SavePaths::Root(), written
+ *    with tmp + rename on every ownership change and every 30 s when dirty;
+ *    loaded on boot (falls back to initialOwnership when absent/stale).
  *  - Client: handlers for TF_RegionState/TF_CaptureTick keep a mirror store
  *    behind the SAME accessors, and the local player's capture-radius status
  *    feeds TFHUD::SetCaptureProgress each frame (all roles with a local player).
@@ -53,6 +53,7 @@
 #include "Net/TFNetProtocol.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -73,7 +74,8 @@ namespace Terrafront
         bool Initialize(TFGameContext& ctx, TFEventBus& events);
         void Update(float deltaTime);
         void FixedUpdate(float fixedDeltaTime);
-        void Shutdown();
+        bool Checkpoint();
+        bool Shutdown();
         void RenderDebugUI();
 
         // --- W2 cross-agent contract (FROZEN). Served from the authoritative
@@ -157,7 +159,7 @@ namespace Terrafront
         std::string DebugCaptureReport() const;
 
         // persistence (TFRegionSystemNet.cpp)
-        std::string SavePath() const;
+        std::filesystem::path SavePath() const;
         bool LoadPersisted();
         bool PersistNow();
 
@@ -182,11 +184,12 @@ namespace Terrafront
         bool m_initialized{false};
 
         std::vector<RegionState> m_state;
-        double m_time{0.0};          ///< fixed-step clock (dominion timing)
-        float m_captureAccum{0.0f};  ///< 1 Hz capture tick accumulator
-        float m_saveAccum{0.0f};     ///< 30 s dirty-save accumulator
-        bool m_dirty{false};         ///< unsaved ownership/dominion change
-        bool m_persistLoaded{false}; ///< boot load attempted once
+        double m_time{0.0};           ///< fixed-step clock (dominion timing)
+        float m_captureAccum{0.0f};   ///< 1 Hz capture tick accumulator
+        float m_saveAccum{0.0f};      ///< 30 s dirty-save accumulator
+        bool m_dirty{false};          ///< unsaved ownership/dominion change
+        bool m_persistLoaded{false};  ///< boot load attempted once
+        bool m_persistBlocked{false}; ///< qualified save unreadable/corrupt/mismatched
 
         // Dominion hold
         bool m_domActive{false};
