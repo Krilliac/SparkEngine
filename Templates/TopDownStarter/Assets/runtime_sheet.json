@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "image": "top_down_runtime_sheet.png",
+  "width": 1254,
+  "height": 1254,
+  "grid": {
+    "columns": 3,
+    "rows": 3,
+    "cellWidth": 418,
+    "cellHeight": 418,
+    "safePadding": 38
+  },
+  "origin": "top-left",
+  "alpha": "straight",
+  "frames": {
+    "player_unit": {
+      "x": 0,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "enemy_unit": {
+      "x": 418,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "enemy_drone": {
+      "x": 836,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "horizontal_cover": {
+      "x": 0,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "corner_cover": {
+      "x": 418,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "energy_pickup": {
+      "x": 836,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "team_status_bars": {
+      "x": 0,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    },
+    "objective_badge": {
+      "x": 418,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    },
+    "restart_button": {
+      "x": 836,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    }
+  }
+}

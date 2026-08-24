@@ -2,7 +2,7 @@
   "projectFileVersion": 1,
   "name": "MultiplayerArena",
   "version": "0.1.0",
-  "description": "A bounded local arena simulation with lobby readiness, teams, scoring, respawns, and match completion.",
+  "description": "A bounded local cyan-versus-magenta arena simulation with lobby readiness, scoring, respawns, and match completion.",
   "engineVersion": "1.0.0",
   "defaultScene": "Scenes/Arena.sparkscene",
   "lastOpenedScene": "Scenes/Arena.sparkscene",

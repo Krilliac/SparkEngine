@@ -521,6 +521,7 @@ add_executable(SparkTests
     # Module .cpp sources are NOT compiled into SparkTests by design.
     TestTFNetProtocolLayout.cpp
     TestTFDataTables.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Data/TFDataTablesParseWorld.cpp"
     TestTFDamageModel.cpp
     TestTFRegionLattice.cpp
     TestTFChatRules.cpp
@@ -908,3 +909,15 @@ add_test(
         -DSPARK_TEMPLATE_ROOT=${CMAKE_SOURCE_DIR}/Templates
         -P ${CMAKE_SOURCE_DIR}/cmake/VerifyTemplateAssets.cmake
 )
+
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME SparkTemplateRuntimeSheets
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/Tools/validate_template_runtime_sheets.py
+            ${CMAKE_SOURCE_DIR}/Templates
+    )
+else()
+    message(WARNING "Python 3 not found; template runtime-sheet pixel validation is disabled")
+endif()

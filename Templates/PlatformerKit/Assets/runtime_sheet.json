@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "image": "platformer_runtime_sheet.png",
+  "width": 1254,
+  "height": 1254,
+  "grid": {
+    "columns": 3,
+    "rows": 3,
+    "cellWidth": 418,
+    "cellHeight": 418,
+    "safePadding": 38
+  },
+  "origin": "top-left",
+  "alpha": "straight",
+  "frames": {
+    "idle_hero": {
+      "x": 0,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "run_strip": {
+      "x": 418,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "speed_boots": {
+      "x": 836,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "coin": {
+      "x": 0,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "hazard_crystals": {
+      "x": 418,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "checkpoint": {
+      "x": 836,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "exit_portal": {
+      "x": 0,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    },
+    "health": {
+      "x": 418,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    },
+    "restart_button": {
+      "x": 836,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    }
+  }
+}

@@ -8,6 +8,18 @@
       "kind": "transparent character animation, collectible, hazard, environment, and UI atlas",
       "origin": "OpenAI ImageGen, directed for SparkEngine PlatformerKit",
       "sha256": "d84977f108e572639bfa9b8ed0df1f7401bba2846b9c6d7fc9a59f6676edd033"
+    },
+    {
+      "path": "platformer_runtime_sheet.png",
+      "kind": "normalized transparent 3x3 sprite sheet with 38-pixel safe padding",
+      "origin": "OpenAI ImageGen, normalized by deterministic SparkEngine tooling",
+      "sha256": "921edd4fd3cc98bce100e8a1ec61841f57765e47f94806e087d9c32c2b5d765c"
+    },
+    {
+      "path": "runtime_sheet.json",
+      "kind": "named source-rectangle metadata for the runtime sheet",
+      "origin": "SparkEngine project-authored metadata",
+      "sha256": "16259cbdec83cd20b81b10ff60cf235f216466c778ac853009c76675a75daba0"
     }
   ],
   "enginePrimitives": [

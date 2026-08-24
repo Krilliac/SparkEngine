@@ -8,6 +8,18 @@
       "kind": "transparent faction character, objective, network, UI, and material atlas",
       "origin": "OpenAI ImageGen, directed for SparkEngine MMOStarter",
       "sha256": "4222f301a88f9f6896327b7a4cd6cfec17794773570ccd0f9822370a5cbf1dbe"
+    },
+    {
+      "path": "mmo_starter_runtime_sheet.png",
+      "kind": "normalized transparent 3x3 sprite sheet with 38-pixel safe padding",
+      "origin": "OpenAI ImageGen, normalized by deterministic SparkEngine tooling",
+      "sha256": "3e8a3b7ff15f5a091e09c4b9cea76a2f8e102cbd8a1cb96010023c264f4097d9"
+    },
+    {
+      "path": "runtime_sheet.json",
+      "kind": "named source-rectangle metadata for the runtime sheet",
+      "origin": "SparkEngine project-authored metadata",
+      "sha256": "6f3d8ef729e8516ee0d7a565d024357484142b6d6f035bbdcfcb1ba8aca53015"
     }
   ],
   "enginePrimitives": [

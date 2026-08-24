@@ -8,6 +8,18 @@
       "kind": "transparent character, quest, inventory, combat, reward, save, and material atlas",
       "origin": "OpenAI ImageGen, directed for SparkEngine RPGStarter",
       "sha256": "fab74a133363a5e11e71061b149a49a8e44ca77b3bbc54111ca9915f44a46c54"
+    },
+    {
+      "path": "rpg_runtime_sheet.png",
+      "kind": "normalized transparent 3x3 sprite sheet with 38-pixel safe padding",
+      "origin": "OpenAI ImageGen, normalized by deterministic SparkEngine tooling",
+      "sha256": "b8756b2576b6d8fa83cf4b6f97762656abfa74077368e03804738c26dc641e3a"
+    },
+    {
+      "path": "runtime_sheet.json",
+      "kind": "named source-rectangle metadata for the runtime sheet",
+      "origin": "SparkEngine project-authored metadata",
+      "sha256": "cff07b4f7d1ace3adce0e4b13f59bf208815fb5325764f968498f9d556a3ac4f"
     }
   ],
   "enginePrimitives": [

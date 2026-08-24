@@ -2,8 +2,8 @@
  * @file GameModule.h
  * @brief MultiplayerArena — Multiplayer arena game module
  *
- * Multiplayer arena template with networking, lobby system, team management,
- * scoreboard, and respawn. Uses SparkEngine's NetworkManager for replication.
+ * Bounded local arena template with a lobby, team management, scoreboard,
+ * and respawn loop. A host can map its stable numeric team IDs onto transport.
  */
 
 #pragma once
@@ -20,11 +20,23 @@
 // Network player
 // ============================================================================
 
+enum class ArenaTeam : uint8_t
+{
+    Unassigned = 0,
+    Cyan = 1,
+    Magenta = 2
+};
+
+[[nodiscard]] constexpr bool IsPlayableArenaTeam(uint8_t team)
+{
+    return team == static_cast<uint8_t>(ArenaTeam::Cyan) || team == static_cast<uint8_t>(ArenaTeam::Magenta);
+}
+
 struct NetPlayer
 {
     uint32_t playerId = 0;
     std::string name;
-    uint8_t team = 0; ///< 0 = unassigned, 1 = red, 2 = blue
+    uint8_t team = static_cast<uint8_t>(ArenaTeam::Unassigned); ///< Stable wire IDs: 1 = cyan, 2 = magenta
     float health = 100.0f;
     uint32_t kills = 0;
     uint32_t deaths = 0;
@@ -54,8 +66,8 @@ struct MatchState
     float matchTimer = 0.0f;
     float matchDuration = 300.0f; ///< 5 minutes
     float countdownTimer = 5.0f;
-    uint32_t teamRedScore = 0;
-    uint32_t teamBlueScore = 0;
+    uint32_t teamCyanScore = 0;
+    uint32_t teamMagentaScore = 0;
     uint32_t scoreLimit = 50;
     uint32_t minPlayers = 2;
 };
@@ -123,7 +135,7 @@ class MultiplayerArenaModule : public Spark::IModule
 
     bool AddPlayer(uint32_t playerId, const std::string& name, uint8_t team)
     {
-        if (m_match.phase != MatchPhase::Lobby || name.empty() || (team != 1 && team != 2) ||
+        if (m_match.phase != MatchPhase::Lobby || name.empty() || !IsPlayableArenaTeam(team) ||
             std::ranges::any_of(m_players, [playerId](const NetPlayer& player) { return player.playerId == playerId; }))
             return false;
         NetPlayer player;
@@ -160,7 +172,8 @@ class MultiplayerArenaModule : public Spark::IModule
         victim->health = 0.0f;
         victim->isAlive = false;
         victim->respawnTimer = 3.0f;
-        uint32_t& teamScore = killer->team == 1 ? m_match.teamRedScore : m_match.teamBlueScore;
+        uint32_t& teamScore = killer->team == static_cast<uint8_t>(ArenaTeam::Cyan) ? m_match.teamCyanScore
+                                                                                   : m_match.teamMagentaScore;
         ++teamScore;
         if (teamScore >= m_match.scoreLimit)
             m_match.phase = MatchPhase::PostMatch;
@@ -226,7 +239,7 @@ class MultiplayerArenaModule : public Spark::IModule
         }
 
         // Check win conditions
-        if (m_match.teamRedScore >= m_match.scoreLimit || m_match.teamBlueScore >= m_match.scoreLimit ||
+        if (m_match.teamCyanScore >= m_match.scoreLimit || m_match.teamMagentaScore >= m_match.scoreLimit ||
             m_match.matchTimer >= m_match.matchDuration)
         {
             m_match.phase = MatchPhase::PostMatch;

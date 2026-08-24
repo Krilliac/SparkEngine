@@ -1,7 +1,7 @@
 {
   "name": "MultiplayerArena",
   "identity": "multiplayer-arena-legacy",
-  "description": "A bounded local arena simulation with lobby readiness, teams, scoring, respawns, and match completion.",
+  "description": "A bounded local cyan-versus-magenta arena simulation with lobby readiness, scoring, respawns, and match completion.",
   "genre": "Multiplayer Arena",
   "gameModule": "MultiplayerArena",
   "defaultScene": "Scenes/Arena.sparkscene",

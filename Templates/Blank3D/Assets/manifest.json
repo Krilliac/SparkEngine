@@ -8,6 +8,18 @@
       "kind": "transparent editor glyph, primitive, and material atlas",
       "origin": "OpenAI ImageGen, directed for SparkEngine Blank3D",
       "sha256": "3003f086b3a418cbcb15900313154b1af20eb5793675e6a9c2bff401c7fea611"
+    },
+    {
+      "path": "blank3d_runtime_sheet.png",
+      "kind": "normalized transparent 3x3 sprite sheet with 38-pixel safe padding",
+      "origin": "OpenAI ImageGen, normalized by deterministic SparkEngine tooling",
+      "sha256": "f8ef1e48305f8a6ed8e529fbf9f8f031500f45a9a846b19e02995ca635288a3b"
+    },
+    {
+      "path": "runtime_sheet.json",
+      "kind": "named source-rectangle metadata for the runtime sheet",
+      "origin": "SparkEngine project-authored metadata",
+      "sha256": "e3186778bfc989ffd578fb073de129ccb2c5172d8cf29d73893ffd6d220f0e31"
     }
   ],
   "enginePrimitives": [

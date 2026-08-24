@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "image": "rpg_runtime_sheet.png",
+  "width": 1254,
+  "height": 1254,
+  "grid": {
+    "columns": 3,
+    "rows": 3,
+    "cellWidth": 418,
+    "cellHeight": 418,
+    "safePadding": 38
+  },
+  "origin": "top-left",
+  "alpha": "straight",
+  "frames": {
+    "hero": {
+      "x": 0,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "quest_giver": {
+      "x": 418,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "stone_golem": {
+      "x": 836,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "mana_crystal": {
+      "x": 0,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "quest_scroll": {
+      "x": 418,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "village_house": {
+      "x": 836,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "health_xp_bars": {
+      "x": 0,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    },
+    "save_crystal": {
+      "x": 418,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    },
+    "load_crystal": {
+      "x": 836,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    }
+  }
+}

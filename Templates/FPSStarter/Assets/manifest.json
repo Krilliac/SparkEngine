@@ -8,6 +8,18 @@
       "kind": "transparent sprite, UI, decal, and material atlas",
       "origin": "OpenAI ImageGen, directed for SparkEngine FPSStarter",
       "sha256": "dff68fb4b4dd665246f276136714328479d2d0671dbdab9a8416d166ae8684c6"
+    },
+    {
+      "path": "fps_starter_runtime_sheet.png",
+      "kind": "normalized transparent 3x3 sprite sheet with 38-pixel safe padding",
+      "origin": "OpenAI ImageGen, normalized by deterministic SparkEngine tooling",
+      "sha256": "5a98f33e449764976c20daf7a092a1f87ca251a37fd3a461e22105ac71f0a34f"
+    },
+    {
+      "path": "runtime_sheet.json",
+      "kind": "named source-rectangle metadata for the runtime sheet",
+      "origin": "SparkEngine project-authored metadata",
+      "sha256": "789333d1e2daa6448756e42330a5486304fc8efb72b04430b859903989728d05"
     }
   ],
   "enginePrimitives": [

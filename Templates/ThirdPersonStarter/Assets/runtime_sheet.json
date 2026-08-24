@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "image": "third_person_runtime_sheet.png",
+  "width": 1254,
+  "height": 1254,
+  "grid": {
+    "columns": 3,
+    "rows": 3,
+    "cellWidth": 418,
+    "cellHeight": 418,
+    "safePadding": 38
+  },
+  "origin": "top-left",
+  "alpha": "straight",
+  "frames": {
+    "runner": {
+      "x": 0,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "objective_crystal": {
+      "x": 418,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "portal": {
+      "x": 836,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "speed_boots": {
+      "x": 0,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "camera_cycle": {
+      "x": 418,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "compass": {
+      "x": 836,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "ground_tile": {
+      "x": 0,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    },
+    "objective_complete": {
+      "x": 418,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    },
+    "portal_complete": {
+      "x": 836,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    }
+  }
+}

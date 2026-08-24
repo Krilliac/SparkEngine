@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "image": "blank3d_runtime_sheet.png",
+  "width": 1254,
+  "height": 1254,
+  "grid": {
+    "columns": 3,
+    "rows": 3,
+    "cellWidth": 418,
+    "cellHeight": 418,
+    "safePadding": 38
+  },
+  "origin": "top-left",
+  "alpha": "straight",
+  "frames": {
+    "transform_gizmo": {
+      "x": 0,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "camera_focus": {
+      "x": 418,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "light_bulb": {
+      "x": 836,
+      "y": 0,
+      "width": 418,
+      "height": 418
+    },
+    "spot_light": {
+      "x": 0,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "wire_cube": {
+      "x": 418,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "wire_sphere": {
+      "x": 836,
+      "y": 418,
+      "width": 418,
+      "height": 418
+    },
+    "capsule_collider": {
+      "x": 0,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    },
+    "ground_plane": {
+      "x": 418,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    },
+    "material_sphere": {
+      "x": 836,
+      "y": 836,
+      "width": 418,
+      "height": 418
+    }
+  }
+}

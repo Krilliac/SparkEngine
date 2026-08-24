@@ -8,6 +8,18 @@
       "kind": "transparent character, pickup, environment, and UI atlas",
       "origin": "OpenAI ImageGen, directed for SparkEngine ThirdPersonStarter",
       "sha256": "40604c1c69cc0ff7e6a01b57215c6db6305ee2b812815f15d43d16b4b598ab83"
+    },
+    {
+      "path": "third_person_runtime_sheet.png",
+      "kind": "normalized transparent 3x3 sprite sheet with 38-pixel safe padding",
+      "origin": "OpenAI ImageGen, normalized by deterministic SparkEngine tooling",
+      "sha256": "46364388b9f0a9fdb96d35c1068c33e2121f95e4475a8d78d07ca84a05ebcb50"
+    },
+    {
+      "path": "runtime_sheet.json",
+      "kind": "named source-rectangle metadata for the runtime sheet",
+      "origin": "SparkEngine project-authored metadata",
+      "sha256": "bd0530ec2a07bff03b0297536c45d0b60d44ce316fc095fe96211998f10c573e"
     }
   ],
   "enginePrimitives": [

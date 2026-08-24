@@ -3,13 +3,31 @@
   "algorithm": "sha256",
   "assets": {
     "Blank3D/Assets/blank3d_atlas.png": "3003f086b3a418cbcb15900313154b1af20eb5793675e6a9c2bff401c7fea611",
+    "Blank3D/Assets/blank3d_runtime_sheet.png": "f8ef1e48305f8a6ed8e529fbf9f8f031500f45a9a846b19e02995ca635288a3b",
+    "Blank3D/Assets/runtime_sheet.json": "e3186778bfc989ffd578fb073de129ccb2c5172d8cf29d73893ffd6d220f0e31",
     "EmptyProject/Assets/empty_project_atlas.png": "946fd87aff15dc36ed0c1eff47742bce2c9ae46749d0f0b7e9ba73c893d0525f",
+    "EmptyProject/Assets/empty_project_runtime_sheet.png": "2d1fc5bd6baa508d2bfabf38f1cdc66ad5c8149c3e78c85007c0d59ad9cfb5dc",
+    "EmptyProject/Assets/runtime_sheet.json": "5691b2069ecae19a97452ed6f086044bed5b02537d7f72c9abde10cd59040037",
     "FPSStarter/Assets/fps_starter_atlas.png": "dff68fb4b4dd665246f276136714328479d2d0671dbdab9a8416d166ae8684c6",
+    "FPSStarter/Assets/fps_starter_runtime_sheet.png": "5a98f33e449764976c20daf7a092a1f87ca251a37fd3a461e22105ac71f0a34f",
+    "FPSStarter/Assets/runtime_sheet.json": "789333d1e2daa6448756e42330a5486304fc8efb72b04430b859903989728d05",
     "MMOStarter/Assets/mmo_starter_atlas.png": "4222f301a88f9f6896327b7a4cd6cfec17794773570ccd0f9822370a5cbf1dbe",
+    "MMOStarter/Assets/mmo_starter_runtime_sheet.png": "3e8a3b7ff15f5a091e09c4b9cea76a2f8e102cbd8a1cb96010023c264f4097d9",
+    "MMOStarter/Assets/runtime_sheet.json": "6f3d8ef729e8516ee0d7a565d024357484142b6d6f035bbdcfcb1ba8aca53015",
     "MultiplayerArena/Assets/multiplayer_arena_atlas.png": "a953b9d53a3ce33508dbea68390306748edc9f1a32e6763dae8276af74a08d23",
+    "MultiplayerArena/Assets/multiplayer_arena_runtime_sheet.png": "a5d75aa270b08e647f5697f7498940d08f5805ca30c6d9cce4e83df610aa1a47",
+    "MultiplayerArena/Assets/runtime_sheet.json": "64091401e47f35e9f14fd8d98f15ce614959dc28e374ebdc61c8bab935382e68",
     "PlatformerKit/Assets/platformer_atlas.png": "d84977f108e572639bfa9b8ed0df1f7401bba2846b9c6d7fc9a59f6676edd033",
+    "PlatformerKit/Assets/platformer_runtime_sheet.png": "921edd4fd3cc98bce100e8a1ec61841f57765e47f94806e087d9c32c2b5d765c",
+    "PlatformerKit/Assets/runtime_sheet.json": "16259cbdec83cd20b81b10ff60cf235f216466c778ac853009c76675a75daba0",
     "RPGStarter/Assets/rpg_atlas.png": "fab74a133363a5e11e71061b149a49a8e44ca77b3bbc54111ca9915f44a46c54",
+    "RPGStarter/Assets/rpg_runtime_sheet.png": "b8756b2576b6d8fa83cf4b6f97762656abfa74077368e03804738c26dc641e3a",
+    "RPGStarter/Assets/runtime_sheet.json": "cff07b4f7d1ace3adce0e4b13f59bf208815fb5325764f968498f9d556a3ac4f",
     "ThirdPersonStarter/Assets/third_person_atlas.png": "40604c1c69cc0ff7e6a01b57215c6db6305ee2b812815f15d43d16b4b598ab83",
-    "TopDownStarter/Assets/top_down_atlas.png": "177e3f25cb8180ef0cc6355b5ad577a0ee54bea05ffe241aaed2fb0a9d4fb16d"
+    "ThirdPersonStarter/Assets/runtime_sheet.json": "bd0530ec2a07bff03b0297536c45d0b60d44ce316fc095fe96211998f10c573e",
+    "ThirdPersonStarter/Assets/third_person_runtime_sheet.png": "46364388b9f0a9fdb96d35c1068c33e2121f95e4475a8d78d07ca84a05ebcb50",
+    "TopDownStarter/Assets/runtime_sheet.json": "784b68d6599fa6d3d0e2c52f3f37beb2cebe0806e6299468966ae2366b87da1d",
+    "TopDownStarter/Assets/top_down_atlas.png": "177e3f25cb8180ef0cc6355b5ad577a0ee54bea05ffe241aaed2fb0a9d4fb16d",
+    "TopDownStarter/Assets/top_down_runtime_sheet.png": "aa72547b5cf7a3ad44b6bf9c3d66d8faab14224cdab68ff822049b8b610d6484"
   }
 }

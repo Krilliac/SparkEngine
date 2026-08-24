@@ -16,3 +16,7 @@ Load `Blank3D.dll` through `spark.modules.json`; the starter scene is `Scenes/De
 ## License and assets
 
 See the SparkEngine root license. The asset manifest records only built-in procedural primitives.
+
+## Runtime asset sheet
+
+`Assets/blank3d_runtime_sheet.png` is the normalized 3x3 sprite sheet prepared for host adapters. `Assets/runtime_sheet.json` gives nine stable, named 418x418 source rectangles with transparent gutters. The larger atlas remains concept and reference art; sheet consumers should use the descriptor rather than guessing coordinates.

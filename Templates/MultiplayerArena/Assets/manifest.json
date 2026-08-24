@@ -8,11 +8,23 @@
       "kind": "transparent character, weapon, objective, network, UI, decal, and material atlas",
       "origin": "OpenAI ImageGen, directed for SparkEngine MultiplayerArena",
       "sha256": "a953b9d53a3ce33508dbea68390306748edc9f1a32e6763dae8276af74a08d23"
+    },
+    {
+      "path": "multiplayer_arena_runtime_sheet.png",
+      "kind": "normalized transparent 3x3 sprite sheet with 38-pixel safe padding",
+      "origin": "OpenAI ImageGen, normalized by deterministic SparkEngine tooling",
+      "sha256": "a5d75aa270b08e647f5697f7498940d08f5805ca30c6d9cce4e83df610aa1a47"
+    },
+    {
+      "path": "runtime_sheet.json",
+      "kind": "named source-rectangle metadata for the runtime sheet",
+      "origin": "SparkEngine project-authored metadata",
+      "sha256": "64091401e47f35e9f14fd8d98f15ce614959dc28e374ebdc61c8bab935382e68"
     }
   ],
   "enginePrimitives": [
     "__spark_primitive_Cube.obj",
     "__spark_primitive_ground__.obj"
   ],
-  "notes": "The scene uses built-in primitives; the atlas supplies an original cyan-versus-magenta arena visual kit."
+  "notes": "The scene uses built-in primitives; the atlas supplies an original cyan-versus-magenta arena visual kit matching stable team IDs 1 (cyan) and 2 (magenta)."
 }

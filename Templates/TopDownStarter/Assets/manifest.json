@@ -8,6 +8,18 @@
       "kind": "transparent unit, tactical UI, boundary, and material atlas",
       "origin": "OpenAI ImageGen, directed for SparkEngine TopDownStarter",
       "sha256": "177e3f25cb8180ef0cc6355b5ad577a0ee54bea05ffe241aaed2fb0a9d4fb16d"
+    },
+    {
+      "path": "top_down_runtime_sheet.png",
+      "kind": "normalized transparent 3x3 sprite sheet with 38-pixel safe padding",
+      "origin": "OpenAI ImageGen, normalized by deterministic SparkEngine tooling",
+      "sha256": "aa72547b5cf7a3ad44b6bf9c3d66d8faab14224cdab68ff822049b8b610d6484"
+    },
+    {
+      "path": "runtime_sheet.json",
+      "kind": "named source-rectangle metadata for the runtime sheet",
+      "origin": "SparkEngine project-authored metadata",
+      "sha256": "784b68d6599fa6d3d0e2c52f3f37beb2cebe0806e6299468966ae2366b87da1d"
     }
   ],
   "enginePrimitives": [

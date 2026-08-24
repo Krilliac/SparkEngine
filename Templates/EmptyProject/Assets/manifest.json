@@ -8,6 +8,18 @@
       "kind": "transparent lifecycle, module, neutral material, and thumbnail atlas",
       "origin": "OpenAI ImageGen, directed for SparkEngine EmptyProject",
       "sha256": "946fd87aff15dc36ed0c1eff47742bce2c9ae46749d0f0b7e9ba73c893d0525f"
+    },
+    {
+      "path": "empty_project_runtime_sheet.png",
+      "kind": "normalized transparent 3x3 sprite sheet with 38-pixel safe padding",
+      "origin": "OpenAI ImageGen, normalized by deterministic SparkEngine tooling",
+      "sha256": "2d1fc5bd6baa508d2bfabf38f1cdc66ad5c8149c3e78c85007c0d59ad9cfb5dc"
+    },
+    {
+      "path": "runtime_sheet.json",
+      "kind": "named source-rectangle metadata for the runtime sheet",
+      "origin": "SparkEngine project-authored metadata",
+      "sha256": "5691b2069ecae19a97452ed6f086044bed5b02537d7f72c9abde10cd59040037"
     }
   ],
   "enginePrimitives": [],

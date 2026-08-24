@@ -127,8 +127,12 @@ TEST(Templates_MultiplayerArena_ConstructsAndRuns)
     EXPECT_TRUE(info.name != nullptr && std::string(info.name) == "MultiplayerArena");
 
     EXPECT_TRUE(mod.OnLoad(nullptr));
-    EXPECT_TRUE(mod.AddPlayer(1, "Cyan", 1));
-    EXPECT_TRUE(mod.AddPlayer(2, "Magenta", 2));
+    EXPECT_EQ(static_cast<uint8_t>(ArenaTeam::Cyan), static_cast<uint8_t>(1));
+    EXPECT_EQ(static_cast<uint8_t>(ArenaTeam::Magenta), static_cast<uint8_t>(2));
+    EXPECT_FALSE(mod.AddPlayer(10, "Unassigned", static_cast<uint8_t>(ArenaTeam::Unassigned)));
+    EXPECT_FALSE(mod.AddPlayer(11, "Unknown", 3));
+    EXPECT_TRUE(mod.AddPlayer(1, "Cyan", static_cast<uint8_t>(ArenaTeam::Cyan)));
+    EXPECT_TRUE(mod.AddPlayer(2, "Magenta", static_cast<uint8_t>(ArenaTeam::Magenta)));
     EXPECT_TRUE(mod.SetReady(1, true));
     EXPECT_TRUE(mod.SetReady(2, true));
     mod.OnUpdate(0.016f);
@@ -136,9 +140,12 @@ TEST(Templates_MultiplayerArena_ConstructsAndRuns)
     mod.OnUpdate(5.0f);
     EXPECT_EQ(static_cast<int>(mod.GetMatchState().phase), static_cast<int>(MatchPhase::InProgress));
     EXPECT_TRUE(mod.RecordElimination(1, 2));
-    EXPECT_EQ(mod.GetMatchState().teamRedScore, static_cast<uint32_t>(1));
+    EXPECT_EQ(mod.GetMatchState().teamCyanScore, static_cast<uint32_t>(1));
+    EXPECT_EQ(mod.GetMatchState().teamMagentaScore, static_cast<uint32_t>(0));
     mod.OnUpdate(3.0f);
     EXPECT_TRUE(mod.GetPlayers()[1].isAlive);
+    EXPECT_TRUE(mod.RecordElimination(2, 1));
+    EXPECT_EQ(mod.GetMatchState().teamMagentaScore, static_cast<uint32_t>(1));
     mod.OnUnload();
 }
 

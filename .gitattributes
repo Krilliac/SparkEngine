@@ -3,6 +3,9 @@
 ###############################################################################
 * text=auto
 *.sh text eol=lf
+# Runtime-sheet descriptors are content-addressed in Templates/assets.lock.json.
+# Keep their on-disk bytes stable across Windows, Linux, and macOS checkouts.
+Templates/*/Assets/runtime_sheet.json text eol=lf
 
 ###############################################################################
 # Set default behavior for command prompt diff.
