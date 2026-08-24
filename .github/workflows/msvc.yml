@@ -15,6 +15,12 @@ on:
     branches: [ "Working" ]
   schedule:
     - cron: '37 4 * * 6'
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Failed same-workflow push run whose preserved SARIF should be repaired
+        required: true
+        type: string
 
 env:
   # Path to the CMake build directory.
@@ -25,6 +31,7 @@ permissions:
 
 jobs:
   analyze:
+    if: github.event_name != 'workflow_dispatch'
     permissions:
       contents: read # for actions/checkout to fetch code
       security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
@@ -43,6 +50,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
+
+      - name: Test MSVC SARIF normalizer
+        run: python -I .github/scripts/test_normalize_msvc_sarif.py
 
       - name: Configure CMake
         # The build matrix already compiles and runs the test corpus. Keep
@@ -87,5 +97,97 @@ jobs:
         with:
           name: msvc-sarif-${{ github.run_id }}
           path: ${{ steps.run-analysis.outputs.sarif }}
+          if-no-files-found: ignore
+          retention-days: 1
+
+  recover-sarif:
+    if: github.event_name == 'workflow_dispatch'
+    name: Recover preserved SARIF
+    runs-on: windows-2022
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout exact recovery head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Test MSVC SARIF normalizer
+        run: python -I .github/scripts/test_normalize_msvc_sarif.py
+
+      - name: Validate source run and download its preserved SARIF
+        id: recover
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:SOURCE_RUN_ID -notmatch '^\d+$') {
+            throw 'source_run_id must contain only decimal digits'
+          }
+
+          $run = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SOURCE_RUN_ID" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read the source workflow run' }
+          $workflow = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/msvc.yml" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the current workflow identity' }
+          if ([int64]$run.workflow_id -ne [int64]$workflow.id) {
+            throw 'The source run belongs to a different workflow'
+          }
+          if ($run.event -ne 'push' -or $run.head_branch -ne 'Working' -or
+              $run.status -ne 'completed' -or $run.conclusion -ne 'failure' -or
+              $run.head_repository.full_name -ne $env:GITHUB_REPOSITORY) {
+            throw 'The source must be a failed completed Working push from this repository'
+          }
+
+          git merge-base --is-ancestor $run.head_sha HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'The source commit is not an ancestor of this recovery head' }
+          $allowedChanges = @(
+            '.github/scripts/normalize-msvc-sarif.py',
+            '.github/scripts/test_normalize_msvc_sarif.py',
+            '.github/workflows/msvc.yml'
+          )
+          $unexpected = @(git diff --name-only "$($run.head_sha)..HEAD" | Where-Object {
+            $_ -notin $allowedChanges
+          })
+          if ($LASTEXITCODE -ne 0 -or $unexpected.Count -ne 0) {
+            throw "Recovery head changed analyzer inputs: $($unexpected -join ', ')"
+          }
+
+          $artifactName = "msvc-sarif-$env:SOURCE_RUN_ID"
+          $artifacts = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SOURCE_RUN_ID/artifacts" |
+            ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate source-run artifacts' }
+          $matches = @($artifacts.artifacts | Where-Object {
+            $_.name -eq $artifactName -and -not $_.expired
+          })
+          if ($matches.Count -ne 1) { throw 'Expected exactly one unexpired preserved SARIF artifact' }
+
+          New-Item -ItemType Directory -Path recovered-sarif | Out-Null
+          gh run download $env:SOURCE_RUN_ID --name $artifactName --dir recovered-sarif
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download the preserved SARIF artifact' }
+          $sarifFiles = @(Get-ChildItem -LiteralPath recovered-sarif -Recurse -File -Filter '*.sarif')
+          if ($sarifFiles.Count -ne 1) { throw 'Expected exactly one SARIF file in the artifact' }
+          "sarif=$($sarifFiles[0].FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Repair preserved MSVC SARIF
+        run: python -I .github/scripts/normalize-msvc-sarif.py "${{ steps.recover.outputs.sarif }}"
+
+      - name: Upload repaired SARIF to GitHub
+        uses: github/codeql-action/upload-sarif@4c0873ef8656cb3c50b3f42fb63bc1ade0cfa827 # v4
+        with:
+          sarif_file: ${{ steps.recover.outputs.sarif }}
+
+      - name: Upload failed recovery payload for diagnosis
+        if: failure() && steps.recover.outputs.sarif != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: msvc-sarif-recovery-${{ github.run_id }}
+          path: ${{ steps.recover.outputs.sarif }}
           if-no-files-found: ignore
           retention-days: 1
