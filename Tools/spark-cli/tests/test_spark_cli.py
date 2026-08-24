@@ -37,6 +37,45 @@ def touch(path):
     path.write_bytes(b"test")
 
 
+class SparkNewTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.engine = self.root / "Engine"
+        self.output = self.root / "Projects"
+        self.output.mkdir()
+        template = self.engine / "Templates" / "MMOStarter"
+        write_json(
+            template / "MMOStarter.sparkproject",
+            {"name": "MMOStarter", "defaultScene": "Scenes/Frontier.sparkscene"},
+        )
+        write_json(
+            template / "spark.modules.json",
+            {"modules": [{"name": "MMOStarter", "path": "MMOStarter.dll"}]},
+        )
+        (template / "Source").mkdir()
+        (template / "Source" / "GameModule.h").write_text(
+            "class MMOStarterModule {};\n", encoding="utf-8"
+        )
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_new_rewrites_project_descriptor_identity_before_renaming(self):
+        args = SimpleNamespace(name="FrontierGame", template="MMOStarter", output=str(self.output))
+        with mock.patch.object(spark_cli, "find_engine_root", return_value=self.engine):
+            result = spark_cli.cmd_new(args)
+
+        project = self.output / "FrontierGame"
+        descriptor = json.loads((project / "FrontierGame.sparkproject").read_text(encoding="utf-8"))
+        manifest = json.loads((project / "spark.modules.json").read_text(encoding="utf-8"))
+        self.assertEqual(result, 0)
+        self.assertFalse((project / "MMOStarter.sparkproject").exists())
+        self.assertEqual(descriptor["name"], "FrontierGame")
+        self.assertEqual(manifest["modules"][0]["name"], "FrontierGame")
+        self.assertIn("FrontierGameModule", (project / "Source" / "GameModule.h").read_text(encoding="utf-8"))
+
+
 class SparkRunTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

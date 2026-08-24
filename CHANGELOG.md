@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Live authored-scene, input, render, HUD, and cleanup loops for every built-in project template and the MultiplayerArena compatibility sample
+- Installed-SDK and packaged headless smoke coverage for all nine shipped template projects
+
+### Changed
+- Project scaffolding now rewrites `.sparkproject` identity before renaming the descriptor
+- Public README, wiki, and badge metrics are generated from the current source and test inventory
+
+### Fixed
+- Editor module discovery, project paths, UTF-8 handling, long-path launches, and fail-closed module loading
+- Transactional CLI packaging and validated packaged-project launches
+- Template module manifests no longer advertise an ignored `loadOrder` field
+- Local badge generation now preserves Shields-compatible logos and cache metadata
+
 ## [1.0.0] - 2026-04-04
 
 ### Added

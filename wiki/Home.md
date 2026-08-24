@@ -91,12 +91,12 @@ SparkEngine is licensed under the [Spark Open License](https://github.com/Krilli
 <!-- AUTO:stats -->
 | Metric | Count |
 |--------|-------|
-| Header files | 962 |
+| Header files | 963 |
 | ECS Components | 79 |
 | Engine System Classes | 75 |
 | Editor Panels | 64 |
 | Test files | 553 |
-| Test cases | 6565+ |
+| Test cases | 6581+ |
 | Wiki pages | 198 |
-| *Last synced* | *2026-08-24 12:19* |
+| *Last synced* | *2026-08-24 13:25* |
 <!-- /AUTO:stats -->

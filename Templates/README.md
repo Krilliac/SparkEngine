@@ -1,6 +1,6 @@
 # SparkEngine installed-SDK project templates
 
-These eight packages are the physical source for SparkEditor's built-in project templates. Each is a standalone CMake project that consumes an installed SparkEngine SDK, produces one game-module shared library, opens a current reflected `.sparkscene`, and bundles deterministic gameplay source plus an original, template-specific visual atlas.
+These eight packages are the physical source for SparkEditor's built-in project templates. Each is a standalone CMake project that consumes an installed SparkEngine SDK, produces one game-module shared library, loads a current reflected `.sparkscene`, and drives a live input/update/render loop with template-specific gameplay and artwork.
 
 | Package | Editor template | Default scene |
 |---|---|---|
@@ -32,7 +32,7 @@ Every package uses only:
 - public headers under `SparkSDK/Include/Spark`;
 - project-local source, reflected scenes, and metadata.
 
-There are no relative includes of the engine source tree. Gameplay behavior is represented by deterministic state machines with public accessors, allowing a package to be tested with `OnLoad(nullptr)`. Visual scene composition stays editable and uses built-in procedural primitive paths; each `Assets/` directory also contains an original transparent sprite/UI/material atlas ready for a host rendering adapter.
+There are no relative includes of the engine source tree. Every gameplay module supports a deterministic `OnLoad(nullptr)` test seam and, with a real `IEngineContext`, appends its authored scene to the engine-owned world, consumes live input, synchronizes entities and camera state, renders, resizes, and removes only its own entities on unload. Visual scene composition stays editable and uses built-in procedural primitive paths. Each `Assets/` directory contains original transparent sprite/UI/material artwork plus a validated 3x3 runtime sheet; the live templates use those sheets for camera-relative HUD feedback. `EmptyProject` intentionally keeps its world and HUD empty while retaining the same scene/render lifecycle.
 
 ## Package layout
 

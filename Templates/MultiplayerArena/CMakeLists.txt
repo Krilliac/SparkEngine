@@ -26,10 +26,10 @@ add_custom_command(TARGET MultiplayerArena POST_BUILD
     COMMENT "Creating asset directories"
 )
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/Assets")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Assets")
     add_custom_command(TARGET MultiplayerArena POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/Assets"
+            "${CMAKE_CURRENT_SOURCE_DIR}/Assets"
             "$<TARGET_FILE_DIR:MultiplayerArena>/Assets"
         COMMENT "Copying game assets"
     )

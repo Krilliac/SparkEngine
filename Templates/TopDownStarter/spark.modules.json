@@ -2,8 +2,7 @@
   "modules": [
     {
       "name": "TopDownStarter",
-      "path": "TopDownStarter.dll",
-      "loadOrder": 1000
+      "path": "TopDownStarter.dll"
     }
   ]
 }

@@ -2,8 +2,7 @@
   "modules": [
     {
       "name": "RPGStarter",
-      "path": "RPGStarter.dll",
-      "loadOrder": 1000
+      "path": "RPGStarter.dll"
     }
   ]
 }

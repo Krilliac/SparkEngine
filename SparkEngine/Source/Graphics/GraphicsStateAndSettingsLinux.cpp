@@ -54,6 +54,12 @@ void GraphicsEngine::ApplyGraphicsState()
     }
 }
 
+void GraphicsEngine::ApplyBasicRenderStates()
+{
+    // The basic D3D11 rasterizer/depth/blend state bundle has no direct
+    // non-Windows equivalent. The active RHI pipeline owns these states.
+}
+
 void GraphicsEngine::ApplyAdvancedGraphicsState()
 {
     auto& rhi = GetRHI();

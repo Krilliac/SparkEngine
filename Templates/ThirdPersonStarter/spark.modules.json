@@ -2,8 +2,7 @@
   "modules": [
     {
       "name": "ThirdPersonStarter",
-      "path": "ThirdPersonStarter.dll",
-      "loadOrder": 1000
+      "path": "ThirdPersonStarter.dll"
     }
   ]
 }

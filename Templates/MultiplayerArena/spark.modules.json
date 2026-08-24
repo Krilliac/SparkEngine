@@ -2,8 +2,7 @@
   "modules": [
     {
       "name": "MultiplayerArena",
-      "path": "MultiplayerArena.dll",
-      "loadOrder": 1000
+      "path": "MultiplayerArena.dll"
     }
   ]
 }

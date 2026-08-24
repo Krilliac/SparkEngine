@@ -180,9 +180,9 @@ update_badges() {
         ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     fi
 
-    local tests_json='{"schemaVersion":1,"label":"tests","message":"'"$FORMATTED_TESTS"'","color":"brightgreen"}'
-    local loc_json='{"schemaVersion":1,"label":"C++ lines of code","message":"'"$formatted_loc"'","color":"blue","namedLogo":"cplusplus","logoColor":"white"}'
-    local files_json='{"schemaVersion":1,"label":"source files","message":"'"$formatted_files"'","color":"green"}'
+    local tests_json='{"schemaVersion":1,"label":"tests","message":"'"$FORMATTED_TESTS"'","color":"brightgreen","cacheSeconds":300}'
+    local loc_json='{"schemaVersion":1,"label":"C++ lines of code","message":"'"$formatted_loc"'","color":"blue","logo":"cplusplus","cacheSeconds":300}'
+    local files_json='{"schemaVersion":1,"label":"source files","message":"'"$formatted_files"'","color":"green","cacheSeconds":300}'
     local breakdown_json='{"schemaVersion":1,"total":'"$TOTAL_LINES"',"files":'"$FILE_COUNT"',"engine":'"$ENGINE_LINES"',"editor":'"$EDITOR_LINES"',"game":'"$GAME_LINES"',"tests":'"$TEST_LINES"',"tools":'"$TOOL_LINES"',"updated":"'"$ts"'"}'
 
     for pair in "tests.json:$tests_json" "loc.json:$loc_json" "files.json:$files_json" "loc-breakdown.json:$breakdown_json"; do
@@ -192,7 +192,7 @@ update_badges() {
 
         local tmpfile
         tmpfile=$(mktemp)
-        echo "$content" | "${PYTHON[@]}" -m json.tool > "$tmpfile" 2>/dev/null || echo "$content" > "$tmpfile"
+        echo "$content" | "${PYTHON[@]}" -m json.tool --indent 2 > "$tmpfile" 2>/dev/null || echo "$content" > "$tmpfile"
         if [ ! -f "$filepath" ] || ! cmp -s "$filepath" "$tmpfile"; then
             CHANGES_MADE=$((CHANGES_MADE + 1))
             log_info "  Updated $name"

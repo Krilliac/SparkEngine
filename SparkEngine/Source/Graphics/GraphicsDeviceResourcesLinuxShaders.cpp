@@ -268,6 +268,21 @@ void GraphicsEngine::UpdateBasicConstants(const DirectX::XMMATRIX& /*world*/, co
     // Constant buffer updates go through the RHI bridge on Linux.
 }
 
+void GraphicsEngine::UpdateBasicConstants(const DirectX::XMMATRIX& world, const DirectX::XMMATRIX& view,
+                                          const DirectX::XMMATRIX& proj, const DirectX::XMFLOAT4& /*color*/,
+                                          const DirectX::XMFLOAT2& /*uvTiling*/)
+{
+    UpdateBasicConstants(world, view, proj);
+}
+
+void GraphicsEngine::UpdateBasicConstants(const DirectX::XMMATRIX& world, const DirectX::XMMATRIX& view,
+                                          const DirectX::XMMATRIX& proj, const DirectX::XMFLOAT4& /*color*/,
+                                          const DirectX::XMFLOAT2& /*uvTiling*/, float /*emissive*/, float /*alpha*/,
+                                          const DirectX::XMFLOAT2& /*uvOffset*/)
+{
+    UpdateBasicConstants(world, view, proj);
+}
+
 void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& view, const XMMATRIX& proj, const XMFLOAT3& cameraPos)
 {
     // Store per-frame camera state for system queries (e.g. ClusteredLightCulling)
@@ -303,6 +318,17 @@ bool GraphicsEngine::DrawMeshInstanced(Mesh& /*mesh*/, const DirectX::XMFLOAT4X4
 //     default, and the editor/game guards skip the bind), so returning nullptr
 //     is the correct non-Windows behavior rather than a hard failure.
 ID3D11ShaderResourceView* GraphicsEngine::GetOrLoadTextureSRV(const std::string& /*path*/)
+{
+    return nullptr;
+}
+
+void GraphicsEngine::SetBasicTexture(ID3D11ShaderResourceView* /*srv*/)
+{
+    // Basic D3D11 SRVs are not part of the non-Windows RHI path.
+}
+
+const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(const std::string& /*jsonPath*/,
+                                                                            std::string_view /*projectRootUtf8*/)
 {
     return nullptr;
 }

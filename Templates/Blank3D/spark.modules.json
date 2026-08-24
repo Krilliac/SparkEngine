@@ -2,8 +2,7 @@
   "modules": [
     {
       "name": "Blank3D",
-      "path": "Blank3D.dll",
-      "loadOrder": 1000
+      "path": "Blank3D.dll"
     }
   ]
 }

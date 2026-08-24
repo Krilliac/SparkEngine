@@ -2,8 +2,7 @@
   "modules": [
     {
       "name": "FPSStarter",
-      "path": "FPSStarter.dll",
-      "loadOrder": 1000
+      "path": "FPSStarter.dll"
     }
   ]
 }

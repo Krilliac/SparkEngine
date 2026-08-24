@@ -4,8 +4,12 @@ MultiplayerArena is a bounded local arena simulation retained for compatibility 
 
 The reflected `Scenes/Arena.sparkscene` uses public built-in primitives. `Assets/multiplayer_arena_atlas.png` supplies original cyan-versus-magenta character, pickup, arena, network, and UI artwork for a host adapter. Configure the generated project against an installed SparkEngine SDK with CMake 3.25 or newer.
 
+## Controls
+
+With a real engine context two ready local players enter a five-second countdown, then play a bounded first-to-three match with a 90-second limit. Cyan uses `WASD` and attacks with `F`; magenta uses `IJKL` and attacks with `O`. Attacks score only when the opposing player is within range. Eliminated players respawn after three seconds. Press `R` to reset scores, positions, readiness, and the countdown.
+
 All source and repository-original artwork are covered by the SparkEngine repository license. No third-party content is bundled.
 
 ## Runtime asset sheet
 
-`Assets/multiplayer_arena_runtime_sheet.png` is the normalized 3x3 sprite sheet prepared for host adapters. `Assets/runtime_sheet.json` gives nine stable, named 418x418 source rectangles with transparent gutters. The larger atlas remains concept and reference art; sheet consumers should use the descriptor rather than guessing coordinates.
+`Assets/multiplayer_arena_runtime_sheet.png` is the normalized 3x3 sprite sheet used by the runtime HUD. `Assets/runtime_sheet.json` gives nine stable, named 418x418 source rectangles with transparent gutters. The larger atlas remains concept and reference art; other sheet consumers should use the descriptor rather than guessing coordinates.

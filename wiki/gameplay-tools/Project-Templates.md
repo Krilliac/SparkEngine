@@ -237,11 +237,11 @@ Ships with four weapons pre-configured:
 
 ### RPGStarter
 
-An RPG template with inventory, dialogue, quests, abilities, and save system integration.
+An RPG template with movement, proximity dialogue, a relic quest, combat, reward state, and an intentionally bounded in-process save slot.
 
-**Features:** `inventory`, `dialogue`, `quests`, `abilities`, `save-system`
+**Features:** `movement`, `inventory`, `dialogue`, `quests`, `combat`, `demo-save-slot`
 
-Based on the `SparkGameRPG` module, which provides access to the engine's quest, dialogue, and save system APIs.
+The starter keeps its rules deterministic and self-contained. It demonstrates where a project can connect the engine's larger quest, dialogue, and persistent save services without claiming those production integrations are already present in the template.
 
 ### PlatformerKit
 
@@ -253,11 +253,11 @@ Based on the `SparkGamePlatformer` module.
 
 ### MultiplayerArena
 
-A multiplayer arena template with networking, lobby management, scoreboard, respawn, and team system.
+A bounded local arena rules sample with lobby readiness, scoreboard, respawn, and teams. It does not open a network transport or dedicated server.
 
-**Features:** `networking`, `lobby`, `scoreboard`, `respawn`, `team-system`
+**Features:** `local-simulation`, `lobby`, `scoreboard`, `respawn`, `team-system`
 
-Based on the `SparkGameFPS` module with networking extensions. Connects to the engine's `NetworkManager` and `AreaServer` systems.
+The stable team and player IDs are suitable for a future transport adapter, but authoritative networking must be added and tested separately before treating this as a networked game.
 
 ## Configuration
 
@@ -294,7 +294,7 @@ cmake -B build -DCMAKE_PREFIX_PATH=~/SparkEngine-install
 
 ### Module Load Order
 
-The `loadOrder` field in `spark.modules.json` controls initialization order. Lower values load first. Game modules typically use 1000+.
+Manifest array order controls discovery. Dependency ordering and initialization priority come from each loaded module's `Spark::ModuleInfo` (`dependencies` and `loadOrder`); the legacy `loadOrder` keys still present in some example manifests are descriptive metadata and are not runtime overrides.
 
 ## Creating Custom Templates
 

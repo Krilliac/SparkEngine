@@ -2,8 +2,7 @@
   "modules": [
     {
       "name": "PlatformerKit",
-      "path": "PlatformerKit.dll",
-      "loadOrder": 1000
+      "path": "PlatformerKit.dll"
     }
   ]
 }

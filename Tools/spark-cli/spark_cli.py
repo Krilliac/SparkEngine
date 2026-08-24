@@ -17,7 +17,7 @@ Templates:
     FPSStarter      — First-person shooter template with weapons, AI, HUD
     RPGStarter      — RPG template with inventory, dialogue, quests
     PlatformerKit   — 2D/3D platformer with character controller
-    MultiplayerArena — Multiplayer arena with networking and lobby
+    MultiplayerArena — Bounded local arena rules and lobby simulation
 
 Examples:
     spark new MyGame
@@ -484,7 +484,18 @@ def cmd_new(args):
     # directory (e.g. Templates/FPSStarter → class FPSStarterModule, target
     # FPSStarter, etc.). Rewrite every textual occurrence of the template
     # name to the user's chosen project name so they do not have to.
-    text_extensions = {".h", ".hpp", ".cpp", ".c", ".txt", ".json", ".cmake", ".md", ".py"}
+    text_extensions = {
+        ".h",
+        ".hpp",
+        ".cpp",
+        ".c",
+        ".txt",
+        ".json",
+        ".sparkproject",
+        ".cmake",
+        ".md",
+        ".py",
+    }
 
     if template_name and template_name != project_name:
         for root, dirs, files in os.walk(project_path):

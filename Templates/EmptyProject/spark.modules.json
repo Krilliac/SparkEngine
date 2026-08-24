@@ -2,8 +2,7 @@
   "modules": [
     {
       "name": "EmptyProject",
-      "path": "EmptyProject.dll",
-      "loadOrder": 1000
+      "path": "EmptyProject.dll"
     }
   ]
 }

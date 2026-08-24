@@ -30,4 +30,4 @@ See the SparkEngine root license. `Assets/README.md` and `Assets/manifest.json` 
 
 ## Runtime asset sheet
 
-`Assets/fps_starter_runtime_sheet.png` is the normalized 3x3 sprite sheet prepared for host adapters. `Assets/runtime_sheet.json` gives nine stable, named 418x418 source rectangles with transparent gutters. The runtime mirrors that locked version-1 grid through named constants; update those constants together with the descriptor if the sheet contract changes. The larger atlas remains concept and reference art.
+`Assets/fps_starter_runtime_sheet.png` is the normalized 3x3 sprite sheet consumed by the live crosshair, ammo, health, target, and victory HUD. `Assets/runtime_sheet.json` gives nine stable, named 418x418 source rectangles with transparent gutters. The runtime mirrors that locked version-1 grid through named constants; update those constants together with the descriptor if the sheet contract changes. The larger atlas remains concept and reference art.

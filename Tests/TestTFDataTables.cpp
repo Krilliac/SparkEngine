@@ -569,8 +569,15 @@ TEST(TFSavePaths_OneRootAndLeafOnlyFiles)
     const fs::path unicodeRoot = Terrafront::SavePaths::ResolveRootWide(L"保存/данные", fs::path(L"D:/服务器"));
     EXPECT_TRUE(unicodeRoot == (fs::path(L"D:/服务器") / L"保存/данные").lexically_normal());
     const fs::path unc = Terrafront::SavePaths::ResolveRootWide(LR"(\\server\share\保存)", cwd);
+#if defined(__MINGW32__)
+    // MinGW libstdc++ does not classify UNC paths as absolute, but the native
+    // Windows path must remain UNC-rooted and must never be prefixed by cwd.
+    EXPECT_TRUE(unc.native().find(LR"(\\server\share)") == 0);
+#else
     EXPECT_TRUE(unc.is_absolute());
     EXPECT_TRUE(unc.root_name() == fs::path(LR"(\\server\share)").root_name());
+#endif
+    EXPECT_FALSE(unc.native().find(cwd.native()) == 0);
 #endif
 }
 

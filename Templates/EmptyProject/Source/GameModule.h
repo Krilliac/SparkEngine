@@ -2,6 +2,8 @@
 
 #include <Spark/SparkSDK.h>
 
+#include "Game/TemplateRuntime.h"
+
 #include <cstdint>
 
 class EmptyProjectModule final : public Spark::IModule
@@ -11,7 +13,7 @@ class EmptyProjectModule final : public Spark::IModule
     {
         Spark::ModuleInfo info{};
         info.name = "EmptyProject";
-        info.version = "0.1.0";
+        info.version = "0.2.0";
         info.sdkVersion = SPARK_SDK_VERSION;
         info.loadOrder = 1000;
         return info;
@@ -23,11 +25,13 @@ class EmptyProjectModule final : public Spark::IModule
         m_updateCount = 0;
         m_elapsedSeconds = 0.0f;
         m_paused = false;
-        return true;
+        return m_runtime.Load(context, "EmptyProject", {"Startup.sparkscene", "Scenes/Default.sparkscene"},
+                              [](const Spark::Templates::TemplateRuntimeScene&) { return true; });
     }
 
     void OnUnload() override
     {
+        m_runtime.Unload();
         m_context = nullptr;
         m_paused = false;
     }
@@ -42,6 +46,8 @@ class EmptyProjectModule final : public Spark::IModule
 
     void OnPause() override { m_paused = true; }
     void OnResume() override { m_paused = false; }
+    void OnRender() override { m_runtime.Render(Spark::Templates::TemplateRuntimeScene::InvalidEntity); }
+    void OnResize(int width, int height) override { m_runtime.Resize(width, height); }
 
     [[nodiscard]] uint64_t GetUpdateCount() const { return m_updateCount; }
     [[nodiscard]] float GetElapsedSeconds() const { return m_elapsedSeconds; }
@@ -50,6 +56,7 @@ class EmptyProjectModule final : public Spark::IModule
 
   private:
     Spark::IEngineContext* m_context = nullptr;
+    Spark::Templates::TemplateRuntimeScene m_runtime;
     uint64_t m_updateCount = 0;
     float m_elapsedSeconds = 0.0f;
     bool m_paused = false;

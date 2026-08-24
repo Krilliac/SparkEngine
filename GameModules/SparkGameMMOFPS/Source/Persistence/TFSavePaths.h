@@ -136,13 +136,26 @@ namespace Terrafront::SavePaths
         if (configuredRoot.empty())
             return workingDirectory.empty() ? std::filesystem::path{} : (workingDirectory / "Saves").lexically_normal();
 
+        // MinGW's std::filesystem classifies a backslash-form UNC path as
+        // relative even on Windows. Preserve UNC/device roots rather than
+        // accidentally placing them underneath the process working directory.
+        const auto isSeparator = [](wchar_t value) { return value == L'\\' || value == L'/'; };
+        const bool hasNetworkOrDeviceRoot =
+            configuredRoot.size() >= 2 && isSeparator(configuredRoot[0]) && isSeparator(configuredRoot[1]);
+
         std::filesystem::path root{configuredRoot};
-        if (root.is_relative())
+        if (root.is_relative() && !hasNetworkOrDeviceRoot)
         {
             if (workingDirectory.empty())
                 return {};
             root = workingDirectory / root;
         }
+#if defined(__MINGW32__)
+        // lexically_normal() collapses MinGW's leading UNC separator pair
+        // because libstdc++ does not parse it as a root name.
+        if (hasNetworkOrDeviceRoot)
+            return root;
+#endif
         return root.lexically_normal();
     }
 

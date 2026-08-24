@@ -678,6 +678,7 @@ endif()
 
 # Editor version defines needed by ProjectManager.cpp
 target_compile_definitions(SparkTests PRIVATE
+    SPARK_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     EDITOR_VERSION_MAJOR=1
     EDITOR_VERSION_MINOR=0
     EDITOR_VERSION_PATCH=0
