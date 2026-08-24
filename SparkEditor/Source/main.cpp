@@ -14,7 +14,7 @@
 #include <iostream>
 #include <fstream>
 #include <memory>
-#include <sstream>
+#include <utility>
 #include <vector>
 #include <cstring>
 #include <cstdlib>
@@ -25,6 +25,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <shellapi.h>
 #endif
 
 static std::atomic<bool> g_collabServerRunning{true};
@@ -455,42 +456,48 @@ int main(int argc, char* argv[])
 #ifdef _WIN32
 // WinMain entry point for Windows applications
 // This is required by the linker when building as a Windows application
-int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
+int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 {
-    // Parse command line arguments from lpCmdLine
+    // Use Windows' command-line grammar so quoted paths, escaped quotes, empty
+    // arguments, and the real executable path are preserved. WinMain's ANSI
+    // lpCmdLine omits argv[0] and cannot faithfully represent Unicode input.
     int argc = 0;
-    char** argv = nullptr;
+    wchar_t** wideArgv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (!wideArgv)
+    {
+        return -1;
+    }
 
-    // Simple command line parsing - convert lpCmdLine to argc/argv format
-    std::string cmdLine(lpCmdLine);
     std::vector<std::string> args;
-    std::vector<char*> argPtrs;
-
-    // Add program name as first argument
-    args.push_back("SparkEditor.exe");
-
-    // Parse command line
-    if (!cmdLine.empty())
+    args.reserve(static_cast<size_t>(argc));
+    for (int i = 0; i < argc; ++i)
     {
-        std::istringstream iss(cmdLine);
-        std::string arg;
-        while (iss >> arg)
+        const int byteCount =
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wideArgv[i], -1, nullptr, 0, nullptr, nullptr);
+        if (byteCount <= 0)
         {
-            args.push_back(arg);
+            LocalFree(wideArgv);
+            return -1;
         }
-    }
 
-    // Create argv array
-    for (auto& arg : args)
-    {
-        argPtrs.push_back(const_cast<char*>(arg.c_str()));
+        std::string arg(static_cast<size_t>(byteCount), '\0');
+        if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wideArgv[i], -1, arg.data(), byteCount, nullptr,
+                                nullptr) != byteCount)
+        {
+            LocalFree(wideArgv);
+            return -1;
+        }
+        arg.pop_back(); // Remove the converted null terminator.
+        args.push_back(std::move(arg));
     }
+    LocalFree(wideArgv);
+
+    std::vector<char*> argPtrs;
+    argPtrs.reserve(args.size() + 1);
+    for (std::string& arg : args)
+        argPtrs.push_back(arg.data());
     argPtrs.push_back(nullptr);
 
-    argc = static_cast<int>(args.size());
-    argv = argPtrs.data();
-
-    // Call main function
-    return main(argc, argv);
+    return main(argc, argPtrs.data());
 }
 #endif // _WIN32

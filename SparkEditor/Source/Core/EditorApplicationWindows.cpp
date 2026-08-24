@@ -202,9 +202,21 @@ namespace SparkEditor
         // Main message loop
         MSG msg = {};
         auto lastTime = std::chrono::high_resolution_clock::now();
+        int frameCount = 0;
 
         while (m_isRunning && msg.message != WM_QUIT)
         {
+            // Keep automation runs deterministic and bounded, matching the
+            // SDL2 implementation. A limit of zero means run indefinitely.
+            if (m_config.testFrameLimit > 0 && frameCount >= m_config.testFrameLimit)
+            {
+                std::cout << "[TEST] Frame limit reached (" << m_config.testFrameLimit << " frames). Exiting.\n"
+                          << std::flush;
+                m_isRunning = false;
+                break;
+            }
+            ++frameCount;
+
             // Calculate delta time
             auto currentTime = std::chrono::high_resolution_clock::now();
             float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
