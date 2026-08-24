@@ -11,7 +11,9 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <vector>
+#include <span>
 #include <memory>
 #include <functional>
 #include <cstdint>
@@ -39,16 +41,31 @@ namespace SparkEditor
     /**
  * @brief Project template types for new project creation
  */
-    enum class ProjectTemplate
+    enum class ProjectTemplate : uint8_t
     {
-        Empty,       ///< Bare project with no assets or scenes
-        FirstPerson, ///< FPS template with player controller and basic level
-        ThirdPerson, ///< Third person template
-        TopDown,     ///< Top-down camera template
-        Blank3D,     ///< Single empty scene with default lighting
-        MMO,         ///< MMO template with area servers, world server, chat
-        Platformer,  ///< Side-scrolling platformer with jump mechanics, collectibles, checkpoints
-        RPG          ///< RPG template with inventory, dialogue NPCs, quest system
+        Empty = 0,       ///< Bare project with no assets or scenes
+        FirstPerson = 1, ///< FPS template with player controller and basic level
+        ThirdPerson = 2, ///< Third person template
+        TopDown = 3,     ///< Top-down camera template
+        Blank3D = 4,     ///< Single empty scene with default lighting
+        MMO = 5,         ///< Bounded local MMO sample
+        Platformer = 6,  ///< Side-scrolling platformer with jump mechanics, collectibles, checkpoints
+        RPG = 7          ///< RPG template with inventory, dialogue NPCs, quest system
+    };
+
+    /** @brief Immutable metadata for one built-in project template. */
+    struct ProjectTemplateDescriptor
+    {
+        ProjectTemplate type;
+        std::string_view stableId; ///< Persisted non-localized identity.
+        std::string_view displayName;
+        std::string_view description;
+        std::string_view iconText;
+        std::string_view packageDirectory; ///< Child directory of the resolved template root.
+        std::string_view defaultScene;     ///< Project-relative reflected scene path.
+        std::string_view genre;
+        std::span<const std::string_view> features;
+        bool sceneOnly = false;
     };
 
     /**
@@ -147,6 +164,12 @@ namespace SparkEditor
         void SetOnProjectClosed(ProjectCallback cb) { m_onProjectClosed = std::move(cb); }
 
         // --- Static helpers ---
+        /// [any thread, thread-safe] Static immutable built-in template catalog.
+        static std::span<const ProjectTemplateDescriptor> GetProjectTemplateDescriptors() noexcept;
+        /// [any thread, thread-safe] Returns nullptr for an invalid enum value.
+        static const ProjectTemplateDescriptor* FindProjectTemplateDescriptor(ProjectTemplate t) noexcept;
+        /// [any thread, thread-safe] Finds by stable ID or physical package directory.
+        static const ProjectTemplateDescriptor* FindProjectTemplateDescriptor(std::string_view identity) noexcept;
         static std::string GetProjectTemplateName(ProjectTemplate t);
         static std::string GetProjectTemplateDescription(ProjectTemplate t);
         static std::string GetEditorDataDirectory(); ///< %APPDATA%/SparkEngine/Editor

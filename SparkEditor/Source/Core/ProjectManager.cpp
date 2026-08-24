@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cctype>
 #include <set>
+#include <array>
 
 #ifdef _WIN32
 #include <shlobj.h>
@@ -323,6 +324,50 @@ namespace SparkEditor
 
     namespace
     {
+        constexpr std::array<std::string_view, 2> kEmptyFeatures = {"minimal", "scene-editing"};
+        constexpr std::array<std::string_view, 6> kFirstPersonFeatures = {"movement", "mouselook", "weapons",
+                                                                          "damage",   "hud",       "restart"};
+        constexpr std::array<std::string_view, 5> kThirdPersonFeatures = {"movement", "orbit-camera", "jump", "pickup",
+                                                                          "goal"};
+        constexpr std::array<std::string_view, 6> kTopDownFeatures = {"movement", "pan-zoom-camera", "collision",
+                                                                      "enemy",    "pickup",          "restart"};
+        constexpr std::array<std::string_view, 4> kBlank3DFeatures = {"primitive", "ground", "lighting", "fly-camera"};
+        constexpr std::array<std::string_view, 7> kMmoFeatures = {
+            "local-client-server", "character", "faction", "capture-point", "bot", "chat", "respawn"};
+        constexpr std::array<std::string_view, 8> kPlatformerFeatures = {
+            "movement", "jump", "double-jump", "collectibles", "hazard", "checkpoint", "finish", "restart"};
+        constexpr std::array<std::string_view, 7> kRpgFeatures = {"movement", "dialogue", "quest",    "inventory",
+                                                                  "combat",   "reward",   "save-load"};
+
+        constexpr std::array<ProjectTemplateDescriptor, 8> kProjectTemplates = {{
+            {ProjectTemplate::Blank3D, "blank-3d", "Blank 3D",
+             "A ready-to-edit 3D scene with a visible primitive, ground, lighting, and fly camera.", "[3D]", "Blank3D",
+             "Scenes/Default.sparkscene", "General", kBlank3DFeatures, true},
+            {ProjectTemplate::FirstPerson, "first-person", "First Person",
+             "A compact first-person game with movement, weapons, a damageable target, HUD, and restart loop.", "[FP]",
+             "FPSStarter", "Scenes/Arena.sparkscene", "FPS", kFirstPersonFeatures, false},
+            {ProjectTemplate::ThirdPerson, "third-person", "Third Person",
+             "A third-person adventure slice with orbit camera, jumping, a pickup, and a goal.", "[TP]",
+             "ThirdPersonStarter", "Scenes/Adventure.sparkscene", "Adventure", kThirdPersonFeatures, false},
+            {ProjectTemplate::TopDown, "top-down", "Top Down",
+             "A top-down action slice with pan/zoom camera, collision, an enemy, a pickup, and restart.", "[TD]",
+             "TopDownStarter", "Scenes/Skirmish.sparkscene", "Action", kTopDownFeatures, false},
+            {ProjectTemplate::Platformer, "platformer", "Platformer",
+             "A complete platformer level with double jump, collectibles, hazards, checkpoint, finish, and restart.",
+             "[PL]", "PlatformerKit", "Scenes/Level01.sparkscene", "Platformer", kPlatformerFeatures, false},
+            {ProjectTemplate::RPG, "rpg", "RPG",
+             "A village RPG slice with dialogue, quest, inventory, combat, reward, and save/load.", "[RPG]",
+             "RPGStarter", "Scenes/Village.sparkscene", "RPG", kRpgFeatures, false},
+            {ProjectTemplate::MMO, "mmo", "MMO",
+             "A bounded local client/server sample with character setup, faction objective, bot, chat, and respawn.",
+             "[MMO]", "MMOStarter", "Scenes/Frontier.sparkscene", "MMO", kMmoFeatures, false},
+            {ProjectTemplate::Empty, "empty", "Empty",
+             "A truthful empty project with an editable world and no bundled art or gameplay assumptions.", "[ ]",
+             "EmptyProject", "Scenes/Default.sparkscene", "General", kEmptyFeatures, true},
+        }};
+
+        static_assert(kProjectTemplates.size() == 8);
+
         std::string NormalizeProjectPath(const std::string& value)
         {
             if (value.empty())
@@ -1443,57 +1488,37 @@ namespace SparkEditor
     // ------------------------------------------------------------------
     // Static template helpers
     // ------------------------------------------------------------------
+    std::span<const ProjectTemplateDescriptor> ProjectManager::GetProjectTemplateDescriptors() noexcept
+    {
+        return kProjectTemplates;
+    }
+
+    const ProjectTemplateDescriptor* ProjectManager::FindProjectTemplateDescriptor(ProjectTemplate t) noexcept
+    {
+        const auto found =
+            std::find_if(kProjectTemplates.begin(), kProjectTemplates.end(),
+                         [t](const ProjectTemplateDescriptor& descriptor) { return descriptor.type == t; });
+        return found == kProjectTemplates.end() ? nullptr : &*found;
+    }
+
+    const ProjectTemplateDescriptor* ProjectManager::FindProjectTemplateDescriptor(std::string_view identity) noexcept
+    {
+        const auto found = std::find_if(
+            kProjectTemplates.begin(), kProjectTemplates.end(), [identity](const ProjectTemplateDescriptor& descriptor)
+            { return descriptor.stableId == identity || descriptor.packageDirectory == identity; });
+        return found == kProjectTemplates.end() ? nullptr : &*found;
+    }
+
     std::string ProjectManager::GetProjectTemplateName(ProjectTemplate t)
     {
-        switch (t)
-        {
-        case ProjectTemplate::Empty:
-            return "Empty";
-        case ProjectTemplate::FirstPerson:
-            return "First Person";
-        case ProjectTemplate::ThirdPerson:
-            return "Third Person";
-        case ProjectTemplate::TopDown:
-            return "Top Down";
-        case ProjectTemplate::Blank3D:
-            return "Blank 3D";
-        case ProjectTemplate::MMO:
-            return "MMO";
-        case ProjectTemplate::Platformer:
-            return "Platformer";
-        case ProjectTemplate::RPG:
-            return "RPG";
-        default:
-            return "Unknown";
-        }
+        const auto* descriptor = FindProjectTemplateDescriptor(t);
+        return descriptor ? std::string(descriptor->displayName) : "Unknown";
     }
 
     std::string ProjectManager::GetProjectTemplateDescription(ProjectTemplate t)
     {
-        switch (t)
-        {
-        case ProjectTemplate::Empty:
-            return "A completely empty project with no default scenes or assets.";
-        case ProjectTemplate::FirstPerson:
-            return "First-person template with player controller, camera, and a basic level.";
-        case ProjectTemplate::ThirdPerson:
-            return "Third-person template with follow camera and character controller.";
-        case ProjectTemplate::TopDown:
-            return "Top-down camera template suitable for strategy or adventure games.";
-        case ProjectTemplate::Blank3D:
-            return "A single empty 3D scene with default lighting and a ground plane.";
-        case ProjectTemplate::MMO:
-            return "MMO template with WorldServer/AreaServer architecture, seamless area "
-                   "streaming, entity replication, chat channels, and large-world support.";
-        case ProjectTemplate::Platformer:
-            return "Platformer template with jump mechanics, collectibles, checkpoints, "
-                   "and win triggers. Uses event response rules for gameplay logic.";
-        case ProjectTemplate::RPG:
-            return "RPG template with inventory system, dialogue NPCs, quest givers, "
-                   "and event response rules. No coding required to get started.";
-        default:
-            return "";
-        }
+        const auto* descriptor = FindProjectTemplateDescriptor(t);
+        return descriptor ? std::string(descriptor->description) : "";
     }
 
 } // namespace SparkEditor

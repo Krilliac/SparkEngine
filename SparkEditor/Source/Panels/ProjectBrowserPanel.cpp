@@ -321,19 +321,13 @@ namespace SparkEditor
             int cols = std::max(1, static_cast<int>((totalWidth + spacing) / (cardWidth + spacing)));
 
             int idx = 0;
-            ProjectTemplate templates[] = {ProjectTemplate::Blank3D,     ProjectTemplate::FirstPerson,
-                                           ProjectTemplate::ThirdPerson, ProjectTemplate::TopDown,
-                                           ProjectTemplate::Platformer,  ProjectTemplate::RPG,
-                                           ProjectTemplate::MMO,         ProjectTemplate::Empty};
-            const char* icons[] = {"[ ]", "[FP]", "[TP]", "[TD]", "[PL]", "[RPG]", "[MMO]", "[ ]"};
-
-            for (int i = 0; i < 8; ++i)
+            for (const auto& descriptor : ProjectManager::GetProjectTemplateDescriptors())
             {
                 if (idx > 0 && (idx % cols) != 0)
                 {
                     ImGui::SameLine(0, spacing);
                 }
-                RenderTemplateCard(templates[i], icons[i]);
+                RenderTemplateCard(descriptor.type, descriptor.iconText.data());
                 idx++;
             }
         }

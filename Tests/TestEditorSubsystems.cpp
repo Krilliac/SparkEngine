@@ -28,6 +28,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <thread>
 
 using namespace SparkEditor;
@@ -717,6 +718,31 @@ TEST(CrashHandler_GetStats)
 
 TEST(ProjectManager_TemplateName)
 {
+    const auto descriptors = ProjectManager::GetProjectTemplateDescriptors();
+    EXPECT_EQ(descriptors.size(), static_cast<size_t>(8));
+    std::set<ProjectTemplate> types;
+    std::set<std::string_view> stableIds;
+    std::set<std::string_view> packages;
+    for (const auto& descriptor : descriptors)
+    {
+        EXPECT_TRUE(!descriptor.stableId.empty());
+        EXPECT_TRUE(!descriptor.displayName.empty());
+        EXPECT_TRUE(!descriptor.description.empty());
+        EXPECT_TRUE(!descriptor.packageDirectory.empty());
+        EXPECT_TRUE(!descriptor.defaultScene.empty());
+        EXPECT_TRUE(!descriptor.features.empty());
+        EXPECT_TRUE(types.insert(descriptor.type).second);
+        EXPECT_TRUE(stableIds.insert(descriptor.stableId).second);
+        EXPECT_TRUE(packages.insert(descriptor.packageDirectory).second);
+        EXPECT_TRUE(ProjectManager::FindProjectTemplateDescriptor(descriptor.type) == &descriptor);
+        EXPECT_TRUE(ProjectManager::FindProjectTemplateDescriptor(descriptor.stableId) == &descriptor);
+        EXPECT_TRUE(ProjectManager::FindProjectTemplateDescriptor(descriptor.packageDirectory) == &descriptor);
+        EXPECT_EQ(ProjectManager::GetProjectTemplateName(descriptor.type), std::string(descriptor.displayName));
+        EXPECT_EQ(ProjectManager::GetProjectTemplateDescription(descriptor.type), std::string(descriptor.description));
+    }
+    EXPECT_TRUE(ProjectManager::FindProjectTemplateDescriptor(static_cast<ProjectTemplate>(255)) == nullptr);
+    EXPECT_TRUE(ProjectManager::FindProjectTemplateDescriptor("not-a-template") == nullptr);
+
     EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::Empty).empty());
     EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::FirstPerson).empty());
     EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::ThirdPerson).empty());
