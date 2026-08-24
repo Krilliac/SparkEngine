@@ -20,9 +20,14 @@
 #include "Core/ProjectManager.h"
 #include "Core/EditorPluginManager.h"
 #include "Panels/BuildPipeline.h"
+#include "Utils/EditorLaunchContext.h"
+#include "Utils/EditorProcessLaunch.h"
 #include "SceneManager/ReflectedSceneSerializer.h"
 #include "Engine/ECS/Components.h"
 #include <algorithm>
+#ifdef _WIN32
+#include <shellapi.h>
+#endif
 #include <array>
 #include <cmath>
 #include <chrono>
@@ -1422,6 +1427,154 @@ TEST(ProjectManager_RecordOpenedSceneSupportsUnicodeProjectPaths)
     std::filesystem::remove_all(parent, ec);
     EXPECT_FALSE(ec);
 }
+
+TEST(EditorLaunchContext_EnumeratesBoundedProjectBuildAndPackageDirectories)
+{
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "spark-launch-context-layout";
+    const fs::path editor = root / "Editor";
+    const fs::path project = root / "Project";
+
+    const auto directories = LaunchContext::ModuleDiscoveryDirectories(editor, project);
+    auto contains = [&](const fs::path& expected)
+    {
+        return std::any_of(directories.begin(), directories.end(),
+                           [&](const fs::path& path) { return LaunchContext::SamePath(path, expected); });
+    };
+
+    EXPECT_EQ(directories.size(), static_cast<size_t>(11));
+    EXPECT_TRUE(contains(editor));
+    EXPECT_TRUE(contains(project / "build"));
+    EXPECT_TRUE(contains(project / "build" / "Debug"));
+    EXPECT_TRUE(contains(project / "build" / "Debug" / "Debug"));
+    EXPECT_TRUE(contains(project / "build" / "RelWithDebInfo" / "RelWithDebInfo"));
+    EXPECT_TRUE(contains(project / "build" / "Release" / "Release"));
+    EXPECT_TRUE(contains(project / "build" / "MinSizeRel" / "MinSizeRel"));
+    EXPECT_TRUE(contains(project / "Build" / "Output"));
+}
+
+TEST(EditorLaunchContext_CanonicallyDeduplicatesDiscoveredModulesAndMatchesSelection)
+{
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "spark-launch-context-dedupe";
+    const fs::path editor = root / "Editor";
+    const fs::path projectBuild = root / "Project" / "build" / "Release" / "Release";
+    const std::vector<fs::path> directories = {editor, projectBuild};
+
+    const auto modules = LaunchContext::DiscoverUniqueModules(
+        directories,
+        [&](const fs::path& directory)
+        {
+            if (LaunchContext::SamePath(directory, editor))
+                return std::vector<fs::path>{editor / "SparkGame.dll", editor / "." / "SparkGame.dll"};
+            return std::vector<fs::path>{projectBuild / "ProjectGame.dll", editor / "SparkGame.dll"};
+        });
+
+    EXPECT_EQ(modules.size(), static_cast<size_t>(2));
+    EXPECT_TRUE(LaunchContext::SamePath(modules.front(), editor / "." / "SparkGame.dll"));
+    EXPECT_TRUE(LaunchContext::SamePath(modules.back(), projectBuild / "ProjectGame.dll"));
+    EXPECT_EQ(*LaunchContext::FindSelectedModuleIndex(modules, editor / "SparkGame.dll"), static_cast<size_t>(0));
+    EXPECT_FALSE(LaunchContext::FindSelectedModuleIndex(modules, editor / "RemovedGame.dll").has_value());
+}
+
+TEST(EditorLaunchContext_UsesActiveProjectThenSafeModuleAndEngineFallbacks)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-launch-context-" + std::to_string(stamp));
+    const fs::path project = root / "Project";
+    const fs::path packageDirectory = project / "Build" / "Output";
+    const fs::path moduleDirectory = root / "Modules";
+    const fs::path engineDirectory = root / "Engine";
+    fs::create_directories(project);
+    fs::create_directories(packageDirectory);
+    fs::create_directories(moduleDirectory);
+    fs::create_directories(engineDirectory);
+
+    const fs::path module = moduleDirectory / "ProjectGame.dll";
+    const fs::path projectModule = project / "build" / "Release" / "Release" / "ProjectGame.dll";
+    const fs::path packagedModule = packageDirectory / "PackagedGame.dll";
+    const fs::path engine = engineDirectory / "SparkEngine.exe";
+    EXPECT_TRUE(
+        LaunchContext::SamePath(LaunchContext::ResolveWorkingDirectory(project, projectModule, engine), project));
+    EXPECT_TRUE(LaunchContext::SamePath(LaunchContext::ResolveWorkingDirectory(project, packagedModule, engine),
+                                        packageDirectory));
+    EXPECT_TRUE(
+        LaunchContext::SamePath(LaunchContext::ResolveWorkingDirectory(project, module, engine), moduleDirectory));
+    EXPECT_TRUE(LaunchContext::SamePath(LaunchContext::ResolveWorkingDirectory(root / "MissingProject", module, engine),
+                                        moduleDirectory));
+    EXPECT_TRUE(LaunchContext::SamePath(
+        LaunchContext::ResolveWorkingDirectory(root / "MissingProject", root / "Missing" / "Game.dll", engine),
+        engineDirectory));
+
+    const fs::path manifest = LaunchContext::ResolveContextFile(project, engineDirectory, "spark.modules.json");
+    const fs::path audit = LaunchContext::ResolveContextFile(project, engineDirectory, "exec_audit.log");
+    EXPECT_TRUE(LaunchContext::SamePath(manifest, project / "spark.modules.json"));
+    EXPECT_TRUE(LaunchContext::SamePath(audit, project / "exec_audit.log"));
+
+    EXPECT_TRUE(LaunchContext::SamePath(
+        project / LaunchContext::PathFromUtf8(LaunchContext::ManifestModuleReference(project, projectModule)),
+        projectModule));
+    EXPECT_EQ(LaunchContext::ManifestModuleReference(project, module),
+              LaunchContext::PathToUtf8(LaunchContext::CanonicalPath(module)));
+
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(EditorLaunchContext_ValidatesExistingDllModulesBeforeLaunch)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-launch-module-validation-" + std::to_string(stamp));
+    fs::create_directories(root);
+    const fs::path dll = root / "PlayableGame.DLL";
+    std::ofstream(dll, std::ios::binary) << "not a real dll; launch validation only checks the path contract";
+    fs::create_directory(root / "Directory.dll");
+
+    EXPECT_TRUE(LaunchContext::ValidateGameModuleForLaunch(dll).empty());
+    EXPECT_FALSE(LaunchContext::ValidateGameModuleForLaunch(root / "Missing.dll").empty());
+    EXPECT_FALSE(LaunchContext::ValidateGameModuleForLaunch(root / "Directory.dll").empty());
+    const fs::path textFile = root / "not-a-module.txt";
+    std::ofstream(textFile, std::ios::binary) << "not a module";
+    EXPECT_FALSE(LaunchContext::ValidateGameModuleForLaunch(textFile).empty());
+
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+#ifdef _WIN32
+TEST(EditorProcessLaunch_QuotesUnicodePathsAndExplicitManifestAsDistinctArguments)
+{
+    const std::filesystem::path engine = L"D:\\Spark Tools\\SparkEngine.exe";
+    const std::filesystem::path module = L"D:\\Projects\\Caf\u00e9 Game\\FPSStarter.dll";
+    const std::filesystem::path cfg = L"D:\\Projects\\Caf\u00e9 Game\\smoke commands.cfg";
+    const std::filesystem::path manifest = L"D:\\Projects\\Caf\u00e9 Game\\spark.modules.json";
+    std::string error;
+    const std::wstring command =
+        BuildGameLaunchCommandLine(engine, module, true, cfg, manifest, L"-test-frames 1", error);
+
+    EXPECT_TRUE(error.empty());
+    ASSERT_FALSE(command.empty());
+    int argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(command.c_str(), &argc);
+    ASSERT_TRUE(argv != nullptr);
+    ASSERT_EQ(argc, 10);
+    EXPECT_TRUE(std::wstring(argv[0]) == engine.wstring());
+    EXPECT_TRUE(std::wstring(argv[1]) == L"-game");
+    EXPECT_TRUE(std::wstring(argv[2]) == module.wstring());
+    EXPECT_TRUE(std::wstring(argv[3]) == L"-headless");
+    EXPECT_TRUE(std::wstring(argv[4]) == L"-exec");
+    EXPECT_TRUE(std::wstring(argv[5]) == cfg.wstring());
+    EXPECT_TRUE(std::wstring(argv[6]) == L"-manifest");
+    EXPECT_TRUE(std::wstring(argv[7]) == manifest.wstring());
+    EXPECT_TRUE(std::wstring(argv[8]) == L"-test-frames");
+    EXPECT_TRUE(std::wstring(argv[9]) == L"1");
+    LocalFree(argv);
+}
+#endif
 
 TEST(BuildPipeline_ConfigureUsesExplicitProjectAndInstalledPackage)
 {

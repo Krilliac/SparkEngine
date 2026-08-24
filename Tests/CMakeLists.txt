@@ -39,6 +39,7 @@ add_executable(SparkTests
     TestTemporalEffects.cpp
     TestPostProcessingPipeline.cpp
     TestStringUtils.cpp
+    TestWindowsCommandLine.cpp
     TestRingBuffer.cpp
     TestUUID.cpp
     TestFileUtils.cpp
@@ -571,6 +572,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/BuildPipeline.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/BuildPipelineProcess.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Utils/EditorProcessLaunch.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPluginManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/UndoRedo/UndoRedoManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneFile.cpp"

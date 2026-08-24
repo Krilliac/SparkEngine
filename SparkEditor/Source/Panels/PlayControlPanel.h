@@ -26,6 +26,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -88,6 +89,7 @@ namespace SparkEditor
         // -- Bookkeeping --
         void PollInstances();
         void RefreshLogTail();
+        void SetLaunchContextDirectory(const std::filesystem::path& workingDirectory);
         std::string WriteDedicatedBotsCfg(int botCount);
         std::string WriteConnectCfg(const std::string& hostPort);
 
@@ -100,7 +102,7 @@ namespace SparkEditor
         char m_quickConnectBuf[128] = "127.0.0.1:27020";
 
         // -- exec_audit.log tail --
-        std::string m_logPath;
+        std::filesystem::path m_logPath;
         std::vector<std::string> m_logLines;
         long long m_logReadOffset = 0;
         float m_logPollTimer = 0.0f;

@@ -14,6 +14,7 @@
  */
 
 #include "TestFramework.h"
+#include "Core/EngineContext.h"
 
 // Bring in every shipped template header.
 #include "../Templates/EmptyProject/Source/GameModule.h"
@@ -25,6 +26,40 @@
 #include "../Templates/RPGStarter/Source/GameModule.h"
 #include "../Templates/ThirdPersonStarter/Source/GameModule.h"
 #include "../Templates/TopDownStarter/Source/GameModule.h"
+
+#include <chrono>
+#include <cmath>
+#include <filesystem>
+#include <fstream>
+
+namespace
+{
+    class ScopedCurrentPath
+    {
+      public:
+        explicit ScopedCurrentPath(const std::filesystem::path& path) : m_previous(std::filesystem::current_path())
+        {
+            std::filesystem::current_path(path);
+        }
+
+        ~ScopedCurrentPath()
+        {
+            std::error_code ec;
+            std::filesystem::current_path(m_previous, ec);
+        }
+
+        ScopedCurrentPath(const ScopedCurrentPath&) = delete;
+        ScopedCurrentPath& operator=(const ScopedCurrentPath&) = delete;
+
+      private:
+        std::filesystem::path m_previous;
+    };
+
+    std::filesystem::path FPSStarterProjectRoot()
+    {
+        return std::filesystem::path(__FILE__).parent_path().parent_path() / "Templates" / "FPSStarter";
+    }
+} // namespace
 
 TEST(Templates_EmptyProject_ConstructsAndReportsInfo)
 {
@@ -76,6 +111,285 @@ TEST(Templates_FPSStarter_ConstructsAndRuns)
         mod.OnUpdate(0.2f);
     }
     EXPECT_TRUE(mod.HasWonRound());
+    mod.OnUnload();
+}
+
+TEST(Templates_FPSStarter_MissesConsumeAmmoWithoutDamagingTarget)
+{
+    FPSStarterModule mod;
+    EXPECT_TRUE(mod.OnLoad(nullptr));
+    EXPECT_TRUE(mod.TryFire(false));
+    EXPECT_EQ(mod.GetWeaponState().magazine, static_cast<uint32_t>(7));
+    EXPECT_NEAR(mod.GetTargetState().health, 100.0f, 0.001f);
+    mod.OnUpdate(0.2f);
+    EXPECT_TRUE(mod.TryFire(true));
+    EXPECT_NEAR(mod.GetTargetState().health, 75.0f, 0.001f);
+    EXPECT_FALSE(mod.SupportsHotReload());
+    mod.OnUnload();
+}
+
+TEST(Templates_FPSStarter_ControlMathIsNormalizedAndFrameRateIndependent)
+{
+    const DirectX::XMFLOAT3 diagonal = FPSStarterModule::ComputePlanarMovement(1.0f, 1.0f, 0.0f, 5.0f, 1.0f);
+    EXPECT_NEAR(std::sqrt(diagonal.x * diagonal.x + diagonal.z * diagonal.z), 5.0f, 0.001f);
+
+    const DirectX::XMFLOAT3 whole = FPSStarterModule::ComputePlanarMovement(1.0f, 0.0f, 37.0f, 5.0f, 1.0f);
+    const DirectX::XMFLOAT3 half = FPSStarterModule::ComputePlanarMovement(1.0f, 0.0f, 37.0f, 5.0f, 0.5f);
+    EXPECT_NEAR(whole.x, half.x * 2.0f, 0.001f);
+    EXPECT_NEAR(whole.z, half.z * 2.0f, 0.001f);
+    EXPECT_NEAR(FPSStarterModule::ClampPitch(120.0f), 89.0f, 0.001f);
+    EXPECT_NEAR(FPSStarterModule::ClampPitch(-120.0f), -89.0f, 0.001f);
+}
+
+TEST(Templates_FPSStarter_CrosshairRayUsesTargetBounds)
+{
+    const DirectX::XMFLOAT3 origin{0.0f, 1.7f, 0.0f};
+    const DirectX::XMFLOAT3 targetMin{-0.5f, 0.0f, 5.5f};
+    const DirectX::XMFLOAT3 targetMax{0.5f, 2.0f, 6.5f};
+    EXPECT_TRUE(FPSStarterModule::RayIntersectsAabb(origin, {0.0f, 0.0f, 1.0f}, targetMin, targetMax));
+    EXPECT_FALSE(FPSStarterModule::RayIntersectsAabb(origin, {1.0f, 0.0f, 0.0f}, targetMin, targetMax));
+}
+
+TEST(Templates_FPSStarter_ArenaContainsRuntimeContract)
+{
+    const std::filesystem::path arena = FPSStarterProjectRoot() / "Scenes" / "Arena.sparkscene";
+    World world;
+    EXPECT_TRUE(Spark::LoadWorld(world, arena.string()));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(6));
+
+    bool foundCamera = false;
+    bool foundPlayer = false;
+    bool foundTarget = false;
+    for (EntityID entity : world.GetEntitiesWith<NameComponent>())
+    {
+        const NameComponent* named = world.GetComponent<NameComponent>(entity);
+        if (!named)
+            continue;
+        if (named->name == "Main Camera")
+            foundCamera = world.HasComponent<Transform>(entity) && world.HasComponent<Camera>(entity) &&
+                          world.GetComponent<Camera>(entity)->isMainCamera;
+        else if (named->name == "Player")
+            foundPlayer =
+                world.HasComponent<Transform>(entity) && world.HasComponent<CharacterControllerComponent>(entity);
+        else if (named->name == "Damageable Target")
+            foundTarget = world.HasComponent<Transform>(entity) && world.HasComponent<MeshRenderer>(entity);
+    }
+    EXPECT_TRUE(foundCamera);
+    EXPECT_TRUE(foundPlayer);
+    EXPECT_TRUE(foundTarget);
+}
+
+TEST(Templates_FPSStarter_HeadlessContextLoadsAndCleansRuntimeScene)
+{
+    ScopedCurrentPath projectRoot(FPSStarterProjectRoot());
+    World world;
+    EngineContext context;
+    context.SetWorld(&world);
+
+    FPSStarterModule mod;
+    EXPECT_TRUE(mod.OnLoad(&context));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(6));
+    EXPECT_TRUE(mod.TryFire());
+    mod.OnUpdate(0.2f);
+    EXPECT_NEAR(mod.GetTargetState().health, 75.0f, 0.001f);
+
+    mod.OnUnload();
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(0));
+}
+
+TEST(Templates_FPSStarter_MouseCaptureTransitionsSuppressFireWithoutPlatformInput)
+{
+    const FPSStarterCaptureTransition win32AutoCapture =
+        FPSStarterModule::ComputeCaptureTransition(true, false, true, false, false, false, false);
+    EXPECT_FALSE(win32AutoCapture.captureChanged);
+    EXPECT_TRUE(win32AutoCapture.captureMouse);
+    EXPECT_TRUE(win32AutoCapture.suppressFire);
+
+    const FPSStarterCaptureTransition released =
+        FPSStarterModule::ComputeCaptureTransition(true, true, false, true, false, false, true);
+    EXPECT_FALSE(released.captureChanged);
+    EXPECT_FALSE(released.suppressFire);
+
+    const FPSStarterCaptureTransition escape =
+        FPSStarterModule::ComputeCaptureTransition(true, true, false, false, true, false, false);
+    EXPECT_TRUE(escape.captureChanged);
+    EXPECT_FALSE(escape.captureMouse);
+
+    const FPSStarterCaptureTransition recapture =
+        FPSStarterModule::ComputeCaptureTransition(false, false, true, false, false, false, false);
+    EXPECT_TRUE(recapture.captureChanged);
+    EXPECT_TRUE(recapture.captureMouse);
+    EXPECT_TRUE(recapture.suppressFire);
+}
+
+TEST(Templates_FPSStarter_RuntimeOwnsOnlyLoadedNamedEntities)
+{
+    ScopedCurrentPath projectRoot(FPSStarterProjectRoot());
+    World world;
+    auto& registry = world.GetRegistry();
+
+    const EntityID hostCamera = registry.create(static_cast<EntityID>(100));
+    registry.emplace<NameComponent>(hostCamera, NameComponent{"Main Camera"});
+    world.AddComponent<Transform>(hostCamera).position = {91.0f, 92.0f, 93.0f};
+    world.AddComponent<Camera>(hostCamera);
+
+    const EntityID hostPlayer = registry.create(static_cast<EntityID>(101));
+    registry.emplace<NameComponent>(hostPlayer, NameComponent{"Player"});
+    world.AddComponent<Transform>(hostPlayer).position = {81.0f, 82.0f, 83.0f};
+    world.AddComponent<CharacterControllerComponent>(hostPlayer);
+
+    const EntityID hostTarget = registry.create(static_cast<EntityID>(102));
+    registry.emplace<NameComponent>(hostTarget, NameComponent{"Damageable Target"});
+    world.AddComponent<Transform>(hostTarget).position = {71.0f, 72.0f, 73.0f};
+    world.AddComponent<MeshRenderer>(hostTarget).visible = false;
+
+    EngineContext context;
+    context.SetWorld(&world);
+    FPSStarterModule mod;
+    EXPECT_TRUE(mod.OnLoad(&context));
+    mod.ResetRound();
+
+    EXPECT_NEAR(world.GetComponent<Transform>(hostCamera)->position.x, 91.0f, 0.001f);
+    EXPECT_NEAR(world.GetComponent<Transform>(hostPlayer)->position.x, 81.0f, 0.001f);
+    EXPECT_NEAR(world.GetComponent<Transform>(hostTarget)->position.x, 71.0f, 0.001f);
+    EXPECT_FALSE(world.GetComponent<MeshRenderer>(hostTarget)->visible);
+
+    mod.OnUnload();
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(3));
+    EXPECT_TRUE(registry.valid(hostCamera));
+    EXPECT_TRUE(registry.valid(hostPlayer));
+    EXPECT_TRUE(registry.valid(hostTarget));
+}
+
+TEST(Templates_FPSStarter_AppendsArenaAroundLowIdHostEntities)
+{
+    ScopedCurrentPath projectRoot(FPSStarterProjectRoot());
+    World world;
+
+    const EntityID hostEntity = world.CreateEntity("Host Sentinel");
+    EXPECT_EQ(static_cast<uint32_t>(hostEntity), static_cast<uint32_t>(0));
+    world.AddComponent<Transform>(hostEntity).position = {41.0f, 42.0f, 43.0f};
+
+    EngineContext context;
+    context.SetWorld(&world);
+    FPSStarterModule mod;
+    EXPECT_TRUE(mod.OnLoad(&context));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(7));
+    EXPECT_TRUE(world.GetRegistry().valid(hostEntity));
+    EXPECT_NEAR(world.GetComponent<Transform>(hostEntity)->position.x, 41.0f, 0.001f);
+
+    mod.OnUnload();
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));
+    EXPECT_TRUE(world.GetRegistry().valid(hostEntity));
+    EXPECT_NEAR(world.GetComponent<Transform>(hostEntity)->position.z, 43.0f, 0.001f);
+}
+
+TEST(Templates_FPSStarter_FallsBackWhenStartupLacksArenaContract)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-fps-startup-fallback-" + std::to_string(stamp));
+    fs::create_directories(root / "Scenes");
+    std::ofstream(root / "Startup.sparkscene", std::ios::binary) << R"({"version":1,"entities":[]})";
+    fs::copy_file(FPSStarterProjectRoot() / "Scenes" / "Arena.sparkscene", root / "Scenes" / "Arena.sparkscene",
+                  fs::copy_options::overwrite_existing);
+
+    {
+        ScopedCurrentPath projectRoot(root);
+        World world;
+        EngineContext context;
+        context.SetWorld(&world);
+
+        FPSStarterModule mod;
+        EXPECT_TRUE(mod.OnLoad(&context));
+        EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(6));
+        EXPECT_TRUE(mod.TryFire());
+        EXPECT_NEAR(mod.GetTargetState().health, 75.0f, 0.001f);
+        mod.OnUnload();
+        EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(0));
+    }
+
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(Templates_FPSStarter_RejectsHostEntitiesAsMissingSceneContract)
+{
+    const std::filesystem::path multiplayerArenaRoot = FPSStarterProjectRoot().parent_path() / "MultiplayerArena";
+    ScopedCurrentPath projectRoot(multiplayerArenaRoot);
+    World world;
+    auto& registry = world.GetRegistry();
+
+    const EntityID hostPlayer = registry.create(static_cast<EntityID>(101));
+    registry.emplace<NameComponent>(hostPlayer, NameComponent{"Player"});
+    world.AddComponent<Transform>(hostPlayer).position = {81.0f, 82.0f, 83.0f};
+    world.AddComponent<CharacterControllerComponent>(hostPlayer);
+
+    const EntityID hostTarget = registry.create(static_cast<EntityID>(102));
+    registry.emplace<NameComponent>(hostTarget, NameComponent{"Damageable Target"});
+    world.AddComponent<Transform>(hostTarget).position = {71.0f, 72.0f, 73.0f};
+    world.AddComponent<MeshRenderer>(hostTarget).visible = false;
+
+    EngineContext context;
+    context.SetWorld(&world);
+    FPSStarterModule mod;
+    EXPECT_FALSE(mod.OnLoad(&context));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(2));
+    EXPECT_TRUE(registry.valid(hostPlayer));
+    EXPECT_TRUE(registry.valid(hostTarget));
+    EXPECT_NEAR(world.GetComponent<Transform>(hostPlayer)->position.x, 81.0f, 0.001f);
+    EXPECT_NEAR(world.GetComponent<Transform>(hostTarget)->position.x, 71.0f, 0.001f);
+    EXPECT_FALSE(world.GetComponent<MeshRenderer>(hostTarget)->visible);
+    mod.OnUnload();
+}
+
+TEST(Templates_FPSStarter_DeadPlayersIgnorePoseInputUntilRespawn)
+{
+    ScopedCurrentPath projectRoot(FPSStarterProjectRoot());
+    World world;
+    InputManager input;
+    EngineContext context;
+    context.SetWorld(&world);
+    context.SetInput(&input);
+
+    FPSStarterModule mod;
+    EXPECT_TRUE(mod.OnLoad(&context));
+    EntityID player = entt::null;
+    for (EntityID entity : world.GetEntitiesWith<NameComponent>())
+    {
+        const NameComponent* named = world.GetComponent<NameComponent>(entity);
+        if (named && named->name == "Player")
+        {
+            player = entity;
+            break;
+        }
+    }
+    EXPECT_TRUE(player != entt::null);
+    if (player == entt::null)
+    {
+        mod.OnUnload();
+        return;
+    }
+    Transform* playerTransform = world.GetComponent<Transform>(player);
+    EXPECT_TRUE(playerTransform != nullptr);
+    if (!playerTransform)
+    {
+        mod.OnUnload();
+        return;
+    }
+    playerTransform->rotation.y = 37.0f;
+    const DirectX::XMFLOAT3 deadPosition = playerTransform->position;
+
+    mod.DamagePlayer(100.0f);
+    input.HandleMessage(WM_KEYDOWN, 'W', 0);
+    mod.OnUpdate(0.1f);
+    input.HandleMessage(WM_KEYUP, 'W', 0);
+
+    EXPECT_FALSE(mod.GetPlayerState().alive);
+    EXPECT_NEAR(playerTransform->position.x, deadPosition.x, 0.001f);
+    EXPECT_NEAR(playerTransform->position.z, deadPosition.z, 0.001f);
+    EXPECT_NEAR(playerTransform->rotation.y, 37.0f, 0.001f);
     mod.OnUnload();
 }
 

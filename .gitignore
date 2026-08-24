@@ -394,6 +394,7 @@ build-debug/
 
 # Common build dirs (additional)
 out/
+dist/
 [Dd]ebug*/
 [Rr]elease*/
 x64/

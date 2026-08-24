@@ -30,7 +30,8 @@ namespace Spark
             const auto modified = std::filesystem::last_write_time(path, ec);
             if (ec)
                 return "unreadable";
-            return std::to_string(size) + ":" + std::to_string(modified.time_since_epoch().count());
+            return std::to_string(size) + ":" +
+                   std::to_string(static_cast<long long>(modified.time_since_epoch().count()));
         }
     } // namespace
 

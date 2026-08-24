@@ -102,8 +102,8 @@ TEST(StartupSplash_ProjectConfigAndCommandLineOverrides)
     EXPECT_TRUE(resolved.muted);
     EXPECT_NEAR(resolved.durationSeconds, 1.25, 0.001);
     EXPECT_EQ(resolved.accentRgb, static_cast<uint32_t>(0x12AB34));
-    EXPECT_TRUE(resolved.imagePath == (root / "Assets/Branding/custom.bmp").lexically_normal());
-    EXPECT_TRUE(resolved.audioPath == (root / "Assets/Audio/custom.wav").lexically_normal());
+    EXPECT_TRUE(resolved.imagePath == std::filesystem::weakly_canonical(root / "Assets/Branding/custom.bmp"));
+    EXPECT_TRUE(resolved.audioPath == std::filesystem::weakly_canonical(root / "Assets/Audio/custom.wav"));
 
     std::error_code ec;
     std::filesystem::remove_all(root, ec);

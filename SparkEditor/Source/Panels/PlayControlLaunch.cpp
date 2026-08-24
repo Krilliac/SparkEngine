@@ -10,6 +10,8 @@
 
 #include "PlayControlPanel.h"
 #include "GameModuleSelectorPanel.h"
+#include "Core/ProjectManager.h"
+#include "../Utils/EditorLaunchContext.h"
 #include "../Utils/EditorProcessLaunch.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
@@ -37,7 +39,13 @@ namespace SparkEditor
         }
 
         namespace fs = std::filesystem;
-        const fs::path dll = fs::path(m_gameModuleSelector->GetLaunchSelectionPath());
+        const fs::path dll = LaunchContext::PathFromUtf8(m_gameModuleSelector->GetLaunchSelectionPath());
+        if (const std::string moduleError = LaunchContext::ValidateGameModuleForLaunch(dll); !moduleError.empty())
+        {
+            m_statusMessage = moduleError;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
+            return;
+        }
 
         fs::path engineExe;
         std::string findError;
@@ -47,7 +55,15 @@ namespace SparkEditor
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
             return;
         }
-        const fs::path exeDir = engineExe.parent_path();
+        const fs::path workingDir = LaunchContext::ResolveWorkingDirectory(
+            LaunchContext::PathFromUtf8(ProjectManager::GetActiveProjectPath()), dll, engineExe);
+        if (workingDir.empty())
+        {
+            m_statusMessage = "No valid project, module, or engine launch directory is available";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
+            return;
+        }
+        SetLaunchContextDirectory(workingDir);
 
         std::string buildError;
         const std::wstring cmd = BuildGameLaunchCommandLine(engineExe, dll, false, {}, L"", buildError);
@@ -58,7 +74,7 @@ namespace SparkEditor
             return;
         }
 
-        const ProcessLaunchResult launch = LaunchEditorProcess(engineExe, cmd, exeDir);
+        const ProcessLaunchResult launch = LaunchEditorProcess(engineExe, cmd, workingDir);
         if (!launch.success)
         {
             m_statusMessage = launch.error;
@@ -71,7 +87,7 @@ namespace SparkEditor
         inst.processHandle = launch.processHandle;
         inst.pid = launch.pid;
         inst.role = InstanceRole::Game;
-        inst.label = dll.stem().string();
+        inst.label = LaunchContext::PathToUtf8(dll.stem());
         m_instances.push_back(inst);
 
         m_statusMessage = "Game running — " + inst.label + ", PID " + std::to_string(inst.pid);
@@ -90,7 +106,13 @@ namespace SparkEditor
         }
 
         namespace fs = std::filesystem;
-        const fs::path dll = fs::path(m_gameModuleSelector->GetLaunchSelectionPath());
+        const fs::path dll = LaunchContext::PathFromUtf8(m_gameModuleSelector->GetLaunchSelectionPath());
+        if (const std::string moduleError = LaunchContext::ValidateGameModuleForLaunch(dll); !moduleError.empty())
+        {
+            m_statusMessage = moduleError;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
+            return;
+        }
 
         fs::path engineExe;
         std::string findError;
@@ -100,7 +122,15 @@ namespace SparkEditor
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
             return;
         }
-        const fs::path exeDir = engineExe.parent_path();
+        const fs::path workingDir = LaunchContext::ResolveWorkingDirectory(
+            LaunchContext::PathFromUtf8(ProjectManager::GetActiveProjectPath()), dll, engineExe);
+        if (workingDir.empty())
+        {
+            m_statusMessage = "No valid project, module, or engine launch directory is available";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
+            return;
+        }
+        SetLaunchContextDirectory(workingDir);
 
         const std::string cfgPath = WriteDedicatedBotsCfg(m_botCount);
         if (cfgPath.empty())
@@ -111,7 +141,8 @@ namespace SparkEditor
         }
 
         std::string buildError;
-        const std::wstring cmd = BuildGameLaunchCommandLine(engineExe, dll, true, fs::path(cfgPath), L"", buildError);
+        const std::wstring cmd =
+            BuildGameLaunchCommandLine(engineExe, dll, true, LaunchContext::PathFromUtf8(cfgPath), L"", buildError);
         if (cmd.empty() && !buildError.empty())
         {
             m_statusMessage = buildError;
@@ -119,7 +150,7 @@ namespace SparkEditor
             return;
         }
 
-        const ProcessLaunchResult launch = LaunchEditorProcess(engineExe, cmd, exeDir);
+        const ProcessLaunchResult launch = LaunchEditorProcess(engineExe, cmd, workingDir);
         if (!launch.success)
         {
             m_statusMessage = launch.error;
@@ -132,7 +163,7 @@ namespace SparkEditor
         inst.processHandle = launch.processHandle;
         inst.pid = launch.pid;
         inst.role = InstanceRole::Dedicated;
-        inst.label = dll.stem().string() + " (+" + std::to_string(m_botCount) + " bots)";
+        inst.label = LaunchContext::PathToUtf8(dll.stem()) + " (+" + std::to_string(m_botCount) + " bots)";
         m_instances.push_back(inst);
 
         m_statusMessage = "Dedicated running — " + inst.label + ", PID " + std::to_string(inst.pid);
@@ -156,7 +187,13 @@ namespace SparkEditor
         }
 
         namespace fs = std::filesystem;
-        const fs::path dll = fs::path(m_gameModuleSelector->GetLaunchSelectionPath());
+        const fs::path dll = LaunchContext::PathFromUtf8(m_gameModuleSelector->GetLaunchSelectionPath());
+        if (const std::string moduleError = LaunchContext::ValidateGameModuleForLaunch(dll); !moduleError.empty())
+        {
+            m_statusMessage = moduleError;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
+            return;
+        }
 
         fs::path engineExe;
         std::string findError;
@@ -166,7 +203,15 @@ namespace SparkEditor
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
             return;
         }
-        const fs::path exeDir = engineExe.parent_path();
+        const fs::path workingDir = LaunchContext::ResolveWorkingDirectory(
+            LaunchContext::PathFromUtf8(ProjectManager::GetActiveProjectPath()), dll, engineExe);
+        if (workingDir.empty())
+        {
+            m_statusMessage = "No valid project, module, or engine launch directory is available";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
+            return;
+        }
+        SetLaunchContextDirectory(workingDir);
 
         const std::string cfgPath = WriteConnectCfg(hostPort);
         if (cfgPath.empty())
@@ -177,7 +222,8 @@ namespace SparkEditor
         }
 
         std::string buildError;
-        const std::wstring cmd = BuildGameLaunchCommandLine(engineExe, dll, false, fs::path(cfgPath), L"", buildError);
+        const std::wstring cmd =
+            BuildGameLaunchCommandLine(engineExe, dll, false, LaunchContext::PathFromUtf8(cfgPath), L"", buildError);
         if (cmd.empty() && !buildError.empty())
         {
             m_statusMessage = buildError;
@@ -185,7 +231,7 @@ namespace SparkEditor
             return;
         }
 
-        const ProcessLaunchResult launch = LaunchEditorProcess(engineExe, cmd, exeDir);
+        const ProcessLaunchResult launch = LaunchEditorProcess(engineExe, cmd, workingDir);
         if (!launch.success)
         {
             m_statusMessage = launch.error;
@@ -198,7 +244,7 @@ namespace SparkEditor
         inst.processHandle = launch.processHandle;
         inst.pid = launch.pid;
         inst.role = InstanceRole::Client;
-        inst.label = dll.stem().string() + " -> " + hostPort;
+        inst.label = LaunchContext::PathToUtf8(dll.stem()) + " -> " + hostPort;
         m_instances.push_back(inst);
 
         m_statusMessage = "Client connecting to " + hostPort + " — PID " + std::to_string(inst.pid);
@@ -245,6 +291,17 @@ namespace SparkEditor
     // ============================================================================
     // exec_audit.log tail
     // ============================================================================
+
+    void PlayControlPanel::SetLaunchContextDirectory(const std::filesystem::path& workingDirectory)
+    {
+        const std::filesystem::path nextLogPath = (workingDirectory / "exec_audit.log").lexically_normal();
+        if (LaunchContext::SamePath(m_logPath, nextLogPath))
+            return;
+
+        m_logPath = nextLogPath;
+        m_logReadOffset = 0;
+        m_logLines.clear();
+    }
 
     void PlayControlPanel::RefreshLogTail()
     {
@@ -311,7 +368,7 @@ namespace SparkEditor
         out << "t2 tf_chaos " << clampedBots << " 3600\n";
         out.close();
 
-        return cfgPath.string();
+        return LaunchContext::PathToUtf8(cfgPath);
     }
 
     std::string PlayControlPanel::WriteConnectCfg(const std::string& hostPort)
@@ -342,7 +399,7 @@ namespace SparkEditor
         out << "t1 tf_connect " << hostPort << "\n";
         out.close();
 
-        return cfgPath.string();
+        return LaunchContext::PathToUtf8(cfgPath);
     }
 
 } // namespace SparkEditor

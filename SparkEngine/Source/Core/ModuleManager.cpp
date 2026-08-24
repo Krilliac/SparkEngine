@@ -12,6 +12,7 @@
 #include "Spark/Version.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LocalFileCache.h"
+#include "Utils/JsonUtils.h"
 #include "Utils/Validate.h"
 
 #include <algorithm>
@@ -19,6 +20,7 @@
 #include <atomic>
 #include <charconv>
 #include <chrono>
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <format>
@@ -48,6 +50,24 @@ namespace
     void* s_imguiAllocFn = nullptr;
     void* s_imguiFreeFn = nullptr;
     void* s_imguiUserData = nullptr;
+
+    std::filesystem::path PathFromUtf8(std::string_view path)
+    {
+        return std::filesystem::u8path(path.begin(), path.end());
+    }
+
+    std::string PathToUtf8(const std::filesystem::path& path)
+    {
+        const std::u8string utf8 = path.generic_u8string();
+        return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+    }
+
+    std::filesystem::path SidecarPath(const std::filesystem::path& modulePath)
+    {
+        std::filesystem::path sidecar = modulePath;
+        sidecar += ".sparkabi";
+        return sidecar;
+    }
 
     template <typename FunctionType> FunctionType ResolveModuleExport(void* handle, const char* name)
     {
@@ -243,11 +263,11 @@ namespace
 
     bool ValidateModuleSidecar(const std::filesystem::path& modulePath, std::string& error)
     {
-        const std::filesystem::path sidecarPath = modulePath.string() + ".sparkabi";
+        const std::filesystem::path sidecarPath = SidecarPath(modulePath);
         std::ifstream sidecar(sidecarPath, std::ios::binary);
         if (!sidecar)
         {
-            error = "missing mandatory ABI sidecar '" + sidecarPath.string() + "'";
+            error = "missing mandatory ABI sidecar '" + PathToUtf8(sidecarPath) + "'";
             return false;
         }
 
@@ -427,12 +447,31 @@ bool ModuleManager::LoadModule(const std::string& path)
         return false;
     }
 
+    const std::filesystem::path modulePath = PathFromUtf8(path);
+
+#ifdef _WIN32
+    // Prevent a concurrent rebuild, rename, or delete from changing the image
+    // between the sidecar hash check and LoadLibraryW. The loader may still
+    // acquire its own read handle, while writers and delete/replace operations
+    // remain excluded until the mapped image has been opened.
+    HANDLE pinnedModule = CreateFileW(modulePath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                      FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (pinnedModule == INVALID_HANDLE_VALUE)
+    {
+        console.LogError(std::format("Failed to pin module '{}' for validation (error {})", path, GetLastError()));
+        return false;
+    }
+#endif
+
     // Preflight the sidecar before asking the OS loader to map the image. The
     // SHA-256 binds the descriptor to this exact binary, so an incompatible or
     // stale candidate is rejected before DllMain/static constructors execute.
     std::string sidecarError;
-    if (!ValidateModuleSidecar(path, sidecarError))
+    if (!ValidateModuleSidecar(modulePath, sidecarError))
     {
+#ifdef _WIN32
+        CloseHandle(pinnedModule);
+#endif
         console.LogError(std::format("Module '{}' rejected before OS load: {}", path, sidecarError));
         return false;
     }
@@ -440,7 +479,8 @@ bool ModuleManager::LoadModule(const std::string& path)
     // Load the shared library only after the non-executing compatibility gate.
     void* handle = nullptr;
 #ifdef _WIN32
-    handle = LoadLibraryA(path.c_str());
+    handle = LoadLibraryW(modulePath.c_str());
+    CloseHandle(pinnedModule);
     if (!handle)
     {
         DWORD err = GetLastError();
@@ -694,9 +734,14 @@ bool ModuleManager::LoadModule(const std::string& path)
 bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
+    const std::filesystem::path manifestFile = PathFromUtf8(manifestPath);
 
     std::string content;
 
+#ifndef _WIN32
+    // LocalFileCache's string-only FileUtils backend is UTF-8-safe on POSIX,
+    // but cannot open arbitrary Unicode paths on Windows. Use the native path
+    // stream below there so the manifest stays wide end-to-end.
     if (m_fileCache)
     {
         auto result = m_fileCache->ReadText(manifestPath);
@@ -705,10 +750,11 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
             content = result.Value();
         }
     }
+#endif
 
     if (content.empty())
     {
-        std::ifstream file(manifestPath);
+        std::ifstream file(manifestFile);
         if (!file.is_open())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Core, "ModuleManager: cannot open manifest '%s' (errno=%d)",
@@ -720,44 +766,61 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
         file.close();
     }
 
-    // Simple JSON parsing for the modules array
-    // Format: { "modules": [ { "name": "...", "path": "...", "loadOrder": N }, ... ] }
-    std::filesystem::path manifestDir = std::filesystem::path(manifestPath).parent_path();
+    const std::filesystem::path manifestDir = manifestFile.parent_path();
     bool anyLoaded = false;
 
-    // Find each module entry by looking for "path" keys
-    size_t pos = 0;
-    while ((pos = content.find("\"path\"", pos)) != std::string::npos)
+    Spark::Json::Value manifest;
+    std::string parseError;
+    if (!Spark::Json::ParseStrict(content, &manifest, &parseError) || !manifest.IsObject())
     {
-        // Extract the path value
-        size_t colon = content.find(':', pos);
-        if (colon == std::string::npos)
-            break;
-        size_t quote1 = content.find('\"', colon + 1);
-        if (quote1 == std::string::npos)
-            break;
-        size_t quote2 = content.find('\"', quote1 + 1);
-        if (quote2 == std::string::npos)
-            break;
+        console.LogError("Module manifest is not valid JSON: " + manifestPath +
+                         (parseError.empty() ? std::string{} : " (" + parseError + ")"));
+        return false;
+    }
 
-        std::string modulePath = content.substr(quote1 + 1, quote2 - quote1 - 1);
+    const Spark::Json::Value& modules = manifest["modules"];
+    if (!modules.IsArray() || modules.Size() == 0)
+    {
+        console.LogError("Module manifest must contain a non-empty modules array: " + manifestPath);
+        return false;
+    }
+
+    for (size_t index = 0; index < modules.Size(); ++index)
+    {
+        const Spark::Json::Value& module = modules[index];
+        if (!module.IsObject())
+        {
+            console.LogWarning(std::format("Module manifest entry {} has no string path", index));
+            continue;
+        }
+        const Spark::Json::Value& path = module["path"];
+        if (!path.IsString())
+        {
+            console.LogWarning(std::format("Module manifest entry {} has no string path", index));
+            continue;
+        }
+
+        const std::string modulePath = path.AsString();
+        if (modulePath.empty())
+        {
+            console.LogWarning(std::format("Module manifest entry {} has an empty path", index));
+            continue;
+        }
 
         // Resolve relative paths against manifest directory
-        std::filesystem::path fullPath(modulePath);
+        std::filesystem::path fullPath = PathFromUtf8(modulePath);
         if (fullPath.is_relative())
             fullPath = manifestDir / fullPath;
 
         if (std::filesystem::exists(fullPath))
         {
-            if (LoadModule(fullPath.string()))
+            if (LoadModule(PathToUtf8(fullPath)))
                 anyLoaded = true;
         }
         else
         {
-            console.LogWarning("Module not found: " + fullPath.string());
+            console.LogWarning("Module not found: " + PathToUtf8(fullPath));
         }
-
-        pos = quote2 + 1;
     }
 
     return anyLoaded;
@@ -768,7 +831,7 @@ bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
     auto& console = Spark::SimpleConsole::GetInstance();
     bool anyLoaded = false;
 
-    if (!std::filesystem::exists(directory))
+    if (!std::filesystem::exists(PathFromUtf8(directory)))
     {
         console.LogWarning("Module directory does not exist: " + directory);
         return false;
@@ -776,7 +839,7 @@ bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
 
     for (const auto& candidate : DiscoverModuleCandidates(directory))
     {
-        console.LogInfo("Found candidate module: " + std::filesystem::path(candidate).filename().string());
+        console.LogInfo("Found candidate module: " + PathToUtf8(PathFromUtf8(candidate).filename()));
         if (LoadModule(candidate))
             anyLoaded = true;
     }
@@ -784,12 +847,13 @@ bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
     return anyLoaded;
 }
 
-std::vector<std::string> ModuleManager::DiscoverModuleCandidates(const std::string& directory)
+std::vector<std::string> ModuleManager::DiscoverModuleCandidates(const std::string& directory, DiscoveryMode mode)
 {
     std::vector<std::string> candidates;
+    const std::filesystem::path directoryPath = PathFromUtf8(directory);
 
     std::error_code ec;
-    if (!std::filesystem::exists(directory, ec) || ec)
+    if (!std::filesystem::is_directory(directoryPath, ec) || ec)
         return candidates;
 
 #ifdef _WIN32
@@ -800,16 +864,27 @@ std::vector<std::string> ModuleManager::DiscoverModuleCandidates(const std::stri
     const std::string ext = ".so";
 #endif
 
-    for (auto& entry : std::filesystem::directory_iterator(directory, ec))
+    std::filesystem::directory_iterator iterator(directoryPath, ec);
+    const std::filesystem::directory_iterator end;
+    while (!ec && iterator != end)
     {
-        if (!entry.is_regular_file())
+        const std::filesystem::directory_entry entry = *iterator;
+        iterator.increment(ec);
+
+        std::error_code entryError;
+        if (!entry.is_regular_file(entryError) || entryError)
             continue;
 
         auto filePath = entry.path();
-        if (filePath.extension() != ext)
+        std::string fileExtension = PathToUtf8(filePath.extension());
+#ifdef _WIN32
+        std::transform(fileExtension.begin(), fileExtension.end(), fileExtension.begin(),
+                       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+#endif
+        if (fileExtension != ext)
             continue;
 
-        auto filename = filePath.filename().string();
+        const std::string filename = PathToUtf8(filePath.filename());
 
         // Common module naming patterns only — everything else is skipped.
         bool isCandidate = (filename.contains("Game") || filename.contains("Module") || filename.contains("Plugin"));
@@ -819,19 +894,26 @@ std::vector<std::string> ModuleManager::DiscoverModuleCandidates(const std::stri
             (filename.find("d3d") == 0 || filename.find("vcruntime") == 0 || filename.find("msvcp") == 0 ||
              filename.find("ucrtbase") == 0 || filename.contains("SparkConsole") || filename.contains("SparkEngine"));
 
-        if (!isCandidate || isSystem)
+        if (mode == DiscoveryMode::ConservativeNameHints && (!isCandidate || isSystem))
             continue;
 
         // A supported candidate has build-generated compatibility metadata.
         // Do not map the image even with platform-specific probe flags: the
         // editor's discovery path must remain portable and non-executing.
-        if (!std::filesystem::is_regular_file(filePath.string() + ".sparkabi", ec) || ec)
+        std::error_code sidecarStatusError;
+        if (!std::filesystem::is_regular_file(SidecarPath(filePath), sidecarStatusError) || sidecarStatusError)
             continue;
-        candidates.push_back(filePath.string());
+        if (mode == DiscoveryMode::CompatibleSidecars)
+        {
+            std::string sidecarError;
+            if (!ValidateModuleSidecar(filePath, sidecarError))
+                continue;
+        }
+        candidates.push_back(PathToUtf8(filePath));
     }
 
     std::sort(candidates.begin(), candidates.end(), [](const std::string& a, const std::string& b)
-              { return std::filesystem::path(a).filename() < std::filesystem::path(b).filename(); });
+              { return PathFromUtf8(a).filename() < PathFromUtf8(b).filename(); });
     return candidates;
 }
 
@@ -1052,15 +1134,16 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         }
 
         const std::string savedPath = entry.path;
-        const std::filesystem::path sourcePath(savedPath);
+        const std::filesystem::path sourcePath = PathFromUtf8(savedPath);
         const uint64_t reloadToken = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
         static std::atomic<uint64_t> reloadSerial{0};
-        const std::filesystem::path shadowPath =
-            sourcePath.parent_path() /
-            (sourcePath.stem().string() + ".spark-reload-" + std::to_string(reloadToken) + "-" +
-             std::to_string(reloadSerial.fetch_add(1, std::memory_order_relaxed)) + sourcePath.extension().string());
-        const std::filesystem::path sourceSidecar = savedPath + ".sparkabi";
-        const std::filesystem::path shadowSidecar = shadowPath.string() + ".sparkabi";
+        std::filesystem::path shadowName = sourcePath.stem();
+        shadowName += ".spark-reload-" + std::to_string(reloadToken) + "-" +
+                      std::to_string(reloadSerial.fetch_add(1, std::memory_order_relaxed));
+        shadowName += sourcePath.extension();
+        const std::filesystem::path shadowPath = sourcePath.parent_path() / shadowName;
+        const std::filesystem::path sourceSidecar = SidecarPath(sourcePath);
+        const std::filesystem::path shadowSidecar = SidecarPath(shadowPath);
 
         auto removeShadowFiles = [&]()
         {
@@ -1091,7 +1174,7 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
 
         ModuleManager stagedManager;
         stagedManager.m_fileCache = m_fileCache;
-        if (!stagedManager.LoadModule(shadowPath.string()))
+        if (!stagedManager.LoadModule(PathToUtf8(shadowPath)))
         {
             console.LogError("Failed to validate staged replacement for module: " + name);
             stagedManager.UnloadAll();
@@ -1137,7 +1220,7 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         LoadedModule replacement = std::move(stagedManager.m_modules.front());
         stagedManager.m_modules.clear();
         replacement.path = savedPath;
-        replacement.transientImagePath = shadowPath.string();
+        replacement.transientImagePath = PathToUtf8(shadowPath);
 
         // Commit only after the replacement is fully usable.
         if (entry.initialized && entry.instance)
@@ -1331,9 +1414,10 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
     if (!entry.transientImagePath.empty())
     {
         std::error_code cleanupError;
-        std::filesystem::remove(entry.transientImagePath + ".sparkabi", cleanupError);
+        const std::filesystem::path transientPath = PathFromUtf8(entry.transientImagePath);
+        std::filesystem::remove(SidecarPath(transientPath), cleanupError);
         cleanupError.clear();
-        std::filesystem::remove(entry.transientImagePath, cleanupError);
+        std::filesystem::remove(transientPath, cleanupError);
         entry.transientImagePath.clear();
     }
 }
@@ -1342,7 +1426,7 @@ std::vector<DiscoveredModule> ModuleManager::DiscoverModules(const std::string& 
 {
     std::vector<DiscoveredModule> result;
 
-    if (!std::filesystem::exists(directory))
+    if (!std::filesystem::exists(PathFromUtf8(directory)))
         return result;
 
     // Metadata discovery must remain non-executing. Candidate enumeration uses
@@ -1352,11 +1436,11 @@ std::vector<DiscoveredModule> ModuleManager::DiscoverModules(const std::string& 
     // presentation metadata.
     for (const std::string& candidate : DiscoverModuleCandidates(directory))
     {
-        const std::filesystem::path filePath(candidate);
+        const std::filesystem::path filePath = PathFromUtf8(candidate);
 
         DiscoveredModule discovered;
         discovered.path = candidate;
-        discovered.name = filePath.stem().string();
+        discovered.name = PathToUtf8(filePath.stem());
         discovered.version = "unknown";
         discovered.isLoaded = false;
 
@@ -1365,7 +1449,8 @@ std::vector<DiscoveredModule> ModuleManager::DiscoverModules(const std::string& 
         {
             std::error_code ec;
             const bool sameFile =
-                loaded.path == discovered.path || std::filesystem::equivalent(loaded.path, discovered.path, ec);
+                loaded.path == discovered.path ||
+                std::filesystem::equivalent(PathFromUtf8(loaded.path), PathFromUtf8(discovered.path), ec);
             if (sameFile)
             {
                 discovered.isLoaded = true;

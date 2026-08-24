@@ -14,6 +14,7 @@
 #include "Platform.h"
 #include "framework.h"
 #include "SparkEngineWindowsInternal.h"
+#include "WindowsCommandLine.h"
 #include "StartupSplash.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/Modding/ModSystem.h"
@@ -37,11 +38,11 @@
 #include <format>
 #include <fstream>
 #include <memory>
-#include <shellapi.h>
 #include <string>
 #include <vector>
 
 #ifdef SPARK_PLATFORM_WINDOWS
+#include <shellapi.h>
 
 /**
  * @brief Parse -test-frames N from a wide command line string (Windows).
@@ -318,16 +319,12 @@ double ExecElapsedSeconds()
 
 static void LoadExecScriptFromCmdLine(LPWSTR cmdLine)
 {
-    std::wstring cmd(cmdLine);
-    size_t pos = cmd.find(L"-exec ");
-    if (pos == std::wstring::npos)
+    const auto pathArgument = Spark::Platform::FindWindowsCommandLineUtf8Argument(cmdLine, L"-exec");
+    if (!pathArgument || pathArgument->empty())
         return;
-    size_t start = pos + 6;
-    size_t end = cmd.find(L' ', start);
-    std::wstring wpath = cmd.substr(start, end - start);
-    std::string path(wpath.begin(), wpath.end());
+    const std::string& path = *pathArgument;
 
-    std::ifstream file(path);
+    std::ifstream file(std::filesystem::u8path(path));
     if (!file)
     {
         Spark::SimpleConsole::GetInstance().LogError("[exec] cannot open script: " + path);

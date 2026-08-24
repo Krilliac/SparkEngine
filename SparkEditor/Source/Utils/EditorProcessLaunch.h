@@ -65,26 +65,29 @@ namespace SparkEditor
     void TerminateEditorProcess(void* processHandle, unsigned int exitCode = 1);
 
     /**
-     * @brief Build a `"<engineExe>" -game <dll> [-headless] [-exec <cfg>] [extraArgs]`
+     * @brief Build a `"<engineExe>" -game <dll> [-headless] [-exec <cfg>]
+     * [-manifest <json>] [extraArgs]`
      * command line for CreateProcessW.
      *
-     * @param dll       Game module DLL path. Converted to its 8.3 short form when it
-     *                  contains a space.
+     * @param dll       Game module DLL path. Quoted with normal Win32 argv rules, so
+     *                  spaces and Unicode are preserved.
      * @param headless  Appends " -headless".
      * @param execCfg   Optional scripted-console-playback file; pass an empty path to
-     *                  omit "-exec". Converted to its 8.3 short form when it contains
-     *                  a space, same as dll.
+     *                  omit "-exec". Quoted with the same Win32 argv rules as dll.
+     * @param manifest  Optional explicit module manifest. Editor project launches
+     *                  should pass the active project's spark.modules.json here.
      * @param extraArgs Appended verbatim after -exec/-headless (e.g. "-test-seconds
      *                  30"). Must already be space-safe internally (a single space
-     *                  between tokens is fine — only PATH arguments need short-form
-     *                  conversion, since the engine's -game/-exec parsers split on
-     *                  the FIRST space and understand no quoting:
-     *                  FindGameModuleFromCmdLine / LoadExecScriptFromCmdLine in
-     *                  SparkEngineWindows.cpp).
-     * @param outError  Set to a human-readable reason on failure (space-containing
-     *                  path with no short form). Left untouched on success.
+     *                  between tokens is fine); path arguments are quoted internally.
+     * @param outError  Set to a human-readable reason on failure. Cleared on success.
      * @return The full command line, or an empty string on failure (check outError).
      */
+    std::wstring BuildGameLaunchCommandLine(const std::filesystem::path& engineExe, const std::filesystem::path& dll,
+                                            bool headless, const std::filesystem::path& execCfg,
+                                            const std::filesystem::path& manifest, const std::wstring& extraArgs,
+                                            std::string& outError);
+
+    /// @brief Compatibility overload for launchers without an explicit manifest.
     std::wstring BuildGameLaunchCommandLine(const std::filesystem::path& engineExe, const std::filesystem::path& dll,
                                             bool headless, const std::filesystem::path& execCfg,
                                             const std::wstring& extraArgs, std::string& outError);

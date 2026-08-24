@@ -4,6 +4,7 @@
  */
 
 #include "EditorProcessLaunch.h"
+#include "EditorLaunchContext.h"
 
 #include <string_view>
 #include <vector>
@@ -18,26 +19,55 @@ namespace SparkEditor
 #ifdef _WIN32
     namespace
     {
-        /// @brief Converts `p` to its 8.3 short form if it contains a space (the
-        /// engine's -game/-exec cmdline parsers split on the first space and
-        /// understand no quoting). Returns the original path unchanged if it has no
-        /// space. Sets *outError and returns an empty wstring on failure.
-        std::wstring ToShortPathIfNeeded(const std::filesystem::path& p, const char* argLabel, std::string& outError)
+        std::filesystem::path GetCurrentExecutablePath()
         {
-            std::wstring w = p.wstring();
-            if (w.find(L' ') == std::wstring::npos)
-                return w;
+            constexpr size_t kInitialPathCapacity = 512;
+            constexpr size_t kMaximumPathCapacity = 32768;
 
-            wchar_t shortBuf[MAX_PATH];
-            const DWORD len = GetShortPathNameW(w.c_str(), shortBuf, MAX_PATH);
-            if (len == 0 || len >= MAX_PATH || std::wstring_view(shortBuf, len).find(L' ') != std::wstring_view::npos)
+            for (size_t capacity = kInitialPathCapacity; capacity <= kMaximumPathCapacity; capacity *= 2)
             {
-                outError = std::string(argLabel) +
-                           " path contains spaces and has no short form — the engine's cmdline parser cannot "
-                           "receive it. Move the build to a space-free path.";
-                return L"";
+                std::vector<wchar_t> buffer(capacity);
+                const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+                if (length == 0)
+                    return {};
+                if (length < buffer.size())
+                    return std::filesystem::path(std::wstring_view(buffer.data(), length));
             }
-            return std::wstring(shortBuf, len);
+            return {};
+        }
+
+        /// @brief Quote one argument using the CommandLineToArgvW backslash rules.
+        std::wstring QuoteWindowsArgument(std::wstring_view argument)
+        {
+            if (!argument.empty() && argument.find_first_of(L" \t\n\v\"") == std::wstring_view::npos)
+                return std::wstring(argument);
+
+            std::wstring quoted;
+            quoted.reserve(argument.size() + 2);
+            quoted.push_back(L'"');
+            size_t backslashes = 0;
+            for (const wchar_t ch : argument)
+            {
+                if (ch == L'\\')
+                {
+                    ++backslashes;
+                    continue;
+                }
+                if (ch == L'"')
+                {
+                    quoted.append(backslashes * 2 + 1, L'\\');
+                    quoted.push_back(L'"');
+                }
+                else
+                {
+                    quoted.append(backslashes, L'\\');
+                    quoted.push_back(ch);
+                }
+                backslashes = 0;
+            }
+            quoted.append(backslashes * 2, L'\\');
+            quoted.push_back(L'"');
+            return quoted;
         }
     } // namespace
 #endif
@@ -47,8 +77,17 @@ namespace SparkEditor
     {
         ProcessLaunchResult result;
 #ifdef _WIN32
+        std::wstring effectiveCommandLine = commandLine;
+        if (effectiveCommandLine.find(L" -manifest ") == std::wstring::npos)
+        {
+            const std::filesystem::path manifest = workingDir / "spark.modules.json";
+            std::error_code ec;
+            if (std::filesystem::is_regular_file(manifest, ec) && !ec)
+                effectiveCommandLine += L" -manifest " + QuoteWindowsArgument(manifest.wstring());
+        }
+
         // CreateProcessW may modify the command-line buffer — pass a writable copy.
-        std::vector<wchar_t> cmdBuf(commandLine.begin(), commandLine.end());
+        std::vector<wchar_t> cmdBuf(effectiveCommandLine.begin(), effectiveCommandLine.end());
         cmdBuf.push_back(L'\0');
 
         STARTUPINFOW startup{};
@@ -115,24 +154,28 @@ namespace SparkEditor
     std::string GetEditorExecutableDirectory()
     {
 #ifdef _WIN32
-        wchar_t exePath[MAX_PATH];
-        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-        return std::filesystem::path(exePath).parent_path().string();
+        const std::filesystem::path executablePath = GetCurrentExecutablePath();
+        return executablePath.empty() ? std::string{} : LaunchContext::PathToUtf8(executablePath.parent_path());
 #else
-        return std::filesystem::canonical("/proc/self/exe").parent_path().string();
+        return LaunchContext::PathToUtf8(std::filesystem::canonical("/proc/self/exe").parent_path());
 #endif
     }
 
     bool FindEngineExecutable(std::filesystem::path& outExePath, std::string& outError)
     {
         namespace fs = std::filesystem;
-        const fs::path exeDir = fs::path(GetEditorExecutableDirectory());
+        const fs::path exeDir = LaunchContext::PathFromUtf8(GetEditorExecutableDirectory());
+        if (exeDir.empty())
+        {
+            outError = "Could not determine the SparkEditor executable directory";
+            return false;
+        }
         const fs::path engineExe = exeDir / "SparkEngine.exe";
 
         std::error_code ec;
         if (!fs::exists(engineExe, ec) || ec)
         {
-            outError = "SparkEngine.exe not found next to the editor (" + exeDir.string() + ")";
+            outError = "SparkEngine.exe not found next to the editor (" + LaunchContext::PathToUtf8(exeDir) + ")";
             return false;
         }
 
@@ -142,24 +185,20 @@ namespace SparkEditor
 
     std::wstring BuildGameLaunchCommandLine(const std::filesystem::path& engineExe, const std::filesystem::path& dll,
                                             bool headless, const std::filesystem::path& execCfg,
-                                            const std::wstring& extraArgs, std::string& outError)
+                                            const std::filesystem::path& manifest, const std::wstring& extraArgs,
+                                            std::string& outError)
     {
 #ifdef _WIN32
-        const std::wstring dllArg = ToShortPathIfNeeded(dll, "Module DLL", outError);
-        if (dllArg.empty() && !outError.empty())
-            return L"";
-
-        std::wstring cmd = L"\"" + engineExe.wstring() + L"\" -game " + dllArg;
+        outError.clear();
+        std::wstring cmd = QuoteWindowsArgument(engineExe.wstring()) + L" -game " + QuoteWindowsArgument(dll.wstring());
         if (headless)
             cmd += L" -headless";
 
         if (!execCfg.empty())
-        {
-            const std::wstring cfgArg = ToShortPathIfNeeded(execCfg, "Exec cfg", outError);
-            if (cfgArg.empty() && !outError.empty())
-                return L"";
-            cmd += L" -exec " + cfgArg;
-        }
+            cmd += L" -exec " + QuoteWindowsArgument(execCfg.wstring());
+
+        if (!manifest.empty())
+            cmd += L" -manifest " + QuoteWindowsArgument(manifest.wstring());
 
         if (!extraArgs.empty())
             cmd += L" " + extraArgs;
@@ -170,10 +209,18 @@ namespace SparkEditor
         (void)dll;
         (void)headless;
         (void)execCfg;
+        (void)manifest;
         (void)extraArgs;
         outError = "Process launch is available on Windows builds only.";
         return L"";
 #endif
+    }
+
+    std::wstring BuildGameLaunchCommandLine(const std::filesystem::path& engineExe, const std::filesystem::path& dll,
+                                            bool headless, const std::filesystem::path& execCfg,
+                                            const std::wstring& extraArgs, std::string& outError)
+    {
+        return BuildGameLaunchCommandLine(engineExe, dll, headless, execCfg, {}, extraArgs, outError);
     }
 
 } // namespace SparkEditor

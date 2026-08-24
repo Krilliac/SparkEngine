@@ -9,9 +9,12 @@
 
 #include "PlayControlPanel.h"
 #include "GameModuleSelectorPanel.h"
+#include "Core/ProjectManager.h"
+#include "../Utils/EditorLaunchContext.h"
 #include "../Utils/EditorProcessLaunch.h"
 #include "Utils/LogMacros.h"
 #include <imgui.h>
+#include <algorithm>
 #include <filesystem>
 #ifdef _WIN32
 #include <windows.h>
@@ -28,13 +31,33 @@ namespace SparkEditor
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayControlPanel initialized");
         m_isInitialized = true;
-        m_logPath = (std::filesystem::path(GetEditorExecutableDirectory()) / "exec_audit.log").string();
+        const std::filesystem::path initialLog = LaunchContext::ResolveContextFile(
+            ProjectManager::GetActiveProjectPath(), GetEditorExecutableDirectory(), "exec_audit.log");
+        m_logPath = initialLog;
         return true;
     }
 
     void PlayControlPanel::Update(float deltaTime)
     {
         PollInstances();
+
+        // Project selection can change after panels are initialized. When no
+        // process is alive, keep the displayed audit tail aligned with the next
+        // launch context; active launches retain the directory they started in.
+        const bool hasLiveInstance = std::any_of(m_instances.begin(), m_instances.end(),
+                                                 [](const RunningInstance& instance) { return instance.alive; });
+        if (!hasLiveInstance)
+        {
+            const std::filesystem::path editorDirectory(GetEditorExecutableDirectory());
+            const std::filesystem::path modulePath =
+                m_gameModuleSelector ? LaunchContext::PathFromUtf8(m_gameModuleSelector->GetLaunchSelectionPath())
+                                     : std::filesystem::path{};
+            const std::filesystem::path workingDirectory = LaunchContext::ResolveWorkingDirectory(
+                LaunchContext::PathFromUtf8(ProjectManager::GetActiveProjectPath()), modulePath,
+                editorDirectory / "SparkEngine.exe");
+            if (!workingDirectory.empty())
+                SetLaunchContextDirectory(workingDirectory);
+        }
 
         m_logPollTimer += deltaTime;
         if (m_logPollTimer >= 0.5f)
@@ -114,7 +137,8 @@ namespace SparkEditor
             ImGui::TextDisabled(
                 "Select a module in the Game Module Selector panel (radio button) to enable launching.");
         else
-            ImGui::Text("Module: %s", std::filesystem::path(selectedPath).stem().string().c_str());
+            ImGui::Text("Module: %s",
+                        LaunchContext::PathToUtf8(LaunchContext::PathFromUtf8(selectedPath).stem()).c_str());
 
 #ifdef _WIN32
         ImGui::BeginDisabled(!hasModule);

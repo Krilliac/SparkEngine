@@ -5,8 +5,10 @@
 
 #include "GameModuleSelectorPanel.h"
 #include "Core/ModuleManager.h"
+#include "Core/ProjectManager.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
+#include "../Utils/EditorLaunchContext.h"
 #include "../Utils/EditorProcessLaunch.h"
 #include <imgui.h>
 #include <filesystem>
@@ -131,24 +133,40 @@ namespace SparkEditor
         std::vector<ModuleEntry> previous = std::move(m_modules);
         m_modules.clear();
 
-        const std::string scanDir = GetEditorExecutableDirectory();
+        const std::filesystem::path editorDirectory = LaunchContext::PathFromUtf8(GetEditorExecutableDirectory());
+        const auto scanDirectories = LaunchContext::ModuleDiscoveryDirectories(
+            editorDirectory, LaunchContext::PathFromUtf8(ProjectManager::GetActiveProjectPath()));
+        const auto candidates = LaunchContext::DiscoverUniqueModules(
+            scanDirectories,
+            [&](const std::filesystem::path& directory)
+            {
+                const auto mode = LaunchContext::SamePath(directory, editorDirectory)
+                                      ? ModuleManager::DiscoveryMode::ConservativeNameHints
+                                      : ModuleManager::DiscoveryMode::CompatibleSidecars;
+                const std::u8string utf8 = directory.generic_u8string();
+                return ModuleManager::DiscoverModuleCandidates(
+                    std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size()), mode);
+            });
 
-        // Safe enumeration: name hint + export probe with DONT_RESOLVE_DLL_REFERENCES.
-        // Never runs DllMain — cheap enough for the 5-second auto-refresh.
-        for (const auto& candidate : ModuleManager::DiscoverModuleCandidates(scanDir))
+        // Safe enumeration: sidecar validation never maps the library or runs
+        // DllMain. The directory set above is fixed and bounded, so
+        // project discovery remains cheap enough for the 5-second auto-refresh.
+        for (const auto& candidate : candidates)
         {
             ModuleEntry mod;
-            mod.path = candidate;
-            mod.name = std::filesystem::path(candidate).stem().string();
+            mod.path = LaunchContext::PathToUtf8(candidate);
+            mod.name = LaunchContext::PathToUtf8(candidate.stem());
             mod.version = "?";
             mod.kindLabel = "?";
             mod.kindKnown = false;
 
             for (const auto& prev : previous)
             {
-                if (prev.path == mod.path)
+                if (LaunchContext::SamePath(LaunchContext::PathFromUtf8(prev.path),
+                                            LaunchContext::PathFromUtf8(mod.path)))
                 {
                     mod = prev;
+                    mod.path = LaunchContext::PathToUtf8(candidate);
                     break;
                 }
             }
@@ -156,17 +174,27 @@ namespace SparkEditor
             m_modules.push_back(std::move(mod));
         }
 
-        // Re-resolve the launch selection by path (indices may have shifted)
+        // Re-resolve the launch selection by path (indices may have shifted).
+        // If a module was deleted or moved, clear both forms of selection so
+        // neither launch surface can hold a stale DLL path.
         m_launchSelection = -1;
         if (!m_launchSelectionPath.empty())
         {
-            for (size_t i = 0; i < m_modules.size(); ++i)
+            std::vector<std::filesystem::path> discoveredPaths;
+            discoveredPaths.reserve(m_modules.size());
+            for (const ModuleEntry& module : m_modules)
+                discoveredPaths.push_back(LaunchContext::PathFromUtf8(module.path));
+
+            const auto selected = LaunchContext::FindSelectedModuleIndex(
+                discoveredPaths, LaunchContext::PathFromUtf8(m_launchSelectionPath));
+            if (selected)
             {
-                if (m_modules[i].path == m_launchSelectionPath)
-                {
-                    m_launchSelection = static_cast<int>(i);
-                    break;
-                }
+                m_launchSelection = static_cast<int>(*selected);
+                m_launchSelectionPath = m_modules[*selected].path;
+            }
+            else
+            {
+                m_launchSelectionPath.clear();
             }
         }
 
@@ -296,6 +324,16 @@ namespace SparkEditor
 
         const auto& mod = m_modules[static_cast<size_t>(m_launchSelection)];
         namespace fs = std::filesystem;
+        const fs::path modulePath = LaunchContext::PathFromUtf8(mod.path);
+        if (const std::string moduleError = LaunchContext::ValidateGameModuleForLaunch(modulePath);
+            !moduleError.empty())
+        {
+            m_launchSelection = -1;
+            m_launchSelectionPath.clear();
+            m_launchStatus = moduleError;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
+            return;
+        }
 
         fs::path engineExe;
         std::string findError;
@@ -305,14 +343,25 @@ namespace SparkEditor
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
             return;
         }
-        const fs::path exeDir = engineExe.parent_path();
+        const fs::path workingDir = LaunchContext::ResolveWorkingDirectory(
+            LaunchContext::PathFromUtf8(ProjectManager::GetActiveProjectPath()), modulePath, engineExe);
+        if (workingDir.empty())
+        {
+            m_launchStatus = "No valid project, module, or engine launch directory is available";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
+            return;
+        }
 
-        // Shared CreateProcessW path (also used by PlayControlPanel) — handles the
-        // -game parser's "reads up to the FIRST SPACE, no quotes" gotcha internally
-        // (FindGameModuleFromCmdLine).
+        // Shared CreateProcessW path (also used by PlayControlPanel).
+        fs::path manifestPath;
+        std::error_code manifestError;
+        const fs::path workingManifest = workingDir / "spark.modules.json";
+        if (fs::is_regular_file(workingManifest, manifestError) && !manifestError)
+            manifestPath = workingManifest;
+
         std::string buildError;
         const std::wstring cmd =
-            BuildGameLaunchCommandLine(engineExe, fs::path(mod.path), headless, {}, L"", buildError);
+            BuildGameLaunchCommandLine(engineExe, modulePath, headless, {}, manifestPath, L"", buildError);
         if (cmd.empty() && !buildError.empty())
         {
             m_launchStatus = buildError;
@@ -320,7 +369,7 @@ namespace SparkEditor
             return;
         }
 
-        const ProcessLaunchResult launch = LaunchEditorProcess(engineExe, cmd, exeDir);
+        const ProcessLaunchResult launch = LaunchEditorProcess(engineExe, cmd, workingDir);
         if (!launch.success)
         {
             m_launchStatus = launch.error;
@@ -376,8 +425,15 @@ namespace SparkEditor
 
     void GameModuleSelectorPanel::SaveModuleManifest()
     {
-        const std::string manifestDir = GetEditorExecutableDirectory();
-        auto manifestPath = std::filesystem::path(manifestDir) / "spark.modules.json";
+        const std::filesystem::path manifestPath = LaunchContext::ResolveContextFile(
+            LaunchContext::PathFromUtf8(ProjectManager::GetActiveProjectPath()),
+            LaunchContext::PathFromUtf8(GetEditorExecutableDirectory()), "spark.modules.json");
+        if (manifestPath.empty())
+        {
+            m_statusMessage = "No valid project or editor directory for spark.modules.json";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_statusMessage.c_str());
+            return;
+        }
 
         // Build JSON manually (no dependency on a JSON library)
         std::string json = "{\n    \"modules\": [\n";
@@ -393,10 +449,11 @@ namespace SparkEditor
                 json += ",\n";
             first = false;
 
-            auto filename = std::filesystem::path(mod.path).filename().string();
+            const std::string moduleReference = LaunchContext::ManifestModuleReference(
+                manifestPath.parent_path(), LaunchContext::PathFromUtf8(mod.path));
             json += "        {\n";
             json += "            \"name\": \"" + mod.name + "\",\n";
-            json += "            \"path\": \"" + filename + "\",\n";
+            json += "            \"path\": \"" + moduleReference + "\",\n";
             json += "            \"loadOrder\": " + std::to_string(loadOrder) + "\n";
             json += "        }";
             loadOrder++;
@@ -409,7 +466,8 @@ namespace SparkEditor
         {
             file << json;
             file.close();
-            m_statusMessage = "Saved spark.modules.json (" + std::to_string(loadOrder - 1000) + " modules)";
+            m_statusMessage = "Saved " + LaunchContext::PathToUtf8(manifestPath) + " (" +
+                              std::to_string(loadOrder - 1000) + " modules)";
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_statusMessage.c_str());
 
             auto& console = Spark::SimpleConsole::GetInstance();

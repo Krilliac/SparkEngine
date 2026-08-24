@@ -61,6 +61,12 @@ struct DiscoveredModule
 class ModuleManager
 {
   public:
+    enum class DiscoveryMode
+    {
+        ConservativeNameHints,
+        CompatibleSidecars,
+    };
+
     ModuleManager() = default;
     ~ModuleManager();
 
@@ -103,13 +109,15 @@ class ModuleManager
     /**
      * @brief Enumerate module-DLL candidates in a directory WITHOUT loading them
      *
-     * Same filter as LoadModulesFromDirectory (name hint + system-DLL exclusion
-     * + mandatory sidecar presence) but never maps the image or runs DllMain.
-     * Used by the bare-launch project selector.
+     * ConservativeNameHints applies the fallback engine-directory name/system
+     * filters. CompatibleSidecars accepts any native library whose ABI sidecar
+     * validates without mapping the image; this is intended for bounded project
+     * build directories where targets commonly have names such as FPSStarter.
      *
      * @return Absolute paths of probable module DLLs, sorted by filename.
      */
-    static std::vector<std::string> DiscoverModuleCandidates(const std::string& directory);
+    static std::vector<std::string> DiscoverModuleCandidates(const std::string& directory,
+                                                             DiscoveryMode mode = DiscoveryMode::ConservativeNameHints);
 
     /** @brief Name of the loaded Game-kind module, or empty when none. */
     std::string GetGameModuleName() const;

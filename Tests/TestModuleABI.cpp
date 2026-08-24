@@ -2,6 +2,7 @@
 
 #include "Core/ModuleHotReload.h"
 #include "Core/ModuleManager.h"
+#include "Utils/LocalFileCache.h"
 #include <Spark/ModuleABI.h>
 #include <Spark/Version.h>
 
@@ -11,6 +12,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <string_view>
 
 #ifndef SPARK_TEST_MISMATCHED_MODULE_PATH
 #error SPARK_TEST_MISMATCHED_MODULE_PATH must name the mismatched module fixture
@@ -22,6 +24,24 @@
 
 namespace
 {
+    std::filesystem::path PathFromUtf8(std::string_view path)
+    {
+        return std::filesystem::u8path(path.begin(), path.end());
+    }
+
+    std::string PathToUtf8(const std::filesystem::path& path)
+    {
+        const std::u8string utf8 = path.generic_u8string();
+        return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+    }
+
+    std::filesystem::path SidecarPath(const std::filesystem::path& modulePath)
+    {
+        std::filesystem::path sidecar = modulePath;
+        sidecar += ".sparkabi";
+        return sidecar;
+    }
+
     class NullEngineContext final : public Spark::IEngineContext
     {
       public:
@@ -41,16 +61,17 @@ namespace
         uint32_t GetSDKVersion() const override { return SPARK_SDK_VERSION; }
     };
 
-    std::filesystem::path CopyCompatibleFixtureToTemp(const std::string& stem)
+    std::filesystem::path CopyCompatibleFixtureToTemp(const std::filesystem::path& stem)
     {
-        const std::filesystem::path sourcePath = SPARK_TEST_COMPATIBLE_MODULE_PATH;
-        const std::filesystem::path destination =
-            std::filesystem::temp_directory_path() / (stem + sourcePath.extension().string());
+        const std::filesystem::path sourcePath = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
+        std::filesystem::path destination = std::filesystem::temp_directory_path() / stem;
+        destination += sourcePath.extension();
         std::error_code ec;
+        std::filesystem::create_directories(destination.parent_path(), ec);
         std::filesystem::remove(destination, ec);
-        std::filesystem::remove(destination.string() + ".sparkabi", ec);
+        std::filesystem::remove(SidecarPath(destination), ec);
         std::filesystem::copy_file(sourcePath, destination, std::filesystem::copy_options::overwrite_existing);
-        std::filesystem::copy_file(sourcePath.string() + ".sparkabi", destination.string() + ".sparkabi",
+        std::filesystem::copy_file(SidecarPath(sourcePath), SidecarPath(destination),
                                    std::filesystem::copy_options::overwrite_existing);
         return destination;
     }
@@ -58,7 +79,7 @@ namespace
     void RemoveModuleCopy(const std::filesystem::path& modulePath)
     {
         std::error_code ec;
-        std::filesystem::remove(modulePath.string() + ".sparkabi", ec);
+        std::filesystem::remove(SidecarPath(modulePath), ec);
         std::filesystem::remove(modulePath, ec);
     }
 
@@ -133,6 +154,68 @@ TEST(ModuleABI_DiscoveryDoesNotExecuteCandidate)
     EXPECT_TRUE(found);
     EXPECT_FALSE(std::filesystem::exists(sentinelPath));
 }
+
+TEST(ModuleABI_ProjectDiscoveryAcceptsCompatibleSidecarWithoutLegacyNameHint)
+{
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("FPSStarter");
+    const std::string directory = PathToUtf8(modulePath.parent_path());
+
+    const auto conservative = ModuleManager::DiscoverModuleCandidates(directory);
+    EXPECT_FALSE(std::any_of(conservative.begin(), conservative.end(), [&](const std::string& candidate)
+                             { return PathFromUtf8(candidate).filename() == modulePath.filename(); }));
+
+    const auto projectCandidates =
+        ModuleManager::DiscoverModuleCandidates(directory, ModuleManager::DiscoveryMode::CompatibleSidecars);
+    EXPECT_TRUE(std::any_of(projectCandidates.begin(), projectCandidates.end(), [&](const std::string& candidate)
+                            { return PathFromUtf8(candidate).filename() == modulePath.filename(); }));
+    RemoveModuleCopy(modulePath);
+}
+
+TEST(ModuleABI_ManifestIgnoresPathKeysOutsideModulesArray)
+{
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkManifestMetadataPath");
+    const std::filesystem::path manifestPath = modulePath.parent_path() / "spark.metadata-only.modules.json";
+    {
+        std::ofstream manifest(manifestPath, std::ios::trunc);
+        manifest << "{ \"path\": \"" << PathToUtf8(modulePath.filename()) << "\", \"metadata\": { \"path\": \""
+                 << PathToUtf8(modulePath.filename()) << "\" } }\n";
+    }
+
+    ModuleManager manager;
+    EXPECT_FALSE(manager.LoadModulesFromManifest(PathToUtf8(manifestPath)));
+    EXPECT_TRUE(manager.GetLoadedModuleInfo().empty());
+
+    RemoveModuleCopy(modulePath);
+    std::error_code ec;
+    std::filesystem::remove(manifestPath, ec);
+}
+
+#ifdef _WIN32
+TEST(ModuleABI_UnicodeManifestPathResolvesAndLoadsWithWideWindowsLoader)
+{
+    const std::filesystem::path unicodeDirectory = std::filesystem::path(L"Spark-ABI-Caf\u00e9-\u6e2c\u8a66");
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp(unicodeDirectory / "FPSStarter");
+    const std::filesystem::path manifestPath = modulePath.parent_path() / "spark.modules.json";
+    {
+        std::ofstream manifest(manifestPath, std::ios::trunc);
+        manifest << "{ \"modules\": [{ \"path\": \"" << PathToUtf8(modulePath.filename()) << "\" }] }\n";
+    }
+
+    {
+        Spark::LocalFileCache fileCache;
+        ModuleManager manager;
+        manager.SetFileCache(&fileCache);
+        EXPECT_TRUE(manager.LoadModulesFromManifest(PathToUtf8(manifestPath)));
+        EXPECT_EQ(manager.GetLoadedModuleInfo().size(), size_t{1});
+        manager.UnloadAll();
+    }
+
+    RemoveModuleCopy(modulePath);
+    std::error_code ec;
+    std::filesystem::remove(manifestPath, ec);
+    std::filesystem::remove(modulePath.parent_path(), ec);
+}
+#endif
 
 TEST(ModuleABI_MismatchRejectedBeforeStaticConstructorInjectionOrFactory)
 {
