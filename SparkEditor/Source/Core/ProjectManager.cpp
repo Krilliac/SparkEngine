@@ -483,7 +483,9 @@ namespace SparkEditor
             // Fill project info
             m_currentProject = ProjectInfo{};
             m_currentProject.name = projectName;
-            m_currentProject.path = projectRoot;
+            m_currentProject.path = NormalizeProjectPath(projectRoot);
+            m_currentProjectFilePath =
+                NormalizeProjectPath((fs::path(m_currentProject.path) / (projectName + ".sparkproject")).string());
             m_currentProject.version = "1.0.0";
             m_currentProject.description = description.empty() ? "Spark Engine Project" : description;
             m_currentProject.engineVersion = GetCurrentEngineVersion().ToString();
@@ -506,7 +508,7 @@ namespace SparkEditor
             m_hasOpenProject = true;
             {
                 std::lock_guard lock(s_activeProjectMutex);
-                s_activeProjectPath = NormalizeProjectPath(projectRoot);
+                s_activeProjectPath = m_currentProject.path;
             }
             AddToRecentProjects(projectName, GetProjectFilePath());
 
@@ -552,10 +554,16 @@ namespace SparkEditor
                 // Fall back: set defaults if no .sparkproject was in template
                 m_currentProject = ProjectInfo{};
                 m_currentProject.name = projectName;
-                m_currentProject.path = projectPath;
+                m_currentProject.path = NormalizeProjectPath(projectPath);
+                m_currentProjectFilePath =
+                    NormalizeProjectPath((fs::path(m_currentProject.path) / (projectName + ".sparkproject")).string());
                 m_currentProject.version = "1.0.0";
                 m_currentProject.engineVersion = GetCurrentEngineVersion().ToString();
-                m_currentProject.modules.push_back(projectName);
+                m_currentProject.modules.push_back(MakeCodeIdentifier(projectName));
+                m_currentProject.createdTime = GetCurrentTimestamp();
+                m_currentProject.lastModified = m_currentProject.createdTime;
+                if (!SaveProjectFile())
+                    return false;
             }
 
             if (!EnsureBuildScaffold(projectPath, m_currentProject.name))
@@ -564,9 +572,9 @@ namespace SparkEditor
             m_hasOpenProject = true;
             {
                 std::lock_guard lock(s_activeProjectMutex);
-                s_activeProjectPath = NormalizeProjectPath(projectPath);
+                s_activeProjectPath = m_currentProject.path;
             }
-            AddToRecentProjects(projectName, projectPath);
+            AddToRecentProjects(projectName, GetProjectFilePath());
 
             if (m_onProjectOpened)
             {
@@ -778,6 +786,7 @@ namespace SparkEditor
             ProjectInfo closed = m_currentProject;
             m_hasOpenProject = false;
             m_currentProject = ProjectInfo{};
+            m_currentProjectFilePath.clear();
             {
                 std::lock_guard lock(s_activeProjectMutex);
                 if (ProjectPathsEqual(s_activeProjectPath, closed.path))
@@ -815,7 +824,12 @@ namespace SparkEditor
     }
     std::string ProjectManager::GetProjectFilePath() const
     {
-        return (fs::path(m_currentProject.path) / (m_currentProject.name + ".sparkproject")).string();
+        if (!m_currentProjectFilePath.empty())
+            return m_currentProjectFilePath;
+        if (m_currentProject.path.empty() || m_currentProject.name.empty())
+            return {};
+        return NormalizeProjectPath(
+            (fs::path(m_currentProject.path) / (m_currentProject.name + ".sparkproject")).string());
     }
 
     std::string ProjectManager::GetActiveProjectPath()
@@ -926,10 +940,14 @@ namespace SparkEditor
         auto scenes = ExtractJsonStringArray(content, "scenes");
         auto modules = ExtractJsonStringArray(content, "modules");
 
-        // Derive project root from the .sparkproject file location
-        std::string projectRoot = fs::path(sparkprojectPath).parent_path().string();
+        // Preserve the selected document path independently from its display
+        // name. On macOS, normalization also resolves /var -> /private/var;
+        // every public project path then uses the same canonical spelling.
+        const std::string normalizedProjectFile = NormalizeProjectPath(sparkprojectPath);
+        std::string projectRoot = fs::path(normalizedProjectFile).parent_path().string();
 
         m_currentProject = ProjectInfo{};
+        m_currentProjectFilePath = normalizedProjectFile;
         m_currentProject.name = name.empty() ? fs::path(projectRoot).filename().string() : name;
         m_currentProject.path = projectRoot;
         m_currentProject.version = version.empty() ? "1.0.0" : version;

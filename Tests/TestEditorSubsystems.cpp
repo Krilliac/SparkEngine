@@ -806,7 +806,10 @@ TEST(ProjectManager_CreateProject_WritesLoadableReflectedScene)
     EXPECT_TRUE(std::filesystem::is_regular_file(moduleHeader));
     EXPECT_TRUE(std::filesystem::is_regular_file(moduleSource));
     EXPECT_TRUE(std::filesystem::is_regular_file(projectRoot / "spark.modules.json"));
-    EXPECT_EQ(ProjectManager::GetActiveProjectPath(), std::filesystem::absolute(projectRoot).string());
+    EXPECT_EQ(std::filesystem::path(ProjectManager::GetActiveProjectPath()),
+              std::filesystem::weakly_canonical(projectRoot));
+    EXPECT_EQ(std::filesystem::path(pm.GetProjectFilePath()),
+              std::filesystem::weakly_canonical(projectRoot / "Playable.sparkproject"));
 
     {
         std::ifstream input(cmakeFile);
@@ -845,7 +848,11 @@ TEST(ProjectManager_CreateProject_WritesLoadableReflectedScene)
     }
     const auto recent = reloaded.GetRecentProjects();
     EXPECT_TRUE(std::any_of(recent.begin(), recent.end(),
-                            [&](const RecentProject& entry) { return entry.path == expectedProjectFile; }));
+                            [&](const RecentProject& entry)
+                            {
+                                std::error_code ec;
+                                return std::filesystem::equivalent(entry.path, expectedProjectFile, ec) && !ec;
+                            }));
     reloaded.RemoveRecentProject(expectedProjectFile);
     reloaded.Shutdown();
 
@@ -882,13 +889,20 @@ TEST(ProjectManager_ProjectMetadataEscapesRoundTrip)
     EXPECT_EQ(info.modules[1], std::string("Quote\"Module"));
     EXPECT_EQ(info.modules[2], std::string("Back\bForm\fSlash/"));
     EXPECT_EQ(info.modules[3], std::string("Unicode") + "\xC3\xA9\xF0\x9F\x9A\x80");
+    EXPECT_EQ(std::filesystem::path(manager.GetProjectFilePath()), std::filesystem::weakly_canonical(projectFile));
     manager.Shutdown();
+    EXPECT_TRUE(std::filesystem::is_regular_file(projectFile));
+    EXPECT_FALSE(std::filesystem::exists(root / (expectedName + ".sparkproject")));
 
     ProjectManager roundTrip;
     roundTrip.Initialize();
     const auto recent = roundTrip.GetRecentProjects();
     const auto found = std::find_if(recent.begin(), recent.end(),
-                                    [&](const RecentProject& entry) { return entry.path == projectFile.string(); });
+                                    [&](const RecentProject& entry)
+                                    {
+                                        std::error_code ec;
+                                        return std::filesystem::equivalent(entry.path, projectFile, ec) && !ec;
+                                    });
     EXPECT_TRUE(found != recent.end());
     if (found != recent.end())
         EXPECT_EQ(found->name, expectedName);

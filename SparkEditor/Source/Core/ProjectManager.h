@@ -167,6 +167,10 @@ namespace SparkEditor
         static std::string GetRecentProjectsFilePath();
 
         ProjectInfo m_currentProject;
+        // The project document is not required to share the display name.
+        // Preserve the exact normalized file selected/created so SaveProject()
+        // never silently renames a project after loading its metadata.
+        std::string m_currentProjectFilePath;
         std::vector<RecentProject> m_recentProjects;
         mutable std::mutex m_recentProjectsMutex; ///< Protects m_recentProjects from concurrent access
         std::string m_engineRoot;
