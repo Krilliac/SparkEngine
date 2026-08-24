@@ -16,7 +16,7 @@ A coverage analysis of SparkEngine's test suite: how many tests exist, which sub
 
 | Metric | Value |
 |--------|-------|
-| Test files (`Tests/*.cpp`) | 485 |
+| C++ test files under `Tests/` | 485 |
 | Total `TEST` / `TEST_F` macros | ~5,991 |
 | Engine headers (`SparkEngine/Source`) | 523 |
 | Editor headers (`SparkEditor/Source`) | 126 |

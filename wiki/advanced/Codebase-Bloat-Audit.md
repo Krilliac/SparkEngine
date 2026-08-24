@@ -22,23 +22,23 @@ Thresholds are guidelines for when to pause and think, not hard limits — a cle
 |------|-------|
 | `Graphics/RHI/OpenGL/OpenGLDevice.cpp` | 2,103 |
 | `Graphics/RHI/Vulkan/VulkanDevice.cpp` | 1,991 |
-| `SparkEditor/Panels/VisualScriptPanel.cpp` | 1,773 |
-| `SparkEditor/Profiler/PerformanceProfiler.cpp` | 1,609 |
+| `SparkEditor/Source/Panels/VisualScriptPanel.cpp` | 1,773 |
+| `SparkEditor/Source/Profiler/PerformanceProfiler.cpp` | 1,609 |
 | `Graphics/RHI/D3D12/D3D12Device.cpp` | 1,593 |
-| `SparkEditor/Core/EditorTheme.cpp` | 1,587 |
+| `SparkEditor/Source/Core/EditorTheme.cpp` | 1,587 |
 | `Graphics/PostProcessingPipeline.cpp` | 1,538 |
 | `Core/EngineSettings.cpp` | 1,522 |
-| `SparkEditor/Core/EditorUI.cpp` | 1,516 |
-| `SparkEditor/Panels/ProjectSettingsPanel.cpp` | 1,501 |
+| `SparkEditor/Source/Core/EditorUI.cpp` | 1,516 |
+| `SparkEditor/Source/Panels/ProjectSettingsPanel.cpp` | 1,501 |
 | `Graphics/RHI/D3D11/D3D11Device.cpp` | 1,481 |
 | `Graphics/GraphicsEngineWindows.cpp` | 1,481 |
 | `SparkConsole/src/ConsoleApp.cpp` | 1,407 |
-| `SparkEditor/Communication/CollaborativeEditSession.cpp` | 1,373 |
-| `SparkEditor/Panels/InspectorComponentRenderers_Reflected.cpp` | 1,362 |
+| `SparkEditor/Source/Communication/CollaborativeEditSession.cpp` | 1,373 |
+| `SparkEditor/Source/Panels/InspectorComponentRenderers_Reflected.cpp` | 1,362 |
 | `Core/Lifecycle/GameplayLifecycleShared.cpp` | 1,347 |
 | `Utils/CrashHandler.cpp` | 1,322 |
 | `Core/SparkEngineLinux.cpp` | 1,296 |
-| `SparkEditor/Panels/InspectorPanel.cpp` | 1,288 |
+| `SparkEditor/Source/Panels/InspectorPanel.cpp` | 1,288 |
 | `Engine/SaveSystem/SaveSystem.cpp` | 1,279 |
 
 **`.cpp` files over 500 lines: 158.** The largest of the RHI backend files (OpenGL/Vulkan/D3D11/D3D12 devices) are single coherent units — full graphics-API surface implementations — and are reasonable candidates to leave intact rather than fragment.
@@ -48,7 +48,7 @@ Thresholds are guidelines for when to pause and think, not hard limits — a cle
 | File | Lines |
 |------|-------|
 | `Graphics/RenderGraph.h` | 1,125 |
-| `SparkEditor/SceneSystem/SceneFileTypes.h` | 1,115 |
+| `SparkEditor/Source/SceneSystem/SceneFileTypes.h` | 1,115 |
 | `Core/EngineSettings.h` | 1,079 |
 | `Utils/JsonUtils.h` | 963 |
 | `Graphics/GraphicsEngine.h` | 957 |
@@ -74,9 +74,9 @@ Every one of the original audit's worst monolithic files has been resolved by sp
 | `Utils/SparkConsole.cpp` | 6,996 | 641 | Resolved — embedded UI stripped |
 | `Graphics/GraphicsEngine.cpp` | 4,949 | 13 | Resolved — split into multiple files; `.cpp` is now a near-empty shim |
 | `Graphics/MaterialSystem.cpp` | 4,326 | 486 | Resolved — split |
-| `SparkEditor/VisualScripting/VisualScriptingSystem.cpp` | 4,067 | deleted | Resolved — duplicate system removed |
+| Former Visual Scripting system implementation | 4,067 | deleted | Resolved — duplicate system removed |
 | `Graphics/AssetPipeline.cpp` | 2,557 | split | Resolved |
-| `SparkEditor/Core/EditorUI.cpp` | 2,353 | 1,516 | Reduced (still over guideline) |
+| `SparkEditor/Source/Core/EditorUI.cpp` | 2,353 | 1,516 | Reduced (still over guideline) |
 | `Graphics/Shader.cpp` | 2,334 | split | Resolved |
 
 The original `Physics/PhysicsSystem.h` (1,909) and `Graphics/RenderGraph.h` (1,730) headers have shrunk to 685 and 1,125 respectively; `PhysicsTypes.h` (779) now holds the data definitions.

@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*552 test files, 6541+ test cases*
+*553 test files, 6565+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -677,7 +677,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEditorCommands` | 8 |
 | `TestEditorDocumentTransition` | 6 |
 | `TestEditorLayoutManager` | 13 |
-| `TestEditorSubsystems` | 100 |
+| `TestEditorSubsystems` | 105 |
 | `TestEditorWindowManager` | 14 |
 | `TestEngineBootPlatforms` | 41 |
 | `TestEngineContext` | 18 |
@@ -811,7 +811,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMeshShaderPipeline` | 9 |
 | `TestMetalRayTracing` | 16 |
 | `TestModSystem` | 9 |
-| `TestModuleABI` | 10 |
+| `TestModuleABI` | 13 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 12 |
@@ -996,7 +996,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestTacticalPointSystem` | 4 |
 | `TestTelemetry` | 15 |
 | `TestTelemetryPhaseFF` | 7 |
-| `TestTemplatesCompile` | 9 |
+| `TestTemplatesCompile` | 20 |
 | `TestTemporalEffects` | 11 |
 | `TestTerrainRenderer` | 5 |
 | `TestTextureCompressor` | 9 |
@@ -1038,6 +1038,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestWeaponMechanics` | 29 |
 | `TestWeaponSystem` | 18 |
 | `TestWeatherSystem` | 8 |
+| `TestWindowsCommandLine` | 5 |
 | `TestWorkSema` | 7 |
 | `TestWorldBasicRender` | 7 |
 | `TestWorldOriginSystem` | 12 |

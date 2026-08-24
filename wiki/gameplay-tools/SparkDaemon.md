@@ -281,7 +281,7 @@ The pattern is established by `ShaderService` (Phase 2) and
    - On error, return a `ServiceResponse` with
      `messageType = ControlMessage::ErrorResponse` and a string payload
 5. Register in `SparkDaemon/src/main.cpp` alongside `ControlService`.
-6. Add tests in `Tests/Test<Svc>ServiceClient.cpp` following the
+6. Add a service-client test file under `Tests/`, following the existing
    fixture pattern (spin up a `DaemonServer` in a background thread,
    connect a `DaemonClient`, exercise the RPCs).
 7. If the service persists to disk, add a `--<svc>-cache-dir` CLI flag

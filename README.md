@@ -144,7 +144,7 @@ Scene hierarchy, Inspector, Asset browser, Game viewport, Gizmos (ImGuizmo), Nod
 
 ## Quality Assurance
 
-**Tests:** 6,447 unit tests across 548 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 6,565 unit tests across 553 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
 
 ```bash
 cd build && ctest --output-on-failure
@@ -258,7 +258,7 @@ SparkEngine/
 ├── SparkEditor/Source/    59 dockable panels, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           10 prebuilt game templates
-├── Tests/                 6,447 unit tests, 548 files
+├── Tests/                 6,565 unit tests, 553 files
 ├── wiki/                  144+ wiki pages
 └── docs/                  API reference, guides
 ```
