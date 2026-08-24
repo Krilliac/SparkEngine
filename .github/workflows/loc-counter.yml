@@ -89,7 +89,6 @@ jobs:
           "message": "${{ steps.loc.outputs.formatted_lines }}",
           "color": "blue",
           "logo": "cplusplus",
-          "logoColor": "white",
           "cacheSeconds": 300
         }
         EOF
