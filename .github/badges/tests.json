@@ -1,6 +1,7 @@
 {
-    "schemaVersion": 1,
-    "label": "tests",
-    "message": "6,565",
-    "color": "brightgreen"
+  "schemaVersion": 1,
+  "label": "tests",
+  "message": "6,565",
+  "color": "brightgreen",
+  "cacheSeconds": 300
 }

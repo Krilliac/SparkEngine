@@ -1,6 +1,7 @@
 {
-    "schemaVersion": 1,
-    "label": "source files",
-    "message": "2,367",
-    "color": "green"
+  "schemaVersion": 1,
+  "label": "source files",
+  "message": "2,367",
+  "color": "green",
+  "cacheSeconds": 300
 }
