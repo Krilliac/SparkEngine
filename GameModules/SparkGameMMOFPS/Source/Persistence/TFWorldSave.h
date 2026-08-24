@@ -115,6 +115,13 @@ namespace Terrafront::WorldSave
         if (!exists)
             return ReadStatus::Missing;
 
+        const bool isRegularFile = std::filesystem::is_regular_file(path, ec);
+        if (ec || !isRegularFile)
+        {
+            detail = ec ? ec.message() : "path is not a regular file";
+            return ReadStatus::Unreadable;
+        }
+
         std::ifstream input(path, std::ios::binary);
         if (!input.is_open())
         {

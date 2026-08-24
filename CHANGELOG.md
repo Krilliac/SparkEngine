@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Transactional CLI packaging and validated packaged-project launches
 - Template module manifests no longer advertise an ignored `loadOrder` field
 - Local badge generation now preserves Shields-compatible logos and cache metadata
+- World-save readers now classify directories and other non-file paths as unreadable consistently across platforms
 
 ## [1.0.0] - 2026-04-04
 
