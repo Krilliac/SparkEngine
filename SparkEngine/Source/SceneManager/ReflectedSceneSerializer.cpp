@@ -250,10 +250,9 @@ namespace Spark
                             // component discriminator, not a reflected field.
                             if (legacyScene && !c.contains("fields") && f.fieldName == "type")
                                 continue;
-                            const json* fieldValue = legacyScene ? FindLegacyField(fields, type, f.fieldName)
-                                                                 : (fields.contains(f.fieldName)
-                                                                        ? &fields[f.fieldName]
-                                                                        : nullptr);
+                            const json* fieldValue =
+                                legacyScene ? FindLegacyField(fields, type, f.fieldName)
+                                            : (fields.contains(f.fieldName) ? &fields[f.fieldName] : nullptr);
                             if (!fieldValue)
                                 continue;
                             if (!legacyScene && !fieldValue->is_string())

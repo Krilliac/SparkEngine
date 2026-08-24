@@ -28,8 +28,8 @@
 #include <unistd.h>
 #endif
 
-    namespace SparkEditor
-    {
+namespace SparkEditor
+{
 
     void EditorUI::ShowOpenSceneDialog()
     {
@@ -278,8 +278,8 @@
         if (!ImGui::BeginMenu("2D Object"))
             return;
 
-        const char* items[] = {"Sprite", "Animated Sprite", "Tilemap", "Camera 2D", "Parallax Background",
-                               "Nine-Slice Sprite"};
+        const char* items[] = {"Sprite",    "Animated Sprite",     "Tilemap",
+                               "Camera 2D", "Parallax Background", "Nine-Slice Sprite"};
         for (const char* item : items)
         {
             if (ImGui::MenuItem(item))
@@ -406,8 +406,8 @@
         auto createObject = [this](const std::string& name)
         {
             const bool created = CreateDocumentEntity(name);
-            ShowNotification(created ? "Created " + name : "Unsupported object: " + name,
-                             created ? "success" : "error", 2.0f);
+            ShowNotification(created ? "Created " + name : "Unsupported object: " + name, created ? "success" : "error",
+                             2.0f);
         };
 
         if (ImGui::MenuItem("Create Empty"))
@@ -533,8 +533,7 @@
                 if (ImGui::MenuItem(layout.name.c_str()))
                 {
                     const bool loaded = LoadLayout(layout.name);
-                    ShowNotification(loaded ? "Layout loaded: " + layout.name
-                                            : "Layout load failed: " + layout.name,
+                    ShowNotification(loaded ? "Layout loaded: " + layout.name : "Layout load failed: " + layout.name,
                                      loaded ? "success" : "error");
                 }
             }

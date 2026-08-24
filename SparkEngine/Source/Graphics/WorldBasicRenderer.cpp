@@ -39,11 +39,9 @@ namespace Spark
                                       XMFLOAT2{u, 0.0f});
             }
             const unsigned int bottomCenter = static_cast<unsigned int>(vertices.size());
-            vertices.emplace_back(XMFLOAT3{0.0f, -halfHeight, 0.0f}, XMFLOAT3{0.0f, -1.0f, 0.0f},
-                                  XMFLOAT2{0.5f, 0.5f});
+            vertices.emplace_back(XMFLOAT3{0.0f, -halfHeight, 0.0f}, XMFLOAT3{0.0f, -1.0f, 0.0f}, XMFLOAT2{0.5f, 0.5f});
             const unsigned int topCenter = static_cast<unsigned int>(vertices.size());
-            vertices.emplace_back(XMFLOAT3{0.0f, halfHeight, 0.0f}, XMFLOAT3{0.0f, 1.0f, 0.0f},
-                                  XMFLOAT2{0.5f, 0.5f});
+            vertices.emplace_back(XMFLOAT3{0.0f, halfHeight, 0.0f}, XMFLOAT3{0.0f, 1.0f, 0.0f}, XMFLOAT2{0.5f, 0.5f});
 
             for (unsigned int i = 0; i < segments; ++i)
             {
@@ -112,8 +110,8 @@ namespace Spark
         return raw;
     }
 
-    WorldBasicRenderStats RenderWorldBasic(World& world, GraphicsEngine& g, WorldMeshCache& cache,
-                                           const XMMATRIX& view, const XMMATRIX& proj)
+    WorldBasicRenderStats RenderWorldBasic(World& world, GraphicsEngine& g, WorldMeshCache& cache, const XMMATRIX& view,
+                                           const XMMATRIX& proj)
     {
         WorldBasicRenderStats stats;
         g.SetBasicShaders();
@@ -190,9 +188,8 @@ namespace Spark
             const Transform* transform = world.GetComponent<Transform>(e);
             const XMMATRIX spriteLocal = XMMatrixScaling(size.x, 1.0f, size.y) * XMMatrixRotationX(XM_PIDIV2);
             const XMMATRIX worldMatrix = spriteLocal * transform->GetWorldMatrix(world.GetRegistry());
-            ID3D11ShaderResourceView* texture = sprite->texturePath.empty()
-                                                    ? nullptr
-                                                    : g.GetOrLoadTextureSRV(sprite->texturePath);
+            ID3D11ShaderResourceView* texture =
+                sprite->texturePath.empty() ? nullptr : g.GetOrLoadTextureSRV(sprite->texturePath);
             g.UpdateBasicConstants(worldMatrix, view, proj, sprite->color, XMFLOAT2(1, 1));
             g.SetBasicTexture(texture);
             quad->Render(g.GetContext());

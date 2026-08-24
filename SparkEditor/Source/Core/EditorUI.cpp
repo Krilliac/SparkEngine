@@ -352,8 +352,8 @@ namespace SparkEditor
                 // World path. Pointing at the file without loading it left the
                 // previous hard-coded Soldier World active and Ctrl+S then
                 // overwrote the new project's scene.
-                const std::string relativeScene = !project.lastOpenedScene.empty() ? project.lastOpenedScene
-                                                                                   : project.defaultScene;
+                const std::string relativeScene =
+                    !project.lastOpenedScene.empty() ? project.lastOpenedScene : project.defaultScene;
                 if (!relativeScene.empty())
                 {
                     const std::string scenePath = (std::filesystem::path(project.path) / relativeScene).string();
@@ -576,8 +576,8 @@ namespace SparkEditor
         if (ImGui::IsKeyPressed(ImGuiKey_F4) && !io.WantTextInput)
         {
             const bool reloaded = m_graphics && m_graphics->Console_ReloadShaders();
-            ShowNotification(reloaded ? "Shaders reloaded" : "Shader reload failed",
-                             reloaded ? "success" : "error", 2.0f);
+            ShowNotification(reloaded ? "Shaders reloaded" : "Shader reload failed", reloaded ? "success" : "error",
+                             2.0f);
         }
 
         // W/E/R: Transform tool shortcuts (only when not typing and not in game view)
@@ -1015,8 +1015,7 @@ namespace SparkEditor
         {
             if (SaveScene())
             {
-                const auto action =
-                    m_documentTransitionGuard.Resolve(UnsavedChangesDecision::Save, true);
+                const auto action = m_documentTransitionGuard.Resolve(UnsavedChangesDecision::Save, true);
                 ImGui::CloseCurrentPopup();
                 ExecuteDocumentTransition(action);
             }
@@ -1573,10 +1572,9 @@ namespace SparkEditor
             ShowNotification("Open a project first before saving a scene", "warning");
             return false;
         }
-        const std::string targetPath = m_currentScenePath.empty()
-                                           ? m_projectManager->GetProjectScenesPath() + "/" + m_currentSceneName +
-                                                 ".sparkscene"
-                                           : m_currentScenePath;
+        const std::string targetPath = m_currentScenePath.empty() ? m_projectManager->GetProjectScenesPath() + "/" +
+                                                                        m_currentSceneName + ".sparkscene"
+                                                                  : m_currentScenePath;
         if (!SaveCurrentScene(targetPath))
         {
             ShowNotification("Failed to save scene", "error");
@@ -1844,8 +1842,7 @@ namespace SparkEditor
             m_sceneModified = false;
             Spark::Editor::CommandHistory::GetInstance().MarkSaved();
 
-            if (m_projectManager && m_projectManager->HasOpenProject() &&
-                !m_projectManager->RecordOpenedScene(path))
+            if (m_projectManager && m_projectManager->HasOpenProject() && !m_projectManager->RecordOpenedScene(path))
             {
                 Spark::SimpleConsole::GetInstance().LogWarning(
                     "Scene saved, but project last-opened-scene metadata was not updated: " + path);
@@ -1896,8 +1893,7 @@ namespace SparkEditor
         m_sceneModified = false;
         Spark::Editor::CommandHistory::GetInstance().MarkSaved();
 
-        if (m_projectManager && m_projectManager->HasOpenProject() &&
-            !m_projectManager->RecordOpenedScene(path))
+        if (m_projectManager && m_projectManager->HasOpenProject() && !m_projectManager->RecordOpenedScene(path))
         {
             console.LogWarning("Scene opened, but project last-opened-scene metadata was not updated: " + path);
         }
