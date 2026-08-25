@@ -160,6 +160,8 @@ namespace OpenWorld
                 m_totalXPEarned += poi.xpReward;
                 Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Discovered: " + poi.name + " (+" +
                                                             std::to_string(poi.xpReward) + " XP)");
+                if (m_onDiscovered)
+                    m_onDiscovered(poi);
                 break;
             }
         }
@@ -199,6 +201,16 @@ namespace OpenWorld
                 ++count;
         }
         return count;
+    }
+
+    const PointOfInterest* OWExplorationSystem::GetPOI(uint32_t poiId) const
+    {
+        for (const auto& poi : m_pois)
+        {
+            if (poi.poiId == poiId)
+                return &poi;
+        }
+        return nullptr;
     }
 
     float OWExplorationSystem::GetOverallCompletion() const
@@ -295,6 +307,7 @@ namespace OpenWorld
 
         m_pois.clear();
         m_progress.clear();
+        m_onDiscovered = {};
         m_initialized = false;
     }
 

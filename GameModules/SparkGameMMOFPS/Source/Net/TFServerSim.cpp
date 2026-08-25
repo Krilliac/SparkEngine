@@ -73,10 +73,7 @@ namespace Terrafront
         if (serverUp && !m_handlersRegistered)
             RegisterNetHandlers();
         else if (!serverUp && m_handlersRegistered)
-        {
-            UnregisterNetHandlers();
-            m_knownClients.clear();
-        }
+            PrepareNetworkStop();
         if (serverUp)
             PollClientJoinsLeaves();
 #endif
@@ -117,8 +114,7 @@ namespace Terrafront
         if (!m_initialized)
             return;
 #ifdef ENABLE_NETWORKING
-        if (m_handlersRegistered)
-            UnregisterNetHandlers();
+        PrepareNetworkStop();
 #endif
         m_inputs.clear();
         m_move.clear();

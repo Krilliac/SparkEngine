@@ -68,6 +68,7 @@ All ten are auto-discovered at CMake configure time via `GameModules/*/CMakeList
 
 - **Source:** `GameModules/SparkGameOpenWorld/Source/`
 - **Wires:** [Large World Support](../subsystems/Large-World-Support.md) (origin rebasing + seamless streaming), [Day/Night Cycle and Weather](../gameplay-tools/Day-Night-Cycle-and-Weather.md), [Terrain and Procedural Generation](../gameplay-tools/Terrain-and-Procedural-Generation.md), [HLOD and World Partition](../gameplay-tools/HLOD-And-World-Partition.md).
+- **Playable loop:** entering a point of interest records discovery; fast-travel POIs unlock immediately, and teleports/travel synchronize the active biome used by wildlife and dynamic events.
 
 ## SparkGamePlatformer
 
@@ -82,6 +83,7 @@ All ten are auto-discovered at CMake configure time via `GameModules/*/CMakeList
 
 - **Source:** `GameModules/SparkGameRTS/Source/`
 - **Wires:** [AI](../subsystems/AI-and-Navigation.md) (flocking + director), [Event System](../subsystems/Event-System.md), [Audio](../subsystems/Audio.md), weather, [Destruction System](../subsystems/Destruction-System.md).
+- **Playable loop:** selection is backed by the live unit roster, while move/stop/hold commands and queued waypoints drive unit state and deterministic map-space movement.
 
 ## SparkGameRacing
 

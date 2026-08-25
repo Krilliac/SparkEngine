@@ -28,6 +28,60 @@ namespace SparkEditor
 
     GameViewPanel::GameViewPanel() : EditorPanel("Game View", "game_view_panel") {}
 
+    void GameViewPanel::ResetFPSHUDPreviewState()
+    {
+        m_showHUD = false;
+        m_showCrosshair = true;
+        m_showStats = false;
+        m_showMinimap = true;
+        m_showKillFeed = true;
+        m_showDamageIndicators = true;
+        m_showScoreboard = false;
+
+        m_health = 85.0f;
+        m_armor = 60.0f;
+        m_stamina = 100.0f;
+        m_ammo = 24;
+        m_reserveAmmo = 90;
+        m_currentWeaponSlot = 2;
+        m_currentWeaponName = "Assault Rifle";
+        m_isReloading = false;
+        m_reloadProgress = 0.0f;
+
+        m_killFeed.clear();
+        m_killFeedSpawnTimer = 0.0f;
+        m_damageIndicators.clear();
+        m_damageSpawnTimer = 0.0f;
+        m_hitMarkerTimer = 0.0f;
+        m_hitMarkerHeadshot = false;
+        m_vignetteIntensity = 0.0f;
+        m_vignettePulse = 0.0f;
+        m_weaponSwitchTimer = 0.0f;
+        m_weaponSwitchName.clear();
+        m_weaponSwitchSlot = 0;
+        m_objectiveProgress = 0.65f;
+        m_objectiveText = "Capture Point A";
+        m_showInteraction = false;
+        m_interactionPulse = 0.0f;
+        m_playerAngle = 0.0f;
+        m_totalTime = 0.0f;
+        m_isCursorCaptured = false;
+        m_cameraYaw = 0.0f;
+        m_cameraPitch = 0.0f;
+        m_cameraPosX = 128.5f;
+        m_cameraPosY = 1.0f;
+        m_cameraPosZ = 64.2f;
+    }
+
+    void GameViewPanel::SetFPSHUDPreviewEnabled(bool enabled)
+    {
+        // This is called for a project identity transition, including FPS to
+        // FPS. Never carry simulated combat/camera state into another project.
+        ResetFPSHUDPreviewState();
+        m_fpsHUDPreviewAvailable = enabled;
+        m_showHUD = enabled;
+    }
+
     bool GameViewPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
@@ -48,7 +102,7 @@ namespace SparkEditor
         // The HUD below is a play-mode simulation, not an editor preview clock.
         // Keep the stopped and paused Game View stable so Stop restores a
         // deterministic frame instead of continuing combat/objective activity.
-        if (!m_isPlaying)
+        if (!m_isPlaying || !m_fpsHUDPreviewAvailable)
             return;
 
         m_totalTime += deltaTime;
@@ -393,44 +447,49 @@ namespace SparkEditor
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Lock Aspect Ratio (16:9)");
 
-        ImGui::SameLine();
-        ImGui::Text("|");
-        ImGui::SameLine();
-
-        ImGui::Checkbox(ICON_FA_CROSSHAIRS " HUD", &m_showHUD);
-        ImGui::SameLine();
-        ImGui::Checkbox(ICON_FA_MAP " Map", &m_showMinimap);
-        ImGui::SameLine();
-        ImGui::Checkbox(ICON_FA_CHART_BAR " Stats", &m_showStats);
-        ImGui::SameLine();
-        ImGui::Checkbox(ICON_FA_SHIELD " Score", &m_showScoreboard);
-
-        ImGui::SameLine();
-        ImGui::Text("|");
-        ImGui::SameLine();
-
-        // Simulate actions
-        if (ImGui::Button(ICON_FA_BOLT " Damage"))
+        if (m_fpsHUDPreviewAvailable)
         {
-            m_health = std::max(5.0f, m_health - 25.0f);
-            SimDamageIndicator dmg;
-            dmg.angle = fmod(m_totalTime * 2.1f, 6.2832f);
-            dmg.intensity = 0.8f;
-            dmg.timer = 1.5f;
-            dmg.maxTime = 1.5f;
-            m_damageIndicators.push_back(dmg);
-        }
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Simulate taking damage");
-        ImGui::SameLine();
+            ImGui::SameLine();
+            ImGui::Text("|");
+            ImGui::SameLine();
 
-        if (ImGui::Button(ICON_FA_CROSSHAIRS " Hit"))
-        {
-            m_hitMarkerTimer = 0.3f;
-            m_hitMarkerHeadshot = (((int)(m_totalTime * 10)) % 3 == 0);
+            bool showHUD = m_showHUD;
+            if (ImGui::Checkbox(ICON_FA_CROSSHAIRS " FPS HUD", &showHUD))
+                SetFPSHUDPreviewVisible(showHUD);
+            ImGui::SameLine();
+            ImGui::Checkbox(ICON_FA_MAP " Map", &m_showMinimap);
+            ImGui::SameLine();
+            ImGui::Checkbox(ICON_FA_CHART_BAR " Stats", &m_showStats);
+            ImGui::SameLine();
+            ImGui::Checkbox(ICON_FA_SHIELD " Score", &m_showScoreboard);
+
+            ImGui::SameLine();
+            ImGui::Text("|");
+            ImGui::SameLine();
+
+            // Simulate actions
+            if (ImGui::Button(ICON_FA_BOLT " Damage"))
+            {
+                m_health = std::max(5.0f, m_health - 25.0f);
+                SimDamageIndicator dmg;
+                dmg.angle = fmod(m_totalTime * 2.1f, 6.2832f);
+                dmg.intensity = 0.8f;
+                dmg.timer = 1.5f;
+                dmg.maxTime = 1.5f;
+                m_damageIndicators.push_back(dmg);
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Simulate taking damage");
+            ImGui::SameLine();
+
+            if (ImGui::Button(ICON_FA_CROSSHAIRS " Hit"))
+            {
+                m_hitMarkerTimer = 0.3f;
+                m_hitMarkerHeadshot = (((int)(m_totalTime * 10)) % 3 == 0);
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Simulate hit marker");
         }
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Simulate hit marker");
 
         ImGui::SameLine();
         ImGui::Text("|");
@@ -500,6 +559,12 @@ namespace SparkEditor
 
     void GameViewPanel::HandleInput(float deltaTime)
     {
+        if (!m_fpsHUDPreviewAvailable)
+        {
+            m_isCursorCaptured = false;
+            return;
+        }
+
         ImGuiIO& io = ImGui::GetIO();
         bool isWindowFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
         bool isWindowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
@@ -758,20 +823,31 @@ namespace SparkEditor
         // "Game View" center text (subtle) — show capture hint when not captured
         if (!m_isCursorCaptured)
         {
-            const char* label =
-                m_isPlaying ? ICON_FA_GAMEPAD " Click to enter Game View" : ICON_FA_PLAY " Press F5 to play";
+            const char* label = !m_isPlaying               ? ICON_FA_PLAY " Press F5 to play"
+                                : m_fpsHUDPreviewAvailable ? ICON_FA_GAMEPAD " Click to enter Game View"
+                                                           : ICON_FA_GAMEPAD " Game View running";
             ImVec2 textSize = ImGui::CalcTextSize(label);
             ImVec2 textPos(pos.x + (viewportSize.x - textSize.x) * 0.5f, pos.y + viewportSize.y * 0.45f);
             drawList->AddText(textPos, IM_COL32(80, 100, 120, 140), label);
 
+            if (ShouldShowInputCaptureHint())
+            {
+                const char* hint = "Click the viewport to capture input";
+                ImVec2 hintSize = ImGui::CalcTextSize(hint);
+                ImVec2 hintPos(pos.x + (viewportSize.x - hintSize.x) * 0.5f, pos.y + viewportSize.y * 0.45f + 20.0f);
+                drawList->AddText(hintPos, IM_COL32(80, 100, 120, 80), hint);
+            }
+        }
+        else if (ShouldShowInputReleaseHint())
+        {
             const char* hint = "Press ESC to release cursor";
             ImVec2 hintSize = ImGui::CalcTextSize(hint);
-            ImVec2 hintPos(pos.x + (viewportSize.x - hintSize.x) * 0.5f, pos.y + viewportSize.y * 0.45f + 20.0f);
-            drawList->AddText(hintPos, IM_COL32(80, 100, 120, 80), hint);
+            ImVec2 hintPos(pos.x + (viewportSize.x - hintSize.x) * 0.5f, pos.y + 18.0f);
+            drawList->AddText(hintPos, IM_COL32(170, 190, 210, 170), hint);
         }
 
         // FPS HUD overlay
-        if (m_showHUD)
+        if (IsFPSHUDPreviewEnabled())
         {
             RenderFPSHUD();
         }

@@ -68,3 +68,16 @@ TEST(DocumentTransition_SecondRequestCannotReplacePendingAction)
     EXPECT_FALSE(guard.Request(DocumentTransitionAction::Exit, false));
     EXPECT_TRUE(guard.GetPending() == DocumentTransitionAction::NewScene);
 }
+
+TEST(DocumentTransition_ProjectOpenAndCreationUseTheDirtyDocumentGate)
+{
+    DocumentTransitionGuard openGuard;
+    EXPECT_FALSE(openGuard.Request(DocumentTransitionAction::OpenProject, true));
+    EXPECT_TRUE(openGuard.GetPending() == DocumentTransitionAction::OpenProject);
+    EXPECT_TRUE(openGuard.Resolve(UnsavedChangesDecision::Discard) == DocumentTransitionAction::OpenProject);
+
+    DocumentTransitionGuard createGuard;
+    EXPECT_FALSE(createGuard.Request(DocumentTransitionAction::CreateProject, true));
+    EXPECT_TRUE(createGuard.GetPending() == DocumentTransitionAction::CreateProject);
+    EXPECT_TRUE(createGuard.Resolve(UnsavedChangesDecision::Save, true) == DocumentTransitionAction::CreateProject);
+}

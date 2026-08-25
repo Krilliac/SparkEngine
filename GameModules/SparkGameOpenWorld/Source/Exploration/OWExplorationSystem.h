@@ -14,8 +14,10 @@
 #include "Enums/OpenWorldEnums.h"
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace OpenWorld
@@ -61,6 +63,8 @@ namespace OpenWorld
     class OWExplorationSystem
     {
       public:
+        using DiscoveryCallback = std::function<void(const PointOfInterest&)>;
+
         OWExplorationSystem() = default;
         ~OWExplorationSystem() = default;
 
@@ -71,6 +75,7 @@ namespace OpenWorld
 
         size_t GetPOICount() const { return m_pois.size(); }
         size_t GetDiscoveredCount() const;
+        const PointOfInterest* GetPOI(uint32_t poiId) const;
         float GetOverallCompletion() const;
         RegionExploration GetRegionExploration(uint32_t regionId) const;
         std::string GetExplorationString() const;
@@ -82,6 +87,9 @@ namespace OpenWorld
         /// @brief Mark a POI's secret as found
         void FindSecret(uint32_t poiId);
 
+        /// @brief Install a synchronous notification for newly visited POIs.
+        void SetDiscoveryCallback(DiscoveryCallback callback) { m_onDiscovered = std::move(callback); }
+
       private:
         void DefinePointsOfInterest();
         void CheckDiscovery(float playerX, float playerY, float playerZ);
@@ -91,6 +99,7 @@ namespace OpenWorld
         std::vector<PointOfInterest> m_pois;
         std::unordered_map<uint32_t, POIProgress> m_progress;
         uint32_t m_totalXPEarned{0};
+        DiscoveryCallback m_onDiscovered;
         bool m_initialized{false};
     };
 

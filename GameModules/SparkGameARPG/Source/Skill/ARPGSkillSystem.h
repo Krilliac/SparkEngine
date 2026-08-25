@@ -22,6 +22,8 @@
 namespace ARPG
 {
 
+    class ARPGHeroSystem;
+
     /// @brief Definition of a single skill
     struct SkillData
     {
@@ -53,13 +55,13 @@ namespace ARPG
         ARPGSkillSystem() = default;
         ~ARPGSkillSystem() = default;
 
-        bool Initialize(Spark::IEngineContext* context);
+        bool Initialize(Spark::IEngineContext* context, const ARPGHeroSystem* heroSystem);
         void Shutdown();
         void Update(float deltaTime);
         void RenderDebugUI();
 
         // === Skill management ===
-        bool LearnSkill(uint32_t heroId, uint32_t skillId, int heroLevel);
+        bool LearnSkill(uint32_t heroId, uint32_t skillId);
         bool UseSkill(uint32_t heroId, uint32_t skillId);
         std::vector<const SkillData*> GetAvailableSkills(ARPGHeroClass heroClass, int heroLevel) const;
         std::vector<uint32_t> GetLearnedSkills(uint32_t heroId) const;
@@ -74,6 +76,7 @@ namespace ARPG
         void AddSkill(const SkillData& skill);
 
         Spark::IEngineContext* m_context{nullptr};
+        const ARPGHeroSystem* m_heroSystem{nullptr};
         std::vector<SkillData> m_allSkills;
 
         /// Hero ID -> list of learned skill IDs

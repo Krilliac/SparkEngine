@@ -103,8 +103,14 @@ namespace Racing
         /// Notify that a racer completed a lap
         void OnLapCompleted(uint32_t vehicleId);
 
+        /// Mark one racer as did-not-finish without ending a race that still has active racers.
+        void MarkDNF(uint32_t vehicleId);
+
         /// Update a racer's track distance (for position sorting)
         void UpdateRacerDistance(uint32_t vehicleId, float distance);
+
+        /// Recompute standings after a batch of current-frame distance updates.
+        void RefreshPositions();
 
         RaceState GetState() const { return m_state; }
         RaceMode GetMode() const { return m_mode; }

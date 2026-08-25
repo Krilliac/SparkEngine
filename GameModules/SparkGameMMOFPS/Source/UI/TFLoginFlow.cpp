@@ -45,6 +45,8 @@ namespace Terrafront
                 return "Server error - try again.";
             case TFAuthErr::NotLoggedIn:
                 return "You are not logged in.";
+            case TFAuthErr::SessionActive:
+                return "Disconnect before changing accounts.";
             default:
                 return "Unknown error.";
             }
@@ -70,6 +72,8 @@ namespace Terrafront
                 return "Server error - try again.";
             case TFCharErr::NotLoggedIn:
                 return "You are not logged in.";
+            case TFCharErr::SessionActive:
+                return "Leave the world before changing characters.";
             default:
                 return "Unknown error.";
             }

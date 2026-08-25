@@ -145,6 +145,12 @@ namespace Platformer
 #include "../GameModules/SparkGameARPG/Source/Hero/ARPGHeroSystem.h"
 #include "../GameModules/SparkGameARPG/Source/Combat/ARPGCombatSystem.h"
 #include "../GameModules/SparkGameARPG/Source/Loot/ARPGLootSystem.h"
+#include "../GameModules/SparkGameARPG/Source/Dungeon/ARPGDungeonSystem.h"
+#include "../GameModules/SparkGameARPG/Source/Skill/ARPGSkillSystem.h"
+#include "../GameModules/SparkGameARPG/Source/Monster/ARPGMonsterSystem.h"
+#include "../GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.h"
+
+#include <limits>
 
 namespace ARPG
 {
@@ -330,6 +336,150 @@ namespace ARPG
         std::string info = loot.GetLootInfoString();
         EXPECT_FALSE(info.empty());
         loot.Shutdown();
+    }
+
+    // =============================================================================
+    // Skills, monsters, and playable encounter
+    // =============================================================================
+
+    TEST(ARPG_Skill_UseRequiresLearningAndHonorsCooldown)
+    {
+        ARPGHeroSystem heroes;
+        ARPGSkillSystem skills;
+        heroes.Initialize(nullptr);
+        EXPECT_TRUE(skills.Initialize(nullptr, &heroes));
+
+        const auto available = skills.GetAvailableSkills(ARPGHeroClass::Sorceress, 1);
+        EXPECT_FALSE(available.empty());
+        const uint32_t skillId = available.front()->skillId;
+        const uint32_t sorceress = heroes.CreateHero("Test Sorceress", ARPGHeroClass::Sorceress);
+        const uint32_t barbarian = heroes.CreateHero("Test Barbarian", ARPGHeroClass::Barbarian);
+
+        EXPECT_FALSE(skills.UseSkill(42, skillId));
+        EXPECT_FALSE(skills.LearnSkill(42, skillId));
+        EXPECT_FALSE(skills.LearnSkill(barbarian, skillId));
+        EXPECT_TRUE(skills.LearnSkill(sorceress, skillId));
+        EXPECT_TRUE(skills.UseSkill(sorceress, skillId));
+        if (available.front()->cooldown > 0.0f)
+        {
+            EXPECT_FALSE(skills.UseSkill(sorceress, skillId));
+            skills.Update(available.front()->cooldown);
+            EXPECT_TRUE(skills.UseSkill(sorceress, skillId));
+        }
+        skills.Shutdown();
+        heroes.Shutdown();
+    }
+
+    TEST(ARPG_Monster_BossStoredStateMatchesSpawnResult)
+    {
+        ARPGMonsterSystem monsters;
+        monsters.Initialize(nullptr);
+
+        const MonsterData boss = monsters.SpawnBoss(5);
+        const MonsterData* stored = monsters.GetMonster(boss.monsterId);
+        EXPECT_TRUE(stored != nullptr);
+        EXPECT_EQ(stored->name, boss.name);
+        EXPECT_TRUE(stored->rank == ARPGMonsterRank::Boss);
+        EXPECT_EQ(stored->affixes.size(), boss.affixes.size());
+
+        monsters.Shutdown();
+    }
+
+    TEST(ARPG_Monster_DamageRejectsInvalidAmountsAndRemovesDefeated)
+    {
+        ARPGMonsterSystem monsters;
+        monsters.Initialize(nullptr);
+
+        const MonsterData monster = monsters.SpawnMonster("Skeleton", 1);
+        EXPECT_FALSE(monsters.DamageMonster(monster.monsterId, -1.0f));
+        EXPECT_FALSE(monsters.DamageMonster(monster.monsterId, std::numeric_limits<float>::quiet_NaN()));
+        EXPECT_TRUE(monsters.DamageMonster(monster.monsterId, monster.maxHealth + 1.0f));
+        monsters.Update(0.0f);
+        EXPECT_TRUE(monsters.GetMonster(monster.monsterId) == nullptr);
+
+        monsters.Shutdown();
+    }
+
+    TEST(ARPG_DemoEncounter_AdvancesFloorAndRestarts)
+    {
+        ARPGHeroSystem heroes;
+        ARPGCombatSystem combat;
+        ARPGLootSystem loot;
+        ARPGDungeonSystem dungeon;
+        ARPGSkillSystem skills;
+        ARPGMonsterSystem monsters;
+        heroes.Initialize(nullptr);
+        combat.Initialize(nullptr);
+        loot.Initialize(nullptr);
+        dungeon.Initialize(nullptr);
+        skills.Initialize(nullptr, &heroes);
+        monsters.Initialize(nullptr);
+
+        ARPGDemoEncounter encounter;
+        EXPECT_TRUE(encounter.Initialize(&heroes, &combat, &loot, &dungeon, &skills, &monsters));
+        EXPECT_EQ(dungeon.GetCurrentFloorNumber(), 1);
+        EXPECT_TRUE(encounter.GetTarget() != nullptr);
+
+        for (int attack = 0; attack < 20 && encounter.GetState().totalKills < 3; ++attack)
+            EXPECT_TRUE(encounter.BasicAttack());
+
+        EXPECT_EQ(encounter.GetState().totalKills, 3u);
+        EXPECT_EQ(dungeon.GetCurrentFloorNumber(), 2);
+        EXPECT_EQ(loot.GetGeneratedItemCount(), 3u);
+        EXPECT_TRUE(encounter.GetTarget() != nullptr);
+
+        encounter.Restart();
+        EXPECT_EQ(encounter.GetState().totalKills, 0u);
+        EXPECT_EQ(dungeon.GetCurrentFloorNumber(), 1);
+        EXPECT_TRUE(encounter.GetTarget() != nullptr);
+        EXPECT_NEAR(encounter.GetHero()->health, encounter.GetHero()->maxHealth, 0.001f);
+        EXPECT_NEAR(encounter.GetHero()->mana, encounter.GetHero()->maxMana, 0.001f);
+
+        encounter.Shutdown();
+        monsters.Shutdown();
+        skills.Shutdown();
+        dungeon.Shutdown();
+        loot.Shutdown();
+        combat.Shutdown();
+        heroes.Shutdown();
+    }
+
+    TEST(ARPG_DemoEncounter_ReconcilesExternallyDefeatedTarget)
+    {
+        ARPGHeroSystem heroes;
+        ARPGCombatSystem combat;
+        ARPGLootSystem loot;
+        ARPGDungeonSystem dungeon;
+        ARPGSkillSystem skills;
+        ARPGMonsterSystem monsters;
+        heroes.Initialize(nullptr);
+        combat.Initialize(nullptr);
+        loot.Initialize(nullptr);
+        dungeon.Initialize(nullptr);
+        skills.Initialize(nullptr, &heroes);
+        monsters.Initialize(nullptr);
+
+        ARPGDemoEncounter encounter;
+        EXPECT_TRUE(encounter.Initialize(&heroes, &combat, &loot, &dungeon, &skills, &monsters));
+        const MonsterData* originalTarget = encounter.GetTarget();
+        EXPECT_TRUE(originalTarget != nullptr);
+        const uint32_t originalTargetId = originalTarget ? originalTarget->monsterId : 0;
+        const float lethalDamage = originalTarget ? originalTarget->maxHealth + 1.0f : 1.0f;
+
+        EXPECT_TRUE(monsters.DamageMonster(originalTargetId, lethalDamage));
+        encounter.Update();
+
+        EXPECT_EQ(encounter.GetState().totalKills, 1u);
+        EXPECT_TRUE(encounter.GetTarget() != nullptr);
+        EXPECT_NE(encounter.GetState().targetMonsterId, originalTargetId);
+
+        encounter.Shutdown();
+        monsters.Shutdown();
+        skills.Shutdown();
+        dungeon.Shutdown();
+        loot.Shutdown();
+        combat.Shutdown();
+        heroes.Shutdown();
     }
 
 } // namespace ARPG

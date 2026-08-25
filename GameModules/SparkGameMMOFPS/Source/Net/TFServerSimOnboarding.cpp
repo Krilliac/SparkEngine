@@ -6,6 +6,7 @@
  *        TFServerSim.cpp).
  */
 #include "Net/TFServerSim.h"
+#include "Net/TFOnboardingSessionRules.h"
 
 #include "Account/TFAccountSystem.h"   // W5 onboarding (Task 4)
 #include "Account/TFCharacterSystem.h" // W5 onboarding (Task 4)
@@ -228,6 +229,16 @@ namespace Terrafront
             ++m_badPackets;
             return;
         }
+
+        TF_AuthReply rep{};
+        const bool authenticated = m_ctx->account && m_ctx->account->AccountForClient(sender) != 0;
+        if (!CanBeginAuthentication(authenticated, m_enteredWorld.contains(sender)))
+        {
+            rep.err = static_cast<uint8_t>(TFAuthErr::SessionActive);
+            SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginReply), &rep, sizeof(rep), true);
+            return;
+        }
+
         TF_AuthRequest req;
         std::memcpy(&req, data, sizeof(req));
         const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
@@ -235,7 +246,6 @@ namespace Terrafront
         std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
         const auto clearPassword = Spark::MakeScopeExit([&] { Spark::SecureClear(pass); });
 
-        TF_AuthReply rep{};
         if (!m_ctx->account || !EnsureAuthorityDatabaseOpen())
         {
             rep.err = static_cast<uint8_t>(TFAuthErr::ServerError);
@@ -259,6 +269,16 @@ namespace Terrafront
             ++m_badPackets;
             return;
         }
+
+        TF_AuthReply rep{};
+        const bool authenticated = m_ctx->account && m_ctx->account->AccountForClient(sender) != 0;
+        if (!CanBeginAuthentication(authenticated, m_enteredWorld.contains(sender)))
+        {
+            rep.err = static_cast<uint8_t>(TFAuthErr::SessionActive);
+            SendToPlayer(sender, static_cast<uint16_t>(TFMsg::RegisterReply), &rep, sizeof(rep), true);
+            return;
+        }
+
         TF_AuthRequest req;
         std::memcpy(&req, data, sizeof(req));
         const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
@@ -266,7 +286,6 @@ namespace Terrafront
         std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
         const auto clearPassword = Spark::MakeScopeExit([&] { Spark::SecureClear(pass); });
 
-        TF_AuthReply rep{};
         if (!m_ctx->account || !EnsureAuthorityDatabaseOpen())
         {
             rep.err = static_cast<uint8_t>(TFAuthErr::ServerError);
@@ -344,6 +363,12 @@ namespace Terrafront
         const std::string name(req.name, strnlen(req.name, sizeof(req.name)));
 
         TF_CharOpReply rep{};
+        if (!CanMutateCharacterProfile(m_enteredWorld.contains(sender)))
+        {
+            rep.err = static_cast<uint8_t>(TFCharErr::SessionActive);
+            SendToPlayer(sender, static_cast<uint16_t>(TFMsg::CharCreateReply), &rep, sizeof(rep), true);
+            return;
+        }
         if (!m_ctx->account || !m_ctx->characters)
         {
             rep.err = static_cast<uint8_t>(TFCharErr::ServerError);
@@ -379,6 +404,12 @@ namespace Terrafront
 
         TF_CharOpReply rep{};
         rep.charId = req.charId;
+        if (!CanMutateCharacterProfile(m_enteredWorld.contains(sender)))
+        {
+            rep.err = static_cast<uint8_t>(TFCharErr::SessionActive);
+            SendToPlayer(sender, static_cast<uint16_t>(TFMsg::CharDeleteReply), &rep, sizeof(rep), true);
+            return;
+        }
         if (!m_ctx->account || !m_ctx->characters)
         {
             rep.err = static_cast<uint8_t>(TFCharErr::ServerError);

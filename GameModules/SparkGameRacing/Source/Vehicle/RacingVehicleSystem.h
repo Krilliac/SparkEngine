@@ -95,11 +95,15 @@ namespace Racing
         void RemoveVehicle(uint32_t id);
 
         /// Apply player input to the player vehicle
-        void ApplyInput(float throttle, float brake, float steer, bool nitroPressed, bool driftPressed);
+        void ApplyInput(float throttle, float brake, float steer, bool nitroPressed, bool driftPressed,
+                        float deltaTime = 1.0f / 60.0f);
 
         /// Apply input to a specific vehicle (used by AI and tools)
         void ApplyInputToVehicle(uint32_t vehicleId, float throttle, float brake, float steer, bool nitroPressed,
-                                 bool driftPressed);
+                                 bool driftPressed, float deltaTime = 1.0f / 60.0f);
+
+        /// Clear drive state and velocity while keeping the vehicle active for presentation.
+        void NeutralizeVehicle(uint32_t vehicleId);
 
         VehicleInstance* GetVehicle(uint32_t id);
         const VehicleInstance* GetVehicle(uint32_t id) const;
@@ -118,7 +122,7 @@ namespace Racing
 
       private:
         void ApplyInputInternal(VehicleInstance& vehicle, float throttle, float brake, float steer, bool nitroPressed,
-                                bool driftPressed);
+                                bool driftPressed, float deltaTime);
         void UpdateVehiclePhysics(VehicleInstance& vehicle, float dt);
         void UpdateDriftState(VehicleInstance& vehicle, float steer, bool driftPressed, float dt);
         void ApplyDamage(VehicleInstance& vehicle, float amount);

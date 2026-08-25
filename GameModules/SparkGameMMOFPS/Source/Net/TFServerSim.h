@@ -114,7 +114,13 @@ namespace Terrafront
         /// both paths run the exact same authoritative logic (DESIGN.md W5).
         void RouteClientMessage(PlayerId sender, TFMsg id, const void* data, size_t size);
 
-        /// Test-only entry point (final-review #1/#2 regression proof): runs the
+        /// Main-thread network stop seam. Drains every authoritative player
+        /// session while persistence/gameplay dependencies are still alive, then
+        /// unregisters handlers and resets registration state so a same-process
+        /// host restart installs a fresh handler set.
+        void PrepareNetworkStop();
+
+        /// Diagnostic entry point (final-review #1/#2 regression proof): runs the
         /// exact same per-player disconnect cleanup PollClientJoinsLeaves runs for
         /// a real socket drop (final progression flush to the character, then
         /// ClearPlayer, then session teardown) without needing an actual

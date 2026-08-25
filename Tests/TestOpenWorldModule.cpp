@@ -419,6 +419,71 @@ TEST(Gated_OWExploration_Update)
     EXPECT_TRUE(true); // no crash
 }
 
+TEST(Gated_OWExploration_DiscoveryCallbackUnlocksFastTravelOnce)
+{
+    OWPlayerSystem player;
+    OWExplorationSystem exploration;
+    EXPECT_TRUE(player.Initialize(nullptr));
+    EXPECT_TRUE(exploration.Initialize(nullptr));
+
+    size_t callbackCount = 0;
+    exploration.SetDiscoveryCallback(
+        [&](const PointOfInterest& poi)
+        {
+            ++callbackCount;
+            if (poi.type == POIType::FastTravel)
+                player.UnlockFastTravel({poi.poiId, poi.name, poi.x, poi.y, poi.z, poi.regionId});
+        });
+
+    exploration.Update(0.1f, 0.0f, 5.0f, 0.0f);
+    EXPECT_EQ(callbackCount, static_cast<size_t>(1));
+    EXPECT_EQ(player.GetFastTravelCount(), static_cast<size_t>(2));
+    EXPECT_TRUE(player.FastTravelTo(4));
+    EXPECT_EQ(player.GetWorldState().currentRegionId, static_cast<uint32_t>(1));
+
+    exploration.Update(0.1f, 0.0f, 5.0f, 0.0f);
+    EXPECT_EQ(callbackCount, static_cast<size_t>(1));
+    EXPECT_EQ(player.GetFastTravelCount(), static_cast<size_t>(2));
+}
+
+TEST(Gated_OWPlayer_RegionTracksWorldPosition)
+{
+    OWWorldSetup world;
+    OWPlayerSystem player;
+    EXPECT_TRUE(world.Initialize(nullptr));
+    EXPECT_TRUE(player.Initialize(nullptr));
+
+    player.SetPosition(3500.0f, 15.0f, 500.0f);
+    const auto& position = player.GetWorldState();
+    const BiomeRegion* region = world.GetRegionAtPosition(position.posX, position.posY, position.posZ);
+    EXPECT_TRUE(region != nullptr);
+    if (region)
+        player.SetCurrentRegion(region->regionId);
+    EXPECT_EQ(player.GetWorldState().currentRegionId, static_cast<uint32_t>(2));
+
+    player.SetPosition(50000.0f, 0.0f, 50000.0f);
+    region = world.GetRegionAtPosition(player.GetWorldState().posX, player.GetWorldState().posY,
+                                       player.GetWorldState().posZ);
+    player.SetCurrentRegion(region ? region->regionId : 0);
+    EXPECT_EQ(player.GetWorldState().currentRegionId, static_cast<uint32_t>(0));
+}
+
+TEST(Gated_OWPlayer_RegionLookupUsesElevationInOverlappingVolumes)
+{
+    OWWorldSetup world;
+    EXPECT_TRUE(world.Initialize(nullptr));
+
+    const BiomeRegion* lowRegion = world.GetRegionAtPosition(3500.0f, 50.0f, 2500.0f);
+    EXPECT_TRUE(lowRegion != nullptr);
+    if (lowRegion)
+        EXPECT_EQ(lowRegion->regionId, static_cast<uint32_t>(2));
+
+    const BiomeRegion* elevatedRegion = world.GetRegionAtPosition(3500.0f, 500.0f, 2500.0f);
+    EXPECT_TRUE(elevatedRegion != nullptr);
+    if (elevatedRegion)
+        EXPECT_EQ(elevatedRegion->regionId, static_cast<uint32_t>(3));
+}
+
 // --- OWGatheringSystem full tests ---
 
 TEST(Gated_OWGathering_Initialize)

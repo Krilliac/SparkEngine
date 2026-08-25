@@ -105,6 +105,15 @@ namespace Terrafront
         /// Boot NetworkManager in client role and connect to a remote host.
         bool Connect(const std::string& ip, uint16_t port);
 
+#ifdef ENABLE_NETWORKING
+        /// Stop the active client/server session while preserving the loaded
+        /// scene, collision, and camera so the same runtime can host/connect
+        /// again. Main/game-thread only; valid for Client, ListenHost, and
+        /// DedicatedServer roles. Call client-side state teardown first when a
+        /// local client exists. Safe when networking is already stopped.
+        void StopNetworking();
+#endif
+
         /// Authoritative terrain height at world XZ. Deterministic and identical
         /// on server and client (same params, same region table). Safe to call
         /// from the AreaServer tick thread: reads only load-time-immutable state.
@@ -169,7 +178,6 @@ namespace Terrafront
 #ifdef ENABLE_NETWORKING
         bool BootServer(uint16_t port, NetRole role);
         void BridgeWorldServerSessions();
-        void StopNetworking();
 #endif
 
         TFGameContext* m_ctx{nullptr};

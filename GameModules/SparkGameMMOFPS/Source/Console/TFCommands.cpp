@@ -51,12 +51,43 @@ namespace
     // translation units. Kept in one teardown list so no callback retaining
     // `this` survives module unload or a hot-reload.
     constexpr const char* kModuleConsoleCommands[] = {
-        "tf_status",      "tf_host",     "tf_dedicated",   "tf_connect",   "tf_disconnect",  "tf_faction",
-        "tf_class",       "tf_spawn",    "tf_fire",        "tf_give",      "tf_reload_data", "tf_regions",
-        "tf_pos",         "tf_tp",       "tf_bots",        "tf_capture",   "tf_botinfo",     "tf_cam",
-        "tf_map",         "tf_deploy",   "tf_flux",        "tf_save",      "tf_debug",       "tf_perf",
-        "tf_vehicle",     "tf_colossus", "tf_place",       "tf_giveflux",  "tf_unlock",      "tf_chat",
-        "tf_register",    "tf_login",    "tf_char_create", "tf_char_list", "tf_enter",       "tf_selftest_onboarding",
+        "tf_status",
+        "tf_host",
+        "tf_dedicated",
+        "tf_connect",
+        "tf_disconnect",
+        "tf_faction",
+        "tf_class",
+        "tf_spawn",
+        "tf_fire",
+        "tf_give",
+        "tf_reload_data",
+        "tf_regions",
+        "tf_pos",
+        "tf_tp",
+        "tf_bots",
+        "tf_capture",
+        "tf_botinfo",
+        "tf_cam",
+        "tf_map",
+        "tf_deploy",
+        "tf_flux",
+        "tf_save",
+        "tf_debug",
+        "tf_perf",
+        "tf_vehicle",
+        "tf_colossus",
+        "tf_place",
+        "tf_giveflux",
+        "tf_unlock",
+        "tf_chat",
+        "tf_register",
+        "tf_login",
+        "tf_char_create",
+        "tf_char_list",
+        "tf_enter",
+        "tf_quickplay",
+        "tf_selftest_onboarding",
         "tf_cheat_stats",
     };
 
@@ -273,15 +304,14 @@ void TerrafrontModule::RegisterConsoleCommands()
         [this](const std::vector<std::string>&) -> std::string
         {
 #ifdef ENABLE_NETWORKING
-            // TF-W2: route through a TFWorldSetup stop/teardown API so world
-            // state (role, servers, scene) resets cleanly alongside the socket.
-            auto& nm = Spark::Net::NetworkManager::GetInstance();
-            if (!nm.IsInitialized())
-                return "[TF] networking not initialized";
-            if (m_ctx.role == NetRole::Client)
-                nm.Disconnect();
-            else
-                nm.StopServer();
+            if (!m_ctx.world)
+                return "[TF] world system not ready";
+            // Reset reply-driven auth/character state first. For a listen host
+            // this also removes the in-process authoritative player, which has
+            // no socket leave event of its own.
+            if (m_ctx.clientNet)
+                m_ctx.clientNet->Disconnect();
+            m_ctx.world->StopNetworking();
             return "[TF] disconnected";
 #else
             return "[TF] networking disabled in this build (define ENABLE_NETWORKING)";

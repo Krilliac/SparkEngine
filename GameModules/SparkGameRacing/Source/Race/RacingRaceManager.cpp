@@ -143,6 +143,22 @@ namespace Racing
         CheckFinishConditions();
     }
 
+    void RacingRaceManager::MarkDNF(uint32_t vehicleId)
+    {
+        bool stateChanged = false;
+        for (auto& racer : m_racers)
+        {
+            if (racer.vehicleId != vehicleId || racer.finished || racer.dnf)
+                continue;
+
+            racer.dnf = true;
+            stateChanged = true;
+            break;
+        }
+        if (stateChanged)
+            CheckFinishConditions();
+    }
+
     void RacingRaceManager::UpdateRacerDistance(uint32_t vehicleId, float distance)
     {
         for (auto& racer : m_racers)
@@ -153,6 +169,11 @@ namespace Racing
                 break;
             }
         }
+    }
+
+    void RacingRaceManager::RefreshPositions()
+    {
+        SortPositions();
     }
 
     const RacerState* RacingRaceManager::GetRacer(uint32_t vehicleId) const
@@ -299,6 +320,9 @@ namespace Racing
 
     void RacingRaceManager::CheckFinishConditions()
     {
+        if (m_state == RaceState::Finished)
+            return;
+
         bool allDone = true;
         for (const auto& racer : m_racers)
         {

@@ -4,6 +4,7 @@
  */
 
 #include "RTSCommandSystem.h"
+#include "Unit/RTSUnitSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -12,13 +13,18 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
 
 namespace RTS
 {
 
-    bool RTSCommandSystem::Initialize(Spark::IEngineContext* context)
+    bool RTSCommandSystem::Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem)
     {
+        if (!unitSystem)
+            return false;
+
         m_context = context;
+        m_unitSystem = unitSystem;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS command system initialized");
         Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Command system initialized");
         return true;
@@ -33,6 +39,8 @@ namespace RTS
     {
         m_selectedUnits.clear();
         m_commandQueues.clear();
+        m_unitSystem = nullptr;
+        m_context = nullptr;
     }
 
     // === Selection ===
@@ -40,11 +48,15 @@ namespace RTS
     void RTSCommandSystem::Select(uint32_t unitId)
     {
         m_selectedUnits.clear();
-        m_selectedUnits.push_back(unitId);
+        if (m_unitSystem && m_unitSystem->GetUnit(unitId))
+            m_selectedUnits.push_back(unitId);
     }
 
     void RTSCommandSystem::AddToSelection(uint32_t unitId)
     {
+        if (!m_unitSystem || !m_unitSystem->GetUnit(unitId))
+            return;
+
         // Prevent duplicates
         for (uint32_t id : m_selectedUnits)
         {
@@ -61,10 +73,17 @@ namespace RTS
 
     void RTSCommandSystem::SelectAllOfType(RTSUnitType type, RTSFaction faction)
     {
-        // This would query the unit system for matching units
-        // For now, keep existing selection logic as a placeholder
-        (void)type;
-        (void)faction;
+        m_selectedUnits.clear();
+        if (!m_unitSystem)
+            return;
+
+        for (uint32_t unitId : m_unitSystem->GetUnitsByFaction(faction))
+        {
+            const UnitData* unit = m_unitSystem->GetUnit(unitId);
+            if (unit && unit->type == type && unit->state != RTSUnitState::Dead)
+                m_selectedUnits.push_back(unitId);
+        }
+        std::ranges::sort(m_selectedUnits);
     }
 
     const std::vector<uint32_t>& RTSCommandSystem::GetSelection() const
@@ -81,6 +100,9 @@ namespace RTS
 
     void RTSCommandSystem::IssueCommand(uint32_t unitId, const UnitCommand& command)
     {
+        if (!m_unitSystem || !m_unitSystem->GetUnit(unitId) || !IsCommandValid(command))
+            return;
+
         // Replace existing queue with single command
         m_commandQueues[unitId].clear();
         m_commandQueues[unitId].push_back(command);
@@ -90,6 +112,9 @@ namespace RTS
 
     void RTSCommandSystem::QueueCommand(uint32_t unitId, const UnitCommand& command)
     {
+        if (!m_unitSystem || !m_unitSystem->GetUnit(unitId) || !IsCommandValid(command))
+            return;
+
         // Append to existing queue (shift-click behavior)
         m_commandQueues[unitId].push_back(command);
     }
@@ -141,11 +166,21 @@ namespace RTS
 
     void RTSCommandSystem::ProcessCommands(float deltaTime)
     {
-        (void)deltaTime;
+        if (!m_unitSystem)
+            return;
 
-        // Process command queues: pop completed commands, advance to next
+        PruneSelection();
+        const float safeDeltaTime = std::isfinite(deltaTime) && deltaTime > 0.0f ? deltaTime : 0.0f;
+
         for (auto it = m_commandQueues.begin(); it != m_commandQueues.end();)
         {
+            UnitData* unit = m_unitSystem->GetUnitMutable(it->first);
+            if (!unit || unit->state == RTSUnitState::Dead)
+            {
+                it = m_commandQueues.erase(it);
+                continue;
+            }
+
             auto& queue = it->second;
 
             if (queue.empty())
@@ -154,24 +189,95 @@ namespace RTS
                 continue;
             }
 
-            // The front command is the active one.
-            // In a full implementation, this would:
-            // 1. Move units toward targetX/targetY for Move commands
-            // 2. Engage targets for Attack commands
-            // 3. Toggle between two waypoints for Patrol
-            // 4. Keep position for Hold
-            // 5. Send workers to build sites for Build
-            // 6. Send workers to resource nodes for Gather
-            // 7. Immediately stop for Stop (clear queue)
-
             const auto& cmd = queue.front();
-            if (cmd.type == RTSCommandType::Stop)
+            switch (cmd.type)
             {
+            case RTSCommandType::Move:
+            {
+                const float dx = cmd.targetX - unit->posX;
+                const float dy = cmd.targetY - unit->posY;
+                const float distance = std::hypot(dx, dy);
+                const float speed = std::isfinite(unit->moveSpeed) ? std::max(unit->moveSpeed, 0.0f) : 0.0f;
+                const float step = speed * safeDeltaTime;
+                unit->state = RTSUnitState::Moving;
+                unit->targetId = 0;
+                if (distance <= 0.001f || (step > 0.0f && step >= distance))
+                {
+                    unit->posX = cmd.targetX;
+                    unit->posY = cmd.targetY;
+                    unit->state = RTSUnitState::Idle;
+                    queue.erase(queue.begin());
+                }
+                else if (step > 0.0f)
+                {
+                    unit->posX += dx / distance * step;
+                    unit->posY += dy / distance * step;
+                }
+                break;
+            }
+            case RTSCommandType::Stop:
+                unit->state = RTSUnitState::Idle;
+                unit->targetId = 0;
                 queue.clear();
+                break;
+            case RTSCommandType::Hold:
+                unit->state = RTSUnitState::Holding;
+                unit->targetId = 0;
+                queue.erase(queue.begin());
+                break;
+            case RTSCommandType::Attack:
+                unit->state = RTSUnitState::Attacking;
+                unit->targetId = cmd.targetEntity;
+                queue.erase(queue.begin());
+                break;
+            case RTSCommandType::Gather:
+                unit->state = RTSUnitState::Gathering;
+                unit->targetId = cmd.targetEntity;
+                queue.erase(queue.begin());
+                break;
+            case RTSCommandType::Build:
+                unit->state = RTSUnitState::Building;
+                unit->targetId = cmd.targetEntity;
+                queue.erase(queue.begin());
+                break;
+            case RTSCommandType::Patrol:
+                unit->state = RTSUnitState::Patrolling;
+                unit->targetId = 0;
+                queue.erase(queue.begin());
+                break;
+            default:
+                queue.clear();
+                break;
             }
 
-            ++it;
+            if (queue.empty())
+                it = m_commandQueues.erase(it);
+            else
+                ++it;
         }
+    }
+
+    bool RTSCommandSystem::IsCommandValid(const UnitCommand& command) const
+    {
+        if (command.type >= RTSCommandType::Count)
+            return false;
+
+        if (command.type == RTSCommandType::Move || command.type == RTSCommandType::Patrol ||
+            command.type == RTSCommandType::Build)
+        {
+            return std::isfinite(command.targetX) && std::isfinite(command.targetY);
+        }
+        return true;
+    }
+
+    void RTSCommandSystem::PruneSelection()
+    {
+        std::erase_if(m_selectedUnits,
+                      [this](uint32_t unitId)
+                      {
+                          const UnitData* unit = m_unitSystem->GetUnit(unitId);
+                          return !unit || unit->state == RTSUnitState::Dead;
+                      });
     }
 
     void RTSCommandSystem::RenderDebugUI()

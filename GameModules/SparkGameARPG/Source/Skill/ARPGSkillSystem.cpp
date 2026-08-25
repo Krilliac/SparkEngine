@@ -5,6 +5,7 @@
 
 #include "ARPGSkillSystem.h"
 #include "Engine/Security/MemoryIntegrity.h"
+#include "Hero/ARPGHeroSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -18,9 +19,13 @@
 namespace ARPG
 {
 
-    bool ARPGSkillSystem::Initialize(Spark::IEngineContext* context)
+    bool ARPGSkillSystem::Initialize(Spark::IEngineContext* context, const ARPGHeroSystem* heroSystem)
     {
+        if (!heroSystem)
+            return false;
+
         m_context = context;
+        m_heroSystem = heroSystem;
         RegisterSkillTrees();
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG skill system initialized with %zu skills", m_allSkills.size());
@@ -33,6 +38,8 @@ namespace ARPG
     {
         m_learnedSkills.clear();
         m_cooldowns.clear();
+        m_heroSystem = nullptr;
+        m_context = nullptr;
     }
 
     void ARPGSkillSystem::Update(float deltaTime)
@@ -147,10 +154,11 @@ namespace ARPG
         return result;
     }
 
-    bool ARPGSkillSystem::LearnSkill(uint32_t heroId, uint32_t skillId, int heroLevel)
+    bool ARPGSkillSystem::LearnSkill(uint32_t heroId, uint32_t skillId)
     {
         const auto* skill = GetSkill(skillId);
-        if (!skill || heroLevel < skill->requiredLevel)
+        const HeroData* hero = m_heroSystem ? m_heroSystem->GetHero(heroId) : nullptr;
+        if (!skill || !hero || hero->heroClass != skill->heroClass || hero->level < skill->requiredLevel)
             return false;
 
         auto& learned = m_learnedSkills[heroId];
@@ -171,7 +179,13 @@ namespace ARPG
     bool ARPGSkillSystem::UseSkill(uint32_t heroId, uint32_t skillId)
     {
         const auto* skill = GetSkill(skillId);
-        if (!skill)
+        const HeroData* hero = m_heroSystem ? m_heroSystem->GetHero(heroId) : nullptr;
+        if (!skill || !hero || hero->heroClass != skill->heroClass || hero->level < skill->requiredLevel)
+            return false;
+
+        const auto learnedIt = m_learnedSkills.find(heroId);
+        if (learnedIt == m_learnedSkills.end() ||
+            std::ranges::find(learnedIt->second, skillId) == learnedIt->second.end())
             return false;
 
         // Check if on cooldown — bypassing allows instant ability spam

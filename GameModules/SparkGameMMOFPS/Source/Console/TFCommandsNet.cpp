@@ -7,12 +7,14 @@
  * Registered from TerrafrontModule::RegisterConsoleCommands() so the single
  * registration entry point (and its order) is preserved. Surface here:
  * tf_chat, and under ENABLE_NETWORKING: tf_register, tf_login,
- * tf_char_create, tf_char_list, tf_enter, tf_selftest_onboarding.
+ * tf_char_create, tf_char_list, tf_enter, tf_quickplay,
+ * tf_selftest_onboarding.
  */
 
 #include "Core/SparkGameMMOFPS.h"
 
 #include "Console/TFCommandsInternal.h"
+#include "Console/TFQuickplay.h"
 #include "Account/TFAccountSystem.h"   // W5 onboarding (Task 7): TFAuthErr
 #include "Account/TFCharacterSystem.h" // W5 onboarding (Task 7): TFCharErr
 #include "Net/TFClientNet.h"
@@ -227,6 +229,40 @@ namespace
             check(hasPawn && pawn.alive, "the spawned pawn is alive and resolvable (can move/fire/spawn)");
         }
 
+        // A modified client must not be able to rebind the account or mutate
+        // character profiles after entering the world. These requests travel
+        // through the real loopback dispatcher and validate the server-owned
+        // state machine, not the console/quickplay client-side guard.
+        {
+            const PlayerId me = ctx.clientNet->LocalPlayerId();
+            const uint64_t boundAccount = ctx.account ? ctx.account->AccountForClient(me) : 0;
+            const size_t characterCount = ctx.characters ? ctx.characters->List(boundAccount).size() : 0;
+
+            {
+                TF_AuthRequest reauth{};
+                const auto clearReauth = Spark::MakeScopeExit([&] { Spark::SecureErase(&reauth, sizeof(reauth)); });
+                std::strncpy(reauth.user, user.c_str(), sizeof(reauth.user) - 1);
+                std::strncpy(reauth.pass, pass.c_str(), sizeof(reauth.pass) - 1);
+                ctx.clientNet->SendMsg(TFMsg::LoginRequest, &reauth, sizeof(reauth));
+            }
+            check(static_cast<TFAuthErr>(ctx.clientNet->LastAuthError()) == TFAuthErr::SessionActive,
+                  "re-authentication while in-world is rejected by the authority");
+            check(ctx.clientNet->IsLoggedIn() && ctx.clientNet->AccountId() == boundAccount,
+                  "re-auth rejection preserves the existing client session identity");
+            check(ctx.account && ctx.account->AccountForClient(me) == boundAccount &&
+                      ctx.serverSim->ActiveCharacterOf(me) == charId,
+                  "re-auth rejection preserves the authoritative account/character binding");
+
+            TF_CharCreateRequest blockedCreate{};
+            std::strncpy(blockedCreate.name, "BlockedProfileEdit", sizeof(blockedCreate.name) - 1);
+            blockedCreate.faction = static_cast<uint8_t>(FactionId::AUC);
+            ctx.clientNet->SendMsg(TFMsg::CharCreateReq, &blockedCreate, sizeof(blockedCreate));
+            check(static_cast<TFCharErr>(ctx.clientNet->LastCharOpError()) == TFCharErr::SessionActive,
+                  "character mutation while in-world is rejected by the authority");
+            check(ctx.characters && ctx.characters->List(boundAccount).size() == characterCount,
+                  "rejected in-world character mutation changed no durable profile data");
+        }
+
         // ---- Part 3: final-review #1/#2 regression -- progression must SURVIVE a
         // disconnect/reconnect for the same character, and must NOT leak into a
         // stale runtime record after the disconnect flush.
@@ -330,6 +366,12 @@ void TerrafrontModule::RegisterConsoleCommandsNet()
     // (TFServerSim::SendToPlayer's local-player short-circuit, T7), so these
     // commands can report the outcome inline instead of "sent, check later".
 #ifdef ENABLE_NETWORKING
+    console.RegisterSensitiveCommand(
+        "tf_quickplay", [this](const std::vector<std::string>& args) -> std::string
+        { return RunLocalQuickplay(m_ctx, m_bots.get(), args); },
+        "Register/login, enter, deploy, and populate a local listen-host war", cat,
+        "tf_quickplay <user> <pass> [mra|auc|hlx] [class] [bots=0..32]");
+
     console.RegisterSensitiveCommand(
         "tf_register",
         [this](const std::vector<std::string>& args) -> std::string

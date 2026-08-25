@@ -62,7 +62,9 @@ class SparkGameRacingModule : public Spark::IModule
     void RegisterConsoleCommands();
     void SetupDefaultRaceRoster();
     void SyncRaceAndTrackState();
-    void ApplyAIDriverInputs();
+    void UpdatePresentationState();
+    void ApplyPlayerInput(float deltaTime);
+    void ApplyAIDriverInputs(float deltaTime);
 
     Spark::IEngineContext* m_context{nullptr};
     bool m_initialized{false};
@@ -75,6 +77,8 @@ class SparkGameRacingModule : public Spark::IModule
     std::unique_ptr<Racing::RacingCameraSystem> m_cameraSystem;
     std::unique_ptr<Racing::RacingHUDSystem> m_hudSystem;
     std::unique_ptr<Racing::RacingEngineSystems> m_engineSystems;
+    bool m_cameraCycleHeld{false};
+    bool m_restartHeld{false};
 };
 
 // Module exports

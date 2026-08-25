@@ -90,6 +90,7 @@ namespace Racing
         void SetStandingsVisible(bool visible) { m_showStandings = visible; }
 
         const HUDData& GetHUDData() const { return m_data; }
+        const std::vector<MinimapEntry>& GetMinimapEntries() const { return m_minimapEntries; }
 
       private:
         void RenderSpeedometer();

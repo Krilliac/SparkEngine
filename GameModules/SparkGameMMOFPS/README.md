@@ -79,6 +79,26 @@ tf_map                     # continent map — ownership + lattice
 tf_status                  # module/net/session overview at any time
 ```
 
+For a one-command local playable war, start a listen host and enter your own
+credentials through the sensitive quickplay command. It follows the real
+register/login/character/enter-world wire path before deploying; it does not
+bypass the onboarding security gate. Every accepted bootstrap authenticates the
+supplied credentials. Reuse them after a supported `tf_disconnect` / `tf_host` cycle to
+reuse the profile rather than creating another account. The command refuses to
+switch profiles while a character is active, and is also refused on standalone,
+remote-client, and dedicated-server runtimes.
+
+The authority enforces the same session state machine independently of the
+console: re-authentication and character mutation are rejected after a profile
+is active. Stopping a host drains and persists every connected session before
+the transport is destroyed, so the same process can host again without stale
+identities or handler state.
+
+```
+tf_host
+tf_quickplay localpilot <your-password> mra striker 12
+```
+
 ### LAN hosting
 
 | Role | Commands |
@@ -100,6 +120,7 @@ Default port is 27020/UDP. Territory and progression persist across restarts
 | `tf_host [port]` / `tf_dedicated [port]` | Start listen host / headless server |
 | `tf_connect <ip[:port]>` / `tf_disconnect` | Join / leave a server |
 | `tf_register <user> <pass>` / `tf_login <user> <pass>` | Scripted onboarding fallback; arguments are redacted from console history |
+| `tf_quickplay <user> <pass> [faction] [class] [bots]` | Local listen-host only: onboard, enter, deploy, and populate a playable war through the real security-gated path |
 | `tf_char_create <name> <mra\|auc\|hlx>` / `tf_char_list` / `tf_enter <id\|index>` | Scripted character onboarding fallback |
 | `tf_faction <mra\|auc\|hlx>` | Choose your side |
 | `tf_class <ghost\|striker\|medtech\|fabricator\|bulwark>` | Choose loadout class |

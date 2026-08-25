@@ -87,6 +87,7 @@ namespace OpenWorld
         // --- Position / Movement ---
         const PlayerWorldState& GetWorldState() const { return m_worldState; }
         void SetPosition(float x, float y, float z);
+        void SetCurrentRegion(uint32_t regionId) { m_worldState.currentRegionId = regionId; }
         void SetFacing(float yaw);
         float GetCompassBearing() const { return m_worldState.yaw; }
         std::string GetCompassDirection() const;

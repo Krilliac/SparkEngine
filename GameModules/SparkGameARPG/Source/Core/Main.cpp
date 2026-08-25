@@ -14,7 +14,9 @@
 #include "Dungeon/ARPGDungeonSystem.h"
 #include "Skill/ARPGSkillSystem.h"
 #include "Monster/ARPGMonsterSystem.h"
+#include "Demo/ARPGDemoEncounter.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Input/InputManager.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 #include "Utils/InvalidStateDetector.h"
@@ -98,7 +100,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
 
     // Initialize skill system (skill trees, cooldowns)
     m_skillSystem = std::make_unique<ARPG::ARPGSkillSystem>();
-    if (!m_skillSystem->Initialize(context))
+    if (!m_skillSystem->Initialize(context, m_heroSystem.get()))
     {
         console.LogError("[ARPG] Failed to initialize skill system");
         return false;
@@ -118,6 +120,14 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
                                      m_dungeonSystem.get()))
     {
         console.LogError("[ARPG] Failed to initialize engine systems integration");
+        return false;
+    }
+
+    m_demoEncounter = std::make_unique<ARPG::ARPGDemoEncounter>();
+    if (!m_demoEncounter->Initialize(m_heroSystem.get(), m_combatSystem.get(), m_lootSystem.get(),
+                                     m_dungeonSystem.get(), m_skillSystem.get(), m_monsterSystem.get()))
+    {
+        console.LogError("[ARPG] Failed to initialize the playable demo encounter");
         return false;
     }
 
@@ -173,6 +183,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
                     " | Monsters: " + std::to_string(m_monsterSystem->GetTemplateCount()) +
                     " | Affixes: " + std::to_string(m_lootSystem->GetAffixPoolSize()) +
                     " | Tiers: " + std::to_string(m_dungeonSystem->GetTierCount()));
+    console.LogInfo("[ARPG] Playable encounter ready — Space attack, Q skill, R restart");
     return true;
 }
 
@@ -184,6 +195,12 @@ void SparkGameARPGModule::OnUnload()
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[ARPG] Unloading Spark ARPG module...");
     SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module shutting down");
+
+    if (m_demoEncounter)
+    {
+        m_demoEncounter->Shutdown();
+        m_demoEncounter.reset();
+    }
 
     // Shutdown engine integrations first (depends on all ARPG subsystems)
     if (m_engineSystems)
@@ -239,8 +256,10 @@ void SparkGameARPGModule::OnUpdate(float deltaTime)
     m_combatSystem->Update(deltaTime);
     m_skillSystem->Update(deltaTime);
     m_dungeonSystem->Update(deltaTime);
+    m_demoEncounter->Update();
     m_monsterSystem->Update(deltaTime);
     m_engineSystems->Update(deltaTime);
+    UpdateDemoInput();
 }
 
 void SparkGameARPGModule::OnFixedUpdate(float fixedDeltaTime)
@@ -326,6 +345,30 @@ void SparkGameARPGModule::RegisterConsoleCommands()
     console.RegisterCommand("arpg_monsters", [this](const std::vector<std::string>&) -> std::string
                             { return m_monsterSystem->GetMonsterListString(); });
 
+    console.RegisterCommand("arpg_encounter", [this](const std::vector<std::string>&) -> std::string
+                            { return m_demoEncounter->GetStatusString(); });
+
+    console.RegisterCommand("arpg_attack",
+                            [this](const std::vector<std::string>&) -> std::string
+                            {
+                                m_demoEncounter->BasicAttack();
+                                return m_demoEncounter->GetStatusString();
+                            });
+
+    console.RegisterCommand("arpg_cast",
+                            [this](const std::vector<std::string>&) -> std::string
+                            {
+                                m_demoEncounter->UsePrimarySkill();
+                                return m_demoEncounter->GetStatusString();
+                            });
+
+    console.RegisterCommand("arpg_restart",
+                            [this](const std::vector<std::string>&) -> std::string
+                            {
+                                m_demoEncounter->Restart();
+                                return m_demoEncounter->GetStatusString();
+                            });
+
     console.RegisterCommand("arpg_save",
                             [this](const std::vector<std::string>& args) -> std::string
                             {
@@ -379,4 +422,26 @@ void SparkGameARPGModule::RegisterConsoleCommands()
                                 info += "Configured procs: 1 (Fire Mastery proc)\n";
                                 return info;
                             });
+}
+
+void SparkGameARPGModule::UpdateDemoInput()
+{
+    InputManager* input = m_context ? m_context->GetInput() : nullptr;
+    if (!input || !m_demoEncounter)
+        return;
+
+    const bool attackDown = input->IsKeyDown(' ');
+    if (attackDown && !m_attackHeld)
+        m_demoEncounter->BasicAttack();
+    m_attackHeld = attackDown;
+
+    const bool skillDown = input->IsKeyDown('Q');
+    if (skillDown && !m_skillHeld)
+        m_demoEncounter->UsePrimarySkill();
+    m_skillHeld = skillDown;
+
+    const bool restartDown = input->IsKeyDown('R');
+    if (restartDown && !m_restartHeld)
+        m_demoEncounter->Restart();
+    m_restartHeld = restartDown;
 }

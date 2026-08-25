@@ -28,6 +28,7 @@ namespace ARPG
     class ARPGSkillSystem;
     class ARPGMonsterSystem;
     class ARPGEngineSystems;
+    class ARPGDemoEncounter;
 } // namespace ARPG
 
 /**
@@ -61,6 +62,7 @@ class SparkGameARPGModule : public Spark::IModule
 
   private:
     void RegisterConsoleCommands();
+    void UpdateDemoInput();
 
     Spark::IEngineContext* m_context{nullptr};
     bool m_initialized{false};
@@ -76,6 +78,10 @@ class SparkGameARPGModule : public Spark::IModule
 
     // Engine system integrations (EventBus, SaveSystem, AI, Animation, Abilities, etc.)
     std::unique_ptr<ARPG::ARPGEngineSystems> m_engineSystems;
+    std::unique_ptr<ARPG::ARPGDemoEncounter> m_demoEncounter;
+    bool m_attackHeld{false};
+    bool m_skillHeld{false};
+    bool m_restartHeld{false};
 };
 
 // Module exports

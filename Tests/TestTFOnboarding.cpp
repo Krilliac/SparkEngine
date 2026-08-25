@@ -15,12 +15,178 @@
 #include "Account/TFCharacterSystem.h"
 #include "Account/TFCrypto.h"
 #include "Net/TFNetProtocol.h"
+#include "Net/TFClientSessionState.h"
+#include "Net/TFClientSessionEnd.h"
+#include "Net/TFNetworkLifecycle.h"
+#include "Net/TFOnboardingSessionRules.h"
+#include "Console/TFQuickplay.h"
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 using namespace Terrafront;
+
+TEST(TFQuickplay_OptionsAreBoundedAndDeterministic)
+{
+    TFQuickplayOptions options;
+    std::string error;
+    EXPECT_TRUE(ParseQuickplayOptions({"pilot", "long-password", "hlx", "medtech", "24"}, options, error));
+    EXPECT_TRUE(options.username == "pilot");
+    EXPECT_TRUE(options.faction == FactionId::HLX);
+    EXPECT_TRUE(options.playerClass == ClassId::Medtech);
+    EXPECT_EQ(options.botCount, static_cast<uint32_t>(24));
+    EXPECT_TRUE(error.empty());
+
+    EXPECT_FALSE(ParseQuickplayOptions({"pilot"}, options, error));
+    EXPECT_TRUE(options.password.empty());
+    EXPECT_FALSE(ParseQuickplayOptions({"pilot", "password", "bad"}, options, error));
+    EXPECT_TRUE(options.password.empty());
+    EXPECT_FALSE(ParseQuickplayOptions({"pilot", "password", "mra", "bad"}, options, error));
+    EXPECT_TRUE(options.password.empty());
+    EXPECT_FALSE(ParseQuickplayOptions({"pilot", "password", "mra", "striker", "33"}, options, error));
+    EXPECT_TRUE(options.password.empty());
+    EXPECT_TRUE(QuickplayCharacterName(42, FactionId::AUC) == "Demo42A");
+    EXPECT_TRUE(QuickplayCharacterName(UINT64_MAX, FactionId::HLX).size() <= 23);
+}
+
+TEST(TFQuickplay_RequiresLiveListenHostRuntime)
+{
+    EXPECT_TRUE(IsQuickplayListenHostRuntime(NetRole::ListenHost, true, true, true));
+    EXPECT_FALSE(IsQuickplayListenHostRuntime(NetRole::Standalone, true, true, true));
+    EXPECT_FALSE(IsQuickplayListenHostRuntime(NetRole::DedicatedServer, true, true, true));
+    EXPECT_FALSE(IsQuickplayListenHostRuntime(NetRole::Client, true, true, true));
+    EXPECT_FALSE(IsQuickplayListenHostRuntime(NetRole::ListenHost, false, true, true));
+    EXPECT_FALSE(IsQuickplayListenHostRuntime(NetRole::ListenHost, true, false, true));
+    EXPECT_FALSE(IsQuickplayListenHostRuntime(NetRole::ListenHost, true, true, false));
+}
+
+TEST(TFClientSessionState_ResetClearsAuthenticationAndCharacters)
+{
+    TFClientSessionState state;
+    state.loggedIn = true;
+    state.accountId = 42;
+    state.lastAuthError = TFAuthErr::Ok;
+    state.characters.push_back(TF_CharBrief{});
+    state.lastCharacterError = TFCharErr::Ok;
+    state.lastCharacterId = 77;
+
+    state.Reset();
+
+    EXPECT_FALSE(state.loggedIn);
+    EXPECT_EQ(state.accountId, uint64_t{0});
+    EXPECT_TRUE(state.lastAuthError == TFAuthErr::NotLoggedIn);
+    EXPECT_TRUE(state.characters.empty());
+    EXPECT_TRUE(state.lastCharacterError == TFCharErr::NotLoggedIn);
+    EXPECT_EQ(state.lastCharacterId, uint64_t{0});
+}
+
+TEST(TFClientSessionState_LoginRepliesNeverExposeAStaleProfile)
+{
+    TFClientSessionState state;
+    state.loggedIn = true;
+    state.accountId = 42;
+    state.characters.push_back(TF_CharBrief{});
+    state.lastCharacterError = TFCharErr::Ok;
+    state.lastCharacterId = 77;
+
+    state.ApplyLoginReply(false, 0, TFAuthErr::BadCredentials);
+    EXPECT_FALSE(state.loggedIn);
+    EXPECT_EQ(state.accountId, uint64_t{0});
+    EXPECT_TRUE(state.characters.empty());
+    EXPECT_TRUE(state.lastCharacterError == TFCharErr::NotLoggedIn);
+    EXPECT_EQ(state.lastCharacterId, uint64_t{0});
+
+    state.loggedIn = true;
+    state.accountId = 99;
+    state.characters.push_back(TF_CharBrief{});
+    state.ApplyLoginReply(false, 0, TFAuthErr::SessionActive);
+    EXPECT_TRUE(state.loggedIn);
+    EXPECT_EQ(state.accountId, uint64_t{99});
+    EXPECT_EQ(state.characters.size(), size_t{1});
+}
+
+TEST(TFClientSessionEnd_UnexpectedRemoteDropRestoresStandaloneLogin)
+{
+    const TFClientSessionEndDecision dropped = PlanClientSessionEnd(NetRole::Client, false);
+    EXPECT_TRUE(dropped.role == NetRole::Standalone);
+    EXPECT_TRUE(dropped.resetLoginFlow);
+
+    const TFClientSessionEndDecision alreadyLogin = PlanClientSessionEnd(NetRole::Client, true);
+    EXPECT_TRUE(alreadyLogin.role == NetRole::Standalone);
+    EXPECT_FALSE(alreadyLogin.resetLoginFlow);
+
+    const TFClientSessionEndDecision listenHost = PlanClientSessionEnd(NetRole::ListenHost, false);
+    EXPECT_TRUE(listenHost.role == NetRole::ListenHost);
+    EXPECT_TRUE(listenHost.resetLoginFlow);
+}
+
+TEST(TFOnboardingSessionRules_RejectReauthAndMidWorldProfileMutation)
+{
+    EXPECT_TRUE(CanBeginAuthentication(false, false));
+    EXPECT_FALSE(CanBeginAuthentication(true, false));
+    EXPECT_FALSE(CanBeginAuthentication(false, true));
+    EXPECT_FALSE(CanBeginAuthentication(true, true));
+    EXPECT_TRUE(CanMutateCharacterProfile(false));
+    EXPECT_FALSE(CanMutateCharacterProfile(true));
+}
+
+TEST(TFNetworkLifecycle_DrainsRemoteSessionsAndSupportsImmediateRehost)
+{
+    std::unordered_set<PlayerId> knownClients{11, 12};
+    bool handlersRegistered = true;
+    std::vector<PlayerId> cleaned;
+    int unregisterCalls = 0;
+
+    StopNetworkSessionLifecycle(
+        knownClients, handlersRegistered, {12, 13, kInvalidPlayer}, [&](PlayerId player) { cleaned.push_back(player); },
+        [&] { ++unregisterCalls; });
+
+    std::sort(cleaned.begin(), cleaned.end());
+    EXPECT_EQ(cleaned.size(), size_t{3});
+    EXPECT_EQ(cleaned[0], PlayerId{11});
+    EXPECT_EQ(cleaned[1], PlayerId{12});
+    EXPECT_EQ(cleaned[2], PlayerId{13});
+    EXPECT_TRUE(knownClients.empty());
+    EXPECT_FALSE(handlersRegistered);
+    EXPECT_EQ(unregisterCalls, 1);
+
+    // A host can restart before another fixed tick: registration state is
+    // already false, so the new server installs handlers and drains normally.
+    handlersRegistered = true;
+    knownClients.insert(21);
+    cleaned.clear();
+    StopNetworkSessionLifecycle(
+        knownClients, handlersRegistered, {}, [&](PlayerId player) { cleaned.push_back(player); },
+        [&] { ++unregisterCalls; });
+    EXPECT_EQ(cleaned.size(), size_t{1});
+    EXPECT_EQ(cleaned[0], PlayerId{21});
+    EXPECT_FALSE(handlersRegistered);
+    EXPECT_EQ(unregisterCalls, 2);
+}
+
+TEST(TFQuickplay_ScriptsRespectTheEnterWorldGate)
+{
+#ifdef SPARK_TEST_SOURCE_DIR
+    const std::filesystem::path sourceRoot = SPARK_TEST_SOURCE_DIR;
+#else
+    const std::filesystem::path sourceRoot = std::filesystem::current_path();
+#endif
+    for (const char* relative : {"Tools/tf_play.cfg", "Tools/tf_smoke_host.cfg"})
+    {
+        std::ifstream input(sourceRoot / relative, std::ios::binary);
+        EXPECT_TRUE(input.good());
+        std::ostringstream buffer;
+        buffer << input.rdbuf();
+        const std::string script = buffer.str();
+        EXPECT_TRUE(script.find("tf_host") != std::string::npos);
+        EXPECT_TRUE(script.find("tf_bots") != std::string::npos);
+        EXPECT_TRUE(script.find(" tf_spawn") == std::string::npos);
+        EXPECT_TRUE(script.find(" tf_faction") == std::string::npos);
+    }
+}
 
 TEST(TFDatabase_AccountCharacter_RoundTrip)
 {

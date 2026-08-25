@@ -88,7 +88,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
 
     // Initialize command system (selection, move, attack, patrol)
     m_commandSystem = std::make_unique<RTS::RTSCommandSystem>();
-    if (!m_commandSystem->Initialize(context))
+    if (!m_commandSystem->Initialize(context, m_unitSystem.get()))
     {
         console.LogError("[RTS] Failed to initialize command system");
         return false;
@@ -223,8 +223,8 @@ void SparkGameRTSModule::OnUpdate(float deltaTime)
     m_matchSystem->Update(deltaTime);
     m_resourceSystem->Update(deltaTime);
     m_buildingSystem->Update(deltaTime);
-    m_unitSystem->Update(deltaTime);
     m_commandSystem->Update(deltaTime);
+    m_unitSystem->Update(deltaTime);
     m_fogOfWarSystem->Update(deltaTime);
     if (m_engineSystems)
         m_engineSystems->Update(deltaTime);

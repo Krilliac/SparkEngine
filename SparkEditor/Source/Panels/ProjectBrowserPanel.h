@@ -15,6 +15,7 @@
 #include "../Core/ProjectManager.h"
 #include <string>
 #include <functional>
+#include <utility>
 
 namespace SparkEditor
 {
@@ -50,6 +51,18 @@ namespace SparkEditor
         bool IsModalActive() const { return m_showModal; }
         void SetModalActive(bool active) { m_showModal = active; }
 
+        using OpenProjectRequestHandler = std::function<bool(const std::string&)>;
+        using CreateProjectRequestHandler =
+            std::function<bool(const std::string&, const std::string&, ProjectTemplate, const std::string&)>;
+        void SetOpenProjectRequestHandler(OpenProjectRequestHandler handler)
+        {
+            m_openProjectRequestHandler = std::move(handler);
+        }
+        void SetCreateProjectRequestHandler(CreateProjectRequestHandler handler)
+        {
+            m_createProjectRequestHandler = std::move(handler);
+        }
+
       private:
         enum class Tab
         {
@@ -62,8 +75,13 @@ namespace SparkEditor
         void RenderNewProjectForm();
         void RenderTemplateCard(ProjectTemplate tmpl, const char* icon);
         bool BrowseForFolder(std::string& outPath);
+        bool RequestOpenProject(const std::string& projectPath);
+        bool RequestCreateProject(const std::string& projectName, const std::string& parentDirectory,
+                                  ProjectTemplate templateType, const std::string& description);
 
         ProjectManager* m_projectManager = nullptr;
+        OpenProjectRequestHandler m_openProjectRequestHandler;
+        CreateProjectRequestHandler m_createProjectRequestHandler;
         bool m_showModal = false;
         Tab m_activeTab = Tab::RecentProjects;
 

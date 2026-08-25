@@ -10,6 +10,7 @@
 #include "Account/TFAccountSystem.h"   // W5 onboarding (Task 4)
 #include "Account/TFCharacterSystem.h" // W5 onboarding (Task 4)
 #include "Net/TFClientNet.h"           // W5 onboarding (Task 7): local-player reply loopback
+#include "Net/TFNetworkLifecycle.h"
 #include "Net/TFNetProtocol.h"
 #include "Net/TFRepProtocol.h" // kTFRepMsg_MoveState + TF_MoveState
 #include "Game/TFPlayerSystem.h"
@@ -134,6 +135,25 @@ namespace Terrafront
                                [](const Spark::Net::NetworkMessage&) {});
         }
         m_handlersRegistered = false;
+    }
+
+    void TFServerSim::PrepareNetworkStop()
+    {
+        std::vector<PlayerId> additionalSessions;
+        additionalSessions.reserve(m_enteredWorld.size() + m_activeCharacter.size() + 1);
+        for (const PlayerId player : m_enteredWorld)
+            additionalSessions.push_back(player);
+        for (const auto& [player, character] : m_activeCharacter)
+        {
+            (void)character;
+            additionalSessions.push_back(player);
+        }
+        if (m_ctx && m_ctx->IsAuthority())
+            additionalSessions.push_back(m_ctx->localPlayer);
+
+        StopNetworkSessionLifecycle(
+            m_knownClients, m_handlersRegistered, additionalSessions,
+            [this](PlayerId player) { CleanupPlayerSession(player); }, [this] { UnregisterNetHandlers(); });
     }
 
     void TFServerSim::PollClientJoinsLeaves()

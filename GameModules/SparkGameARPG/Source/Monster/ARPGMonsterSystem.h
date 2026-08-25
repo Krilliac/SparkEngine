@@ -86,6 +86,16 @@ namespace ARPG
         std::vector<MonsterData> SpawnElitePack(int level, int packSize = 4);
         MonsterData SpawnBoss(int level);
 
+        /// Find a live monster by its stable encounter ID.
+        MonsterData* GetMonster(uint32_t monsterId);
+        const MonsterData* GetMonster(uint32_t monsterId) const;
+
+        /// Apply finite positive damage. Returns false for an invalid/dead target or invalid amount.
+        bool DamageMonster(uint32_t monsterId, float amount);
+
+        /// Remove every active encounter monster without rebuilding the template registry.
+        void ClearActiveMonsters();
+
         // === Queries ===
         size_t GetTemplateCount() const { return m_templates.size(); }
         size_t GetActiveMonsterCount() const { return m_activeMonsters.size(); }

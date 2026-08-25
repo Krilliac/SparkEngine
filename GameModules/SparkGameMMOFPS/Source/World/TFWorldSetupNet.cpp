@@ -9,6 +9,7 @@
 #include "World/TFWorldSetup.h"
 
 #include "Net/TFServerSim.h"
+#include "Net/TFClientNet.h"
 
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
@@ -94,7 +95,11 @@ namespace Terrafront
         // single-continent-per-process boot — see the design doc), only the
         // networking layer, so this is safe to run before every (re)connect.
         if (m_netBooted)
+        {
+            if (m_ctx->clientNet)
+                m_ctx->clientNet->Disconnect();
             StopNetworking();
+        }
 
         auto& nm = Spark::Net::NetworkManager::GetInstance();
         if (!nm.IsInitialized() && !nm.Initialize())
@@ -225,6 +230,13 @@ namespace Terrafront
             m_areaServer->Stop();
             m_areaServer.reset();
         }
+        // The transport owns only sockets/queues. Terrafront owns authenticated
+        // sessions and must drain them while player/progression/database systems
+        // are still valid, before NetworkManager discards its client list and
+        // handler table. This also resets handler registration for a same-process
+        // stop -> host restart.
+        if (m_ctx && m_ctx->serverSim)
+            m_ctx->serverSim->PrepareNetworkStop();
         if (m_worldServer)
         {
             m_worldServer->Stop();

@@ -35,6 +35,7 @@
 #include <filesystem>
 #include <fstream>
 #include <set>
+#include <stdexcept>
 #include <thread>
 
 using namespace SparkEditor;
@@ -1025,6 +1026,49 @@ TEST(ProjectManager_GeneratedFallbackUsesProjectIdentityInsteadOfStagingName)
     EXPECT_FALSE(cleanupError);
 }
 
+TEST(ProjectManager_CreateReplacementClosesPreviousProjectForFallbackAndPhysicalTemplates)
+{
+    const std::filesystem::path sourceRoot = FindProjectManagerTestSourceRoot();
+    ASSERT_FALSE(sourceRoot.empty());
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path parent =
+        std::filesystem::temp_directory_path() / ("spark-create-replacement-test-" + std::to_string(stamp));
+    const std::filesystem::path emptyEngineRoot = parent / "EngineWithoutTemplates";
+    const std::filesystem::path projects = parent / "Projects";
+    std::filesystem::create_directories(emptyEngineRoot);
+    std::filesystem::create_directories(projects);
+
+    ProjectManager manager;
+    manager.Initialize();
+    manager.SetEngineRoot(emptyEngineRoot.string());
+    ASSERT_TRUE(manager.CreateProject("Initial", projects.string(), ProjectTemplate::Blank3D));
+
+    std::vector<std::string> lifecycle;
+    manager.SetOnProjectClosed([&](const ProjectInfo& project) { lifecycle.push_back("close:" + project.name); });
+    manager.SetOnProjectOpened([&](const ProjectInfo& project) { lifecycle.push_back("open:" + project.name); });
+
+    ASSERT_TRUE(manager.CreateProject("FallbackReplacement", projects.string(), ProjectTemplate::Blank3D));
+    manager.SetEngineRoot(sourceRoot.string());
+    ASSERT_TRUE(manager.CreateProject("PhysicalReplacement", projects.string(), ProjectTemplate::FirstPerson));
+
+    ASSERT_EQ(lifecycle.size(), static_cast<size_t>(4));
+    EXPECT_EQ(lifecycle[0], std::string("close:Initial"));
+    EXPECT_EQ(lifecycle[1], std::string("open:FallbackReplacement"));
+    EXPECT_EQ(lifecycle[2], std::string("close:FallbackReplacement"));
+    EXPECT_EQ(lifecycle[3], std::string("open:PhysicalReplacement"));
+    EXPECT_TRUE(manager.HasOpenProject());
+    EXPECT_EQ(manager.GetCurrentProject().name, std::string("PhysicalReplacement"));
+
+    manager.SetOnProjectClosed({});
+    manager.SetOnProjectOpened({});
+    for (const char* name : {"Initial", "FallbackReplacement", "PhysicalReplacement"})
+        manager.RemoveRecentProject((projects / name / (std::string(name) + ".sparkproject")).string());
+    manager.Shutdown();
+    std::error_code cleanupError;
+    std::filesystem::remove_all(parent, cleanupError);
+    EXPECT_FALSE(cleanupError);
+}
+
 TEST(ProjectManager_LegacyAndCustomProjectsDoNotAcquireBlankTemplateIdentity)
 {
     const std::filesystem::path sourceRoot = FindProjectManagerTestSourceRoot();
@@ -1429,6 +1473,211 @@ TEST(ProjectManager_RecordOpenedSceneSupportsUnicodeProjectPaths)
     EXPECT_EQ(manager.GetCurrentProject().lastOpenedScene, std::string("Scenes/Caf\xC3\xA9.sparkscene"));
 
     manager.RemoveRecentProject(TestPathUtf8(root / "UnicodeProject.sparkproject"));
+    manager.Shutdown();
+    std::error_code ec;
+    std::filesystem::remove_all(parent, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(ProjectManager_RecordOpenedSceneDoesNotRewriteAlreadyCurrentScene)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / ("spark-current-scene-test-" + std::to_string(stamp));
+    std::filesystem::create_directories(root / "Scenes");
+    const std::filesystem::path scene = root / "Scenes" / "Default.sparkscene";
+    const std::filesystem::path projectFile = root / "Idempotent.sparkproject";
+    std::ofstream(scene) << "{\"entities\":[]}";
+    std::ofstream(projectFile) << "{\n"
+                                  "  \"name\": \"Idempotent\",\n"
+                                  "  \"version\": \"1.0.0\",\n"
+                                  "  \"engineVersion\": \"1.0.0\",\n"
+                                  "  \"template\": \"empty\",\n"
+                                  "  \"defaultScene\": \"Scenes/Default.sparkscene\",\n"
+                                  "  \"lastOpenedScene\": \"Scenes/Default.sparkscene\",\n"
+                                  "  \"createdTime\": 0,\n"
+                                  "  \"lastModified\": 0,\n"
+                                  "  \"modules\": [\"Idempotent\"]\n"
+                                  "}\n";
+
+    auto readProject = [&]()
+    {
+        std::ifstream in(projectFile, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    };
+
+    ProjectManager manager;
+    manager.Initialize();
+    ASSERT_TRUE(manager.OpenProject(projectFile.string()));
+    const std::string before = readProject();
+    EXPECT_EQ(manager.GetCurrentProject().lastModified, static_cast<uint64_t>(0));
+    EXPECT_TRUE(manager.RecordOpenedScene(scene.string()));
+    EXPECT_EQ(manager.GetCurrentProject().lastModified, static_cast<uint64_t>(0));
+    EXPECT_TRUE(manager.GetCurrentProject().scenes.empty());
+    EXPECT_EQ(readProject(), before);
+    manager.RemoveRecentProject(projectFile.string());
+    manager.Shutdown();
+    EXPECT_EQ(readProject(), before);
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(ProjectManager_ExplicitSaveStillPersistsLastModified)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / ("spark-explicit-save-test-" + std::to_string(stamp));
+    std::filesystem::create_directories(root / "Scenes");
+    const std::filesystem::path scene = root / "Scenes" / "Default.sparkscene";
+    const std::filesystem::path projectFile = root / "Explicit.sparkproject";
+    std::ofstream(scene) << "{\"entities\":[]}";
+    std::ofstream(projectFile)
+        << "{\n  \"name\": \"Explicit\",\n  \"version\": \"1.0.0\",\n"
+           "  \"engineVersion\": \"1.0.0\",\n  \"defaultScene\": \"Scenes/Default.sparkscene\",\n"
+           "  \"lastOpenedScene\": \"Scenes/Default.sparkscene\",\n  \"createdTime\": 0,\n"
+           "  \"lastModified\": 0,\n  \"modules\": [\"Explicit\"],\n"
+           "  \"scenes\": [\"Scenes/Default.sparkscene\"]\n}\n";
+
+    ProjectManager manager;
+    manager.Initialize();
+    ASSERT_TRUE(manager.OpenProject(projectFile.string()));
+    EXPECT_EQ(manager.GetCurrentProject().lastModified, static_cast<uint64_t>(0));
+    EXPECT_TRUE(manager.SaveProject());
+    EXPECT_TRUE(manager.GetCurrentProject().lastModified > 0);
+    manager.RemoveRecentProject(projectFile.string());
+    manager.Shutdown();
+
+    ProjectManager reopened;
+    reopened.Initialize();
+    ASSERT_TRUE(reopened.OpenProject(projectFile.string()));
+    EXPECT_TRUE(reopened.GetCurrentProject().lastModified > 0);
+    reopened.RemoveRecentProject(projectFile.string());
+    reopened.Shutdown();
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(ProjectManager_ResolveProjectScenePathRejectsTraversalBeforeLoad)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path parent =
+        std::filesystem::temp_directory_path() / ("spark-scene-containment-test-" + std::to_string(stamp));
+    ProjectManager manager;
+    manager.Initialize();
+    ASSERT_TRUE(manager.CreateProject("Contained", parent.string(), ProjectTemplate::Blank3D));
+    const std::filesystem::path root = parent / "Contained";
+    const std::filesystem::path inside = root / "Scenes" / "Inside.sparkscene";
+    const std::filesystem::path outside = parent / "Outside.sparkscene";
+    World sourceWorld;
+    sourceWorld.CreateEntity("ContainedEntity");
+    std::ofstream(inside) << Spark::SerializeWorld(sourceWorld);
+    std::ofstream(outside) << Spark::SerializeWorld(sourceWorld);
+
+    std::string resolved;
+    EXPECT_TRUE(manager.ResolveProjectScenePath("Scenes/Inside.sparkscene", resolved));
+    EXPECT_EQ(std::filesystem::weakly_canonical(std::filesystem::path(resolved)),
+              std::filesystem::weakly_canonical(inside));
+    EXPECT_FALSE(manager.ResolveProjectScenePath("../Outside.sparkscene", resolved));
+    EXPECT_TRUE(resolved.empty());
+
+    World loadedWorld;
+    EXPECT_TRUE(manager.LoadProjectScene("Scenes/Inside.sparkscene", loadedWorld, resolved));
+    EXPECT_EQ(loadedWorld.GetEntityCount(), static_cast<size_t>(1));
+    EXPECT_FALSE(manager.LoadProjectScene("../Outside.sparkscene", loadedWorld, resolved));
+    EXPECT_TRUE(resolved.empty());
+
+    const std::filesystem::path outsideLink = root / "Scenes" / "OutsideLink.sparkscene";
+    std::error_code ec;
+    std::filesystem::create_symlink(outside, outsideLink, ec);
+    if (!ec)
+    {
+        World linkedWorld;
+        EXPECT_FALSE(manager.LoadProjectScene("Scenes/OutsideLink.sparkscene", linkedWorld, resolved));
+        EXPECT_TRUE(resolved.empty());
+    }
+
+    manager.RemoveRecentProject((root / "Contained.sparkproject").string());
+    manager.Shutdown();
+    ec.clear();
+    std::filesystem::remove_all(parent, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(ProjectManager_FailedProjectSwitchPreservesCurrentProjectAndDefersCloseCallback)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path parent =
+        std::filesystem::temp_directory_path() / ("spark-transactional-open-test-" + std::to_string(stamp));
+    ProjectManager manager;
+    manager.Initialize();
+    ASSERT_TRUE(manager.CreateProject("Current", parent.string(), ProjectTemplate::Blank3D));
+    const std::string currentPath = manager.GetCurrentProject().path;
+    const std::filesystem::path invalidProjectDirectory = parent / "NotAProject";
+    std::filesystem::create_directories(invalidProjectDirectory);
+
+    int closeCallbacks = 0;
+    manager.SetOnProjectClosed([&](const ProjectInfo&) { ++closeCallbacks; });
+    EXPECT_FALSE(manager.OpenProject(invalidProjectDirectory.string()));
+    EXPECT_TRUE(manager.HasOpenProject());
+    EXPECT_EQ(manager.GetCurrentProject().path, currentPath);
+    EXPECT_EQ(closeCallbacks, 0);
+
+    manager.SetOnProjectClosed({});
+    manager.RemoveRecentProject((parent / "Current" / "Current.sparkproject").string());
+    manager.Shutdown();
+    std::error_code ec;
+    std::filesystem::remove_all(parent, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(ProjectManager_CommittedSwitchSurvivesThrowingLifecycleCallbacks)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path parent =
+        std::filesystem::temp_directory_path() / ("spark-callback-switch-test-" + std::to_string(stamp));
+    const std::filesystem::path firstRoot = parent / "First";
+    const std::filesystem::path secondRoot = parent / "Second";
+    std::filesystem::create_directories(firstRoot);
+    std::filesystem::create_directories(secondRoot);
+    const std::filesystem::path firstProject = firstRoot / "First.sparkproject";
+    const std::filesystem::path secondProject = secondRoot / "Second.sparkproject";
+    std::ofstream(firstProject) << "{\"name\":\"First\",\"version\":\"1.0.0\",\"modules\":[],\"scenes\":[]}";
+    std::ofstream(secondProject) << "{\"name\":\"Second\",\"version\":\"1.0.0\",\"modules\":[],\"scenes\":[]}";
+
+    ProjectManager manager;
+    manager.Initialize();
+    ASSERT_TRUE(manager.OpenProject(firstProject.string()));
+
+    int closeCallbacks = 0;
+    int openCallbacks = 0;
+    manager.SetOnProjectClosed(
+        [&](const ProjectInfo&)
+        {
+            ++closeCallbacks;
+            throw std::runtime_error("expected close callback failure");
+        });
+    manager.SetOnProjectOpened(
+        [&](const ProjectInfo&)
+        {
+            ++openCallbacks;
+            throw std::runtime_error("expected open callback failure");
+        });
+
+    EXPECT_TRUE(manager.OpenProject(secondProject.string()));
+    EXPECT_TRUE(manager.HasOpenProject());
+    EXPECT_EQ(manager.GetCurrentProject().name, std::string("Second"));
+    EXPECT_EQ(closeCallbacks, 1);
+    EXPECT_EQ(openCallbacks, 1);
+    EXPECT_TRUE(ProjectManager::GetActiveProjectPath().find("Second") != std::string::npos);
+
+    manager.SetOnProjectClosed({});
+    manager.SetOnProjectOpened({});
+    manager.RemoveRecentProject(firstProject.string());
+    manager.RemoveRecentProject(secondProject.string());
     manager.Shutdown();
     std::error_code ec;
     std::filesystem::remove_all(parent, ec);

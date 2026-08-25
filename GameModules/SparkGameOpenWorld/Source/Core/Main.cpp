@@ -86,6 +86,13 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
         console.LogError("[OpenWorld] Failed to initialize exploration system");
         return false;
     }
+    m_explorationSystem->SetDiscoveryCallback(
+        [this](const OpenWorld::PointOfInterest& poi)
+        {
+            if (poi.type != OpenWorld::POIType::FastTravel || !m_playerSystem)
+                return;
+            m_playerSystem->UnlockFastTravel({poi.poiId, poi.name, poi.x, poi.y, poi.z, poi.regionId});
+        });
 
     // 4. Wildlife system (species, herds, predator-prey, taming)
     m_wildlifeSystem = std::make_unique<OpenWorld::OWWildlifeSystem>();
@@ -238,10 +245,13 @@ void SparkGameOpenWorldModule::OnUpdate(float deltaTime)
     if (!m_initialized || m_paused)
         return;
 
-    const auto& playerState = m_playerSystem->GetWorldState();
-
     m_worldSetup->Update(deltaTime);
     m_playerSystem->Update(deltaTime);
+    const auto& position = m_playerSystem->GetWorldState();
+    const OpenWorld::BiomeRegion* region =
+        m_worldSetup->GetRegionAtPosition(position.posX, position.posY, position.posZ);
+    m_playerSystem->SetCurrentRegion(region ? region->regionId : 0);
+    const auto& playerState = m_playerSystem->GetWorldState();
     m_explorationSystem->Update(deltaTime, playerState.posX, playerState.posY, playerState.posZ);
     m_wildlifeSystem->Update(deltaTime, playerState.posX, playerState.posZ, playerState.currentRegionId);
     m_settlementSystem->Update(deltaTime);

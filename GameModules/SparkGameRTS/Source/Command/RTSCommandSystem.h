@@ -21,6 +21,8 @@
 namespace RTS
 {
 
+    class RTSUnitSystem;
+
     /// @brief A command issued to a unit
     struct UnitCommand
     {
@@ -39,7 +41,7 @@ namespace RTS
         RTSCommandSystem() = default;
         ~RTSCommandSystem() = default;
 
-        bool Initialize(Spark::IEngineContext* context);
+        bool Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem);
         void Update(float deltaTime);
         void Shutdown();
         void RenderDebugUI();
@@ -65,8 +67,11 @@ namespace RTS
 
       private:
         void ProcessCommands(float deltaTime);
+        [[nodiscard]] bool IsCommandValid(const UnitCommand& command) const;
+        void PruneSelection();
 
         Spark::IEngineContext* m_context{nullptr};
+        RTSUnitSystem* m_unitSystem{nullptr};
 
         // Current selection
         std::vector<uint32_t> m_selectedUnits;

@@ -50,6 +50,8 @@ namespace SparkEditor
         None,
         NewScene,
         OpenSceneDialog,
+        OpenProject,
+        CreateProject,
         Exit
     };
 
@@ -179,6 +181,12 @@ namespace SparkEditor
         void ShowNewProjectDialog();
         void ShowOpenProjectDialog();
         void ShowProjectBrowser();
+        /// Route project replacement through the unsaved-scene decision gate.
+        /// A true result means the request either completed or is awaiting the
+        /// user's Save/Discard/Cancel decision.
+        bool RequestOpenProject(const std::string& projectPath);
+        bool RequestCreateProject(const std::string& projectName, const std::string& parentDirectory,
+                                  ProjectTemplate templateType, const std::string& description);
 
         /// Document operations shared by menus, shortcuts, command palette,
         /// and World-backed panels. These are the only scene model the editor
@@ -410,6 +418,11 @@ namespace SparkEditor
         bool m_sceneModified = false;
         bool m_sceneModifiedBeforePlay = false;
         DocumentTransitionGuard m_documentTransitionGuard;
+        std::string m_pendingProjectPath;
+        std::string m_pendingProjectName;
+        std::string m_pendingProjectParentDirectory;
+        std::string m_pendingProjectDescription;
+        ProjectTemplate m_pendingProjectTemplate = ProjectTemplate::Blank3D;
 
         // Helper methods
         /// @brief Atomically replace the edited document World. Clears the
@@ -419,9 +432,12 @@ namespace SparkEditor
         /// RewirePanelsToWorld(). Both OpenScene() and the initial world
         /// creation in SetGraphicsDevice() route through it.
         void SwapWorld(std::unique_ptr<::World> newWorld);
+        void StopPlayModeForDocumentTransition();
         bool RequestDocumentTransition(DocumentTransitionAction action);
-        void ExecuteDocumentTransition(DocumentTransitionAction action);
+        bool ExecuteDocumentTransition(DocumentTransitionAction action);
+        void ClearPendingProjectTransition();
         void NewSceneNow();
+        void ResetWorldAfterProjectClose();
         void ShowOpenSceneDialogNow();
         void RenderUnsavedChangesDialog();
 

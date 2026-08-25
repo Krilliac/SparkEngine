@@ -367,6 +367,17 @@ void TerrafrontModule::OnUnload()
     // SimpleConsole serializes dispatch and unregister with its lifecycle lock.
     UnregisterConsoleCommands();
 
+    // End client and authoritative server sessions while every cleanup
+    // dependency (login flow, players, progression, characters, database,
+    // outfits/directives) is still initialized. Network teardown persists and
+    // clears those sessions before NetworkManager discards its client/handler
+    // tables. Keeping this ahead of the reverse subsystem teardown is required
+    // for both clean unload and same-process stop/re-host.
+    m_clientNet->Shutdown();
+#ifdef ENABLE_NETWORKING
+    m_world->StopNetworking();
+#endif
+
     // reverse boot order
     // W5 onboarding (Task 6, additive): loginFlow/db were constructed last,
     // so they shut down first. TFAccountSystem/TFCharacterSystem are plain
@@ -416,7 +427,6 @@ void TerrafrontModule::OnUnload()
     m_weapons->Shutdown();
     m_players->Shutdown();
     m_regions->Shutdown();
-    m_clientNet->Shutdown();
     m_serverSim->Shutdown();
     m_replication->Shutdown();
     m_world->Shutdown();

@@ -29,7 +29,8 @@ namespace Terrafront
         NoSuchCharacter,
         NotYourCharacter,
         ServerError,
-        NotLoggedIn
+        NotLoggedIn,
+        SessionActive
     };
 
     struct TFCharCreateResult

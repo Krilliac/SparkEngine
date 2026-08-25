@@ -9,6 +9,7 @@
  *        TFClientNetView.cpp (same class, split per repo file-size rules).
  */
 #include "Net/TFClientNet.h"
+#include "Net/TFClientSessionEnd.h"
 #include "Net/TFChatRules.h"
 
 #include "Game/TFPlayerSystem.h"
@@ -183,12 +184,7 @@ namespace Terrafront
             m_localPlayer = kInvalidPlayer;
             m_predActive = false;
             m_interp.clear();
-            // review follow-up (state hygiene): this is the automatic link-down
-            // detection for a real socket drop -- reset inWorld here too so
-            // InWorld() doesn't keep reporting true after the network session
-            // actually ended (see the matching reset in Disconnect()).
-            if (m_ctx)
-                m_ctx->inWorld = false;
+            ResetSessionState();
             SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] client link down");
         }
 #endif
@@ -236,6 +232,12 @@ namespace Terrafront
     void TFClientNet::Disconnect()
     {
 #ifdef ENABLE_NETWORKING
+        // A loopback listen host has no socket leave event, so explicitly run
+        // the same authoritative cleanup used for remote disconnects before
+        // invalidating the local identity or stopping NetworkManager.
+        if (LocalLoopback() && m_localPlayer != kInvalidPlayer && m_ctx->serverSim)
+            m_ctx->serverSim->DebugSimulateDisconnect(m_localPlayer);
+
         if (m_handlersRegistered)
             ReleaseClientHandlers();
 #endif
@@ -244,23 +246,26 @@ namespace Terrafront
         m_predActive = false;
         m_interp.clear();
         m_chatHistory.clear();
-        // review follow-up (state hygiene): inWorld is only ever set true (on
-        // WorldWelcome) and never reset -- InWorld() stayed true for the rest of
-        // the process after a disconnect, letting gated client UI/systems believe
-        // the session was still in-world. Client-side session end, so reset here.
+        ResetSessionState();
+    }
+
+    void TFClientNet::ResetSessionState()
+    {
+        m_session.Reset();
         if (m_ctx)
+        {
+            const bool loginFlowAtLogin = !m_ctx->loginFlow || m_ctx->loginFlow->State() == TFFlowState::Login;
+            const TFClientSessionEndDecision decision = PlanClientSessionEnd(m_ctx->role, loginFlowAtLogin);
             m_ctx->inWorld = false;
-        if (m_ctx && m_ctx->role == NetRole::Client)
-            m_ctx->role = NetRole::Standalone;
-        // multimap-plumbing lane (W13) gap #3 fix (docs/TERRAFRONT_MULTIMAP.md
-        // section 4): without this, TFLoginFlow::m_state stayed InWorld after a
-        // disconnect/continent-hop, so IsOpen() stayed false and the login
-        // screen never reappeared even though the socket was gone. Reset
-        // unconditionally except when already at Login, so an early connect
-        // failure (Disconnect() called before ever reaching InWorld) doesn't
-        // clobber in-progress form state the player is still looking at.
-        if (m_ctx && m_ctx->loginFlow && m_ctx->loginFlow->State() != TFFlowState::Login)
-            m_ctx->loginFlow->ResetToLogin();
+            m_ctx->localPlayer = kInvalidPlayer;
+            m_ctx->localFaction = FactionId::None;
+            m_ctx->role = decision.role;
+            // Both an explicit disconnect and an observed link loss end the
+            // onboarding session. Keep the typed username only; clear the
+            // password, character selection, and stale InWorld UI state.
+            if (m_ctx->loginFlow && decision.resetLoginFlow)
+                m_ctx->loginFlow->ResetToLogin();
+        }
     }
 
     // ---------------------------------------------------------------------------

@@ -28,8 +28,15 @@
 #include <shlobj.h>
 #include <windows.h>
 #elif defined(__APPLE__)
+#include <fcntl.h>
+#include <limits.h>
 #include <mach-o/dyld.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #else
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -571,6 +578,147 @@ namespace SparkEditor
             return normalizedLeft == normalizedRight;
         }
 
+        bool IsPathInsideRoot(const fs::path& root, const fs::path& candidate)
+        {
+            std::string rootText = PathToUtf8(root.lexically_normal());
+            std::string candidateText = PathToUtf8(candidate.lexically_normal());
+            std::replace(rootText.begin(), rootText.end(), '\\', '/');
+            std::replace(candidateText.begin(), candidateText.end(), '\\', '/');
+#ifdef _WIN32
+            std::transform(rootText.begin(), rootText.end(), rootText.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            std::transform(candidateText.begin(), candidateText.end(), candidateText.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+#endif
+            while (rootText.size() > 1 && rootText.back() == '/')
+                rootText.pop_back();
+            return candidateText.size() > rootText.size() && candidateText.starts_with(rootText) &&
+                   candidateText[rootText.size()] == '/';
+        }
+
+        constexpr uint64_t kMaximumSceneDocumentBytes = 64ull * 1024ull * 1024ull;
+
+        bool ReadContainedFileFromHandle(const fs::path& projectRoot, const fs::path& candidate,
+                                         std::string& resolvedPath, std::string& contents)
+        {
+            resolvedPath.clear();
+            contents.clear();
+#ifdef _WIN32
+            const HANDLE rawHandle =
+                ::CreateFileW(candidate.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+            if (rawHandle == INVALID_HANDLE_VALUE)
+                return false;
+            struct HandleCloser
+            {
+                HANDLE handle;
+                ~HandleCloser() { ::CloseHandle(handle); }
+            } closer{rawHandle};
+
+            BY_HANDLE_FILE_INFORMATION information{};
+            if (!::GetFileInformationByHandle(rawHandle, &information) ||
+                (information.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ||
+                ::GetFileType(rawHandle) != FILE_TYPE_DISK)
+            {
+                return false;
+            }
+
+            const DWORD pathLength =
+                ::GetFinalPathNameByHandleW(rawHandle, nullptr, 0, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+            if (pathLength == 0)
+                return false;
+            std::vector<wchar_t> finalPathBuffer(static_cast<size_t>(pathLength) + 1u, L'\0');
+            const DWORD copied = ::GetFinalPathNameByHandleW(rawHandle, finalPathBuffer.data(),
+                                                             static_cast<DWORD>(finalPathBuffer.size()),
+                                                             FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+            if (copied == 0 || copied >= finalPathBuffer.size())
+                return false;
+
+            std::wstring finalPathText(finalPathBuffer.data(), copied);
+            if (finalPathText.starts_with(L"\\\\?\\UNC\\"))
+                finalPathText = L"\\\\" + finalPathText.substr(8);
+            else if (finalPathText.starts_with(L"\\\\?\\"))
+                finalPathText.erase(0, 4);
+            const fs::path finalPath = fs::path(finalPathText).lexically_normal();
+            if (!IsPathInsideRoot(projectRoot, finalPath))
+                return false;
+
+            LARGE_INTEGER fileSize{};
+            if (!::GetFileSizeEx(rawHandle, &fileSize) || fileSize.QuadPart < 0 ||
+                static_cast<uint64_t>(fileSize.QuadPart) > kMaximumSceneDocumentBytes)
+            {
+                return false;
+            }
+            contents.resize(static_cast<size_t>(fileSize.QuadPart));
+            size_t offset = 0;
+            while (offset < contents.size())
+            {
+                const DWORD requested =
+                    static_cast<DWORD>(std::min<size_t>(contents.size() - offset, static_cast<size_t>(1024u * 1024u)));
+                DWORD bytesRead = 0;
+                if (!::ReadFile(rawHandle, contents.data() + offset, requested, &bytesRead, nullptr) || bytesRead == 0)
+                    return false;
+                offset += bytesRead;
+            }
+            resolvedPath = PathToUtf8(finalPath);
+            return true;
+#else
+            int flags = O_RDONLY;
+#ifdef O_CLOEXEC
+            flags |= O_CLOEXEC;
+#endif
+#ifdef O_NOFOLLOW
+            flags |= O_NOFOLLOW;
+#endif
+            const int descriptor = ::open(candidate.c_str(), flags);
+            if (descriptor < 0)
+                return false;
+            struct DescriptorCloser
+            {
+                int descriptor;
+                ~DescriptorCloser() { ::close(descriptor); }
+            } closer{descriptor};
+
+            struct stat information{};
+            if (::fstat(descriptor, &information) != 0 || !S_ISREG(information.st_mode) || information.st_size < 0 ||
+                static_cast<uint64_t>(information.st_size) > kMaximumSceneDocumentBytes)
+            {
+                return false;
+            }
+
+            fs::path finalPath;
+#ifdef __APPLE__
+            std::array<char, PATH_MAX> finalPathBuffer{};
+            if (::fcntl(descriptor, F_GETPATH, finalPathBuffer.data()) == -1)
+                return false;
+            finalPath = fs::path(finalPathBuffer.data()).lexically_normal();
+#else
+            const std::string descriptorPath = "/proc/self/fd/" + std::to_string(descriptor);
+            std::array<char, PATH_MAX> finalPathBuffer{};
+            const ssize_t copied =
+                ::readlink(descriptorPath.c_str(), finalPathBuffer.data(), finalPathBuffer.size() - 1);
+            if (copied <= 0 || static_cast<size_t>(copied) >= finalPathBuffer.size())
+                return false;
+            finalPathBuffer[static_cast<size_t>(copied)] = '\0';
+            finalPath = fs::path(finalPathBuffer.data()).lexically_normal();
+#endif
+            if (!IsPathInsideRoot(projectRoot, finalPath))
+                return false;
+
+            contents.resize(static_cast<size_t>(information.st_size));
+            size_t offset = 0;
+            while (offset < contents.size())
+            {
+                const ssize_t bytesRead = ::read(descriptor, contents.data() + offset, contents.size() - offset);
+                if (bytesRead <= 0)
+                    return false;
+                offset += static_cast<size_t>(bytesRead);
+            }
+            resolvedPath = PathToUtf8(finalPath);
+            return true;
+#endif
+        }
+
         std::string MakeCodeIdentifier(const std::string& value)
         {
             std::string result;
@@ -783,7 +931,6 @@ namespace SparkEditor
         std::cout << "ProjectManager::Shutdown()\n";
         if (m_hasOpenProject)
         {
-            SaveProject();
             CloseProject();
         }
         SaveRecentProjectsList();
@@ -936,8 +1083,23 @@ namespace SparkEditor
             fs::rename(staging, destination);
             committed = true;
             ownsStaging = false;
-            m_currentProject.path = std::move(finalProjectPath);
-            m_currentProjectFilePath = std::move(finalProjectFilePath);
+            ProjectInfo createdProject = std::move(m_currentProject);
+            createdProject.path = std::move(finalProjectPath);
+            std::string createdProjectFilePath = std::move(finalProjectFilePath);
+
+            // Project generation is staged in m_currentProject while the old
+            // project remains logically open. Once the filesystem commit is
+            // irreversible, retire the previous project before publishing the
+            // replacement so lifecycle subscribers see the same close/open
+            // sequence as OpenProject().
+            m_currentProject = previousProject;
+            m_currentProjectFilePath = previousProjectFilePath;
+            m_hasOpenProject = previouslyOpen;
+            if (previouslyOpen)
+                CloseProject();
+
+            m_currentProject = std::move(createdProject);
+            m_currentProjectFilePath = std::move(createdProjectFilePath);
             m_hasOpenProject = true;
             try
             {
@@ -1182,8 +1344,21 @@ namespace SparkEditor
             fs::rename(staging, destination);
             committed = true;
             ownsStaging = false;
-            m_currentProject.path = std::move(finalProjectPath);
-            m_currentProjectFilePath = std::move(finalProjectFilePath);
+            ProjectInfo createdProject = std::move(m_currentProject);
+            createdProject.path = std::move(finalProjectPath);
+            std::string createdProjectFilePath = std::move(finalProjectFilePath);
+
+            // Match OpenProject() replacement semantics: after the staged
+            // tree is committed, close the old logical project exactly once
+            // before publishing the newly created one.
+            m_currentProject = previousProject;
+            m_currentProjectFilePath = previousProjectFilePath;
+            m_hasOpenProject = previouslyOpen;
+            if (previouslyOpen)
+                CloseProject();
+
+            m_currentProject = std::move(createdProject);
+            m_currentProjectFilePath = std::move(createdProjectFilePath);
             m_hasOpenProject = true;
             try
             {
@@ -1339,6 +1514,18 @@ namespace SparkEditor
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading project from '%s'", sparkprojectPath.c_str());
         std::cout << "Opening project: " << sparkprojectPath << "\n";
 
+        const bool hadOpenProject = m_hasOpenProject;
+        const ProjectInfo previousProject = m_currentProject;
+        const std::string previousProjectFilePath = m_currentProjectFilePath;
+        bool transitionCommitted = false;
+
+        const auto restorePreviousProject = [&]()
+        {
+            m_hasOpenProject = hadOpenProject;
+            m_currentProject = previousProject;
+            m_currentProjectFilePath = previousProjectFilePath;
+        };
+
         try
         {
 
@@ -1366,42 +1553,86 @@ namespace SparkEditor
                 }
             }
 
-            if (!fs::exists(PathFromUtf8(resolvedPath)))
+            if (!fs::is_regular_file(PathFromUtf8(resolvedPath)))
             {
                 std::cerr << "Project file not found: " << resolvedPath << "\n";
                 return false;
             }
 
-            if (m_hasOpenProject)
-            {
-                SaveProject();
-                CloseProject();
-            }
-
             if (!LoadProjectFile(resolvedPath))
+            {
+                restorePreviousProject();
                 return false;
+            }
 
             // Older editor-created projects predate the standalone build skeleton.
             // Add only missing generated files; never overwrite user-authored build
             // scripts or module sources.
             if (!EnsureBuildScaffold(m_currentProject.path, m_currentProject.name))
+            {
+                restorePreviousProject();
                 return false;
+            }
 
+            // Loading and scaffold validation above are staged while the old
+            // project remains logically open. Only now is it safe to notify the
+            // editor that the previous document should be retired.
+            ProjectInfo loadedProject = std::move(m_currentProject);
+            std::string loadedProjectFilePath = std::move(m_currentProjectFilePath);
+            const std::string loadedActiveProjectPath = NormalizeProjectPath(loadedProject.path);
+            restorePreviousProject();
+            if (hadOpenProject)
+                CloseProject();
+
+            m_currentProject = std::move(loadedProject);
+            m_currentProjectFilePath = std::move(loadedProjectFilePath);
             m_hasOpenProject = true;
+            transitionCommitted = true;
+            // Everything below is post-commit bookkeeping. A notification or
+            // callback failure must not turn a successful project replacement
+            // into a false return or attempt to resurrect the already-retired
+            // document.
+            try
             {
                 std::lock_guard lock(s_activeProjectMutex);
-                s_activeProjectPath = NormalizeProjectPath(m_currentProject.path);
+                s_activeProjectPath = loadedActiveProjectPath;
             }
-            m_currentProject.lastModified = GetCurrentTimestamp();
-            AddToRecentProjects(m_currentProject.name, resolvedPath);
+            catch (const std::exception& activePathError)
+            {
+                std::cerr << "Could not publish active project path after commit: " << activePathError.what() << "\n";
+            }
+
+            try
+            {
+                AddToRecentProjects(m_currentProject.name, resolvedPath);
+            }
+            catch (const std::exception& recentError)
+            {
+                std::cerr << "Could not update recent projects after commit: " << recentError.what() << "\n";
+            }
 
             if (m_onProjectOpened)
-                m_onProjectOpened(m_currentProject);
+            {
+                try
+                {
+                    m_onProjectOpened(m_currentProject);
+                }
+                catch (const std::exception& callbackError)
+                {
+                    std::cerr << "Project-opened callback failed after commit: " << callbackError.what() << "\n";
+                }
+                catch (...)
+                {
+                    std::cerr << "Project-opened callback failed after commit.\n";
+                }
+            }
 
             return true;
         }
         catch (const std::exception& e)
         {
+            if (!transitionCommitted)
+                restorePreviousProject();
             std::cerr << "Error opening project: " << e.what() << "\n";
             return false;
         }
@@ -1421,8 +1652,9 @@ namespace SparkEditor
         return SaveProjectFile();
     }
 
-    bool ProjectManager::RecordOpenedScene(const std::string& scenePath)
+    bool ProjectManager::ResolveProjectScenePath(const std::string& scenePath, std::string& resolvedPath) const
     {
+        resolvedPath.clear();
         if (!m_hasOpenProject || scenePath.empty())
             return false;
 
@@ -1439,13 +1671,71 @@ namespace SparkEditor
         if (ec || relative.empty() || relative.is_absolute() || *relative.begin() == "..")
             return false;
 
+        resolvedPath = PathToUtf8(candidate);
+        return true;
+    }
+
+    bool ProjectManager::LoadProjectScene(const std::string& scenePath, ::World& world, std::string& resolvedPath) const
+    {
+        resolvedPath.clear();
+        if (!m_hasOpenProject || scenePath.empty())
+            return false;
+
+        const fs::path projectRoot = PathFromUtf8(NormalizeProjectPath(m_currentProject.path));
+        fs::path candidate = PathFromUtf8(scenePath);
+        if (candidate.is_relative())
+            candidate = projectRoot / candidate;
+        candidate = fs::absolute(candidate).lexically_normal();
+
+        // Reject obvious absolute/traversal escapes before opening anything.
+        // The handle-derived final path below remains the security authority
+        // for symlinks, junctions, and concurrent path replacement.
+        if (!IsPathInsideRoot(projectRoot, candidate))
+            return false;
+
+        std::string sceneDocument;
+        if (!ReadContainedFileFromHandle(projectRoot, candidate, resolvedPath, sceneDocument))
+            return false;
+        if (!Spark::DeserializeInto(world, sceneDocument))
+        {
+            resolvedPath.clear();
+            return false;
+        }
+        return true;
+    }
+
+    bool ProjectManager::RecordOpenedScene(const std::string& scenePath)
+    {
+        std::string resolvedPath;
+        if (!ResolveProjectScenePath(scenePath, resolvedPath))
+            return false;
+
+        const fs::path projectRoot = PathFromUtf8(NormalizeProjectPath(m_currentProject.path));
+        const fs::path candidate = PathFromUtf8(resolvedPath);
+
+        std::error_code ec;
+        const fs::path relative = fs::relative(candidate, projectRoot, ec).lexically_normal();
+        if (ec || relative.empty() || relative.is_absolute() || *relative.begin() == "..")
+            return false;
+
         std::string storedPath = PathToUtf8(relative);
         std::replace(storedPath.begin(), storedPath.end(), '\\', '/');
+        const bool sceneAlreadyRecorded = std::any_of(
+            m_currentProject.scenes.begin(), m_currentProject.scenes.end(), [&](const std::string& scene)
+            { return ProjectPathsEqual(PathToUtf8(projectRoot / PathFromUtf8(scene)), PathToUtf8(candidate)); });
+
+        // Opening the project's already-current scene is a read-only operation.
+        // Avoid rewriting checked-in template descriptors (and dirtying their
+        // lastModified field) every time the editor starts.
+        if (ProjectPathsEqual(PathToUtf8(projectRoot / PathFromUtf8(m_currentProject.lastOpenedScene)),
+                              PathToUtf8(candidate)))
+        {
+            return true;
+        }
+
         const ProjectInfo previous = m_currentProject;
         m_currentProject.lastOpenedScene = storedPath;
-        if (std::none_of(
-                m_currentProject.scenes.begin(), m_currentProject.scenes.end(), [&](const std::string& scene)
-                { return ProjectPathsEqual(PathToUtf8(projectRoot / PathFromUtf8(scene)), PathToUtf8(candidate)); }))
+        if (!sceneAlreadyRecorded)
         {
             m_currentProject.scenes.push_back(storedPath);
         }
@@ -1473,7 +1763,18 @@ namespace SparkEditor
             }
             if (m_onProjectClosed)
             {
-                m_onProjectClosed(closed);
+                try
+                {
+                    m_onProjectClosed(closed);
+                }
+                catch (const std::exception& callbackError)
+                {
+                    std::cerr << "Project-closed callback failed after close: " << callbackError.what() << "\n";
+                }
+                catch (...)
+                {
+                    std::cerr << "Project-closed callback failed after close.\n";
+                }
             }
         }
     }

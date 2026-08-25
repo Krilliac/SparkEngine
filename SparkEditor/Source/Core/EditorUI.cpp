@@ -266,6 +266,12 @@ namespace SparkEditor
             console.LogWarning("Project manager initialization failed");
         }
         m_projectBrowserPanel = std::make_shared<ProjectBrowserPanel>(m_projectManager.get());
+        m_projectBrowserPanel->SetOpenProjectRequestHandler([this](const std::string& projectPath)
+                                                            { return RequestOpenProject(projectPath); });
+        m_projectBrowserPanel->SetCreateProjectRequestHandler(
+            [this](const std::string& projectName, const std::string& parentDirectory, ProjectTemplate templateType,
+                   const std::string& description)
+            { return RequestCreateProject(projectName, parentDirectory, templateType, description); });
         m_projectBrowserPanel->Initialize();
 
         // Undo/redo — the editor uses the single process-wide
@@ -369,6 +375,14 @@ namespace SparkEditor
         m_projectManager->SetOnProjectOpened(
             [this](const ProjectInfo& project)
             {
+                // GameViewPanel's built-in overlay is specifically an FPS HUD
+                // simulator. Do not leak its weapons, bots, and capture point
+                // into Empty, RPG, platformer, or other template previews.
+                if (auto gameViewIt = m_panels.find("GameView"); gameViewIt != m_panels.end())
+                    if (auto* gameView = dynamic_cast<GameViewPanel*>(gameViewIt->second.get()))
+                        gameView->SetFPSHUDPreviewEnabled(project.hasTemplateIdentity &&
+                                                          project.templateType == ProjectTemplate::FirstPerson);
+
                 // Update asset browser path
                 auto it = m_panels.find("AssetBrowser");
                 if (it != m_panels.end())
@@ -388,11 +402,11 @@ namespace SparkEditor
                     !project.lastOpenedScene.empty() ? project.lastOpenedScene : project.defaultScene;
                 if (!relativeScene.empty())
                 {
-                    const std::string scenePath = PathToUtf8(PathFromUtf8(project.path) / PathFromUtf8(relativeScene));
-                    if (!OpenScene(scenePath))
+                    if (!OpenScene(relativeScene))
                     {
                         NewSceneNow();
-                        ShowNotification("Project scene could not be loaded; opened a fresh scene", "warning");
+                        ShowNotification("Project scene was missing, unsafe, or unreadable; opened a fresh scene",
+                                         "warning");
                     }
                 }
                 else
@@ -406,6 +420,12 @@ namespace SparkEditor
         m_projectManager->SetOnProjectClosed(
             [this](const ProjectInfo& project)
             {
+                if (auto gameViewIt = m_panels.find("GameView"); gameViewIt != m_panels.end())
+                    if (auto* gameView = dynamic_cast<GameViewPanel*>(gameViewIt->second.get()))
+                        gameView->SetFPSHUDPreviewEnabled(false);
+
+                ResetWorldAfterProjectClose();
+
                 auto it = m_panels.find("AssetBrowser");
                 if (it != m_panels.end())
                 {
@@ -773,6 +793,11 @@ namespace SparkEditor
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("Shutting down EditorUI...");
 
+        // Retire play/simulate while every document callback and panel is
+        // still alive. This restores or commits the active snapshot and closes
+        // the process-wide transient undo session before any World is replaced.
+        StopPlayModeForDocumentTransition();
+
         // Shutdown panels using vector iteration since unordered_map doesn't have rbegin/rend
         std::vector<std::pair<std::string, std::shared_ptr<EditorPanel>>> panelVector(m_panels.begin(), m_panels.end());
         for (auto it = panelVector.rbegin(); it != panelVector.rend(); ++it)
@@ -805,6 +830,8 @@ namespace SparkEditor
         if (m_projectManager)
         {
             console.LogInfo("Shutting down project manager...");
+            m_projectManager->SetOnProjectOpened({});
+            m_projectManager->SetOnProjectClosed({});
             m_projectManager->Shutdown();
             m_projectManager.reset();
             console.LogSuccess("Project manager shutdown complete");
@@ -1073,6 +1100,7 @@ namespace SparkEditor
         if (ImGui::Button("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
         {
             m_documentTransitionGuard.Resolve(UnsavedChangesDecision::Cancel);
+            ClearPendingProjectTransition();
             ImGui::CloseCurrentPopup();
         }
 
@@ -1531,30 +1559,91 @@ namespace SparkEditor
         }
     }
 
+    bool EditorUI::RequestOpenProject(const std::string& projectPath)
+    {
+        if (projectPath.empty() || m_documentTransitionGuard.HasPending())
+            return false;
+
+        m_pendingProjectPath = projectPath;
+        if (!m_documentTransitionGuard.Request(DocumentTransitionAction::OpenProject, IsSceneModified()))
+            return m_documentTransitionGuard.GetPending() == DocumentTransitionAction::OpenProject;
+        return ExecuteDocumentTransition(DocumentTransitionAction::OpenProject);
+    }
+
+    bool EditorUI::RequestCreateProject(const std::string& projectName, const std::string& parentDirectory,
+                                        ProjectTemplate templateType, const std::string& description)
+    {
+        if (projectName.empty() || parentDirectory.empty() || m_documentTransitionGuard.HasPending())
+            return false;
+
+        m_pendingProjectName = projectName;
+        m_pendingProjectParentDirectory = parentDirectory;
+        m_pendingProjectTemplate = templateType;
+        m_pendingProjectDescription = description;
+        if (!m_documentTransitionGuard.Request(DocumentTransitionAction::CreateProject, IsSceneModified()))
+            return m_documentTransitionGuard.GetPending() == DocumentTransitionAction::CreateProject;
+        return ExecuteDocumentTransition(DocumentTransitionAction::CreateProject);
+    }
+
     bool EditorUI::RequestDocumentTransition(DocumentTransitionAction action)
     {
         if (!m_documentTransitionGuard.Request(action, IsSceneModified()))
             return false;
-        ExecuteDocumentTransition(action);
-        return true;
+        return ExecuteDocumentTransition(action);
     }
 
-    void EditorUI::ExecuteDocumentTransition(DocumentTransitionAction action)
+    bool EditorUI::ExecuteDocumentTransition(DocumentTransitionAction action)
     {
         switch (action)
         {
         case DocumentTransitionAction::NewScene:
             NewSceneNow();
-            break;
+            return true;
         case DocumentTransitionAction::OpenSceneDialog:
             ShowOpenSceneDialogNow();
-            break;
+            return true;
+        case DocumentTransitionAction::OpenProject:
+        {
+            const std::string projectPath = m_pendingProjectPath;
+            ClearPendingProjectTransition();
+            if (!m_projectManager || !m_projectManager->OpenProject(projectPath))
+            {
+                ShowNotification("Failed to open project: " + projectPath, "error");
+                return false;
+            }
+            return true;
+        }
+        case DocumentTransitionAction::CreateProject:
+        {
+            const std::string projectName = m_pendingProjectName;
+            const std::string parentDirectory = m_pendingProjectParentDirectory;
+            const ProjectTemplate templateType = m_pendingProjectTemplate;
+            const std::string description = m_pendingProjectDescription;
+            ClearPendingProjectTransition();
+            if (!m_projectManager ||
+                !m_projectManager->CreateProject(projectName, parentDirectory, templateType, description))
+            {
+                ShowNotification("Failed to create project: " + projectName, "error");
+                return false;
+            }
+            return true;
+        }
         case DocumentTransitionAction::Exit:
             m_exitRequested = true;
-            break;
+            return true;
         case DocumentTransitionAction::None:
-            break;
+            return false;
         }
+        return false;
+    }
+
+    void EditorUI::ClearPendingProjectTransition()
+    {
+        m_pendingProjectPath.clear();
+        m_pendingProjectName.clear();
+        m_pendingProjectParentDirectory.clear();
+        m_pendingProjectDescription.clear();
+        m_pendingProjectTemplate = ProjectTemplate::Blank3D;
     }
 
     bool EditorUI::RequestExitWithConfirmation()
@@ -1599,6 +1688,15 @@ namespace SparkEditor
         if (m_pluginManager)
             m_pluginManager->NotifySceneLoad("Untitled");
         ShowNotification("New scene created", "success");
+    }
+
+    void EditorUI::ResetWorldAfterProjectClose()
+    {
+        SwapWorld(std::make_unique<::World>());
+        m_currentScenePath.clear();
+        m_currentSceneName = "Untitled";
+        m_sceneModified = false;
+        Spark::Editor::CommandHistory::GetInstance().MarkSaved();
     }
 
     bool EditorUI::SaveScene()
@@ -1778,8 +1876,17 @@ namespace SparkEditor
         return true;
     }
 
+    void EditorUI::StopPlayModeForDocumentTransition()
+    {
+        if (m_playModeManager.IsInPlayMode())
+            m_playModeManager.ExitPlayMode();
+        m_playMode = PlayMode::Stopped;
+    }
+
     void EditorUI::SwapWorld(std::unique_ptr<::World> newWorld)
     {
+        StopPlayModeForDocumentTransition();
+
         // Clear the command history BEFORE the outgoing World is freed. Commands
         // may close over raw entities/components of the old m_world (e.g.
         // LambdaCommands), so a later Undo/Redo would re-execute against a freed
@@ -1913,7 +2020,11 @@ namespace SparkEditor
         // Load into a fresh World first so a failed/partial load never
         // corrupts the World currently being edited.
         auto fresh = std::make_unique<::World>();
-        if (!Spark::LoadWorld(*fresh, path))
+        std::string loadedPath = path;
+        const bool loaded = m_projectManager && m_projectManager->HasOpenProject()
+                                ? m_projectManager->LoadProjectScene(path, *fresh, loadedPath)
+                                : Spark::LoadWorld(*fresh, path);
+        if (!loaded)
         {
             console.LogError("Failed to open scene (Spark::LoadWorld): " + path);
             return false;
@@ -1924,21 +2035,21 @@ namespace SparkEditor
         // reference the freed old World (use-after-free).
         SwapWorld(std::move(fresh));
 
-        m_currentScenePath = path;
-        m_currentSceneName = PathToUtf8(PathFromUtf8(path).stem());
+        m_currentScenePath = loadedPath;
+        m_currentSceneName = PathToUtf8(PathFromUtf8(loadedPath).stem());
         m_sceneModified = false;
         Spark::Editor::CommandHistory::GetInstance().MarkSaved();
 
-        if (m_projectManager && m_projectManager->HasOpenProject() && !m_projectManager->RecordOpenedScene(path))
+        if (m_projectManager && m_projectManager->HasOpenProject() && !m_projectManager->RecordOpenedScene(loadedPath))
         {
-            console.LogWarning("Scene opened, but project last-opened-scene metadata was not updated: " + path);
+            console.LogWarning("Scene opened, but project last-opened-scene metadata was not updated: " + loadedPath);
         }
 
-        console.LogSuccess("Scene opened from: " + path);
+        console.LogSuccess("Scene opened from: " + loadedPath);
 
         if (m_pluginManager)
         {
-            m_pluginManager->NotifySceneLoad(path);
+            m_pluginManager->NotifySceneLoad(loadedPath);
         }
 
         return true;

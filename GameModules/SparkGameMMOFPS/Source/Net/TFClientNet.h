@@ -32,6 +32,7 @@
 
 #include "Core/TFTypes.h"
 #include "Core/TFEvents.h"
+#include "Net/TFClientSessionState.h"
 #include "Net/TFNetProtocol.h"
 #include "Net/TFRepProtocol.h"
 
@@ -111,12 +112,12 @@ namespace Terrafront
         // server reply so console commands (tf_login/tf_char_list/...) and Task
         // 5/6 can consume it. Once `m_ctx->loginFlow` is wired (Task 6), the
         // On*Reply handlers below should forward to it directly instead.
-        bool IsLoggedIn() const { return m_loggedIn; }
-        uint64_t AccountId() const { return m_accountId; }
-        uint8_t LastAuthError() const { return m_lastAuthErr; }
-        const std::vector<TF_CharBrief>& CharacterList() const { return m_charList; }
-        uint8_t LastCharOpError() const { return m_lastCharOpErr; }
-        uint64_t LastCharOpId() const { return m_lastCharOpId; }
+        bool IsLoggedIn() const { return m_session.loggedIn; }
+        uint64_t AccountId() const { return m_session.accountId; }
+        uint8_t LastAuthError() const { return static_cast<uint8_t>(m_session.lastAuthError); }
+        const std::vector<TF_CharBrief>& CharacterList() const { return m_session.characters; }
+        uint8_t LastCharOpError() const { return static_cast<uint8_t>(m_session.lastCharacterError); }
+        uint64_t LastCharOpId() const { return m_session.lastCharacterId; }
 
 #ifdef ENABLE_NETWORKING
         /// W5 onboarding (Task 7 acceptance-harness fix): the listen-host/
@@ -149,6 +150,7 @@ namespace Terrafront
         bool LocalLoopback() const; ///< authority role with a local player
         void EnsureLocalHostIdentity();
         void UpdateConnectionState();
+        void ResetSessionState();
         void RouteLoopback(TFMsg id, const void* payload, size_t size);
 
         void PumpInput(float dt, bool aliveLocalPawn);
@@ -224,12 +226,7 @@ namespace Terrafront
         bool m_showDebug{false};
 
         // W5 onboarding (Task 4) reply stash (see the getters above).
-        bool m_loggedIn{false};
-        uint64_t m_accountId{0};
-        uint8_t m_lastAuthErr{0};
-        std::vector<TF_CharBrief> m_charList;
-        uint8_t m_lastCharOpErr{0};
-        uint64_t m_lastCharOpId{0};
+        TFClientSessionState m_session;
     };
 
 } // namespace Terrafront

@@ -57,6 +57,36 @@ namespace SparkEditor
         /** @brief Elapsed HUD simulation time, exposed for diagnostics and regression tests. */
         float GetSimulationTime() const { return m_totalTime; }
 
+        /**
+         * @brief Enable the editor's legacy FPS HUD simulator for an FPS project.
+         *
+         * The overlay is an editor preview, not project-authored UI. Keeping it
+         * disabled for other templates prevents FPS weapons, bots, and capture
+         * objectives from leaking into otherwise unrelated game views.
+         */
+        void SetFPSHUDPreviewEnabled(bool enabled);
+        void SetFPSHUDPreviewVisible(bool visible) { m_showHUD = m_fpsHUDPreviewAvailable && visible; }
+        bool IsFPSHUDPreviewAvailable() const { return m_fpsHUDPreviewAvailable; }
+        bool IsFPSHUDPreviewEnabled() const { return m_fpsHUDPreviewAvailable && m_showHUD; }
+        enum class InputCaptureHint
+        {
+            None,
+            Capture,
+            Release
+        };
+        static InputCaptureHint ResolveInputCaptureHint(bool playing, bool previewAvailable, bool cursorCaptured)
+        {
+            if (!playing || !previewAvailable)
+                return InputCaptureHint::None;
+            return cursorCaptured ? InputCaptureHint::Release : InputCaptureHint::Capture;
+        }
+        InputCaptureHint GetInputCaptureHint() const
+        {
+            return ResolveInputCaptureHint(m_isPlaying, m_fpsHUDPreviewAvailable, m_isCursorCaptured);
+        }
+        bool ShouldShowInputCaptureHint() const { return GetInputCaptureHint() == InputCaptureHint::Capture; }
+        bool ShouldShowInputReleaseHint() const { return GetInputCaptureHint() == InputCaptureHint::Release; }
+
       private:
         void RenderToolbar();
         void RenderGameContent();
@@ -75,6 +105,7 @@ namespace SparkEditor
         void RenderScoreboard(float cx, float cy, float width, float height);
         void RenderLowHealthVignette(float x, float y, float w, float h);
         void RenderInteractionPrompt(float cx, float cy);
+        void ResetFPSHUDPreviewState();
 #ifdef _WIN32
         void CreateRenderTexture(int width, int height);
         bool RenderWorldToTexture(int width, int height);
@@ -94,7 +125,8 @@ namespace SparkEditor
         float m_aspectRatio = 16.0f / 9.0f;
 
         // HUD visibility
-        bool m_showHUD = true;
+        bool m_fpsHUDPreviewAvailable = false;
+        bool m_showHUD = false;
         bool m_showCrosshair = true;
         bool m_showStats = false;
         bool m_showMinimap = true;

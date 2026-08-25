@@ -12,6 +12,7 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <random>
 #include <sstream>
 
@@ -250,10 +251,46 @@ namespace ARPG
         // Bosses always get 3 affixes
         AssignChampionAffixes(boss, 3);
 
+        // SpawnMonster stores the authoritative instance before the boss-specific
+        // name and affixes are applied. Keep that stored copy in sync.
+        if (MonsterData* storedBoss = GetMonster(boss.monsterId))
+            *storedBoss = boss;
+
         SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG boss spawned: %s (Lv%d)", boss.name.c_str(), level);
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Boss spawned: " + boss.name + " (Lv" +
                                                     std::to_string(level) + ")");
         return boss;
+    }
+
+    MonsterData* ARPGMonsterSystem::GetMonster(uint32_t monsterId)
+    {
+        const auto it =
+            std::find_if(m_activeMonsters.begin(), m_activeMonsters.end(),
+                         [monsterId](const MonsterData& monster) { return monster.monsterId == monsterId; });
+        return it != m_activeMonsters.end() ? &*it : nullptr;
+    }
+
+    const MonsterData* ARPGMonsterSystem::GetMonster(uint32_t monsterId) const
+    {
+        const auto it =
+            std::find_if(m_activeMonsters.cbegin(), m_activeMonsters.cend(),
+                         [monsterId](const MonsterData& monster) { return monster.monsterId == monsterId; });
+        return it != m_activeMonsters.cend() ? &*it : nullptr;
+    }
+
+    bool ARPGMonsterSystem::DamageMonster(uint32_t monsterId, float amount)
+    {
+        MonsterData* monster = GetMonster(monsterId);
+        if (!monster || monster->health <= 0.0f || !std::isfinite(amount) || amount <= 0.0f)
+            return false;
+
+        monster->health = std::max(0.0f, monster->health - amount);
+        return true;
+    }
+
+    void ARPGMonsterSystem::ClearActiveMonsters()
+    {
+        m_activeMonsters.clear();
     }
 
     std::string ARPGMonsterSystem::GetMonsterListString() const

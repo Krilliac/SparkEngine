@@ -127,10 +127,10 @@ namespace SparkEditor
                         label += "  [missing]";
                     if (ImGui::MenuItem(label.c_str(), nullptr, false, rp.valid))
                     {
-                        if (m_projectManager->OpenProject(rp.path))
-                            ShowNotification("Opened project: " + rp.name, "success");
-                        else
-                            ShowNotification("Failed to open project: " + rp.name, "error");
+                        // The request may be waiting on Save/Discard/Cancel;
+                        // the project-open callback reports success only after
+                        // the transition actually commits.
+                        RequestOpenProject(rp.path);
                     }
                 }
                 ImGui::Separator();

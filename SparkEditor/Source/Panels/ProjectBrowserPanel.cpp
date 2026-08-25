@@ -70,6 +70,22 @@ namespace SparkEditor
         m_isInitialized = false;
     }
 
+    bool ProjectBrowserPanel::RequestOpenProject(const std::string& projectPath)
+    {
+        if (m_openProjectRequestHandler)
+            return m_openProjectRequestHandler(projectPath);
+        return m_projectManager && m_projectManager->OpenProject(projectPath);
+    }
+
+    bool ProjectBrowserPanel::RequestCreateProject(const std::string& projectName, const std::string& parentDirectory,
+                                                   ProjectTemplate templateType, const std::string& description)
+    {
+        if (m_createProjectRequestHandler)
+            return m_createProjectRequestHandler(projectName, parentDirectory, templateType, description);
+        return m_projectManager &&
+               m_projectManager->CreateProject(projectName, parentDirectory, templateType, description);
+    }
+
     void ProjectBrowserPanel::ShowNewProject()
     {
         m_showModal = true;
@@ -161,9 +177,9 @@ namespace SparkEditor
             std::string path;
             if (BrowseForFolder(path))
             {
-                if (m_projectManager->OpenProject(path))
+                if (RequestOpenProject(path))
                 {
-                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "ProjectBrowserPanel: opened project at '%s'",
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "ProjectBrowserPanel: accepted project request at '%s'",
                                    path.c_str());
                     m_showModal = false;
                 }
@@ -242,7 +258,7 @@ namespace SparkEditor
                     {
                         if (rp.valid)
                         {
-                            if (m_projectManager->OpenProject(rp.path))
+                            if (RequestOpenProject(rp.path))
                             {
                                 m_showModal = false;
                             }
@@ -402,12 +418,12 @@ namespace SparkEditor
 
             if (m_createError.empty())
             {
-                if (m_projectManager->CreateProject(name, m_newProjectPath, m_selectedTemplate,
-                                                    m_newProjectDescription))
+                if (RequestCreateProject(name, m_newProjectPath, m_selectedTemplate, m_newProjectDescription))
                 {
                     m_showModal = false;
-                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "ProjectBrowserPanel: project '%s' created at '%s'",
-                                   name.c_str(), m_newProjectPath);
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor,
+                                   "ProjectBrowserPanel: accepted create request for '%s' at '%s'", name.c_str(),
+                                   m_newProjectPath);
                 }
                 else
                 {

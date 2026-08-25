@@ -97,28 +97,47 @@ namespace Racing
             m_vehicles.erase(it);
     }
 
-    void RacingVehicleSystem::ApplyInput(float throttle, float brake, float steer, bool nitroPressed, bool driftPressed)
+    void RacingVehicleSystem::ApplyInput(float throttle, float brake, float steer, bool nitroPressed, bool driftPressed,
+                                         float deltaTime)
     {
         VehicleInstance* player = GetPlayerVehicle();
         if (!player)
             return;
 
-        ApplyInputInternal(*player, throttle, brake, steer, nitroPressed, driftPressed);
+        ApplyInputInternal(*player, throttle, brake, steer, nitroPressed, driftPressed, deltaTime);
     }
 
     void RacingVehicleSystem::ApplyInputToVehicle(uint32_t vehicleId, float throttle, float brake, float steer,
-                                                  bool nitroPressed, bool driftPressed)
+                                                  bool nitroPressed, bool driftPressed, float deltaTime)
     {
         VehicleInstance* vehicle = GetVehicle(vehicleId);
         if (!vehicle || !vehicle->isActive)
             return;
 
-        ApplyInputInternal(*vehicle, throttle, brake, steer, nitroPressed, driftPressed);
+        ApplyInputInternal(*vehicle, throttle, brake, steer, nitroPressed, driftPressed, deltaTime);
+    }
+
+    void RacingVehicleSystem::NeutralizeVehicle(uint32_t vehicleId)
+    {
+        VehicleInstance* vehicle = GetVehicle(vehicleId);
+        if (!vehicle)
+            return;
+
+        vehicle->speed = 0.0f;
+        vehicle->rpm = 0.0f;
+        vehicle->steerAngle = 0.0f;
+        vehicle->driftState = DriftState::None;
+        vehicle->driftCharge = 0.0f;
+        vehicle->boostTimer = 0.0f;
     }
 
     void RacingVehicleSystem::ApplyInputInternal(VehicleInstance& vehicle, float throttle, float brake, float steer,
-                                                 bool nitroPressed, bool driftPressed)
+                                                 bool nitroPressed, bool driftPressed, float deltaTime)
     {
+        if (!std::isfinite(deltaTime) || deltaTime <= 0.0f)
+            return;
+        deltaTime = std::min(deltaTime, 0.1f);
+
         // Clamp inputs
         throttle = std::clamp(throttle, 0.0f, 1.0f);
         brake = std::clamp(brake, 0.0f, 1.0f);
@@ -141,13 +160,13 @@ namespace Racing
         if (vehicle.boostTimer > 0.0f)
             boostMultiplier = 1.3f;
 
-        vehicle.speed += (accelForce * boostMultiplier - brakeForce - drag) * (1.0f / 60.0f);
+        vehicle.speed += (accelForce * boostMultiplier - brakeForce - drag) * deltaTime;
         vehicle.speed = std::clamp(vehicle.speed, 0.0f, vehicle.baseStats.maxSpeed * boostMultiplier);
 
         // Nitro
         if (nitroPressed && vehicle.nitro > 0.0f)
         {
-            vehicle.nitro -= 0.01f;
+            vehicle.nitro = std::max(0.0f, vehicle.nitro - 0.6f * deltaTime);
             vehicle.boostTimer = 0.5f;
         }
 
@@ -155,7 +174,7 @@ namespace Racing
         const float maxSpeed = std::max(vehicle.baseStats.maxSpeed, 1.0f);
         vehicle.rpm = (vehicle.speed / maxSpeed) * 8000.0f;
 
-        UpdateDriftState(vehicle, steer, driftPressed, 1.0f / 60.0f);
+        UpdateDriftState(vehicle, steer, driftPressed, deltaTime);
     }
 
     VehicleInstance* RacingVehicleSystem::GetVehicle(uint32_t id)

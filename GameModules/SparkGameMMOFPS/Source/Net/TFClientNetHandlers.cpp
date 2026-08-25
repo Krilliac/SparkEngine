@@ -318,9 +318,7 @@ namespace Terrafront
             return;
         TF_AuthReply rep;
         std::memcpy(&rep, data, sizeof(rep));
-        m_loggedIn = rep.ok != 0;
-        m_accountId = rep.accountId;
-        m_lastAuthErr = rep.err;
+        m_session.ApplyLoginReply(rep.ok != 0, rep.accountId, static_cast<TFAuthErr>(rep.err));
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] login reply: ok=%d err=%u account=%llu", rep.ok,
                        static_cast<unsigned>(rep.err), static_cast<unsigned long long>(rep.accountId));
         if (m_ctx->loginFlow)
@@ -333,7 +331,7 @@ namespace Terrafront
             return;
         TF_AuthReply rep;
         std::memcpy(&rep, data, sizeof(rep));
-        m_lastAuthErr = rep.err;
+        m_session.lastAuthError = static_cast<TFAuthErr>(rep.err);
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] register reply: ok=%d err=%u account=%llu", rep.ok,
                        static_cast<unsigned>(rep.err), static_cast<unsigned long long>(rep.accountId));
         if (m_ctx->loginFlow)
@@ -346,7 +344,7 @@ namespace Terrafront
             return;
         TF_CharListReply rep;
         std::memcpy(&rep, data, sizeof(rep));
-        m_charList.assign(rep.chars, rep.chars + std::min<uint8_t>(rep.count, 5));
+        m_session.characters.assign(rep.chars, rep.chars + std::min<uint8_t>(rep.count, 5));
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] char list reply: %u character(s)",
                        static_cast<unsigned>(rep.count));
         if (m_ctx->loginFlow)
@@ -359,8 +357,8 @@ namespace Terrafront
             return;
         TF_CharOpReply rep;
         std::memcpy(&rep, data, sizeof(rep));
-        m_lastCharOpErr = rep.err;
-        m_lastCharOpId = rep.charId;
+        m_session.lastCharacterError = static_cast<TFCharErr>(rep.err);
+        m_session.lastCharacterId = rep.charId;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] char create reply: ok=%d err=%u charId=%llu", rep.ok,
                        static_cast<unsigned>(rep.err), static_cast<unsigned long long>(rep.charId));
         if (m_ctx->loginFlow)
@@ -373,8 +371,8 @@ namespace Terrafront
             return;
         TF_CharOpReply rep;
         std::memcpy(&rep, data, sizeof(rep));
-        m_lastCharOpErr = rep.err;
-        m_lastCharOpId = rep.charId;
+        m_session.lastCharacterError = static_cast<TFCharErr>(rep.err);
+        m_session.lastCharacterId = rep.charId;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] char delete reply: ok=%d err=%u charId=%llu", rep.ok,
                        static_cast<unsigned>(rep.err), static_cast<unsigned long long>(rep.charId));
         if (m_ctx->loginFlow)

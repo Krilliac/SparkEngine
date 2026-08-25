@@ -80,6 +80,7 @@ namespace OpenWorld
         const std::vector<BiomeRegion>& GetRegions() const { return m_regions; }
         const BiomeRegion* GetRegion(uint32_t regionId) const;
         const BiomeRegion* GetRegionAtPosition(float x, float z) const;
+        const BiomeRegion* GetRegionAtPosition(float x, float y, float z) const;
         std::string GetRegionListString() const;
         std::string GetWorldStatusString() const;
 

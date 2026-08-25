@@ -220,8 +220,10 @@ void SparkGameRacingModule::OnUpdate(float deltaTime)
     m_raceManager->Update(deltaTime);
     SyncRaceAndTrackState();
     m_aiDriver->Update(deltaTime);
-    ApplyAIDriverInputs();
+    ApplyPlayerInput(deltaTime);
+    ApplyAIDriverInputs(deltaTime);
     m_vehicleSystem->Update(deltaTime);
+    UpdatePresentationState();
     m_cameraSystem->Update(deltaTime);
     m_hudSystem->Update(deltaTime);
 }

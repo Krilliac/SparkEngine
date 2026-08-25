@@ -329,6 +329,17 @@ namespace OpenWorld
         return nullptr;
     }
 
+    const BiomeRegion* OWWorldSetup::GetRegionAtPosition(float x, float y, float z) const
+    {
+        for (const auto& r : m_regions)
+        {
+            if (x >= r.boundsMinX && x <= r.boundsMaxX && y >= r.boundsMinY && y <= r.boundsMaxY && z >= r.boundsMinZ &&
+                z <= r.boundsMaxZ)
+                return &r;
+        }
+        return nullptr;
+    }
+
     std::string OWWorldSetup::GetRegionListString() const
     {
         std::ostringstream ss;
