@@ -222,13 +222,11 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
                         if (transform && camera && camera->fov > 0.0f && camera->fov < 180.0f &&
                             camera->nearPlane > 0.0f && camera->farPlane > camera->nearPlane)
                         {
-                            const XMMATRIX rotation =
-                                XMMatrixRotationRollPitchYaw(XMConvertToRadians(transform->rotation.x),
-                                                             XMConvertToRadians(transform->rotation.y),
-                                                             XMConvertToRadians(transform->rotation.z));
+                            const XMMATRIX rotation = XMMatrixRotationRollPitchYaw(
+                                XMConvertToRadians(transform->rotation.x), XMConvertToRadians(transform->rotation.y),
+                                XMConvertToRadians(transform->rotation.z));
                             eye = XMLoadFloat3(&transform->position);
-                            const XMVECTOR forward =
-                                XMVector3TransformNormal(XMVectorSet(0, 0, 1, 0), rotation);
+                            const XMVECTOR forward = XMVector3TransformNormal(XMVectorSet(0, 0, 1, 0), rotation);
                             up = XMVector3TransformNormal(XMVectorSet(0, 1, 0, 0), rotation);
                             at = XMVectorAdd(eye, forward);
                             fov = camera->fov;
@@ -240,8 +238,7 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
                     int fbW = g_windowWidthOverride > 0 ? g_windowWidthOverride : 1280;
                     int fbH = g_windowHeightOverride > 0 ? g_windowHeightOverride : 720;
                     float aspect = static_cast<float>(fbW) / static_cast<float>(fbH);
-                    XMMATRIX proj =
-                        XMMatrixPerspectiveFovLH(XMConvertToRadians(fov), aspect, nearPlane, farPlane);
+                    XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(fov), aspect, nearPlane, farPlane);
                     Spark::RenderWorldBasic(g_sceneWorld, *gfx, g_sceneCache, view, proj, sceneProjectRoot);
                 }
                 gfx->EndFrame();

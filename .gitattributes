@@ -6,6 +6,13 @@
 # Runtime-sheet descriptors are content-addressed in Templates/assets.lock.json.
 # Keep their on-disk bytes stable across Windows, Linux, and macOS checkouts.
 Templates/*/Assets/runtime_sheet.json text eol=lf
+# Generated Wavefront assets are also content-addressed by both the starter
+# model manifest and Templates/assets.lock.json. Preserve their exact bytes on
+# every checkout so Windows autocrlf cannot invalidate the locks.
+Assets/**/*.obj text eol=lf
+Assets/**/*.mtl text eol=lf
+Templates/*/Assets/**/*.obj text eol=lf
+Templates/*/Assets/**/*.mtl text eol=lf
 
 ###############################################################################
 # Set default behavior for command prompt diff.
