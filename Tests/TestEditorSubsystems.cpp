@@ -861,7 +861,7 @@ TEST(ProjectManager_AllRegisteredTemplatesCreateMappedPhysicalPackages)
     manager.SetEngineRoot(sourceRoot.string());
     size_t callbackCount = 0;
     manager.SetOnProjectOpened([&](const ProjectInfo&) { ++callbackCount; });
-    constexpr std::array<size_t, 8> expectedEntityCountsByType = {0, 6, 6, 8, 4, 7, 12, 9};
+    constexpr std::array<size_t, 8> expectedEntityCountsByType = {0, 6, 6, 10, 4, 7, 12, 9};
 
     size_t templateIndex = 0;
     for (const auto& descriptor : ProjectManager::GetProjectTemplateDescriptors())

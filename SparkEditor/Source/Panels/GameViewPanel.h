@@ -54,6 +54,9 @@ namespace SparkEditor
         /** @brief Check if the game view is capturing input (cursor locked) */
         bool IsCursorCaptured() const { return m_isCursorCaptured; }
 
+        /** @brief Elapsed HUD simulation time, exposed for diagnostics and regression tests. */
+        float GetSimulationTime() const { return m_totalTime; }
+
       private:
         void RenderToolbar();
         void RenderGameContent();

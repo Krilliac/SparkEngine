@@ -773,6 +773,128 @@ class SparkPackageTests(unittest.TestCase):
         self.assertFalse((self.root / "dist").exists())
 
 
+class SparkShippedTemplatePackageTests(unittest.TestCase):
+    """Exercise the real template metadata/content through package and run."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.engine_source = CLI_PATH.parents[2]
+        self.engine_runtime = self.root / "EngineRuntime"
+        self.host = (
+            self.engine_runtime / "build" / "bin" / "Release" /
+            spark_cli.executable_filename()
+        )
+        touch(self.host)
+        if spark_cli.current_platform() != "windows":
+            self.host.chmod(0o755)
+        touch(self.host.parent / "Shaders" / "Basic.hlsl")
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_every_shipped_template_assembles_and_launches_as_a_package(self):
+        template_sources = sorted(
+            path.parent
+            for path in (self.engine_source / "Templates").glob("*/*.sparkproject")
+        )
+        self.assertEqual(
+            [path.name for path in template_sources],
+            [
+                "Blank3D", "EmptyProject", "FPSStarter", "MMOStarter",
+                "MultiplayerArena", "PlatformerKit", "RPGStarter",
+                "ThirdPersonStarter", "TopDownStarter",
+            ],
+        )
+
+        for template_source in template_sources:
+            with self.subTest(template=template_source.name):
+                project_root = self.root / "Projects" / template_source.name
+                shutil.copytree(
+                    template_source,
+                    project_root,
+                    ignore=shutil.ignore_patterns("build", "dist"),
+                )
+                descriptor_path = next(project_root.glob("*.sparkproject"))
+                descriptor = json.loads(descriptor_path.read_text(encoding="utf-8"))
+                source_manifest = json.loads(
+                    (project_root / "spark.modules.json").read_text(encoding="utf-8")
+                )
+                declared_module = Path(source_manifest["modules"][0]["path"])
+                module_stem = declared_module.stem
+                module_name = (
+                    f"{module_stem}.dll" if spark_cli.current_platform() == "windows"
+                    else f"lib{module_stem}.so"
+                )
+                build_dir = project_root / "build" / "Release"
+                touch(build_dir / "CMakeCache.txt")
+                module = build_dir / "Release" / module_name
+                touch(module)
+                touch(Path(str(module) + ".sparkabi"))
+
+                package_output = self.root / "Packages" / template_source.name
+                package_args = SimpleNamespace(
+                    config="Release",
+                    output=str(package_output),
+                    platform=None,
+                    strip=False,
+                    compress=False,
+                    force=False,
+                )
+                package_log = io.StringIO()
+                with working_directory(project_root), contextlib.redirect_stdout(
+                    package_log
+                ), mock.patch.object(
+                    spark_cli, "cmd_build", return_value=0
+                ), mock.patch.object(
+                    spark_cli, "find_engine_root", return_value=self.engine_runtime
+                ):
+                    package_result = spark_cli.cmd_package(package_args)
+
+                self.assertEqual(package_result, 0, package_log.getvalue())
+                package_root = package_output / (
+                    f"{descriptor['name']}-{spark_cli.current_platform()}-release"
+                )
+                package_manifest = json.loads(
+                    (package_root / "manifest.json").read_text(encoding="utf-8")
+                )
+                startup_scene = descriptor["defaultScene"].replace("\\", "/")
+                self.assertEqual(package_manifest["startupScene"], "Startup.sparkscene")
+                self.assertEqual(
+                    (package_root / "Startup.sparkscene").read_bytes(),
+                    (project_root / startup_scene).read_bytes(),
+                )
+                for content_directory in ("Assets", "Scenes", "Config"):
+                    source_files = sorted(
+                        path.relative_to(project_root / content_directory)
+                        for path in (project_root / content_directory).rglob("*")
+                        if path.is_file()
+                    )
+                    packaged_files = sorted(
+                        path.relative_to(package_root / content_directory)
+                        for path in (package_root / content_directory).rglob("*")
+                        if path.is_file()
+                    )
+                    self.assertEqual(packaged_files, source_files)
+
+                run_args = SimpleNamespace(
+                    config="Release",
+                    no_build=True,
+                    package=package_root,
+                    runtime_args=["--", "-headless", "-test-frames", "1"],
+                )
+                with working_directory(project_root), mock.patch.object(
+                    spark_cli.subprocess, "run", return_value=subprocess_result(0)
+                ) as run:
+                    run_result = spark_cli.cmd_run(run_args)
+                self.assertEqual(run_result, 0)
+                run.assert_called_once_with(
+                    [str((package_root / package_manifest["host"]).resolve()),
+                     "-headless", "-test-frames", "1"],
+                    cwd=package_root.resolve(),
+                )
+
+
 def subprocess_result(returncode):
     return SimpleNamespace(returncode=returncode)
 

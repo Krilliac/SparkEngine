@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*553 test files, 6582+ test cases*
+*555 test files, 6590+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -744,6 +744,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameModuleRacing` | 15 |
 | `TestGameObjectTransforms` | 24 |
 | `TestGamePackager` | 10 |
+| `TestGameViewPanel` | 1 |
 | `TestGamepadInputProcessing` | 23 |
 | `TestGameplayDebugger` | 11 |
 | `TestGameplayExtensionRegistry` | 7 |
@@ -895,6 +896,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestReflection` | 18 |
 | `TestReflectionProbeCache` | 16 |
 | `TestReflectionReal` | 22 |
+| `TestRegionMapDataSource` | 7 |
 | `TestReliableChannel` | 22 |
 | `TestRemoteDebugSystem` | 11 |
 | `TestRenderCommandRing` | 8 |

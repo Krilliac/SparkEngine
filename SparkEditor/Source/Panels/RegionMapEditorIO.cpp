@@ -24,8 +24,7 @@
  * the writer below is hand-rolled for that reason.
  *
  * Saving backs up the selected region map to a sibling .bak file first, then
- * re-reads the written file
- * through Json::ParseStrict; on failure the backup is restored.
+ * commits a strictly validated temporary document through an atomic replace.
  */
 
 #include "RegionMapEditorPanel.h"
@@ -471,75 +470,9 @@ namespace SparkEditor
 
     bool RegionMapEditorPanel::SaveToDisk(std::string& outError)
     {
-        // 1) Backup the current selected region map (if any) to a sibling .bak file.
-        std::string oldBytes;
-        bool hadOld = false;
-        {
-            std::ifstream in(m_dataPath, std::ios::binary);
-            if (in.is_open())
-            {
-                std::stringstream ss;
-                ss << in.rdbuf();
-                oldBytes = ss.str();
-                hadOld = true;
-            }
-        }
-        const std::string bakPath = m_dataPath + ".bak";
-        if (hadOld)
-        {
-            std::ofstream bak(bakPath, std::ios::binary | std::ios::trunc);
-            if (!bak.is_open())
-            {
-                outError = "cannot write backup '" + bakPath + "' - save aborted";
-                return false;
-            }
-            bak.write(oldBytes.data(), static_cast<std::streamsize>(oldBytes.size()));
-            if (!bak.good())
-            {
-                outError = "backup write failed for '" + bakPath + "' - save aborted";
-                return false;
-            }
-        }
-
-        // 2) Write the document.
         const std::string doc = SerializeDocument();
-        {
-            std::ofstream outFile(m_dataPath, std::ios::binary | std::ios::trunc);
-            if (!outFile.is_open())
-            {
-                outError = "cannot open '" + m_dataPath + "' for writing";
-                return false;
-            }
-            outFile.write(doc.data(), static_cast<std::streamsize>(doc.size()));
-            if (!outFile.good())
-            {
-                outError = "write failed for '" + m_dataPath + "'";
-                return false;
-            }
-        }
-
-        // 3) Re-read what actually hit the disk and ParseStrict-validate it.
-        {
-            std::ifstream verify(m_dataPath, std::ios::binary);
-            std::stringstream ss;
-            ss << verify.rdbuf();
-            const std::string written = ss.str();
-            Spark::Json::Value root;
-            std::string parseErr;
-            if (!Spark::Json::ParseStrict(written, &root, &parseErr))
-            {
-                // Restore the backup so the game never sees a corrupt file.
-                if (hadOld)
-                {
-                    std::ofstream restore(m_dataPath, std::ios::binary | std::ios::trunc);
-                    restore.write(oldBytes.data(), static_cast<std::streamsize>(oldBytes.size()));
-                }
-                outError = "post-save ParseStrict failed (" + parseErr + ")" +
-                           (hadOld ? " - original file restored from backup" : "");
-                return false;
-            }
-        }
-
+        if (!WriteRegionMapDocumentAtomically(fs::path(m_dataPath), doc, outError))
+            return false;
         m_dirty = false;
         return true;
     }

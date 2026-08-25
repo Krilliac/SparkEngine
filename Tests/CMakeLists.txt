@@ -864,12 +864,14 @@ if(TARGET imgui)
     # Editor sources that require ImGui
     target_sources(SparkTests PRIVATE
         "${CMAKE_SOURCE_DIR}/Tests/TestAdvancedAssetPipeline.cpp"
+        "${CMAKE_SOURCE_DIR}/Tests/TestGameViewPanel.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/AssetPipeline/AdvancedAssetPipelineUI.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/AssetPipeline/AssetProcessors.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPanel.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorTheme.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/AssetBrowserPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/GameViewPanel.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Search/CommandPalette.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/LevelStreaming/LevelStreamingSystem.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlSystem.cpp"

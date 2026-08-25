@@ -29,4 +29,11 @@ namespace SparkEditor
     /// with a safe, existing region lattice. Sanctuary entries are skipped.
     bool LoadRegionMapDataSources(const std::filesystem::path& dataDirectory,
                                   std::vector<RegionMapDataSource>& outSources, std::string& outError);
+
+    /// Strict-JSON-validates and atomically replaces one region-map document.
+    /// An existing destination is first copied to a sibling `.bak` through the
+    /// same temporary-file + atomic-replace path. A failed validation or backup
+    /// leaves the destination untouched.
+    bool WriteRegionMapDocumentAtomically(const std::filesystem::path& destination, std::string_view document,
+                                          std::string& outError);
 } // namespace SparkEditor

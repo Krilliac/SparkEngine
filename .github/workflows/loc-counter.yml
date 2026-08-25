@@ -143,23 +143,29 @@ jobs:
 
     # Pushes made with GITHUB_TOKEN intentionally do not trigger ordinary
     # push workflows. Explicit workflow_dispatch is the supported exception,
-    # so prove the generated-badge commit instead of leaving Working ahead of
-    # the repository-driven site publication.
-    - name: Dispatch exact-head build after badge commit
+    # so prove the generated-badge commit and publish its canonical wiki rather
+    # than leaving Working ahead of either repository-driven workflow.
+    - name: Dispatch exact-head workflows after badge commit
       if: steps.badge-commit.outputs.changed == 'true'
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
-        REMOTE_HEAD="$(git ls-remote --exit-code --heads origin "$GITHUB_REF" | awk '{print $1}')"
-        if test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
-          echo "Working advanced after this badge push; the newer head owns the build."
-          exit 0
-        fi
-        for attempt in 1 2 3 4 5; do
-          if gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"; then
-            exit 0
-          fi
-          test "$attempt" -lt 5 || exit 1
-          sleep "$((attempt * 2))"
-        done
+        dispatch_exact_head() {
+          local workflow="$1"
+          for attempt in 1 2 3 4 5; do
+            REMOTE_HEAD="$(git ls-remote --exit-code --heads origin "$GITHUB_REF" | awk '{print $1}')"
+            if test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
+              echo "Working advanced after this badge push; the newer head owns $workflow."
+              return 0
+            fi
+            if gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"; then
+              return 0
+            fi
+            test "$attempt" -lt 5 || return 1
+            sleep "$((attempt * 2))"
+          done
+        }
+
+        dispatch_exact_head build.yml
+        dispatch_exact_head publish-wiki.yml

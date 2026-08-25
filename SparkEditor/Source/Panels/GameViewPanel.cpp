@@ -44,6 +44,13 @@ namespace SparkEditor
     void GameViewPanel::Update(float deltaTime)
     {
         m_lastDeltaTime = deltaTime;
+
+        // The HUD below is a play-mode simulation, not an editor preview clock.
+        // Keep the stopped and paused Game View stable so Stop restores a
+        // deterministic frame instead of continuing combat/objective activity.
+        if (!m_isPlaying)
+            return;
+
         m_totalTime += deltaTime;
 
         // Simulate health regeneration (slow)

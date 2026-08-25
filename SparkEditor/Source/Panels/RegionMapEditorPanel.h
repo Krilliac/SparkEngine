@@ -109,11 +109,11 @@ namespace SparkEditor
         void SyncEditBuffers();
 
         // -- Document state -----------------------------------------------------
-        std::string m_dataPath;     ///< selected confined region-map path
+        std::string m_dataPath; ///< selected confined region-map path
         std::vector<RegionMapDataSource> m_dataSources;
         int m_dataSourceIndex = -1;
         std::string m_dataSourceError;
-        std::string m_schemaNote;   ///< preserved "$schema_note" (may be empty)
+        std::string m_schemaNote; ///< preserved "$schema_note" (may be empty)
         Continent m_continent;
         std::vector<Region> m_regions;               ///< kept sorted by id
         std::vector<std::pair<int, int>> m_conduits; ///< file order preserved

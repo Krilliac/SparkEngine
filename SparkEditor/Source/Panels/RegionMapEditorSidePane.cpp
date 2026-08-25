@@ -286,7 +286,7 @@ namespace SparkEditor
                 std::string err;
                 if (SaveToDisk(err))
                 {
-                    m_statusMsg = "Saved. Backup written to regions.json.bak; ParseStrict re-read OK.";
+                    m_statusMsg = "Saved atomically. Selected map backup refreshed; ParseStrict re-read OK.";
                     m_statusIsError = false;
                     SPARK_LOG_INFO(Spark::LogCategory::Editor, "RegionMapEditorPanel: saved '%s'", m_dataPath.c_str());
                 }

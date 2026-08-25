@@ -465,6 +465,17 @@ String table editor for [multi-language support](../subsystems/Localization.md).
 
 **Source:** `SparkEditor/Source/Panels/SaveSystemPanel.cpp` (141 lines)
 
+### Region Map Editor
+
+The Region Map Editor discovers every Terrafront continent lattice declared by
+`Assets/MMOFPS/Data/continents.json`. Switching maps is disabled while the
+current map has unsaved edits. Save validates the serialized document with the
+strict JSON parser, refreshes that selected map's sibling `.bak`, and atomically
+replaces only its declared region file, so an interrupted write cannot truncate
+the live lattice.
+
+**Source:** `SparkEditor/Source/Panels/RegionMapEditorPanel.h`
+
 ### Spline Editor Panel
 
 [Spline](Terrain-and-Procedural-Generation.md) path authoring for cameras, AI, and procedural content.
