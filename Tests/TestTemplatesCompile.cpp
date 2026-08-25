@@ -587,7 +587,7 @@ TEST(Templates_TopDownStarter_HeadlessRuntimeMovesAndCleansScene)
     TopDownStarterModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_FALSE(mod.SupportsHotReload());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(9));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(11));
 
     const float startZ = mod.GetState().playerZ;
     input.HandleMessage(WM_KEYDOWN, 'W', 0);
@@ -750,7 +750,7 @@ TEST(Templates_MultiplayerArena_HeadlessRuntimeOwnsPlayableScene)
     MultiplayerArenaModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_FALSE(mod.SupportsHotReload());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(9));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(11));
     EXPECT_EQ(mod.GetPlayers().size(), static_cast<size_t>(2));
     mod.OnUpdate(0.1f);
     mod.OnUpdate(5.0f);
