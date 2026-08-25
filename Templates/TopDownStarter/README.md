@@ -1,8 +1,13 @@
 # TopDownStarter
 
-A top-down action slice with pan/zoom camera, collision bounds, an enemy, a pickup, and restart.
+A top-down arena skirmish with bounded movement, pan/zoom follow camera, pursuing enemy combat, an energy upgrade,
+live feedback, and restart.
 
-This installed-SDK example keeps bounded movement, pickup, enemy pursuit/combat, win, health, and restart rules in a deterministic public API while a complete runtime bridge loads and renders the reflected scene. Named scene transforms define the player, enemy, pickup, and camera spawn state, so edits made in the scene remain authoritative.
+This installed-SDK example keeps bounded movement, pickup, enemy pursuit/combat, win, health, and restart rules in a
+deterministic public API while a complete runtime bridge loads and renders the reflected scene. The hunter drone attacks
+on a readable cadence rather than applying continuous contact damage, and player/enemy emissive flashes make hits
+visible. Named scene transforms define the player, enemy, pickup, and camera spawn state, so scene edits remain
+authoritative.
 
 ## Configure and build
 
@@ -22,7 +27,15 @@ Load `TopDownStarter.dll` through `spark.modules.json`; the scene is `Scenes/Ski
 - `F`: collect the energy pickup while nearby
 - `R`: restart after victory or defeat, restoring the scene-authored spawn state
 
-The camera-relative status HUD switches between the status bars, objective badge, and restart icon from the runtime sheet as the round changes.
+## Playable loop
+
+1. Move northwest and press `F` near the hovering energy cell. It restores 25 health and raises attack damage from 20
+   to 30, reducing the hits needed to destroy the drone.
+2. Keep moving as the hunter drone pursues. It deals 12 damage at most once every 0.8 seconds while in contact range.
+3. Press `Space` within attack range until the drone is defeated, then use `R` to replay the encounter.
+
+The camera-relative HUD uses three cards: round state on the left, enemy health/visibility in the center, and energy
+upgrade state on the right. It switches to objective and restart art for victory or defeat.
 
 ## License and assets
 

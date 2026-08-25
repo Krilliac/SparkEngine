@@ -861,7 +861,7 @@ TEST(ProjectManager_AllRegisteredTemplatesCreateMappedPhysicalPackages)
     manager.SetEngineRoot(sourceRoot.string());
     size_t callbackCount = 0;
     manager.SetOnProjectOpened([&](const ProjectInfo&) { ++callbackCount; });
-    constexpr std::array<size_t, 8> expectedEntityCountsByType = {0, 6, 6, 10, 4, 7, 12, 9};
+    constexpr std::array<size_t, 8> expectedEntityCountsByType = {0, 12, 6, 10, 10, 7, 12, 9};
 
     size_t templateIndex = 0;
     for (const auto& descriptor : ProjectManager::GetProjectTemplateDescriptors())
@@ -901,9 +901,16 @@ TEST(ProjectManager_AllRegisteredTemplatesCreateMappedPhysicalPackages)
         EXPECT_EQ(static_cast<int>(project.templateType), static_cast<int>(descriptor.type));
         EXPECT_EQ(project.defaultScene, std::string(descriptor.defaultScene));
         EXPECT_EQ(project.lastOpenedScene, std::string(descriptor.defaultScene));
-        EXPECT_EQ(project.scenes.size(), static_cast<size_t>(1));
+        const size_t expectedSceneCount = descriptor.type == ProjectTemplate::Empty ? 2 : 1;
+        EXPECT_EQ(project.scenes.size(), expectedSceneCount);
         if (!project.scenes.empty())
             EXPECT_EQ(project.scenes.front(), std::string(descriptor.defaultScene));
+        if (descriptor.type == ProjectTemplate::Empty)
+        {
+            EXPECT_TRUE(std::find(project.scenes.begin(), project.scenes.end(), "Scenes/RuntimePreview.sparkscene") !=
+                        project.scenes.end());
+            EXPECT_TRUE(std::filesystem::is_regular_file(projectRoot / "Scenes" / "RuntimePreview.sparkscene"));
+        }
         EXPECT_EQ(project.modules.size(), static_cast<size_t>(1));
         if (!project.modules.empty())
             EXPECT_TRUE(IsPortableCodeIdentifier(project.modules.front()));

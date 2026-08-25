@@ -15,6 +15,7 @@
 
 #include "TestFramework.h"
 #include "Core/EngineContext.h"
+#include "Graphics/GraphicsEngine.h"
 
 // Bring in every shipped template header.
 #include "../Templates/EmptyProject/Source/GameModule.h"
@@ -116,6 +117,24 @@ TEST(Templates_Blank3D_CameraControlsAndReset)
     mod.OnUnload();
 }
 
+TEST(Templates_Blank3D_RejectsNonFiniteCameraControls)
+{
+    Blank3DModule mod;
+    EXPECT_TRUE(mod.OnLoad(nullptr));
+    const Blank3DCameraState initial = mod.GetCameraState();
+    const float invalid = std::numeric_limits<float>::quiet_NaN();
+    mod.Move(invalid, 1.0f, 1.0f, 1.0f);
+    mod.Move(1.0f, 1.0f, 1.0f, invalid);
+    mod.Look(invalid, 10.0f);
+    mod.SetMoveSpeed(invalid);
+    mod.OnUpdate(invalid);
+    EXPECT_NEAR(mod.GetCameraState().x, initial.x, 0.001f);
+    EXPECT_NEAR(mod.GetCameraState().yawDegrees, initial.yawDegrees, 0.001f);
+    EXPECT_NEAR(mod.GetCameraState().moveSpeed, initial.moveSpeed, 0.001f);
+    EXPECT_NEAR(mod.GetElapsedSeconds(), 0.0f, 0.001f);
+    mod.OnUnload();
+}
+
 TEST(Templates_Blank3D_HeadlessRuntimeLoadsDrivesAndCleansScene)
 {
     ScopedCurrentPath projectRoot(TemplateProjectRoot("Blank3D"));
@@ -130,7 +149,7 @@ TEST(Templates_Blank3D_HeadlessRuntimeLoadsDrivesAndCleansScene)
     Blank3DModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_FALSE(mod.SupportsHotReload());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(5));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(11));
 
     input.HandleMessage(WM_KEYDOWN, 'W', 0);
     mod.OnUpdate(0.25f);
@@ -160,7 +179,7 @@ TEST(Templates_Blank3D_FallsBackAfterInvalidStartupContract)
         context.SetWorld(&world);
         Blank3DModule mod;
         EXPECT_TRUE(mod.OnLoad(&context));
-        EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(4));
+        EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(10));
         mod.OnUnload();
         EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(0));
     }
@@ -261,7 +280,7 @@ TEST(Templates_FPSStarter_ArenaContainsRuntimeContract)
     const std::filesystem::path arena = FPSStarterProjectRoot() / "Scenes" / "Arena.sparkscene";
     World world;
     EXPECT_TRUE(Spark::LoadWorld(world, arena.string()));
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(6));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(12));
 
     bool foundCamera = false;
     bool foundPlayer = false;
@@ -294,7 +313,8 @@ TEST(Templates_FPSStarter_HeadlessContextLoadsAndCleansRuntimeScene)
 
     FPSStarterModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(6));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(12));
+    EXPECT_TRUE(mod.IsTargetUnderCrosshair());
     EXPECT_TRUE(mod.TryFire());
     mod.OnUpdate(0.2f);
     EXPECT_NEAR(mod.GetTargetState().health, 75.0f, 0.001f);
@@ -380,7 +400,7 @@ TEST(Templates_FPSStarter_AppendsArenaAroundLowIdHostEntities)
     context.SetWorld(&world);
     FPSStarterModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(7));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(13));
     EXPECT_TRUE(world.GetRegistry().valid(hostEntity));
     EXPECT_NEAR(world.GetComponent<Transform>(hostEntity)->position.x, 41.0f, 0.001f);
 
@@ -408,7 +428,7 @@ TEST(Templates_FPSStarter_FallsBackWhenStartupLacksArenaContract)
 
         FPSStarterModule mod;
         EXPECT_TRUE(mod.OnLoad(&context));
-        EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(6));
+        EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(12));
         EXPECT_TRUE(mod.TryFire());
         EXPECT_NEAR(mod.GetTargetState().health, 75.0f, 0.001f);
         mod.OnUnload();
@@ -547,6 +567,26 @@ TEST(Templates_ThirdPersonStarter_HeadlessRuntimeMovesJumpsAndCleansScene)
     EXPECT_TRUE(world.GetRegistry().valid(hostEntity));
 }
 
+TEST(Templates_EmptyProject_GraphicalRuntimeLoadsPreviewAndCleansOwnedEntities)
+{
+    ScopedCurrentPath projectRoot(TemplateProjectRoot("EmptyProject"));
+    World world;
+    const EntityID hostEntity = world.CreateEntity("Host Sentinel");
+    GraphicsEngine graphics;
+    EngineContext context;
+    context.SetWorld(&world);
+    context.SetGraphics(&graphics);
+
+    EmptyProjectModule mod;
+    EXPECT_TRUE(mod.OnLoad(&context));
+    EXPECT_TRUE(mod.IsPreviewActive());
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(6));
+
+    mod.OnUnload();
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));
+    EXPECT_TRUE(world.GetRegistry().valid(hostEntity));
+}
+
 TEST(Templates_ThirdPersonStarter_RejectsNonFiniteControls)
 {
     ThirdPersonStarterModule mod;
@@ -616,6 +656,25 @@ TEST(Templates_TopDownStarter_RejectsNonFiniteControls)
     mod.OnUnload();
 }
 
+TEST(Templates_TopDownStarter_InputAttackFlashSurvivesItsFirstFrame)
+{
+    ScopedCurrentPath projectRoot(TemplateProjectRoot("TopDownStarter"));
+    World world;
+    InputManager input;
+    EngineContext context;
+    context.SetWorld(&world);
+    context.SetInput(&input);
+
+    TopDownStarterModule mod;
+    EXPECT_TRUE(mod.OnLoad(&context));
+    mod.Move(1.0f, 1.0f, 1.18f);
+    input.HandleMessage(WM_KEYDOWN, VK_SPACE, 0);
+    mod.OnUpdate(0.25f);
+    input.HandleMessage(WM_KEYUP, VK_SPACE, 0);
+    EXPECT_TRUE(mod.GetEnemyHitFlashRemaining() > 0.0f);
+    mod.OnUnload();
+}
+
 TEST(Templates_MMOStarter_CompletesBoundedLocalSession)
 {
     MMOStarterModule mod;
@@ -676,10 +735,25 @@ TEST(Templates_MMOStarter_HeadlessRuntimeLoadsMovesRespawnsAndCleansScene)
     if (player != entt::null)
         EXPECT_TRUE(world.GetComponent<Transform>(player)->position.z > startZ);
 
+    const float protectedHealth = mod.GetState().playerHealth;
+    mod.DamagePlayer(25.0f);
+    EXPECT_NEAR(mod.GetState().playerHealth, protectedHealth, 0.001f);
+    mod.OnUpdate(1.5f);
     mod.DamagePlayer(100.0f);
     EXPECT_FALSE(mod.GetState().playerAlive);
     mod.OnUpdate(3.0f);
     EXPECT_TRUE(mod.GetState().playerAlive);
+    EXPECT_TRUE(mod.GetState().spawnProtectionRemaining > 0.0f);
+    mod.DamagePlayer(100.0f);
+    EXPECT_TRUE(mod.GetState().playerAlive);
+
+    EXPECT_TRUE(mod.AttackBot());
+    EXPECT_TRUE(mod.AttackBot());
+    EXPECT_TRUE(mod.AttackBot());
+    EXPECT_NEAR(mod.GetState().botHealth, 0.0f, 0.001f);
+    EXPECT_TRUE(mod.GetState().botRespawnRemaining > 0.0f);
+    mod.OnUpdate(4.0f);
+    EXPECT_NEAR(mod.GetState().botHealth, 75.0f, 0.001f);
     mod.OnUnload();
     EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));
     EXPECT_TRUE(world.GetRegistry().valid(hostEntity));
@@ -739,6 +813,30 @@ TEST(Templates_MultiplayerArena_RequiresOpposingTeamsAndLivingKiller)
     match.OnUnload();
 }
 
+TEST(Templates_MultiplayerArena_TiedRegulationEntersSuddenDeath)
+{
+    MultiplayerArenaModule match;
+    EXPECT_TRUE(match.OnLoad(nullptr));
+    EXPECT_TRUE(match.AddPlayer(1, "Cyan", static_cast<uint8_t>(ArenaTeam::Cyan)));
+    EXPECT_TRUE(match.AddPlayer(2, "Magenta", static_cast<uint8_t>(ArenaTeam::Magenta)));
+    EXPECT_TRUE(match.SetReady(1, true));
+    EXPECT_TRUE(match.SetReady(2, true));
+    match.OnUpdate(0.1f);
+    match.OnUpdate(5.0f);
+
+    EXPECT_TRUE(match.RecordElimination(1, 2));
+    match.OnUpdate(3.0f);
+    EXPECT_TRUE(match.RecordElimination(2, 1));
+    match.OnUpdate(300.0f);
+    EXPECT_EQ(static_cast<int>(match.GetMatchState().phase), static_cast<int>(MatchPhase::Overtime));
+
+    EXPECT_TRUE(match.RecordElimination(1, 2));
+    EXPECT_EQ(static_cast<int>(match.GetMatchState().phase), static_cast<int>(MatchPhase::PostMatch));
+    EXPECT_EQ(match.GetMatchState().teamCyanScore, static_cast<uint32_t>(2));
+    EXPECT_EQ(match.GetMatchState().teamMagentaScore, static_cast<uint32_t>(1));
+    match.OnUnload();
+}
+
 TEST(Templates_MultiplayerArena_HeadlessRuntimeOwnsPlayableScene)
 {
     ScopedCurrentPath projectRoot(TemplateProjectRoot("MultiplayerArena"));
@@ -750,7 +848,7 @@ TEST(Templates_MultiplayerArena_HeadlessRuntimeOwnsPlayableScene)
     MultiplayerArenaModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_FALSE(mod.SupportsHotReload());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(11));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(17));
     EXPECT_EQ(mod.GetPlayers().size(), static_cast<size_t>(2));
     mod.OnUpdate(0.1f);
     mod.OnUpdate(5.0f);
@@ -824,6 +922,32 @@ TEST(Templates_PlatformerKit_RejectsNonFiniteControls)
     mod.OnUnload();
 }
 
+TEST(Templates_PlatformerKit_SprintChangesSpeedAndReleasesCleanly)
+{
+    ScopedCurrentPath projectRoot(TemplateProjectRoot("PlatformerKit"));
+    World world;
+    EngineContext context;
+    context.SetWorld(&world);
+    PlatformerKitModule mod;
+    EXPECT_TRUE(mod.OnLoad(&context));
+    mod.SetMoveInput(1.0f);
+    mod.SetSprintInput(false);
+    mod.OnUpdate(1.0f / 30.0f);
+    const float walkSpeed = mod.GetState().velocityX;
+    EXPECT_FALSE(mod.GetState().sprinting);
+
+    mod.SetSprintInput(true);
+    mod.OnUpdate(1.0f / 30.0f);
+    EXPECT_TRUE(mod.GetState().sprinting);
+    EXPECT_TRUE(mod.GetState().velocityX > walkSpeed);
+
+    mod.SetSprintInput(false);
+    mod.OnUpdate(1.0f / 30.0f);
+    EXPECT_FALSE(mod.GetState().sprinting);
+    EXPECT_NEAR(mod.GetState().velocityX, walkSpeed, 0.001f);
+    mod.OnUnload();
+}
+
 TEST(Templates_RPGStarter_ConstructsAndRuns)
 {
     RPGStarterModule mod;
@@ -887,4 +1011,58 @@ TEST(Templates_RPGStarter_RejectsNonFiniteControls)
     EXPECT_NEAR(mod.GetState().x, 0.0f, 0.001f);
     EXPECT_TRUE(std::isfinite(mod.GetState().health));
     mod.OnUnload();
+}
+
+TEST(Templates_RPGStarter_SaveRestoresCombatCooldownAndFacing)
+{
+    ScopedCurrentPath projectRoot(TemplateProjectRoot("RPGStarter"));
+    World world;
+    EngineContext context;
+    context.SetWorld(&world);
+    RPGStarterModule mod;
+    EXPECT_TRUE(mod.OnLoad(&context));
+    mod.TalkToElder();
+    mod.CloseDialogue();
+    EXPECT_TRUE(mod.PickUpRelic());
+    mod.Move(1.0f, 1.0f, 2.0f);
+    mod.OnUpdate(0.1f);
+    const float savedCooldown = mod.GetEnemyAttackCooldown();
+    const float savedHeroYaw = mod.GetHeroYawDegrees();
+    const float savedWardenYaw = mod.GetWardenYawDegrees();
+    EXPECT_TRUE(savedCooldown > 0.0f);
+    mod.SaveToSlot();
+
+    mod.Move(-1.0f, 0.0f, 0.5f);
+    mod.OnUpdate(0.5f);
+    EXPECT_TRUE(mod.LoadFromSlot());
+    EXPECT_NEAR(mod.GetEnemyAttackCooldown(), savedCooldown, 0.001f);
+    EXPECT_NEAR(mod.GetHeroYawDegrees(), savedHeroYaw, 0.001f);
+    EXPECT_NEAR(mod.GetWardenYawDegrees(), savedWardenYaw, 0.001f);
+    mod.OnUnload();
+}
+
+TEST(Templates_ThirdPersonStarter_SprintAndCameraResetPreserveProgress)
+{
+    ThirdPersonStarterModule walking;
+    EXPECT_TRUE(walking.OnLoad(nullptr));
+    walking.Move(0.0f, 1.0f, 1.0f);
+    const float walkDistance = walking.GetState().z;
+    walking.OnUnload();
+
+    ThirdPersonStarterModule sprinting;
+    EXPECT_TRUE(sprinting.OnLoad(nullptr));
+    sprinting.SetSprintInput(true);
+    sprinting.Move(0.0f, 1.0f, 1.0f);
+    EXPECT_TRUE(sprinting.GetState().sprinting);
+    EXPECT_TRUE(sprinting.GetState().z > walkDistance);
+    sprinting.ResetAdventure();
+    EXPECT_FALSE(sprinting.GetState().sprinting);
+    sprinting.Move(1.0f, 2.0f / 3.0f, 0.7211f);
+    EXPECT_TRUE(sprinting.TryCollectPickup());
+    sprinting.Move(1.0f, 0.75f, 1.0f);
+    EXPECT_TRUE(sprinting.TryReachGoal());
+    sprinting.Orbit(45.0f, 10.0f, 2.0f);
+    sprinting.ResetCamera();
+    EXPECT_TRUE(sprinting.GetState().goalReached);
+    sprinting.OnUnload();
 }

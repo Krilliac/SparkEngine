@@ -16,7 +16,9 @@ struct ThirdPersonStarterState
     float orbitYawDegrees = 0.0f;
     float orbitPitchDegrees = 25.0f;
     float orbitDistance = 8.0f;
+    float elapsedSeconds = 0.0f;
     bool grounded = true;
+    bool sprinting = false;
     bool pickupCollected = false;
     bool goalReached = false;
 };
@@ -42,6 +44,8 @@ class ThirdPersonStarterModule final : public Spark::IModule
         m_jumpHeld = false;
         m_interactHeld = false;
         m_restartHeld = false;
+        m_cameraResetHeld = false;
+        m_sprintInput = false;
 
         if (!m_runtime.Load(context, "ThirdPersonStarter", {"Startup.sparkscene", "Scenes/Adventure.sparkscene"},
                             [this](const Spark::Templates::TemplateRuntimeScene& scene)
@@ -79,6 +83,7 @@ class ThirdPersonStarterModule final : public Spark::IModule
     {
         m_runtime.Unload();
         ResetEntityHandles();
+        m_sprintInput = false;
         m_context = nullptr;
     }
 
@@ -90,6 +95,7 @@ class ThirdPersonStarterModule final : public Spark::IModule
             return;
 
         UpdateRuntimeInput(deltaTime);
+        m_state.elapsedSeconds += deltaTime;
         if (!m_state.grounded)
         {
             m_state.verticalVelocity -= 18.0f * deltaTime;
@@ -121,8 +127,10 @@ class ThirdPersonStarterModule final : public Spark::IModule
         const float worldZ = std::cos(yaw) * zAxis - std::sin(yaw) * xAxis;
         const float previousX = m_state.x;
         const float previousZ = m_state.z;
-        m_state.x = std::clamp(m_state.x + worldX * 5.0f * deltaTime, -20.0f, 20.0f);
-        m_state.z = std::clamp(m_state.z + worldZ * 5.0f * deltaTime, -20.0f, 20.0f);
+        const float moveSpeed = m_sprintInput ? 8.0f : 5.0f;
+        m_state.sprinting = m_sprintInput && (std::abs(worldX) > 0.0001f || std::abs(worldZ) > 0.0001f);
+        m_state.x = std::clamp(m_state.x + worldX * moveSpeed * deltaTime, -20.0f, 20.0f);
+        m_state.z = std::clamp(m_state.z + worldZ * moveSpeed * deltaTime, -20.0f, 20.0f);
         const float movedX = m_state.x - previousX;
         const float movedZ = m_state.z - previousZ;
         if (std::abs(movedX) > 0.0001f || std::abs(movedZ) > 0.0001f)
@@ -147,6 +155,15 @@ class ThirdPersonStarterModule final : public Spark::IModule
         m_state.orbitDistance = std::clamp(m_state.orbitDistance + zoomDelta, 3.0f, 14.0f);
     }
 
+    void SetSprintInput(bool sprinting) { m_sprintInput = sprinting; }
+
+    void ResetCamera()
+    {
+        m_state.orbitYawDegrees = m_orbitSpawnYawDegrees;
+        m_state.orbitPitchDegrees = m_orbitSpawnPitchDegrees;
+        m_state.orbitDistance = m_orbitSpawnDistance;
+    }
+
     bool TryCollectPickup()
     {
         if (m_state.pickupCollected || DistanceSquared(m_pickupPosition.x, m_pickupPosition.z) > 2.25f)
@@ -163,6 +180,8 @@ class ThirdPersonStarterModule final : public Spark::IModule
             return false;
         }
         m_state.goalReached = true;
+        m_state.sprinting = false;
+        m_sprintInput = false;
         return true;
     }
 
@@ -175,6 +194,7 @@ class ThirdPersonStarterModule final : public Spark::IModule
         m_state.orbitYawDegrees = m_orbitSpawnYawDegrees;
         m_state.orbitPitchDegrees = m_orbitSpawnPitchDegrees;
         m_state.orbitDistance = m_orbitSpawnDistance;
+        m_sprintInput = false;
         m_groundY = m_playerSpawnPosition.y;
         m_playerYawDegrees = m_playerSpawnRotation.y;
         SyncRuntimeState();
@@ -211,6 +231,7 @@ class ThirdPersonStarterModule final : public Spark::IModule
             zAxis += 1.0f;
         if (input->IsKeyDown('S'))
             zAxis -= 1.0f;
+        SetSprintInput(input->IsKeyDown(VK_SHIFT));
         Move(xAxis, zAxis, deltaTime);
 
         if (input->IsMouseButtonDown(1))
@@ -222,6 +243,11 @@ class ThirdPersonStarterModule final : public Spark::IModule
             Orbit(0.0f, 0.0f, -6.0f * deltaTime);
         if (input->IsKeyDown('X'))
             Orbit(0.0f, 0.0f, 6.0f * deltaTime);
+
+        const bool cameraResetDown = input->IsKeyDown('C');
+        if (cameraResetDown && !m_cameraResetHeld)
+            ResetCamera();
+        m_cameraResetHeld = cameraResetDown;
 
         const bool jumpDown = input->IsKeyDown(VK_SPACE);
         if (jumpDown && !m_jumpHeld)
@@ -250,9 +276,17 @@ class ThirdPersonStarterModule final : public Spark::IModule
             m_playerSpawnRotation = player->rotation;
         }
         if (const Transform* pickup = m_runtime.Get<Transform>(m_pickupEntity))
+        {
             m_pickupPosition = pickup->position;
+            m_pickupBaseRotation = pickup->rotation;
+            m_pickupBaseScale = pickup->scale;
+        }
         if (const Transform* goal = m_runtime.Get<Transform>(m_goalEntity))
+        {
             m_goalPosition = goal->position;
+            m_goalBaseRotation = goal->rotation;
+            m_goalBaseScale = goal->scale;
+        }
 
         const Transform* camera = m_runtime.Get<Transform>(m_cameraEntity);
         if (!camera)
@@ -290,16 +324,36 @@ class ThirdPersonStarterModule final : public Spark::IModule
             camera->rotation = {m_state.orbitPitchDegrees, m_state.orbitYawDegrees, 0.0f};
         }
 
+        if (Transform* pickupTransform = m_runtime.Get<Transform>(m_pickupEntity))
+        {
+            pickupTransform->position.y = m_pickupPosition.y + std::sin(m_state.elapsedSeconds * 2.2f) * 0.10f;
+            pickupTransform->rotation = m_pickupBaseRotation;
+            pickupTransform->rotation.y = std::fmod(m_pickupBaseRotation.y + m_state.elapsedSeconds * 65.0f, 360.0f);
+            pickupTransform->scale = m_pickupBaseScale;
+        }
         if (MeshRenderer* pickup = m_runtime.Get<MeshRenderer>(m_pickupEntity))
+        {
             pickup->visible = !m_state.pickupCollected;
+            pickup->emissive = 0.18f;
+        }
+        if (Transform* goalTransform = m_runtime.Get<Transform>(m_goalEntity))
+        {
+            const float pulse = 1.0f + std::sin(m_state.elapsedSeconds * 1.8f) * 0.035f;
+            goalTransform->position = m_goalPosition;
+            goalTransform->rotation = m_goalBaseRotation;
+            goalTransform->scale = {m_goalBaseScale.x * pulse, m_goalBaseScale.y * pulse, m_goalBaseScale.z * pulse};
+        }
         if (MeshRenderer* goal = m_runtime.Get<MeshRenderer>(m_goalEntity))
-            goal->visible = !m_state.goalReached;
+        {
+            goal->visible = true;
+            goal->emissive = m_state.goalReached ? 0.45f : (m_state.pickupCollected ? 0.20f : 0.05f);
+        }
 
         if (SpriteRenderer* hud = m_runtime.Get<SpriteRenderer>(m_hudEntity))
         {
             if (m_state.goalReached)
             {
-                hud->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(1, 2);
+                hud->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(2, 2);
                 hud->color = {0.3f, 1.0f, 0.55f, 0.95f};
             }
             else if (m_state.pickupCollected)
@@ -310,7 +364,10 @@ class ThirdPersonStarterModule final : public Spark::IModule
             else
             {
                 hud->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(1, 0);
-                hud->color = {1.0f, 1.0f, 1.0f, 0.95f};
+                const float proximityPulse = DistanceSquared(m_pickupPosition.x, m_pickupPosition.z) <= 2.25f
+                                                 ? 0.85f + std::sin(m_state.elapsedSeconds * 6.0f) * 0.15f
+                                                 : 1.0f;
+                hud->color = {proximityPulse, 1.0f, 1.0f, 0.95f};
             }
         }
         m_runtime.PlaceHud(m_cameraEntity, m_hudEntity, -0.13f, 0.09f, 0.32f, 0.07f, 0.07f);
@@ -329,6 +386,10 @@ class ThirdPersonStarterModule final : public Spark::IModule
         m_playerSpawnRotation = {};
         m_pickupPosition = {3.0f, 0.5f, 2.0f};
         m_goalPosition = {7.0f, 1.0f, 5.0f};
+        m_pickupBaseRotation = {};
+        m_goalBaseRotation = {};
+        m_pickupBaseScale = {0.5f, 0.5f, 0.5f};
+        m_goalBaseScale = {1.35f, 1.35f, 1.35f};
         m_orbitSpawnYawDegrees = 0.0f;
         m_orbitSpawnPitchDegrees = 25.0f;
         m_orbitSpawnDistance = 8.0f;
@@ -351,6 +412,10 @@ class ThirdPersonStarterModule final : public Spark::IModule
     DirectX::XMFLOAT3 m_playerSpawnRotation{};
     DirectX::XMFLOAT3 m_pickupPosition{3.0f, 0.5f, 2.0f};
     DirectX::XMFLOAT3 m_goalPosition{7.0f, 1.0f, 5.0f};
+    DirectX::XMFLOAT3 m_pickupBaseRotation{};
+    DirectX::XMFLOAT3 m_goalBaseRotation{};
+    DirectX::XMFLOAT3 m_pickupBaseScale{0.5f, 0.5f, 0.5f};
+    DirectX::XMFLOAT3 m_goalBaseScale{1.35f, 1.35f, 1.35f};
     float m_groundY = 0.0f;
     float m_orbitSpawnYawDegrees = 0.0f;
     float m_orbitSpawnPitchDegrees = 25.0f;
@@ -364,4 +429,6 @@ class ThirdPersonStarterModule final : public Spark::IModule
     bool m_jumpHeld = false;
     bool m_interactHeld = false;
     bool m_restartHeld = false;
+    bool m_cameraResetHeld = false;
+    bool m_sprintInput = false;
 };

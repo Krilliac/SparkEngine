@@ -22,6 +22,9 @@
       "sha256": "5691b2069ecae19a97452ed6f086044bed5b02537d7f72c9abde10cd59040037"
     }
   ],
-  "enginePrimitives": [],
-  "notes": "The reflected scene remains intentionally empty; the atlas supplies optional original starter and lifecycle visuals."
+  "enginePrimitives": [
+    "__spark_primitive_ground__.obj",
+    "__spark_primitive_Cube.obj"
+  ],
+  "notes": "The editable Default scene remains intentionally empty. Graphical game runs select RuntimePreview, which uses engine-owned procedural primitives and the runtime-sheet starter emblem so successful rendering is unambiguous."
 }

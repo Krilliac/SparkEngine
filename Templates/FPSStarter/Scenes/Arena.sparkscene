@@ -111,9 +111,9 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,1.000000,6.000000",
-            "rotation": "0.000000,0.000000,0.000000",
-            "scale": "1.000000,2.000000,1.000000"
+            "position": "0.000000,0.000000,6.000000",
+            "rotation": "0.000000,180.000000,0.000000",
+            "scale": "1.500000,2.000000,1.500000"
           },
           "type": "Transform"
         },
@@ -137,9 +137,9 @@
       "components": [
         {
           "fields": {
-            "position": "3.000000,1.000000,3.000000",
+            "position": "3.000000,0.000000,3.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "2.000000,2.000000,0.500000"
+            "scale": "2.500000,2.000000,1.000000"
           },
           "type": "Transform"
         },
@@ -156,7 +156,163 @@
         }
       ],
       "id": 5,
-      "name": "Cover",
+      "name": "Right Lane Cover",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-3.000000,0.000000,3.000000",
+            "rotation": "0.000000,180.000000,0.000000",
+            "scale": "2.500000,2.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/cover_barrier.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 6,
+      "name": "Left Lane Cover",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,0.000000,24.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "48.000000,3.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.050000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_wall.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 7,
+      "name": "North Range Wall",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,0.000000,-24.000000",
+            "rotation": "0.000000,180.000000,0.000000",
+            "scale": "48.000000,3.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.050000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_wall.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 8,
+      "name": "South Range Wall",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "24.000000,0.000000,0.000000",
+            "rotation": "0.000000,90.000000,0.000000",
+            "scale": "48.000000,3.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.050000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_wall.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 9,
+      "name": "East Range Wall",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-24.000000,0.000000,0.000000",
+            "rotation": "0.000000,-90.000000,0.000000",
+            "scale": "48.000000,3.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.050000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_wall.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 10,
+      "name": "West Range Wall",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-5.000000,0.000000,-1.500000",
+            "rotation": "0.000000,-20.000000,-8.000000",
+            "scale": "2.500000,2.500000,2.500000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.080000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/training_rifle.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 11,
+      "name": "Training Rifle Display",
       "parent": -1
     }
   ],

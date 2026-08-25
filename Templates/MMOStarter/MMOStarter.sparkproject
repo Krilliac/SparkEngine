@@ -1,8 +1,8 @@
 {
   "projectFileVersion": 1,
   "name": "MMOStarter",
-  "version": "0.1.0",
-  "description": "A bounded local client/server sample with character setup, faction objective, bot, chat, and respawn.",
+  "version": "0.3.0",
+  "description": "A bounded MMO frontier slice with faction choice, a capture objective, pursuing bot combat, chat, and fair respawn.",
   "engineVersion": "1.0.0",
   "template": "mmo",
   "defaultScene": "Scenes/Frontier.sparkscene",

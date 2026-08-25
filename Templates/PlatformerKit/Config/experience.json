@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "template": "PlatformerKit",
+  "experience": "Collect all three coins, activate the checkpoint, avoid the spike strip, and reach the finish gate.",
+  "expectedFirstFrame": "Side-view obstacle course with the runner on the left and a coin objective in the HUD.",
+  "controls": {
+    "move": ["A", "D"],
+    "sprint": ["Left Shift", "Right Shift"],
+    "jump": ["Space"],
+    "restart": ["R"]
+  },
+  "stableSceneEntities": [
+    "Ground",
+    "Directional Light",
+    "Main Camera",
+    "Player",
+    "Platform A",
+    "Platform B",
+    "Coin 1",
+    "Coin 2",
+    "Coin 3",
+    "Hazard",
+    "Checkpoint",
+    "Finish"
+  ],
+  "acceptance": [
+    "The player can move, sprint, jump, and double-jump.",
+    "Each coin disappears once and advances the objective state.",
+    "The hazard consumes one life and respawns at the active checkpoint.",
+    "The finish refuses completion until all three coins are collected.",
+    "R restores lives, coins, checkpoint, timer, and visual objective state."
+  ]
+}

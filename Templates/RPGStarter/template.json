@@ -1,7 +1,7 @@
 {
   "name": "RPGStarter",
   "identity": "rpg",
-  "description": "A village RPG slice with dialogue, quest, inventory, combat, reward, and save/load.",
+  "description": "A complete village RPG quest with bounded exploration, dialogue, relic inventory, reactive combat, objective HUD, reward, and save/load.",
   "genre": "RPG",
   "gameModule": "RPGStarter",
   "defaultScene": "Scenes/Village.sparkscene",
@@ -11,6 +11,8 @@
     "quest",
     "inventory",
     "combat",
+    "quest-hud",
+    "camera-follow",
     "reward",
     "save-load"
   ]

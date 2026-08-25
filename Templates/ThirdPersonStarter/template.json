@@ -1,15 +1,18 @@
 {
   "name": "ThirdPersonStarter",
   "identity": "third-person",
-  "description": "A third-person adventure slice with orbit camera, jumping, a pickup, and a goal.",
+  "description": "A polished third-person wayfinding slice with camera-relative movement, sprinting, orbit and reset controls, a crystal objective, and a portal goal.",
   "genre": "Adventure",
   "gameModule": "ThirdPersonStarter",
   "defaultScene": "Scenes/Adventure.sparkscene",
   "features": [
     "movement",
+    "sprint",
     "orbit-camera",
+    "camera-reset",
     "jump",
     "pickup",
-    "goal"
+    "objective-hud",
+    "portal-goal"
   ]
 }

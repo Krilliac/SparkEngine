@@ -1130,6 +1130,7 @@ namespace SparkEditor
 
             if (const auto* descriptor = FindProjectTemplateDescriptor(templateName))
             {
+                const std::vector<std::string> declaredScenes = m_currentProject.scenes;
                 const fs::path defaultScene = staging / fs::path(descriptor->defaultScene);
                 if (!fs::is_regular_file(defaultScene))
                     return fail("Template package is missing its declared default scene: " + PathToUtf8(defaultScene));
@@ -1139,6 +1140,24 @@ namespace SparkEditor
                 m_currentProject.defaultScene = std::string(descriptor->defaultScene);
                 m_currentProject.lastOpenedScene = m_currentProject.defaultScene;
                 m_currentProject.scenes = {m_currentProject.defaultScene};
+                for (const std::string& declaredScene : declaredScenes)
+                {
+                    fs::path relative = PathFromUtf8(declaredScene).lexically_normal();
+                    if (relative.empty() || relative.is_absolute() || *relative.begin() == "..")
+                        return fail("Template project declares an unsafe scene path: " + declaredScene);
+                    const fs::path candidate = staging / relative;
+                    if (!fs::is_regular_file(candidate))
+                        return fail("Template project is missing its declared scene: " + PathToUtf8(candidate));
+                    std::string storedPath = PathToUtf8(relative);
+                    std::replace(storedPath.begin(), storedPath.end(), '\\', '/');
+                    if (std::none_of(m_currentProject.scenes.begin(), m_currentProject.scenes.end(),
+                                     [&](const std::string& scene)
+                                     {
+                                         return ProjectPathsEqual(PathToUtf8(staging / PathFromUtf8(scene)),
+                                                                  PathToUtf8(candidate));
+                                     }))
+                        m_currentProject.scenes.push_back(std::move(storedPath));
+                }
             }
             else if (m_currentProject.description.empty())
             {

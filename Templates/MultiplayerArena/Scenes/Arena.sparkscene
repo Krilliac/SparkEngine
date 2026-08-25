@@ -82,8 +82,8 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,0.000000,0.000000",
-            "rotation": "0.000000,0.000000,0.000000",
+            "position": "-6.000000,0.000000,0.000000",
+            "rotation": "0.000000,90.000000,0.000000",
             "scale": "2.250000,2.250000,2.250000"
           },
           "type": "Transform"
@@ -108,8 +108,8 @@
       "components": [
         {
           "fields": {
-            "position": "6.000000,0.000000,4.000000",
-            "rotation": "0.000000,0.000000,0.000000",
+            "position": "6.000000,0.000000,0.000000",
+            "rotation": "0.000000,-90.000000,0.000000",
             "scale": "2.250000,2.250000,2.250000"
           },
           "type": "Transform"
@@ -134,7 +134,7 @@
       "components": [
         {
           "fields": {
-            "position": "-4.000000,0.000000,3.000000",
+            "position": "0.000000,0.000000,0.000000",
             "rotation": "0.000000,0.000000,0.000000",
             "scale": "1.500000,1.500000,1.500000"
           },
@@ -258,6 +258,166 @@
       ],
       "id": 9,
       "name": "West Wall",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-6.000000,5.000000,0.000000",
+            "rotation": "90.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "0.030000,0.720000,1.000000",
+            "intensity": "2.500000",
+            "range": "9.000000",
+            "shadowMapResolution": "512",
+            "spotAngle": "55.000000",
+            "spotInnerAngle": "35.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 10,
+      "name": "Cyan Spawn Light",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "6.000000,5.000000,0.000000",
+            "rotation": "90.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "0.920000,0.060000,0.620000",
+            "intensity": "2.500000",
+            "range": "9.000000",
+            "shadowMapResolution": "512",
+            "spotAngle": "55.000000",
+            "spotInnerAngle": "35.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 11,
+      "name": "Magenta Spawn Light",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-7.500000,0.000000,7.500000",
+            "rotation": "0.000000,45.000000,0.000000",
+            "scale": "4.000000,2.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.040000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_divider.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 12,
+      "name": "Northwest Corner Pylon",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "7.500000,0.000000,7.500000",
+            "rotation": "0.000000,-45.000000,0.000000",
+            "scale": "4.000000,2.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.040000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_divider.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 13,
+      "name": "Northeast Corner Pylon",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-7.500000,0.000000,-7.500000",
+            "rotation": "0.000000,-45.000000,0.000000",
+            "scale": "4.000000,2.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.040000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_divider.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 14,
+      "name": "Southwest Corner Pylon",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "7.500000,0.000000,-7.500000",
+            "rotation": "0.000000,45.000000,0.000000",
+            "scale": "4.000000,2.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.040000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_divider.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 15,
+      "name": "Southeast Corner Pylon",
       "parent": -1
     }
   ],

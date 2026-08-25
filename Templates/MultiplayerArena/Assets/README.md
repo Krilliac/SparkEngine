@@ -1,6 +1,6 @@
 # MultiplayerArena asset provenance
 
-`multiplayer_arena_atlas.png` is repository-original generated artwork with cyan and magenta champions, energy weapons and pickups, spawn pad, matching team flags, scoreboard frame, network/server glyphs, arena materials, and decals. The reflected arena remains renderer-independent and uses built-in primitives. Stable gameplay team IDs are `1` for cyan and `2` for magenta. No third-party content is bundled; `manifest.json` records the atlas SHA-256.
+`multiplayer_arena_atlas.png` is repository-original generated artwork with cyan and magenta champions, energy weapons and pickups, spawn pad, matching team flags, scoreboard frame, network/server glyphs, arena materials, and decals. The reflected arena pairs the built-in ground with repository-original `cyan_duelist`, `magenta_duelist`, `shield_pickup`, and `arena_divider` OBJ/MTL sets. Stable gameplay team IDs are `1` for cyan and `2` for magenta. No third-party content is bundled; `manifest.json` records every authored asset SHA-256.
 
 ## Normalized sprite sheet
 

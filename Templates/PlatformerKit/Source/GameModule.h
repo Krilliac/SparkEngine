@@ -25,6 +25,7 @@ struct PlatformerKitState
     uint32_t deaths = 0;
     uint32_t jumpsUsed = 0;
     bool grounded = true;
+    bool sprinting = false;
     bool checkpointActive = false;
     bool finished = false;
 };
@@ -88,6 +89,7 @@ class PlatformerKitModule final : public Spark::IModule
     {
         m_runtime.Unload();
         ResetRuntimeHandles();
+        m_sprintInput = false;
         m_context = nullptr;
     }
 
@@ -99,6 +101,8 @@ class PlatformerKitModule final : public Spark::IModule
             return;
 
         UpdateRuntimeInput();
+        if (m_state.finished || m_state.lives == 0)
+            m_state.sprinting = false;
         if (!m_state.finished && m_state.lives > 0)
         {
             m_fixedAccumulator += std::min(deltaTime, kMaxFrameTime);
@@ -115,6 +119,7 @@ class PlatformerKitModule final : public Spark::IModule
     void OnResize(int width, int height) override { m_runtime.Resize(width, height); }
 
     void SetMoveInput(float input) { m_moveInput = std::isfinite(input) ? std::clamp(input, -1.0f, 1.0f) : 0.0f; }
+    void SetSprintInput(bool sprinting) { m_sprintInput = sprinting; }
 
     bool Jump()
     {
@@ -161,6 +166,8 @@ class PlatformerKitModule final : public Spark::IModule
         m_state.finished = true;
         m_state.velocityX = 0.0f;
         m_state.velocityY = 0.0f;
+        m_state.sprinting = false;
+        m_sprintInput = false;
         m_moveInput = 0.0f;
         return true;
     }
@@ -172,6 +179,7 @@ class PlatformerKitModule final : public Spark::IModule
         m_state.y = m_playerSpawn.y;
         m_collected.fill(false);
         m_moveInput = 0.0f;
+        m_sprintInput = false;
         m_fixedAccumulator = 0.0f;
     }
 
@@ -198,6 +206,7 @@ class PlatformerKitModule final : public Spark::IModule
     static constexpr float kFixedStep = 1.0f / 120.0f;
     static constexpr float kMaxFrameTime = 0.25f;
     static constexpr float kMoveSpeed = 8.0f;
+    static constexpr float kSprintSpeed = 11.5f;
     static constexpr float kGravity = 24.0f;
     static constexpr float kJumpVelocity = 10.0f;
 
@@ -305,7 +314,8 @@ class PlatformerKitModule final : public Spark::IModule
     void SimulateStep(float deltaTime)
     {
         m_state.elapsedSeconds += deltaTime;
-        m_state.velocityX = m_moveInput * kMoveSpeed;
+        m_state.sprinting = m_sprintInput && std::abs(m_moveInput) > 0.0f;
+        m_state.velocityX = m_moveInput * (m_state.sprinting ? kSprintSpeed : kMoveSpeed);
         if (m_state.grounded && !IsStandingOnSurface())
             m_state.grounded = false;
 
@@ -370,6 +380,7 @@ class PlatformerKitModule final : public Spark::IModule
         if (input->IsKeyDown('A'))
             horizontal -= 1.0f;
         SetMoveInput(horizontal);
+        SetSprintInput(input->IsKeyDown(VK_SHIFT));
 
         if (input->WasKeyPressed(VK_SPACE))
             Jump();
@@ -386,9 +397,21 @@ class PlatformerKitModule final : public Spark::IModule
 
         for (std::size_t index = 0; index < m_coinEntities.size(); ++index)
         {
+            if (Transform* coinTransform = m_runtime.Get<Transform>(m_coinEntities[index]))
+            {
+                coinTransform->rotation.y =
+                    std::fmod(m_state.elapsedSeconds * 120.0f + static_cast<float>(index) * 70.0f, 360.0f);
+            }
             if (MeshRenderer* coin = m_runtime.Get<MeshRenderer>(m_coinEntities[index]))
                 coin->visible = !m_collected[index];
         }
+
+        if (Transform* checkpoint = m_runtime.Get<Transform>(m_checkpointEntity))
+            checkpoint->rotation.y = std::fmod(m_state.elapsedSeconds * 45.0f, 360.0f);
+        if (MeshRenderer* checkpoint = m_runtime.Get<MeshRenderer>(m_checkpointEntity))
+            checkpoint->emissive = m_state.checkpointActive ? 0.35f : 0.08f;
+        if (MeshRenderer* finish = m_runtime.Get<MeshRenderer>(m_finishEntity))
+            finish->emissive = m_state.coins == m_collected.size() ? 0.4f : 0.04f;
 
         if (Transform* camera = m_runtime.Get<Transform>(m_cameraEntity))
         {
@@ -399,11 +422,35 @@ class PlatformerKitModule final : public Spark::IModule
         if (SpriteRenderer* hud = m_runtime.Get<SpriteRenderer>(m_hudEntity))
         {
             if (m_state.finished)
+            {
                 hud->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(0, 2);
+                hud->color = {0.35f, 1.0f, 0.55f, 0.95f};
+            }
             else if (m_state.lives == 0)
+            {
                 hud->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(2, 2);
-            else
+                hud->color = {1.0f, 0.35f, 0.3f, 0.95f};
+            }
+            else if (m_state.coins == m_collected.size())
+            {
+                hud->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(0, 2);
+                hud->color = {0.35f, 0.9f, 1.0f, 0.95f};
+            }
+            else if (m_state.checkpointActive)
+            {
+                hud->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(2, 1);
+                hud->color = {0.4f, 0.9f, 1.0f, 0.95f};
+            }
+            else if (m_state.lives < 3)
+            {
                 hud->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(1, 2);
+                hud->color = {1.0f, 0.65f, 0.25f, 0.95f};
+            }
+            else
+            {
+                hud->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(0, 1);
+                hud->color = {1.0f, 0.85f, 0.25f, 0.95f};
+            }
         }
         m_runtime.PlaceHud(m_cameraEntity, m_hudEntity, -0.12f, 0.08f, 0.32f, 0.055f, 0.055f);
     }
@@ -436,6 +483,7 @@ class PlatformerKitModule final : public Spark::IModule
     float m_killPlaneY = -12.0f;
     float m_moveInput = 0.0f;
     float m_fixedAccumulator = 0.0f;
+    bool m_sprintInput = false;
     uint32_t m_groundEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_lightEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_cameraEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;

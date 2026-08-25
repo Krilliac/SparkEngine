@@ -1,0 +1,109 @@
+{
+  "entities": [
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,0.000000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "18.000000,0.100000,18.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_ground__.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 0,
+      "name": "Preview Ground",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,0.650000,0.000000",
+            "rotation": "0.000000,45.000000,0.000000",
+            "scale": "1.250000,1.250000,1.250000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.080000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Cube.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 1,
+      "name": "Preview Origin",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-4.000000,8.000000,-3.000000",
+            "rotation": "48.000000,-32.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "color": "0.720000,0.860000,1.000000",
+            "intensity": "1.300000",
+            "range": "24.000000",
+            "shadowMapResolution": "1024",
+            "spotAngle": "45.000000",
+            "spotInnerAngle": "30.000000",
+            "type": "0"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 2,
+      "name": "Preview Light",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "4.000000,3.200000,-7.000000",
+            "rotation": "16.000000,-28.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "farPlane": "500.000000",
+            "fov": "52.000000",
+            "isMainCamera": "true",
+            "nearPlane": "0.100000"
+          },
+          "type": "Camera"
+        }
+      ],
+      "id": 3,
+      "name": "Preview Camera",
+      "parent": -1
+    }
+  ],
+  "version": 1
+}

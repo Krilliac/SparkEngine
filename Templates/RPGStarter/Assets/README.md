@@ -1,6 +1,9 @@
 # RPGStarter asset provenance
 
-`rpg_atlas.png` is repository-original generated artwork with hero, elder, warden, relic, quest/inventory/dialogue/combat/reward/save visuals, and fantasy materials. The village remains renderer-independent and uses built-in primitives. No third-party content is bundled; the manifest records the atlas SHA-256.
+`rpg_atlas.png` is repository-original generated artwork with hero, elder, warden, relic,
+quest/inventory/dialogue/combat/reward/save visuals, and fantasy materials. The reflected village scene uses six
+authored OBJ/MTL sets for its cast and buildings plus the built-in ground primitive. No third-party content is bundled;
+`manifest.json` records every shipped asset and SHA-256.
 
 ## Normalized sprite sheet
 

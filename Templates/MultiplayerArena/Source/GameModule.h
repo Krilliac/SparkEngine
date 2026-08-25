@@ -206,7 +206,8 @@ class MultiplayerArenaModule final : public Spark::IModule
         uint32_t& teamScore =
             killer->team == static_cast<uint8_t>(ArenaTeam::Cyan) ? m_match.teamCyanScore : m_match.teamMagentaScore;
         ++teamScore;
-        if (teamScore >= m_match.scoreLimit)
+        if (teamScore >= m_match.scoreLimit ||
+            (m_match.phase == MatchPhase::Overtime && m_match.teamCyanScore != m_match.teamMagentaScore))
             m_match.phase = MatchPhase::PostMatch;
         return true;
     }
@@ -340,9 +341,17 @@ class MultiplayerArenaModule final : public Spark::IModule
             }
         }
 
-        if (m_match.teamCyanScore >= m_match.scoreLimit || m_match.teamMagentaScore >= m_match.scoreLimit ||
-            m_match.matchTimer >= m_match.matchDuration)
+        if (m_match.teamCyanScore >= m_match.scoreLimit || m_match.teamMagentaScore >= m_match.scoreLimit)
+        {
             m_match.phase = MatchPhase::PostMatch;
+            return;
+        }
+
+        if (m_match.phase == MatchPhase::InProgress && m_match.matchTimer >= m_match.matchDuration)
+        {
+            m_match.phase =
+                m_match.teamCyanScore == m_match.teamMagentaScore ? MatchPhase::Overtime : MatchPhase::PostMatch;
+        }
     }
 
     [[nodiscard]] uint32_t EntityForTeam(uint8_t team) const

@@ -26,6 +26,8 @@ struct MMOStarterState
     float botHealth = 75.0f;
     float captureProgress = 0.0f;
     float respawnRemaining = 0.0f;
+    float botRespawnRemaining = 0.0f;
+    float spawnProtectionRemaining = 0.0f;
     uint32_t deaths = 0;
     uint32_t botDefeats = 0;
     bool serverRunning = false;
@@ -42,7 +44,7 @@ class MMOStarterModule final : public Spark::IModule
     {
         Spark::ModuleInfo info{};
         info.name = "MMOStarter";
-        info.version = "0.2.0";
+        info.version = "0.3.0";
         info.sdkVersion = SPARK_SDK_VERSION;
         info.loadOrder = 1000;
         return info;
@@ -113,11 +115,17 @@ class MMOStarterModule final : public Spark::IModule
             {
                 m_state.playerHealth = 100.0f;
                 m_state.playerAlive = true;
+                m_state.spawnProtectionRemaining = SpawnProtectionSeconds;
                 ResetPlayerTransform();
             }
         }
+        else
+        {
+            m_state.spawnProtectionRemaining = std::max(0.0f, m_state.spawnProtectionRemaining - deltaTime);
+        }
 
         UpdateRuntimeInput(deltaTime);
+        UpdateTrainingBot(deltaTime);
         SyncRuntimeState();
     }
 
@@ -165,13 +173,16 @@ class MMOStarterModule final : public Spark::IModule
             return false;
         m_state.botHealth = std::max(0.0f, m_state.botHealth - 25.0f);
         if (m_state.botHealth == 0.0f)
+        {
             ++m_state.botDefeats;
+            m_state.botRespawnRemaining = BotRespawnSeconds;
+        }
         return true;
     }
 
     void DamagePlayer(float amount)
     {
-        if (!CanPlay() || !std::isfinite(amount) || amount <= 0.0f)
+        if (!CanPlay() || m_state.spawnProtectionRemaining > 0.0f || !std::isfinite(amount) || amount <= 0.0f)
             return;
         m_state.playerHealth = std::max(0.0f, m_state.playerHealth - amount);
         if (m_state.playerHealth == 0.0f)
@@ -211,9 +222,15 @@ class MMOStarterModule final : public Spark::IModule
 
   private:
     static constexpr float PlayerMoveSpeed = 6.0f;
+    static constexpr float BotMoveSpeed = 2.5f;
     static constexpr float ArenaLimit = 22.0f;
     static constexpr float BotAttackRangeSquared = 12.25f;
+    static constexpr float BotMeleeRangeSquared = 4.0f;
     static constexpr float CaptureRangeSquared = 25.0f;
+    static constexpr float BotAttackInterval = 1.2f;
+    static constexpr float BotDamage = 12.0f;
+    static constexpr float BotRespawnSeconds = 4.0f;
+    static constexpr float SpawnProtectionSeconds = 1.5f;
 
     [[nodiscard]] static bool HasVisibleText(const std::string& value)
     {
@@ -242,9 +259,20 @@ class MMOStarterModule final : public Spark::IModule
     void RememberSpawnPoints()
     {
         if (const Transform* player = m_runtime.Get<Transform>(m_playerEntity))
+        {
             m_playerSpawn = player->position;
+            m_playerSpawnYawDegrees = player->rotation.y;
+        }
         if (const Transform* bot = m_runtime.Get<Transform>(m_botEntity))
+        {
             m_botSpawn = bot->position;
+            m_botSpawnYawDegrees = bot->rotation.y;
+        }
+        if (const Transform* camera = m_runtime.Get<Transform>(m_cameraEntity))
+        {
+            m_cameraOffset = {camera->position.x - m_playerSpawn.x, camera->position.y - m_playerSpawn.y,
+                              camera->position.z - m_playerSpawn.z};
+        }
     }
 
     void StartPlayableSession()
@@ -253,10 +281,15 @@ class MMOStarterModule final : public Spark::IModule
         StartLocalSession();
         CreateCharacter("Astra");
         SelectFaction(MMOStarterFaction::Azure);
+        m_botAttackCooldown = 0.0f;
+        m_playerYawDegrees = m_playerSpawnYawDegrees;
+        m_botYawDegrees = m_botSpawnYawDegrees;
+        m_state.spawnProtectionRemaining = SpawnProtectionSeconds;
         ResetPlayerTransform();
         if (Transform* bot = m_runtime.Get<Transform>(m_botEntity))
         {
             bot->position = m_botSpawn;
+            bot->rotation.y = m_botYawDegrees;
             if (MeshRenderer* mesh = m_runtime.Get<MeshRenderer>(m_botEntity))
                 mesh->worldMatrixDirty = true;
         }
@@ -264,9 +297,11 @@ class MMOStarterModule final : public Spark::IModule
 
     void ResetPlayerTransform()
     {
+        m_playerYawDegrees = m_playerSpawnYawDegrees;
         if (Transform* player = m_runtime.Get<Transform>(m_playerEntity))
         {
             player->position = m_playerSpawn;
+            player->rotation.y = m_playerYawDegrees;
             if (MeshRenderer* mesh = m_runtime.Get<MeshRenderer>(m_playerEntity))
                 mesh->worldMatrixDirty = true;
         }
@@ -324,10 +359,13 @@ class MMOStarterModule final : public Spark::IModule
             }
             if (Transform* player = m_runtime.Get<Transform>(m_playerEntity))
             {
+                if (std::abs(x) > 0.0001f || std::abs(z) > 0.0001f)
+                    m_playerYawDegrees = std::atan2(x, z) * RadiansToDegrees;
                 player->position.x =
                     std::clamp(player->position.x + x * PlayerMoveSpeed * deltaTime, -ArenaLimit, ArenaLimit);
                 player->position.z =
                     std::clamp(player->position.z + z * PlayerMoveSpeed * deltaTime, -ArenaLimit, ArenaLimit);
+                player->rotation.y = m_playerYawDegrees;
                 if (MeshRenderer* mesh = m_runtime.Get<MeshRenderer>(m_playerEntity))
                     mesh->worldMatrixDirty = true;
             }
@@ -352,6 +390,56 @@ class MMOStarterModule final : public Spark::IModule
         m_chatHeld = chatDown;
     }
 
+    void UpdateTrainingBot(float deltaTime)
+    {
+        m_botAttackCooldown = std::max(0.0f, m_botAttackCooldown - deltaTime);
+        if (m_state.botHealth <= 0.0f)
+        {
+            if (m_state.objectiveCaptured)
+                return;
+            m_state.botRespawnRemaining = std::max(0.0f, m_state.botRespawnRemaining - deltaTime);
+            if (m_state.botRespawnRemaining > 0.0f)
+                return;
+            m_state.botHealth = 75.0f;
+            m_botYawDegrees = m_botSpawnYawDegrees;
+            if (Transform* bot = m_runtime.Get<Transform>(m_botEntity))
+            {
+                bot->position = m_botSpawn;
+                bot->rotation.y = m_botYawDegrees;
+                if (MeshRenderer* mesh = m_runtime.Get<MeshRenderer>(m_botEntity))
+                    mesh->worldMatrixDirty = true;
+            }
+        }
+
+        if (!CanPlay() || m_state.objectiveCaptured)
+            return;
+
+        Transform* bot = m_runtime.Get<Transform>(m_botEntity);
+        const Transform* player = m_runtime.Get<Transform>(m_playerEntity);
+        if (!bot || !player)
+            return;
+
+        const float dx = player->position.x - bot->position.x;
+        const float dz = player->position.z - bot->position.z;
+        const float distanceSquared = dx * dx + dz * dz;
+        if (distanceSquared > BotMeleeRangeSquared)
+        {
+            const float distance = std::sqrt(distanceSquared);
+            const float step = std::min(distance, BotMoveSpeed * deltaTime);
+            bot->position.x = std::clamp(bot->position.x + dx / distance * step, -ArenaLimit, ArenaLimit);
+            bot->position.z = std::clamp(bot->position.z + dz / distance * step, -ArenaLimit, ArenaLimit);
+            m_botYawDegrees = std::atan2(dx, dz) * RadiansToDegrees;
+            bot->rotation.y = m_botYawDegrees;
+            if (MeshRenderer* mesh = m_runtime.Get<MeshRenderer>(m_botEntity))
+                mesh->worldMatrixDirty = true;
+        }
+        else if (m_botAttackCooldown == 0.0f && m_state.spawnProtectionRemaining == 0.0f)
+        {
+            DamagePlayer(BotDamage);
+            m_botAttackCooldown = BotAttackInterval;
+        }
+    }
+
     void SyncRuntimeState()
     {
         if (MeshRenderer* player = m_runtime.Get<MeshRenderer>(m_playerEntity))
@@ -366,6 +454,15 @@ class MMOStarterModule final : public Spark::IModule
         }
         if (MeshRenderer* capture = m_runtime.Get<MeshRenderer>(m_captureEntity))
             capture->emissive = m_state.objectiveCaptured ? 0.8f : m_state.captureProgress / 250.0f;
+
+        if (Transform* camera = m_runtime.Get<Transform>(m_cameraEntity))
+        {
+            if (const Transform* player = m_runtime.Get<Transform>(m_playerEntity))
+            {
+                camera->position = {player->position.x + m_cameraOffset.x, player->position.y + m_cameraOffset.y,
+                                    player->position.z + m_cameraOffset.z};
+            }
+        }
 
         if (SpriteRenderer* faction = m_runtime.Get<SpriteRenderer>(m_factionHudEntity))
         {
@@ -383,11 +480,14 @@ class MMOStarterModule final : public Spark::IModule
         {
             if (!m_state.playerAlive)
                 status->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(1, 1);
-            else if (m_state.botHealth == 0.0f)
-                status->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(2, 2);
-            else
+            else if (m_state.spawnProtectionRemaining > 0.0f || m_state.botHealth == 0.0f)
+                status->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(0, 1);
+            else if (!m_chatLog.empty())
                 status->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(0, 2);
-            status->visible = !m_state.playerAlive || m_state.botHealth == 0.0f || !m_chatLog.empty();
+            else
+                status->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(0, 1);
+            status->visible = !m_state.playerAlive || m_state.spawnProtectionRemaining > 0.0f ||
+                              m_state.botHealth < 75.0f || !m_chatLog.empty();
         }
 
         m_runtime.PlaceHud(m_cameraEntity, m_factionHudEntity, -0.13f, 0.08f, 0.32f, 0.05f, 0.05f);
@@ -401,6 +501,13 @@ class MMOStarterModule final : public Spark::IModule
     std::vector<std::string> m_chatLog;
     DirectX::XMFLOAT3 m_playerSpawn{};
     DirectX::XMFLOAT3 m_botSpawn{};
+    DirectX::XMFLOAT3 m_cameraOffset{0.0f, 7.0f, -12.0f};
+    float m_playerYawDegrees = 0.0f;
+    float m_botYawDegrees = 0.0f;
+    float m_playerSpawnYawDegrees = 0.0f;
+    float m_botSpawnYawDegrees = 0.0f;
+    float m_botAttackCooldown = 0.0f;
+    static constexpr float RadiansToDegrees = 57.29577951308232f;
     uint32_t m_cameraEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_playerEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_botEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;

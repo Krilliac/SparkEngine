@@ -1,7 +1,7 @@
 {
   "name": "TopDownStarter",
   "identity": "top-down",
-  "description": "A top-down action slice with pan/zoom camera, collision bounds, an enemy, a pickup, and restart.",
+  "description": "A top-down arena skirmish with bounded movement, pan/zoom follow camera, pursuing enemy combat, energy upgrade, live HUD feedback, and restart.",
   "genre": "Action",
   "gameModule": "TopDownStarter",
   "defaultScene": "Scenes/Skirmish.sparkscene",
@@ -9,8 +9,10 @@
     "movement",
     "pan-zoom-camera",
     "collision",
-    "enemy",
-    "pickup",
+    "enemy-pursuit",
+    "timed-enemy-attacks",
+    "energy-upgrade",
+    "combat-feedback-hud",
     "restart"
   ]
 }

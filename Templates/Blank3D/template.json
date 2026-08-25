@@ -1,7 +1,7 @@
 {
   "name": "Blank3D",
   "identity": "blank-3d",
-  "description": "A ready-to-edit 3D scene with a visible primitive, ground, lighting, and fly camera.",
+  "description": "A ready-to-edit 3D composition study with a primitive gallery, two-light rig, camera HUD, and six-axis fly controls.",
   "genre": "General",
   "gameModule": "Blank3D",
   "defaultScene": "Scenes/Default.sparkscene",
@@ -9,6 +9,9 @@
     "primitive",
     "ground",
     "lighting",
-    "fly-camera"
+    "fly-camera",
+    "primitive-gallery",
+    "composition-study",
+    "runtime-hud"
   ]
 }

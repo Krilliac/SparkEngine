@@ -38,10 +38,10 @@
         },
         {
           "fields": {
-            "castShadows": "false",
-            "color": "1.000000,0.960000,0.840000",
-            "intensity": "1.000000",
-            "range": "10.000000",
+            "castShadows": "true",
+            "color": "1.000000,0.900000,0.720000",
+            "intensity": "1.300000",
+            "range": "40.000000",
             "shadowMapResolution": "1024",
             "spotAngle": "45.000000",
             "spotInnerAngle": "30.000000",
@@ -67,7 +67,7 @@
         {
           "fields": {
             "farPlane": "1000.000000",
-            "fov": "60.000000",
+            "fov": "55.000000",
             "isMainCamera": "true",
             "nearPlane": "0.100000"
           },
@@ -108,7 +108,7 @@
       "components": [
         {
           "fields": {
-            "position": "3.000000,0.000000,2.000000",
+            "position": "3.000000,0.150000,2.000000",
             "rotation": "0.000000,0.000000,0.000000",
             "scale": "0.500000,0.500000,0.500000"
           },

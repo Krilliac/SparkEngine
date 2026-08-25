@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "template": "ThirdPersonStarter",
+  "experience": "Find the wayfinder crystal, then activate the portal.",
+  "expectedFirstFrame": "Third-person adventurer facing a raised crystal, with a distant portal and objective HUD visible.",
+  "controls": {
+    "move": ["W", "A", "S", "D"],
+    "sprint": ["Left Shift", "Right Shift"],
+    "jump": ["Space"],
+    "orbit": ["Right Mouse"],
+    "zoom": ["Z", "X"],
+    "resetCamera": ["C"],
+    "interact": ["E"],
+    "restart": ["R"]
+  },
+  "stableSceneEntities": [
+    "Ground",
+    "Directional Light",
+    "Main Camera",
+    "Player",
+    "Adventure Pickup",
+    "Goal Beacon"
+  ],
+  "acceptance": [
+    "Movement remains camera-relative and diagonal input is normalized.",
+    "Shift increases travel speed without changing direction.",
+    "Space jumps once and lands back on the scene-authored ground height.",
+    "C restores only the scene-authored orbit while preserving objective progress.",
+    "E collects the nearby crystal, then activates the nearby portal.",
+    "R restores the player, objective state, camera, and animated targets."
+  ]
+}

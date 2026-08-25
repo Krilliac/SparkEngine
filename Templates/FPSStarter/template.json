@@ -1,7 +1,7 @@
 {
   "name": "FPSStarter",
   "identity": "first-person",
-  "description": "A compact first-person game with movement, weapons, a damageable target, HUD state, and a restart loop.",
+  "description": "A playable first-person training range with authored arena props, hitscan combat, a live HUD, reloads, and round reset.",
   "genre": "FPS",
   "gameModule": "FPSStarter",
   "defaultScene": "Scenes/Arena.sparkscene",
@@ -11,6 +11,8 @@
     "weapons",
     "damage",
     "hud",
-    "restart"
+    "restart",
+    "mouse-capture",
+    "authored-training-range"
   ]
 }

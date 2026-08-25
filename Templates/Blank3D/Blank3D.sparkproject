@@ -1,8 +1,8 @@
 {
   "projectFileVersion": 1,
   "name": "Blank3D",
-  "version": "0.1.0",
-  "description": "A ready-to-edit 3D scene with a visible primitive, ground, lighting, and fly camera.",
+  "version": "0.2.0",
+  "description": "A ready-to-edit 3D composition study with a primitive gallery, two-light rig, camera HUD, and six-axis fly controls.",
   "engineVersion": "1.0.0",
   "template": "blank-3d",
   "defaultScene": "Scenes/Default.sparkscene",

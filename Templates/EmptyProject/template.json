@@ -1,12 +1,13 @@
 {
   "name": "EmptyProject",
   "identity": "empty",
-  "description": "A truthful empty project with an editable world and no bundled art or gameplay assumptions.",
+  "description": "A minimal editable project whose empty authoring scene stays blank while graphical runs use an explicit starter preview.",
   "genre": "General",
   "gameModule": "EmptyProject",
   "defaultScene": "Scenes/Default.sparkscene",
   "features": [
     "minimal",
-    "scene-editing"
+    "scene-editing",
+    "intentional-runtime-preview"
   ]
 }

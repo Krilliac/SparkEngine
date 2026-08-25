@@ -40,7 +40,7 @@ class RPGStarterModule final : public Spark::IModule
     {
         Spark::ModuleInfo info{};
         info.name = "RPGStarter";
-        info.version = "0.2.0";
+        info.version = "0.3.0";
         info.sdkVersion = SPARK_SDK_VERSION;
         info.loadOrder = 1000;
         return info;
@@ -86,6 +86,8 @@ class RPGStarterModule final : public Spark::IModule
                                                        Spark::Templates::TemplateRuntimeScene::SheetCell(0, 2));
             m_saveHudEntity = m_runtime.CreateSprite("RPG Save Slot HUD", "Assets/rpg_runtime_sheet.png",
                                                      Spark::Templates::TemplateRuntimeScene::SheetCell(1, 2));
+            m_questHudEntity = m_runtime.CreateSprite("RPG Quest Objective HUD", "Assets/rpg_runtime_sheet.png",
+                                                      Spark::Templates::TemplateRuntimeScene::SheetCell(1, 0));
         }
         SyncRuntimeState();
         return true;
@@ -126,8 +128,10 @@ class RPGStarterModule final : public Spark::IModule
             xAxis /= length;
             zAxis /= length;
         }
-        m_state.x += xAxis * kMoveSpeed * deltaTime;
-        m_state.z += zAxis * kMoveSpeed * deltaTime;
+        m_state.x = std::clamp(m_state.x + xAxis * kMoveSpeed * deltaTime, -kVillageLimit, kVillageLimit);
+        m_state.z = std::clamp(m_state.z + zAxis * kMoveSpeed * deltaTime, -kVillageLimit, kVillageLimit);
+        if (std::abs(xAxis) > 0.0001f || std::abs(zAxis) > 0.0001f)
+            m_heroYawDegrees = std::atan2(xAxis, zAxis) * kRadiansToDegrees;
     }
 
     void TalkToElder()
@@ -178,6 +182,9 @@ class RPGStarterModule final : public Spark::IModule
         m_savedState = m_state;
         m_savedInventory = m_inventory;
         m_savedRewardClaimed = m_rewardClaimed;
+        m_savedHeroYawDegrees = m_heroYawDegrees;
+        m_savedWardenYawDegrees = m_wardenYawDegrees;
+        m_savedEnemyAttackCooldown = m_enemyAttackCooldown;
         m_hasSave = true;
     }
 
@@ -188,7 +195,9 @@ class RPGStarterModule final : public Spark::IModule
         m_state = m_savedState;
         m_inventory = m_savedInventory;
         m_rewardClaimed = m_savedRewardClaimed;
-        m_enemyAttackCooldown = 0.0f;
+        m_heroYawDegrees = m_savedHeroYawDegrees;
+        m_wardenYawDegrees = m_savedWardenYawDegrees;
+        m_enemyAttackCooldown = m_savedEnemyAttackCooldown;
         return true;
     }
 
@@ -199,6 +208,8 @@ class RPGStarterModule final : public Spark::IModule
         m_state.z = m_heroSpawn.z;
         m_inventory.clear();
         m_rewardClaimed = false;
+        m_heroYawDegrees = m_heroSpawnYawDegrees;
+        m_wardenYawDegrees = m_wardenSpawnYawDegrees;
         m_enemyAttackCooldown = 0.0f;
     }
 
@@ -206,6 +217,9 @@ class RPGStarterModule final : public Spark::IModule
     [[nodiscard]] const std::vector<std::string>& GetInventory() const { return m_inventory; }
     [[nodiscard]] bool HasSave() const { return m_hasSave; }
     [[nodiscard]] bool IsRewardClaimed() const { return m_rewardClaimed; }
+    [[nodiscard]] float GetEnemyAttackCooldown() const { return m_enemyAttackCooldown; }
+    [[nodiscard]] float GetHeroYawDegrees() const { return m_heroYawDegrees; }
+    [[nodiscard]] float GetWardenYawDegrees() const { return m_wardenYawDegrees; }
     [[nodiscard]] bool HasItem(const std::string& item) const
     {
         return std::find(m_inventory.begin(), m_inventory.end(), item) != m_inventory.end();
@@ -213,10 +227,12 @@ class RPGStarterModule final : public Spark::IModule
 
   private:
     static constexpr float kMoveSpeed = 4.0f;
+    static constexpr float kVillageLimit = 22.0f;
     static constexpr float kInteractionRadius = 2.25f;
     static constexpr float kCombatRadius = 2.75f;
     static constexpr float kWardenDamage = 10.0f;
     static constexpr float kWardenAttackInterval = 1.0f;
+    static constexpr float kRadiansToDegrees = 57.29577951308232f;
 
     static bool HasVisual(const Spark::Templates::TemplateRuntimeScene& scene, uint32_t entity)
     {
@@ -236,6 +252,7 @@ class RPGStarterModule final : public Spark::IModule
         m_houseEntities.fill(invalid);
         m_statusHudEntity = invalid;
         m_saveHudEntity = invalid;
+        m_questHudEntity = invalid;
     }
 
     void ResetAuthoredDefaults()
@@ -246,6 +263,8 @@ class RPGStarterModule final : public Spark::IModule
         m_elderPosition = {1000.0f, 0.0f, 1000.0f};
         m_relicPosition = {1000.0f, 0.0f, 1000.0f};
         m_wardenPosition = {1000.0f, 0.0f, 1000.0f};
+        m_heroSpawnYawDegrees = 0.0f;
+        m_wardenSpawnYawDegrees = 0.0f;
     }
 
     void CaptureAuthoredScene()
@@ -254,11 +273,14 @@ class RPGStarterModule final : public Spark::IModule
         const Transform& camera = *m_runtime.Get<Transform>(m_cameraEntity);
         m_heroSpawn = hero.position;
         m_heroHeight = hero.position.y;
+        m_heroSpawnYawDegrees = hero.rotation.y;
         m_cameraOffset = {camera.position.x - hero.position.x, camera.position.y - hero.position.y,
                           camera.position.z - hero.position.z};
         m_elderPosition = m_runtime.Get<Transform>(m_elderEntity)->position;
         m_relicPosition = m_runtime.Get<Transform>(m_relicEntity)->position;
-        m_wardenPosition = m_runtime.Get<Transform>(m_wardenEntity)->position;
+        const Transform& warden = *m_runtime.Get<Transform>(m_wardenEntity);
+        m_wardenPosition = warden.position;
+        m_wardenSpawnYawDegrees = warden.rotation.y;
     }
 
     [[nodiscard]] bool IsNear(const DirectX::XMFLOAT3& position, float radius) const
@@ -320,6 +342,13 @@ class RPGStarterModule final : public Spark::IModule
     void UpdateWardenRetaliation(float deltaTime)
     {
         m_enemyAttackCooldown = std::max(0.0f, m_enemyAttackCooldown - deltaTime);
+        if (!m_state.enemyDefeated && m_state.questStage == RPGStarterQuestStage::DefeatWarden)
+        {
+            const float dx = m_state.x - m_wardenPosition.x;
+            const float dz = m_state.z - m_wardenPosition.z;
+            if (dx * dx + dz * dz > 0.0001f)
+                m_wardenYawDegrees = std::atan2(dx, dz) * kRadiansToDegrees;
+        }
         if (m_state.health <= 0.0f || m_state.dialogueOpen || m_state.enemyDefeated ||
             m_state.questStage != RPGStarterQuestStage::DefeatWarden || !IsNear(m_wardenPosition, kCombatRadius) ||
             m_enemyAttackCooldown > 0.0f)
@@ -334,13 +363,24 @@ class RPGStarterModule final : public Spark::IModule
     void SyncRuntimeState()
     {
         if (Transform* hero = m_runtime.Get<Transform>(m_heroEntity))
+        {
             hero->position = {m_state.x, m_heroHeight, m_state.z};
+            hero->rotation.y = m_heroYawDegrees;
+            if (MeshRenderer* mesh = m_runtime.Get<MeshRenderer>(m_heroEntity))
+                mesh->worldMatrixDirty = true;
+        }
         if (MeshRenderer* hero = m_runtime.Get<MeshRenderer>(m_heroEntity))
             hero->visible = m_state.health > 0.0f;
         if (MeshRenderer* relic = m_runtime.Get<MeshRenderer>(m_relicEntity))
             relic->visible = !HasItem("Lost Relic");
         if (MeshRenderer* warden = m_runtime.Get<MeshRenderer>(m_wardenEntity))
             warden->visible = !m_state.enemyDefeated;
+        if (Transform* warden = m_runtime.Get<Transform>(m_wardenEntity))
+        {
+            warden->rotation.y = m_wardenYawDegrees;
+            if (MeshRenderer* mesh = m_runtime.Get<MeshRenderer>(m_wardenEntity))
+                mesh->worldMatrixDirty = true;
+        }
 
         if (Transform* camera = m_runtime.Get<Transform>(m_cameraEntity))
         {
@@ -357,7 +397,31 @@ class RPGStarterModule final : public Spark::IModule
         {
             save->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(m_hasSave ? 2u : 1u, 2);
         }
+        if (SpriteRenderer* quest = m_runtime.Get<SpriteRenderer>(m_questHudEntity))
+        {
+            switch (m_state.questStage)
+            {
+            case RPGStarterQuestStage::NotStarted:
+                quest->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(1, 0);
+                break;
+            case RPGStarterQuestStage::FindRelic:
+                quest->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(0, 1);
+                break;
+            case RPGStarterQuestStage::DefeatWarden:
+                quest->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(2, 0);
+                break;
+            case RPGStarterQuestStage::ReturnToElder:
+                quest->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(1, 1);
+                break;
+            case RPGStarterQuestStage::Complete:
+                quest->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(2, 2);
+                break;
+            }
+            quest->color = m_rewardClaimed ? DirectX::XMFLOAT4{0.45f, 1.0f, 0.55f, 1.0f}
+                                           : DirectX::XMFLOAT4{1.0f, 1.0f, 1.0f, 1.0f};
+        }
         m_runtime.PlaceHud(m_cameraEntity, m_statusHudEntity, -0.12f, 0.08f, 0.32f, 0.055f, 0.055f);
+        m_runtime.PlaceHud(m_cameraEntity, m_questHudEntity, 0.0f, 0.08f, 0.32f, 0.055f, 0.055f);
         m_runtime.PlaceHud(m_cameraEntity, m_saveHudEntity, 0.12f, 0.08f, 0.32f, 0.055f, 0.055f);
     }
 
@@ -374,6 +438,13 @@ class RPGStarterModule final : public Spark::IModule
     DirectX::XMFLOAT3 m_wardenPosition{};
     float m_heroHeight = 0.0f;
     float m_enemyAttackCooldown = 0.0f;
+    float m_heroYawDegrees = 0.0f;
+    float m_heroSpawnYawDegrees = 0.0f;
+    float m_savedHeroYawDegrees = 0.0f;
+    float m_wardenYawDegrees = 0.0f;
+    float m_wardenSpawnYawDegrees = 0.0f;
+    float m_savedWardenYawDegrees = 0.0f;
+    float m_savedEnemyAttackCooldown = 0.0f;
     bool m_rewardClaimed = false;
     bool m_savedRewardClaimed = false;
     bool m_hasSave = false;
@@ -387,4 +458,5 @@ class RPGStarterModule final : public Spark::IModule
     std::array<uint32_t, 2> m_houseEntities{};
     uint32_t m_statusHudEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_saveHudEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
+    uint32_t m_questHudEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
 };

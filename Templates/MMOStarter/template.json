@@ -1,7 +1,7 @@
 {
   "name": "MMOStarter",
   "identity": "mmo",
-  "description": "A bounded local client/server sample with character setup, faction objective, bot, chat, and respawn.",
+  "description": "A bounded MMO frontier slice with local session setup, faction choice, capture objective, pursuing bot combat, chat, respawn, and spawn protection.",
   "genre": "MMO",
   "gameModule": "MMOStarter",
   "defaultScene": "Scenes/Frontier.sparkscene",
@@ -10,8 +10,10 @@
     "character",
     "faction",
     "capture-point",
-    "bot",
+    "pursuing-training-bot",
     "chat",
-    "respawn"
+    "respawn",
+    "spawn-protection",
+    "camera-follow"
   ]
 }

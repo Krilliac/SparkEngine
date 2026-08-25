@@ -1,8 +1,8 @@
 {
   "projectFileVersion": 1,
   "name": "PlatformerKit",
-  "version": "0.1.0",
-  "description": "A complete platformer level with double jump, collectibles, hazards, checkpoint, finish, and restart.",
+  "version": "0.2.0",
+  "description": "A polished side-view platformer challenge with double jump, collectibles, hazards, checkpoint recovery, sprinting, and a gated finish.",
   "engineVersion": "1.0.0",
   "template": "platformer",
   "defaultScene": "Scenes/Level01.sparkscene",

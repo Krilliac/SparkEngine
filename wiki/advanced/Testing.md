@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*555 test files, 6590+ test cases*
+*556 test files, 6599+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -907,6 +907,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestResult` | 8 |
 | `TestRingBuffer` | 14 |
 | `TestRingBufferReal` | 7 |
+| `TestRuntimePackage` | 2 |
 | `TestRuntimePrefab` | 19 |
 | `TestSHLighting` | 7 |
 | `TestSSAOTemporalFilter` | 8 |
@@ -998,7 +999,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestTacticalPointSystem` | 4 |
 | `TestTelemetry` | 15 |
 | `TestTelemetryPhaseFF` | 7 |
-| `TestTemplatesCompile` | 36 |
+| `TestTemplatesCompile` | 43 |
 | `TestTemporalEffects` | 11 |
 | `TestTerrainRenderer` | 5 |
 | `TestTextureCompressor` | 9 |

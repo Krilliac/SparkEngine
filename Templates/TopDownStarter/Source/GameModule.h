@@ -31,7 +31,7 @@ class TopDownStarterModule final : public Spark::IModule
     {
         Spark::ModuleInfo info{};
         info.name = "TopDownStarter";
-        info.version = "0.2.0";
+        info.version = "0.3.0";
         info.sdkVersion = SPARK_SDK_VERSION;
         info.loadOrder = 1000;
         return info;
@@ -72,6 +72,10 @@ class TopDownStarterModule final : public Spark::IModule
         {
             m_hudEntity = m_runtime.CreateSprite("TopDown Status HUD", "Assets/top_down_runtime_sheet.png",
                                                  Spark::Templates::TemplateRuntimeScene::SheetCell(0, 2));
+            m_enemyHudEntity = m_runtime.CreateSprite("TopDown Enemy HUD", "Assets/top_down_runtime_sheet.png",
+                                                      Spark::Templates::TemplateRuntimeScene::SheetCell(1, 0));
+            m_pickupHudEntity = m_runtime.CreateSprite("TopDown Pickup HUD", "Assets/top_down_runtime_sheet.png",
+                                                       Spark::Templates::TemplateRuntimeScene::SheetCell(2, 1));
         }
         SyncRuntimeState();
         return true;
@@ -91,7 +95,12 @@ class TopDownStarterModule final : public Spark::IModule
         if (!std::isfinite(deltaTime) || deltaTime <= 0.0f)
             return;
 
+        m_enemyAttackCooldown = std::max(0.0f, m_enemyAttackCooldown - deltaTime);
+        m_playerHitFlashRemaining = std::max(0.0f, m_playerHitFlashRemaining - deltaTime);
+        m_enemyHitFlashRemaining = std::max(0.0f, m_enemyHitFlashRemaining - deltaTime);
         UpdateRuntimeInput(deltaTime);
+        if (!m_state.pickupCollected)
+            m_pickupTime += deltaTime;
         if (!m_state.enemyDefeated && !m_state.playerDefeated && !m_state.won)
         {
             const float dx = m_state.playerX - m_state.enemyX;
@@ -99,7 +108,7 @@ class TopDownStarterModule final : public Spark::IModule
             const float distance = std::sqrt(dx * dx + dz * dz);
             if (distance > 0.01f)
             {
-                const float step = std::min(distance, 1.5f * deltaTime);
+                const float step = std::min(distance, kEnemyMoveSpeed * deltaTime);
                 m_state.enemyX += dx / distance * step;
                 m_state.enemyZ += dz / distance * step;
                 m_enemyYawDegrees = std::atan2(dx, dz) * kRadiansToDegrees;
@@ -107,9 +116,12 @@ class TopDownStarterModule final : public Spark::IModule
 
             const float remainingDx = m_state.playerX - m_state.enemyX;
             const float remainingDz = m_state.playerZ - m_state.enemyZ;
-            if (remainingDx * remainingDx + remainingDz * remainingDz < 1.2f * 1.2f)
+            if (remainingDx * remainingDx + remainingDz * remainingDz < kEnemyAttackRangeSquared &&
+                m_enemyAttackCooldown == 0.0f)
             {
-                m_state.playerHealth = std::max(0.0f, m_state.playerHealth - 12.0f * deltaTime);
+                m_state.playerHealth = std::max(0.0f, m_state.playerHealth - kEnemyDamage);
+                m_enemyAttackCooldown = kEnemyAttackInterval;
+                m_playerHitFlashRemaining = kHitFlashSeconds;
                 if (m_state.playerHealth == 0.0f)
                     m_state.playerDefeated = true;
             }
@@ -164,6 +176,7 @@ class TopDownStarterModule final : public Spark::IModule
         }
         m_state.pickupCollected = true;
         m_state.playerHealth = std::min(100.0f, m_state.playerHealth + 25.0f);
+        m_playerHitFlashRemaining = 0.0f;
         return true;
     }
 
@@ -175,6 +188,7 @@ class TopDownStarterModule final : public Spark::IModule
             return false;
         }
         m_state.enemyHealth = std::max(0.0f, m_state.enemyHealth - (m_state.pickupCollected ? 30.0f : 20.0f));
+        m_enemyHitFlashRemaining = kHitFlashSeconds;
         if (m_state.enemyHealth == 0.0f)
         {
             m_state.enemyDefeated = true;
@@ -195,14 +209,24 @@ class TopDownStarterModule final : public Spark::IModule
         m_cameraPanZ = m_cameraSpawnPosition.z - m_playerSpawnPosition.z;
         m_playerYawDegrees = m_playerSpawnRotation.y;
         m_enemyYawDegrees = m_enemySpawnRotation.y;
+        m_enemyAttackCooldown = 0.0f;
+        m_playerHitFlashRemaining = 0.0f;
+        m_enemyHitFlashRemaining = 0.0f;
+        m_pickupTime = 0.0f;
         UpdateCameraTracking();
         SyncRuntimeState();
     }
 
     [[nodiscard]] const TopDownStarterState& GetState() const { return m_state; }
+    [[nodiscard]] float GetEnemyHitFlashRemaining() const { return m_enemyHitFlashRemaining; }
 
   private:
     static constexpr float kRadiansToDegrees = 57.29577951308232f;
+    static constexpr float kEnemyMoveSpeed = 1.5f;
+    static constexpr float kEnemyAttackRangeSquared = 1.44f;
+    static constexpr float kEnemyDamage = 12.0f;
+    static constexpr float kEnemyAttackInterval = 0.8f;
+    static constexpr float kHitFlashSeconds = 0.18f;
 
     static void NormalizeAxes(float& xAxis, float& zAxis)
     {
@@ -292,11 +316,15 @@ class TopDownStarterModule final : public Spark::IModule
         {
             player->position = {m_state.playerX, m_playerSpawnPosition.y, m_state.playerZ};
             player->rotation.y = m_playerYawDegrees;
+            if (MeshRenderer* mesh = m_runtime.Get<MeshRenderer>(m_playerEntity))
+                mesh->worldMatrixDirty = true;
         }
         if (Transform* enemy = m_runtime.Get<Transform>(m_enemyEntity))
         {
             enemy->position = {m_state.enemyX, m_enemySpawnPosition.y, m_state.enemyZ};
             enemy->rotation.y = m_enemyYawDegrees;
+            if (MeshRenderer* mesh = m_runtime.Get<MeshRenderer>(m_enemyEntity))
+                mesh->worldMatrixDirty = true;
         }
         if (Transform* camera = m_runtime.Get<Transform>(m_cameraEntity))
         {
@@ -304,11 +332,24 @@ class TopDownStarterModule final : public Spark::IModule
             camera->rotation = {m_cameraPitchDegrees, m_cameraYawDegrees, 0.0f};
         }
         if (MeshRenderer* player = m_runtime.Get<MeshRenderer>(m_playerEntity))
+        {
             player->visible = !m_state.playerDefeated;
+            player->emissive = m_playerHitFlashRemaining > 0.0f ? 0.85f : 0.05f;
+        }
         if (MeshRenderer* enemy = m_runtime.Get<MeshRenderer>(m_enemyEntity))
+        {
             enemy->visible = !m_state.enemyDefeated;
+            enemy->emissive = m_enemyHitFlashRemaining > 0.0f ? 0.95f : 0.08f;
+        }
         if (MeshRenderer* pickup = m_runtime.Get<MeshRenderer>(m_pickupEntity))
             pickup->visible = !m_state.pickupCollected;
+        if (Transform* pickup = m_runtime.Get<Transform>(m_pickupEntity))
+        {
+            pickup->position.y = m_pickupPosition.y + 0.15f * std::sin(m_pickupTime * 2.5f);
+            pickup->rotation.y = std::fmod(m_pickupTime * 70.0f, 360.0f);
+            if (MeshRenderer* mesh = m_runtime.Get<MeshRenderer>(m_pickupEntity))
+                mesh->worldMatrixDirty = true;
+        }
 
         if (SpriteRenderer* hud = m_runtime.Get<SpriteRenderer>(m_hudEntity))
         {
@@ -328,7 +369,22 @@ class TopDownStarterModule final : public Spark::IModule
                 hud->color = {1.0f, 1.0f, 1.0f, 0.95f};
             }
         }
+        if (SpriteRenderer* enemyHud = m_runtime.Get<SpriteRenderer>(m_enemyHudEntity))
+        {
+            const float healthRatio = std::clamp(m_state.enemyHealth / 75.0f, 0.0f, 1.0f);
+            enemyHud->color = {1.0f, 0.25f + 0.75f * healthRatio, 0.25f + 0.75f * healthRatio, 0.95f};
+            enemyHud->visible = !m_state.enemyDefeated && !m_state.playerDefeated;
+        }
+        if (SpriteRenderer* pickupHud = m_runtime.Get<SpriteRenderer>(m_pickupHudEntity))
+        {
+            pickupHud->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(
+                m_state.pickupCollected ? 1u : 2u, m_state.pickupCollected ? 2u : 1u);
+            pickupHud->color = m_state.pickupCollected ? DirectX::XMFLOAT4{0.35f, 1.0f, 0.55f, 0.95f}
+                                                       : DirectX::XMFLOAT4{1.0f, 1.0f, 1.0f, 0.95f};
+        }
         m_runtime.PlaceHud(m_cameraEntity, m_hudEntity, -0.13f, 0.09f, 0.32f, 0.085f, 0.055f);
+        m_runtime.PlaceHud(m_cameraEntity, m_enemyHudEntity, 0.0f, 0.09f, 0.32f, 0.055f, 0.055f);
+        m_runtime.PlaceHud(m_cameraEntity, m_pickupHudEntity, 0.13f, 0.09f, 0.32f, 0.055f, 0.055f);
     }
 
     void UpdateCameraTracking()
@@ -363,6 +419,8 @@ class TopDownStarterModule final : public Spark::IModule
         m_enemyEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
         m_pickupEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
         m_hudEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
+        m_enemyHudEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
+        m_pickupHudEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     }
 
     Spark::IEngineContext* m_context = nullptr;
@@ -380,11 +438,17 @@ class TopDownStarterModule final : public Spark::IModule
     float m_cameraYawDegrees = 0.0f;
     float m_playerYawDegrees = 0.0f;
     float m_enemyYawDegrees = 0.0f;
+    float m_enemyAttackCooldown = 0.0f;
+    float m_playerHitFlashRemaining = 0.0f;
+    float m_enemyHitFlashRemaining = 0.0f;
+    float m_pickupTime = 0.0f;
     uint32_t m_cameraEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_playerEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_enemyEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_pickupEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_hudEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
+    uint32_t m_enemyHudEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
+    uint32_t m_pickupHudEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     bool m_attackHeld = false;
     bool m_collectHeld = false;
     bool m_restartHeld = false;

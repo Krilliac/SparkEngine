@@ -1,7 +1,7 @@
 {
   "name": "MultiplayerArena",
   "identity": "multiplayer-arena-legacy",
-  "description": "A bounded local cyan-versus-magenta arena simulation with lobby readiness, scoring, respawns, and match completion.",
+  "description": "A symmetric local cyan-versus-magenta arena match with lobby readiness, split-keyboard combat, scoring, respawns, and a timed finish.",
   "genre": "Multiplayer Arena",
   "gameModule": "MultiplayerArena",
   "defaultScene": "Scenes/Arena.sparkscene",
@@ -10,6 +10,10 @@
     "team-assignment",
     "scoreboard",
     "respawn",
-    "match-loop"
+    "match-loop",
+    "sudden-death-overtime",
+    "split-keyboard",
+    "symmetric-spawns",
+    "team-lighting"
   ]
 }

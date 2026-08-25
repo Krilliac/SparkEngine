@@ -40,8 +40,18 @@ class Blank3DModule final : public Spark::IModule
                             [this](const Spark::Templates::TemplateRuntimeScene& scene)
                             {
                                 m_cameraEntity = scene.Find("Main Camera");
+                                const auto hasVisual = [&scene](const char* name)
+                                {
+                                    const uint32_t entity = scene.Find(name);
+                                    return scene.Get<Transform>(entity) && scene.Get<MeshRenderer>(entity);
+                                };
+                                const uint32_t fillLight = scene.Find("Composition Fill Light");
                                 return scene.Get<Transform>(m_cameraEntity) && scene.Get<Camera>(m_cameraEntity) &&
-                                       scene.Get<MeshRenderer>(scene.Find("Starter Cube"));
+                                       hasVisual("Starter Cube") && hasVisual("Scale Study - Tall") &&
+                                       hasVisual("Scale Study - Wide") && hasVisual("Composition Arch - Left") &&
+                                       hasVisual("Composition Arch - Right") &&
+                                       hasVisual("Composition Arch - Lintel") && scene.Get<Transform>(fillLight) &&
+                                       scene.Get<LightComponent>(fillLight);
                             }))
             return false;
         if (m_runtime.IsActive() && m_runtime.GetGraphics())
@@ -63,7 +73,7 @@ class Blank3DModule final : public Spark::IModule
 
     void OnUpdate(float deltaTime) override
     {
-        if (deltaTime <= 0.0f)
+        if (!std::isfinite(deltaTime) || deltaTime <= 0.0f)
             return;
         m_elapsedSeconds += deltaTime;
         UpdateRuntimeInput(deltaTime);
@@ -75,7 +85,8 @@ class Blank3DModule final : public Spark::IModule
 
     void Move(float forward, float right, float vertical, float deltaTime)
     {
-        if (deltaTime <= 0.0f)
+        if (!std::isfinite(forward) || !std::isfinite(right) || !std::isfinite(vertical) || !std::isfinite(deltaTime) ||
+            deltaTime <= 0.0f)
             return;
         m_camera.z += forward * m_camera.moveSpeed * deltaTime;
         m_camera.x += right * m_camera.moveSpeed * deltaTime;
@@ -84,11 +95,17 @@ class Blank3DModule final : public Spark::IModule
 
     void Look(float yawDeltaDegrees, float pitchDeltaDegrees)
     {
+        if (!std::isfinite(yawDeltaDegrees) || !std::isfinite(pitchDeltaDegrees))
+            return;
         m_camera.yawDegrees += yawDeltaDegrees;
         m_camera.pitchDegrees = std::clamp(m_camera.pitchDegrees + pitchDeltaDegrees, -89.0f, 89.0f);
     }
 
-    void SetMoveSpeed(float speed) { m_camera.moveSpeed = std::clamp(speed, 0.5f, 50.0f); }
+    void SetMoveSpeed(float speed)
+    {
+        if (std::isfinite(speed))
+            m_camera.moveSpeed = std::clamp(speed, 0.5f, 50.0f);
+    }
 
     void ResetCamera() { m_camera = {}; }
 

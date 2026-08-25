@@ -270,6 +270,7 @@ class FPSStarterModule final : public Spark::IModule
     [[nodiscard]] float GetReloadRemaining() const { return m_reloadRemaining; }
     [[nodiscard]] float GetRespawnRemaining() const { return m_respawnRemaining; }
     [[nodiscard]] bool HasWonRound() const { return m_roundWon; }
+    [[nodiscard]] bool IsTargetUnderCrosshair() const { return IsTargetInCrosshair(); }
 
     // Deterministic helpers are public so the template's control contract can
     // be tested without constructing a platform window or synthesizing OS input.
@@ -735,13 +736,15 @@ class FPSStarterModule final : public Spark::IModule
         const Transform* target = GetTransform(m_targetEntity);
         if (!camera || !target || m_target.destroyed)
             return false;
-        const DirectX::XMFLOAT3 halfExtents = {std::max(0.05f, std::abs(target->scale.x) * 0.5f),
-                                               std::max(0.05f, std::abs(target->scale.y) * 0.5f),
-                                               std::max(0.05f, std::abs(target->scale.z) * 0.5f)};
-        const DirectX::XMFLOAT3 boundsMin = {target->position.x - halfExtents.x, target->position.y - halfExtents.y,
-                                             target->position.z - halfExtents.z};
-        const DirectX::XMFLOAT3 boundsMax = {target->position.x + halfExtents.x, target->position.y + halfExtents.y,
-                                             target->position.z + halfExtents.z};
+        const float halfWidth = std::max(0.05f, std::abs(target->scale.x) * 0.5f);
+        const float halfDepth = std::max(0.05f, std::abs(target->scale.z) * 0.5f);
+        const float height = std::max(0.05f, std::abs(target->scale.y));
+        // training_target.obj is authored with its pivot at the base, so its
+        // vertical hit bounds must grow upward from the grounded transform.
+        const DirectX::XMFLOAT3 boundsMin = {target->position.x - halfWidth, target->position.y,
+                                             target->position.z - halfDepth};
+        const DirectX::XMFLOAT3 boundsMax = {target->position.x + halfWidth, target->position.y + height,
+                                             target->position.z + halfDepth};
         return RayIntersectsAabb(camera->position, CameraForward(m_yawDegrees, m_pitchDegrees), boundsMin, boundsMax);
     }
 

@@ -1,7 +1,7 @@
 {
   "name": "PlatformerKit",
   "identity": "platformer",
-  "description": "A complete platformer level with double jump, collectibles, hazards, checkpoint, finish, and restart.",
+  "description": "A polished side-view platformer challenge with double jump, collectibles, hazards, checkpoint recovery, sprinting, and a gated finish.",
   "genre": "Platformer",
   "gameModule": "PlatformerKit",
   "defaultScene": "Scenes/Level01.sparkscene",
@@ -9,10 +9,11 @@
     "movement",
     "jump",
     "double-jump",
+    "sprint",
     "collectibles",
     "hazard",
     "checkpoint",
-    "finish",
+    "gated-finish",
     "restart"
   ]
 }

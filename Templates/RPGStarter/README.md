@@ -1,8 +1,12 @@
 # RPGStarter
 
-A village RPG slice with dialogue, quest, inventory, combat, reward, and save/load.
+A complete village RPG quest with bounded exploration, dialogue, relic inventory, reactive combat, objective HUD,
+reward, and save/load.
 
-This installed-SDK example exposes a complete tiny quest flow: talk to the elder, recover a relic, defeat the warden, claim a reward, and exercise in-memory save/load. Movement, dialogue, inventory, combat, quest, and reward state are public and deterministic.
+This installed-SDK example exposes a complete tiny quest flow: talk to the elder, recover a relic, defeat the warden,
+claim a reward, and exercise in-memory save/load. Movement is normalized and village-bounded; the hero and warden face
+their actions while a following camera keeps the authored village composition visible. Dialogue, inventory, combat,
+quest, reward, and save state remain public and deterministic.
 
 ## Configure and build
 
@@ -25,6 +29,18 @@ Load `RPGStarter.dll` through `spark.modules.json`; the scene is `Scenes/Village
 The elder, relic, combat, and reward interactions are proximity-gated. The warden retaliates while the hero remains in
 combat range; reaching zero health hides the hero until `R` starts a new run. The save slot is intentionally in-process
 demo state: it survives `R`/`NewGame()` but not module unload or application exit.
+
+## Quest walkthrough
+
+1. Walk northeast to the elder and press `E` to accept the relic quest; press `E` again to close dialogue.
+2. Travel northwest to the glowing relic and press `E` to add it to the inventory.
+3. Cross to the northeast training yard and use `Space` or left mouse while near the warden. Do not linger in range:
+   the warden retaliates once per second.
+4. Return to the elder and press `E` to complete the quest and claim 50 gold plus 100 experience.
+5. Use `F5`, move or restart, and then use `F9` to verify the bounded demo save slot.
+
+The center HUD card changes from elder to relic, warden, return-scroll, and completion art. The left card tints with
+health, and the right card changes when a save slot exists, so every major state transition has visible feedback.
 
 ## License and assets
 
