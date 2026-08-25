@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import subprocess
+from collections import defaultdict
 from pathlib import Path
 
 
@@ -21,6 +22,13 @@ PACK_TEMPLATES = {
     "top_down_starter": "TopDownStarter",
 }
 MAX_ASSET_BYTES = 64 * 1024 * 1024
+MODULE_PACK_DIRECTORIES = {
+    "module_arpg": "ARPG",
+    "module_racing": "Racing",
+    "module_rts": "RTS",
+    "module_openworld": "OpenWorld",
+}
+MODULE_GROUND_TOLERANCE_METERS = 0.005
 
 
 def sha256(path: Path) -> str:
@@ -258,18 +266,124 @@ def validate_template_surfaces(
     return scene_references, failures
 
 
+def module_variant(name: str) -> tuple[str, str]:
+    if name.endswith("_collision"):
+        return name.removesuffix("_collision"), "collision"
+    if name.endswith("_lod1"):
+        return name.removesuffix("_lod1"), "lod1"
+    return name, "lod0"
+
+
+def validate_module_kits(
+    root: Path, manifest: dict[str, object], validated: dict[str, dict[str, object]]
+) -> list[str]:
+    """Validate module-kit naming, coverage, pivot, and simplification contracts."""
+    failures: list[str] = []
+    assets = manifest.get("assets")
+    if not isinstance(assets, list):
+        return ["manifest assets must be a list"]
+
+    module_entries = [entry for entry in assets if str(entry.get("pack", "")).startswith("module_")]
+    declared_paths = [str(entry.get("path", "")) for entry in module_entries]
+    duplicate_paths = sorted(path for path in set(declared_paths) if declared_paths.count(path) > 1)
+    if duplicate_paths:
+        failures.append(f"duplicate module manifest path(s): {', '.join(duplicate_paths)}")
+
+    expected_previews = {
+        f"docs/images/model-pipeline/{pack}.png" for pack in MODULE_PACK_DIRECTORIES
+    }
+    declared_previews = set(manifest.get("previews", []))
+    missing_previews = sorted(expected_previews - declared_previews)
+    if missing_previews:
+        failures.append(f"module preview(s) absent from manifest: {', '.join(missing_previews)}")
+
+    declared_module_files: set[str] = set()
+    for pack, directory_name in MODULE_PACK_DIRECTORIES.items():
+        pack_entries = [entry for entry in module_entries if entry.get("pack") == pack]
+        if not pack_entries:
+            failures.append(f"generated manifest has no assets for {pack}")
+            continue
+
+        expected_directory = root / "Assets" / "Models" / "ModuleKits" / directory_name
+        groups: dict[str, dict[str, tuple[dict[str, object], dict[str, object]]]] = defaultdict(dict)
+        for entry in pack_entries:
+            name = str(entry.get("name", ""))
+            relative_path = str(entry.get("path", ""))
+            expected_path = (expected_directory / f"{name}.obj").relative_to(root).as_posix()
+            if relative_path != expected_path:
+                failures.append(
+                    f"module asset path does not match its pack/name: {relative_path} (expected {expected_path})"
+                )
+            declared_module_files.add(relative_path)
+            declared_module_files.add(str(Path(relative_path).with_suffix(".mtl")).replace("\\", "/"))
+            base, variant = module_variant(name)
+            if variant in groups[base]:
+                failures.append(f"duplicate {pack}/{base} {variant} variant")
+                continue
+            actual = validated.get(relative_path)
+            if actual is not None:
+                groups[base][variant] = (entry, actual)
+
+        for base, variants in sorted(groups.items()):
+            missing = sorted({"lod0", "lod1", "collision"} - variants.keys())
+            if missing:
+                failures.append(f"{pack}/{base} missing variant(s): {', '.join(missing)}")
+                continue
+            lod0 = variants["lod0"][1]
+            lod1 = variants["lod1"][1]
+            collision = variants["collision"][1]
+            if int(lod1["triangles"]) >= int(lod0["triangles"]):
+                failures.append(f"{pack}/{base}: LOD1 is not simpler than LOD0")
+            if int(collision["triangles"]) >= int(lod1["triangles"]):
+                failures.append(f"{pack}/{base}: collision proxy is not simpler than LOD1")
+            for variant, (_, actual) in variants.items():
+                minimum_y = float(actual["bounds"]["min"][1])
+                if abs(minimum_y) > MODULE_GROUND_TOLERANCE_METERS:
+                    failures.append(
+                        f"{pack}/{base} {variant}: ground pivot is {minimum_y:.6f} m "
+                        f"(tolerance {MODULE_GROUND_TOLERANCE_METERS:.3f} m)"
+                    )
+
+    module_root = root / "Assets" / "Models" / "ModuleKits"
+    actual_module_files = {
+        path.relative_to(root).as_posix()
+        for path in module_root.rglob("*")
+        if path.is_file() and path.suffix.lower() in {".obj", ".mtl"}
+    }
+    undeclared = sorted(actual_module_files - declared_module_files)
+    missing = sorted(declared_module_files - actual_module_files)
+    if undeclared:
+        failures.append(f"module model file(s) absent from manifest: {', '.join(undeclared)}")
+    if missing:
+        failures.append(f"manifest module model file(s) missing on disk: {', '.join(missing)}")
+    return failures
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", type=Path, required=True)
+    parser.add_argument(
+        "--allow-worktree",
+        action="store_true",
+        help="validate working-tree outputs without requiring them to match the Git index",
+    )
     arguments = parser.parse_args()
     root = arguments.repo_root.resolve()
-    manifest_path = confined_file(root, "Assets/Models/Generated/starter_assets_manifest.json", label="manifest")
-    require_index_match(root, manifest_path, tracked_files(root), label="generated manifest")
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    tracked = tracked_files(root)
+    try:
+        manifest_path = confined_file(
+            root, "Assets/Models/Generated/starter_assets_manifest.json", label="manifest"
+        )
+        tracked = None if arguments.allow_worktree else tracked_files(root)
+        require_index_match(root, manifest_path, tracked, label="generated manifest")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+        print(f"ERROR: {error}")
+        print("FAILED: manifest could not be loaded for validation")
+        return 1
 
     failures: list[str] = []
     checked = 0
+    validated: dict[str, dict[str, object]] = {}
     for entry in manifest["assets"]:
         try:
             path = confined_file(root, entry["path"], label="generated asset")
@@ -279,6 +393,7 @@ def main() -> int:
             for field in ("sha256", "mtlSha256", "bounds"):
                 if actual[field] != entry.get(field):
                     raise ValueError(f"manifest {field} mismatch for {entry['path']}")
+            validated[entry["path"]] = actual
             checked += 1
         except (OSError, UnicodeError, ValueError) as error:
             failures.append(str(error))
@@ -299,6 +414,8 @@ def main() -> int:
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
         scene_references = 0
         failures.append(str(error))
+
+    failures.extend(validate_module_kits(root, manifest, validated))
 
     if failures:
         for failure in failures:

@@ -88,6 +88,7 @@ namespace Racing
         RacingAIDriver() = default;
         ~RacingAIDriver() = default;
 
+        /** Initialize the deterministic AI simulation; context may be null for standalone tools/tests. */
         bool Initialize(Spark::IEngineContext* context);
         void Update(float deltaTime);
         void Shutdown();

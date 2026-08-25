@@ -5,10 +5,8 @@
  * @author Spark Engine Team
  * @date 2026
  *
- * MMOEngineSystems registers MMO-specific content (class abilities, NPC dialogue
- * trees, boss cinematic sequences, mob behavior trees, animation state machines,
- * event subscriptions, and localization tables) with the engine's built-in systems
- * accessed through IEngineContext.
+ * MMOEngineSystems registers the MMO content supported by public engine APIs and
+ * exposes the data-driven ability/animation catalog used by the showcase.
  */
 
 #pragma once
@@ -102,6 +100,10 @@ namespace MMO
         // RAII event handles — automatically unsubscribe on destruction
         std::vector<Spark::SubscriptionHandle> m_eventHandles;
 
+        float m_runtimeSeconds = 0.0f;
+        float m_statusSampleTimer = 0.0f;
+        float m_sampledWorldHour = 8.0f;
+        float m_sampledWeatherIntensity = 0.0f;
         bool m_initialized = false;
     };
 

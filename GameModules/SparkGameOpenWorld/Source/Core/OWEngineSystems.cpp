@@ -2,7 +2,7 @@
  * @file OWEngineSystems.cpp
  * @brief Wires open world gameplay into engine subsystems
  *
- * Registers save serializers, wildlife behavior trees, cinematic sequences,
+ * Provides versioned gameplay persistence, wildlife behavior trees, cinematic sequences,
  * biome-driven weather/time rules, dynamic music, and event subscriptions.
  */
 
@@ -20,6 +20,8 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
+#include "Persistence/OWPersistence.inl"
+
 namespace OpenWorld
 {
 
@@ -36,7 +38,7 @@ namespace OpenWorld
 
         m_context = context;
 
-        RegisterSaveSerializers();
+        ConfigurePersistence();
         RegisterBehaviorTrees();
         RegisterCinematicSequences();
         SetupWeatherAndTimeOfDay();
@@ -47,6 +49,18 @@ namespace OpenWorld
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world engine systems integration initialized (6 subsystems)");
         Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Engine systems wired (6 subsystems)");
         return true;
+    }
+
+    void OWEngineSystems::BindGameState(OWPlayerSystem& player, OWExplorationSystem& exploration,
+                                        OWGatheringSystem& gathering, OWSettlementSystem& settlements,
+                                        OWWildlifeSystem& wildlife, OWDynamicEventSystem& events)
+    {
+        m_player = &player;
+        m_exploration = &exploration;
+        m_gathering = &gathering;
+        m_settlements = &settlements;
+        m_wildlife = &wildlife;
+        m_events = &events;
     }
 
     // Intentional: deltaTime reserved for future per-frame open-world updates
@@ -63,6 +77,12 @@ namespace OpenWorld
 
         m_eventHandles.clear();
         m_context = nullptr;
+        m_player = nullptr;
+        m_exploration = nullptr;
+        m_gathering = nullptr;
+        m_settlements = nullptr;
+        m_wildlife = nullptr;
+        m_events = nullptr;
         m_initialized = false;
         Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Engine systems shut down");
     }
@@ -72,68 +92,6 @@ namespace OpenWorld
 #ifdef ENABLE_EDITOR
         // Engine system debug is rendered by the engine's own panels
 #endif
-    }
-
-    // =========================================================================
-    // Save System
-    // =========================================================================
-
-    void OWEngineSystems::RegisterSaveSerializers()
-    {
-        auto* saveSystem = m_context->GetSaveSystem();
-        if (!saveSystem)
-            return;
-
-        auto& registry = Spark::ComponentSerializerRegistry::GetInstance();
-
-        auto registerPlaceholder = [&](const std::string& typeName)
-        {
-            registry.Register(
-                typeName,
-                [typeName](const void*) -> Spark::SerializedComponent
-                {
-                    Spark::SerializedComponent sc;
-                    sc.typeName = typeName;
-                    sc.properties["placeholder"] = typeName;
-                    return sc;
-                },
-                // Intentional: deserialization callback params for future save/load implementation
-                []([[maybe_unused]] World& world, [[maybe_unused]] EntityID entity,
-                   [[maybe_unused]] const Spark::SerializedComponent& data) {});
-        };
-
-        registerPlaceholder("OWPlayerSurvival");    // Health, stamina, hunger, thirst, temp
-        registerPlaceholder("OWExplorationState");  // Discovered POIs, secrets, XP
-        registerPlaceholder("OWResourceInventory"); // Gathered materials
-        registerPlaceholder("OWCampData");          // Player camp positions and tiers
-        registerPlaceholder("OWWildlifeTamed");     // Tamed animal companions
-        registerPlaceholder("OWEventProgress");     // Completed world events
-
-        saveSystem->SetMaxAutoSaves(3);
-
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world registered 6 save serializers");
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Registered 6 save serializers");
-    }
-
-    std::string OWEngineSystems::SaveGame(const std::string& slotName)
-    {
-        auto* saveSystem = m_context->GetSaveSystem();
-        if (!saveSystem)
-            return "Save system not available";
-
-        return "Save to slot '" + slotName + "' requested (save system wired)";
-    }
-
-    std::string OWEngineSystems::LoadGame(const std::string& slotName)
-    {
-        auto* saveSystem = m_context->GetSaveSystem();
-        if (!saveSystem)
-            return "Save system not available";
-
-        if (!saveSystem->SaveExists(slotName))
-            return "No save found in slot '" + slotName + "'";
-
-        return "Load from slot '" + slotName + "' requested (save system wired)";
     }
 
     // =========================================================================

@@ -11,6 +11,7 @@
 #include <imgui.h>
 #endif
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 
@@ -322,6 +323,55 @@ namespace OpenWorld
 
         Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Camp '" + camp.name + "' upgraded to tier " +
                                                     std::to_string(static_cast<int>(camp.tier)));
+        return true;
+    }
+
+    SettlementSaveState OWSettlementSystem::CaptureSaveState() const
+    {
+        SettlementSaveState state;
+        state.nextCampId = m_nextCampId;
+        state.camps.reserve(m_camps.size());
+        for (const auto& [id, camp] : m_camps)
+        {
+            (void)id;
+            state.camps.push_back(camp);
+        }
+        std::ranges::sort(state.camps, {}, &PlayerCamp::campId);
+        return state;
+    }
+
+    bool OWSettlementSystem::RestoreSaveState(const SettlementSaveState& state, std::string* error)
+    {
+        auto fail = [&](const char* message)
+        {
+            if (error)
+                *error = message;
+            return false;
+        };
+        if (state.camps.size() > 1024)
+            return fail("too many player camps");
+
+        std::unordered_map<uint32_t, PlayerCamp> camps;
+        camps.reserve(state.camps.size());
+        uint32_t highestId = 0;
+        for (const auto& camp : state.camps)
+        {
+            if (camp.campId == 0 || camp.name.empty() || camp.name.size() > 128 ||
+                static_cast<uint8_t>(camp.tier) >= static_cast<uint8_t>(CampTier::Count) || !std::isfinite(camp.posX) ||
+                !std::isfinite(camp.posY) || !std::isfinite(camp.posZ) || camp.regionId == 0 || camp.regionId > 8 ||
+                camp.hasCookingFire != (camp.tier >= CampTier::Lean_To) ||
+                camp.hasStorageChest != (camp.tier >= CampTier::Tent) ||
+                camp.hasCraftingStation != (camp.tier >= CampTier::Cabin) ||
+                camp.storageCapacity != 10 + 10 * static_cast<uint32_t>(camp.tier) ||
+                !camps.emplace(camp.campId, camp).second)
+                return fail("invalid player camp record");
+            highestId = std::max(highestId, camp.campId);
+        }
+        if (state.nextCampId == 0 || state.nextCampId <= highestId)
+            return fail("invalid next camp id");
+
+        m_camps = std::move(camps);
+        m_nextCampId = state.nextCampId;
         return true;
     }
 

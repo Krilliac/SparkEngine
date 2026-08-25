@@ -13,6 +13,8 @@
 #include "../GameModules/SparkGameOpenWorld/Source/Gathering/OWGatheringSystem.h"
 #include "../GameModules/SparkGameOpenWorld/Source/Wildlife/OWWildlifeSystem.h"
 
+#include <algorithm>
+
 using namespace OpenWorld;
 
 // =============================================================================
@@ -253,6 +255,47 @@ TEST(OW_EnumCoverage_Biomes)
 #include "../GameModules/SparkGameOpenWorld/Source/Settlement/OWSettlementSystem.h"
 #include "../GameModules/SparkGameOpenWorld/Source/Events/OWDynamicEventSystem.h"
 #include "../GameModules/SparkGameOpenWorld/Source/World/OWWorldSetup.h"
+#include "../GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.h"
+#include "../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.h"
+
+namespace
+{
+    class OpenWorldStreamingContext final : public Spark::IEngineContext
+    {
+      public:
+        explicit OpenWorldStreamingContext(Spark::Streaming::SeamlessAreaManager& streaming) : m_streaming(streaming) {}
+
+        GraphicsEngine* GetGraphics() override { return nullptr; }
+        const GraphicsEngine* GetGraphics() const override { return nullptr; }
+        InputManager* GetInput() override { return nullptr; }
+        const InputManager* GetInput() const override { return nullptr; }
+        Timer* GetTimer() override { return nullptr; }
+        const Timer* GetTimer() const override { return nullptr; }
+        Spark::EventBus* GetEventBus() override { return nullptr; }
+        const Spark::EventBus* GetEventBus() const override { return nullptr; }
+        ::AudioEngine* GetAudio() override { return nullptr; }
+        const ::AudioEngine* GetAudio() const override { return nullptr; }
+        PhysicsSystem* GetPhysics() override { return nullptr; }
+        const PhysicsSystem* GetPhysics() const override { return nullptr; }
+        Spark::Streaming::SeamlessAreaManager* GetAreaStreaming() override
+        {
+            ++m_streamingQueries;
+            return &m_streaming;
+        }
+        const Spark::Streaming::SeamlessAreaManager* GetAreaStreaming() const override
+        {
+            ++m_streamingQueries;
+            return &m_streaming;
+        }
+        uint32_t GetAreaStreamingQueryCount() const { return m_streamingQueries; }
+        uint32_t GetEngineVersion() const override { return 0; }
+        uint32_t GetSDKVersion() const override { return 0; }
+
+      private:
+        Spark::Streaming::SeamlessAreaManager& m_streaming;
+        mutable uint32_t m_streamingQueries = 0;
+    };
+} // namespace
 
 // --- OWPlayerSystem full tests ---
 
@@ -484,6 +527,169 @@ TEST(Gated_OWPlayer_RegionLookupUsesElevationInOverlappingVolumes)
         EXPECT_EQ(elevatedRegion->regionId, static_cast<uint32_t>(3));
 }
 
+TEST(Gated_OWPersistence_CodecRoundTripsCompleteGameplayState)
+{
+    OWPlayerSystem player;
+    OWExplorationSystem exploration;
+    OWGatheringSystem gathering;
+    OWSettlementSystem settlements;
+    OWWildlifeSystem wildlife;
+    OWDynamicEventSystem events;
+    EXPECT_TRUE(player.Initialize(nullptr));
+    EXPECT_TRUE(exploration.Initialize(nullptr));
+    EXPECT_TRUE(gathering.Initialize(nullptr));
+    EXPECT_TRUE(settlements.Initialize(nullptr));
+    EXPECT_TRUE(wildlife.Initialize(nullptr));
+    EXPECT_TRUE(events.Initialize(nullptr));
+
+    player.TakeDamage(37.0f);
+    player.SetPosition(6123.5f, 7.25f, -998.0f);
+    player.SetFacing(271.0f);
+    player.UnlockFastTravel({99, "Codec Camp", 12.0f, 3.0f, 44.0f, 4});
+    exploration.RevealPOI(2);
+    exploration.FindSecret(2);
+    gathering.AddResource(ResourceType::Iron, 17);
+    gathering.HarvestNode(1);
+    const uint32_t campId = settlements.PlaceCamp("Quoted \"Camp\"", 10.0f, 2.0f, 30.0f, 1);
+    EXPECT_TRUE(settlements.UpgradeCamp(campId));
+    const uint32_t eventId = events.TriggerEvent(1, 1, 50.0f, 75.0f);
+    EXPECT_TRUE(events.JoinEvent(eventId));
+
+    OWGameSaveData source;
+    source.player = player.CaptureSaveState();
+    source.exploration = exploration.CaptureSaveState();
+    source.gathering = gathering.CaptureSaveState();
+    source.settlements = settlements.CaptureSaveState();
+    source.wildlife = wildlife.CaptureSaveState();
+    source.events = events.CaptureSaveState();
+
+    const std::string encoded = OWEngineSystems::SerializeSnapshot(source);
+    EXPECT_TRUE(!encoded.empty());
+    OWGameSaveData decoded;
+    std::string error;
+    EXPECT_TRUE(OWEngineSystems::DeserializeSnapshot(encoded, decoded, error));
+    EXPECT_TRUE(error.empty());
+    EXPECT_EQ(decoded.version, kOpenWorldSaveVersion);
+    EXPECT_NEAR(decoded.player.survival.health, 63.0f, 0.001f);
+    EXPECT_NEAR(decoded.player.world.posX, 6123.5f, 0.001f);
+    EXPECT_NEAR(decoded.player.world.yaw, 271.0f, 0.001f);
+    EXPECT_EQ(decoded.player.fastTravelPoints.size(), source.player.fastTravelPoints.size());
+    EXPECT_EQ(decoded.exploration.progress.size(), source.exploration.progress.size());
+    EXPECT_EQ(decoded.gathering.nodes.size(), source.gathering.nodes.size());
+    EXPECT_EQ(decoded.settlements.camps.size(), static_cast<size_t>(1));
+    EXPECT_EQ(decoded.settlements.camps.front().name, std::string("Quoted \"Camp\""));
+    EXPECT_EQ(decoded.wildlife.animals.size(), source.wildlife.animals.size());
+    EXPECT_EQ(decoded.wildlife.herds.size(), source.wildlife.herds.size());
+    EXPECT_EQ(decoded.events.activeEvents.size(), static_cast<size_t>(1));
+    EXPECT_TRUE(decoded.events.activeEvents.front().playerParticipating);
+    EXPECT_EQ(OWEngineSystems::SerializeSnapshot(decoded), encoded);
+}
+
+TEST(Gated_OWPersistence_RestoresSubsystemState)
+{
+    OWPlayerSystem player;
+    OWExplorationSystem exploration;
+    OWGatheringSystem gathering;
+    OWSettlementSystem settlements;
+    OWWildlifeSystem wildlife;
+    OWDynamicEventSystem events;
+    player.Initialize(nullptr);
+    exploration.Initialize(nullptr);
+    gathering.Initialize(nullptr);
+    settlements.Initialize(nullptr);
+    wildlife.Initialize(nullptr);
+    events.Initialize(nullptr);
+
+    player.TakeDamage(25.0f);
+    player.SetPosition(100.0f, 200.0f, 300.0f);
+    exploration.RevealPOI(3);
+    gathering.AddResource(ResourceType::Crystal, 9);
+    gathering.HarvestNode(1);
+    const uint32_t campId = settlements.PlaceCamp("Restore Camp", 5.0f, 6.0f, 7.0f, 2);
+    settlements.UpgradeCamp(campId);
+    const uint32_t eventId = events.TriggerEvent(2, 2, 8.0f, 9.0f);
+    events.JoinEvent(eventId);
+
+    const auto playerState = player.CaptureSaveState();
+    const auto explorationState = exploration.CaptureSaveState();
+    const auto gatheringState = gathering.CaptureSaveState();
+    const auto settlementState = settlements.CaptureSaveState();
+    const auto wildlifeState = wildlife.CaptureSaveState();
+    const auto eventState = events.CaptureSaveState();
+
+    OWPlayerSystem restoredPlayer;
+    OWExplorationSystem restoredExploration;
+    OWGatheringSystem restoredGathering;
+    OWSettlementSystem restoredSettlements;
+    OWWildlifeSystem restoredWildlife;
+    OWDynamicEventSystem restoredEvents;
+    restoredPlayer.Initialize(nullptr);
+    restoredExploration.Initialize(nullptr);
+    restoredGathering.Initialize(nullptr);
+    restoredSettlements.Initialize(nullptr);
+    restoredWildlife.Initialize(nullptr);
+    restoredEvents.Initialize(nullptr);
+
+    std::string error;
+    EXPECT_TRUE(restoredPlayer.RestoreSaveState(playerState, &error));
+    EXPECT_TRUE(restoredExploration.RestoreSaveState(explorationState, &error));
+    EXPECT_TRUE(restoredGathering.RestoreSaveState(gatheringState, &error));
+    EXPECT_TRUE(restoredSettlements.RestoreSaveState(settlementState, &error));
+    EXPECT_TRUE(restoredWildlife.RestoreSaveState(wildlifeState, &error));
+    EXPECT_TRUE(restoredEvents.RestoreSaveState(eventState, &error));
+    EXPECT_NEAR(restoredPlayer.GetSurvivalState().health, 75.0f, 0.001f);
+    EXPECT_NEAR(restoredPlayer.GetWorldState().posZ, 300.0f, 0.001f);
+    EXPECT_EQ(restoredExploration.CaptureSaveState().progress.size(), explorationState.progress.size());
+    EXPECT_EQ(restoredGathering.GetInventory().Get(ResourceType::Crystal), 9u);
+    EXPECT_EQ(restoredGathering.CaptureSaveState().nodes.front().currentYield,
+              gatheringState.nodes.front().currentYield);
+    EXPECT_EQ(restoredSettlements.GetCampCount(), static_cast<size_t>(1));
+    EXPECT_EQ(restoredWildlife.GetActiveAnimalCount(), wildlife.GetActiveAnimalCount());
+    EXPECT_EQ(restoredEvents.GetActiveEventCount(), static_cast<size_t>(1));
+
+    auto invalidPlayerState = playerState;
+    invalidPlayerState.survival.health = invalidPlayerState.survival.maxHealth + 1.0f;
+    const float healthBeforeRejectedRestore = restoredPlayer.GetSurvivalState().health;
+    EXPECT_FALSE(restoredPlayer.RestoreSaveState(invalidPlayerState, &error));
+    EXPECT_NEAR(restoredPlayer.GetSurvivalState().health, healthBeforeRejectedRestore, 0.001f);
+
+    auto invalidEventState = eventState;
+    invalidEventState.activeEvents.front().state = EventState::Completed;
+    const auto activeEventsBeforeRejectedRestore = restoredEvents.CaptureSaveState();
+    EXPECT_FALSE(restoredEvents.RestoreSaveState(invalidEventState, &error));
+    EXPECT_EQ(restoredEvents.CaptureSaveState().activeEvents.size(),
+              activeEventsBeforeRejectedRestore.activeEvents.size());
+    EXPECT_TRUE(restoredEvents.CaptureSaveState().activeEvents.front().state == EventState::Active);
+}
+
+TEST(Gated_OWPersistence_RejectsMalformedOrUnsafePayloads)
+{
+    OWGameSaveData data;
+    const std::string valid = OWEngineSystems::SerializeSnapshot(data);
+    OWGameSaveData decoded;
+    std::string error;
+
+    EXPECT_FALSE(OWEngineSystems::DeserializeSnapshot("SPARK_OPEN_WORLD_SAVE 99\nEND\n", decoded, error));
+    EXPECT_TRUE(error.find("version") != std::string::npos);
+    EXPECT_FALSE(OWEngineSystems::DeserializeSnapshot(valid.substr(0, valid.size() / 2), decoded, error));
+    EXPECT_FALSE(OWEngineSystems::DeserializeSnapshot(valid + "unexpected", decoded, error));
+
+    std::string corrupted = valid;
+    const size_t playerRecord = corrupted.find("PLAYER 100");
+    EXPECT_TRUE(playerRecord != std::string::npos);
+    if (playerRecord != std::string::npos)
+        corrupted[playerRecord + std::string("PLAYER ").size()] = '9';
+    EXPECT_FALSE(OWEngineSystems::DeserializeSnapshot(corrupted, decoded, error));
+    EXPECT_TRUE(error.find("checksum") != std::string::npos);
+
+    std::string excessive = valid;
+    const size_t fastTravel = excessive.find("FAST_TRAVEL 0");
+    EXPECT_TRUE(fastTravel != std::string::npos);
+    if (fastTravel != std::string::npos)
+        excessive.replace(fastTravel, std::string("FAST_TRAVEL 0").size(), "FAST_TRAVEL 999999");
+    EXPECT_FALSE(OWEngineSystems::DeserializeSnapshot(excessive, decoded, error));
+}
+
 // --- OWGatheringSystem full tests ---
 
 TEST(Gated_OWGathering_Initialize)
@@ -587,6 +793,44 @@ TEST(Gated_OWWildlife_UpdateBehavior)
     for (int i = 0; i < 100; i++)
         wildlife.Update(0.016f, static_cast<float>(i * 5), static_cast<float>(i * 3), 1);
     EXPECT_TRUE(wildlife.GetActiveAnimalCount() > 0);
+}
+
+TEST(Gated_OWWildlife_CoincidentPlayerPositionStaysFinite)
+{
+    OWWildlifeSystem wildlife;
+    EXPECT_TRUE(wildlife.Initialize(nullptr));
+    const auto before = wildlife.CaptureSaveState();
+    EXPECT_TRUE(!before.animals.empty());
+    if (before.animals.empty())
+        return;
+
+    const auto& animal = before.animals.front();
+    wildlife.Update(0.016f, animal.posX, animal.posZ, animal.regionId);
+    const auto after = wildlife.CaptureSaveState();
+    EXPECT_TRUE(std::isfinite(after.animals.front().posX));
+    EXPECT_TRUE(std::isfinite(after.animals.front().posZ));
+}
+
+TEST(Gated_OWWildlife_CullingDeadAnimalsRepairsHerdMembership)
+{
+    OWWildlifeSystem wildlife;
+    EXPECT_TRUE(wildlife.Initialize(nullptr));
+    const auto initial = wildlife.CaptureSaveState();
+    const auto member = std::find_if(initial.animals.begin(), initial.animals.end(),
+                                     [](const AnimalInstance& animal) { return animal.herdId != 0; });
+    EXPECT_TRUE(member != initial.animals.end());
+    if (member == initial.animals.end())
+        return;
+
+    wildlife.HuntAnimal(member->instanceId);
+    wildlife.Update(60.0f, -100000.0f, -100000.0f, 1);
+    const auto culled = wildlife.CaptureSaveState();
+
+    OWWildlifeSystem restored;
+    EXPECT_TRUE(restored.Initialize(nullptr));
+    std::string error;
+    EXPECT_TRUE(restored.RestoreSaveState(culled, &error));
+    EXPECT_EQ(restored.GetActiveAnimalCount(), culled.animals.size());
 }
 
 // --- OWSettlementSystem full tests ---
@@ -695,6 +939,37 @@ TEST(Gated_OWWorldSetup_Strings)
     world.Initialize(nullptr);
     EXPECT_TRUE(!world.GetRegionListString().empty());
     EXPECT_TRUE(!world.GetWorldStatusString().empty());
+}
+
+TEST(Gated_OWWorldSetup_LeavesEngineStreamingTickToLifecycle)
+{
+    auto& streaming = Spark::Streaming::SeamlessAreaManager::GetInstance();
+    streaming.Shutdown();
+    streaming.Initialize();
+
+    auto config = streaming.GetConfig();
+    config.loadRadius = 1.0f;
+    config.updateInterval = 0.01f;
+    streaming.SetConfig(config);
+
+    OpenWorldStreamingContext context(streaming);
+    OWWorldSetup world;
+    EXPECT_TRUE(world.Initialize(&context));
+    EXPECT_TRUE(context.GetAreaStreamingQueryCount() > 0);
+
+    // Keep the origin biome synchronous so this assertion measures tick
+    // ownership rather than background file I/O.
+    streaming.GetAssetLoader().RemoveManifest(1);
+    EXPECT_TRUE(streaming.GetAreaState(1) == Spark::Streaming::AreaState::Unloaded);
+
+    const uint32_t queriesBeforeUpdate = context.GetAreaStreamingQueryCount();
+    world.Update(1.0f);
+    EXPECT_TRUE(context.GetAreaStreamingQueryCount() > queriesBeforeUpdate);
+    EXPECT_TRUE(streaming.GetAreaState(1) == Spark::Streaming::AreaState::Unloaded);
+
+    world.Shutdown();
+    EXPECT_FALSE(streaming.GetAssetLoader().HasManifest(2));
+    streaming.Shutdown();
 }
 
 #endif // SPARK_TEST_HAS_IMGUI

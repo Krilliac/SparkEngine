@@ -97,6 +97,14 @@ namespace Spark::Gameplay
         Failed
     };
 
+    /** @brief Serializable per-quest runtime state for one entity. */
+    struct QuestProgressSnapshot
+    {
+        uint32_t questId = 0;
+        QuestState state = QuestState::NotStarted;
+        std::vector<uint32_t> objectiveCounts;
+    };
+
     // ============================================================================
     // Quest System
     // ============================================================================
@@ -187,6 +195,18 @@ namespace Spark::Gameplay
 
         /// @brief Get all completed quest IDs for an entity
         [[nodiscard]] std::vector<uint32_t> GetCompletedQuests(uint32_t entityId) const;
+
+        /// @brief Capture all quest state for one entity without invoking policy callbacks.
+        [[nodiscard]] std::vector<QuestProgressSnapshot> CaptureEntityState(uint32_t entityId) const;
+
+        /// @brief Validate a snapshot against registered definitions without changing live state.
+        [[nodiscard]] bool ValidateEntityState(const std::vector<QuestProgressSnapshot>& snapshot) const;
+
+        /// @brief Atomically replace one entity's quest state after validating registered definitions.
+        bool RestoreEntityState(uint32_t entityId, const std::vector<QuestProgressSnapshot>& snapshot);
+
+        /// @brief Remove all quest state owned by an entity that is being destroyed or replaced.
+        void ClearEntityState(uint32_t entityId);
 
         // -- Console --
 

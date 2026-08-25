@@ -136,6 +136,109 @@ namespace Platformer
         checkpoints.Shutdown();
     }
 
+    TEST(Platformer_Player_DeterministicMovementAcceleratesAndRuns)
+    {
+        PlatformerCheckpointSystem checkpoints;
+        checkpoints.Initialize(nullptr);
+        checkpoints.SetLevelSpawn(0.0f, 0.0f, 0.0f);
+
+        PlatformerPlayerController player;
+        player.Initialize(nullptr, &checkpoints);
+        player.Respawn();
+        player.SetMovementInput(1.0f);
+        player.FixedUpdate(0.1f);
+
+        EXPECT_NEAR(player.GetPlayerVelocity().x, 4.0f, 0.001f);
+        EXPECT_NEAR(player.GetPlayerPosition().x, 0.4f, 0.001f);
+
+        player.SetMovementInput(1.0f, true);
+        for (int i = 0; i < 10; ++i)
+            player.FixedUpdate(0.1f);
+        EXPECT_NEAR(player.GetPlayerVelocity().x, 12.0f, 0.001f);
+        checkpoints.Shutdown();
+    }
+
+    TEST(Platformer_Player_JumpRequestSurvivesOneFullBufferInterval)
+    {
+        PlatformerCheckpointSystem checkpoints;
+        checkpoints.Initialize(nullptr);
+        checkpoints.SetLevelSpawn(0.0f, 0.0f, 0.0f);
+
+        PlatformerPlayerController player;
+        player.Initialize(nullptr, &checkpoints);
+        player.Respawn();
+        player.SetJumpInput(true);
+        player.FixedUpdate(0.1f);
+
+        EXPECT_TRUE(player.GetPlayerVelocity().y > 0.0f);
+        EXPECT_EQ(player.GetStateString(), std::string("Jumping"));
+        checkpoints.Shutdown();
+    }
+
+    TEST(Platformer_Player_DashUsesFacingDirectionAfterUnlock)
+    {
+        PlatformerCheckpointSystem checkpoints;
+        checkpoints.Initialize(nullptr);
+        checkpoints.SetLevelSpawn(0.0f, 0.0f, 0.0f);
+
+        PlatformerPlayerController player;
+        player.Initialize(nullptr, &checkpoints);
+        player.Respawn();
+        player.UnlockAbility(PowerUpType::Dash);
+        player.SetMovementInput(-1.0f);
+        player.RequestDash();
+        player.FixedUpdate(0.05f);
+
+        EXPECT_EQ(player.GetStateString(), std::string("Dashing"));
+        EXPECT_TRUE(player.GetPlayerPosition().x < -0.9f);
+        checkpoints.Shutdown();
+    }
+
+    TEST(Platformer_Player_DamageRejectsInvalidAmountsAndHonorsInvincibility)
+    {
+        PlatformerCheckpointSystem checkpoints;
+        checkpoints.Initialize(nullptr);
+
+        PlatformerPlayerController player;
+        player.Initialize(nullptr, &checkpoints);
+        EXPECT_FALSE(player.TakeDamage(0));
+        EXPECT_FALSE(player.TakeDamage(-3));
+        EXPECT_EQ(player.GetLives(), 3);
+
+        EXPECT_TRUE(player.TakeDamage(1));
+        EXPECT_EQ(player.GetLives(), 2);
+        EXPECT_FALSE(player.TakeDamage(1));
+        EXPECT_EQ(player.GetLives(), 2);
+
+        player.Update(-1.0f);
+        EXPECT_FALSE(player.TakeDamage(1));
+        EXPECT_EQ(player.GetLives(), 2);
+
+        player.Update(2.0f);
+        EXPECT_TRUE(player.TakeDamage(1));
+        EXPECT_EQ(player.GetLives(), 1);
+        player.GrantLives(100);
+        EXPECT_EQ(player.GetLives(), 9);
+        checkpoints.Shutdown();
+    }
+
+    TEST(Platformer_Checkpoint_ActivationIsScopedToActiveLevel)
+    {
+        PlatformerCheckpointSystem checkpoints;
+        checkpoints.Initialize(nullptr);
+        checkpoints.SetActiveLevel(1);
+
+        checkpoints.CheckActivation(25.0f, 5.0f, 0.0f);
+        EXPECT_EQ(checkpoints.GetActivatedCount(), 0u);
+
+        checkpoints.CheckActivation(30.0f, 1.0f, 0.0f);
+        EXPECT_EQ(checkpoints.GetActivatedCount(), 1u);
+        const auto respawn = checkpoints.GetLastCheckpointPosition();
+        EXPECT_EQ(respawn.x, 30.0f);
+        EXPECT_EQ(respawn.y, 1.0f);
+        checkpoints.Shutdown();
+    }
+
 } // namespace Platformer
 
 // =============================================================================
@@ -149,11 +252,92 @@ namespace Platformer
 #include "../GameModules/SparkGameARPG/Source/Skill/ARPGSkillSystem.h"
 #include "../GameModules/SparkGameARPG/Source/Monster/ARPGMonsterSystem.h"
 #include "../GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.h"
+#include "../GameModules/SparkGameARPG/Source/Core/ARPGAbilityCatalog.h"
+#include "../GameModules/SparkGameARPG/Source/Core/ARPGEngineSystems.h"
+
+#include "Engine/Animation/AnimationSystem.h"
+#include "Engine/Coroutine/CoroutineScheduler.h"
+#include "Engine/Gameplay/AbilitySystem.h"
 
 #include <limits>
 
 namespace ARPG
 {
+
+    namespace
+    {
+        class ARPGEngineTestContext final : public Spark::IEngineContext
+        {
+          public:
+            explicit ARPGEngineTestContext(bool exposeCoroutine = true) : m_exposeCoroutine(exposeCoroutine) {}
+
+            GraphicsEngine* GetGraphics() override { return nullptr; }
+            const GraphicsEngine* GetGraphics() const override { return nullptr; }
+            InputManager* GetInput() override { return nullptr; }
+            const InputManager* GetInput() const override { return nullptr; }
+            Timer* GetTimer() override { return nullptr; }
+            const Timer* GetTimer() const override { return nullptr; }
+            Spark::EventBus* GetEventBus() override { return nullptr; }
+            const Spark::EventBus* GetEventBus() const override { return nullptr; }
+            AudioEngine* GetAudio() override { return nullptr; }
+            const AudioEngine* GetAudio() const override { return nullptr; }
+            PhysicsSystem* GetPhysics() override { return nullptr; }
+            const PhysicsSystem* GetPhysics() const override { return nullptr; }
+            Spark::Animation::AnimationSystem* GetAnimation() override
+            {
+                return &Spark::Animation::AnimationManager::GetInstance();
+            }
+            const Spark::Animation::AnimationSystem* GetAnimation() const override
+            {
+                return &Spark::Animation::AnimationManager::GetInstance();
+            }
+            Spark::CoroutineScheduler* GetCoroutineScheduler() override
+            {
+                return m_exposeCoroutine ? &Spark::CoroutineScheduler::GetInstance() : nullptr;
+            }
+            const Spark::CoroutineScheduler* GetCoroutineScheduler() const override
+            {
+                return m_exposeCoroutine ? &Spark::CoroutineScheduler::GetInstance() : nullptr;
+            }
+            Spark::Gameplay::AbilitySystem* GetAbilities() override
+            {
+                return &Spark::Gameplay::AbilitySystem::GetInstance();
+            }
+            const Spark::Gameplay::AbilitySystem* GetAbilities() const override
+            {
+                return &Spark::Gameplay::AbilitySystem::GetInstance();
+            }
+            uint32_t GetEngineVersion() const override { return 0; }
+            uint32_t GetSDKVersion() const override { return 0; }
+
+          private:
+            bool m_exposeCoroutine = true;
+        };
+
+        struct ARPGEngineFixture
+        {
+            ARPGHeroSystem heroes;
+            ARPGCombatSystem combat;
+            ARPGLootSystem loot;
+            ARPGDungeonSystem dungeon;
+
+            void Initialize()
+            {
+                heroes.Initialize(nullptr);
+                combat.Initialize(nullptr);
+                loot.Initialize(nullptr);
+                dungeon.Initialize(nullptr);
+            }
+
+            void Shutdown()
+            {
+                dungeon.Shutdown();
+                loot.Shutdown();
+                combat.Shutdown();
+                heroes.Shutdown();
+            }
+        };
+    } // namespace
 
     // =============================================================================
     // ARPGHeroSystem
@@ -217,6 +401,152 @@ namespace ARPG
         std::string list = heroes.GetHeroListString();
         EXPECT_FALSE(list.empty());
         heroes.Shutdown();
+    }
+
+    TEST(ARPG_Hero_RegenerationIsDeterministicAndClamped)
+    {
+        ARPGHeroSystem heroes;
+        heroes.Initialize(nullptr);
+
+        const uint32_t id = heroes.CreateHero("Regenerator", ARPGHeroClass::Sorceress);
+        HeroData* hero = heroes.GetHero(id);
+        EXPECT_TRUE(hero != nullptr);
+        if (!hero)
+        {
+            heroes.Shutdown();
+            return;
+        }
+        hero->health = 50.0f;
+        hero->mana = 25.0f;
+
+        heroes.Update(2.0f);
+        EXPECT_NEAR(hero->health, 52.0f, 0.001f);
+        EXPECT_NEAR(hero->mana, 40.0f, 0.001f);
+
+        heroes.Update(1000.0f);
+        EXPECT_NEAR(hero->health, hero->maxHealth, 0.001f);
+        EXPECT_NEAR(hero->mana, hero->maxMana, 0.001f);
+
+        const float fullHealth = hero->health;
+        const float fullMana = hero->mana;
+        heroes.Update(-1.0f);
+        heroes.Update(std::numeric_limits<float>::quiet_NaN());
+        EXPECT_NEAR(hero->health, fullHealth, 0.001f);
+        EXPECT_NEAR(hero->mana, fullMana, 0.001f);
+        heroes.Shutdown();
+    }
+
+    TEST(ARPG_EngineBridge_RegistersAbilitiesAurasAndAnimationClips)
+    {
+        auto& abilities = Spark::Gameplay::AbilitySystem::GetInstance();
+        abilities.Shutdown();
+        abilities.Initialize(nullptr);
+
+        ARPGEngineFixture fixture;
+        fixture.Initialize();
+        ARPGEngineTestContext context;
+        ARPGEngineSystems bridge;
+        EXPECT_TRUE(bridge.Initialize(&context, &fixture.heroes, &fixture.combat, &fixture.loot, &fixture.dungeon));
+
+        EXPECT_TRUE(bridge.HasEngineAbilityBridge());
+        EXPECT_TRUE(bridge.HasEngineAnimationBridge());
+        EXPECT_EQ(bridge.GetRegisteredAbilityCount(), 4u);
+        EXPECT_EQ(bridge.GetRegisteredAuraCount(), 4u);
+        EXPECT_EQ(bridge.GetRegisteredProcCount(), 1u);
+
+        const auto* fireball = abilities.GetAbilityDef(ARPGAbilityCatalog::FIREBALL_ABILITY_ID);
+        EXPECT_TRUE(fireball != nullptr);
+        if (fireball)
+        {
+            EXPECT_EQ(fireball->name, std::string("ARPG Fireball"));
+            EXPECT_EQ(fireball->effects.size(), 1u);
+            if (!fireball->effects.empty())
+                EXPECT_TRUE(fireball->effects.front().school == Spark::Gameplay::AbilitySchool::Fire);
+        }
+
+        const auto* poison = abilities.GetAuraDef(ARPGAbilityCatalog::POISON_AURA_ID);
+        EXPECT_TRUE(poison != nullptr);
+        if (poison)
+        {
+            EXPECT_TRUE(poison->type == Spark::Gameplay::AuraType::DamageOverTime);
+            EXPECT_EQ(poison->maxStacks, 3);
+        }
+
+        const auto attackClip = Spark::Animation::AnimationManager::GetInstance().GetClip("arpg_hero_attack");
+        EXPECT_TRUE(attackClip != nullptr);
+        if (attackClip)
+            EXPECT_FALSE(attackClip->loop);
+        EXPECT_EQ(bridge.GetHeroAnimationState(), std::string("Idle"));
+
+        bridge.Shutdown();
+        fixture.Shutdown();
+        abilities.Shutdown();
+    }
+
+    TEST(ARPG_EngineBridge_RejectsMissingGameplayDependencies)
+    {
+        ARPGEngineFixture fixture;
+        fixture.Initialize();
+        ARPGEngineTestContext context;
+        ARPGEngineSystems bridge;
+
+        EXPECT_FALSE(bridge.Initialize(nullptr, &fixture.heroes, &fixture.combat, &fixture.loot, &fixture.dungeon));
+        EXPECT_FALSE(bridge.Initialize(&context, nullptr, &fixture.combat, &fixture.loot, &fixture.dungeon));
+        EXPECT_FALSE(bridge.Initialize(&context, &fixture.heroes, nullptr, &fixture.loot, &fixture.dungeon));
+        EXPECT_FALSE(bridge.Initialize(&context, &fixture.heroes, &fixture.combat, nullptr, &fixture.dungeon));
+        EXPECT_FALSE(bridge.Initialize(&context, &fixture.heroes, &fixture.combat, &fixture.loot, nullptr));
+
+        fixture.Shutdown();
+    }
+
+    TEST(ARPG_EngineBridge_ActionRecoveryUsesEngineCoroutineAndSupersedesOldAction)
+    {
+        auto& scheduler = Spark::CoroutineScheduler::GetInstance();
+        scheduler.StopAll();
+        scheduler.Update(0.0f);
+
+        ARPGEngineFixture fixture;
+        fixture.Initialize();
+        ARPGEngineTestContext context;
+        ARPGEngineSystems bridge;
+        EXPECT_TRUE(bridge.Initialize(&context, &fixture.heroes, &fixture.combat, &fixture.loot, &fixture.dungeon));
+
+        bridge.PlayHeroAction(ARPGHeroAction::BasicAttack);
+        EXPECT_EQ(bridge.GetHeroAnimationState(), std::string("Attack"));
+        EXPECT_TRUE(bridge.IsHeroActionActive());
+        scheduler.Update(0.20f);
+
+        bridge.PlayHeroAction(ARPGHeroAction::Cast);
+        EXPECT_EQ(bridge.GetHeroAnimationState(), std::string("Cast"));
+        scheduler.Update(0.44f);
+        EXPECT_EQ(bridge.GetHeroAnimationState(), std::string("Cast"));
+        scheduler.Update(0.22f);
+        EXPECT_EQ(bridge.GetHeroAnimationState(), std::string("Idle"));
+        EXPECT_FALSE(bridge.IsHeroActionActive());
+
+        bridge.Shutdown();
+        scheduler.Update(0.0f);
+        fixture.Shutdown();
+        Spark::Gameplay::AbilitySystem::GetInstance().Shutdown();
+    }
+
+    TEST(ARPG_EngineBridge_ActionRecoveryFallsBackWithoutScheduler)
+    {
+        ARPGEngineFixture fixture;
+        fixture.Initialize();
+        ARPGEngineTestContext context(false);
+        ARPGEngineSystems bridge;
+        EXPECT_TRUE(bridge.Initialize(&context, &fixture.heroes, &fixture.combat, &fixture.loot, &fixture.dungeon));
+
+        bridge.PlayHeroAction(ARPGHeroAction::BasicAttack);
+        bridge.Update(0.44f);
+        EXPECT_EQ(bridge.GetHeroAnimationState(), std::string("Attack"));
+        bridge.Update(0.02f);
+        EXPECT_EQ(bridge.GetHeroAnimationState(), std::string("Idle"));
+
+        bridge.Shutdown();
+        fixture.Shutdown();
+        Spark::Gameplay::AbilitySystem::GetInstance().Shutdown();
     }
 
     // =============================================================================
@@ -472,6 +802,58 @@ namespace ARPG
         EXPECT_EQ(encounter.GetState().totalKills, 1u);
         EXPECT_TRUE(encounter.GetTarget() != nullptr);
         EXPECT_NE(encounter.GetState().targetMonsterId, originalTargetId);
+
+        encounter.Shutdown();
+        monsters.Shutdown();
+        skills.Shutdown();
+        dungeon.Shutdown();
+        loot.Shutdown();
+        combat.Shutdown();
+        heroes.Shutdown();
+    }
+
+    TEST(ARPG_DemoEncounter_StateRoundTripRestoresProgress)
+    {
+        ARPGHeroSystem heroes;
+        ARPGCombatSystem combat;
+        ARPGLootSystem loot;
+        ARPGDungeonSystem dungeon;
+        ARPGSkillSystem skills;
+        ARPGMonsterSystem monsters;
+        heroes.Initialize(nullptr);
+        combat.Initialize(nullptr);
+        loot.Initialize(nullptr);
+        dungeon.Initialize(nullptr);
+        skills.Initialize(nullptr, &heroes);
+        monsters.Initialize(nullptr);
+
+        ARPGDemoEncounter encounter;
+        EXPECT_TRUE(encounter.Initialize(&heroes, &combat, &loot, &dungeon, &skills, &monsters));
+        for (int attack = 0; attack < 20 && encounter.GetState().totalKills < 3; ++attack)
+            EXPECT_TRUE(encounter.BasicAttack());
+        EXPECT_EQ(dungeon.GetCurrentFloorNumber(), 2);
+        EXPECT_TRUE(encounter.BasicAttack());
+
+        const std::string snapshot = encounter.SerializeState();
+        const uint32_t savedKills = encounter.GetState().totalKills;
+        const float savedTargetHealth = encounter.GetTarget()->health;
+        const int savedAttributePoints = heroes.GetHero(encounter.GetState().heroId)->freeAttributePoints;
+        const float savedMoveSpeed = heroes.GetHero(encounter.GetState().heroId)->moveSpeed;
+        EXPECT_TRUE(encounter.CanRestoreState(snapshot));
+        EXPECT_FALSE(encounter.CanRestoreState(snapshot + " trailing-garbage"));
+        encounter.Restart();
+        heroes.GetHero(encounter.GetState().heroId)->freeAttributePoints = 999;
+        heroes.GetHero(encounter.GetState().heroId)->moveSpeed = 99.0f;
+        EXPECT_EQ(dungeon.GetCurrentFloorNumber(), 1);
+
+        EXPECT_TRUE(encounter.RestoreState(snapshot));
+        EXPECT_EQ(dungeon.GetCurrentFloorNumber(), 2);
+        EXPECT_EQ(encounter.GetState().totalKills, savedKills);
+        EXPECT_NEAR(encounter.GetTarget()->health, savedTargetHealth, 0.001f);
+        EXPECT_EQ(heroes.GetHero(encounter.GetState().heroId)->freeAttributePoints, savedAttributePoints);
+        EXPECT_NEAR(heroes.GetHero(encounter.GetState().heroId)->moveSpeed, savedMoveSpeed, 0.001f);
+        EXPECT_EQ(encounter.SerializeState(), snapshot);
+        EXPECT_FALSE(encounter.RestoreState("ARPGDEMO 99 corrupt"));
 
         encounter.Shutdown();
         monsters.Shutdown();

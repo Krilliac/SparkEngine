@@ -11,6 +11,7 @@
 #include <imgui.h>
 #endif
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 
@@ -33,10 +34,20 @@ namespace ARPG
         m_heroes.clear();
     }
 
-    // Intentional: deltaTime reserved for future health/mana regeneration
-    void ARPGHeroSystem::Update([[maybe_unused]] float deltaTime)
+    void ARPGHeroSystem::Update(float deltaTime)
     {
-        // Future: health/mana regeneration over time
+        if (!std::isfinite(deltaTime) || deltaTime <= 0.0f)
+            return;
+
+        for (auto& [id, hero] : m_heroes)
+        {
+            (void)id;
+            if (hero.health <= 0.0f)
+                continue;
+
+            hero.health = std::min(hero.maxHealth, hero.health + hero.maxHealth * 0.01f * deltaTime);
+            hero.mana = std::min(hero.maxMana, hero.mana + hero.maxMana * 0.05f * deltaTime);
+        }
     }
 
     void ARPGHeroSystem::RegisterClassTemplates()

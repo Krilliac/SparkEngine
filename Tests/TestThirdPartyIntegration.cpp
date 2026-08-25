@@ -76,10 +76,14 @@ TEST(Cgltf_Free_Null)
     cgltf_free(nullptr);
 }
 
-TEST(Cgltf_Validate_Null)
+TEST(Cgltf_Parse_InvalidJson)
 {
-    cgltf_result result = cgltf_validate(nullptr);
+    constexpr char invalidJson[] = "{]";
+    cgltf_options options = {};
+    cgltf_data* data = nullptr;
+    cgltf_result result = cgltf_parse(&options, invalidJson, sizeof(invalidJson) - 1, &data);
     EXPECT_TRUE(result != cgltf_result_success);
+    EXPECT_TRUE(data == nullptr);
 }
 
 #endif // SPARK_HAS_CGLTF

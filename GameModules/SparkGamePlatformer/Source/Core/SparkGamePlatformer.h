@@ -61,6 +61,7 @@ class SparkGamePlatformerModule : public Spark::IModule
 
   private:
     void RegisterConsoleCommands();
+    bool LoadPlayableLevel(uint32_t index);
 
     Spark::IEngineContext* m_context{nullptr};
     bool m_initialized{false};

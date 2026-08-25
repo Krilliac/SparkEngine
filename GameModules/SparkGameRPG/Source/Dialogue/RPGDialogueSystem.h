@@ -95,7 +95,6 @@ namespace RPG
         ~RPGDialogueSystem() = default;
 
         bool Initialize(Spark::IEngineContext* context);
-        void Update(float deltaTime);
         void Shutdown();
         void RenderDebugUI();
 

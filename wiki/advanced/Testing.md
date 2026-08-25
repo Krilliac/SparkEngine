@@ -517,10 +517,10 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*556 test files, 6599+ test cases*
+*557 test files, 6719 source-level test definitions*
 
-| Test File | Test Cases |
-|-----------|------------|
+| Test File | Test Definitions |
+|-----------|------------------|
 | `TestSubsystemIntegrationScenarios` | 4 |
 | `TestAIBehaviorTree` | 16 |
 | `TestAIBudgetLimiter` | 6 |
@@ -675,9 +675,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestECSystemsReal` | 12 |
 | `TestEditorAutomation` | 9 |
 | `TestEditorCommands` | 8 |
-| `TestEditorDocumentTransition` | 6 |
+| `TestEditorDocumentTransition` | 7 |
 | `TestEditorLayoutManager` | 13 |
-| `TestEditorSubsystems` | 105 |
+| `TestEditorSubsystems` | 111 |
 | `TestEditorWindowManager` | 14 |
 | `TestEngineBootPlatforms` | 41 |
 | `TestEngineContext` | 18 |
@@ -703,8 +703,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFBXImportValidation` | 3 |
 | `TestFBXImporter` | 17 |
 | `TestFPSComponents` | 23 |
-| `TestFPSGameplayIntegration` | 10 |
-| `TestFPSMultiplayer` | 10 |
+| `TestFPSGameplayIntegration` | 17 |
+| `TestFPSMultiplayer` | 11 |
 | `TestFastNoise2SIMD` | 29 |
 | `TestFaultIsolation` | 14 |
 | `TestFaultIsolationReal` | 8 |
@@ -724,6 +724,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFrustumCulling` | 11 |
 | `TestFullEngineDiagnostics` | 7 |
 | `TestGLSLPipelineIntegration` | 19 |
+| `TestGLTFStaticMeshLoader` | 8 |
 | `TestGPUClusterCulling` | 11 |
 | `TestGPUDrivenRenderer` | 14 |
 | `TestGPUDrivenRendererD3D11` | 2 |
@@ -737,14 +738,14 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGTAOEffect` | 8 |
 | `TestGameMode` | 5 |
 | `TestGameModeReal` | 11 |
-| `TestGameModuleMMO` | 23 |
-| `TestGameModulePlatformerARPG` | 21 |
-| `TestGameModuleRPG` | 26 |
-| `TestGameModuleRTS` | 24 |
-| `TestGameModuleRacing` | 15 |
+| `TestGameModuleMMO` | 36 |
+| `TestGameModulePlatformerARPG` | 37 |
+| `TestGameModuleRPG` | 35 |
+| `TestGameModuleRTS` | 39 |
+| `TestGameModuleRacing` | 28 |
 | `TestGameObjectTransforms` | 24 |
 | `TestGamePackager` | 10 |
-| `TestGameViewPanel` | 1 |
+| `TestGameViewPanel` | 3 |
 | `TestGamepadInputProcessing` | 23 |
 | `TestGameplayDebugger` | 11 |
 | `TestGameplayExtensionRegistry` | 7 |
@@ -852,7 +853,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestOcclusionCulling` | 6 |
 | `TestOnlineServices` | 10 |
 | `TestOpaqueHandle` | 7 |
-| `TestOpenWorldModule` | 52 |
+| `TestOpenWorldModule` | 61 |
 | `TestPacketValidator` | 10 |
 | `TestPacketValidatorReal` | 3 |
 | `TestParallelCulling` | 5 |
@@ -883,7 +884,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestProcessDrawListLinux` | 9 |
 | `TestProfiler` | 19 |
 | `TestProximityTriggerSystem` | 4 |
-| `TestQuestSystem` | 10 |
+| `TestQuestSystem` | 11 |
 | `TestRHIBridgeIntegration` | 19 |
 | `TestRHICapabilityParity` | 4 |
 | `TestRHIHandlePool` | 10 |
@@ -936,7 +937,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSelfRecovery` | 16 |
 | `TestSequencer` | 10 |
 | `TestSequencerAudioWiring` | 3 |
-| `TestSequencerReal` | 8 |
+| `TestSequencerReal` | 9 |
 | `TestSerializer` | 17 |
 | `TestServerLiveMockClient` | 10 |
 | `TestServerMockClient` | 31 |
@@ -989,7 +990,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestTFDeathRecapWire` | 5 |
 | `TestTFFixedStep` | 1 |
 | `TestTFNetProtocolLayout` | 9 |
-| `TestTFOnboarding` | 28 |
+| `TestTFOnboarding` | 37 |
 | `TestTFOutfitStore` | 16 |
 | `TestTFRedeployRules` | 7 |
 | `TestTFRegionLattice` | 11 |
@@ -1031,7 +1032,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestVersionControlSystemPhaseAA` | 11 |
 | `TestVersionedHandle` | 9 |
 | `TestVideoPlayer` | 12 |
-| `TestVisualScriptCompiler` | 17 |
+| `TestVisualScriptCompiler` | 25 |
 | `TestVolumeManager` | 11 |
 | `TestVolumetricClouds` | 14 |
 | `TestVoxelConeTracing` | 24 |
@@ -1069,7 +1070,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `Test_persistence_AsyncDatabasePool` | 3 |
 | `Test_persistence_ModSystem` | 2 |
 | `Test_persistence_ReplaySystem` | 3 |
-| `Test_persistence_SaveSystem` | 7 |
+| `Test_persistence_SaveSystem` | 8 |
 | `Test_scripting_hardening` | 8 |
 | `Test_tests_ecsystemordering_real` | 5 |
 | `Test_tests_enginecontext_real` | 3 |

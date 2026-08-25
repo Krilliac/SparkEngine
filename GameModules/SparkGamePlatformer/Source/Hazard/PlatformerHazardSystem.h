@@ -69,6 +69,10 @@ namespace Platformer
 
         // Knockback direction and force (applied to player on hit)
         float knockbackForce = 5.0f;
+
+        // Stable origin used by animated hazards; posX/posY contain the live position.
+        float originX = 0.0f;
+        float originY = 0.0f;
     };
 
     /// @brief Active projectile in flight

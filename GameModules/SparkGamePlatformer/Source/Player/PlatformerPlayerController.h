@@ -89,14 +89,36 @@ namespace Platformer
         /// @brief Respawn at last activated checkpoint
         void Respawn();
 
-        /// @brief Apply damage to the player (from hazards)
-        void TakeDamage(int amount);
+        /// @brief Apply damage to the player (from hazards).
+        /// @return true when lives were reduced, false when the hit was rejected or absorbed.
+        bool TakeDamage(int amount);
 
         /// @brief Unlock a movement ability
         void UnlockAbility(PowerUpType type);
 
         /// @brief Apply a temporary power-up effect
         void ApplyPowerUp(PowerUpType type, float duration);
+
+        /// @brief Set deterministic horizontal movement input in the [-1, 1] range.
+        void SetMovementInput(float horizontalAxis, bool runHeld = false);
+
+        /// @brief Set jump-button state; a rising edge queues a buffered jump.
+        void SetJumpInput(bool held);
+
+        /// @brief Queue a dash for the next fixed update.
+        void RequestDash();
+
+        /// @brief Queue a ground pound for the next fixed update.
+        void RequestGroundPound();
+
+        /// @brief Apply an external velocity impulse (hazard knockback or wind).
+        void ApplyImpulse(float horizontal, float vertical);
+
+        /// @brief Grant lives without exceeding the configured maximum.
+        void GrantLives(int amount);
+
+        bool IsMagnetActive() const { return m_magnetTimer > 0.0f; }
+        PlayerVelocity GetPlayerVelocity() const { return m_velocity; }
 
       private:
         void ProcessInput(float deltaTime);
@@ -166,6 +188,13 @@ namespace Platformer
         bool m_hasDashed{false};
         bool m_jumpHeld{false};
         bool m_jumpRequested{false};
+        bool m_dashRequested{false};
+        bool m_groundPoundRequested{false};
+        bool m_dashInputHeld{false};
+        bool m_groundPoundInputHeld{false};
+        bool m_respawnInputHeld{false};
+        float m_moveInput{0.0f};
+        bool m_runHeld{false};
 
         // Abilities (locked by default, unlocked via AbilityOrbs)
         AbilityFlags m_abilities{};

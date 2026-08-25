@@ -76,6 +76,19 @@ void Grenade::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, flo
     Projectile::Fire(startPosition, direction, speed);
 }
 
+void Grenade::OnHit(GameObject* target)
+{
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, target);
+    Explode();
+}
+
+void Grenade::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
+{
+    (void)hitPoint;
+    (void)normal;
+    Explode();
+}
+
 void Grenade::Explode()
 {
     if (m_hasExploded)

@@ -24,11 +24,43 @@
 #include "Physics/PhysicsSystem.h"
 #include "Core/EngineContext.h"
 #include <sstream>
+#include <utility>
+#include <vector>
+
+namespace
+{
+    std::vector<std::string> g_advancedCommandNames;
+
+    class TrackedConsoleRegistrar
+    {
+      public:
+        explicit TrackedConsoleRegistrar(Spark::SimpleConsole& console) : m_console(console) {}
+
+        template <typename... Args> void RegisterCommand(const std::string& name, Args&&... args)
+        {
+            m_console.RegisterCommand(name, std::forward<Args>(args)...);
+            g_advancedCommandNames.push_back(name);
+        }
+
+      private:
+        Spark::SimpleConsole& m_console;
+    };
+} // namespace
 
 // EngineContext accessed via EngineContext::Get()
 
 namespace SparkConsole
 {
+
+    void UnregisterAdvancedCommands()
+    {
+        auto& console = Spark::SimpleConsole::GetInstance();
+        for (const auto& commandName : g_advancedCommandNames)
+        {
+            console.UnregisterCommand(commandName);
+        }
+        g_advancedCommandNames.clear();
+    }
 
     /**
  * @brief Register all advanced console commands for the unified GraphicsEngine
@@ -39,7 +71,9 @@ namespace SparkConsole
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Registering advanced console commands");
 
-        auto& console = Spark::SimpleConsole::GetInstance();
+        UnregisterAdvancedCommands();
+        auto& simpleConsole = Spark::SimpleConsole::GetInstance();
+        TrackedConsoleRegistrar console(simpleConsole);
 
         // ========================================================================
         // TEXTURE SYSTEM COMMANDS (via GraphicsEngine)
@@ -358,10 +392,7 @@ namespace SparkConsole
             "shader_list",
             [graphics](const std::vector<std::string>&) -> std::string
             {
-                // Access shader system through GraphicsEngine's reload path
-                // The Shader class Console_ListShaders is used directly when a Shader* is available.
-                // For the console, we delegate to the GraphicsEngine which owns the Shader.
-                graphics->Console_ReloadShaders(); // trigger a no-op to ensure shaders are initialized
+                (void)graphics;
                 return "Use 'render_stats' for shader status. Shader list requires direct Shader* access.";
             },
             "List all loaded shaders");
@@ -416,7 +447,7 @@ namespace SparkConsole
             },
             "Get comprehensive system metrics");
 
-        console.Log("Advanced console commands registered for unified GraphicsEngine", "SUCCESS");
+        simpleConsole.Log("Advanced console commands registered for unified GraphicsEngine", "SUCCESS");
     }
 
 } // namespace SparkConsole

@@ -213,8 +213,15 @@ namespace MMO
 
         // === Configuration ===
 
-        void SetAutoSaveInterval(float seconds) { m_autoSaveInterval = seconds; }
+        void SetAutoSaveInterval(float seconds)
+        {
+            m_autoSaveInterval = seconds > 0.0f ? seconds : 1.0f;
+            if (m_autoSaveTimer <= 0.0f || m_autoSaveTimer > m_autoSaveInterval)
+                m_autoSaveTimer = m_autoSaveInterval;
+        }
         float GetAutoSaveInterval() const { return m_autoSaveInterval; }
+        bool IsAutoSaveDue() const { return m_initialized && m_autoSaveTimer <= 0.0f; }
+        void ResetAutoSaveTimer() { m_autoSaveTimer = m_autoSaveInterval; }
         bool IsInitialized() const { return m_initialized; }
         int GetPendingWrites() const;
 

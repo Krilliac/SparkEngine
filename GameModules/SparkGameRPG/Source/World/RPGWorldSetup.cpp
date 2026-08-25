@@ -19,9 +19,6 @@ namespace RPG
 
     bool RPGWorldSetup::Initialize(Spark::IEngineContext* context)
     {
-        if (!context)
-            return false;
-
         m_context = context;
 
         DefineWorldAreas();
@@ -88,9 +85,9 @@ namespace RPG
         dungeon.isSafeZone = false;
         dungeon.connectedAreas = {2}; // Forest
         dungeon.encounters = {
-            {200, "Skeleton Warrior", 4, 6, 8.0f},    {201, "Phantom", 5, 7, 5.0f},
-            {202, "Crypt Crawler", 4, 5, 7.0f},       {203, "Bone Golem", 6, 8, 3.0f},
-            {204, "Necromancer Acolyte", 5, 7, 4.0f},
+            {200, "Skeleton Warrior", 4, 6, 8.0f},   {201, "Phantom", 5, 7, 5.0f},
+            {202, "Crypt Crawler", 4, 5, 7.0f},      {203, "Bone Golem", 6, 8, 3.0f},
+            {204, "Shadow Necromancer", 5, 7, 4.0f},
         };
         m_areas.push_back(dungeon);
 
@@ -145,7 +142,9 @@ namespace RPG
 
     void RPGWorldSetup::RegisterAreasWithStreaming()
     {
-        auto& streamingMgr = Spark::Streaming::SeamlessAreaManager::GetInstance();
+        auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
+        if (!streamingMgr)
+            streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
 
         for (const auto& area : m_areas)
         {
@@ -157,7 +156,7 @@ namespace RPG
             def.scenePath = "Assets/Scenes/RPG/" + area.name + ".scene";
             def.priority = area.isSafeZone ? 2 : 1;
 
-            streamingMgr.RegisterArea(def);
+            streamingMgr->RegisterArea(def);
         }
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG areas registered with SeamlessAreaManager");
@@ -175,13 +174,15 @@ namespace RPG
 
     void RPGWorldSetup::Update(float deltaTime)
     {
-        if (!m_initialized)
+        if (!m_initialized || !(deltaTime > 0.0f))
             return;
 
         m_worldTime += deltaTime;
 
-        auto& streamingMgr = Spark::Streaming::SeamlessAreaManager::GetInstance();
-        streamingMgr.Update(deltaTime);
+        // The engine lifecycle owns the host service tick. Standalone tests that
+        // use the per-image fallback own that fallback's tick locally.
+        if (!m_context || !m_context->GetAreaStreaming())
+            Spark::Streaming::SeamlessAreaManager::GetInstance().Update(deltaTime);
     }
 
     void RPGWorldSetup::Shutdown()
@@ -189,7 +190,14 @@ namespace RPG
         if (!m_initialized)
             return;
 
+        auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
+        if (!streamingMgr)
+            streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
+        for (const auto& area : m_areas)
+            streamingMgr->UnregisterArea(area.areaId);
+
         m_areas.clear();
+        m_context = nullptr;
         m_initialized = false;
     }
 

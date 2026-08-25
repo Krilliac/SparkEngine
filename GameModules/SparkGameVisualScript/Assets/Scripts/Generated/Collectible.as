@@ -11,7 +11,8 @@ class Collectible
     float bobSpeed = 2.0f;
     float bobHeight = 0.3f;
     float baseY = 0.5f;
-    float timer = 0.0f;
+    float bobOffset = 0.0f;
+    float bobDirection = 1.0f;
     bool collected = false;
     int scoreValue = 100;
 
@@ -26,8 +27,6 @@ class Collectible
         if (collected)
             return;
 
-        timer = timer + dt;
-
         // Spin animation
         Vector3 rot = getRotation(selfEntity);
         rot.y = rot.y + spinSpeed * dt;
@@ -36,13 +35,32 @@ class Collectible
         setRotation(selfEntity, rot);
 
         // Bob up and down
+        bobOffset = bobOffset + bobDirection * bobSpeed * bobHeight * dt;
+        if (bobOffset >= bobHeight)
+        {
+            bobOffset = bobHeight;
+            bobDirection = -1.0f;
+        }
+        else if (bobOffset <= -bobHeight)
+        {
+            bobOffset = -bobHeight;
+            bobDirection = 1.0f;
+        }
+
         Vector3 pos = getPosition(selfEntity);
-        float bobOffset = sin(timer * bobSpeed) * bobHeight;
         pos.y = baseY + bobOffset;
         setPosition(selfEntity, pos);
+
+        uint player = getEntityByName("VS_Player");
+        Vector3 playerPos = getPosition(player);
+        float dx = playerPos.x - pos.x;
+        float dy = playerPos.y - pos.y;
+        float dz = playerPos.z - pos.z;
+        if (dx * dx + dy * dy + dz * dz <= 2.25f)
+            Collect();
     }
 
-    void OnTriggerEnter(uint triggerId)
+    void Collect()
     {
         if (collected)
             return;
@@ -50,10 +68,13 @@ class Collectible
         collected = true;
         playSound(selfEntity, "coin_pickup");
         playAnimation(selfEntity, "collect_burst");
-        fireEvent("ScoreAdded");
+        uint manager = getEntityByName("VS_GameManager");
+        setHealth(manager, getHealth(manager) + scoreValue);
         print("Collected! +" + scoreValue + " points");
 
-        // Move off-screen (visual removal)
-        setPosition(selfEntity, Vector3(0.0f, -100.0f, 0.0f));
+        // Move off-screen (visual removal) while preserving the spawn X/Z.
+        Vector3 pos = getPosition(selfEntity);
+        pos.y = -100.0f;
+        setPosition(selfEntity, pos);
     }
 }

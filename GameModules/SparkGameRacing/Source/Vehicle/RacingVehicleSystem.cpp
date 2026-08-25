@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <unordered_set>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -189,6 +191,44 @@ namespace Racing
         auto it =
             std::find_if(m_vehicles.begin(), m_vehicles.end(), [id](const VehicleInstance& v) { return v.id == id; });
         return it != m_vehicles.end() ? &(*it) : nullptr;
+    }
+
+    bool RacingVehicleSystem::RestoreState(const std::vector<VehicleInstance>& vehicles)
+    {
+        std::unordered_set<uint32_t> ids;
+        ids.reserve(vehicles.size());
+        uint32_t nextId = 1;
+        size_t playerCount = 0;
+        for (const VehicleInstance& vehicle : vehicles)
+        {
+            const VehicleStats& stats = vehicle.baseStats;
+            if (vehicle.id == 0 || vehicle.id == std::numeric_limits<uint32_t>::max() || vehicle.name.empty() ||
+                vehicle.name.size() > 256 || vehicle.type >= VehicleType::Count ||
+                vehicle.driftState >= DriftState::Count || vehicle.currentSurface >= SurfaceType::Count ||
+                !std::isfinite(stats.maxSpeed) || !std::isfinite(stats.acceleration) ||
+                !std::isfinite(stats.handling) || !std::isfinite(stats.braking) || !std::isfinite(stats.weight) ||
+                !std::isfinite(stats.durability) || !std::isfinite(stats.driftBonus) || stats.maxSpeed <= 0.0f ||
+                stats.acceleration < 0.0f || stats.handling < 0.0f || stats.braking < 0.0f || stats.weight <= 0.0f ||
+                stats.durability <= 0.0f || stats.driftBonus < 0.0f || !std::isfinite(vehicle.positionX) ||
+                !std::isfinite(vehicle.positionY) || !std::isfinite(vehicle.positionZ) ||
+                !std::isfinite(vehicle.heading) || !std::isfinite(vehicle.speed) || !std::isfinite(vehicle.rpm) ||
+                !std::isfinite(vehicle.steerAngle) || !std::isfinite(vehicle.driftCharge) ||
+                !std::isfinite(vehicle.boostTimer) || !std::isfinite(vehicle.nitro) || !std::isfinite(vehicle.damage) ||
+                vehicle.speed < 0.0f || vehicle.rpm < 0.0f || vehicle.driftCharge < 0.0f ||
+                vehicle.driftCharge > 1.0f || vehicle.boostTimer < 0.0f || vehicle.nitro < 0.0f ||
+                vehicle.nitro > 1.0f || vehicle.damage < 0.0f || !ids.insert(vehicle.id).second)
+            {
+                return false;
+            }
+            playerCount += vehicle.isPlayer ? 1u : 0u;
+            if (playerCount > 1)
+                return false;
+            nextId = std::max(nextId, vehicle.id + 1);
+        }
+
+        m_vehicles = vehicles;
+        m_nextId = nextId;
+        return true;
     }
 
     VehicleInstance* RacingVehicleSystem::GetPlayerVehicle()

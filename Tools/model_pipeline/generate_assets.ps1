@@ -35,7 +35,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Blender asset generation failed with exit code $LASTEXITCODE"
 }
 
-python (Join-Path $PSScriptRoot 'validate_models.py') --repo-root $RepoRoot
+python (Join-Path $PSScriptRoot 'validate_models.py') --repo-root $RepoRoot --allow-worktree
 if ($LASTEXITCODE -ne 0) {
     throw "Model validation failed with exit code $LASTEXITCODE"
 }

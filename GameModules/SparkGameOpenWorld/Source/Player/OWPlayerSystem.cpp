@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <sstream>
+#include <unordered_set>
 
 namespace OpenWorld
 {
@@ -209,6 +210,63 @@ namespace OpenWorld
             }
         }
         return false;
+    }
+
+    PlayerSaveState OWPlayerSystem::CaptureSaveState() const
+    {
+        return {m_survival, m_worldState, m_fastTravelPoints, m_survivalTickTimer};
+    }
+
+    bool OWPlayerSystem::RestoreSaveState(const PlayerSaveState& state, std::string* error)
+    {
+        auto fail = [&](const char* message)
+        {
+            if (error)
+                *error = message;
+            return false;
+        };
+        auto finite = [](float value) { return std::isfinite(value); };
+
+        const auto& s = state.survival;
+        if (!finite(s.health) || !finite(s.maxHealth) || !finite(s.stamina) || !finite(s.maxStamina) ||
+            !finite(s.hunger) || !finite(s.thirst) || !finite(s.temperature) || !finite(s.warmth) ||
+            s.maxHealth <= 0.0f || s.maxHealth > 100000.0f || s.health < 0.0f || s.health > s.maxHealth ||
+            s.maxStamina <= 0.0f || s.maxStamina > 100000.0f || s.stamina < 0.0f || s.stamina > s.maxStamina ||
+            s.hunger < 0.0f || s.hunger > 100.0f || s.thirst < 0.0f || s.thirst > 100.0f || s.temperature < -100.0f ||
+            s.temperature > 100.0f || s.warmth < 0.0f || s.warmth > 1.0f)
+            return fail("invalid player survival state");
+
+        const auto& world = state.world;
+        if (!finite(world.posX) || !finite(world.posY) || !finite(world.posZ) || !finite(world.yaw) ||
+            !finite(world.speed) || std::abs(world.posX) > 100000000.0f || std::abs(world.posY) > 100000000.0f ||
+            std::abs(world.posZ) > 100000000.0f || world.yaw < 0.0f || world.yaw >= 360.0f || world.speed < 0.0f ||
+            world.speed > 10000.0f || world.currentRegionId > 8)
+            return fail("invalid player world state");
+        if (!finite(state.survivalTickTimer) || state.survivalTickTimer < 0.0f || state.survivalTickTimer > 60.0f)
+            return fail("invalid survival tick timer");
+        if (state.fastTravelPoints.size() > 256)
+            return fail("too many fast travel points");
+
+        std::unordered_set<uint32_t> ids;
+        bool hasStartingPoint = false;
+        for (const auto& point : state.fastTravelPoints)
+        {
+            if (point.pointId == 0 || !ids.insert(point.pointId).second || point.name.empty() ||
+                point.name.size() > 128 || !finite(point.x) || !finite(point.y) || !finite(point.z) ||
+                point.regionId == 0 || point.regionId > 8)
+                return fail("invalid fast travel point");
+            hasStartingPoint = hasStartingPoint || point.pointId == 1;
+        }
+        if (!hasStartingPoint)
+            return fail("starting fast travel point is missing");
+
+        m_survival = state.survival;
+        m_worldState = state.world;
+        SetFacing(state.world.yaw);
+        m_fastTravelPoints = state.fastTravelPoints;
+        m_unlockedPointIds = std::move(ids);
+        m_survivalTickTimer = state.survivalTickTimer;
+        return true;
     }
 
     std::string OWPlayerSystem::GetStatusString() const

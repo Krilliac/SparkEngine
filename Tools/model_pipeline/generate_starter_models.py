@@ -476,6 +476,275 @@ def build_top_down(materials):
     return {"tactician": tactician, "hunter_drone": hunter, "energy_cell": cell, "skirmish_wall": wall}
 
 
+def build_arpg_module_kit(materials):
+    """Build readable gothic-fantasy landmarks for the ARPG example."""
+    chest = [
+        box("arpg_chest_base", (1.08, .66, .48), (0, 0, .24), materials["brown"], .055),
+        box("arpg_chest_lid", (1.10, .68, .30), (0, 0, .63), materials["wood"], .07),
+        *[box(f"arpg_chest_band_{i}", (.09, .72, .80), (x, 0, .40), materials["gold"], .018)
+          for i, x in enumerate((-.38, .38))],
+        box("arpg_chest_lock", (.22, .08, .28), (0, -.37, .43), materials["gold"], .025),
+        sphere("arpg_chest_gem", .075, (0, -.425, .48), materials["purple"], 12, 8),
+        *[box(f"arpg_chest_rune_{i}", (.16, .025, .045), (x, -.405, .66), materials["cyan"], .008,
+              (0, math.radians(angle), 0)) for i, (x, angle) in enumerate(((-.22, 25), (0, 0), (.22, -25)))],
+    ]
+    chest_lod1 = [
+        box("arpg_chest_lod1_body", (1.08, .66, .50), (0, 0, .25), materials["brown"], .025),
+        box("arpg_chest_lod1_lid", (1.10, .68, .28), (0, 0, .64), materials["wood"], .035),
+        box("arpg_chest_lod1_lock", (.22, .06, .25), (0, -.36, .44), materials["gold"], .01),
+    ]
+    chest_collision = [box("arpg_chest_collision", (1.10, .68, .79), (0, 0, .395), materials["white"], 0)]
+
+    pillar = [
+        cylinder("arpg_pillar_foot", .50, .16, (0, 0, .08), materials["stone"], 12),
+        cylinder("arpg_pillar_plinth", .39, .22, (0, 0, .25), materials["gunmetal"], 10),
+        cone("arpg_pillar_shaft", .30, .23, 1.42, (0, 0, 1.07), materials["stone"], 8),
+        torus("arpg_pillar_rune_low", .30, .035, (0, 0, .62), materials["purple"]),
+        torus("arpg_pillar_rune_high", .27, .035, (0, 0, 1.43), materials["cyan"]),
+        cone("arpg_pillar_crown", .44, .24, .32, (0, 0, 1.94), materials["gunmetal"], 8),
+        sphere("arpg_pillar_orb", .20, (0, 0, 2.20), materials["purple"], 16, 10),
+        *[cone(f"arpg_pillar_spike_{i}", .075, 0, .34,
+              (math.cos(i * math.pi / 2) * .35, math.sin(i * math.pi / 2) * .35, 2.06),
+              materials["steel"], 6) for i in range(4)],
+    ]
+    pillar_lod1 = [
+        cylinder("arpg_pillar_lod1_base", .45, .30, (0, 0, .15), materials["stone"], 8),
+        cone("arpg_pillar_lod1_shaft", .30, .22, 1.52, (0, 0, 1.05), materials["stone"], 8),
+        cone("arpg_pillar_lod1_crown", .42, .22, .32, (0, 0, 1.97), materials["gunmetal"], 8),
+        sphere("arpg_pillar_lod1_orb", .19, (0, 0, 2.20), materials["purple"], 10, 6),
+    ]
+    pillar_collision = [cylinder("arpg_pillar_collision", .50, 2.40, (0, 0, 1.20), materials["white"], 8, bevel=0)]
+
+    brazier = [
+        cylinder("arpg_brazier_foot", .42, .13, (0, 0, .065), materials["gunmetal"], 12),
+        cone("arpg_brazier_stem", .20, .12, .62, (0, 0, .42), materials["steel"], 8),
+        cylinder("arpg_brazier_bowl", .48, .18, (0, 0, .79), materials["gunmetal"], 16),
+        torus("arpg_brazier_rim", .43, .055, (0, 0, .90), materials["gold"]),
+        cone("arpg_brazier_flame_outer", .31, .02, .74, (0, 0, 1.24), materials["orange"], 9),
+        cone("arpg_brazier_flame_inner", .17, 0, .50, (0, -.03, 1.27), materials["gold"], 7),
+        *[box(f"arpg_brazier_leg_{i}", (.09, .09, .54),
+              (math.cos(i * 2 * math.pi / 3) * .30, math.sin(i * 2 * math.pi / 3) * .30, .35),
+              materials["steel"], .015, (0, math.radians(12), i * 2 * math.pi / 3)) for i in range(3)],
+    ]
+    brazier_lod1 = [
+        cone("arpg_brazier_lod1_stand", .40, .20, .80, (0, 0, .40), materials["gunmetal"], 8),
+        cylinder("arpg_brazier_lod1_bowl", .46, .18, (0, 0, .82), materials["steel"], 10),
+        cone("arpg_brazier_lod1_flame", .28, 0, .66, (0, 0, 1.22), materials["orange"], 7),
+    ]
+    brazier_collision = [cylinder("arpg_brazier_collision", .48, 1.56, (0, 0, .78), materials["white"], 8, bevel=0)]
+    return {
+        "arcane_loot_chest": chest, "arcane_loot_chest_lod1": chest_lod1,
+        "arcane_loot_chest_collision": chest_collision,
+        "necrotic_combat_pillar": pillar, "necrotic_combat_pillar_lod1": pillar_lod1,
+        "necrotic_combat_pillar_collision": pillar_collision,
+        "summoner_ritual_brazier": brazier, "summoner_ritual_brazier_lod1": brazier_lod1,
+        "summoner_ritual_brazier_collision": brazier_collision,
+    }
+
+
+def build_racing_module_kit(materials):
+    """Build motorsport props with strong silhouettes and emissive race cues."""
+    gantry = [
+        *[box(f"race_gantry_post_{i}", (.20, .30, 2.15), (x, 0, 1.075), materials["gunmetal"], .035)
+          for i, x in enumerate((-1.35, 1.35))],
+        box("race_gantry_header", (3.00, .34, .30), (0, 0, 2.07), materials["navy"], .045),
+        *[cylinder(f"race_gantry_light_{i}", .13, .08, (-.72 + i * .36, -.22, 2.07),
+                   materials["red" if i < 4 else "green"], 16, (math.radians(90), 0, 0), .008)
+          for i in range(5)],
+        *[box(f"race_gantry_foot_{i}", (.62, .74, .12), (x, 0, .06), materials["steel"], .025)
+          for i, x in enumerate((-1.35, 1.35))],
+        box("race_gantry_banner", (1.10, .05, .22), (0, -.20, 2.38), materials["cyan"], .02),
+    ]
+    gantry_lod1 = [
+        box("race_gantry_lod1_post_l", (.22, .30, 2.15), (-1.35, 0, 1.075), materials["gunmetal"], .015),
+        box("race_gantry_lod1_post_r", (.22, .30, 2.15), (1.35, 0, 1.075), materials["gunmetal"], .015),
+        box("race_gantry_lod1_header", (3.00, .34, .32), (0, 0, 2.07), materials["navy"], .02),
+        box("race_gantry_lod1_lights", (1.75, .07, .20), (0, -.205, 2.07), materials["red"], .01),
+    ]
+    gantry_collision = [
+        box("race_gantry_collision_l", (.62, .74, 2.18), (-1.35, 0, 1.09), materials["white"], 0),
+        box("race_gantry_collision_r", (.62, .74, 2.18), (1.35, 0, 1.09), materials["white"], 0),
+        box("race_gantry_collision_top", (3.00, .42, .38), (0, 0, 2.11), materials["white"], 0),
+    ]
+    cabinet = [
+        box("race_cabinet_body", (1.04, .52, .92), (0, 0, .46), materials["red"], .055),
+        box("race_cabinet_top", (1.10, .58, .09), (0, 0, .965), materials["black"], .025),
+        *[box(f"race_cabinet_drawer_{i}", (.88, .035, .16), (0, -.28, .20 + i * .21),
+              materials["gunmetal"], .012) for i in range(3)],
+        *[box(f"race_cabinet_handle_{i}", (.30, .04, .035), (0, -.315, .20 + i * .21),
+              materials["steel"], .008) for i in range(3)],
+        *[cylinder(f"race_cabinet_wheel_{i}", .10, .07, (x, y, .10), materials["black"], 12,
+                   (math.radians(90), 0, 0)) for i, (x, y) in enumerate(((-.40, -.23), (.40, -.23), (-.40, .23), (.40, .23)))],
+        box("race_cabinet_display", (.34, .035, .18), (.27, -.30, .82), materials["cyan"], .012),
+    ]
+    cabinet_lod1 = [
+        box("race_cabinet_lod1_body", (1.04, .52, .92), (0, 0, .46), materials["red"], .025),
+        box("race_cabinet_lod1_front", (.86, .03, .58), (0, -.275, .48), materials["gunmetal"], .008),
+        box("race_cabinet_lod1_display", (.30, .035, .16), (.27, -.30, .81), materials["cyan"], .006),
+    ]
+    cabinet_collision = [box("race_cabinet_collision", (1.10, .60, 1.02), (0, 0, .51), materials["white"], 0)]
+    checkpoint = [
+        cylinder("race_checkpoint_base", .50, .14, (0, 0, .07), materials["gunmetal"], 20),
+        cone("race_checkpoint_pedestal", .34, .20, .56, (0, 0, .40), materials["steel"], 10),
+        torus("race_checkpoint_ring_outer", .58, .065, (0, 0, 1.05), materials["cyan"], (math.radians(90), 0, 0)),
+        torus("race_checkpoint_ring_inner", .40, .025, (0, -.03, 1.05), materials["magenta"], (math.radians(90), 0, 0)),
+        sphere("race_checkpoint_core", .14, (0, 0, 1.05), materials["gold"], 16, 10),
+        *[box(f"race_checkpoint_fin_{i}", (.08, .16, .38), (x, 0, .38), materials["navy"], .018,
+              (0, math.radians(angle), 0)) for i, (x, angle) in enumerate(((-.28, -16), (.28, 16)))],
+    ]
+    checkpoint_lod1 = [
+        cone("race_checkpoint_lod1_base", .48, .20, .70, (0, 0, .35), materials["gunmetal"], 8),
+        torus("race_checkpoint_lod1_ring", .56, .055, (0, 0, 1.04), materials["cyan"], (math.radians(90), 0, 0)),
+        sphere("race_checkpoint_lod1_core", .13, (0, 0, 1.04), materials["gold"], 10, 6),
+    ]
+    checkpoint_collision = [cylinder("race_checkpoint_collision", .60, 1.64, (0, 0, .82), materials["white"], 10, bevel=0)]
+    return {
+        "neon_start_light_gantry": gantry, "neon_start_light_gantry_lod1": gantry_lod1,
+        "neon_start_light_gantry_collision": gantry_collision,
+        "solar_pit_tool_cabinet": cabinet, "solar_pit_tool_cabinet_lod1": cabinet_lod1,
+        "solar_pit_tool_cabinet_collision": cabinet_collision,
+        "circuit_hologram_checkpoint": checkpoint, "circuit_hologram_checkpoint_lod1": checkpoint_lod1,
+        "circuit_hologram_checkpoint_collision": checkpoint_collision,
+    }
+
+
+def build_rts_module_kit(materials):
+    """Build compact faction-readable structures for the RTS example."""
+    silo = [
+        cylinder("rts_silo_foundation", .72, .16, (0, 0, .08), materials["gunmetal"], 16),
+        cylinder("rts_silo_tank", .50, 1.06, (0, 0, .67), materials["steel"], 14),
+        cone("rts_silo_roof", .55, .05, .38, (0, 0, 1.39), materials["navy"], 14),
+        *[box(f"rts_silo_leg_{i}", (.13, .13, .46),
+              (math.cos(i * math.pi / 2) * .49, math.sin(i * math.pi / 2) * .49, .30),
+              materials["gunmetal"], .025) for i in range(4)],
+        cylinder("rts_silo_pipe", .075, 1.02, (.60, 0, .63), materials["orange"], 10),
+        box("rts_silo_badge", (.36, .035, .30), (0, -.515, .78), materials["cyan"], .018),
+        *[torus(f"rts_silo_band_{i}", .51, .035, (0, 0, z), materials["navy"]) for i, z in enumerate((.36, 1.02))],
+    ]
+    silo_lod1 = [
+        cylinder("rts_silo_lod1_base", .66, .20, (0, 0, .10), materials["gunmetal"], 10),
+        cylinder("rts_silo_lod1_tank", .50, 1.10, (0, 0, .72), materials["steel"], 10),
+        cone("rts_silo_lod1_roof", .54, .04, .36, (0, 0, 1.45), materials["navy"], 10),
+    ]
+    silo_collision = [cylinder("rts_silo_collision", .72, 1.68, (0, 0, .84), materials["white"], 10, bevel=0)]
+    barracks = [
+        box("rts_barracks_foundation", (1.78, 1.28, .16), (0, 0, .08), materials["gunmetal"], .035),
+        box("rts_barracks_body", (1.50, 1.04, .72), (0, 0, .52), materials["navy"], .065),
+        box("rts_barracks_roof", (1.66, 1.18, .18), (0, 0, .96), materials["steel"], .045),
+        box("rts_barracks_door", (.48, .045, .58), (0, -.545, .44), materials["black"], .025),
+        box("rts_barracks_door_light", (.34, .035, .07), (0, -.58, .72), materials["cyan"], .012),
+        *[box(f"rts_barracks_buttress_{i}", (.20, .22, .84), (x, y, .48), materials["steel"], .035)
+          for i, (x, y) in enumerate(((-.74, -.43), (.74, -.43), (-.74, .43), (.74, .43)))],
+        *[cylinder(f"rts_barracks_vent_{i}", .14, .34, (x, .20, 1.18), materials["orange"], 10)
+          for i, x in enumerate((-.48, .48))],
+        box("rts_barracks_faction_mark", (.38, .035, .28), (.50, -.57, .48), materials["gold"], .018),
+    ]
+    barracks_lod1 = [
+        box("rts_barracks_lod1_base", (1.78, 1.28, .18), (0, 0, .09), materials["gunmetal"], .02),
+        box("rts_barracks_lod1_body", (1.52, 1.06, .76), (0, 0, .56), materials["navy"], .035),
+        box("rts_barracks_lod1_roof", (1.68, 1.18, .18), (0, 0, 1.00), materials["steel"], .025),
+        box("rts_barracks_lod1_door", (.48, .035, .58), (0, -.55, .44), materials["cyan"], .01),
+    ]
+    barracks_collision = [box("rts_barracks_collision", (1.80, 1.30, 1.30), (0, 0, .65), materials["white"], 0)]
+    generator = [
+        cylinder("rts_generator_base", .74, .16, (0, 0, .08), materials["black"], 16),
+        cylinder("rts_generator_core", .33, 1.08, (0, 0, .70), materials["gunmetal"], 12),
+        *[torus(f"rts_generator_coil_{i}", .43, .055, (0, 0, .34 + i * .34),
+                materials["cyan" if i % 2 == 0 else "azure"]) for i in range(3)],
+        sphere("rts_generator_cap", .30, (0, 0, 1.30), materials["orange"], 14, 8, (1, 1, .70)),
+        *[cone(f"rts_generator_pylon_{i}", .16, .07, .90,
+              (math.cos(i * math.pi / 2) * .55, math.sin(i * math.pi / 2) * .55, .58),
+              materials["steel"], 8) for i in range(4)],
+        *[sphere(f"rts_generator_node_{i}", .095,
+                (math.cos(i * math.pi / 2) * .55, math.sin(i * math.pi / 2) * .55, 1.05),
+                materials["cyan"], 10, 6) for i in range(4)],
+    ]
+    generator_lod1 = [
+        cylinder("rts_generator_lod1_base", .72, .18, (0, 0, .09), materials["black"], 10),
+        cone("rts_generator_lod1_core", .48, .30, 1.24, (0, 0, .72), materials["gunmetal"], 10),
+        torus("rts_generator_lod1_coil", .43, .06, (0, 0, .72), materials["cyan"]),
+        sphere("rts_generator_lod1_cap", .27, (0, 0, 1.32), materials["orange"], 10, 6, (1, 1, .7)),
+    ]
+    generator_collision = [cylinder("rts_generator_collision", .76, 1.62, (0, 0, .81), materials["white"], 10, bevel=0)]
+    return {
+        "command_resource_silo": silo, "command_resource_silo_lod1": silo_lod1,
+        "command_resource_silo_collision": silo_collision,
+        "assembly_barracks_module": barracks, "assembly_barracks_module_lod1": barracks_lod1,
+        "assembly_barracks_module_collision": barracks_collision,
+        "power_generator_array": generator, "power_generator_array_lod1": generator_lod1,
+        "power_generator_array_collision": generator_collision,
+    }
+
+
+def build_openworld_module_kit(materials):
+    """Build natural exploration landmarks for the OpenWorld example."""
+    waystone = [
+        cylinder("ow_waystone_base", .64, .18, (0, 0, .09), materials["stone"], 10),
+        cone("ow_waystone_body", .40, .28, 1.62, (0, 0, .90), materials["stone"], 7),
+        cone("ow_waystone_cap", .34, 0, .48, (0, 0, 1.92), materials["gunmetal"], 7),
+        *[box(f"ow_waystone_rune_{i}", (.16, .035, .28), (x, -.335, z), materials["cyan"], .015,
+              (0, math.radians(angle), 0)) for i, (x, z, angle) in enumerate(((-.10, .65, -12), (.08, 1.02, 10), (-.06, 1.38, -8)))],
+        torus("ow_waystone_root_ring", .45, .045, (0, 0, .28), materials["grass"]),
+    ]
+    waystone_lod1 = [
+        cylinder("ow_waystone_lod1_base", .60, .20, (0, 0, .10), materials["stone"], 8),
+        cone("ow_waystone_lod1_body", .40, .24, 1.62, (0, 0, .90), materials["stone"], 7),
+        cone("ow_waystone_lod1_cap", .32, 0, .46, (0, 0, 1.92), materials["gunmetal"], 7),
+        box("ow_waystone_lod1_rune", (.18, .025, .72), (0, -.31, 1.05), materials["cyan"], .008),
+    ]
+    waystone_collision = [cylinder("ow_waystone_collision", .64, 2.20, (0, 0, 1.10), materials["white"], 8, bevel=0)]
+    firepit = [
+        *[sphere(f"ow_firepit_stone_{i}", .19,
+                (math.cos(i * math.pi / 4) * .55, math.sin(i * math.pi / 4) * .55, .15),
+                materials["stone"], 10, 6, (1.15, .86, .72)) for i in range(8)],
+        *[cylinder(f"ow_firepit_log_{i}", .085, 1.02, (0, 0, .23), materials["wood"], 9,
+                   (0, math.radians(90), math.radians(45 + i * 90))) for i in range(2)],
+        cone("ow_firepit_flame_outer", .34, .02, .86, (0, 0, .68), materials["orange"], 9),
+        cone("ow_firepit_flame_inner", .19, 0, .61, (0, -.03, .65), materials["gold"], 7),
+        box("ow_firepit_kettle_beam", (1.28, .10, .10), (0, .12, 1.32), materials["wood"], .02),
+        *[box(f"ow_firepit_kettle_post_{i}", (.10, .10, 1.32), (x, .12, .66), materials["wood"], .02,
+              (0, math.radians(angle), 0)) for i, (x, angle) in enumerate(((-.55, -8), (.55, 8)))],
+        cylinder("ow_firepit_kettle", .27, .30, (0, .10, .92), materials["gunmetal"], 14),
+    ]
+    firepit_lod1 = [
+        torus("ow_firepit_lod1_ring", .52, .14, (0, 0, .14), materials["stone"]),
+        box("ow_firepit_lod1_logs", (1.02, .20, .18), (0, 0, .25), materials["wood"], .02, (0, 0, math.radians(45))),
+        cone("ow_firepit_lod1_flame", .32, 0, .82, (0, 0, .68), materials["orange"], 7),
+    ]
+    firepit_collision = [cylinder("ow_firepit_collision", .72, .48, (0, 0, .24), materials["white"], 10, bevel=0)]
+    cairn = [
+        *[sphere(f"ow_cairn_rock_{i}", radius, (x, y, z), materials["stone"], 10, 6, scale)
+          for i, (radius, x, y, z, scale) in enumerate((
+              (.48, 0, 0, .30, (1.30, .95, .62)), (.39, -.06, .02, .59, (1.15, .86, .60)),
+              (.31, .08, -.01, .87, (1.08, .82, .58)), (.22, -.04, 0, 1.10, (1.02, .78, .56))))],
+        cylinder("ow_cairn_signpost", .055, 1.55, (.62, .02, .78), materials["wood"], 9),
+        box("ow_cairn_signboard", (.88, .10, .30), (.65, .02, 1.34), materials["wood"], .035,
+            (0, math.radians(-9), math.radians(4))),
+        cone("ow_cairn_sign_tip", .16, 0, .42, (1.14, .02, 1.34), materials["wood"], 4,
+             (0, math.radians(90), 0)),
+        box("ow_cairn_mark", (.28, .025, .06), (.54, -.045, 1.35), materials["gold"], .012),
+    ]
+    cairn_lod1 = [
+        *[sphere(f"ow_cairn_lod1_rock_{i}", radius, (x, 0, z), materials["stone"], 8, 5, scale)
+          for i, (radius, x, z, scale) in enumerate(((.50, 0, .31, (1.25, .9, .62)), (.38, -.04, .62, (1.1, .84, .60)),
+                                                    (.27, .05, .92, (1.05, .80, .58))))],
+        cylinder("ow_cairn_lod1_post", .06, 1.52, (.62, 0, .76), materials["wood"], 7),
+        box("ow_cairn_lod1_sign", (.90, .10, .30), (.66, 0, 1.34), materials["wood"], .02),
+    ]
+    cairn_collision = [
+        cylinder("ow_cairn_collision_rocks", .56, 1.30, (0, 0, .65), materials["white"], 8, bevel=0),
+        box("ow_cairn_collision_sign", (1.10, .24, 1.55), (.62, 0, .775), materials["white"], 0),
+    ]
+    return {
+        "ancient_waystone_marker": waystone, "ancient_waystone_marker_lod1": waystone_lod1,
+        "ancient_waystone_marker_collision": waystone_collision,
+        "traveler_camp_firepit": firepit, "traveler_camp_firepit_lod1": firepit_lod1,
+        "traveler_camp_firepit_collision": firepit_collision,
+        "ranger_wayfinding_cairn": cairn, "ranger_wayfinding_cairn_lod1": cairn_lod1,
+        "ranger_wayfinding_cairn_collision": cairn_collision,
+    }
+
+
 def export_model(record: ModelRecord) -> None:
     record.path.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.object.select_all(action="DESELECT")
@@ -654,12 +923,14 @@ def render_pack(pack: str, records: list[ModelRecord], output: Path, materials) 
             obj.parent = pivot
         preview_helpers.append(pivot)
 
-        bpy.ops.object.text_add(location=(center_x - .72, center_y - .92, .04),
+        bpy.ops.object.text_add(location=(center_x, center_y - .92, .04),
                                 rotation=(0, 0, 0))
         label = bpy.context.object
         label.data.body = record.name.replace("_", " ").upper()
-        label.data.align_x = "LEFT"
-        label.data.size = .20
+        label.data.align_x = "CENTER"
+        # Keep long module-kit names inside their grid cell instead of letting
+        # them overlap adjacent LOD/collision labels.
+        label.data.size = min(.18, 3.0 / max(len(label.data.body), 1))
         label.data.extrude = .008
         label.data.materials.append(materials["white"])
         preview_helpers.append(label)
@@ -673,7 +944,7 @@ def render_pack(pack: str, records: list[ModelRecord], output: Path, materials) 
     camera = bpy.data.objects.get("PreviewCamera")
     camera.location = (6.8, -10.8, 8.8)
     camera.data.type = "ORTHO"
-    camera.data.ortho_scale = max(8.8, rows * 3.1)
+    camera.data.ortho_scale = max(8.8, rows * 3.5)
     look_at(camera, (0, 0, .55))
     bpy.context.scene.camera = camera
     bpy.context.scene.render.filepath = str(output)
@@ -740,6 +1011,10 @@ def main() -> None:
         "rpg_starter": (build_rpg(materials), root / "Templates" / "RPGStarter" / "Assets" / "Models"),
         "third_person_starter": (build_third_person(materials), root / "Templates" / "ThirdPersonStarter" / "Assets" / "Models"),
         "top_down_starter": (build_top_down(materials), root / "Templates" / "TopDownStarter" / "Assets" / "Models"),
+        "module_arpg": (build_arpg_module_kit(materials), root / "Assets" / "Models" / "ModuleKits" / "ARPG"),
+        "module_racing": (build_racing_module_kit(materials), root / "Assets" / "Models" / "ModuleKits" / "Racing"),
+        "module_rts": (build_rts_module_kit(materials), root / "Assets" / "Models" / "ModuleKits" / "RTS"),
+        "module_openworld": (build_openworld_module_kit(materials), root / "Assets" / "Models" / "ModuleKits" / "OpenWorld"),
     }
     records = []
     for pack, (models, directory) in definitions.items():

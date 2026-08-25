@@ -23,6 +23,9 @@
 
 #include <Spark/ModuleDllMain.h>
 
+#include <algorithm>
+#include <cmath>
+
 // =============================================================================
 // Module exports
 // =============================================================================
@@ -118,6 +121,12 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
+    if (!LoadPlayableLevel(0))
+    {
+        console.LogError("[Platformer] Failed to start the first playable level");
+        return false;
+    }
+
     RegisterConsoleCommands();
 
     // Register Platformer-specific state validation rules
@@ -151,6 +160,24 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
                     " | Collectibles: " + std::to_string(m_collectibleSystem->GetTotalCollectibleCount()) +
                     " | Hazards: " + std::to_string(m_hazardSystem->GetHazardCount()) +
                     " | Checkpoints: " + std::to_string(m_checkpointSystem->GetCheckpointCount()));
+    console.LogInfo("[Platformer] Controls: A/D move, Shift run, Space jump, E dash, Ctrl ground pound, R respawn");
+    return true;
+}
+
+bool SparkGamePlatformerModule::LoadPlayableLevel(uint32_t index)
+{
+    if (!m_levelSystem || !m_checkpointSystem || !m_collectibleSystem || !m_playerController ||
+        !m_levelSystem->LoadLevel(index))
+    {
+        return false;
+    }
+
+    const auto spawn = m_levelSystem->GetCurrentSpawnPoint();
+    m_checkpointSystem->ResetLevel(index);
+    m_checkpointSystem->SetActiveLevel(index);
+    m_checkpointSystem->SetLevelSpawn(spawn.x, spawn.y, spawn.z);
+    m_collectibleSystem->ResetLevel(index);
+    m_playerController->Respawn();
     return true;
 }
 
@@ -208,13 +235,44 @@ void SparkGamePlatformerModule::OnUnload()
 
 void SparkGamePlatformerModule::OnUpdate(float deltaTime)
 {
-    if (!m_initialized || m_paused)
+    if (!m_initialized || m_paused || !std::isfinite(deltaTime) || deltaTime <= 0.0f)
         return;
 
     m_levelSystem->Update(deltaTime);
     m_playerController->Update(deltaTime);
     m_collectibleSystem->Update(deltaTime);
     m_hazardSystem->Update(deltaTime);
+
+    const auto playerPosition = m_playerController->GetPlayerPosition();
+    for (const auto& pickup : m_collectibleSystem->CheckCollection(playerPosition.x, playerPosition.y, playerPosition.z,
+                                                                   m_playerController->IsMagnetActive()))
+    {
+        switch (pickup.type)
+        {
+        case Platformer::CollectibleType::AbilityOrb:
+            m_playerController->UnlockAbility(pickup.abilityType);
+            break;
+        case Platformer::CollectibleType::HealthPickup:
+        case Platformer::CollectibleType::ExtraLife:
+            m_playerController->GrantLives(std::max(1, pickup.value));
+            break;
+        default:
+            break;
+        }
+    }
+
+    m_checkpointSystem->CheckActivation(playerPosition.x, playerPosition.y, playerPosition.z);
+
+    float knockbackX = 0.0f;
+    float knockbackY = 0.0f;
+    const int damage = m_hazardSystem->CheckHazardCollision(playerPosition.x, playerPosition.y, playerPosition.z,
+                                                            knockbackX, knockbackY);
+    if (damage > 0 && m_playerController->TakeDamage(damage))
+        m_playerController->ApplyImpulse(knockbackX, knockbackY);
+
+    if (m_levelSystem->TryCompleteAtPosition(playerPosition.x, playerPosition.y, playerPosition.z, 0))
+        Spark::SimpleConsole::GetInstance().LogInfo("[Platformer] Goal reached. Use platformer_next to continue.");
+
     m_checkpointSystem->Update(deltaTime);
     m_cameraSystem->Update(deltaTime, m_playerController->GetPlayerPosition());
     m_engineSystems->Update(deltaTime);
@@ -222,10 +280,16 @@ void SparkGamePlatformerModule::OnUpdate(float deltaTime)
 
 void SparkGamePlatformerModule::OnFixedUpdate(float fixedDeltaTime)
 {
-    if (!m_initialized || m_paused)
+    if (!m_initialized || m_paused || !std::isfinite(fixedDeltaTime) || fixedDeltaTime <= 0.0f)
         return;
 
     m_playerController->FixedUpdate(fixedDeltaTime);
+
+    const auto playerPosition = m_playerController->GetPlayerPosition();
+    float windX = 0.0f;
+    float windY = 0.0f;
+    m_hazardSystem->GetWindForce(playerPosition.x, playerPosition.y, playerPosition.z, windX, windY);
+    m_playerController->ApplyImpulse(windX * fixedDeltaTime, windY * fixedDeltaTime);
 }
 
 void SparkGamePlatformerModule::OnRender()
@@ -311,8 +375,25 @@ void SparkGamePlatformerModule::RegisterConsoleCommands()
                                 {
                                     return "Invalid level index: " + args[0];
                                 }
-                                return m_levelSystem->LoadLevel(idx) ? "Level " + std::to_string(idx) + " loaded"
-                                                                     : "Failed to load level";
+                                return LoadPlayableLevel(idx) ? "Level " + std::to_string(idx) + " loaded"
+                                                              : "Failed to load level";
+                            });
+
+    console.RegisterCommand("platformer_next",
+                            [this](const std::vector<std::string>&) -> std::string
+                            {
+                                const uint32_t next = m_levelSystem->GetCurrentLevelIndex() + 1;
+                                if (next >= m_levelSystem->GetLevelCount())
+                                    return "All platformer levels completed";
+                                return LoadPlayableLevel(next) ? "Advanced to level " + std::to_string(next)
+                                                               : "Next level is still locked";
+                            });
+
+    console.RegisterCommand("platformer_restart",
+                            [this](const std::vector<std::string>&) -> std::string
+                            {
+                                const uint32_t current = m_levelSystem->GetCurrentLevelIndex();
+                                return LoadPlayableLevel(current) ? "Level restarted" : "Failed to restart level";
                             });
 
     console.RegisterCommand("platformer_respawn",

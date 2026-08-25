@@ -35,11 +35,30 @@
 
 using namespace DirectX;
 
+void Game::SetEngineContext(Spark::IEngineContext* context)
+{
+    if (m_engineContext == context && (!context || m_engineSystemsInitialized))
+    {
+        return;
+    }
+
+    m_engineContext = context;
+    if (m_engineContext && !m_engineSystemsInitialized)
+    {
+        InitializeEngineSystems();
+    }
+}
+
 /*-------------------------------------------------------------
   Initialize engine system connections from the game side
 --------------------------------------------------------------*/
 void Game::InitializeEngineSystems()
 {
+    if (m_engineSystemsInitialized)
+    {
+        return;
+    }
+
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing engine system connections");
     if (!m_engineContext)
     {
@@ -248,6 +267,7 @@ void Game::InitializeEngineSystems()
         LOG_TO_CONSOLE_IMMEDIATE(L"Replay: system configured (20fps, combat_arena)", L"SUCCESS");
     }
 
+    m_engineSystemsInitialized = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "All engine systems wired into game");
     LOG_TO_CONSOLE_IMMEDIATE(L"All engine systems wired into game", L"SUCCESS");
 }

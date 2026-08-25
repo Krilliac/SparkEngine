@@ -249,7 +249,13 @@ namespace OpenWorld
 
     void OWWorldSetup::RegisterAreasWithStreaming()
     {
-        auto& streamingMgr = Spark::Streaming::SeamlessAreaManager::GetInstance();
+        // A module DLL statically links SparkEngineLib, so calling GetInstance()
+        // here creates a manager owned by this DLL rather than using the host's
+        // lifecycle-managed service. Resolve the host instance through the ABI;
+        // retain the fallback only for standalone/unit-test contexts.
+        auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
+        if (!streamingMgr)
+            streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
 
         for (const auto& region : m_regions)
         {
@@ -271,7 +277,7 @@ namespace OpenWorld
             manifest.texturePaths.push_back(basePath + "terrain_normal.dds");
             manifest.audioPaths.push_back(basePath + "ambience.wav");
 
-            streamingMgr.RegisterArea(def, std::move(manifest));
+            streamingMgr->RegisterArea(def, std::move(manifest));
         }
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world areas registered with SeamlessAreaManager");
@@ -295,8 +301,10 @@ namespace OpenWorld
 
         m_worldTime += deltaTime;
 
-        auto& streamingMgr = Spark::Streaming::SeamlessAreaManager::GetInstance();
-        streamingMgr.Update(deltaTime);
+        // The host service is pumped once by the shared gameplay lifecycle.
+        // Only standalone/test use of the per-image fallback owns its tick.
+        if (!m_context || !m_context->GetAreaStreaming())
+            Spark::Streaming::SeamlessAreaManager::GetInstance().Update(deltaTime);
     }
 
     void OWWorldSetup::Shutdown()
@@ -304,8 +312,15 @@ namespace OpenWorld
         if (!m_initialized)
             return;
 
+        auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
+        if (!streamingMgr)
+            streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
+        for (const auto& region : m_regions)
+            streamingMgr->UnregisterArea(region.regionId);
+
         m_regions.clear();
         m_roads.clear();
+        m_context = nullptr;
         m_initialized = false;
     }
 

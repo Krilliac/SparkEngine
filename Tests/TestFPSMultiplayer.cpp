@@ -4,85 +4,16 @@
  */
 
 #include "TestFramework.h"
+#include "Game/MultiplayerSystem.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-// Inline test-only copies of the key structs to avoid DLL linkage issues
-namespace TestFPSMP
-{
-    struct NetworkPlayerState
-    {
-        uint32_t clientId = 0;
-        float posX = 0.0f, posY = 0.0f, posZ = 0.0f;
-        float yaw = 0.0f, pitch = 0.0f;
-        float health = 100.0f;
-        uint8_t currentWeapon = 0;
-        bool isAlive = true;
-        bool isCrouching = false;
-        uint32_t sequenceNumber = 0;
-
-        std::vector<uint8_t> Serialize() const
-        {
-            std::vector<uint8_t> buf(sizeof(NetworkPlayerState));
-            std::memcpy(buf.data(), this, sizeof(NetworkPlayerState));
-            return buf;
-        }
-
-        static NetworkPlayerState Deserialize(const uint8_t* data, size_t size)
-        {
-            NetworkPlayerState s;
-            if (data && size >= sizeof(NetworkPlayerState))
-                std::memcpy(&s, data, sizeof(NetworkPlayerState));
-            return s;
-        }
-    };
-
-    struct PlayerInput
-    {
-        float forward = 0.0f;
-        float strafe = 0.0f;
-        float yaw = 0.0f;
-        float pitch = 0.0f;
-        bool jump = false;
-        bool fire = false;
-        bool reload = false;
-        bool crouch = false;
-        uint32_t sequenceNumber = 0;
-
-        std::vector<uint8_t> Serialize() const
-        {
-            std::vector<uint8_t> buf(sizeof(PlayerInput));
-            std::memcpy(buf.data(), this, sizeof(PlayerInput));
-            return buf;
-        }
-
-        static PlayerInput Deserialize(const uint8_t* data, size_t size)
-        {
-            PlayerInput inp;
-            if (data && size >= sizeof(PlayerInput))
-                std::memcpy(&inp, data, sizeof(PlayerInput));
-            return inp;
-        }
-    };
-
-    struct PlayerScore
-    {
-        uint32_t clientId = 0;
-        std::string playerName;
-        uint32_t kills = 0;
-        uint32_t deaths = 0;
-        uint32_t assists = 0;
-        int32_t score = 0;
-    };
-} // namespace TestFPSMP
-
-using namespace TestFPSMP;
+using namespace SparkFPS;
 
 TEST(FPSMultiplayer_PlayerStateSerializationRoundtrip)
 {
@@ -91,9 +22,14 @@ TEST(FPSMultiplayer_PlayerStateSerializationRoundtrip)
     original.posX = 15.5f;
     original.posY = 2.0f;
     original.posZ = -8.3f;
+    original.velX = 4.0f;
+    original.velY = -1.0f;
+    original.velZ = 2.5f;
     original.yaw = 1.57f;
     original.pitch = -0.3f;
     original.health = 65.0f;
+    original.actionFlags = ActionJump | ActionFire;
+    original.acknowledgedInputSequence = 38;
     original.currentWeapon = 2;
     original.isAlive = true;
     original.isCrouching = true;
@@ -102,12 +38,18 @@ TEST(FPSMultiplayer_PlayerStateSerializationRoundtrip)
     auto data = original.Serialize();
     auto restored = NetworkPlayerState::Deserialize(data.data(), data.size());
 
+    EXPECT_EQ(data.size(), NetworkPlayerState::SerializedSize);
     EXPECT_EQ(restored.clientId, static_cast<uint32_t>(7));
     EXPECT_NEAR(restored.posX, 15.5f, 0.001f);
     EXPECT_NEAR(restored.posY, 2.0f, 0.001f);
     EXPECT_NEAR(restored.posZ, -8.3f, 0.001f);
+    EXPECT_NEAR(restored.velX, 4.0f, 0.001f);
+    EXPECT_NEAR(restored.velY, -1.0f, 0.001f);
+    EXPECT_NEAR(restored.velZ, 2.5f, 0.001f);
     EXPECT_NEAR(restored.yaw, 1.57f, 0.001f);
     EXPECT_NEAR(restored.health, 65.0f, 0.001f);
+    EXPECT_EQ(restored.actionFlags, static_cast<uint32_t>(ActionJump | ActionFire));
+    EXPECT_EQ(restored.acknowledgedInputSequence, static_cast<uint32_t>(38));
     EXPECT_EQ(restored.currentWeapon, static_cast<uint8_t>(2));
     EXPECT_TRUE(restored.isAlive);
     EXPECT_TRUE(restored.isCrouching);
@@ -130,6 +72,7 @@ TEST(FPSMultiplayer_PlayerInputSerializationRoundtrip)
     auto data = original.Serialize();
     auto restored = PlayerInput::Deserialize(data.data(), data.size());
 
+    EXPECT_EQ(data.size(), PlayerInput::SerializedSize);
     EXPECT_NEAR(restored.forward, 1.0f, 0.001f);
     EXPECT_NEAR(restored.strafe, -0.5f, 0.001f);
     EXPECT_TRUE(restored.jump);
@@ -137,6 +80,34 @@ TEST(FPSMultiplayer_PlayerInputSerializationRoundtrip)
     EXPECT_FALSE(restored.reload);
     EXPECT_TRUE(restored.crouch);
     EXPECT_EQ(restored.sequenceNumber, static_cast<uint32_t>(100));
+}
+
+TEST(FPSMultiplayer_WireEncodingIsStableAndTruncatedPayloadDefaults)
+{
+    NetworkPlayerState state;
+    state.clientId = 0x12345678u;
+    state.health = 25.0f;
+    const auto stateBytes = state.Serialize();
+
+    EXPECT_EQ(stateBytes.size(), static_cast<size_t>(55));
+    EXPECT_EQ(stateBytes[0], static_cast<uint8_t>(0x78));
+    EXPECT_EQ(stateBytes[1], static_cast<uint8_t>(0x56));
+    EXPECT_EQ(stateBytes[2], static_cast<uint8_t>(0x34));
+    EXPECT_EQ(stateBytes[3], static_cast<uint8_t>(0x12));
+
+    const auto truncatedState = NetworkPlayerState::Deserialize(stateBytes.data(), stateBytes.size() - 1);
+    EXPECT_EQ(truncatedState.clientId, static_cast<uint32_t>(0));
+    EXPECT_NEAR(truncatedState.health, 100.0f, 0.001f);
+
+    PlayerInput input;
+    input.forward = 1.0f;
+    input.jump = true;
+    const auto inputBytes = input.Serialize();
+    EXPECT_EQ(inputBytes.size(), static_cast<size_t>(24));
+
+    const auto truncatedInput = PlayerInput::Deserialize(inputBytes.data(), inputBytes.size() - 1);
+    EXPECT_NEAR(truncatedInput.forward, 0.0f, 0.001f);
+    EXPECT_FALSE(truncatedInput.jump);
 }
 
 TEST(FPSMultiplayer_JoinLeavePlayerTracking)

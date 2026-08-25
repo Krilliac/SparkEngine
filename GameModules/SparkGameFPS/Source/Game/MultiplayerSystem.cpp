@@ -9,45 +9,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <random>
 
 namespace SparkFPS
 {
-
-    // ============================================================================
-    // Serialization
-    // ============================================================================
-
-    std::vector<uint8_t> NetworkPlayerState::Serialize() const
-    {
-        std::vector<uint8_t> buf(sizeof(NetworkPlayerState));
-        std::memcpy(buf.data(), this, sizeof(NetworkPlayerState));
-        return buf;
-    }
-
-    NetworkPlayerState NetworkPlayerState::Deserialize(const uint8_t* data, size_t size)
-    {
-        NetworkPlayerState s;
-        if (data && size >= sizeof(NetworkPlayerState))
-            std::memcpy(&s, data, sizeof(NetworkPlayerState));
-        return s;
-    }
-
-    std::vector<uint8_t> PlayerInput::Serialize() const
-    {
-        std::vector<uint8_t> buf(sizeof(PlayerInput));
-        std::memcpy(buf.data(), this, sizeof(PlayerInput));
-        return buf;
-    }
-
-    PlayerInput PlayerInput::Deserialize(const uint8_t* data, size_t size)
-    {
-        PlayerInput inp;
-        if (data && size >= sizeof(PlayerInput))
-            std::memcpy(&inp, data, sizeof(PlayerInput));
-        return inp;
-    }
 
     // ============================================================================
     // Singleton
@@ -97,8 +62,21 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::Update(float deltaTime)
     {
-        if (!m_isActive)
+        if (!m_isActive || !std::isfinite(deltaTime) || deltaTime <= 0.0f)
             return;
+
+        auto& network = Spark::Net::NetworkManager::GetInstance();
+        network.Update(deltaTime);
+
+        if (!m_isServer)
+        {
+            const uint32_t assignedClientId = network.GetLocalClientID();
+            if (assignedClientId != Spark::Net::INVALID_CLIENT && assignedClientId != m_localClientId)
+            {
+                m_localClientId = assignedClientId;
+                OnPlayerJoined(m_localClientId);
+            }
+        }
 
         if (m_isServer)
             ServerUpdate(deltaTime);
@@ -128,11 +106,16 @@ namespace SparkFPS
 
     bool FPSMultiplayerSystem::StartServer(uint16_t port, uint32_t maxPlayers)
     {
-        (void)port;
-        (void)maxPlayers;
+        if (maxPlayers == 0 || maxPlayers > 256)
+            return false;
+
+        auto& network = Spark::Net::NetworkManager::GetInstance();
+        if (!network.Initialize() || !network.StartServer(port, static_cast<int>(maxPlayers)))
+            return false;
+
         m_isActive = true;
         m_isServer = true;
-        m_localClientId = 1;
+        m_localClientId = network.GetLocalClientID();
         OnPlayerJoined(m_localClientId);
 
         auto& console = Spark::SimpleConsole::GetInstance();
@@ -143,6 +126,7 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::StopServer()
     {
+        Spark::Net::NetworkManager::GetInstance().StopServer();
         m_isActive = false;
         m_playerStates.clear();
         m_scores.clear();
@@ -154,11 +138,16 @@ namespace SparkFPS
 
     bool FPSMultiplayerSystem::Connect(const std::string& address, uint16_t port)
     {
-        (void)address;
-        (void)port;
+        if (address.empty() || port == 0)
+            return false;
+
+        auto& network = Spark::Net::NetworkManager::GetInstance();
+        if (!network.Initialize() || !network.Connect(address, port, "FPSPlayer"))
+            return false;
+
         m_isActive = true;
         m_isServer = false;
-        m_localClientId = 2;
+        m_localClientId = Spark::Net::INVALID_CLIENT;
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.Log("[FPSMultiplayer] Connecting to " + address + ":" + std::to_string(port));
@@ -167,8 +156,10 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::Disconnect()
     {
+        Spark::Net::NetworkManager::GetInstance().Disconnect();
         m_isActive = false;
         m_playerStates.clear();
+        m_localClientId = Spark::Net::INVALID_CLIENT;
     }
 
     void FPSMultiplayerSystem::SendInput(const PlayerInput& input)
@@ -191,6 +182,21 @@ namespace SparkFPS
         predicted.sequenceNumber = assignedSequence;
 
         m_clientPrediction.ApplyPrediction(m_localPredictedState, predicted, 1.0f / 60.0f);
+
+        Spark::Net::ClientInputState networkInput{};
+        networkInput.inputSequence = input.sequenceNumber;
+        networkInput.moveForward = input.forward;
+        networkInput.moveRight = input.strafe;
+        networkInput.lookYaw = input.yaw;
+        networkInput.lookPitch = input.pitch;
+        networkInput.jump = input.jump;
+        networkInput.fire = input.fire;
+        networkInput.reload = input.reload;
+        networkInput.crouch = input.crouch;
+        networkInput.deltaTime = 1.0f / 60.0f;
+        networkInput.timestamp = predicted.timestamp;
+        Spark::Net::NetworkManager::GetInstance().SendClientInput(networkInput);
+
         if (input.fire)
         {
             ProjectileData projectile;
@@ -225,7 +231,16 @@ namespace SparkFPS
             board.push_back(score);
 
         std::sort(board.begin(), board.end(),
-                  [](const PlayerScore& a, const PlayerScore& b) { return a.score > b.score; });
+                  [](const PlayerScore& a, const PlayerScore& b)
+                  {
+                      if (a.score != b.score)
+                          return a.score > b.score;
+                      if (a.kills != b.kills)
+                          return a.kills > b.kills;
+                      if (a.deaths != b.deaths)
+                          return a.deaths < b.deaths;
+                      return a.clientId < b.clientId;
+                  });
         return board;
     }
 

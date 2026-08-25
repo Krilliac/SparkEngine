@@ -6,14 +6,14 @@
 #include "TestFramework.h"
 #include "Engine/Cinematic/Sequencer.h"
 
+#include <memory>
+
 namespace
 {
     void ResetSequencer()
     {
         auto& mgr = Spark::Cinematic::SequencerManager::GetInstance();
-        mgr.StopAll();
-        // Clean up existing sequences from prior tests via RemoveSequence.
-        // There's no Clear() API; rely on unique test-scoped names.
+        mgr.ClearSequences();
     }
 } // namespace
 
@@ -57,6 +57,32 @@ TEST(SequencerReal_RemoveSequence)
     mgr.RemoveSequence("PhaseKK_Removable");
     auto* seq = mgr.GetSequence("PhaseKK_Removable");
     EXPECT_TRUE(seq == nullptr);
+}
+
+TEST(SequencerReal_ClearSequencesDestroysCallbacksAndRemovesAllEntries)
+{
+    ResetSequencer();
+    auto& mgr = Spark::Cinematic::SequencerManager::GetInstance();
+
+    int callbackOwnerCount = 0;
+    auto callbackOwner = std::shared_ptr<int>(new int(1),
+                                              [&](int* value)
+                                              {
+                                                  ++callbackOwnerCount;
+                                                  delete value;
+                                              });
+
+    auto* first = mgr.CreateSequence("PhaseKK_ClearFirst");
+    first->SetEventCallback([owner = callbackOwner](const std::string&, const std::string&) { (void)owner; });
+    callbackOwner.reset();
+    mgr.CreateSequence("PhaseKK_ClearSecond");
+
+    mgr.ClearSequences();
+
+    EXPECT_TRUE(mgr.GetSequence("PhaseKK_ClearFirst") == nullptr);
+    EXPECT_TRUE(mgr.GetSequence("PhaseKK_ClearSecond") == nullptr);
+    EXPECT_EQ(callbackOwnerCount, 1);
+    EXPECT_FALSE(mgr.IsAnyCutscenePlaying());
 }
 
 TEST(SequencerReal_StopAllIdempotent)

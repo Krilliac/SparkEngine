@@ -4,6 +4,8 @@
  */
 
 #include "RTSBuildingSystem.h"
+#include "Resource/RTSResourceSystem.h"
+#include "Unit/RTSUnitSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -12,13 +14,19 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
+#include <unordered_map>
 
 namespace RTS
 {
 
-    bool RTSBuildingSystem::Initialize(Spark::IEngineContext* context)
+    bool RTSBuildingSystem::Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem,
+                                       RTSResourceSystem* resourceSystem)
     {
         m_context = context;
+        m_unitSystem = unitSystem;
+        m_resourceSystem = resourceSystem;
 
         RegisterFactionTemplates(RTSFaction::Human);
         RegisterFactionTemplates(RTSFaction::Sentinel);
@@ -33,14 +41,18 @@ namespace RTS
 
     void RTSBuildingSystem::Update(float deltaTime)
     {
-        UpdateConstruction(deltaTime);
-        UpdateProduction(deltaTime);
+        const float safeDeltaTime = std::isfinite(deltaTime) && deltaTime > 0.0f ? deltaTime : 0.0f;
+        UpdateConstruction(safeDeltaTime);
+        UpdateProduction(safeDeltaTime);
 
         // Remove destroyed buildings
         for (auto it = m_buildings.begin(); it != m_buildings.end();)
         {
             if (it->second.health <= 0.0f)
+            {
+                ReleaseQueuedSupply(it->second);
                 it = m_buildings.erase(it);
+            }
             else
                 ++it;
         }
@@ -48,8 +60,17 @@ namespace RTS
 
     void RTSBuildingSystem::Shutdown()
     {
+        for (const auto& [id, building] : m_buildings)
+        {
+            (void)id;
+            ReleaseQueuedSupply(building);
+        }
         m_buildings.clear();
         m_templates.clear();
+        m_context = nullptr;
+        m_unitSystem = nullptr;
+        m_resourceSystem = nullptr;
+        m_nextBuildingId = 1;
     }
 
     // === Building lifecycle ===
@@ -82,7 +103,10 @@ namespace RTS
     {
         auto it = m_buildings.find(buildingId);
         if (it != m_buildings.end())
+        {
+            ReleaseQueuedSupply(it->second);
             m_buildings.erase(it);
+        }
     }
 
     // === Production ===
@@ -110,13 +134,35 @@ namespace RTS
         if (!canProduce)
             return false;
 
+        if (!m_unitSystem)
+            return false;
+
+        const UnitTemplate* unitTemplate = m_unitSystem->GetTemplate(unitType, it->second.faction);
+        if (!unitTemplate)
+            return false;
+
         // Queue limit: max 5 items per building
         if (it->second.productionQueue.size() >= 5)
             return false;
 
+        if (m_resourceSystem)
+        {
+            if (!m_resourceSystem->CanAfford(it->second.faction, unitTemplate->cost.minerals, unitTemplate->cost.gas) ||
+                !m_resourceSystem->CanUseSupply(it->second.faction, unitTemplate->cost.supply))
+            {
+                return false;
+            }
+            if (!m_resourceSystem->SpendResources(it->second.faction, unitTemplate->cost.minerals,
+                                                  unitTemplate->cost.gas))
+            {
+                return false;
+            }
+            m_resourceSystem->UseSupply(it->second.faction, unitTemplate->cost.supply);
+        }
+
         ProductionEntry entry;
         entry.unitType = unitType;
-        entry.totalTime = 18.0f; // Default production time; would look up from unit template
+        entry.totalTime = unitTemplate->buildTime;
         entry.timeRemaining = entry.totalTime;
         it->second.productionQueue.push_back(entry);
         return true;
@@ -138,6 +184,7 @@ namespace RTS
             if (bld.faction == faction)
                 result.push_back(id);
         }
+        std::ranges::sort(result);
         return result;
     }
 
@@ -198,7 +245,56 @@ namespace RTS
         return result;
     }
 
+    bool RTSBuildingSystem::RestoreState(const std::vector<BuildingData>& buildings)
+    {
+        std::unordered_map<uint32_t, BuildingData> restored;
+        restored.reserve(buildings.size());
+        uint32_t nextId = 1;
+
+        for (const BuildingData& building : buildings)
+        {
+            if (building.buildingId == 0 || building.buildingId == std::numeric_limits<uint32_t>::max() ||
+                building.type >= RTSBuildingType::Count || building.faction >= RTSFaction::Count ||
+                !std::isfinite(building.health) || !std::isfinite(building.maxHealth) ||
+                !std::isfinite(building.posX) || !std::isfinite(building.posY) ||
+                !std::isfinite(building.constructionProgress) || !std::isfinite(building.constructionTime) ||
+                building.maxHealth <= 0.0f || building.health < 0.0f || building.health > building.maxHealth ||
+                building.constructionProgress < 0.0f || building.constructionProgress > 1.0f ||
+                building.constructionTime <= 0.0f || building.productionQueue.size() > 5)
+            {
+                return false;
+            }
+            for (const ProductionEntry& entry : building.productionQueue)
+            {
+                if (entry.unitType >= RTSUnitType::Count || !std::isfinite(entry.timeRemaining) ||
+                    !std::isfinite(entry.totalTime) || entry.totalTime <= 0.0f || entry.timeRemaining < 0.0f ||
+                    entry.timeRemaining > entry.totalTime)
+                {
+                    return false;
+                }
+            }
+            if (!restored.emplace(building.buildingId, building).second)
+                return false;
+            nextId = std::max(nextId, building.buildingId + 1);
+        }
+
+        m_buildings = std::move(restored);
+        m_nextBuildingId = nextId;
+        return true;
+    }
+
     // === Internal ===
+
+    void RTSBuildingSystem::ReleaseQueuedSupply(const BuildingData& building)
+    {
+        if (!m_resourceSystem || !m_unitSystem)
+            return;
+        for (const ProductionEntry& entry : building.productionQueue)
+        {
+            if (const UnitTemplate* unitTemplate = m_unitSystem->GetTemplate(entry.unitType, building.faction))
+                m_resourceSystem->FreeSupply(building.faction, unitTemplate->cost.supply);
+        }
+    }
 
     void RTSBuildingSystem::RegisterFactionTemplates(RTSFaction faction)
     {
@@ -284,16 +380,27 @@ namespace RTS
             if (!bld.constructionComplete || bld.productionQueue.empty())
                 continue;
 
-            // Only process the front of the queue
-            auto& front = bld.productionQueue.front();
-            front.timeRemaining -= deltaTime;
-
-            if (front.timeRemaining <= 0.0f)
+            float remainingTime = deltaTime;
+            while (!bld.productionQueue.empty())
             {
-                // Unit produced -- the module's OnUpdate will read completed units
-                Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Building " + std::to_string(id) +
-                                                            " finished producing a unit");
+                auto& front = bld.productionQueue.front();
+                front.timeRemaining -= remainingTime;
+                if (front.timeRemaining > 0.0f)
+                    break;
+
+                const float overflowTime = -front.timeRemaining;
+                const uint32_t unitId = m_unitSystem ? m_unitSystem->SpawnUnit(front.unitType, bld.faction,
+                                                                               bld.posX + 2.0f, bld.posY + 2.0f)
+                                                     : 0;
+                if (unitId == 0)
+                    break;
+
+                Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Building " + std::to_string(id) + " produced unit " +
+                                                            std::to_string(unitId));
                 bld.productionQueue.erase(bld.productionQueue.begin());
+                remainingTime = overflowTime;
+                if (remainingTime <= 0.0f)
+                    break;
             }
         }
     }

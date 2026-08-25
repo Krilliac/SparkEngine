@@ -14,13 +14,15 @@
 
 #include <algorithm>
 #include <sstream>
+#include <utility>
 
 namespace MMO
 {
 
-    bool MMOCraftingSystem::Initialize(Spark::IEngineContext* context)
+    bool MMOCraftingSystem::Initialize(Spark::IEngineContext* context, MMOInventorySystem* inventorySystem)
     {
         m_context = context;
+        m_invSystem = inventorySystem;
         RegisterDefaultRecipes();
         SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO crafting system initialized: %zu recipes", m_recipes.size());
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Crafting system initialized (" +
@@ -31,6 +33,8 @@ namespace MMO
     void MMOCraftingSystem::Shutdown()
     {
         m_recipes.clear();
+        m_invSystem = nullptr;
+        m_context = nullptr;
     }
 
     void MMOCraftingSystem::RegisterDefaultRecipes()
@@ -193,17 +197,20 @@ namespace MMO
         if (recipe->station != CraftingStation::None && recipe->station != crafter.nearbyStation)
             return false;
 
-        if (m_invSystem)
+        if (!m_invSystem)
+            return false;
+
+        InventoryData trialInventory = inv;
+        for (const auto& mat : recipe->materials)
         {
-            for (const auto& mat : recipe->materials)
-            {
-                if (m_invSystem->CountItem(inv, mat.itemDefId) < mat.count)
-                    return false;
-            }
-            if (m_invSystem->IsFull(inv))
+            if (m_invSystem->CountItem(trialInventory, mat.itemDefId) < mat.count)
                 return false;
+            m_invSystem->RemoveItem(trialInventory, mat.itemDefId, mat.count);
         }
-        return true;
+
+        // Validate the result against the post-consumption inventory. A full bag
+        // can still craft when ingredients free a slot or the result stacks.
+        return m_invSystem->AddItem(trialInventory, recipe->resultItemId, recipe->resultCount) == recipe->resultCount;
     }
 
     bool MMOCraftingSystem::StartCraft(CraftingState& crafter, InventoryData& inv, uint32_t recipeId)
@@ -238,7 +245,7 @@ namespace MMO
 
     void MMOCraftingSystem::Update(float dt, CraftingState& crafter, InventoryData& inv)
     {
-        if (!crafter.isCrafting)
+        if (!crafter.isCrafting || dt <= 0.0f)
             return;
 
         const auto* recipe = GetRecipe(crafter.activeRecipeId);
@@ -251,21 +258,35 @@ namespace MMO
         crafter.craftProgress += dt / recipe->craftTime;
         if (crafter.craftProgress >= 1.0f)
         {
-            CompleteCraft(crafter, inv);
-            crafter.isCrafting = false;
-            crafter.activeRecipeId = 0;
-            crafter.craftProgress = 0.0f;
+            if (CompleteCraft(crafter, inv))
+            {
+                crafter.isCrafting = false;
+                crafter.activeRecipeId = 0;
+                crafter.craftProgress = 0.0f;
+            }
+            else
+            {
+                // Keep the completed job pending until the player frees a slot.
+                // This avoids consuming materials and silently losing the result.
+                crafter.craftProgress = 1.0f;
+            }
         }
     }
 
-    void MMOCraftingSystem::CompleteCraft(CraftingState& crafter, InventoryData& inv)
+    bool MMOCraftingSystem::CompleteCraft(CraftingState& crafter, InventoryData& inv)
     {
         const auto* recipe = GetRecipe(crafter.activeRecipeId);
-        if (!recipe)
-            return;
+        if (!recipe || !m_invSystem)
+            return false;
 
-        if (m_invSystem)
-            m_invSystem->AddItem(inv, recipe->resultItemId, recipe->resultCount);
+        InventoryData completedInventory = inv;
+        if (m_invSystem->AddItem(completedInventory, recipe->resultItemId, recipe->resultCount) != recipe->resultCount)
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning(
+                "[MMO] Craft complete but awaiting inventory space for the result");
+            return false;
+        }
+        inv = std::move(completedInventory);
 
         AwardSkillXP(crafter, recipe->discipline, recipe->skillXP);
 
@@ -273,6 +294,7 @@ namespace MMO
                        recipe->resultCount);
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[MMO] Crafted: " + recipe->name);
+        return true;
     }
 
     void MMOCraftingSystem::AwardSkillXP(CraftingState& crafter, CraftingDiscipline disc, int xp)

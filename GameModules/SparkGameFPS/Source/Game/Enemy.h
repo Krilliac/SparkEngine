@@ -80,6 +80,9 @@ class SPARK_GAME_API Enemy : public GameObject
     /** @brief Apply damage to this enemy */
     void TakeDamage(float dmg);
 
+    /** @brief Supply the arena's non-owning enemy roster for medic support behavior. */
+    void SetAllies(const std::vector<Enemy*>* allies) { m_allies = allies; }
+
     /** @brief Check if still alive */
     bool IsAlive() const { return m_health > 0.0f; }
 
@@ -109,6 +112,7 @@ class SPARK_GAME_API Enemy : public GameObject
     Spark::AI::AIAgentConfig m_aiConfig;
     EnemyType m_type{EnemyType::Grunt};
     Player* m_player{nullptr};
+    const std::vector<Enemy*>* m_allies{nullptr};
     std::vector<DirectX::XMFLOAT3> m_patrolPoints;
     size_t m_currentPatrolIndex{0};
 

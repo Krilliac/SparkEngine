@@ -325,6 +325,9 @@ namespace Spark
     class SaveSystem
     {
       public:
+        using CustomStateValidator =
+            std::function<bool(const std::unordered_map<std::string, std::string>& customState)>;
+
         /**
      * @brief Access the singleton SaveSystem instance.
      *
@@ -368,6 +371,15 @@ namespace Spark
         bool Save(const std::string& slotName, World& world, const SaveMetadata& metadata);
 
         /**
+         * @brief Save ECS state plus module-owned opaque key/value state in one atomic file.
+         *
+         * Use this overload for orchestration state that is not naturally represented by
+         * ECS components (for example a template's active encounter or session cursor).
+         */
+        bool Save(const std::string& slotName, World& world, const SaveMetadata& metadata,
+                  const std::unordered_map<std::string, std::string>& customState);
+
+        /**
      * @brief Load a previously saved game state from the specified slot.
      *
      * Reads and parses the binary save file, reconstructs all entities and components
@@ -385,6 +397,24 @@ namespace Spark
      *                  (file not found, corrupt/truncated data, version mismatch, etc.).
      */
         bool Load(const std::string& slotName, World& world);
+
+        /**
+         * @brief Load ECS state and return the module-owned opaque state from the same snapshot.
+         *
+         * @param outCustomState Replaced only after the save parses and the world restores successfully.
+         */
+        bool Load(const std::string& slotName, World& world,
+                  std::unordered_map<std::string, std::string>& outCustomState);
+
+        /**
+         * @brief Validate module-owned state before committing the ECS world restore.
+         *
+         * The validator runs after the complete file has parsed but before DeserializeWorld().
+         * Returning false leaves both @p world and @p outCustomState unchanged.
+         */
+        bool Load(const std::string& slotName, World& world,
+                  std::unordered_map<std::string, std::string>& outCustomState,
+                  const CustomStateValidator& customStateValidator);
 
         /**
      * @brief Save the current game state to the dedicated quicksave slot.

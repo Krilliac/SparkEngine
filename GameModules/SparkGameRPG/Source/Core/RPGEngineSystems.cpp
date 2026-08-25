@@ -2,9 +2,8 @@
  * @file RPGEngineSystems.cpp
  * @brief Wires RPG gameplay into engine subsystems
  *
- * Registers save serializers, animation state machines, NPC behavior trees,
- * cinematic sequences, weather/time rules, coroutines, music, and event
- * subscriptions with the engine's infrastructure.
+ * Configures real ECS saving plus NPC behavior trees, cinematic sequences,
+ * weather/time rules, music, and event subscriptions.
  */
 
 #include "RPGEngineSystems.h"
@@ -20,6 +19,8 @@
 #include "Engine/Events/EventSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+
+#include <unordered_map>
 
 namespace RPG
 {
@@ -38,29 +39,17 @@ namespace RPG
         m_context = context;
         auto& console = Spark::SimpleConsole::GetInstance();
 
-        RegisterSaveSerializers();
-        RegisterAnimationStateMachines();
+        ConfigureSaveSystem();
         RegisterBehaviorTrees();
         RegisterCinematicSequences();
         SetupWeatherAndTimeOfDay();
-        RegisterCoroutines();
         RegisterMusicTracks();
         SubscribeToEvents();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG engine systems integration initialized (8 subsystems wired)");
-        console.LogInfo("[RPG] Engine systems integration initialized (8 subsystems wired)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG engine systems integration initialized (6 subsystems wired)");
+        console.LogInfo("[RPG] Engine systems integration initialized (6 subsystems wired)");
         return true;
-    }
-
-    // Intentional: deltaTime reserved for future RPG engine integration ticks
-    void RPGEngineSystems::Update([[maybe_unused]] float deltaTime)
-    {
-        if (!m_initialized)
-            return;
-
-        // Coroutine scheduler and music manager are ticked by the engine itself.
-        // RPG-specific per-frame logic for engine integration goes here if needed.
     }
 
     void RPGEngineSystems::Shutdown()
@@ -79,92 +68,74 @@ namespace RPG
         console.LogInfo("[RPG] Engine systems integration shut down");
     }
 
-    void RPGEngineSystems::RenderDebugUI()
-    {
-#ifdef ENABLE_EDITOR
-        // Engine system debug UI is rendered by the engine's own editor panels.
-        // RPG-specific overlays (e.g. active save slot, current weather) could go here.
-#endif
-    }
-
     // =========================================================================
     // Save System
     // =========================================================================
 
-    void RPGEngineSystems::RegisterSaveSerializers()
+    void RPGEngineSystems::ConfigureSaveSystem()
     {
         auto* saveSystem = m_context->GetSaveSystem();
         if (!saveSystem)
             return;
 
-        auto& registry = Spark::ComponentSerializerRegistry::GetInstance();
-
-        // Helper: register a placeholder serializer pair for an RPG component type.
-        // Real implementations will serialize actual struct fields once the data
-        // model is finalized.
-        auto registerPlaceholder = [&](const std::string& typeName)
-        {
-            registry.Register(
-                typeName,
-                [typeName](const void*) -> Spark::SerializedComponent
-                {
-                    Spark::SerializedComponent sc;
-                    sc.typeName = typeName;
-                    sc.properties["placeholder"] = typeName;
-                    return sc;
-                },
-                []([[maybe_unused]] World& world, [[maybe_unused]] EntityID entity,
-                   [[maybe_unused]] const Spark::SerializedComponent& data) {});
-        };
-
-        registerPlaceholder("RPGCharacterData");  // Character stats, class, level
-        registerPlaceholder("RPGQuestProgress");  // Quest chain states, objectives
-        registerPlaceholder("RPGInventory");      // Equipment, consumables, gold, weight
-        registerPlaceholder("RPGNPCDisposition"); // NPC friendship/hostility levels
-
-        // Configure autosave slots for RPG (3 rotating + metadata)
+        // RPG state represented by ECS components is covered by the engine's real
+        // built-in/reflected serializers. Do not register type names that emit fake
+        // data: those produce apparently successful saves which cannot restore state.
         saveSystem->SetMaxAutoSaves(3);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG registered 4 save serializers");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Registered 4 save serializers");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG save integration configured (3 rotating autosaves)");
+        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Save integration configured (real ECS snapshots)");
     }
 
-    std::string RPGEngineSystems::SaveGame(const std::string& slotName)
+    std::string RPGEngineSystems::SaveGame(const std::string& slotName, const std::string& demoState)
     {
-        auto* saveSystem = m_context->GetSaveSystem();
+        auto* saveSystem = m_context ? m_context->GetSaveSystem() : nullptr;
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
         if (!saveSystem)
             return "Save system not available";
+        if (!world)
+            return "World not available for saving";
 
-        // In a real implementation this would access the active World from context
-        // and populate metadata from RPG character state
-        return "Save to slot '" + slotName + "' requested (save system wired)";
+        Spark::SaveMetadata metadata;
+        metadata.saveName = "Oakhollow - " + slotName;
+        metadata.sceneName = "RPG/Oakhollow";
+        metadata.playerClass = "Adventurer";
+        metadata.playTime = static_cast<float>(m_context->GetElapsedTime());
+
+        if (demoState.empty())
+            return "Failed to snapshot RPG demo session";
+        const std::unordered_map<std::string, std::string> customState = {{"SparkGameRPG.demo.v1", demoState}};
+        return saveSystem->Save(slotName, *world, metadata, customState)
+                   ? "Saved RPG world to slot '" + slotName + "'"
+                   : "Failed to save RPG world to slot '" + slotName + "'";
     }
 
-    std::string RPGEngineSystems::LoadGame(const std::string& slotName)
+    std::string RPGEngineSystems::LoadGame(const std::string& slotName, std::string& outDemoState,
+                                           const std::function<bool(const std::string&)>& validateDemoState)
     {
-        auto* saveSystem = m_context->GetSaveSystem();
+        outDemoState.clear();
+        auto* saveSystem = m_context ? m_context->GetSaveSystem() : nullptr;
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
         if (!saveSystem)
             return "Save system not available";
+        if (!world)
+            return "World not available for loading";
 
         if (!saveSystem->SaveExists(slotName))
             return "No save found in slot '" + slotName + "'";
 
-        return "Load from slot '" + slotName + "' requested (save system wired)";
-    }
+        std::unordered_map<std::string, std::string> customState;
+        const auto validateCustomState = [&](const std::unordered_map<std::string, std::string>& candidate)
+        {
+            const auto demoState = candidate.find("SparkGameRPG.demo.v1");
+            return demoState != candidate.end() && validateDemoState && validateDemoState(demoState->second);
+        };
+        if (!saveSystem->Load(slotName, *world, customState, validateCustomState))
+            return "Failed to validate or load RPG state from slot '" + slotName + "'";
 
-    // =========================================================================
-    // Animation
-    // =========================================================================
-
-    void RPGEngineSystems::RegisterAnimationStateMachines()
-    {
-        // AnimationSystem.h has include conflicts with IEngineContext.h
-        // (using AnimationSystem = AnimationManager typedef clashes with forward decl).
-        // 6 class animation state machines: warrior, mage, ranger, cleric, rogue, paladin
-        // Each has: idle -> walk -> run -> attack -> cast -> dodge -> interact -> die
-        // with class-specific blend durations (configured via data).
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RPG animation: 6 class state machines configured");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Animation: 6 class state machines configured");
+        const auto demoState = customState.find("SparkGameRPG.demo.v1");
+        outDemoState = demoState->second;
+        return "Loaded RPG world from slot '" + slotName + "'";
     }
 
     // =========================================================================
@@ -368,20 +339,6 @@ namespace RPG
 
         timeOfDay->SetTimeOfDay(hour);
         return "Time set to " + timeOfDay->GetTimeString();
-    }
-
-    // =========================================================================
-    // Coroutines
-    // =========================================================================
-
-    void RPGEngineSystems::RegisterCoroutines()
-    {
-        // CoroutineScheduler.h cannot be included from game module DLLs
-        // (C++20 coroutine header bugs with GCC 13). Coroutine patterns:
-        // quest timers, dialogue pacing, NPC respawn delays — started on demand
-        // by gameplay code via IEngineContext::GetCoroutineScheduler().
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[RPG] Coroutines: quest timers, dialogue pacing, respawn delays configured");
     }
 
     // =========================================================================

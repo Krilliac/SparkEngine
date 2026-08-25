@@ -187,7 +187,7 @@ namespace Spark
             break;
         }
 
-        m_projectilePool->FireProjectile(projType, muzzlePos, fireDir, muzzleVelocity);
+        m_projectilePool->FireProjectile(projType, muzzlePos, fireDir, muzzleVelocity, seat.weaponDamage);
         m_weaponCooldown = 1.0f / seat.weaponFireRate;
     }
 

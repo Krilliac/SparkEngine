@@ -51,6 +51,9 @@ namespace ARPG
         [[nodiscard]] const HeroData* GetHero() const;
         [[nodiscard]] const MonsterData* GetTarget() const;
         [[nodiscard]] std::string GetStatusString() const;
+        [[nodiscard]] std::string SerializeState() const;
+        [[nodiscard]] bool CanRestoreState(const std::string& serializedState) const;
+        bool RestoreState(const std::string& serializedState);
 
       private:
         bool ResolveAttack(float damage, ARPGDamageType type, bool isSkill);

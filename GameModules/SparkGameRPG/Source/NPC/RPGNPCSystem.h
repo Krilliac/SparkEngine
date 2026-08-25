@@ -106,7 +106,6 @@ namespace RPG
         void RegisterDefaultNPCs();
         void UpdateSchedules();
         void UpdatePatrols(float deltaTime);
-        void UpdateBehaviors(float deltaTime);
 
         Spark::IEngineContext* m_context{nullptr};
         std::unordered_map<uint32_t, NPCData> m_npcs;

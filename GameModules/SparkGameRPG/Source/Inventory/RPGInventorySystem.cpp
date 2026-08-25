@@ -84,6 +84,18 @@ namespace RPG
                       {},
                       30.0f,
                       30.0f});
+        RegisterItem({200,
+                      "Moonpetal Herb",
+                      "A luminous forest herb used in healing salves",
+                      ItemRarity::Common,
+                      ItemSlot::Count,
+                      0.1f,
+                      2,
+                      20,
+                      false,
+                      {},
+                      0.0f,
+                      0.0f});
 
         // === Weapons (MainHand) ===
         RegisterItem({10,

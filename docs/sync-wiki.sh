@@ -126,7 +126,7 @@ collect_inventory() {
     done < "$tmpfile"
 
     # --- Tests ---
-    TEST_COUNT=0
+    TEST_DEFINITION_COUNT=0
     TEST_FILES=""
     find "$PROJECT_ROOT/Tests" -name 'Test*.cpp' ! -name 'TestMain.cpp' ! -name 'TestFramework*' 2>/dev/null | sort > "$tmpfile"
     while IFS= read -r tfile; do
@@ -136,7 +136,7 @@ collect_inventory() {
         TEST_FILES="${TEST_FILES}${tname}\n"
         local tc
         tc=$(grep -Ec '^[[:space:]]*TEST(_F)?[[:space:]]*\(' "$tfile" 2>/dev/null) || tc=0
-        TEST_COUNT=$((TEST_COUNT + tc))
+        TEST_DEFINITION_COUNT=$((TEST_DEFINITION_COUNT + tc))
     done < "$tmpfile"
     TEST_FILE_COUNT=$(echo -e "$TEST_FILES" | grep -c '[A-Z]' || true)
 
@@ -225,8 +225,8 @@ sync_testing_page() {
     fi
 
     local test_content=""
-    test_content="*${TEST_FILE_COUNT} test files, ${TEST_COUNT}+ test cases*\n\n"
-    test_content+="| Test File | Test Cases |\n|-----------|------------|\n"
+    test_content="*${TEST_FILE_COUNT} test files, ${TEST_DEFINITION_COUNT} source-level test definitions*\n\n"
+    test_content+="| Test File | Test Definitions |\n|-----------|------------------|\n"
     test_content+=$(find "$PROJECT_ROOT/Tests" -name 'Test*.cpp' ! -name 'TestMain.cpp' ! -name 'TestFramework*' 2>/dev/null | \
         sort | while IFS= read -r tfile; do
             local tname
@@ -309,7 +309,7 @@ sync_home_page() {
 | Engine System Classes | ${sys_count} |
 | Editor Panels | ${panel_count} |
 | Test files | ${TEST_FILE_COUNT} |
-| Test cases | ${TEST_COUNT}+ |
+| Test definitions | ${TEST_DEFINITION_COUNT} |
 | Wiki pages | ${WIKI_PAGE_COUNT} |
 | *Last synced* | *${last_synced}* |"
 
@@ -458,7 +458,7 @@ main() {
             echo "  System classes: $sys_count"
             echo "  Panels:       $panel_count"
             echo "  Test files:   $TEST_FILE_COUNT"
-            echo "  Test cases:   $TEST_COUNT+"
+            echo "  Test definitions: $TEST_DEFINITION_COUNT"
             echo ""
             log_info "Wiki:"
             echo "  Pages:        $WIKI_PAGE_COUNT"

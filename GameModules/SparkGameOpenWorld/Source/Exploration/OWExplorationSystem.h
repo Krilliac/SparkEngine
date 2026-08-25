@@ -57,6 +57,13 @@ namespace OpenWorld
         float completionPercent = 0.0f;
     };
 
+    /// @brief Mutable discovery state stored in an OpenWorld save.
+    struct ExplorationSaveState
+    {
+        std::vector<POIProgress> progress;
+        uint32_t totalXPEarned = 0;
+    };
+
     /**
      * @brief Exploration and discovery tracking system
      */
@@ -86,6 +93,9 @@ namespace OpenWorld
 
         /// @brief Mark a POI's secret as found
         void FindSecret(uint32_t poiId);
+
+        ExplorationSaveState CaptureSaveState() const;
+        bool RestoreSaveState(const ExplorationSaveState& state, std::string* error = nullptr);
 
         /// @brief Install a synchronous notification for newly visited POIs.
         void SetDiscoveryCallback(DiscoveryCallback callback) { m_onDiscovered = std::move(callback); }

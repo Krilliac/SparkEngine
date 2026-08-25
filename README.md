@@ -5,7 +5,7 @@ A C++23 open-source 3D game engine with a full RHI abstraction layer, ECS (EnTT)
 > 🌐 **Website now live:** [sparkengine.dev](https://sparkengine.dev/)
 
 [![Build SparkEngine](https://img.shields.io/github/actions/workflow/status/Krilliac/SparkEngine/build.yml?branch=Working&style=flat-square&label=CI)](https://github.com/Krilliac/SparkEngine/actions)
-[![Tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/tests.json&style=flat-square)](Tests)
+[![Test definitions](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/tests.json&style=flat-square)](Tests)
 [![C++ lines of code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/loc.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
 [![Source files](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/files.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
 [![License: Spark Open](https://img.shields.io/badge/License-Spark_Open-blue?style=flat-square)](LICENSE)
@@ -144,7 +144,7 @@ Scene hierarchy, Inspector, Asset browser, Game viewport, Gizmos (ImGuizmo), Nod
 
 ## Quality Assurance
 
-**Tests:** 6,581 unit tests across 553 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 6,719 test definitions across 557 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
 
 ```bash
 cd build && ctest --output-on-failure
@@ -258,7 +258,7 @@ SparkEngine/
 ├── SparkEditor/Source/    59 dockable panels, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           10 prebuilt game templates
-├── Tests/                 6,581 unit tests, 553 files
+├── Tests/                 6,719 test definitions, 557 files
 ├── wiki/                  144+ wiki pages
 └── docs/                  API reference, guides
 ```

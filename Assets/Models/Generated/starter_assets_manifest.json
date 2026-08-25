@@ -708,6 +708,690 @@
           0.14
         ]
       }
+    },
+    {
+      "pack": "module_arpg",
+      "name": "arcane_loot_chest",
+      "path": "Assets/Models/ModuleKits/ARPG/arcane_loot_chest.obj",
+      "sha256": "3a0b23f225210967dfae1747aad981c36a467ac7b71fa5f37f0141fb579cd921",
+      "mtlSha256": "383958dabe42fd4c34e0a034e3d741cdfd74fedf04ff7b73aac68a4524323d1f",
+      "bounds": {
+        "min": [
+          -0.55,
+          0.0,
+          -0.5
+        ],
+        "max": [
+          0.55,
+          0.8,
+          0.36
+        ]
+      }
+    },
+    {
+      "pack": "module_arpg",
+      "name": "arcane_loot_chest_lod1",
+      "path": "Assets/Models/ModuleKits/ARPG/arcane_loot_chest_lod1.obj",
+      "sha256": "123503d5ad8c3318045e05b849bf27953d27353d7392078970798aec2ecf8773",
+      "mtlSha256": "609d7355252cfc3c59ac366f5b720bbe382f44921e620e0d59f81de355a1597f",
+      "bounds": {
+        "min": [
+          -0.55,
+          0.0,
+          -0.39
+        ],
+        "max": [
+          0.55,
+          0.78,
+          0.34
+        ]
+      }
+    },
+    {
+      "pack": "module_arpg",
+      "name": "arcane_loot_chest_collision",
+      "path": "Assets/Models/ModuleKits/ARPG/arcane_loot_chest_collision.obj",
+      "sha256": "210e89448863c3db2823a128d73475b857cee516e6afa15da057a3783709527a",
+      "mtlSha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "bounds": {
+        "min": [
+          -0.55,
+          0.0,
+          -0.34
+        ],
+        "max": [
+          0.55,
+          0.79,
+          0.34
+        ]
+      }
+    },
+    {
+      "pack": "module_arpg",
+      "name": "necrotic_combat_pillar",
+      "path": "Assets/Models/ModuleKits/ARPG/necrotic_combat_pillar.obj",
+      "sha256": "a7ba610410421823246f5ca30cf3125989d93d6f07c332d2293c77347b07e7ed",
+      "mtlSha256": "14307891bcca0612f133d4dd2d8b86b40721e78074a2c3a62b3003be0e029993",
+      "bounds": {
+        "min": [
+          -0.5,
+          0.0,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          2.4,
+          0.5
+        ]
+      }
+    },
+    {
+      "pack": "module_arpg",
+      "name": "necrotic_combat_pillar_lod1",
+      "path": "Assets/Models/ModuleKits/ARPG/necrotic_combat_pillar_lod1.obj",
+      "sha256": "535873c00375558ceaf243b9c27e5000163fef985df0bd89ef3a3a5a3cb24981",
+      "mtlSha256": "aab349cf5fcf87560bd805a1a895d2d90cf649a524cb072031b9f0f2b3a5a596",
+      "bounds": {
+        "min": [
+          -0.446637,
+          0.0,
+          -0.447622
+        ],
+        "max": [
+          0.447622,
+          2.39,
+          0.447622
+        ]
+      }
+    },
+    {
+      "pack": "module_arpg",
+      "name": "necrotic_combat_pillar_collision",
+      "path": "Assets/Models/ModuleKits/ARPG/necrotic_combat_pillar_collision.obj",
+      "sha256": "c4a92a3e92ed988bf0e9bbf3b9239f365f0176b36b8ac1435b422777f3d19be4",
+      "mtlSha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "bounds": {
+        "min": [
+          -0.5,
+          0.0,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          2.4,
+          0.5
+        ]
+      }
+    },
+    {
+      "pack": "module_arpg",
+      "name": "summoner_ritual_brazier",
+      "path": "Assets/Models/ModuleKits/ARPG/summoner_ritual_brazier.obj",
+      "sha256": "6c88e6bdd758c3794bf42e0ac181d2b90c12677a3dcff0cb96ac1adec128f7fa",
+      "mtlSha256": "cba4f28a4067462e3e56f7c4547af093adac1187e8dc6f4b8b87d37ff039412f",
+      "bounds": {
+        "min": [
+          -0.485,
+          0.0,
+          -0.485
+        ],
+        "max": [
+          0.485,
+          1.61,
+          0.485
+        ]
+      }
+    },
+    {
+      "pack": "module_arpg",
+      "name": "summoner_ritual_brazier_lod1",
+      "path": "Assets/Models/ModuleKits/ARPG/summoner_ritual_brazier_lod1.obj",
+      "sha256": "921352b8a68cfff9c5ad98331e663216e86d124a9dcd0ffbebd283ee633dc9b0",
+      "mtlSha256": "421a5ba6a6896913c3287a2a762a9b94bcd00f6398148d2287088cd8f5e7a676",
+      "bounds": {
+        "min": [
+          -0.437486,
+          0.0,
+          -0.457285
+        ],
+        "max": [
+          0.437486,
+          1.55,
+          0.457285
+        ]
+      }
+    },
+    {
+      "pack": "module_arpg",
+      "name": "summoner_ritual_brazier_collision",
+      "path": "Assets/Models/ModuleKits/ARPG/summoner_ritual_brazier_collision.obj",
+      "sha256": "fdecd44b43762bd2a8c72b8724fad31287d98ecf66cc810d32880fbacde0d228",
+      "mtlSha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "bounds": {
+        "min": [
+          -0.48,
+          0.0,
+          -0.48
+        ],
+        "max": [
+          0.48,
+          1.56,
+          0.48
+        ]
+      }
+    },
+    {
+      "pack": "module_racing",
+      "name": "neon_start_light_gantry",
+      "path": "Assets/Models/ModuleKits/Racing/neon_start_light_gantry.obj",
+      "sha256": "ca80cbe678d67dccf162a757dbf83f9bf8702cb18626546ec14f47c9065fc7c5",
+      "mtlSha256": "79c40896084964ebb9eab6e907ef91905b5f1be38f88b9909526a9e7f135a7fb",
+      "bounds": {
+        "min": [
+          -1.66,
+          0.0,
+          -0.37
+        ],
+        "max": [
+          1.66,
+          2.49,
+          0.37
+        ]
+      }
+    },
+    {
+      "pack": "module_racing",
+      "name": "neon_start_light_gantry_lod1",
+      "path": "Assets/Models/ModuleKits/Racing/neon_start_light_gantry_lod1.obj",
+      "sha256": "098094b1133d70719362aedc598d40094e33e6e4cb4ec4a11cf2e323b9d4b075",
+      "mtlSha256": "599b591dda4f457a1e39b0e8c7a18c36ae924905ba6789c576fffe396f0962fc",
+      "bounds": {
+        "min": [
+          -1.5,
+          0.0,
+          -0.24
+        ],
+        "max": [
+          1.5,
+          2.23,
+          0.17
+        ]
+      }
+    },
+    {
+      "pack": "module_racing",
+      "name": "neon_start_light_gantry_collision",
+      "path": "Assets/Models/ModuleKits/Racing/neon_start_light_gantry_collision.obj",
+      "sha256": "e9b24d23d6b8778deeb39e9c5675c6456132629dba3f4145d90181afee04e53a",
+      "mtlSha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "bounds": {
+        "min": [
+          -1.66,
+          0.0,
+          -0.37
+        ],
+        "max": [
+          1.66,
+          2.3,
+          0.37
+        ]
+      }
+    },
+    {
+      "pack": "module_racing",
+      "name": "solar_pit_tool_cabinet",
+      "path": "Assets/Models/ModuleKits/Racing/solar_pit_tool_cabinet.obj",
+      "sha256": "7eb282e3508194d6ab5b43175359b657e2d2552af7fcc0d1721dbd90fec70ee7",
+      "mtlSha256": "703cd5138a35875dbbddb57972a1c2b287bdf4c9595547167bbd17e4d5baf4b7",
+      "bounds": {
+        "min": [
+          -0.55,
+          0.0,
+          -0.335
+        ],
+        "max": [
+          0.55,
+          1.01,
+          0.29
+        ]
+      }
+    },
+    {
+      "pack": "module_racing",
+      "name": "solar_pit_tool_cabinet_lod1",
+      "path": "Assets/Models/ModuleKits/Racing/solar_pit_tool_cabinet_lod1.obj",
+      "sha256": "2fc4b383c586efd0098334cc202280859292eabd4fb57819b3118c5148241de1",
+      "mtlSha256": "7138f4aaffc0bb35468821e43c46ce2ab4c42f66d52dc3a21eec174c6aee673c",
+      "bounds": {
+        "min": [
+          -0.52,
+          0.0,
+          -0.3175
+        ],
+        "max": [
+          0.52,
+          0.92,
+          0.26
+        ]
+      }
+    },
+    {
+      "pack": "module_racing",
+      "name": "solar_pit_tool_cabinet_collision",
+      "path": "Assets/Models/ModuleKits/Racing/solar_pit_tool_cabinet_collision.obj",
+      "sha256": "fa4a0c90d449345986baa3b1241c9a9a8ad17e02eb58285e36fa53231472bbed",
+      "mtlSha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "bounds": {
+        "min": [
+          -0.55,
+          0.0,
+          -0.3
+        ],
+        "max": [
+          0.55,
+          1.02,
+          0.3
+        ]
+      }
+    },
+    {
+      "pack": "module_racing",
+      "name": "circuit_hologram_checkpoint",
+      "path": "Assets/Models/ModuleKits/Racing/circuit_hologram_checkpoint.obj",
+      "sha256": "a2ebf0f34b6bdb1fb22d491e41555ce9edd5598e7cc3a33abf14179fc8baa155",
+      "mtlSha256": "fc608411751b5798d410eaa47d1ba61a5ccb2fd67ad96071f489c9a956b50609",
+      "bounds": {
+        "min": [
+          -0.645,
+          0.0,
+          -0.5
+        ],
+        "max": [
+          0.645,
+          1.695,
+          0.5
+        ]
+      }
+    },
+    {
+      "pack": "module_racing",
+      "name": "circuit_hologram_checkpoint_lod1",
+      "path": "Assets/Models/ModuleKits/Racing/circuit_hologram_checkpoint_lod1.obj",
+      "sha256": "6bb6e36890197f14490c7da5016ab6adb1f795937da3531c8ea48a155d21b6d0",
+      "mtlSha256": "acb31451fd79b640d8e7764850e2c0b907d9cb717a715a995ce16c24a37c5924",
+      "bounds": {
+        "min": [
+          -0.615,
+          0.0,
+          -0.48
+        ],
+        "max": [
+          0.615,
+          1.655,
+          0.48
+        ]
+      }
+    },
+    {
+      "pack": "module_racing",
+      "name": "circuit_hologram_checkpoint_collision",
+      "path": "Assets/Models/ModuleKits/Racing/circuit_hologram_checkpoint_collision.obj",
+      "sha256": "6b0819953af67c5d71ac35b07f2350e0a1f1040f565f6dcd39fd120359597e35",
+      "mtlSha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "bounds": {
+        "min": [
+          -0.570634,
+          0.0,
+          -0.6
+        ],
+        "max": [
+          0.570634,
+          1.64,
+          0.6
+        ]
+      }
+    },
+    {
+      "pack": "module_rts",
+      "name": "command_resource_silo",
+      "path": "Assets/Models/ModuleKits/RTS/command_resource_silo.obj",
+      "sha256": "8850067be651de1123afede998b90860f45a64695294d0c17aa25fac1f5fc4f8",
+      "mtlSha256": "d8a85d683dc12fdbd55f494a1f22e60d5f3d924a2e856214a59ad85b088dcaa1",
+      "bounds": {
+        "min": [
+          -0.72,
+          0.0,
+          -0.72
+        ],
+        "max": [
+          0.72,
+          1.58,
+          0.72
+        ]
+      }
+    },
+    {
+      "pack": "module_rts",
+      "name": "command_resource_silo_lod1",
+      "path": "Assets/Models/ModuleKits/RTS/command_resource_silo_lod1.obj",
+      "sha256": "ba31df5852544e3c7a0ad3f0e8799bb41ea4c36f514307e4ed87c6d6b61b561a",
+      "mtlSha256": "5c2d33db2f1f3428bd4da8cf4a2ddb7feff8ebb79ff37c2b9ee4a240f64a05cb",
+      "bounds": {
+        "min": [
+          -0.627697,
+          0.0,
+          -0.657285
+        ],
+        "max": [
+          0.627697,
+          1.63,
+          0.657285
+        ]
+      }
+    },
+    {
+      "pack": "module_rts",
+      "name": "command_resource_silo_collision",
+      "path": "Assets/Models/ModuleKits/RTS/command_resource_silo_collision.obj",
+      "sha256": "680edd8516604dd85c37aafa3407edb8b2a4bcad1247728ead133b260a2a4757",
+      "mtlSha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "bounds": {
+        "min": [
+          -0.684761,
+          0.0,
+          -0.72
+        ],
+        "max": [
+          0.684761,
+          1.68,
+          0.72
+        ]
+      }
+    },
+    {
+      "pack": "module_rts",
+      "name": "assembly_barracks_module",
+      "path": "Assets/Models/ModuleKits/RTS/assembly_barracks_module.obj",
+      "sha256": "b005724e2923abafcfbefedc2d5491b434b9219a5ee516b2002de61fa4d3cc70",
+      "mtlSha256": "3357ab96aea45864afc47965ed5b2d7b38bc8cd141ece5aae8c6e3ca1e15247e",
+      "bounds": {
+        "min": [
+          -0.89,
+          0.0,
+          -0.64
+        ],
+        "max": [
+          0.89,
+          1.35,
+          0.64
+        ]
+      }
+    },
+    {
+      "pack": "module_rts",
+      "name": "assembly_barracks_module_lod1",
+      "path": "Assets/Models/ModuleKits/RTS/assembly_barracks_module_lod1.obj",
+      "sha256": "16c87453773802852f25d182fac2eb05be402d99344c337258685fbc3e1c965b",
+      "mtlSha256": "9fdf4027ce100147b72d37d5c46756f95bd0bf78570350a2c4c71f3bbf1f0cf4",
+      "bounds": {
+        "min": [
+          -0.89,
+          0.0,
+          -0.64
+        ],
+        "max": [
+          0.89,
+          1.09,
+          0.64
+        ]
+      }
+    },
+    {
+      "pack": "module_rts",
+      "name": "assembly_barracks_module_collision",
+      "path": "Assets/Models/ModuleKits/RTS/assembly_barracks_module_collision.obj",
+      "sha256": "fe1796b5bebac38858445afca75f9dd485fd7b821ea6f6b320826b29da0d51d0",
+      "mtlSha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "bounds": {
+        "min": [
+          -0.9,
+          0.0,
+          -0.65
+        ],
+        "max": [
+          0.9,
+          1.3,
+          0.65
+        ]
+      }
+    },
+    {
+      "pack": "module_rts",
+      "name": "power_generator_array",
+      "path": "Assets/Models/ModuleKits/RTS/power_generator_array.obj",
+      "sha256": "c4215d0c8a2d68d3d819f064c0a1af9e1c2fe8d462f52106963488478079cf9f",
+      "mtlSha256": "2ac0c426b1c774f524264b4c3b874e8593e68ff8db3adc90cf8dc63f3c07897f",
+      "bounds": {
+        "min": [
+          -0.74,
+          0.0,
+          -0.74
+        ],
+        "max": [
+          0.74,
+          1.51,
+          0.74
+        ]
+      }
+    },
+    {
+      "pack": "module_rts",
+      "name": "power_generator_array_lod1",
+      "path": "Assets/Models/ModuleKits/RTS/power_generator_array_lod1.obj",
+      "sha256": "52f6b77135e67383a27ab575ba0a43142eeb3060f1e11982781a70dbc0128ccd",
+      "mtlSha256": "867cf87be6940849e54fa2979a1d089eb2d4b5ed11f894a180513de3a9d925e7",
+      "bounds": {
+        "min": [
+          -0.684761,
+          0.0,
+          -0.717285
+        ],
+        "max": [
+          0.684761,
+          1.509,
+          0.717285
+        ]
+      }
+    },
+    {
+      "pack": "module_rts",
+      "name": "power_generator_array_collision",
+      "path": "Assets/Models/ModuleKits/RTS/power_generator_array_collision.obj",
+      "sha256": "d4dd20e1d601cadf7b61d3619f091637e3511afa69b988fd11fca25ddcfdc4c6",
+      "mtlSha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "bounds": {
+        "min": [
+          -0.722803,
+          0.0,
+          -0.76
+        ],
+        "max": [
+          0.722803,
+          1.62,
+          0.76
+        ]
+      }
+    },
+    {
+      "pack": "module_openworld",
+      "name": "ancient_waystone_marker",
+      "path": "Assets/Models/ModuleKits/OpenWorld/ancient_waystone_marker.obj",
+      "sha256": "19cbe0b4da6a3484175172ea078a3d9dc7714dcfa9f5cf0dadbac628ffb1b6ee",
+      "mtlSha256": "056ed24614bbbbc9cc00fce1e7872b335cdce44b6ea17100c722a765c78e8eea",
+      "bounds": {
+        "min": [
+          -0.608676,
+          0.0,
+          -0.637285
+        ],
+        "max": [
+          0.608676,
+          2.16,
+          0.637285
+        ]
+      }
+    },
+    {
+      "pack": "module_openworld",
+      "name": "ancient_waystone_marker_lod1",
+      "path": "Assets/Models/ModuleKits/OpenWorld/ancient_waystone_marker_lod1.obj",
+      "sha256": "13446dbabf280043290501114d8109757e19005cf995c2306f99b9924ed8bc1c",
+      "mtlSha256": "14a28841b9d09db4ad4a4877943973c8674bfdb0ee537d8ab72db155ec4ff194",
+      "bounds": {
+        "min": [
+          -0.596637,
+          0.0,
+          -0.596637
+        ],
+        "max": [
+          0.596637,
+          2.15,
+          0.596637
+        ]
+      }
+    },
+    {
+      "pack": "module_openworld",
+      "name": "ancient_waystone_marker_collision",
+      "path": "Assets/Models/ModuleKits/OpenWorld/ancient_waystone_marker_collision.obj",
+      "sha256": "1e10a40698a8763e5a438775d2c265b3dc1c5d1bd99c0620f5419feea3af217f",
+      "mtlSha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "bounds": {
+        "min": [
+          -0.64,
+          0.0,
+          -0.64
+        ],
+        "max": [
+          0.64,
+          2.2,
+          0.64
+        ]
+      }
+    },
+    {
+      "pack": "module_openworld",
+      "name": "traveler_camp_firepit",
+      "path": "Assets/Models/ModuleKits/OpenWorld/traveler_camp_firepit.obj",
+      "sha256": "f34123cbe659d806653d2beba9ae691ed8590007964864cecb52f74b2b55df55",
+      "mtlSha256": "5de709c5424b69be8a4947b6a07fddc222cd945559cfb8817a6f08d46ba374ea",
+      "bounds": {
+        "min": [
+          -0.757806,
+          0.00197,
+          -0.7134
+        ],
+        "max": [
+          0.757806,
+          1.37,
+          0.7134
+        ]
+      }
+    },
+    {
+      "pack": "module_openworld",
+      "name": "traveler_camp_firepit_lod1",
+      "path": "Assets/Models/ModuleKits/OpenWorld/traveler_camp_firepit_lod1.obj",
+      "sha256": "672de2be43008b1dc8aaf41ed435ba20491ccca7ec0c022bd234ef3be79a3de2",
+      "mtlSha256": "d4f30f3f0bb743d91256f8de1810a232b1be7756894250aee8c34fa4c5cd285a",
+      "bounds": {
+        "min": [
+          -0.66,
+          0.0,
+          -0.66
+        ],
+        "max": [
+          0.66,
+          1.09,
+          0.66
+        ]
+      }
+    },
+    {
+      "pack": "module_openworld",
+      "name": "traveler_camp_firepit_collision",
+      "path": "Assets/Models/ModuleKits/OpenWorld/traveler_camp_firepit_collision.obj",
+      "sha256": "c8f97c8d2fc4c6ecd2c8a65e6021238fefcde692d31e70b19be8752f56e3f18d",
+      "mtlSha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "bounds": {
+        "min": [
+          -0.684761,
+          0.0,
+          -0.72
+        ],
+        "max": [
+          0.684761,
+          0.48,
+          0.72
+        ]
+      }
+    },
+    {
+      "pack": "module_openworld",
+      "name": "ranger_wayfinding_cairn",
+      "path": "Assets/Models/ModuleKits/OpenWorld/ranger_wayfinding_cairn.obj",
+      "sha256": "d67b17161e46caca3cf40afa3677eb54fdba010ea05f3415a8932dd7c9f25063",
+      "mtlSha256": "f3bfd394959abe4697a12aeb8525578d7d0f9e6b86a97372583b0569679df3a6",
+      "bounds": {
+        "min": [
+          -1.35,
+          0.0024,
+          -0.456
+        ],
+        "max": [
+          0.593459,
+          1.555,
+          0.456
+        ]
+      }
+    },
+    {
+      "pack": "module_openworld",
+      "name": "ranger_wayfinding_cairn_lod1",
+      "path": "Assets/Models/ModuleKits/OpenWorld/ranger_wayfinding_cairn_lod1.obj",
+      "sha256": "329d852e3a95996e0bcbfe650901fec2bd665bdbe2f8a379429aa541f9f700a5",
+      "mtlSha256": "e3576606d191ae1f0ff5ac2283b2b2b3506668a2b3bdff637fe13a3275b23b82",
+      "bounds": {
+        "min": [
+          -1.11,
+          0.0,
+          -0.427975
+        ],
+        "max": [
+          0.59441,
+          1.52,
+          0.427975
+        ]
+      }
+    },
+    {
+      "pack": "module_openworld",
+      "name": "ranger_wayfinding_cairn_collision",
+      "path": "Assets/Models/ModuleKits/OpenWorld/ranger_wayfinding_cairn_collision.obj",
+      "sha256": "4ce2c4bae5e392dab24964d0a5f70fc223815c2135e6a43065895c9b5179bc53",
+      "mtlSha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "bounds": {
+        "min": [
+          -1.17,
+          0.0,
+          -0.56
+        ],
+        "max": [
+          0.56,
+          1.55,
+          0.56
+        ]
+      }
     }
   ],
   "previews": [
@@ -718,6 +1402,10 @@
     "docs/images/model-pipeline/platformer_kit.png",
     "docs/images/model-pipeline/rpg_starter.png",
     "docs/images/model-pipeline/third_person_starter.png",
-    "docs/images/model-pipeline/top_down_starter.png"
+    "docs/images/model-pipeline/top_down_starter.png",
+    "docs/images/model-pipeline/module_arpg.png",
+    "docs/images/model-pipeline/module_racing.png",
+    "docs/images/model-pipeline/module_rts.png",
+    "docs/images/model-pipeline/module_openworld.png"
   ]
 }

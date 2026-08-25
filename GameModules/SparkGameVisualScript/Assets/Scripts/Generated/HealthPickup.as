@@ -14,7 +14,8 @@ class HealthPickup
     float baseY = 0.3f;
     float pulseSpeed = 3.0f;
     float pulseScale = 0.15f;
-    float timer = 0.0f;
+    float bobOffset = 0.0f;
+    float bobDirection = 1.0f;
 
     void Start()
     {
@@ -25,8 +26,6 @@ class HealthPickup
 
     void Update(float dt)
     {
-        timer = timer + dt;
-
         if (!isActive)
         {
             // Respawn countdown
@@ -51,13 +50,34 @@ class HealthPickup
             rot.y = rot.y - 360.0f;
         setRotation(selfEntity, rot);
 
-        // Gentle bob
+        // Gentle triangle-wave bob. This uses only arithmetic operators that
+        // the bootstrap AngelScript API guarantees.
+        bobOffset = bobOffset + bobDirection * pulseSpeed * pulseScale * dt;
+        if (bobOffset >= pulseScale)
+        {
+            bobOffset = pulseScale;
+            bobDirection = -1.0f;
+        }
+        else if (bobOffset <= -pulseScale)
+        {
+            bobOffset = -pulseScale;
+            bobDirection = 1.0f;
+        }
+
         Vector3 pos = getPosition(selfEntity);
-        pos.y = baseY + sin(timer * pulseSpeed) * pulseScale;
+        pos.y = baseY + bobOffset;
         setPosition(selfEntity, pos);
+
+        uint player = getEntityByName("VS_Player");
+        Vector3 playerPos = getPosition(player);
+        float dx = playerPos.x - pos.x;
+        float dy = playerPos.y - pos.y;
+        float dz = playerPos.z - pos.z;
+        if (dx * dx + dy * dy + dz * dz <= 2.25f && getHealth(player) < 100.0f)
+            Collect(player);
     }
 
-    void OnTriggerEnter(uint triggerId)
+    void Collect(uint player)
     {
         if (!isActive)
             return;
@@ -65,10 +85,15 @@ class HealthPickup
         isActive = false;
         respawnTimer = respawnTime;
         playSound(selfEntity, "health_pickup");
+        float newHealth = getHealth(player) + healAmount;
+        if (newHealth > 100.0f)
+            newHealth = 100.0f;
+        setHealth(player, newHealth);
         print("Player healed for " + healAmount + " HP!");
-        fireEvent("PlayerHealed");
 
-        // Hide item
-        setPosition(selfEntity, Vector3(0.0f, -100.0f, 0.0f));
+        // Hide item while preserving the spawn X/Z for respawn.
+        Vector3 pos = getPosition(selfEntity);
+        pos.y = -100.0f;
+        setPosition(selfEntity, pos);
     }
 }

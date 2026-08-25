@@ -21,6 +21,8 @@ namespace RPG
     bool RPGCharacterSystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
+        m_characters.clear();
+        m_nextCharId = 1;
         RegisterDefaultClasses();
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG character system initialized with %zu classes", m_classes.size());
@@ -217,11 +219,17 @@ namespace RPG
 
         uint32_t id = character.characterId;
         m_characters[id] = character;
+        RecalculateDerivedStats(m_characters[id]);
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG character created: %s (%s)", name.c_str(),
                        classDef->name.c_str());
         Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Character created: " + name + " (" + classDef->name + ")");
         return id;
+    }
+
+    bool RPGCharacterSystem::DestroyCharacter(uint32_t characterId)
+    {
+        return m_characters.erase(characterId) > 0;
     }
 
     CharacterData* RPGCharacterSystem::GetCharacter(uint32_t characterId)
@@ -253,7 +261,9 @@ namespace RPG
         if (!character || character->level >= MAX_LEVEL)
             return;
 
-        character->xp += amount;
+        const uint64_t accumulatedXP = static_cast<uint64_t>(character->xp) + amount;
+        character->xp = static_cast<uint32_t>(
+            std::min<uint64_t>(accumulatedXP, static_cast<uint64_t>(std::numeric_limits<uint32_t>::max())));
 
         while (character->xp >= character->xpToNextLevel && character->level < MAX_LEVEL)
         {
@@ -347,9 +357,11 @@ namespace RPG
         if (!classDef)
             return;
 
-        // Health scales with constitution, mana with intelligence
-        float conBonus = (character.baseStats.constitution - 10.0f) * 2.0f;
-        float intBonus = (character.baseStats.intelligence - 10.0f) * 1.5f;
+        // Health scales with effective constitution, mana with effective intelligence,
+        // including currently equipped items.
+        const auto effectiveStats = ComputeEffectiveStats(character.characterId);
+        float conBonus = (effectiveStats.constitution - 10.0f) * 2.0f;
+        float intBonus = (effectiveStats.intelligence - 10.0f) * 1.5f;
 
         float healthRatio = (character.maxHealth > 0.0f) ? character.currentHealth / character.maxHealth : 1.0f;
         float manaRatio = (character.maxMana > 0.0f) ? character.currentMana / character.maxMana : 1.0f;

@@ -91,6 +91,9 @@ namespace RTS
         const UnitTemplate* GetTemplate(RTSUnitType type, RTSFaction faction) const;
         std::string GetUnitListString() const;
 
+        /** Replace all runtime units from a validated persistence snapshot. */
+        bool RestoreState(const std::vector<UnitData>& units);
+
         // === Unit state ===
         void SetUnitState(uint32_t unitId, RTSUnitState state);
         void SetUnitTarget(uint32_t unitId, uint32_t targetId);

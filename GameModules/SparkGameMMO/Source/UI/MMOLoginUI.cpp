@@ -13,6 +13,7 @@
 #include <imgui.h>
 #endif
 
+#include <algorithm>
 #include <cstring>
 
 namespace MMO
@@ -21,6 +22,11 @@ namespace MMO
     bool MMOLoginUI::Initialize(Spark::IEngineContext* context, MMOAccountSystem* accountSys,
                                 MMOCharacterSystem* charSys)
     {
+        if (!accountSys || !charSys)
+            return false;
+        if (m_accountSys || m_charSys || m_context)
+            Shutdown();
+
         m_context = context;
         m_accountSys = accountSys;
         m_charSys = charSys;
@@ -34,9 +40,29 @@ namespace MMO
         return true;
     }
 
+    void MMOLoginUI::Update(float deltaTime)
+    {
+        if (m_state != LoginUIState::EnteringWorld)
+            return;
+
+        m_enterWorldTimer -= std::max(deltaTime, 0.0f);
+        if (m_enterWorldTimer <= 0.0f)
+        {
+            m_enterWorldTimer = 0.0f;
+            m_state = LoginUIState::InGame;
+        }
+    }
+
     void MMOLoginUI::Shutdown()
     {
         m_loginPassword.Clear();
+        m_enterWorldCallback = {};
+        m_sessionToken.clear();
+        m_loggedInAccountId = 0;
+        m_selectedCharIndex = -1;
+        m_confirmDelete = false;
+        m_enterWorldTimer = 0.0f;
+        m_state = LoginUIState::Login;
         m_accountSys = nullptr;
         m_charSys = nullptr;
         m_context = nullptr;
@@ -265,8 +291,7 @@ namespace MMO
             {
                 const auto& ch = characters[m_selectedCharIndex];
                 m_accountSys->SetActiveCharacter(m_sessionToken, ch.characterId);
-                m_state = LoginUIState::EnteringWorld;
-                m_enterWorldTimer = 2.0f;
+                SetState(LoginUIState::EnteringWorld);
 
                 if (m_enterWorldCallback)
                     m_enterWorldCallback(m_loggedInAccountId, ch.characterId);
@@ -514,9 +539,6 @@ namespace MMO
 
         ImGui::End();
 
-        m_enterWorldTimer -= ImGui::GetIO().DeltaTime;
-        if (m_enterWorldTimer <= 0.0f)
-            m_state = LoginUIState::InGame;
 #endif
     }
 

@@ -21,6 +21,8 @@
 #include "Core/Platform.h"
 
 #include <array>
+#include <bit>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -30,6 +32,36 @@
 
 namespace SparkFPS
 {
+
+    namespace Detail
+    {
+        inline void WriteU32(std::vector<uint8_t>& bytes, uint32_t value)
+        {
+            bytes.push_back(static_cast<uint8_t>(value));
+            bytes.push_back(static_cast<uint8_t>(value >> 8));
+            bytes.push_back(static_cast<uint8_t>(value >> 16));
+            bytes.push_back(static_cast<uint8_t>(value >> 24));
+        }
+
+        inline void WriteFloat(std::vector<uint8_t>& bytes, float value)
+        {
+            WriteU32(bytes, std::bit_cast<uint32_t>(value));
+        }
+
+        inline uint32_t ReadU32(const uint8_t* bytes, size_t& offset)
+        {
+            const uint32_t value =
+                static_cast<uint32_t>(bytes[offset]) | (static_cast<uint32_t>(bytes[offset + 1]) << 8) |
+                (static_cast<uint32_t>(bytes[offset + 2]) << 16) | (static_cast<uint32_t>(bytes[offset + 3]) << 24);
+            offset += 4;
+            return value;
+        }
+
+        inline float ReadFloat(const uint8_t* bytes, size_t& offset)
+        {
+            return std::bit_cast<float>(ReadU32(bytes, offset));
+        }
+    } // namespace Detail
 
     // ============================================================================
     // Message Types
@@ -68,6 +100,8 @@ namespace SparkFPS
 
     struct NetworkPlayerState
     {
+        static constexpr size_t SerializedSize = 55;
+
         uint32_t clientId = 0;
         float posX = 0.0f, posY = 0.0f, posZ = 0.0f;
         float velX = 0.0f, velY = 0.0f, velZ = 0.0f;
@@ -81,15 +115,64 @@ namespace SparkFPS
         uint32_t sequenceNumber = 0;
 
         /** @brief Serialize state into byte buffer. */
-        std::vector<uint8_t> Serialize() const;
+        std::vector<uint8_t> Serialize() const
+        {
+            std::vector<uint8_t> bytes;
+            bytes.reserve(SerializedSize);
+            Detail::WriteU32(bytes, clientId);
+            Detail::WriteFloat(bytes, posX);
+            Detail::WriteFloat(bytes, posY);
+            Detail::WriteFloat(bytes, posZ);
+            Detail::WriteFloat(bytes, velX);
+            Detail::WriteFloat(bytes, velY);
+            Detail::WriteFloat(bytes, velZ);
+            Detail::WriteFloat(bytes, yaw);
+            Detail::WriteFloat(bytes, pitch);
+            Detail::WriteFloat(bytes, health);
+            Detail::WriteU32(bytes, actionFlags);
+            Detail::WriteU32(bytes, acknowledgedInputSequence);
+            bytes.push_back(currentWeapon);
+            bytes.push_back(static_cast<uint8_t>(isAlive));
+            bytes.push_back(static_cast<uint8_t>(isCrouching));
+            Detail::WriteU32(bytes, sequenceNumber);
+            return bytes;
+        }
 
         /** @brief Deserialize state from byte buffer. */
-        static NetworkPlayerState Deserialize(const uint8_t* data, size_t size);
+        static NetworkPlayerState Deserialize(const uint8_t* data, size_t size)
+        {
+            if (!data || size < SerializedSize)
+            {
+                return {};
+            }
+
+            NetworkPlayerState state;
+            size_t offset = 0;
+            state.clientId = Detail::ReadU32(data, offset);
+            state.posX = Detail::ReadFloat(data, offset);
+            state.posY = Detail::ReadFloat(data, offset);
+            state.posZ = Detail::ReadFloat(data, offset);
+            state.velX = Detail::ReadFloat(data, offset);
+            state.velY = Detail::ReadFloat(data, offset);
+            state.velZ = Detail::ReadFloat(data, offset);
+            state.yaw = Detail::ReadFloat(data, offset);
+            state.pitch = Detail::ReadFloat(data, offset);
+            state.health = Detail::ReadFloat(data, offset);
+            state.actionFlags = Detail::ReadU32(data, offset);
+            state.acknowledgedInputSequence = Detail::ReadU32(data, offset);
+            state.currentWeapon = data[offset++];
+            state.isAlive = data[offset++] != 0;
+            state.isCrouching = data[offset++] != 0;
+            state.sequenceNumber = Detail::ReadU32(data, offset);
+            return state;
+        }
     };
 
     /** @brief Client input sent to server each tick. */
     struct PlayerInput
     {
+        static constexpr size_t SerializedSize = 24;
+
         float forward = 0.0f;
         float strafe = 0.0f;
         float yaw = 0.0f;
@@ -100,8 +183,42 @@ namespace SparkFPS
         bool crouch = false;
         uint32_t sequenceNumber = 0;
 
-        std::vector<uint8_t> Serialize() const;
-        static PlayerInput Deserialize(const uint8_t* data, size_t size);
+        std::vector<uint8_t> Serialize() const
+        {
+            std::vector<uint8_t> bytes;
+            bytes.reserve(SerializedSize);
+            Detail::WriteFloat(bytes, forward);
+            Detail::WriteFloat(bytes, strafe);
+            Detail::WriteFloat(bytes, yaw);
+            Detail::WriteFloat(bytes, pitch);
+            bytes.push_back(static_cast<uint8_t>(jump));
+            bytes.push_back(static_cast<uint8_t>(fire));
+            bytes.push_back(static_cast<uint8_t>(reload));
+            bytes.push_back(static_cast<uint8_t>(crouch));
+            Detail::WriteU32(bytes, sequenceNumber);
+            return bytes;
+        }
+
+        static PlayerInput Deserialize(const uint8_t* data, size_t size)
+        {
+            if (!data || size < SerializedSize)
+            {
+                return {};
+            }
+
+            PlayerInput input;
+            size_t offset = 0;
+            input.forward = Detail::ReadFloat(data, offset);
+            input.strafe = Detail::ReadFloat(data, offset);
+            input.yaw = Detail::ReadFloat(data, offset);
+            input.pitch = Detail::ReadFloat(data, offset);
+            input.jump = data[offset++] != 0;
+            input.fire = data[offset++] != 0;
+            input.reload = data[offset++] != 0;
+            input.crouch = data[offset++] != 0;
+            input.sequenceNumber = Detail::ReadU32(data, offset);
+            return input;
+        }
     };
 
     /** @brief Per-player score tracking. */

@@ -65,6 +65,13 @@ namespace OpenWorld
         uint32_t storageCapacity = 10;
     };
 
+    /// @brief Player-created settlement state stored in an OpenWorld save.
+    struct SettlementSaveState
+    {
+        std::vector<PlayerCamp> camps;
+        uint32_t nextCampId = 1;
+    };
+
     /**
      * @brief Settlement and player camp management system
      */
@@ -91,6 +98,9 @@ namespace OpenWorld
 
         /// @brief Upgrade an existing camp to the next tier
         bool UpgradeCamp(uint32_t campId);
+
+        SettlementSaveState CaptureSaveState() const;
+        bool RestoreSaveState(const SettlementSaveState& state, std::string* error = nullptr);
 
         std::string GetSettlementListString() const;
         std::string GetCampListString() const;

@@ -738,6 +738,15 @@ namespace Spark::Cinematic
             seq->Stop();
     }
 
+    void SequencerManager::ClearSequences()
+    {
+        StopAll();
+        m_sequences.clear();
+
+        std::lock_guard<std::mutex> lock(m_audioQueueMutex);
+        m_pendingAudioCues.clear();
+    }
+
     void SequencerManager::Update(float deltaTime)
     {
         for (auto& [name, seq] : m_sequences)

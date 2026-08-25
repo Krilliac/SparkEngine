@@ -27,6 +27,8 @@
 
 #include <Spark/ModuleDllMain.h>
 
+#include <unordered_map>
+
 // =============================================================================
 // Module exports
 // =============================================================================
@@ -327,6 +329,9 @@ void SparkGameARPGModule::RegisterConsoleCommands()
             status += "Items generated: " + std::to_string(m_lootSystem->GetGeneratedItemCount()) + "\n";
             status += "Dungeon floor: " + std::to_string(m_dungeonSystem->GetCurrentFloorNumber()) + "\n";
             status += "Attacks processed: " + std::to_string(m_combatSystem->GetAttacksProcessed()) + "\n";
+            status += "Hero animation: " + m_engineSystems->GetHeroAnimationState() + "\n";
+            status += "Engine ability bridge: " +
+                      std::string(m_engineSystems->HasEngineAbilityBridge() ? "active\n" : "unavailable\n");
             return status;
         });
 
@@ -351,14 +356,16 @@ void SparkGameARPGModule::RegisterConsoleCommands()
     console.RegisterCommand("arpg_attack",
                             [this](const std::vector<std::string>&) -> std::string
                             {
-                                m_demoEncounter->BasicAttack();
+                                if (m_demoEncounter->BasicAttack())
+                                    m_engineSystems->PlayHeroAction(ARPG::ARPGHeroAction::BasicAttack);
                                 return m_demoEncounter->GetStatusString();
                             });
 
     console.RegisterCommand("arpg_cast",
                             [this](const std::vector<std::string>&) -> std::string
                             {
-                                m_demoEncounter->UsePrimarySkill();
+                                if (m_demoEncounter->UsePrimarySkill())
+                                    m_engineSystems->PlayHeroAction(ARPG::ARPGHeroAction::Cast);
                                 return m_demoEncounter->GetStatusString();
                             });
 
@@ -366,30 +373,36 @@ void SparkGameARPGModule::RegisterConsoleCommands()
                             [this](const std::vector<std::string>&) -> std::string
                             {
                                 m_demoEncounter->Restart();
+                                m_engineSystems->PlayHeroAction(ARPG::ARPGHeroAction::Idle);
                                 return m_demoEncounter->GetStatusString();
                             });
 
-    console.RegisterCommand("arpg_save",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                auto* saveSystem = m_context->GetSaveSystem();
-                                if (!saveSystem)
-                                    return "Save system not available";
+    console.RegisterCommand(
+        "arpg_save",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            auto* saveSystem = m_context->GetSaveSystem();
+            if (!saveSystem)
+                return "Save system not available";
 
-                                auto* world = m_context->GetWorld();
-                                if (!world)
-                                    return "World not available";
+            auto* world = m_context->GetWorld();
+            if (!world)
+                return "World not available";
 
-                                std::string slot = args.empty() ? "arpg_quicksave" : args[0];
-                                Spark::SaveMetadata meta;
-                                meta.saveName = "ARPG Save";
-                                meta.sceneName =
-                                    "Dungeon Floor " + std::to_string(m_dungeonSystem->GetCurrentFloorNumber());
+            std::string slot = args.empty() ? "arpg_quicksave" : args[0];
+            Spark::SaveMetadata meta;
+            meta.saveName = "ARPG Save";
+            meta.sceneName = "Dungeon Floor " + std::to_string(m_dungeonSystem->GetCurrentFloorNumber());
 
-                                if (saveSystem->Save(slot, *world, meta))
-                                    return "ARPG state saved to slot: " + slot;
-                                return "Failed to save to slot: " + slot;
-                            });
+            const std::string demoState = m_demoEncounter->SerializeState();
+            if (demoState.empty())
+                return "Failed to snapshot ARPG demo state";
+            const std::unordered_map<std::string, std::string> customState = {{"SparkGameARPG.demo.v1", demoState}};
+
+            if (saveSystem->Save(slot, *world, meta, customState))
+                return "ARPG state saved to slot: " + slot;
+            return "Failed to save to slot: " + slot;
+        });
 
     console.RegisterCommand("arpg_load",
                             [this](const std::vector<std::string>& args) -> std::string
@@ -406,22 +419,38 @@ void SparkGameARPGModule::RegisterConsoleCommands()
                                 if (!saveSystem->SaveExists(slot))
                                     return "No save found in slot: " + slot;
 
-                                if (saveSystem->Load(slot, *world))
+                                std::unordered_map<std::string, std::string> customState;
+                                const auto validateDemoState =
+                                    [this](const std::unordered_map<std::string, std::string>& candidate)
+                                {
+                                    const auto state = candidate.find("SparkGameARPG.demo.v1");
+                                    return state != candidate.end() && m_demoEncounter->CanRestoreState(state->second);
+                                };
+                                if (saveSystem->Load(slot, *world, customState, validateDemoState))
+                                {
+                                    const auto state = customState.find("SparkGameARPG.demo.v1");
+                                    if (!m_demoEncounter->RestoreState(state->second))
+                                        return "ARPG demo restore failed after validated world load: " + slot;
                                     return "ARPG state loaded from slot: " + slot;
-                                return "Failed to load from slot: " + slot;
+                                }
+                                return "Failed to validate or load ARPG state from slot: " + slot;
                             });
 
-    console.RegisterCommand("arpg_abilities",
-                            [this]([[maybe_unused]] const std::vector<std::string>& args) -> std::string
-                            {
-                                // AbilitySystem.h cannot be included from game modules (types not in scope).
-                                // Report the statically-known ARPG ability configuration instead.
-                                std::string info = "=== ARPG Abilities ===\n";
-                                info += "Configured abilities: 4 (Fireball, Whirlwind, Raise Skeleton, Holy Light)\n";
-                                info += "Configured auras: 4 (Holy Shield, Bone Armor, Poison DoT, Fire Mastery)\n";
-                                info += "Configured procs: 1 (Fire Mastery proc)\n";
-                                return info;
-                            });
+    console.RegisterCommand(
+        "arpg_abilities",
+        [this]([[maybe_unused]] const std::vector<std::string>& args) -> std::string
+        {
+            std::string info = "=== ARPG Abilities ===\n";
+            info += "Engine bridge: " +
+                    std::string(m_engineSystems->HasEngineAbilityBridge() ? "active\n" : "unavailable\n");
+            info += "Registered abilities: " + std::to_string(m_engineSystems->GetRegisteredAbilityCount()) +
+                    " (Fireball, Whirlwind, Raise Skeleton, Holy Light)\n";
+            info += "Registered auras: " + std::to_string(m_engineSystems->GetRegisteredAuraCount()) +
+                    " (Holy Shield, Bone Armor, Poison DoT, Fire Mastery)\n";
+            info += "Registered procs: " + std::to_string(m_engineSystems->GetRegisteredProcCount()) +
+                    " (Fire Mastery proc)\n";
+            return info;
+        });
 }
 
 void SparkGameARPGModule::UpdateDemoInput()
@@ -432,16 +461,25 @@ void SparkGameARPGModule::UpdateDemoInput()
 
     const bool attackDown = input->IsKeyDown(' ');
     if (attackDown && !m_attackHeld)
-        m_demoEncounter->BasicAttack();
+    {
+        if (m_demoEncounter->BasicAttack())
+            m_engineSystems->PlayHeroAction(ARPG::ARPGHeroAction::BasicAttack);
+    }
     m_attackHeld = attackDown;
 
     const bool skillDown = input->IsKeyDown('Q');
     if (skillDown && !m_skillHeld)
-        m_demoEncounter->UsePrimarySkill();
+    {
+        if (m_demoEncounter->UsePrimarySkill())
+            m_engineSystems->PlayHeroAction(ARPG::ARPGHeroAction::Cast);
+    }
     m_skillHeld = skillDown;
 
     const bool restartDown = input->IsKeyDown('R');
     if (restartDown && !m_restartHeld)
+    {
         m_demoEncounter->Restart();
+        m_engineSystems->PlayHeroAction(ARPG::ARPGHeroAction::Idle);
+    }
     m_restartHeld = restartDown;
 }

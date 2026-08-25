@@ -11,6 +11,7 @@
 #include <imgui.h>
 #endif
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 
@@ -30,6 +31,8 @@ namespace RPG
 
     void RPGNPCSystem::Update(float deltaTime)
     {
+        deltaTime = std::max(0.0f, deltaTime);
+
         // Advance world time
         m_worldTime += deltaTime;
         m_worldHour += deltaTime / SECONDS_PER_GAME_HOUR;
@@ -38,7 +41,6 @@ namespace RPG
 
         UpdateSchedules();
         UpdatePatrols(deltaTime);
-        UpdateBehaviors(deltaTime);
     }
 
     void RPGNPCSystem::Shutdown()
@@ -355,15 +357,6 @@ namespace RPG
                 npc.posZ += (dz / dist) * step;
             }
         }
-    }
-
-    void RPGNPCSystem::UpdateBehaviors(float deltaTime)
-    {
-        (void)deltaTime;
-
-        // In a full implementation this would drive AI behavior trees via
-        // m_context->GetAI(). For the showcase, schedule + patrol is sufficient
-        // to demonstrate the integration pattern.
     }
 
     void RPGNPCSystem::RenderDebugUI()

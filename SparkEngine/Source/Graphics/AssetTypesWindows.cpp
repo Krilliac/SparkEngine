@@ -2,7 +2,7 @@
  * @file AssetTypesWindows.cpp
  * @brief Windows/D3D11 mesh asset implementation (MeshAsset)
  *
- * Contains the OBJ parser and D3D11 GPU buffer creation for meshes.
+ * Contains the OBJ/glTF parsers and D3D11 GPU buffer creation for meshes.
  * Split from AssetTypes.cpp for platform isolation; the texture/audio/cache
  * implementations live in AssetTypesWindowsMedia.cpp. The Linux counterpart
  * lives in AssetTypesLinux.cpp.
@@ -12,6 +12,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 #include "AssetPipeline.h"
+#include "GLTFStaticMeshLoader.h"
 #include "Utils/Assert.h"
 #include "Utils/LogMacros.h"
 #include "../Utils/Validate.h"
@@ -21,6 +22,9 @@
 #include <sstream>
 #include <filesystem>
 #include <algorithm>
+#include <cfloat>
+#include <cmath>
+#include <limits>
 
 // ============================================================================
 // MESH ASSET IMPLEMENTATION (Windows / D3D11)
@@ -29,6 +33,22 @@
 HRESULT MeshAsset::Load(ID3D11Device* device)
 {
     ASSERT(device);
+
+    m_meshData.vertices.clear();
+    m_meshData.indices.clear();
+    m_meshData.submeshes.clear();
+
+    if (!m_path.empty() && !std::filesystem::exists(m_path))
+    {
+        std::string extension = std::filesystem::path(m_path).extension().string();
+        std::transform(extension.begin(), extension.end(), extension.begin(),
+                       [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+        if (extension == ".gltf" || extension == ".glb")
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "glTF source does not exist: %s", m_path.c_str());
+            return E_FAIL;
+        }
+    }
 
     // Attempt to load from file if the path exists
     if (!m_path.empty() && std::filesystem::exists(m_path))
@@ -124,6 +144,57 @@ HRESULT MeshAsset::Load(ID3D11Device* device)
                 }
             }
         }
+        else if (ext == ".gltf" || ext == ".glb")
+        {
+            Spark::Graphics::Detail::GLTFStaticMeshData imported;
+            std::string error;
+            if (!Spark::Graphics::Detail::LoadGLTFStaticMesh(std::filesystem::path(m_path), imported, error))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load glTF '%s': %s", m_path.c_str(),
+                                error.c_str());
+                return E_FAIL;
+            }
+
+            m_meshData.vertices.reserve(imported.vertices.size());
+            m_meshData.indices = std::move(imported.indices);
+            m_meshData.submeshes.reserve(imported.primitives.size());
+
+            XMFLOAT3 bbMin = {FLT_MAX, FLT_MAX, FLT_MAX};
+            XMFLOAT3 bbMax = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+            for (const auto& source : imported.vertices)
+            {
+                MeshAssetData::Vertex vertex{};
+                vertex.position = {source.position[0], source.position[1], source.position[2]};
+                vertex.normal = {source.normal[0], source.normal[1], source.normal[2]};
+                vertex.texCoord0 = {source.texCoord[0], source.texCoord[1]};
+                vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+                m_meshData.vertices.push_back(vertex);
+
+                bbMin.x = std::min(bbMin.x, vertex.position.x);
+                bbMin.y = std::min(bbMin.y, vertex.position.y);
+                bbMin.z = std::min(bbMin.z, vertex.position.z);
+                bbMax.x = std::max(bbMax.x, vertex.position.x);
+                bbMax.y = std::max(bbMax.y, vertex.position.y);
+                bbMax.z = std::max(bbMax.z, vertex.position.z);
+            }
+            for (const auto& primitive : imported.primitives)
+            {
+                m_meshData.submeshes.push_back(primitive.indexStart);
+            }
+
+            m_meshData.boundingBoxMin = bbMin;
+            m_meshData.boundingBoxMax = bbMax;
+            m_meshData.boundingSphereCenter = {(bbMin.x + bbMax.x) * 0.5f, (bbMin.y + bbMax.y) * 0.5f,
+                                               (bbMin.z + bbMax.z) * 0.5f};
+            const float dx = bbMax.x - bbMin.x;
+            const float dy = bbMax.y - bbMin.y;
+            const float dz = bbMax.z - bbMin.z;
+            m_meshData.boundingSphereRadius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
+
+            Spark::SimpleConsole::GetInstance().LogSuccess("Loaded glTF: " + m_path + " (" +
+                                                           std::to_string(m_meshData.vertices.size()) + " verts, " +
+                                                           std::to_string(m_meshData.indices.size() / 3) + " tris)");
+        }
     }
 
     // Fallback: unit cube if no file was loaded
@@ -141,6 +212,13 @@ HRESULT MeshAsset::Load(ID3D11Device* device)
         };
         m_meshData.indices = {0, 1, 2, 2, 3, 0, 4, 6, 5, 6, 4, 7, 4, 0, 3, 3, 7, 4,
                               1, 5, 6, 6, 2, 1, 3, 2, 6, 6, 7, 3, 4, 1, 0, 1, 4, 5};
+    }
+
+    if (m_meshData.vertices.size() > std::numeric_limits<UINT>::max() / sizeof(MeshAssetData::Vertex) ||
+        m_meshData.indices.size() > std::numeric_limits<UINT>::max() / sizeof(uint32_t))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Mesh is too large for D3D11 buffers: %s", m_path.c_str());
+        return E_FAIL;
     }
 
     // Create GPU buffers

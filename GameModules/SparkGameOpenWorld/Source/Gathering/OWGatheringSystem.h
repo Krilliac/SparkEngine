@@ -78,6 +78,24 @@ namespace OpenWorld
         }
     };
 
+    /// @brief Mutable depletion state for one authored resource node.
+    struct ResourceNodeSaveState
+    {
+        uint32_t nodeId = 0;
+        uint32_t currentYield = 0;
+        float respawnTimer = 0.0f;
+        bool isDepleted = false;
+    };
+
+    /// @brief Mutable gathering and crafting state stored in an OpenWorld save.
+    struct GatheringSaveState
+    {
+        std::vector<std::pair<ResourceType, uint32_t>> inventory;
+        std::vector<ResourceNodeSaveState> nodes;
+        uint32_t totalHarvested = 0;
+        uint32_t totalCrafted = 0;
+    };
+
     /**
      * @brief Resource gathering and crafting system
      */
@@ -107,6 +125,9 @@ namespace OpenWorld
 
         /// @brief Craft an item, consuming resources
         bool Craft(uint32_t recipeId);
+
+        GatheringSaveState CaptureSaveState() const;
+        bool RestoreSaveState(const GatheringSaveState& state, std::string* error = nullptr);
 
         std::string GetNodeListString() const;
         std::string GetRecipeListString() const;

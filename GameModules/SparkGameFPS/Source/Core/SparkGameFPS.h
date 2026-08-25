@@ -17,6 +17,9 @@
 #include "Spark/SparkSDK.h"
 #include "Core/IGameModule.h"
 
+#include <string>
+#include <vector>
+
 // Forward declarations
 class Game;
 class Console;
@@ -67,6 +70,7 @@ class SparkGameModule : public Spark::IModule, public IGameModule
     void RegisterGameConsoleCommands();
 
     Spark::IEngineContext* m_context{nullptr};
+    std::vector<std::string> m_registeredConsoleCommands;
     bool m_initialized{false};
 };
 

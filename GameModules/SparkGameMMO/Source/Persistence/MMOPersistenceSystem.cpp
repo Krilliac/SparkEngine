@@ -65,6 +65,9 @@ namespace MMO
 
     bool MMOPersistenceSystem::Initialize(Spark::IEngineContext* context, const std::string& dbPath)
     {
+        if (m_initialized || m_db)
+            Shutdown();
+
         m_context = context;
         m_db = std::make_unique<AsyncDatabasePool>();
 
@@ -93,6 +96,8 @@ namespace MMO
             m_db->Close();
             m_db.reset();
         }
+        m_context = nullptr;
+        m_autoSaveTimer = 0.0f;
         m_initialized = false;
     }
 
@@ -105,7 +110,8 @@ namespace MMO
         m_db->ProcessCallbacks();
 
         // Auto-save timer (module is responsible for triggering the actual save)
-        m_autoSaveTimer -= dt;
+        if (dt > 0.0f)
+            m_autoSaveTimer -= dt;
     }
 
     void MMOPersistenceSystem::RegisterPreparedStatements()
@@ -124,7 +130,7 @@ namespace MMO
         // Placeholders use the engine's zero-based "?N" syntax — the only form
         // SQLiteConnection::Execute substitutes (AsyncDatabase.cpp).
         m_db->PrepareStatement(sid(MMOStmtId::InsertCharacter),
-                               "SET character_?0 ?1|1|0|1|0.0|1.0|0.0|0.0|100.0|100.0|50.0|50.0|0.0|0");
+                               "SET character_?0 ?1|?2|1|0|1|0.0|1.0|0.0|0.0|100.0|100.0|50.0|50.0|0.0|0");
 
         // ?1 is the full pipe-delimited character blob built by the save paths.
         m_db->PrepareStatement(sid(MMOStmtId::UpdateCharacter), "SET character_?0 ?1");
@@ -222,7 +228,8 @@ namespace MMO
         // Generate a simple character ID from timestamp
         uint32_t charId = static_cast<uint32_t>(GetTimestamp() & 0xFFFFFFFF);
 
-        auto result = m_db->SyncQuery(sid(MMOStmtId::InsertCharacter), {MakeInt(charId), MakeString(name)});
+        auto result =
+            m_db->SyncQuery(sid(MMOStmtId::InsertCharacter), {MakeInt(charId), MakeString(name), MakeInt(accountId)});
 
         if (result.success)
         {
@@ -267,25 +274,37 @@ namespace MMO
                     try
                     {
                         outData.name = UnquoteStoredString(tokens[0]);
-                        outData.level = std::stoi(tokens[1]);
-                        outData.xp = std::stoi(tokens[2]);
-                        outData.areaId = static_cast<uint32_t>(std::stoi(tokens[3]));
-                        outData.posX = std::stof(tokens[4]);
-                        outData.posY = std::stof(tokens[5]);
-                        outData.posZ = std::stof(tokens[6]);
-                        outData.rotY = std::stof(tokens[7]);
-                        outData.health = std::stof(tokens[8]);
-                        outData.maxHealth = std::stof(tokens[9]);
-                        outData.mana = std::stof(tokens[10]);
-                        outData.maxMana = std::stof(tokens[11]);
-                        outData.playTime = std::stof(tokens[12]);
-                        outData.inventory.currency = std::stoi(tokens[13]);
+                        // Version 2 stores accountId after the name. Continue to
+                        // accept legacy 14-field records written by earlier builds.
+                        const size_t valueOffset = tokens.size() >= 15 ? 2 : 1;
+                        if (tokens.size() >= 15)
+                            outData.accountId = static_cast<uint32_t>(std::stoul(tokens[1]));
+                        outData.level = std::stoi(tokens[valueOffset]);
+                        outData.xp = std::stoi(tokens[valueOffset + 1]);
+                        outData.areaId = static_cast<uint32_t>(std::stoul(tokens[valueOffset + 2]));
+                        outData.posX = std::stof(tokens[valueOffset + 3]);
+                        outData.posY = std::stof(tokens[valueOffset + 4]);
+                        outData.posZ = std::stof(tokens[valueOffset + 5]);
+                        outData.rotY = std::stof(tokens[valueOffset + 6]);
+                        outData.health = std::stof(tokens[valueOffset + 7]);
+                        outData.maxHealth = std::stof(tokens[valueOffset + 8]);
+                        outData.mana = std::stof(tokens[valueOffset + 9]);
+                        outData.maxMana = std::stof(tokens[valueOffset + 10]);
+                        outData.playTime = std::stof(tokens[valueOffset + 11]);
+                        outData.inventory.currency = std::stoi(tokens[valueOffset + 12]);
                     }
                     catch (const std::exception&)
                     {
                         SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt character data for ID %u",
                                         characterId);
+                        return false;
                     }
+                }
+                else
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: incomplete character data for ID %u",
+                                    characterId);
+                    return false;
                 }
             }
         }
@@ -316,9 +335,10 @@ namespace MMO
 
         // Build the pipe-delimited character string
         std::ostringstream ss;
-        ss << data.name << "|" << data.level << "|" << data.xp << "|" << data.areaId << "|" << data.posX << "|"
-           << data.posY << "|" << data.posZ << "|" << data.rotY << "|" << data.health << "|" << data.maxHealth << "|"
-           << data.mana << "|" << data.maxMana << "|" << data.playTime << "|" << data.inventory.currency;
+        ss << data.name << "|" << data.accountId << "|" << data.level << "|" << data.xp << "|" << data.areaId << "|"
+           << data.posX << "|" << data.posY << "|" << data.posZ << "|" << data.rotY << "|" << data.health << "|"
+           << data.maxHealth << "|" << data.mana << "|" << data.maxMana << "|" << data.playTime << "|"
+           << data.inventory.currency;
 
         m_db->AsyncQuery(sid(MMOStmtId::UpdateCharacter), {MakeInt(data.characterId), MakeString(ss.str())});
 
@@ -344,9 +364,10 @@ namespace MMO
         auto sid = [](MMOStmtId id) { return static_cast<PreparedStatementID>(id); };
 
         std::ostringstream ss;
-        ss << data.name << "|" << data.level << "|" << data.xp << "|" << data.areaId << "|" << data.posX << "|"
-           << data.posY << "|" << data.posZ << "|" << data.rotY << "|" << data.health << "|" << data.maxHealth << "|"
-           << data.mana << "|" << data.maxMana << "|" << data.playTime << "|" << data.inventory.currency;
+        ss << data.name << "|" << data.accountId << "|" << data.level << "|" << data.xp << "|" << data.areaId << "|"
+           << data.posX << "|" << data.posY << "|" << data.posZ << "|" << data.rotY << "|" << data.health << "|"
+           << data.maxHealth << "|" << data.mana << "|" << data.maxMana << "|" << data.playTime << "|"
+           << data.inventory.currency;
 
         auto result =
             m_db->SyncQuery(sid(MMOStmtId::UpdateCharacter), {MakeInt(data.characterId), MakeString(ss.str())});

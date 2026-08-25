@@ -99,12 +99,16 @@ namespace Platformer
      */
     enum class PowerUpType : uint8_t
     {
-        DoubleJump = 0, ///< Enables double jump ability
-        SpeedBoost = 1, ///< Increases movement speed
-        Magnet = 2,     ///< Attracts nearby collectibles
-        Shield = 3,     ///< Absorbs one hit without damage
-        GhostMode = 4,  ///< Pass through hazards temporarily
-        Count = 5
+        DoubleJump = 0,  ///< Enables double jump ability
+        SpeedBoost = 1,  ///< Increases movement speed
+        Magnet = 2,      ///< Attracts nearby collectibles
+        Shield = 3,      ///< Absorbs one hit without damage
+        GhostMode = 4,   ///< Pass through hazards temporarily
+        WallJump = 5,    ///< Enables wall sliding and wall jumping
+        Dash = 6,        ///< Enables the directional air/ground dash
+        GroundPound = 7, ///< Enables the downward ground-pound attack
+        Climb = 8,       ///< Enables climbable-surface traversal
+        Count = 9
     };
 
 } // namespace Platformer

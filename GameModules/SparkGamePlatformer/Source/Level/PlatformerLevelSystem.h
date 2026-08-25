@@ -136,6 +136,11 @@ namespace Platformer
         /// @brief Mark the current level as completed, calculate star rating
         void CompleteLevel(float completionTime, int deaths);
 
+        /// @brief Complete the active level when the player reaches its projected goal trigger.
+        bool TryCompleteAtPosition(float playerX, float playerY, float playerZ, int deaths);
+
+        bool IsLevelActive() const { return m_levelActive; }
+
         /// @brief Console output: list of all levels with progress
         std::string GetLevelListString() const;
 

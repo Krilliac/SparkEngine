@@ -2,7 +2,7 @@
 
 include(CMakeFindDependencyMacro)
 
-if(NOT WIN32)
+if(NOT WIN32 OR @SPARK_PACKAGE_HAS_ANGELSCRIPT@)
     find_dependency(Threads REQUIRED)
 endif()
 

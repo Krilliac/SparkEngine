@@ -388,7 +388,7 @@ void Player::Fire()
         break;
     }
 
-    m_projectilePool->FireProjectile(type, pos, dir, m_currentWeapon.MuzzleVelocity);
+    m_projectilePool->FireProjectile(type, pos, dir, m_currentWeapon.MuzzleVelocity, m_currentWeapon.Damage);
 
     // Only consume ammo if infinite ammo is disabled
     if (!m_infiniteAmmoEnabled)
@@ -531,7 +531,17 @@ void Player::HandleInput(float)
 
     // Class abilities
     if (m_input->WasKeyPressed('F'))
-        ActivatePrimaryAbility();
+    {
+        if (m_playerClass == PlayerClass::RECON && m_cloakActive)
+        {
+            m_cloakActive = false;
+            m_primaryAbility.Deactivate();
+        }
+        else
+        {
+            ActivatePrimaryAbility();
+        }
+    }
     if (m_input->WasKeyPressed('G'))
         ActivateSecondaryAbility();
 
@@ -539,13 +549,6 @@ void Player::HandleInput(float)
     if (m_playerClass == PlayerClass::SCOUT && m_primaryAbility.isActive)
     {
         m_jetpackActive = m_input->IsKeyDown(VK_SPACE) && m_jetpackFuel > 0.0f;
-    }
-
-    // Toggle cloak off manually
-    if (m_cloakActive && m_input->WasKeyPressed('F'))
-    {
-        m_cloakActive = false;
-        m_primaryAbility.Deactivate();
     }
 }
 

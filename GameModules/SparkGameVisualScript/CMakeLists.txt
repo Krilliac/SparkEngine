@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 3.25)
 #   - PlayerController: WASD movement, jump, sprint, health regen
 #   - Collectible: spinning coins, pickup scoring, sound effects
 #   - EnemyPatrol: waypoint patrol, player detection, chase, attack
-#   - GameManager: score tracking, win/lose conditions, HUD
+#   - GameManager: score tracking and win/lose conditions
 #   - HealthPickup: healing items with respawn cooldown
 #
 # The C++ code is ONLY the IModule shell that loads scripts and
@@ -151,6 +151,18 @@ endif()
 
 if(FEATURE_DEFINITIONS)
     target_compile_definitions(SparkGameVisualScript PRIVATE ${FEATURE_DEFINITIONS})
+endif()
+
+if(SPARK_GAME_VS_STANDALONE)
+    message(WARNING
+        "SparkGameVisualScript standalone mode has no guaranteed AngelScript runtime; the module will reject "
+        "load and register no vs_* commands unless its engine SDK supplies SPARK_ANGELSCRIPT_SUPPORT")
+elseif(SPARK_ANGELSCRIPT_AVAILABLE)
+    message(STATUS "SparkGameVisualScript runtime contract: AngelScript supported; vs_* commands enabled on load")
+else()
+    message(STATUS
+        "SparkGameVisualScript runtime contract: AngelScript unsupported; module load rejects and vs_* commands "
+        "remain unavailable")
 endif()
 
 # Copy visual script assets alongside the built DLL

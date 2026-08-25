@@ -15,7 +15,6 @@ namespace RPG
       public:
         bool Initialize(Spark::IEngineContext* context, RPGCharacterSystem* characterSystem);
         void Shutdown();
-        void Update(float deltaTime);
         void RenderDebugUI();
 
         [[nodiscard]] size_t GetRegisteredQuestCount() const;

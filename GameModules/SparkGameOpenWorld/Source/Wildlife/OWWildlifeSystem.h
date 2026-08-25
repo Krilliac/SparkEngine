@@ -69,6 +69,16 @@ namespace OpenWorld
         uint32_t regionId = 0;
     };
 
+    /// @brief Mutable wildlife population stored in an OpenWorld save.
+    struct WildlifeSaveState
+    {
+        std::vector<AnimalInstance> animals;
+        std::vector<Herd> herds;
+        uint32_t nextInstanceId = 1;
+        uint32_t nextHerdId = 1;
+        float respawnTimer = 0.0f;
+    };
+
     /**
      * @brief Wildlife population, ecology, and taming system
      */
@@ -93,6 +103,9 @@ namespace OpenWorld
 
         /// @brief Hunt an animal, returning its resource drops
         std::vector<std::pair<ResourceType, uint32_t>> HuntAnimal(uint32_t instanceId);
+
+        WildlifeSaveState CaptureSaveState() const;
+        bool RestoreSaveState(const WildlifeSaveState& state, std::string* error = nullptr);
 
         std::string GetWildlifeString() const;
         std::string GetSpeciesListString() const;

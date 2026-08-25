@@ -73,6 +73,9 @@ namespace Platformer
         /// @brief Set the initial spawn point (used before any checkpoint is activated)
         void SetLevelSpawn(float x, float y, float z);
 
+        /// @brief Limit activation checks and respawn lookup to the active level.
+        void SetActiveLevel(uint32_t levelIndex) { m_activeLevel = levelIndex; }
+
       private:
         void BuildDemoCheckpoints();
 
@@ -80,6 +83,7 @@ namespace Platformer
         std::vector<CheckpointData> m_checkpoints;
         uint32_t m_lastActivatedId{0};
         uint32_t m_nextId{1};
+        uint32_t m_activeLevel{0};
         PlayerPosition m_levelSpawn{0.0f, 1.0f, 0.0f};
         bool m_initialized{false};
     };

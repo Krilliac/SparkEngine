@@ -10,6 +10,7 @@
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace Spark
 {
@@ -19,6 +20,19 @@ namespace Spark
     bool GameMode::Initialize(const GameModeRules& rules)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        const bool validRules = rules.scoreLimit >= 0 && rules.roundLimit > 0 && std::isfinite(rules.timeLimit) &&
+                                rules.timeLimit >= 0.0f && std::isfinite(rules.respawnDelay) &&
+                                rules.respawnDelay >= 0.0f && std::isfinite(rules.damageMultiplier) &&
+                                rules.damageMultiplier > 0.0f && std::isfinite(rules.healthMultiplier) &&
+                                rules.healthMultiplier > 0.0f && std::isfinite(rules.speedMultiplier) &&
+                                rules.speedMultiplier > 0.0f;
+        if (!validRules)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "Rejected invalid GameMode rules for '%s'",
+                            rules.modeName.c_str());
+            return false;
+        }
+
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing GameMode: %s", rules.modeName.c_str());
         m_rules = rules;
         m_roundState = RoundState::WaitingForPlayers;
@@ -26,8 +40,13 @@ namespace Spark
         m_currentRound = 0;
         m_alphaScore = 0;
         m_bravoScore = 0;
+        m_roundAlphaScore = 0;
+        m_roundBravoScore = 0;
         m_firstBloodOccurred = false;
+        m_roundEndTimer = 0.0f;
         m_playerScores.clear();
+        m_roundPlayerKills.clear();
+        m_roundPlayerScores.clear();
         m_roundResults.clear();
 
         // Set up round-state FSM — callbacks keep m_roundState in sync so that
@@ -61,12 +80,17 @@ namespace Spark
                                 CheckWinCondition();
                             });
 
-        m_roundFSM.AddState(RoundState::RoundEnd, [this]() { m_roundState = RoundState::RoundEnd; });
+        m_roundFSM.AddState(
+            RoundState::RoundEnd, [this]() { m_roundState = RoundState::RoundEnd; },
+            [this](float dt)
+            {
+                m_roundEndTimer = (std::max)(0.0f, m_roundEndTimer - dt);
+                if (m_roundEndTimer <= 0.0f && m_matchActive && m_currentRound < m_rules.roundLimit)
+                {
+                    StartRound();
+                }
+            });
         m_roundFSM.AddState(RoundState::MatchEnd, [this]() { m_roundState = RoundState::MatchEnd; });
-
-        // Automatic transition: Countdown → InProgress when timer expires
-        m_roundFSM.AddTransition(RoundState::Countdown, RoundState::InProgress,
-                                 [this]() { return m_countdownTimer <= 0.0f; });
 
         m_roundFSM.Start(RoundState::WaitingForPlayers);
         return true;
@@ -74,7 +98,7 @@ namespace Spark
 
     void GameMode::Update(float deltaTime)
     {
-        if (!m_matchActive)
+        if (!m_matchActive || !std::isfinite(deltaTime) || deltaTime <= 0.0f)
             return;
 
         m_roundFSM.Tick(deltaTime);
@@ -88,6 +112,8 @@ namespace Spark
         m_currentRound = 0;
         m_alphaScore = 0;
         m_bravoScore = 0;
+        m_roundAlphaScore = 0;
+        m_roundBravoScore = 0;
         m_firstBloodOccurred = false;
         m_roundResults.clear();
 
@@ -103,6 +129,7 @@ namespace Spark
             score.damageTaken = 0;
             score.headshots = 0;
             score.currentStreak = 0;
+            score.longestKillStreak = 0.0f;
         }
 
         StartRound();
@@ -125,12 +152,21 @@ namespace Spark
 
     void GameMode::StartRound()
     {
+        if (!m_matchActive || m_currentRound >= m_rules.roundLimit)
+        {
+            return;
+        }
+
         m_currentRound++;
         m_roundState = RoundState::Countdown;
         m_roundFSM.TransitionTo(RoundState::Countdown);
         m_countdownTimer = 3.0f; // 3 second countdown
         m_roundElapsed = 0.0f;
         m_roundTimeRemaining = m_rules.timeLimit;
+        m_roundAlphaScore = 0;
+        m_roundBravoScore = 0;
+        m_roundPlayerKills.clear();
+        m_roundPlayerScores.clear();
 
         // Reset per-round player stats
         for (auto& [name, score] : m_playerScores)
@@ -146,15 +182,21 @@ namespace Spark
 
     void GameMode::EndRound(Team winningTeam)
     {
+        if (!m_matchActive || m_roundState == RoundState::RoundEnd || m_roundState == RoundState::MatchEnd)
+        {
+            return;
+        }
+
         m_roundState = RoundState::RoundEnd;
+        m_roundEndTimer = 3.0f;
         m_roundFSM.TransitionTo(RoundState::RoundEnd);
 
         RoundResult result;
         result.roundNumber = m_currentRound;
         result.winningTeam = winningTeam;
         result.mvpPlayer = GetMVP();
-        result.alphaScore = m_alphaScore;
-        result.bravoScore = m_bravoScore;
+        result.alphaScore = m_roundAlphaScore;
+        result.bravoScore = m_roundBravoScore;
         result.roundDuration = m_roundElapsed;
         m_roundResults.push_back(result);
 
@@ -172,10 +214,12 @@ namespace Spark
 
     void GameMode::UpdateCountdown(float dt)
     {
-        m_countdownTimer -= dt;
+        m_countdownTimer = (std::max)(0.0f, m_countdownTimer - dt);
         if (m_countdownTimer <= 0.0f)
-            m_countdownTimer = 0.0f;
-        // Transition to InProgress is driven by the FSM condition (m_countdownTimer <= 0)
+        {
+            m_roundState = RoundState::InProgress;
+            m_roundFSM.TransitionTo(RoundState::InProgress);
+        }
     }
 
     // === Player Management ===
@@ -194,6 +238,8 @@ namespace Spark
     void GameMode::RemovePlayer(const std::string& name)
     {
         m_playerScores.erase(name);
+        m_roundPlayerKills.erase(name);
+        m_roundPlayerScores.erase(name);
     }
 
     void GameMode::SetPlayerTeam(const std::string& name, Team team)
@@ -212,17 +258,38 @@ namespace Spark
         auto killerIt = m_playerScores.find(killer);
         auto victimIt = m_playerScores.find(victim);
 
+        if (killer == victim)
+        {
+            if (victimIt != m_playerScores.end())
+            {
+                auto& score = victimIt->second;
+                score.deaths++;
+                score.totalScore -= m_rules.deathPenalty;
+                score.currentStreak = 0;
+                m_roundPlayerScores[victim] -= m_rules.deathPenalty;
+                if (m_events.onPlayerDeath)
+                {
+                    m_events.onPlayerDeath(victim);
+                }
+            }
+            return;
+        }
+
         if (killerIt != m_playerScores.end())
         {
             auto& ks = killerIt->second;
             ks.kills++;
             ks.totalScore += m_rules.killPoints;
             ks.currentStreak++;
+            ks.longestKillStreak = (std::max)(ks.longestKillStreak, static_cast<float>(ks.currentStreak));
+            m_roundPlayerKills[killer]++;
+            m_roundPlayerScores[killer] += m_rules.killPoints;
 
             if (headshot)
             {
                 ks.headshots++;
                 ks.totalScore += m_rules.headshotBonus;
+                m_roundPlayerScores[killer] += m_rules.headshotBonus;
             }
 
             // First blood
@@ -247,10 +314,12 @@ namespace Spark
                 if (ks.team == Team::Alpha)
                 {
                     m_alphaScore += m_rules.killPoints;
+                    m_roundAlphaScore += m_rules.killPoints;
                 }
                 else if (ks.team == Team::Bravo)
                 {
                     m_bravoScore += m_rules.killPoints;
+                    m_roundBravoScore += m_rules.killPoints;
                 }
                 if (m_events.onScoreUpdate)
                 {
@@ -269,6 +338,7 @@ namespace Spark
             victimIt->second.deaths++;
             victimIt->second.totalScore -= m_rules.deathPenalty;
             victimIt->second.currentStreak = 0;
+            m_roundPlayerScores[victim] -= m_rules.deathPenalty;
 
             if (m_events.onPlayerDeath)
             {
@@ -284,6 +354,7 @@ namespace Spark
         {
             it->second.assists++;
             it->second.totalScore += m_rules.assistPoints;
+            m_roundPlayerScores[player] += m_rules.assistPoints;
         }
     }
 
@@ -294,16 +365,19 @@ namespace Spark
         {
             it->second.objectiveScore += points;
             it->second.totalScore += points;
+            m_roundPlayerScores[player] += points;
 
             if (m_rules.teamsEnabled)
             {
                 if (it->second.team == Team::Alpha)
                 {
                     m_alphaScore += points;
+                    m_roundAlphaScore += points;
                 }
                 else if (it->second.team == Team::Bravo)
                 {
                     m_bravoScore += points;
+                    m_roundBravoScore += points;
                 }
             }
         }
@@ -315,6 +389,7 @@ namespace Spark
         if (it != m_playerScores.end())
         {
             it->second.totalScore += points;
+            m_roundPlayerScores[player] += points;
         }
     }
 
@@ -370,7 +445,16 @@ namespace Spark
             scores.push_back(score);
         }
         std::sort(scores.begin(), scores.end(),
-                  [](const PlayerScore& a, const PlayerScore& b) { return a.totalScore > b.totalScore; });
+                  [](const PlayerScore& a, const PlayerScore& b)
+                  {
+                      if (a.totalScore != b.totalScore)
+                          return a.totalScore > b.totalScore;
+                      if (a.kills != b.kills)
+                          return a.kills > b.kills;
+                      if (a.deaths != b.deaths)
+                          return a.deaths < b.deaths;
+                      return a.playerName < b.playerName;
+                  });
         return scores;
     }
 
@@ -385,7 +469,16 @@ namespace Spark
             }
         }
         std::sort(scores.begin(), scores.end(),
-                  [](const PlayerScore& a, const PlayerScore& b) { return a.totalScore > b.totalScore; });
+                  [](const PlayerScore& a, const PlayerScore& b)
+                  {
+                      if (a.totalScore != b.totalScore)
+                          return a.totalScore > b.totalScore;
+                      if (a.kills != b.kills)
+                          return a.kills > b.kills;
+                      if (a.deaths != b.deaths)
+                          return a.deaths < b.deaths;
+                      return a.playerName < b.playerName;
+                  });
         return scores;
     }
 
@@ -402,16 +495,26 @@ namespace Spark
 
     void GameMode::CheckWinCondition()
     {
-        if (m_rules.type == GameModeType::FreePlay)
+        if (m_rules.type == GameModeType::FreePlay || m_rules.type == GameModeType::Survival)
             return;
 
         if (m_rules.teamsEnabled)
         {
-            if (m_alphaScore >= m_rules.scoreLimit * m_rules.killPoints)
+            int targetScore = m_rules.scoreLimit;
+            if (m_rules.type == GameModeType::TeamDeathmatch)
+            {
+                targetScore *= m_rules.killPoints;
+            }
+            else if (m_rules.type == GameModeType::CaptureTheFlag)
+            {
+                targetScore *= m_rules.objectivePoints;
+            }
+
+            if (m_roundAlphaScore >= targetScore)
             {
                 EndRound(Team::Alpha);
             }
-            else if (m_bravoScore >= m_rules.scoreLimit * m_rules.killPoints)
+            else if (m_roundBravoScore >= targetScore)
             {
                 EndRound(Team::Bravo);
             }
@@ -419,9 +522,11 @@ namespace Spark
         else
         {
             // FFA: check if any player reached score limit
-            for (const auto& [name, score] : m_playerScores)
+            for (const auto& playerEntry : m_playerScores)
             {
-                if (score.kills >= m_rules.scoreLimit)
+                const auto& name = playerEntry.first;
+                const auto roundKills = m_roundPlayerKills.find(name);
+                if (roundKills != m_roundPlayerKills.end() && roundKills->second >= m_rules.scoreLimit)
                 {
                     EndRound(Team::None);
                     break;
@@ -444,12 +549,15 @@ namespace Spark
     std::string GameMode::GetMVP() const
     {
         std::string mvp;
-        int highestScore = -1;
-        for (const auto& [name, score] : m_playerScores)
+        int highestScore = (std::numeric_limits<int>::min)();
+        for (const auto& playerEntry : m_playerScores)
         {
-            if (score.totalScore > highestScore)
+            const auto& name = playerEntry.first;
+            const auto roundScore = m_roundPlayerScores.find(name);
+            const int value = roundScore != m_roundPlayerScores.end() ? roundScore->second : 0;
+            if (value > highestScore || (value == highestScore && (mvp.empty() || name < mvp)))
             {
-                highestScore = score.totalScore;
+                highestScore = value;
                 mvp = name;
             }
         }

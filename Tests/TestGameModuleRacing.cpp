@@ -15,6 +15,7 @@
 #include "../GameModules/SparkGameRacing/Source/Race/RacingRaceManager.h"
 #include "../GameModules/SparkGameRacing/Source/AI/RacingAIDriver.h"
 #include "../GameModules/SparkGameRacing/Source/Camera/RacingCameraSystem.h"
+#include "../GameModules/SparkGameRacing/Source/Core/RacingPersistence.h"
 #include "../GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.h"
 #include "../GameModules/SparkGameRacing/Source/HUD/RacingHUDSystem.h"
 
@@ -505,6 +506,90 @@ TEST(Racing_RaceFlow_TerminalRacersRetainNonDrivingControlEdges)
     camera.Shutdown();
     vehicles.Shutdown();
     race.Shutdown();
+}
+
+// ============================================================================
+// Racing persistence
+// ============================================================================
+
+TEST(Racing_Persistence_ValidatesPortableSlotNames)
+{
+    EXPECT_TRUE(RacingPersistence::IsValidSlotName("career-01_alpha"));
+    EXPECT_TRUE(RacingPersistence::IsValidSlotName(std::string(64, 'r')));
+    EXPECT_FALSE(RacingPersistence::IsValidSlotName(""));
+    EXPECT_FALSE(RacingPersistence::IsValidSlotName(std::string(65, 'r')));
+    EXPECT_FALSE(RacingPersistence::IsValidSlotName("../escape"));
+    EXPECT_FALSE(RacingPersistence::IsValidSlotName("nested/slot"));
+    EXPECT_FALSE(RacingPersistence::IsValidSlotName("slot name"));
+}
+
+TEST(Racing_Persistence_RoundTripsAndAtomicallyRestoresRaceState)
+{
+    RacingTrackSystem tracks;
+    EXPECT_TRUE(tracks.Initialize(nullptr));
+    RacingVehicleSystem vehicles;
+    EXPECT_TRUE(vehicles.Initialize(nullptr));
+    RacingRaceManager race;
+    EXPECT_TRUE(race.Initialize(nullptr));
+    RacingAIDriver ai;
+    ASSERT_TRUE(ai.Initialize(nullptr));
+
+    const uint32_t playerId = vehicles.CreateVehicle("Player \"One\"", VehicleType::SuperCar, true);
+    VehicleInstance* player = vehicles.GetVehicle(playerId);
+    ASSERT_TRUE(player != nullptr);
+    player->positionX = 17.25f;
+    player->positionZ = -44.5f;
+    player->heading = 1.25f;
+    player->speed = 211.75f;
+    player->nitro = 0.375f;
+    player->damage = 12.5f;
+    race.RegisterRacer(playerId, player->name, true);
+    race.StartRace(RaceMode::Championship, 1);
+    race.Update(3.5f);
+    race.Update(42.25f);
+    race.OnLapCompleted(playerId);
+    ai.SetGlobalDifficulty(AIDifficulty::Hard);
+
+    const RacingPersistenceSnapshot captured = RacingPersistence::Capture(tracks, vehicles, race, ai);
+    EXPECT_NEAR(captured.race.countdownTimer, 0.0f, 0.001f);
+    std::string error;
+    const std::string encoded = RacingPersistence::Serialize(captured, error);
+    EXPECT_EQ(error, std::string());
+    ASSERT_FALSE(encoded.empty());
+
+    RacingPersistenceSnapshot decoded;
+    ASSERT_TRUE(RacingPersistence::Deserialize(encoded, decoded, error));
+    EXPECT_EQ(RacingPersistence::Serialize(decoded), encoded);
+
+    player->positionX = 999.0f;
+    player->speed = 0.0f;
+    tracks.LoadDemoTrack(2);
+    race.StartRace(RaceMode::TimeTrial, 5);
+    ai.SetGlobalDifficulty(AIDifficulty::Easy);
+
+    ASSERT_TRUE(RacingPersistence::Apply(decoded, tracks, vehicles, race, ai, error));
+    EXPECT_EQ(tracks.GetCurrentTrack().id, captured.trackId);
+    const VehicleInstance* restoredPlayer = vehicles.GetVehicle(playerId);
+    ASSERT_TRUE(restoredPlayer != nullptr);
+    EXPECT_NEAR(restoredPlayer->positionX, 17.25f, 0.001f);
+    EXPECT_NEAR(restoredPlayer->speed, 211.75f, 0.001f);
+    EXPECT_TRUE(race.GetState() == RaceState::Finished);
+    EXPECT_TRUE(race.GetMode() == RaceMode::Championship);
+    const RacerState* restoredRacer = race.GetRacer(playerId);
+    ASSERT_TRUE(restoredRacer != nullptr);
+    EXPECT_EQ(restoredRacer->lapTimes.size(), static_cast<size_t>(1));
+    EXPECT_TRUE(ai.GetGlobalDifficulty() == AIDifficulty::Hard);
+}
+
+TEST(Racing_Persistence_RejectsCorruptionWithoutReplacingOutput)
+{
+    RacingPersistenceSnapshot output;
+    output.trackId = 77;
+    std::string error;
+
+    EXPECT_FALSE(RacingPersistence::Deserialize("SPARK_RACING_STATE_V1\nTRACK 1\n", output, error));
+    EXPECT_FALSE(error.empty());
+    EXPECT_EQ(output.trackId, static_cast<uint32_t>(77));
 }
 
 #endif // SPARK_TEST_HAS_IMGUI

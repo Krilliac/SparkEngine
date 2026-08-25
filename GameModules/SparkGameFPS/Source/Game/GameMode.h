@@ -245,6 +245,7 @@ namespace Spark
         int GetCurrentRound() const { return m_currentRound; }
         float GetRoundTimeRemaining() const { return m_roundTimeRemaining; }
         float GetCountdownTime() const { return m_countdownTimer; }
+        float GetRoundTransitionTime() const { return m_roundEndTimer; }
         bool IsMatchActive() const { return m_matchActive; }
 
         const PlayerScore* GetPlayerScore(const std::string& name) const;
@@ -272,15 +273,20 @@ namespace Spark
         float m_roundTimeRemaining = 0.0f;
         float m_roundElapsed = 0.0f;
         float m_countdownTimer = 0.0f;
+        float m_roundEndTimer = 0.0f;
         bool m_firstBloodOccurred = false;
 
         std::unordered_map<std::string, PlayerScore> m_playerScores;
+        std::unordered_map<std::string, int> m_roundPlayerKills;
+        std::unordered_map<std::string, int> m_roundPlayerScores;
         std::vector<SpawnPoint> m_spawnPoints;
         std::vector<RoundResult> m_roundResults;
 
         // Team scores (for team modes)
         int m_alphaScore = 0;
         int m_bravoScore = 0;
+        int m_roundAlphaScore = 0;
+        int m_roundBravoScore = 0;
 
         GameModeEvents m_events;
 

@@ -303,6 +303,12 @@ void ShutdownEngineAfterPreflight()
         if (rt.eventBus)
             rt.eventBus->ClearAll();
 
+        // Cinematic sequences can own std::function callbacks whose target and
+        // destructor live in a game-module DLL. Destroy them while the module is
+        // still mapped; otherwise SequencerManager's process-static destructor can
+        // call into an unloaded image during CRT teardown.
+        Spark::Cinematic::SequencerManager::GetInstance().ClearSequences();
+
 #ifdef ENABLE_NETWORKING
         // Net message handlers are std::functions whose lambdas live in module
         // DLL code (TFServerSim/TFClientNet register them). They must be

@@ -93,12 +93,6 @@ namespace Spark
         return true;
     }
 
-    void GravitySystem::Update(float deltaTime)
-    {
-        // Remove inactive zones if needed (currently just a placeholder)
-        // Zones are generally persistent
-    }
-
     int GravitySystem::AddZone(const GravityZone& zone)
     {
         if ((int)m_zones.size() >= MAX_ZONES)

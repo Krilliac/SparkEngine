@@ -24,12 +24,6 @@ namespace RPG
         return true;
     }
 
-    void RPGDialogueSystem::Update(float deltaTime)
-    {
-        (void)deltaTime;
-        // Dialogue is event-driven; no per-frame work needed
-    }
-
     void RPGDialogueSystem::Shutdown()
     {
         EndDialogue();

@@ -39,6 +39,30 @@
 #include "Engine/ECS/Components/AIComponents.h"
 #include "Engine/ECS/Components/PhysicsComponents.h"
 
+#include <utility>
+
+namespace
+{
+    class TrackedConsoleRegistrar
+    {
+      public:
+        TrackedConsoleRegistrar(Spark::SimpleConsole& console, std::vector<std::string>& registeredNames)
+            : m_console(console), m_registeredNames(registeredNames)
+        {
+        }
+
+        template <typename... Args> void RegisterCommand(const std::string& name, Args&&... args)
+        {
+            m_console.RegisterCommand(name, std::forward<Args>(args)...);
+            m_registeredNames.push_back(name);
+        }
+
+      private:
+        Spark::SimpleConsole& m_console;
+        std::vector<std::string>& m_registeredNames;
+    };
+} // namespace
+
 // Global game pointer used by SparkConsole (in SparkEngineLib) to call into
 // game systems.  Owned by SparkGameModule; set during Initialize, cleared
 // during Shutdown.  Raw pointer avoids unique_ptr ABI mismatch across DLL boundary.
@@ -116,10 +140,7 @@ void SparkGameModule::OnFixedUpdate(float fixedDeltaTime)
     if (!g_game || g_game->IsPaused())
         return;
 
-    // Fixed-timestep physics for deterministic vehicle and gravity simulation
-    if (auto* gravitySystem = g_game->GetGravitySystem())
-        gravitySystem->Update(fixedDeltaTime);
-
+    // Vehicle motion is owned by the fixed-timestep path in SDK-v2 modules.
     if (auto* vehicleSystem = g_game->GetVehicleSystem())
         vehicleSystem->Update(fixedDeltaTime);
 }
@@ -147,12 +168,7 @@ void SparkGameModule::OnImGui()
     if (!g_game)
         return;
 
-    // Debug overlay: show game stats when ImGui is active
-    int drawCalls = 0;
-    int triangles = 0;
-    int activeObjects = 0;
-    g_game->GetPerformanceStats(drawCalls, triangles, activeObjects);
-    // Stats are available for ImGui rendering by the editor
+    g_game->RenderDebugUI();
 }
 
 // --- IGameModule interface (legacy) ---
@@ -250,12 +266,21 @@ void SparkGameModule::Shutdown()
 
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Shutting down SparkGameFPS module");
 
+    auto& console = Spark::SimpleConsole::GetInstance();
+    for (const auto& commandName : m_registeredConsoleCommands)
+    {
+        console.UnregisterCommand(commandName);
+    }
+    m_registeredConsoleCommands.clear();
+    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("FPS");
+
     if (g_game)
     {
         g_game->Shutdown();
         delete g_game;
         g_game = nullptr;
     }
+    m_context = nullptr;
     m_initialized = false;
 
     Spark::SimpleConsole::GetInstance().LogInfo("SparkGameFPS module shut down");
@@ -263,8 +288,13 @@ void SparkGameModule::Shutdown()
 
 void SparkGameModule::Update(float deltaTime)
 {
-    if (g_game)
+    if (g_game && !g_game->IsPaused())
+    {
         g_game->Update(deltaTime);
+        // Legacy hosts do not call OnFixedUpdate, so advance fixed gameplay once per frame.
+        if (auto* vehicleSystem = g_game->GetVehicleSystem())
+            vehicleSystem->Update(deltaTime);
+    }
 }
 
 void SparkGameModule::Render()
@@ -301,8 +331,14 @@ bool SparkGameModule::IsPaused() const
 // ===================================================================================
 void SparkGameModule::RegisterGameConsoleCommands()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
+    auto& simpleConsole = Spark::SimpleConsole::GetInstance();
+    TrackedConsoleRegistrar console(simpleConsole, m_registeredConsoleCommands);
     Game* game = g_game;
+
+    console.RegisterCommand(
+        "game_status", [game](const std::vector<std::string>&) -> std::string
+        { return game ? game->GetStatusString() : "Game not available"; },
+        "Show the live Spark Arena match, wave, player, and progression status");
 
     console.RegisterCommand(
         "game_timescale",
@@ -973,8 +1009,7 @@ void SparkGameModule::RegisterGameConsoleCommands()
         {
             if (!game)
                 return "Game not available";
-            game->StartWaves();
-            return "Wave mode started!";
+            return game->StartWaves() ? "Survival match started" : "Failed to start survival match";
         },
         "Start wave-based survival mode");
 

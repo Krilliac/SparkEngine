@@ -116,7 +116,8 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
 
     // Initialize engine system integrations (audio, events, save, replay, weather, destruction, coroutines)
     m_engineSystems = std::make_unique<Racing::RacingEngineSystems>();
-    if (!m_engineSystems->Initialize(context))
+    if (!m_engineSystems->Initialize(context, m_vehicleSystem.get(), m_trackSystem.get(), m_raceManager.get(),
+                                     m_aiDriver.get()))
     {
         console.LogError("[Racing] Failed to initialize engine system integrations");
         return false;

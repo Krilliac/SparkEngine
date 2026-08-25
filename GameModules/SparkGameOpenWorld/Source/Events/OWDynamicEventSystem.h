@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace OpenWorld
@@ -52,6 +53,16 @@ namespace OpenWorld
         bool playerParticipating = false;
     };
 
+    /// @brief Mutable dynamic-event state stored in an OpenWorld save.
+    struct DynamicEventSaveState
+    {
+        std::vector<ActiveWorldEvent> activeEvents;
+        std::vector<std::pair<uint32_t, float>> cooldowns;
+        uint32_t nextEventId = 1;
+        float eventCheckTimer = 0.0f;
+        uint32_t totalEventsCompleted = 0;
+    };
+
     /**
      * @brief Dynamic world event spawning and lifecycle management
      */
@@ -74,6 +85,9 @@ namespace OpenWorld
 
         /// @brief Player joins an active event
         bool JoinEvent(uint32_t eventId);
+
+        DynamicEventSaveState CaptureSaveState() const;
+        bool RestoreSaveState(const DynamicEventSaveState& state, std::string* error = nullptr);
 
         std::string GetEventListString() const;
         std::string GetActiveEventsString() const;

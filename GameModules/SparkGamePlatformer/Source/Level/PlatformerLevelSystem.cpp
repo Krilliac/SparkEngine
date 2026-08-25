@@ -8,6 +8,7 @@
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
+#include <cmath>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -329,6 +330,23 @@ namespace Platformer
                         " Time: " + std::to_string(completionTime) + "s Deaths: " + std::to_string(deaths));
     }
 
+    bool PlatformerLevelSystem::TryCompleteAtPosition(float playerX, float playerY, float playerZ, int deaths)
+    {
+        (void)playerY;
+        if (!m_levelActive || m_currentLevel >= m_levels.size())
+            return false;
+
+        const auto& goal = m_levels[m_currentLevel].goalPoint;
+        const float dx = playerX - goal.x;
+        const float dz = playerZ - goal.z;
+        constexpr float kGoalRadius = 3.0f;
+        if (dx * dx + dz * dz > kGoalRadius * kGoalRadius)
+            return false;
+
+        CompleteLevel(m_levelTimer, deaths);
+        return true;
+    }
+
     int PlatformerLevelSystem::CalculateStars(uint32_t levelIndex, float time, int deaths) const
     {
         if (levelIndex >= m_levels.size())
@@ -352,7 +370,8 @@ namespace Platformer
         if (!m_initialized || !m_levelActive)
             return;
 
-        m_levelTimer += deltaTime;
+        if (std::isfinite(deltaTime) && deltaTime > 0.0f)
+            m_levelTimer += deltaTime;
     }
 
     void PlatformerLevelSystem::Render()

@@ -37,6 +37,7 @@
 // Forward declarations for engine systems wired into the game
 namespace Spark
 {
+    class SubscriptionHandle;
     class WeatherSystem;
     class DialogueSystem;
     class DestructionSystem;
@@ -326,7 +327,7 @@ class SPARK_GAME_API Game
      * @brief Set the engine context for SDK v2 subsystem access
      * @param context Engine service locator — stored for lifetime of Game
      */
-    void SetEngineContext(Spark::IEngineContext* context) { m_engineContext = context; }
+    void SetEngineContext(Spark::IEngineContext* context);
 
     /** @brief Get the engine context */
     Spark::IEngineContext* GetEngineContext() const { return m_engineContext; }
@@ -427,8 +428,14 @@ class SPARK_GAME_API Game
     /** @brief Get the loot drop/power-up system */
     Spark::LootSystem* GetLootSystem() const { return m_lootSystem.get(); }
 
-    /** @brief Start wave-based survival mode */
-    void StartWaves();
+    /** @brief Start or restart the playable wave-based survival match. */
+    bool StartWaves();
+
+    /** @brief Build a human-readable snapshot of the live arena state. */
+    [[nodiscard]] std::string GetStatusString() const;
+
+    /** @brief Render the editor-facing arena controls and live status panel. */
+    void RenderDebugUI();
 
     /**
      * @brief Get current scene object count
@@ -596,6 +603,7 @@ class SPARK_GAME_API Game
 
     // Engine-side pointers (not owned)
     Spark::IEngineContext* m_engineContext{nullptr}; ///< SDK v2 engine context
+    bool m_engineSystemsInitialized{false};          ///< SDK-v2 services were wired after context attachment
     GraphicsEngine* m_graphics{nullptr};             ///< Reference to graphics engine
     InputManager* m_input{nullptr};                  ///< Reference to input manager
 
@@ -619,13 +627,14 @@ class SPARK_GAME_API Game
     std::unique_ptr<Spark::LootSystem> m_lootSystem;         ///< Loot drops and power-ups
 
     // Integrated systems - GameMode, HUD, Inventory, Quests
-    std::unique_ptr<Spark::GameMode> m_gameMode;   ///< FPS game mode (scoring, rounds)
-    std::unique_ptr<Spark::HUDSystem> m_hudSystem; ///< Heads-up display
-    Spark::ItemRegistry m_itemRegistry;            ///< Item definitions
-    Spark::InventoryComponent m_playerInventory;   ///< Player inventory data
-    Spark::QuestRegistry m_questRegistry;          ///< Quest definitions
-    Spark::QuestJournalComponent m_playerQuests;   ///< Player quest journal
-    Spark::EventBus* m_eventBus{nullptr};          ///< Engine event bus (not owned)
+    std::unique_ptr<Spark::GameMode> m_gameMode;                 ///< FPS game mode (scoring, rounds)
+    std::unique_ptr<Spark::HUDSystem> m_hudSystem;               ///< Heads-up display
+    Spark::ItemRegistry m_itemRegistry;                          ///< Item definitions
+    Spark::InventoryComponent m_playerInventory;                 ///< Player inventory data
+    Spark::QuestRegistry m_questRegistry;                        ///< Quest definitions
+    Spark::QuestJournalComponent m_playerQuests;                 ///< Player quest journal
+    Spark::EventBus* m_eventBus{nullptr};                        ///< Engine event bus (not owned)
+    std::vector<Spark::SubscriptionHandle> m_eventSubscriptions; ///< Keeps EventBus callbacks active
 
 #ifdef ENABLE_NETWORKING
     bool m_networkInitialized{false}; ///< Whether networking subsystem was initialized

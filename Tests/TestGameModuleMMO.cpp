@@ -1,6 +1,6 @@
 /**
  * @file TestGameModuleMMO.cpp
- * @brief Tests for MMO game module systems: character, guild, and chat
+ * @brief Tests for MMO game module character, social, world, and gameplay systems
  *
  * All tests are behind SPARK_TEST_HAS_IMGUI because the MMO module .cpp
  * files include ImGui for debug UI rendering.
@@ -11,10 +11,44 @@
 #ifdef SPARK_TEST_HAS_IMGUI
 
 #include "../GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.h"
-#include "../GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.h"
 #include "../GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.h"
+#include "../GameModules/SparkGameMMO/Source/Crafting/MMOCraftingSystem.h"
+#include "../GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.h"
+#include "../GameModules/SparkGameMMO/Source/Inventory/MMOInventorySystem.h"
+#include "../GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.h"
+#include "../GameModules/SparkGameMMO/Source/Trading/MMOTradingSystem.h"
+#include "../GameModules/SparkGameMMO/Source/UI/MMOLoginUI.h"
+#include "../GameModules/SparkGameMMO/Source/World/MMOWorldSetup.h"
+#include "../GameModules/SparkGameMMO/Source/WorldBoss/MMOWorldBossSystem.h"
+
+#include "../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h"
+
+#include <cmath>
+#include <limits>
 
 using namespace MMO;
+
+namespace
+{
+    class MMOTestContext final : public Spark::IEngineContext
+    {
+      public:
+        GraphicsEngine* GetGraphics() override { return nullptr; }
+        const GraphicsEngine* GetGraphics() const override { return nullptr; }
+        InputManager* GetInput() override { return nullptr; }
+        const InputManager* GetInput() const override { return nullptr; }
+        Timer* GetTimer() override { return nullptr; }
+        const Timer* GetTimer() const override { return nullptr; }
+        Spark::EventBus* GetEventBus() override { return nullptr; }
+        const Spark::EventBus* GetEventBus() const override { return nullptr; }
+        ::AudioEngine* GetAudio() override { return nullptr; }
+        const ::AudioEngine* GetAudio() const override { return nullptr; }
+        PhysicsSystem* GetPhysics() override { return nullptr; }
+        const PhysicsSystem* GetPhysics() const override { return nullptr; }
+        uint32_t GetEngineVersion() const override { return 0; }
+        uint32_t GetSDKVersion() const override { return 0; }
+    };
+} // namespace
 
 // ============================================================================
 // MMOCharacterSystem
@@ -316,6 +350,274 @@ TEST(MMO_ChatSystem_GetChannelCount)
 
     EXPECT_GT(sys.GetChannelCount(), 0u);
     sys.Shutdown();
+}
+
+TEST(MMO_ChatSystem_RejectsEmptyMessage)
+{
+    MMOChatSystem sys;
+    sys.Initialize(nullptr);
+
+    const size_t historyBefore = sys.GetHistory().size();
+    sys.SendMessage(ChatChannel::Global, "");
+    EXPECT_EQ(sys.GetHistory().size(), historyBefore);
+    sys.Shutdown();
+}
+
+// ============================================================================
+// Player movement and area resolution
+// ============================================================================
+
+TEST(MMO_PlayerMovement_NormalizesDiagonalInput)
+{
+    MMOPlayer player;
+    MMOPlayerSystem::IntegrateMovement(player, MMOPlayerInput{1.0f, 1.0f, false}, 0.1f);
+
+    const float velocity = std::sqrt(player.velocityX * player.velocityX + player.velocityZ * player.velocityZ);
+    const float distance = std::sqrt(player.posX * player.posX + player.posZ * player.posZ);
+    EXPECT_NEAR(velocity, 6.0f, 0.0001f);
+    EXPECT_NEAR(distance, 0.6f, 0.0001f);
+    EXPECT_NEAR(player.posX, player.posZ, 0.0001f);
+}
+
+TEST(MMO_PlayerMovement_ClampsLongFrames)
+{
+    MMOPlayer player;
+    MMOPlayerSystem::IntegrateMovement(player, MMOPlayerInput{1.0f, 0.0f, true}, 2.0f);
+
+    EXPECT_NEAR(player.velocityX, 10.5f, 0.0001f);
+    EXPECT_NEAR(player.posX, 2.625f, 0.0001f);
+    EXPECT_NEAR(player.posZ, 0.0f, 0.0001f);
+}
+
+TEST(MMO_PlayerMovement_RejectsNonFiniteInput)
+{
+    MMOPlayer player;
+    MMOPlayerSystem::IntegrateMovement(player, MMOPlayerInput{std::numeric_limits<float>::quiet_NaN(), 1.0f, false},
+                                       0.1f);
+
+    EXPECT_TRUE(std::isfinite(player.posX));
+    EXPECT_TRUE(std::isfinite(player.posZ));
+    EXPECT_NEAR(player.posX, 0.0f, 0.0001f);
+    EXPECT_NEAR(player.posZ, 0.6f, 0.0001f);
+}
+
+TEST(MMO_WorldAreaResolution_PrefersCurrentOverlappingArea)
+{
+    MMOTestContext context;
+    MMOWorldSetup world;
+    EXPECT_TRUE(world.Initialize(&context));
+
+    // TownSquare and ShadowCrypt overlap at this point. An explicitly entered
+    // dungeon must remain selected instead of snapping back to the outdoor area.
+    EXPECT_EQ(world.FindAreaId(0.0f, 0.0f, 0.0f, 3), 3u);
+    EXPECT_EQ(world.FindAreaId(0.0f, 0.0f, 0.0f, 1), 1u);
+    EXPECT_EQ(world.FindAreaId(550.0f, 1.0f, 0.0f, 1), 2u);
+    world.Shutdown();
+}
+
+// ============================================================================
+// Inventory-backed crafting
+// ============================================================================
+
+TEST(MMO_Crafting_RejectsMissingInventoryDependency)
+{
+    MMOCraftingSystem crafting;
+    crafting.Initialize(nullptr);
+    CraftingState state;
+    state.nearbyStation = CraftingStation::AlchemyLab;
+    state.skills[static_cast<int>(CraftingDiscipline::Alchemy)] = {CraftingDiscipline::Alchemy, 1, 0, 100};
+    crafting.LearnRecipe(state, 100);
+    InventoryData inventory;
+    inventory.slots = {{10, 2}, {11, 1}};
+
+    EXPECT_FALSE(crafting.CanCraft(state, inventory, 100));
+    EXPECT_FALSE(crafting.StartCraft(state, inventory, 100));
+    EXPECT_EQ(inventory.slots.size(), 2u);
+    crafting.Shutdown();
+}
+
+TEST(MMO_Crafting_ConsumesMaterialsAndProducesResult)
+{
+    MMOInventorySystem items;
+    MMOCraftingSystem crafting;
+    items.Initialize(nullptr);
+    crafting.Initialize(nullptr, &items);
+
+    CraftingState state;
+    state.nearbyStation = CraftingStation::AlchemyLab;
+    state.skills[static_cast<int>(CraftingDiscipline::Alchemy)] = {CraftingDiscipline::Alchemy, 1, 0, 100};
+    crafting.LearnRecipe(state, 100);
+    InventoryData inventory;
+    items.AddItem(inventory, 10, 2);
+    items.AddItem(inventory, 11, 1);
+
+    EXPECT_TRUE(crafting.StartCraft(state, inventory, 100));
+    EXPECT_EQ(items.CountItem(inventory, 10), 0);
+    EXPECT_EQ(items.CountItem(inventory, 11), 0);
+    crafting.Update(3.1f, state, inventory);
+    EXPECT_FALSE(state.isCrafting);
+    EXPECT_EQ(items.CountItem(inventory, 1), 1);
+    EXPECT_EQ(state.skills[static_cast<int>(CraftingDiscipline::Alchemy)].currentXP, 15);
+
+    crafting.Shutdown();
+    items.Shutdown();
+}
+
+TEST(MMO_Crafting_HoldsCompletedResultUntilSpaceIsAvailable)
+{
+    MMOInventorySystem items;
+    MMOCraftingSystem crafting;
+    items.Initialize(nullptr);
+    crafting.Initialize(nullptr, &items);
+
+    CraftingState state;
+    state.nearbyStation = CraftingStation::AlchemyLab;
+    state.skills[static_cast<int>(CraftingDiscipline::Alchemy)] = {CraftingDiscipline::Alchemy, 1, 0, 100};
+    crafting.LearnRecipe(state, 100);
+    InventoryData inventory;
+    inventory.maxSlots = 2;
+    items.AddItem(inventory, 10, 2);
+    items.AddItem(inventory, 11, 1);
+    EXPECT_TRUE(crafting.StartCraft(state, inventory, 100));
+
+    // Fill the slots freed by ingredient consumption while the timed craft runs.
+    items.AddItem(inventory, 13, 1);
+    items.AddItem(inventory, 14, 1);
+    crafting.Update(3.1f, state, inventory);
+    EXPECT_TRUE(state.isCrafting);
+    EXPECT_EQ(items.CountItem(inventory, 1), 0);
+
+    items.RemoveItem(inventory, 14, 1);
+    crafting.Update(0.1f, state, inventory);
+    EXPECT_FALSE(state.isCrafting);
+    EXPECT_EQ(items.CountItem(inventory, 1), 1);
+
+    crafting.Shutdown();
+    items.Shutdown();
+}
+
+TEST(MMO_Trading_TransfersOffersAtomically)
+{
+    MMOInventorySystem items;
+    MMOTradingSystem trading;
+    items.Initialize(nullptr);
+    trading.Initialize(nullptr);
+
+    InventoryData inventoryA;
+    InventoryData inventoryB;
+    inventoryA.currency = 50;
+    inventoryB.currency = 30;
+    items.AddItem(inventoryA, 10, 2);
+    items.AddItem(inventoryB, 13, 1);
+
+    const uint32_t tradeId = trading.ProposeTrade(1, 2);
+    EXPECT_GT(tradeId, 0u);
+    EXPECT_TRUE(trading.AcceptTrade(tradeId, 2));
+    EXPECT_TRUE(trading.AddTradeItem(tradeId, 1, 10, 2));
+    EXPECT_TRUE(trading.AddTradeItem(tradeId, 2, 13, 1));
+    EXPECT_TRUE(trading.SetTradeCurrency(tradeId, 1, 10));
+    EXPECT_TRUE(trading.SetTradeCurrency(tradeId, 2, 5));
+    EXPECT_TRUE(trading.ConfirmTrade(tradeId, 1));
+    EXPECT_TRUE(trading.ConfirmTrade(tradeId, 2));
+    EXPECT_TRUE(trading.ExecuteTrade(tradeId, inventoryA, inventoryB, items));
+
+    EXPECT_EQ(items.CountItem(inventoryA, 10), 0);
+    EXPECT_EQ(items.CountItem(inventoryA, 13), 1);
+    EXPECT_EQ(items.CountItem(inventoryB, 13), 0);
+    EXPECT_EQ(items.CountItem(inventoryB, 10), 2);
+    EXPECT_EQ(inventoryA.currency, 45);
+    EXPECT_EQ(inventoryB.currency, 35);
+
+    trading.Shutdown();
+    items.Shutdown();
+}
+
+TEST(MMO_Trading_RollsBackWhenAnOfferIsNotOwned)
+{
+    MMOInventorySystem items;
+    MMOTradingSystem trading;
+    items.Initialize(nullptr);
+    trading.Initialize(nullptr);
+
+    InventoryData inventoryA;
+    InventoryData inventoryB;
+    inventoryA.currency = 25;
+    inventoryB.currency = 25;
+    const uint32_t tradeId = trading.ProposeTrade(1, 2);
+    trading.AcceptTrade(tradeId, 2);
+    trading.AddTradeItem(tradeId, 1, 10, 1);
+    trading.ConfirmTrade(tradeId, 1);
+    trading.ConfirmTrade(tradeId, 2);
+
+    EXPECT_FALSE(trading.ExecuteTrade(tradeId, inventoryA, inventoryB, items));
+    EXPECT_TRUE(inventoryA.slots.empty());
+    EXPECT_TRUE(inventoryB.slots.empty());
+    EXPECT_EQ(inventoryA.currency, 25);
+    EXPECT_EQ(inventoryB.currency, 25);
+
+    trading.Shutdown();
+    items.Shutdown();
+}
+
+TEST(MMO_AuctionBuyout_DoesNotChargeWhenInventoryIsFull)
+{
+    MMOInventorySystem items;
+    MMOTradingSystem trading;
+    items.Initialize(nullptr);
+    trading.Initialize(nullptr);
+
+    const uint32_t listingId = trading.CreateListing(1, "Seller", 10, 1, 5, 10, AuctionDuration::Short);
+    InventoryData buyer;
+    buyer.maxSlots = 0;
+    buyer.currency = 50;
+    EXPECT_FALSE(trading.Buyout(listingId, 2, buyer, items));
+    EXPECT_EQ(buyer.currency, 50);
+    EXPECT_TRUE(buyer.slots.empty());
+
+    trading.Shutdown();
+    items.Shutdown();
+}
+
+// ============================================================================
+// Runtime UI and combat validation
+// ============================================================================
+
+TEST(MMO_LoginUI_EnteringWorldProgressesWithoutRendering)
+{
+    MMOAccountSystem accounts;
+    MMOCharacterSystem characters;
+    MMOLoginUI login;
+    accounts.Initialize(nullptr);
+    characters.Initialize(nullptr);
+
+    EXPECT_TRUE(login.Initialize(nullptr, &accounts, &characters));
+    login.SetState(LoginUIState::EnteringWorld);
+    login.Update(1.0f);
+    EXPECT_EQ(static_cast<int>(login.GetState()), static_cast<int>(LoginUIState::EnteringWorld));
+    login.Update(1.1f);
+    EXPECT_EQ(static_cast<int>(login.GetState()), static_cast<int>(LoginUIState::InGame));
+
+    login.Shutdown();
+    characters.Shutdown();
+    accounts.Shutdown();
+}
+
+TEST(MMO_WorldBoss_RejectsNonPositiveOrNonFiniteContribution)
+{
+    MMOWorldBossSystem bosses;
+    bosses.Initialize(nullptr);
+    EXPECT_TRUE(bosses.SpawnBoss(1));
+    const auto* before = bosses.GetBossInstance(1);
+    EXPECT_TRUE(before != nullptr);
+    const float initialHealth = before->currentHealth;
+
+    EXPECT_FALSE(bosses.DamageBoss(1, 7, "Tester", 0.0f));
+    EXPECT_FALSE(bosses.DamageBoss(1, 7, "Tester", -100.0f));
+    EXPECT_FALSE(bosses.DamageBoss(1, 7, "Tester", std::numeric_limits<float>::quiet_NaN()));
+    const auto* after = bosses.GetBossInstance(1);
+    EXPECT_NEAR(after->currentHealth, initialHealth, 0.0001f);
+    EXPECT_TRUE(after->contributions.empty());
+    bosses.Shutdown();
 }
 
 #endif // SPARK_TEST_HAS_IMGUI

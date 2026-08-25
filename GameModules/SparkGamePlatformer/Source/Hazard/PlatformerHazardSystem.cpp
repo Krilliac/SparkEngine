@@ -64,6 +64,8 @@ namespace Platformer
         sawblade.bladeRadius = 1.5f;
         sawblade.damage = 1;
         sawblade.knockbackForce = 8.0f;
+        sawblade.originX = sawblade.posX;
+        sawblade.originY = sawblade.posY;
         m_hazards.push_back(sawblade);
 
         // Crusher in the cave section
@@ -80,6 +82,8 @@ namespace Platformer
         crusher.crusherSpeed = 8.0f;
         crusher.crusherPauseTime = 1.5f;
         crusher.damage = 1;
+        crusher.originX = crusher.posX;
+        crusher.originY = crusher.posY;
         m_hazards.push_back(crusher);
 
         // Projectile launcher guarding a gem
@@ -167,7 +171,7 @@ namespace Platformer
                 continue;
 
             // Simple oscillation between start Y and crusherEndY
-            float cycleTime = std::abs(hazard.posY - hazard.crusherEndY) / hazard.crusherSpeed;
+            float cycleTime = std::abs(hazard.originY - hazard.crusherEndY) / hazard.crusherSpeed;
             if (cycleTime <= 0.0f)
                 continue;
 
@@ -177,7 +181,7 @@ namespace Platformer
 
             float t = std::fmod(m_globalTimer, totalCycle);
 
-            float startY = hazard.posY;
+            const float startY = hazard.originY;
             if (t < cycleTime)
             {
                 // Moving down
@@ -211,8 +215,9 @@ namespace Platformer
                 continue;
 
             // Ping-pong between start and end positions
-            float pathLength = std::sqrt((hazard.pathEndX - hazard.posX) * (hazard.pathEndX - hazard.posX) +
-                                         (hazard.pathEndY - hazard.posY) * (hazard.pathEndY - hazard.posY));
+            const float deltaX = hazard.pathEndX - hazard.originX;
+            const float deltaY = hazard.pathEndY - hazard.originY;
+            float pathLength = std::sqrt(deltaX * deltaX + deltaY * deltaY);
 
             if (pathLength < 0.01f || hazard.pathSpeed <= 0.0f)
                 continue;
@@ -223,14 +228,8 @@ namespace Platformer
             // Ping-pong: 0->1 forward, 1->2 backward
             float progress = (t <= 1.0f) ? t : (2.0f - t);
 
-            float dirX = (hazard.pathEndX - hazard.posX) / pathLength;
-            float dirY = (hazard.pathEndY - hazard.posY) / pathLength;
-
-            // Store original position for collision; actual position is interpolated
-            // In a full implementation, we'd have separate current/start positions
-            (void)dirX;
-            (void)dirY;
-            (void)progress;
+            hazard.posX = hazard.originX + deltaX * progress;
+            hazard.posY = hazard.originY + deltaY * progress;
         }
     }
 

@@ -162,6 +162,12 @@ namespace RTS
         return result;
     }
 
+    void RTSCommandSystem::ResetRuntimeState()
+    {
+        m_selectedUnits.clear();
+        m_commandQueues.clear();
+    }
+
     // === Internal ===
 
     void RTSCommandSystem::ProcessCommands(float deltaTime)

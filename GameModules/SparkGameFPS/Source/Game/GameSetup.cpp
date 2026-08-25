@@ -35,6 +35,8 @@
 
 #include "Utils/LogMacros.h"
 
+#include <algorithm>
+
 using namespace DirectX;
 
 /*-------------------------------------------------------------
@@ -350,6 +352,7 @@ Enemy* Game::SpawnEnemy(EnemyType type, float x, float y, float z)
 
     enemy->SetPosition({x, y, z});
     enemy->SetName("Enemy_" + std::to_string(enemy->GetID()));
+    enemy->SetAllies(&m_enemies);
 
     Enemy* ptr = enemy.get();
     m_enemies.push_back(ptr);
@@ -499,44 +502,45 @@ void Game::InitializeGameplaySystems()
     {
         if (m_hudSystem)
             m_hudSystem->AddKillFeedEntry("", "VICTORY", "All " + std::to_string(totalWaves) + " waves cleared!");
+        if (m_gameMode && m_gameMode->IsMatchActive())
+            m_gameMode->EndRound(Spark::Team::None);
     };
-
-    // Wire enemy kill events to progression and loot
-    if (m_eventBus)
-    {
-        (void)m_eventBus->Subscribe<Spark::EntityKilledEvent>(
-            [this](const Spark::EntityKilledEvent& e)
-            {
-                // Award XP for kills
-                if (m_progression)
-                {
-                    int xp = Spark::ProgressionSystem::XP_PER_KILL;
-                    if (m_lootSystem && m_lootSystem->HasBuff(Spark::PowerUpType::DoubleXP))
-                        xp *= 2;
-                    m_progression->AwardXP(xp, "kill");
-                }
-
-                // Spawn loot near player as we don't have enemy position in the event
-                if (m_lootSystem && m_player)
-                {
-                    XMFLOAT3 deathPos = m_player->GetPosition();
-                    // Offset slightly so drops don't stack on player
-                    deathPos.x += 2.0f;
-                    deathPos.z += 2.0f;
-                    bool isBoss = m_waveSpawner && m_waveSpawner->IsBossWave();
-                    m_lootSystem->SpawnEnemyLoot(deathPos, 0, isBoss);
-                }
-            });
-    }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Gameplay systems initialized (waves, progression, loot)", L"SUCCESS");
 }
 
-void Game::StartWaves()
+bool Game::StartWaves()
 {
-    if (m_waveSpawner)
+    if (!m_waveSpawner || !m_gameMode)
     {
-        m_waveSpawner->Start();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Wave mode started!", L"SUCCESS");
+        LOG_TO_CONSOLE_IMMEDIATE(L"Wave mode unavailable - gameplay systems are not initialized", L"ERROR");
+        return false;
     }
+
+    auto rules = Spark::GameMode::GetPreset(Spark::GameModeType::Survival);
+    if (!m_gameMode->Initialize(rules))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Wave mode unavailable - survival rules are invalid", L"ERROR");
+        return false;
+    }
+
+    m_gameMode->AddPlayer("Player1");
+    m_gameMode->StartMatch();
+
+    // A restart begins a clean encounter instead of carrying surviving actors
+    // into the next wave-one accounting window.
+    std::erase_if(m_gameObjects, [this](const std::unique_ptr<GameObject>& object)
+                  { return std::find(m_enemies.begin(), m_enemies.end(), object.get()) != m_enemies.end(); });
+    m_enemies.clear();
+
+    m_waveSpawner->Reset();
+    m_waveSpawner->Start();
+
+    if (m_hudSystem)
+    {
+        m_hudSystem->AddKillFeedEntry("", "SURVIVAL", "Hold the arena and clear every wave");
+    }
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Survival match started - clear every wave!", L"SUCCESS");
+    return true;
 }

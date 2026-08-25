@@ -345,6 +345,15 @@ namespace Spark::Cinematic
         void PauseSequence(const std::string& name);
         void StopAll();
 
+        /**
+         * @brief Destroy every sequence and discard queued cues while module code is still resident.
+         *
+         * Sequence callbacks may be std::function targets implemented by a hot-loaded game module.
+         * The engine must call this before unloading module DLLs so callback destructors never jump
+         * into an unmapped image during process-static teardown.
+         */
+        void ClearSequences();
+
         void Update(float deltaTime);
         bool IsAnyCutscenePlaying() const;
         Sequence* GetActiveSequence();

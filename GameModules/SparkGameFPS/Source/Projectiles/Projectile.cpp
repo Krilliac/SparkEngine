@@ -12,8 +12,8 @@
 using namespace DirectX;
 
 Projectile::Projectile()
-    : m_velocity{0, 0, 0}, m_speed(50.0f), m_lifeTime(0.0f), m_maxLifeTime(5.0f), m_damage(25.0f), m_active(false),
-      m_boundingSphere(GetPosition(), 0.1f), m_hasGravity(false), m_gravityScale(1.0f)
+    : m_velocity{0, 0, 0}, m_previousPosition{0, 0, 0}, m_speed(50.0f), m_lifeTime(0.0f), m_maxLifeTime(5.0f),
+      m_damage(25.0f), m_active(false), m_boundingSphere(GetPosition(), 0.1f), m_hasGravity(false), m_gravityScale(1.0f)
 {
     // Base GameObject scale
     XMFLOAT3 scale{0.1f, 0.1f, 0.3f};
@@ -43,6 +43,8 @@ void Projectile::Update(float deltaTime)
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, deltaTime >= 0 && std::isfinite(deltaTime), "Invalid deltaTime");
     if (!m_active)
         return;
+
+    m_previousPosition = GetPosition();
 
     // Physics integration
     UpdatePhysics(deltaTime);
@@ -81,6 +83,7 @@ void Projectile::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, 
     SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, speed >= 0, "Speed must be non-negative");
     SetPosition(startPosition);
+    m_previousPosition = startPosition;
     m_speed = speed;
 
     XMVECTOR dirV = XMVector3Normalize(XMLoadFloat3(&direction));
@@ -110,6 +113,7 @@ void Projectile::Reset()
 {
     Deactivate();
     SetPosition(XMFLOAT3{0, 0, 0});
+    m_previousPosition = {0, 0, 0};
     SetRotation(XMFLOAT3{0, 0, 0});
 }
 

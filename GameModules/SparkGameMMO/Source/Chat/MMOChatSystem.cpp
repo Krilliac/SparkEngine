@@ -25,7 +25,12 @@ namespace MMO
 
     bool MMOChatSystem::Initialize(Spark::IEngineContext* context)
     {
+        if (m_initialized || m_context)
+            Shutdown();
+
         m_context = context;
+        m_time = 0.0f;
+        m_history.clear();
 
         SetupNetworkHandlers();
 
@@ -60,17 +65,22 @@ namespace MMO
                                     if (netMsg.payload.size() < 2)
                                         return;
 
-                                    // Server-side: broadcast chat to all other clients
-                                    if (netMgr->GetRole() == Spark::Net::NetworkRole::Server)
-                                    {
-                                        netMgr->SendToAllExcept(netMsg.senderID, netMsg);
-                                    }
-
                                     Spark::Net::NetBuffer buf;
                                     buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
-                                    auto channel = static_cast<ChatChannel>(buf.ReadUint8());
+                                    const uint8_t channelValue = buf.ReadUint8();
                                     std::string senderName = buf.ReadString();
                                     std::string text = buf.ReadString();
+                                    if (buf.HasError() || channelValue > static_cast<uint8_t>(ChatChannel::Whisper) ||
+                                        senderName.empty() || text.empty())
+                                    {
+                                        return;
+                                    }
+                                    const auto channel = static_cast<ChatChannel>(channelValue);
+
+                                    // Validate before relaying. Routing by party/area is owned by the
+                                    // authoritative game service; this showcase relays accepted messages.
+                                    if (netMgr->GetRole() == Spark::Net::NetworkRole::Server)
+                                        netMgr->SendToAllExcept(netMsg.senderID, netMsg);
 
                                     ChatMessage msg{};
                                     msg.channel = channel;
@@ -97,6 +107,10 @@ namespace MMO
 
     void MMOChatSystem::SendMessage(ChatChannel channel, const std::string& text, uint32_t targetId)
     {
+        if (!m_initialized || text.empty() ||
+            static_cast<uint8_t>(channel) > static_cast<uint8_t>(ChatChannel::Whisper))
+            return;
+
         ChatMessage msg{};
         msg.channel = channel;
         msg.senderClientId = 1; // Local client
@@ -146,12 +160,24 @@ namespace MMO
         if (!m_initialized)
             return;
 
-        m_time += deltaTime;
+        if (deltaTime > 0.0f)
+            m_time += deltaTime;
     }
 
     void MMOChatSystem::Shutdown()
     {
+#ifdef ENABLE_NETWORKING
+        if (auto* netMgr = m_context ? m_context->GetNetwork() : nullptr)
+        {
+            // NetworkManager currently has one handler slot per message type and
+            // no unregister API. Replace the DLL-owned callback before unload so
+            // hot reload cannot invoke a lambda whose code/data have been freed.
+            netMgr->RegisterHandler(Spark::Net::MessageType::ChatMessage, [](const Spark::Net::NetworkMessage&) {});
+        }
+#endif
         m_history.clear();
+        m_time = 0.0f;
+        m_context = nullptr;
         m_initialized = false;
     }
 

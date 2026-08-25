@@ -10,20 +10,26 @@
  * the pre-compiled AngelScript files to entities.
  *
  * Game features (all defined in visual scripts):
- *   - Player movement (WASD + mouse look)
+ *   - Player movement (WASD + sprint + jump)
  *   - Collectible items with score tracking
  *   - Enemy patrol with chase behavior
  *   - Health system with damage and healing
  *   - Win/lose conditions
  *   - Sound and animation triggers
- *   - HUD display (health bar, score counter)
+ *   - Console status and deterministic full-demo restart
  *
  * Implements the Spark::IModule interface for the module system.
  */
 
 #pragma once
 
+#include "Engine/ECS/Components/CoreComponents.h"
 #include "Spark/SparkSDK.h"
+
+#include <filesystem>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 /**
  * @brief Game module with all logic defined in visual scripts
@@ -49,10 +55,18 @@ class SparkGameVisualScriptModule : public Spark::IModule
     void OnImGui() override;
 
   private:
-    void LoadAndCompileScripts();
-    void SpawnGameEntities();
+    bool LoadAndCompileScripts();
+    bool SpawnGameEntities();
+    bool AttachScript(EntityID entity, const std::string& className);
+    void DestroyGameEntities();
+    void RegisterConsoleCommands();
+    void UnregisterConsoleCommands();
+    std::string GetStatusString() const;
 
     Spark::IEngineContext* m_context{nullptr};
+    std::filesystem::path m_scriptRoot;
+    std::unordered_map<std::string, std::string> m_scriptSources;
+    std::vector<EntityID> m_scriptEntities;
     bool m_initialized{false};
     bool m_paused{false};
 };

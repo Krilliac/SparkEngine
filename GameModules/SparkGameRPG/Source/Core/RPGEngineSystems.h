@@ -1,13 +1,12 @@
 /**
  * @file RPGEngineSystems.h
- * @brief Wires RPG gameplay into engine subsystems (save, animation, AI, cinematic, etc.)
+ * @brief Wires RPG gameplay into save, AI, cinematic, environment, audio, and event systems
  * @author Spark Engine Team
  * @date 2026
  *
  * RPGEngineSystems registers RPG-specific data with engine infrastructure:
- * save serializers, animation state machines, NPC behavior trees, cinematic
- * sequences, weather/time-of-day rules, coroutine tasks, music tracks, and
- * event bus subscriptions.
+ * save configuration, NPC behavior trees, cinematic sequences, weather/time-of-day
+ * rules, music tracks, and event bus subscriptions.
  */
 
 #pragma once
@@ -15,6 +14,7 @@
 #include "Spark/IEngineContext.h"
 #include "Utils/EventBus.h"
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -25,8 +25,8 @@ namespace RPG
      * @brief Bridges RPG game logic with engine subsystems
      *
      * Constructed and owned by SparkGameRPGModule. On Initialize() it registers
-     * RPG-specific assets and handlers with the engine's save, animation, AI,
-     * cinematic, weather, coroutine, music, and event systems.
+     * RPG-specific assets and handlers with the engine's save, AI, cinematic,
+     * weather, music, and event systems.
      */
     class RPGEngineSystems
     {
@@ -41,22 +41,17 @@ namespace RPG
          */
         bool Initialize(Spark::IEngineContext* context);
 
-        /** @brief Per-frame update for engine system integration (coroutines, music, etc.) */
-        void Update(float deltaTime);
-
         /** @brief Release subscriptions and clean up registrations */
         void Shutdown();
-
-        /** @brief Render debug UI for engine system integrations */
-        void RenderDebugUI();
 
         // ---- Console command helpers ----
 
         /** @brief Save to a named slot with current RPG state */
-        std::string SaveGame(const std::string& slotName);
+        std::string SaveGame(const std::string& slotName, const std::string& demoState);
 
         /** @brief Load from a named slot */
-        std::string LoadGame(const std::string& slotName);
+        std::string LoadGame(const std::string& slotName, std::string& outDemoState,
+                             const std::function<bool(const std::string&)>& validateDemoState);
 
         /** @brief Set weather type by name (clear/rain/snow/fog/storm) */
         std::string SetWeather(const std::string& weatherName);
@@ -65,12 +60,10 @@ namespace RPG
         std::string SetTime(float hour);
 
       private:
-        void RegisterSaveSerializers();
-        void RegisterAnimationStateMachines();
+        void ConfigureSaveSystem();
         void RegisterBehaviorTrees();
         void RegisterCinematicSequences();
         void SetupWeatherAndTimeOfDay();
-        void RegisterCoroutines();
         void RegisterMusicTracks();
         void SubscribeToEvents();
 

@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <sstream>
+#include <unordered_set>
 
 namespace OpenWorld
 {
@@ -348,8 +349,17 @@ namespace OpenWorld
             {
                 animal.behavior = AnimalBehavior::Fleeing;
                 float speed = species->fleeSpeed * deltaTime;
-                animal.posX -= (dx / distToPlayer) * speed;
-                animal.posZ -= (dz / distToPlayer) * speed;
+                if (distToPlayer > 0.001f)
+                {
+                    animal.posX -= (dx / distToPlayer) * speed;
+                    animal.posZ -= (dz / distToPlayer) * speed;
+                }
+                else
+                {
+                    // A coincident player/animal position has no normalized escape
+                    // direction. Use a deterministic axis instead of producing NaNs.
+                    animal.posX += (id % 2 == 0 ? speed : -speed);
+                }
             }
             // Carnivores stalk player if in range
             else if (species->diet == DietType::Carnivore && species->attackDamage > 0.0f &&
@@ -397,6 +407,18 @@ namespace OpenWorld
         }
         for (uint32_t id : toRemove)
             m_animals.erase(id);
+
+        // Keep herd membership consistent with the live population. Stale IDs
+        // previously accumulated forever after hunted animals were culled.
+        for (auto herd = m_herds.begin(); herd != m_herds.end();)
+        {
+            auto& members = herd->second.memberIds;
+            std::erase_if(members, [this](uint32_t id) { return m_animals.find(id) == m_animals.end(); });
+            if (members.empty())
+                herd = m_herds.erase(herd);
+            else
+                ++herd;
+        }
     }
 
     bool OWWildlifeSystem::TameAnimal(uint32_t instanceId)
@@ -442,6 +464,101 @@ namespace OpenWorld
         }
 
         return drops;
+    }
+
+    WildlifeSaveState OWWildlifeSystem::CaptureSaveState() const
+    {
+        WildlifeSaveState state;
+        state.animals.reserve(m_animals.size());
+        for (const auto& [id, animal] : m_animals)
+        {
+            (void)id;
+            state.animals.push_back(animal);
+        }
+        std::ranges::sort(state.animals, {}, &AnimalInstance::instanceId);
+        state.herds.reserve(m_herds.size());
+        for (const auto& [id, herd] : m_herds)
+        {
+            (void)id;
+            state.herds.push_back(herd);
+        }
+        std::ranges::sort(state.herds, {}, &Herd::herdId);
+        state.nextInstanceId = m_nextInstanceId;
+        state.nextHerdId = m_nextHerdId;
+        state.respawnTimer = m_respawnTimer;
+        return state;
+    }
+
+    bool OWWildlifeSystem::RestoreSaveState(const WildlifeSaveState& state, std::string* error)
+    {
+        auto fail = [&](const char* message)
+        {
+            if (error)
+                *error = message;
+            return false;
+        };
+        if (state.animals.size() > 10000 || state.herds.size() > 2048 || !std::isfinite(state.respawnTimer) ||
+            state.respawnTimer < 0.0f || state.respawnTimer > 3600.0f)
+            return fail("invalid wildlife state size or timer");
+
+        std::unordered_map<uint32_t, AnimalInstance> animals;
+        animals.reserve(state.animals.size());
+        uint32_t highestAnimalId = 0;
+        for (const auto& animal : state.animals)
+        {
+            if (animal.instanceId == 0 ||
+                static_cast<uint8_t>(animal.type) >= static_cast<uint8_t>(AnimalType::Count) ||
+                static_cast<uint8_t>(animal.behavior) >= static_cast<uint8_t>(AnimalBehavior::Count) ||
+                !std::isfinite(animal.posX) || !std::isfinite(animal.posY) || !std::isfinite(animal.posZ) ||
+                !std::isfinite(animal.health) || animal.health < 0.0f || animal.health > 100000.0f ||
+                animal.regionId == 0 || animal.regionId > 8 || animal.isAlive != (animal.health > 0.0f) ||
+                (animal.isTamed && (!animal.isAlive || animal.behavior != AnimalBehavior::Following)) ||
+                !animals.emplace(animal.instanceId, animal).second)
+                return fail("invalid wildlife animal record");
+            highestAnimalId = std::max(highestAnimalId, animal.instanceId);
+        }
+
+        std::unordered_map<uint32_t, Herd> herds;
+        herds.reserve(state.herds.size());
+        uint32_t highestHerdId = 0;
+        for (const auto& herd : state.herds)
+        {
+            if (herd.herdId == 0 || static_cast<uint8_t>(herd.type) >= static_cast<uint8_t>(AnimalType::Count) ||
+                !std::isfinite(herd.centerX) || !std::isfinite(herd.centerZ) || herd.regionId == 0 ||
+                herd.regionId > 8 || herd.memberIds.size() > 256 || !herds.emplace(herd.herdId, herd).second)
+                return fail("invalid wildlife herd record");
+            std::unordered_set<uint32_t> members;
+            for (uint32_t memberId : herd.memberIds)
+            {
+                auto animal = animals.find(memberId);
+                if (animal == animals.end() || animal->second.herdId != herd.herdId ||
+                    animal->second.type != herd.type || !members.insert(memberId).second)
+                    return fail("invalid wildlife herd membership");
+            }
+            highestHerdId = std::max(highestHerdId, herd.herdId);
+        }
+
+        for (const auto& [id, animal] : animals)
+        {
+            (void)id;
+            if (animal.herdId != 0)
+            {
+                const auto herd = herds.find(animal.herdId);
+                if (herd == herds.end() || std::find(herd->second.memberIds.begin(), herd->second.memberIds.end(),
+                                                     animal.instanceId) == herd->second.memberIds.end())
+                    return fail("animal references a missing herd membership");
+            }
+        }
+        if (state.nextInstanceId == 0 || state.nextInstanceId <= highestAnimalId || state.nextHerdId == 0 ||
+            state.nextHerdId <= highestHerdId)
+            return fail("invalid wildlife next id");
+
+        m_animals = std::move(animals);
+        m_herds = std::move(herds);
+        m_nextInstanceId = state.nextInstanceId;
+        m_nextHerdId = state.nextHerdId;
+        m_respawnTimer = state.respawnTimer;
+        return true;
     }
 
     size_t OWWildlifeSystem::GetTamedCount() const

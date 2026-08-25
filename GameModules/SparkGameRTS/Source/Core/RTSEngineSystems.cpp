@@ -4,6 +4,7 @@
  */
 
 #include "RTSEngineSystems.h"
+#include "RTSPersistence.h"
 #include "Engine/AI/AISystem.h"
 #include "Engine/AI/BehaviorTree.h"
 #include "Engine/AI/NavMesh.h"
@@ -16,6 +17,8 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
+#include <unordered_map>
+
 namespace RTS
 {
 
@@ -23,12 +26,18 @@ namespace RTS
     // Lifecycle
     // =========================================================================
 
-    bool RTSEngineSystems::Initialize(Spark::IEngineContext* context)
+    bool RTSEngineSystems::Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem,
+                                      RTSBuildingSystem* buildingSystem, RTSResourceSystem* resourceSystem,
+                                      RTSCommandSystem* commandSystem)
     {
         if (!context)
             return false;
 
         m_context = context;
+        m_unitSystem = unitSystem;
+        m_buildingSystem = buildingSystem;
+        m_resourceSystem = resourceSystem;
+        m_commandSystem = commandSystem;
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[RTS] Initializing engine system integrations...");
@@ -54,16 +63,8 @@ namespace RTS
         if (m_autosaveTimer >= AutosaveInterval)
         {
             m_autosaveTimer = 0.0f;
-            auto* saveSystem = m_context->GetSaveSystem();
-            if (saveSystem)
-            {
-                Spark::SaveMetadata meta;
-                meta.saveName = "RTS Auto Save";
-                meta.sceneName = "RTSMatch";
-                // AutoSave uses rotating slots internally
-                // We pass a World reference through the save system
-                // In practice the match system provides the world
-            }
+            if (!SaveMatch("rts_autosave"))
+                Spark::SimpleConsole::GetInstance().LogWarning("[RTS] Autosave failed");
         }
     }
 
@@ -82,6 +83,10 @@ namespace RTS
         m_eventHandles.clear();
 
         m_context = nullptr;
+        m_unitSystem = nullptr;
+        m_buildingSystem = nullptr;
+        m_resourceSystem = nullptr;
+        m_commandSystem = nullptr;
         console.LogInfo("[RTS] Engine system integrations shut down");
     }
 
@@ -394,6 +399,12 @@ namespace RTS
 
     bool RTSEngineSystems::SaveMatch(const std::string& slotName) const
     {
+        if (!IsValidSlotName(slotName))
+        {
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] Invalid save slot: " + slotName);
+            return false;
+        }
+
         auto* saveSystem = m_context ? m_context->GetSaveSystem() : nullptr;
         if (!saveSystem)
         {
@@ -401,20 +412,58 @@ namespace RTS
             return false;
         }
 
+        auto* world = m_context->GetWorld();
+        if (!world || !m_unitSystem || !m_buildingSystem || !m_resourceSystem)
+        {
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] World or gameplay state is not available");
+            return false;
+        }
+
         Spark::SaveMetadata meta;
         meta.saveName = "RTS Match - " + slotName;
         meta.sceneName = "RTSMatch";
-        // Full match state save includes units, buildings, resources, fog, tech progress
+        meta.playTime = static_cast<float>(m_context->GetElapsedTime());
+
+        const RTSPersistenceSnapshot snapshot =
+            RTSPersistence::Capture(*m_unitSystem, *m_buildingSystem, *m_resourceSystem);
+        const std::string encoded = RTSPersistence::Serialize(snapshot);
+        if (encoded.empty())
+        {
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] Failed to serialize match state");
+            return false;
+        }
+
+        const std::unordered_map<std::string, std::string> customState = {
+            {std::string(RTSPersistence::StateKey), encoded}};
+        if (!saveSystem->Save(slotName, *world, meta, customState))
+        {
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] Failed to write save slot: " + slotName);
+            return false;
+        }
+
         Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match saved to slot: " + slotName);
         return true;
     }
 
     bool RTSEngineSystems::LoadMatch(const std::string& slotName) const
     {
+        if (!IsValidSlotName(slotName))
+        {
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] Invalid save slot: " + slotName);
+            return false;
+        }
+
         auto* saveSystem = m_context ? m_context->GetSaveSystem() : nullptr;
         if (!saveSystem)
         {
             Spark::SimpleConsole::GetInstance().LogError("[RTS] SaveSystem not available");
+            return false;
+        }
+
+        auto* world = m_context->GetWorld();
+        if (!world || !m_unitSystem || !m_buildingSystem || !m_resourceSystem)
+        {
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] World or gameplay state is not available");
             return false;
         }
 
@@ -424,8 +473,38 @@ namespace RTS
             return false;
         }
 
+        std::unordered_map<std::string, std::string> customState;
+        if (!saveSystem->Load(slotName, *world, customState))
+        {
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] Failed to read save slot: " + slotName);
+            return false;
+        }
+
+        const auto encoded = customState.find(std::string(RTSPersistence::StateKey));
+        if (encoded == customState.end())
+        {
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] Save slot has no RTS match state: " + slotName);
+            return false;
+        }
+
+        RTSPersistenceSnapshot snapshot;
+        std::string error;
+        if (!RTSPersistence::Deserialize(encoded->second, snapshot, error) ||
+            !RTSPersistence::Apply(snapshot, *m_unitSystem, *m_buildingSystem, *m_resourceSystem, m_commandSystem,
+                                   error))
+        {
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] Invalid match state in slot '" + slotName +
+                                                         "': " + error);
+            return false;
+        }
+
         Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match loaded from slot: " + slotName);
         return true;
+    }
+
+    bool RTSEngineSystems::IsValidSlotName(const std::string& slotName)
+    {
+        return RTSPersistence::IsValidSlotName(slotName);
     }
 
     void RTSEngineSystems::SetWeather(const std::string& weatherName) const

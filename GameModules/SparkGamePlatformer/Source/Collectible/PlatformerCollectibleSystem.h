@@ -60,6 +60,15 @@ namespace Platformer
         int collectedKeys = 0;
     };
 
+    /// @brief Gameplay effect emitted when an item is collected.
+    struct CollectedPickup
+    {
+        CollectibleType type{CollectibleType::Coin};
+        PowerUpType abilityType{PowerUpType::DoubleJump};
+        int value = 0;
+        float powerUpDuration = 0.0f;
+    };
+
     /**
      * @brief Manages collectible items across all levels
      *
@@ -89,8 +98,9 @@ namespace Platformer
         /// @brief Total stars collected (global counter, gates progression)
         int GetStarsCollected() const { return m_starsCollected; }
 
-        /// @brief Check collection for a given player position and magnet state
-        void CheckCollection(float playerX, float playerY, float playerZ, bool magnetActive);
+        /// @brief Check collection for a given player position and magnet state.
+        /// @return Newly collected pickups whose gameplay effects must be applied by the module.
+        std::vector<CollectedPickup> CheckCollection(float playerX, float playerY, float playerZ, bool magnetActive);
 
         /// @brief Reset collectibles for a level reload
         void ResetLevel(uint32_t levelIndex);

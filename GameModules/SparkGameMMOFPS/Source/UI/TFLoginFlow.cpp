@@ -260,10 +260,10 @@ namespace Terrafront
         const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
         std::strncpy(req.user, m_username, sizeof(req.user) - 1);
         std::strncpy(req.pass, m_password, sizeof(req.pass) - 1);
-        m_ctx->clientNet->SendMsg(TFMsg::LoginRequest, &req, sizeof(req));
-        Spark::SecureErase(m_password, sizeof(m_password));
-        m_pending = PendingOp::Login;
         m_error.clear();
+        DispatchAfterArmingOnboardingState([&] { m_pending = PendingOp::Login; },
+                                           [&] { m_ctx->clientNet->SendMsg(TFMsg::LoginRequest, &req, sizeof(req)); });
+        Spark::SecureErase(m_password, sizeof(m_password));
     }
 
     void TFLoginFlow::SendRegister()
@@ -274,18 +274,18 @@ namespace Terrafront
         const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
         std::strncpy(req.user, m_username, sizeof(req.user) - 1);
         std::strncpy(req.pass, m_password, sizeof(req.pass) - 1);
-        m_ctx->clientNet->SendMsg(TFMsg::RegisterRequest, &req, sizeof(req));
-        Spark::SecureErase(m_password, sizeof(m_password));
-        m_pending = PendingOp::Register;
         m_error.clear();
+        DispatchAfterArmingOnboardingState([&] { m_pending = PendingOp::Register; }, [&]
+                                           { m_ctx->clientNet->SendMsg(TFMsg::RegisterRequest, &req, sizeof(req)); });
+        Spark::SecureErase(m_password, sizeof(m_password));
     }
 
     void TFLoginFlow::SendCharList()
     {
         if (!m_ctx || !m_ctx->clientNet)
             return;
-        m_ctx->clientNet->SendMsg(TFMsg::CharListRequest, nullptr, 0);
-        m_pending = PendingOp::CharList;
+        DispatchAfterArmingOnboardingState([&] { m_pending = PendingOp::CharList; },
+                                           [&] { m_ctx->clientNet->SendMsg(TFMsg::CharListRequest, nullptr, 0); });
     }
 
     void TFLoginFlow::SendCharCreate()
@@ -295,9 +295,9 @@ namespace Terrafront
         TF_CharCreateRequest req{};
         std::strncpy(req.name, m_createName, sizeof(req.name) - 1);
         req.faction = static_cast<uint8_t>(m_createFaction);
-        m_ctx->clientNet->SendMsg(TFMsg::CharCreateReq, &req, sizeof(req));
-        m_pending = PendingOp::CharCreate;
         m_error.clear();
+        DispatchAfterArmingOnboardingState([&] { m_pending = PendingOp::CharCreate; },
+                                           [&] { m_ctx->clientNet->SendMsg(TFMsg::CharCreateReq, &req, sizeof(req)); });
     }
 
     void TFLoginFlow::SendCharDelete(uint64_t charId)
@@ -306,9 +306,9 @@ namespace Terrafront
             return;
         TF_CharDeleteRequest req{};
         req.charId = charId;
-        m_ctx->clientNet->SendMsg(TFMsg::CharDeleteReq, &req, sizeof(req));
-        m_pending = PendingOp::CharDelete;
         m_error.clear();
+        DispatchAfterArmingOnboardingState([&] { m_pending = PendingOp::CharDelete; },
+                                           [&] { m_ctx->clientNet->SendMsg(TFMsg::CharDeleteReq, &req, sizeof(req)); });
     }
 
     void TFLoginFlow::SendEnterWorld(uint64_t charId)
@@ -317,9 +317,13 @@ namespace Terrafront
             return;
         TF_EnterWorldRequest req{};
         req.charId = charId;
-        m_ctx->clientNet->SendMsg(TFMsg::EnterWorldReq, &req, sizeof(req));
-        m_enterTimer = 0.0f;
-        m_state = TFFlowState::EnteringWorld;
+        DispatchAfterArmingOnboardingState(
+            [&]
+            {
+                m_enterTimer = 0.0f;
+                m_state = TFFlowState::EnteringWorld;
+            },
+            [&] { m_ctx->clientNet->SendMsg(TFMsg::EnterWorldReq, &req, sizeof(req)); });
     }
 
     // ---------------------------------------------------------------------------

@@ -39,7 +39,7 @@ namespace Platformer
     {
         // Level 0 (Green Hills) collectibles
         // Coin trail along the main path
-        SpawnCollectibleLine(5.0f, 2.0f, 0.0f, 8, 2.0f, CollectibleType::Coin);
+        SpawnCollectibleLine(5.0f, 1.0f, 0.0f, 8, 2.0f, CollectibleType::Coin);
 
         // Gems on higher platforms
         CollectibleInstance gem{};
@@ -84,10 +84,20 @@ namespace Platformer
         abilityOrb.id = m_nextId++;
         abilityOrb.type = CollectibleType::AbilityOrb;
         abilityOrb.posX = 20.0f;
-        abilityOrb.posY = 6.0f;
+        abilityOrb.posY = 1.0f;
         abilityOrb.posZ = 0.0f;
         abilityOrb.abilityType = PowerUpType::DoubleJump;
         abilityOrb.value = 0;
+        m_collectibles.push_back(abilityOrb);
+
+        abilityOrb.id = m_nextId++;
+        abilityOrb.posX = 40.0f;
+        abilityOrb.abilityType = PowerUpType::Dash;
+        m_collectibles.push_back(abilityOrb);
+
+        abilityOrb.id = m_nextId++;
+        abilityOrb.posX = 70.0f;
+        abilityOrb.abilityType = PowerUpType::GroundPound;
         m_collectibles.push_back(abilityOrb);
 
         // Key for a locked gate
@@ -127,8 +137,10 @@ namespace Platformer
         }
     }
 
-    void PlatformerCollectibleSystem::CheckCollection(float playerX, float playerY, float playerZ, bool magnetActive)
+    std::vector<CollectedPickup> PlatformerCollectibleSystem::CheckCollection(float playerX, float playerY,
+                                                                              float playerZ, bool magnetActive)
     {
+        std::vector<CollectedPickup> collected;
         float collectionMultiplier = magnetActive ? m_magnetRadius : 1.0f;
 
         for (auto& item : m_collectibles)
@@ -145,6 +157,7 @@ namespace Platformer
             if (distSq <= radius * radius)
             {
                 item.collected = true;
+                collected.push_back({item.type, item.abilityType, item.value, item.powerUpDuration});
 
                 switch (item.type)
                 {
@@ -172,6 +185,8 @@ namespace Platformer
                 }
             }
         }
+
+        return collected;
     }
 
     void PlatformerCollectibleSystem::ResetLevel(uint32_t levelIndex)

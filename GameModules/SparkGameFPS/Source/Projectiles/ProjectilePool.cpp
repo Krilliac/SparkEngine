@@ -4,6 +4,8 @@
 #include "Bullet.h"
 #include "Rocket.h"
 #include "Grenade.h"
+#include "Game/Enemy.h"
+#include "Engine/Events/EventSystem.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include "Utils/SparkConsole.h"
@@ -153,6 +155,27 @@ Projectile* ProjectilePool::GetProjectile()
     return p;
 }
 
+Projectile* ProjectilePool::GetProjectile(ProjectileType type)
+{
+    const size_t availableCount = m_availableProjectiles.size();
+    for (size_t index = 0; index < availableCount; ++index)
+    {
+        Projectile* projectile = m_availableProjectiles.front();
+        m_availableProjectiles.pop();
+
+        const bool matches = (type == ProjectileType::BULLET && dynamic_cast<Bullet*>(projectile)) ||
+                             (type == ProjectileType::ROCKET && dynamic_cast<Rocket*>(projectile)) ||
+                             (type == ProjectileType::GRENADE && dynamic_cast<Grenade*>(projectile));
+        if (matches)
+            return projectile;
+
+        m_availableProjectiles.push(projectile);
+    }
+
+    LOG_TO_CONSOLE(L"ProjectilePool: No projectile available for requested weapon type", L"WARNING");
+    return nullptr;
+}
+
 void ProjectilePool::ReturnProjectile(Projectile* p)
 {
     // **FIXED: Rate-limited logging for projectile return**
@@ -160,7 +183,7 @@ void ProjectilePool::ReturnProjectile(Projectile* p)
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, p);
     if (p)
     {
-        p->SetActive(false);
+        p->Deactivate();
         m_availableProjectiles.push(p);
     }
 }
@@ -169,8 +192,9 @@ void ProjectilePool::FireBullet(const XMFLOAT3& pos, const XMFLOAT3& dir, float 
 {
     LOG_TO_CONSOLE(L"ProjectilePool::FireBullet called. speed=" + std::to_wstring(speed), L"OPERATION");
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, speed >= 0.0f, "Speed must be non-negative in FireBullet");
-    if (auto p = GetProjectile())
+    if (auto p = GetProjectile(ProjectileType::BULLET))
     {
+        p->SetDamage(15.0f);
         p->Fire(pos, dir, speed);
     }
 }
@@ -179,8 +203,9 @@ void ProjectilePool::FireRocket(const XMFLOAT3& pos, const XMFLOAT3& dir, float 
 {
     LOG_TO_CONSOLE(L"ProjectilePool::FireRocket called. speed=" + std::to_wstring(speed), L"OPERATION");
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, speed >= 0.0f, "Speed must be non-negative in FireRocket");
-    if (auto p = GetProjectile())
+    if (auto p = GetProjectile(ProjectileType::ROCKET))
     {
+        p->SetDamage(75.0f);
         p->Fire(pos, dir, speed);
     }
 }
@@ -189,35 +214,48 @@ void ProjectilePool::FireGrenade(const XMFLOAT3& pos, const XMFLOAT3& dir, float
 {
     LOG_TO_CONSOLE(L"ProjectilePool::FireGrenade called. speed=" + std::to_wstring(speed), L"OPERATION");
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, speed >= 0.0f, "Speed must be non-negative in FireGrenade");
-    if (auto p = GetProjectile())
+    if (auto p = GetProjectile(ProjectileType::GRENADE))
     {
+        p->SetDamage(100.0f);
         p->SetGravity(true, 1.0f);
         p->Fire(pos, dir, speed);
     }
 }
 
-void ProjectilePool::FireProjectile(ProjectileType type, const XMFLOAT3& pos, const XMFLOAT3& dir, float speed)
+void ProjectilePool::FireProjectile(ProjectileType type, const XMFLOAT3& pos, const XMFLOAT3& dir, float speed,
+                                    float damage)
 {
     // **FIXED: Rate-limited logging for weapon firing**
     static auto lastFireLog = std::chrono::steady_clock::now();
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastFireLog).count();
 
+    Projectile* projectile = GetProjectile(type);
+    if (!projectile)
+        return;
+
+    float defaultDamage = 15.0f;
     switch (type)
     {
     case ProjectileType::BULLET:
-        FireBullet(pos, dir, speed);
+        defaultDamage = 15.0f;
         break;
     case ProjectileType::ROCKET:
-        FireRocket(pos, dir, speed);
+        defaultDamage = 75.0f;
         break;
     case ProjectileType::GRENADE:
-        FireGrenade(pos, dir, speed);
+        defaultDamage = 100.0f;
+        projectile->SetGravity(true, 1.0f);
         break;
     default:
         LOG_TO_CONSOLE_IMMEDIATE(L"Unknown ProjectileType in FireProjectile", L"ERROR");
+        ReturnProjectile(projectile);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Game, false, "Unknown ProjectileType in FireProjectile");
+        return;
     }
+
+    projectile->SetDamage(damage >= 0.0f ? damage : defaultDamage);
+    projectile->Fire(pos, dir, speed);
 
     // Only log firing every 3 seconds to avoid spam
     if (elapsed >= 3)
@@ -225,6 +263,71 @@ void ProjectilePool::FireProjectile(ProjectileType type, const XMFLOAT3& pos, co
         LOG_TO_CONSOLE(L"ProjectilePool: Projectile fired.", L"INFO");
         lastFireLog = now;
     }
+}
+
+size_t ProjectilePool::ResolveEnemyHits(const std::vector<Enemy*>& enemies, Spark::EventBus* eventBus)
+{
+    size_t hitCount = 0;
+
+    for (auto& ownedProjectile : m_projectiles)
+    {
+        Projectile* projectile = ownedProjectile.get();
+        if (!projectile->IsActive())
+            continue;
+
+        const XMFLOAT3 start = projectile->GetPreviousPosition();
+        const XMFLOAT3 end = projectile->GetPosition();
+        const float segmentX = end.x - start.x;
+        const float segmentY = end.y - start.y;
+        const float segmentZ = end.z - start.z;
+        const float segmentLengthSq = segmentX * segmentX + segmentY * segmentY + segmentZ * segmentZ;
+
+        for (Enemy* enemy : enemies)
+        {
+            if (!enemy || !enemy->IsAlive())
+                continue;
+
+            const XMFLOAT3 enemyPosition = enemy->GetPosition();
+            float interpolation = 0.0f;
+            if (segmentLengthSq > 0.000001f)
+            {
+                interpolation = ((enemyPosition.x - start.x) * segmentX + (enemyPosition.y - start.y) * segmentY +
+                                 (enemyPosition.z - start.z) * segmentZ) /
+                                segmentLengthSq;
+                interpolation = std::clamp(interpolation, 0.0f, 1.0f);
+            }
+
+            const float closestX = start.x + segmentX * interpolation;
+            const float closestY = start.y + segmentY * interpolation;
+            const float closestZ = start.z + segmentZ * interpolation;
+            const float dx = enemyPosition.x - closestX;
+            const float dy = enemyPosition.y - closestY;
+            const float dz = enemyPosition.z - closestZ;
+            const auto& scale = enemy->GetScale();
+            const float enemyRadius =
+                (std::max)(0.75f, (std::max)({std::abs(scale.x), std::abs(scale.y), std::abs(scale.z)}));
+            const float combinedRadius = enemyRadius + projectile->GetBoundingSphere().Radius;
+            if (dx * dx + dy * dy + dz * dz > combinedRadius * combinedRadius)
+                continue;
+
+            enemy->TakeDamage(projectile->GetDamage());
+            const bool killed = !enemy->IsAlive();
+            const char* cause = dynamic_cast<Rocket*>(projectile)    ? "Rocket"
+                                : dynamic_cast<Grenade*>(projectile) ? "Grenade"
+                                                                     : "Bullet";
+            projectile->OnHit(enemy);
+            ReturnProjectile(projectile);
+            ++hitCount;
+
+            if (killed && eventBus)
+            {
+                eventBus->Publish(Spark::EntityKilledEvent{enemy->GetID(), 0, cause});
+            }
+            break;
+        }
+    }
+
+    return hitCount;
 }
 
 void ProjectilePool::SetPhysicsSystem(PhysicsSystem* ps)

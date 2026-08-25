@@ -61,6 +61,15 @@ namespace OpenWorld
         uint32_t regionId = 0;
     };
 
+    /// @brief Complete mutable player state persisted by the OpenWorld save file.
+    struct PlayerSaveState
+    {
+        SurvivalState survival;
+        PlayerWorldState world;
+        std::vector<FastTravelPoint> fastTravelPoints;
+        float survivalTickTimer = 0.0f;
+    };
+
     /**
      * @brief Player survival, movement, fast travel, and compass system
      */
@@ -97,6 +106,9 @@ namespace OpenWorld
         bool FastTravelTo(uint32_t pointId);
         const std::vector<FastTravelPoint>& GetFastTravelPoints() const { return m_fastTravelPoints; }
         size_t GetFastTravelCount() const { return m_fastTravelPoints.size(); }
+
+        PlayerSaveState CaptureSaveState() const;
+        bool RestoreSaveState(const PlayerSaveState& state, std::string* error = nullptr);
 
         std::string GetStatusString() const;
 

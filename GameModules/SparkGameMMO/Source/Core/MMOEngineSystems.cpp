@@ -30,8 +30,12 @@ namespace MMO
     {
         if (!context)
             return false;
+        if (m_initialized || m_context)
+            Shutdown();
 
         m_context = context;
+        m_runtimeSeconds = 0.0f;
+        m_statusSampleTimer = 0.0f;
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO: Wiring engine subsystems");
         auto& console = Spark::SimpleConsole::GetInstance();
@@ -52,17 +56,31 @@ namespace MMO
         return true;
     }
 
-    // Intentional: deltaTime reserved for future tick-rate-dependent updates
-    void MMOEngineSystems::Update([[maybe_unused]] float deltaTime)
+    void MMOEngineSystems::Update(float deltaTime)
     {
-        if (!m_initialized)
+        if (!m_initialized || deltaTime <= 0.0f)
             return;
+
+        m_runtimeSeconds += deltaTime;
+        m_statusSampleTimer -= deltaTime;
+        if (m_statusSampleTimer > 0.0f)
+            return;
+
+        if (auto* weather = m_context->GetWeather())
+            m_sampledWeatherIntensity = weather->GetCurrentState().intensity;
+        if (auto* timeOfDay = m_context->GetTimeOfDay())
+            m_sampledWorldHour = timeOfDay->GetTimeOfDay();
+        m_statusSampleTimer = 1.0f;
     }
 
     void MMOEngineSystems::Shutdown()
     {
         m_eventHandles.clear();
         m_context = nullptr;
+        m_runtimeSeconds = 0.0f;
+        m_statusSampleTimer = 0.0f;
+        m_sampledWorldHour = 8.0f;
+        m_sampledWeatherIntensity = 0.0f;
         m_initialized = false;
     }
 
@@ -102,7 +120,7 @@ namespace MMO
         //   Healer:  Holy Light (2.5s cast, 40m), Mass Heal (30s CD, AoE 15m), Renew (HoT, 12s)
         //   Rogue:   Backstab (6s CD, 5m), Poison Blade (30% proc, 2s ICD)
         Spark::SimpleConsole::GetInstance().LogInfo(
-            "[MMO] Abilities: 7 abilities, 1 proc, 2 auras configured (Warrior/Mage/Healer/Rogue)");
+            "[MMO] Ability catalog: Warrior/Mage/Healer/Rogue definitions available for data registration");
     }
 
     // =========================================================================
@@ -325,7 +343,7 @@ namespace MMO
         //   Transitions: idle↔run, idle→combat_idle, combat↔attack/cast/channel (9 transitions)
         //   Mount SM: mount_idle, mount_run, mount_fly (3 states, 4 transitions)
         Spark::SimpleConsole::GetInstance().LogInfo(
-            "[MMO] Animation: class SM (7 states, 9 transitions), mount SM (3 states, 4 transitions) configured");
+            "[MMO] Animation catalog: class and mount state-machine definitions available for data registration");
     }
 
     // =========================================================================
@@ -400,12 +418,12 @@ namespace MMO
 
     std::string MMOEngineSystems::GetWeatherStatus() const
     {
-        if (auto* weather = m_context->GetWeather())
-        {
-            auto& state = weather->GetCurrentState();
-            return "Weather: intensity=" + std::to_string(state.intensity) + "\n";
-        }
-        return "Weather system unavailable\n";
+        if (!m_initialized || !m_context || !m_context->GetWeather())
+            return "Weather system unavailable\n";
+
+        return "Weather: intensity=" + std::to_string(m_sampledWeatherIntensity) +
+               ", world hour=" + std::to_string(m_sampledWorldHour) + ", observed=" + std::to_string(m_runtimeSeconds) +
+               "s\n";
     }
 
     std::string MMOEngineSystems::GetCinematicList() const

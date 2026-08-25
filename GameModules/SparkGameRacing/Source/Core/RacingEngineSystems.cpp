@@ -8,6 +8,7 @@
  */
 
 #include "RacingEngineSystems.h"
+#include "RacingPersistence.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -20,6 +21,8 @@
 #include "Engine/Destruction/DestructionSystem.h"
 // CoroutineScheduler.h excluded — C++20 coroutine header bugs with GCC 13
 
+#include <unordered_map>
+
 namespace Racing
 {
 
@@ -27,12 +30,18 @@ namespace Racing
     // Initialize / Update / Shutdown
     // =============================================================================
 
-    bool RacingEngineSystems::Initialize(Spark::IEngineContext* context)
+    bool RacingEngineSystems::Initialize(Spark::IEngineContext* context, RacingVehicleSystem* vehicleSystem,
+                                         RacingTrackSystem* trackSystem, RacingRaceManager* raceManager,
+                                         RacingAIDriver* aiDriver)
     {
         if (!context)
             return false;
 
         m_context = context;
+        m_vehicleSystem = vehicleSystem;
+        m_trackSystem = trackSystem;
+        m_raceManager = raceManager;
+        m_aiDriver = aiDriver;
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[Racing] Initializing engine system integrations...");
@@ -86,6 +95,10 @@ namespace Racing
         // is handled engine-side when the module context is released.
 
         m_context = nullptr;
+        m_vehicleSystem = nullptr;
+        m_trackSystem = nullptr;
+        m_raceManager = nullptr;
+        m_aiDriver = nullptr;
         m_initialized = false;
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing engine system integrations shut down");
@@ -180,36 +193,92 @@ namespace Racing
         if (!save)
             return;
 
-        save->SetSaveDirectory("Saves/Racing");
+        if (!save->Initialize("Saves/Racing"))
+        {
+            Spark::SimpleConsole::GetInstance().LogError("[Racing] Save: failed to initialize Saves/Racing");
+            return;
+        }
 
         Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Save: directory set to Saves/Racing");
     }
 
     std::string RacingEngineSystems::SaveRaceData(const std::string& slotName)
     {
+        if (!IsValidSlotName(slotName))
+            return "Invalid slot name: use 1-64 letters, digits, '_' or '-'";
+        if (!m_context)
+            return "Engine systems not initialized";
+
         auto* save = m_context->GetSaveSystem();
         if (!save)
             return "Save system not available";
 
+        auto* world = m_context->GetWorld();
+        if (!world)
+            return "World not available";
+        if (!m_vehicleSystem || !m_trackSystem || !m_raceManager || !m_aiDriver)
+            return "Racing gameplay state not available";
+
         Spark::SaveMetadata meta;
         meta.saveName = "Racing - " + slotName;
+        meta.sceneName = m_trackSystem->GetCurrentTrack().name;
+        meta.playTime = static_cast<float>(m_context->GetElapsedTime());
 
-        // Save via custom state: best laps, career, unlocked vehicles, win/loss/DNF stats
-        // The actual World serialization handles entity data; metadata carries display info
-        // For now, mark the save as ready -- full serialization uses World reference at call site
+        const RacingPersistenceSnapshot snapshot =
+            RacingPersistence::Capture(*m_trackSystem, *m_vehicleSystem, *m_raceManager, *m_aiDriver);
+        std::string snapshotError;
+        const std::string encoded = RacingPersistence::Serialize(snapshot, snapshotError);
+        if (encoded.empty())
+            return "Failed to snapshot racing state: " + snapshotError;
+        const std::unordered_map<std::string, std::string> customState = {
+            {std::string(RacingPersistence::StateKey), encoded}};
+        if (!save->Save(slotName, *world, meta, customState))
+            return "Failed to save race data to slot: " + slotName;
         return "Race data saved to slot: " + slotName;
     }
 
     std::string RacingEngineSystems::LoadRaceData(const std::string& slotName)
     {
+        if (!IsValidSlotName(slotName))
+            return "Invalid slot name: use 1-64 letters, digits, '_' or '-'";
+        if (!m_context)
+            return "Engine systems not initialized";
+
         auto* save = m_context->GetSaveSystem();
         if (!save)
             return "Save system not available";
 
+        auto* world = m_context->GetWorld();
+        if (!world)
+            return "World not available";
+        if (!m_vehicleSystem || !m_trackSystem || !m_raceManager || !m_aiDriver)
+            return "Racing gameplay state not available";
+
         if (!save->SaveExists(slotName))
             return "No save found for slot: " + slotName;
 
+        std::unordered_map<std::string, std::string> customState;
+        if (!save->Load(slotName, *world, customState))
+            return "Failed to load race data from slot: " + slotName;
+
+        const auto encoded = customState.find(std::string(RacingPersistence::StateKey));
+        if (encoded == customState.end())
+            return "Save has no racing state: " + slotName;
+
+        RacingPersistenceSnapshot snapshot;
+        std::string error;
+        if (!RacingPersistence::Deserialize(encoded->second, snapshot, error) ||
+            !RacingPersistence::Apply(snapshot, *m_trackSystem, *m_vehicleSystem, *m_raceManager, *m_aiDriver, error))
+        {
+            return "Invalid racing state in slot '" + slotName + "': " + error;
+        }
+
         return "Race data loaded from slot: " + slotName;
+    }
+
+    bool RacingEngineSystems::IsValidSlotName(const std::string& slotName)
+    {
+        return RacingPersistence::IsValidSlotName(slotName);
     }
 
     // =============================================================================

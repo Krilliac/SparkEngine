@@ -2,13 +2,15 @@
  * @file TestFPSGameplayIntegration.cpp
  * @brief Integration tests for the FPS game module's core gameplay systems
  *
- * Tests the GameMode lifecycle (init → update → scoring → round transitions)
- * and WaveSpawner state machine (idle → countdown → spawning → completed).
- * All tests are CPU-only — no GPU, no DLL loading.
+ * Tests the production GameMode lifecycle (init → countdown → scoring →
+ * intermission → next round), validation, and deterministic scoreboard rules.
+ * All tests are CPU-only — no GPU or DLL loading.
  */
 
 #include "TestFramework.h"
 #include "Game/GameMode.h"
+
+#include <limits>
 
 using namespace Spark;
 
@@ -165,4 +167,139 @@ TEST(FPSInteg_GameMode_RemovePlayer)
 
     mode.RemovePlayer("LeavingPlayer");
     EXPECT_TRUE(mode.GetPlayerScore("LeavingPlayer") == nullptr);
+}
+
+TEST(FPSInteg_GameMode_RejectsInvalidRulesWithoutStarting)
+{
+    GameMode mode;
+    GameModeRules rules;
+    rules.roundLimit = 0;
+    EXPECT_FALSE(mode.Initialize(rules));
+    EXPECT_FALSE(mode.IsMatchActive());
+
+    rules.roundLimit = 1;
+    rules.timeLimit = std::numeric_limits<float>::quiet_NaN();
+    EXPECT_FALSE(mode.Initialize(rules));
+    EXPECT_FALSE(mode.IsMatchActive());
+}
+
+TEST(FPSInteg_GameMode_TwoRoundMatchTransitionsDeterministically)
+{
+    GameMode mode;
+    auto rules = GameMode::GetPreset(GameModeType::Deathmatch);
+    rules.scoreLimit = 1;
+    rules.roundLimit = 2;
+    rules.timeLimit = 0.0f;
+    EXPECT_TRUE(mode.Initialize(rules));
+    mode.AddPlayer("Ranger");
+    mode.AddPlayer("Target");
+
+    mode.StartMatch();
+    EXPECT_TRUE(mode.IsMatchActive());
+    EXPECT_EQ(mode.GetCurrentRound(), 1);
+    EXPECT_TRUE(mode.GetRoundState() == RoundState::Countdown);
+
+    mode.Update(3.0f);
+    EXPECT_TRUE(mode.GetRoundState() == RoundState::InProgress);
+    mode.RecordKill("Ranger", "Target");
+    mode.Update(0.016f);
+    EXPECT_TRUE(mode.GetRoundState() == RoundState::RoundEnd);
+    EXPECT_EQ(mode.GetRoundResults().size(), static_cast<size_t>(1));
+    EXPECT_NEAR(mode.GetRoundTransitionTime(), 3.0f, 0.001f);
+
+    mode.Update(3.0f);
+    EXPECT_EQ(mode.GetCurrentRound(), 2);
+    EXPECT_TRUE(mode.GetRoundState() == RoundState::Countdown);
+    mode.Update(3.0f);
+    mode.Update(0.016f);
+    EXPECT_TRUE(mode.IsMatchActive());
+    EXPECT_TRUE(mode.GetRoundState() == RoundState::InProgress);
+    mode.RecordKill("Ranger", "Target");
+    mode.Update(0.016f);
+
+    EXPECT_FALSE(mode.IsMatchActive());
+    EXPECT_TRUE(mode.GetRoundState() == RoundState::MatchEnd);
+    EXPECT_EQ(mode.GetRoundResults().size(), static_cast<size_t>(2));
+}
+
+TEST(FPSInteg_GameMode_SurvivalDoesNotAutoCompleteAtZeroScoreLimit)
+{
+    GameMode mode;
+    const auto rules = GameMode::GetPreset(GameModeType::Survival);
+    EXPECT_TRUE(mode.Initialize(rules));
+    mode.AddPlayer("Player1");
+    mode.StartMatch();
+
+    mode.Update(3.0f);
+    mode.Update(5.0f);
+
+    EXPECT_TRUE(mode.IsMatchActive());
+    EXPECT_TRUE(mode.GetRoundState() == RoundState::InProgress);
+}
+
+TEST(FPSInteg_GameMode_InvalidDeltaDoesNotAdvanceCountdown)
+{
+    GameMode mode;
+    EXPECT_TRUE(mode.Initialize(GameMode::GetPreset(GameModeType::Deathmatch)));
+    mode.AddPlayer("Player1");
+    mode.StartMatch();
+
+    mode.Update(-1.0f);
+    mode.Update(std::numeric_limits<float>::quiet_NaN());
+
+    EXPECT_NEAR(mode.GetCountdownTime(), 3.0f, 0.001f);
+    EXPECT_TRUE(mode.GetRoundState() == RoundState::Countdown);
+}
+
+TEST(FPSInteg_GameMode_SuicideRecordsDeathWithoutKillRewards)
+{
+    GameMode mode;
+    GameModeRules rules;
+    rules.deathPenalty = 25;
+    EXPECT_TRUE(mode.Initialize(rules));
+    mode.AddPlayer("Player1");
+
+    mode.RecordKill("Player1", "Player1", true);
+
+    const auto* score = mode.GetPlayerScore("Player1");
+    EXPECT_TRUE(score != nullptr);
+    EXPECT_EQ(score->kills, 0);
+    EXPECT_EQ(score->deaths, 1);
+    EXPECT_EQ(score->headshots, 0);
+    EXPECT_EQ(score->totalScore, -25);
+}
+
+TEST(FPSInteg_GameMode_ScoreboardTieOrderIsStable)
+{
+    GameMode mode;
+    EXPECT_TRUE(mode.Initialize(GameModeRules{}));
+    mode.AddPlayer("Charlie");
+    mode.AddPlayer("Alice");
+    mode.AddPlayer("Bob");
+
+    const auto scoreboard = mode.GetScoreboard();
+    EXPECT_EQ(scoreboard.size(), static_cast<size_t>(3));
+    EXPECT_EQ(scoreboard[0].playerName, std::string("Alice"));
+    EXPECT_EQ(scoreboard[1].playerName, std::string("Bob"));
+    EXPECT_EQ(scoreboard[2].playerName, std::string("Charlie"));
+}
+
+TEST(FPSInteg_GameMode_CaptureTheFlagRequiresConfiguredCaptureLimit)
+{
+    GameMode mode;
+    const auto rules = GameMode::GetPreset(GameModeType::CaptureTheFlag);
+    EXPECT_TRUE(mode.Initialize(rules));
+    mode.AddPlayer("Carrier", Team::Alpha);
+    mode.StartMatch();
+    mode.Update(3.0f);
+
+    mode.RecordObjectiveScore("Carrier", rules.objectivePoints);
+    mode.Update(0.016f);
+    EXPECT_TRUE(mode.IsMatchActive());
+
+    mode.RecordObjectiveScore("Carrier", rules.objectivePoints);
+    mode.RecordObjectiveScore("Carrier", rules.objectivePoints);
+    mode.Update(0.016f);
+    EXPECT_FALSE(mode.IsMatchActive());
+    EXPECT_TRUE(mode.GetRoundState() == RoundState::MatchEnd);
 }

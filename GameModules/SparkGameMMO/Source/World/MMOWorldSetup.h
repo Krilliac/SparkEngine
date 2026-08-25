@@ -47,6 +47,12 @@ namespace MMO
         bool isPvPEnabled = false;
         bool isInstanced = false;
         std::string description;
+
+        bool Contains(float x, float y, float z) const
+        {
+            return x >= boundsMinX && x <= boundsMaxX && y >= boundsMinY && y <= boundsMaxY && z >= boundsMinZ &&
+                   z <= boundsMaxZ;
+        }
     };
 
     /**
@@ -87,6 +93,8 @@ namespace MMO
 
         size_t GetAreaCount() const { return m_areas.size(); }
         const std::vector<MMOAreaInfo>& GetAreas() const { return m_areas; }
+        const MMOAreaInfo* GetArea(uint32_t areaId) const;
+        uint32_t FindAreaId(float x, float y, float z, uint32_t fallbackAreaId = 0) const;
         std::string GetWorldStatusString() const;
         std::string GetAreaListString() const;
 

@@ -49,6 +49,12 @@ enum class ProjectileType
  * @warning Initialize() must be called before firing any projectiles
  */
 class PhysicsSystem;
+class Enemy;
+
+namespace Spark
+{
+    class EventBus;
+}
 
 class ProjectilePool
 {
@@ -96,6 +102,9 @@ class ProjectilePool
      */
     Projectile* GetProjectile();
 
+    /** @brief Get an available projectile matching the requested weapon type. */
+    Projectile* GetProjectile(ProjectileType type);
+
     /**
      * @brief Return a projectile to the available pool
      * @param p Pointer to the projectile to return
@@ -133,7 +142,14 @@ class ProjectilePool
      * @param dir Direction vector (should be normalized)
      * @param speed Initial speed
      */
-    void FireProjectile(ProjectileType type, const DirectX::XMFLOAT3& pos, const DirectX::XMFLOAT3& dir, float speed);
+    void FireProjectile(ProjectileType type, const DirectX::XMFLOAT3& pos, const DirectX::XMFLOAT3& dir, float speed,
+                        float damage = -1.0f);
+
+    /**
+     * @brief Apply swept projectile hits to live arena enemies.
+     * @return Number of projectiles that hit an enemy this frame.
+     */
+    size_t ResolveEnemyHits(const std::vector<Enemy*>& enemies, Spark::EventBus* eventBus);
 
     /**
      * @brief Set the physics system on all managed projectiles

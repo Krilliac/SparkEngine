@@ -23,6 +23,7 @@
 #include "Account/MMOAccountSystem.h"
 #include "Character/MMOCharacterSystem.h"
 #include "UI/MMOLoginUI.h"
+#include "Gameplay/MMOGameplaySession.h"
 #include "MMOEngineSystems.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
@@ -32,6 +33,46 @@
 #include "Engine/ECS/Components/NetworkComponents.h"
 
 #include <Spark/ModuleDllMain.h>
+
+#include <charconv>
+#include <cmath>
+
+namespace
+{
+    bool ParseUint(const std::string& text, uint32_t& value)
+    {
+        if (text.empty())
+            return false;
+        const char* begin = text.data();
+        const char* end = begin + text.size();
+        const auto [ptr, error] = std::from_chars(begin, end, value);
+        return error == std::errc{} && ptr == end;
+    }
+
+    bool ParsePositiveInt(const std::string& text, int& value)
+    {
+        if (text.empty())
+            return false;
+        const char* begin = text.data();
+        const char* end = begin + text.size();
+        const auto [ptr, error] = std::from_chars(begin, end, value);
+        return error == std::errc{} && ptr == end && value > 0;
+    }
+
+    bool ParsePositiveFloat(const std::string& text, float& value)
+    {
+        try
+        {
+            size_t parsed = 0;
+            value = std::stof(text, &parsed);
+            return parsed == text.size() && std::isfinite(value) && value > 0.0f;
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
+} // namespace
 
 // =============================================================================
 // Module exports
@@ -47,8 +88,7 @@ SparkGameMMOModule::SparkGameMMOModule() = default;
 
 SparkGameMMOModule::~SparkGameMMOModule()
 {
-    if (m_initialized)
-        OnUnload();
+    OnUnload();
 }
 
 Spark::ModuleInfo SparkGameMMOModule::GetModuleInfo() const
@@ -66,6 +106,10 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
     if (!context)
         return false;
 
+    // A reused module instance must not retain handlers or partially initialized
+    // systems from an earlier failed/hot-reload attempt.
+    OnUnload();
+
     m_context = context;
 
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Loading SparkGameMMO module");
@@ -73,92 +117,99 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[MMO] Loading Spark MMO module...");
 
+    const auto failLoad = [this, &console](const std::string& message)
+    {
+        console.LogError(message);
+        ShutdownSystems();
+        m_context = nullptr;
+        return false;
+    };
+
     // Initialize the world area setup (registers areas with streaming/area servers)
     m_worldSetup = std::make_unique<MMO::MMOWorldSetup>();
     if (!m_worldSetup->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize world setup");
-        return false;
+        return failLoad("[MMO] Failed to initialize world setup");
     }
 
     // Initialize player system (spawning, replication, prediction)
     m_playerSystem = std::make_unique<MMO::MMOPlayerSystem>();
     if (!m_playerSystem->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize player system");
-        return false;
+        return failLoad("[MMO] Failed to initialize player system");
     }
+    m_playerSystem->SetAreaResolver(
+        [this](float x, float y, float z, uint32_t currentAreaId)
+        { return m_worldSetup ? m_worldSetup->FindAreaId(x, y, z, currentAreaId) : currentAreaId; });
 
     // Initialize chat system (area, global, party, whisper channels)
     m_chatSystem = std::make_unique<MMO::MMOChatSystem>();
     if (!m_chatSystem->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize chat system");
-        return false;
+        return failLoad("[MMO] Failed to initialize chat system");
     }
 
     // Initialize MMO gameplay systems
     m_inventorySystem = std::make_unique<MMO::MMOInventorySystem>();
     if (!m_inventorySystem->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize inventory system");
-        return false;
+        return failLoad("[MMO] Failed to initialize inventory system");
     }
 
     m_craftingSystem = std::make_unique<MMO::MMOCraftingSystem>();
-    if (!m_craftingSystem->Initialize(context))
+    if (!m_craftingSystem->Initialize(context, m_inventorySystem.get()))
     {
-        console.LogError("[MMO] Failed to initialize crafting system");
-        return false;
+        return failLoad("[MMO] Failed to initialize crafting system");
     }
 
     m_guildSystem = std::make_unique<MMO::MMOGuildSystem>();
     if (!m_guildSystem->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize guild system");
-        return false;
+        return failLoad("[MMO] Failed to initialize guild system");
     }
 
     m_tradingSystem = std::make_unique<MMO::MMOTradingSystem>();
     if (!m_tradingSystem->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize trading system");
-        return false;
+        return failLoad("[MMO] Failed to initialize trading system");
     }
 
     m_partySystem = std::make_unique<MMO::MMOPartySystem>();
     if (!m_partySystem->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize party system");
-        return false;
+        return failLoad("[MMO] Failed to initialize party system");
     }
 
     m_achievementSystem = std::make_unique<MMO::MMOAchievementSystem>();
     if (!m_achievementSystem->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize achievement system");
-        return false;
+        return failLoad("[MMO] Failed to initialize achievement system");
     }
 
     m_reputationSystem = std::make_unique<MMO::MMOReputationSystem>();
     if (!m_reputationSystem->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize reputation system");
-        return false;
+        return failLoad("[MMO] Failed to initialize reputation system");
     }
 
     m_dungeonSystem = std::make_unique<MMO::MMODungeonSystem>();
     if (!m_dungeonSystem->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize dungeon system");
-        return false;
+        return failLoad("[MMO] Failed to initialize dungeon system");
     }
 
     m_worldBossSystem = std::make_unique<MMO::MMOWorldBossSystem>();
     if (!m_worldBossSystem->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize world boss system");
-        return false;
+        return failLoad("[MMO] Failed to initialize world boss system");
+    }
+
+    m_gameplaySession = std::make_unique<MMO::MMOGameplaySession>();
+    if (!m_gameplaySession->Initialize(m_playerSystem.get(), m_worldSetup.get(), m_inventorySystem.get(),
+                                       m_craftingSystem.get(), m_achievementSystem.get(), m_reputationSystem.get(),
+                                       m_dungeonSystem.get(), m_worldBossSystem.get()))
+    {
+        return failLoad("[MMO] Failed to initialize playable gameplay session");
     }
 
     m_persistenceSystem = std::make_unique<MMO::MMOPersistenceSystem>();
@@ -171,23 +222,47 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
     m_accountSystem = std::make_unique<MMO::MMOAccountSystem>();
     if (!m_accountSystem->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize account system");
-        return false;
+        return failLoad("[MMO] Failed to initialize account system");
     }
 
     m_characterSystem = std::make_unique<MMO::MMOCharacterSystem>();
     if (!m_characterSystem->Initialize(context))
     {
-        console.LogError("[MMO] Failed to initialize character system");
-        return false;
+        return failLoad("[MMO] Failed to initialize character system");
     }
 
     m_loginUI = std::make_unique<MMO::MMOLoginUI>();
     if (!m_loginUI->Initialize(context, m_accountSystem.get(), m_characterSystem.get()))
     {
-        console.LogError("[MMO] Failed to initialize login UI");
-        return false;
+        return failLoad("[MMO] Failed to initialize login UI");
     }
+    m_loginUI->SetEnterWorldCallback(
+        [this](uint32_t accountId, uint32_t characterId)
+        {
+            if (!m_characterSystem || !m_gameplaySession)
+                return;
+
+            MMO::CharacterSaveData saved;
+            if (m_persistenceSystem && m_persistenceSystem->LoadCharacter(characterId, saved) && !saved.name.empty())
+            {
+                // Legacy records did not persist accountId; the authenticated
+                // login flow is authoritative for ownership during migration.
+                saved.accountId = accountId;
+                m_gameplaySession->LoadSaveData(saved);
+                return;
+            }
+
+            const auto* character = m_characterSystem->GetCharacter(characterId);
+            if (!character)
+                return;
+            const auto* race = m_characterSystem->GetRace(character->race);
+            const auto stats = m_characterSystem->ComputeStats(character->race, character->classId, character->level);
+            const float x = race ? race->spawnX : 0.0f;
+            const float y = race ? race->spawnY : 1.0f;
+            const float z = race ? race->spawnZ : 0.0f;
+            m_gameplaySession->ActivateCharacter(accountId, characterId, character->name, character->level,
+                                                 stats.health, character->areaId, x, y, z);
+        });
 
     // Wire engine subsystems (weather, abilities, dialogue, cinematic, AI, animation, events, localization)
     m_engineSystems = std::make_unique<MMO::MMOEngineSystems>();
@@ -214,9 +289,26 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
     }
 #endif
 
-    // Register MMO-specific state validation rules
-    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
+    RegisterStateValidationRules();
 
+    m_initialized = true;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "SparkGameMMO module loaded: playable session ready");
+    console.LogInfo("[MMO] Spark MMO module loaded successfully; playable session ready");
+    console.LogInfo("[MMO] Controls: WASD move, Shift sprint; run mmo_help for gameplay commands");
+    console.LogInfo("[MMO] World areas: " + std::to_string(m_worldSetup->GetAreaCount()));
+    console.LogInfo("[MMO] Items: " + std::to_string(m_inventorySystem->GetItemCount()) +
+                    " | Recipes: " + std::to_string(m_craftingSystem->GetRecipeCount()) +
+                    " | Factions: " + std::to_string(m_reputationSystem->GetFactionCount()) +
+                    " | Dungeons: " + std::to_string(m_dungeonSystem->GetDungeonCount()) +
+                    " | World Bosses: " + std::to_string(m_worldBossSystem->GetBossCount()) +
+                    " | Achievements: " + std::to_string(m_achievementSystem->GetAchievementCount()));
+    return true;
+}
+
+void SparkGameMMOModule::RegisterStateValidationRules()
+{
+    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
+    stateDetector.RemoveRulesByCategory("MMO");
     stateDetector.AddRule({"MMO.DeadWithNetwork", "MMO", Spark::StateViolationSeverity::Error, true,
                            [](World& w, std::vector<Spark::StateViolation>& out)
                            {
@@ -248,42 +340,57 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
                                    }
                                }
                            }});
-
-    m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "SparkGameMMO module loaded: 17 subsystems initialized");
-    console.LogInfo("[MMO] Spark MMO module loaded successfully (17 subsystems)");
-    console.LogInfo("[MMO] World areas: " + std::to_string(m_worldSetup->GetAreaCount()));
-    console.LogInfo("[MMO] Items: " + std::to_string(m_inventorySystem->GetItemCount()) +
-                    " | Recipes: " + std::to_string(m_craftingSystem->GetRecipeCount()) +
-                    " | Factions: " + std::to_string(m_reputationSystem->GetFactionCount()) +
-                    " | Dungeons: " + std::to_string(m_dungeonSystem->GetDungeonCount()) +
-                    " | World Bosses: " + std::to_string(m_worldBossSystem->GetBossCount()) +
-                    " | Achievements: " + std::to_string(m_achievementSystem->GetAchievementCount()));
-    return true;
+    m_stateRulesRegistered = true;
 }
 
 void SparkGameMMOModule::OnUnload()
 {
-    if (!m_initialized)
+    if (!m_context && !m_initialized && !m_consoleCommandsRegistered && !m_stateRulesRegistered)
         return;
 
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Unloading SparkGameMMO module");
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[MMO] Unloading Spark MMO module...");
 
-    // Shutdown engine subsystem wiring first
+    if (m_gameplaySession && m_persistenceSystem)
+    {
+        const auto save = m_gameplaySession->BuildSaveData();
+        if (save.accountId != 0 && save.characterId != 0)
+            m_persistenceSystem->SaveCharacterSync(save);
+    }
+
+    UnregisterConsoleCommands();
+    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("MMO");
+    m_stateRulesRegistered = false;
+    ShutdownSystems();
+
+    m_context = nullptr;
+    m_initialized = false;
+    m_paused = false;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "SparkGameMMO module unloaded");
+    console.LogInfo("[MMO] Spark MMO module unloaded");
+}
+
+void SparkGameMMOModule::ShutdownSystems()
+{
     if (m_engineSystems)
     {
         m_engineSystems->Shutdown();
         m_engineSystems.reset();
     }
 
-    // Shutdown login UI and account/character systems
     if (m_loginUI)
     {
         m_loginUI->Shutdown();
         m_loginUI.reset();
     }
+
+    if (m_gameplaySession)
+    {
+        m_gameplaySession->Shutdown();
+        m_gameplaySession.reset();
+    }
+
     if (m_characterSystem)
     {
         m_characterSystem->Shutdown();
@@ -295,14 +402,12 @@ void SparkGameMMOModule::OnUnload()
         m_accountSystem.reset();
     }
 
-    // Shutdown persistence (final save)
     if (m_persistenceSystem)
     {
         m_persistenceSystem->Shutdown();
         m_persistenceSystem.reset();
     }
 
-    // Shutdown gameplay systems in reverse order
     if (m_worldBossSystem)
     {
         m_worldBossSystem->Shutdown();
@@ -369,11 +474,6 @@ void SparkGameMMOModule::OnUnload()
         m_worldSetup->Shutdown();
         m_worldSetup.reset();
     }
-
-    m_context = nullptr;
-    m_initialized = false;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "SparkGameMMO module unloaded");
-    console.LogInfo("[MMO] Spark MMO module unloaded");
 }
 
 void SparkGameMMOModule::OnUpdate(float deltaTime)
@@ -393,6 +493,9 @@ void SparkGameMMOModule::OnUpdate(float deltaTime)
     m_playerSystem->Update(deltaTime);
     m_chatSystem->Update(deltaTime);
 
+    m_loginUI->Update(deltaTime);
+    m_gameplaySession->Update(deltaTime);
+
     // Update gameplay systems
     m_tradingSystem->Update(deltaTime);
     m_partySystem->Update(deltaTime);
@@ -402,7 +505,16 @@ void SparkGameMMOModule::OnUpdate(float deltaTime)
     m_accountSystem->Update(deltaTime);
 
     if (m_persistenceSystem)
+    {
         m_persistenceSystem->Update(deltaTime);
+        if (m_persistenceSystem->IsAutoSaveDue())
+        {
+            const auto save = m_gameplaySession->BuildSaveData();
+            if (save.accountId != 0 && save.characterId != 0)
+                m_persistenceSystem->SaveCharacterAsync(save);
+            m_persistenceSystem->ResetAutoSaveTimer();
+        }
+    }
 }
 
 void SparkGameMMOModule::OnFixedUpdate(float fixedDeltaTime)
@@ -454,6 +566,7 @@ void SparkGameMMOModule::OnImGui()
     m_reputationSystem->RenderDebugUI();
     m_dungeonSystem->RenderDebugUI();
     m_worldBossSystem->RenderDebugUI();
+    m_gameplaySession->RenderDebugUI();
     if (m_persistenceSystem)
         m_persistenceSystem->RenderDebugUI();
     m_accountSystem->RenderDebugUI();
@@ -463,6 +576,9 @@ void SparkGameMMOModule::OnImGui()
 
 void SparkGameMMOModule::RegisterConsoleCommands()
 {
+    if (m_consoleCommandsRegistered)
+        return;
+
     auto& console = Spark::SimpleConsole::GetInstance();
 
     console.RegisterCommand(
@@ -481,9 +597,110 @@ void SparkGameMMOModule::RegisterConsoleCommands()
             status += "Items: " + std::to_string(m_inventorySystem->GetItemCount()) + "\n";
             status += "Achievements: " + std::to_string(m_achievementSystem->GetAchievementCount()) + "\n";
             status += "DB: " + std::string(m_persistenceSystem ? "Connected" : "Offline") + "\n";
-            status += m_worldSetup->GetWorldStatusString();
+            status += m_worldSetup->GetWorldStatusString() + "\n";
+            if (m_gameplaySession)
+                status += m_gameplaySession->GetStatusString();
             return status;
         });
+
+    console.RegisterCommand("mmo_play",
+                            [this](const std::vector<std::string>&) -> std::string
+                            {
+                                if (m_loginUI)
+                                    m_loginUI->SetState(MMO::LoginUIState::InGame);
+                                return m_gameplaySession ? m_gameplaySession->GetStatusString()
+                                                         : "MMO gameplay session is unavailable";
+                            });
+
+    console.RegisterCommand("mmo_restart",
+                            [this](const std::vector<std::string>&) -> std::string
+                            {
+                                if (m_loginUI)
+                                    m_loginUI->SetState(MMO::LoginUIState::InGame);
+                                return m_gameplaySession ? m_gameplaySession->ResetDemo()
+                                                         : "MMO gameplay session is unavailable";
+                            });
+
+    console.RegisterCommand("mmo_travel",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                uint32_t areaId = 0;
+                                if (args.empty() || !ParseUint(args[0], areaId))
+                                    return "Usage: mmo_travel <area-id>";
+                                return m_gameplaySession->Travel(areaId);
+                            });
+
+    console.RegisterCommand("mmo_gather",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                uint32_t itemId = 0;
+                                int count = 1;
+                                if (args.empty() || !ParseUint(args[0], itemId) ||
+                                    (args.size() > 1 && !ParsePositiveInt(args[1], count)))
+                                {
+                                    return "Usage: mmo_gather <material-item-id> [count]";
+                                }
+                                return m_gameplaySession->Gather(itemId, count);
+                            });
+
+    console.RegisterCommand("mmo_craft",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                uint32_t recipeId = 0;
+                                if (args.empty() || !ParseUint(args[0], recipeId))
+                                    return "Usage: mmo_craft <recipe-id>";
+                                return m_gameplaySession->Craft(recipeId);
+                            });
+
+    console.RegisterCommand("mmo_use",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                uint32_t itemId = 0;
+                                if (args.empty() || !ParseUint(args[0], itemId))
+                                    return "Usage: mmo_use <item-id>";
+                                return m_gameplaySession->UseItem(itemId);
+                            });
+
+    console.RegisterCommand("mmo_boss_attack",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                uint32_t bossId = 0;
+                                if (args.empty() || !ParseUint(args[0], bossId))
+                                    return "Usage: mmo_boss_attack <boss-id>";
+                                return m_gameplaySession->AttackWorldBoss(bossId);
+                            });
+
+    console.RegisterCommand("mmo_dungeon_enter",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                uint32_t dungeonId = 0;
+                                if (args.empty() || !ParseUint(args[0], dungeonId))
+                                    return "Usage: mmo_dungeon_enter <dungeon-id>";
+                                return m_gameplaySession->EnterDungeon(dungeonId);
+                            });
+
+    console.RegisterCommand("mmo_dungeon_boss", [this](const std::vector<std::string>&) -> std::string
+                            { return m_gameplaySession->DefeatNextDungeonBoss(); });
+
+    console.RegisterCommand("mmo_damage",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                float amount = 0.0f;
+                                if (args.empty() || !ParsePositiveFloat(args[0], amount))
+                                    return "Usage: mmo_damage <positive-amount>";
+                                return m_gameplaySession->TakeDamage(amount);
+                            });
+
+    console.RegisterCommand("mmo_respawn", [this](const std::vector<std::string>&) -> std::string
+                            { return m_gameplaySession->Respawn(); });
+
+    console.RegisterCommand("mmo_inventory",
+                            [this](const std::vector<std::string>&) -> std::string
+                            {
+                                return m_gameplaySession
+                                           ? m_inventorySystem->GetInventoryString(m_gameplaySession->GetInventory())
+                                           : "MMO gameplay session is unavailable";
+                            });
 
     console.RegisterCommand("mmo_chat",
                             [this](const std::vector<std::string>& args) -> std::string
@@ -532,17 +749,9 @@ void SparkGameMMOModule::RegisterConsoleCommands()
     console.RegisterCommand("mmo_boss_spawn",
                             [this](const std::vector<std::string>& args) -> std::string
                             {
-                                if (args.empty())
+                                uint32_t id = 0;
+                                if (args.empty() || !ParseUint(args[0], id))
                                     return "Usage: mmo_boss_spawn <boss_id>";
-                                uint32_t id;
-                                try
-                                {
-                                    id = static_cast<uint32_t>(std::stoi(args[0]));
-                                }
-                                catch (const std::exception&)
-                                {
-                                    return "Invalid boss ID: " + args[0];
-                                }
                                 return m_worldBossSystem->SpawnBoss(id) ? "Boss spawned!" : "Spawn failed";
                             });
 
@@ -604,17 +813,46 @@ void SparkGameMMOModule::RegisterConsoleCommands()
     console.RegisterCommand("mmo_characters",
                             [this](const std::vector<std::string>& args) -> std::string
                             {
-                                if (args.empty())
+                                uint32_t acctId = 0;
+                                if (args.empty() || !ParseUint(args[0], acctId))
                                     return "Usage: mmo_characters <account_id>";
-                                uint32_t acctId;
-                                try
-                                {
-                                    acctId = static_cast<uint32_t>(std::stoi(args[0]));
-                                }
-                                catch (const std::exception&)
-                                {
-                                    return "Invalid account ID: " + args[0];
-                                }
                                 return m_characterSystem->GetCharacterListString(acctId);
                             });
+
+    console.RegisterCommand("mmo_help",
+                            [](const std::vector<std::string>&) -> std::string
+                            {
+                                return "MMO playable commands:\n"
+                                       "  mmo_play | mmo_restart | mmo_status\n"
+                                       "  mmo_travel <area-id> | mmo_areas | mmo_players\n"
+                                       "  mmo_gather <material-id> [count] | mmo_craft <recipe-id>\n"
+                                       "  mmo_use <item-id> | mmo_inventory | mmo_recipes\n"
+                                       "  mmo_boss_attack <boss-id> | mmo_bosses\n"
+                                       "  mmo_dungeon_enter <dungeon-id> | mmo_dungeon_boss | mmo_dungeons\n"
+                                       "  mmo_damage <amount> | mmo_respawn\n"
+                                       "  mmo_chat <channel> <message> | mmo_guilds | mmo_auctions\n"
+                                       "  mmo_register <user> <password> | mmo_login <user> <password>\n"
+                                       "  mmo_online | mmo_characters <account-id> | mmo_db_status";
+                            });
+
+    m_consoleCommandsRegistered = true;
+}
+
+void SparkGameMMOModule::UnregisterConsoleCommands()
+{
+    if (!m_consoleCommandsRegistered)
+        return;
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    constexpr const char* commandNames[]{
+        "mmo_status",    "mmo_play",        "mmo_restart",       "mmo_travel",       "mmo_gather",  "mmo_craft",
+        "mmo_use",       "mmo_boss_attack", "mmo_dungeon_enter", "mmo_dungeon_boss", "mmo_damage",  "mmo_respawn",
+        "mmo_inventory", "mmo_chat",        "mmo_areas",         "mmo_players",      "mmo_guilds",  "mmo_guild_create",
+        "mmo_auctions",  "mmo_dungeons",    "mmo_bosses",        "mmo_boss_spawn",   "mmo_recipes", "mmo_db_status",
+        "mmo_register",  "mmo_login",       "mmo_online",        "mmo_abilities",    "mmo_weather", "mmo_cinematic",
+        "mmo_locale",    "mmo_characters",  "mmo_help",
+    };
+    for (const char* commandName : commandNames)
+        console.UnregisterCommand(commandName);
+    m_consoleCommandsRegistered = false;
 }

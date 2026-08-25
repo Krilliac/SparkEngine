@@ -26,12 +26,6 @@ namespace RPG
         return true;
     }
 
-    void RPGQuestSystem::Update(float deltaTime)
-    {
-        (void)deltaTime;
-        // Quests are event-driven; objective updates come from gameplay events
-    }
-
     void RPGQuestSystem::Shutdown()
     {
         m_quests.clear();
@@ -76,7 +70,7 @@ namespace RPG
         investigate.prerequisiteQuestId = 2;
         investigate.areaName = "Forest";
         investigate.objectives = {
-            {3, ObjectiveType::Talk, "Speak with the forest hermit", 300, 1, 0},
+            {3, ObjectiveType::Talk, "Speak with the forest hermit", 5, 1, 0},
         };
         investigate.rewards = {60, 0, {}, 10, "Oakhollow"};
         RegisterQuest(investigate);
@@ -90,8 +84,8 @@ namespace RPG
         cryptExplore.prerequisiteQuestId = 3;
         cryptExplore.areaName = "Dungeon";
         cryptExplore.objectives = {
-            {4, ObjectiveType::Explore, "Reach the crypt's inner sanctum", 400, 1, 0},
-            {5, ObjectiveType::Kill, "Defeat the necromancer", 401, 1, 0},
+            {4, ObjectiveType::Explore, "Reach the crypt's inner sanctum", 3, 1, 0},
+            {5, ObjectiveType::Kill, "Defeat the necromancer", 204, 1, 0},
         };
         cryptExplore.rewards = {200, 100, {{3, 1}}, 20, "Oakhollow"};
         RegisterQuest(cryptExplore);
@@ -155,17 +149,13 @@ namespace RPG
 
     // === Quest tracking ===
 
-    bool RPGQuestSystem::AcceptQuest(uint32_t characterId, uint32_t questId)
+    bool RPGQuestSystem::AcceptQuest(uint32_t characterId, uint32_t questId, int characterLevel)
     {
         const auto* def = GetQuestDef(questId);
-        if (!def)
+        if (characterId == 0 || !def || !IsQuestAvailable(characterId, questId, characterLevel))
             return false;
 
         auto& charProgress = m_progress[characterId];
-
-        // Already tracking this quest?
-        if (charProgress.find(questId) != charProgress.end())
-            return false;
 
         QuestProgress progress;
         progress.questId = questId;
@@ -202,6 +192,9 @@ namespace RPG
 
     void RPGQuestSystem::UpdateObjective(uint32_t characterId, ObjectiveType type, uint32_t targetId, int count)
     {
+        if (count <= 0)
+            return;
+
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
             return;

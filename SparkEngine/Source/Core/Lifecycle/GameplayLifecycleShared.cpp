@@ -679,6 +679,7 @@ namespace Spark::Core::Lifecycle
             static AngelScriptEngine s_angelScript;
             if (s_angelScript.Initialize())
             {
+                ctx->SetScriptEngine(&s_angelScript);
                 AngelScriptEngine::BindWorld(ctx->GetWorld());
                 SPARK_LOG_INFO(Spark::LogCategory::Core, "AngelScriptEngine initialized");
             }

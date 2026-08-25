@@ -8,6 +8,7 @@
 
 #include "SparkGameRTS.h"
 #include "RTSEngineSystems.h"
+#include "Demo/RTSDemoPresentation.h"
 #include "Unit/RTSUnitSystem.h"
 #include "Building/RTSBuildingSystem.h"
 #include "Resource/RTSResourceSystem.h"
@@ -70,19 +71,19 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
-    // Initialize building system (tech trees, production queues)
-    m_buildingSystem = std::make_unique<RTS::RTSBuildingSystem>();
-    if (!m_buildingSystem->Initialize(context))
+    // Initialize resource system (minerals, gas, supply)
+    m_resourceSystem = std::make_unique<RTS::RTSResourceSystem>();
+    if (!m_resourceSystem->Initialize(context, m_unitSystem.get()))
     {
-        console.LogError("[RTS] Failed to initialize building system");
+        console.LogError("[RTS] Failed to initialize resource system");
         return false;
     }
 
-    // Initialize resource system (minerals, gas, supply)
-    m_resourceSystem = std::make_unique<RTS::RTSResourceSystem>();
-    if (!m_resourceSystem->Initialize(context))
+    // Initialize building system (tech trees, production queues)
+    m_buildingSystem = std::make_unique<RTS::RTSBuildingSystem>();
+    if (!m_buildingSystem->Initialize(context, m_unitSystem.get(), m_resourceSystem.get()))
     {
-        console.LogError("[RTS] Failed to initialize resource system");
+        console.LogError("[RTS] Failed to initialize building system");
         return false;
     }
 
@@ -112,9 +113,18 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
 
     // Initialize engine system integrations (AI, events, audio, weather, destruction, save, coroutines)
     m_engineSystems = std::make_unique<RTS::RTSEngineSystems>();
-    if (!m_engineSystems->Initialize(context))
+    if (!m_engineSystems->Initialize(context, m_unitSystem.get(), m_buildingSystem.get(), m_resourceSystem.get(),
+                                     m_commandSystem.get()))
     {
         console.LogWarning("[RTS] Engine system integrations partially unavailable (non-fatal)");
+    }
+
+    m_demoPresentation = std::make_unique<RTS::RTSDemoPresentation>();
+    if (!m_demoPresentation->Initialize(context, m_unitSystem.get(), m_buildingSystem.get(), m_resourceSystem.get(),
+                                        m_commandSystem.get(), m_fogOfWarSystem.get(), m_matchSystem.get()))
+    {
+        console.LogError("[RTS] Failed to initialize playable demo");
+        return false;
     }
 
     RegisterConsoleCommands();
@@ -173,6 +183,11 @@ void SparkGameRTSModule::OnUnload()
     SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS module shutting down");
 
     // Shutdown in reverse initialization order
+    if (m_demoPresentation)
+    {
+        m_demoPresentation->Shutdown();
+        m_demoPresentation.reset();
+    }
     if (m_engineSystems)
     {
         m_engineSystems->Shutdown();
@@ -193,15 +208,17 @@ void SparkGameRTSModule::OnUnload()
         m_commandSystem->Shutdown();
         m_commandSystem.reset();
     }
+    if (m_buildingSystem)
+    {
+        // Buildings release supply reserved by queued production through the
+        // resource system, so their dependency must remain alive here.
+        m_buildingSystem->Shutdown();
+        m_buildingSystem.reset();
+    }
     if (m_resourceSystem)
     {
         m_resourceSystem->Shutdown();
         m_resourceSystem.reset();
-    }
-    if (m_buildingSystem)
-    {
-        m_buildingSystem->Shutdown();
-        m_buildingSystem.reset();
     }
     if (m_unitSystem)
     {
@@ -220,12 +237,14 @@ void SparkGameRTSModule::OnUpdate(float deltaTime)
     if (!m_initialized || m_paused)
         return;
 
+    m_demoPresentation->UpdateInput();
     m_matchSystem->Update(deltaTime);
     m_resourceSystem->Update(deltaTime);
     m_buildingSystem->Update(deltaTime);
     m_commandSystem->Update(deltaTime);
     m_unitSystem->Update(deltaTime);
     m_fogOfWarSystem->Update(deltaTime);
+    m_demoPresentation->RefreshVision();
     if (m_engineSystems)
         m_engineSystems->Update(deltaTime);
 }
@@ -272,6 +291,7 @@ void SparkGameRTSModule::OnImGui()
     m_commandSystem->RenderDebugUI();
     m_fogOfWarSystem->RenderDebugUI();
     m_matchSystem->RenderDebugUI();
+    m_demoPresentation->RenderUI();
 }
 
 void SparkGameRTSModule::RegisterConsoleCommands()
@@ -304,6 +324,57 @@ void SparkGameRTSModule::RegisterConsoleCommands()
     console.RegisterCommand("rts_resources", [this](const std::vector<std::string>&) -> std::string
                             { return m_resourceSystem->GetResourceListString(); });
 
+    console.RegisterCommand("rts_demo_reset", [this](const std::vector<std::string>&) -> std::string
+                            { return m_demoPresentation->Reset() ? "RTS demo reset" : "RTS demo reset failed"; });
+
+    console.RegisterCommand("rts_select",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.empty())
+                                    return "Usage: rts_select <workers|marines|tanks|army>";
+                                if (args[0] == "workers")
+                                    m_demoPresentation->SelectUnitType(RTS::RTSUnitType::Worker);
+                                else if (args[0] == "marines")
+                                    m_demoPresentation->SelectUnitType(RTS::RTSUnitType::Marine);
+                                else if (args[0] == "tanks")
+                                    m_demoPresentation->SelectUnitType(RTS::RTSUnitType::Tank);
+                                else if (args[0] == "army")
+                                    m_demoPresentation->SelectArmy();
+                                else
+                                    return "Unknown group: " + args[0];
+                                return "Selected " + std::to_string(m_commandSystem->GetSelectionCount()) + " units";
+                            });
+
+    console.RegisterCommand("rts_move",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.size() < 2)
+                                    return "Usage: rts_move <x> <y> [queue]";
+                                try
+                                {
+                                    const bool queued = args.size() >= 3 && args[2] == "queue";
+                                    return m_demoPresentation->MoveSelection(std::stof(args[0]), std::stof(args[1]),
+                                                                             queued)
+                                               ? "Move order issued"
+                                               : "Move order rejected";
+                                }
+                                catch (const std::exception&)
+                                {
+                                    return "Invalid move coordinates";
+                                }
+                            });
+
+    console.RegisterCommand("rts_hold",
+                            [this](const std::vector<std::string>&) -> std::string {
+                                return m_demoPresentation->HoldSelection() ? "Hold order issued" : "No units selected";
+                            });
+    console.RegisterCommand("rts_stop",
+                            [this](const std::vector<std::string>&) -> std::string {
+                                return m_demoPresentation->StopSelection() ? "Stop order issued" : "No units selected";
+                            });
+    console.RegisterCommand("rts_train_marine", [this](const std::vector<std::string>&) -> std::string
+                            { return m_demoPresentation->TrainMarine() ? "Marine queued" : "Marine queue rejected"; });
+
     // Engine system commands
     console.RegisterCommand("rts_save",
                             [this](const std::vector<std::string>& args) -> std::string
@@ -311,6 +382,8 @@ void SparkGameRTSModule::RegisterConsoleCommands()
                                 if (!m_engineSystems)
                                     return "Engine systems not initialized";
                                 std::string slot = args.empty() ? "rts_quicksave" : args[0];
+                                if (!RTS::RTSEngineSystems::IsValidSlotName(slot))
+                                    return "Invalid slot name: use 1-64 letters, digits, '_' or '-'";
                                 return m_engineSystems->SaveMatch(slot) ? "Saved to: " + slot : "Save failed";
                             });
 
@@ -320,6 +393,8 @@ void SparkGameRTSModule::RegisterConsoleCommands()
                                 if (!m_engineSystems)
                                     return "Engine systems not initialized";
                                 std::string slot = args.empty() ? "rts_quicksave" : args[0];
+                                if (!RTS::RTSEngineSystems::IsValidSlotName(slot))
+                                    return "Invalid slot name: use 1-64 letters, digits, '_' or '-'";
                                 return m_engineSystems->LoadMatch(slot) ? "Loaded from: " + slot : "Load failed";
                             });
 

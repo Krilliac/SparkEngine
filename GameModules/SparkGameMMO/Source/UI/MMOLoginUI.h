@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <utility>
 
 namespace MMO
 {
@@ -51,6 +52,7 @@ namespace MMO
         ~MMOLoginUI() = default;
 
         bool Initialize(Spark::IEngineContext* context, MMOAccountSystem* accountSys, MMOCharacterSystem* charSys);
+        void Update(float deltaTime);
         void Shutdown();
         void RenderUI();
 
@@ -61,6 +63,7 @@ namespace MMO
         {
             m_loginPassword.Clear();
             m_state = state;
+            m_enterWorldTimer = state == LoginUIState::EnteringWorld ? ENTER_WORLD_DELAY : 0.0f;
         }
         void ReturnToCharacterSelect();
         void ReturnToLogin();
@@ -106,6 +109,8 @@ namespace MMO
         int m_bodyTypeIndex{0};
         int m_markingIndex{0};
         std::string m_createError;
+
+        static constexpr float ENTER_WORLD_DELAY = 2.0f;
     };
 
 } // namespace MMO

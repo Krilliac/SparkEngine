@@ -21,6 +21,9 @@
 namespace RTS
 {
 
+    class RTSResourceSystem;
+    class RTSUnitSystem;
+
     /// @brief Cost to construct a building
     struct BuildingCost
     {
@@ -75,7 +78,8 @@ namespace RTS
         RTSBuildingSystem() = default;
         ~RTSBuildingSystem() = default;
 
-        bool Initialize(Spark::IEngineContext* context);
+        bool Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem = nullptr,
+                        RTSResourceSystem* resourceSystem = nullptr);
         void Update(float deltaTime);
         void Shutdown();
         void RenderDebugUI();
@@ -96,12 +100,18 @@ namespace RTS
         int GetSupplyProvided(RTSFaction faction) const;
         std::string GetBuildingListString() const;
 
+        /** Replace all runtime buildings from a validated persistence snapshot. */
+        bool RestoreState(const std::vector<BuildingData>& buildings);
+
       private:
         void RegisterFactionTemplates(RTSFaction faction);
+        void ReleaseQueuedSupply(const BuildingData& building);
         void UpdateConstruction(float deltaTime);
         void UpdateProduction(float deltaTime);
 
         Spark::IEngineContext* m_context{nullptr};
+        RTSUnitSystem* m_unitSystem{nullptr};
+        RTSResourceSystem* m_resourceSystem{nullptr};
 
         std::unordered_map<uint32_t, BuildingData> m_buildings;
         std::vector<BuildingTemplate> m_templates;

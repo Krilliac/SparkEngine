@@ -2,33 +2,42 @@
 // Class: PlayerController
 //
 // Visual Script Graph: PlayerController.vscript
-// This script handles ALL player behavior — movement, looking, jumping, health.
+// This script handles ALL player behavior — movement, sprinting, jumping, health.
 // No C++ game code was written to create this behavior.
 
 class PlayerController
 {
     uint selfEntity = 0;
     float moveSpeed = 8.0f;
-    float lookSensitivity = 2.0f;
     float jumpForce = 5.0f;
     float health = 100.0f;
     float maxHealth = 100.0f;
     bool isGrounded = true;
-    float yaw = 0.0f;
-    float pitch = 0.0f;
+    float verticalVelocity = 0.0f;
+    float gravity = -16.0f;
 
     void Start()
     {
         print("PlayerController: Player spawned and ready");
         health = maxHealth;
+        setHealth(selfEntity, maxHealth);
     }
 
     void Update(float dt)
     {
         // === Movement (WASD) ===
+        health = getHealth(selfEntity);
+        if (health <= 0.0f)
+            return;
+
         Vector3 currentPos = getPosition(selfEntity);
         float moveX = 0.0f;
         float moveZ = 0.0f;
+
+        if (getKey("LeftShift"))
+            moveSpeed = 14.0f;
+        else
+            moveSpeed = 8.0f;
 
         if (getKey("W"))
             moveZ = moveZ + moveSpeed * dt;
@@ -39,32 +48,32 @@ class PlayerController
         if (getKey("D"))
             moveX = moveX + moveSpeed * dt;
 
-        Vector3 newPos = Vector3(currentPos.x + moveX, currentPos.y, currentPos.z + moveZ);
-        setPosition(selfEntity, newPos);
+        if (moveX != 0.0f && moveZ != 0.0f)
+        {
+            moveX = moveX * 0.7071068f;
+            moveZ = moveZ * 0.7071068f;
+        }
 
         // === Jump ===
         if (getKeyDown("Space") && isGrounded)
         {
-            applyForce(selfEntity, Vector3(0.0f, jumpForce, 0.0f));
+            verticalVelocity = jumpForce;
             isGrounded = false;
         }
 
-        // === Ground check (simple Y threshold) ===
-        Vector3 pos = getPosition(selfEntity);
-        if (pos.y <= 0.1f)
+        verticalVelocity = verticalVelocity + gravity * dt;
+        float nextY = currentPos.y + verticalVelocity * dt;
+        if (nextY <= 1.0f)
         {
+            nextY = 1.0f;
+            verticalVelocity = 0.0f;
             isGrounded = true;
         }
 
-        // === Sprint ===
-        if (getKey("LeftShift"))
-        {
-            moveSpeed = 14.0f;
-        }
-        else
-        {
-            moveSpeed = 8.0f;
-        }
+        currentPos.x = currentPos.x + moveX;
+        currentPos.y = nextY;
+        currentPos.z = currentPos.z + moveZ;
+        setPosition(selfEntity, currentPos);
 
         // === Health regen ===
         if (health < maxHealth)
@@ -72,23 +81,7 @@ class PlayerController
             health = health + 2.0f * dt;
             if (health > maxHealth)
                 health = maxHealth;
-        }
-    }
-
-    void OnCollision(uint other)
-    {
-        // Nothing here — collision responses handled by other scripts
-    }
-
-    void OnDamaged(float amount)
-    {
-        health = health - amount;
-        print("Player took " + amount + " damage! Health: " + health);
-        if (health <= 0.0f)
-        {
-            health = 0.0f;
-            print("PLAYER DIED — Game Over!");
-            fireEvent("PlayerDied");
+            setHealth(selfEntity, health);
         }
     }
 }

@@ -19,6 +19,10 @@
 
 namespace RTS
 {
+    class RTSBuildingSystem;
+    class RTSCommandSystem;
+    class RTSResourceSystem;
+    class RTSUnitSystem;
 
     /**
      * @brief Bridges SparkEngine services into the RTS module
@@ -41,7 +45,9 @@ namespace RTS
          * @param context  Engine context providing access to subsystems.
          * @return true on success, false if a required subsystem is missing.
          */
-        bool Initialize(Spark::IEngineContext* context);
+        bool Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem = nullptr,
+                        RTSBuildingSystem* buildingSystem = nullptr, RTSResourceSystem* resourceSystem = nullptr,
+                        RTSCommandSystem* commandSystem = nullptr);
 
         /**
          * @brief Per-frame update for engine-system integrations.
@@ -60,6 +66,9 @@ namespace RTS
         /** @brief Load an RTS match state from the given slot. */
         bool LoadMatch(const std::string& slotName) const;
 
+        /** @brief Match SaveSystem's portable slot-name policy. */
+        static bool IsValidSlotName(const std::string& slotName);
+
         /** @brief Set the weather type by name ("clear", "rain", "fog", "storm", "snow"). */
         void SetWeather(const std::string& weatherName) const;
 
@@ -77,6 +86,10 @@ namespace RTS
         void SetupCoroutines();
 
         Spark::IEngineContext* m_context{nullptr};
+        RTSUnitSystem* m_unitSystem{nullptr};
+        RTSBuildingSystem* m_buildingSystem{nullptr};
+        RTSResourceSystem* m_resourceSystem{nullptr};
+        RTSCommandSystem* m_commandSystem{nullptr};
 
         // RAII event subscription handles (auto-unsubscribe on destruction)
         std::vector<Spark::SubscriptionHandle> m_eventHandles;

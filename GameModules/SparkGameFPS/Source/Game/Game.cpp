@@ -106,11 +106,27 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     m_classSystem->Initialize();
     LOG_TO_CONSOLE_IMMEDIATE(L"Class system initialized with 6 classes", L"SUCCESS");
 
+    /* Projectile pool --------------------------------------*/
+    // Player and vehicles share this pool so every fired projectile follows
+    // the same update, render, collision, and recycling path.
+    m_projectilePool = std::make_unique<ProjectilePool>(100);
+    ASSERT(m_projectilePool);
+
+    HRESULT hr = m_projectilePool->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
+    ASSERT_MSG(SUCCEEDED(hr), "ProjectilePool::Initialize failed");
+    if (FAILED(hr))
+    {
+        std::wstring errorMsg = L"ProjectilePool initialization failed with HR=0x" + std::to_wstring(hr);
+        LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+        return hr;
+    }
+
     /* Player -----------------------------------------------*/
     m_player = std::make_unique<Player>();
     ASSERT(m_player);
+    m_player->SetProjectilePool(m_projectilePool.get());
 
-    HRESULT hr = m_player->Initialize(m_graphics->GetDevice(), m_graphics->GetContext(), m_camera.get(), m_input);
+    hr = m_player->Initialize(m_graphics->GetDevice(), m_graphics->GetContext(), m_camera.get(), m_input);
     ASSERT_MSG(SUCCEEDED(hr), "Player::Initialize failed");
     if (FAILED(hr))
     {
@@ -125,19 +141,6 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     // Set default class (Scout)
     m_player->SetClass(PlayerClass::SCOUT, m_classSystem.get());
     LOG_TO_CONSOLE_IMMEDIATE(L"Player class set to Scout (default)", L"SUCCESS");
-
-    /* Projectile pool --------------------------------------*/
-    m_projectilePool = std::make_unique<ProjectilePool>(100);
-    ASSERT(m_projectilePool);
-
-    hr = m_projectilePool->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-    ASSERT_MSG(SUCCEEDED(hr), "ProjectilePool::Initialize failed");
-    if (FAILED(hr))
-    {
-        std::wstring errorMsg = L"ProjectilePool initialization failed with HR=0x" + std::to_wstring(hr);
-        LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
-        return hr;
-    }
 
     /* Scene objects - Enhanced combat arena ----------------*/
     CreateCombatArena();
@@ -188,10 +191,17 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     SparkConsole::RegisterAdvancedCommands(this, m_graphics);
 
     /* Engine system integration — audio, weather, destruction, dialogue, save */
-    InitializeEngineSystems();
+    if (m_engineContext)
+    {
+        InitializeEngineSystems();
+    }
+    else
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Engine services will attach when the SDK-v2 context is available", L"INFO");
+    }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"All systems online - gamemode, HUD, inventory, quests, vehicles, gravity, interactions, "
-                             L"damage zones, respawn, audio, weather, destruction, dialogue, save",
+    LOG_TO_CONSOLE_IMMEDIATE(L"Gameplay systems online - gamemode, HUD, inventory, quests, vehicles, gravity, "
+                             L"interactions, damage zones, and respawn",
                              L"SUCCESS");
 
     return S_OK;
@@ -208,6 +218,12 @@ void Game::Shutdown()
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Game::Shutdown called.", L"INFO");
 
+    SparkConsole::UnregisterAdvancedCommands();
+
+    // Subscription handles capture this Game. Detach them before destroying any
+    // systems those callbacks may access.
+    m_eventSubscriptions.clear();
+    m_enemies.clear();
     m_gameObjects.clear();
     m_lootSystem.reset();
     m_progression.reset();
@@ -225,6 +241,8 @@ void Game::Shutdown()
     m_camera.reset();
     m_sceneManager.reset();
     m_eventBus = nullptr;
+    m_engineContext = nullptr;
+    m_engineSystemsInitialized = false;
 
 #ifdef ENABLE_NETWORKING
     if (m_networkInitialized)
@@ -254,16 +272,38 @@ void Game::SetPhysicsSystem(PhysicsSystem* ps)
 --------------------------------------------------------------*/
 void Game::SetEventBus(Spark::EventBus* bus)
 {
+    // SubscriptionHandle is RAII; retaining these handles is what keeps the
+    // callbacks connected. Clearing first also safely supports context swaps.
+    m_eventSubscriptions.clear();
     m_eventBus = bus;
     if (!bus)
         return;
 
     // Entity killed → update gamemode scoring, quest progress, and HUD kill feed
-    (void)bus->Subscribe<Spark::EntityKilledEvent>(
+    m_eventSubscriptions.emplace_back(bus->Subscribe<Spark::EntityKilledEvent>(
         [this](const Spark::EntityKilledEvent& e)
         {
             if (m_gameMode)
                 m_gameMode->RecordKill("Player1", "Enemy");
+
+            if (m_progression)
+            {
+                int xp = Spark::ProgressionSystem::XP_PER_KILL;
+                if (m_lootSystem && m_lootSystem->HasBuff(Spark::PowerUpType::DoubleXP))
+                    xp *= 2;
+                m_progression->AwardXP(xp, "kill");
+            }
+
+            // The event currently carries no world position, so place drops a
+            // short distance from the player instead of stacking them at the origin.
+            if (m_lootSystem && m_player)
+            {
+                XMFLOAT3 deathPos = m_player->GetPosition();
+                deathPos.x += 2.0f;
+                deathPos.z += 2.0f;
+                const bool isBoss = m_waveSpawner && m_waveSpawner->IsBossWave();
+                m_lootSystem->SpawnEnemyLoot(deathPos, 0, isBoss);
+            }
 
             // Show hit marker and add kill feed entry on HUD
             if (m_hudSystem)
@@ -274,10 +314,10 @@ void Game::SetEventBus(Spark::EventBus* bus)
 
             // Progress kill-based quest objectives
             Spark::QuestOps::UpdateObjective(m_playerQuests, m_questRegistry, 1, 0, 1, m_eventBus, 0);
-        });
+        }));
 
     // Entity damaged → show damage indicator on HUD
-    (void)bus->Subscribe<Spark::EntityDamagedEvent>(
+    m_eventSubscriptions.emplace_back(bus->Subscribe<Spark::EntityDamagedEvent>(
         [this](const Spark::EntityDamagedEvent& e)
         {
             if (m_hudSystem && m_player)
@@ -287,15 +327,15 @@ void Game::SetEventBus(Spark::EventBus* bus)
                 // Use a default forward angle since we don't have source position
                 m_hudSystem->AddDamageIndicator(0.0f, intensity);
             }
-        });
+        }));
 
     // Item pickup → add to player inventory
-    (void)bus->Subscribe<Spark::ItemPickedUpEvent>(
+    m_eventSubscriptions.emplace_back(bus->Subscribe<Spark::ItemPickedUpEvent>(
         [this](const Spark::ItemPickedUpEvent& e)
-        { Spark::InventoryOps::AddItem(m_playerInventory, m_itemRegistry, e.itemDefId, e.count); });
+        { Spark::InventoryOps::AddItem(m_playerInventory, m_itemRegistry, e.itemDefId, e.count); }));
 
     // Player respawn → teleport to spawn point and reset HUD state
-    (void)bus->Subscribe<Spark::PlayerRespawnEvent>(
+    m_eventSubscriptions.emplace_back(bus->Subscribe<Spark::PlayerRespawnEvent>(
         [this](const Spark::PlayerRespawnEvent& e)
         {
             // Teleport camera/player to spawn location
@@ -317,7 +357,7 @@ void Game::SetEventBus(Spark::EventBus* bus)
             std::wstring msg = L"Player respawned at (" + std::to_wstring(e.spawnX) + L", " +
                                std::to_wstring(e.spawnY) + L", " + std::to_wstring(e.spawnZ) + L")";
             LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
-        });
+        }));
 
     LOG_TO_CONSOLE_IMMEDIATE(L"EventBus connected - cross-system events wired", L"SUCCESS");
 }
@@ -364,16 +404,14 @@ void Game::Update(float dt)
     });
     SPARK_GUARDED_UPDATE("Game:Projectiles", "Game", {
         if (m_projectilePool)
+        {
             m_projectilePool->Update(dt);
+            m_projectilePool->ResolveEnemyHits(m_enemies, m_eventBus);
+        }
     });
 
-    // New systems
-    SPARK_GUARDED_UPDATE("Game:Vehicles", "Game", {
-        if (m_vehicleSystem)
-            m_vehicleSystem->Update(dt);
-        if (m_gravitySystem)
-            m_gravitySystem->Update(dt);
-    });
+    // Vehicle simulation runs from SparkGameModule::OnFixedUpdate so it is
+    // deterministic and is not advanced twice by variable + fixed ticks.
     SPARK_GUARDED_UPDATE("Game:Interaction", "Game", {
         if (m_interactionSystem)
             m_interactionSystem->Update(dt, m_player.get());
@@ -622,12 +660,10 @@ void Game::UpdateGameObjects(float dt)
 }
 
 /*-------------------------------------------------------------
-  WASD + mouse look, zoom, and shooting input handling
+  Camera look plus arena-level input handling. Player owns movement/combat.
 --------------------------------------------------------------*/
-void Game::HandleInput(float dt)
+void Game::HandleInput(float)
 {
-    // No logging for per-frame operations
-    ASSERT(dt >= 0.0f);
     if (!m_input || !m_camera)
     {
         return;
@@ -641,29 +677,7 @@ void Game::HandleInput(float dt)
         m_camera->Pitch(-dy * mouseSens);
     }
 
-    float moveSpeed = 10.0f * dt;
-    if (m_input->IsKeyDown('W'))
-        m_camera->MoveForward(moveSpeed);
-    if (m_input->IsKeyDown('S'))
-        m_camera->MoveForward(-moveSpeed);
-    if (m_input->IsKeyDown('A'))
-        m_camera->MoveRight(-moveSpeed);
-    if (m_input->IsKeyDown('D'))
-        m_camera->MoveRight(moveSpeed);
-    if (m_input->IsKeyDown(VK_SPACE))
-        m_camera->MoveUp(moveSpeed);
-    if (m_input->IsKeyDown(VK_LCONTROL))
-        m_camera->MoveUp(-moveSpeed);
-
     m_camera->SetZoom(m_input->IsMouseButtonDown(1));
-
-    if (m_input->WasMouseButtonPressed(0) && m_projectilePool)
-    {
-        auto pos = m_camera->GetPosition();
-        auto dir = m_camera->GetForward();
-        m_projectilePool->FireProjectile(ProjectileType::BULLET, pos, dir, 50.0f);
-        LOG_TO_CONSOLE(L"Projectile fired", L"DEBUG");
-    }
 
     // Class switching with F5-F10 keys
     if (m_input->WasKeyPressed(VK_F5))
@@ -678,6 +692,10 @@ void Game::HandleInput(float dt)
         SetPlayerClass(PlayerClass::VANGUARD);
     if (m_input->WasKeyPressed(VK_F10))
         SetPlayerClass(PlayerClass::TITAN);
+
+    // F11 starts or restarts the complete survival loop used by UI and console.
+    if (m_input->WasKeyPressed(VK_F11))
+        StartWaves();
 
     // Cycle classes with [ and ]
     if (m_input->WasKeyPressed(VK_OEM_4))

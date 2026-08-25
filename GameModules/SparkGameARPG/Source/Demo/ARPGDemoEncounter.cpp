@@ -14,10 +14,74 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
+#include <limits>
 #include <sstream>
 
 namespace ARPG
 {
+    namespace
+    {
+        struct ARPGDemoSnapshot
+        {
+            int floor = 0;
+            uint32_t killsOnFloor = 0;
+            uint32_t totalKills = 0;
+            ARPGHeroClass heroClass = ARPGHeroClass::Barbarian;
+            int level = 0;
+            uint32_t experience = 0;
+            uint32_t xpToNextLevel = 0;
+            float strength = 0.0f;
+            float dexterity = 0.0f;
+            float intelligence = 0.0f;
+            float vitality = 0.0f;
+            float health = 0.0f;
+            float maxHealth = 0.0f;
+            float mana = 0.0f;
+            float maxMana = 0.0f;
+            float moveSpeed = 0.0f;
+            int freeAttributePoints = 0;
+            uint32_t primarySkillId = 0;
+            float targetHealth = 0.0f;
+            float targetMaxHealth = 0.0f;
+        };
+
+        bool ParseARPGDemoSnapshot(const std::string& serializedState, const ARPGSkillSystem* skills,
+                                   uint32_t killsPerFloor, ARPGDemoSnapshot& result)
+        {
+            std::istringstream snapshot(serializedState);
+            std::string magic;
+            int version = 0;
+            int heroClass = 0;
+            if (!(snapshot >> magic >> version >> result.floor >> result.killsOnFloor >> result.totalKills >>
+                  heroClass >> result.level >> result.experience >> result.xpToNextLevel >> result.strength >>
+                  result.dexterity >> result.intelligence >> result.vitality >> result.health >> result.maxHealth >>
+                  result.mana >> result.maxMana >> result.moveSpeed >> result.freeAttributePoints >>
+                  result.primarySkillId >> result.targetHealth >> result.targetMaxHealth) ||
+                magic != "ARPGDEMO" || version != 2 || result.floor < 1 || result.floor > 1000 ||
+                result.killsOnFloor >= killsPerFloor || heroClass < 0 ||
+                heroClass >= static_cast<int>(ARPGHeroClass::Count) || result.level < 1 || result.level > 70 ||
+                result.xpToNextLevel == 0 || !std::isfinite(result.strength) || !std::isfinite(result.dexterity) ||
+                !std::isfinite(result.intelligence) || !std::isfinite(result.vitality) ||
+                !std::isfinite(result.health) || !std::isfinite(result.maxHealth) || !std::isfinite(result.mana) ||
+                !std::isfinite(result.maxMana) || !std::isfinite(result.moveSpeed) ||
+                !std::isfinite(result.targetHealth) || !std::isfinite(result.targetMaxHealth) ||
+                result.maxHealth <= 0.0f || result.maxMana < 0.0f || result.moveSpeed <= 0.0f ||
+                result.freeAttributePoints < 0 || result.health < 0.0f || result.health > result.maxHealth ||
+                result.mana < 0.0f || result.mana > result.maxMana || result.targetHealth <= 0.0f ||
+                result.targetMaxHealth <= 0.0f || result.targetHealth > result.targetMaxHealth)
+                return false;
+
+            snapshot >> std::ws;
+            if (!snapshot.eof())
+                return false;
+
+            result.heroClass = static_cast<ARPGHeroClass>(heroClass);
+            const SkillData* skill = skills ? skills->GetSkill(result.primarySkillId) : nullptr;
+            return skill && skill->heroClass == result.heroClass && skill->requiredLevel <= result.level;
+        }
+    } // namespace
+
     bool ARPGDemoEncounter::Initialize(ARPGHeroSystem* heroes, ARPGCombatSystem* combat, ARPGLootSystem* loot,
                                        ARPGDungeonSystem* dungeon, ARPGSkillSystem* skills, ARPGMonsterSystem* monsters)
     {
@@ -213,5 +277,85 @@ namespace ARPG
                    << target->maxHealth << "\n";
         status << "Controls: Space basic attack, Q primary skill, R restart encounter";
         return status.str();
+    }
+
+    std::string ARPGDemoEncounter::SerializeState() const
+    {
+        const HeroData* hero = GetHero();
+        const MonsterData* target = GetTarget();
+        if (!hero || !target || !m_dungeon)
+            return {};
+
+        std::ostringstream snapshot;
+        snapshot << std::setprecision(std::numeric_limits<float>::max_digits10) << "ARPGDEMO 2 "
+                 << m_dungeon->GetCurrentFloorNumber() << ' ' << m_state.killsOnFloor << ' ' << m_state.totalKills
+                 << ' ' << static_cast<int>(hero->heroClass) << ' ' << hero->level << ' ' << hero->experience << ' '
+                 << hero->xpToNextLevel << ' ' << hero->strength << ' ' << hero->dexterity << ' ' << hero->intelligence
+                 << ' ' << hero->vitality << ' ' << hero->health << ' ' << hero->maxHealth << ' ' << hero->mana << ' '
+                 << hero->maxMana << ' ' << hero->moveSpeed << ' ' << hero->freeAttributePoints << ' '
+                 << m_state.primarySkillId << ' ' << target->health << ' ' << target->maxHealth;
+        return snapshot.str();
+    }
+
+    bool ARPGDemoEncounter::CanRestoreState(const std::string& serializedState) const
+    {
+        ARPGDemoSnapshot snapshot;
+        return m_heroes && m_dungeon && m_monsters &&
+               ParseARPGDemoSnapshot(serializedState, m_skills, KillsPerFloor, snapshot);
+    }
+
+    bool ARPGDemoEncounter::RestoreState(const std::string& serializedState)
+    {
+        if (!m_heroes || !m_dungeon || !m_monsters)
+            return false;
+
+        ARPGDemoSnapshot snapshot;
+        if (!ParseARPGDemoSnapshot(serializedState, m_skills, KillsPerFloor, snapshot))
+            return false;
+
+        m_monsters->ClearActiveMonsters();
+        m_dungeon->SetDungeonTier(ARPGDungeonTier::Normal);
+        for (int currentFloor = 0; currentFloor < snapshot.floor; ++currentFloor)
+            m_dungeon->DescendToNextFloor();
+
+        m_state.killsOnFloor = snapshot.killsOnFloor;
+        m_state.totalKills = snapshot.totalKills;
+        m_state.primarySkillId = snapshot.primarySkillId;
+        m_state.lastDamage = 0.0f;
+        m_state.lastAttackWasSkill = false;
+        m_state.targetMonsterId = 0;
+
+        HeroData* hero = m_heroes->GetHero(m_state.heroId);
+        if (!hero)
+            return false;
+        hero->heroClass = snapshot.heroClass;
+        hero->level = snapshot.level;
+        hero->experience = snapshot.experience;
+        hero->xpToNextLevel = snapshot.xpToNextLevel;
+        hero->strength = snapshot.strength;
+        hero->dexterity = snapshot.dexterity;
+        hero->intelligence = snapshot.intelligence;
+        hero->vitality = snapshot.vitality;
+        hero->health = snapshot.health;
+        hero->maxHealth = snapshot.maxHealth;
+        hero->mana = snapshot.mana;
+        hero->maxMana = snapshot.maxMana;
+        hero->moveSpeed = snapshot.moveSpeed;
+        hero->freeAttributePoints = snapshot.freeAttributePoints;
+        const auto learnedSkills = m_skills->GetLearnedSkills(hero->heroId);
+        if (std::find(learnedSkills.begin(), learnedSkills.end(), snapshot.primarySkillId) == learnedSkills.end() &&
+            !m_skills->LearnSkill(hero->heroId, snapshot.primarySkillId))
+            return false;
+
+        SpawnNextTarget();
+        MonsterData* target = m_monsters->GetMonster(m_state.targetMonsterId);
+        if (!target)
+        {
+            Restart();
+            return false;
+        }
+        target->maxHealth = snapshot.targetMaxHealth;
+        target->health = snapshot.targetHealth;
+        return true;
     }
 } // namespace ARPG

@@ -40,12 +40,13 @@ class Projectile : public GameObject
 {
   protected:
     // Motion
-    DirectX::XMFLOAT3 m_velocity; ///< Current velocity vector
-    float m_speed;                ///< Base speed magnitude
-    float m_lifeTime;             ///< Current lifetime counter
-    float m_maxLifeTime;          ///< Maximum lifetime before auto-deactivation
-    float m_damage;               ///< Damage dealt to targets
-    bool m_active;                ///< Whether projectile is currently active
+    DirectX::XMFLOAT3 m_velocity;         ///< Current velocity vector
+    DirectX::XMFLOAT3 m_previousPosition; ///< Position before the current simulation step
+    float m_speed;                        ///< Base speed magnitude
+    float m_lifeTime;                     ///< Current lifetime counter
+    float m_maxLifeTime;                  ///< Maximum lifetime before auto-deactivation
+    float m_damage;                       ///< Damage dealt to targets
+    bool m_active;                        ///< Whether projectile is currently active
 
     // Physics
     BoundingSphere m_boundingSphere;         ///< Collision bounds
@@ -148,6 +149,9 @@ class Projectile : public GameObject
      * @return Current velocity
      */
     const DirectX::XMFLOAT3& GetVelocity() const { return m_velocity; }
+
+    /** @brief Get the position before the most recent update for swept collision tests. */
+    const DirectX::XMFLOAT3& GetPreviousPosition() const { return m_previousPosition; }
 
     /**
      * @brief Get the collision bounding sphere

@@ -12,6 +12,8 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace RTS
 {
@@ -52,6 +54,8 @@ namespace RTS
     {
         m_units.clear();
         m_templates.clear();
+        m_context = nullptr;
+        m_nextUnitId = 1;
     }
 
     // === Unit lifecycle ===
@@ -114,6 +118,7 @@ namespace RTS
             if (unit.faction == faction)
                 result.push_back(id);
         }
+        std::ranges::sort(result);
         return result;
     }
 
@@ -157,6 +162,33 @@ namespace RTS
             result += "," + std::to_string(static_cast<int>(unit.posY)) + ")\n";
         }
         return result;
+    }
+
+    bool RTSUnitSystem::RestoreState(const std::vector<UnitData>& units)
+    {
+        std::unordered_map<uint32_t, UnitData> restored;
+        restored.reserve(units.size());
+        uint32_t nextId = 1;
+
+        for (const UnitData& unit : units)
+        {
+            if (unit.unitId == 0 || unit.unitId == std::numeric_limits<uint32_t>::max() ||
+                unit.type >= RTSUnitType::Count || unit.faction >= RTSFaction::Count ||
+                unit.state >= RTSUnitState::Count || !std::isfinite(unit.health) || !std::isfinite(unit.maxHealth) ||
+                !std::isfinite(unit.damage) || !std::isfinite(unit.attackSpeed) || !std::isfinite(unit.moveSpeed) ||
+                !std::isfinite(unit.visionRange) || !std::isfinite(unit.posX) || !std::isfinite(unit.posY) ||
+                unit.maxHealth <= 0.0f || unit.health < 0.0f || unit.health > unit.maxHealth || unit.damage < 0.0f ||
+                unit.attackSpeed < 0.0f || unit.moveSpeed < 0.0f || unit.visionRange < 0.0f ||
+                !restored.emplace(unit.unitId, unit).second)
+            {
+                return false;
+            }
+            nextId = std::max(nextId, unit.unitId + 1);
+        }
+
+        m_units = std::move(restored);
+        m_nextUnitId = nextId;
+        return true;
     }
 
     // === Unit state ===

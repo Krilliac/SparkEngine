@@ -32,8 +32,11 @@ namespace MMO
     {
         if (!context)
             return false;
+        if (m_initialized || m_context)
+            Shutdown();
 
         m_context = context;
+        m_worldTime = 0.0f;
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing MMO world setup");
 
@@ -170,6 +173,14 @@ namespace MMO
 #ifdef ENABLE_NETWORKING
         auto& console = Spark::SimpleConsole::GetInstance();
 
+        // A client/editor module must not bind authoritative world-server ports.
+        // Dedicated/headless hosts own the WorldServer topology.
+        if (!m_context || !m_context->IsHeadless())
+        {
+            console.LogInfo("[MMO World] Client mode - dedicated WorldServer topology deferred");
+            return;
+        }
+
         // Configure the WorldServer to coordinate all area servers
         Spark::Net::WorldServerConfig worldConfig{};
         worldConfig.worldName = "SparkMMO Demo World";
@@ -234,6 +245,9 @@ namespace MMO
         if (!m_initialized)
             return;
 
+        if (deltaTime <= 0.0f)
+            return;
+
         m_worldTime += deltaTime;
 
         // Update seamless area streaming based on player position.
@@ -265,26 +279,38 @@ namespace MMO
         if (!nm->StartServer(port, 128))
             return false;
 
-        // Register server-side chat broadcast handler
-        nm->RegisterHandler(Spark::Net::MessageType::ChatMessage,
-                            [nm](const Spark::Net::NetworkMessage& msg)
-                            {
-                                if (nm->GetRole() != Spark::Net::NetworkRole::Server)
-                                    return;
-
-                                // Broadcast to all other connected clients
-                                nm->SendToAllExcept(msg.senderID, msg);
-                            });
-
-        // Register server-side position relay handler
+        // Chat routing remains owned by MMOChatSystem. Preserve the engine's
+        // canonical client snapshot handling while adding the dedicated-server
+        // relay needed for client-authored entity snapshots.
         nm->RegisterHandler(Spark::Net::MessageType::EntityStateUpdate,
                             [nm](const Spark::Net::NetworkMessage& msg)
                             {
-                                if (nm->GetRole() != Spark::Net::NetworkRole::Server)
+                                const auto role = nm->GetRole();
+                                if (role == Spark::Net::NetworkRole::Server)
+                                {
+                                    nm->SendToAllExcept(msg.senderID, msg);
+                                    return;
+                                }
+                                if (role != Spark::Net::NetworkRole::Client)
                                     return;
 
-                                // Relay position update to all other clients
-                                nm->SendToAllExcept(msg.senderID, msg);
+                                Spark::Net::NetBuffer buffer;
+                                buffer.WriteBytes(msg.payload.data(), msg.payload.size());
+                                nm->DeserializeEntityState(buffer);
+                                if (buffer.HasError() || nm->GetRole() != Spark::Net::NetworkRole::Client ||
+                                    msg.channel != Spark::Net::ChannelType::Unreliable || msg.sequence == 0)
+                                {
+                                    return;
+                                }
+
+                                Spark::Net::NetworkMessage ack;
+                                ack.type = Spark::Net::MessageType::DeltaAck;
+                                ack.channel = Spark::Net::ChannelType::Unreliable;
+                                ack.senderID = nm->GetLocalClientID();
+                                Spark::Net::NetBuffer ackBuffer;
+                                ackBuffer.WriteUint32(msg.sequence);
+                                ack.payload = ackBuffer.GetData();
+                                nm->SendMessage(ack);
                             });
 
         m_networkServerRunning = true;
@@ -337,8 +363,6 @@ namespace MMO
                 m_worldServer->HandlePlayerDisconnect(clientId);
             }
         }
-
-        m_worldTime += deltaTime;
     }
 
     void MMOWorldSetup::StopNetworkServer()
@@ -351,7 +375,6 @@ namespace MMO
         if (nm)
         {
             nm->StopServer();
-            nm->Shutdown();
         }
         m_knownClients.clear();
         m_networkServerRunning = false;
@@ -364,18 +387,31 @@ namespace MMO
 
     void MMOWorldSetup::Shutdown()
     {
-        if (!m_initialized)
-            return;
-
 #ifdef ENABLE_NETWORKING
+        StopNetworkServer();
         if (m_worldServer)
         {
             m_worldServer->Stop();
             m_worldServer.reset();
         }
+        m_knownClients.clear();
 #endif
 
+        if (m_context || m_initialized)
+        {
+            auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
+            if (!streamingMgr)
+                streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
+            for (const auto& area : m_areas)
+            {
+                if (!area.isInstanced)
+                    streamingMgr->UnregisterArea(area.areaId);
+            }
+        }
+
         m_areas.clear();
+        m_worldTime = 0.0f;
+        m_context = nullptr;
         m_initialized = false;
     }
 
@@ -418,6 +454,32 @@ namespace MMO
         status += "Origin Rebases: " + std::to_string(stats.totalRebases) + "\n";
         status += "Max Distance: " + std::to_string(stats.maxDistanceFromOrigin) + "m\n";
         return status;
+    }
+
+    const MMOAreaInfo* MMOWorldSetup::GetArea(uint32_t areaId) const
+    {
+        for (const auto& area : m_areas)
+        {
+            if (area.areaId == areaId)
+                return &area;
+        }
+        return nullptr;
+    }
+
+    uint32_t MMOWorldSetup::FindAreaId(float x, float y, float z, uint32_t fallbackAreaId) const
+    {
+        // Boundaries intentionally touch and instanced spaces can overlap the
+        // outdoor map. Prefer the current area while it still contains the
+        // player to prevent edge jitter and instant exits after explicit travel.
+        if (const auto* currentArea = GetArea(fallbackAreaId); currentArea && currentArea->Contains(x, y, z))
+            return fallbackAreaId;
+
+        for (const auto& area : m_areas)
+        {
+            if (area.Contains(x, y, z))
+                return area.areaId;
+        }
+        return fallbackAreaId;
     }
 
     std::string MMOWorldSetup::GetAreaListString() const

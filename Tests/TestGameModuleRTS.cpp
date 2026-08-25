@@ -10,11 +10,15 @@
 
 #ifdef SPARK_TEST_HAS_IMGUI
 
+#include <filesystem>
+#include <fstream>
 #include <limits>
+#include <sstream>
 
 #include "../GameModules/SparkGameRTS/Source/Unit/RTSUnitSystem.h"
 #include "../GameModules/SparkGameRTS/Source/Command/RTSCommandSystem.h"
 #include "../GameModules/SparkGameRTS/Source/Building/RTSBuildingSystem.h"
+#include "../GameModules/SparkGameRTS/Source/Core/RTSPersistence.h"
 #include "../GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.h"
 
 using namespace RTS;
@@ -301,6 +305,79 @@ TEST(RTS_Building_ListStringNonEmpty)
     EXPECT_TRUE(!list.empty());
 }
 
+TEST(RTS_Building_CompletedProductionSpawnsUnitAndConsumesEconomy)
+{
+    RTSUnitSystem units;
+    EXPECT_TRUE(units.Initialize(nullptr));
+    RTSResourceSystem resources;
+    EXPECT_TRUE(resources.Initialize(nullptr, &units));
+    resources.InitializePlayer(RTSFaction::Human);
+    RTSBuildingSystem buildings;
+    EXPECT_TRUE(buildings.Initialize(nullptr, &units, &resources));
+
+    const uint32_t barracks = buildings.PlaceBuilding(RTSBuildingType::Barracks, RTSFaction::Human, 10.0f, 12.0f);
+    buildings.Update(100.0f);
+    const size_t unitsBefore = units.GetUnitCount();
+    const PlayerResources before = *resources.GetPlayerResources(RTSFaction::Human);
+
+    EXPECT_TRUE(buildings.StartProduction(barracks, RTSUnitType::Marine));
+    const PlayerResources queued = *resources.GetPlayerResources(RTSFaction::Human);
+    EXPECT_TRUE(queued.minerals < before.minerals);
+    EXPECT_EQ(queued.currentSupply, before.currentSupply + 1);
+
+    buildings.Update(100.0f);
+    EXPECT_EQ(units.GetUnitCount(), unitsBefore + 1);
+    const auto marines = units.GetUnitsByFaction(RTSFaction::Human);
+    EXPECT_EQ(marines.size(), static_cast<size_t>(1));
+    const UnitData* marine = units.GetUnit(marines.front());
+    EXPECT_TRUE(marine != nullptr);
+    EXPECT_TRUE(marine->type == RTSUnitType::Marine);
+    EXPECT_NEAR(marine->posX, 12.0f, 0.001f);
+    EXPECT_NEAR(marine->posY, 14.0f, 0.001f);
+}
+
+TEST(RTS_Building_LargeUpdateCarriesTimeAcrossProductionQueue)
+{
+    RTSUnitSystem units;
+    EXPECT_TRUE(units.Initialize(nullptr));
+    RTSResourceSystem resources;
+    EXPECT_TRUE(resources.Initialize(nullptr, &units));
+    resources.InitializePlayer(RTSFaction::Human);
+    RTSBuildingSystem buildings;
+    EXPECT_TRUE(buildings.Initialize(nullptr, &units, &resources));
+
+    const uint32_t barracks = buildings.PlaceBuilding(RTSBuildingType::Barracks, RTSFaction::Human, 0.0f, 0.0f);
+    buildings.Update(100.0f);
+    EXPECT_TRUE(buildings.StartProduction(barracks, RTSUnitType::Marine));
+    EXPECT_TRUE(buildings.StartProduction(barracks, RTSUnitType::Marine));
+
+    buildings.Update(36.0f);
+    EXPECT_EQ(units.GetUnitsByFaction(RTSFaction::Human).size(), static_cast<size_t>(2));
+    EXPECT_TRUE(buildings.GetBuilding(barracks)->productionQueue.empty());
+}
+
+TEST(RTS_Building_ProductionRejectsMissingRuntimeAndUnavailableSupply)
+{
+    RTSBuildingSystem disconnectedBuildings;
+    EXPECT_TRUE(disconnectedBuildings.Initialize(nullptr));
+    const uint32_t disconnectedBarracks =
+        disconnectedBuildings.PlaceBuilding(RTSBuildingType::Barracks, RTSFaction::Human, 0.0f, 0.0f);
+    disconnectedBuildings.Update(100.0f);
+    EXPECT_FALSE(disconnectedBuildings.StartProduction(disconnectedBarracks, RTSUnitType::Marine));
+
+    RTSUnitSystem units;
+    EXPECT_TRUE(units.Initialize(nullptr));
+    RTSResourceSystem resources;
+    EXPECT_TRUE(resources.Initialize(nullptr, &units));
+    resources.InitializePlayer(RTSFaction::Human);
+    resources.UseSupply(RTSFaction::Human, 10);
+    RTSBuildingSystem buildings;
+    EXPECT_TRUE(buildings.Initialize(nullptr, &units, &resources));
+    const uint32_t barracks = buildings.PlaceBuilding(RTSBuildingType::Barracks, RTSFaction::Human, 0.0f, 0.0f);
+    buildings.Update(100.0f);
+    EXPECT_FALSE(buildings.StartProduction(barracks, RTSUnitType::Marine));
+}
+
 // =============================================================================
 // RTSResourceSystem
 // =============================================================================
@@ -395,6 +472,17 @@ TEST(RTS_Resource_NodeCountIncrements)
     EXPECT_EQ(resources.GetNodeCount(), before + 2);
 }
 
+TEST(RTS_Resource_RejectsInvalidNodes)
+{
+    RTSResourceSystem resources;
+    EXPECT_TRUE(resources.Initialize(nullptr));
+    EXPECT_EQ(resources.CreateNode(RTSResourceType::Supply, 0.0f, 0.0f, 100), static_cast<uint32_t>(0));
+    EXPECT_EQ(resources.CreateNode(RTSResourceType::Minerals, 0.0f, 0.0f, 0), static_cast<uint32_t>(0));
+    EXPECT_EQ(resources.CreateNode(RTSResourceType::Gas, std::numeric_limits<float>::infinity(), 0.0f, 100),
+              static_cast<uint32_t>(0));
+    EXPECT_EQ(resources.GetNodeCount(), static_cast<size_t>(0));
+}
+
 TEST(RTS_Resource_ListStringNonEmpty)
 {
     RTSResourceSystem resources;
@@ -403,6 +491,152 @@ TEST(RTS_Resource_ListStringNonEmpty)
     resources.CreateNode(RTSResourceType::Minerals, 0.0f, 0.0f, 500);
     std::string list = resources.GetResourceListString();
     EXPECT_TRUE(!list.empty());
+}
+
+TEST(RTS_Resource_HarvestCreditsOwningWorkerFaction)
+{
+    RTSUnitSystem units;
+    EXPECT_TRUE(units.Initialize(nullptr));
+    const uint32_t humanWorker = units.SpawnUnit(RTSUnitType::Worker, RTSFaction::Human, 0.0f, 0.0f);
+    const uint32_t swarmWorker = units.SpawnUnit(RTSUnitType::Worker, RTSFaction::Swarm, 10.0f, 10.0f);
+    const uint32_t nonWorker = units.SpawnUnit(RTSUnitType::Marine, RTSFaction::Human, 2.0f, 2.0f);
+
+    RTSResourceSystem resources;
+    EXPECT_TRUE(resources.Initialize(nullptr, &units));
+    resources.InitializePlayer(RTSFaction::Human);
+    resources.InitializePlayer(RTSFaction::Swarm);
+    const uint32_t humanNode = resources.CreateNode(RTSResourceType::Minerals, 0.0f, 0.0f, 100);
+    const uint32_t swarmNode = resources.CreateNode(RTSResourceType::Minerals, 10.0f, 10.0f, 100);
+    EXPECT_FALSE(resources.AssignWorker(humanNode, nonWorker));
+    EXPECT_TRUE(resources.AssignWorker(humanNode, humanWorker));
+    EXPECT_TRUE(resources.AssignWorker(swarmNode, swarmWorker));
+
+    const int humanBefore = resources.GetPlayerResources(RTSFaction::Human)->minerals;
+    const int swarmBefore = resources.GetPlayerResources(RTSFaction::Swarm)->minerals;
+    resources.Update(2.0f);
+    EXPECT_EQ(resources.GetPlayerResources(RTSFaction::Human)->minerals, humanBefore + 8);
+    EXPECT_EQ(resources.GetPlayerResources(RTSFaction::Swarm)->minerals, swarmBefore + 8);
+    EXPECT_EQ(resources.GetNodes().at(humanNode).remaining, 92);
+    EXPECT_EQ(resources.GetNodes().at(swarmNode).remaining, 92);
+}
+
+TEST(RTS_Resource_DeadWorkersArePrunedBeforeHarvest)
+{
+    RTSUnitSystem units;
+    EXPECT_TRUE(units.Initialize(nullptr));
+    const uint32_t worker = units.SpawnUnit(RTSUnitType::Worker, RTSFaction::Human, 0.0f, 0.0f);
+    RTSResourceSystem resources;
+    EXPECT_TRUE(resources.Initialize(nullptr, &units));
+    resources.InitializePlayer(RTSFaction::Human);
+    const uint32_t node = resources.CreateNode(RTSResourceType::Minerals, 0.0f, 0.0f, 100);
+    EXPECT_TRUE(resources.AssignWorker(node, worker));
+    units.KillUnit(worker);
+
+    const int before = resources.GetPlayerResources(RTSFaction::Human)->minerals;
+    resources.Update(2.0f);
+    EXPECT_EQ(resources.GetPlayerResources(RTSFaction::Human)->minerals, before);
+    EXPECT_TRUE(resources.GetNodes().at(node).assignedWorkers.empty());
+}
+
+// =============================================================================
+// RTS persistence
+// =============================================================================
+
+TEST(RTS_ShutdownOrder_KeepsResourcesAliveForQueuedBuildings)
+{
+    const auto modulePath =
+        std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "GameModules" / "SparkGameRTS" / "Source" / "Core" / "Main.cpp";
+    std::ifstream stream(modulePath, std::ios::binary);
+    EXPECT_TRUE(stream.is_open());
+    if (!stream)
+        return;
+
+    std::ostringstream source;
+    source << stream.rdbuf();
+    const size_t unload = source.str().find("void SparkGameRTSModule::OnUnload()");
+    const size_t building = source.str().find("if (m_buildingSystem)", unload);
+    const size_t resources = source.str().find("if (m_resourceSystem)", unload);
+    EXPECT_TRUE(unload != std::string::npos);
+    EXPECT_TRUE(building != std::string::npos);
+    EXPECT_TRUE(resources != std::string::npos);
+    EXPECT_TRUE(building < resources);
+}
+
+TEST(RTS_Persistence_ValidatesPortableSlotNames)
+{
+    EXPECT_TRUE(RTSPersistence::IsValidSlotName("campaign-01_alpha"));
+    EXPECT_TRUE(RTSPersistence::IsValidSlotName(std::string(64, 'a')));
+    EXPECT_FALSE(RTSPersistence::IsValidSlotName(""));
+    EXPECT_FALSE(RTSPersistence::IsValidSlotName(std::string(65, 'a')));
+    EXPECT_FALSE(RTSPersistence::IsValidSlotName("../escape"));
+    EXPECT_FALSE(RTSPersistence::IsValidSlotName("nested/slot"));
+    EXPECT_FALSE(RTSPersistence::IsValidSlotName("slot name"));
+}
+
+TEST(RTS_Persistence_RoundTripsAndAtomicallyRestoresGameplayState)
+{
+    RTSUnitSystem units;
+    EXPECT_TRUE(units.Initialize(nullptr));
+    RTSResourceSystem resources;
+    EXPECT_TRUE(resources.Initialize(nullptr, &units));
+    resources.InitializePlayer(RTSFaction::Human);
+    RTSBuildingSystem buildings;
+    EXPECT_TRUE(buildings.Initialize(nullptr, &units, &resources));
+    RTSCommandSystem commands;
+    EXPECT_TRUE(commands.Initialize(nullptr, &units));
+
+    const uint32_t worker = units.SpawnUnit(RTSUnitType::Worker, RTSFaction::Human, 3.25f, -7.5f);
+    const uint32_t marine = units.SpawnUnit(RTSUnitType::Marine, RTSFaction::Human, 8.0f, 4.0f);
+    const float savedWorkerHealth = units.GetUnit(worker)->maxHealth * 0.5f;
+    units.GetUnitMutable(worker)->health = savedWorkerHealth;
+    units.SetUnitTarget(marine, worker);
+    const uint32_t minerals = resources.CreateNode(RTSResourceType::Minerals, 4.0f, -6.0f, 777);
+    EXPECT_TRUE(resources.AssignWorker(minerals, worker));
+    resources.AddResources(RTSFaction::Human, 125, 40);
+
+    const uint32_t barracks = buildings.PlaceBuilding(RTSBuildingType::Barracks, RTSFaction::Human, 12.0f, 15.0f);
+    buildings.Update(100.0f);
+    EXPECT_TRUE(buildings.StartProduction(barracks, RTSUnitType::Marine));
+
+    const RTSPersistenceSnapshot captured = RTSPersistence::Capture(units, buildings, resources);
+    std::string error;
+    const std::string encoded = RTSPersistence::Serialize(captured, error);
+    EXPECT_EQ(error, std::string());
+    ASSERT_FALSE(encoded.empty());
+
+    RTSPersistenceSnapshot decoded;
+    ASSERT_TRUE(RTSPersistence::Deserialize(encoded, decoded, error));
+    EXPECT_EQ(RTSPersistence::Serialize(decoded), encoded);
+
+    units.GetUnitMutable(worker)->health = 1.0f;
+    units.SpawnUnit(RTSUnitType::Tank, RTSFaction::Human, 99.0f, 99.0f);
+    resources.AddResources(RTSFaction::Human, 999, 999);
+    commands.Select(worker);
+
+    EXPECT_TRUE(RTSPersistence::Apply(decoded, units, buildings, resources, &commands, error));
+    EXPECT_EQ(units.GetUnitCount(), static_cast<size_t>(2));
+    EXPECT_NEAR(units.GetUnit(worker)->health, savedWorkerHealth, 0.001f);
+    EXPECT_EQ(units.GetUnit(marine)->targetId, worker);
+    EXPECT_EQ(resources.GetNodes().at(minerals).remaining, 777);
+    EXPECT_EQ(resources.GetNodes().at(minerals).assignedWorkers.size(), static_cast<size_t>(1));
+    EXPECT_EQ(resources.GetPlayerResources(RTSFaction::Human)->minerals, captured.players.front().second.minerals);
+    EXPECT_EQ(resources.GetPlayerResources(RTSFaction::Human)->gas, captured.players.front().second.gas);
+    EXPECT_EQ(buildings.GetBuilding(barracks)->productionQueue.size(), static_cast<size_t>(1));
+    EXPECT_EQ(commands.GetSelectionCount(), static_cast<size_t>(0));
+}
+
+TEST(RTS_Persistence_RejectsCorruptionWithoutReplacingOutput)
+{
+    RTSPersistenceSnapshot output;
+    UnitData sentinel;
+    sentinel.unitId = 42;
+    output.units.push_back(sentinel);
+    std::string error;
+
+    EXPECT_FALSE(RTSPersistence::Deserialize("SPARK_RTS_STATE_V1\nUNITS 1\n", output, error));
+    EXPECT_FALSE(error.empty());
+    EXPECT_EQ(output.units.size(), static_cast<size_t>(1));
+    EXPECT_EQ(output.units.front().unitId, static_cast<uint32_t>(42));
 }
 
 #endif // SPARK_TEST_HAS_IMGUI

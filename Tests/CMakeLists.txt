@@ -199,6 +199,7 @@ add_executable(SparkTests
     TestJsonUtils.cpp
     TestJsonStrict.cpp
     TestThirdPartyIntegration.cpp
+    TestGLTFStaticMeshLoader.cpp
     TestNetworkStress.cpp
     TestNetworkMMOIntegration.cpp
     TestAnimationStress.cpp
@@ -822,6 +823,13 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Inventory/MMOInventorySystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Crafting/MMOCraftingSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Trading/MMOTradingSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/WorldBoss/MMOWorldBossSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/UI/MMOLoginUI.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Core/MMOEngineSystems.cpp"
     )
 
@@ -836,7 +844,11 @@ if(TARGET imgui)
     target_sources(SparkTests PRIVATE
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Character/RPGCharacterSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Combat/RPGCombatSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Inventory/RPGInventorySystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Quest/RPGQuestSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/World/RPGWorldSetup.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Core/RPGEngineSystems.cpp"
     )
 
@@ -848,8 +860,8 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/AI/RacingAIDriver.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Camera/RacingCameraSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/HUD/RacingHUDSystem.cpp"
-        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Core/MainRaceFlow.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.cpp"
     )
 
     # Platformer module sources

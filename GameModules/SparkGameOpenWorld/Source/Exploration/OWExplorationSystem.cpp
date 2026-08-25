@@ -11,6 +11,7 @@
 #include <imgui.h>
 #endif
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 
@@ -190,6 +191,47 @@ namespace OpenWorld
             Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Secret found at POI " + std::to_string(poiId) +
                                                         " (+50 XP)");
         }
+    }
+
+    ExplorationSaveState OWExplorationSystem::CaptureSaveState() const
+    {
+        ExplorationSaveState state;
+        state.totalXPEarned = m_totalXPEarned;
+        state.progress.reserve(m_progress.size());
+        for (const auto& [id, progress] : m_progress)
+        {
+            (void)id;
+            state.progress.push_back(progress);
+        }
+        std::ranges::sort(state.progress, {}, &POIProgress::poiId);
+        return state;
+    }
+
+    bool OWExplorationSystem::RestoreSaveState(const ExplorationSaveState& state, std::string* error)
+    {
+        auto fail = [&](const char* message)
+        {
+            if (error)
+                *error = message;
+            return false;
+        };
+        if (state.progress.size() != m_progress.size() || state.progress.size() > 4096)
+            return fail("POI progress does not match this world");
+
+        std::unordered_map<uint32_t, POIProgress> restored;
+        restored.reserve(state.progress.size());
+        for (const auto& progress : state.progress)
+        {
+            const auto rawState = static_cast<uint8_t>(progress.state);
+            if (rawState >= static_cast<uint8_t>(DiscoveryState::Count) ||
+                m_progress.find(progress.poiId) == m_progress.end() ||
+                !restored.emplace(progress.poiId, progress).second)
+                return fail("invalid POI progress record");
+        }
+
+        m_progress = std::move(restored);
+        m_totalXPEarned = state.totalXPEarned;
+        return true;
     }
 
     size_t OWExplorationSystem::GetDiscoveredCount() const

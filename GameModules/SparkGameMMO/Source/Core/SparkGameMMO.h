@@ -37,6 +37,7 @@ namespace MMO
     class MMOCharacterSystem;
     class MMOLoginUI;
     class MMOEngineSystems;
+    class MMOGameplaySession;
 } // namespace MMO
 
 /**
@@ -71,10 +72,15 @@ class SparkGameMMOModule : public Spark::IModule
 
   private:
     void RegisterConsoleCommands();
+    void UnregisterConsoleCommands();
+    void RegisterStateValidationRules();
+    void ShutdownSystems();
 
     Spark::IEngineContext* m_context{nullptr};
     bool m_initialized{false};
     bool m_paused{false};
+    bool m_consoleCommandsRegistered{false};
+    bool m_stateRulesRegistered{false};
 
     std::unique_ptr<MMO::MMOWorldSetup> m_worldSetup;
     std::unique_ptr<MMO::MMOPlayerSystem> m_playerSystem;
@@ -94,6 +100,7 @@ class SparkGameMMOModule : public Spark::IModule
     std::unique_ptr<MMO::MMOAccountSystem> m_accountSystem;
     std::unique_ptr<MMO::MMOCharacterSystem> m_characterSystem;
     std::unique_ptr<MMO::MMOLoginUI> m_loginUI;
+    std::unique_ptr<MMO::MMOGameplaySession> m_gameplaySession;
 
     // Engine subsystem integration
     std::unique_ptr<MMO::MMOEngineSystems> m_engineSystems;

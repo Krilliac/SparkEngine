@@ -11,6 +11,7 @@
 #include <imgui.h>
 #endif
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 
@@ -221,6 +222,82 @@ namespace OpenWorld
         it->second.playerParticipating = true;
         it->second.state = EventState::Active;
         Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Joined event: " + it->second.name);
+        return true;
+    }
+
+    DynamicEventSaveState OWDynamicEventSystem::CaptureSaveState() const
+    {
+        DynamicEventSaveState state;
+        state.activeEvents.reserve(m_activeEvents.size());
+        for (const auto& [id, event] : m_activeEvents)
+        {
+            (void)id;
+            state.activeEvents.push_back(event);
+        }
+        std::ranges::sort(state.activeEvents, {}, &ActiveWorldEvent::eventId);
+        state.cooldowns.reserve(m_cooldowns.size());
+        for (const auto& cooldown : m_cooldowns)
+            state.cooldowns.push_back(cooldown);
+        std::ranges::sort(state.cooldowns, {}, [](const auto& cooldown) { return cooldown.first; });
+        state.nextEventId = m_nextEventId;
+        state.eventCheckTimer = m_eventCheckTimer;
+        state.totalEventsCompleted = m_totalEventsCompleted;
+        return state;
+    }
+
+    bool OWDynamicEventSystem::RestoreSaveState(const DynamicEventSaveState& state, std::string* error)
+    {
+        auto fail = [&](const char* message)
+        {
+            if (error)
+                *error = message;
+            return false;
+        };
+        if (state.activeEvents.size() > 1024 || state.cooldowns.size() > m_templates.size() ||
+            !std::isfinite(state.eventCheckTimer) || state.eventCheckTimer < 0.0f || state.eventCheckTimer > 3600.0f)
+            return fail("invalid dynamic event state size or timer");
+
+        auto findTemplate = [&](uint32_t templateId) -> const WorldEventTemplate*
+        {
+            const auto found = std::find_if(m_templates.begin(), m_templates.end(), [=](const WorldEventTemplate& item)
+                                            { return item.templateId == templateId; });
+            return found == m_templates.end() ? nullptr : &*found;
+        };
+        std::unordered_map<uint32_t, ActiveWorldEvent> events;
+        events.reserve(state.activeEvents.size());
+        uint32_t highestEventId = 0;
+        for (const auto& event : state.activeEvents)
+        {
+            const WorldEventTemplate* eventTemplate = findTemplate(event.templateId);
+            if (event.eventId == 0 || !eventTemplate || event.name != eventTemplate->name ||
+                event.type != eventTemplate->type || event.totalDuration != eventTemplate->duration ||
+                static_cast<uint8_t>(event.type) >= static_cast<uint8_t>(WorldEventType::Count) ||
+                event.state < EventState::Approaching || event.state > EventState::Resolving ||
+                !std::isfinite(event.posX) || !std::isfinite(event.posZ) || !std::isfinite(event.timeRemaining) ||
+                !std::isfinite(event.totalDuration) || event.timeRemaining < 0.0f || event.totalDuration <= 0.0f ||
+                event.timeRemaining > event.totalDuration || event.regionId == 0 || event.regionId > 8 ||
+                event.name.size() > 128 || !events.emplace(event.eventId, event).second)
+                return fail("invalid active world event record");
+            highestEventId = std::max(highestEventId, event.eventId);
+        }
+
+        std::unordered_map<uint32_t, float> cooldowns;
+        cooldowns.reserve(state.cooldowns.size());
+        for (const auto& [templateId, remaining] : state.cooldowns)
+        {
+            const WorldEventTemplate* eventTemplate = findTemplate(templateId);
+            if (!eventTemplate || !std::isfinite(remaining) || remaining < 0.0f ||
+                remaining > eventTemplate->cooldown || !cooldowns.emplace(templateId, remaining).second)
+                return fail("invalid event cooldown record");
+        }
+        if (state.nextEventId == 0 || state.nextEventId <= highestEventId)
+            return fail("invalid next event id");
+
+        m_activeEvents = std::move(events);
+        m_cooldowns = std::move(cooldowns);
+        m_nextEventId = state.nextEventId;
+        m_eventCheckTimer = state.eventCheckTimer;
+        m_totalEventsCompleted = state.totalEventsCompleted;
         return true;
     }
 

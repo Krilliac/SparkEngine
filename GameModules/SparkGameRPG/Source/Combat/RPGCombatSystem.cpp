@@ -35,16 +35,10 @@ namespace RPG
 
     void RPGCombatSystem::Update(float deltaTime)
     {
+        deltaTime = std::max(0.0f, deltaTime);
         UpdateCooldowns(deltaTime);
         UpdateCombos(deltaTime);
         UpdateEncounters(deltaTime);
-    }
-
-    void RPGCombatSystem::FixedUpdate(float fixedDeltaTime)
-    {
-        // Physics-rate knockback application would go here when integrated
-        // with the engine's PhysicsSystem via m_context->GetPhysics()
-        (void)fixedDeltaTime;
     }
 
     void RPGCombatSystem::Shutdown()
@@ -58,6 +52,9 @@ namespace RPG
 
     uint32_t RPGCombatSystem::StartEncounter(uint32_t attackerId, uint32_t defenderId)
     {
+        if (attackerId == 0 || defenderId == 0 || attackerId == defenderId)
+            return 0;
+
         CombatEncounter encounter;
         encounter.encounterId = m_nextEncounterId++;
         encounter.attackerId = attackerId;
@@ -105,7 +102,15 @@ namespace RPG
     {
         DamageResult result;
         result.type = type;
-        result.comboMultiplier = combo.damageMultiplier;
+        result.comboMultiplier = std::max(1.0f, combo.damageMultiplier);
+
+        baseDamage = std::max(0.0f, baseDamage);
+        attackStat = std::max(0.0f, attackStat);
+        defenseStat = std::max(0.0f, defenseStat);
+        if (baseDamage == 0.0f)
+        {
+            return result;
+        }
 
         // Raw damage: base + stat scaling
         // Attack stat adds 2% per point, defense reduces by 1% per point
@@ -122,13 +127,13 @@ namespace RPG
         }
 
         // Apply combo multiplier
-        result.rawDamage *= combo.damageMultiplier;
+        result.rawDamage *= result.comboMultiplier;
 
         // Apply resistance
         auto typeIndex = static_cast<size_t>(type);
         if (typeIndex < resistances.values.size())
         {
-            result.resistanceReduction = resistances.values[typeIndex];
+            result.resistanceReduction = std::clamp(resistances.values[typeIndex], 0.0f, 1.0f);
         }
         float resistMod = std::max(0.0f, 1.0f - result.resistanceReduction);
 
@@ -148,6 +153,9 @@ namespace RPG
 
     bool RPGCombatSystem::UseAbility(uint32_t characterId, uint32_t abilityId, float cooldown)
     {
+        if (characterId == 0 || abilityId == 0 || cooldown < 0.0f || !std::isfinite(cooldown))
+            return false;
+
         if (!IsAbilityReady(characterId, abilityId))
             return false;
 
@@ -201,6 +209,21 @@ namespace RPG
     {
         auto it = m_combos.find(characterId);
         return it != m_combos.end() ? &it->second : nullptr;
+    }
+
+    void RPGCombatSystem::ClearCharacterState(uint32_t characterId)
+    {
+        if (characterId == 0)
+            return;
+
+        m_cooldowns.erase(characterId);
+        m_combos.erase(characterId);
+        std::erase_if(m_encounters,
+                      [characterId](const auto& entry)
+                      {
+                          const CombatEncounter& encounter = entry.second;
+                          return encounter.attackerId == characterId || encounter.defenderId == characterId;
+                      });
     }
 
     // === Knockback ===

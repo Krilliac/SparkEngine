@@ -71,6 +71,19 @@ namespace Racing
         uint32_t wins = 0;
     };
 
+    /** Serializable race-manager state kept outside the ECS world. */
+    struct RacingRaceSnapshot
+    {
+        std::vector<RacerState> racers;
+        std::vector<ChampionshipEntry> championship;
+        RaceState state = RaceState::Countdown;
+        RaceMode mode = RaceMode::SingleRace;
+        float countdownTimer = 3.0f;
+        float raceTime = 0.0f;
+        uint32_t totalLaps = 3;
+        float dnfTimeout = 300.0f;
+    };
+
     /**
      * @brief Orchestrates race state, timing, and results
      *
@@ -123,6 +136,9 @@ namespace Racing
         size_t GetRacerCount() const { return m_racers.size(); }
         uint32_t GetPlayerPosition() const;
         float GetPlayerBestLap() const;
+
+        RacingRaceSnapshot CaptureState() const;
+        bool RestoreState(const RacingRaceSnapshot& snapshot);
 
         std::string GetStandingsString() const;
         std::string GetResultsString() const;

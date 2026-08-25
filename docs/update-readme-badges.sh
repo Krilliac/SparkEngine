@@ -59,7 +59,6 @@ collect_metrics() {
     log_info "Scanning codebase..."
 
     eval "$("${PYTHON[@]}" "$PROJECT_ROOT/docs/codebase-metrics.py" --shell)"
-    TEST_CASES="$TEST_DEFINITIONS"
     format_count() {
         "${PYTHON[@]}" -c 'import sys; print(f"{int(sys.argv[1]):,}")' "$1"
     }
@@ -67,9 +66,9 @@ collect_metrics() {
     GAME_MODULES=$(find "$GAME_SRC" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d " ")
     WIKI_PAGES=$(find "$PROJECT_ROOT/wiki" -name '*.md' ! -name '_Sidebar.md' 2>/dev/null | wc -l | tr -d " ")
 
-    FORMATTED_TESTS=$(format_count "$TEST_CASES")
+    FORMATTED_TESTS=$(format_count "$TEST_DEFINITIONS")
 
-    log_info "Found: ${TEST_CASES} tests, ${PANEL_COUNT} panels, ${GAME_MODULES} modules, ${TOTAL_LINES} LOC"
+    log_info "Found: ${TEST_DEFINITIONS} test definitions, ${PANEL_COUNT} panels, ${GAME_MODULES} modules, ${TOTAL_LINES} LOC"
 }
 
 # ============================================================================
@@ -113,15 +112,22 @@ update_readme() {
         'ImGui editor ([0-9]* panels)' \
         "ImGui editor (${PANEL_COUNT} panels)"
 
-    # Test count in prose: "N unit tests across M files"
+    # Source-level test-definition count in prose. This is deliberately not
+    # described as executed tests: feature/platform gates control registration.
     sed_replace "$readme" \
         '[0-9,]* unit tests across [0-9,]* files' \
-        "${FORMATTED_TESTS} unit tests across ${TEST_FILES} files"
+        "${FORMATTED_TESTS} test definitions across ${TEST_FILES} files"
+    sed_replace "$readme" \
+        '[0-9,]* test definitions across [0-9,]* files' \
+        "${FORMATTED_TESTS} test definitions across ${TEST_FILES} files"
 
     # Test count in the repository tree summary
     sed_replace "$readme" \
         'Tests/                 [0-9,]* unit tests, [0-9,]* files' \
-        "Tests/                 ${FORMATTED_TESTS} unit tests, ${TEST_FILES} files"
+        "Tests/                 ${FORMATTED_TESTS} test definitions, ${TEST_FILES} files"
+    sed_replace "$readme" \
+        'Tests/                 [0-9,]* test definitions, [0-9,]* files' \
+        "Tests/                 ${FORMATTED_TESTS} test definitions, ${TEST_FILES} files"
 
     # Wiki page count in tree
     sed_replace "$readme" \
@@ -144,10 +150,13 @@ update_ai_instructions() {
     )
 
     for f in "${files[@]}"; do
-        # "N unit tests across M files"
+        # Source-level test definitions, not configuration-dependent executions.
         sed_replace "$f" \
             '[0-9,]* unit tests across [0-9,]* files' \
-            "${FORMATTED_TESTS} unit tests across ${TEST_FILES} files"
+            "${FORMATTED_TESTS} test definitions across ${TEST_FILES} files"
+        sed_replace "$f" \
+            '[0-9,]* test definitions across [0-9,]* files' \
+            "${FORMATTED_TESTS} test definitions across ${TEST_FILES} files"
 
         # "ImGui-based editor (N panels)"
         sed_replace "$f" \
@@ -159,7 +168,10 @@ update_ai_instructions() {
     local bt="$PROJECT_ROOT/.github/prompts/build-test.prompt.md"
     sed_replace "$bt" \
         '[0-9,]* unit tests across [0-9,]* files' \
-        "${FORMATTED_TESTS} unit tests across ${TEST_FILES} files"
+        "${FORMATTED_TESTS} test definitions across ${TEST_FILES} files"
+    sed_replace "$bt" \
+        '[0-9,]* test definitions across [0-9,]* files' \
+        "${FORMATTED_TESTS} test definitions across ${TEST_FILES} files"
 }
 
 # ============================================================================
@@ -180,7 +192,7 @@ update_badges() {
         ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     fi
 
-    local tests_json='{"schemaVersion":1,"label":"tests","message":"'"$FORMATTED_TESTS"'","color":"brightgreen","cacheSeconds":300}'
+    local tests_json='{"schemaVersion":1,"label":"test definitions","message":"'"$FORMATTED_TESTS"'","color":"brightgreen","cacheSeconds":300}'
     local loc_json='{"schemaVersion":1,"label":"C++ lines of code","message":"'"$formatted_loc"'","color":"blue","logo":"cplusplus","cacheSeconds":300}'
     local files_json='{"schemaVersion":1,"label":"source files","message":"'"$formatted_files"'","color":"green","cacheSeconds":300}'
     local breakdown_json='{"schemaVersion":1,"total":'"$TOTAL_LINES"',"files":'"$FILE_COUNT"',"engine":'"$ENGINE_LINES"',"editor":'"$EDITOR_LINES"',"game":'"$GAME_LINES"',"tests":'"$TEST_LINES"',"tools":'"$TOOL_LINES"',"updated":"'"$ts"'"}'
@@ -220,7 +232,7 @@ update() {
     update_badges
 
     if [ "$CHANGES_MADE" -gt 0 ]; then
-        log_success "Updated $CHANGES_MADE file(s)"
+        log_success "Applied $CHANGES_MADE generated-value update(s)"
     else
         log_success "All files already up to date"
     fi
@@ -235,7 +247,7 @@ check_mode() {
     update_badges
 
     if [ "$CHANGES_MADE" -gt 0 ]; then
-        log_warning "$CHANGES_MADE file(s) out of date. Run: docs/update-readme-badges.sh"
+        log_warning "$CHANGES_MADE generated value(s) out of date. Run: docs/update-readme-badges.sh"
         exit 1
     else
         log_success "All README/badge files are up to date."

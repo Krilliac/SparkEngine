@@ -337,8 +337,20 @@ void Enemy::HealNearby(float dt)
     if (m_healTimer > 0.0f)
         return;
 
-    // Medic heals are a no-op in single-player without an ally list,
-    // but the timer resets so the medic alternates between attacking and "healing"
+    if (m_allies)
+    {
+        const float healRangeSquared = m_healRange * m_healRange;
+        for (Enemy* ally : *m_allies)
+        {
+            if (!ally || ally == this || !ally->IsAlive() || ally->m_health >= ally->m_maxHealth)
+                continue;
+            if (DistanceSquared(GetPosition(), ally->GetPosition()) > healRangeSquared)
+                continue;
+
+            ally->m_health = (std::min)(ally->m_maxHealth, ally->m_health + m_healAmount);
+        }
+    }
+
     m_healTimer = m_healCooldown;
 }
 

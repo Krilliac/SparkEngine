@@ -47,6 +47,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Terrafront
@@ -61,6 +62,16 @@ namespace Terrafront
         EnteringWorld,
         InWorld,
     };
+
+    /// Arm client request state before dispatching. Listen-host loopback
+    /// replies are delivered synchronously, so state written after dispatch
+    /// would overwrite the reply sink's completed state.
+    template <typename ArmState, typename Dispatch>
+    void DispatchAfterArmingOnboardingState(ArmState&& armState, Dispatch&& dispatch)
+    {
+        std::forward<ArmState>(armState)();
+        std::forward<Dispatch>(dispatch)();
+    }
 
     class TFLoginFlow
     {

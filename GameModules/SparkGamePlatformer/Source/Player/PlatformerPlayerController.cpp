@@ -5,6 +5,7 @@
 
 #include "PlatformerPlayerController.h"
 #include "Checkpoint/PlatformerCheckpointSystem.h"
+#include "Input/InputManager.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -39,7 +40,7 @@ namespace Platformer
 
     void PlatformerPlayerController::Update(float deltaTime)
     {
-        if (!m_initialized)
+        if (!m_initialized || !std::isfinite(deltaTime) || deltaTime <= 0.0f)
             return;
 
         ProcessInput(deltaTime);
@@ -49,7 +50,7 @@ namespace Platformer
 
     void PlatformerPlayerController::FixedUpdate(float fixedDeltaTime)
     {
-        if (!m_initialized)
+        if (!m_initialized || !std::isfinite(fixedDeltaTime) || fixedDeltaTime <= 0.0f)
             return;
 
         if (m_state == PlayerState::Dead)
@@ -76,14 +77,28 @@ namespace Platformer
     {
         (void)deltaTime;
 
-        // In a real implementation, input would come from the engine's InputManager.
-        // Here we document the intended input mappings:
-        // - Left stick / WASD: horizontal movement
-        // - A / Space: jump (hold for variable height)
-        // - X / Shift: dash
-        // - B / Ctrl: ground pound (in air)
-        // - Y / E: interact (checkpoints, doors)
-        // - LT / Run: run modifier
+        InputManager* input = m_context ? m_context->GetInput() : nullptr;
+        if (!input)
+            return;
+
+        constexpr int kShift = 0x10;
+        constexpr int kControl = 0x11;
+        const float horizontal = (input->IsKeyDown('D') ? 1.0f : 0.0f) - (input->IsKeyDown('A') ? 1.0f : 0.0f);
+        SetMovementInput(horizontal, input->IsKeyDown(kShift));
+        SetJumpInput(input->IsKeyDown(' '));
+
+        const bool dashHeld = input->IsKeyDown('E');
+        const bool groundPoundHeld = input->IsKeyDown(kControl);
+        const bool respawnHeld = input->IsKeyDown('R');
+        if (dashHeld && !m_dashInputHeld)
+            RequestDash();
+        if (groundPoundHeld && !m_groundPoundInputHeld)
+            RequestGroundPound();
+        if (respawnHeld && !m_respawnInputHeld)
+            Respawn();
+        m_dashInputHeld = dashHeld;
+        m_groundPoundInputHeld = groundPoundHeld;
+        m_respawnInputHeld = respawnHeld;
     }
 
     void PlatformerPlayerController::ApplyGravity(float fixedDeltaTime)
@@ -131,20 +146,23 @@ namespace Platformer
         if (m_speedBoostTimer > 0.0f)
             currentMoveSpeed *= 1.5f;
 
-        // Horizontal deceleration when no input
-        float accel = m_grounded ? m_deceleration : m_airAcceleration;
-        if (std::abs(m_velocity.x) > 0.1f)
+        const float maxHorizontalSpeed = currentMoveSpeed * (m_runHeld ? m_runMultiplier : 1.0f);
+        const float targetVelocity = m_moveInput * maxHorizontalSpeed;
+        const float accel = (std::abs(m_moveInput) > 0.01f) ? (m_grounded ? m_acceleration : m_airAcceleration)
+                                                            : (m_grounded ? m_deceleration : m_airAcceleration);
+        const float velocityDelta = targetVelocity - m_velocity.x;
+        const float maxStep = accel * fixedDeltaTime;
+        if (std::abs(velocityDelta) <= maxStep)
         {
-            float sign = (m_velocity.x > 0.0f) ? 1.0f : -1.0f;
-            m_velocity.x -= sign * accel * fixedDeltaTime;
-
-            // Prevent overshoot past zero
-            if ((sign > 0.0f && m_velocity.x < 0.0f) || (sign < 0.0f && m_velocity.x > 0.0f))
-                m_velocity.x = 0.0f;
+            m_velocity.x = targetVelocity;
+        }
+        else
+        {
+            m_velocity.x += std::copysign(maxStep, velocityDelta);
         }
 
         // Clamp horizontal speed
-        m_velocity.x = std::clamp(m_velocity.x, -currentMoveSpeed, currentMoveSpeed);
+        m_velocity.x = std::clamp(m_velocity.x, -maxHorizontalSpeed, maxHorizontalSpeed);
 
         // Apply velocity to position
         m_position.x += m_velocity.x * fixedDeltaTime;
@@ -193,8 +211,7 @@ namespace Platformer
             m_jumpBufferTimer = m_jumpBufferTime;
             m_jumpRequested = false;
         }
-
-        if (m_jumpBufferTimer > 0.0f)
+        else if (m_jumpBufferTimer > 0.0f)
             m_jumpBufferTimer -= fixedDeltaTime;
     }
 
@@ -260,7 +277,20 @@ namespace Platformer
     void PlatformerPlayerController::HandleDash(float fixedDeltaTime)
     {
         if (!m_abilities.dash)
+        {
+            m_dashRequested = false;
             return;
+        }
+
+        if (m_dashRequested && m_state != PlayerState::Dashing && m_dashCooldownTimer <= 0.0f && !m_hasDashed)
+        {
+            m_dashRequested = false;
+            m_dashTimer = m_dashDuration;
+            m_dashCooldownTimer = m_dashCooldown;
+            m_hasDashed = true;
+            m_velocity.y = 0.0f;
+            TransitionState(PlayerState::Dashing);
+        }
 
         // Active dash
         if (m_state == PlayerState::Dashing)
@@ -283,7 +313,19 @@ namespace Platformer
     void PlatformerPlayerController::HandleGroundPound()
     {
         if (!m_abilities.groundPound)
+        {
+            m_groundPoundRequested = false;
             return;
+        }
+
+        const bool requested = m_groundPoundRequested;
+        m_groundPoundRequested = false;
+        if (requested && !m_grounded && m_state != PlayerState::Dashing)
+        {
+            m_velocity.x = 0.0f;
+            m_velocity.y = m_groundPoundSpeed;
+            TransitionState(PlayerState::GroundPounding);
+        }
 
         if (m_state == PlayerState::GroundPounding && m_grounded)
         {
@@ -364,14 +406,17 @@ namespace Platformer
             m_ghostTimer -= deltaTime;
     }
 
-    void PlatformerPlayerController::TakeDamage(int amount)
+    bool PlatformerPlayerController::TakeDamage(int amount)
     {
+        if (amount <= 0)
+            return false;
+
         if (m_invincible || m_state == PlayerState::Dead)
-            return;
+            return false;
 
         // Ghost mode ignores damage
         if (m_ghostTimer > 0.0f)
-            return;
+            return false;
 
         // Shield absorbs hit
         if (m_hasShield)
@@ -380,7 +425,7 @@ namespace Platformer
             m_shieldTimer = 0.0f;
             m_invincible = true;
             m_invincibilityTimer = m_invincibilityDuration * 0.5f;
-            return;
+            return false;
         }
 
         SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Platformer player took %d damage (lives remaining: %d)", amount,
@@ -391,7 +436,7 @@ namespace Platformer
             m_lives = 0;
             SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer player died — game over");
             TransitionState(PlayerState::Dead);
-            return;
+            return true;
         }
 
         // Grant invincibility frames
@@ -401,6 +446,7 @@ namespace Platformer
         // Knockback: small upward bounce
         m_velocity.y = m_jumpForce * 0.5f;
         m_grounded = false;
+        return true;
     }
 
     void PlatformerPlayerController::Respawn()
@@ -421,6 +467,8 @@ namespace Platformer
         m_invincibilityTimer = m_invincibilityDuration;
         m_hasDoubleJumped = false;
         m_hasDashed = false;
+        m_dashRequested = false;
+        m_groundPoundRequested = false;
 
         if (m_lives <= 0)
             m_lives = 3; // Restart with default lives on game over
@@ -438,6 +486,22 @@ namespace Platformer
             m_abilities.doubleJump = true;
             SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer ability unlocked: Double Jump");
             console.LogInfo("[Platformer Player] Unlocked: Double Jump");
+            break;
+        case PowerUpType::WallJump:
+            m_abilities.wallJump = true;
+            console.LogInfo("[Platformer Player] Unlocked: Wall Jump");
+            break;
+        case PowerUpType::Dash:
+            m_abilities.dash = true;
+            console.LogInfo("[Platformer Player] Unlocked: Dash");
+            break;
+        case PowerUpType::GroundPound:
+            m_abilities.groundPound = true;
+            console.LogInfo("[Platformer Player] Unlocked: Ground Pound");
+            break;
+        case PowerUpType::Climb:
+            m_abilities.climb = true;
+            console.LogInfo("[Platformer Player] Unlocked: Climb");
             break;
         case PowerUpType::SpeedBoost:
             // Speed boost is a temporary power-up, not a permanent unlock
@@ -458,6 +522,9 @@ namespace Platformer
 
     void PlatformerPlayerController::ApplyPowerUp(PowerUpType type, float duration)
     {
+        if (!std::isfinite(duration) || duration <= 0.0f)
+            return;
+
         switch (type)
         {
         case PowerUpType::SpeedBoost:
@@ -473,9 +540,54 @@ namespace Platformer
         case PowerUpType::GhostMode:
             m_ghostTimer = duration;
             break;
+        case PowerUpType::WallJump:
+        case PowerUpType::Dash:
+        case PowerUpType::GroundPound:
+        case PowerUpType::Climb:
         default:
             break;
         }
+    }
+
+    void PlatformerPlayerController::SetMovementInput(float horizontalAxis, bool runHeld)
+    {
+        m_moveInput = std::clamp(horizontalAxis, -1.0f, 1.0f);
+        m_runHeld = runHeld;
+        if (std::abs(m_moveInput) > 0.01f)
+            m_facingDirection = std::copysign(1.0f, m_moveInput);
+    }
+
+    void PlatformerPlayerController::SetJumpInput(bool held)
+    {
+        if (held && !m_jumpHeld)
+            m_jumpRequested = true;
+        m_jumpHeld = held;
+    }
+
+    void PlatformerPlayerController::RequestDash()
+    {
+        m_dashRequested = true;
+    }
+
+    void PlatformerPlayerController::RequestGroundPound()
+    {
+        m_groundPoundRequested = true;
+    }
+
+    void PlatformerPlayerController::ApplyImpulse(float horizontal, float vertical)
+    {
+        if (m_state == PlayerState::Dead)
+            return;
+        m_velocity.x += horizontal;
+        m_velocity.y += vertical;
+        if (vertical > 0.0f)
+            m_grounded = false;
+    }
+
+    void PlatformerPlayerController::GrantLives(int amount)
+    {
+        if (amount > 0)
+            m_lives = (amount >= MAX_LIVES - m_lives) ? MAX_LIVES : m_lives + amount;
     }
 
     void PlatformerPlayerController::Render()

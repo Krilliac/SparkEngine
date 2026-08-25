@@ -89,7 +89,7 @@ namespace Platformer
     {
         for (auto& cp : m_checkpoints)
         {
-            if (cp.activated)
+            if (cp.levelIndex != m_activeLevel || cp.activated)
                 continue;
 
             float dx = cp.posX - playerX;
@@ -117,7 +117,7 @@ namespace Platformer
     {
         for (const auto& cp : m_checkpoints)
         {
-            if (cp.id == m_lastActivatedId)
+            if (cp.levelIndex == m_activeLevel && cp.id == m_lastActivatedId)
                 return {cp.posX, cp.posY, cp.posZ};
         }
 
@@ -147,6 +147,7 @@ namespace Platformer
             }
         }
         m_lastActivatedId = 0;
+        m_activeLevel = levelIndex;
     }
 
     void PlatformerCheckpointSystem::SetLevelSpawn(float x, float y, float z)

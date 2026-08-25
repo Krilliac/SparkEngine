@@ -689,18 +689,39 @@ namespace Spark
 
     bool SaveSystem::Save(const std::string& slotName, World& world, const SaveMetadata& metadata)
     {
+        return Save(slotName, world, metadata, {});
+    }
+
+    bool SaveSystem::Save(const std::string& slotName, World& world, const SaveMetadata& metadata,
+                          const std::unordered_map<std::string, std::string>& customState)
+    {
         SPARK_TRACE_ENTER(Spark::LogCategory::Save);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Save, !slotName.empty(), "SaveSystem::Save — slotName must not be empty");
         if (!IsValidSlotName(slotName))
             return false;
         EventBus::Global().Publish<SaveBeginEvent>({slotName});
         SaveData data = SerializeWorld(world, metadata);
+        data.customState = customState;
         bool ok = WriteToFile(GetSavePath(slotName), data);
         EventBus::Global().Publish<SaveCompleteEvent>({slotName, ok});
         return ok;
     }
 
     bool SaveSystem::Load(const std::string& slotName, World& world)
+    {
+        std::unordered_map<std::string, std::string> ignoredCustomState;
+        return Load(slotName, world, ignoredCustomState);
+    }
+
+    bool SaveSystem::Load(const std::string& slotName, World& world,
+                          std::unordered_map<std::string, std::string>& outCustomState)
+    {
+        return Load(slotName, world, outCustomState, {});
+    }
+
+    bool SaveSystem::Load(const std::string& slotName, World& world,
+                          std::unordered_map<std::string, std::string>& outCustomState,
+                          const CustomStateValidator& customStateValidator)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Save);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Save, !slotName.empty(), "SaveSystem::Load — slotName must not be empty");
@@ -713,7 +734,14 @@ namespace Spark
             EventBus::Global().Publish<LoadCompleteEvent>({slotName, false});
             return false;
         }
+        if (customStateValidator && !customStateValidator(data.customState))
+        {
+            EventBus::Global().Publish<LoadCompleteEvent>({slotName, false});
+            return false;
+        }
         bool ok = DeserializeWorld(data, world);
+        if (ok)
+            outCustomState = data.customState;
         EventBus::Global().Publish<LoadCompleteEvent>({slotName, ok});
         return ok;
     }

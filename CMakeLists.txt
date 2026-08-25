@@ -134,6 +134,7 @@ else()
     option(ENABLE_SDL2 "Enable SDL2 cross-platform input and windowing" OFF)
 endif()
 option(SPARK_HEADLESS_SUPPORT "Enable headless/dedicated server mode support" ON)
+option(ENABLE_ANGELSCRIPT "Enable the AngelScript gameplay scripting runtime" ON)
 option(ENABLE_RECAST "Enable Recast/Detour navmesh generation (improved voxel-based builder)" ON)
 option(ENABLE_NEURAL_RENDERING "Enable neural rendering features (NTC, radiance cache, neural post-processing)" ON)
 option(ENABLE_VR "Enable VR/AR framework (OpenXR-ready stub)" OFF)
@@ -838,10 +839,89 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui")
     message(STATUS "Found Dear ImGui")
 endif()
 
-# AngelScript
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/sdk/angelscript/include")
-    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/sdk/angelscript/include")
-    message(STATUS "Found AngelScript")
+# AngelScript core plus the add-ons used by AngelScriptEngine. Header-only
+# detection is not enough: it produced a runtime stub while making the SDK look
+# available in configure output.
+set(SPARK_ANGELSCRIPT_SDK_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/sdk")
+set(SPARK_ANGELSCRIPT_CORE_DIR "${SPARK_ANGELSCRIPT_SDK_DIR}/angelscript")
+set(SPARK_ANGELSCRIPT_ADDON_DIR "${SPARK_ANGELSCRIPT_SDK_DIR}/add_on")
+set(SPARK_ANGELSCRIPT_AVAILABLE FALSE)
+set(_SPARK_ANGELSCRIPT_REQUIRED_FILES
+    "${SPARK_ANGELSCRIPT_CORE_DIR}/include/angelscript.h"
+    "${SPARK_ANGELSCRIPT_CORE_DIR}/source/as_scriptengine.cpp"
+    "${SPARK_ANGELSCRIPT_CORE_DIR}/projects/cmake/CMakeLists.txt"
+    "${SPARK_ANGELSCRIPT_ADDON_DIR}/scriptarray/scriptarray.cpp"
+    "${SPARK_ANGELSCRIPT_ADDON_DIR}/scriptbuilder/scriptbuilder.cpp"
+    "${SPARK_ANGELSCRIPT_ADDON_DIR}/scriptstdstring/scriptstdstring.cpp"
+)
+set(_SPARK_ANGELSCRIPT_SDK_COMPLETE TRUE)
+foreach(_spark_angelscript_file IN LISTS _SPARK_ANGELSCRIPT_REQUIRED_FILES)
+    if(NOT EXISTS "${_spark_angelscript_file}")
+        set(_SPARK_ANGELSCRIPT_SDK_COMPLETE FALSE)
+    endif()
+endforeach()
+
+if(ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE)
+    set(AS_DISABLE_INSTALL ON CACHE BOOL "Disable AngelScript's standalone install rules" FORCE)
+
+    # AngelScript's MSVC x64 backend enables MASM. Directory-wide C/C++ options
+    # such as /permissive-, /GL, and /favor are otherwise inherited by ml64 and
+    # make its assembly step fail. Configure the dependency in a clean option
+    # scope; its own CMake file publishes the language-appropriate flags it needs.
+    get_property(_spark_parent_compile_options DIRECTORY PROPERTY COMPILE_OPTIONS)
+    set_property(DIRECTORY PROPERTY COMPILE_OPTIONS "")
+    add_subdirectory(
+        "${SPARK_ANGELSCRIPT_CORE_DIR}/projects/cmake"
+        "${CMAKE_BINARY_DIR}/ThirdParty/AngelScript"
+        EXCLUDE_FROM_ALL
+    )
+    set_property(DIRECTORY PROPERTY COMPILE_OPTIONS "${_spark_parent_compile_options}")
+    unset(_spark_parent_compile_options)
+
+    # The upstream project defines ANGELSCRIPT_EXPORT even for its default
+    # static library. That turns every AngelScript API into dllexport when the
+    # archive is consumed by a game DLL; Windows then exposes those functions
+    # through the module import library and the host sees duplicate definitions.
+    # Static consumers must use the header's no-import/no-export contract.
+    if(NOT BUILD_SHARED_LIBS)
+        get_target_property(_spark_angelscript_definitions angelscript COMPILE_DEFINITIONS)
+        if(_spark_angelscript_definitions)
+            list(REMOVE_ITEM _spark_angelscript_definitions ANGELSCRIPT_EXPORT -DANGELSCRIPT_EXPORT)
+            set_property(TARGET angelscript PROPERTY COMPILE_DEFINITIONS "${_spark_angelscript_definitions}")
+        endif()
+        unset(_spark_angelscript_definitions)
+    endif()
+    target_sources(angelscript PRIVATE
+        "${SPARK_ANGELSCRIPT_ADDON_DIR}/scriptarray/scriptarray.cpp"
+        "${SPARK_ANGELSCRIPT_ADDON_DIR}/scriptbuilder/scriptbuilder.cpp"
+        "${SPARK_ANGELSCRIPT_ADDON_DIR}/scriptstdstring/scriptstdstring.cpp"
+    )
+    target_include_directories(angelscript PUBLIC
+        $<BUILD_INTERFACE:${SPARK_ANGELSCRIPT_ADDON_DIR}>
+        $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty>
+    )
+    set_target_properties(angelscript PROPERTIES FOLDER "ThirdParty")
+    if(SPARK_SUPPRESS_THIRDPARTY_WARNINGS)
+        if(MSVC)
+            target_compile_options(angelscript PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:/w>)
+        elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
+            target_compile_options(angelscript PRIVATE -w)
+        endif()
+    endif()
+
+    list(APPEND THIRDPARTY_INCLUDE_DIRS
+        "${SPARK_ANGELSCRIPT_CORE_DIR}/include"
+        "${SPARK_ANGELSCRIPT_ADDON_DIR}"
+    )
+    set(SPARK_ANGELSCRIPT_AVAILABLE TRUE)
+    message(STATUS "AngelScript: enabled (core + scriptarray + scriptbuilder + scriptstdstring)")
+elseif(ENABLE_ANGELSCRIPT)
+    message(WARNING
+        "AngelScript: requested but the vendored SDK is incomplete; scripting will use the explicit unsupported "
+        "contract and SparkGameVisualScript will reject module load")
+else()
+    message(STATUS
+        "AngelScript: disabled by ENABLE_ANGELSCRIPT=OFF; SparkGameVisualScript will reject module load")
 endif()
 
 # ---------------------------------------------------------------------
@@ -1232,6 +1312,15 @@ if(MINIZ_FOUND)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_MINIZ_AVAILABLE=1)
     target_compile_definitions(SparkEngine PRIVATE SPARK_MINIZ_AVAILABLE=1)
     message(STATUS "Linking SparkEngineLib with MINIZ")
+endif()
+
+if(SPARK_ANGELSCRIPT_AVAILABLE)
+    # The public feature definition keeps AngelScriptEngine's class layout and
+    # behavior identical in the host, game modules, tests, and SDK consumers.
+    # The static library dependency itself is link-only for consumers.
+    target_link_libraries(SparkEngineLib PRIVATE angelscript)
+    target_compile_definitions(SparkEngineLib PUBLIC SPARK_ANGELSCRIPT_SUPPORT=1)
+    message(STATUS "Linking SparkEngineLib with AngelScript runtime and required add-ons")
 endif()
 
 if(ENABLE_NETWORKING)
@@ -2221,7 +2310,7 @@ set(SPARK_INSTALL_COMPONENT_TEMPLATES "templates")
 set(SPARK_INSTALL_COMPONENT_SAMPLES "samples")
 
 set(_SPARK_INSTALL_TARGETS SparkEngineLib)
-foreach(_spark_dependency miniz tinyexr zstd tinyobjloader stb_image cgltf miniaudio nlohmann_json glad Jolt Recast Detour)
+foreach(_spark_dependency miniz tinyexr zstd tinyobjloader stb_image cgltf miniaudio nlohmann_json glad Jolt Recast Detour angelscript)
     if(TARGET ${_spark_dependency})
         list(APPEND _SPARK_INSTALL_TARGETS ${_spark_dependency})
     endif()
@@ -2272,6 +2361,10 @@ include(CMakePackageConfigHelpers)
 set(SPARK_PACKAGE_HAS_CURL 0)
 if(TARGET CURL::libcurl)
     set(SPARK_PACKAGE_HAS_CURL 1)
+endif()
+set(SPARK_PACKAGE_HAS_ANGELSCRIPT 0)
+if(SPARK_ANGELSCRIPT_AVAILABLE)
+    set(SPARK_PACKAGE_HAS_ANGELSCRIPT 1)
 endif()
 configure_package_config_file(
     "${CMAKE_SOURCE_DIR}/cmake/SparkEngineConfig.cmake.in"
@@ -2411,6 +2504,13 @@ message(STATUS "Tests: ${BUILD_TESTS}")
 message(STATUS "Networking: ${ENABLE_NETWORKING}")
 message(STATUS "  DXR RayTracing : ${ENABLE_DXR}")
 message(STATUS "  SDL2 Input     : ${ENABLE_SDL2}")
+if(SPARK_ANGELSCRIPT_AVAILABLE)
+    message(STATUS "  AngelScript    : ENABLED")
+elseif(ENABLE_ANGELSCRIPT)
+    message(STATUS "  AngelScript    : MISSING SDK (unsupported contract)")
+else()
+    message(STATUS "  AngelScript    : DISABLED (unsupported contract)")
+endif()
 message(STATUS "  Headless Mode  : ${SPARK_HEADLESS_SUPPORT}")
 message(STATUS "  VR Framework   : ${ENABLE_VR}")
 message(STATUS "  Mobile Platform: ${ENABLE_MOBILE}")
@@ -2515,15 +2615,22 @@ else()
 endif()
 
 # AngelScript
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/sdk/angelscript/include")
+if(SPARK_ANGELSCRIPT_AVAILABLE)
     message(STATUS "  [OK]      AngelScript     — hot-reload scripting")
+elseif(NOT ENABLE_ANGELSCRIPT)
+    message(STATUS "  [OFF]     AngelScript     — disabled by ENABLE_ANGELSCRIPT=OFF")
+    _spark_dep_help("AngelScript"
+        "What:    Statically-typed scripting language with C++-like syntax and hot-reload"
+        "Impact:  SparkGameVisualScript rejects load and registers no vs_* commands"
+        "Enable:  configure with -DENABLE_ANGELSCRIPT=ON"
+    )
 else()
     list(APPEND _SPARK_MISSING_DEPS "angelscript")
     math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
     message(STATUS "  [MISSING] AngelScript     — hot-reload scripting")
     _spark_dep_help("AngelScript"
         "What:    Statically-typed scripting language with C++-like syntax and hot-reload"
-        "Impact:  Scripting system unavailable — no gameplay scripts, no hot-reload, no script console"
+        "Impact:  Scripting is unavailable; SparkGameVisualScript rejects load and registers no vs_* commands"
         "Install: git submodule update --init ThirdParty/Scripting/angelscript-mirror"
         "Docs:    https://www.angelcode.com/angelscript/"
     )

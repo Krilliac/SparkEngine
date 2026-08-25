@@ -4,6 +4,7 @@
  */
 
 #include "RTSResourceSystem.h"
+#include "Unit/RTSUnitSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -12,13 +13,17 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
+#include <unordered_set>
 
 namespace RTS
 {
 
-    bool RTSResourceSystem::Initialize(Spark::IEngineContext* context)
+    bool RTSResourceSystem::Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem)
     {
         m_context = context;
+        m_unitSystem = unitSystem;
         m_gatherTimer = 0.0f;
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS resource system initialized");
@@ -28,7 +33,8 @@ namespace RTS
 
     void RTSResourceSystem::Update(float deltaTime)
     {
-        GatherResources(deltaTime);
+        if (std::isfinite(deltaTime) && deltaTime > 0.0f)
+            GatherResources(deltaTime);
 
         // Remove depleted nodes with no assigned workers
         for (auto it = m_nodes.begin(); it != m_nodes.end();)
@@ -44,6 +50,10 @@ namespace RTS
     {
         m_playerResources.clear();
         m_nodes.clear();
+        m_unitSystem = nullptr;
+        m_context = nullptr;
+        m_gatherTimer = 0.0f;
+        m_nextNodeId = 1;
     }
 
     // === Player resources ===
@@ -119,10 +129,24 @@ namespace RTS
             it->second.currentSupply = std::max(0, it->second.currentSupply - amount);
     }
 
+    bool RTSResourceSystem::CanUseSupply(RTSFaction faction, int amount) const
+    {
+        const auto it = m_playerResources.find(faction);
+        if (it == m_playerResources.end() || amount < 0)
+            return false;
+        return it->second.currentSupply + amount <= it->second.maxSupply;
+    }
+
     // === Resource nodes ===
 
     uint32_t RTSResourceSystem::CreateNode(RTSResourceType type, float x, float y, int amount)
     {
+        if ((type != RTSResourceType::Minerals && type != RTSResourceType::Gas) || !std::isfinite(x) ||
+            !std::isfinite(y) || amount <= 0)
+        {
+            return 0;
+        }
+
         ResourceNode node;
         node.nodeId = m_nextNodeId++;
         node.type = type;
@@ -141,6 +165,13 @@ namespace RTS
         auto it = m_nodes.find(nodeId);
         if (it == m_nodes.end())
             return false;
+
+        if (m_unitSystem)
+        {
+            const UnitData* unit = m_unitSystem->GetUnit(workerId);
+            if (!unit || unit->type != RTSUnitType::Worker || unit->state == RTSUnitState::Dead)
+                return false;
+        }
 
         auto& node = it->second;
         if (static_cast<int>(node.assignedWorkers.size()) >= node.maxWorkers)
@@ -172,6 +203,11 @@ namespace RTS
     size_t RTSResourceSystem::GetNodeCount() const
     {
         return m_nodes.size();
+    }
+
+    const std::unordered_map<uint32_t, ResourceNode>& RTSResourceSystem::GetNodes() const
+    {
+        return m_nodes;
     }
 
     std::string RTSResourceSystem::GetResourceListString() const
@@ -208,6 +244,51 @@ namespace RTS
         return result;
     }
 
+    bool RTSResourceSystem::RestoreState(const std::vector<std::pair<RTSFaction, PlayerResources>>& players,
+                                         const std::vector<ResourceNode>& nodes)
+    {
+        std::unordered_map<RTSFaction, PlayerResources> restoredPlayers;
+        restoredPlayers.reserve(players.size());
+        for (const auto& [faction, resources] : players)
+        {
+            if (faction >= RTSFaction::Count || resources.minerals < 0 || resources.gas < 0 ||
+                resources.currentSupply < 0 || resources.maxSupply < 0 ||
+                resources.currentSupply > resources.maxSupply || !restoredPlayers.emplace(faction, resources).second)
+            {
+                return false;
+            }
+        }
+
+        std::unordered_map<uint32_t, ResourceNode> restoredNodes;
+        restoredNodes.reserve(nodes.size());
+        uint32_t nextId = 1;
+        for (const ResourceNode& node : nodes)
+        {
+            if (node.nodeId == 0 || node.nodeId == std::numeric_limits<uint32_t>::max() ||
+                (node.type != RTSResourceType::Minerals && node.type != RTSResourceType::Gas) ||
+                !std::isfinite(node.posX) || !std::isfinite(node.posY) || node.remaining < 0 || node.maxWorkers <= 0 ||
+                node.assignedWorkers.size() > static_cast<size_t>(node.maxWorkers))
+            {
+                return false;
+            }
+            std::unordered_set<uint32_t> workers;
+            for (uint32_t workerId : node.assignedWorkers)
+            {
+                if (workerId == 0 || !workers.insert(workerId).second)
+                    return false;
+            }
+            if (!restoredNodes.emplace(node.nodeId, node).second)
+                return false;
+            nextId = std::max(nextId, node.nodeId + 1);
+        }
+
+        m_playerResources = std::move(restoredPlayers);
+        m_nodes = std::move(restoredNodes);
+        m_nextNodeId = nextId;
+        m_gatherTimer = 0.0f;
+        return true;
+    }
+
     // === Internal ===
 
     void RTSResourceSystem::GatherResources(float deltaTime)
@@ -223,24 +304,33 @@ namespace RTS
             if (node.remaining <= 0 || node.assignedWorkers.empty())
                 continue;
 
-            int workerCount = static_cast<int>(node.assignedWorkers.size());
-            int harvestAmount = 0;
+            if (m_unitSystem)
+            {
+                std::erase_if(node.assignedWorkers,
+                              [this](uint32_t workerId)
+                              {
+                                  const UnitData* unit = m_unitSystem->GetUnit(workerId);
+                                  return !unit || unit->type != RTSUnitType::Worker ||
+                                         unit->state == RTSUnitState::Dead;
+                              });
+            }
 
-            if (node.type == RTSResourceType::Minerals)
-                harvestAmount = MINERALS_PER_TRIP * workerCount;
-            else if (node.type == RTSResourceType::Gas)
-                harvestAmount = GAS_PER_TRIP * workerCount;
+            for (uint32_t workerId : node.assignedWorkers)
+            {
+                if (node.remaining <= 0)
+                    break;
 
-            harvestAmount = std::min(harvestAmount, node.remaining);
-            node.remaining -= harvestAmount;
+                const UnitData* worker = m_unitSystem ? m_unitSystem->GetUnit(workerId) : nullptr;
+                const RTSFaction faction = worker ? worker->faction : RTSFaction::Human;
+                const int perWorker = node.type == RTSResourceType::Minerals ? MINERALS_PER_TRIP : GAS_PER_TRIP;
+                const int harvestAmount = std::min(perWorker, node.remaining);
+                node.remaining -= harvestAmount;
 
-            // Credit resources to all factions that have workers here
-            // In a full implementation, workers would track their owning faction
-            // For now, credit to Human as default
-            if (node.type == RTSResourceType::Minerals)
-                AddResources(RTSFaction::Human, harvestAmount, 0);
-            else if (node.type == RTSResourceType::Gas)
-                AddResources(RTSFaction::Human, 0, harvestAmount);
+                if (node.type == RTSResourceType::Minerals)
+                    AddResources(faction, harvestAmount, 0);
+                else if (node.type == RTSResourceType::Gas)
+                    AddResources(faction, 0, harvestAmount);
+            }
         }
     }
 

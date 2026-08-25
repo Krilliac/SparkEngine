@@ -21,6 +21,10 @@
 
 namespace Racing
 {
+    class RacingAIDriver;
+    class RacingRaceManager;
+    class RacingTrackSystem;
+    class RacingVehicleSystem;
 
     /**
      * @brief Bridges Spark Engine systems into racing gameplay logic.
@@ -46,7 +50,9 @@ namespace Racing
          * @param context  Engine context providing access to all subsystems.
          * @return true on success.
          */
-        bool Initialize(Spark::IEngineContext* context);
+        bool Initialize(Spark::IEngineContext* context, RacingVehicleSystem* vehicleSystem = nullptr,
+                        RacingTrackSystem* trackSystem = nullptr, RacingRaceManager* raceManager = nullptr,
+                        RacingAIDriver* aiDriver = nullptr);
 
         /** @brief Per-frame update for engine system integration. */
         void Update(float deltaTime);
@@ -64,6 +70,9 @@ namespace Racing
 
         /** @brief Load race progress from a named slot. */
         std::string LoadRaceData(const std::string& slotName);
+
+        /** @brief Match SaveSystem's portable slot-name policy. */
+        static bool IsValidSlotName(const std::string& slotName);
 
         /** @brief Start or stop replay recording/playback. */
         std::string ToggleReplay(const std::string& action);
@@ -84,6 +93,10 @@ namespace Racing
         void RegisterCoroutines();
 
         Spark::IEngineContext* m_context = nullptr;
+        RacingVehicleSystem* m_vehicleSystem = nullptr;
+        RacingTrackSystem* m_trackSystem = nullptr;
+        RacingRaceManager* m_raceManager = nullptr;
+        RacingAIDriver* m_aiDriver = nullptr;
         bool m_initialized = false;
 
         // RAII event handles -- auto-unsubscribe on destruction

@@ -82,7 +82,6 @@ namespace RPG
 
         bool Initialize(Spark::IEngineContext* context);
         void Update(float deltaTime);
-        void FixedUpdate(float fixedDeltaTime);
         void Shutdown();
         void RenderDebugUI();
 
@@ -103,6 +102,9 @@ namespace RPG
         void RegisterHit(uint32_t characterId);
         void ResetCombo(uint32_t characterId);
         const ComboState* GetComboState(uint32_t characterId) const;
+
+        /// @brief Remove all transient combat state owned by a character being destroyed.
+        void ClearCharacterState(uint32_t characterId);
 
         // === Knockback (physics integration) ===
         float CalculateKnockback(float damage, DamageType type) const;

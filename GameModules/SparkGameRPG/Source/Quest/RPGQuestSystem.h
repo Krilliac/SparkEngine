@@ -76,7 +76,6 @@ namespace RPG
         ~RPGQuestSystem() = default;
 
         bool Initialize(Spark::IEngineContext* context);
-        void Update(float deltaTime);
         void Shutdown();
         void RenderDebugUI();
 
@@ -87,7 +86,7 @@ namespace RPG
         std::string GetQuestListString() const;
 
         // === Quest tracking ===
-        bool AcceptQuest(uint32_t characterId, uint32_t questId);
+        bool AcceptQuest(uint32_t characterId, uint32_t questId, int characterLevel = 1);
         bool AbandonQuest(uint32_t characterId, uint32_t questId);
         void UpdateObjective(uint32_t characterId, ObjectiveType type, uint32_t targetId, int count = 1);
         bool CompleteQuest(uint32_t characterId, uint32_t questId);

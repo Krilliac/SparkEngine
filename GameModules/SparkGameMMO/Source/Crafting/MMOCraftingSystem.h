@@ -76,7 +76,7 @@ namespace MMO
         MMOCraftingSystem() = default;
         ~MMOCraftingSystem() = default;
 
-        bool Initialize(Spark::IEngineContext* context);
+        bool Initialize(Spark::IEngineContext* context, MMOInventorySystem* inventorySystem = nullptr);
         void Update(float dt, CraftingState& crafter, InventoryData& inv);
         void Shutdown();
         void RenderDebugUI();
@@ -99,7 +99,7 @@ namespace MMO
 
       private:
         void RegisterDefaultRecipes();
-        void CompleteCraft(CraftingState& crafter, InventoryData& inv);
+        bool CompleteCraft(CraftingState& crafter, InventoryData& inv);
         void AwardSkillXP(CraftingState& crafter, CraftingDiscipline disc, int xp);
 
         Spark::IEngineContext* m_context{nullptr};

@@ -102,6 +102,12 @@ class Grenade : public Projectile
      */
     void Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed) override;
 
+    /** @brief Detonate when the grenade directly contacts an object. */
+    void OnHit(GameObject* target) override;
+
+    /** @brief Detonate on world contact instead of silently deactivating. */
+    void OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal) override;
+
   private:
     /**
      * @brief Trigger the grenade explosion

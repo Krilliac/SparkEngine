@@ -2,19 +2,21 @@
  * @file MeshWindows.cpp
  * @brief Windows/D3D11 implementation — split from Mesh.cpp
  *
- * Keeps lifecycle (Initialize/Shutdown), OBJ loading, normal calculation,
+ * Keeps lifecycle (Initialize/Shutdown), OBJ/glTF loading, normal calculation,
  * buffer creation, and rendering. Procedural primitive generation
  * (CreateCube/CreateTriangle/CreatePlane/CreateSphere/CreatePyramid) lives in
  * MeshWindowsPrimitives.cpp. The Linux counterpart lives in MeshLinux.cpp.
  */
 #include "Mesh.h"
+#include "GLTFStaticMeshLoader.h"
 #include "../Core/Platform.h"
 #include "../Utils/MathUtils.h"
 /**
  * @file Mesh.cpp
  * @brief CPU-side mesh geometry and D3D11 GPU buffer management
  *
- * Supports loading OBJ files via tinyobjloader, procedural primitive generation
+ * Supports loading OBJ files via tinyobjloader and static glTF meshes via cgltf,
+ * procedural primitive generation
  * (cube, sphere, plane, triangle, pyramid), automatic normal calculation via
  * cross-product accumulation, and D3D11 vertex/index buffer creation.
  * Dual implementation: Windows uses DirectXMath + D3D11; Linux stores CPU-side
@@ -23,16 +25,16 @@
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include <tiny_obj_loader.h>
-#if SPARK_HAS_CGLTF
-#include <cgltf.h>
-#endif
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 #include <fstream>
 #include <filesystem>
+#include <cctype>
 #include <cmath>
 #include <map>
+#include <limits>
+#include <utility>
 #ifdef SPARK_PLATFORM_WINDOWS
 
 
@@ -67,9 +69,8 @@ void Mesh::Shutdown()
     m_context = nullptr;
 }
 
-/// Loads an OBJ mesh from disk using tinyobjloader. Converts wide path to UTF-8,
-/// extracts positions/normals/UVs per-index (expanding shared vertices), recalculates
-/// normals if any are zero, then uploads to GPU via CreateBuffers().
+/// Loads an OBJ or core static glTF mesh from disk, validates its CPU geometry,
+/// recalculates missing normals, then uploads to GPU via CreateBuffers().
 bool Mesh::LoadFromFile(const std::wstring& path)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
@@ -78,6 +79,68 @@ bool Mesh::LoadFromFile(const std::wstring& path)
     // Convert wide path to UTF-8 for tinyobjloader
     auto u8path_u8 = std::filesystem::path(path).u8string(); // basic_string<char8_t>
     std::string u8Path(u8path_u8.begin(), u8path_u8.end());  // convert to std::string
+
+    std::string extension = std::filesystem::path(path).extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+
+    if (extension == ".gltf" || extension == ".glb")
+    {
+        Spark::Graphics::Detail::GLTFStaticMeshData imported;
+        std::string error;
+        if (!Spark::Graphics::Detail::LoadGLTFStaticMesh(std::filesystem::path(path), imported, error))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "glTF load failed for '%s': %s", u8Path.c_str(),
+                            error.c_str());
+            return false;
+        }
+        if (imported.vertices.size() > std::numeric_limits<UINT>::max() ||
+            imported.indices.size() > std::numeric_limits<UINT>::max())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "glTF mesh exceeds D3D11 count limits: %s", u8Path.c_str());
+            return false;
+        }
+
+        std::vector<Vertex> vertices;
+        vertices.reserve(imported.vertices.size());
+        for (const auto& source : imported.vertices)
+        {
+            vertices.emplace_back(XMFLOAT3{source.position[0], source.position[1], source.position[2]},
+                                  XMFLOAT3{source.normal[0], source.normal[1], source.normal[2]},
+                                  XMFLOAT2{source.texCoord[0], source.texCoord[1]});
+        }
+
+        std::vector<MeshSubmesh> submeshes;
+        submeshes.reserve(imported.primitives.size());
+        for (const auto& primitive : imported.primitives)
+        {
+            MeshSubmesh submesh{};
+            submesh.indexStart = primitive.indexStart;
+            submesh.indexCount = primitive.indexCount;
+            submeshes.push_back(std::move(submesh));
+        }
+
+        m_vertices = std::move(vertices);
+        m_indices.assign(imported.indices.begin(), imported.indices.end());
+        m_submeshes = std::move(submeshes);
+        m_vertexCount = static_cast<UINT>(m_vertices.size());
+        m_indexCount = static_cast<UINT>(m_indices.size());
+
+        const HRESULT hr = CreateBuffers();
+        if (FAILED(hr))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "CreateBuffers failed for glTF: %s", u8Path.c_str());
+            return false;
+        }
+        return true;
+    }
+
+    if (extension != ".obj")
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Unsupported mesh format '%s': %s", extension.c_str(),
+                        u8Path.c_str());
+        return false;
+    }
 
     // Reader config
     tinyobj::ObjReader reader;

@@ -4,6 +4,7 @@
  */
 
 #include "ARPGEngineSystems.h"
+#include "ARPGAbilityCatalog.h"
 #include "Hero/ARPGHeroSystem.h"
 #include "Combat/ARPGCombatSystem.h"
 #include "Loot/ARPGLootSystem.h"
@@ -14,11 +15,9 @@
 #include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/AI/AISystem.h"
 #include "Engine/AI/BehaviorTree.h"
-// NOTE: Engine/Animation/AnimationSystem.h, Engine/Coroutine/CoroutineScheduler.h,
-// and Engine/Gameplay/AbilitySystem.h are NOT included here — they cause compilation
-// conflicts when included from game modules (forward-declaration clashes, coroutine
-// header bugs on GCC 13, and out-of-scope types respectively).
-// SetupAnimation(), SetupCoroutines(), and SetupAbilities() use logging-only stubs.
+#include "Engine/Animation/AnimationSystem.h"
+#include "Engine/Coroutine/CoroutineScheduler.h"
+#include "Engine/Gameplay/AbilitySystem.h"
 #include "Graphics/WeatherSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
@@ -27,17 +26,59 @@
 #include <imgui.h>
 #endif
 
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <memory>
+#include <utility>
+
 namespace ARPG
 {
+
+    namespace
+    {
+        constexpr const char* IDLE_STATE = "Idle";
+        constexpr const char* MOVE_STATE = "Run";
+        constexpr const char* ATTACK_STATE = "Attack";
+        constexpr const char* CAST_STATE = "Cast";
+        constexpr const char* DEATH_STATE = "Die";
+
+        Spark::Animation::AnimationState MakeAnimationState(const char* name, const char* clipName, bool loop)
+        {
+            Spark::Animation::AnimationState state;
+            state.name = name;
+            state.clipName = clipName;
+            state.speed = 1.0f;
+            state.loop = loop;
+            return state;
+        }
+
+        std::shared_ptr<Spark::Animation::AnimationClip> MakeAnimationClip(const char* name, float duration, bool loop)
+        {
+            auto clip = std::make_shared<Spark::Animation::AnimationClip>();
+            clip->name = name;
+            clip->duration = duration;
+            clip->ticksPerSecond = 30.0f;
+            clip->loop = loop;
+            return clip;
+        }
+    } // namespace
 
     // =========================================================================
     // Lifecycle
     // =========================================================================
 
+    ARPGEngineSystems::ARPGEngineSystems() = default;
+
+    ARPGEngineSystems::~ARPGEngineSystems()
+    {
+        Shutdown();
+    }
+
     bool ARPGEngineSystems::Initialize(Spark::IEngineContext* context, ARPGHeroSystem* heroes, ARPGCombatSystem* combat,
                                        ARPGLootSystem* loot, ARPGDungeonSystem* dungeon)
     {
-        if (!context)
+        if (!context || !heroes || !combat || !loot || !dungeon)
             return false;
 
         m_context = context;
@@ -61,11 +102,20 @@ namespace ARPG
         return true;
     }
 
-    // Intentional: deltaTime reserved for future ARPG tick updates
-    void ARPGEngineSystems::Update([[maybe_unused]] float deltaTime)
+    void ARPGEngineSystems::Update(float deltaTime)
     {
         if (!m_initialized)
             return;
+
+        if (m_heroAnimation && std::isfinite(deltaTime) && deltaTime > 0.0f)
+            m_heroAnimation->Update(deltaTime);
+
+        if (!m_actionUsesCoroutine && m_actionTimeRemaining > 0.0f && std::isfinite(deltaTime) && deltaTime > 0.0f)
+        {
+            m_actionTimeRemaining = std::max(0.0f, m_actionTimeRemaining - deltaTime);
+            if (m_actionTimeRemaining <= 0.0f)
+                CompleteHeroAction(m_actionGeneration);
+        }
     }
 
     void ARPGEngineSystems::Shutdown()
@@ -76,10 +126,29 @@ namespace ARPG
         // RAII handles auto-unsubscribe, but clear explicitly for deterministic order
         m_eventHandles.clear();
 
-        // Coroutine cleanup is handled by the engine's CoroutineScheduler shutdown.
-        // We don't call into it here because the header is not included (see top of file).
+        ++m_actionGeneration;
+        if (m_context && !m_actionCoroutineName.empty())
+        {
+            if (auto* scheduler = m_context->GetCoroutineScheduler())
+                scheduler->StopCoroutine(m_actionCoroutineName);
+        }
+
+        m_heroAnimation.reset();
+        m_actionCoroutineName.clear();
+        m_actionTimeRemaining = 0.0f;
+        m_actionUsesCoroutine = false;
+        m_hasAnimationBridge = false;
+        m_hasAbilityBridge = false;
+        m_registeredAbilityCount = 0;
+        m_registeredAuraCount = 0;
+        m_registeredProcCount = 0;
 
         m_initialized = false;
+        m_context = nullptr;
+        m_heroes = nullptr;
+        m_combat = nullptr;
+        m_loot = nullptr;
+        m_dungeon = nullptr;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG engine systems integration shut down");
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Engine systems integration shut down");
     }
@@ -93,8 +162,10 @@ namespace ARPG
         if (ImGui::TreeNode("ARPG Engine Integration"))
         {
             ImGui::Text("Event subscriptions: %zu", m_eventHandles.size());
-            ImGui::Text("Coroutines: configured (wave spawn, buff timer, loot fountain)");
-            ImGui::Text("Abilities: 4 abilities, 4 auras, 1 proc configured");
+            ImGui::Text("Hero animation: %s", GetHeroAnimationState().c_str());
+            ImGui::Text("Action recovery: %s", m_actionUsesCoroutine ? "engine coroutine" : "local timer");
+            ImGui::Text("Abilities: %u abilities, %u auras, %u proc registered", m_registeredAbilityCount,
+                        m_registeredAuraCount, m_registeredProcCount);
 
             if (auto* destruction = m_context->GetDestruction())
             {
@@ -315,11 +386,35 @@ namespace ARPG
 
     void ARPGEngineSystems::SetupAnimation()
     {
-        // AnimationSystem.h cannot be included from game modules (conflicts with
-        // IEngineContext.h forward declaration of Spark::Animation::AnimationSystem).
-        // Clip registration will be done at runtime when heroes are spawned.
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[ARPG] Animation: hero state machine configured (idle/run/attack/cast/die)");
+        m_heroAnimation = std::make_unique<Spark::Animation::AnimationStateMachine>();
+
+        constexpr const char* IdleClip = "arpg_hero_idle";
+        constexpr const char* RunClip = "arpg_hero_run";
+        constexpr const char* AttackClip = "arpg_hero_attack";
+        constexpr const char* CastClip = "arpg_hero_cast";
+        constexpr const char* DeathClip = "arpg_hero_death";
+
+        m_heroAnimation->AddState(MakeAnimationState(IDLE_STATE, IdleClip, true));
+        m_heroAnimation->AddState(MakeAnimationState(MOVE_STATE, RunClip, true));
+        m_heroAnimation->AddState(MakeAnimationState(ATTACK_STATE, AttackClip, false));
+        m_heroAnimation->AddState(MakeAnimationState(CAST_STATE, CastClip, false));
+        m_heroAnimation->AddState(MakeAnimationState(DEATH_STATE, DeathClip, false));
+        m_heroAnimation->SetDefaultState(IDLE_STATE);
+        m_heroAnimation->ForceState(IDLE_STATE);
+
+        if (auto* animation = m_context->GetAnimation())
+        {
+            animation->RegisterClip(IdleClip, MakeAnimationClip(IdleClip, 1.0f, true));
+            animation->RegisterClip(RunClip, MakeAnimationClip(RunClip, 0.75f, true));
+            animation->RegisterClip(
+                AttackClip, MakeAnimationClip(AttackClip, GetActionDuration(ARPGHeroAction::BasicAttack), false));
+            animation->RegisterClip(CastClip,
+                                    MakeAnimationClip(CastClip, GetActionDuration(ARPGHeroAction::Cast), false));
+            animation->RegisterClip(DeathClip, MakeAnimationClip(DeathClip, 1.2f, false));
+            m_hasAnimationBridge = true;
+        }
+
+        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Animation: live hero state machine registered");
     }
 
     // =========================================================================
@@ -328,11 +423,12 @@ namespace ARPG
 
     void ARPGEngineSystems::SetupCoroutines()
     {
-        // CoroutineScheduler.h cannot be included from game modules (triggers C++20
-        // coroutine header bugs with GCC 13). Coroutine sequences (wave spawn, buff
-        // timer, loot fountain) will be driven by the dungeon system's Update() instead.
+        m_actionCoroutineName =
+            "arpg.hero_action_recovery." + std::to_string(static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this)));
+        const bool available = m_context->GetCoroutineScheduler() != nullptr;
         Spark::SimpleConsole::GetInstance().LogInfo(
-            "[ARPG] Coroutines: wave spawn and buff timer sequences configured");
+            available ? "[ARPG] Coroutines: hero action recovery connected"
+                      : "[ARPG] Coroutines: scheduler unavailable, using deterministic local recovery");
     }
 
     // =========================================================================
@@ -341,14 +437,101 @@ namespace ARPG
 
     void ARPGEngineSystems::SetupAbilities()
     {
-        // AbilitySystem.h cannot be included from game modules (types like
-        // AbilityDefinition, AuraDefinition, ProcDefinition are not in scope outside
-        // the engine). Ability registration will be done via script or engine-side
-        // configuration. The ARPG module defines:
-        //   4 abilities: Fireball, Whirlwind, Raise Skeleton, Holy Light
-        //   4 auras:     Holy Shield, Bone Armor, Poison DoT, Fire Mastery
-        //   1 proc:      Fire Mastery proc (10% chance on fire damage)
+        auto* abilities = m_context->GetAbilities();
+        if (!abilities)
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning("[ARPG] Abilities: engine registry unavailable");
+            return;
+        }
+
+        ARPGAbilityCatalog::Register(*abilities);
+
+        m_hasAbilityBridge = true;
+        m_registeredAbilityCount = 4;
+        m_registeredAuraCount = 4;
+        m_registeredProcCount = 1;
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Abilities: 4 abilities, 4 auras, 1 proc registered");
+    }
+
+    void ARPGEngineSystems::PlayHeroAction(ARPGHeroAction action)
+    {
+        if (!m_initialized || !m_heroAnimation)
+            return;
+
+        const char* state = IDLE_STATE;
+        switch (action)
+        {
+        case ARPGHeroAction::Idle:
+            state = IDLE_STATE;
+            break;
+        case ARPGHeroAction::Move:
+            state = MOVE_STATE;
+            break;
+        case ARPGHeroAction::BasicAttack:
+            state = ATTACK_STATE;
+            break;
+        case ARPGHeroAction::Cast:
+            state = CAST_STATE;
+            break;
+        case ARPGHeroAction::Death:
+            state = DEATH_STATE;
+            break;
+        }
+
+        ++m_actionGeneration;
+        m_heroAnimation->ForceState(state);
+        m_actionTimeRemaining = GetActionDuration(action);
+        m_actionUsesCoroutine = false;
+
+        if (m_context && !m_actionCoroutineName.empty())
+        {
+            if (auto* scheduler = m_context->GetCoroutineScheduler())
+            {
+                scheduler->StopCoroutine(m_actionCoroutineName);
+                if (m_actionTimeRemaining > 0.0f)
+                {
+                    const uint64_t generation = m_actionGeneration;
+                    scheduler->StartCoroutine(m_actionCoroutineName)
+                        .WaitForSeconds(m_actionTimeRemaining)
+                        .Do([this, generation]() { CompleteHeroAction(generation); });
+                    m_actionUsesCoroutine = true;
+                }
+            }
+        }
+    }
+
+    std::string ARPGEngineSystems::GetHeroAnimationState() const
+    {
+        return m_heroAnimation ? m_heroAnimation->GetCurrentStateName() : std::string{};
+    }
+
+    bool ARPGEngineSystems::IsHeroActionActive() const
+    {
+        const std::string state = GetHeroAnimationState();
+        return state == ATTACK_STATE || state == CAST_STATE;
+    }
+
+    void ARPGEngineSystems::CompleteHeroAction(uint64_t generation)
+    {
+        if (!m_initialized || generation != m_actionGeneration || !m_heroAnimation)
+            return;
+
+        m_heroAnimation->ForceState(IDLE_STATE);
+        m_actionTimeRemaining = 0.0f;
+        m_actionUsesCoroutine = false;
+    }
+
+    float ARPGEngineSystems::GetActionDuration(ARPGHeroAction action)
+    {
+        switch (action)
+        {
+        case ARPGHeroAction::BasicAttack:
+            return 0.45f;
+        case ARPGHeroAction::Cast:
+            return 0.65f;
+        default:
+            return 0.0f;
+        }
     }
 
     // =========================================================================

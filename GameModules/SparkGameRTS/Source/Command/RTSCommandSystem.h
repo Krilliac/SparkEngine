@@ -65,6 +65,9 @@ namespace RTS
         size_t GetPendingCommandCount() const;
         std::string GetCommandStatusString() const;
 
+        /** Clear transient selections and queued orders after restoring persistent state. */
+        void ResetRuntimeState();
+
       private:
         void ProcessCommands(float deltaTime);
         [[nodiscard]] bool IsCommandValid(const UnitCommand& command) const;

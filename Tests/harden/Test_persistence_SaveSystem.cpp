@@ -16,6 +16,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace Spark;
@@ -237,6 +238,56 @@ TEST(SaveSystem_Save_ReplacesExistingSlotAtomically)
     World loadedWorld;
     EXPECT_TRUE(ss.Load("same-slot", loadedWorld));
     EXPECT_EQ(loadedWorld.GetEntityCount(), 2u);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_CustomState_RoundTripsWithWorldAndDoesNotMutateOutputOnFailure)
+{
+    const std::string dir = MakeTempSaveDir("custom_state_roundtrip");
+    SaveSystem& ss = SaveSystem::GetInstance();
+    EXPECT_TRUE(ss.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("custom-state-owner");
+    source.AddComponent<Transform>(sourceEntity);
+    SaveMetadata metadata;
+    metadata.saveName = "Custom state roundtrip";
+    const std::unordered_map<std::string, std::string> customState = {
+        {"SparkGameRPG.demo.v1", "RPGDEMO 1 state"},
+        {"SparkGameARPG.demo.v1", "ARPGDEMO 1 state"},
+    };
+    EXPECT_TRUE(ss.Save("custom-roundtrip", source, metadata, customState));
+
+    World rejectedWorld;
+    rejectedWorld.CreateEntity("validator-sentinel");
+    std::unordered_map<std::string, std::string> rejectedCustomState = {{"sentinel", "unchanged"}};
+    bool validatorCalled = false;
+    EXPECT_FALSE(ss.Load("custom-roundtrip", rejectedWorld, rejectedCustomState,
+                         [&](const auto& candidate)
+                         {
+                             validatorCalled = true;
+                             return candidate.contains("missing-required-key");
+                         }));
+    EXPECT_TRUE(validatorCalled);
+    EXPECT_EQ(rejectedWorld.GetEntityCount(), 1u);
+    EXPECT_EQ(rejectedCustomState.size(), 1u);
+    EXPECT_EQ(rejectedCustomState.at("sentinel"), std::string("unchanged"));
+
+    World loaded;
+    std::unordered_map<std::string, std::string> loadedCustomState = {{"sentinel", "unchanged-on-failure"}};
+    EXPECT_TRUE(ss.Load("custom-roundtrip", loaded, loadedCustomState));
+    EXPECT_EQ(loaded.GetEntityCount(), 1u);
+    EXPECT_EQ(loadedCustomState.size(), 2u);
+    EXPECT_EQ(loadedCustomState.at("SparkGameRPG.demo.v1"), std::string("RPGDEMO 1 state"));
+    EXPECT_EQ(loadedCustomState.at("SparkGameARPG.demo.v1"), std::string("ARPGDEMO 1 state"));
+
+    const auto path = std::filesystem::path(dir) / "custom-roundtrip.spark_save";
+    std::filesystem::resize_file(path, 8);
+    loadedCustomState = {{"sentinel", "unchanged-on-failure"}};
+    EXPECT_FALSE(ss.Load("custom-roundtrip", loaded, loadedCustomState));
+    EXPECT_EQ(loadedCustomState.size(), 1u);
+    EXPECT_EQ(loadedCustomState.at("sentinel"), std::string("unchanged-on-failure"));
 
     std::filesystem::remove_all(dir);
 }

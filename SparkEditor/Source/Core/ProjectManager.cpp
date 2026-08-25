@@ -679,7 +679,9 @@ namespace SparkEditor
                 ~DescriptorCloser() { ::close(descriptor); }
             } closer{descriptor};
 
-            struct stat information{};
+            struct stat information
+            {
+            };
             if (::fstat(descriptor, &information) != 0 || !S_ISREG(information.st_mode) || information.st_size < 0 ||
                 static_cast<uint64_t>(information.st_size) > kMaximumSceneDocumentBytes)
             {
@@ -1313,8 +1315,7 @@ namespace SparkEditor
                     std::string storedPath = PathToUtf8(relative);
                     std::replace(storedPath.begin(), storedPath.end(), '\\', '/');
                     if (std::none_of(m_currentProject.scenes.begin(), m_currentProject.scenes.end(),
-                                     [&](const std::string& scene)
-                                     {
+                                     [&](const std::string& scene) {
                                          return ProjectPathsEqual(PathToUtf8(staging / PathFromUtf8(scene)),
                                                                   PathToUtf8(candidate));
                                      }))

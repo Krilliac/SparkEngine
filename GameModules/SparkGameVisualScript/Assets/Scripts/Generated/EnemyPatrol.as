@@ -53,23 +53,26 @@ class EnemyPatrol
         {
             // Chase mode
             isChasing = true;
-            float dist = sqrt(distSq);
-
-            if (dist > 0.1f)
+            if (distSq > 0.01f)
             {
-                float dirX = dx / dist;
-                float dirZ = dz / dist;
-
                 if (distSq > attackRange * attackRange)
                 {
-                    // Move toward player
-                    Vector3 newPos = Vector3(myPos.x + dirX * chaseSpeed * dt, myPos.y,
-                                             myPos.z + dirZ * chaseSpeed * dt);
-                    setPosition(selfEntity, newPos);
-
-                    // Face player
-                    float angle = atan2(dirX, dirZ) * 57.2958f;
-                    setRotation(selfEntity, Vector3(0.0f, angle, 0.0f));
+                    // Move toward the player without relying on optional math
+                    // add-ons. Diagonal motion is normalized by a constant.
+                    bool moveX = dx > 0.1f || dx < -0.1f;
+                    bool moveZ = dz > 0.1f || dz < -0.1f;
+                    float step = chaseSpeed * dt;
+                    if (moveX && moveZ)
+                        step = step * 0.7071068f;
+                    if (dx > 0.1f)
+                        myPos.x = myPos.x + step;
+                    else if (dx < -0.1f)
+                        myPos.x = myPos.x - step;
+                    if (dz > 0.1f)
+                        myPos.z = myPos.z + step;
+                    else if (dz < -0.1f)
+                        myPos.z = myPos.z - step;
+                    setPosition(selfEntity, myPos);
                 }
                 else
                 {
@@ -79,8 +82,11 @@ class EnemyPatrol
                         attackTimer = attackCooldown;
                         playAnimation(selfEntity, "attack_swing");
                         playSound(selfEntity, "enemy_attack");
+                        float playerHealth = getHealth(player) - attackDamage;
+                        if (playerHealth < 0.0f)
+                            playerHealth = 0.0f;
+                        setHealth(player, playerHealth);
                         print("Enemy attacks player for " + attackDamage + " damage!");
-                        fireEvent("PlayerDamaged");
                     }
                 }
             }
@@ -94,44 +100,33 @@ class EnemyPatrol
 
             float pdx = targetX - myPos.x;
             float pdz = targetZ - myPos.z;
-            float pdist = sqrt(pdx * pdx + pdz * pdz);
+            float patrolDistSq = pdx * pdx + pdz * pdz;
 
-            if (pdist < 1.0f)
+            if (patrolDistSq < 1.0f)
             {
                 // Reached waypoint — switch
                 movingToB = !movingToB;
             }
             else
             {
-                float pDirX = pdx / pdist;
-                float pDirZ = pdz / pdist;
-                Vector3 newPos = Vector3(myPos.x + pDirX * patrolSpeed * dt, myPos.y,
-                                         myPos.z + pDirZ * patrolSpeed * dt);
-                setPosition(selfEntity, newPos);
-
-                float angle = atan2(pDirX, pDirZ) * 57.2958f;
-                setRotation(selfEntity, Vector3(0.0f, angle, 0.0f));
+                bool moveX = pdx > 0.1f || pdx < -0.1f;
+                bool moveZ = pdz > 0.1f || pdz < -0.1f;
+                float step = patrolSpeed * dt;
+                if (moveX && moveZ)
+                    step = step * 0.7071068f;
+                if (pdx > 0.1f)
+                    myPos.x = myPos.x + step;
+                else if (pdx < -0.1f)
+                    myPos.x = myPos.x - step;
+                if (pdz > 0.1f)
+                    myPos.z = myPos.z + step;
+                else if (pdz < -0.1f)
+                    myPos.z = myPos.z - step;
+                setPosition(selfEntity, myPos);
             }
 
             playAnimation(selfEntity, "walk");
         }
     }
 
-    void OnDamaged(float amount)
-    {
-        float hp = getHealth(selfEntity);
-        hp = hp - amount;
-        setHealth(selfEntity, hp);
-        playSound(selfEntity, "enemy_hurt");
-        print("Enemy took " + amount + " damage! HP: " + hp);
-
-        if (hp <= 0.0f)
-        {
-            playAnimation(selfEntity, "death");
-            playSound(selfEntity, "enemy_death");
-            print("Enemy defeated!");
-            fireEvent("EnemyKilled");
-            destroyEntity(selfEntity);
-        }
-    }
 }

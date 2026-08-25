@@ -2,6 +2,7 @@
 // Standalone implementations for CI testing
 
 #include "TestFramework.h"
+#include "Engine/Gameplay/QuestSystem.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -378,4 +379,47 @@ TEST(Quest_StartInvalidQuest)
     TestQuest::QuestRegistry reg;
     TestQuest::QuestJournal journal;
     EXPECT_FALSE(TestQuest::QuestOps::StartQuest(journal, reg, 999));
+}
+
+TEST(QuestSystemReal_SnapshotValidationAndRestoreAreTransactional)
+{
+    using namespace Spark::Gameplay;
+    auto& quests = QuestSystem::GetInstance();
+    quests.Shutdown();
+    quests.Initialize();
+
+    QuestDefinition definition;
+    definition.questId = 70001;
+    definition.name = "Snapshot contract";
+    definition.objectives.push_back({"Complete two steps", QuestObjective::Type::Interact, 9, 2, 0});
+    quests.RegisterQuest(definition);
+    EXPECT_TRUE(quests.StartQuest(42, definition.questId));
+    quests.ReportProgress(42, QuestObjective::Type::Interact, 9, 1);
+
+    const auto original = quests.CaptureEntityState(42);
+    EXPECT_EQ(original.size(), static_cast<size_t>(1));
+    EXPECT_EQ(original[0].objectiveCounts[0], 1u);
+    EXPECT_TRUE(quests.ValidateEntityState(original));
+
+    auto impossible = original;
+    impossible[0].state = QuestState::Completed;
+    EXPECT_FALSE(quests.ValidateEntityState(impossible));
+    EXPECT_FALSE(quests.RestoreEntityState(42, impossible));
+    EXPECT_EQ(quests.CaptureEntityState(42)[0].objectiveCounts[0], 1u);
+
+    auto duplicate = original;
+    duplicate.push_back(original[0]);
+    EXPECT_FALSE(quests.RestoreEntityState(42, duplicate));
+    auto unknown = original;
+    unknown[0].questId = 999999;
+    EXPECT_FALSE(quests.RestoreEntityState(42, unknown));
+
+    auto completed = original;
+    completed[0].state = QuestState::Completed;
+    completed[0].objectiveCounts[0] = 2;
+    EXPECT_TRUE(quests.RestoreEntityState(42, completed));
+    EXPECT_EQ(static_cast<int>(quests.CaptureEntityState(42)[0].state), static_cast<int>(QuestState::Completed));
+    quests.ClearEntityState(42);
+    EXPECT_TRUE(quests.CaptureEntityState(42).empty());
+    quests.Shutdown();
 }

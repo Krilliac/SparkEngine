@@ -4,6 +4,9 @@
 #include "TestFramework.h"
 #include <algorithm>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <limits>
 #include <queue>
 #include <sstream>
 #include <string>
@@ -18,6 +21,14 @@
 // has no AngelScript SDK dependency (pure string/struct compiler), so it's
 // safe to link directly like the rest of SparkEngineLib.
 #include "Engine/Scripting/VisualScriptCompiler.h"
+#include "../GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoRuntime.h"
+
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
+#include <angelscript.h>
+#include <scriptarray/scriptarray.h>
+#include <scriptbuilder/scriptbuilder.h>
+#include <scriptstdstring/scriptstdstring.h>
+#endif
 
 namespace TestVSC
 {
@@ -528,6 +539,140 @@ TEST(VisualScriptCompiler_VarNameFormat)
     EXPECT_EQ(VarName(5, 0), std::string("n5_out0"));
     EXPECT_EQ(VarName(100, 2), std::string("n100_out2"));
 }
+
+// ============================================================================
+// SparkGameVisualScript live-demo regressions
+// ============================================================================
+
+TEST(VisualScriptDemo_ManifestMatchesSpawnContract)
+{
+    uint32_t instances = 0;
+    std::unordered_set<std::string> classNames;
+    std::unordered_set<std::string> fileNames;
+    for (const auto& asset : Spark::VisualScriptDemo::ScriptManifest)
+    {
+        instances += asset.instanceCount;
+        classNames.emplace(asset.className);
+        fileNames.emplace(asset.fileName);
+    }
+
+    EXPECT_EQ(instances, Spark::VisualScriptDemo::ExpectedEntityCount);
+    EXPECT_EQ(classNames.size(), Spark::VisualScriptDemo::ScriptManifest.size());
+    EXPECT_EQ(fileNames.size(), Spark::VisualScriptDemo::ScriptManifest.size());
+}
+
+TEST(VisualScriptDemo_SelectsFirstCompleteRootWithoutMixingDirectories)
+{
+    using namespace Spark::VisualScriptDemo;
+    const std::array<std::filesystem::path, 3> roots = {"partial", "complete", "duplicate"};
+
+    auto selected =
+        SelectCompleteScriptRoot(roots,
+                                 [](const std::filesystem::path& path)
+                                 {
+                                     if (path.parent_path() == "partial")
+                                         return path.filename() != "HealthPickup.as";
+                                     return path.parent_path() == "complete" || path.parent_path() == "duplicate";
+                                 });
+
+    EXPECT_TRUE(selected.has_value());
+    EXPECT_EQ(selected->string(), std::filesystem::path("complete").string());
+}
+
+TEST(VisualScriptDemo_EntityBindingRequiresOnePlaceholder)
+{
+    using namespace Spark::VisualScriptDemo;
+    auto bound = BindSelfEntity("class Demo { uint selfEntity = 0; void Start() {} }", 42);
+    EXPECT_TRUE(bound.has_value());
+    EXPECT_TRUE(bound->find("uint selfEntity = 42;") != std::string::npos);
+    EXPECT_TRUE(bound->find(SelfEntityDeclaration) == std::string::npos);
+
+    EXPECT_FALSE(BindSelfEntity("class Demo { void Start() {} }", 1).has_value());
+    EXPECT_FALSE(BindSelfEntity("uint selfEntity = 0; uint selfEntity = 0;", 1).has_value());
+}
+
+TEST(VisualScriptDemo_DeltaTimeIsFinitePositiveAndBounded)
+{
+    using Spark::VisualScriptDemo::SanitizeDeltaTime;
+    EXPECT_EQ(SanitizeDeltaTime(-0.01f), 0.0f);
+    EXPECT_EQ(SanitizeDeltaTime(0.0f), 0.0f);
+    EXPECT_EQ(SanitizeDeltaTime(std::numeric_limits<float>::infinity()), 0.0f);
+    EXPECT_EQ(SanitizeDeltaTime(0.016f), 0.016f);
+    EXPECT_EQ(SanitizeDeltaTime(0.5f), 0.1f);
+}
+
+TEST(VisualScriptDemo_RuntimeSupportContractIsExplicit)
+{
+    using namespace Spark::VisualScriptDemo;
+    EXPECT_TRUE(EvaluateRuntimeSupport(true, true, true) == RuntimeSupport::Ready);
+    EXPECT_TRUE(EvaluateRuntimeSupport(false, true, true) == RuntimeSupport::MissingCompiledSupport);
+    EXPECT_TRUE(EvaluateRuntimeSupport(true, false, true) == RuntimeSupport::MissingWorld);
+    EXPECT_TRUE(EvaluateRuntimeSupport(true, true, false) == RuntimeSupport::MissingScriptEngine);
+
+    const std::string unsupported = std::string(RuntimeSupportMessage(RuntimeSupport::MissingCompiledSupport));
+    EXPECT_TRUE(unsupported.find("ENABLE_ANGELSCRIPT") != std::string::npos);
+    EXPECT_TRUE(unsupported.find("Module load rejected") != std::string::npos);
+    EXPECT_TRUE(unsupported.find("vs_* commands are unavailable") != std::string::npos);
+
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
+    EXPECT_TRUE(AngelScriptCompiledIn);
+#else
+    EXPECT_FALSE(AngelScriptCompiledIn);
+#endif
+}
+
+TEST(VisualScriptDemo_GameplayLifecyclePublishesAngelScriptService)
+{
+    const auto lifecyclePath = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "SparkEngine" / "Source" / "Core" /
+                               "Lifecycle" / "GameplayLifecycleShared.cpp";
+    std::ifstream stream(lifecyclePath, std::ios::binary);
+    EXPECT_TRUE(stream.is_open());
+    if (!stream)
+        return;
+
+    std::ostringstream source;
+    source << stream.rdbuf();
+    EXPECT_TRUE(source.str().find("ctx->SetScriptEngine(&s_angelScript);") != std::string::npos);
+}
+
+TEST(VisualScriptDemo_ShippedScriptsUseBootstrapAPIOnly)
+{
+    const auto root = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "GameModules" / "SparkGameVisualScript" /
+                      "Assets" / "Scripts" / "Generated";
+    const std::array<std::string_view, 4> unsupportedCalls = {"sin(", "sqrt(", "atan2(", "Vector3("};
+
+    for (const auto& asset : Spark::VisualScriptDemo::ScriptManifest)
+    {
+        std::ifstream stream(root / std::filesystem::path(asset.fileName), std::ios::binary);
+        EXPECT_TRUE(stream.is_open());
+        std::ostringstream source;
+        source << stream.rdbuf();
+        for (const auto call : unsupportedCalls)
+            EXPECT_TRUE(source.str().find(call) == std::string::npos);
+    }
+}
+
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
+TEST(VisualScriptDemo_AngelScriptCoreAndRequiredAddonsAreLinked)
+{
+    asIScriptEngine* engine = asCreateScriptEngine();
+    EXPECT_TRUE(engine != nullptr);
+    if (!engine)
+        return;
+
+    RegisterStdString(engine);
+    RegisterScriptArray(engine, true);
+    {
+        CScriptBuilder builder;
+        EXPECT_TRUE(builder.StartNewModule(engine, "VisualScriptLinkSmoke") >= 0);
+        EXPECT_TRUE(
+            builder.AddSectionFromMemory(
+                "smoke", "class Smoke { array<string> values; void Start() { values.insertLast(\"ready\"); } }") >= 0);
+        EXPECT_TRUE(builder.BuildModule() >= 0);
+    }
+    engine->ShutDownAndRelease();
+}
+#endif
 
 // ============================================================================
 // Security regression tests — exercise the REAL Spark::Scripting compiler

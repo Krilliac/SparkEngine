@@ -8,6 +8,8 @@
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
+#include <cmath>
+#include <unordered_set>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -206,6 +208,76 @@ namespace Racing
         return -1.0f;
     }
 
+    RacingRaceSnapshot RacingRaceManager::CaptureState() const
+    {
+        RacingRaceSnapshot snapshot;
+        snapshot.racers = m_racers;
+        snapshot.championship = m_championship;
+        snapshot.state = m_state;
+        snapshot.mode = m_mode;
+        snapshot.countdownTimer = m_countdownTimer;
+        snapshot.raceTime = m_raceTime;
+        snapshot.totalLaps = m_totalLaps;
+        snapshot.dnfTimeout = m_dnfTimeout;
+        return snapshot;
+    }
+
+    bool RacingRaceManager::RestoreState(const RacingRaceSnapshot& snapshot)
+    {
+        if (snapshot.state >= RaceState::Count || snapshot.mode >= RaceMode::Count ||
+            !std::isfinite(snapshot.countdownTimer) || !std::isfinite(snapshot.raceTime) ||
+            !std::isfinite(snapshot.dnfTimeout) || snapshot.countdownTimer < 0.0f || snapshot.raceTime < 0.0f ||
+            snapshot.totalLaps == 0 || snapshot.totalLaps > 100 || snapshot.dnfTimeout <= 0.0f)
+        {
+            return false;
+        }
+
+        std::unordered_set<uint32_t> racerIds;
+        size_t playerCount = 0;
+        for (const RacerState& racer : snapshot.racers)
+        {
+            if (racer.vehicleId == 0 || racer.name.empty() || racer.name.size() > 256 ||
+                !std::isfinite(racer.distanceAlongTrack) || !std::isfinite(racer.totalTime) ||
+                !std::isfinite(racer.currentLapTime) || !std::isfinite(racer.bestLapTime) ||
+                !std::isfinite(racer.finishTime) || racer.currentLap > snapshot.totalLaps || racer.totalTime < 0.0f ||
+                racer.currentLapTime < 0.0f || racer.bestLapTime < -1.0f || racer.finishTime < 0.0f ||
+                racer.splitTimes.size() > 10000 || racer.lapTimes.size() > 100 ||
+                !racerIds.insert(racer.vehicleId).second)
+            {
+                return false;
+            }
+            playerCount += racer.isPlayer ? 1u : 0u;
+            if (playerCount > 1)
+                return false;
+            for (float split : racer.splitTimes)
+                if (!std::isfinite(split) || split < 0.0f)
+                    return false;
+            for (float lap : racer.lapTimes)
+                if (!std::isfinite(lap) || lap < 0.0f)
+                    return false;
+        }
+
+        std::unordered_set<uint32_t> championshipIds;
+        for (const ChampionshipEntry& entry : snapshot.championship)
+        {
+            if (entry.vehicleId == 0 || entry.name.empty() || entry.name.size() > 256 ||
+                !championshipIds.insert(entry.vehicleId).second)
+            {
+                return false;
+            }
+        }
+
+        m_racers = snapshot.racers;
+        m_championship = snapshot.championship;
+        m_state = snapshot.state;
+        m_mode = snapshot.mode;
+        m_countdownTimer = snapshot.countdownTimer;
+        m_raceTime = snapshot.raceTime;
+        m_totalLaps = snapshot.totalLaps;
+        m_dnfTimeout = snapshot.dnfTimeout;
+        return true;
+    }
+
     std::string RacingRaceManager::GetStandingsString() const
     {
         std::string result = "Race Standings:\n";
@@ -248,6 +320,7 @@ namespace Racing
         m_countdownTimer -= deltaTime;
         if (m_countdownTimer <= 0.0f)
         {
+            m_countdownTimer = 0.0f;
             m_state = RaceState::Racing;
             auto& console = Spark::SimpleConsole::GetInstance();
             SPARK_LOG_INFO(Spark::LogCategory::Game, "Race GO!");

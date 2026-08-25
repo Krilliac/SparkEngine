@@ -12,6 +12,7 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <sstream>
 
 namespace MMO
@@ -147,6 +148,9 @@ namespace MMO
     bool MMOWorldBossSystem::DamageBoss(uint32_t bossDefId, uint32_t attackerId, const std::string& attackerName,
                                         float damage)
     {
+        if (!std::isfinite(damage) || damage <= 0.0f)
+            return false;
+
         auto it = m_instances.find(bossDefId);
         if (it == m_instances.end() || !it->second.IsAlive())
             return false;
@@ -181,6 +185,9 @@ namespace MMO
     void MMOWorldBossSystem::RecordHealing(uint32_t bossDefId, uint32_t healerId, const std::string& healerName,
                                            float amount)
     {
+        if (!std::isfinite(amount) || amount <= 0.0f)
+            return;
+
         auto it = m_instances.find(bossDefId);
         if (it == m_instances.end() || !it->second.IsAlive())
             return;

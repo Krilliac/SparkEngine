@@ -11,7 +11,10 @@
 #include <imgui.h>
 #endif
 
+#include <algorithm>
+#include <cmath>
 #include <sstream>
+#include <unordered_set>
 
 namespace OpenWorld
 {
@@ -368,6 +371,70 @@ namespace OpenWorld
             return true;
         }
         return false;
+    }
+
+    GatheringSaveState OWGatheringSystem::CaptureSaveState() const
+    {
+        GatheringSaveState state;
+        state.inventory.reserve(m_inventory.resources.size());
+        for (const auto& entry : m_inventory.resources)
+            state.inventory.push_back(entry);
+        std::ranges::sort(state.inventory, {}, [](const auto& entry) { return static_cast<uint8_t>(entry.first); });
+        state.nodes.reserve(m_nodes.size());
+        for (const auto& [id, node] : m_nodes)
+        {
+            (void)id;
+            state.nodes.push_back({node.nodeId, node.currentYield, node.respawnTimer, node.isDepleted});
+        }
+        std::ranges::sort(state.nodes, {}, &ResourceNodeSaveState::nodeId);
+        state.totalHarvested = m_totalHarvested;
+        state.totalCrafted = m_totalCrafted;
+        return state;
+    }
+
+    bool OWGatheringSystem::RestoreSaveState(const GatheringSaveState& state, std::string* error)
+    {
+        auto fail = [&](const char* message)
+        {
+            if (error)
+                *error = message;
+            return false;
+        };
+        if (state.inventory.size() > static_cast<size_t>(ResourceType::Count) || state.nodes.size() != m_nodes.size())
+            return fail("gathering state does not match this world");
+
+        ResourceInventory inventory;
+        std::unordered_set<uint8_t> resourceTypes;
+        for (const auto& [type, amount] : state.inventory)
+        {
+            const auto rawType = static_cast<uint8_t>(type);
+            if (rawType >= static_cast<uint8_t>(ResourceType::Count) || amount > 1000000000u ||
+                !resourceTypes.insert(rawType).second)
+                return fail("invalid resource inventory record");
+            inventory.resources.emplace(type, amount);
+        }
+
+        auto nodes = m_nodes;
+        std::unordered_set<uint32_t> nodeIds;
+        for (const auto& node : state.nodes)
+        {
+            const auto existing = m_nodes.find(node.nodeId);
+            if (existing == m_nodes.end() || !std::isfinite(node.respawnTimer) ||
+                node.currentYield > existing->second.maxYield || node.respawnTimer < 0.0f ||
+                node.respawnTimer > existing->second.respawnTime || node.isDepleted != (node.currentYield == 0) ||
+                !nodeIds.insert(node.nodeId).second)
+                return fail("invalid resource node record");
+            auto& restored = nodes.at(node.nodeId);
+            restored.currentYield = node.currentYield;
+            restored.respawnTimer = node.respawnTimer;
+            restored.isDepleted = node.isDepleted;
+        }
+
+        m_inventory = std::move(inventory);
+        m_nodes = std::move(nodes);
+        m_totalHarvested = state.totalHarvested;
+        m_totalCrafted = state.totalCrafted;
+        return true;
     }
 
     std::string OWGatheringSystem::GetNodeListString() const

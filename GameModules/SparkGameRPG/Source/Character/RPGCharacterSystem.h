@@ -121,6 +121,7 @@ namespace RPG
 
         // === Character CRUD ===
         uint32_t CreateCharacter(const std::string& name, CharacterClass classId);
+        bool DestroyCharacter(uint32_t characterId);
         CharacterData* GetCharacter(uint32_t characterId);
         const CharacterData* GetCharacter(uint32_t characterId) const;
 

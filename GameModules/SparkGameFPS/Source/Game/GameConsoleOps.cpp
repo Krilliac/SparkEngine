@@ -29,10 +29,12 @@
 #include "PlaneObject.h"
 #include "SphereObject.h"
 #include "ModelObject.h"
+#include "Enemy.h"
 #include "Player.h"
 #include "Projectiles/ProjectilePool.h"
 #include "SceneManager/SceneManager.h"
 #include "Engine/Networking/NetworkManager.h"
+#include <algorithm>
 #include <filesystem>
 
 #include "Utils/LogMacros.h"
@@ -247,6 +249,8 @@ bool Game::DeleteObject(size_t index)
         return false;
     }
 
+    const GameObject* removedObject = m_gameObjects[index].get();
+    std::erase_if(m_enemies, [removedObject](const Enemy* enemy) { return enemy == removedObject; });
     m_gameObjects.erase(m_gameObjects.begin() + index);
 
     std::wstring deleteMsg = L"Deleted object at index " + std::to_wstring(index) + L". Remaining objects: " +
@@ -258,10 +262,13 @@ bool Game::DeleteObject(size_t index)
 void Game::ClearScene(bool keepPlayer)
 {
     size_t originalCount = m_gameObjects.size();
+    m_enemies.clear();
     m_gameObjects.clear();
 
     if (!keepPlayer)
     {
+        if (m_hudSystem)
+            m_hudSystem->SetPlayer(nullptr);
         m_player.reset();
         m_projectilePool.reset();
     }
@@ -387,6 +394,7 @@ bool Game::LoadScene(const std::string& scenePath)
         if (success)
         {
             // Clear existing game objects if loading a new scene
+            m_enemies.clear();
             m_gameObjects.clear();
 
             std::wstring loadMsg = L"Scene loaded successfully: " + wScenePath;
@@ -680,6 +688,7 @@ void Game::CreateTestScene(const std::string& sceneType)
     LOG_TO_CONSOLE_IMMEDIATE(L"Creating test scene via console integration", L"INFO");
 
     // Clear existing objects
+    m_enemies.clear();
     m_gameObjects.clear();
 
     if (sceneType == "basic")
@@ -837,7 +846,11 @@ bool Game::ConnectToServer(const std::string& address, uint16_t port)
 
     std::wstring addr(address.begin(), address.end());
     LOG_TO_CONSOLE_IMMEDIATE(L"Connecting to " + addr + L":" + std::to_wstring(port) + L"...", L"INFO");
-    netMgr.Connect(address, port, "Player");
+    if (!netMgr.Connect(address, port, "Player"))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to connect to " + addr + L":" + std::to_wstring(port), L"ERROR");
+        return false;
+    }
     return true;
 }
 

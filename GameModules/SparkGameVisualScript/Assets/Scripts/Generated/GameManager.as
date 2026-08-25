@@ -2,7 +2,7 @@
 // Class: GameManager
 //
 // Visual Script Graph: GameManager.vscript
-// Tracks score, collectibles remaining, win/lose conditions, HUD updates.
+// Tracks score, collectibles remaining, and win/lose conditions.
 
 class GameManager
 {
@@ -10,7 +10,6 @@ class GameManager
     int score = 0;
     int totalCoins = 5;
     int coinsCollected = 0;
-    int enemiesKilled = 0;
     float gameTime = 0.0f;
     bool gameOver = false;
     bool gameWon = false;
@@ -21,10 +20,11 @@ class GameManager
         print("Collect all 5 coins to win!");
         print("Avoid the enemies — they deal damage!");
         print("Controls: WASD + Space to jump, Shift to sprint");
+        print("Console: vs_status shows progress, vs_restart resets the demo");
         print("==========================");
         score = 0;
         coinsCollected = 0;
-        enemiesKilled = 0;
+        setHealth(selfEntity, 0.0f);
     }
 
     void Update(float dt)
@@ -33,6 +33,18 @@ class GameManager
             return;
 
         gameTime = gameTime + dt;
+        score = int(getHealth(selfEntity));
+        coinsCollected = score / 100;
+
+        uint player = getEntityByName("VS_Player");
+        if (getHealth(player) <= 0.0f)
+        {
+            gameOver = true;
+            print("*** GAME OVER ***");
+            print("Final Score: " + score);
+            print("Run vs_restart to try again");
+            return;
+        }
 
         // Check win condition
         if (coinsCollected >= totalCoins)
@@ -41,44 +53,7 @@ class GameManager
             print("*** YOU WIN! ***");
             print("Score: " + score);
             print("Time: " + gameTime + " seconds");
-            print("Enemies defeated: " + enemiesKilled);
             playSound(selfEntity, "victory_fanfare");
-            fireEvent("GameWon");
         }
-
-        // Restart on R key
-        if (getKeyDown("R"))
-        {
-            print("Restarting game...");
-            score = 0;
-            coinsCollected = 0;
-            enemiesKilled = 0;
-            gameTime = 0.0f;
-            gameOver = false;
-            gameWon = false;
-            fireEvent("GameRestart");
-        }
-    }
-
-    void OnScoreAdded()
-    {
-        coinsCollected = coinsCollected + 1;
-        score = score + 100;
-        print("Score: " + score + " | Coins: " + coinsCollected + "/" + totalCoins);
-    }
-
-    void OnEnemyKilled()
-    {
-        enemiesKilled = enemiesKilled + 1;
-        score = score + 250;
-        print("Enemy killed! Score: " + score);
-    }
-
-    void OnPlayerDied()
-    {
-        gameOver = true;
-        print("*** GAME OVER ***");
-        print("Final Score: " + score);
-        print("Press R to restart");
     }
 }

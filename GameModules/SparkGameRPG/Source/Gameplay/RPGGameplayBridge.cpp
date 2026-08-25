@@ -61,11 +61,6 @@ namespace RPG
         m_registeredDialogueTrees = 0;
     }
 
-    void RPGGameplayBridge::Update(float deltaTime)
-    {
-        (void)deltaTime;
-    }
-
     size_t RPGGameplayBridge::GetRegisteredQuestCount() const
     {
         const auto status = Spark::Gameplay::QuestSystem::GetInstance().Console_GetStatus();
@@ -106,6 +101,10 @@ namespace RPG
 
     void RPGGameplayBridge::OnQuestCompleted(uint32_t entityId, const Spark::Gameplay::QuestDefinition& questDef)
     {
+        if (m_characterSystem)
+        {
+            m_characterSystem->AddXP(entityId, questDef.xpReward);
+        }
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Quest completed through engine system: %s (entity=%u)",
                        questDef.name.c_str(), entityId);
     }
@@ -143,7 +142,7 @@ namespace RPG
         investigate.requiredLevel = 3;
         investigate.prerequisiteQuestId = 2;
         investigate.objectives.push_back(
-            {"Speak with the forest hermit", Spark::Gameplay::QuestObjective::Type::Talk, 300, 1});
+            {"Speak with the forest hermit", Spark::Gameplay::QuestObjective::Type::Talk, 5, 1});
         investigate.xpReward = 60;
         questSystem.RegisterQuest(investigate);
 
@@ -154,9 +153,9 @@ namespace RPG
         cryptExplore.requiredLevel = 5;
         cryptExplore.prerequisiteQuestId = 3;
         cryptExplore.objectives.push_back(
-            {"Reach the crypt's inner sanctum", Spark::Gameplay::QuestObjective::Type::Reach, 400, 1});
+            {"Reach the crypt's inner sanctum", Spark::Gameplay::QuestObjective::Type::Reach, 3, 1});
         cryptExplore.objectives.push_back(
-            {"Defeat the necromancer", Spark::Gameplay::QuestObjective::Type::Kill, 401, 1});
+            {"Defeat the necromancer", Spark::Gameplay::QuestObjective::Type::Kill, 204, 1});
         cryptExplore.xpReward = 200;
         cryptExplore.itemRewards = {{3, 1}};
         questSystem.RegisterQuest(cryptExplore);

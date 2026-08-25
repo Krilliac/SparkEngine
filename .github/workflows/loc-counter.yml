@@ -40,14 +40,14 @@ jobs:
         }
         FORMATTED_LOC="$(format_count "$CPP_LINES")"
         FORMATTED_FILES="$(format_count "$FILE_COUNT")"
-        FORMATTED_TESTS="$(format_count "$TEST_DEFINITIONS")"
+        FORMATTED_TEST_DEFINITIONS="$(format_count "$TEST_DEFINITIONS")"
 
         echo "total_lines=$CPP_LINES" >> "$GITHUB_OUTPUT"
         echo "formatted_lines=$FORMATTED_LOC" >> "$GITHUB_OUTPUT"
         echo "file_count=$FILE_COUNT" >> "$GITHUB_OUTPUT"
         echo "formatted_files=$FORMATTED_FILES" >> "$GITHUB_OUTPUT"
-        echo "test_count=$TEST_DEFINITIONS" >> "$GITHUB_OUTPUT"
-        echo "formatted_tests=$FORMATTED_TESTS" >> "$GITHUB_OUTPUT"
+        echo "test_definition_count=$TEST_DEFINITIONS" >> "$GITHUB_OUTPUT"
+        echo "formatted_test_definitions=$FORMATTED_TEST_DEFINITIONS" >> "$GITHUB_OUTPUT"
         echo "engine_lines=$ENGINE_LINES" >> "$GITHUB_OUTPUT"
         echo "editor_lines=$EDITOR_LINES" >> "$GITHUB_OUTPUT"
         echo "game_lines=$GAME_LINES" >> "$GITHUB_OUTPUT"
@@ -70,12 +70,13 @@ jobs:
       run: |
         mkdir -p .github/badges
 
-        # Registered test-definition badge
+        # Source-level test-definition badge. Runtime registration varies with
+        # platform and feature gates, so this must not claim executed cases.
         cat > .github/badges/tests.json << EOF
         {
           "schemaVersion": 1,
-          "label": "tests",
-          "message": "${{ steps.loc.outputs.formatted_tests }}",
+          "label": "test definitions",
+          "message": "${{ steps.loc.outputs.formatted_test_definitions }}",
           "color": "brightgreen",
           "cacheSeconds": 300
         }

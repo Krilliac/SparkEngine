@@ -16,11 +16,14 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <unordered_map>
 #include <vector>
 
 namespace RTS
 {
+
+    class RTSUnitSystem;
 
     /// @brief Per-player resource pool
     struct PlayerResources
@@ -52,7 +55,7 @@ namespace RTS
         RTSResourceSystem() = default;
         ~RTSResourceSystem() = default;
 
-        bool Initialize(Spark::IEngineContext* context);
+        bool Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem = nullptr);
         void Update(float deltaTime);
         void Shutdown();
         void RenderDebugUI();
@@ -66,6 +69,7 @@ namespace RTS
         void AddSupply(RTSFaction faction, int amount);
         void UseSupply(RTSFaction faction, int amount);
         void FreeSupply(RTSFaction faction, int amount);
+        bool CanUseSupply(RTSFaction faction, int amount) const;
 
         // === Resource nodes ===
         uint32_t CreateNode(RTSResourceType type, float x, float y, int amount);
@@ -74,12 +78,18 @@ namespace RTS
 
         // === Queries ===
         size_t GetNodeCount() const;
+        const std::unordered_map<uint32_t, ResourceNode>& GetNodes() const;
         std::string GetResourceListString() const;
+
+        /** Replace the economy and resource nodes from a validated persistence snapshot. */
+        bool RestoreState(const std::vector<std::pair<RTSFaction, PlayerResources>>& players,
+                          const std::vector<ResourceNode>& nodes);
 
       private:
         void GatherResources(float deltaTime);
 
         Spark::IEngineContext* m_context{nullptr};
+        RTSUnitSystem* m_unitSystem{nullptr};
 
         std::unordered_map<RTSFaction, PlayerResources> m_playerResources;
         std::unordered_map<uint32_t, ResourceNode> m_nodes;

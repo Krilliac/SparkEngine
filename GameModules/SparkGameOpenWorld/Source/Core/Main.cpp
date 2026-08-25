@@ -128,6 +128,8 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
 
     // 8. Engine systems integration (save, AI, cinematic, weather, music, events)
     m_engineSystems = std::make_unique<OpenWorld::OWEngineSystems>();
+    m_engineSystems->BindGameState(*m_playerSystem, *m_explorationSystem, *m_gatheringSystem, *m_settlementSystem,
+                                   *m_wildlifeSystem, *m_eventSystem);
     if (!m_engineSystems->Initialize(context))
     {
         console.LogWarning("[OpenWorld] Engine systems integration partially failed (non-fatal)");

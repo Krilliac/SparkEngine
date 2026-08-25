@@ -99,11 +99,6 @@ namespace Spark
      */
         bool Initialize(const XMFLOAT3& worldGravity = {0, -20.0f, 0});
 
-        /**
-     * @brief Update gravity transitions
-     */
-        void Update(float deltaTime);
-
         // === Zone Management ===
 
         /**

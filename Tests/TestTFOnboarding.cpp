@@ -20,6 +20,7 @@
 #include "Net/TFNetworkLifecycle.h"
 #include "Net/TFOnboardingSessionRules.h"
 #include "Console/TFQuickplay.h"
+#include "UI/TFLoginFlow.h"
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
@@ -61,6 +62,40 @@ TEST(TFQuickplay_RequiresLiveListenHostRuntime)
     EXPECT_FALSE(IsQuickplayListenHostRuntime(NetRole::ListenHost, false, true, true));
     EXPECT_FALSE(IsQuickplayListenHostRuntime(NetRole::ListenHost, true, false, true));
     EXPECT_FALSE(IsQuickplayListenHostRuntime(NetRole::ListenHost, true, true, false));
+}
+
+TEST(TFLoginFlow_SynchronousLoopbackReplyWinsOverArmedRequestState)
+{
+    enum class Pending
+    {
+        None,
+        Login
+    };
+
+    Pending pending = Pending::None;
+    DispatchAfterArmingOnboardingState([&] { pending = Pending::Login; },
+                                       [&]
+                                       {
+                                           EXPECT_TRUE(pending == Pending::Login);
+                                           pending = Pending::None; // synchronous login reply sink
+                                       });
+    EXPECT_TRUE(pending == Pending::None);
+
+    TFFlowState flow = TFFlowState::Login;
+    float enterTimer = 7.0f;
+    DispatchAfterArmingOnboardingState(
+        [&]
+        {
+            enterTimer = 0.0f;
+            flow = TFFlowState::EnteringWorld;
+        },
+        [&]
+        {
+            EXPECT_TRUE(flow == TFFlowState::EnteringWorld);
+            flow = TFFlowState::InWorld; // synchronous TF_WorldWelcome sink
+        });
+    EXPECT_TRUE(flow == TFFlowState::InWorld);
+    EXPECT_EQ(enterTimer, 0.0f);
 }
 
 TEST(TFClientSessionState_ResetClearsAuthenticationAndCharacters)

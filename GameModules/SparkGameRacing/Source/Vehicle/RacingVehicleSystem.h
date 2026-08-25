@@ -112,6 +112,9 @@ namespace Racing
         const std::vector<VehicleInstance>& GetVehicles() const { return m_vehicles; }
         size_t GetVehicleCount() const { return m_vehicles.size(); }
 
+        /** Replace every vehicle from a validated persistence snapshot. */
+        bool RestoreState(const std::vector<VehicleInstance>& vehicles);
+
         /// Get default stats for a vehicle type
         static VehicleStats GetDefaultStats(VehicleType type);
 

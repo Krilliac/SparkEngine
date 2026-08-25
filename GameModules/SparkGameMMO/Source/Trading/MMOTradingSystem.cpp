@@ -13,7 +13,9 @@
 #endif
 
 #include <algorithm>
+#include <limits>
 #include <sstream>
+#include <utility>
 
 namespace MMO
 {
@@ -28,6 +30,9 @@ namespace MMO
 
     void MMOTradingSystem::Update(float dt)
     {
+        if (dt <= 0.0f)
+            return;
+
         // Expire trade sessions
         for (auto it = m_trades.begin(); it != m_trades.end();)
         {
@@ -77,6 +82,9 @@ namespace MMO
 
     uint32_t MMOTradingSystem::ProposeTrade(uint32_t initiatorId, uint32_t targetId)
     {
+        if (initiatorId == 0 || targetId == 0 || initiatorId == targetId)
+            return 0;
+
         TradeSession session;
         session.tradeId = m_nextTradeId++;
         session.sideA.playerId = initiatorId;
@@ -115,6 +123,9 @@ namespace MMO
 
     bool MMOTradingSystem::AddTradeItem(uint32_t tradeId, uint32_t playerId, uint32_t itemDefId, int count)
     {
+        if (itemDefId == 0 || count <= 0)
+            return false;
+
         auto* trade = GetTradeMut(tradeId);
         if (!trade || trade->state != TradeState::Open)
             return false;
@@ -190,19 +201,48 @@ namespace MMO
             return false;
         SPARK_BRANCH_GUARD_END("mmo_trade_state_validation")
 
-        // Transfer items A → B
+        InventoryData nextA = invA;
+        InventoryData nextB = invB;
+
+        // Validate and remove each offered stack from its owner first. Working
+        // on copies makes the whole exchange atomic if any later check fails.
         for (const auto& item : trade->sideA.items)
-            invSys.AddItem(invB, item.itemDefId, item.count);
+        {
+            if (item.count <= 0 || invSys.RemoveItem(nextA, item.itemDefId, item.count) != item.count)
+                return false;
+        }
 
-        // Transfer items B → A
         for (const auto& item : trade->sideB.items)
-            invSys.AddItem(invA, item.itemDefId, item.count);
+        {
+            if (item.count <= 0 || invSys.RemoveItem(nextB, item.itemDefId, item.count) != item.count)
+                return false;
+        }
 
-        // Transfer currency
-        invA.currency -= trade->sideA.currency;
-        invB.currency += trade->sideA.currency;
-        invB.currency -= trade->sideB.currency;
-        invA.currency += trade->sideB.currency;
+        for (const auto& item : trade->sideA.items)
+        {
+            if (invSys.AddItem(nextB, item.itemDefId, item.count) != item.count)
+                return false;
+        }
+        for (const auto& item : trade->sideB.items)
+        {
+            if (invSys.AddItem(nextA, item.itemDefId, item.count) != item.count)
+                return false;
+        }
+
+        if (trade->sideA.currency < 0 || trade->sideB.currency < 0 || nextA.currency < trade->sideA.currency ||
+            nextB.currency < trade->sideB.currency)
+        {
+            return false;
+        }
+        const int64_t currencyA = static_cast<int64_t>(nextA.currency) - trade->sideA.currency + trade->sideB.currency;
+        const int64_t currencyB = static_cast<int64_t>(nextB.currency) - trade->sideB.currency + trade->sideA.currency;
+        if (currencyA > std::numeric_limits<int>::max() || currencyB > std::numeric_limits<int>::max())
+            return false;
+        nextA.currency = static_cast<int>(currencyA);
+        nextB.currency = static_cast<int>(currencyB);
+
+        invA = std::move(nextA);
+        invB = std::move(nextB);
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Trade completed: ID %u", tradeId);
         trade->state = TradeState::Completed;
@@ -236,7 +276,9 @@ namespace MMO
     uint32_t MMOTradingSystem::CreateListing(uint32_t sellerId, const std::string& sellerName, uint32_t itemDefId,
                                              int count, int startPrice, int buyoutPrice, AuctionDuration duration)
     {
-        if (static_cast<int>(m_listings.size()) >= MAX_LISTINGS)
+        if (static_cast<int>(m_listings.size()) >= MAX_LISTINGS || sellerId == 0 || sellerName.empty() ||
+            itemDefId == 0 || count <= 0 || startPrice < 0 || buyoutPrice < 0 ||
+            (buyoutPrice > 0 && buyoutPrice < startPrice))
             return 0;
 
         AuctionListing listing;
@@ -288,8 +330,11 @@ namespace MMO
                 if (buyerInv.currency < listing.buyoutPrice)
                     return false;
 
-                buyerInv.currency -= listing.buyoutPrice;
-                invSys.AddItem(buyerInv, listing.itemDefId, listing.itemCount);
+                InventoryData completedInventory = buyerInv;
+                if (invSys.AddItem(completedInventory, listing.itemDefId, listing.itemCount) != listing.itemCount)
+                    return false;
+                completedInventory.currency -= listing.buyoutPrice;
+                buyerInv = std::move(completedInventory);
                 listing.sold = true;
                 listing.highBidderId = buyerId;
                 listing.currentBid = listing.buyoutPrice;
