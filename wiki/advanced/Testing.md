@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*553 test files, 6581+ test cases*
+*553 test files, 6582+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -1040,7 +1040,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestWeatherSystem` | 8 |
 | `TestWindowsCommandLine` | 5 |
 | `TestWorkSema` | 7 |
-| `TestWorldBasicRender` | 7 |
+| `TestWorldBasicRender` | 8 |
 | `TestWorldOriginSystem` | 12 |
 | `TestWorldServerRouting` | 22 |
 | `Test_ai-anim_animation` | 3 |
