@@ -594,6 +594,45 @@ namespace SparkEditor
         else
         {
 #ifdef _WIN32
+            // A package must not combine a newly built module with an arbitrary
+            // old engine executable left in another configuration directory.
+            // Refresh the source-tree host incrementally when this editor is
+            // running from a configured engine checkout. An explicit host is
+            // an operator-selected artifact and is intentionally left alone.
+            if (std::getenv("SPARKENGINE_RUNTIME_HOST") == nullptr)
+            {
+                const std::filesystem::path engineBuild = FindEngineBuildDirectory();
+                if (!engineBuild.empty())
+                {
+                    {
+                        std::lock_guard lk(m_statusMutex);
+                        m_statusText = "Building runtime host...";
+                    }
+                    const std::vector<std::string> hostBuildArgs = {"--build",     engineBuild.string(), "--config",
+                                                                    installConfig, "--target",           "SparkEngine"};
+                    PushLog(BuildLogLine::Level::Info, "> " + FormatCommandForLog("cmake", hostBuildArgs));
+                    const int hostBuildExit = RunCommand("cmake", hostBuildArgs);
+                    if (m_cancelRequested.load())
+                    {
+                        m_result.store(BuildResult::Cancelled);
+                        m_running.store(false);
+                        return;
+                    }
+                    if (hostBuildExit != 0)
+                    {
+                        PushLog(BuildLogLine::Level::Error,
+                                "SparkEngine runtime host build failed (exit " + std::to_string(hostBuildExit) + ")");
+                        {
+                            std::lock_guard lk(m_statusMutex);
+                            m_statusText = "Packaging Failed";
+                        }
+                        m_result.store(BuildResult::Failed);
+                        m_running.store(false);
+                        return;
+                    }
+                }
+            }
+
             {
                 std::lock_guard lk(m_statusMutex);
                 m_statusText = "Packaging...";

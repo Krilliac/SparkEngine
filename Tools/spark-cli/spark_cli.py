@@ -308,6 +308,36 @@ def find_runtime_host(engine_root, config):
     return next((path.resolve() for path in candidates if runnable(path)), None)
 
 
+def build_runtime_host_if_configured(engine_root, config):
+    """Refresh a source-tree runtime host before it is copied into a package.
+
+    An explicit SPARKENGINE_RUNTIME_HOST is an operator-selected artifact and is
+    therefore left untouched. Installed SDKs may likewise have no build tree.
+    When the CLI is running from a configured SparkEngine checkout, however,
+    CMake is the source of truth: an incremental target build prevents a stale
+    executable from being paired with a freshly built game module.
+    """
+    if os.environ.get("SPARKENGINE_RUNTIME_HOST") or not engine_root:
+        return 0
+
+    build_dir = engine_root / "build"
+    if not (build_dir / "CMakeCache.txt").is_file():
+        return 0
+
+    print(f"Refreshing SparkEngine runtime host ({config})...")
+    try:
+        result = subprocess.run(
+            ["cmake", "--build", str(build_dir), "--config", config, "--target", "SparkEngine"],
+            cwd=engine_root,
+        )
+    except OSError as exc:
+        print(f"Error: Failed to start the SparkEngine runtime build: {exc}")
+        return 1
+    if result.returncode != 0:
+        print(f"Error: SparkEngine runtime host build failed (exit {result.returncode}).")
+    return result.returncode
+
+
 def _module_stem(path):
     stem = Path(path).stem.casefold()
     return stem[3:] if stem.startswith("lib") else stem
@@ -1149,7 +1179,11 @@ def cmd_package(args):
         print(f"Error: {target_error}")
         return 1
 
-    runtime_host = find_runtime_host(find_engine_root(), config)
+    engine_root = find_engine_root()
+    runtime_build_result = build_runtime_host_if_configured(engine_root, config)
+    if runtime_build_result != 0:
+        return runtime_build_result
+    runtime_host = find_runtime_host(engine_root, config)
     if not runtime_host:
         print(f"Error: No SparkEngine runtime host matching {config} was found.")
         print("Set SPARKENGINE_RUNTIME_HOST to an explicit executable or build/install the engine host.")

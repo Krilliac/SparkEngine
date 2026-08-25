@@ -728,6 +728,39 @@ class SparkPackageTests(unittest.TestCase):
 
         self.assertIsNone(found)
 
+    def test_package_refreshes_configured_source_tree_runtime_host(self):
+        touch(self.engine_root / "CMakeLists.txt")
+        touch(self.engine_root / "build" / "CMakeCache.txt")
+
+        with mock.patch.object(spark_cli.subprocess, "run", return_value=subprocess_result(0)) as run:
+            result, output, _ = self.run_package()
+
+        self.assertEqual(result, 0, output)
+        run.assert_called_once_with(
+            [
+                "cmake", "--build", str(self.engine_root / "build"),
+                "--config", "Release", "--target", "SparkEngine",
+            ],
+            cwd=self.engine_root,
+        )
+        self.assertIn("Refreshing SparkEngine runtime host", output)
+
+    def test_package_stops_when_runtime_host_refresh_fails(self):
+        touch(self.engine_root / "build" / "CMakeCache.txt")
+        output = io.StringIO()
+        with working_directory(self.root), contextlib.redirect_stdout(output), mock.patch.object(
+            spark_cli, "cmd_build"
+        ) as project_build, mock.patch.object(
+            spark_cli, "find_engine_root", return_value=self.engine_root
+        ), mock.patch.object(
+            spark_cli.subprocess, "run", return_value=subprocess_result(7)
+        ):
+            result = spark_cli.cmd_package(self.args())
+
+        self.assertEqual(result, 7)
+        self.assertIn("runtime host build failed", output.getvalue())
+        project_build.assert_not_called()
+
     def test_package_rejects_ambiguous_built_modules(self):
         duplicate = self.build_dir / "Release" / "stale" / self.module_name
         touch(duplicate)
