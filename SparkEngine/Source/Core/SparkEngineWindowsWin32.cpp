@@ -187,16 +187,61 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
                 gfx->BeginFrame();
                 if (!g_scenePath.empty())
                 {
-                    // Fixed framing camera looking at the scene origin.
                     using namespace DirectX;
+                    // Prefer the authored main camera (or the first valid
+                    // camera as a legacy fallback). The old hard-coded origin
+                    // camera ignored template composition and routinely put
+                    // scene content outside the preview frame.
                     XMVECTOR eye = XMVectorSet(2.0f, 1.7f, -3.5f, 1.0f);
                     XMVECTOR at = XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f);
                     XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+                    float fov = 60.0f;
+                    float nearPlane = 0.1f;
+                    float farPlane = 6000.0f;
+                    EntityID fallbackCamera = entt::null;
+                    EntityID selectedCamera = entt::null;
+                    for (auto cameraEntity : g_sceneWorld.GetEntitiesWith<Transform, Camera>())
+                    {
+                        const Camera* camera = g_sceneWorld.GetComponent<Camera>(cameraEntity);
+                        if (!camera)
+                            continue;
+                        if (fallbackCamera == entt::null)
+                            fallbackCamera = cameraEntity;
+                        if (camera->isMainCamera)
+                        {
+                            selectedCamera = cameraEntity;
+                            break;
+                        }
+                    }
+                    if (selectedCamera == entt::null)
+                        selectedCamera = fallbackCamera;
+                    if (selectedCamera != entt::null)
+                    {
+                        const Transform* transform = g_sceneWorld.GetComponent<Transform>(selectedCamera);
+                        const Camera* camera = g_sceneWorld.GetComponent<Camera>(selectedCamera);
+                        if (transform && camera && camera->fov > 0.0f && camera->fov < 180.0f &&
+                            camera->nearPlane > 0.0f && camera->farPlane > camera->nearPlane)
+                        {
+                            const XMMATRIX rotation =
+                                XMMatrixRotationRollPitchYaw(XMConvertToRadians(transform->rotation.x),
+                                                             XMConvertToRadians(transform->rotation.y),
+                                                             XMConvertToRadians(transform->rotation.z));
+                            eye = XMLoadFloat3(&transform->position);
+                            const XMVECTOR forward =
+                                XMVector3TransformNormal(XMVectorSet(0, 0, 1, 0), rotation);
+                            up = XMVector3TransformNormal(XMVectorSet(0, 1, 0, 0), rotation);
+                            at = XMVectorAdd(eye, forward);
+                            fov = camera->fov;
+                            nearPlane = camera->nearPlane;
+                            farPlane = camera->farPlane;
+                        }
+                    }
                     XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
                     int fbW = g_windowWidthOverride > 0 ? g_windowWidthOverride : 1280;
                     int fbH = g_windowHeightOverride > 0 ? g_windowHeightOverride : 720;
                     float aspect = static_cast<float>(fbW) / static_cast<float>(fbH);
-                    XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(60.0f), aspect, 0.1f, 6000.0f);
+                    XMMATRIX proj =
+                        XMMatrixPerspectiveFovLH(XMConvertToRadians(fov), aspect, nearPlane, farPlane);
                     Spark::RenderWorldBasic(g_sceneWorld, *gfx, g_sceneCache, view, proj, sceneProjectRoot);
                 }
                 gfx->EndFrame();

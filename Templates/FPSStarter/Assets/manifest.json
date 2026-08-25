@@ -20,11 +20,58 @@
       "kind": "named source-rectangle metadata for the runtime sheet",
       "origin": "SparkEngine project-authored metadata",
       "sha256": "789333d1e2daa6448756e42330a5486304fc8efb72b04430b859903989728d05"
+    },
+    {
+      "path": "Models/arena_wall.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "435f93cb56d61793a98a26efc9ed3a6ecd897f7822fbfac2b621163ddaab952e"
+    },
+    {
+      "path": "Models/arena_wall.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "94daccfc6ebf03bc7b787f49cb6f48500dabb55af0d97d724facb25aea1819d8"
+    },
+    {
+      "path": "Models/cover_barrier.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "29972d3c79a1ba7b757835f8a5344c3d676a11b547a4bb8419a622366a33c13d"
+    },
+    {
+      "path": "Models/cover_barrier.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "80490117dd11d8438fe33146e2dd245be21833b56e9077eabfb70db427c59abd"
+    },
+    {
+      "path": "Models/training_rifle.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "92c1f1a64e18c076f8c297e5b20bad57d491260199abce3953cddac257da511e"
+    },
+    {
+      "path": "Models/training_rifle.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "f9976c9e7df1ea6f1ddf06b2f75d9d1bf9e3985dfcfe66efcfdcbef613b8c3c9"
+    },
+    {
+      "path": "Models/training_target.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "355eafa4c33dc5b99b7b5b8e8dcc1e2d35f4d47417ce0b35a3388516a72fc568"
+    },
+    {
+      "path": "Models/training_target.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "1403032f5e0b97c6f5b1d486c5b2f311b1aae2d22cea054d247c1b801ff85b01"
     }
   ],
   "enginePrimitives": [
-    "__spark_primitive_Cube.obj",
     "__spark_primitive_ground__.obj"
   ],
-  "notes": "The reflected scene uses SparkEngine built-in primitives; the atlas provides original production art for host rendering and UI adapters."
+  "notes": "The reflected scene uses repository-original authored OBJ/MTL models; the built-in ground primitive remains for the world floor, and the atlas provides complementary UI and sprite art."
 }

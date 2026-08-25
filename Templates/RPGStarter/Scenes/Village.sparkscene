@@ -93,7 +93,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/hero.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -119,7 +119,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/village_elder.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -145,7 +145,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/lost_relic.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -171,7 +171,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/training_warden.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -197,7 +197,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/village_house_a.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -223,7 +223,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/village_house_b.obj",
             "receiveShadows": "true",
             "visible": "true"
           },

@@ -20,11 +20,82 @@
       "kind": "named source-rectangle metadata for the runtime sheet",
       "origin": "SparkEngine project-authored metadata",
       "sha256": "16259cbdec83cd20b81b10ff60cf235f216466c778ac853009c76675a75daba0"
+    },
+    {
+      "path": "Models/checkpoint.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "6cce6e81b804176adf24238605c28b9958df391e96fceef502ea5f7ecba30aac"
+    },
+    {
+      "path": "Models/checkpoint.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "e83894709c80e28b1bb85687d91bc39f8da928bc3770d551315cb3c1f1bfa1c6"
+    },
+    {
+      "path": "Models/coin.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "b7db8a84f56ff12818a44d1d2600ec6758290670c04425def1882559c65fac99"
+    },
+    {
+      "path": "Models/coin.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "d3d785dce66b8ef0550150eef723f891f5aebc1328f43141c0d82a36bf6da2e4"
+    },
+    {
+      "path": "Models/finish_gate.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "4d30da70562893a8661688130f7e66f13da1a09977838a41b7f1635c83e65b6f"
+    },
+    {
+      "path": "Models/finish_gate.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "1673bf492034f12ba3201305abd4eec9fa7a38dcd2a17ff3ce81b5b10975e99b"
+    },
+    {
+      "path": "Models/platform_straight.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "8849f7baa1142883259e050bdf7ce6246f8c8b31e4d8b6bc6abde8cd40e6d3a4"
+    },
+    {
+      "path": "Models/platform_straight.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "c05340c005e54b776b0e020a90661b0b527266d92eb3db1106a5c7bb9934aee6"
+    },
+    {
+      "path": "Models/runner.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "b798c1ac17d058d282079b5ffab6b394da85b3342d381104875a8994cb2a2cd2"
+    },
+    {
+      "path": "Models/runner.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "2fddb66afe5807fed620dbb6bee4c13b7cfc72e173cb774afef094d206ca7a15"
+    },
+    {
+      "path": "Models/spike_hazard.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "edacbd6984db171fd4cb27f3a2731fb840f7bdd66ae5dabc6e1df05b14f9dfea"
+    },
+    {
+      "path": "Models/spike_hazard.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "a8fc38e8f551dee88c8fd063ebdd217ef5cf58f1eaaa7dae4d2e38b18b22109f"
     }
   ],
   "enginePrimitives": [
-    "__spark_primitive_Cube.obj",
     "__spark_primitive_ground__.obj"
   ],
-  "notes": "The level uses built-in primitives; the atlas supplies an original bright platformer visual kit."
+  "notes": "The reflected scene uses repository-original authored OBJ/MTL models; the built-in ground primitive remains for the world floor, and the atlas provides complementary UI and sprite art."
 }

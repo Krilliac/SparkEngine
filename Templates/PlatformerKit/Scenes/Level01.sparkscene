@@ -58,7 +58,7 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,5.000000,-12.000000",
+            "position": "9.000000,5.500000,-14.000000",
             "rotation": "10.000000,0.000000,0.000000",
             "scale": "1.000000,1.000000,1.000000"
           },
@@ -67,7 +67,7 @@
         {
           "fields": {
             "farPlane": "1000.000000",
-            "fov": "60.000000",
+            "fov": "50.000000",
             "isMainCamera": "true",
             "nearPlane": "0.100000"
           },
@@ -93,7 +93,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/runner.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -119,7 +119,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/platform_straight.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -145,7 +145,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/platform_straight.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -171,7 +171,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/coin.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -197,7 +197,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/coin.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -223,7 +223,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/coin.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -249,7 +249,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/spike_hazard.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -275,7 +275,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/checkpoint.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -301,7 +301,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/finish_gate.obj",
             "receiveShadows": "true",
             "visible": "true"
           },

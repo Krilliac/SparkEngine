@@ -122,7 +122,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/training_target.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -148,7 +148,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/cover_barrier.obj",
             "receiveShadows": "true",
             "visible": "true"
           },

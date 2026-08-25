@@ -327,6 +327,12 @@ void GraphicsEngine::SetBasicTexture(ID3D11ShaderResourceView* /*srv*/)
     // Basic D3D11 SRVs are not part of the non-Windows RHI path.
 }
 
+void GraphicsEngine::SetBasicMaterialTextures(ID3D11ShaderResourceView* /*normalSrv*/,
+                                              ID3D11ShaderResourceView* /*roughnessSrv*/)
+{
+    // Basic D3D11 SRVs are not part of the non-Windows RHI path.
+}
+
 const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(const std::string& /*jsonPath*/,
                                                                             std::string_view /*projectRootUtf8*/)
 {

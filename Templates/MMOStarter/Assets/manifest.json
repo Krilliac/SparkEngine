@@ -20,11 +20,58 @@
       "kind": "named source-rectangle metadata for the runtime sheet",
       "origin": "SparkEngine project-authored metadata",
       "sha256": "6f3d8ef729e8516ee0d7a565d024357484142b6d6f035bbdcfcb1ba8aca53015"
+    },
+    {
+      "path": "Models/astra.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "a7342d870d8a1b2cc8e7ab6cca77b9242dbb26f542d4abfa4c07a2fedaf2015a"
+    },
+    {
+      "path": "Models/astra.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "6a8cd9d4b9bf3147288b98bae481f45a241f9d68b5b152c86971412f2c60bcf7"
+    },
+    {
+      "path": "Models/capture_beacon.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "1212e8d4ac227dddb869661a3cdf5850bf676f0fc83283010bda98c78ef78e5b"
+    },
+    {
+      "path": "Models/capture_beacon.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "160f0239118f52cb33f813d0fbef9f1672eff77a785d63ac90acc98a1b068e13"
+    },
+    {
+      "path": "Models/frontier_relay.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "0d72584e8361ab7a77266b0ccc0d6fbb1d1266be331991fdb25b280d1baa3511"
+    },
+    {
+      "path": "Models/frontier_relay.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "2ac0c426b1c774f524264b4c3b874e8593e68ff8db3adc90cf8dc63f3c07897f"
+    },
+    {
+      "path": "Models/training_bot.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "bbc6920181fcb829880436c7986ff6b8a23e1c08805c0940d9fd585642516f96"
+    },
+    {
+      "path": "Models/training_bot.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "ac6514c62b81eaf61af129c3f82e85a709b51ddd3eace3faf04508b40b7ad538"
     }
   ],
   "enginePrimitives": [
-    "__spark_primitive_Cube.obj",
     "__spark_primitive_ground__.obj"
   ],
-  "notes": "The frontier uses built-in primitives; the atlas supplies an original Azure-versus-Ember local-MMO visual kit."
+  "notes": "The reflected scene uses repository-original authored OBJ/MTL models; the built-in ground primitive remains for the world floor, and the atlas provides complementary UI and sprite art."
 }

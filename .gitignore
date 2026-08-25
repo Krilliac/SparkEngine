@@ -375,6 +375,7 @@ FodyWeavers.xsd
 # (*.obj is ignored above for compiled object files)
 !Assets/Models/*.obj
 !Assets/**/*.obj
+!Templates/**/Assets/Models/*.obj
 
 ##########################
 # Custom SparkEngine Rules

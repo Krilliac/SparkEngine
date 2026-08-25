@@ -20,11 +20,82 @@
       "kind": "named source-rectangle metadata for the runtime sheet",
       "origin": "SparkEngine project-authored metadata",
       "sha256": "cff07b4f7d1ace3adce0e4b13f59bf208815fb5325764f968498f9d556a3ac4f"
+    },
+    {
+      "path": "Models/hero.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "ccf32b870221acc60e6100edcc1f2239cea9c8def1fbacf707cf95f226cd809b"
+    },
+    {
+      "path": "Models/hero.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "ce4b35cca36d5768b594277b39b98d42b57ccb3a503bca29d0230741cc7ba1b4"
+    },
+    {
+      "path": "Models/lost_relic.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "4d96504fe3ade91f93b68cc42e57ee52f47b839d247c1f6a68f590f6fd0851a5"
+    },
+    {
+      "path": "Models/lost_relic.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "eba3618e75ad1a216e831edf9fa74444ecac56dc4ae76102122d41d4067b0001"
+    },
+    {
+      "path": "Models/training_warden.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "022d0d85b308a10b96f65fcc041d61364711c2edce457c4dbbdc5d5f06cf518e"
+    },
+    {
+      "path": "Models/training_warden.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "8f42b2e513c229978c4f38a88aae75bcdbe2e6a0d75f677230eeadcfc51d4ae5"
+    },
+    {
+      "path": "Models/village_elder.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "41d7604174ba8967bf0598c67b1591b32bdf02e795b1315de97ee807284e824e"
+    },
+    {
+      "path": "Models/village_elder.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "57e7887b6ff132c5c57b2948b65bdef7594a487f4a502d81509cdb976df9d099"
+    },
+    {
+      "path": "Models/village_house_a.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "501f2d77def7d9977f6c578bdc3315b63018bf8224f3d106a6f89415573ac79e"
+    },
+    {
+      "path": "Models/village_house_a.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "6cf63b0ccc017843fc643312700d3055404fb1ee8ad36c749666e022da650028"
+    },
+    {
+      "path": "Models/village_house_b.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "46337a26856af122926fa1640bf817ab3ed345bb167280348359221359e48ea2"
+    },
+    {
+      "path": "Models/village_house_b.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "2b3132e4bc7efde82535780dd8f850994a697d16e52c374e1b01be716ff78c4b"
     }
   ],
   "enginePrimitives": [
-    "__spark_primitive_Cube.obj",
     "__spark_primitive_ground__.obj"
   ],
-  "notes": "The village uses built-in primitives; the atlas supplies an original purple/gold quest-adventure visual kit."
+  "notes": "The reflected scene uses repository-original authored OBJ/MTL models; the built-in ground primitive remains for the world floor, and the atlas provides complementary UI and sprite art."
 }

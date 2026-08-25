@@ -481,5 +481,14 @@ void Mesh::Render(ID3D11DeviceContext* ctx)
     (void)ctx;
 }
 
+void Mesh::RenderRange(ID3D11DeviceContext* ctx, unsigned int indexStart, unsigned int indexCount)
+{
+    // The Linux backend records geometry for the RHI path; direct D3D-style
+    // range draws are intentionally inert, matching Render().
+    (void)ctx;
+    (void)indexStart;
+    (void)indexCount;
+}
+
 
 #endif // !SPARK_PLATFORM_WINDOWS

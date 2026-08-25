@@ -161,6 +161,18 @@ static void LoadAndInitModules(LPWSTR lpCmdLine)
         console.LogSuccess("Loaded " + std::to_string(GetEngineRuntime().moduleManager->GetModuleCount()) +
                            " module(s)");
     }
+    else if (!g_projectSelectorCandidates.empty() && !g_scenePath.empty())
+    {
+        // -scene is an explicit engine-only preview request. Module discovery
+        // may still find every SDK/game DLL beside the executable, but showing
+        // the bare-launch selector over the requested scene makes automated
+        // captures and standalone scene previews unusable.
+        g_projectSelectorCandidates.clear();
+#ifdef SPARK_HAS_IMGUI
+        Spark::GameImGui::SetAuxPanel(nullptr);
+#endif
+        console.LogInfo("[-scene] Suppressed the project selector for explicit scene preview");
+    }
     else if (!g_projectSelectorCandidates.empty())
     {
 #ifdef SPARK_HAS_IMGUI
@@ -192,6 +204,12 @@ void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     SPARK_HEARTBEAT();
     InitGameplaySubsystems();
     SPARK_HEARTBEAT();
+
+    // Command registration is intentionally a no-op until SimpleConsole is
+    // initialized. Prime only the command registry here: the rest of
+    // InitConsole publishes EngineStartEvent and builds gameplay/debug phases,
+    // which must remain after audio and module initialization below.
+    Spark::SimpleConsole::GetInstance().Initialize();
 
     auto& console = Spark::SimpleConsole::GetInstance();
 

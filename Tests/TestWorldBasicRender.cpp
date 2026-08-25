@@ -264,6 +264,54 @@ TEST(WorldMeshCache_MissingPlaceholderReloadsWhenImportedAssetAppears)
     std::filesystem::remove_all(root, ec);
 }
 
+TEST(MeshObjLoader_PreservesMtlColorRangesForBasicRenderer)
+{
+    ComPtr<ID3D11Device> dev;
+    ComPtr<ID3D11DeviceContext> ctx;
+    D3D_FEATURE_LEVEL featureLevel{};
+    HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION,
+                                   &dev, &featureLevel, &ctx);
+    if (FAILED(hr))
+        hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &dev,
+                               &featureLevel, &ctx);
+    if (FAILED(hr))
+        return;
+
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / "spark_obj_mtl_color_ranges";
+    const std::filesystem::path objPath = root / "two_colors.obj";
+    const std::filesystem::path mtlPath = root / "two_colors.mtl";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    std::filesystem::create_directories(root, ec);
+    {
+        std::ofstream mtl(mtlPath, std::ios::binary | std::ios::trunc);
+        mtl << "newmtl Red\nKd 0.8 0.1 0.2\n\nnewmtl Blue\nKd 0.1 0.2 0.9\n";
+        std::ofstream obj(objPath, std::ios::binary | std::ios::trunc);
+        obj << "mtllib two_colors.mtl\n"
+               "v -1 0 0\nv 0 0 0\nv -1 1 0\nv 1 0 0\nv 1 1 0\n"
+               "vn 0 0 -1\n"
+               "usemtl Red\nf 1//1 2//1 3//1\n"
+               "usemtl Blue\nf 2//1 4//1 5//1\n";
+    }
+
+    Mesh mesh;
+    EXPECT_TRUE(SUCCEEDED(mesh.Initialize(dev.Get(), ctx.Get())));
+    EXPECT_TRUE(mesh.LoadFromFile(objPath.native()));
+    const auto& submeshes = mesh.GetSubmeshes();
+    EXPECT_EQ(submeshes.size(), 2u);
+    if (submeshes.size() == 2)
+    {
+        EXPECT_EQ(submeshes[0].indexStart, 0u);
+        EXPECT_EQ(submeshes[0].indexCount, 3u);
+        EXPECT_EQ(submeshes[1].indexStart, 3u);
+        EXPECT_EQ(submeshes[1].indexCount, 3u);
+        EXPECT_GT(submeshes[0].diffuseColor.x, submeshes[0].diffuseColor.z);
+        EXPECT_GT(submeshes[1].diffuseColor.z, submeshes[1].diffuseColor.x);
+    }
+    std::filesystem::remove_all(root, ec);
+}
+
 TEST(WorldBasicRender_SpritesResolveUVPivotSortAndRestoreOutputMergerState)
 {
     ComPtr<ID3D11Device> dev;

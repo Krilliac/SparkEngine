@@ -344,13 +344,22 @@ namespace Spark
             const Transform* t = world.GetComponent<Transform>(e);
             const XMMATRIX wmat = t->GetWorldMatrix(world.GetRegistry());
             ID3D11ShaderResourceView* srv = nullptr;
+            ID3D11ShaderResourceView* normalSrv = nullptr;
+            ID3D11ShaderResourceView* roughnessSrv = nullptr;
+            XMFLOAT2 tiling(1, 1);
+            const bool hasExplicitMaterial = !mr->materialPath.empty();
             if (!mr->materialPath.empty())
             {
                 const auto materialPath = cache.ResolveAsset(projectRootUtf8, mr->materialPath);
                 if (materialPath && materialPath->nativePath.extension() == ".json")
                 {
                     if (const auto* mat = g.GetOrLoadBasicMaterial(mr->materialPath, projectRootUtf8))
+                    {
                         srv = mat->srv.Get();
+                        normalSrv = mat->normalSrv.Get();
+                        roughnessSrv = mat->roughnessSrv.Get();
+                        tiling = mat->tiling;
+                    }
                 }
                 else if (materialPath)
                 {
@@ -362,11 +371,38 @@ namespace Spark
                     cache.WarnRejectedAssetOnce("material asset", mr->materialPath);
                 }
             }
-            g.UpdateBasicConstants(wmat, view, proj, XMFLOAT4(1, 1, 1, 1), XMFLOAT2(1, 1));
-            g.SetBasicTexture(srv);
-            mesh->Render(g.GetContext());
+
+            // An explicit MeshRenderer material overrides OBJ material groups.
+            // Without an override, honor each OBJ/MTL Kd color range. This is
+            // the live editor/runtime path, so ignoring submeshes made authored
+            // multi-part models appear as a single white object even though the
+            // loader had preserved their material ranges.
+            const auto& submeshes = mesh->GetSubmeshes();
+            if (!hasExplicitMaterial && !submeshes.empty())
+            {
+                g.SetBasicMaterialTextures(nullptr, nullptr);
+                for (const MeshSubmesh& submesh : submeshes)
+                {
+                    g.UpdateBasicConstants(wmat, view, proj, submesh.diffuseColor, XMFLOAT2(1, 1));
+                    // MTL image references are intentionally not opened here:
+                    // explicit material JSON remains the confined texture path.
+                    g.SetBasicTexture(nullptr);
+                    mesh->RenderRange(g.GetContext(), submesh.indexStart, submesh.indexCount);
+                }
+            }
+            else
+            {
+                g.UpdateBasicConstants(wmat, view, proj, XMFLOAT4(1, 1, 1, 1), tiling);
+                g.SetBasicTexture(srv);
+                g.SetBasicMaterialTextures(normalSrv, roughnessSrv);
+                mesh->Render(g.GetContext());
+            }
             ++stats.drawn;
         }
+
+        // Sprite draws use their geometric normal and fully rough default.
+        // Do not leak the last mesh's normal/roughness maps into that batch.
+        g.SetBasicMaterialTextures(nullptr, nullptr);
 
         // The editor's Create Sprite surface produces SpriteRenderer entities,
         // while both editor viewports use this lightweight World renderer.
