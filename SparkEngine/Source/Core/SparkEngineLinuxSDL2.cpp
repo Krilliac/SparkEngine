@@ -13,6 +13,7 @@
 #include "SparkEngineLinuxInternal.h"
 #include "SparkEngineMacOS.h"
 #include "StartupSplash.h"
+#include "RuntimePackage.h"
 #include "EngineRuntime.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
@@ -176,12 +177,11 @@ int RunSDL2Windowed(int argc, char* argv[])
             splashContext.arguments.emplace_back(argv[i] ? argv[i] : "");
         splashContext.headless = g_headlessMode;
         splashContext.automatedTest = g_testFrameLimit > 0;
-        splashContext.executableDirectory = Spark::MacOS::GetExecutableDirectory();
+        splashContext.executableDirectory = Spark::RuntimePackage::GetExecutableDirectory();
         if (splashContext.executableDirectory.empty())
         {
-            std::error_code ec;
-            const auto executable = std::filesystem::read_symlink("/proc/self/exe", ec);
-            splashContext.executableDirectory = ec ? std::filesystem::current_path() : executable.parent_path();
+            std::error_code error;
+            splashContext.executableDirectory = std::filesystem::current_path(error);
         }
         Spark::PlayStartupSplash(splashContext);
     }

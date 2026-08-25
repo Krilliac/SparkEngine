@@ -11,6 +11,7 @@
 #include "Platform.h"
 #include "framework.h"
 #include "SparkEngineWindowsInternal.h"
+#include "RuntimePackage.h"
 #include "WindowsCommandLine.h"
 #include "EngineContext.h"
 #include "EngineRuntime.h"
@@ -31,26 +32,6 @@
 #include <vector>
 
 #ifdef SPARK_PLATFORM_WINDOWS
-
-/**
- * @brief Get the executable directory
- */
-static std::filesystem::path GetExecutableDirectory()
-{
-    constexpr size_t kInitialPathCapacity = 512;
-    constexpr size_t kMaximumPathCapacity = 32768;
-
-    for (size_t capacity = kInitialPathCapacity; capacity <= kMaximumPathCapacity; capacity *= 2)
-    {
-        std::vector<wchar_t> buffer(capacity);
-        const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-        if (length == 0)
-            return {};
-        if (length < buffer.size())
-            return std::filesystem::path(std::wstring_view(buffer.data(), length)).parent_path();
-    }
-    return {};
-}
 
 static std::string PathToUtf8(const std::filesystem::path& path)
 {
@@ -88,7 +69,7 @@ static bool g_projectSelectorRemember = false;
 bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
-    const auto exeDir = GetExecutableDirectory();
+    const auto exeDir = Spark::RuntimePackage::GetExecutableDirectory();
     if (exeDir.empty())
     {
         console.LogError("Could not determine the SparkEngine executable directory");
@@ -234,7 +215,7 @@ void ConsumeProjectSelectorChoice()
     if (g_projectSelectorRemember)
     {
         // Manifest parser keys off "path" entries — keep the format minimal.
-        const std::filesystem::path executableDirectory = GetExecutableDirectory();
+        const std::filesystem::path executableDirectory = Spark::RuntimePackage::GetExecutableDirectory();
         if (executableDirectory.empty())
         {
             console.LogError("Project selector: could not determine the executable directory; choice was not saved");

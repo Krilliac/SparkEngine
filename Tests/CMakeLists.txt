@@ -562,6 +562,8 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Game/TFServerValidation.cpp"
     # Compile-time validation that shipped project templates are real C++
     TestTemplatesCompile.cpp
+    # Packaged runtimes must resolve content when launched from a foreign CWD.
+    TestRuntimePackage.cpp
     # GraphicsEngine device-attach init + headless WorldBasicRenderer smoke is
     # Windows-only and is added below.
     # FPS game module source needed by TestGameModeReal

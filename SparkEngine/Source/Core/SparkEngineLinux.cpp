@@ -18,6 +18,7 @@
 #include "EngineRuntime.h"
 #include "ModuleManager.h"
 #include "ModuleHotReload.h"
+#include "RuntimePackage.h"
 #include "Engine/Events/EventSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Logger.h"
@@ -146,6 +147,20 @@ int main(int argc, char* argv[])
         g_minimalInit = ParseFlag(argc, argv, "-minimal-init");
         g_noJobSystem = ParseFlag(argc, argv, "-no-jobsystem");
         ParseWindowSizeOverrideArgs(argc, argv);
+
+        const bool hasExplicitLaunchRoot =
+            ParseFlag(argc, argv, "-game") || ParseFlag(argc, argv, "-manifest") || ParseFlag(argc, argv, "-scene");
+        if (!hasExplicitLaunchRoot)
+        {
+            std::error_code packageError;
+            const auto packageResult = Spark::RuntimePackage::AnchorWorkingDirectory(
+                Spark::RuntimePackage::GetExecutableDirectory(), packageError);
+            if (packageResult == Spark::RuntimePackage::WorkingDirectoryResult::Anchored)
+                SPARK_LOG_INFO(Spark::LogCategory::Core, "Anchored packaged runtime to its executable directory");
+            else if (packageResult == Spark::RuntimePackage::WorkingDirectoryResult::Failed)
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Could not enter packaged runtime directory: %s",
+                                packageError.message().c_str());
+        }
 
 #ifdef SPARK_HEADLESS_SUPPORT
         bool headless = ParseFlag(argc, argv, "-headless") || ParseFlag(argc, argv, "-dedicated");

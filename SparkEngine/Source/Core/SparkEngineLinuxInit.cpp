@@ -12,6 +12,7 @@
 #include "Platform.h"
 #include "SparkEngineLinuxInternal.h"
 #include "SparkEngineMacOS.h"
+#include "RuntimePackage.h"
 #include "EngineRuntime.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
@@ -53,15 +54,8 @@
 
 static std::filesystem::path GetExecutableDirectoryLinux()
 {
-    // On macOS the dedicated helper uses _NSGetExecutablePath; on other
-    // platforms it returns an empty path so we fall through to /proc/self/exe.
-    if (auto macDir = Spark::MacOS::GetExecutableDirectory(); !macDir.empty())
-        return macDir;
-
-    std::error_code ec;
-    auto exePath = std::filesystem::read_symlink("/proc/self/exe", ec);
-    if (!ec)
-        return exePath.parent_path();
+    if (auto executableDirectory = Spark::RuntimePackage::GetExecutableDirectory(); !executableDirectory.empty())
+        return executableDirectory;
     return std::filesystem::current_path();
 }
 

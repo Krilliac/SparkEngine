@@ -15,6 +15,7 @@
 #include "framework.h"
 #include "SparkEngineWindowsInternal.h"
 #include "WindowsCommandLine.h"
+#include "RuntimePackage.h"
 #include "StartupSplash.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/Modding/ModSystem.h"
@@ -222,10 +223,7 @@ static Spark::StartupSplashContext BuildStartupSplashContext()
             context.arguments.push_back(StartupSplashUtf8(argv[i]));
         LocalFree(argv);
     }
-    wchar_t executable[MAX_PATH]{};
-    const DWORD length = GetModuleFileNameW(nullptr, executable, MAX_PATH);
-    if (length > 0 && length < MAX_PATH)
-        context.executableDirectory = std::filesystem::path(executable).parent_path();
+    context.executableDirectory = Spark::RuntimePackage::GetExecutableDirectory();
     context.headless = g_headlessMode;
     context.automatedTest = g_testFrameLimit > 0 || g_testSecondsLimit > 0.0;
     return context;
@@ -484,6 +482,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     g_noJobSystem = (std::wstring(lpCmdLine).find(L"-no-jobsystem") != std::wstring::npos);
     ParseWindowSizeOverride(lpCmdLine);
     g_scenePath = ParseScenePathOverride(lpCmdLine);
+
+    // spark-cli packages are self-contained applications. Windows supplies the
+    // caller's working directory when an .exe is double-clicked or started by
+    // another process, so root package-relative scenes/saves at the executable
+    // unless the caller explicitly supplied a content/module location.
+    const bool hasExplicitLaunchRoot = Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-game") ||
+                                       Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-manifest") ||
+                                       !g_scenePath.empty();
+    if (!hasExplicitLaunchRoot)
+    {
+        std::error_code packageError;
+        const auto packageResult = Spark::RuntimePackage::AnchorWorkingDirectory(
+            Spark::RuntimePackage::GetExecutableDirectory(), packageError);
+        if (packageResult == Spark::RuntimePackage::WorkingDirectoryResult::Anchored)
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "Anchored packaged runtime to its executable directory");
+        else if (packageResult == Spark::RuntimePackage::WorkingDirectoryResult::Failed)
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "Could not enter packaged runtime directory: %s",
+                            packageError.message().c_str());
+    }
 
 #ifdef SPARK_HEADLESS_SUPPORT
     g_headlessMode = ParseHeadlessFlag(lpCmdLine);
