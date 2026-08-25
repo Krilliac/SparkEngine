@@ -14,8 +14,11 @@ from pathlib import Path
 PACK_TEMPLATES = {
     "fps_starter": "FPSStarter",
     "mmo_starter": "MMOStarter",
+    "multiplayer_arena": "MultiplayerArena",
     "platformer_kit": "PlatformerKit",
     "rpg_starter": "RPGStarter",
+    "third_person_starter": "ThirdPersonStarter",
+    "top_down_starter": "TopDownStarter",
 }
 MAX_ASSET_BYTES = 64 * 1024 * 1024
 
@@ -54,6 +57,24 @@ def tracked_files(root: Path) -> set[str] | None:
     if result.returncode != 0:
         return None
     return {path.decode("utf-8").replace("\\", "/") for path in result.stdout.split(b"\0") if path}
+
+
+def require_index_match(root: Path, path: Path, tracked: set[str] | None, *, label: str) -> None:
+    """Ensure validation evidence describes the proposed Git snapshot, not only the worktree."""
+    if tracked is None:
+        return
+    relative = path.relative_to(root).as_posix()
+    if relative not in tracked:
+        raise ValueError(f"{label} is absent from the Git index: {relative}")
+    result = subprocess.run(
+        ["git", "-C", str(root), "diff", "--quiet", "--", relative],
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode == 1:
+        raise ValueError(f"{label} has unstaged content and does not match the Git index: {relative}")
+    if result.returncode != 0:
+        raise ValueError(f"could not compare {label} with the Git index: {relative}")
 
 
 def parse_float_fields(path: Path, line_number: int, fields: list[str], count: int) -> tuple[float, ...]:
@@ -194,16 +215,21 @@ def validate_template_surfaces(
 ) -> tuple[int, list[str]]:
     failures: list[str] = []
     scene_references = 0
-    lock = json.loads((root / "Templates" / "assets.lock.json").read_text(encoding="utf-8"))["assets"]
+    lock_path = root / "Templates" / "assets.lock.json"
+    require_index_match(root, lock_path, tracked, label="template asset lock")
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))["assets"]
     packs = {entry["pack"] for entry in manifest["assets"]}
     for pack, template_name in PACK_TEMPLATES.items():
         if pack not in packs:
             failures.append(f"generated manifest has no assets for {pack}")
             continue
         template_root = root / "Templates" / template_name
-        asset_manifest = json.loads((template_root / "Assets" / "manifest.json").read_text(encoding="utf-8"))
+        asset_manifest_path = template_root / "Assets" / "manifest.json"
+        require_index_match(root, asset_manifest_path, tracked, label=f"{template_name} asset manifest")
+        asset_manifest = json.loads(asset_manifest_path.read_text(encoding="utf-8"))
         declared = {entry["path"]: entry["sha256"] for entry in asset_manifest["assets"]}
         for scene_path in sorted((template_root / "Scenes").glob("*.sparkscene")):
+            require_index_match(root, scene_path, tracked, label=f"{template_name} scene")
             scene = json.loads(scene_path.read_text(encoding="utf-8"))
             for entity in scene.get("entities", []):
                 for component in entity.get("components", []):
@@ -220,8 +246,7 @@ def validate_template_surfaces(
                         for asset_key in (relative_asset, mtl_asset):
                             asset = confined_file(template_root / "Assets", asset_key, label=str(scene_path))
                             repo_relative = asset.relative_to(root).as_posix()
-                            if tracked is not None and repo_relative not in tracked:
-                                raise ValueError(f"{scene_path}: asset is absent from the Git index: {repo_relative}")
+                            require_index_match(root, asset, tracked, label=str(scene_path))
                             actual_hash = sha256(asset)
                             if declared.get(asset_key) != actual_hash:
                                 raise ValueError(f"{scene_path}: undeclared or stale manifest asset {asset_key}")
@@ -239,6 +264,7 @@ def main() -> int:
     arguments = parser.parse_args()
     root = arguments.repo_root.resolve()
     manifest_path = confined_file(root, "Assets/Models/Generated/starter_assets_manifest.json", label="manifest")
+    require_index_match(root, manifest_path, tracked_files(root), label="generated manifest")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     tracked = tracked_files(root)
 
@@ -247,11 +273,8 @@ def main() -> int:
     for entry in manifest["assets"]:
         try:
             path = confined_file(root, entry["path"], label="generated asset")
-            if tracked is not None:
-                for generated_path in (path, path.with_suffix(".mtl")):
-                    repo_relative = generated_path.relative_to(root).as_posix()
-                    if repo_relative not in tracked:
-                        raise ValueError(f"generated asset is absent from the Git index: {repo_relative}")
+            for generated_path in (path, path.with_suffix(".mtl")):
+                require_index_match(root, generated_path, tracked, label="generated asset")
             actual = validate_obj(path)
             for field in ("sha256", "mtlSha256", "bounds"):
                 if actual[field] != entry.get(field):
@@ -263,8 +286,7 @@ def main() -> int:
     for preview in manifest["previews"]:
         try:
             preview_path = confined_file(root, preview, label="preview")
-            if tracked is not None and preview_path.relative_to(root).as_posix() not in tracked:
-                raise ValueError(f"preview is absent from the Git index: {preview}")
+            require_index_match(root, preview_path, tracked, label="preview")
             data = preview_path.read_bytes()
             if len(data) < 1024 or not data.startswith(b"\x89PNG\r\n\x1a\n"):
                 raise ValueError(f"preview is not a nontrivial PNG: {preview}")

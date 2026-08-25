@@ -25,7 +25,7 @@
       "path": "Models/astra.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "a7342d870d8a1b2cc8e7ab6cca77b9242dbb26f542d4abfa4c07a2fedaf2015a"
+      "sha256": "f074db7cb2ac3f2820a027b5017f69be535206a64df513e931845a25774a97bf"
     },
     {
       "path": "Models/astra.mtl",
@@ -37,7 +37,7 @@
       "path": "Models/capture_beacon.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "1212e8d4ac227dddb869661a3cdf5850bf676f0fc83283010bda98c78ef78e5b"
+      "sha256": "1f4a25501fc48c45d6f6c550cb505198bd9027b97906d3adb7dea5b4e0d48d97"
     },
     {
       "path": "Models/capture_beacon.mtl",
@@ -49,7 +49,7 @@
       "path": "Models/frontier_relay.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "0d72584e8361ab7a77266b0ccc0d6fbb1d1266be331991fdb25b280d1baa3511"
+      "sha256": "000e5d077792b72c41cfca43ce08f87f61bbb45a5f63665a0ba818b93f2e97ca"
     },
     {
       "path": "Models/frontier_relay.mtl",
@@ -61,7 +61,7 @@
       "path": "Models/training_bot.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "bbc6920181fcb829880436c7986ff6b8a23e1c08805c0940d9fd585642516f96"
+      "sha256": "bd511160f60bfff12dad5b79c8028d7ed1eac89c9aca00d727cb5bb28fd68ce8"
     },
     {
       "path": "Models/training_bot.mtl",

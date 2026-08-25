@@ -25,7 +25,7 @@
       "path": "Models/arena_wall.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "435f93cb56d61793a98a26efc9ed3a6ecd897f7822fbfac2b621163ddaab952e"
+      "sha256": "327ea8766049890af833b6e3e72981a26100da707d95f288505b582c10415b6a"
     },
     {
       "path": "Models/arena_wall.mtl",
@@ -37,7 +37,7 @@
       "path": "Models/cover_barrier.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "29972d3c79a1ba7b757835f8a5344c3d676a11b547a4bb8419a622366a33c13d"
+      "sha256": "f956c1c85e495c16543a8d3a9c8ef56994f873bca1b92b5f43f29cfad5a387df"
     },
     {
       "path": "Models/cover_barrier.mtl",
@@ -49,7 +49,7 @@
       "path": "Models/training_rifle.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "92c1f1a64e18c076f8c297e5b20bad57d491260199abce3953cddac257da511e"
+      "sha256": "ea0096e564ac2f9eb52fe11b67f4394eae3d94ee7738c99fc003d2bbef8fcd05"
     },
     {
       "path": "Models/training_rifle.mtl",
@@ -61,7 +61,7 @@
       "path": "Models/training_target.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "355eafa4c33dc5b99b7b5b8e8dcc1e2d35f4d47417ce0b35a3388516a72fc568"
+      "sha256": "4bb35cf4fac415a3e6a61bfdcff43b4e778105f62ab898a06b13b90b18986b75"
     },
     {
       "path": "Models/training_target.mtl",

@@ -65,19 +65,16 @@ zero gravity drop + energy ammo pool.
 - MMO module's subsystem pattern (`Initialize(IEngineContext*)/Update/Shutdown/
   RenderDebugUI`) and its Persistence/Account/Chat/Party systems as libraries.
 
-**Known engine gaps we must fill (the real work).** Engine-side extension is explicitly
-IN SCOPE (owner directive 2026-07-05): when the clean solution is an engine API, extend
-`SparkEngine/Source` rather than working around it in the module. Planned engine extensions:
-- `AreaServer::UpdateSimulation` is a velocity-integration stub → add an engine-level
-  `IAreaSimulation` plug-in interface (`AreaServer::SetSimulation(IAreaSimulation*)`) so any
-  game module can supply authoritative per-area simulation; Terrafront implements it in
-  `TFServerSim`. (Engine change: `Engine/Networking/AreaServer.{h,cpp}` + new
-  `IAreaSimulation.h`.)
+**Engine extension status.** Engine-side extension is explicitly IN SCOPE (owner directive
+2026-07-05): when the clean solution is an engine API, extend `SparkEngine/Source` rather
+than working around it in the module. Shipped and planned extensions:
+- **Shipped:** `AreaServer::SetSimulation(IAreaSimulation*)` provides the engine-level
+  authoritative simulation hook, and Terrafront implements it in `TFServerSim`.
 - No end-to-end prediction→replication→interpolation wiring exists in any module → Wave 1's
   centerpiece (module side, using existing engine primitives).
-- **Lag-compensated hit rewind:** add `Engine/Networking/LagCompensation.{h,cpp}` — ring
-  buffer of entity poses (250ms @ 60Hz), `RewindAndTrace(clientRTT, ray)` API. Generic,
-  reusable by any shooter module.
+- **Shipped:** `Engine/Networking/LagCompensation.{h,cpp}` provides a generic ring buffer
+  of entity poses and rewound raycasts for shooter modules; focused unit and integration
+  tests cover the implementation.
 - **Windows glTF import:** promote `LoadGLTF`/cgltf path out of the Linux-only TU into
   shared `ModelLoading.cpp` compiled on all platforms (keep OBJ as primary content format;
   glTF becomes a supported import convenience).
@@ -88,8 +85,7 @@ IN SCOPE (owner directive 2026-07-05): when the clean solution is an engine API,
 - **OGG decode (stretch, W4):** wire stb_vorbis (or miniaudio's built-in decoders) into
   `AudioAsset::Load` so CC0 OGG packs don't need offline conversion. WAV remains primary.
 - Engine extensions land as separate commits touching `SparkEngine/Source` with their own
-  tests (`TestAreaSimulationHook.cpp`, `TestLagCompensation.cpp`), reviewed against the
-  anti-bloat rules in the repo CLAUDE.md.
+  tests, reviewed against the anti-bloat rules in the repo CLAUDE.md.
 
 **Server topology v1:** one `DedicatedServer` process hosting `WorldServer` + ONE
 `AreaServer` covering all of Cindral Wastes (single area, target 32–64 players LAN).

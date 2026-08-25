@@ -194,6 +194,11 @@ with `tf_reload_data`.
 | `decor.json` | Region-tier authored/scattered decor templates and collision parts |
 | `suits.json` | Loadout suit passives and unlock metadata |
 
+SparkEditor's **Window > Tools > Region Map Editor** reads `continents.json` and lets
+designers switch between every registered editable lattice. Source builds prefer the
+repository's `Assets/MMOFPS/Data` directory, while installed builds fall back to their
+packaged asset directory; saving always targets the file shown in the editor toolbar.
+
 ### Save files
 
 Every TerraFront store resolves one process-stable root. Set `TF_SAVE_ROOT` to

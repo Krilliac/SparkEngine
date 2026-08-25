@@ -535,11 +535,12 @@ TEST(Templates_ThirdPersonStarter_HeadlessRuntimeMovesJumpsAndCleansScene)
     input.HandleMessage(WM_KEYUP, 'W', 0);
     EXPECT_TRUE(mod.GetState().z > startZ);
 
+    const float jumpStartY = mod.GetState().y;
     input.HandleMessage(WM_KEYDOWN, VK_SPACE, 0);
     mod.OnUpdate(0.1f);
     input.HandleMessage(WM_KEYUP, VK_SPACE, 0);
     EXPECT_FALSE(mod.GetState().grounded);
-    EXPECT_TRUE(mod.GetState().y > 1.0f);
+    EXPECT_TRUE(mod.GetState().y > jumpStartY);
 
     mod.OnUnload();
     EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));

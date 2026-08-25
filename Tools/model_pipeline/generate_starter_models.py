@@ -26,6 +26,7 @@ PALETTE = {
     "gold": (1.0, 0.58, 0.07, 1.0),
     "green": (0.05, 0.66, 0.28, 1.0),
     "purple": (0.43, 0.12, 0.86, 1.0),
+    "magenta": (0.92, 0.06, 0.62, 1.0),
     "brown": (0.28, 0.13, 0.065, 1.0),
     "wood": (0.50, 0.25, 0.09, 1.0),
     "stone": (0.38, 0.44, 0.50, 1.0),
@@ -37,8 +38,11 @@ PALETTE = {
 PACK_TEMPLATES = {
     "fps_starter": "FPSStarter",
     "mmo_starter": "MMOStarter",
+    "multiplayer_arena": "MultiplayerArena",
     "platformer_kit": "PlatformerKit",
     "rpg_starter": "RPGStarter",
+    "third_person_starter": "ThirdPersonStarter",
+    "top_down_starter": "TopDownStarter",
 }
 
 
@@ -371,6 +375,107 @@ def build_rpg(materials):
             "village_house_b": house("house_b",materials["navy"],.18)}
 
 
+def build_multiplayer_arena(materials):
+    """Cyan-versus-magenta local-arena silhouettes and readable objectives."""
+    def duelist(prefix, team_color):
+        objects = humanoid(prefix, team_color, materials["navy"], materials["cream"], broad=True)
+        objects.extend([
+            box(f"{prefix}_helmet", (.31, .27, .16), (0, .01, .98), materials["gunmetal"], .045),
+            box(f"{prefix}_visor", (.23, .035, .055), (0, -.145, .96), team_color, .012),
+            box(f"{prefix}_shoulder_l", (.20, .30, .15), (-.35, 0, .69), team_color, .04),
+            box(f"{prefix}_shoulder_r", (.20, .30, .15), (.35, 0, .69), team_color, .04),
+            box(f"{prefix}_blaster", (.34, .13, .14), (.42, -.08, .50), materials["steel"], .03),
+            cylinder(f"{prefix}_blaster_core", .035, .25, (.61, -.08, .51), team_color, 12,
+                     (0, math.radians(90), 0)),
+        ])
+        return objects
+
+    shield = [
+        cylinder("shield_base", .38, .10, (0, 0, .05), materials["gunmetal"], 20),
+        cylinder("shield_emitter", .12, .38, (0, 0, .27), materials["steel"], 12),
+        torus("shield_field_outer", .34, .055, (0, 0, .52), materials["cyan"],
+              (math.radians(90), 0, 0)),
+        torus("shield_field_inner", .21, .030, (0, 0, .52), materials["magenta"],
+              (math.radians(90), 0, 0)),
+        sphere("shield_core", .10, (0, 0, .52), materials["white"], 16, 10),
+    ]
+    wall = [
+        box("arena_wall_core", (1.0, .18, .72), (0, 0, .36), materials["gunmetal"], .035),
+        box("arena_wall_cap", (1.04, .24, .11), (0, 0, .775), materials["black"], .025),
+        box("arena_wall_rail_cyan", (.42, .035, .075), (-.25, -.108, .46), materials["cyan"], .012),
+        box("arena_wall_rail_magenta", (.42, .035, .075), (.25, -.108, .46), materials["magenta"], .012),
+        box("arena_wall_pillar_l", (.10, .26, .88), (-.48, 0, .44), materials["steel"], .025),
+        box("arena_wall_pillar_r", (.10, .26, .88), (.48, 0, .44), materials["steel"], .025),
+    ]
+    return {
+        "cyan_duelist": duelist("cyan_duelist", materials["cyan"]),
+        "magenta_duelist": duelist("magenta_duelist", materials["magenta"]),
+        "shield_pickup": shield,
+        "arena_divider": wall,
+    }
+
+
+def build_third_person(materials):
+    adventurer = humanoid("adventurer", materials["green"], materials["brown"], materials["cream"])
+    adventurer.extend([
+        box("adventurer_pack", (.36, .16, .43), (0, .18, .58), materials["wood"], .045),
+        box("adventurer_roll", (.42, .17, .12), (0, .20, .82), materials["gold"], .035),
+        box("adventurer_scarf", (.34, .06, .075), (-.10, -.12, .73), materials["cyan"], .018,
+            (0, math.radians(14), 0)),
+    ])
+    crystal = [
+        cylinder("crystal_plinth", .30, .10, (0, 0, .05), materials["stone"], 16),
+        cone("crystal_lower", .17, .10, .34, (0, 0, .27), materials["purple"], 6),
+        cone("crystal_upper", .10, 0, .40, (0, 0, .64), materials["cyan"], 6),
+        torus("crystal_aura", .27, .026, (0, 0, .44), materials["gold"]),
+    ]
+    portal = [
+        cylinder("portal_base", .58, .12, (0, 0, .06), materials["stone"], 20),
+        box("portal_pillar_l", (.16, .28, 1.12), (-.45, 0, .62), materials["gunmetal"], .04),
+        box("portal_pillar_r", (.16, .28, 1.12), (.45, 0, .62), materials["gunmetal"], .04),
+        box("portal_crown", (1.06, .30, .18), (0, 0, 1.17), materials["stone"], .045),
+        torus("portal_field", .39, .060, (0, -.02, .67), materials["cyan"],
+              (math.radians(90), 0, 0)),
+        sphere("portal_keystone", .105, (0, 0, 1.19), materials["gold"], 16, 10),
+    ]
+    return {"adventurer": adventurer, "wayfinder_crystal": crystal, "goal_portal": portal}
+
+
+def build_top_down(materials):
+    tactician = humanoid("tactician", materials["azure"], materials["navy"], materials["cream"])
+    tactician.extend([
+        box("tactician_pauldron_l", (.20, .28, .14), (-.30, 0, .68), materials["cyan"], .04),
+        box("tactician_pauldron_r", (.20, .28, .14), (.30, 0, .68), materials["cyan"], .04),
+        cylinder("tactician_blade", .035, .56, (.34, 0, .40), materials["steel"], 10,
+                 (0, math.radians(-8), 0)),
+        box("tactician_blade_core", (.075, .06, .31), (.34, -.02, .57), materials["cyan"], .015),
+    ])
+    hunter = [
+        torus("hunter_hover", .31, .045, (0, 0, .15), materials["magenta"]),
+        sphere("hunter_body", .31, (0, 0, .46), materials["gunmetal"], 20, 12, (1.0, .82, .72)),
+        cone("hunter_shell", .24, .10, .35, (0, 0, .72), materials["red"], 8),
+        cylinder("hunter_eye", .085, .06, (0, -.255, .48), materials["orange"], 16,
+                 (math.radians(90), 0, 0)),
+        box("hunter_fin_l", (.30, .10, .12), (-.34, 0, .46), materials["steel"], .03),
+        box("hunter_fin_r", (.30, .10, .12), (.34, 0, .46), materials["steel"], .03),
+    ]
+    cell = [
+        cylinder("energy_cell_base", .28, .10, (0, 0, .05), materials["gunmetal"], 16),
+        cylinder("energy_cell_shell", .15, .46, (0, 0, .31), materials["steel"], 12),
+        cylinder("energy_cell_core", .095, .50, (0, 0, .33), materials["cyan"], 12),
+        torus("energy_cell_ring_low", .20, .035, (0, 0, .18), materials["azure"]),
+        torus("energy_cell_ring_high", .20, .035, (0, 0, .48), materials["magenta"]),
+    ]
+    wall = [
+        box("skirmish_wall_core", (1.0, .20, .72), (0, 0, .36), materials["navy"], .035),
+        box("skirmish_wall_cap", (1.04, .26, .11), (0, 0, .775), materials["gunmetal"], .025),
+        box("skirmish_wall_signal", (.70, .035, .075), (0, -.125, .46), materials["cyan"], .012),
+        box("skirmish_wall_end_l", (.10, .28, .88), (-.48, 0, .44), materials["steel"], .025),
+        box("skirmish_wall_end_r", (.10, .28, .88), (.48, 0, .44), materials["steel"], .025),
+    ]
+    return {"tactician": tactician, "hunter_drone": hunter, "energy_cell": cell, "skirmish_wall": wall}
+
+
 def export_model(record: ModelRecord) -> None:
     record.path.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.object.select_all(action="DESELECT")
@@ -382,6 +487,75 @@ def export_model(record: ModelRecord) -> None:
                           export_triangulated_mesh=True, export_object_groups=True, export_material_groups=True,
                           forward_axis="Z", up_axis="Y", path_mode="RELATIVE")
     bpy.ops.object.select_all(action="DESELECT")
+    canonicalize_obj(record.path)
+
+
+def canonicalize_obj(path: Path) -> None:
+    """Make Blender's set-like UV and face emission byte-stable without changing geometry."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    emitted = [line for line in lines if line.startswith("vt ")]
+    if not emitted:
+        return
+
+    # Blender may enumerate the same evaluated UV loops in a different order
+    # when unrelated objects exist in the scene. Sort and deduplicate the UV
+    # value table, then remap face indices so the mesh remains identical.
+    def normalized_uv(line: str) -> str:
+        values = []
+        for token in line.split()[1:]:
+            value = float(token)
+            if abs(value) < 0.000005:
+                value = 0.0
+            values.append(f"{value:.5f}")
+        return "vt " + " ".join(values)
+
+    normalized = [normalized_uv(line) for line in emitted]
+    canonical = sorted(
+        set(normalized),
+        key=lambda line: (tuple(float(value) for value in line.split()[1:]), line),
+    )
+    canonical_index = {line: index + 1 for index, line in enumerate(canonical)}
+    old_to_new = [canonical_index[line] for line in normalized]
+
+    output = []
+    inserted = False
+    for line in lines:
+        if line.startswith("vt "):
+            if not inserted:
+                output.extend(canonical)
+                inserted = True
+            continue
+        if line.startswith("f "):
+            fields = line.split()
+            remapped = []
+            for corner in fields[1:]:
+                parts = corner.split("/")
+                if len(parts) >= 2 and parts[1]:
+                    old_index = int(parts[1])
+                    resolved = old_index - 1 if old_index > 0 else len(emitted) + old_index
+                    if resolved < 0 or resolved >= len(old_to_new):
+                        raise RuntimeError(f"{path}: UV index {old_index} is out of range")
+                    parts[1] = str(old_to_new[resolved])
+                remapped.append("/".join(parts))
+            line = "f " + " ".join(remapped)
+        output.append(line)
+    # Evaluated polygon iteration can also vary between Blender runs. Face
+    # order has no semantic meaning inside one group/material block, so sort
+    # each contiguous block while preserving all object/group boundaries.
+    canonical_output = []
+    faces = []
+    for line in output:
+        if line.startswith("f "):
+            faces.append(line)
+            continue
+        if faces:
+            canonical_output.extend(sorted(faces))
+            faces.clear()
+        canonical_output.append(line)
+    if faces:
+        canonical_output.extend(sorted(faces))
+
+    path.write_text("\n".join(canonical_output) + "\n", encoding="utf-8", newline="\n")
 
 
 def sha256(path: Path) -> str:
@@ -561,8 +735,11 @@ def main() -> None:
         "core_primitives": (build_primitives(materials), root / "Assets" / "Models"),
         "fps_starter": (build_fps(materials), root / "Templates" / "FPSStarter" / "Assets" / "Models"),
         "mmo_starter": (build_mmo(materials), root / "Templates" / "MMOStarter" / "Assets" / "Models"),
+        "multiplayer_arena": (build_multiplayer_arena(materials), root / "Templates" / "MultiplayerArena" / "Assets" / "Models"),
         "platformer_kit": (build_platformer(materials), root / "Templates" / "PlatformerKit" / "Assets" / "Models"),
         "rpg_starter": (build_rpg(materials), root / "Templates" / "RPGStarter" / "Assets" / "Models"),
+        "third_person_starter": (build_third_person(materials), root / "Templates" / "ThirdPersonStarter" / "Assets" / "Models"),
+        "top_down_starter": (build_top_down(materials), root / "Templates" / "TopDownStarter" / "Assets" / "Models"),
     }
     records = []
     for pack, (models, directory) in definitions.items():

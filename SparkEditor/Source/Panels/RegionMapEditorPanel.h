@@ -1,6 +1,6 @@
 /**
  * @file RegionMapEditorPanel.h
- * @brief Visual editor for the TERRAFRONT territory lattice (Assets/MMOFPS/Data/regions.json) — W11
+ * @brief Visual editor for Terrafront territory lattices registered by continents.json.
  * @author Spark Engine Team
  * @date 2026
  *
@@ -17,6 +17,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include "RegionMapDataSource.h"
 
 #include <array>
 #include <cstdint>
@@ -27,7 +28,7 @@
 namespace SparkEditor
 {
 
-    /// @brief Visual editor for Assets/MMOFPS/Data/regions.json (DATA only, no live world).
+    /// @brief Visual editor for continent region maps declared by Assets/MMOFPS/Data/continents.json.
     class RegionMapEditorPanel : public EditorPanel
     {
       public:
@@ -85,6 +86,7 @@ namespace SparkEditor
       private:
         // -- Load / save --------------------------------------------------------
         void ResolveDataPath();
+        bool SelectDataSource(size_t index, std::string& outError);
         bool LoadFromDisk(std::string& outError);
         bool SaveToDisk(std::string& outError);
         std::string SerializeDocument() const;
@@ -107,8 +109,10 @@ namespace SparkEditor
         void SyncEditBuffers();
 
         // -- Document state -----------------------------------------------------
-        std::string m_assetsPrefix; ///< "", "../", ... — probed at Initialize
-        std::string m_dataPath;     ///< <prefix>Assets/MMOFPS/Data/regions.json
+        std::string m_dataPath;     ///< selected confined region-map path
+        std::vector<RegionMapDataSource> m_dataSources;
+        int m_dataSourceIndex = -1;
+        std::string m_dataSourceError;
         std::string m_schemaNote;   ///< preserved "$schema_note" (may be empty)
         Continent m_continent;
         std::vector<Region> m_regions;               ///< kept sorted by id

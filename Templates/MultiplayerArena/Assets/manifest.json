@@ -20,11 +20,58 @@
       "kind": "named source-rectangle metadata for the runtime sheet",
       "origin": "SparkEngine project-authored metadata",
       "sha256": "64091401e47f35e9f14fd8d98f15ce614959dc28e374ebdc61c8bab935382e68"
+    },
+    {
+      "path": "Models/arena_divider.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "c0d80d066e0877a6834336452a42f0eef7918587256f3dea2e6683e2bbc216e0"
+    },
+    {
+      "path": "Models/arena_divider.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "4b25af78dcbb0ef7c5a36505cd7d45c91b64388ba4f0b6e67df1176febe6a671"
+    },
+    {
+      "path": "Models/cyan_duelist.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "4a1ec3b43ded62d40694419e739b9b68868c242a280e7fe28ded67b36c2606c5"
+    },
+    {
+      "path": "Models/cyan_duelist.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "891433f9c1a523124e0e22efb7781d12f25a87945dee6edf395eac0afa6ea4fa"
+    },
+    {
+      "path": "Models/magenta_duelist.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "33307c820ebea7e0ffa1aff61e2588a9d72c6ef391af74ea7ad65c4fcd1c4328"
+    },
+    {
+      "path": "Models/magenta_duelist.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "3e4dbe8720bad3cdf29127862439070cabfab9a9051e1f0370ac162dbb82ef1c"
+    },
+    {
+      "path": "Models/shield_pickup.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "d3b66bfbeb80c9a7dd005549311baf751913651610106e989c39fa84e0ba3246"
+    },
+    {
+      "path": "Models/shield_pickup.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "302a4964e24a410c0638715d71801e88c844e6c61a04eedd14de6c2ba79a4b25"
     }
   ],
   "enginePrimitives": [
-    "__spark_primitive_Cube.obj",
     "__spark_primitive_ground__.obj"
   ],
-  "notes": "The scene uses built-in primitives; the atlas supplies an original cyan-versus-magenta arena visual kit matching stable team IDs 1 (cyan) and 2 (magenta)."
+  "notes": "The reflected scene uses repository-original authored OBJ/MTL models; the built-in ground primitive remains for the world floor, and the atlas provides complementary UI and sprite art."
 }

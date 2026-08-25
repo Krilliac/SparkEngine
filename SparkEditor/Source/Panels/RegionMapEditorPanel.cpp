@@ -1,6 +1,6 @@
 /**
  * @file RegionMapEditorPanel.cpp
- * @brief Visual editor for Assets/MMOFPS/Data/regions.json (W11) — lifecycle, validation, layout
+ * @brief Visual editor for Terrafront continent region maps — lifecycle, validation, layout
  * @author Spark Engine Team
  * @date 2026
  *
@@ -304,6 +304,34 @@ namespace SparkEditor
 
     void RegionMapEditorPanel::RenderToolbar()
     {
+        const char* sourceLabel = "Unavailable";
+        if (m_dataSourceIndex >= 0 && m_dataSourceIndex < static_cast<int>(m_dataSources.size()))
+            sourceLabel = m_dataSources[static_cast<size_t>(m_dataSourceIndex)].name.c_str();
+
+        ImGui::SetNextItemWidth(190.0f);
+        ImGui::BeginDisabled(m_dirty || m_dataSources.empty());
+        if (ImGui::BeginCombo("##region_map_continent", sourceLabel))
+        {
+            for (size_t i = 0; i < m_dataSources.size(); ++i)
+            {
+                const bool selected = static_cast<int>(i) == m_dataSourceIndex;
+                const std::string label = m_dataSources[i].name + "##" + m_dataSources[i].key;
+                if (ImGui::Selectable(label.c_str(), selected) && !selected)
+                {
+                    std::string err;
+                    SelectDataSource(i, err);
+                }
+                if (selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::EndDisabled();
+        if (m_dirty && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("Save or reload the current map before switching continents.");
+        else if (!m_dataSourceError.empty() && ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s", m_dataSourceError.c_str());
+        ImGui::SameLine();
         if (ImGui::Button("Reload"))
         {
             std::string err;

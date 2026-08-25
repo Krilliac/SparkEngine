@@ -526,6 +526,8 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Data/TFDataTablesParseWorld.cpp"
     TestTFDamageModel.cpp
     TestTFRegionLattice.cpp
+    TestRegionMapDataSource.cpp
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/RegionMapDataSource.cpp"
     TestTFChatRules.cpp
     # W7/W8 rule math + wire freezes (header-only includes / standalone mirrors)
     TestTFRedeployRules.cpp

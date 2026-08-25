@@ -20,11 +20,46 @@
       "kind": "named source-rectangle metadata for the runtime sheet",
       "origin": "SparkEngine project-authored metadata",
       "sha256": "bd0530ec2a07bff03b0297536c45d0b60d44ce316fc095fe96211998f10c573e"
+    },
+    {
+      "path": "Models/adventurer.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "1363c8d8a83c05fb089d00aea07dc3f7c802c246edc08607aac49e1aae2d94e4"
+    },
+    {
+      "path": "Models/adventurer.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "de254b26fcb6489444b0c8a4b3aacac9ca38b6d8b8f4e563c2b27585d9c4706c"
+    },
+    {
+      "path": "Models/goal_portal.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "b7e377cd1d4b308e1d767a78c0141c83adfdf10560f42c1e9840740309e2b201"
+    },
+    {
+      "path": "Models/goal_portal.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "1bf8bfeef19ecb96391a52206ad448c3d0c8f16e28f313b65a4343c1240695e4"
+    },
+    {
+      "path": "Models/wayfinder_crystal.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "da582e93a9286026c6a75326ae132e23f8f5fd0f5404b4644b6459691c6868d8"
+    },
+    {
+      "path": "Models/wayfinder_crystal.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "eba3618e75ad1a216e831edf9fa74444ecac56dc4ae76102122d41d4067b0001"
     }
   ],
   "enginePrimitives": [
-    "__spark_primitive_Cube.obj",
     "__spark_primitive_ground__.obj"
   ],
-  "notes": "The scene uses built-in primitives; the atlas supplies an original warm traversal-adventure visual kit."
+  "notes": "The reflected scene uses repository-original authored OBJ/MTL models; the built-in ground primitive remains for the world floor, and the atlas provides complementary UI and sprite art."
 }

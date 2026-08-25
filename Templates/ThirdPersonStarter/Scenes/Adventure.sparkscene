@@ -82,9 +82,9 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,1.000000,0.000000",
+            "position": "0.000000,0.000000,0.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "0.700000,1.800000,0.700000"
+            "scale": "1.000000,1.000000,1.000000"
           },
           "type": "Transform"
         },
@@ -93,7 +93,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/adventurer.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -108,7 +108,7 @@
       "components": [
         {
           "fields": {
-            "position": "3.000000,0.500000,2.000000",
+            "position": "3.000000,0.000000,2.000000",
             "rotation": "0.000000,0.000000,0.000000",
             "scale": "0.500000,0.500000,0.500000"
           },
@@ -119,7 +119,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/wayfinder_crystal.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -134,9 +134,9 @@
       "components": [
         {
           "fields": {
-            "position": "7.000000,1.000000,5.000000",
+            "position": "7.000000,0.000000,5.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "1.000000,2.000000,1.000000"
+            "scale": "1.350000,1.350000,1.350000"
           },
           "type": "Transform"
         },
@@ -145,7 +145,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/goal_portal.obj",
             "receiveShadows": "true",
             "visible": "true"
           },

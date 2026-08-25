@@ -26,9 +26,14 @@ Pass `-Name platformer_kit` (or another listed case) to refresh one runtime
 capture without launching every template. `-PreviewRoot <path>` redirects
 captures for path/automation testing.
 
+The authored packs cover FPS, MMO, local multiplayer arena, platformer, RPG,
+third-person adventure, and top-down action templates. Blank3D and EmptyProject
+remain intentionally minimal composition surfaces and use built-in primitives.
+
 Generation is deterministic on the pinned Blender build: all geometry is built
 from explicit dimensions, materials use fixed colors, meshes are triangulated,
-transforms are baked, and the manifest records Blender version, OBJ and MTL
+transforms are baked, and Blender's set-like UV table and face blocks are
+canonically sorted and remapped before hashing. The manifest records Blender version, OBJ and MTL
 SHA-256 hashes, and meter-space bounds. The export contract is Y-up, +Z
 forward, meters, with a ground-level pivot, authored normals, and UV0 where
 Blender supplies it.

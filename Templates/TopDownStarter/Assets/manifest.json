@@ -20,11 +20,58 @@
       "kind": "named source-rectangle metadata for the runtime sheet",
       "origin": "SparkEngine project-authored metadata",
       "sha256": "784b68d6599fa6d3d0e2c52f3f37beb2cebe0806e6299468966ae2366b87da1d"
+    },
+    {
+      "path": "Models/energy_cell.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "576a6fa200e492a0d3aa230c211179eeb752643936629d478a1ce8d2664bcf51"
+    },
+    {
+      "path": "Models/energy_cell.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "736ec764249b49ea9ef7d39c8fc2681fcdc144cd97fa0d24e7c63055367470a8"
+    },
+    {
+      "path": "Models/hunter_drone.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "17669a2fe30c743bff99796ac12ecb7c8070ad28d66d493686092037e7808df3"
+    },
+    {
+      "path": "Models/hunter_drone.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "148d5994d292dd4c28d2a24f6d76c85721f2c3e213432a33e4f2e4a3e477fe1e"
+    },
+    {
+      "path": "Models/skirmish_wall.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "27d29c99380bc6917163644847ad0c8677a7b0e1fe348236e40058446aed289f"
+    },
+    {
+      "path": "Models/skirmish_wall.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "9fdf4027ce100147b72d37d5c46756f95bd0bf78570350a2c4c71f3bbf1f0cf4"
+    },
+    {
+      "path": "Models/tactician.obj",
+      "kind": "triangulated Wavefront OBJ model",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "f48ed20d4e02518f6345b60854c3ba84596cbbe38b49d5038a21b6cd72f62e5c"
+    },
+    {
+      "path": "Models/tactician.mtl",
+      "kind": "Wavefront material color library",
+      "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
+      "sha256": "421441c71f14ed9c71fcb51da1fd519380c77c9fd4e264c585f60c2dbd48a49c"
     }
   ],
   "enginePrimitives": [
-    "__spark_primitive_Cube.obj",
     "__spark_primitive_ground__.obj"
   ],
-  "notes": "The scene uses built-in primitives; the atlas supplies an original neon tactical-board visual kit."
+  "notes": "The reflected scene uses repository-original authored OBJ/MTL models; the built-in ground primitive remains for the world floor, and the atlas provides complementary UI and sprite art."
 }

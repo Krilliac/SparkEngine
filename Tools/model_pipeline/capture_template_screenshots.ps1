@@ -3,8 +3,8 @@ param(
     [string]$EnginePath,
     [string]$RepoRoot,
     [string]$PreviewRoot,
-    [ValidateSet('fps_starter', 'mmo_starter', 'platformer_kit', 'rpg_starter')]
-    [string[]]$Name = @('fps_starter', 'mmo_starter', 'platformer_kit', 'rpg_starter'),
+    [ValidateSet('fps_starter', 'mmo_starter', 'multiplayer_arena', 'platformer_kit', 'rpg_starter', 'third_person_starter', 'top_down_starter')]
+    [string[]]$Name = @('fps_starter', 'mmo_starter', 'multiplayer_arena', 'platformer_kit', 'rpg_starter', 'third_person_starter', 'top_down_starter'),
     [double]$CaptureAtSeconds = 2.0,
     [double]$ExitAfterSeconds = 5.0
 )
@@ -27,8 +27,11 @@ if (Get-Process SparkEngine -ErrorAction SilentlyContinue) {
 $cases = @(
     @{ Name='fps_starter'; Template='FPSStarter'; Scene='Arena.sparkscene' },
     @{ Name='mmo_starter'; Template='MMOStarter'; Scene='Frontier.sparkscene' },
+    @{ Name='multiplayer_arena'; Template='MultiplayerArena'; Scene='Arena.sparkscene' },
     @{ Name='platformer_kit'; Template='PlatformerKit'; Scene='Level01.sparkscene' },
-    @{ Name='rpg_starter'; Template='RPGStarter'; Scene='Village.sparkscene' }
+    @{ Name='rpg_starter'; Template='RPGStarter'; Scene='Village.sparkscene' },
+    @{ Name='third_person_starter'; Template='ThirdPersonStarter'; Scene='Adventure.sparkscene' },
+    @{ Name='top_down_starter'; Template='TopDownStarter'; Scene='Skirmish.sparkscene' }
 )
 $cases = $cases | Where-Object { $_.Name -in $Name }
 

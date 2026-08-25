@@ -10,7 +10,7 @@
       "pack": "core_primitives",
       "name": "Cube",
       "path": "Assets/Models/Cube.obj",
-      "sha256": "f62f17ba36aa564a1a94c3f456f3ac6fb3a5e922da21d2a35c3c5027ecc3fd9d",
+      "sha256": "11c03feaa3fe66b43f00d5e83c929075f93c28cc2333cfcf1130c47ddb10c2fb",
       "mtlSha256": "4caef0d77565e65395e937bf64c4d063f9d2a9c3c8283f2e7773a6759ab9720f",
       "bounds": {
         "min": [
@@ -29,7 +29,7 @@
       "pack": "core_primitives",
       "name": "Plane",
       "path": "Assets/Models/Plane.obj",
-      "sha256": "530ac66d22cc7fa52dcfadc29e4b5701c698f9d81dc9b051157a2bcebeab8843",
+      "sha256": "1a6d7c681177a228880762f3058140fb0d9ce817adcb572281b4ff3d7b359eea",
       "mtlSha256": "0b6e2c02a50532d179fac309522045c44a91f7668e208030c7a2fc7335159f11",
       "bounds": {
         "min": [
@@ -48,7 +48,7 @@
       "pack": "core_primitives",
       "name": "Pyramid",
       "path": "Assets/Models/Pyramid.obj",
-      "sha256": "a3150f9c45336b0ea69906baa0cc9d530c569d55da8f4e57470c0d31ade8cb72",
+      "sha256": "3ebfaea9e8c52c3d3116437cf5426f4fb237dc2e7eddedebd470a46611bd9c3c",
       "mtlSha256": "8ceff3ea076b8f49fe9c0eb6f6838143b5d09a4104498863b03b91b3c785917e",
       "bounds": {
         "min": [
@@ -86,7 +86,7 @@
       "pack": "core_primitives",
       "name": "Sphere",
       "path": "Assets/Models/Sphere.obj",
-      "sha256": "38fe677d7f1ee7bf737e0e2fceecc9f9b7ba1485361059198454efd9e6023c4a",
+      "sha256": "66737ef1050fdde36bf5d500b6bd97f5a0aa623adbc1f125641a3a73fab0c7c8",
       "mtlSha256": "c8573cb1fcf57739757f4efff43dc4f7ba14f5fcc410443c0a80f431feeff8d5",
       "bounds": {
         "min": [
@@ -105,7 +105,7 @@
       "pack": "core_primitives",
       "name": "Wall",
       "path": "Assets/Models/Wall.obj",
-      "sha256": "9d3c3ee23e2db4105a5d9119694f94cf3973b18c5753a90b166a3eadc24fe430",
+      "sha256": "9cd28cdab7d6dcd2c72ec5d595bd889bfe37afd267361cb82feb120ab78d88c8",
       "mtlSha256": "54c6029ad35436ca1640b73ab51a76e52e8b284bc3229d2c377de64251028bfc",
       "bounds": {
         "min": [
@@ -124,7 +124,7 @@
       "pack": "fps_starter",
       "name": "training_target",
       "path": "Templates/FPSStarter/Assets/Models/training_target.obj",
-      "sha256": "355eafa4c33dc5b99b7b5b8e8dcc1e2d35f4d47417ce0b35a3388516a72fc568",
+      "sha256": "4bb35cf4fac415a3e6a61bfdcff43b4e778105f62ab898a06b13b90b18986b75",
       "mtlSha256": "1403032f5e0b97c6f5b1d486c5b2f311b1aae2d22cea054d247c1b801ff85b01",
       "bounds": {
         "min": [
@@ -143,7 +143,7 @@
       "pack": "fps_starter",
       "name": "cover_barrier",
       "path": "Templates/FPSStarter/Assets/Models/cover_barrier.obj",
-      "sha256": "29972d3c79a1ba7b757835f8a5344c3d676a11b547a4bb8419a622366a33c13d",
+      "sha256": "f956c1c85e495c16543a8d3a9c8ef56994f873bca1b92b5f43f29cfad5a387df",
       "mtlSha256": "80490117dd11d8438fe33146e2dd245be21833b56e9077eabfb70db427c59abd",
       "bounds": {
         "min": [
@@ -162,7 +162,7 @@
       "pack": "fps_starter",
       "name": "arena_wall",
       "path": "Templates/FPSStarter/Assets/Models/arena_wall.obj",
-      "sha256": "435f93cb56d61793a98a26efc9ed3a6ecd897f7822fbfac2b621163ddaab952e",
+      "sha256": "327ea8766049890af833b6e3e72981a26100da707d95f288505b582c10415b6a",
       "mtlSha256": "94daccfc6ebf03bc7b787f49cb6f48500dabb55af0d97d724facb25aea1819d8",
       "bounds": {
         "min": [
@@ -181,7 +181,7 @@
       "pack": "fps_starter",
       "name": "training_rifle",
       "path": "Templates/FPSStarter/Assets/Models/training_rifle.obj",
-      "sha256": "92c1f1a64e18c076f8c297e5b20bad57d491260199abce3953cddac257da511e",
+      "sha256": "ea0096e564ac2f9eb52fe11b67f4394eae3d94ee7738c99fc003d2bbef8fcd05",
       "mtlSha256": "f9976c9e7df1ea6f1ddf06b2f75d9d1bf9e3985dfcfe66efcfdcbef613b8c3c9",
       "bounds": {
         "min": [
@@ -200,7 +200,7 @@
       "pack": "mmo_starter",
       "name": "astra",
       "path": "Templates/MMOStarter/Assets/Models/astra.obj",
-      "sha256": "a7342d870d8a1b2cc8e7ab6cca77b9242dbb26f542d4abfa4c07a2fedaf2015a",
+      "sha256": "f074db7cb2ac3f2820a027b5017f69be535206a64df513e931845a25774a97bf",
       "mtlSha256": "6a8cd9d4b9bf3147288b98bae481f45a241f9d68b5b152c86971412f2c60bcf7",
       "bounds": {
         "min": [
@@ -219,7 +219,7 @@
       "pack": "mmo_starter",
       "name": "training_bot",
       "path": "Templates/MMOStarter/Assets/Models/training_bot.obj",
-      "sha256": "bbc6920181fcb829880436c7986ff6b8a23e1c08805c0940d9fd585642516f96",
+      "sha256": "bd511160f60bfff12dad5b79c8028d7ed1eac89c9aca00d727cb5bb28fd68ce8",
       "mtlSha256": "ac6514c62b81eaf61af129c3f82e85a709b51ddd3eace3faf04508b40b7ad538",
       "bounds": {
         "min": [
@@ -238,7 +238,7 @@
       "pack": "mmo_starter",
       "name": "capture_beacon",
       "path": "Templates/MMOStarter/Assets/Models/capture_beacon.obj",
-      "sha256": "1212e8d4ac227dddb869661a3cdf5850bf676f0fc83283010bda98c78ef78e5b",
+      "sha256": "1f4a25501fc48c45d6f6c550cb505198bd9027b97906d3adb7dea5b4e0d48d97",
       "mtlSha256": "160f0239118f52cb33f813d0fbef9f1672eff77a785d63ac90acc98a1b068e13",
       "bounds": {
         "min": [
@@ -257,7 +257,7 @@
       "pack": "mmo_starter",
       "name": "frontier_relay",
       "path": "Templates/MMOStarter/Assets/Models/frontier_relay.obj",
-      "sha256": "0d72584e8361ab7a77266b0ccc0d6fbb1d1266be331991fdb25b280d1baa3511",
+      "sha256": "000e5d077792b72c41cfca43ce08f87f61bbb45a5f63665a0ba818b93f2e97ca",
       "mtlSha256": "2ac0c426b1c774f524264b4c3b874e8593e68ff8db3adc90cf8dc63f3c07897f",
       "bounds": {
         "min": [
@@ -273,10 +273,86 @@
       }
     },
     {
+      "pack": "multiplayer_arena",
+      "name": "cyan_duelist",
+      "path": "Templates/MultiplayerArena/Assets/Models/cyan_duelist.obj",
+      "sha256": "4a1ec3b43ded62d40694419e739b9b68868c242a280e7fe28ded67b36c2606c5",
+      "mtlSha256": "891433f9c1a523124e0e22efb7781d12f25a87945dee6edf395eac0afa6ea4fa",
+      "bounds": {
+        "min": [
+          -0.735,
+          0.0,
+          -0.1625
+        ],
+        "max": [
+          0.45,
+          1.06,
+          0.15
+        ]
+      }
+    },
+    {
+      "pack": "multiplayer_arena",
+      "name": "magenta_duelist",
+      "path": "Templates/MultiplayerArena/Assets/Models/magenta_duelist.obj",
+      "sha256": "33307c820ebea7e0ffa1aff61e2588a9d72c6ef391af74ea7ad65c4fcd1c4328",
+      "mtlSha256": "3e4dbe8720bad3cdf29127862439070cabfab9a9051e1f0370ac162dbb82ef1c",
+      "bounds": {
+        "min": [
+          -0.735,
+          0.0,
+          -0.1625
+        ],
+        "max": [
+          0.45,
+          1.06,
+          0.15
+        ]
+      }
+    },
+    {
+      "pack": "multiplayer_arena",
+      "name": "shield_pickup",
+      "path": "Templates/MultiplayerArena/Assets/Models/shield_pickup.obj",
+      "sha256": "d3b66bfbeb80c9a7dd005549311baf751913651610106e989c39fa84e0ba3246",
+      "mtlSha256": "302a4964e24a410c0638715d71801e88c844e6c61a04eedd14de6c2ba79a4b25",
+      "bounds": {
+        "min": [
+          -0.395,
+          0.0,
+          -0.38
+        ],
+        "max": [
+          0.395,
+          0.915,
+          0.38
+        ]
+      }
+    },
+    {
+      "pack": "multiplayer_arena",
+      "name": "arena_divider",
+      "path": "Templates/MultiplayerArena/Assets/Models/arena_divider.obj",
+      "sha256": "c0d80d066e0877a6834336452a42f0eef7918587256f3dea2e6683e2bbc216e0",
+      "mtlSha256": "4b25af78dcbb0ef7c5a36505cd7d45c91b64388ba4f0b6e67df1176febe6a671",
+      "bounds": {
+        "min": [
+          -0.53,
+          0.0,
+          -0.13
+        ],
+        "max": [
+          0.53,
+          0.88,
+          0.13
+        ]
+      }
+    },
+    {
       "pack": "platformer_kit",
       "name": "runner",
       "path": "Templates/PlatformerKit/Assets/Models/runner.obj",
-      "sha256": "b798c1ac17d058d282079b5ffab6b394da85b3342d381104875a8994cb2a2cd2",
+      "sha256": "e34751037a25951805bf478827d702e88a1fbb93880524d86b6bdb8de5e78577",
       "mtlSha256": "2fddb66afe5807fed620dbb6bee4c13b7cfc72e173cb774afef094d206ca7a15",
       "bounds": {
         "min": [
@@ -295,7 +371,7 @@
       "pack": "platformer_kit",
       "name": "platform_straight",
       "path": "Templates/PlatformerKit/Assets/Models/platform_straight.obj",
-      "sha256": "8849f7baa1142883259e050bdf7ce6246f8c8b31e4d8b6bc6abde8cd40e6d3a4",
+      "sha256": "5bd1f80b1c22c2df6c671323f997e7b01a0b5c1eeb5a8f80e7e285d3e6215d4f",
       "mtlSha256": "c05340c005e54b776b0e020a90661b0b527266d92eb3db1106a5c7bb9934aee6",
       "bounds": {
         "min": [
@@ -314,7 +390,7 @@
       "pack": "platformer_kit",
       "name": "coin",
       "path": "Templates/PlatformerKit/Assets/Models/coin.obj",
-      "sha256": "b7db8a84f56ff12818a44d1d2600ec6758290670c04425def1882559c65fac99",
+      "sha256": "757c925ef9b492626a43cb15b9627eab140c761c566f1a729e6f43928bbb6546",
       "mtlSha256": "d3d785dce66b8ef0550150eef723f891f5aebc1328f43141c0d82a36bf6da2e4",
       "bounds": {
         "min": [
@@ -333,7 +409,7 @@
       "pack": "platformer_kit",
       "name": "spike_hazard",
       "path": "Templates/PlatformerKit/Assets/Models/spike_hazard.obj",
-      "sha256": "edacbd6984db171fd4cb27f3a2731fb840f7bdd66ae5dabc6e1df05b14f9dfea",
+      "sha256": "4c81ef96a50f21339c36a78c5375e14898eeb7cff9c9dae87d0629cb39d9689a",
       "mtlSha256": "a8fc38e8f551dee88c8fd063ebdd217ef5cf58f1eaaa7dae4d2e38b18b22109f",
       "bounds": {
         "min": [
@@ -352,7 +428,7 @@
       "pack": "platformer_kit",
       "name": "checkpoint",
       "path": "Templates/PlatformerKit/Assets/Models/checkpoint.obj",
-      "sha256": "6cce6e81b804176adf24238605c28b9958df391e96fceef502ea5f7ecba30aac",
+      "sha256": "092ac95085dea2274c2a8a9dafd69e14ae61f2418ab2c8f8a406ef30a61c02d7",
       "mtlSha256": "e83894709c80e28b1bb85687d91bc39f8da928bc3770d551315cb3c1f1bfa1c6",
       "bounds": {
         "min": [
@@ -371,7 +447,7 @@
       "pack": "platformer_kit",
       "name": "finish_gate",
       "path": "Templates/PlatformerKit/Assets/Models/finish_gate.obj",
-      "sha256": "4d30da70562893a8661688130f7e66f13da1a09977838a41b7f1635c83e65b6f",
+      "sha256": "fb8cd4da4c3754eebfa24f1c723494ee1c2e1a01e6481e3a3471cd1ad2505da7",
       "mtlSha256": "1673bf492034f12ba3201305abd4eec9fa7a38dcd2a17ff3ce81b5b10975e99b",
       "bounds": {
         "min": [
@@ -390,7 +466,7 @@
       "pack": "rpg_starter",
       "name": "hero",
       "path": "Templates/RPGStarter/Assets/Models/hero.obj",
-      "sha256": "ccf32b870221acc60e6100edcc1f2239cea9c8def1fbacf707cf95f226cd809b",
+      "sha256": "d207e47f34013c3254c3dcfa7a0dfc125796a12cc779dd6829af4a400fc9ac04",
       "mtlSha256": "ce4b35cca36d5768b594277b39b98d42b57ccb3a503bca29d0230741cc7ba1b4",
       "bounds": {
         "min": [
@@ -409,7 +485,7 @@
       "pack": "rpg_starter",
       "name": "village_elder",
       "path": "Templates/RPGStarter/Assets/Models/village_elder.obj",
-      "sha256": "41d7604174ba8967bf0598c67b1591b32bdf02e795b1315de97ee807284e824e",
+      "sha256": "a1284df41e88e9008732b218a81534c88feb85e7e42170a2242bf3ed7f269e1f",
       "mtlSha256": "57e7887b6ff132c5c57b2948b65bdef7594a487f4a502d81509cdb976df9d099",
       "bounds": {
         "min": [
@@ -428,7 +504,7 @@
       "pack": "rpg_starter",
       "name": "training_warden",
       "path": "Templates/RPGStarter/Assets/Models/training_warden.obj",
-      "sha256": "022d0d85b308a10b96f65fcc041d61364711c2edce457c4dbbdc5d5f06cf518e",
+      "sha256": "6fcef8f4dc8f96c11a2f99d6e426ceaee6d91cda988e2713a520caa075ff0897",
       "mtlSha256": "8f42b2e513c229978c4f38a88aae75bcdbe2e6a0d75f677230eeadcfc51d4ae5",
       "bounds": {
         "min": [
@@ -447,7 +523,7 @@
       "pack": "rpg_starter",
       "name": "lost_relic",
       "path": "Templates/RPGStarter/Assets/Models/lost_relic.obj",
-      "sha256": "4d96504fe3ade91f93b68cc42e57ee52f47b839d247c1f6a68f590f6fd0851a5",
+      "sha256": "127c6d17fa87ab10cf4d4233b131e3099594072330178973532b7f55d6e5e6a1",
       "mtlSha256": "eba3618e75ad1a216e831edf9fa74444ecac56dc4ae76102122d41d4067b0001",
       "bounds": {
         "min": [
@@ -466,7 +542,7 @@
       "pack": "rpg_starter",
       "name": "village_house_a",
       "path": "Templates/RPGStarter/Assets/Models/village_house_a.obj",
-      "sha256": "501f2d77def7d9977f6c578bdc3315b63018bf8224f3d106a6f89415573ac79e",
+      "sha256": "6ad792cad2fba10e405b738e75054789c7da911afa840dde4106cdbdb7d7e6f6",
       "mtlSha256": "6cf63b0ccc017843fc643312700d3055404fb1ee8ad36c749666e022da650028",
       "bounds": {
         "min": [
@@ -485,7 +561,7 @@
       "pack": "rpg_starter",
       "name": "village_house_b",
       "path": "Templates/RPGStarter/Assets/Models/village_house_b.obj",
-      "sha256": "46337a26856af122926fa1640bf817ab3ed345bb167280348359221359e48ea2",
+      "sha256": "7728ea5095f5fea54b8d6762a9ac30918f1f659f203bdd5033fc12b94b409291",
       "mtlSha256": "2b3132e4bc7efde82535780dd8f850994a697d16e52c374e1b01be716ff78c4b",
       "bounds": {
         "min": [
@@ -499,13 +575,149 @@
           0.487904
         ]
       }
+    },
+    {
+      "pack": "third_person_starter",
+      "name": "adventurer",
+      "path": "Templates/ThirdPersonStarter/Assets/Models/adventurer.obj",
+      "sha256": "1363c8d8a83c05fb089d00aea07dc3f7c802c246edc08607aac49e1aae2d94e4",
+      "mtlSha256": "de254b26fcb6489444b0c8a4b3aacac9ca38b6d8b8f4e563c2b27585d9c4706c",
+      "bounds": {
+        "min": [
+          -0.373707,
+          0.0,
+          -0.15
+        ],
+        "max": [
+          0.373707,
+          1.0275,
+          0.285
+        ]
+      }
+    },
+    {
+      "pack": "third_person_starter",
+      "name": "wayfinder_crystal",
+      "path": "Templates/ThirdPersonStarter/Assets/Models/wayfinder_crystal.obj",
+      "sha256": "da582e93a9286026c6a75326ae132e23f8f5fd0f5404b4644b6459691c6868d8",
+      "mtlSha256": "eba3618e75ad1a216e831edf9fa74444ecac56dc4ae76102122d41d4067b0001",
+      "bounds": {
+        "min": [
+          -0.3,
+          0.0,
+          -0.3
+        ],
+        "max": [
+          0.3,
+          0.84,
+          0.3
+        ]
+      }
+    },
+    {
+      "pack": "third_person_starter",
+      "name": "goal_portal",
+      "path": "Templates/ThirdPersonStarter/Assets/Models/goal_portal.obj",
+      "sha256": "b7e377cd1d4b308e1d767a78c0141c83adfdf10560f42c1e9840740309e2b201",
+      "mtlSha256": "1bf8bfeef19ecb96391a52206ad448c3d0c8f16e28f313b65a4343c1240695e4",
+      "bounds": {
+        "min": [
+          -0.58,
+          0.0,
+          -0.58
+        ],
+        "max": [
+          0.58,
+          1.295,
+          0.58
+        ]
+      }
+    },
+    {
+      "pack": "top_down_starter",
+      "name": "tactician",
+      "path": "Templates/TopDownStarter/Assets/Models/tactician.obj",
+      "sha256": "f48ed20d4e02518f6345b60854c3ba84596cbbe38b49d5038a21b6cd72f62e5c",
+      "mtlSha256": "421441c71f14ed9c71fcb51da1fd519380c77c9fd4e264c585f60c2dbd48a49c",
+      "bounds": {
+        "min": [
+          -0.411201,
+          0.0,
+          -0.145
+        ],
+        "max": [
+          0.4,
+          1.0275,
+          0.14
+        ]
+      }
+    },
+    {
+      "pack": "top_down_starter",
+      "name": "hunter_drone",
+      "path": "Templates/TopDownStarter/Assets/Models/hunter_drone.obj",
+      "sha256": "17669a2fe30c743bff99796ac12ecb7c8070ad28d66d493686092037e7808df3",
+      "mtlSha256": "148d5994d292dd4c28d2a24f6d76c85721f2c3e213432a33e4f2e4a3e477fe1e",
+      "bounds": {
+        "min": [
+          -0.49,
+          0.105,
+          -0.355
+        ],
+        "max": [
+          0.49,
+          0.895,
+          0.355
+        ]
+      }
+    },
+    {
+      "pack": "top_down_starter",
+      "name": "energy_cell",
+      "path": "Templates/TopDownStarter/Assets/Models/energy_cell.obj",
+      "sha256": "576a6fa200e492a0d3aa230c211179eeb752643936629d478a1ce8d2664bcf51",
+      "mtlSha256": "736ec764249b49ea9ef7d39c8fc2681fcdc144cd97fa0d24e7c63055367470a8",
+      "bounds": {
+        "min": [
+          -0.28,
+          0.0,
+          -0.28
+        ],
+        "max": [
+          0.28,
+          0.58,
+          0.28
+        ]
+      }
+    },
+    {
+      "pack": "top_down_starter",
+      "name": "skirmish_wall",
+      "path": "Templates/TopDownStarter/Assets/Models/skirmish_wall.obj",
+      "sha256": "27d29c99380bc6917163644847ad0c8677a7b0e1fe348236e40058446aed289f",
+      "mtlSha256": "9fdf4027ce100147b72d37d5c46756f95bd0bf78570350a2c4c71f3bbf1f0cf4",
+      "bounds": {
+        "min": [
+          -0.53,
+          0.0,
+          -0.1425
+        ],
+        "max": [
+          0.53,
+          0.88,
+          0.14
+        ]
+      }
     }
   ],
   "previews": [
     "docs/images/model-pipeline/core_primitives.png",
     "docs/images/model-pipeline/fps_starter.png",
     "docs/images/model-pipeline/mmo_starter.png",
+    "docs/images/model-pipeline/multiplayer_arena.png",
     "docs/images/model-pipeline/platformer_kit.png",
-    "docs/images/model-pipeline/rpg_starter.png"
+    "docs/images/model-pipeline/rpg_starter.png",
+    "docs/images/model-pipeline/third_person_starter.png",
+    "docs/images/model-pipeline/top_down_starter.png"
   ]
 }

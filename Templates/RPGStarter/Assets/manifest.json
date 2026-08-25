@@ -25,7 +25,7 @@
       "path": "Models/hero.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "ccf32b870221acc60e6100edcc1f2239cea9c8def1fbacf707cf95f226cd809b"
+      "sha256": "d207e47f34013c3254c3dcfa7a0dfc125796a12cc779dd6829af4a400fc9ac04"
     },
     {
       "path": "Models/hero.mtl",
@@ -37,7 +37,7 @@
       "path": "Models/lost_relic.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "4d96504fe3ade91f93b68cc42e57ee52f47b839d247c1f6a68f590f6fd0851a5"
+      "sha256": "127c6d17fa87ab10cf4d4233b131e3099594072330178973532b7f55d6e5e6a1"
     },
     {
       "path": "Models/lost_relic.mtl",
@@ -49,7 +49,7 @@
       "path": "Models/training_warden.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "022d0d85b308a10b96f65fcc041d61364711c2edce457c4dbbdc5d5f06cf518e"
+      "sha256": "6fcef8f4dc8f96c11a2f99d6e426ceaee6d91cda988e2713a520caa075ff0897"
     },
     {
       "path": "Models/training_warden.mtl",
@@ -61,7 +61,7 @@
       "path": "Models/village_elder.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "41d7604174ba8967bf0598c67b1591b32bdf02e795b1315de97ee807284e824e"
+      "sha256": "a1284df41e88e9008732b218a81534c88feb85e7e42170a2242bf3ed7f269e1f"
     },
     {
       "path": "Models/village_elder.mtl",
@@ -73,7 +73,7 @@
       "path": "Models/village_house_a.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "501f2d77def7d9977f6c578bdc3315b63018bf8224f3d106a6f89415573ac79e"
+      "sha256": "6ad792cad2fba10e405b738e75054789c7da911afa840dde4106cdbdb7d7e6f6"
     },
     {
       "path": "Models/village_house_a.mtl",
@@ -85,7 +85,7 @@
       "path": "Models/village_house_b.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "46337a26856af122926fa1640bf817ab3ed345bb167280348359221359e48ea2"
+      "sha256": "7728ea5095f5fea54b8d6762a9ac30918f1f659f203bdd5033fc12b94b409291"
     },
     {
       "path": "Models/village_house_b.mtl",

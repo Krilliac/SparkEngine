@@ -25,7 +25,7 @@
       "path": "Models/checkpoint.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "6cce6e81b804176adf24238605c28b9958df391e96fceef502ea5f7ecba30aac"
+      "sha256": "092ac95085dea2274c2a8a9dafd69e14ae61f2418ab2c8f8a406ef30a61c02d7"
     },
     {
       "path": "Models/checkpoint.mtl",
@@ -37,7 +37,7 @@
       "path": "Models/coin.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "b7db8a84f56ff12818a44d1d2600ec6758290670c04425def1882559c65fac99"
+      "sha256": "757c925ef9b492626a43cb15b9627eab140c761c566f1a729e6f43928bbb6546"
     },
     {
       "path": "Models/coin.mtl",
@@ -49,7 +49,7 @@
       "path": "Models/finish_gate.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "4d30da70562893a8661688130f7e66f13da1a09977838a41b7f1635c83e65b6f"
+      "sha256": "fb8cd4da4c3754eebfa24f1c723494ee1c2e1a01e6481e3a3471cd1ad2505da7"
     },
     {
       "path": "Models/finish_gate.mtl",
@@ -61,7 +61,7 @@
       "path": "Models/platform_straight.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "8849f7baa1142883259e050bdf7ce6246f8c8b31e4d8b6bc6abde8cd40e6d3a4"
+      "sha256": "5bd1f80b1c22c2df6c671323f997e7b01a0b5c1eeb5a8f80e7e285d3e6215d4f"
     },
     {
       "path": "Models/platform_straight.mtl",
@@ -73,7 +73,7 @@
       "path": "Models/runner.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "b798c1ac17d058d282079b5ffab6b394da85b3342d381104875a8994cb2a2cd2"
+      "sha256": "e34751037a25951805bf478827d702e88a1fbb93880524d86b6bdb8de5e78577"
     },
     {
       "path": "Models/runner.mtl",
@@ -85,7 +85,7 @@
       "path": "Models/spike_hazard.obj",
       "kind": "triangulated Wavefront OBJ model",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
-      "sha256": "edacbd6984db171fd4cb27f3a2731fb840f7bdd66ae5dabc6e1df05b14f9dfea"
+      "sha256": "4c81ef96a50f21339c36a78c5375e14898eeb7cff9c9dae87d0629cb39d9689a"
     },
     {
       "path": "Models/spike_hazard.mtl",

@@ -1,6 +1,6 @@
 /**
  * @file RegionMapEditorIO.cpp
- * @brief Load / save / serialize for RegionMapEditorPanel — Assets/MMOFPS/Data/regions.json (W11)
+ * @brief Load / save / serialize for RegionMapEditorPanel continent region maps.
  * @author Spark Engine Team
  * @date 2026
  *
@@ -23,13 +23,15 @@
  * in an unordered_map, so StringifyPretty cannot give a stable field order;
  * the writer below is hand-rolled for that reason.
  *
- * Saving backs up to regions.json.bak first, then re-reads the written file
+ * Saving backs up the selected region map to a sibling .bak file first, then
+ * re-reads the written file
  * through Json::ParseStrict; on failure the backup is restored.
  */
 
 #include "RegionMapEditorPanel.h"
 
 #include "RegionMapEditorInternal.h"
+#include "Utils/EditorProcessLaunch.h"
 #include "Utils/JsonUtils.h"
 
 #include <algorithm>
@@ -50,7 +52,7 @@ namespace SparkEditor
 
     namespace
     {
-        constexpr const char* kDataRelPath = "Assets/MMOFPS/Data/regions.json";
+        constexpr const char* kDefaultDataFile = "regions.json";
 
         void AppendEscaped(std::string& out, const std::string& in)
         {
@@ -145,20 +147,82 @@ namespace SparkEditor
 
     void RegionMapEditorPanel::ResolveDataPath()
     {
-        // The editor normally runs with the repo root as cwd, but probe a few
-        // parents so the panel also works when launched from a build output
-        // directory (same probe as SceneImportPanel / BasicMaterialEditorPanel).
-        m_assetsPrefix.clear();
-        for (const char* prefix : {"", "../", "../../", "../../../"})
+        // Probe both cwd and the real executable location. Shell/app launchers
+        // commonly assign an unrelated cwd, while installed/build-tree editors
+        // always have a stable executable path.
+        std::vector<fs::path> roots;
+        auto addAncestors = [&roots](fs::path current)
         {
-            std::error_code ec;
-            if (fs::exists(fs::path(prefix) / "Assets" / "MMOFPS" / "Data", ec))
+            for (int depth = 0; !current.empty() && depth < 8; ++depth)
             {
-                m_assetsPrefix = prefix;
-                break;
+                roots.push_back(current);
+                const fs::path parent = current.parent_path();
+                if (parent == current)
+                    break;
+                current = parent;
             }
+        };
+        std::error_code ec;
+        addAncestors(fs::current_path(ec));
+        const std::string executableDirectory = GetEditorExecutableDirectory();
+        if (!executableDirectory.empty())
+            addAncestors(fs::path(executableDirectory));
+
+        auto findDataDirectory = [&roots, &ec](bool requireSourceRoot)
+        {
+            for (const fs::path& root : roots)
+            {
+                if (requireSourceRoot &&
+                    (!fs::is_regular_file(root / "CMakeLists.txt", ec) || !fs::is_directory(root / "SparkEditor", ec)))
+                {
+                    ec.clear();
+                    continue;
+                }
+                const fs::path candidate = root / "Assets" / "MMOFPS" / "Data";
+                if (fs::is_directory(candidate, ec) && !ec)
+                    return fs::absolute(candidate, ec).lexically_normal();
+                ec.clear();
+            }
+            return fs::path{};
+        };
+        // A build tree can contain copied runtime assets. Prefer the source
+        // root so authoring never silently saves into build/bin/<config>.
+        fs::path dataDirectory = findDataDirectory(true);
+        if (dataDirectory.empty())
+            dataDirectory = findDataDirectory(false);
+        if (dataDirectory.empty())
+            dataDirectory = fs::absolute(fs::path("Assets") / "MMOFPS" / "Data", ec).lexically_normal();
+
+        if (LoadRegionMapDataSources(dataDirectory, m_dataSources, m_dataSourceError))
+        {
+            m_dataSourceIndex = 0;
+            for (size_t i = 0; i < m_dataSources.size(); ++i)
+            {
+                if (m_dataSources[i].key == "cindral_wastes")
+                {
+                    m_dataSourceIndex = static_cast<int>(i);
+                    break;
+                }
+            }
+            m_dataPath = m_dataSources[static_cast<size_t>(m_dataSourceIndex)].dataPath.generic_string();
         }
-        m_dataPath = m_assetsPrefix + kDataRelPath;
+        else
+        {
+            m_dataSourceIndex = -1;
+            m_dataPath = (dataDirectory / kDefaultDataFile).generic_string();
+        }
+    }
+
+    bool RegionMapEditorPanel::SelectDataSource(size_t index, std::string& outError)
+    {
+        if (index >= m_dataSources.size())
+        {
+            outError = "invalid continent selection";
+            return false;
+        }
+        m_dataSourceIndex = static_cast<int>(index);
+        m_dataPath = m_dataSources[index].dataPath.generic_string();
+        return LoadFromDisk(outError);
     }
 
     bool RegionMapEditorPanel::LoadFromDisk(std::string& outError)
@@ -407,7 +471,7 @@ namespace SparkEditor
 
     bool RegionMapEditorPanel::SaveToDisk(std::string& outError)
     {
-        // 1) Backup the current file (if any) to regions.json.bak.
+        // 1) Backup the current selected region map (if any) to a sibling .bak file.
         std::string oldBytes;
         bool hadOld = false;
         {
