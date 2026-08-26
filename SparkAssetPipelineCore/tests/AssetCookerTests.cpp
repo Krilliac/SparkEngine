@@ -115,9 +115,13 @@ int main(int argc, char** argv)
         const auto aliasedOutput = aliasedRoot / "aliased-output";
         const auto aliasedManifest = aliasedOutput / "metadata" / "manifest.json";
         const auto aliasedResult = Spark::AssetPipeline::CookAssets({source, aliasedOutput, aliasedManifest, false});
-        aliasedOutputPassed = aliasedResult.Succeeded() &&
-                              std::filesystem::is_regular_file(root / "aliased-output" / "nested" / "asset.txt") &&
-                              std::filesystem::is_regular_file(root / "aliased-output" / "metadata" / "manifest.json");
+        const auto aliasedDefaultOutput = aliasedRoot / "aliased-default-output";
+        const auto aliasedDefaultResult = Spark::AssetPipeline::CookAssets({source, aliasedDefaultOutput, {}, false});
+        aliasedOutputPassed =
+            aliasedResult.Succeeded() && aliasedDefaultResult.Succeeded() &&
+            std::filesystem::is_regular_file(root / "aliased-output" / "nested" / "asset.txt") &&
+            std::filesystem::is_regular_file(root / "aliased-output" / "metadata" / "manifest.json") &&
+            std::filesystem::is_regular_file(root / "aliased-default-output" / "spark-cook-manifest.json");
     }
 #endif
 

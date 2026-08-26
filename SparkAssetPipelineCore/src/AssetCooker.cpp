@@ -775,7 +775,7 @@ namespace Spark::AssetPipeline
         ec.clear();
 
         const auto manifestCandidate =
-            request.manifestPath.empty() ? output / "spark-cook-manifest.json" : request.manifestPath;
+            request.manifestPath.empty() ? outputLexical / "spark-cook-manifest.json" : request.manifestPath;
         const auto manifestLexical = std::filesystem::absolute(manifestCandidate, ec).lexically_normal();
         if (ec || !IsContained(manifestLexical, outputLexical) ||
             !ValidateOutputTarget(manifestLexical, outputLexical, result.error, "cook manifest"))
