@@ -323,8 +323,13 @@ jobs:
 
         if [[ "${{ needs.prepare.outputs.is_versioned }}" == "false" ]]; then
           # Nightly release: snapshot current nightly downloads before replacement
-          NIGHTLY_DL=$(gh api repos/${{ github.repository }}/releases/tags/nightly \
-            --jq '[.assets[].download_count] | add // 0' 2>/dev/null || echo 0)
+          if NIGHTLY_DL=$(gh api repos/${{ github.repository }}/releases/tags/nightly \
+            --jq '[.assets[].download_count] | add // 0' 2>/dev/null); then
+            :
+          else
+            NIGHTLY_DL=0
+          fi
+          [[ "$NIGHTLY_DL" =~ ^[0-9]+$ ]] || NIGHTLY_DL=0
           echo "Current nightly downloads before reset: $NIGHTLY_DL"
           if test "$LAST_SNAPSHOT_RUN_ID" != "$GITHUB_RUN_ID"; then
             SNAPSHOT=$NIGHTLY_DL
@@ -343,8 +348,13 @@ jobs:
           }' > "$NIGHTLY_BADGE"
         else
           # Stable release: snapshot current stable downloads before new version
-          STABLE_DL=$(gh api repos/${{ github.repository }}/releases/latest \
-            --jq '[.assets[].download_count] | add // 0' 2>/dev/null || echo 0)
+          if STABLE_DL=$(gh api repos/${{ github.repository }}/releases/latest \
+            --jq '[.assets[].download_count] | add // 0' 2>/dev/null); then
+            :
+          else
+            STABLE_DL=0
+          fi
+          [[ "$STABLE_DL" =~ ^[0-9]+$ ]] || STABLE_DL=0
           echo "Current stable downloads before reset: $STABLE_DL"
           if test "$LAST_SNAPSHOT_RUN_ID" != "$GITHUB_RUN_ID"; then
             SNAPSHOT=$STABLE_DL
@@ -381,9 +391,14 @@ jobs:
         # this badge to the current sum on every release run. The installer asset name
         # is the same across releases, so this is a stable aggregate.
         INSTALLER_BADGE=".github/badges/installer-downloads.json"
-        INSTALLER_TOTAL=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate --slurp \
+        if INSTALLER_TOTAL=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate --slurp \
           --jq '[.[][] | .assets[] | select(.name | startswith("SparkInstaller-")) | .download_count] | add // 0' \
-          2>/dev/null || echo 0)
+          2>/dev/null); then
+          :
+        else
+          INSTALLER_TOTAL=0
+        fi
+        [[ "$INSTALLER_TOTAL" =~ ^[0-9]+$ ]] || INSTALLER_TOTAL=0
         echo "Installer total downloads: $INSTALLER_TOTAL"
         INSTALLER_FORMATTED=$(printf "%'d" "$INSTALLER_TOTAL" 2>/dev/null || echo "$INSTALLER_TOTAL")
         printf '{\n    "schemaVersion": 1,\n    "label": "installer downloads",\n    "message": "%s",\n    "color": "blueviolet",\n    "namedLogo": "github",\n    "logoColor": "white"\n}\n' \
