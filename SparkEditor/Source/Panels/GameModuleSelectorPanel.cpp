@@ -418,8 +418,8 @@ namespace SparkEditor
         unsigned long exitCode = 0;
         if (m_gameProcess.Poll(exitCode))
         {
-            m_launchStatus = "Last launch (PID " + std::to_string(pid) + ") exited with code " +
-                             std::to_string(exitCode);
+            m_launchStatus =
+                "Last launch (PID " + std::to_string(pid) + ") exited with code " + std::to_string(exitCode);
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
         }
 #endif

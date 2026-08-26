@@ -473,8 +473,7 @@ namespace SparkEditor
         // The fixed-width legacy frame always carries an edit section. Keep that
         // section canonical for non-edit messages so irrelevant caller state can
         // never leak nondeterministic bytes onto the wire.
-        WriteEditMessage(buf,
-                         msg.type == InternalMessageType::EditBroadcast ? msg.editMessage : defaultEditMessage);
+        WriteEditMessage(buf, msg.type == InternalMessageType::EditBroadcast ? msg.editMessage : defaultEditMessage);
         WriteEditorPeer(buf, msg.peerInfo);
 
         return buf;
@@ -546,8 +545,8 @@ namespace SparkEditor
 
         // Allow port reuse
         int optval = 1;
-        setsockopt(ToNativeSocket(m_listenSocket), SOL_SOCKET, SO_REUSEADDR,
-                   reinterpret_cast<const char*>(&optval), sizeof(optval));
+        setsockopt(ToNativeSocket(m_listenSocket), SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&optval),
+                   sizeof(optval));
         ConfigureSigPipeSuppression(m_listenSocket);
 
         sockaddr_in addr{};

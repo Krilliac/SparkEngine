@@ -32,7 +32,7 @@ namespace SparkEditor
     {
         bool success = false;
         void* processHandle = nullptr; ///< HANDLE, owned by the caller — CloseHandle() once no longer polled.
-        void* jobHandle = nullptr;    ///< Optional owned Job Object handle for process-tree lifetime control.
+        void* jobHandle = nullptr;     ///< Optional owned Job Object handle for process-tree lifetime control.
         unsigned long pid = 0;
         std::string error; ///< Human-readable failure reason (empty on success).
     };
@@ -66,8 +66,7 @@ namespace SparkEditor
      * descendants, and is then resumed. Both processHandle and jobHandle in the
      * successful result are owned by the caller.
      */
-    ProcessLaunchResult LaunchOwnedEditorProcess(const std::filesystem::path& exePath,
-                                                 const std::wstring& commandLine,
+    ProcessLaunchResult LaunchOwnedEditorProcess(const std::filesystem::path& exePath, const std::wstring& commandLine,
                                                  const std::filesystem::path& workingDir);
 
     /// @brief Non-blocking poll of a handle from LaunchEditorProcess. Returns true
@@ -97,8 +96,7 @@ namespace SparkEditor
      * Handles are always closed before returning.
      */
     EditorProcessStopResult StopEditorProcessTree(void* processHandle, void* jobHandle, unsigned long pid,
-                                                  unsigned long gracePeriodMs = 1500,
-                                                  unsigned int exitCode = 1);
+                                                  unsigned long gracePeriodMs = 1500, unsigned int exitCode = 1);
 
     /// @brief Injectable operations used by OwnedEditorProcess. Production uses
     /// the platform helpers above; tests can provide deterministic fakes.

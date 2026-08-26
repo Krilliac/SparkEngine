@@ -796,8 +796,8 @@ namespace Spark::Net
                     // Enable broadcast
                     int broadcastEnable = 1;
                     if (setsockopt(broadcastSocket, SOL_SOCKET, SO_BROADCAST,
-                                   reinterpret_cast<const char*>(&broadcastEnable), sizeof(broadcastEnable)) ==
-                        SOCKET_ERROR)
+                                   reinterpret_cast<const char*>(&broadcastEnable),
+                                   sizeof(broadcastEnable)) == SOCKET_ERROR)
                     {
 #ifdef SPARK_PLATFORM_WINDOWS
                         closesocket(broadcastSocket);

@@ -107,7 +107,8 @@ namespace SparkEditor
 
             constexpr char prefix[] = "SparkEditor caught fatal signal ";
             constexpr char processPrefix[] = " in process ";
-            constexpr char suffix[] = "; detailed reporting skipped because the process is in an unsafe signal context.\n";
+            constexpr char suffix[] =
+                "; detailed reporting skipped because the process is in an unsafe signal context.\n";
             char message[192];
             size_t length = 0;
 
@@ -228,8 +229,8 @@ namespace SparkEditor
 #else
             constexpr int closeOnExecFlag = 0;
 #endif
-            g_emergencyCrashLogFd = open(emergencyLogPath.c_str(), O_WRONLY | O_CREAT | O_APPEND | closeOnExecFlag,
-                                         S_IRUSR | S_IWUSR);
+            g_emergencyCrashLogFd =
+                open(emergencyLogPath.c_str(), O_WRONLY | O_CREAT | O_APPEND | closeOnExecFlag, S_IRUSR | S_IWUSR);
         }
 
         struct sigaction sa = {};

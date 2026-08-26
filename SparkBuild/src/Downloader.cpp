@@ -421,8 +421,8 @@ namespace SparkBuild
         {
             const uint64_t sequence = g_tempDownloadSequence.fetch_add(1, std::memory_order_relaxed);
             const std::filesystem::path candidate =
-                tempDirectory / ("sparkbuild_download_" + std::to_string(processId) + "_" + std::to_string(tick) +
-                                 "_" + std::to_string(sequence) + ".zip");
+                tempDirectory / ("sparkbuild_download_" + std::to_string(processId) + "_" + std::to_string(tick) + "_" +
+                                 std::to_string(sequence) + ".zip");
 
 #ifdef SPARK_PLATFORM_WINDOWS
             HANDLE file = CreateFileA(candidate.string().c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ,
@@ -455,7 +455,7 @@ namespace SparkBuild
     }
 
     bool Downloader::DownloadAndExtract(const std::string& url, const std::string& destDir,
-                                         DownloadProgressCallback progress)
+                                        DownloadProgressCallback progress)
     {
         const std::string tempPath = ReserveTempDownloadPath();
         if (tempPath.empty())

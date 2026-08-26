@@ -577,8 +577,8 @@ namespace SparkEditor
 
             std::cout << "Creating console process: " << commandLine << "\n";
 
-            BOOL success = CreateProcessA(NULL, commandLine.data(), NULL, NULL, TRUE, creationFlags,
-                                          NULL, NULL, &si, &pi);
+            BOOL success =
+                CreateProcessA(NULL, commandLine.data(), NULL, NULL, TRUE, creationFlags, NULL, NULL, &si, &pi);
 
             if (!success)
             {

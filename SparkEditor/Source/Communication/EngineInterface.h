@@ -141,12 +141,12 @@ namespace SparkEditor
     struct EngineCommand
     {
         EngineCommandType type = EngineCommandType::CUSTOM_COMMAND; ///< Command type
-        uint64_t commandID = 0;                                  ///< Unique command identifier
-        std::string targetObjectID;                              ///< Target object (if applicable)
-        std::string componentType;                               ///< Component type (if applicable)
-        std::unordered_map<std::string, std::string> parameters; ///< Command parameters
-        std::vector<uint8_t> binaryData;                         ///< Binary data payload
-        uint64_t timestamp = 0;                                  ///< Command timestamp
+        uint64_t commandID = 0;                                     ///< Unique command identifier
+        std::string targetObjectID;                                 ///< Target object (if applicable)
+        std::string componentType;                                  ///< Component type (if applicable)
+        std::unordered_map<std::string, std::string> parameters;    ///< Command parameters
+        std::vector<uint8_t> binaryData;                            ///< Binary data payload
+        uint64_t timestamp = 0;                                     ///< Command timestamp
     };
 
     /**
@@ -155,13 +155,13 @@ namespace SparkEditor
     struct EngineEvent
     {
         EngineEventType type = EngineEventType::CUSTOM_EVENT; ///< Event type
-        uint64_t eventID = 0;                              ///< Unique event identifier
-        std::string sourceObjectID;                        ///< Source object (if applicable)
-        std::string message;                               ///< Event message
-        std::unordered_map<std::string, std::string> data; ///< Event data
-        std::vector<uint8_t> binaryData;                   ///< Binary data payload
-        uint64_t timestamp = 0;                            ///< Event timestamp
-        int severity = 0;                                  ///< Event severity (0=info, 1=warning, 2=error)
+        uint64_t eventID = 0;                                 ///< Unique event identifier
+        std::string sourceObjectID;                           ///< Source object (if applicable)
+        std::string message;                                  ///< Event message
+        std::unordered_map<std::string, std::string> data;    ///< Event data
+        std::vector<uint8_t> binaryData;                      ///< Binary data payload
+        uint64_t timestamp = 0;                               ///< Event timestamp
+        int severity = 0;                                     ///< Event severity (0=info, 1=warning, 2=error)
     };
 
     /**

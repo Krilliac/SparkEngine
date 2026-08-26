@@ -79,7 +79,7 @@ namespace SparkEditor
         // --- Launch state (separate-process game launch) ---
         int m_launchSelection = -1;        ///< Index into m_modules chosen for launch
         std::string m_launchSelectionPath; ///< Path of the selection (survives refresh reordering)
-        OwnedEditorProcess m_gameProcess; ///< Owns the launched SparkEngine process tree.
+        OwnedEditorProcess m_gameProcess;  ///< Owns the launched SparkEngine process tree.
         std::string m_launchStatus;        ///< Human-readable last-launch status line
     };
 

@@ -152,8 +152,8 @@ namespace SparkEditor
                 CloseHandle(process.hThread);
                 CloseHandle(process.hProcess);
                 CloseHandle(job);
-                result.error = "Launch failed: could not assign process to Job Object (Win32 error " +
-                               std::to_string(error) + ")";
+                result.error =
+                    "Launch failed: could not assign process to Job Object (Win32 error " + std::to_string(error) + ")";
                 return result;
             }
 
@@ -165,8 +165,8 @@ namespace SparkEditor
                 CloseHandle(process.hThread);
                 CloseHandle(process.hProcess);
                 CloseHandle(job);
-                result.error = "Launch failed: could not resume owned process (Win32 error " +
-                               std::to_string(error) + ")";
+                result.error =
+                    "Launch failed: could not resume owned process (Win32 error " + std::to_string(error) + ")";
                 return result;
             }
 
@@ -192,8 +192,7 @@ namespace SparkEditor
         return LaunchEditorProcessImpl(exePath, commandLine, workingDir, false);
     }
 
-    ProcessLaunchResult LaunchOwnedEditorProcess(const std::filesystem::path& exePath,
-                                                 const std::wstring& commandLine,
+    ProcessLaunchResult LaunchOwnedEditorProcess(const std::filesystem::path& exePath, const std::wstring& commandLine,
                                                  const std::filesystem::path& workingDir)
     {
         return LaunchEditorProcessImpl(exePath, commandLine, workingDir, true);
@@ -298,8 +297,8 @@ namespace SparkEditor
             m_operations.poll = [](void* handle, unsigned long& exitCode)
             { return PollProcessExited(handle, exitCode); };
         if (!m_operations.stopAndClose)
-            m_operations.stopAndClose = [](void* processHandle, void* jobHandle, unsigned long pid,
-                                           unsigned long gracePeriodMs)
+            m_operations.stopAndClose =
+                [](void* processHandle, void* jobHandle, unsigned long pid, unsigned long gracePeriodMs)
             { return StopEditorProcessTree(processHandle, jobHandle, pid, gracePeriodMs); };
         if (!m_operations.close)
             m_operations.close = [](void* processHandle, void* jobHandle)

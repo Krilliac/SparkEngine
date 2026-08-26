@@ -249,7 +249,6 @@ namespace Spark::Net
                     nearestArea = id;
                 }
             }
-
         }
 
         if (nearestArea == INVALID_AREA)
@@ -388,8 +387,8 @@ namespace Spark::Net
             ++m_stats.totalAreaTransfers;
         }
 
-        Log("Transferring player '" + playerName + "' from area " + std::to_string(currentArea) +
-            " to area " + std::to_string(targetArea) + ".");
+        Log("Transferring player '" + playerName + "' from area " + std::to_string(currentArea) + " to area " +
+            std::to_string(targetArea) + ".");
         return true;
     }
 
@@ -450,14 +449,14 @@ namespace Spark::Net
             if (reg.cpuLoad > LOAD_BALANCE_OVERLOAD_THRESHOLD)
             {
                 overloaded.push_back(reg);
-                SPARK_LOG_WARN("WorldServer", "Area '%s' (ID=%u) is overloaded: CPU=%.1f%%.", reg.areaName.c_str(), reg.areaId,
-                               reg.cpuLoad * 100.0f);
+                SPARK_LOG_WARN("WorldServer", "Area '%s' (ID=%u) is overloaded: CPU=%.1f%%.", reg.areaName.c_str(),
+                               reg.areaId, reg.cpuLoad * 100.0f);
             }
             else if (reg.cpuLoad < LOAD_BALANCE_UNDERLOAD_THRESHOLD)
             {
                 underloaded.push_back(reg);
-                SPARK_LOG_INFO("WorldServer", "Area '%s' (ID=%u) is underloaded: CPU=%.1f%%.", reg.areaName.c_str(), reg.areaId,
-                               reg.cpuLoad * 100.0f);
+                SPARK_LOG_INFO("WorldServer", "Area '%s' (ID=%u) is underloaded: CPU=%.1f%%.", reg.areaName.c_str(),
+                               reg.areaId, reg.cpuLoad * 100.0f);
             }
         }
 
