@@ -69,7 +69,11 @@ TEST(ServiceTopologyController_RemovesStaleControlFilesBeforeLaunch)
     spec.stopFile = stop;
     controller.Configure(TopologyService::Gateway, std::move(spec));
 
-    EXPECT_FALSE(controller.Start(TopologyService::Gateway));
+    // CreateProcess reports a missing executable synchronously on Windows, while
+    // POSIX fork/exec reports a successful fork and the child exits with 127.
+    // This test covers stale-control cleanup, so do not make it depend on which
+    // launch-failure model the platform exposes.
+    (void)controller.Start(TopologyService::Gateway);
     EXPECT_FALSE(fs::exists(health));
     EXPECT_FALSE(fs::exists(stop));
 

@@ -372,6 +372,14 @@ namespace
     bool IsSiblingSharedLibrary(const std::filesystem::path& path)
     {
         const std::string filename = path.filename().string();
+        // ABI metadata is named `<module>.so.sparkabi` on Linux.  The
+        // versioned-library check below intentionally accepts names such as
+        // `libfoo.so.1`, but must not classify the sidecar as a loadable
+        // sibling.  In particular, the source module's sidecar has already
+        // been copied into the private stage, so trying to symlink it again
+        // fails with `file_exists` and prevents every Linux module load.
+        if (filename.ends_with(".sparkabi"))
+            return false;
 #if defined(__APPLE__)
         return filename.ends_with(".dylib");
 #else

@@ -282,7 +282,26 @@ namespace SparkEditor
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        const bool terminated = SignalPosixProcess(*handle, SIGKILL) == 0 || errno == ESRCH;
+        // Do not let an exit on the grace-period boundary get misclassified as
+        // a force-termination failure. In particular, Darwin can return EPERM
+        // when signalling a process group whose remaining members are zombies.
+        // Reaping the owned leader first gives the same Graceful result that the
+        // polling loop would have produced one scheduler tick earlier.
+        if (PollPosixProcess(*handle, ignoredExitCode))
+        {
+            CloseEditorProcessHandles(processHandle, nullptr);
+            return EditorProcessStopResult::Graceful;
+        }
+
+        const int signalResult = SignalPosixProcess(*handle, SIGKILL);
+        const int signalError = signalResult == 0 ? 0 : errno;
+        if (signalResult != 0 && PollPosixProcess(*handle, ignoredExitCode))
+        {
+            CloseEditorProcessHandles(processHandle, nullptr);
+            return EditorProcessStopResult::Graceful;
+        }
+
+        const bool terminated = signalResult == 0 || signalError == ESRCH;
         if (terminated && !handle->exited)
         {
             int status = 0;
