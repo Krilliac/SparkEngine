@@ -57,7 +57,8 @@ namespace SparkEditor
         };
 
         PosixSignalRegistration g_fatalSignalRegistrations[] = {
-            {SIGSEGV}, {SIGABRT}, {SIGFPE}, {SIGILL}, {SIGBUS},
+            PosixSignalRegistration(SIGSEGV), PosixSignalRegistration(SIGABRT), PosixSignalRegistration(SIGFPE),
+            PosixSignalRegistration(SIGILL),  PosixSignalRegistration(SIGBUS),
         };
         volatile sig_atomic_t g_emergencyCrashLogFd = -1;
         volatile sig_atomic_t g_handlingFatalSignal = 0;
