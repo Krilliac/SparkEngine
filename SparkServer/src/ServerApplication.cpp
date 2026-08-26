@@ -25,6 +25,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <locale>
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -46,9 +47,10 @@ namespace Spark::Server
         bool ParseFloat(std::string_view text, float minValue, float maxValue, float& output)
         {
             float value = 0.0f;
-            const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
-            if (error != std::errc{} || end != text.data() + text.size() || !std::isfinite(value) || value < minValue ||
-                value > maxValue)
+            std::istringstream parser{std::string{text}};
+            parser.imbue(std::locale::classic());
+            if (!(parser >> std::noskipws >> value) || parser.peek() != std::char_traits<char>::eof() ||
+                !std::isfinite(value) || value < minValue || value > maxValue)
                 return false;
             output = value;
             return true;

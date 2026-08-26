@@ -214,7 +214,7 @@ namespace Spark
                     Cleanup();
                     return false;
                 }
-                struct stat information{};
+                struct stat information = {};
                 if (::fstat(input, &information) != 0 || !S_ISREG(information.st_mode))
                 {
                     ::close(input);
@@ -300,7 +300,7 @@ namespace Spark
         bool CapturePluginFileIdentity(const std::filesystem::path& path, PluginFileIdentity& identity,
                                        std::string& error)
         {
-            struct stat information{};
+            struct stat information = {};
             if (::stat(path.c_str(), &information) != 0 || !S_ISREG(information.st_mode))
             {
                 error = "failed to query plugin file identity";

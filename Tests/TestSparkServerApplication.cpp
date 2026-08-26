@@ -28,7 +28,7 @@ TEST(SparkServerOptions_ParsesValidatedOverrides)
                                   std::string_view{"--max-clients"},
                                   std::string_view{"128"},
                                   std::string_view{"--tick-rate"},
-                                  std::string_view{"30"},
+                                  std::string_view{"30.5"},
                                   std::string_view{"--map"},
                                   std::string_view{"town, dungeon"},
                                   std::string_view{"--no-lan-broadcast"}};
@@ -36,7 +36,7 @@ TEST(SparkServerOptions_ParsesValidatedOverrides)
     EXPECT_TRUE(result.options.has_value());
     EXPECT_EQ(result.options->server.port, static_cast<uint16_t>(28015));
     EXPECT_EQ(result.options->server.maxClients, 128);
-    EXPECT_NEAR(result.options->server.tickRate, 30.0f, 0.001f);
+    EXPECT_NEAR(result.options->server.tickRate, 30.5f, 0.001f);
     EXPECT_EQ(result.options->server.mapRotation.size(), static_cast<size_t>(2));
     EXPECT_FALSE(result.options->server.enableLanBroadcast);
 }

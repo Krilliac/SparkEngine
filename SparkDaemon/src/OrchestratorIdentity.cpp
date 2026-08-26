@@ -371,15 +371,15 @@ namespace Spark::Daemon
     std::filesystem::path DefaultOrchestratorIdentityPath()
     {
         if (const char* overridePath = std::getenv("SPARK_ORCHESTRATOR_IDENTITY"); overridePath && *overridePath)
-            return std::filesystem::u8path(overridePath);
+            return std::filesystem::path{overridePath};
 #if defined(_WIN32)
         if (const char* localAppData = std::getenv("LOCALAPPDATA"); localAppData && *localAppData)
-            return std::filesystem::u8path(localAppData) / "SparkEngine" / "orchestrator.identity";
+            return std::filesystem::path{localAppData} / "SparkEngine" / "orchestrator.identity";
 #else
         if (const char* stateHome = std::getenv("XDG_STATE_HOME"); stateHome && *stateHome)
-            return std::filesystem::u8path(stateHome) / "sparkengine" / "orchestrator.identity";
+            return std::filesystem::path{stateHome} / "sparkengine" / "orchestrator.identity";
         if (const char* home = std::getenv("HOME"); home && *home)
-            return std::filesystem::u8path(home) / ".local" / "state" / "sparkengine" / "orchestrator.identity";
+            return std::filesystem::path{home} / ".local" / "state" / "sparkengine" / "orchestrator.identity";
 #endif
         return std::filesystem::temp_directory_path() / "sparkengine-orchestrator.identity";
     }
