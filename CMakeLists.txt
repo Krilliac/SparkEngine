@@ -2521,6 +2521,12 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/Templates")
     install(DIRECTORY "Templates/"
         DESTINATION share/SparkEngine/templates
         COMPONENT ${SPARK_INSTALL_COMPONENT_TEMPLATES}
+        PATTERN "build" EXCLUDE
+        PATTERN "build-*" EXCLUDE
+        PATTERN "CMakeFiles" EXCLUDE
+        PATTERN "CMakeCache.txt" EXCLUDE
+        PATTERN "cmake_install.cmake" EXCLUDE
+        PATTERN "*.user" EXCLUDE
     )
 endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/Samples")
