@@ -161,8 +161,16 @@ def _path_is_link_like(path):
 
 
 def _absolute_unresolved(path):
-    """Make a path absolute without resolving any existing filesystem links."""
-    return Path(os.path.abspath(os.fspath(path)))
+    """Canonicalize the parent while preserving the final directory entry.
+
+    The final component must remain unresolved so callers can inspect and reject
+    a package-destination symlink before it is followed.  Canonicalizing the
+    parent still gives one stable spelling for filesystem aliases such as
+    macOS's ``/var`` -> ``/private/var`` mapping, which keeps transaction
+    ownership metadata comparable across processes and working-directory APIs.
+    """
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    return absolute.parent.resolve() / absolute.name
 
 
 def _find_nested_path_key(value, location):

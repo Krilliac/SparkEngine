@@ -509,7 +509,31 @@ namespace DirectX
     }
     inline XMMATRIX XMMatrixRotationRollPitchYaw(float pitch, float yaw, float roll)
     {
-        return XMMatrixRotationX(pitch) * XMMatrixRotationY(yaw) * XMMatrixRotationZ(roll);
+        const float cp = cosf(pitch);
+        const float sp = sinf(pitch);
+        const float cy = cosf(yaw);
+        const float sy = sinf(yaw);
+        const float cr = cosf(roll);
+        const float sr = sinf(roll);
+
+        // DirectXMath's scalar reference formula. This is equivalent to
+        // Rz * Rx * Ry for the row-vector convention used by DirectXMath.
+        return {cr * cy + sr * sp * sy,
+                sr * cp,
+                sr * sp * cy - cr * sy,
+                0.0f,
+                cr * sp * sy - sr * cy,
+                cr * cp,
+                sr * sy + cr * sp * cy,
+                0.0f,
+                cp * sy,
+                -sp,
+                cp * cy,
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                1.0f};
     }
 
     // Store/Load additional

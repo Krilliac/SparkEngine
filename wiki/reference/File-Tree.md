@@ -1527,7 +1527,7 @@ graph LR
 - [`Platform.h`](../../SparkEngine/Source/Core/Platform.h) — 269 LOC — Cross-platform type definitions and compatibility layer
 - [`PlatformAudioStubs.h`](../../SparkEngine/Source/Core/PlatformAudioStubs.h) — 375 LOC — XAudio2, XInput, and related stubs for non-Windows platforms
 - [`PlatformD3DStubs.h`](../../SparkEngine/Source/Core/PlatformD3DStubs.h) — 221 LOC — D3D11/DXGI type stubs and ComPtr for non-Windows platforms
-- [`PlatformDirectXMathStubs.h`](../../SparkEngine/Source/Core/PlatformDirectXMathStubs.h) — 747 LOC — DirectXMath compatibility stubs for non-Windows platforms
+- [`PlatformDirectXMathStubs.h`](../../SparkEngine/Source/Core/PlatformDirectXMathStubs.h) — 771 LOC — DirectXMath compatibility stubs for non-Windows platforms
 - [`PlatformTypes.h`](../../SparkEngine/Source/Core/PlatformTypes.h) — 440 LOC — Win32 type aliases and macros for non-Windows platforms
 - [`PluginRegistry.cpp`](../../SparkEngine/Source/Core/PluginRegistry.cpp) — 116 LOC — Implementation of the static plugin registry
 - [`PluginRegistry.h`](../../SparkEngine/Source/Core/PluginRegistry.h) — 82 LOC — Macro-based plugin registration using a static linked list
@@ -2804,7 +2804,7 @@ graph LR
 - [`TestCoverSystem.cpp`](../../Tests/TestCoverSystem.cpp) — 191 LOC
 - [`TestCoverSystemReal.cpp`](../../Tests/TestCoverSystemReal.cpp) — 77 LOC — Real-class tests for Spark::AI::CoverSystem
 - [`TestCoverageAI.cpp`](../../Tests/TestCoverageAI.cpp) — 300 LOC — Deterministic real-class coverage for production AI subsystems.
-- [`TestCoverageCamera.cpp`](../../Tests/TestCoverageCamera.cpp) — 177 LOC — Production coverage for SparkEngineCamera behavior and console controls.
+- [`TestCoverageCamera.cpp`](../../Tests/TestCoverageCamera.cpp) — 192 LOC — Production coverage for SparkEngineCamera behavior and console controls.
 - [`TestCoverageScripting.cpp`](../../Tests/TestCoverageScripting.cpp) — 377 LOC — Production coverage for script hot reload, sandbox diagnostics, and visual compilation.
 - [`TestCpuDebuggerPhaseGG.cpp`](../../Tests/TestCpuDebuggerPhaseGG.cpp) — 100 LOC — Phase GG Theme 3D tests for Spark::CpuDebugger
 - [`TestCpuNeuralInference.cpp`](../../Tests/TestCpuNeuralInference.cpp) — 389 LOC — Tests for SIMD-optimized CPU neural inference
@@ -3287,5 +3287,5 @@ graph LR
 | Metric | Count |
 |--------|-------|
 | Source files scanned | 2457 |
-| Total lines of code  | 718291 |
+| Total lines of code  | 718330 |
 | Source directories   | 17 |

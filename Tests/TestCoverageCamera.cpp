@@ -19,6 +19,21 @@ namespace
     }
 } // namespace
 
+TEST(CoverageCamera_RollPitchYawMatchesDirectXMathForwardSemantics)
+{
+    const auto rotation =
+        DirectX::XMMatrixRotationRollPitchYaw(0.0f, DirectX::XM_PIDIV2, DirectX::XMConvertToRadians(-30.0f));
+    const auto transformed = DirectX::XMVector3TransformCoord(DirectX::XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f), rotation);
+    DirectX::XMFLOAT3 forward{};
+    DirectX::XMStoreFloat3(&forward, transformed);
+
+    // DirectXMath applies roll, then pitch, then yaw for row vectors. Roll is
+    // therefore around the local forward axis and cannot change this result.
+    EXPECT_NEAR(forward.x, 1.0f, kEpsilon);
+    EXPECT_NEAR(forward.y, 0.0f, kEpsilon);
+    EXPECT_NEAR(forward.z, 0.0f, kEpsilon);
+}
+
 TEST(CoverageCamera_RealMovementRotationAndProjectionPaths)
 {
     SparkEngineCamera camera;

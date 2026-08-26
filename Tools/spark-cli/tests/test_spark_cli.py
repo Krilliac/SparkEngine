@@ -245,7 +245,7 @@ class SparkRunTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         run.assert_called_once_with(
-            ["cmake", "--build", str(configured), "--config", "Release"],
+            ["cmake", "--build", str(configured.resolve()), "--config", "Release"],
             cwd=self.root.resolve(),
         )
 
@@ -599,9 +599,11 @@ class SparkPackageTests(unittest.TestCase):
         package = self.package_path()
         touch(package / "keep.txt")
         real_link_check = spark_cli._path_is_link_like
+        canonical_package = spark_cli._absolute_unresolved(package)
 
         def report_final_as_link(path):
-            return path == package or real_link_check(path)
+            return (spark_cli._absolute_unresolved(path) == canonical_package or
+                    real_link_check(path))
 
         with mock.patch.object(spark_cli, "_path_is_link_like", side_effect=report_final_as_link):
             result, output, build = self.run_package(self.args(force=True))
