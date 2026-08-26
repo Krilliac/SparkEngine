@@ -174,7 +174,7 @@ enum class GameModeType : uint8_t
 ### Built-in Server
 
 ```cpp
-// Launch: SparkServer.exe --port 27015 --maxclients 32
+// Launch: SparkServer.exe --manifest spark.modules.json --port 27015 --max-clients 32
 
 int main()
 {
@@ -488,12 +488,15 @@ cmake --build build --config Release
 
 ```bash
 # Separate build target for the dedicated server
-cmake -B build -DENABLE_NETWORKING=ON -DENABLE_GRAPHICS=OFF -DBUILD_DEDICATED_SERVER=ON
+cmake -B build -DENABLE_NETWORKING=ON -DENABLE_GRAPHICS=OFF -DENABLE_SERVER_PROCESSES=ON
 cmake --build build --config Release --target SparkServer
 
-# Run the dedicated server
-./build/bin/SparkServer --port 27015 --maxclients 32
+# Run the dedicated server using the project's module manifest
+./build/bin/SparkServer --manifest spark.modules.json --port 27015 --max-clients 32
 ```
+
+`SparkServer` requires either `--manifest <path>` or `--module <game-library>`
+so that it can select the server game module explicitly.
 
 ## Thread Safety
 
@@ -532,7 +535,7 @@ If you start with the game module approach during development and want to switch
 1. Move game logic from `IModule::OnUpdate()` into the server's main loop
 2. Replace `IEngineContext*` calls with direct subsystem access
 3. Remove DLL export macros (`SPARK_IMPLEMENT_MODULE`)
-4. Add a `SparkServer` build target in CMake
+4. Enable the existing `SparkServer` target with `-DENABLE_SERVER_PROCESSES=ON`
 5. Configure the build to exclude graphics/audio subsystems
 
 ### From Built-in to Game Module

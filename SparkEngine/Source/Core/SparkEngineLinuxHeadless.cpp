@@ -39,6 +39,7 @@
 #include <chrono>
 #include <format>
 #include <memory>
+#include <string_view>
 #include <thread>
 
 #ifndef SPARK_PLATFORM_WINDOWS
@@ -86,6 +87,20 @@ int RunHeadlessLinux(int argc, char* argv[])
     else
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessLinux: modules + detectors skipped (-minimal-init)");
+    }
+
+    bool requireGameModule = false;
+    for (int i = 1; i < argc; ++i)
+        requireGameModule = requireGameModule || std::string_view(argv[i]) == "-require-game";
+
+    int exitCode = 0;
+    if (requireGameModule &&
+        (!GetEngineRuntime().moduleManager || GetEngineRuntime().moduleManager->GetInitializedModuleCount() == 0))
+    {
+        Spark::SimpleConsole::GetInstance().LogError(
+            "Required game module was not initialized; terminating with a failure status.");
+        g_shutdownRequested.store(true, std::memory_order_relaxed);
+        exitCode = 2;
     }
 
     // Fixed 60 Hz server loop
@@ -161,7 +176,7 @@ int RunHeadlessLinux(int argc, char* argv[])
 
     ShutdownLinuxAfterPreflight();
     Spark::SimpleConsole::GetInstance().LogInfo("Headless server shut down cleanly.");
-    return 0;
+    return exitCode;
 }
 #endif // SPARK_HEADLESS_SUPPORT
 

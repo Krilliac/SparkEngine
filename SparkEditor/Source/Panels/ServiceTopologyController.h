@@ -4,6 +4,7 @@
 #include "Utils/Process.h"
 
 #include <array>
+#include <deque>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -35,7 +36,7 @@ namespace SparkEditor
         std::optional<int> exitCode;
         std::string status = "Idle";
         std::string health;
-        std::vector<std::string> log;
+        std::deque<std::string> log;
     };
 
     class ServiceTopologyController
@@ -58,6 +59,13 @@ namespace SparkEditor
                                                                        const std::filesystem::path& stop);
         [[nodiscard]] static std::vector<std::string> EndpointArguments(std::string endpoint);
         [[nodiscard]] static std::vector<std::string> OrchestratorStatusArguments(std::string endpoint);
+
+        static constexpr size_t MaxRetainedLogLines = 1024;
+        static constexpr size_t MaxRetainedLogLineBytes = 16 * 1024;
+        static constexpr size_t MaxDrainedLogLinesPerUpdate = 128;
+        static constexpr size_t MaxHealthFileBytes = 256 * 1024;
+        static void AppendLogLine(TopologyServiceSnapshot& snapshot, std::string line);
+        static bool ReadHealthFile(const std::filesystem::path& path, std::string& contents);
 
       private:
         struct Record

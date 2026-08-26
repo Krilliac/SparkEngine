@@ -267,7 +267,6 @@ namespace SparkEditor
         else
             ImGui::TextDisabled("Select a module (radio button) to enable launching.");
 
-#ifdef _WIN32
         const bool running = m_gameProcess.IsRunning();
         ImGui::BeginDisabled(!hasSelection || running);
 
@@ -307,9 +306,6 @@ namespace SparkEditor
             ImGui::EndTooltip();
         }
         ImGui::EndDisabled();
-#else
-        ImGui::TextDisabled("Process launch is available on Windows builds only.");
-#endif
 
         if (!m_launchStatus.empty())
         {
@@ -321,7 +317,6 @@ namespace SparkEditor
 
     void GameModuleSelectorPanel::LaunchGame(bool headless)
     {
-#ifdef _WIN32
         if (m_gameProcess.IsRunning())
         {
             m_launchStatus = "A game process is already running (PID " + std::to_string(m_gameProcess.GetPid()) +
@@ -402,15 +397,10 @@ namespace SparkEditor
                          std::to_string(m_gameProcess.GetPid());
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
         Spark::SimpleConsole::GetInstance().LogSuccess("[Editor] " + m_launchStatus);
-#else
-        (void)headless;
-        m_launchStatus = "Process launch is available on Windows builds only.";
-#endif
     }
 
     void GameModuleSelectorPanel::PollLaunchedProcess()
     {
-#ifdef _WIN32
         if (!m_gameProcess.IsRunning())
             return;
 
@@ -422,7 +412,6 @@ namespace SparkEditor
                 "Last launch (PID " + std::to_string(pid) + ") exited with code " + std::to_string(exitCode);
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
         }
-#endif
     }
 
     void GameModuleSelectorPanel::StopLaunchedProcess()

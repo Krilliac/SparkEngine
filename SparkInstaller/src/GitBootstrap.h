@@ -21,6 +21,9 @@ namespace SparkInstaller
         // cache directory and returns the absolute path.
         static GitBootstrapResult Ensure(const LogSink& log);
 
+        // Shell-less PATH probe used by Ensure and focused regression tests.
+        static bool IsGitAvailableOnPath();
+
         // Platform-appropriate per-user cache dir (created on demand):
         //   Windows: %LOCALAPPDATA%/SparkInstaller/cache
         //   Linux:   $XDG_CACHE_HOME/SparkInstaller or ~/.cache/SparkInstaller

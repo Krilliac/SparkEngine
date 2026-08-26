@@ -1,12 +1,17 @@
 #include <chrono>
+#include <charconv>
 #include <cerrno>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -45,6 +50,21 @@ namespace
         uint64_t durationMs = 0;
         std::string error;
     };
+
+    template <typename Integer> bool ParseInteger(std::string_view input, Integer& output, bool allowNegative)
+    {
+        if (input.empty() || input.front() == '+' || (!allowNegative && input.front() == '-'))
+            return false;
+
+        Integer parsed{};
+        const char* const first = input.data();
+        const char* const last = first + input.size();
+        const auto [end, error] = std::from_chars(first, last, parsed, 10);
+        if (error != std::errc{} || end != last)
+            return false;
+        output = parsed;
+        return true;
+    }
 
     std::string Escape(std::string_view input, bool xml)
     {
@@ -355,11 +375,20 @@ int main(int argc, char** argv)
             else if (argument == "--log-contains")
                 plan.logContains.push_back(value);
             else if (argument == "--frames")
-                plan.frames = static_cast<uint32_t>(std::stoul(value));
+            {
+                if (!ParseInteger(value, plan.frames, false))
+                    throw std::invalid_argument("invalid frame count");
+            }
             else if (argument == "--timeout-ms")
-                plan.timeoutMs = static_cast<uint32_t>(std::stoul(value));
+            {
+                if (!ParseInteger(value, plan.timeoutMs, false))
+                    throw std::invalid_argument("invalid timeout");
+            }
             else if (argument == "--expected-exit")
-                plan.expectedExit = std::stoi(value);
+            {
+                if (!ParseInteger(value, plan.expectedExit, true))
+                    throw std::invalid_argument("invalid expected exit code");
+            }
             else
                 throw std::invalid_argument("unknown argument");
         }

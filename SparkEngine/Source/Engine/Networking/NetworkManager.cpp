@@ -580,15 +580,67 @@ namespace Spark::Net
         if (!advancedForReconnect)
             m_serverTime += deltaTime;
 
-        // Receive from socket and enqueue
-        const std::vector<ClientID> newlyConnected = ProcessIncoming();
-        for (ClientID id : newlyConnected)
+        auto dispatchMessage = [&](const NetworkMessage& message, bool warnIfUnhandled = true)
         {
+            MessageHandler internalHandler;
+            MessageHandler applicationObserver;
+            {
+                std::lock_guard<std::mutex> lock(m_handlerMutex);
+                const uint16_t type = static_cast<uint16_t>(message.type);
+                auto internalIt = m_internalHandlers.find(type);
+                if (internalIt != m_internalHandlers.end())
+                    internalHandler = internalIt->second;
+                auto observerIt = m_handlers.find(type);
+                if (observerIt != m_handlers.end())
+                    applicationObserver = observerIt->second;
+            }
+
+            // Protocol state changes stay under the API lock. Application code
+            // runs afterward with that lock fully released and can never replace
+            // the mandatory handler that established the invariant.
+            if (internalHandler)
+            {
+                internalHandler(message);
+                if (m_lifecycleEpoch != updateLifecycleEpoch)
+                    return false;
+            }
+            if (applicationObserver)
+            {
+                NetworkMessage callbackMessage = message;
+                if (!invokeUnlocked([&applicationObserver, &callbackMessage]()
+                                    { applicationObserver(callbackMessage); }))
+                    return false;
+            }
+            else if (!internalHandler && warnIfUnhandled)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network, "Unknown message type %u — dropping",
+                               static_cast<unsigned>(message.type));
+            }
+            return true;
+        };
+
+        // Receive from socket and enqueue. Successful admission events are
+        // surfaced to application observers exactly once before initial sync,
+        // allowing a DedicatedServer policy callback to kick the client first.
+        const std::vector<NetworkMessage> newlyConnected = ProcessIncoming();
+        for (const NetworkMessage& event : newlyConnected)
+        {
+            if (!dispatchMessage(event, false))
+                return;
+
+            bool remainsAdmitted = false;
+            {
+                std::lock_guard<std::mutex> lock(m_clientsMutex);
+                remainsAdmitted = m_clients.contains(event.senderID);
+            }
+            if (!remainsAdmitted)
+                continue;
+
             // SendFullEntitySync owns its lock so its property callbacks can
             // completely release it (recursive unlock would leave this frame's
             // outer acquisition held).
             apiLock.unlock();
-            SendFullEntitySync(id);
+            SendFullEntitySync(event.senderID);
             apiLock.lock();
             if (m_lifecycleEpoch != updateLifecycleEpoch)
                 return;
@@ -673,29 +725,8 @@ namespace Spark::Net
                     peer.expectedOrderedSequence++;
                 }
 
-                MessageHandler handler;
-                {
-                    std::lock_guard<std::mutex> lock(m_handlerMutex);
-                    auto it = m_handlers.find(static_cast<uint16_t>(msg.type));
-                    if (it != m_handlers.end())
-                    {
-                        handler = it->second;
-                    }
-                }
-                if (handler)
-                {
-                    // Copy both callback and message before releasing the API
-                    // lock. User code may synchronously wait for another thread
-                    // that calls GetStats/SendMessage/Shutdown.
-                    NetworkMessage callbackMessage = msg;
-                    if (!invokeUnlocked([&handler, &callbackMessage]() { handler(callbackMessage); }))
-                        return;
-                }
-                else
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Network, "Unknown message type %u — dropping",
-                                   static_cast<unsigned>(msg.type));
-                }
+                if (!dispatchMessage(msg))
+                    return;
 
                 // Check channel before popping — msg reference is invalidated by pop()
                 bool wasReliableOrdered = (msg.channel == ChannelType::ReliableOrdered);
@@ -710,20 +741,8 @@ namespace Spark::Net
                     NetworkMessage orderedMessage;
                     while (PopNextOrderedMessage(peerKey, orderedMessage))
                     {
-                        MessageHandler orderedHandler;
-                        {
-                            std::lock_guard<std::mutex> lock(m_handlerMutex);
-                            auto it = m_handlers.find(static_cast<uint16_t>(orderedMessage.type));
-                            if (it != m_handlers.end())
-                                orderedHandler = it->second;
-                        }
-                        if (orderedHandler)
-                        {
-                            NetworkMessage callbackMessage = orderedMessage;
-                            if (!invokeUnlocked([&orderedHandler, &callbackMessage]()
-                                                { orderedHandler(callbackMessage); }))
-                                return;
-                        }
+                        if (!dispatchMessage(orderedMessage))
+                            return;
                     }
                 }
             }

@@ -52,9 +52,13 @@ namespace SparkEditor
             const std::filesystem::path modulePath =
                 m_gameModuleSelector ? LaunchContext::PathFromUtf8(m_gameModuleSelector->GetLaunchSelectionPath())
                                      : std::filesystem::path{};
+#ifdef _WIN32
+            const std::filesystem::path engineExecutable = editorDirectory / "SparkEngine.exe";
+#else
+            const std::filesystem::path engineExecutable = editorDirectory / "SparkEngine";
+#endif
             const std::filesystem::path workingDirectory = LaunchContext::ResolveWorkingDirectory(
-                LaunchContext::PathFromUtf8(ProjectManager::GetActiveProjectPath()), modulePath,
-                editorDirectory / "SparkEngine.exe");
+                LaunchContext::PathFromUtf8(ProjectManager::GetActiveProjectPath()), modulePath, engineExecutable);
             if (!workingDirectory.empty())
                 SetLaunchContextDirectory(workingDirectory);
         }
@@ -75,7 +79,7 @@ namespace SparkEditor
             return;
         }
 
-        ImGui::TextWrapped("Launch and monitor real, out-of-process SparkEngine.exe play-test instances. "
+        ImGui::TextWrapped("Launch and monitor real, out-of-process SparkEngine play-test instances. "
                            "In-editor play is not offered — see Game Module Selector for why.");
         ImGui::Separator();
 
@@ -94,10 +98,8 @@ namespace SparkEditor
         // independent processes, same policy as GameModuleSelectorPanel.
         for (auto& inst : m_instances)
         {
-#ifdef _WIN32
             if (inst.processHandle)
-                CloseHandle(static_cast<HANDLE>(inst.processHandle));
-#endif
+                CloseEditorProcessHandles(inst.processHandle, nullptr);
             inst.processHandle = nullptr;
         }
         m_instances.clear();
@@ -140,7 +142,6 @@ namespace SparkEditor
             ImGui::Text("Module: %s",
                         LaunchContext::PathToUtf8(LaunchContext::PathFromUtf8(selectedPath).stem()).c_str());
 
-#ifdef _WIN32
         ImGui::BeginDisabled(!hasModule);
 
         if (ImGui::Button("Launch Game"))
@@ -163,9 +164,6 @@ namespace SparkEditor
         }
 
         ImGui::EndDisabled();
-#else
-        ImGui::TextDisabled("Process launch is available on Windows builds only.");
-#endif
 
         if (!m_statusMessage.empty())
             ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.75f, 1.0f), "%s", m_statusMessage.c_str());
@@ -181,13 +179,11 @@ namespace SparkEditor
         ImGui::SetNextItemWidth(200.0f);
         ImGui::InputText("host:port", m_quickConnectBuf, sizeof(m_quickConnectBuf));
 
-#ifdef _WIN32
         ImGui::SameLine();
         ImGui::BeginDisabled(!hasModule || m_quickConnectBuf[0] == '\0');
         if (ImGui::Button("Launch Client (Connecting-To)"))
             LaunchClient(m_quickConnectBuf);
         ImGui::EndDisabled();
-#endif
     }
 
     void PlayControlPanel::RenderStatus()

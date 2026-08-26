@@ -173,6 +173,21 @@ int main(int argc, char** argv)
                                                                     false, directUpdated, directError);
     const std::string directBytes = ReadFile(directOutput);
 
+    const auto unicodeSource = root / "unicode-source";
+    const auto unicodeOutput = root / "unicode-output";
+    const auto unicodeNested = std::filesystem::u8path(u8"\u00E9");
+    const auto unicodeFile = unicodeNested / std::filesystem::u8path(u8"\u96EA.bin");
+    std::filesystem::create_directories(unicodeSource / unicodeNested);
+    std::ofstream(unicodeSource / unicodeFile, std::ios::binary) << "portable unicode";
+    std::ofstream(unicodeSource / std::filesystem::u8path(u8"\u03A9.txt"), std::ios::binary) << "ordered unicode";
+    const auto unicodeFirst = Spark::AssetPipeline::CookAssets({unicodeSource, unicodeOutput, {}, false});
+    const auto unicodeSecond = Spark::AssetPipeline::CookAssets({unicodeSource, unicodeOutput, {}, false});
+    const std::string expectedUnicodePath = "\xC3\xA9/\xE9\x9B\xAA.bin";
+    const bool unicodePassed = unicodeFirst.Succeeded() && unicodeSecond.Succeeded() &&
+                               unicodeFirst.manifestSha256 == unicodeSecond.manifestSha256 &&
+                               std::any_of(unicodeFirst.records.begin(), unicodeFirst.records.end(),
+                                           [&](const auto& record) { return record.path == expectedUnicodePath; });
+
     bool controlFilenamePassed = true;
 #if !defined(_WIN32)
     const auto controlSource = root / "control-source";
@@ -239,8 +254,8 @@ int main(int argc, char** argv)
          (!throughInternalManifestLink.Succeeded() && internalManifestBytes == "preserve-internal")) &&
         (!hardLinkAvailable ||
          (!throughHardLinkedManifest.Succeeded() && internalManifestBytes == "preserve-internal")) &&
-        !wrongDigestAccepted && directBytes == "old bytes" && controlFilenamePassed && aliasedOutputPassed &&
-        concurrentPassed && std::filesystem::is_regular_file(output / "nested" / "asset.txt");
+        !wrongDigestAccepted && directBytes == "old bytes" && unicodePassed && controlFilenamePassed &&
+        aliasedOutputPassed && concurrentPassed && std::filesystem::is_regular_file(output / "nested" / "asset.txt");
     if (!passed)
     {
         std::cerr << "Asset cooker deterministic/incremental contract failed\n"
@@ -258,9 +273,9 @@ int main(int argc, char** argv)
                   << " internalLinkedRejected="
                   << (!internalManifestLinkAvailable || !throughInternalManifestLink.Succeeded())
                   << " hardLinkedRejected=" << (!hardLinkAvailable || !throughHardLinkedManifest.Succeeded()) << "\n"
-                  << "control=" << controlFilenamePassed << " aliasedOutput=" << aliasedOutputPassed
-                  << " children=" << childAResult << ',' << childBResult << " concurrentFirst='" << concurrentFirst
-                  << "' concurrentSecond='" << concurrentSecond
+                  << "unicode=" << unicodePassed << " control=" << controlFilenamePassed
+                  << " aliasedOutput=" << aliasedOutputPassed << " children=" << childAResult << ',' << childBResult
+                  << " concurrentFirst='" << concurrentFirst << "' concurrentSecond='" << concurrentSecond
                   << "' manifest=" << std::filesystem::exists(concurrentManifest) << "\n"
                   << "preserved fixture: " << root << "\n";
         return 1;

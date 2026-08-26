@@ -38,6 +38,7 @@
 #include <set>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 
 using namespace SparkEditor;
 
@@ -48,6 +49,41 @@ namespace
         const std::u8string utf8 = path.generic_u8string();
         return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
     }
+
+    struct PluginLifecycleProbe
+    {
+        static inline std::vector<std::string> events;
+    };
+
+    class SuccessfulLifecyclePlugin final : public IEditorPlugin
+    {
+      public:
+        const char* GetName() const override { return "SuccessfulLifecyclePlugin"; }
+        const char* GetVersion() const override { return "1.0"; }
+        bool Initialize(EditorApplication*) override
+        {
+            PluginLifecycleProbe::events.emplace_back("successful-initialize");
+            return true;
+        }
+        void Shutdown() override { PluginLifecycleProbe::events.emplace_back("successful-shutdown"); }
+        void Update(float) override {}
+        void OnGUI() override {}
+    };
+
+    class FailingLifecyclePlugin final : public IEditorPlugin
+    {
+      public:
+        const char* GetName() const override { return "FailingLifecyclePlugin"; }
+        const char* GetVersion() const override { return "1.0"; }
+        bool Initialize(EditorApplication*) override
+        {
+            PluginLifecycleProbe::events.emplace_back("failing-initialize");
+            return false;
+        }
+        void Shutdown() override { PluginLifecycleProbe::events.emplace_back("failing-shutdown"); }
+        void Update(float) override {}
+        void OnGUI() override {}
+    };
 } // namespace
 
 // ============================================================================
@@ -1780,22 +1816,33 @@ TEST(EditorLaunchContext_UsesActiveProjectThenSafeModuleAndEngineFallbacks)
     EXPECT_FALSE(ec);
 }
 
-TEST(EditorLaunchContext_ValidatesExistingDllModulesBeforeLaunch)
+TEST(EditorLaunchContext_ValidatesExistingNativeModulesBeforeLaunch)
 {
     namespace fs = std::filesystem;
     const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     const fs::path root = fs::temp_directory_path() / ("spark-launch-module-validation-" + std::to_string(stamp));
     fs::create_directories(root);
-    const fs::path dll = root / "PlayableGame.DLL";
-    std::ofstream(dll, std::ios::binary) << "not a real dll; launch validation only checks the path contract";
-    fs::create_directory(root / "Directory.dll");
+#if defined(_WIN32)
+    constexpr std::string_view nativeExtension = ".DLL";
+    constexpr std::string_view wrongExtension = ".so";
+#elif defined(__APPLE__)
+    constexpr std::string_view nativeExtension = ".dylib";
+    constexpr std::string_view wrongExtension = ".dll";
+#else
+    constexpr std::string_view nativeExtension = ".so";
+    constexpr std::string_view wrongExtension = ".dll";
+#endif
+    const fs::path module = root / ("PlayableGame" + std::string(nativeExtension));
+    std::ofstream(module, std::ios::binary) << "not a real module; launch validation only checks the path contract";
+    const fs::path directory = root / ("Directory" + std::string(nativeExtension));
+    fs::create_directory(directory);
 
-    EXPECT_TRUE(LaunchContext::ValidateGameModuleForLaunch(dll).empty());
-    EXPECT_FALSE(LaunchContext::ValidateGameModuleForLaunch(root / "Missing.dll").empty());
-    EXPECT_FALSE(LaunchContext::ValidateGameModuleForLaunch(root / "Directory.dll").empty());
-    const fs::path textFile = root / "not-a-module.txt";
-    std::ofstream(textFile, std::ios::binary) << "not a module";
-    EXPECT_FALSE(LaunchContext::ValidateGameModuleForLaunch(textFile).empty());
+    EXPECT_TRUE(LaunchContext::ValidateGameModuleForLaunch(module).empty());
+    EXPECT_FALSE(LaunchContext::ValidateGameModuleForLaunch(root / ("Missing" + std::string(nativeExtension))).empty());
+    EXPECT_FALSE(LaunchContext::ValidateGameModuleForLaunch(directory).empty());
+    const fs::path wrongModule = root / ("not-a-module" + std::string(wrongExtension));
+    std::ofstream(wrongModule, std::ios::binary) << "not a module";
+    EXPECT_FALSE(LaunchContext::ValidateGameModuleForLaunch(wrongModule).empty());
 
     std::error_code ec;
     fs::remove_all(root, ec);
@@ -1831,7 +1878,61 @@ TEST(EditorProcessLaunch_QuotesUnicodePathsAndExplicitManifestAsDistinctArgument
     EXPECT_TRUE(std::wstring(argv[9]) == L"1");
     LocalFree(argv);
 }
+#else
+TEST(EditorProcessLaunch_PosixBuildsArgvSafeCommand)
+{
+    const std::filesystem::path engine = "/tmp/Spark Tools/SparkEngine";
+    const std::filesystem::path module = "/tmp/Cafe Game/Player's Module.so";
+    const std::filesystem::path cfg = "/tmp/Cafe Game/smoke commands.cfg";
+    const std::filesystem::path manifest = "/tmp/Cafe Game/spark.modules.json";
+    std::string error;
+    const std::wstring command =
+        BuildGameLaunchCommandLine(engine, module, true, cfg, manifest, L"-test-frames 1", error);
+
+    EXPECT_TRUE(error.empty());
+    EXPECT_FALSE(command.empty());
+    EXPECT_TRUE(command.find(L" -game ") != std::wstring::npos);
+    EXPECT_TRUE(command.find(L" -headless") != std::wstring::npos);
+    EXPECT_TRUE(command.find(L" -manifest ") != std::wstring::npos);
+    EXPECT_TRUE(command.find(L"'\\''") != std::wstring::npos);
+}
+
+TEST(EditorProcessLaunch_PosixLaunchesPollsAndPreservesMetacharacterArgument)
+{
+    ProcessLaunchResult launch =
+        LaunchEditorProcess("/bin/sh", L"'/bin/sh' -c 'test \"$1\" = \"semi;colon\"' -- 'semi;colon'", "/tmp");
+    ASSERT_TRUE(launch.success);
+    ASSERT_TRUE(launch.processHandle != nullptr);
+
+    unsigned long exitCode = 999;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (!PollProcessExited(launch.processHandle, exitCode) && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+    EXPECT_EQ(exitCode, 0ul);
+    CloseEditorProcessHandles(launch.processHandle, launch.jobHandle);
+}
+
+TEST(EditorProcessLaunch_PosixStopsOwnedProcessGroup)
+{
+    ProcessLaunchResult launch = LaunchOwnedEditorProcess("/bin/sh", L"'/bin/sh' -c 'sleep 30 & wait'", "/tmp");
+    ASSERT_TRUE(launch.success);
+    ASSERT_TRUE(launch.processHandle != nullptr);
+
+    const EditorProcessStopResult stopped =
+        StopEditorProcessTree(launch.processHandle, launch.jobHandle, launch.pid, 20);
+    EXPECT_TRUE(stopped == EditorProcessStopResult::Graceful || stopped == EditorProcessStopResult::Terminated);
+}
 #endif
+
+TEST(EditorProcessLaunch_DiscoversExecutableDirectoryWithoutThrowing)
+{
+    const std::string executableDirectory = GetEditorExecutableDirectory();
+    EXPECT_FALSE(executableDirectory.empty());
+    std::error_code error;
+    EXPECT_TRUE(std::filesystem::is_directory(LaunchContext::PathFromUtf8(executableDirectory), error));
+    EXPECT_FALSE(error);
+}
 
 TEST(EditorOwnedProcess_ReplacesWithoutOrphaningAndDestructorStops)
 {
@@ -2198,6 +2299,25 @@ TEST(PluginManager_GetPluginNull)
     EditorPluginManager mgr;
     IEditorPlugin* plugin = mgr.GetPlugin("NonExistent");
     EXPECT_TRUE(plugin == nullptr);
+}
+
+TEST(PluginManager_FailedInitializationSupportsExplicitRollback)
+{
+    PluginLifecycleProbe::events.clear();
+    EditorPluginManager mgr;
+    ASSERT_TRUE(mgr.RegisterPlugin<SuccessfulLifecyclePlugin>());
+    ASSERT_TRUE(mgr.RegisterPlugin<FailingLifecyclePlugin>());
+
+    EXPECT_FALSE(mgr.InitializeAll(nullptr));
+    EXPECT_EQ(PluginLifecycleProbe::events.size(), static_cast<size_t>(2));
+    EXPECT_EQ(PluginLifecycleProbe::events[0], std::string("successful-initialize"));
+    EXPECT_EQ(PluginLifecycleProbe::events[1], std::string("failing-initialize"));
+
+    // EditorApplication's failInitialization path calls ShutdownAll(). Only
+    // plugins that actually initialized participate in rollback.
+    mgr.ShutdownAll();
+    ASSERT_EQ(PluginLifecycleProbe::events.size(), static_cast<size_t>(3));
+    EXPECT_EQ(PluginLifecycleProbe::events[2], std::string("successful-shutdown"));
 }
 
 // ============================================================================

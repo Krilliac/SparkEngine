@@ -52,6 +52,7 @@ namespace SparkEditor
             console.LogError("Failed to register window class");
             return false;
         }
+        m_windowClassRegistered = true;
         console.LogInfo("Window class registered successfully");
 
         // Create window
@@ -182,12 +183,15 @@ namespace SparkEditor
         if (!ImGui_ImplWin32_Init(m_hwnd))
         {
             std::cerr << "Failed to initialize ImGui Win32 backend\n";
+            ImGui::DestroyContext();
             return false;
         }
 
         if (!ImGui_ImplDX11_Init(m_device.Get(), m_context.Get()))
         {
             std::cerr << "Failed to initialize ImGui DirectX 11 backend\n";
+            ImGui_ImplWin32_Shutdown();
+            ImGui::DestroyContext();
             return false;
         }
 
@@ -351,9 +355,13 @@ namespace SparkEditor
         m_isRunning = false;
 
         // Shutdown editor plugins before UI teardown
-        console.LogInfo("Shutting down editor plugins...");
-        m_pluginManager.ShutdownAll();
-        console.LogSuccess("Editor plugins shutdown complete");
+        if (m_pluginLifecycleStarted)
+        {
+            console.LogInfo("Shutting down editor plugins...");
+            m_pluginManager.ShutdownAll();
+            m_pluginLifecycleStarted = false;
+            console.LogSuccess("Editor plugins shutdown complete");
+        }
 
         if (m_ui)
         {
@@ -365,16 +373,24 @@ namespace SparkEditor
 
         // Window manager shutdown after EditorUI so any auto-save picks
         // up the final panel state.
-        console.LogInfo("Shutting down window manager...");
-        EditorWindowManager::GetInstance().Shutdown();
-        console.LogSuccess("Window manager shutdown complete");
+        if (m_windowManagerInitialized)
+        {
+            console.LogInfo("Shutting down window manager...");
+            EditorWindowManager::GetInstance().Shutdown();
+            m_windowManagerInitialized = false;
+            console.LogSuccess("Window manager shutdown complete");
+        }
 
         // Cleanup ImGui
-        console.LogInfo("Cleaning up Dear ImGui...");
-        ImGui_ImplDX11_Shutdown();
-        ImGui_ImplWin32_Shutdown();
-        ImGui::DestroyContext();
-        console.LogSuccess("Dear ImGui cleanup complete");
+        if (m_imguiInitialized)
+        {
+            console.LogInfo("Cleaning up Dear ImGui...");
+            ImGui_ImplDX11_Shutdown();
+            ImGui_ImplWin32_Shutdown();
+            ImGui::DestroyContext();
+            m_imguiInitialized = false;
+            console.LogSuccess("Dear ImGui cleanup complete");
+        }
 
         // Cleanup DirectX
         console.LogInfo("Cleaning up DirectX 11...");
@@ -392,8 +408,14 @@ namespace SparkEditor
             m_hwnd = nullptr;
             console.LogSuccess("Main window destroyed");
         }
+        if (m_windowClassRegistered)
+        {
+            UnregisterClassW(L"SparkEditorWindow", GetModuleHandleW(nullptr));
+            m_windowClassRegistered = false;
+        }
 
         m_isInitialized = false;
+        m_initializationStarted = false;
         console.LogSuccess("Enhanced editor shutdown complete");
     }
 

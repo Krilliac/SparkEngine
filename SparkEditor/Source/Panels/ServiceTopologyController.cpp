@@ -2,8 +2,11 @@
 
 #include "Utils/DaemonClient.h"
 
+#include <algorithm>
+#include <array>
 #include <fstream>
 #include <sstream>
+#include <string_view>
 
 namespace SparkEditor
 {
@@ -34,9 +37,22 @@ namespace SparkEditor
             record.snapshot.status = "Executable is not configured";
             return false;
         }
-        std::error_code error;
-        if (!record.spec.stopFile.empty())
-            std::filesystem::remove(record.spec.stopFile, error);
+        record.snapshot = {};
+        const auto removeStaleFile = [&record](const std::filesystem::path& path, const char* description)
+        {
+            if (path.empty())
+                return true;
+            std::error_code error;
+            std::filesystem::remove(path, error);
+            if (!error)
+                return true;
+            record.snapshot.status = std::string("Could not remove stale ") + description + ": " + error.message();
+            return false;
+        };
+        if (!removeStaleFile(record.spec.stopFile, "stop file") ||
+            !removeStaleFile(record.spec.healthFile, "health file"))
+            return false;
+
         Spark::Process::Builder builder(record.spec.executable.string());
         for (const auto& argument : record.spec.arguments)
             builder.Arg(argument);
@@ -47,7 +63,6 @@ namespace SparkEditor
             return false;
         }
         record.process.emplace(std::move(*launched));
-        record.snapshot = {};
         record.snapshot.running = true;
         record.snapshot.status = "Running";
         return true;
@@ -92,25 +107,75 @@ namespace SparkEditor
             if (!record.process)
                 continue;
             std::string line;
-            while (record.process->TryReadLine(line))
-                record.snapshot.log.push_back(std::move(line));
+            size_t drainedLines = 0;
+            while (drainedLines < MaxDrainedLogLinesPerUpdate && record.process->TryReadLine(line))
+            {
+                AppendLogLine(record.snapshot, std::move(line));
+                ++drainedLines;
+            }
             if (!record.spec.healthFile.empty())
             {
-                std::ifstream health(record.spec.healthFile, std::ios::binary);
-                if (health)
-                    record.snapshot.health.assign(std::istreambuf_iterator<char>(health), {});
+                std::string health;
+                if (ReadHealthFile(record.spec.healthFile, health))
+                    record.snapshot.health = std::move(health);
+                else
+                    record.snapshot.health.clear();
             }
             if (const auto exit = record.process->GetExitCode())
             {
                 std::istringstream remaining(record.process->ReadAllStdout());
                 while (std::getline(remaining, line))
-                    record.snapshot.log.push_back(std::move(line));
+                    AppendLogLine(record.snapshot, std::move(line));
                 record.snapshot.running = false;
                 record.snapshot.exitCode = *exit;
                 record.snapshot.status = *exit == 0 ? "Exited" : "Failed (" + std::to_string(*exit) + ")";
                 record.process.reset();
             }
         }
+    }
+
+    void ServiceTopologyController::AppendLogLine(TopologyServiceSnapshot& snapshot, std::string line)
+    {
+        if (line.size() > MaxRetainedLogLineBytes)
+        {
+            constexpr std::string_view suffix = " [truncated]";
+            line.resize(MaxRetainedLogLineBytes - suffix.size());
+            line.append(suffix);
+        }
+        while (snapshot.log.size() >= MaxRetainedLogLines)
+            snapshot.log.pop_front();
+        snapshot.log.push_back(std::move(line));
+    }
+
+    bool ServiceTopologyController::ReadHealthFile(const std::filesystem::path& path, std::string& contents)
+    {
+        contents.clear();
+        std::error_code error;
+        const std::uintmax_t size = std::filesystem::file_size(path, error);
+        if (error || size > MaxHealthFileBytes)
+            return false;
+
+        std::ifstream health(path, std::ios::binary);
+        if (!health)
+            return false;
+
+        contents.reserve(static_cast<size_t>(size));
+        std::array<char, 4096> buffer{};
+        while (health && contents.size() < MaxHealthFileBytes)
+        {
+            const size_t remaining = MaxHealthFileBytes - contents.size();
+            health.read(buffer.data(), static_cast<std::streamsize>(std::min(remaining, buffer.size())));
+            const std::streamsize count = health.gcount();
+            if (count > 0)
+                contents.append(buffer.data(), static_cast<size_t>(count));
+        }
+
+        if (health.bad() || health.peek() != std::char_traits<char>::eof())
+        {
+            contents.clear();
+            return false;
+        }
+        return true;
     }
 
     const TopologyServiceSnapshot& ServiceTopologyController::Snapshot(TopologyService service) const

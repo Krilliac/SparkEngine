@@ -152,7 +152,11 @@ else()
     endif()
 
     target_link_libraries(SparkEditor PRIVATE OpenGL::GL)
-    target_link_libraries(SparkEditor PRIVATE pthread dl)
+    find_package(Threads REQUIRED)
+    target_link_libraries(SparkEditor PRIVATE Threads::Threads)
+    if(NOT APPLE)
+        target_link_libraries(SparkEditor PRIVATE dl)
+    endif()
 endif()
 
 if(TARGET miniz)

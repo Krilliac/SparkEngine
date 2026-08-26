@@ -75,10 +75,13 @@ namespace Spark::Net
         m_bytesReceivedSinceSample = 0;
         m_stats = {};
 
-        // Register built-in message handlers
-        RegisterHandler(MessageType::Connect, [this](const NetworkMessage& msg) { HandleConnect(msg); });
-        RegisterHandler(MessageType::Disconnect, [this](const NetworkMessage& msg) { HandleDisconnect(msg); });
-        RegisterHandler(MessageType::ConnectAccepted,
+        // Mandatory protocol handlers are intentionally separate from application
+        // observers. RegisterHandler/ClearHandlers must never replace or erase
+        // transport lifecycle invariants.
+        auto registerInternal = [this](MessageType type, MessageHandler handler)
+        { m_internalHandlers[static_cast<uint16_t>(type)] = std::move(handler); };
+        registerInternal(MessageType::Disconnect, [this](const NetworkMessage& msg) { HandleDisconnect(msg); });
+        registerInternal(MessageType::ConnectAccepted,
                         [this](const NetworkMessage& msg)
                         {
                             if (GetRole() == NetworkRole::Client)
@@ -102,7 +105,37 @@ namespace Spark::Net
                                 m_reconnectAttempts = 0;
                             }
                         });
-        RegisterHandler(MessageType::Heartbeat,
+        registerInternal(MessageType::ConnectRejected,
+                         [this](const NetworkMessage& msg)
+                         {
+                             std::string reason = "Connection rejected";
+                             if (!msg.payload.empty())
+                             {
+                                 NetBuffer buf;
+                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
+                                 std::string suppliedReason = buf.ReadString();
+                                 if (!buf.HasError() && !suppliedReason.empty())
+                                     reason = std::move(suppliedReason);
+                             }
+
+                             {
+                                 std::lock_guard<std::mutex> stateLock(m_stateMutex);
+                                 if (m_role.load(std::memory_order_acquire) != NetworkRole::Client ||
+                                     m_connectionState != ConnectionState::Connecting)
+                                     return;
+                                 m_lastConnectionError = reason;
+                                 m_connectionState = ConnectionState::Disconnected;
+                                 m_role = NetworkRole::None;
+                                 m_localClientID = INVALID_CLIENT;
+                                 m_wasConnected = false;
+                             }
+#ifdef ENABLE_NETWORKING
+                             CloseSocket();
+#endif
+                             m_peers.clear();
+                             SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection rejected: %s", reason.c_str());
+                         });
+        registerInternal(MessageType::Heartbeat,
                         [this](const NetworkMessage& msg)
                         {
                             NetworkRole role;
@@ -120,7 +153,7 @@ namespace Spark::Net
                                 }
                             }
                         });
-        RegisterHandler(MessageType::EntityStateUpdate,
+        registerInternal(MessageType::EntityStateUpdate,
                         [this](const NetworkMessage& msg)
                         {
                             NetworkRole role;
@@ -157,7 +190,7 @@ namespace Spark::Net
                                 }
                             }
                         });
-        RegisterHandler(MessageType::DeltaAck,
+        registerInternal(MessageType::DeltaAck,
                         [this](const NetworkMessage& msg)
                         {
                             // Server-only: advance the sending client's delta baseline.
@@ -174,7 +207,7 @@ namespace Spark::Net
                             buf.WriteBytes(msg.payload.data(), msg.payload.size());
                             DeltaSnapshotManager::GetInstance().AcknowledgeSequence(msg.senderID, buf.ReadUint32());
                         });
-        RegisterHandler(MessageType::ClientInput,
+        registerInternal(MessageType::ClientInput,
                         [this](const NetworkMessage& msg)
                         {
                             NetworkRole role;
@@ -265,6 +298,7 @@ namespace Spark::Net
         }
         {
             std::lock_guard<std::mutex> lock(m_handlerMutex);
+            m_internalHandlers.clear();
             m_handlers.clear();
             m_sensitiveMessageTypes.clear();
         }
@@ -432,6 +466,7 @@ namespace Spark::Net
             std::lock_guard<std::mutex> stateLock(m_stateMutex);
             m_role = NetworkRole::Client;
             m_connectionState = ConnectionState::Connecting;
+            m_lastConnectionError.clear();
         }
         ++m_lifecycleEpoch;
 
@@ -916,9 +951,9 @@ namespace Spark::Net
     // ProcessIncoming -- read from socket, parse, enqueue
     // --------------------------------------------------------------------------
 
-    std::vector<ClientID> NetworkManager::ProcessIncoming()
+    std::vector<NetworkMessage> NetworkManager::ProcessIncoming()
     {
-        std::vector<ClientID> newlyConnected;
+        std::vector<NetworkMessage> newlyConnected;
 #ifdef ENABLE_NETWORKING
         if (m_socket == INVALID_SOCKET)
             return newlyConnected;
@@ -1014,7 +1049,10 @@ namespace Spark::Net
 
                     const ClientID admittedID = HandleConnect(msg);
                     if (admittedID != INVALID_CLIENT)
-                        newlyConnected.push_back(admittedID);
+                    {
+                        msg.senderID = admittedID;
+                        newlyConnected.push_back(std::move(msg));
+                    }
                     continue;
                 }
 

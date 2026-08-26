@@ -111,3 +111,32 @@ if(NOT CMAKE_PROJECT_NAME STREQUAL "SparkEngine")
 endif()
 
 install(TARGETS SparkInstaller RUNTIME DESTINATION bin COMPONENT tools)
+
+set(_sparkinstaller_tests_default ON)
+if(DEFINED BUILD_TESTS)
+    set(_sparkinstaller_tests_default ${BUILD_TESTS})
+endif()
+option(SPARKINSTALLER_BUILD_TESTS "Build SparkInstaller focused regression tests"
+       ${_sparkinstaller_tests_default})
+unset(_sparkinstaller_tests_default)
+
+if(SPARKINSTALLER_BUILD_TESTS)
+    enable_testing()
+    add_executable(SparkInstallerGitTests
+        tests/GitContractTests.cpp
+        src/GitRunner.cpp
+        src/GitBootstrap.cpp
+    )
+    target_include_directories(SparkInstallerGitTests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_link_libraries(SparkInstallerGitTests PRIVATE SparkBuildCore)
+    if(MSVC)
+        target_compile_definitions(SparkInstallerGitTests PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(SparkInstallerGitTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME SparkInstallerGitTests COMMAND SparkInstallerGitTests)
+    set_tests_properties(SparkInstallerGitTests PROPERTIES TIMEOUT 15)
+endif()

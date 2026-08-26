@@ -46,6 +46,7 @@
 #include "Utils/FreezeDetector.h" // SPARK_HEARTBEAT / SPARK_FREEZE_RECOVERY_*
 #include "FixedTimestepAccumulator.h"
 #include <cstring>
+#include <cstdio>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -327,8 +328,14 @@ void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
     if (LoadGameModulesLinux(*GetEngineRuntime().moduleManager, argc, argv))
     {
         GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
-        console.LogSuccess("Loaded " + std::to_string(GetEngineRuntime().moduleManager->GetModuleCount()) +
-                           " module(s)");
+        const size_t initializedModules = GetEngineRuntime().moduleManager->GetInitializedModuleCount();
+        console.LogSuccess("Loaded " + std::to_string(initializedModules) + " module(s)");
+        if (initializedModules > 0)
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "SPARK_MODULE_READY count=%zu", initializedModules);
+            std::fprintf(stdout, "SPARK_MODULE_READY count=%zu\n", initializedModules);
+            std::fflush(stdout);
+        }
     }
     else
     {

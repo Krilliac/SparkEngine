@@ -68,6 +68,17 @@ else()
     project(SparkEngine VERSION ${SPARK_ENGINE_VERSION} LANGUAGES CXX C)
 endif()
 
+# Keep the public SDK's semantic version in lockstep with project()/CPack.
+# Version.h retains the independently managed SDK ABI number and includes this
+# generated header for the release version macros.
+set(SPARK_GENERATED_INCLUDE_DIR "${CMAKE_BINARY_DIR}/generated/include")
+file(MAKE_DIRECTORY "${SPARK_GENERATED_INCLUDE_DIR}/Spark")
+configure_file(
+    "${CMAKE_SOURCE_DIR}/cmake/SparkGeneratedVersion.h.in"
+    "${SPARK_GENERATED_INCLUDE_DIR}/Spark/GeneratedVersion.h"
+    @ONLY
+)
+
 # Set consistent runtime library for all targets using modern CMake (CMP0091)
 # Must be after project() so that the MSVC variable is defined.
 if(MSVC)
@@ -1265,9 +1276,13 @@ set_target_properties(SparkEngineLib PROPERTIES OUTPUT_NAME "SparkEngineLib")
 if(NOT WIN32)
     add_library(SparkEngineInterface INTERFACE)
     target_include_directories(SparkEngineInterface INTERFACE
-        $<TARGET_PROPERTY:SparkEngineLib,INTERFACE_INCLUDE_DIRECTORIES>)
+        $<BUILD_INTERFACE:$<TARGET_PROPERTY:SparkEngineLib,INTERFACE_INCLUDE_DIRECTORIES>>
+        $<INSTALL_INTERFACE:include>
+        $<INSTALL_INTERFACE:include/SparkEngine>
+        $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty>)
     target_compile_definitions(SparkEngineInterface INTERFACE
-        $<TARGET_PROPERTY:SparkEngineLib,INTERFACE_COMPILE_DEFINITIONS>)
+        $<BUILD_INTERFACE:$<TARGET_PROPERTY:SparkEngineLib,INTERFACE_COMPILE_DEFINITIONS>>)
+    target_compile_features(SparkEngineInterface INTERFACE cxx_std_23)
     if(APPLE)
         target_link_options(SparkEngineInterface INTERFACE
             "LINKER:-undefined,dynamic_lookup")
@@ -1934,6 +1949,7 @@ target_include_directories(SparkEngineLib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkEngine/Source>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/GameModules/SparkGameFPS/Source>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkSDK/Include>
+    $<BUILD_INTERFACE:${SPARK_GENERATED_INCLUDE_DIR}>
     $<INSTALL_INTERFACE:include>
     $<INSTALL_INTERFACE:include/SparkEngine>
     $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty>
@@ -2353,10 +2369,20 @@ install(TARGETS ${_SPARK_INSTALL_TARGETS}
     ARCHIVE DESTINATION lib COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
     LIBRARY DESTINATION lib COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
 )
+if(TARGET SparkEngineInterface)
+    install(TARGETS SparkEngineInterface
+        EXPORT SparkEngineTargets
+        INCLUDES DESTINATION include
+    )
+endif()
 
 # Install SparkSDK public headers
 install(DIRECTORY SparkSDK/Include/Spark
     DESTINATION include
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+)
+install(FILES "${SPARK_GENERATED_INCLUDE_DIR}/Spark/GeneratedVersion.h"
+    DESTINATION include/Spark
     COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
 )
 
@@ -2487,18 +2513,51 @@ if(TARGET SparkGameFPS)
     )
 endif()
 
-# Install shaders
-if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders")
-    install(DIRECTORY "SparkEngine/Shaders/"
+if(TARGET SparkCrashReporter)
+    install(TARGETS SparkCrashReporter
+        RUNTIME DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+    )
+endif()
+
+# Match the normal post-build layout: engine HLSL files are flattened directly
+# into Shaders/, while the repo-root shader tree remains under Shaders/HLSL/.
+# Keeping the layouts distinct also avoids overwriting the differently authored
+# BasicVS/DebugUtils/GaussianBlur/PBRSurface/Water variants shared by both trees.
+if(ENGINE_SHADER_FILES)
+    install(FILES ${ENGINE_SHADER_FILES}
+        DESTINATION bin/Shaders
+        COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+    )
+endif()
+file(GLOB _spark_precompiled_engine_shaders
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders/Compiled/*.cso")
+if(_spark_precompiled_engine_shaders)
+    install(FILES ${_spark_precompiled_engine_shaders}
+        DESTINATION bin/Shaders
+        COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+    )
+endif()
+if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders")
+    install(DIRECTORY "Shaders/"
         DESTINATION bin/Shaders
         COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
     )
 endif()
 
-# Startup branding is needed before any project or renderer is initialized.
-if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/Engine")
-    install(DIRECTORY "Assets/Engine/"
-        DESTINATION bin/Assets/Engine
+# Mirror the runtime asset set copied beside SparkEngine after a normal build.
+# MMOFPS/Data is required for TerraFront module initialization and command
+# registration, while Engine contains startup branding used before project load.
+foreach(_spark_runtime_asset_dir Models Textures Audio Materials Scenes Scripts MMO MMOFPS Engine)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${_spark_runtime_asset_dir}")
+        install(DIRECTORY "Assets/${_spark_runtime_asset_dir}/"
+            DESTINATION "bin/Assets/${_spark_runtime_asset_dir}"
+            COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+        )
+    endif()
+endforeach()
+if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Resources/Config")
+    install(DIRECTORY "SparkEngine/Resources/Config/"
+        DESTINATION bin/Resources/Config
         COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
     )
 endif()

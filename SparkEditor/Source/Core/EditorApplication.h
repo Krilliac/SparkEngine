@@ -113,8 +113,12 @@ namespace SparkEditor
         // Configuration and state
         EditorConfig m_config;
         std::string m_imguiIniPath;
+        bool m_initializationStarted = false;
         bool m_isInitialized = false;
         bool m_isRunning = false;
+        bool m_imguiInitialized = false;
+        bool m_windowManagerInitialized = false;
+        bool m_pluginLifecycleStarted = false;
 
         // Window management
         int m_windowWidth = 1600;
@@ -122,6 +126,7 @@ namespace SparkEditor
 
 #ifdef _WIN32
         HWND m_hwnd = nullptr;
+        bool m_windowClassRegistered = false;
 
         // DirectX 11 resources
         Microsoft::WRL::ComPtr<ID3D11Device> m_device;

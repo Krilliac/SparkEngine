@@ -9,12 +9,9 @@
 
 #pragma once
 
-#include <cstdint>
+#include <Spark/GeneratedVersion.h>
 
-// Engine release version (human-readable)
-#define SPARK_ENGINE_VERSION_MAJOR 1
-#define SPARK_ENGINE_VERSION_MINOR 0
-#define SPARK_ENGINE_VERSION_PATCH 0
+#include <cstdint>
 
 // SDK ABI version — increment when IModule, IEngineContext, or any SDK
 // interface changes in a binary-incompatible way.

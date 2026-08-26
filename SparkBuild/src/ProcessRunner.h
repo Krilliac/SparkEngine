@@ -40,10 +40,13 @@ namespace SparkBuild
       private:
         void AsyncThreadFunc(std::string command, std::string workingDir, OutputCallback onOutput,
                              CompletionCallback onComplete);
+        void CompleteAsync(int exitCode, bool success, const CompletionCallback& onComplete);
 
         std::thread m_thread;
+        std::mutex m_threadMutex;
         std::atomic<bool> m_running{false};
         std::atomic<bool> m_cancelRequested{false};
+        std::atomic<bool> m_shuttingDown{false};
         int m_exitCode = 0;
         std::mutex m_processMutex;
 

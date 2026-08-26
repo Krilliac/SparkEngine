@@ -13,12 +13,47 @@
 
 namespace Spark::Daemon
 {
+    namespace
+    {
+        constexpr size_t kMinimumSnapshotBudget = 1024;
+
+        size_t EncodedSnapshotBaseSize(std::string_view sessionId) noexcept
+        {
+            return sizeof(uint16_t) + sizeof(uint32_t) + sessionId.size() + sizeof(uint64_t) +
+                   3 * sizeof(uint32_t);
+        }
+
+        size_t EncodedPeerSize(const CollaborationPeer& peer) noexcept
+        {
+            return sizeof(uint32_t) + 2 * sizeof(uint32_t) + peer.name.size() + peer.presence.size();
+        }
+
+        size_t EncodedLockSize(std::string_view nodeId) noexcept
+        {
+            return 2 * sizeof(uint32_t) + nodeId.size();
+        }
+
+        size_t EncodedEditSize(const CollaborationEdit& edit) noexcept
+        {
+            return sizeof(uint64_t) + sizeof(uint32_t) + 2 * sizeof(uint32_t) + edit.nodeId.size() +
+                   edit.payload.size();
+        }
+
+        bool CanGrowSnapshot(size_t current, size_t addition, size_t budget) noexcept
+        {
+            return current <= budget && addition <= budget - current;
+        }
+    } // namespace
+
     CollaborationService::CollaborationService(CollaborationConfig config) : m_config(std::move(config))
     {
         m_config.maximumSessions = std::clamp<size_t>(m_config.maximumSessions, 1, 1024);
         m_config.maximumPeersPerSession = std::clamp<size_t>(m_config.maximumPeersPerSession, 1, 1024);
         m_config.maximumLocksPerSession = std::clamp<size_t>(m_config.maximumLocksPerSession, 1, 1'000'000);
         m_config.maximumEditHistory = std::clamp<size_t>(m_config.maximumEditHistory, 1, 1'000'000);
+        m_config.maximumSnapshotBytes =
+            std::clamp<size_t>(m_config.maximumSnapshotBytes, kMinimumSnapshotBudget,
+                               static_cast<size_t>(kMaxPayloadSize - kFrameHeaderSize));
         m_config.peerTimeout =
             std::clamp(m_config.peerTimeout, std::chrono::seconds(5), std::chrono::seconds(24 * 60 * 60));
     }
@@ -66,6 +101,7 @@ namespace Spark::Daemon
             return MakeError("session limit reached");
         SessionRecord session;
         session.id = id;
+        session.snapshotBytes = EncodedSnapshotBaseSize(session.id);
         session.administrationToken = GenerateToken();
         if (session.administrationToken.empty())
             return MakeError("secure token generation failed");
@@ -109,15 +145,20 @@ namespace Spark::Daemon
             return MakeError("session peer limit reached");
 
         PeerRecord record;
-        record.peer.id = session.nextPeerId++;
+        record.peer.id = session.nextPeerId;
         record.peer.name = std::move(name);
         record.token = GenerateToken();
         if (record.token.empty())
             return MakeError("secure token generation failed");
         record.lastSeen = std::chrono::steady_clock::now();
+        const size_t peerBytes = EncodedPeerSize(record.peer);
+        if (!CanGrowSnapshot(session.snapshotBytes, peerBytes, m_config.maximumSnapshotBytes))
+            return MakeError("session snapshot budget reached");
+        ++session.nextPeerId;
         const uint32_t peerId = record.peer.id;
         const std::string token = record.token;
         session.peers.emplace(peerId, std::move(record));
+        session.snapshotBytes += peerBytes;
 
         ServiceResponse response;
         response.messageType = static_cast<uint16_t>(CollaborationMessage::JoinSessionResponse);
@@ -150,7 +191,15 @@ namespace Spark::Daemon
         if (!session)
             return MakeError("invalid collaboration capability");
         auto& peer = session->peers.at(auth.peerId);
+        const size_t oldBytes = EncodedPeerSize(peer.peer);
+        CollaborationPeer updatedPeer = peer.peer;
+        updatedPeer.presence = presence;
+        const size_t newBytes = EncodedPeerSize(updatedPeer);
+        if (newBytes > oldBytes &&
+            !CanGrowSnapshot(session->snapshotBytes, newBytes - oldBytes, m_config.maximumSnapshotBytes))
+            return MakeError("session snapshot budget reached");
         peer.peer.presence = std::move(presence);
+        session->snapshotBytes = session->snapshotBytes - oldBytes + newBytes;
         peer.lastSeen = std::chrono::steady_clock::now();
         return MakeAck(CollaborationMessage::PresenceResponse);
     }
@@ -172,8 +221,13 @@ namespace Spark::Daemon
             acquired = lockIt->second == auth.peerId;
         else if (session->locks.size() < m_config.maximumLocksPerSession)
         {
-            session->locks.emplace(std::move(nodeId), auth.peerId);
-            acquired = true;
+            const size_t lockBytes = EncodedLockSize(nodeId);
+            if (CanGrowSnapshot(session->snapshotBytes, lockBytes, m_config.maximumSnapshotBytes))
+            {
+                session->locks.emplace(std::move(nodeId), auth.peerId);
+                session->snapshotBytes += lockBytes;
+                acquired = true;
+            }
         }
         ServiceResponse response;
         response.messageType = static_cast<uint16_t>(CollaborationMessage::AcquireLockResponse);
@@ -194,6 +248,7 @@ namespace Spark::Daemon
         auto lockIt = session->locks.find(nodeId);
         if (lockIt == session->locks.end() || lockIt->second != auth.peerId)
             return MakeError("peer does not own the node lock");
+        session->snapshotBytes -= EncodedLockSize(lockIt->first);
         session->locks.erase(lockIt);
         return MakeAck(CollaborationMessage::ReleaseLockResponse);
     }
@@ -213,14 +268,23 @@ namespace Spark::Daemon
         if (lockIt == session->locks.end() || lockIt->second != auth.peerId)
             return MakeError("edit requires a node lock owned by the submitting peer");
         CollaborationEdit edit;
-        edit.sequence = session->nextSequence++;
         edit.authorPeerId = auth.peerId;
         edit.nodeId = std::move(nodeId);
         edit.payload = std::move(editPayload);
+        const size_t editBytes = EncodedEditSize(edit);
+        while (!session->edits.empty() &&
+               (session->edits.size() >= m_config.maximumEditHistory ||
+                !CanGrowSnapshot(session->snapshotBytes, editBytes, m_config.maximumSnapshotBytes)))
+        {
+            session->snapshotBytes -= EncodedEditSize(session->edits.front());
+            session->edits.pop_front();
+        }
+        if (!CanGrowSnapshot(session->snapshotBytes, editBytes, m_config.maximumSnapshotBytes))
+            return MakeError("edit exceeds session snapshot budget");
+        edit.sequence = session->nextSequence++;
         const uint64_t sequence = edit.sequence;
         session->edits.push_back(std::move(edit));
-        while (session->edits.size() > m_config.maximumEditHistory)
-            session->edits.pop_front();
+        session->snapshotBytes += editBytes;
 
         ServiceResponse response;
         response.messageType = static_cast<uint16_t>(CollaborationMessage::SubmitEditResponse);
@@ -256,7 +320,8 @@ namespace Spark::Daemon
 
         ServiceResponse response;
         response.messageType = static_cast<uint16_t>(CollaborationMessage::SnapshotResponse);
-        if (!EncodeSnapshot(snapshot, response.payload))
+        if (!EncodeSnapshot(snapshot, response.payload) || response.payload.size() > m_config.maximumSnapshotBytes ||
+            response.payload.size() > kMaxPayloadSize)
             return MakeError("could not encode collaboration snapshot");
         return response;
     }
@@ -296,11 +361,19 @@ namespace Spark::Daemon
 
     void CollaborationService::RemovePeerLocked(SessionRecord& session, uint32_t peerId)
     {
-        session.peers.erase(peerId);
+        auto peerIt = session.peers.find(peerId);
+        if (peerIt != session.peers.end())
+        {
+            session.snapshotBytes -= EncodedPeerSize(peerIt->second.peer);
+            session.peers.erase(peerIt);
+        }
         for (auto it = session.locks.begin(); it != session.locks.end();)
         {
             if (it->second == peerId)
+            {
+                session.snapshotBytes -= EncodedLockSize(it->first);
                 it = session.locks.erase(it);
+            }
             else
                 ++it;
         }

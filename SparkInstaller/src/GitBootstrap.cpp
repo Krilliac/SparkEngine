@@ -1,4 +1,5 @@
 #include "GitBootstrap.h"
+#include "GitRunner.h"
 
 #include "Downloader.h"
 #include "Platform.h"
@@ -14,17 +15,6 @@ namespace SparkInstaller
 
     namespace
     {
-        bool IsGitOnPath()
-        {
-            SparkBuild::ProcessRunner runner;
-            std::string output;
-#ifdef SPARK_PLATFORM_WINDOWS
-            return runner.RunSync("where git", {}, output) == 0;
-#else
-            return runner.RunSync("command -v git", {}, output) == 0;
-#endif
-        }
-
         std::string HomeDir()
         {
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -44,6 +34,13 @@ namespace SparkInstaller
         constexpr const char* kPortableGitExeRel = "cmd\\git.exe";
 #endif
     } // namespace
+
+    bool GitBootstrap::IsGitAvailableOnPath()
+    {
+        SparkBuild::ProcessRunner runner;
+        std::string output;
+        return runner.RunSync(GitRunner::EncodeProcessRunnerArgument("git") + " --version", {}, output) == 0;
+    }
 
     std::string GitBootstrap::CacheDir()
     {
@@ -66,7 +63,7 @@ namespace SparkInstaller
     GitBootstrapResult GitBootstrap::Ensure(const LogSink& log)
     {
         GitBootstrapResult result;
-        if (IsGitOnPath())
+        if (IsGitAvailableOnPath())
         {
             result.ok = true;
             result.gitExe = "git";

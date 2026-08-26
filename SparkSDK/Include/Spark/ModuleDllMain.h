@@ -27,6 +27,8 @@
 
 #pragma once
 
+#include "ModuleRuntimeInjection.h"
+
 #if defined(_WIN32)
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -69,12 +71,6 @@ extern "C" __declspec(dllexport) void SparkModuleInjectConsole(void* hostConsole
     Spark::Detail::InjectConsoleInstance(static_cast<Spark::SimpleConsole*>(hostConsole));
 }
 
-// EngineContext lives in the global namespace; this header declares its static
-// SetInjected() setter. Module translation units have the engine source tree on
-// their include path, so the quoted include resolves (mirrors the mid-file
-// <imgui.h> include below).
-#include "Core/EngineContext.h"
-
 /**
  * @brief Host-EngineContext injection hook, called by ModuleManager after load.
  *
@@ -85,16 +81,9 @@ extern "C" __declspec(dllexport) void SparkModuleInjectConsole(void* hostConsole
  * EngineContext::Get() at the host executable's live context. The pointer is stored
  * non-owning, so module teardown / FreeLibrary never frees the host context.
  */
-#include "Physics/PhysicsSystem.h"
-
 extern "C" __declspec(dllexport) void SparkModuleInjectEngineContext(void* ctx)
 {
-    EngineContext::SetInjected(static_cast<EngineContext*>(ctx));
-    // Jolt keeps per-image globals (allocator fn pointers, Factory::sInstance,
-    // RegisterTypes dispatch tables). This module image must register ITS
-    // copies before any module-side shape creation or collision query — the
-    // exe's registration does not reach this DLL. Idempotent, ~free.
-    PhysicsSystem::EnsureImageRuntime();
+    Spark::Detail::InjectModuleEngineRuntime(ctx);
 }
 
 #ifdef SPARK_HAS_IMGUI

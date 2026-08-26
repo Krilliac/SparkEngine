@@ -288,10 +288,12 @@ server.Start(config);  // launches tick loop on background thread
 
 ```bash
 ./SparkEngine -headless -game SparkGame.dll              # runtime headless (game module)
-./SparkServer --port 27015 --maxclients 32               # compile-time headless (built-in)
+./SparkServer --manifest spark.modules.json --port 27015 --max-clients 32  # compile-time headless (built-in)
 ```
 
-For the built-in server, build with `-DENABLE_GRAPHICS=OFF -DBUILD_DEDICATED_SERVER=ON`. See [Dedicated Server](Dedicated-Server.md) for full details.
+For the built-in server, build with `-DENABLE_GRAPHICS=OFF -DENABLE_SERVER_PROCESSES=ON`.
+Every `SparkServer` launch must select game code with either `--manifest <path>`
+or `--module <game-library>`. See [Dedicated Server](Dedicated-Server.md) for full details.
 
 **RCON** -- built-in commands: `help`, `status`, `kick`, `ban`, `map`, `say`. Add custom ones:
 

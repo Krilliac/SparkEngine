@@ -25,6 +25,7 @@
 #include <thread>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -84,6 +85,18 @@ namespace Spark
         std::string ResultMessage(const char* action, SparkPluginResult result)
         {
             return std::string(action) + " failed with plugin result " + std::to_string(result);
+        }
+
+        constexpr uint64_t kMaximumReloadStateBytes = UINT64_C(16) * 1024u * 1024u;
+
+        bool HasHotReloadContract(const SparkPluginDescriptor* descriptor)
+        {
+            if (!descriptor || !descriptor->api)
+                return false;
+            const auto* api = descriptor->api;
+            return (api->capabilities & SPARK_PLUGIN_CAP_HOT_RELOAD) != 0 && api->abi_minor >= 1 &&
+                   api->struct_size >= offsetof(SparkPluginAPI, reserved) && api->prepare_unload && api->save_state &&
+                   api->restore_state && api->cancel_unload;
         }
 
         struct PluginMetadata
@@ -504,6 +517,7 @@ namespace Spark
         std::unordered_map<SparkPluginTask, std::shared_ptr<TaskState>> tasks;
         std::atomic<uint64_t> nextTask{1};
         bool unloading = false;
+        inline static thread_local SparkPluginTask executingTask = 0;
 
         Impl()
         {
@@ -549,9 +563,19 @@ namespace Spark
 
         static void LogThunk(void* context, SparkPluginLogLevel level, const char* category, const char* message)
         {
-            auto& self = *static_cast<Impl*>(context);
-            if (self.logSink)
-                self.logSink(level, category ? category : "Plugin", message ? message : "");
+            if (!context)
+                return;
+            try
+            {
+                auto& self = *static_cast<Impl*>(context);
+                if (self.logSink)
+                    self.logSink(level, category ? category : "Plugin", message ? message : "");
+            }
+            catch (...)
+            {
+                // Logging is advisory. A throwing host sink must never unwind
+                // through the plugin's C ABI frame.
+            }
         }
 
         static SparkPluginResult ScheduleTaskThunk(void* context, SparkPluginTaskFn callback, void* taskContext,
@@ -559,21 +583,28 @@ namespace Spark
         {
             if (!context || !callback || !outTask)
                 return SPARK_PLUGIN_ERROR_INVALID_ARGUMENT;
+            *outTask = 0;
             auto& self = *static_cast<Impl*>(context);
-            auto task = std::make_shared<TaskState>();
-            const SparkPluginTask id = self.nextTask.fetch_add(1, std::memory_order_relaxed);
-            {
-                std::lock_guard lock(self.tasksMutex);
-                if (self.unloading || self.tasks.size() >= 64)
-                    return SPARK_PLUGIN_ERROR_BUSY;
-                self.tasks.emplace(id, task);
-            }
+            SparkPluginTask id = 0;
+            bool inserted = false;
             try
             {
+                auto task = std::make_shared<TaskState>();
+                id = self.nextTask.fetch_add(1, std::memory_order_relaxed);
+                if (id == 0)
+                    return SPARK_PLUGIN_ERROR_INTERNAL;
+                {
+                    std::lock_guard lock(self.tasksMutex);
+                    if (self.unloading || self.tasks.size() >= 64)
+                        return SPARK_PLUGIN_ERROR_BUSY;
+                    self.tasks.emplace(id, task);
+                    inserted = true;
+                }
                 task->worker = std::thread(
-                    [task, callback, taskContext]
+                    [task, callback, taskContext, id]
                     {
                         bool failed = false;
+                        executingTask = id;
                         try
                         {
                             callback(taskContext);
@@ -584,6 +615,7 @@ namespace Spark
                             // C++ plugin so it cannot tear down the host process.
                             failed = true;
                         }
+                        executingTask = 0;
                         {
                             std::lock_guard lock(task->mutex);
                             task->failed = failed;
@@ -591,27 +623,35 @@ namespace Spark
                         }
                         task->complete.notify_all();
                     });
+                *outTask = id;
+                return SPARK_PLUGIN_OK;
+            }
+            catch (const std::bad_alloc&)
+            {
+                if (inserted)
+                {
+                    std::lock_guard lock(self.tasksMutex);
+                    self.tasks.erase(id);
+                }
+                return SPARK_PLUGIN_ERROR_OUT_OF_MEMORY;
             }
             catch (...)
             {
+                if (inserted)
                 {
-                    std::lock_guard taskLock(task->mutex);
-                    task->failed = true;
-                    task->done = true;
+                    std::lock_guard lock(self.tasksMutex);
+                    self.tasks.erase(id);
                 }
-                task->complete.notify_all();
-                std::lock_guard lock(self.tasksMutex);
-                self.tasks.erase(id);
-                return SPARK_PLUGIN_ERROR_OUT_OF_MEMORY;
+                return SPARK_PLUGIN_ERROR_INTERNAL;
             }
-            *outTask = id;
-            return SPARK_PLUGIN_OK;
         }
 
         static SparkPluginResult WaitTaskThunk(void* context, SparkPluginTask id, uint32_t timeoutMs)
         {
             if (!context || id == 0)
                 return SPARK_PLUGIN_ERROR_INVALID_ARGUMENT;
+            if (executingTask == id)
+                return SPARK_PLUGIN_ERROR_BUSY;
             auto& self = *static_cast<Impl*>(context);
             std::shared_ptr<TaskState> task;
             {
@@ -655,8 +695,20 @@ namespace Spark
         {
             if (!context || !stableId || !outResource)
                 return SPARK_PLUGIN_ERROR_INVALID_ARGUMENT;
-            auto& self = *static_cast<Impl*>(context);
-            return self.resolver ? self.resolver(stableId, outResource) : SPARK_PLUGIN_ERROR_UNSUPPORTED;
+            *outResource = 0;
+            try
+            {
+                auto& self = *static_cast<Impl*>(context);
+                return self.resolver ? self.resolver(stableId, outResource) : SPARK_PLUGIN_ERROR_UNSUPPORTED;
+            }
+            catch (const std::bad_alloc&)
+            {
+                return SPARK_PLUGIN_ERROR_OUT_OF_MEMORY;
+            }
+            catch (...)
+            {
+                return SPARK_PLUGIN_ERROR_INTERNAL;
+            }
         }
 
         size_t ActiveTaskCount() const
@@ -1073,7 +1125,199 @@ namespace Spark
         }
     }
 
-    bool DynamicPluginHost::Unload(std::chrono::milliseconds timeout, std::string* error)
+    bool DynamicPluginHost::Reload(const std::filesystem::path& replacementPath, std::chrono::milliseconds timeout,
+                                   std::string* error)
+    {
+        if (!IsLoaded())
+        {
+            if (error)
+                *error = "no plugin is loaded to reload";
+            return false;
+        }
+
+        DynamicPluginHost replacement;
+        replacement.SetLogSink(m_impl->logSink);
+        replacement.SetResourceResolver(m_impl->resolver);
+        std::string replacementError;
+        if (!replacement.Load(replacementPath, &replacementError))
+        {
+            if (error)
+                *error = "replacement load failed: " + replacementError;
+            return false;
+        }
+        return CommitReload(replacement, timeout, error);
+    }
+
+    bool DynamicPluginHost::ReloadDescriptorForTesting(const SparkPluginDescriptor* descriptor,
+                                                       std::chrono::milliseconds timeout, std::string* error)
+    {
+        if (!IsLoaded())
+        {
+            if (error)
+                *error = "no plugin is loaded to reload";
+            return false;
+        }
+
+        DynamicPluginHost replacement;
+        replacement.SetLogSink(m_impl->logSink);
+        replacement.SetResourceResolver(m_impl->resolver);
+        std::string replacementError;
+        if (!replacement.AttachDescriptorForTesting(descriptor, &replacementError))
+        {
+            if (error)
+                *error = "replacement descriptor failed: " + replacementError;
+            return false;
+        }
+        return CommitReload(replacement, timeout, error);
+    }
+
+    bool DynamicPluginHost::CommitReload(DynamicPluginHost& replacement, std::chrono::milliseconds timeout,
+                                         std::string* error)
+    {
+        const auto* oldDescriptor = m_impl->descriptor;
+        const auto* replacementDescriptor = replacement.m_impl->descriptor;
+        if (!HasHotReloadContract(oldDescriptor) || !HasHotReloadContract(replacementDescriptor))
+        {
+            if (error)
+                *error = "both plugins must advertise transactional hot reload and provide "
+                         "prepare_unload/save_state/restore_state/cancel_unload";
+            return false;
+        }
+        if (std::strcmp(oldDescriptor->id, replacementDescriptor->id) != 0)
+        {
+            if (error)
+                *error = "replacement plugin id does not match the loaded plugin";
+            return false;
+        }
+
+        std::vector<uint8_t> state;
+        try
+        {
+            state.resize(static_cast<size_t>(kMaximumReloadStateBytes));
+        }
+        catch (...)
+        {
+            if (error)
+                *error = "failed to allocate the bounded hot-reload state buffer";
+            return false;
+        }
+
+        const State oldState = m_impl->state;
+        if (!PrepareUnload(timeout, error))
+            return false;
+
+        const auto rollbackPrepared = [&](std::string reason)
+        {
+            SparkPluginResult cancelResult = SPARK_PLUGIN_ERROR_INTERNAL;
+            try
+            {
+                cancelResult = oldDescriptor->api->cancel_unload(m_impl->instance);
+            }
+            catch (...)
+            {
+                if (error)
+                    *error = std::move(reason) + "; plugin cancel_unload threw, so the old plugin remains quarantined";
+                return false;
+            }
+            if (cancelResult != SPARK_PLUGIN_OK)
+            {
+                if (error)
+                    *error = std::move(reason) + "; " + ResultMessage("plugin cancel_unload", cancelResult) +
+                             ", so the old plugin remains quarantined";
+                return false;
+            }
+            m_impl->CancelUnload();
+            if (error)
+                *error = std::move(reason);
+            return false;
+        };
+
+        SparkPluginMutableBytes output{state.data(), 0, kMaximumReloadStateBytes};
+        SparkPluginResult saveResult = SPARK_PLUGIN_ERROR_INTERNAL;
+        try
+        {
+            saveResult = oldDescriptor->api->save_state(m_impl->instance, &output);
+        }
+        catch (...)
+        {
+            return rollbackPrepared("plugin save_state threw across the C ABI");
+        }
+        if (saveResult != SPARK_PLUGIN_OK)
+            return rollbackPrepared(ResultMessage("plugin save_state", saveResult));
+        if (output.data != state.data() || output.capacity != kMaximumReloadStateBytes || output.size > output.capacity)
+            return rollbackPrepared("plugin save_state violated the host-owned bounded buffer contract");
+        state.resize(static_cast<size_t>(output.size));
+
+        const SparkPluginBytes input{state.data(), static_cast<uint64_t>(state.size())};
+        SparkPluginResult restoreResult = SPARK_PLUGIN_ERROR_INTERNAL;
+        try
+        {
+            restoreResult = replacementDescriptor->api->restore_state(replacement.m_impl->instance, input);
+        }
+        catch (...)
+        {
+            return rollbackPrepared("replacement restore_state threw across the C ABI");
+        }
+        if (restoreResult != SPARK_PLUGIN_OK)
+            return rollbackPrepared(ResultMessage("replacement restore_state", restoreResult));
+
+        if (oldState == State::Started)
+        {
+            try
+            {
+                if (oldDescriptor->api->stop)
+                    oldDescriptor->api->stop(m_impl->instance);
+                m_impl->state = State::Stopped;
+            }
+            catch (...)
+            {
+                if (error)
+                    *error = "old plugin stop threw during reload commit; the old plugin remains quarantined";
+                return false;
+            }
+
+            std::string startError;
+            if (!replacement.Start(&startError))
+            {
+                SparkPluginResult restartResult = SPARK_PLUGIN_ERROR_INTERNAL;
+                try
+                {
+                    restartResult =
+                        oldDescriptor->api->start ? oldDescriptor->api->start(m_impl->instance) : SPARK_PLUGIN_OK;
+                }
+                catch (...)
+                {
+                    if (error)
+                        *error = "replacement start failed: " + startError +
+                                 "; restarting the old plugin threw, so it remains quarantined";
+                    return false;
+                }
+                if (restartResult != SPARK_PLUGIN_OK)
+                {
+                    if (error)
+                        *error = "replacement start failed: " + startError + "; " +
+                                 ResultMessage("old plugin restart", restartResult) +
+                                 ", so the old plugin remains quarantined";
+                    return false;
+                }
+                m_impl->state = State::Started;
+                return rollbackPrepared("replacement start failed: " + startError);
+            }
+        }
+        if (oldState == State::Stopped)
+            replacement.m_impl->state = State::Stopped;
+
+        // Commit only after the replacement has restored and reached the old
+        // lifecycle state. If old teardown fails, replacement remains owned by
+        // its temporary host and the old host stays fail-closed/quarantined.
+        if (!FinishUnload(timeout, error))
+            return false;
+
+        m_impl.swap(replacement.m_impl);
+        return true;
+    }
+
+    bool DynamicPluginHost::PrepareUnload(std::chrono::milliseconds timeout, std::string* error)
     {
         if (!IsLoaded())
             return true;
@@ -1104,10 +1348,42 @@ namespace Spark
         }
         if (!m_impl->WaitForTasks(timeout))
         {
+            if (api->cancel_unload)
+            {
+                SparkPluginResult cancelResult = SPARK_PLUGIN_ERROR_INTERNAL;
+                try
+                {
+                    cancelResult = api->cancel_unload(m_impl->instance);
+                }
+                catch (...)
+                {
+                    if (error)
+                        *error = "plugin host task fence timed out; plugin cancel_unload threw, so the plugin remains "
+                                 "quarantined";
+                    return false;
+                }
+                if (cancelResult != SPARK_PLUGIN_OK)
+                {
+                    if (error)
+                        *error = "plugin host task fence timed out; " +
+                                 ResultMessage("plugin cancel_unload", cancelResult) +
+                                 ", so the plugin remains quarantined";
+                    return false;
+                }
+            }
+            m_impl->CancelUnload();
             if (error)
                 *error = "plugin host task fence timed out";
             return false;
         }
+        return true;
+    }
+
+    bool DynamicPluginHost::FinishUnload(std::chrono::milliseconds timeout, std::string* error)
+    {
+        if (!IsLoaded())
+            return true;
+        const auto* api = m_impl->descriptor->api;
         if (m_impl->state == State::Started && api->stop)
         {
             try
@@ -1147,6 +1423,11 @@ namespace Spark
         m_impl->path.clear();
         m_impl->CancelUnload();
         return true;
+    }
+
+    bool DynamicPluginHost::Unload(std::chrono::milliseconds timeout, std::string* error)
+    {
+        return PrepareUnload(timeout, error) && FinishUnload(timeout, error);
     }
 
     DynamicPluginHost::State DynamicPluginHost::GetState() const noexcept

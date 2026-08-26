@@ -107,6 +107,33 @@ class AutomationContractTests(unittest.TestCase):
             time.sleep(0.05)
         self.assertFalse(process_exists(child_pid), f"descendant process {child_pid} survived timeout")
 
+    def test_numeric_options_reject_signs_junk_and_overflow(self):
+        cases = (
+            ("--frames", "-1"),
+            ("--frames", "+1"),
+            ("--frames", "1junk"),
+            ("--frames", "4294967296"),
+            ("--timeout-ms", "-1"),
+            ("--timeout-ms", "+1"),
+            ("--timeout-ms", "10junk"),
+            ("--timeout-ms", "4294967296"),
+            ("--expected-exit", "+1"),
+            ("--expected-exit", "1junk"),
+            ("--expected-exit", "2147483648"),
+            ("--expected-exit", "-2147483649"),
+        )
+        for option, value in cases:
+            with self.subTest(option=option, value=value):
+                completed = subprocess.run(
+                    [str(AUTOMATION), "--executable", sys.executable, option, value],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=5,
+                )
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertIn(f"Invalid argument: {option} {value}", completed.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

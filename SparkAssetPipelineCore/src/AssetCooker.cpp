@@ -610,11 +610,15 @@ namespace Spark::AssetPipeline
             }
             else
             {
-                std::filesystem::create_directories(output.parent_path(), ec);
-                if (ec)
+                const std::filesystem::path outputParent = output.parent_path();
+                if (!outputParent.empty())
                 {
-                    error = "failed to create output directory: " + ec.message();
-                    return false;
+                    std::filesystem::create_directories(outputParent, ec);
+                    if (ec)
+                    {
+                        error = "failed to create output directory: " + ec.message();
+                        return false;
+                    }
                 }
                 stage = MakeStagePath(output);
             }
@@ -793,7 +797,28 @@ namespace Spark::AssetPipeline
         if (!ValidateOutputTarget(manifest, output, result.error, "cook manifest"))
             return result;
 
-        std::vector<std::filesystem::path> files;
+        struct SourceEntry
+        {
+            std::filesystem::path path;
+            std::string portablePath;
+        };
+        const auto makePortableRelative =
+            [&](const std::filesystem::path& path, const std::filesystem::path& root, std::string& portable)
+        {
+            try
+            {
+                const std::u8string utf8 = path.lexically_relative(root).generic_u8string();
+                portable.assign(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+                return !portable.empty();
+            }
+            catch (const std::filesystem::filesystem_error& exception)
+            {
+                result.error = "asset path is not representable as portable UTF-8: " + std::string(exception.what());
+                return false;
+            }
+        };
+
+        std::vector<SourceEntry> files;
         std::filesystem::recursive_directory_iterator iterator(source, ec), end;
         while (!ec && iterator != end)
         {
@@ -812,7 +837,11 @@ namespace Spark::AssetPipeline
                     result.error = "source entry escapes the source root";
                     return result;
                 }
-                files.push_back(canonical);
+                SourceEntry entry;
+                entry.path = canonical;
+                if (!makePortableRelative(canonical, source, entry.portablePath))
+                    return result;
+                files.push_back(std::move(entry));
             }
             iterator.increment(ec);
         }
@@ -821,12 +850,8 @@ namespace Spark::AssetPipeline
             result.error = "failed to enumerate source assets: " + ec.message();
             return result;
         }
-        std::sort(files.begin(), files.end(),
-                  [&](const auto& left, const auto& right)
-                  {
-                      return left.lexically_relative(source).generic_string() <
-                             right.lexically_relative(source).generic_string();
-                  });
+        std::sort(files.begin(), files.end(), [](const SourceEntry& left, const SourceEntry& right)
+                  { return left.portablePath < right.portablePath; });
 
         std::filesystem::path generation;
         std::unique_ptr<ScopedDirectoryCleanup> generationCleanup;
@@ -839,21 +864,21 @@ namespace Spark::AssetPipeline
         for (const auto& file : files)
         {
             CookRecord record;
-            record.path = file.lexically_relative(source).generic_string();
-            const auto relativePath = std::filesystem::path(record.path);
+            record.path = file.portablePath;
+            const auto relativePath = std::filesystem::u8path(record.path);
             const auto previousDestination = output / relativePath;
             if (request.dryRun)
             {
                 if (!ValidateOutputTarget(previousDestination, output, result.error, "cooked output") ||
-                    !StageAndCookFile(file, previousDestination, {}, true, record.updated, record.sha256, record.size,
-                                      result.error))
+                    !StageAndCookFile(file.path, previousDestination, {}, true, record.updated, record.sha256,
+                                      record.size, result.error))
                     return result;
             }
             else
             {
                 const auto generationDestination = generation / relativePath;
                 if (!IsContained(generationDestination.lexically_normal(), generation) ||
-                    !CopyGenerationFile(file, generationDestination, previousDestination, output, record.updated,
+                    !CopyGenerationFile(file.path, generationDestination, previousDestination, output, record.updated,
                                         record.sha256, record.size, result.error))
                 {
                     if (result.error.empty())
@@ -871,7 +896,9 @@ namespace Spark::AssetPipeline
         {
             const auto manifestRelative = manifest.lexically_relative(output);
             const auto generationManifest = (generation / manifestRelative).lexically_normal();
-            const auto manifestRecordPath = manifestRelative.generic_string();
+            std::string manifestRecordPath;
+            if (!makePortableRelative(manifest, output, manifestRecordPath))
+                return result;
             const bool conflictsWithAsset =
                 std::any_of(result.records.begin(), result.records.end(),
                             [&](const CookRecord& record) { return record.path == manifestRecordPath; });

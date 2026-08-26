@@ -19,6 +19,9 @@ namespace Spark::Daemon
     inline constexpr size_t kMaximumPresenceLength = 512;
     inline constexpr size_t kMaximumEditPayloadLength = 64 * 1024;
     inline constexpr size_t kCollaborationTokenLength = 64;
+    /// Default encoded snapshot budget. This intentionally stays well below
+    /// the daemon's 16 MiB frame ceiling, leaving room for framing evolution.
+    inline constexpr size_t kDefaultCollaborationSnapshotBytes = 8 * 1024 * 1024;
 
     enum class CollaborationMessage : uint16_t
     {

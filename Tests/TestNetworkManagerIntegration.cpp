@@ -115,6 +115,31 @@ namespace
         localAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         return bind(socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) == 0;
     }
+
+    std::vector<uint8_t> BuildWireMessage(MessageType type, ChannelType channel, ClientID sender,
+                                          const std::vector<uint8_t>& payload = {})
+    {
+        std::vector<uint8_t> packet;
+        auto put32 = [&](uint32_t value)
+        {
+            for (int shift = 0; shift < 32; shift += 8)
+                packet.push_back(static_cast<uint8_t>((value >> shift) & 0xffu));
+        };
+        auto put16 = [&](uint16_t value)
+        {
+            packet.push_back(static_cast<uint8_t>(value & 0xffu));
+            packet.push_back(static_cast<uint8_t>((value >> 8) & 0xffu));
+        };
+        put32(0x5350524B);
+        put16(static_cast<uint16_t>(type));
+        packet.push_back(static_cast<uint8_t>(channel));
+        put32(sender);
+        put32(0); // sequence
+        put32(0); // timestamp bits
+        put32(static_cast<uint32_t>(payload.size()));
+        packet.insert(packet.end(), payload.begin(), payload.end());
+        return packet;
+    }
 } // namespace
 
 TEST(NetworkManager_MessageCallbackMayWaitForCrossThreadStopServer)
@@ -563,6 +588,152 @@ TEST(NetworkManager_RejectedConnectDoesNotTriggerEntitySync)
     closesocket(rejected);
     closesocket(admitted);
     nm.StopServer();
+    nm.Shutdown();
+}
+
+TEST(NetworkManager_ProtocolHandlersAndApplicationObserversBothRunExactlyOnce)
+{
+    auto& nm = NetworkManager::GetInstance();
+    ASSERT_TRUE(nm.Initialize());
+    ASSERT_TRUE(nm.StartServer(0, 1));
+
+    int connectCallbacks = 0;
+    int disconnectCallbacks = 0;
+    size_t clientsSeenByDisconnect = 99;
+    nm.RegisterHandler(MessageType::Connect,
+                       [&](const NetworkMessage& msg)
+                       {
+                           ++connectCallbacks;
+                           EXPECT_TRUE(msg.senderID != INVALID_CLIENT);
+                       });
+    nm.RegisterHandler(MessageType::Disconnect,
+                       [&](const NetworkMessage&)
+                       {
+                           ++disconnectCallbacks;
+                           clientsSeenByDisconnect = nm.GetClients().size();
+                       });
+
+    SOCKET client = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    ASSERT_TRUE(client != INVALID_SOCKET);
+    ASSERT_TRUE(BindLoopbackEphemeral(client));
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(nm.GetBoundPort());
+    inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
+
+    const auto connect = BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT);
+    auto sendPacket = [&](const std::vector<uint8_t>& packet)
+    {
+        return sendto(client, reinterpret_cast<const char*>(packet.data()), static_cast<int>(packet.size()), 0,
+                      reinterpret_cast<const sockaddr*>(&serverAddr), sizeof(serverAddr));
+    };
+
+    EXPECT_EQ(sendPacket(connect), static_cast<int>(connect.size()));
+    for (int i = 0; i < 20 && connectCallbacks == 0; ++i)
+    {
+        nm.Update(0.016f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    EXPECT_EQ(connectCallbacks, 1);
+    EXPECT_EQ(nm.GetClients().size(), 1u);
+    EXPECT_EQ(nm.GetStats().fullEntitySyncs, 1u);
+
+    const auto disconnect = BuildWireMessage(MessageType::Disconnect, ChannelType::Reliable, INVALID_CLIENT);
+    EXPECT_EQ(sendPacket(disconnect), static_cast<int>(disconnect.size()));
+    for (int i = 0; i < 20 && disconnectCallbacks == 0; ++i)
+    {
+        nm.Update(0.016f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    EXPECT_EQ(disconnectCallbacks, 1);
+    EXPECT_EQ(clientsSeenByDisconnect, 0u);
+    EXPECT_TRUE(nm.GetClients().empty());
+
+    // The released capacity is usable immediately; reconnect admission and its
+    // observer each occur once, with a fresh full sync.
+    EXPECT_EQ(sendPacket(connect), static_cast<int>(connect.size()));
+    for (int i = 0; i < 20 && connectCallbacks < 2; ++i)
+    {
+        nm.Update(0.016f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    EXPECT_EQ(connectCallbacks, 2);
+    EXPECT_EQ(nm.GetClients().size(), 1u);
+    EXPECT_EQ(nm.GetStats().fullEntitySyncs, 2u);
+
+    closesocket(client);
+    nm.StopServer();
+    nm.Shutdown();
+}
+
+TEST(NetworkManager_ClearApplicationHandlersPreservesConnectRejectedTransition)
+{
+    SOCKET server = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    ASSERT_TRUE(server != INVALID_SOCKET);
+    ASSERT_TRUE(BindLoopbackEphemeral(server));
+
+    sockaddr_in serverAddr{};
+#ifdef SPARK_PLATFORM_WINDOWS
+    int serverAddrLength = sizeof(serverAddr);
+#else
+    socklen_t serverAddrLength = sizeof(serverAddr);
+#endif
+    ASSERT_TRUE(getsockname(server, reinterpret_cast<sockaddr*>(&serverAddr), &serverAddrLength) == 0);
+
+    auto& nm = NetworkManager::GetInstance();
+    ASSERT_TRUE(nm.Initialize());
+    int applicationCallbacks = 0;
+    nm.RegisterHandler(MessageType::ConnectRejected,
+                       [&](const NetworkMessage&) { ++applicationCallbacks; });
+    nm.ClearHandlers();
+    ASSERT_TRUE(nm.Connect("127.0.0.1", ntohs(serverAddr.sin_port), "RejectedPlayer"));
+
+    sockaddr_in clientAddr{};
+#ifdef SPARK_PLATFORM_WINDOWS
+    int clientAddrLength = sizeof(clientAddr);
+#else
+    socklen_t clientAddrLength = sizeof(clientAddr);
+#endif
+    std::vector<uint8_t> request(2048);
+    int received = -1;
+    for (int i = 0; i < 20 && received <= 0; ++i)
+    {
+        nm.Update(0.016f);
+        fd_set readSet;
+        FD_ZERO(&readSet);
+        FD_SET(server, &readSet);
+        timeval timeout{0, 10'000};
+#ifdef SPARK_PLATFORM_WINDOWS
+        const int ready = select(0, &readSet, nullptr, nullptr, &timeout);
+#else
+        const int ready = select(server + 1, &readSet, nullptr, nullptr, &timeout);
+#endif
+        if (ready > 0)
+            received = recvfrom(server, reinterpret_cast<char*>(request.data()), static_cast<int>(request.size()), 0,
+                                reinterpret_cast<sockaddr*>(&clientAddr), &clientAddrLength);
+    }
+    ASSERT_TRUE(received > 0);
+
+    NetBuffer reason;
+    reason.WriteString("Server maintenance");
+    const auto rejection =
+        BuildWireMessage(MessageType::ConnectRejected, ChannelType::Reliable, 0, reason.GetData());
+    EXPECT_EQ(sendto(server, reinterpret_cast<const char*>(rejection.data()), static_cast<int>(rejection.size()), 0,
+                     reinterpret_cast<const sockaddr*>(&clientAddr), clientAddrLength),
+              static_cast<int>(rejection.size()));
+
+    for (int i = 0; i < 20 && nm.GetConnectionState() != ConnectionState::Disconnected; ++i)
+    {
+        nm.Update(0.016f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Disconnected));
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::None));
+    EXPECT_EQ(nm.GetLocalClientID(), INVALID_CLIENT);
+    EXPECT_EQ(nm.GetLastConnectionError(), "Server maintenance");
+    EXPECT_EQ(applicationCallbacks, 0);
+
+    closesocket(server);
     nm.Shutdown();
 }
 

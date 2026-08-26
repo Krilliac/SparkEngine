@@ -34,27 +34,51 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
+      cmake_version: ${{ steps.meta.outputs.cmake_version }}
       tag: ${{ steps.meta.outputs.tag }}
       is_versioned: ${{ steps.meta.outputs.is_versioned }}
       configs: ${{ steps.matrix.outputs.configs }}
       build_type: ${{ steps.matrix.outputs.build_type }}
     steps:
+    - name: Checkout release metadata source
+      uses: actions/checkout@v7.0.1
+
     - name: Compute release metadata
       id: meta
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        REF_NAME: ${{ github.ref_name }}
+        REF_TYPE: ${{ github.ref_type }}
       run: |
-        if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.release_tag }}" ]]; then
-          TAG="${{ inputs.release_tag }}"
+        set -euo pipefail
+        DEFAULT_VERSION=$(sed -nE 's/^set\(SPARK_ENGINE_VERSION "([0-9]+\.[0-9]+\.[0-9]+)" CACHE.*/\1/p' CMakeLists.txt | head -n 1)
+        if [[ ! "$DEFAULT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Could not determine the default semantic version from CMakeLists.txt" >&2
+          exit 1
+        fi
+
+        if [[ "$EVENT_NAME" == "workflow_dispatch" && -n "$INPUT_RELEASE_TAG" ]]; then
+          TAG="$INPUT_RELEASE_TAG"
+        elif [[ "$REF_TYPE" == "tag" ]]; then
+          TAG="$REF_NAME"
+        else
+          TAG=""
+        fi
+
+        if [[ -n "$TAG" ]]; then
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must have the form vMAJOR.MINOR.PATCH; got: $TAG" >&2
+            exit 1
+          fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-          echo "is_versioned=true" >> "$GITHUB_OUTPUT"
-        elif [[ "${{ github.ref_type }}" == "tag" ]]; then
-          TAG="${{ github.ref_name }}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "cmake_version=${TAG#v}" >> "$GITHUB_OUTPUT"
           echo "is_versioned=true" >> "$GITHUB_OUTPUT"
         else
           echo "tag=nightly" >> "$GITHUB_OUTPUT"
           echo "version=nightly" >> "$GITHUB_OUTPUT"
+          echo "cmake_version=$DEFAULT_VERSION" >> "$GITHUB_OUTPUT"
           echo "is_versioned=false" >> "$GITHUB_OUTPUT"
         fi
 
@@ -94,7 +118,7 @@ jobs:
       uses: microsoft/setup-msbuild@v3
 
     - name: Configure CMake
-      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage"
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}" -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage"
 
     - name: Build
       run: cmake --build build --config ${{ matrix.config }} --parallel
@@ -105,16 +129,39 @@ jobs:
     - name: Validate external package consumption
       shell: pwsh
       run: |
-        cmake --install build --config ${{ matrix.config }} --component sdk
+        cmake --install build --config ${{ matrix.config }}
         cmake -S Tests/PackageSmoke -B smoke-build -G "Visual Studio 17 2022" -A x64 -T v143 `
-          -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine"
+          -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" `
+          -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
         cmake --build smoke-build --config ${{ matrix.config }} --parallel
         ctest --test-dir smoke-build -C ${{ matrix.config }} --output-on-failure
+
+    - name: Build every template against the installed SDK
+      shell: pwsh
+      run: |
+        cmake `
+          -DSPARK_TEMPLATE_ROOT="${{ github.workspace }}/stage/share/SparkEngine/templates" `
+          -DSPARK_TEMPLATE_SOURCE_ROOT="${{ github.workspace }}/Templates" `
+          -DSPARK_TEMPLATE_BUILD_ROOT="${{ github.workspace }}/template-smoke-build" `
+          -DSPARK_ENGINE_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" `
+          -DSPARK_ENGINE_EXECUTABLE="${{ github.workspace }}/stage/bin/SparkEngine.exe" `
+          -DSPARK_TEMPLATE_CONFIG=${{ matrix.config }} `
+          "-DSPARK_CMAKE_GENERATOR=Visual Studio 17 2022" `
+          -DSPARK_CMAKE_GENERATOR_PLATFORM=x64 `
+          -DSPARK_CMAKE_GENERATOR_TOOLSET=v143 `
+          -P cmake/VerifyInstalledTemplates.cmake
+
+    - name: Validate staged package executable BOM
+      shell: pwsh
+      run: |
+        cmake `
+          -DSPARK_PACKAGE_ROOT="${{ github.workspace }}/stage" `
+          -DSPARK_EXECUTABLE_SUFFIX=.exe `
+          -P cmake/ValidateStagedPackageExecutables.cmake
 
     - name: Generate CPack packages
       shell: pwsh
       run: |
-        cmake --install build --config ${{ matrix.config }}
         cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
         $cpackExitCode = $LASTEXITCODE
         if ($cpackExitCode -ne 0) {
@@ -175,6 +222,7 @@ jobs:
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
+          -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}" \
           -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage" \
           -DCMAKE_C_COMPILER=gcc-14 \
           -DCMAKE_CXX_COMPILER=g++-14
@@ -195,9 +243,30 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DCMAKE_C_COMPILER=gcc-14 \
           -DCMAKE_CXX_COMPILER=g++-14 \
-          -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine"
+          -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" \
+          -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
         cmake --build smoke-build --parallel $(nproc)
         ctest --test-dir smoke-build --output-on-failure
+
+    - name: Build every template against the installed SDK
+      run: |
+        cmake \
+          -DSPARK_TEMPLATE_ROOT="${{ github.workspace }}/stage/share/SparkEngine/templates" \
+          -DSPARK_TEMPLATE_SOURCE_ROOT="${{ github.workspace }}/Templates" \
+          -DSPARK_TEMPLATE_BUILD_ROOT="${{ github.workspace }}/template-smoke-build" \
+          -DSPARK_ENGINE_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" \
+          -DSPARK_ENGINE_EXECUTABLE="${{ github.workspace }}/stage/bin/SparkEngine" \
+          -DSPARK_TEMPLATE_CONFIG=${{ matrix.config }} \
+          "-DSPARK_CMAKE_GENERATOR=Unix Makefiles" \
+          -DSPARK_C_COMPILER=gcc-14 \
+          -DSPARK_CXX_COMPILER=g++-14 \
+          -P cmake/VerifyInstalledTemplates.cmake
+
+    - name: Validate staged package executable BOM
+      run: |
+        cmake \
+          -DSPARK_PACKAGE_ROOT="${{ github.workspace }}/stage" \
+          -P cmake/ValidateStagedPackageExecutables.cmake
 
     - name: Generate CPack packages
       run: |
@@ -207,6 +276,89 @@ jobs:
       uses: actions/upload-artifact@v7.0.1
       with:
         name: SparkEngine-Linux-${{ matrix.config }}-packages
+        path: |
+          build/packages/*.zip
+          build/packages/*.tar.gz
+        retention-days: 7
+
+  # ===========================================================================
+  # macOS Build — Apple Clang, installed SDK, templates, and CPack
+  # ===========================================================================
+  build-macos:
+    needs: [prepare]
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJson(needs.prepare.outputs.configs) }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        brew update
+        brew install cmake sdl2 openal-soft
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DBUILD_TESTS=ON \
+          -DENABLE_LTO=OFF \
+          -DENABLE_SDL2=ON \
+          -DENABLE_VULKAN=OFF \
+          -DENABLE_OPENGL=ON \
+          -DENABLE_METAL=OFF \
+          -DENABLE_DXR=OFF \
+          -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}" \
+          -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage" \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3
+
+    - name: Build
+      run: cmake --build build --parallel $(sysctl -n hw.logicalcpu)
+
+    - name: Run Tests
+      run: ctest --test-dir build --output-on-failure
+
+    - name: Validate external package consumption
+      run: |
+        cmake --install build
+        cmake -S Tests/PackageSmoke -B smoke-build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" \
+          -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+        cmake --build smoke-build --parallel $(sysctl -n hw.logicalcpu)
+        ctest --test-dir smoke-build --output-on-failure
+
+    - name: Build every template against the installed SDK
+      run: |
+        cmake \
+          -DSPARK_TEMPLATE_ROOT="${{ github.workspace }}/stage/share/SparkEngine/templates" \
+          -DSPARK_TEMPLATE_SOURCE_ROOT="${{ github.workspace }}/Templates" \
+          -DSPARK_TEMPLATE_BUILD_ROOT="${{ github.workspace }}/template-smoke-build" \
+          -DSPARK_ENGINE_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" \
+          -DSPARK_ENGINE_EXECUTABLE="${{ github.workspace }}/stage/bin/SparkEngine" \
+          -DSPARK_TEMPLATE_CONFIG=${{ matrix.config }} \
+          "-DSPARK_CMAKE_GENERATOR=Unix Makefiles" \
+          -P cmake/VerifyInstalledTemplates.cmake
+
+    - name: Validate staged package executable BOM
+      run: |
+        cmake \
+          -DSPARK_PACKAGE_ROOT="${{ github.workspace }}/stage" \
+          -P cmake/ValidateStagedPackageExecutables.cmake
+
+    - name: Generate CPack packages
+      run: cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
+
+    - name: Upload packaged artifact
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: SparkEngine-macOS-${{ matrix.config }}-packages
         path: |
           build/packages/*.zip
           build/packages/*.tar.gz
@@ -270,7 +422,7 @@ jobs:
   # Publish GitHub Release (versioned or rolling "latest")
   # ===========================================================================
   release:
-    needs: [prepare, build-windows, build-linux, build-installer]
+    needs: [prepare, build-windows, build-linux, build-macos, build-installer]
     runs-on: ubuntu-latest
     permissions:
       actions: write

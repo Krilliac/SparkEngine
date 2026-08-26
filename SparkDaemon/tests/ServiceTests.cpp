@@ -112,6 +112,99 @@ namespace
         Check(IsError(deleteRejected), "forged administration token cannot delete a session");
     }
 
+    void TestCollaborationSnapshotByteBudget()
+    {
+        Spark::Daemon::CollaborationConfig config;
+        config.maximumEditHistory = 100;
+        config.maximumSnapshotBytes = 1024;
+        Spark::Daemon::CollaborationService service(config);
+
+        auto created = *service.HandleMessage(
+            static_cast<uint16_t>(Spark::Daemon::CollaborationMessage::CreateSessionRequest),
+            CreatePayload("bounded"));
+        Check(!IsError(created), "bounded collaboration session creates");
+
+        std::vector<uint8_t> payload;
+        Spark::Daemon::EncodeJoinRequest("bounded", "alice", payload);
+        auto joined = *service.HandleMessage(
+            static_cast<uint16_t>(Spark::Daemon::CollaborationMessage::JoinSessionRequest), payload);
+        uint32_t peerId = 0;
+        std::string token;
+        Check(Spark::Daemon::DecodeJoinResponse(joined.payload, peerId, token),
+              "bounded collaboration peer joins");
+        Spark::Daemon::CollaborationAuth auth{"bounded", peerId, token};
+
+        Spark::Daemon::EncodeAuthString(auth, "node", Spark::Daemon::kMaximumNodeIdLength, payload);
+        auto acquired = *service.HandleMessage(
+            static_cast<uint16_t>(Spark::Daemon::CollaborationMessage::AcquireLockRequest), payload);
+        Check(!IsError(acquired), "bounded collaboration lock request succeeds");
+
+        const std::string editPayload(300, 'x');
+        for (int i = 0; i < 10; ++i)
+        {
+            Spark::Daemon::EncodeEditRequest(auth, "node", editPayload, payload);
+            auto submitted = *service.HandleMessage(
+                static_cast<uint16_t>(Spark::Daemon::CollaborationMessage::SubmitEditRequest), payload);
+            Check(!IsError(submitted), "new edit evicts old history to stay within the byte budget");
+        }
+
+        Spark::Daemon::EncodeCollaborationAuth(auth, payload);
+        auto response = *service.HandleMessage(
+            static_cast<uint16_t>(Spark::Daemon::CollaborationMessage::SnapshotRequest), payload);
+        Check(!IsError(response), "byte-bounded collaboration snapshot remains encodable");
+        Check(response.payload.size() <= config.maximumSnapshotBytes,
+              "collaboration snapshot stays below its configured byte budget");
+        Check(response.payload.size() < Spark::Daemon::kMaxPayloadSize,
+              "collaboration snapshot stays below the daemon frame ceiling");
+
+        Spark::Daemon::Wire::Reader reader(response.payload);
+        std::string sessionId;
+        uint64_t nextSequence = 0;
+        uint32_t peerCount = 0;
+        Check(Spark::Daemon::Wire::ReadVersion(reader) &&
+                  reader.ReadString(sessionId, Spark::Daemon::kMaximumSessionIdLength) && reader.Read(nextSequence) &&
+                  reader.Read(peerCount),
+              "bounded collaboration snapshot header decodes");
+        for (uint32_t i = 0; i < peerCount; ++i)
+        {
+            uint32_t id = 0;
+            std::string name;
+            std::string presence;
+            Check(reader.Read(id) && reader.ReadString(name, Spark::Daemon::kMaximumPeerNameLength) &&
+                      reader.ReadString(presence, Spark::Daemon::kMaximumPresenceLength),
+                  "bounded snapshot peer decodes");
+        }
+        uint32_t lockCount = 0;
+        Check(reader.Read(lockCount), "bounded collaboration lock count decodes");
+        for (uint32_t i = 0; i < lockCount; ++i)
+        {
+            std::string nodeId;
+            uint32_t owner = 0;
+            Check(reader.ReadString(nodeId, Spark::Daemon::kMaximumNodeIdLength) && reader.Read(owner),
+                  "bounded snapshot lock decodes");
+        }
+        uint32_t editCount = 0;
+        Check(reader.Read(editCount), "bounded collaboration edit count decodes");
+        uint64_t firstSequence = 0;
+        for (uint32_t i = 0; i < editCount; ++i)
+        {
+            uint64_t sequence = 0;
+            uint32_t author = 0;
+            std::string nodeId;
+            std::string edit;
+            Check(reader.Read(sequence) && reader.Read(author) &&
+                      reader.ReadString(nodeId, Spark::Daemon::kMaximumNodeIdLength) &&
+                      reader.ReadString(edit, Spark::Daemon::kMaximumEditPayloadLength),
+                  "bounded snapshot edit decodes");
+            if (i == 0)
+                firstSequence = sequence;
+        }
+        Check(reader.Finished(), "bounded collaboration snapshot has canonical length");
+        Check(editCount > 0 && editCount < 10, "byte budget evicts only the oldest edits");
+        Check(firstSequence == 11 - editCount && nextSequence == 11,
+              "byte-budget eviction retains the newest contiguous edit suffix");
+    }
+
     void TestSupervisorFailClosedConfiguration()
     {
         Spark::Daemon::OrchestrationConfig config;
@@ -127,6 +220,54 @@ namespace
         auto response =
             *service.HandleMessage(static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::DefineRequest), payload);
         Check(IsError(response), "supervisor without allow roots rejects definitions");
+    }
+
+    void TestSupervisorRevalidatesExecutableAtLaunch(const std::filesystem::path& executable,
+                                                      const std::filesystem::path& scratch)
+    {
+        const auto allowed = scratch / "swap-allowed";
+        const auto outside = scratch / "swap-outside";
+        std::filesystem::create_directories(allowed);
+        std::filesystem::create_directories(outside);
+        const auto allowedExecutable = allowed / executable.filename();
+        const auto outsideExecutable = outside / executable.filename();
+        std::filesystem::copy_file(executable, allowedExecutable, std::filesystem::copy_options::overwrite_existing);
+        std::filesystem::copy_file(executable, outsideExecutable, std::filesystem::copy_options::overwrite_existing);
+
+        Spark::Daemon::OrchestrationConfig config;
+        config.allowedExecutableRoots = {allowed};
+        config.journalPath = scratch / "swap.state";
+        Spark::Daemon::OrchestrationService service(config);
+        Spark::Daemon::ProcessDefinition definition;
+        definition.id = "swap";
+        definition.executable = allowedExecutable.string();
+        definition.workingDirectory = allowed.string();
+        definition.arguments = {"--supervised-child"};
+        definition.gracefulStopMilliseconds = 200;
+        std::vector<uint8_t> payload;
+        Spark::Daemon::EncodeProcessDefinition({"swap-client", 1}, definition, payload);
+        const auto defined = *service.HandleMessage(
+            static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::DefineRequest), payload);
+        Check(!IsError(defined), "allow-root executable definition is accepted before a path swap");
+
+        std::error_code swapError;
+        std::filesystem::remove(allowedExecutable, swapError);
+        swapError.clear();
+        std::filesystem::create_symlink(outsideExecutable, allowedExecutable, swapError);
+        if (!swapError)
+        {
+            Spark::Daemon::EncodeProcessMutation({"swap-client", 2}, "swap", payload);
+            const auto started = *service.HandleMessage(
+                static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::StartRequest), payload);
+            Check(IsError(started), "launch-time canonicalization rejects executable swapped outside allow roots");
+            const auto statuses = service.Snapshot();
+            Check(statuses.size() == 1 && statuses.front().processId == 0,
+                  "rejected swapped executable never creates a process");
+        }
+        else
+        {
+            std::cout << "[ INFO   ] orchestration path-swap test skipped: " << swapError.message() << '\n';
+        }
     }
 
     void TestJournalTornTailAndStalePid(const std::filesystem::path& scratch, const std::filesystem::path& executable)
@@ -296,7 +437,9 @@ int main(int argc, char** argv)
     std::filesystem::create_directories(scratch);
     TestStrictProcessCodec();
     TestCollaborationCapabilitiesAndLocks();
+    TestCollaborationSnapshotByteBudget();
     TestSupervisorFailClosedConfiguration();
+    TestSupervisorRevalidatesExecutableAtLaunch(executable, scratch);
     TestJournalTornTailAndStalePid(scratch, executable);
     TestJournalWriteBoundsPreservePublishedSnapshot(scratch);
     TestPersistentOrchestratorIdentity(scratch);

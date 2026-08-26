@@ -29,7 +29,7 @@
 
 #define SPARK_PLUGIN_ABI_MAGIC UINT32_C(0x47504B53) /* "SKPG" */
 #define SPARK_PLUGIN_ABI_MAJOR UINT32_C(1)
-#define SPARK_PLUGIN_ABI_MINOR UINT32_C(0)
+#define SPARK_PLUGIN_ABI_MINOR UINT32_C(1)
 #define SPARK_PLUGIN_ENTRY_POINT "SparkGetPluginDescriptor"
 
 typedef uint64_t SparkPluginInstance;
@@ -120,8 +120,10 @@ typedef struct SparkPluginAPI
     SparkPluginResult (*prepare_unload)(SparkPluginInstance instance, uint32_t timeout_ms);
     SparkPluginResult (*save_state)(SparkPluginInstance instance, SparkPluginMutableBytes* state);
     SparkPluginResult (*restore_state)(SparkPluginInstance instance, SparkPluginBytes state);
+    /** Undo a successful prepare_unload when a transactional reload aborts. */
+    SparkPluginResult (*cancel_unload)(SparkPluginInstance instance);
 
-    void* reserved[8];
+    void* reserved[7];
 } SparkPluginAPI;
 
 typedef struct SparkPluginDescriptor
@@ -145,7 +147,7 @@ typedef const SparkPluginDescriptor* (*SparkGetPluginDescriptorFn)(uint32_t host
 static inline SparkPluginResult SparkValidatePluginDescriptor(const SparkPluginDescriptor* descriptor)
 {
     const size_t minimum_descriptor_size = offsetof(SparkPluginDescriptor, reserved);
-    const size_t minimum_api_size = offsetof(SparkPluginAPI, reserved);
+    const size_t minimum_api_size = offsetof(SparkPluginAPI, cancel_unload);
     if (descriptor == NULL || descriptor->api == NULL || descriptor->id == NULL || descriptor->name == NULL)
         return SPARK_PLUGIN_ERROR_INVALID_ARGUMENT;
     if (descriptor->struct_size < minimum_descriptor_size || descriptor->api->struct_size < minimum_api_size)
@@ -157,6 +159,16 @@ static inline SparkPluginResult SparkValidatePluginDescriptor(const SparkPluginD
         return SPARK_PLUGIN_ERROR_INCOMPATIBLE_ABI;
     if (descriptor->api->create == NULL || descriptor->api->destroy == NULL)
         return SPARK_PLUGIN_ERROR_INCOMPATIBLE_ABI;
+    if ((descriptor->api->capabilities & SPARK_PLUGIN_CAP_HOT_RELOAD) != 0)
+    {
+        if (descriptor->api->prepare_unload == NULL || descriptor->api->save_state == NULL ||
+            descriptor->api->restore_state == NULL)
+            return SPARK_PLUGIN_ERROR_INCOMPATIBLE_ABI;
+        if (descriptor->api->abi_minor >= UINT32_C(1) &&
+            (descriptor->api->struct_size < offsetof(SparkPluginAPI, reserved) ||
+             descriptor->api->cancel_unload == NULL))
+            return SPARK_PLUGIN_ERROR_INCOMPATIBLE_ABI;
+    }
     return SPARK_PLUGIN_OK;
 }
 

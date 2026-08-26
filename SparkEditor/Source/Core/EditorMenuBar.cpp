@@ -17,6 +17,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <algorithm>
+#include <cerrno>
 #include <filesystem>
 
 #ifdef _WIN32
@@ -25,11 +26,48 @@
 #include <shellapi.h>
 #else
 #include <cstdlib>
+#include <sys/wait.h>
 #include <unistd.h>
 #endif
 
 namespace SparkEditor
 {
+#ifndef _WIN32
+    namespace
+    {
+        bool LaunchDocumentationViewer()
+        {
+            const pid_t pid = fork();
+            if (pid == -1)
+                return false;
+            if (pid == 0)
+            {
+                if (setsid() == -1)
+                    _exit(127);
+                const pid_t detachedPid = fork();
+                if (detachedPid == -1)
+                    _exit(127);
+                if (detachedPid != 0)
+                    _exit(0);
+#ifdef __APPLE__
+                execlp("open", "open", "docs/", nullptr);
+#else
+                execlp("xdg-open", "xdg-open", "docs/", nullptr);
+#endif
+                _exit(127);
+            }
+
+            int status = 0;
+            while (waitpid(pid, &status, 0) == -1)
+            {
+                if (errno == EINTR)
+                    continue;
+                return errno == ECHILD;
+            }
+            return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+        }
+    } // namespace
+#endif
 
     void EditorUI::ShowOpenSceneDialog()
     {
@@ -658,20 +696,13 @@ namespace SparkEditor
         {
 #ifdef _WIN32
             ShellExecuteA(nullptr, "open", "docs", nullptr, nullptr, SW_SHOWNORMAL);
-#else
-            // Use fork/execlp instead of system() to avoid shell injection risks
-            pid_t pid = fork();
-            if (pid == 0)
-            {
-#ifdef __APPLE__
-                execlp("open", "open", "docs/", nullptr);
-#else
-                execlp("xdg-open", "xdg-open", "docs/", nullptr);
-#endif
-                _exit(1);
-            }
-#endif
             ShowNotification("Opening documentation...", "info", 2.0f);
+#else
+            if (LaunchDocumentationViewer())
+                ShowNotification("Opening documentation...", "info", 2.0f);
+            else
+                ShowNotification("Could not launch the documentation viewer", "error", 3.0f);
+#endif
         }
         ImGui::EndMenu();
     }

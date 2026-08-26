@@ -26,9 +26,22 @@ and `destroy`. Optional capabilities advertise ticking, hot reload, asset
 import/processing, editor integration, and runtime integration.
 
 Hot-reloadable plugins must quiesce their scheduled tasks in
-`prepare_unload`, serialize only stable IDs and bytes through `save_state`, and
-restore them through `restore_state`. Host resources are reacquired by stable
-ID rather than persisting process-local pointers or handles.
+`prepare_unload`, serialize only stable IDs and bytes through `save_state`,
+restore them through `restore_state`, and reverse a prepared-but-aborted
+transaction through `cancel_unload`. Host resources are reacquired by stable
+ID rather than persisting process-local pointers or handles. Advertising
+`SPARK_PLUGIN_CAP_HOT_RELOAD` in ABI minor 1 or newer requires all four
+callbacks. ABI minor 0 plugins remain loadable, but cannot use transactional
+hot reload because they have no rollback callback. During
+`DynamicPluginHost::Reload`, `save_state` receives a host-owned buffer with
+`size` initially zero and `capacity` limited to 16 MiB; the plugin writes only
+within `capacity` and sets `size` to the bytes produced. The replacement must
+restore those bytes successfully before the old image is destroyed. The old
+generation is stopped before the replacement starts, so two generations never
+own runtime resources concurrently. Load, save, restore, or replacement-start
+failures keep the old image loaded; pre-commit failures call `cancel_unload`,
+and a replacement-start failure restarts the stopped old generation before the
+host reopens task scheduling.
 
 ## Building a plugin
 

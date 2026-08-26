@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -112,6 +113,11 @@ namespace
         return "\"" + QuoteNativeArgument(executable.string()) + " --spawn-descendant " +
                QuoteNativeArgument(pidFile.string()) + "\"";
     }
+
+    std::string BuildSuccessCommand(const std::filesystem::path& executable)
+    {
+        return "\"" + QuoteNativeArgument(executable.string()) + " --exit-success\"";
+    }
 #else
     std::string QuoteShellArgument(const std::string& argument)
     {
@@ -130,6 +136,11 @@ namespace
     std::string BuildRunnerCommand(const std::filesystem::path& executable, const std::filesystem::path& pidFile)
     {
         return QuoteShellArgument(executable.string()) + " --spawn-descendant " + QuoteShellArgument(pidFile.string());
+    }
+
+    std::string BuildSuccessCommand(const std::filesystem::path& executable)
+    {
+        return QuoteShellArgument(executable.string()) + " --exit-success";
     }
 #endif
 
@@ -338,6 +349,112 @@ namespace
         std::filesystem::remove(unrelatedPidFile, ignored);
         return failures == 0 ? 0 : 1;
     }
+
+    int RunCompletionReentryTest(const std::filesystem::path& executable)
+    {
+        std::mutex completionMutex;
+        std::condition_variable completionCondition;
+        int completionCount = 0;
+        bool allSuccessful = true;
+        bool rerunAttempted = false;
+        bool rerunAccepted = false;
+
+        SparkBuild::ProcessRunner runner;
+        const std::string command = BuildSuccessCommand(executable);
+        SparkBuild::CompletionCallback completion;
+        completion = [&](int exitCode, bool success)
+        {
+            bool startAgain = false;
+            {
+                std::lock_guard<std::mutex> lock(completionMutex);
+                ++completionCount;
+                allSuccessful = allSuccessful && success && exitCode == 0;
+                startAgain = completionCount == 1;
+            }
+
+            if (startAgain)
+            {
+                const bool accepted = runner.RunAsync(command, {}, [](const std::string&) {}, completion);
+                {
+                    std::lock_guard<std::mutex> lock(completionMutex);
+                    rerunAttempted = true;
+                    rerunAccepted = accepted;
+                }
+            }
+            completionCondition.notify_all();
+        };
+
+        if (!runner.RunAsync(command, {}, [](const std::string&) {}, completion))
+        {
+            std::cerr << "FAIL: ProcessRunner rejected the initial reentry launch\n";
+            return 1;
+        }
+
+        bool completed = false;
+        {
+            std::unique_lock<std::mutex> lock(completionMutex);
+            completed = completionCondition.wait_for(
+                lock, 8s, [&] { return completionCount == 2 || (rerunAttempted && !rerunAccepted); });
+        }
+
+        int failures = 0;
+        auto check = [&failures](bool condition, const char* message)
+        {
+            if (!condition)
+            {
+                ++failures;
+                std::cerr << "FAIL: " << message << '\n';
+            }
+        };
+        std::lock_guard<std::mutex> lock(completionMutex);
+        check(completed, "completion callback reentry timed out");
+        check(rerunAttempted, "completion callback did not attempt a second run");
+        check(rerunAccepted, "ProcessRunner rejected a run from its completion callback");
+        check(completionCount == 2, "reentrant completion callbacks did not run exactly once each");
+        check(allSuccessful, "a reentrant ProcessRunner run reported failure");
+        check(!runner.IsRunning(), "runner still reports running after the reentrant completion callback");
+        return failures == 0 ? 0 : 1;
+    }
+
+    int RunCompletionOwnedDestructionTest(const std::filesystem::path& executable)
+    {
+        std::mutex completionMutex;
+        std::condition_variable completionCondition;
+        bool destroyed = false;
+        bool successful = false;
+        auto runner = std::make_unique<SparkBuild::ProcessRunner>();
+
+        const bool accepted = runner->RunAsync(
+            BuildSuccessCommand(executable), {}, [](const std::string&) {},
+            [&](int exitCode, bool success)
+            {
+                successful = success && exitCode == 0;
+                runner.reset();
+                {
+                    std::lock_guard<std::mutex> lock(completionMutex);
+                    destroyed = true;
+                }
+                completionCondition.notify_all();
+            });
+        if (!accepted)
+        {
+            std::cerr << "FAIL: ProcessRunner rejected the callback-destruction launch\n";
+            return 1;
+        }
+
+        std::unique_lock<std::mutex> lock(completionMutex);
+        if (!completionCondition.wait_for(lock, 8s, [&] { return destroyed; }))
+        {
+            std::cerr << "FAIL: destroying ProcessRunner in its completion callback deadlocked\n";
+            return 1;
+        }
+        if (!successful || runner)
+        {
+            std::cerr << "FAIL: callback-owned ProcessRunner destruction did not complete successfully\n";
+            return 1;
+        }
+        return 0;
+    }
 } // namespace
 
 int main(int argc, char** argv)
@@ -347,7 +464,12 @@ int main(int argc, char** argv)
         return SentinelMain(argv[2]);
     if (argc == 3 && std::string(argv[1]) == "--spawn-descendant")
         return DescendantSpawnerMain(executable, argv[2]);
+    if (argc == 2 && std::string(argv[1]) == "--exit-success")
+        return 0;
     if (argc != 1)
         return 64;
-    return RunCancellationTreeTest(executable);
+    const int cancellationResult = RunCancellationTreeTest(executable);
+    const int reentryResult = RunCompletionReentryTest(executable);
+    const int destructionResult = RunCompletionOwnedDestructionTest(executable);
+    return cancellationResult == 0 && reentryResult == 0 && destructionResult == 0 ? 0 : 1;
 }

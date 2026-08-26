@@ -21,6 +21,7 @@ namespace Spark::Daemon
         size_t maximumPeersPerSession = 32;
         size_t maximumLocksPerSession = 4096;
         size_t maximumEditHistory = 8192;
+        size_t maximumSnapshotBytes = kDefaultCollaborationSnapshotBytes;
         std::chrono::seconds peerTimeout{120};
     };
 
@@ -62,6 +63,7 @@ namespace Spark::Daemon
             std::unordered_map<uint32_t, PeerRecord> peers;
             std::unordered_map<std::string, uint32_t> locks;
             std::deque<CollaborationEdit> edits;
+            size_t snapshotBytes = 0;
         };
 
         ServiceResponse Create(const std::vector<uint8_t>& payload);

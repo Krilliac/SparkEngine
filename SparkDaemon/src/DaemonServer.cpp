@@ -183,7 +183,10 @@ namespace Spark::Daemon
 #endif
     } // namespace
 
-    DaemonServer::DaemonServer() = default;
+    DaemonServer::DaemonServer(size_t maximumClientWorkers)
+        : m_maximumClientWorkers(std::clamp<size_t>(maximumClientWorkers, 1, 1024))
+    {
+    }
 
     DaemonServer::~DaemonServer()
     {
@@ -298,6 +301,12 @@ namespace Spark::Daemon
 
             ReapFinishedWorkers();
             std::lock_guard lock(m_threadsMutex);
+            if (m_clientWorkers.size() >= m_maximumClientWorkers)
+            {
+                ::DisconnectNamedPipe(pipe);
+                ::CloseHandle(pipe);
+                continue;
+            }
             auto& worker = m_clientWorkers.emplace_back();
             std::atomic<bool>& doneFlag = worker.done;
             worker.thread = std::thread([this, pipe, &doneFlag] { HandleConnection(FromNative(pipe), doneFlag); });
@@ -459,6 +468,11 @@ namespace Spark::Daemon
             ReapFinishedWorkers();
 
             std::lock_guard lock(m_threadsMutex);
+            if (m_clientWorkers.size() >= m_maximumClientWorkers)
+            {
+                ::close(connFd);
+                continue;
+            }
             auto& worker = m_clientWorkers.emplace_back();
             std::atomic<bool>& doneFlag = worker.done;
             worker.thread = std::thread([this, connFd, &doneFlag]

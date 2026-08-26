@@ -7,7 +7,9 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 #include "Process.h"
+#include "ProcessPipeBuffer.h"
 
+#include <algorithm>
 #include <string>
 
 #include <windows.h>
@@ -75,7 +77,7 @@ namespace Spark
             }
         }
 
-        /// Read all available bytes from a pipe handle (non-blocking via PeekNamedPipe).
+        /// Drain a bounded amount of available data (non-blocking via PeekNamedPipe).
         static bool ReadAvailable(HANDLE h, std::string& dest)
         {
             DWORD avail = 0;
@@ -85,13 +87,18 @@ namespace Spark
                 return true; // No data, not EOF
 
             char buf[4096];
+            size_t drainedBytes = 0;
             while (avail > 0)
             {
-                DWORD toRead = (avail < sizeof(buf)) ? avail : static_cast<DWORD>(sizeof(buf));
+                const size_t capacity = ProcessDetail::RemainingReadCapacity(dest.size(), drainedBytes);
+                if (capacity == 0)
+                    return true;
+                const DWORD toRead = static_cast<DWORD>(std::min<size_t>({avail, sizeof(buf), capacity}));
                 DWORD bytesRead = 0;
                 if (!ReadFile(h, buf, toRead, &bytesRead, NULL) || bytesRead == 0)
                     return false;
                 dest.append(buf, bytesRead);
+                drainedBytes += bytesRead;
                 avail -= bytesRead;
             }
             return true;

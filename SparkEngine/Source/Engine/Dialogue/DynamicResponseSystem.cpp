@@ -150,21 +150,29 @@ namespace Spark::Dialogue
             return;
         }
 
-        // Mark the rule as triggered
+        // Mark the rule as triggered, then snapshot its actions before invoking
+        // any user callback. A Custom action may legitimately register another
+        // rule or shut the system down; either operation can reallocate/clear
+        // m_rules and would invalidate bestRule and references into its action
+        // vector while this dispatch is still on the stack.
         bestRule->lastTriggeredTime = m_gameTime;
+        const std::vector<ResponseAction> actions = bestRule->actions;
 
         // Execute actions (Wait actions queue remaining actions as pending)
-        for (size_t i = 0; i < bestRule->actions.size(); ++i)
+        for (size_t i = 0; i < actions.size(); ++i)
         {
-            const auto& action = bestRule->actions[i];
+            if (!m_initialized)
+                break;
+
+            const auto& action = actions[i];
 
             if (action.type == ResponseAction::Type::Wait)
             {
                 // Queue all remaining actions with accumulated delay
                 float delay = action.floatParam;
-                for (size_t j = i + 1; j < bestRule->actions.size(); ++j)
+                for (size_t j = i + 1; j < actions.size(); ++j)
                 {
-                    const auto& deferred = bestRule->actions[j];
+                    const auto& deferred = actions[j];
                     if (deferred.type == ResponseAction::Type::Wait)
                     {
                         delay += deferred.floatParam;

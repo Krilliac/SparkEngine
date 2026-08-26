@@ -39,6 +39,8 @@
 #endif // SPARK_PLATFORM_WINDOWS
 #else
 #include <dlfcn.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 // =============================================================================
@@ -338,6 +340,165 @@ namespace
         }
         return true;
     }
+
+#ifndef _WIN32
+    class ScopedStagedModuleImage
+    {
+      public:
+        ~ScopedStagedModuleImage() { Cleanup(); }
+
+        ScopedStagedModuleImage(const ScopedStagedModuleImage&) = delete;
+        ScopedStagedModuleImage& operator=(const ScopedStagedModuleImage&) = delete;
+        ScopedStagedModuleImage() = default;
+
+        void Set(std::filesystem::path path) { m_path = std::move(path); }
+        [[nodiscard]] const std::filesystem::path& Get() const { return m_path; }
+
+        void Disarm() { m_path.clear(); }
+
+      private:
+        void Cleanup()
+        {
+            if (m_path.empty())
+                return;
+            std::error_code ignored;
+            std::filesystem::remove_all(m_path.parent_path(), ignored);
+            m_path.clear();
+        }
+
+        std::filesystem::path m_path;
+    };
+
+    bool IsSiblingSharedLibrary(const std::filesystem::path& path)
+    {
+        const std::string filename = path.filename().string();
+#if defined(__APPLE__)
+        return filename.ends_with(".dylib");
+#else
+        return filename.ends_with(".so") || filename.find(".so.") != std::string::npos;
+#endif
+    }
+
+    bool StageSiblingSharedLibraries(const std::filesystem::path& source, const std::filesystem::path& stagingDirectory,
+                                     std::string& error)
+    {
+        constexpr size_t kMaximumSiblingLibraries = 256;
+        size_t stagedCount = 0;
+        std::error_code iteratorError;
+        for (std::filesystem::directory_iterator it(source.parent_path(), iteratorError), end;
+             !iteratorError && it != end; it.increment(iteratorError))
+        {
+            const std::filesystem::path sibling = it->path();
+            if (sibling.filename() == source.filename() || !IsSiblingSharedLibrary(sibling))
+                continue;
+
+            std::error_code typeError;
+            if (!std::filesystem::is_regular_file(sibling, typeError) || typeError)
+                continue;
+            if (++stagedCount > kMaximumSiblingLibraries)
+            {
+                error = "module directory exceeds the 256 sibling shared-library staging limit";
+                return false;
+            }
+
+            std::error_code linkError;
+            const std::filesystem::path target = std::filesystem::weakly_canonical(sibling, linkError);
+            if (linkError)
+            {
+                error = "failed to resolve sibling module dependency: " + linkError.message();
+                return false;
+            }
+            std::filesystem::create_symlink(target, stagingDirectory / sibling.filename(), linkError);
+            if (linkError)
+            {
+                error = "failed to stage sibling module dependency: " + linkError.message();
+                return false;
+            }
+        }
+        if (iteratorError)
+        {
+            error = "failed to enumerate sibling module dependencies: " + iteratorError.message();
+            return false;
+        }
+        return true;
+    }
+
+    bool StageModuleForPosixLoad(const std::filesystem::path& source, ScopedStagedModuleImage& staged,
+                                 std::string& error)
+    {
+        static std::atomic<uint64_t> stageSerial{0};
+        const uint64_t timestamp = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+
+        for (uint32_t attempt = 0; attempt < 32; ++attempt)
+        {
+            const uint64_t serial = stageSerial.fetch_add(1, std::memory_order_relaxed);
+            const std::filesystem::path stagingDirectory =
+                std::filesystem::temp_directory_path() /
+                ("spark-module-stage-" + std::to_string(static_cast<uint64_t>(::getpid())) + "-" +
+                 std::to_string(timestamp) + "-" + std::to_string(serial));
+            std::error_code directoryError;
+            if (!std::filesystem::create_directory(stagingDirectory, directoryError))
+            {
+                if (directoryError == std::errc::file_exists)
+                    continue;
+                error = "failed to create private module staging directory: " + directoryError.message();
+                return false;
+            }
+            if (::chmod(stagingDirectory.c_str(), S_IRWXU) != 0)
+            {
+                std::error_code ignored;
+                std::filesystem::remove(stagingDirectory, ignored);
+                error = "failed to secure private module staging directory";
+                return false;
+            }
+
+            const std::filesystem::path candidate = stagingDirectory / source.filename();
+            const std::filesystem::path candidateSidecar = SidecarPath(candidate);
+
+            std::error_code copyError;
+            if (!std::filesystem::copy_file(source, candidate, std::filesystem::copy_options::none, copyError))
+            {
+                if (copyError == std::errc::file_exists)
+                {
+                    std::error_code ignored;
+                    std::filesystem::remove_all(stagingDirectory, ignored);
+                    continue;
+                }
+                std::error_code ignored;
+                std::filesystem::remove(stagingDirectory, ignored);
+                error = "failed to stage module image: " + copyError.message();
+                return false;
+            }
+
+            copyError.clear();
+            if (!std::filesystem::copy_file(SidecarPath(source), candidateSidecar, std::filesystem::copy_options::none,
+                                            copyError))
+            {
+                std::error_code ignored;
+                std::filesystem::remove(candidate, ignored);
+                ignored.clear();
+                std::filesystem::remove(stagingDirectory, ignored);
+                if (copyError == std::errc::file_exists)
+                    continue;
+                error = "failed to stage module ABI sidecar: " + copyError.message();
+                return false;
+            }
+
+            if (!StageSiblingSharedLibraries(source, stagingDirectory, error))
+            {
+                std::error_code ignored;
+                std::filesystem::remove_all(stagingDirectory, ignored);
+                return false;
+            }
+
+            staged.Set(candidate);
+            return true;
+        }
+
+        error = "failed to reserve a unique staged module image";
+        return false;
+    }
+#endif
 } // namespace
 
 void ModuleManager::SetImGuiInjection(void* context, void* allocFn, void* freeFn, void* userData)
@@ -449,6 +610,24 @@ bool ModuleManager::LoadModule(const std::string& path)
 
     const std::filesystem::path modulePath = PathFromUtf8(path);
 
+#ifndef _WIN32
+    // A compiler or build system may atomically replace the source .so/.dylib
+    // after its sidecar/hash check but before dlopen executes constructors.
+    // Load a unique snapshot instead; normal rebuilds only ever replace the
+    // declared source path, while the verified snapshot remains stable until
+    // this module is unloaded.
+    ScopedStagedModuleImage stagedImage;
+    std::string stagingError;
+    if (!StageModuleForPosixLoad(modulePath, stagedImage, stagingError))
+    {
+        console.LogError(std::format("Failed to stage module '{}' for validation: {}", path, stagingError));
+        return false;
+    }
+    const std::filesystem::path& validatedModulePath = stagedImage.Get();
+#else
+    const std::filesystem::path& validatedModulePath = modulePath;
+#endif
+
 #ifdef _WIN32
     // Prevent a concurrent rebuild, rename, or delete from changing the image
     // between the sidecar hash check and LoadLibraryW. The loader may still
@@ -467,7 +646,7 @@ bool ModuleManager::LoadModule(const std::string& path)
     // SHA-256 binds the descriptor to this exact binary, so an incompatible or
     // stale candidate is rejected before DllMain/static constructors execute.
     std::string sidecarError;
-    if (!ValidateModuleSidecar(modulePath, sidecarError))
+    if (!ValidateModuleSidecar(validatedModulePath, sidecarError))
     {
 #ifdef _WIN32
         CloseHandle(pinnedModule);
@@ -488,7 +667,8 @@ bool ModuleManager::LoadModule(const std::string& path)
         return false;
     }
 #else
-    handle = dlopen(path.c_str(), RTLD_NOW);
+    const std::string loadPath = PathToUtf8(validatedModulePath);
+    handle = dlopen(loadPath.c_str(), RTLD_NOW);
     if (!handle)
     {
         const char* err = dlerror();
@@ -640,9 +820,15 @@ bool ModuleManager::LoadModule(const std::string& path)
         entry.loadOrder = info.loadOrder;
         entry.isLegacyAdapter = false;
         entry.kind = info.kind;
+#ifndef _WIN32
+        entry.transientImagePath = PathToUtf8(stagedImage.Get());
+#endif
 
         console.LogSuccess(std::format("Loaded module: {} v{}", info.name, info.version));
         m_modules.push_back(std::move(entry));
+#ifndef _WIN32
+        stagedImage.Disarm();
+#endif
         SortModules();
         return true;
     }
@@ -711,12 +897,18 @@ bool ModuleManager::LoadModule(const std::string& path)
         entry.loadOrder = info.loadOrder;
         entry.isLegacyAdapter = true;
         entry.kind = Spark::ModuleKind::Game;
+#ifndef _WIN32
+        entry.transientImagePath = PathToUtf8(stagedImage.Get());
+#endif
 
         // Transfer ownership last to avoid leak if any prior line throws
         entry.instance = adapterOwner.release();
 
         console.LogSuccess(std::format("Loaded legacy module: {} v{}", info.name, info.version));
         m_modules.push_back(std::move(entry));
+#ifndef _WIN32
+        stagedImage.Disarm();
+#endif
         SortModules();
         return true;
     }
@@ -1135,6 +1327,7 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
 
         const std::string savedPath = entry.path;
         const std::filesystem::path sourcePath = PathFromUtf8(savedPath);
+#ifdef _WIN32
         const uint64_t reloadToken = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
         static std::atomic<uint64_t> reloadSerial{0};
         std::filesystem::path shadowName = sourcePath.stem();
@@ -1171,6 +1364,17 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
             removeShadowFiles();
             return false;
         }
+#else
+        ScopedStagedModuleImage reloadShadow;
+        std::string reloadStagingError;
+        if (!StageModuleForPosixLoad(sourcePath, reloadShadow, reloadStagingError))
+        {
+            console.LogError("Failed to stage module reload for '" + name + "': " + reloadStagingError);
+            return false;
+        }
+        const std::filesystem::path shadowPath = reloadShadow.Get();
+        const auto removeShadowFiles = []() {};
+#endif
 
         ModuleManager stagedManager;
         stagedManager.m_fileCache = m_fileCache;
@@ -1220,7 +1424,16 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         LoadedModule replacement = std::move(stagedManager.m_modules.front());
         stagedManager.m_modules.clear();
         replacement.path = savedPath;
+#ifdef _WIN32
+        // Windows maps the outer reload shadow directly and keeps it until the
+        // replacement image is unloaded.
         replacement.transientImagePath = PathToUtf8(shadowPath);
+#else
+        // POSIX LoadModule already created and tracked a private inner staging
+        // image. Preserve that ownership and discard the now-unused outer
+        // reload copy instead of overwriting the tracked cleanup path.
+        removeShadowFiles();
+#endif
 
         // Commit only after the replacement is fully usable.
         if (entry.initialized && entry.instance)
@@ -1276,6 +1489,12 @@ std::vector<std::pair<std::string, std::string>> ModuleManager::GetModulePathsAn
     for (const auto& entry : m_modules)
         result.emplace_back(entry.name, entry.path);
     return result;
+}
+
+size_t ModuleManager::GetInitializedModuleCount() const
+{
+    return static_cast<size_t>(std::count_if(m_modules.begin(), m_modules.end(), [](const LoadedModule& module)
+                                             { return module.initialized && module.instance != nullptr; }));
 }
 
 Spark::IModule* ModuleManager::GetPrimaryModule() const
@@ -1415,9 +1634,7 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
     {
         std::error_code cleanupError;
         const std::filesystem::path transientPath = PathFromUtf8(entry.transientImagePath);
-        std::filesystem::remove(SidecarPath(transientPath), cleanupError);
-        cleanupError.clear();
-        std::filesystem::remove(transientPath, cleanupError);
+        std::filesystem::remove_all(transientPath.parent_path(), cleanupError);
         entry.transientImagePath.clear();
     }
 }

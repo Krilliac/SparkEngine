@@ -14,12 +14,21 @@
 #include <string>
 #include <string_view>
 
+#ifndef _WIN32
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
 #ifndef SPARK_TEST_MISMATCHED_MODULE_PATH
 #error SPARK_TEST_MISMATCHED_MODULE_PATH must name the mismatched module fixture
 #endif
 
 #ifndef SPARK_TEST_COMPATIBLE_MODULE_PATH
 #error SPARK_TEST_COMPATIBLE_MODULE_PATH must name the compatible module fixture
+#endif
+
+#ifndef SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH
+#error SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH must name the sibling-dependent module fixture
 #endif
 
 namespace
@@ -124,6 +133,23 @@ namespace
             unsetenv("SPARK_MODULE_ABI_VETO_UNLOAD");
 #endif
     }
+
+#ifndef _WIN32
+    size_t CountStagedModuleImages(const std::filesystem::path& source)
+    {
+        const std::string prefix = "spark-module-stage-" + std::to_string(static_cast<uint64_t>(::getpid())) + "-";
+        size_t count = 0;
+        std::error_code ec;
+        const std::filesystem::path stagingRoot = std::filesystem::temp_directory_path();
+        for (std::filesystem::directory_iterator it(stagingRoot, ec), end; !ec && it != end; it.increment(ec))
+        {
+            const std::string filename = it->path().filename().string();
+            if (filename.starts_with(prefix) && std::filesystem::exists(it->path() / source.filename()))
+                ++count;
+        }
+        return count;
+    }
+#endif
 } // namespace
 
 TEST(ModuleABI_ExpectedDescriptorIsCompatible)
@@ -285,6 +311,58 @@ TEST(ModuleABI_CompatibleMacroModuleStillLoads)
     manager.UnloadAll();
 }
 
+#ifndef _WIN32
+TEST(ModuleABI_PosixLoadsVerifiedShadowAndCleansItAfterUnload)
+{
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkPosixStagedModule");
+    EXPECT_EQ(CountStagedModuleImages(modulePath), size_t{0});
+
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+    EXPECT_EQ(CountStagedModuleImages(modulePath), size_t{1});
+
+    manager.UnloadAll();
+    EXPECT_EQ(CountStagedModuleImages(modulePath), size_t{0});
+    RemoveModuleCopy(modulePath);
+}
+
+TEST(ModuleABI_PosixLoadsFromReadOnlyInstallDirectory)
+{
+    const std::filesystem::path sourcePath = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
+    const std::filesystem::path installDirectory =
+        std::filesystem::temp_directory_path() /
+        ("spark-readonly-module-" + std::to_string(static_cast<uint64_t>(::getpid())));
+    std::error_code ec;
+    std::filesystem::remove_all(installDirectory, ec);
+    std::filesystem::create_directory(installDirectory);
+    const std::filesystem::path installedModule = installDirectory / sourcePath.filename();
+    std::filesystem::copy_file(sourcePath, installedModule);
+    std::filesystem::copy_file(SidecarPath(sourcePath), SidecarPath(installedModule));
+    ASSERT_TRUE(::chmod(installDirectory.c_str(), S_IRUSR | S_IXUSR) == 0);
+
+    ModuleManager manager;
+    EXPECT_TRUE(manager.LoadModule(PathToUtf8(installedModule)));
+    manager.UnloadAll();
+    EXPECT_EQ(CountStagedModuleImages(installedModule), size_t{0});
+
+    EXPECT_TRUE(::chmod(installDirectory.c_str(), S_IRWXU) == 0);
+    std::filesystem::remove_all(installDirectory, ec);
+}
+
+TEST(ModuleABI_PosixPrivateStagePreservesSiblingDependencyResolution)
+{
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH));
+
+    NullEngineContext context;
+    manager.InitializeAll(&context);
+    EXPECT_EQ(manager.GetInitializedModuleCount(), size_t{1});
+
+    manager.ShutdownAll();
+    manager.UnloadAll();
+}
+#endif
+
 TEST(ModuleABI_FailedTransactionalReloadPreservesWorkingModule)
 {
     const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkReloadPreservationModule");
@@ -292,6 +370,9 @@ TEST(ModuleABI_FailedTransactionalReloadPreservesWorkingModule)
     ModuleManager manager;
     ASSERT_TRUE(manager.LoadModule(modulePath.string()));
     manager.InitializeAll(&context);
+#ifndef _WIN32
+    EXPECT_EQ(CountStagedModuleImages(modulePath), size_t{1});
+#endif
 
     Spark::IModule* const workingInstance = manager.GetModule("Spark Compatible ABI Fixture");
     EXPECT_TRUE(workingInstance != nullptr);
@@ -412,8 +493,14 @@ TEST(ModuleABI_HotReloadCallbackCanReenterManagerWithoutDeadlock)
     EXPECT_TRUE(callbackRan);
     EXPECT_TRUE(statusFromCallback.find("Reloads:  1") != std::string::npos);
     EXPECT_EQ(hotReload.GetReloadCount(), 1);
+#ifndef _WIN32
+    EXPECT_EQ(CountStagedModuleImages(modulePath), size_t{1});
+#endif
 
     manager.ShutdownAll();
     manager.UnloadAll();
+#ifndef _WIN32
+    EXPECT_EQ(CountStagedModuleImages(modulePath), size_t{0});
+#endif
     RemoveModuleCopy(modulePath);
 }

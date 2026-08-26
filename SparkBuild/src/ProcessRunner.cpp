@@ -136,28 +136,64 @@ namespace SparkBuild
 
     ProcessRunner::~ProcessRunner()
     {
+        m_shuttingDown.store(true);
         Cancel();
-        if (m_thread.joinable())
+        std::thread activeThread;
         {
-            m_thread.join();
+            std::lock_guard<std::mutex> lock(m_threadMutex);
+            activeThread = std::move(m_thread);
+        }
+        if (activeThread.joinable())
+        {
+            if (activeThread.get_id() == std::this_thread::get_id())
+                activeThread.detach();
+            else
+                activeThread.join();
         }
     }
 
     bool ProcessRunner::RunAsync(const std::string& command, const std::string& workingDir, OutputCallback onOutput,
                                  CompletionCallback onComplete)
     {
-        if (m_running.load())
+        std::lock_guard<std::mutex> lock(m_threadMutex);
+        if (m_shuttingDown.load() || m_running.load())
             return false;
 
+        // CompleteAsync detaches a finishing worker before it invokes the
+        // callback, so callback reentry never encounters its own thread here.
         if (m_thread.joinable())
-        {
-            m_thread.join();
-        }
+            return false;
 
         m_cancelRequested.store(false);
         m_running.store(true);
-        m_thread = std::thread(&ProcessRunner::AsyncThreadFunc, this, command, workingDir, onOutput, onComplete);
+        try
+        {
+            m_thread = std::thread(&ProcessRunner::AsyncThreadFunc, this, command, workingDir, std::move(onOutput),
+                                   std::move(onComplete));
+        }
+        catch (...)
+        {
+            m_running.store(false);
+            throw;
+        }
         return true;
+    }
+
+    void ProcessRunner::CompleteAsync(int exitCode, bool success, const CompletionCallback& onComplete)
+    {
+        m_exitCode = exitCode;
+        {
+            std::lock_guard<std::mutex> lock(m_threadMutex);
+            if (m_thread.joinable() && m_thread.get_id() == std::this_thread::get_id())
+                m_thread.detach();
+            m_running.store(false);
+        }
+
+        // This must be the final operation. The callback is allowed to start a
+        // replacement run or destroy the runner; do not touch object state
+        // after invoking it.
+        if (onComplete)
+            onComplete(exitCode, success);
     }
 
     void ProcessRunner::Cancel()
@@ -271,9 +307,7 @@ namespace SparkBuild
         HANDLE hReadPipe = nullptr, hWritePipe = nullptr;
         if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
         {
-            m_running.store(false);
-            if (onComplete)
-                onComplete(-1, false);
+            CompleteAsync(-1, false, onComplete);
             return;
         }
         SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
@@ -294,10 +328,7 @@ namespace SparkBuild
         {
             ::CloseHandle(hWritePipe);
             ::CloseHandle(hReadPipe);
-            m_exitCode = -1;
-            m_running.store(false);
-            if (onComplete)
-                onComplete(-1, false);
+            CompleteAsync(-1, false, onComplete);
             return;
         }
 
@@ -308,10 +339,7 @@ namespace SparkBuild
             ::CloseHandle(job);
             ::CloseHandle(hWritePipe);
             ::CloseHandle(hReadPipe);
-            m_exitCode = -1;
-            m_running.store(false);
-            if (onComplete)
-                onComplete(-1, false);
+            CompleteAsync(-1, false, onComplete);
             return;
         }
 
@@ -323,10 +351,7 @@ namespace SparkBuild
         {
             ::CloseHandle(job);
             ::CloseHandle(hReadPipe);
-            m_exitCode = -1;
-            m_running.store(false);
-            if (onComplete)
-                onComplete(-1, false);
+            CompleteAsync(-1, false, onComplete);
             return;
         }
 
@@ -338,10 +363,7 @@ namespace SparkBuild
             ::CloseHandle(pi.hThread);
             ::CloseHandle(job);
             ::CloseHandle(hReadPipe);
-            m_exitCode = -1;
-            m_running.store(false);
-            if (onComplete)
-                onComplete(-1, false);
+            CompleteAsync(-1, false, onComplete);
             return;
         }
 
@@ -384,10 +406,8 @@ namespace SparkBuild
         ::CloseHandle(job);
         ::CloseHandle(hReadPipe);
 
-        m_running.store(false);
         bool success = (exitCode == 0) && !m_cancelRequested.load();
-        if (onComplete)
-            onComplete(m_exitCode, success);
+        CompleteAsync(m_exitCode, success, onComplete);
     }
 
     void ProcessRunner::ReadPipeOutput(HANDLE hPipe, OutputCallback& onOutput, std::string& lineBuffer)
@@ -468,6 +488,8 @@ namespace SparkBuild
         while (true)
         {
             ssize_t n = read(pipefd[0], buf, sizeof(buf) - 1);
+            if (n < 0 && errno == EINTR)
+                continue;
             if (n <= 0)
                 break;
             buf[n] = '\0';
@@ -476,7 +498,13 @@ namespace SparkBuild
         close(pipefd[0]);
 
         int status = 0;
-        waitpid(pid, &status, 0);
+        pid_t waited = -1;
+        do
+        {
+            waited = waitpid(pid, &status, 0);
+        } while (waited < 0 && errno == EINTR);
+        if (waited != pid)
+            return -1;
 
         if (WIFEXITED(status))
         {
@@ -491,9 +519,7 @@ namespace SparkBuild
         int pipefd[2];
         if (pipe(pipefd) == -1)
         {
-            m_running.store(false);
-            if (onComplete)
-                onComplete(-1, false);
+            CompleteAsync(-1, false, onComplete);
             return;
         }
 
@@ -502,9 +528,7 @@ namespace SparkBuild
         {
             close(pipefd[0]);
             close(pipefd[1]);
-            m_running.store(false);
-            if (onComplete)
-                onComplete(-1, false);
+            CompleteAsync(-1, false, onComplete);
             return;
         }
 
@@ -544,10 +568,7 @@ namespace SparkBuild
             {
             }
             close(pipefd[0]);
-            m_exitCode = -1;
-            m_running.store(false);
-            if (onComplete)
-                onComplete(-1, false);
+            CompleteAsync(-1, false, onComplete);
             return;
         }
 
@@ -588,10 +609,8 @@ namespace SparkBuild
             m_exitCode = -1;
         }
 
-        m_running.store(false);
         bool success = (m_exitCode == 0) && !m_cancelRequested.load();
-        if (onComplete)
-            onComplete(m_exitCode, success);
+        CompleteAsync(m_exitCode, success, onComplete);
     }
 
     void ProcessRunner::ReadPipeOutput(int fd, OutputCallback& onOutput, std::string& lineBuffer)

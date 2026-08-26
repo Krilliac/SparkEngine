@@ -20,6 +20,8 @@
 #include <fstream>
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <unistd.h>
 #endif
 
 namespace SparkEditor
@@ -31,7 +33,6 @@ namespace SparkEditor
 
     void PlayControlPanel::LaunchGame()
     {
-#ifdef _WIN32
         if (!m_gameModuleSelector || m_gameModuleSelector->GetLaunchSelectionPath().empty())
         {
             m_statusMessage = "No module selected in Game Module Selector";
@@ -93,12 +94,10 @@ namespace SparkEditor
         m_statusMessage = "Game running — " + inst.label + ", PID " + std::to_string(inst.pid);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
         Spark::SimpleConsole::GetInstance().LogSuccess("[Editor] " + m_statusMessage);
-#endif
     }
 
     void PlayControlPanel::LaunchDedicatedWithBots()
     {
-#ifdef _WIN32
         if (!m_gameModuleSelector || m_gameModuleSelector->GetLaunchSelectionPath().empty())
         {
             m_statusMessage = "No module selected in Game Module Selector";
@@ -169,12 +168,10 @@ namespace SparkEditor
         m_statusMessage = "Dedicated running — " + inst.label + ", PID " + std::to_string(inst.pid);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
         Spark::SimpleConsole::GetInstance().LogSuccess("[Editor] " + m_statusMessage);
-#endif
     }
 
     void PlayControlPanel::LaunchClient(const std::string& hostPort)
     {
-#ifdef _WIN32
         if (!m_gameModuleSelector || m_gameModuleSelector->GetLaunchSelectionPath().empty())
         {
             m_statusMessage = "No module selected in Game Module Selector";
@@ -250,7 +247,6 @@ namespace SparkEditor
         m_statusMessage = "Client connecting to " + hostPort + " — PID " + std::to_string(inst.pid);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
         Spark::SimpleConsole::GetInstance().LogSuccess("[Editor] " + m_statusMessage);
-#endif
     }
 
     void PlayControlPanel::StopAll()
@@ -261,6 +257,10 @@ namespace SparkEditor
             if (inst.alive)
             {
                 TerminateEditorProcess(inst.processHandle, 1);
+                CloseEditorProcessHandles(inst.processHandle, nullptr);
+                inst.processHandle = nullptr;
+                inst.alive = false;
+                inst.exitCode = 1;
                 ++stopped;
             }
         }
@@ -271,7 +271,6 @@ namespace SparkEditor
 
     void PlayControlPanel::PollInstances()
     {
-#ifdef _WIN32
         for (auto& inst : m_instances)
         {
             if (!inst.alive)
@@ -281,11 +280,12 @@ namespace SparkEditor
             {
                 inst.alive = false;
                 inst.exitCode = exitCode;
+                CloseEditorProcessHandles(inst.processHandle, nullptr);
+                inst.processHandle = nullptr;
                 SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayControlPanel: PID %lu (%s) exited with code %lu",
                                inst.pid, inst.label.c_str(), exitCode);
             }
         }
-#endif
     }
 
     // ============================================================================
@@ -355,6 +355,8 @@ namespace SparkEditor
         unsigned long ownPid = 0;
 #ifdef _WIN32
         ownPid = GetCurrentProcessId();
+#else
+        ownPid = static_cast<unsigned long>(::getpid());
 #endif
         const fs::path cfgPath = tempDir / ("spark_playcontrol_dedicated_" + std::to_string(ownPid) + "_" +
                                             std::to_string(m_launchCounter) + ".cfg");
@@ -387,6 +389,8 @@ namespace SparkEditor
         unsigned long ownPid = 0;
 #ifdef _WIN32
         ownPid = GetCurrentProcessId();
+#else
+        ownPid = static_cast<unsigned long>(::getpid());
 #endif
         const fs::path cfgPath = tempDir / ("spark_playcontrol_connect_" + std::to_string(ownPid) + "_" +
                                             std::to_string(m_launchCounter) + ".cfg");

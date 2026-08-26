@@ -55,6 +55,18 @@ namespace Spark
         SparkPluginResult Tick(double deltaSeconds);
 
         /**
+         * Transactionally replace the current hot-reloadable plugin.
+         *
+         * The replacement is validated and instantiated beside the old image.
+         * The old plugin is then quiesced and serializes at most 16 MiB into a
+         * host-owned byte buffer. The replacement must restore that state (and
+         * start when the old plugin was started) before the old image is
+         * destroyed. Any pre-commit failure leaves the old plugin loaded.
+         */
+        bool Reload(const std::filesystem::path& replacementPath,
+                    std::chrono::milliseconds timeout = std::chrono::seconds(5), std::string* error = nullptr);
+
+        /**
          * Stop/destroy/unmap after the plugin and every host task reach an unload fence.
          * Failure is fail-closed: the image stays mapped and the instance stays owned.
          */
@@ -69,7 +81,16 @@ namespace Spark
         /** Test seam: validate and instantiate an in-process descriptor without mapping a library. */
         bool AttachDescriptorForTesting(const SparkPluginDescriptor* descriptor, std::string* error = nullptr);
 
+        /** Test seam for transactional reload without mapping native libraries. */
+        bool ReloadDescriptorForTesting(const SparkPluginDescriptor* descriptor,
+                                        std::chrono::milliseconds timeout = std::chrono::seconds(5),
+                                        std::string* error = nullptr);
+
       private:
+        bool CommitReload(DynamicPluginHost& replacement, std::chrono::milliseconds timeout, std::string* error);
+        bool PrepareUnload(std::chrono::milliseconds timeout, std::string* error);
+        bool FinishUnload(std::chrono::milliseconds timeout, std::string* error);
+
         struct Impl;
         std::unique_ptr<Impl> m_impl;
     };

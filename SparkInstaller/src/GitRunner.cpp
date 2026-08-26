@@ -1,6 +1,5 @@
 #include "GitRunner.h"
 
-#include "Platform.h"
 #include "ProcessRunner.h"
 
 #include <cstdio>
@@ -9,57 +8,6 @@ namespace SparkInstaller
 {
     namespace
     {
-#ifdef SPARK_PLATFORM_WINDOWS
-        // Windows cmd.exe quoting: wrap in double quotes, escape embedded " and \.
-        // The command is run via cmd /c, so we also escape cmd metacharacters.
-        std::string ShellQuote(const std::string& s)
-        {
-            std::string out;
-            out.reserve(s.size() + 4);
-            out += '"';
-            int backslashes = 0;
-            for (char c : s)
-            {
-                if (c == '\\')
-                {
-                    ++backslashes;
-                    out += c;
-                    continue;
-                }
-                if (c == '"')
-                {
-                    out.append(static_cast<size_t>(backslashes) + 1, '\\');
-                    out += '"';
-                }
-                else
-                {
-                    out += c;
-                }
-                backslashes = 0;
-            }
-            out.append(static_cast<size_t>(backslashes), '\\');
-            out += '"';
-            return out;
-        }
-#else
-        // POSIX shell quoting: always single-quote and escape embedded single-quotes via '\''.
-        std::string ShellQuote(const std::string& s)
-        {
-            std::string out;
-            out.reserve(s.size() + 2);
-            out += '\'';
-            for (char c : s)
-            {
-                if (c == '\'')
-                    out += "'\\''";
-                else
-                    out += c;
-            }
-            out += '\'';
-            return out;
-        }
-#endif
-
         // Whitelist-validate a git ref (branch or tag). Rejects any input
         // outside [A-Za-z0-9._/+-], which is a conservative subset of what
         // git itself allows and blocks every shell metacharacter.
@@ -80,26 +28,70 @@ namespace SparkInstaller
             return true;
         }
 
-        // Whitelist-validate a repository URL. Accepts https://, http://, git@host:..., or ssh://.
-        // Rejects shell metacharacters anywhere.
+        bool StartsWith(std::string_view value, std::string_view prefix)
+        {
+            return value.size() >= prefix.size() && value.substr(0, prefix.size()) == prefix;
+        }
+
+        // Accept explicit network URL forms, scp-style git@host:path, and
+        // explicit local paths. In particular, never allow an option-shaped
+        // repository argument to reach `git clone`.
         bool IsSafeRepoUrl(const std::string& url)
         {
-            if (url.empty() || url.size() > 1024)
+            if (url.empty() || url.size() > 1024 || url.front() == '-')
                 return false;
-            for (char c : url)
+            for (const unsigned char character : url)
             {
-                if (c == '`' || c == '$' || c == ';' || c == '&' || c == '|' || c == '\n' || c == '\r' || c == '<' ||
-                    c == '>' || c == '"' || c == '\'' || c == '\\' || c == ' ' || c == '\t')
+                if (character < 32 || character == 127)
+                    return false;
+            }
+
+            const bool networkUrl = StartsWith(url, "https://") || StartsWith(url, "http://") ||
+                                    StartsWith(url, "ssh://") || StartsWith(url, "git://") ||
+                                    StartsWith(url, "file://");
+            const bool scpUrl = StartsWith(url, "git@") && url.find(':', 4) != std::string::npos;
+            const bool posixPath = StartsWith(url, "/") || StartsWith(url, "./") || StartsWith(url, "../");
+            const bool uncPath = StartsWith(url, "\\\\");
+            const bool drivePath = url.size() >= 3 &&
+                                   ((url[0] >= 'A' && url[0] <= 'Z') || (url[0] >= 'a' && url[0] <= 'z')) &&
+                                   url[1] == ':' && (url[2] == '/' || url[2] == '\\');
+            if ((networkUrl || scpUrl) && url.find(' ') != std::string::npos)
+                return false;
+            return networkUrl || scpUrl || posixPath || uncPath || drivePath;
+        }
+
+        bool IsSafeCloneDestination(const std::string& destination)
+        {
+            if (destination.empty() || destination.size() > 32767 || destination.front() == '-')
+                return false;
+            for (const unsigned char character : destination)
+            {
+                if (character < 32 || character == 127)
                     return false;
             }
             return true;
         }
     } // namespace
 
+    std::string GitRunner::EncodeProcessRunnerArgument(std::string_view argument)
+    {
+        std::string encoded;
+        encoded.reserve(argument.size() * 2 + 2);
+        encoded.push_back('"');
+        for (const char character : argument)
+        {
+            if (character == '\\' || character == '"')
+                encoded.push_back('\\');
+            encoded.push_back(character);
+        }
+        encoded.push_back('"');
+        return encoded;
+    }
+
     int GitRunner::Run(const std::string& args, const std::string& cwd, const LogSink& log) const
     {
         SparkBuild::ProcessRunner runner;
-        std::string cmd = ShellQuote(m_gitExe) + " " + args;
+        std::string cmd = EncodeProcessRunnerArgument(m_gitExe) + " " + args;
         if (log)
             log("$ git " + args);
 
@@ -125,11 +117,17 @@ namespace SparkInstaller
                 log("error: git ref contains unsafe characters: " + ref);
             return false;
         }
+        if (!IsSafeCloneDestination(destination))
+        {
+            if (log)
+                log("error: clone destination is empty, option-shaped, or contains control characters: " + destination);
+            return false;
+        }
 
         std::string args = "clone --recurse-submodules --progress";
         if (!ref.empty())
-            args += " --branch " + ShellQuote(ref);
-        args += " " + ShellQuote(repoUrl) + " " + ShellQuote(destination);
+            args += " --branch " + EncodeProcessRunnerArgument(ref);
+        args += " -- " + EncodeProcessRunnerArgument(repoUrl) + " " + EncodeProcessRunnerArgument(destination);
         return Run(args, {}, log) == 0;
     }
 
@@ -146,10 +144,17 @@ namespace SparkInstaller
                 log("error: git ref contains unsafe characters: " + ref);
             return false;
         }
-        if (Run("checkout " + ShellQuote(ref), destination, log) != 0)
+        if (Run("checkout " + EncodeProcessRunnerArgument(ref), destination, log) != 0)
             return false;
-        Run("pull --ff-only", destination, log);
-        return true;
+
+        // A detached tag/commit is already exact after fetch + checkout. If a
+        // matching origin branch exists, require its explicit fast-forward even
+        // when the local branch has no configured upstream; otherwise the
+        // installer could build stale local source while reporting success.
+        const std::string remoteRef = "refs/remotes/origin/" + ref;
+        if (Run("show-ref --verify --quiet " + EncodeProcessRunnerArgument(remoteRef), destination, log) != 0)
+            return true;
+        return Run("pull --ff-only origin " + EncodeProcessRunnerArgument(ref), destination, log) == 0;
     }
 
     bool GitRunner::UpdateSubmodules(const std::string& destination, const LogSink& log) const
@@ -160,7 +165,7 @@ namespace SparkInstaller
     std::string GitRunner::HeadCommit(const std::string& destination) const
     {
         SparkBuild::ProcessRunner runner;
-        std::string cmd = ShellQuote(m_gitExe) + " rev-parse HEAD";
+        std::string cmd = EncodeProcessRunnerArgument(m_gitExe) + " rev-parse HEAD";
         std::string output;
         if (runner.RunSync(cmd, destination, output) != 0)
             return {};

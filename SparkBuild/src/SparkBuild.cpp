@@ -1,8 +1,11 @@
 #include "SparkBuild.h"
 #include "Terminal.h"
 #include "Downloader.h"
+#include <algorithm>
+#include <cerrno>
 #include <iostream>
 #include <filesystem>
+#include <iterator>
 #include <sstream>
 #include <thread>
 #include <atomic>
@@ -35,6 +38,15 @@ namespace SparkBuild
 
             if (pid == 0)
             {
+                if (setsid() == -1)
+                    _exit(127);
+
+                const pid_t detachedPid = fork();
+                if (detachedPid == -1)
+                    _exit(127);
+                if (detachedPid != 0)
+                    _exit(0);
+
                 if (!workingDir.empty() && chdir(workingDir.c_str()) != 0)
                     _exit(127);
 
@@ -49,7 +61,15 @@ namespace SparkBuild
                 _exit(127);
             }
 
-            return true;
+            int status = 0;
+            while (waitpid(pid, &status, 0) == -1)
+            {
+                if (errno == EINTR)
+                    continue;
+                // A process-wide SIGCHLD policy may already reap children.
+                return errno == ECHILD;
+            }
+            return WIFEXITED(status) && WEXITSTATUS(status) == 0;
         }
 #endif
     } // namespace
@@ -1029,7 +1049,7 @@ namespace SparkBuild
         }
 
         std::string binDir = (std::filesystem::path(buildDir) / "bin").string();
-        std::string exePath;
+        std::vector<std::filesystem::path> candidates;
 
         try
         {
@@ -1037,35 +1057,53 @@ namespace SparkBuild
             {
                 if (!entry.is_regular_file())
                     continue;
-                std::string name = entry.path().stem().string();
-                std::string ext = entry.path().extension().string();
-
 #ifdef SPARK_PLATFORM_WINDOWS
-                if (ext != ".exe")
+                if (entry.path().filename() != "SparkEngine.exe")
                     continue;
 #else
-                if (!ext.empty())
+                if (entry.path().filename() != "SparkEngine")
                     continue;
                 auto perms = std::filesystem::status(entry.path()).permissions();
                 if ((perms & std::filesystem::perms::owner_exec) == std::filesystem::perms::none)
                     continue;
 #endif
-                if (name.find("Spark") != std::string::npos && name.find("Test") == std::string::npos)
-                {
-                    exePath = entry.path().string();
-                    break;
-                }
+                candidates.push_back(entry.path());
             }
         }
         catch (...)
         {
         }
 
-        if (exePath.empty())
+        std::sort(candidates.begin(), candidates.end(),
+                  [](const auto& left, const auto& right) { return left.generic_string() < right.generic_string(); });
+
+        const std::string configuration = BuildTypeToString(m_config.config.buildType);
+        std::vector<std::filesystem::path> configuredCandidates;
+        std::copy_if(candidates.begin(), candidates.end(), std::back_inserter(configuredCandidates),
+                     [&configuration](const std::filesystem::path& candidate)
+                     {
+                         return std::find(candidate.begin(), candidate.end(), std::filesystem::path(configuration)) !=
+                                candidate.end();
+                     });
+        if (!configuredCandidates.empty())
+            candidates = std::move(configuredCandidates);
+
+        if (candidates.empty())
         {
             std::cout << Term::Red("Engine executable not found. Build the project first.") << "\n";
             return;
         }
+        if (candidates.size() != 1)
+        {
+            std::cout << Term::Red("Multiple SparkEngine executables match the active build configuration; "
+                                   "remove stale build outputs or choose a dedicated build directory.")
+                      << "\n";
+            for (const auto& candidate : candidates)
+                std::cout << "  " << candidate.string() << "\n";
+            return;
+        }
+
+        const std::string exePath = candidates.front().string();
 
         std::cout << Term::Green("Launching: " + exePath) << "\n";
         std::string runDir = std::filesystem::path(exePath).parent_path().string();

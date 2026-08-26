@@ -1,10 +1,11 @@
 /**
  * @file EditorProcessLaunch.cpp
- * @brief Shared CreateProcessW helper implementation.
+ * @brief Process ownership, executable discovery, and command-line construction.
  */
 
 #include "EditorProcessLaunch.h"
 #include "EditorLaunchContext.h"
+#include "EditorProcessLaunchText.h"
 
 #include <string_view>
 #include <utility>
@@ -13,10 +14,12 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 
 namespace SparkEditor
 {
-
 #ifdef _WIN32
     namespace
     {
@@ -36,260 +39,8 @@ namespace SparkEditor
             }
             return {};
         }
-
-        /// @brief Quote one argument using the CommandLineToArgvW backslash rules.
-        std::wstring QuoteWindowsArgument(std::wstring_view argument)
-        {
-            if (!argument.empty() && argument.find_first_of(L" \t\n\v\"") == std::wstring_view::npos)
-                return std::wstring(argument);
-
-            std::wstring quoted;
-            quoted.reserve(argument.size() + 2);
-            quoted.push_back(L'"');
-            size_t backslashes = 0;
-            for (const wchar_t ch : argument)
-            {
-                if (ch == L'\\')
-                {
-                    ++backslashes;
-                    continue;
-                }
-                if (ch == L'"')
-                {
-                    quoted.append(backslashes * 2 + 1, L'\\');
-                    quoted.push_back(L'"');
-                }
-                else
-                {
-                    quoted.append(backslashes, L'\\');
-                    quoted.push_back(ch);
-                }
-                backslashes = 0;
-            }
-            quoted.append(backslashes * 2, L'\\');
-            quoted.push_back(L'"');
-            return quoted;
-        }
-
-        BOOL CALLBACK RequestGracefulWindowClose(HWND window, LPARAM parameter)
-        {
-            DWORD windowPid = 0;
-            GetWindowThreadProcessId(window, &windowPid);
-            if (windowPid == static_cast<DWORD>(parameter))
-                PostMessageW(window, WM_CLOSE, 0, 0);
-            return TRUE;
-        }
     } // namespace
 #endif
-
-    namespace
-    {
-        ProcessLaunchResult LaunchEditorProcessImpl(const std::filesystem::path& exePath,
-                                                    const std::wstring& commandLine,
-                                                    const std::filesystem::path& workingDir, bool ownProcessTree)
-        {
-            ProcessLaunchResult result;
-#ifdef _WIN32
-            std::wstring effectiveCommandLine = commandLine;
-            if (effectiveCommandLine.find(L" -manifest ") == std::wstring::npos)
-            {
-                const std::filesystem::path manifest = workingDir / "spark.modules.json";
-                std::error_code ec;
-                if (std::filesystem::is_regular_file(manifest, ec) && !ec)
-                    effectiveCommandLine += L" -manifest " + QuoteWindowsArgument(manifest.wstring());
-            }
-
-            // CreateProcessW may modify the command-line buffer — pass a writable copy.
-            std::vector<wchar_t> cmdBuf(effectiveCommandLine.begin(), effectiveCommandLine.end());
-            cmdBuf.push_back(L'\0');
-
-            HANDLE job = nullptr;
-            if (ownProcessTree)
-            {
-                job = CreateJobObjectW(nullptr, nullptr);
-                if (!job)
-                {
-                    result.error = "Launch failed: could not create process Job Object (Win32 error " +
-                                   std::to_string(GetLastError()) + ")";
-                    return result;
-                }
-
-                JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
-                limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-                if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)))
-                {
-                    result.error = "Launch failed: could not configure process Job Object (Win32 error " +
-                                   std::to_string(GetLastError()) + ")";
-                    CloseHandle(job);
-                    return result;
-                }
-            }
-
-            STARTUPINFOW startup{};
-            startup.cb = sizeof(startup);
-            PROCESS_INFORMATION process{};
-
-            const std::wstring exeW = exePath.wstring();
-            const std::wstring workingDirW = workingDir.wstring();
-            // Owned launches start suspended so they cannot create descendants
-            // before assignment to the kill-on-close Job Object.
-            const DWORD creationFlags = CREATE_NO_WINDOW | (ownProcessTree ? CREATE_SUSPENDED : 0);
-            const BOOL ok = CreateProcessW(exeW.c_str(), cmdBuf.data(), nullptr, nullptr, FALSE, creationFlags, nullptr,
-                                           workingDirW.c_str(), &startup, &process);
-            if (!ok)
-            {
-                result.error = "Launch failed (Win32 error " + std::to_string(GetLastError()) + ")";
-                if (job)
-                    CloseHandle(job);
-                return result;
-            }
-
-            if (ownProcessTree && !AssignProcessToJobObject(job, process.hProcess))
-            {
-                const DWORD error = GetLastError();
-                TerminateProcess(process.hProcess, 1);
-                WaitForSingleObject(process.hProcess, 1000);
-                CloseHandle(process.hThread);
-                CloseHandle(process.hProcess);
-                CloseHandle(job);
-                result.error =
-                    "Launch failed: could not assign process to Job Object (Win32 error " + std::to_string(error) + ")";
-                return result;
-            }
-
-            if (ownProcessTree && ResumeThread(process.hThread) == static_cast<DWORD>(-1))
-            {
-                const DWORD error = GetLastError();
-                TerminateJobObject(job, 1);
-                WaitForSingleObject(process.hProcess, 1000);
-                CloseHandle(process.hThread);
-                CloseHandle(process.hProcess);
-                CloseHandle(job);
-                result.error =
-                    "Launch failed: could not resume owned process (Win32 error " + std::to_string(error) + ")";
-                return result;
-            }
-
-            CloseHandle(process.hThread);
-            result.success = true;
-            result.processHandle = process.hProcess;
-            result.jobHandle = job;
-            result.pid = process.dwProcessId;
-#else
-            (void)exePath;
-            (void)commandLine;
-            (void)workingDir;
-            (void)ownProcessTree;
-            result.error = "Process launch is available on Windows builds only.";
-#endif
-            return result;
-        }
-    } // namespace
-
-    ProcessLaunchResult LaunchEditorProcess(const std::filesystem::path& exePath, const std::wstring& commandLine,
-                                            const std::filesystem::path& workingDir)
-    {
-        return LaunchEditorProcessImpl(exePath, commandLine, workingDir, false);
-    }
-
-    ProcessLaunchResult LaunchOwnedEditorProcess(const std::filesystem::path& exePath, const std::wstring& commandLine,
-                                                 const std::filesystem::path& workingDir)
-    {
-        return LaunchEditorProcessImpl(exePath, commandLine, workingDir, true);
-    }
-
-    bool PollProcessExited(void* processHandle, unsigned long& outExitCode)
-    {
-#ifdef _WIN32
-        if (!processHandle)
-            return false;
-        DWORD exitCode = 0;
-        if (GetExitCodeProcess(static_cast<HANDLE>(processHandle), &exitCode) && exitCode != STILL_ACTIVE)
-        {
-            outExitCode = exitCode;
-            return true;
-        }
-        return false;
-#else
-        (void)processHandle;
-        (void)outExitCode;
-        return false;
-#endif
-    }
-
-    void TerminateEditorProcess(void* processHandle, unsigned int exitCode)
-    {
-#ifdef _WIN32
-        if (!processHandle)
-            return;
-        // Best-effort: the process may have already exited on its own.
-        TerminateProcess(static_cast<HANDLE>(processHandle), exitCode);
-#else
-        (void)processHandle;
-        (void)exitCode;
-#endif
-    }
-
-    void CloseEditorProcessHandles(void* processHandle, void* jobHandle)
-    {
-#ifdef _WIN32
-        if (processHandle)
-            CloseHandle(static_cast<HANDLE>(processHandle));
-        if (jobHandle)
-            CloseHandle(static_cast<HANDLE>(jobHandle));
-#else
-        (void)processHandle;
-        (void)jobHandle;
-#endif
-    }
-
-    EditorProcessStopResult StopEditorProcessTree(void* processHandle, void* jobHandle, unsigned long pid,
-                                                  unsigned long gracePeriodMs, unsigned int exitCode)
-    {
-#ifdef _WIN32
-        if (!processHandle)
-        {
-            CloseEditorProcessHandles(nullptr, jobHandle);
-            return EditorProcessStopResult::NotRunning;
-        }
-
-        HANDLE process = static_cast<HANDLE>(processHandle);
-        if (WaitForSingleObject(process, 0) == WAIT_OBJECT_0)
-        {
-            CloseEditorProcessHandles(processHandle, jobHandle);
-            return EditorProcessStopResult::Graceful;
-        }
-
-        // Windowed games get a normal close request first. Headless children have
-        // no top-level window, so they simply consume the same bounded grace time.
-        if (pid != 0)
-            EnumWindows(RequestGracefulWindowClose, static_cast<LPARAM>(pid));
-
-        if (WaitForSingleObject(process, gracePeriodMs) == WAIT_OBJECT_0)
-        {
-            CloseEditorProcessHandles(processHandle, jobHandle);
-            return EditorProcessStopResult::Graceful;
-        }
-
-        BOOL terminated = FALSE;
-        if (jobHandle)
-            terminated = TerminateJobObject(static_cast<HANDLE>(jobHandle), exitCode);
-        else
-            terminated = TerminateProcess(process, exitCode);
-
-        if (terminated)
-            (void)WaitForSingleObject(process, 1000);
-        CloseEditorProcessHandles(processHandle, jobHandle);
-        return terminated ? EditorProcessStopResult::Terminated : EditorProcessStopResult::Failed;
-#else
-        (void)processHandle;
-        (void)jobHandle;
-        (void)pid;
-        (void)gracePeriodMs;
-        (void)exitCode;
-        return EditorProcessStopResult::NotRunning;
-#endif
-    }
 
     OwnedEditorProcess::OwnedEditorProcess(EditorProcessOperations operations) : m_operations(std::move(operations))
     {
@@ -361,8 +112,25 @@ namespace SparkEditor
 #ifdef _WIN32
         const std::filesystem::path executablePath = GetCurrentExecutablePath();
         return executablePath.empty() ? std::string{} : LaunchContext::PathToUtf8(executablePath.parent_path());
+#elif defined(__APPLE__)
+        uint32_t requiredSize = 0;
+        (void)_NSGetExecutablePath(nullptr, &requiredSize);
+        if (requiredSize == 0)
+            return {};
+
+        std::vector<char> buffer(requiredSize);
+        if (_NSGetExecutablePath(buffer.data(), &requiredSize) != 0)
+            return {};
+
+        std::error_code error;
+        std::filesystem::path executablePath = std::filesystem::weakly_canonical(buffer.data(), error);
+        if (error)
+            executablePath = std::filesystem::path(buffer.data()).lexically_normal();
+        return LaunchContext::PathToUtf8(executablePath.parent_path());
 #else
-        return LaunchContext::PathToUtf8(std::filesystem::canonical("/proc/self/exe").parent_path());
+        std::error_code error;
+        const std::filesystem::path executablePath = std::filesystem::canonical("/proc/self/exe", error);
+        return error ? std::string{} : LaunchContext::PathToUtf8(executablePath.parent_path());
 #endif
     }
 
@@ -375,12 +143,19 @@ namespace SparkEditor
             outError = "Could not determine the SparkEditor executable directory";
             return false;
         }
+#ifdef _WIN32
         const fs::path engineExe = exeDir / "SparkEngine.exe";
+        constexpr std::string_view executableName = "SparkEngine.exe";
+#else
+        const fs::path engineExe = exeDir / "SparkEngine";
+        constexpr std::string_view executableName = "SparkEngine";
+#endif
 
         std::error_code ec;
         if (!fs::exists(engineExe, ec) || ec)
         {
-            outError = "SparkEngine.exe not found next to the editor (" + LaunchContext::PathToUtf8(exeDir) + ")";
+            outError = std::string(executableName) + " not found next to the editor (" +
+                       LaunchContext::PathToUtf8(exeDir) + ")";
             return false;
         }
 
@@ -395,29 +170,62 @@ namespace SparkEditor
     {
 #ifdef _WIN32
         outError.clear();
-        std::wstring cmd = QuoteWindowsArgument(engineExe.wstring()) + L" -game " + QuoteWindowsArgument(dll.wstring());
+        std::wstring cmd = Detail::QuoteWindowsArgument(engineExe.wstring()) + L" -game " +
+                           Detail::QuoteWindowsArgument(dll.wstring());
         if (headless)
             cmd += L" -headless";
 
         if (!execCfg.empty())
-            cmd += L" -exec " + QuoteWindowsArgument(execCfg.wstring());
+            cmd += L" -exec " + Detail::QuoteWindowsArgument(execCfg.wstring());
 
         if (!manifest.empty())
-            cmd += L" -manifest " + QuoteWindowsArgument(manifest.wstring());
+            cmd += L" -manifest " + Detail::QuoteWindowsArgument(manifest.wstring());
 
         if (!extraArgs.empty())
             cmd += L" " + extraArgs;
 
         return cmd;
 #else
-        (void)engineExe;
-        (void)dll;
-        (void)headless;
-        (void)execCfg;
-        (void)manifest;
-        (void)extraArgs;
-        outError = "Process launch is available on Windows builds only.";
-        return L"";
+        outError.clear();
+        std::wstring engineArgument;
+        std::wstring moduleArgument;
+        if (!Detail::DecodeUtf8(LaunchContext::PathToUtf8(engineExe), engineArgument) ||
+            !Detail::DecodeUtf8(LaunchContext::PathToUtf8(dll), moduleArgument))
+        {
+            outError = "Launch path contains invalid UTF-8";
+            return {};
+        }
+
+        std::wstring command =
+            Detail::QuotePosixArgument(engineArgument) + L" -game " + Detail::QuotePosixArgument(moduleArgument);
+        if (headless)
+            command += L" -headless";
+
+        if (!execCfg.empty())
+        {
+            std::wstring execArgument;
+            if (!Detail::DecodeUtf8(LaunchContext::PathToUtf8(execCfg), execArgument))
+            {
+                outError = "Exec path contains invalid UTF-8";
+                return {};
+            }
+            command += L" -exec " + Detail::QuotePosixArgument(execArgument);
+        }
+
+        if (!manifest.empty())
+        {
+            std::wstring manifestArgument;
+            if (!Detail::DecodeUtf8(LaunchContext::PathToUtf8(manifest), manifestArgument))
+            {
+                outError = "Manifest path contains invalid UTF-8";
+                return {};
+            }
+            command += L" -manifest " + Detail::QuotePosixArgument(manifestArgument);
+        }
+
+        if (!extraArgs.empty())
+            command += L" " + extraArgs;
+        return command;
 #endif
     }
 
@@ -427,5 +235,6 @@ namespace SparkEditor
     {
         return BuildGameLaunchCommandLine(engineExe, dll, headless, execCfg, {}, extraArgs, outError);
     }
+
 
 } // namespace SparkEditor

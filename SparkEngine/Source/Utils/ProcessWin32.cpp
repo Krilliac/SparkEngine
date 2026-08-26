@@ -114,17 +114,11 @@ namespace Spark
         if (!m_impl || !m_impl->stdoutRead)
             return false;
 
+        if (ProcessDetail::ExtractBufferedLine(m_impl->stdoutBuffer, line))
+            return true;
+
         Impl::ReadAvailable(m_impl->stdoutRead, m_impl->stdoutBuffer);
-
-        auto pos = m_impl->stdoutBuffer.find('\n');
-        if (pos == std::string::npos)
-            return false;
-
-        line = m_impl->stdoutBuffer.substr(0, pos);
-        if (!line.empty() && line.back() == '\r')
-            line.pop_back();
-        m_impl->stdoutBuffer.erase(0, pos + 1);
-        return true;
+        return ProcessDetail::ExtractBufferedLine(m_impl->stdoutBuffer, line);
     }
 
     std::string Process::ReadAllStdout()

@@ -1,0 +1,10 @@
+/**
+ * @file GeneratedVersion.h
+ * @brief CMake-generated SparkEngine semantic version constants.
+ */
+
+#pragma once
+
+#define SPARK_ENGINE_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define SPARK_ENGINE_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define SPARK_ENGINE_VERSION_PATCH @PROJECT_VERSION_PATCH@

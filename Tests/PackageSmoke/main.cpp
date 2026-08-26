@@ -7,6 +7,7 @@
 #include <SparkEngine/Graphics/ScreenCapture.h>
 #include <SparkEngine/Physics/PhysicsSystem.h>
 #include <SparkEngine/Utils/JsonUtils.h>
+#include <Spark/Version.h>
 
 #if defined(SPARK_JOLT_PHYSICS_AVAILABLE)
 #include <SparkEngine/Physics/PhysicsSpatialQueriesInternal.h>
@@ -36,6 +37,6 @@ int main()
     const bool recastLinked = Spark::AI::IsRecastAvailable();
     std::cout << "Spark package smoke test: EXR=" << exrRejected << " FBX=" << fbxRejected
               << " capture=" << screenCaptureRejected << " JSON=" << jsonWorks << " Recast=" << recastLinked
-              << " ECS=" << name.name << '\n';
+              << " ECS=" << name.name << " EngineVersion=" << Spark::GetEngineVersion() << '\n';
     return exrRejected && fbxRejected && screenCaptureRejected && jsonWorks && !name.name.empty() ? 0 : 1;
 }

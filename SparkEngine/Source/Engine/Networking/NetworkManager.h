@@ -417,7 +417,8 @@ namespace Spark::Net
         /// Broadcast a message to all connected clients (alias for SendToAll)
         void BroadcastMessage(const NetworkMessage& msg);
 
-        /// Register message handler
+        /// Register or replace an application observer for a message type.
+        /// Mandatory protocol handlers are owned separately and cannot be replaced.
         using MessageHandler = std::function<void(const NetworkMessage&)>;
         void RegisterHandler(MessageType type, MessageHandler handler);
         /** Register a handler whose received payload copies must be erased on release. */
@@ -465,6 +466,12 @@ namespace Spark::Net
         {
             std::lock_guard<std::mutex> lock(m_stateMutex);
             return m_localClientID;
+        }
+        /// Last server-supplied reason for rejecting a connection attempt.
+        std::string GetLastConnectionError() const
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            return m_lastConnectionError;
         }
         float GetServerTime() const
         {
@@ -635,7 +642,7 @@ namespace Spark::Net
         uint64_t m_lifecycleEpoch =
             0; ///< Invalidates callback-interrupted Update continuations after lifecycle change.
 
-        std::vector<ClientID> ProcessIncoming();
+        std::vector<NetworkMessage> ProcessIncoming();
         void ProcessOutgoing();
         void FlushOutgoingQueue();
         void HandleRetransmissions();
@@ -703,6 +710,9 @@ namespace Spark::Net
         std::atomic<uint64_t> m_droppedOutgoingMessages{0};
         std::queue<NetworkMessage> m_outgoingQueue;
         std::queue<NetworkMessage> m_incomingQueue;
+        // Protocol handlers run first and are never exposed to application code.
+        // Application observers may be replaced/cleared without disabling transport invariants.
+        std::unordered_map<uint16_t, MessageHandler> m_internalHandlers;
         std::unordered_map<uint16_t, MessageHandler> m_handlers;
         std::unordered_set<uint16_t> m_sensitiveMessageTypes;
         mutable std::mutex m_queueMutex;   ///< Protects m_outgoingQueue, m_incomingQueue
@@ -823,6 +833,7 @@ namespace Spark::Net
         std::string m_lastServerAddress;                 ///< Last server address for reconnect
         uint16_t m_lastServerPort = 0;                   ///< Last server port for reconnect
         std::string m_lastPlayerName;                    ///< Last player name for reconnect
+        std::string m_lastConnectionError;               ///< Last ConnectRejected reason
         bool m_wasConnected = false;                     ///< True if we were connected before disconnect
         std::function<void()> m_reconnectFailedCallback; ///< Called when max attempts exhausted
 
@@ -867,6 +878,7 @@ namespace Spark::Net
         void Update(float /*deltaTime*/) {}
         NetworkRole GetRole() const { return NetworkRole::None; }
         ConnectionState GetConnectionState() const { return ConnectionState::Disconnected; }
+        std::string GetLastConnectionError() const { return {}; }
         bool IsInitialized() const { return false; }
     };
 

@@ -619,6 +619,15 @@ namespace Spark::Daemon
 
     bool OrchestrationService::LaunchLocked(Record& record, std::string& error)
     {
+        // A durable definition may sit idle while its path topology changes.
+        // Re-canonicalize at the launch boundary so a symlink/junction swapped
+        // outside the configured roots is rejected instead of trusting the
+        // earlier Define-time check.
+        if (!NormalizeDefinition(record.definition, error))
+        {
+            record.status.state = SupervisedProcessState::Failed;
+            return false;
+        }
 #if defined(_WIN32)
         const auto executable = Utf8Path(record.definition.executable).wstring();
         const auto workingDirectory = Utf8Path(record.definition.workingDirectory).wstring();

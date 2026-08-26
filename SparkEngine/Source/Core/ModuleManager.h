@@ -206,6 +206,9 @@ class ModuleManager
     /** @brief Get the number of loaded modules */
     size_t GetModuleCount() const { return m_modules.size(); }
 
+    /** @brief Get the number of modules whose OnLoad completed successfully. */
+    size_t GetInitializedModuleCount() const;
+
     /** @brief Check if any modules are loaded */
     bool HasModules() const { return !m_modules.empty(); }
 

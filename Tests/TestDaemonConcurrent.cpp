@@ -74,9 +74,12 @@ namespace
         std::thread thread;
         std::string sockPath;
 
-        explicit ConcurrentFixture(const char* tag) : sockPath(UniqueConcurrentSockPath(tag))
+        explicit ConcurrentFixture(
+            const char* tag,
+            size_t maximumWorkers = Spark::Daemon::DaemonServer::kDefaultMaximumClientWorkers)
+            : sockPath(UniqueConcurrentSockPath(tag))
         {
-            server = std::make_unique<Spark::Daemon::DaemonServer>();
+            server = std::make_unique<Spark::Daemon::DaemonServer>(maximumWorkers);
             auto statsProvider = [this] { return server->SnapshotStats(); };
             server->AddService(
                 std::make_unique<Spark::Daemon::ControlService>(server->GetShouldStopFlag(), statsProvider));
@@ -175,6 +178,32 @@ TEST(DaemonConcurrent_TwoClientsShareCacheAndDontInterleaveResponses)
             ++hits;
     }
     EXPECT_EQ(hits, kIterations);
+}
+
+TEST(DaemonConcurrent_WorkerCapRefusesOverloadAndShutdownRemainsPrompt)
+{
+    ConcurrentFixture fx("worker-cap", 1);
+
+    Spark::Daemon::DaemonClient occupyingClient;
+    ASSERT_TRUE(occupyingClient.Connect(fx.sockPath).has_value());
+    // Let the accept loop assign the sole worker and publish its next endpoint.
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    Spark::Daemon::DaemonClient overloadedClient;
+    const auto connected = overloadedClient.Connect(fx.sockPath);
+    if (connected)
+    {
+        // A transport connection can win the race just before refusal, but no
+        // request may be serviced by an extra worker.
+        EXPECT_FALSE(overloadedClient.Ping().has_value());
+    }
+
+    const auto stopStarted = std::chrono::steady_clock::now();
+    fx.server->Stop();
+    if (fx.thread.joinable())
+        fx.thread.join();
+    const auto stopElapsed = std::chrono::steady_clock::now() - stopStarted;
+    EXPECT_TRUE(stopElapsed < std::chrono::seconds(2));
 }
 
 // =========================================================================

@@ -178,17 +178,24 @@ namespace SparkEditor
         inline std::string ValidateGameModuleForLaunch(const std::filesystem::path& modulePath)
         {
             if (modulePath.empty())
-                return "No game module DLL is selected";
+                return "No game module is selected";
 
             std::error_code ec;
             if (!std::filesystem::is_regular_file(modulePath, ec) || ec)
-                return "Selected game module DLL is missing or is not a regular file: " + PathToUtf8(modulePath);
+                return "Selected game module is missing or is not a regular file: " + PathToUtf8(modulePath);
 
             std::string extension = PathToUtf8(modulePath.extension());
             std::transform(extension.begin(), extension.end(), extension.begin(),
                            [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-            if (extension != ".dll")
-                return "Selected game module must be a DLL: " + PathToUtf8(modulePath);
+#if defined(_WIN32)
+            constexpr std::string_view nativeModuleExtension = ".dll";
+#elif defined(__APPLE__)
+            constexpr std::string_view nativeModuleExtension = ".dylib";
+#else
+            constexpr std::string_view nativeModuleExtension = ".so";
+#endif
+            if (extension != nativeModuleExtension)
+                return "Selected game module must use the native shared-library extension: " + PathToUtf8(modulePath);
 
             return {};
         }

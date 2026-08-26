@@ -123,6 +123,13 @@ if(CONSOLE_SOURCES)
         )
     endif()
 
+    # SparkEngine launches this companion process at runtime, so it must be
+    # present in installed trees and in every CPack runtime package.
+    install(TARGETS SparkConsole
+        RUNTIME DESTINATION bin
+        COMPONENT runtime
+    )
+
     message(STATUS "SparkConsole configured successfully (all configurations: Debug, Release, RelWithDebInfo, MinSizeRel)")
     message(STATUS "SparkConsole output directory: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 else()

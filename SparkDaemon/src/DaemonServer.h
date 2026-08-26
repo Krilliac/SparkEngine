@@ -18,6 +18,7 @@
 #include "ServiceBase.h"
 
 #include <atomic>
+#include <cstddef>
 #include <chrono>
 #include <list>
 #include <memory>
@@ -33,7 +34,9 @@ namespace Spark::Daemon
     class DaemonServer
     {
       public:
-        DaemonServer();
+        static constexpr size_t kDefaultMaximumClientWorkers = 64;
+
+        explicit DaemonServer(size_t maximumClientWorkers = kDefaultMaximumClientWorkers);
         ~DaemonServer();
 
         DaemonServer(const DaemonServer&) = delete;
@@ -96,6 +99,7 @@ namespace Spark::Daemon
         std::unordered_map<uint16_t, std::unique_ptr<ServiceBase>> m_services;
         std::mutex m_threadsMutex;
         std::list<ClientWorker> m_clientWorkers;
+        size_t m_maximumClientWorkers = kDefaultMaximumClientWorkers;
         std::atomic<bool> m_shouldStop{false};
         std::intptr_t m_listenFd = -1;
         std::string m_boundPath;

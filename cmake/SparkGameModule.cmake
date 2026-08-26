@@ -8,9 +8,9 @@
     file(GLOB_RECURSE GAME_SOURCES "Source/*.cpp" "Source/*.h")
     spark_add_game_module(MyGame ${GAME_SOURCES})
 
-  This creates a SHARED library with the correct definitions and links
-  against SparkEngineLib. SPARK_IMPLEMENT_MODULE(YourModuleClass) emits the
-  mandatory SparkGetModuleCompatibility/CreateModule/DestroyModule exports.
+  This creates a SHARED library with the correct definitions. Windows modules
+  link the static engine SDK; POSIX modules use the header/interface target and
+  resolve engine symbols from the exporting host at load time.
 #]=============================================================================]
 
 include_guard(GLOBAL)
@@ -188,8 +188,22 @@ function(spark_add_game_module TARGET_NAME)
         SPARK_GAME_DLL
     )
 
-    # Link against the engine static library
-    target_link_libraries(${TARGET_NAME} PRIVATE Spark::SparkEngineLib)
+    if(WIN32)
+        set(_spark_module_link_target Spark::SparkEngineLib)
+        if(NOT TARGET ${_spark_module_link_target} AND TARGET SparkEngineLib)
+            set(_spark_module_link_target SparkEngineLib)
+        endif()
+    else()
+        set(_spark_module_link_target Spark::SparkEngineInterface)
+        if(NOT TARGET ${_spark_module_link_target} AND TARGET SparkEngineInterface)
+            set(_spark_module_link_target SparkEngineInterface)
+        endif()
+    endif()
+    if(NOT TARGET ${_spark_module_link_target})
+        message(FATAL_ERROR
+            "spark_add_game_module: required engine target '${_spark_module_link_target}' is unavailable")
+    endif()
+    target_link_libraries(${TARGET_NAME} PRIVATE ${_spark_module_link_target})
 
     # Include SDK headers
     target_include_directories(${TARGET_NAME} PRIVATE
@@ -209,5 +223,6 @@ function(spark_add_game_module TARGET_NAME)
 
     spark_configure_module_abi(${TARGET_NAME})
 
-    message(STATUS "spark_add_game_module: ${TARGET_NAME} configured as game module DLL")
+    message(STATUS
+        "spark_add_game_module: ${TARGET_NAME} configured with ${_spark_module_link_target}")
 endfunction()

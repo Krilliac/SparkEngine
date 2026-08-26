@@ -122,6 +122,7 @@ namespace SparkEditor
         if (!ImGui_ImplSDL2_InitForOpenGL(m_window, m_glContext))
         {
             std::cerr << "Failed to initialize ImGui SDL2 backend\n";
+            ImGui::DestroyContext();
             return false;
         }
 
@@ -129,6 +130,8 @@ namespace SparkEditor
         if (!ImGui_ImplOpenGL3_Init(glslVersion))
         {
             std::cerr << "Failed to initialize ImGui OpenGL3 backend\n";
+            ImGui_ImplSDL2_Shutdown();
+            ImGui::DestroyContext();
             return false;
         }
 
@@ -284,9 +287,13 @@ namespace SparkEditor
         m_isRunning = false;
 
         // Shutdown editor plugins before UI teardown
-        console.LogInfo("Shutting down editor plugins...");
-        m_pluginManager.ShutdownAll();
-        console.LogSuccess("Editor plugins shutdown complete");
+        if (m_pluginLifecycleStarted)
+        {
+            console.LogInfo("Shutting down editor plugins...");
+            m_pluginManager.ShutdownAll();
+            m_pluginLifecycleStarted = false;
+            console.LogSuccess("Editor plugins shutdown complete");
+        }
 
         if (m_ui)
         {
@@ -298,16 +305,24 @@ namespace SparkEditor
 
         // Window manager shutdown after EditorUI so any auto-save picks
         // up the final panel state.
-        console.LogInfo("Shutting down window manager...");
-        EditorWindowManager::GetInstance().Shutdown();
-        console.LogSuccess("Window manager shutdown complete");
+        if (m_windowManagerInitialized)
+        {
+            console.LogInfo("Shutting down window manager...");
+            EditorWindowManager::GetInstance().Shutdown();
+            m_windowManagerInitialized = false;
+            console.LogSuccess("Window manager shutdown complete");
+        }
 
         // Cleanup ImGui
-        console.LogInfo("Cleaning up Dear ImGui...");
-        ImGui_ImplOpenGL3_Shutdown();
-        ImGui_ImplSDL2_Shutdown();
-        ImGui::DestroyContext();
-        console.LogSuccess("Dear ImGui cleanup complete");
+        if (m_imguiInitialized)
+        {
+            console.LogInfo("Cleaning up Dear ImGui...");
+            ImGui_ImplOpenGL3_Shutdown();
+            ImGui_ImplSDL2_Shutdown();
+            ImGui::DestroyContext();
+            m_imguiInitialized = false;
+            console.LogSuccess("Dear ImGui cleanup complete");
+        }
 
         // Cleanup OpenGL and SDL
         console.LogInfo("Cleaning up OpenGL and SDL2...");
@@ -325,6 +340,7 @@ namespace SparkEditor
         console.LogSuccess("OpenGL and SDL2 cleanup complete");
 
         m_isInitialized = false;
+        m_initializationStarted = false;
         console.LogSuccess("Enhanced editor shutdown complete");
     }
 

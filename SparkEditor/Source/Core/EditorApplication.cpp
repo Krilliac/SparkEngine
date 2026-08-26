@@ -67,7 +67,7 @@ namespace SparkEditor
     EditorApplication::~EditorApplication()
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorApplication destructor called");
-        if (m_isInitialized)
+        if (m_isInitialized || m_initializationStarted)
         {
             Shutdown();
         }
@@ -80,6 +80,18 @@ namespace SparkEditor
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("Initializing Enhanced Spark Engine Editor...");
 
+        if (m_isInitialized || m_initializationStarted)
+        {
+            console.LogError("EditorApplication is already initialized or initializing");
+            return false;
+        }
+        m_initializationStarted = true;
+        const auto failInitialization = [this]()
+        {
+            Shutdown();
+            return false;
+        };
+
         m_config = config;
         m_windowWidth = config.windowWidth;
         m_windowHeight = config.windowHeight;
@@ -89,7 +101,7 @@ namespace SparkEditor
         if (!CreateMainWindow(config))
         {
             console.LogError("Failed to create main editor window");
-            return false;
+            return failInitialization();
         }
         console.LogSuccess("Main window created successfully (" + std::to_string(m_windowWidth) + "x" +
                            std::to_string(m_windowHeight) + ")");
@@ -99,7 +111,7 @@ namespace SparkEditor
         if (!InitializeGraphics())
         {
             console.LogError("Failed to initialize graphics backend");
-            return false;
+            return failInitialization();
         }
         console.LogSuccess("Graphics backend initialized successfully");
 
@@ -108,8 +120,9 @@ namespace SparkEditor
         if (!InitializeImGui())
         {
             console.LogError("Failed to initialize Dear ImGui");
-            return false;
+            return failInitialization();
         }
+        m_imguiInitialized = true;
         console.LogSuccess("Dear ImGui initialized successfully");
 
         // Initialize window manager singleton — owns multi-monitor placement,
@@ -117,6 +130,7 @@ namespace SparkEditor
         // before EditorUI so panels can query / restore their window state
         // while they are being created.
         console.LogInfo("Initializing window manager...");
+        m_windowManagerInitialized = true;
         EditorWindowManager::GetInstance().Initialize();
         console.LogSuccess("Window manager initialized");
 
@@ -126,7 +140,7 @@ namespace SparkEditor
         if (!m_ui->Initialize(config))
         {
             console.LogError("Failed to initialize EditorUI");
-            return false;
+            return failInitialization();
         }
         // Give EditorUI access to the plugin manager for menu bar rendering
         m_ui->SetPluginManager(&m_pluginManager);
@@ -134,8 +148,11 @@ namespace SparkEditor
 
 #ifdef _WIN32
         // Pass the DirectX device to panels that need it (Scene View)
-        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Editor, m_device.Get(), false);
-        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Editor, m_context.Get(), false);
+        if (!m_device || !m_context)
+        {
+            console.LogError("Graphics device/context became unavailable during editor initialization");
+            return failInitialization();
+        }
         if (m_device && m_context)
         {
             m_ui->SetGraphicsDevice(m_device.Get(), m_context.Get());
@@ -144,10 +161,16 @@ namespace SparkEditor
 
         // Initialize plugin system
         console.LogInfo("Initializing editor plugins...");
-        m_pluginManager.InitializeAll(this);
+        m_pluginLifecycleStarted = true;
+        if (!m_pluginManager.InitializeAll(this))
+        {
+            console.LogError("One or more editor plugins failed to initialize");
+            return failInitialization();
+        }
         console.LogSuccess("Editor plugins initialized");
 
         m_isInitialized = true;
+        m_initializationStarted = false;
         m_isRunning = true;
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Editor initialization complete (window %dx%d)", m_windowWidth,

@@ -3,6 +3,7 @@
 #include "InstallerContext.h"
 
 #include <string>
+#include <string_view>
 
 namespace SparkInstaller
 {
@@ -20,6 +21,13 @@ namespace SparkInstaller
 
         // Resolve the current HEAD commit SHA.
         std::string HeadCommit(const std::string& destination) const;
+
+        /**
+         * Encode one argv element for SparkBuild::ProcessRunner::RunSync.
+         * RunSync is deliberately shell-less: it recognizes double quotes and
+         * backslash escapes, so shell-specific single quoting is incorrect.
+         */
+        static std::string EncodeProcessRunnerArgument(std::string_view argument);
 
       private:
         int Run(const std::string& args, const std::string& cwd, const LogSink& log) const;

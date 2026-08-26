@@ -3,6 +3,10 @@
 #include "Panels/ServiceTopologyController.h"
 
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <utility>
 
 using namespace SparkEditor;
 
@@ -30,4 +34,69 @@ TEST(ServiceTopologyController_ConstructsOrchestratorStatusCommand)
     const auto arguments = ServiceTopologyController::OrchestratorStatusArguments("spark-daemon-test");
     EXPECT_EQ(arguments.size(), static_cast<size_t>(3));
     EXPECT_EQ(arguments[2], std::string("list"));
+}
+
+TEST(ServiceTopologyController_BoundsRetainedProcessOutput)
+{
+    TopologyServiceSnapshot snapshot;
+    for (size_t index = 0; index < ServiceTopologyController::MaxRetainedLogLines + 3; ++index)
+        ServiceTopologyController::AppendLogLine(snapshot, "line-" + std::to_string(index));
+
+    EXPECT_EQ(snapshot.log.size(), ServiceTopologyController::MaxRetainedLogLines);
+    EXPECT_EQ(snapshot.log.front(), std::string("line-3"));
+
+    ServiceTopologyController::AppendLogLine(
+        snapshot, std::string(ServiceTopologyController::MaxRetainedLogLineBytes + 100, 'x'));
+    EXPECT_EQ(snapshot.log.back().size(), ServiceTopologyController::MaxRetainedLogLineBytes);
+    EXPECT_TRUE(snapshot.log.back().ends_with(" [truncated]"));
+}
+
+TEST(ServiceTopologyController_RemovesStaleControlFilesBeforeLaunch)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-topology-stale-" + std::to_string(stamp));
+    fs::create_directories(root);
+    const fs::path health = root / "health.json";
+    const fs::path stop = root / "gateway.stop";
+    std::ofstream(health) << "{\"ready\":true}";
+    std::ofstream(stop) << "stop\n";
+
+    ServiceTopologyController controller;
+    TopologyServiceSpec spec;
+    spec.executable = root / "missing-service";
+    spec.healthFile = health;
+    spec.stopFile = stop;
+    controller.Configure(TopologyService::Gateway, std::move(spec));
+
+    EXPECT_FALSE(controller.Start(TopologyService::Gateway));
+    EXPECT_FALSE(fs::exists(health));
+    EXPECT_FALSE(fs::exists(stop));
+
+    std::error_code error;
+    fs::remove_all(root, error);
+    EXPECT_FALSE(error);
+}
+
+TEST(ServiceTopologyController_CapsHealthFileBeforeReading)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-topology-health-" + std::to_string(stamp));
+    fs::create_directories(root);
+    const fs::path health = root / "health.json";
+
+    std::ofstream(health, std::ios::binary)
+        << std::string(ServiceTopologyController::MaxHealthFileBytes + 1, 'x');
+    std::string contents = "stale";
+    EXPECT_FALSE(ServiceTopologyController::ReadHealthFile(health, contents));
+    EXPECT_TRUE(contents.empty());
+
+    std::ofstream(health, std::ios::binary | std::ios::trunc) << "{\"ready\":true}";
+    EXPECT_TRUE(ServiceTopologyController::ReadHealthFile(health, contents));
+    EXPECT_EQ(contents, std::string("{\"ready\":true}"));
+
+    std::error_code error;
+    fs::remove_all(root, error);
+    EXPECT_FALSE(error);
 }

@@ -25,46 +25,46 @@
 namespace SparkEditor
 {
 
-    /// @brief Outcome of a CreateProcessW-based launch attempt. On non-Windows
-    /// builds LaunchEditorProcess always returns success=false with an explanatory
-    /// error (process launch is a Windows-only feature here).
+    /// @brief Outcome of a platform process launch attempt. Handles are opaque:
+    /// Win32 uses native HANDLE values while POSIX uses an owned process record.
     struct ProcessLaunchResult
     {
         bool success = false;
-        void* processHandle = nullptr; ///< HANDLE, owned by the caller — CloseHandle() once no longer polled.
+        void* processHandle = nullptr; ///< Opaque owned process handle; close with CloseEditorProcessHandles().
         void* jobHandle = nullptr;     ///< Optional owned Job Object handle for process-tree lifetime control.
         unsigned long pid = 0;
         std::string error; ///< Human-readable failure reason (empty on success).
     };
 
     /**
-     * @brief CreateProcessW wrapper shared by every editor panel that spawns a
-     * separate SparkEngine.exe instance.
+     * @brief Platform launch wrapper shared by every editor panel that spawns a
+     * separate SparkEngine instance.
      *
      * @param exePath    Full path to SparkEngine.exe (used as CreateProcessW's
      *                   lpApplicationName so the launch doesn't depend on PATH).
-     * @param commandLine The FULL command line including the quoted exe path at the
-     *                   front (CreateProcessW convention) — build it with
+     * @param commandLine The FULL command line including the executable path at the
+     *                   front — build it with
      *                   BuildGameLaunchCommandLine() below for the common
      *                   "-game <dll>" case.
      * @param workingDir Working directory for the new process (exec_audit.log /
      *                   server.log land here relative to cwd).
      *
-     * Console-subsystem children are launched without a visible console window so
+     * POSIX launches parse this command into argv and call execv directly; shell
+     * metacharacters are never evaluated implicitly. Console-subsystem children are
+     * launched without a visible console window so
      * editor-managed services do not steal focus. Native game/render windows are
      * unaffected. The thread handle is closed internally; the process handle is
      * left open for the caller to poll (PollProcessExited) / terminate
-     * (TerminateEditorProcess) / eventually CloseHandle.
+     * (TerminateEditorProcess) / eventually CloseEditorProcessHandles.
      */
     ProcessLaunchResult LaunchEditorProcess(const std::filesystem::path& exePath, const std::wstring& commandLine,
                                             const std::filesystem::path& workingDir);
 
     /**
-     * @brief Launch an editor-managed process in a kill-on-close Windows Job Object.
+     * @brief Launch an editor-managed process tree.
      *
-     * The child starts suspended, is assigned to the job before it can create
-     * descendants, and is then resumed. Both processHandle and jobHandle in the
-     * successful result are owned by the caller.
+     * Windows uses a kill-on-close Job Object. POSIX establishes a dedicated
+     * process group before exec. Returned opaque handles are owned by the caller.
      */
     ProcessLaunchResult LaunchOwnedEditorProcess(const std::filesystem::path& exePath, const std::wstring& commandLine,
                                                  const std::filesystem::path& workingDir);

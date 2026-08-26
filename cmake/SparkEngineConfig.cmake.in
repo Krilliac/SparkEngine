@@ -31,10 +31,25 @@ endif()
 # the installed Spark/Version.h immediately to derive the module ABI sidecar.
 set(SPARK_ENGINE_INCLUDE_DIR "${PACKAGE_PREFIX_DIR}/include")
 set(SPARK_ENGINE_SDK_DIR "${PACKAGE_PREFIX_DIR}/include/Spark")
-set(SPARK_ENGINE_LIBRARIES Spark::SparkEngineLib)
 set(SPARK_ENGINE_FOUND TRUE)
 
 include("${CMAKE_CURRENT_LIST_DIR}/SparkEngineTargets.cmake")
+
+# SparkEngineInterface intentionally carries no link dependency on the static
+# engine archive. Reuse that imported target's compile-time ABI requirements so
+# installed POSIX modules match the host while leaving symbols for dlopen().
+if(TARGET Spark::SparkEngineInterface)
+    set_property(TARGET Spark::SparkEngineInterface PROPERTY
+        INTERFACE_COMPILE_DEFINITIONS
+        "$<TARGET_PROPERTY:Spark::SparkEngineLib,INTERFACE_COMPILE_DEFINITIONS>")
+endif()
+
+if(WIN32)
+    set(SPARK_ENGINE_LIBRARIES Spark::SparkEngineLib)
+else()
+    set(SPARK_ENGINE_LIBRARIES Spark::SparkEngineInterface)
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/SparkGameModule.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/SparkPlugin.cmake")
 

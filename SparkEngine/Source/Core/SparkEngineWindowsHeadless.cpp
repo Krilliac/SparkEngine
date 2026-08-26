@@ -39,6 +39,7 @@
 #include "GameplaySystemLifecycle.h"
 #include "ModuleHotReload.h"
 #include "ModuleManager.h"
+#include "WindowsCommandLine.h"
 #include "Utils/Assert.h"
 #include "Utils/AssetStallDetector.h"
 #include "Utils/BenchmarkFramework.h"
@@ -164,7 +165,7 @@ static bool InitHeadlessEngineContext()
 /**
  * @brief Load modules and register console commands for headless mode.
  */
-static void LoadHeadlessModules(LPWSTR lpCmdLine)
+static size_t LoadHeadlessModules(LPWSTR lpCmdLine)
 {
     GetEngineRuntime().moduleManager = std::make_unique<ModuleManager>();
     auto& console = Spark::SimpleConsole::GetInstance();
@@ -172,8 +173,14 @@ static void LoadHeadlessModules(LPWSTR lpCmdLine)
     if (LoadGameModules(*GetEngineRuntime().moduleManager, lpCmdLine))
     {
         GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
-        console.LogSuccess("Loaded " + std::to_string(GetEngineRuntime().moduleManager->GetModuleCount()) +
-                           " module(s)");
+        const size_t initializedModules = GetEngineRuntime().moduleManager->GetInitializedModuleCount();
+        console.LogSuccess("Loaded " + std::to_string(initializedModules) + " module(s)");
+        if (initializedModules > 0)
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "SPARK_MODULE_READY count=%zu", initializedModules);
+            std::fprintf(stdout, "SPARK_MODULE_READY count=%zu\n", initializedModules);
+            std::fflush(stdout);
+        }
     }
     else if (!g_projectSelectorCandidates.empty())
     {
@@ -195,6 +202,7 @@ static void LoadHeadlessModules(LPWSTR lpCmdLine)
                                          GetEngineRuntime().moduleHotReload.get());
     Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
     Assert::RegisterConsoleCommands();
+    return GetEngineRuntime().moduleManager->GetInitializedModuleCount();
 }
 
 /**
@@ -229,10 +237,11 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     // roll of the dice against the Wine gs.base race on a gVisor sandbox.
     // The main loop can still run useful engine update ticks without any
     // of them registered.
+    size_t initializedModuleCount = 0;
     if (!g_minimalInit)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: LoadHeadlessModules");
-        LoadHeadlessModules(lpCmdLine);
+        initializedModuleCount = LoadHeadlessModules(lpCmdLine);
         SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: detector singletons");
         Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
         // Server-role watchdog: a dedicated/headless server must RECOVER from
@@ -264,6 +273,15 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core,
                        "RunHeadlessWindows: LoadHeadlessModules + detectors skipped (-minimal-init)");
+    }
+
+    int exitCode = 0;
+    if (Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-require-game") && initializedModuleCount == 0)
+    {
+        Spark::SimpleConsole::GetInstance().LogError(
+            "Required game module was not initialized; terminating with a failure status.");
+        g_shutdownRequested.store(true, std::memory_order_relaxed);
+        exitCode = 2;
     }
 
     // Fixed 60 Hz server loop
@@ -365,7 +383,7 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     // AllocHeadlessConsole. Calling FreeConsole on an inherited console
     // detaches us from the parent's console, which we don't want.
     FreeConsole();
-    return 0;
+    return exitCode;
 }
 #endif // SPARK_HEADLESS_SUPPORT
 #endif // SPARK_PLATFORM_WINDOWS

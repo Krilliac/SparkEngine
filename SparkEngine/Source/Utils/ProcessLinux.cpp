@@ -11,7 +11,9 @@
 #if defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
 
 #include "Process.h"
+#include "ProcessPipeBuffer.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstring>
 #include <sstream>
@@ -96,16 +98,22 @@ namespace Spark
             }
         }
 
-        /// Read all available bytes from fd into dest. Returns false on EOF/error.
+        /// Drain a bounded amount of available data. Returns false on EOF/error.
         static bool ReadAvailable(int fd, std::string& dest)
         {
             char buf[4096];
+            size_t drainedBytes = 0;
             for (;;)
             {
-                ssize_t n = read(fd, buf, sizeof(buf));
+                const size_t capacity = ProcessDetail::RemainingReadCapacity(dest.size(), drainedBytes);
+                if (capacity == 0)
+                    return true;
+                const size_t requested = std::min(capacity, sizeof(buf));
+                ssize_t n = read(fd, buf, requested);
                 if (n > 0)
                 {
                     dest.append(buf, static_cast<size_t>(n));
+                    drainedBytes += static_cast<size_t>(n);
                     continue;
                 }
                 if (n == 0)
@@ -438,20 +446,12 @@ namespace Spark
         if (!m_impl || m_impl->stdoutReadFd < 0)
             return false;
 
+        if (ProcessDetail::ExtractBufferedLine(m_impl->stdoutBuffer, line))
+            return true;
+
         // Read any available data into the buffer
         Impl::ReadAvailable(m_impl->stdoutReadFd, m_impl->stdoutBuffer);
-
-        // Check for a complete line
-        auto pos = m_impl->stdoutBuffer.find('\n');
-        if (pos == std::string::npos)
-            return false;
-
-        line = m_impl->stdoutBuffer.substr(0, pos);
-        // Trim trailing \r if present
-        if (!line.empty() && line.back() == '\r')
-            line.pop_back();
-        m_impl->stdoutBuffer.erase(0, pos + 1);
-        return true;
+        return ProcessDetail::ExtractBufferedLine(m_impl->stdoutBuffer, line);
     }
 
     std::string Process::ReadAllStdout()

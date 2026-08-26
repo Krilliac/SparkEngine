@@ -585,6 +585,8 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/BuildPipeline.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/BuildPipelineProcess.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Utils/EditorProcessLaunch.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Utils/EditorProcessLaunchWin32.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Utils/EditorProcessLaunchPosix.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPluginManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/UndoRedo/UndoRedoManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneFile.cpp"
@@ -619,16 +621,44 @@ add_library(SparkMismatchedModuleFixture SHARED
     Fixtures/ModuleABI/MismatchedModule.cpp)
 add_library(SparkCompatibleModuleFixture SHARED
     Fixtures/ModuleABI/CompatibleModule.cpp)
+add_library(SparkModuleSiblingDependency SHARED
+    Fixtures/ModuleABI/SiblingDependency.cpp)
+add_library(SparkSiblingDependentModuleFixture SHARED
+    Fixtures/ModuleABI/SiblingDependentModule.cpp)
 
 foreach(_module_fixture IN ITEMS SparkMismatchedModuleFixture SparkCompatibleModuleFixture)
     target_compile_features(${_module_fixture} PRIVATE cxx_std_23)
     target_compile_definitions(${_module_fixture} PRIVATE SPARK_MODULE_DLL)
-    target_include_directories(${_module_fixture} PRIVATE "${CMAKE_SOURCE_DIR}/SparkSDK/Include")
+    target_include_directories(${_module_fixture} PRIVATE
+        "${CMAKE_SOURCE_DIR}/SparkSDK/Include"
+        "${SPARK_GENERATED_INCLUDE_DIR}")
     if(MSVC)
         set_property(TARGET ${_module_fixture} PROPERTY
             MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif()
 endforeach()
+
+target_compile_features(SparkModuleSiblingDependency PRIVATE cxx_std_23)
+target_compile_features(SparkSiblingDependentModuleFixture PRIVATE cxx_std_23)
+target_compile_definitions(SparkSiblingDependentModuleFixture PRIVATE SPARK_MODULE_DLL)
+target_include_directories(SparkSiblingDependentModuleFixture PRIVATE
+    "${CMAKE_SOURCE_DIR}/SparkSDK/Include"
+    "${SPARK_GENERATED_INCLUDE_DIR}")
+target_link_libraries(SparkSiblingDependentModuleFixture PRIVATE SparkModuleSiblingDependency)
+if(MSVC)
+    set_property(TARGET SparkSiblingDependentModuleFixture PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
+if(APPLE)
+    set(_spark_fixture_origin "@loader_path")
+elseif(UNIX)
+    set(_spark_fixture_origin "$ORIGIN")
+endif()
+if(DEFINED _spark_fixture_origin)
+    set_target_properties(SparkSiblingDependentModuleFixture PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "${_spark_fixture_origin}")
+endif()
 
 get_property(SPARK_TEST_CURRENT_SDK_VERSION GLOBAL PROPERTY SPARK_MODULE_CURRENT_SDK_VERSION)
 if(NOT SPARK_TEST_CURRENT_SDK_VERSION)
@@ -639,11 +669,14 @@ math(EXPR SPARK_TEST_MISMATCHED_SDK_VERSION
 spark_configure_module_abi(SparkMismatchedModuleFixture
     SDK_VERSION "${SPARK_TEST_MISMATCHED_SDK_VERSION}")
 spark_configure_module_abi(SparkCompatibleModuleFixture)
+spark_configure_module_abi(SparkSiblingDependentModuleFixture)
 
-add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture)
+add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture
+    SparkSiblingDependentModuleFixture)
 target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_MISMATCHED_MODULE_PATH="$<TARGET_FILE:SparkMismatchedModuleFixture>"
-    SPARK_TEST_COMPATIBLE_MODULE_PATH="$<TARGET_FILE:SparkCompatibleModuleFixture>")
+    SPARK_TEST_COMPATIBLE_MODULE_PATH="$<TARGET_FILE:SparkCompatibleModuleFixture>"
+    SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH="$<TARGET_FILE:SparkSiblingDependentModuleFixture>")
 
 # Objective-C++ test sources — only compile when the Metal backend is
 # actually available. SPARK_METAL_AVAILABLE is set by the root CMakeLists

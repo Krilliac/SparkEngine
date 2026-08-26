@@ -8,6 +8,7 @@
 
 #include "TestFramework.h"
 #include "Utils/Process.h"
+#include "Utils/ProcessPipeBuffer.h"
 
 #include <chrono>
 #include <filesystem>
@@ -17,6 +18,25 @@
 // ============================================================================
 // Platform-specific command helpers
 // ============================================================================
+
+TEST(ProcessPipeBuffer_BoundsUnterminatedLinesAndPerCallDrain)
+{
+    using namespace Spark::ProcessDetail;
+    std::string buffer(MaxBufferedLineBytes, 'x');
+    std::string line;
+    EXPECT_TRUE(ExtractBufferedLine(buffer, line));
+    EXPECT_EQ(line.size(), MaxBufferedLineBytes);
+    EXPECT_TRUE(buffer.empty());
+
+    buffer = "first\r\nsecond";
+    EXPECT_TRUE(ExtractBufferedLine(buffer, line));
+    EXPECT_EQ(line, std::string("first"));
+    EXPECT_EQ(buffer, std::string("second"));
+
+    EXPECT_EQ(RemainingReadCapacity(0, 0), MaxPipeDrainBytesPerCall);
+    EXPECT_EQ(RemainingReadCapacity(MaxBufferedLineBytes, 0), static_cast<size_t>(0));
+    EXPECT_EQ(RemainingReadCapacity(0, MaxPipeDrainBytesPerCall), static_cast<size_t>(0));
+}
 
 #if defined(__APPLE__)
 static constexpr const char* kEchoCmd = "/bin/echo";
@@ -215,6 +235,33 @@ TEST(Process_TryReadLine)
     EXPECT_TRUE(gotAlpha);
     EXPECT_TRUE(gotBeta);
     result->WaitForExit();
+}
+
+TEST(Process_TryReadLineChunksLargeUnterminatedOutput)
+{
+    const size_t outputBytes = Spark::ProcessDetail::MaxBufferedLineBytes * 2;
+    const std::string script = "head -c " + std::to_string(outputBytes) + " /dev/zero | tr '\\000' x";
+    auto result = Spark::Process::Builder(kShellCmd).Arg("-c").Arg(script).CaptureStdout().Launch();
+    EXPECT_TRUE(result.has_value());
+
+    size_t received = 0;
+    std::string line;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (received < outputBytes && std::chrono::steady_clock::now() < deadline)
+    {
+        if (result->TryReadLine(line))
+        {
+            EXPECT_TRUE(line.size() <= Spark::ProcessDetail::MaxBufferedLineBytes);
+            received += line.size();
+        }
+        else
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+
+    EXPECT_EQ(received, outputBytes);
+    EXPECT_EQ(result->WaitForExit(), 0);
 }
 
 // ============================================================================
