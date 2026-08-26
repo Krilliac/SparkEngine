@@ -7,7 +7,6 @@ Scans the codebase and generates wiki/Engine-Architecture-Flowchart.md
 import argparse
 import pathlib
 import re
-from datetime import datetime
 
 
 def scan_editor_panels(project_root: pathlib.Path) -> list[str]:
@@ -82,8 +81,6 @@ def generate_page(args) -> str:
     n_components = len(components) if components else int(args.components)
     backend_list = backends if backends else args.backends.split()
 
-    now = datetime.now().strftime("%Y-%m-%d")
-
     sections = []
 
     # ================================================================
@@ -94,7 +91,7 @@ def generate_page(args) -> str:
 > Complete visual guide to how SparkEngine works, from boot to shutdown.
 
 <!-- AUTO:flowchart_stats -->
-_Generated {now} from {args.headers} headers, {args.sources} source files, {n_components} ECS components, {n_systems} ECS systems, {n_panels} editor panels, {len(backend_list)} RHI backends._
+_Generated from {args.headers} headers, {args.sources} source files, {n_components} ECS components, {n_systems} ECS systems, {n_panels} editor panels, {len(backend_list)} RHI backends._
 <!-- /AUTO:flowchart_stats -->
 
 ---

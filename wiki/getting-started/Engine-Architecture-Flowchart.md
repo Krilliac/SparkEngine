@@ -3,7 +3,7 @@
 > Complete visual guide to how SparkEngine works, from boot to shutdown.
 
 <!-- AUTO:flowchart_stats -->
-_Generated 2026-08-26 from 712 headers, 589 source files, 79 ECS components, 11 ECS systems, 65 editor panels, 6 RHI backends._
+_Generated from 712 headers, 589 source files, 79 ECS components, 11 ECS systems, 65 editor panels, 6 RHI backends._
 <!-- /AUTO:flowchart_stats -->
 
 ---

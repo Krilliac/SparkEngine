@@ -293,14 +293,6 @@ sync_home_page() {
     local panel_count
     panel_count=$(echo -e "$PANEL_LIST" | grep -c '[A-Z]' || true)
 
-    local last_synced
-    if [ "$CHECK_MODE" = true ]; then
-        last_synced=$(grep -E '^\| \*Last synced\* \| \*.*\* \|$' "$page" | sed -E 's/^\| \*Last synced\* \| \*(.*)\* \|$/\1/' | head -1)
-        [ -n "$last_synced" ] || last_synced="N/A"
-    else
-        last_synced="$(date '+%Y-%m-%d %H:%M')"
-    fi
-
     local stats_content
     stats_content="| Metric | Count |
 |--------|-------|
@@ -310,8 +302,7 @@ sync_home_page() {
 | Editor Panels | ${panel_count} |
 | Test files | ${TEST_FILE_COUNT} |
 | Test definitions | ${TEST_DEFINITION_COUNT} |
-| Wiki pages | ${WIKI_PAGE_COUNT} |
-| *Last synced* | *${last_synced}* |"
+| Wiki pages | ${WIKI_PAGE_COUNT} |"
 
     update_auto_section "$page" "stats" "$stats_content"
 }

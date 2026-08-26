@@ -2803,6 +2803,9 @@ graph LR
 - [`TestCoroutineScheduler.cpp`](../../Tests/TestCoroutineScheduler.cpp) — 336 LOC — Tests for the gameplay coroutine/task scheduler
 - [`TestCoverSystem.cpp`](../../Tests/TestCoverSystem.cpp) — 191 LOC
 - [`TestCoverSystemReal.cpp`](../../Tests/TestCoverSystemReal.cpp) — 77 LOC — Real-class tests for Spark::AI::CoverSystem
+- [`TestCoverageAI.cpp`](../../Tests/TestCoverageAI.cpp) — 300 LOC — Deterministic real-class coverage for production AI subsystems.
+- [`TestCoverageCamera.cpp`](../../Tests/TestCoverageCamera.cpp) — 178 LOC — Production coverage for SparkEngineCamera behavior and console controls.
+- [`TestCoverageScripting.cpp`](../../Tests/TestCoverageScripting.cpp) — 377 LOC — Production coverage for script hot reload, sandbox diagnostics, and visual compilation.
 - [`TestCpuDebuggerPhaseGG.cpp`](../../Tests/TestCpuDebuggerPhaseGG.cpp) — 100 LOC — Phase GG Theme 3D tests for Spark::CpuDebugger
 - [`TestCpuNeuralInference.cpp`](../../Tests/TestCpuNeuralInference.cpp) — 389 LOC — Tests for SIMD-optimized CPU neural inference
 - [`TestCpuNeuralTraining.cpp`](../../Tests/TestCpuNeuralTraining.cpp) — 415 LOC — Tests for the CPU neural-network training substrate.
@@ -3283,7 +3286,6 @@ graph LR
 
 | Metric | Count |
 |--------|-------|
-| Source files scanned | 2454 |
-| Total lines of code  | 717437 |
+| Source files scanned | 2457 |
+| Total lines of code  | 718292 |
 | Source directories   | 17 |
-| Last generated       | 2026-08-26 12:20:18 |

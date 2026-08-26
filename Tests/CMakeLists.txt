@@ -44,6 +44,9 @@ add_executable(SparkTests
     TestTFFixedStep.cpp
     TestAIBehaviorTree.cpp
     TestAIStress.cpp
+    TestCoverageAI.cpp
+    TestCoverageCamera.cpp
+    TestCoverageScripting.cpp
     TestSequencer.cpp
     TestMeshLOD.cpp
     TestInputSystem.cpp

@@ -6,12 +6,12 @@
 # Mermaid module-level #include dependency graph.
 #
 # Output:
-#   docs/api/FileTree.md
+#   wiki/reference/File-Tree.md
 #
 # Usage:
 #   ./generate-file-tree.sh              # Full regeneration (default)
 #   ./generate-file-tree.sh generate
-#   ./generate-file-tree.sh check        # Exit 1 if FileTree.md is older than any source file
+#   ./generate-file-tree.sh check        # Exit 1 if generated content differs
 
 set -e
 
@@ -46,7 +46,8 @@ log_warning() { echo -e "${YELLOW}[FILE-TREE]${NC} $1"; }
 log_error()   { echo -e "${RED}[FILE-TREE]${NC} $1"; }
 
 generate_tree() {
-    mkdir -p "$WIKI_DIR"
+    local output_file="${1:-$OUTPUT_FILE}"
+    mkdir -p "$(dirname "$output_file")"
     local tmp_files tmp_edges
     tmp_files=$(mktemp)
     tmp_edges=$(mktemp)
@@ -169,12 +170,11 @@ generate_tree() {
         echo "| Source files scanned | $total_files |"
         echo "| Total lines of code  | $total_loc |"
         echo "| Source directories   | ${#SOURCE_DIRS[@]} |"
-        echo "| Last generated       | $(date '+%Y-%m-%d %H:%M:%S') |"
 
-    } > "$OUTPUT_FILE"
+    } > "$output_file"
 
     rm -f "$tmp_files" "$tmp_edges"
-    log_success "Wrote $(basename "$OUTPUT_FILE") ($total_files files, $total_loc LOC)"
+    log_success "Wrote $(basename "$output_file") ($total_files files, $total_loc LOC)"
 }
 
 check_stale() {
@@ -182,15 +182,19 @@ check_stale() {
         log_warning "$OUTPUT_FILE missing"
         exit 1
     fi
-    for dir in "${SOURCE_DIRS[@]}"; do
-        [ -d "$dir" ] || continue
-        if find "$dir" -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) -newer "$OUTPUT_FILE" -print -quit | grep -q .; then
-            log_warning "$OUTPUT_FILE is stale (source newer)"
-            exit 1
-        fi
-    done
-    log_info "File tree up to date"
-    exit 0
+    local generated
+    generated=$(mktemp)
+    if ! generate_tree "$generated" >/dev/null; then
+        rm -f "$generated"
+        return 1
+    fi
+    if ! cmp -s "$OUTPUT_FILE" "$generated"; then
+        rm -f "$generated"
+        log_warning "$OUTPUT_FILE is out of date. Run: docs/generate-file-tree.sh generate"
+        return 1
+    fi
+    rm -f "$generated"
+    log_info "File tree is up to date"
 }
 
 main() {
@@ -208,7 +212,7 @@ main() {
             echo "Usage: $0 [generate|check|help]"
             echo ""
             echo "  generate  Regenerate docs/api/FileTree.md (default)"
-            echo "  check     Exit 1 if FileTree.md is older than any source file"
+            echo "  check     Exit 1 if generated content differs from File-Tree.md"
             echo "  help      Show this message"
             ;;
         *)

@@ -150,6 +150,8 @@ class SparkRunTests(unittest.TestCase):
         engine_root = self.root / "engine"
         host = engine_root / "build" / "bin" / "Debug" / spark_cli.executable_filename()
         touch(host)
+        if spark_cli.current_platform() != "windows":
+            host.chmod(0o755)
         completed = subprocess_result(0)
 
         with working_directory(self.root), mock.patch.object(
@@ -727,6 +729,18 @@ class SparkPackageTests(unittest.TestCase):
             found = spark_cli.find_runtime_host(self.engine_root, "Release")
 
         self.assertIsNone(found)
+
+    def test_posix_runtime_host_accepts_executable(self):
+        posix_host = self.engine_root / "build" / "bin" / "Release" / "SparkEngine"
+        touch(posix_host)
+        posix_host.chmod(0o755)
+
+        with mock.patch.object(
+            spark_cli, "current_platform", return_value="linux"
+        ), mock.patch.dict(spark_cli.os.environ, {"SPARKENGINE_RUNTIME_HOST": ""}):
+            found = spark_cli.find_runtime_host(self.engine_root, "Release")
+
+        self.assertEqual(found, posix_host.resolve())
 
     def test_package_refreshes_configured_source_tree_runtime_host(self):
         touch(self.engine_root / "CMakeLists.txt")
