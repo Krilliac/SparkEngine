@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 1,
-  "label": "nightly downloads",
-  "message": "0",
-  "color": "brightgreen",
-  "namedLogo": "github",
-  "logoColor": "white"
-}
+    "schemaVersion": 1,
+    "label": "nightly downloads",
+    "message": "0",
+    "color": "brightgreen",
+    "namedLogo": "github",
+    "logoColor": "white"
+  }
