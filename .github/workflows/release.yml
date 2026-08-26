@@ -115,6 +115,23 @@ jobs:
       run: |
         cmake --install build --config ${{ matrix.config }}
         cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
+        if ($LASTEXITCODE -ne 0) {
+          Get-ChildItem build/packages/_CPack_Packages -Filter NSISOutput.log -Recurse -ErrorAction SilentlyContinue |
+            ForEach-Object {
+              Write-Error "CPack NSIS diagnostic: $($_.FullName)" -ErrorAction Continue
+              Get-Content -LiteralPath $_.FullName
+            }
+          exit $LASTEXITCODE
+        }
+
+    - name: Upload CPack failure diagnostics
+      if: failure()
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: SparkEngine-Windows-${{ matrix.config }}-cpack-diagnostics
+        path: build/packages/_CPack_Packages/**/NSISOutput.log
+        if-no-files-found: ignore
+        retention-days: 7
 
     - name: Upload packaged artifact
       uses: actions/upload-artifact@v7.0.1
@@ -142,7 +159,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Configure CMake
       run: |
