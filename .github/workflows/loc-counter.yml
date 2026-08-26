@@ -127,10 +127,10 @@ jobs:
         }
         EOF
 
-    - name: Refresh generated README and wiki stats
+    - name: Refresh generated repository and wiki stats
       run: |
         set -euo pipefail
-        bash docs/update-readme-badges.sh readme
+        bash docs/update-readme-badges.sh update
         bash docs/sync-wiki.sh sync
 
     - name: Commit badge data
@@ -147,7 +147,8 @@ jobs:
         fi
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add -- README.md .github/badges/tests.json .github/badges/loc.json .github/badges/files.json \
+        git add -- README.md .github/copilot-instructions.md .github/prompts/copilot-instructions.md \
+          .github/prompts/build-test.prompt.md .github/badges/tests.json .github/badges/loc.json .github/badges/files.json \
           .github/badges/loc-breakdown.json wiki/Home.md wiki/advanced/Testing.md \
           wiki/subsystems/Entity-Component-System.md wiki/gameplay-tools/SparkEditor.md
         git diff --cached --quiet && echo "No changes to commit" && exit 0

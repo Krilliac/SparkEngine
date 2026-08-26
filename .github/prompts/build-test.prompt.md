@@ -65,7 +65,7 @@ Builds on every push/PR: Windows MSVC + Linux GCC + Linux Clang (Debug + Release
 
 ## Testing
 
-6,760 test definitions across 565 files in `Tests/` with internal framework + CTest.
+6,817 test definitions across 568 files in `Tests/` with internal framework + CTest.
 
 ```bash
 cd build && ctest --output-on-failure          # all tests
