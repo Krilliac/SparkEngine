@@ -749,8 +749,8 @@ jobs:
       if: matrix.config == 'Release'
       run: |
         echo "Test results: $(wc -l < test-results.log) lines"
-        grep -q "VulkanParity_ShaderCompilePath_Asserted" test-results.log
-        grep -q "VulkanParity_D3D11MilestoneSnapshot" test-results.log
+        grep -Fq 'name="VulkanParity_ShaderCompilePath_Asserted"' build/SparkTests-junit.xml
+        grep -Fq 'name="VulkanParity_D3D11MilestoneSnapshot"' build/SparkTests-junit.xml
 
     - name: Extract error summary
       if: failure()
