@@ -8,6 +8,7 @@ on:
       - '**.h'
       - '**.hpp'
       - 'docs/codebase-metrics.py'
+      - 'docs/sync-wiki.sh'
       - 'docs/update-readme-badges.sh'
       - '.github/workflows/loc-counter.yml'
   workflow_dispatch:
@@ -126,6 +127,11 @@ jobs:
         }
         EOF
 
+    - name: Refresh generated wiki test and repository stats
+      run: |
+        set -euo pipefail
+        bash docs/sync-wiki.sh sync
+
     - name: Commit badge data
       id: badge-commit
       env:
@@ -140,9 +146,11 @@ jobs:
         fi
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add .github/badges/tests.json .github/badges/loc.json .github/badges/files.json .github/badges/loc-breakdown.json
+        git add -- .github/badges/tests.json .github/badges/loc.json .github/badges/files.json \
+          .github/badges/loc-breakdown.json wiki/Home.md wiki/advanced/Testing.md \
+          wiki/subsystems/Entity-Component-System.md wiki/gameplay-tools/SparkEditor.md
         git diff --cached --quiet && echo "No changes to commit" && exit 0
-        git commit -m "chore: update lines of code counter"
+        git commit -m "chore: refresh generated repository metrics"
         git push \
           "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
           "HEAD:refs/heads/${GITHUB_REF_NAME}"
