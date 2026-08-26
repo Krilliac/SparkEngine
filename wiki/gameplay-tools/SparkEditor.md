@@ -908,6 +908,7 @@ cmake --build build --config Release
 | `ScriptDebugPanel` | `SparkEditor/Source/Panels/ScriptDebugPanel.h` |
 | `ScriptEditorPanel` | `SparkEditor/Source/Panels/ScriptEditorPanel.h` |
 | `SearchPanel` | `SparkEditor/Source/Panels/SearchPanel.h` |
+| `ServiceTopologyPanel` | `SparkEditor/Source/Panels/ServiceTopologyPanel.h` |
 | `SplineEditorPanel` | `SparkEditor/Source/Panels/SplineEditorPanel.h` |
 | `SpriteAnimationEditorPanel` | `SparkEditor/Source/Panels/SpriteAnimationEditorPanel.h` |
 | `SpriteEditorPanel` | `SparkEditor/Source/Panels/SpriteEditorPanel.h` |
