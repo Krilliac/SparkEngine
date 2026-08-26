@@ -2804,7 +2804,7 @@ graph LR
 - [`TestCoverSystem.cpp`](../../Tests/TestCoverSystem.cpp) — 191 LOC
 - [`TestCoverSystemReal.cpp`](../../Tests/TestCoverSystemReal.cpp) — 77 LOC — Real-class tests for Spark::AI::CoverSystem
 - [`TestCoverageAI.cpp`](../../Tests/TestCoverageAI.cpp) — 300 LOC — Deterministic real-class coverage for production AI subsystems.
-- [`TestCoverageCamera.cpp`](../../Tests/TestCoverageCamera.cpp) — 178 LOC — Production coverage for SparkEngineCamera behavior and console controls.
+- [`TestCoverageCamera.cpp`](../../Tests/TestCoverageCamera.cpp) — 177 LOC — Production coverage for SparkEngineCamera behavior and console controls.
 - [`TestCoverageScripting.cpp`](../../Tests/TestCoverageScripting.cpp) — 377 LOC — Production coverage for script hot reload, sandbox diagnostics, and visual compilation.
 - [`TestCpuDebuggerPhaseGG.cpp`](../../Tests/TestCpuDebuggerPhaseGG.cpp) — 100 LOC — Phase GG Theme 3D tests for Spark::CpuDebugger
 - [`TestCpuNeuralInference.cpp`](../../Tests/TestCpuNeuralInference.cpp) — 389 LOC — Tests for SIMD-optimized CPU neural inference
@@ -3287,5 +3287,5 @@ graph LR
 | Metric | Count |
 |--------|-------|
 | Source files scanned | 2457 |
-| Total lines of code  | 718292 |
+| Total lines of code  | 718291 |
 | Source directories   | 17 |

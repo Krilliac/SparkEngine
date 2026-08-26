@@ -120,7 +120,7 @@ namespace
         int lastError = ENOENT;
         do
         {
-            struct stat endpointStatus{};
+            struct stat endpointStatus = {};
             if (::stat(endpoint.c_str(), &endpointStatus) == 0)
             {
                 if (S_ISSOCK(endpointStatus.st_mode))

@@ -7,7 +7,6 @@
 
 #include "Camera/SparkEngineCamera.h"
 
-#include <DirectXMath.h>
 #include <cmath>
 
 namespace

@@ -50,7 +50,7 @@ jobs:
       run: python3 Tools/model_pipeline/validate_models.py --repo-root .
 
     - name: Validate publishable wiki output
-      run: python3 Tools/publish-wiki.py --check
+      run: python3 tools/publish-wiki.py --check
 
     - name: Verify all generated documentation and statistics
       id: generated-docs
