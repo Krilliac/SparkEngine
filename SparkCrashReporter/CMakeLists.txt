@@ -55,9 +55,7 @@ if(REPORTER_SOURCES)
     message(STATUS "SparkCrashReporter will be built")
 
     if(BUILD_TESTS)
-        if(PROJECT_IS_TOP_LEVEL)
-            enable_testing()
-        endif()
+        enable_testing()
 
         add_executable(SparkCrashReporterManifestTests
             tests/CrashReporterManifestTests.cpp

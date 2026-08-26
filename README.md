@@ -206,6 +206,11 @@ cmake --build build-asan && ./build-asan/bin/SparkTests
 
 When a workflow uploads sanitizer or coverage results, they are available from
 that run on the [GitHub Actions page](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml).
+The primary Windows, Linux, and macOS lanes also retain granular JUnit XML,
+machine-readable JSON totals, runtime, and slow-test tables. CI rejects a
+missing, empty, malformed, failed, or suspiciously under-registered test run;
+the badge above remains explicitly source-definition based rather than claiming
+that every platform executed the same feature-gated cases.
 
 ---
 

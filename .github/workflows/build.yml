@@ -28,6 +28,29 @@ env:
 
 jobs:
   # ===========================================================================
+  # CI Tooling — prove report parsers and generated repository statistics
+  # ===========================================================================
+  validate-ci-tools:
+    name: "Validate CI tooling"
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v7.0.1
+
+    - name: Test JUnit statistics parser
+      run: python3 .github/scripts/test-summarize-test-results.py
+
+    - name: Test Spark CLI
+      run: python3 -m unittest discover -s Tools/spark-cli/tests -p "test_*.py" -v
+
+    - name: Verify generated repository and wiki statistics
+      if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+      run: |
+        bash docs/update-readme-badges.sh check
+        bash docs/update-codebase-stats.sh check
+        bash docs/sync-wiki.sh check
+
+  # ===========================================================================
   # Code Quality — clang-format enforcement
   # ===========================================================================
   check-format:
@@ -438,6 +461,28 @@ jobs:
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel 2>&1 | tee test-results.log
 
+    - name: Validate and summarize test statistics
+      if: always() && matrix.config == 'Release'
+      shell: bash
+      run: |
+        python .github/scripts/summarize-test-results.py \
+          build/SparkTests-junit.xml \
+          --min-tests 5000 \
+          --title "SparkTests — Windows VS2022 Release" \
+          --json test-stats-windows-vs2022-release.json
+
+    - name: Upload machine-readable test results
+      if: always() && matrix.config == 'Release'
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: test-results-windows-vs2022-release
+        path: |
+          build/SparkTests-junit.xml
+          test-stats-windows-vs2022-release.json
+          test-results.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+
     - name: Extract error summary
       if: failure()
       shell: bash
@@ -531,6 +576,26 @@ jobs:
       if: matrix.config == 'Release'
       run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel
 
+    - name: Validate and summarize test statistics
+      if: always() && matrix.config == 'Release'
+      run: |
+        python .github/scripts/summarize-test-results.py \
+          build/SparkTests-junit.xml \
+          --min-tests 5000 \
+          --title "SparkTests — Windows VS2026 Release" \
+          --json test-stats-windows-vs2026-release.json
+
+    - name: Upload machine-readable test results
+      if: always() && matrix.config == 'Release'
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: test-results-windows-vs2026-release
+        path: |
+          build/SparkTests-junit.xml
+          test-stats-windows-vs2026-release.json
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
       uses: actions/upload-artifact@v7.0.1
@@ -602,7 +667,28 @@ jobs:
     - name: Run Tests
       run: |
         set -o pipefail
-        cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
+        cd build && ./bin/SparkTests --junit-xml SparkTests-junit.xml 2>&1 | tee ../test-results.log
+
+    - name: Validate and summarize test statistics
+      if: always()
+      run: |
+        python3 .github/scripts/summarize-test-results.py \
+          build/SparkTests-junit.xml \
+          --min-tests 5000 \
+          --title "SparkTests — Linux GCC ${{ matrix.config }}" \
+          --json test-stats-linux-gcc-${{ matrix.config }}.json
+
+    - name: Upload machine-readable test results
+      if: always()
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: test-results-linux-gcc-${{ matrix.config }}
+        path: |
+          build/SparkTests-junit.xml
+          test-stats-linux-gcc-${{ matrix.config }}.json
+          test-results.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
 
     - name: Assert Vulkan preset is enabled (Release gate)
       if: matrix.config == 'Release'
@@ -724,7 +810,28 @@ jobs:
     - name: Run Tests
       run: |
         set -o pipefail
-        cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
+        cd build && ./bin/SparkTests --junit-xml SparkTests-junit.xml 2>&1 | tee ../test-results.log
+
+    - name: Validate and summarize test statistics
+      if: always()
+      run: |
+        python3 .github/scripts/summarize-test-results.py \
+          build/SparkTests-junit.xml \
+          --min-tests 5000 \
+          --title "SparkTests — Linux Clang ${{ matrix.config }}" \
+          --json test-stats-linux-clang-${{ matrix.config }}.json
+
+    - name: Upload machine-readable test results
+      if: always()
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: test-results-linux-clang-${{ matrix.config }}
+        path: |
+          build/SparkTests-junit.xml
+          test-stats-linux-clang-${{ matrix.config }}.json
+          test-results.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
 
     - name: Extract error summary
       if: failure()
@@ -957,7 +1064,28 @@ jobs:
       if: matrix.config == 'Release'
       run: |
         set -o pipefail
-        cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
+        cd build && ./bin/SparkTests --junit-xml SparkTests-junit.xml 2>&1 | tee ../test-results.log
+
+    - name: Validate and summarize test statistics
+      if: always() && matrix.config == 'Release'
+      run: |
+        python3 .github/scripts/summarize-test-results.py \
+          build/SparkTests-junit.xml \
+          --min-tests 5000 \
+          --title "SparkTests — macOS ${{ matrix.backend }} Release" \
+          --json test-stats-macos-${{ matrix.backend }}-release.json
+
+    - name: Upload machine-readable test results
+      if: always() && matrix.config == 'Release'
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: test-results-macos-${{ matrix.backend }}-release
+        path: |
+          build/SparkTests-junit.xml
+          test-stats-macos-${{ matrix.backend }}-release.json
+          test-results.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
 
     - name: Extract error summary
       if: failure()
@@ -1317,6 +1445,7 @@ jobs:
     name: "CI Error Report"
     if: always()
     needs:
+      - validate-ci-tools
       - check-format
       - validate-prompts
       - check-thirdparty-manifest
@@ -1332,6 +1461,7 @@ jobs:
       - coverage
       - clang-tidy
       - todo-count
+      - build-installer
     runs-on: ubuntu-24.04
     permissions:
       contents: read

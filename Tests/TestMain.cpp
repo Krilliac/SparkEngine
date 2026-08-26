@@ -8,6 +8,7 @@
  * CLI options:
  *   --output-file <path>   Write all test output to a file
  *   --errors-only          Only include failed tests and error details in output file
+ *   --quiet                Suppress per-test success output on the console
  *   --junit-xml <path>     Write JUnit XML report (for CI integration)
  *   --shuffle [seed]       Randomize test execution order (seed for reproducibility)
  *   --retries N            Retry failed tests up to N times (for flaky test mitigation)
@@ -297,6 +298,7 @@ struct TestOutput
 {
     std::ofstream file;
     bool errorsOnly = false;
+    bool quiet = false;
     bool hasFile = false;
 
     void Open(const std::string& path)
@@ -305,10 +307,12 @@ struct TestOutput
         hasFile = file.is_open();
     }
 
-    // Always write to console; write to file unless errors-only mode filters it
+    // Quiet mode keeps failures visible while avoiding a large success stream
+    // that can bottleneck CTest and hosted-CI output capture.
     void Print(const std::string& msg, bool isError = false)
     {
-        std::cout << msg;
+        if (!quiet || isError)
+            std::cout << msg;
         if (hasFile && (!errorsOnly || isError))
             file << msg;
     }
@@ -438,6 +442,7 @@ static void PrintUsage(const char* argv0)
               << "Options:\n"
               << "  --output-file <path>   Write test output to a file\n"
               << "  --errors-only          Only write failed tests to the output file\n"
+              << "  --quiet                Suppress per-test success output on the console\n"
               << "  --junit-xml <path>     Write JUnit XML report for CI integration\n"
               << "  --shuffle [seed]       Randomize test order (optional integer seed)\n"
               << "  --retries <N>          Retry failed tests up to N times (default: 0)\n"
@@ -477,6 +482,7 @@ int main(int argc, char** argv)
     std::string outputFilePath;
     std::string junitXmlPath;
     bool errorsOnly = false;
+    bool quiet = false;
     bool shuffle = false;
     unsigned int shuffleSeed = 0;
     int maxRetries = 0;
@@ -496,6 +502,10 @@ int main(int argc, char** argv)
         else if (arg == "--errors-only")
         {
             errorsOnly = true;
+        }
+        else if (arg == "--quiet")
+        {
+            quiet = true;
         }
         else if (arg == "--shuffle")
         {
@@ -532,6 +542,7 @@ int main(int argc, char** argv)
 
     TestOutput out;
     out.errorsOnly = errorsOnly;
+    out.quiet = quiet;
     if (!outputFilePath.empty())
     {
         out.Open(outputFilePath);

@@ -1014,9 +1014,18 @@ if(TARGET SparkAutomation)
     )
 endif()
 
-# Add to CTest
+# Add to CTest. SparkTests also emits its granular JUnit report from CTest so
+# CI can distinguish a real zero-failure run from an executable launch failure.
 enable_testing()
-add_test(NAME SparkEngineTests COMMAND SparkTests)
+add_test(
+    NAME SparkEngineTests
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_TEST_EXECUTABLE=$<TARGET_FILE:SparkTests>
+        -DSPARK_JUNIT_REPORT=${CMAKE_BINARY_DIR}/SparkTests-junit.xml
+        -DSPARK_TEST_LOG=${CMAKE_BINARY_DIR}/SparkTests.log
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
+)
+set_tests_properties(SparkEngineTests PROPERTIES TIMEOUT 210)
 add_test(
     NAME SparkTemplateAssets
     COMMAND ${CMAKE_COMMAND}
@@ -1032,6 +1041,14 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_SOURCE_DIR}/Tools/validate_template_runtime_sheets.py
             ${CMAKE_SOURCE_DIR}/Templates
     )
+    add_test(
+        NAME SparkCliContract
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+            -s ${CMAKE_SOURCE_DIR}/Tools/spark-cli/tests
+            -p test_*.py
+            -v
+    )
+    set_tests_properties(SparkCliContract PROPERTIES LABELS "cli;integration" TIMEOUT 180)
 else()
-    message(WARNING "Python 3 not found; template runtime-sheet pixel validation is disabled")
+    message(WARNING "Python 3 not found; template runtime-sheet and Spark CLI validation are disabled")
 endif()

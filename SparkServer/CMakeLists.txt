@@ -43,5 +43,6 @@ install(TARGETS SparkServer RUNTIME DESTINATION bin COMPONENT runtime)
 install(FILES config/server.example.ini DESTINATION share/SparkEngine/examples COMPONENT runtime)
 
 if(BUILD_TESTS)
+    enable_testing()
     add_test(NAME SparkServerHelp COMMAND $<TARGET_FILE:SparkServer> --help)
 endif()

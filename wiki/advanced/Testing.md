@@ -95,6 +95,17 @@ ctest --test-dir build --output-on-failure
 ./build/bin/SparkTests
 ```
 
+### CI Test Evidence
+
+The primary Windows, Linux, and macOS jobs retain the runner's granular JUnit
+XML plus a JSON summary containing executed, passed, failed, errored, skipped,
+duration, and slowest-test fields. The summary parser fails closed when the
+report is missing, empty, malformed, contains a failure, or records fewer than
+the expected registration floor. This prevents an executable launch failure
+from being reported as a zero-failure test run. Repository badges count source
+test definitions separately because platform and feature gates affect the
+runtime set.
+
 ### Run Specific Tests
 
 ```bash

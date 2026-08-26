@@ -53,5 +53,6 @@ install(TARGETS SparkGateway RUNTIME DESTINATION bin COMPONENT runtime)
 install(FILES config/gateway.example.ini DESTINATION share/SparkEngine/examples COMPONENT runtime)
 
 if(BUILD_TESTS)
+    enable_testing()
     add_test(NAME SparkGatewayHelp COMMAND $<TARGET_FILE:SparkGateway> --help)
 endif()

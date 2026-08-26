@@ -2572,6 +2572,10 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/Tools")
     install(DIRECTORY "Tools/"
         DESTINATION tools
         COMPONENT ${SPARK_INSTALL_COMPONENT_TOOLS}
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE
+        PATTERN "*.pyo" EXCLUDE
+        PATTERN "tests" EXCLUDE
     )
 endif()
 

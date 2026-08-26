@@ -622,7 +622,8 @@ jobs:
         )
 
         FILES=""
-        TABLE="| Asset | Notes |"$'\n'"|---|---|"
+        TABLE="| Asset | Size | Notes |"$'\n'"|---|---:|---|"
+        : > SHA256SUMS
         for artifact in *.zip *.tar.gz *.exe *.msi SparkInstaller-*; do
           if [ ! -f "$artifact" ]; then
             continue
@@ -637,9 +638,28 @@ jobs:
             note="Linux package"
           fi
 
+          size_bytes=$(stat --format='%s' "$artifact")
+          size_human=$(numfmt --to=iec-i --suffix=B "$size_bytes")
+          sha256sum "$artifact" >> SHA256SUMS
           FILES="${FILES}${artifact}"$'\n'
-          TABLE="${TABLE}"$'\n'"| \`${artifact}\` | ${note} |"
+          TABLE="${TABLE}"$'\n'"| \`${artifact}\` | ${size_human} | ${note} |"
         done
+
+        if [ ! -s SHA256SUMS ]; then
+          echo "No release assets were collected; refusing to publish an empty release." >&2
+          exit 1
+        fi
+        sha256sum --check SHA256SUMS
+        FILES="${FILES}SHA256SUMS"$'\n'
+        TABLE="${TABLE}"$'\n'"| \`SHA256SUMS\` | — | SHA-256 verification manifest |"
+
+        {
+          echo "### Release artifact statistics"
+          echo
+          echo "$TABLE"
+          echo
+          echo 'Every collected artifact passed an immediate `sha256sum --check SHA256SUMS` round trip.'
+        } >> "$GITHUB_STEP_SUMMARY"
 
         # Write multiline outputs
         {

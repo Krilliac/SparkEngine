@@ -8,6 +8,7 @@ on:
       - '**.h'
       - '**.hpp'
       - 'docs/codebase-metrics.py'
+      - 'docs/update-codebase-stats.sh'
       - 'docs/sync-wiki.sh'
       - 'docs/update-readme-badges.sh'
       - '.github/workflows/loc-counter.yml'
@@ -131,6 +132,7 @@ jobs:
       run: |
         set -euo pipefail
         bash docs/update-readme-badges.sh update
+        bash docs/update-codebase-stats.sh generate
         bash docs/sync-wiki.sh sync
 
     - name: Commit badge data
@@ -150,6 +152,7 @@ jobs:
         git add -- README.md .github/copilot-instructions.md .github/prompts/copilot-instructions.md \
           .github/prompts/build-test.prompt.md .github/badges/tests.json .github/badges/loc.json .github/badges/files.json \
           .github/badges/loc-breakdown.json wiki/Home.md wiki/advanced/Testing.md \
+          wiki/advanced/Codebase-Statistics.md \
           wiki/subsystems/Entity-Component-System.md wiki/gameplay-tools/SparkEditor.md
         git diff --cached --quiet && echo "No changes to commit" && exit 0
         git commit -m "chore: refresh generated repository metrics"
