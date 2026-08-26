@@ -80,6 +80,7 @@ jobs:
     needs: [prepare]
     runs-on: windows-2022
     strategy:
+      fail-fast: false
       matrix:
         config: ${{ fromJson(needs.prepare.outputs.configs) }}
 
@@ -115,13 +116,15 @@ jobs:
       run: |
         cmake --install build --config ${{ matrix.config }}
         cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
-        if ($LASTEXITCODE -ne 0) {
-          Get-ChildItem build/packages/_CPack_Packages -Filter NSISOutput.log -Recurse -ErrorAction SilentlyContinue |
+        $cpackExitCode = $LASTEXITCODE
+        if ($cpackExitCode -ne 0) {
+          Get-ChildItem build/packages/_CPack_Packages -File -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -in @('NSISOutput.log', 'wix.log') } |
             ForEach-Object {
-              Write-Error "CPack NSIS diagnostic: $($_.FullName)" -ErrorAction Continue
+              Write-Error "CPack diagnostic: $($_.FullName)" -ErrorAction Continue
               Get-Content -LiteralPath $_.FullName
             }
-          exit $LASTEXITCODE
+          exit $cpackExitCode
         }
 
     - name: Upload CPack failure diagnostics
@@ -129,7 +132,9 @@ jobs:
       uses: actions/upload-artifact@v7.0.1
       with:
         name: SparkEngine-Windows-${{ matrix.config }}-cpack-diagnostics
-        path: build/packages/_CPack_Packages/**/NSISOutput.log
+        path: |
+          build/packages/_CPack_Packages/**/NSISOutput.log
+          build/packages/_CPack_Packages/**/wix.log
         if-no-files-found: ignore
         retention-days: 7
 
@@ -137,7 +142,10 @@ jobs:
       uses: actions/upload-artifact@v7.0.1
       with:
         name: SparkEngine-Windows-${{ matrix.config }}-packages
-        path: build/packages/*
+        path: |
+          build/packages/*.zip
+          build/packages/*.exe
+          build/packages/*.msi
         retention-days: 7
 
   # ===========================================================================
@@ -147,6 +155,7 @@ jobs:
     needs: [prepare]
     runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false
       matrix:
         config: ${{ fromJson(needs.prepare.outputs.configs) }}
 
@@ -198,7 +207,9 @@ jobs:
       uses: actions/upload-artifact@v7.0.1
       with:
         name: SparkEngine-Linux-${{ matrix.config }}-packages
-        path: build/packages/*
+        path: |
+          build/packages/*.zip
+          build/packages/*.tar.gz
         retention-days: 7
 
   # ===========================================================================
