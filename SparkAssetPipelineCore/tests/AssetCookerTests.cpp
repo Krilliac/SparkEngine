@@ -105,6 +105,22 @@ int main(int argc, char** argv)
     const auto overlapping = Spark::AssetPipeline::CookAssets({source, source / "output", {}, true});
     const auto escapedManifest = Spark::AssetPipeline::CookAssets({source, output, root / "outside.json", false});
 
+    bool aliasedOutputPassed = true;
+#if !defined(_WIN32)
+    const auto aliasedRoot = root / "aliased-root";
+    std::error_code aliasError;
+    std::filesystem::create_directory_symlink(root, aliasedRoot, aliasError);
+    if (!aliasError)
+    {
+        const auto aliasedOutput = aliasedRoot / "aliased-output";
+        const auto aliasedManifest = aliasedOutput / "metadata" / "manifest.json";
+        const auto aliasedResult = Spark::AssetPipeline::CookAssets({source, aliasedOutput, aliasedManifest, false});
+        aliasedOutputPassed = aliasedResult.Succeeded() &&
+                              std::filesystem::is_regular_file(root / "aliased-output" / "nested" / "asset.txt") &&
+                              std::filesystem::is_regular_file(root / "aliased-output" / "metadata" / "manifest.json");
+    }
+#endif
+
     std::error_code symlinkError;
     const auto external = root / "external";
     std::filesystem::create_directories(external);
@@ -219,8 +235,8 @@ int main(int argc, char** argv)
          (!throughInternalManifestLink.Succeeded() && internalManifestBytes == "preserve-internal")) &&
         (!hardLinkAvailable ||
          (!throughHardLinkedManifest.Succeeded() && internalManifestBytes == "preserve-internal")) &&
-        !wrongDigestAccepted && directBytes == "old bytes" && controlFilenamePassed && concurrentPassed &&
-        std::filesystem::is_regular_file(output / "nested" / "asset.txt");
+        !wrongDigestAccepted && directBytes == "old bytes" && controlFilenamePassed && aliasedOutputPassed &&
+        concurrentPassed && std::filesystem::is_regular_file(output / "nested" / "asset.txt");
     if (!passed)
     {
         std::cerr << "Asset cooker deterministic/incremental contract failed\n"
@@ -238,8 +254,9 @@ int main(int argc, char** argv)
                   << " internalLinkedRejected="
                   << (!internalManifestLinkAvailable || !throughInternalManifestLink.Succeeded())
                   << " hardLinkedRejected=" << (!hardLinkAvailable || !throughHardLinkedManifest.Succeeded()) << "\n"
-                  << "control=" << controlFilenamePassed << " children=" << childAResult << ',' << childBResult
-                  << " concurrentFirst='" << concurrentFirst << "' concurrentSecond='" << concurrentSecond
+                  << "control=" << controlFilenamePassed << " aliasedOutput=" << aliasedOutputPassed
+                  << " children=" << childAResult << ',' << childBResult << " concurrentFirst='" << concurrentFirst
+                  << "' concurrentSecond='" << concurrentSecond
                   << "' manifest=" << std::filesystem::exists(concurrentManifest) << "\n"
                   << "preserved fixture: " << root << "\n";
         return 1;

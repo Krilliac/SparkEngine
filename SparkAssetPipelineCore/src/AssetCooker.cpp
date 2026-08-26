@@ -735,7 +735,13 @@ namespace Spark::AssetPipeline
             return result;
         }
         ec.clear();
-        const auto output = std::filesystem::weakly_canonical(request.outputRoot, ec);
+        const auto outputLexical = std::filesystem::absolute(request.outputRoot, ec).lexically_normal();
+        if (ec)
+        {
+            result.error = "failed to resolve output root";
+            return result;
+        }
+        const auto output = std::filesystem::weakly_canonical(outputLexical, ec);
         if (ec)
         {
             result.error = "failed to resolve output root";
@@ -771,8 +777,8 @@ namespace Spark::AssetPipeline
         const auto manifestCandidate =
             request.manifestPath.empty() ? output / "spark-cook-manifest.json" : request.manifestPath;
         const auto manifestLexical = std::filesystem::absolute(manifestCandidate, ec).lexically_normal();
-        if (ec || !IsContained(manifestLexical, output) ||
-            !ValidateOutputTarget(manifestLexical, output, result.error, "cook manifest"))
+        if (ec || !IsContained(manifestLexical, outputLexical) ||
+            !ValidateOutputTarget(manifestLexical, outputLexical, result.error, "cook manifest"))
         {
             if (result.error.empty())
                 result.error = "cook manifest escapes the output root";
