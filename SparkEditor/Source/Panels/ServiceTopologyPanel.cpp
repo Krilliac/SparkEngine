@@ -53,6 +53,9 @@ namespace SparkEditor
         // The editor can initialize before a project is opened. Refresh idle
         // launch specifications so paths follow the active project.
         ConfigureController();
+        // Keep the complete control row and all four service summaries visible
+        // the first time this operational panel is opened.
+        ImGui::SetNextWindowSize(ImVec2(860.0f, 520.0f), ImGuiCond_Appearing);
         if (BeginPanel())
         {
             ImGui::TextWrapped("Local production topology. Start area SparkServer processes before Gateway; the "

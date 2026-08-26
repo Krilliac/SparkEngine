@@ -96,7 +96,11 @@ namespace SparkEditor
 
         const std::wstring exeW = exePath.wstring();
         const std::wstring workingDirW = workingDir.wstring();
-        const BOOL ok = CreateProcessW(exeW.c_str(), cmdBuf.data(), nullptr, nullptr, FALSE, 0, nullptr,
+        // Console-subsystem helpers (daemon, collaboration, gateway, server)
+        // must not steal focus by opening Windows Terminal over the editor.
+        // CREATE_NO_WINDOW suppresses only the inherited console; a launched
+        // game can still create and show its own native rendering window.
+        const BOOL ok = CreateProcessW(exeW.c_str(), cmdBuf.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr,
                                        workingDirW.c_str(), &startup, &process);
         if (!ok)
         {

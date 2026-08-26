@@ -40,7 +40,7 @@ namespace SparkEditor
         Spark::Process::Builder builder(record.spec.executable.string());
         for (const auto& argument : record.spec.arguments)
             builder.Arg(argument);
-        auto launched = builder.CaptureStdout().MergeStderrIntoStdout().Launch();
+        auto launched = builder.CaptureStdout().MergeStderrIntoStdout().NoWindow().Launch();
         if (!launched)
         {
             record.snapshot.status = launched.error();

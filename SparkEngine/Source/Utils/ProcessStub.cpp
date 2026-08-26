@@ -50,6 +50,11 @@ namespace Spark
         m_stdinMode = PipeMode::Capture;
         return *this;
     }
+    Process::Builder& Process::Builder::NoWindow()
+    {
+        m_noWindow = true;
+        return *this;
+    }
     Process::Builder& Process::Builder::Detached()
     {
         m_detached = true;

@@ -199,6 +199,12 @@ namespace Spark
         return *this;
     }
 
+    Process::Builder& Process::Builder::NoWindow()
+    {
+        m_noWindow = true;
+        return *this;
+    }
+
     Process::Builder& Process::Builder::Detached()
     {
         m_detached = true;
@@ -274,6 +280,8 @@ namespace Spark
         // BEFORE it runs — otherwise it could spawn its own children (which
         // would escape the job) in the gap between create and assign.
         DWORD flags = CREATE_SUSPENDED;
+        if (m_noWindow)
+            flags |= CREATE_NO_WINDOW;
         if (m_detached)
             flags |= CREATE_NO_WINDOW | DETACHED_PROCESS;
 

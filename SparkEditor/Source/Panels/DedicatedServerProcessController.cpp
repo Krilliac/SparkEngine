@@ -135,7 +135,7 @@ namespace SparkEditor
             builder.WorkingDirectory(request.workingDirectory.string());
         for (const auto& argument : arguments)
             builder.Arg(argument);
-        auto launched = builder.CaptureStdout().MergeStderrIntoStdout().Launch();
+        auto launched = builder.CaptureStdout().MergeStderrIntoStdout().NoWindow().Launch();
         if (!launched)
         {
             m_snapshot = {DedicatedServerProcessState::Failed, {}, {}, launched.error()};

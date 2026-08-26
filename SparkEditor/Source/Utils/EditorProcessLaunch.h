@@ -48,9 +48,11 @@ namespace SparkEditor
      * @param workingDir Working directory for the new process (exec_audit.log /
      *                   server.log land here relative to cwd).
      *
-     * The thread handle is closed internally; the process handle is left open for
-     * the caller to poll (PollProcessExited) / terminate (TerminateEditorProcess) /
-     * eventually CloseHandle.
+     * Console-subsystem children are launched without a visible console window so
+     * editor-managed services do not steal focus. Native game/render windows are
+     * unaffected. The thread handle is closed internally; the process handle is
+     * left open for the caller to poll (PollProcessExited) / terminate
+     * (TerminateEditorProcess) / eventually CloseHandle.
      */
     ProcessLaunchResult LaunchEditorProcess(const std::filesystem::path& exePath, const std::wstring& commandLine,
                                             const std::filesystem::path& workingDir);

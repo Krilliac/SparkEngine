@@ -333,7 +333,8 @@ TEST(Process_BuilderChaining)
                        .CaptureStdout()
                        .CaptureStderr()
                        .MergeStderrIntoStdout()
-                       .CaptureStdin();
+                       .CaptureStdin()
+                       .NoWindow();
 
     // Launch will fail since "some_executable" doesn't exist, but builder is valid
     auto result = builder.Launch();

@@ -57,13 +57,17 @@ See [Templates/README.md](Templates/README.md) and [SparkTemplates](https://gith
 
 ## Editor
 
-![SparkEditor — ImGui-based visual editor with 59 dockable panels](docs/screenshots/editor-overview.png)
+![SparkEditor — Veyra Highlands region-map workflow](docs/screenshots/editor-region-map-veyra-highlands.jpg)
+
+SparkEditor provides 65 dockable panels spanning scene construction, asset and shader workflows, profiling,
+multiplayer operations, collaboration, dedicated servers, world streaming, and live region design.
 
 <details>
 <summary>More screenshots</summary>
 
 | Screenshot | Description |
 |---|---|
+| ![Editor overview](docs/screenshots/editor-overview.png) | Docked scene, hierarchy, inspector, console, and asset-browser workspace |
 | ![Welcome](docs/screenshots/editor-welcome.png) | Welcome screen and project setup |
 | ![Windows](docs/screenshots/editor-window-menu.png) | Panel layout — Scene, Inspector, Asset Browser, Shader Graph, Sequencer |
 | ![GameObject](docs/screenshots/editor-gameobject-menu.png) | Component editing and drag-drop |

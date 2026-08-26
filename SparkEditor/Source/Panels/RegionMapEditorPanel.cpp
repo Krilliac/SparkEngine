@@ -280,6 +280,11 @@ namespace SparkEditor
         if (!IsVisible())
             return;
 
+        // This tool needs enough room for both the continent canvas and the
+        // 360 px inspector pane. Without a first-use size ImGui can create a
+        // floating window at its minimum content height, leaving the map
+        // effectively invisible until the user finds the resize handle.
+        ImGui::SetNextWindowSize(ImVec2(1180.0f, 720.0f), ImGuiCond_Appearing);
         if (BeginPanel())
         {
             RenderToolbar();

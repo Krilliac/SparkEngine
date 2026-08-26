@@ -82,6 +82,10 @@ namespace Spark
             /// Enable writing to the child's stdin via WriteStdin()/CloseStdin().
             Builder& CaptureStdin();
 
+            /// Suppress a platform console window for the child. On Windows this
+            /// uses CREATE_NO_WINDOW; on other platforms it is a no-op.
+            Builder& NoWindow();
+
             /// Launch as a detached (fire-and-forget) process. The Process object
             /// will not own or track the child after launch.
             Builder& Detached();
@@ -98,6 +102,7 @@ namespace Spark
             PipeMode m_stdoutMode = PipeMode::None;
             PipeMode m_stderrMode = PipeMode::None;
             bool m_mergeStderrIntoStdout = false;
+            bool m_noWindow = false;
             bool m_detached = false;
         };
 

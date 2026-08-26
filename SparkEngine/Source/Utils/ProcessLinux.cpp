@@ -177,6 +177,12 @@ namespace Spark
         return *this;
     }
 
+    Process::Builder& Process::Builder::NoWindow()
+    {
+        m_noWindow = true;
+        return *this;
+    }
+
     Process::Builder& Process::Builder::Detached()
     {
         m_detached = true;
