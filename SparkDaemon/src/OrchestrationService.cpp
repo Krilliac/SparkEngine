@@ -48,7 +48,34 @@ namespace Spark::Daemon
                    state == SupervisedProcessState::Draining || state == SupervisedProcessState::Stopping;
         }
 
+#if !defined(_WIN32)
+        void WriteChildError(int descriptor, int errorCode) noexcept
+        {
+            const char* cursor = reinterpret_cast<const char*>(&errorCode);
+            size_t remaining = sizeof(errorCode);
+            while (remaining > 0)
+            {
+                const ssize_t written = ::write(descriptor, cursor, remaining);
+                if (written > 0)
+                {
+                    cursor += written;
+                    remaining -= static_cast<size_t>(written);
+                    continue;
+                }
+                if (written < 0 && errno == EINTR)
+                    continue;
+                break;
+            }
+        }
+#endif
+
 #if defined(_WIN32)
+        std::filesystem::path Utf8Path(std::string_view value)
+        {
+            const auto* bytes = reinterpret_cast<const char8_t*>(value.data());
+            return std::filesystem::path{std::u8string{bytes, value.size()}};
+        }
+
         std::wstring Utf8ToWide(std::string_view value)
         {
             if (value.empty())
@@ -532,7 +559,7 @@ namespace Spark::Daemon
         }
         std::error_code pathError;
 #if defined(_WIN32)
-        auto executable = std::filesystem::canonical(std::filesystem::u8path(definition.executable), pathError);
+        auto executable = std::filesystem::canonical(Utf8Path(definition.executable), pathError);
 #else
         auto executable = std::filesystem::canonical(definition.executable, pathError);
 #endif
@@ -551,13 +578,12 @@ namespace Spark::Daemon
             return false;
         }
 #endif
-        auto working = definition.workingDirectory.empty()
-                           ? executable.parent_path()
-                           : std::filesystem::canonical(
+        auto working = definition.workingDirectory.empty() ? executable.parent_path()
+                                                           : std::filesystem::canonical(
 #if defined(_WIN32)
-                                 std::filesystem::u8path(definition.workingDirectory), pathError);
+                                                                 Utf8Path(definition.workingDirectory), pathError);
 #else
-                                 definition.workingDirectory, pathError);
+                                                                 definition.workingDirectory, pathError);
 #endif
         if (pathError || !std::filesystem::is_directory(working, pathError) || !IsUnderAllowedRoot(working))
         {
@@ -594,8 +620,8 @@ namespace Spark::Daemon
     bool OrchestrationService::LaunchLocked(Record& record, std::string& error)
     {
 #if defined(_WIN32)
-        const auto executable = std::filesystem::u8path(record.definition.executable).wstring();
-        const auto workingDirectory = std::filesystem::u8path(record.definition.workingDirectory).wstring();
+        const auto executable = Utf8Path(record.definition.executable).wstring();
+        const auto workingDirectory = Utf8Path(record.definition.workingDirectory).wstring();
         std::wstring commandLine = QuoteWindowsArgument(executable);
         for (const auto& argument : record.definition.arguments)
         {
@@ -719,12 +745,12 @@ namespace Spark::Daemon
             if (::chdir(record.definition.workingDirectory.c_str()) != 0)
             {
                 int childError = errno;
-                (void)::write(errorPipe[1], &childError, sizeof(childError));
+                WriteChildError(errorPipe[1], childError);
                 _exit(126);
             }
             ::execv(record.definition.executable.c_str(), argv.data());
             int childError = errno;
-            (void)::write(errorPipe[1], &childError, sizeof(childError));
+            WriteChildError(errorPipe[1], childError);
             _exit(127);
         }
 

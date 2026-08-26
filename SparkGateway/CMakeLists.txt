@@ -10,8 +10,6 @@ if(NOT ENABLE_NETWORKING)
 endif()
 
 add_library(SparkGatewaySecurity STATIC
-    src/GatewayAreaControl.cpp
-    src/GatewayAreaControl.h
     src/GatewaySecurity.cpp
     src/GatewaySecurity.h
 )
@@ -23,6 +21,8 @@ if(WIN32)
 endif()
 
 add_library(SparkGatewayCore STATIC
+    src/GatewayAreaControl.cpp
+    src/GatewayAreaControl.h
     src/GatewayApplication.cpp
     src/GatewayApplication.h
     src/GatewayCoordinator.cpp
