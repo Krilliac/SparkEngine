@@ -122,17 +122,41 @@ namespace SparkEditor
         HANDLE job = CreateJobObjectW(nullptr, nullptr);
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
         limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        if (!job || !SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)) ||
-            !AssignProcessToJobObject(job, process.hProcess))
+        DWORD containmentError = ERROR_SUCCESS;
+        bool ownsJob = false;
+        if (!job)
+            containmentError = GetLastError();
+        else if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)))
+            containmentError = GetLastError();
+        else if (!AssignProcessToJobObject(job, process.hProcess))
+            containmentError = GetLastError();
+        else
+            ownsJob = true;
+
+        if (!ownsJob)
         {
-            TerminateProcess(process.hProcess, 1);
-            CloseHandle(process.hThread);
-            CloseHandle(process.hProcess);
-            CloseHandle(readPipe);
+            BOOL hostInJob = FALSE;
+            BOOL childInJob = FALSE;
+            const bool inheritedOuterJob = IsProcessInJob(GetCurrentProcess(), nullptr, &hostInJob) && hostInJob &&
+                                           IsProcessInJob(process.hProcess, nullptr, &childInJob) && childInJob;
+            if (!inheritedOuterJob)
+            {
+                TerminateProcess(process.hProcess, 1);
+                CloseHandle(process.hThread);
+                CloseHandle(process.hProcess);
+                CloseHandle(readPipe);
+                if (job)
+                    CloseHandle(job);
+                PushLog(BuildLogLine::Level::Error, "Failed to contain subprocess tree in a Windows job");
+                return -1;
+            }
+
             if (job)
                 CloseHandle(job);
-            PushLog(BuildLogLine::Level::Error, "Failed to contain subprocess tree in a Windows job");
-            return -1;
+            job = nullptr;
+            PushLog(BuildLogLine::Level::Warning,
+                    "Subprocess inherited the host Windows job; nested job assignment was unavailable (Win32 " +
+                        std::to_string(containmentError) + "). Cancellation will terminate the immediate child.");
         }
 
         {
@@ -142,7 +166,12 @@ namespace SparkEditor
         }
         ResumeThread(process.hThread);
         if (m_cancelRequested.load())
-            TerminateJobObject(job, 1);
+        {
+            if (job)
+                TerminateJobObject(job, 1);
+            else
+                TerminateProcess(process.hProcess, 1);
+        }
 
         std::array<char, 512> buffer{};
         std::string lineAccum;
@@ -179,7 +208,8 @@ namespace SparkEditor
 
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
-        CloseHandle(job);
+        if (job)
+            CloseHandle(job);
         CloseHandle(readPipe);
 
         return static_cast<int>(exitCode);

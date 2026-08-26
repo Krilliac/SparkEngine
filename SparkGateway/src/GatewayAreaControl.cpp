@@ -228,17 +228,6 @@ namespace Spark::Gateway
             return queried && ::EqualSid(clientUser->User.Sid, serverUser->User.Sid) != FALSE;
         }
 
-        void WaitForPeerClose(HANDLE pipe, const std::atomic<bool>& stop)
-        {
-            const auto deadline = std::chrono::steady_clock::now() + LocalIoTimeout;
-            while (!stop.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline)
-            {
-                DWORD available = 0;
-                if (!::PeekNamedPipe(pipe, nullptr, 0, nullptr, &available, nullptr))
-                    return;
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
-            }
-        }
 #else
         bool SameUserPeer(int socket)
         {
@@ -782,8 +771,12 @@ namespace Spark::Gateway
                     responseSent = SendFrameUntil(pipe, Daemon::ServiceId::Orchestration,
                                                   header.messageType + ResponseFlag, response, m_stop);
                 }
+                // Complete the documented reply lifecycle before recycling
+                // the single pipe instance. PeekNamedPipe does not reliably
+                // observe peer closure under Wine and can hold the listener
+                // unavailable until the full I/O timeout expires.
                 if (responseSent)
-                    WaitForPeerClose(pipe, m_stop);
+                    (void)::FlushFileBuffers(pipe);
             }
             DisconnectNamedPipe(pipe);
         }
@@ -1119,7 +1112,7 @@ namespace Spark::Gateway
                     responseSent = SendFrameUntil(pipe, Daemon::ServiceId::Orchestration, IngressResponse,
                                                   EncodeRoute(route), m_stop);
                 if (responseSent)
-                    WaitForPeerClose(pipe, m_stop);
+                    (void)::FlushFileBuffers(pipe);
             }
             DisconnectNamedPipe(pipe);
         }
