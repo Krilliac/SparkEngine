@@ -21,6 +21,60 @@ log_success() { echo -e "${GREEN}[THIRDPARTY-MANIFEST]${NC} $1"; }
 log_warn()    { echo -e "${YELLOW}[THIRDPARTY-MANIFEST]${NC} $1"; }
 log_error()   { echo -e "${RED}[THIRDPARTY-MANIFEST]${NC} $1"; }
 
+is_dependabot_pull_request() {
+    [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] || return 1
+    [ "${GITHUB_ACTOR:-}" = "dependabot[bot]" ] || return 1
+    [ -n "${GITHUB_EVENT_PATH:-}" ] || return 1
+    [ -f "$GITHUB_EVENT_PATH" ] || return 1
+
+    node - "$GITHUB_EVENT_PATH" "${GITHUB_REPOSITORY:-}" <<'JS'
+const fs = require("fs");
+
+const event = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const pullRequest = event.pull_request || {};
+const repository = event.repository || {};
+const headRepository = (pullRequest.head || {}).repo || {};
+const expectedRepository = process.argv[3];
+
+const valid =
+    (pullRequest.user || {}).login === "dependabot[bot]" &&
+    repository.full_name &&
+    headRepository.full_name === repository.full_name &&
+    (!expectedRepository || repository.full_name === expectedRepository);
+process.exit(valid ? 0 : 1);
+JS
+}
+
+is_pointer_only_submodule_diff() {
+    local base_ref="$1"
+    local raw_diff=""
+    local line=""
+    local path=""
+    local pointer_count=0
+    local pointer_pattern=$'^:160000 160000 [0-9a-f]{40} [0-9a-f]{40} M\t(.+)$'
+
+    raw_diff="$(git diff --raw --no-abbrev --no-renames "$base_ref"...HEAD --)"
+    [ -n "$raw_diff" ] || return 1
+
+    while IFS= read -r line; do
+        # Only an existing mode-160000 entry moving to another mode-160000
+        # entry is accepted. Additions, removals, renames, ordinary files, and
+        # mixed diffs all fall back to the normal manifest-update requirement.
+        if [[ ! "$line" =~ $pointer_pattern ]]; then
+            return 1
+        fi
+        path="${BASH_REMATCH[1]}"
+        [[ "$path" == ThirdParty/* ]] || return 1
+        git config --file .gitmodules --get-regexp '^submodule\..*\.path$' \
+            | awk '{print $2}' \
+            | grep -Fxq "$path" || return 1
+        grep -Fq "|$path|" "$MANIFEST" || return 1
+        pointer_count=$((pointer_count + 1))
+    done <<< "$raw_diff"
+
+    [ "$pointer_count" -gt 0 ]
+}
+
 if [ ! -f "$MANIFEST" ]; then
     log_error "Missing manifest: $MANIFEST"
     exit 1
@@ -85,6 +139,13 @@ if "${WIRING_DIFF_CMD[@]}" \
 fi
 
 if { [ "$thirdparty_changed" = true ] || [ "$wiring_changed" = true ]; } && [ "$manifest_changed" = false ]; then
+    if [ -n "${BASE_REF:-}" ] \
+        && is_dependabot_pull_request \
+        && is_pointer_only_submodule_diff "$BASE_REF"; then
+        log_success "Verified Dependabot pointer-only submodule update against repository gitlinks"
+        exit 0
+    fi
+
     log_error "Dependency paths/URLs/versions changed but $MANIFEST was not updated."
     log_warn "Changed files:"
     echo "$CHANGED_FILES" | sed 's/^/  - /'

@@ -1052,15 +1052,21 @@ jobs:
         if: always()
         run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
       - name: Test
+        id: coverage-tests
+        continue-on-error: true
         env:
           SPARK_TEST_EXCLUDE: "LoadTest_"
-        # Deliberately tolerant: test failures should not abort the
-        # coverage report generation. The CI Error Report still picks
-        # them up via the extract-errors step below.
         run: |
-          cd build && ./bin/SparkTests --verbose 2>&1 | tee ../test-output.log || true
+          set +e
+          set -o pipefail
+          cd build && ./bin/SparkTests --verbose 2>&1 | tee ../test-output.log
+          test_exit=${PIPESTATUS[0]}
           tail -5 ../test-output.log
+          exit "$test_exit"
       - name: Generate coverage
+        id: generate-coverage
+        if: always()
+        continue-on-error: true
         # lcov is noisy on warnings and sometimes emits non-zero exit
         # codes even with --ignore-errors. Capture each command's exit
         # status explicitly so we can continue into the per-subsystem
@@ -1093,19 +1099,39 @@ jobs:
             exit 1
           fi
       - name: Per-subsystem coverage analysis
+        id: subsystem-coverage
+        if: always()
+        continue-on-error: true
         run: |
+          set +e
           chmod +x scripts/coverage-report.sh
-          scripts/coverage-report.sh coverage.info --json coverage.json 2>&1 | tee subsystem-coverage.txt || true
+          scripts/coverage-report.sh coverage.info --json coverage.json 2>&1 | tee subsystem-coverage.txt
+          threshold_exit=${PIPESTATUS[0]}
+          if [ "$threshold_exit" -ne 0 ]; then
+            echo "coverage: error: Per-subsystem coverage analysis or threshold enforcement failed" | tee -a subsystem-coverage.txt
+          fi
+          exit "$threshold_exit"
       - name: Extract error summary
-        if: failure()
+        if: >-
+          always() &&
+          (failure() ||
+           steps.coverage-tests.outcome == 'failure' ||
+           steps.generate-coverage.outcome == 'failure' ||
+           steps.subsystem-coverage.outcome == 'failure')
         run: |
           .github/scripts/extract-errors.sh \
             "coverage" \
             error-summary.json \
-            cmake-build.log test-output.log
+            cmake-build.log test-output.log lcov-capture.log lcov-remove.log \
+            coverage-summary.txt subsystem-coverage.txt
 
       - name: Upload error summary
-        if: failure()
+        if: >-
+          always() &&
+          (failure() ||
+           steps.coverage-tests.outcome == 'failure' ||
+           steps.generate-coverage.outcome == 'failure' ||
+           steps.subsystem-coverage.outcome == 'failure')
         uses: actions/upload-artifact@v7.0.1
         with:
           name: ci-errors-coverage
@@ -1113,7 +1139,7 @@ jobs:
           retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
       - name: Post coverage summary to PR
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v9
         with:
           script: |
@@ -1150,6 +1176,7 @@ jobs:
               console.log('Could not post coverage:', e.message);
             }
       - name: Upload coverage
+        if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: coverage-report
@@ -1158,6 +1185,29 @@ jobs:
             coverage.json
             subsystem-coverage.txt
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: warn
+
+      - name: Enforce coverage test and threshold results
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.coverage-tests.outcome }}
+          GENERATE_OUTCOME: ${{ steps.generate-coverage.outcome }}
+          THRESHOLD_OUTCOME: ${{ steps.subsystem-coverage.outcome }}
+        run: |
+          failed=0
+          if [ "$TEST_OUTCOME" = "failure" ]; then
+            echo "::error::SparkTests failed during the coverage run"
+            failed=1
+          fi
+          if [ "$GENERATE_OUTCOME" = "failure" ]; then
+            echo "::error::Coverage generation failed"
+            failed=1
+          fi
+          if [ "$THRESHOLD_OUTCOME" = "failure" ]; then
+            echo "::error::One or more coverage thresholds failed"
+            failed=1
+          fi
+          exit "$failed"
 
   # ===========================================================================
   # Static Analysis — Clang-Tidy
@@ -1289,6 +1339,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
+      - name: Test CI error reporter
+        run: node .github/scripts/test-report-ci-errors.js
+
       - name: Download all error summaries
         uses: actions/download-artifact@v8.0.1
         with:
@@ -1301,6 +1354,7 @@ jobs:
         uses: actions/github-script@v9
         env:
           ARTIFACT_DIR: ci-error-summaries
+          NEEDS_JSON: ${{ toJSON(needs) }}
         with:
           script: |
             const report = require('./.github/scripts/report-ci-errors.js');

@@ -2,16 +2,75 @@
 # Format:
 #   "name|source|version_or_commit|license|local_path|required_files_csv|feature_macro|fallback_or_stub_path|severity"
 # severity: ERROR (configure-time fatal), WARN (configure-time warning)
-# Last sync: 2026-08-23 (Dependabot integration: Dear ImGui docking 5098ce161 -> fd13a1e892, superseding the master-only 01380c579 proposal with the official docking-branch head; reconciled previously advanced miniz 3.1.2 and SDL2 branch pins with this manifest. Previously — hardened tinyexr v1.0.13 allocation failure handling; replaced the tinyexr placeholder with the official v1.0.13 single-header release and wired its existing miniz dependency; EnTT 1333fa531 -> 85c6bba014 and SDL2 b8b3f5ef2 -> a2e7c76bda merged. Previously — 2026-07-05 (Dependabot submodule bumps merged: Dear ImGui docking 148bd34a7 -> 5098ce161, SDL2 859844eae -> b8b3f5ef2 (SDL2 line, release-2.32.0-218), miniz 4b9fcf1df -> e78dfd22d (3.1.1-7). Pointer-only updates, no CMake wiring changes. Also actions/cache v5->v6 and actions/checkout v6->v7 in workflows. Previously — 2026-04-20 (SDL2 branch pin + CMake split: `.gitmodules` adds `branch = SDL2` hint for libsdl-org/SDL so Dependabot stays on the SDL2 line rather than auto-bumping to SDL3, and CMakeLists.txt SDL2 config block now splits Linux/macOS options (X11 off on Apple, Objective-C/Objective-C++ enabled via project() so SDL2's cocoa .m sources compile) and copies SDL2's public headers at configure time to avoid a build-order race with the `sdl_headers_copy` target. Submodule pointer unchanged (859844eae, SDL 2.30.0). Previously — 2026-04-16 (SparkDaemon subproject added: `add_subdirectory(SparkDaemon)` in top-level CMakeLists.txt introduces the new first-party SparkDaemon executable + `SparkEngine/Source/Utils/DaemonLifecycle*` engine wiring. No third-party wiring, no vendored deps, no submodule pointer changes — the manifest-sync regex trips on `CMAKE_SOURCE_DIR` ("_DIR" token) inside the new subproject gate. Previously — 2026-04-12 Platform split: CMakeLists.txt SPARK_ENGINE_ENTRY_POINT changed to SPARK_ENGINE_ENTRY_POINTS list for SparkEngine.cpp/Windows/Linux three-file split — no third-party wiring, no vendored dependency changes.)
+# Git submodules use the immutable gitlink in HEAD as their canonical lock. The
+# helper below renders that exact 40-character revision into the manifest at
+# configure/check time, avoiding a second SHA copy that Dependabot cannot edit.
+# Source archives without Git metadata retain an explicit descriptive marker.
+# Last sync: 2026-08-26 (made repository gitlinks canonical for submodule pins;
+# Dependabot pointer-only PRs can now be validated without leaving stale SHAs).
+
+function(_spark_manifest_gitlink_revision dep_path out_var)
+    get_filename_component(_manifest_root "${CMAKE_CURRENT_LIST_DIR}/.." REALPATH)
+    execute_process(
+        COMMAND git rev-parse --show-toplevel
+        WORKING_DIRECTORY "${_manifest_root}"
+        OUTPUT_VARIABLE _git_root
+        RESULT_VARIABLE _git_root_rc
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+
+    if(_git_root_rc EQUAL 0)
+        get_filename_component(_git_root "${_git_root}" REALPATH)
+    endif()
+
+    if(_git_root_rc EQUAL 0 AND _git_root STREQUAL _manifest_root)
+        execute_process(
+            COMMAND git ls-tree HEAD -- "${dep_path}"
+            WORKING_DIRECTORY "${_manifest_root}"
+            OUTPUT_VARIABLE _gitlink_record
+            RESULT_VARIABLE _gitlink_rc
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+    else()
+        set(_gitlink_record "")
+        set(_gitlink_rc 1)
+    endif()
+
+    if(_gitlink_rc EQUAL 0 AND NOT _gitlink_record STREQUAL "")
+        if(NOT _gitlink_record MATCHES "^160000 commit ([0-9a-fA-F]+)[\t ]")
+            message(FATAL_ERROR
+                "Third-party submodule '${dep_path}' is not a mode-160000 gitlink in HEAD: ${_gitlink_record}")
+        endif()
+        set(_gitlink_revision "${CMAKE_MATCH_1}")
+        string(LENGTH "${_gitlink_revision}" _gitlink_revision_length)
+        if(NOT _gitlink_revision_length EQUAL 40)
+            message(FATAL_ERROR
+                "Third-party submodule '${dep_path}' has an invalid gitlink revision: ${_gitlink_revision}")
+        endif()
+    else()
+        set(_gitlink_revision "gitlink (exact revision recorded by repository tree)")
+    endif()
+
+    set(${out_var} "${_gitlink_revision}" PARENT_SCOPE)
+endfunction()
+
+_spark_manifest_gitlink_revision("ThirdParty/Utils/miniz" _spark_miniz_revision)
+_spark_manifest_gitlink_revision("ThirdParty/ECS/entt" _spark_entt_revision)
+_spark_manifest_gitlink_revision("ThirdParty/UI/imgui" _spark_imgui_revision)
+_spark_manifest_gitlink_revision("ThirdParty/Scripting/angelscript-mirror" _spark_angelscript_revision)
+_spark_manifest_gitlink_revision("ThirdParty/AI/recastnavigation" _spark_recast_revision)
+_spark_manifest_gitlink_revision("ThirdParty/SDL2" _spark_sdl2_revision)
 
 set(SPARK_THIRDPARTY_AUDIT_ENTRIES
     "Jolt Physics|https://github.com/jrouwe/JoltPhysics|v5.5.1 (vendored snapshot)|MIT|ThirdParty/Physics/JoltPhysics|Jolt/Jolt.h,Build/CMakeLists.txt|SPARK_JOLT_PHYSICS_AVAILABLE|SparkEngine/Source/Physics/PhysicsSystemStub.cpp|ERROR"
-    "miniz|https://github.com/richgel999/miniz.git|77d0dce8627735138c51770d1799a1ef48f2117d|MIT|ThirdParty/Utils/miniz|miniz.c,miniz.h|SPARK_HAS_MINIZ (path-gated in CMake)|SparkEngine/Source/Utils/CrashHandlerStub.cpp|ERROR"
-    "EnTT|https://github.com/skypjack/entt.git|85c6bba014049b5de8fad49d25424df2f1f6a8c1|MIT|ThirdParty/ECS/entt|single_include/entt/entt.hpp|SPARK_HAS_ENTT (path-gated in CMake)|ThirdParty/ECS/entt_stub|WARN"
-    "Dear ImGui|https://github.com/ocornut/imgui.git (docking branch)|fd13a1e8923a0a7077b404fc36fd063b25a0c0b5|MIT|ThirdParty/UI/imgui|imgui.h,imgui.cpp|SPARK_HAS_IMGUI (path-gated in CMake)|SparkEditor disabled when missing|WARN"
-    "AngelScript|https://github.com/codecat/angelscript-mirror.git|c81df254037524b18cd41a57805cfec76acd05bf|zlib|ThirdParty/Scripting/angelscript-mirror|sdk/angelscript/include|SPARK_HAS_ANGELSCRIPT (path-gated in CMake)|SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp (stub path)|WARN"
-    "RecastNavigation|https://github.com/recastnavigation/recastnavigation.git|9f4ce64458dfae86e1239c525ddc219c4e9e06f1|zlib|ThirdParty/AI/recastnavigation|Recast/Source/Recast.cpp,Detour/Source/DetourNavMesh.cpp|SPARK_RECAST_AVAILABLE|SparkEngine/Source/Engine/AI/RecastDetourBackend.cpp (internal fallback backend)|WARN"
-    "SDL2|https://github.com/libsdl-org/SDL.git|5882a4f13d3bf374d2345280c679173f4ff324da|zlib|ThirdParty/SDL2|CMakeLists.txt,include/SDL.h|SPARK_HAS_SDL2 (path/system-package-gated in CMake)|Headless mode (no window/input backend)|WARN"
+    "miniz|https://github.com/richgel999/miniz.git|${_spark_miniz_revision}|MIT|ThirdParty/Utils/miniz|miniz.c,miniz.h|SPARK_HAS_MINIZ (path-gated in CMake)|SparkEngine/Source/Utils/CrashHandlerStub.cpp|ERROR"
+    "EnTT|https://github.com/skypjack/entt.git|${_spark_entt_revision}|MIT|ThirdParty/ECS/entt|single_include/entt/entt.hpp|SPARK_HAS_ENTT (path-gated in CMake)|ThirdParty/ECS/entt_stub|WARN"
+    "Dear ImGui|https://github.com/ocornut/imgui.git (docking branch)|${_spark_imgui_revision}|MIT|ThirdParty/UI/imgui|imgui.h,imgui.cpp|SPARK_HAS_IMGUI (path-gated in CMake)|SparkEditor disabled when missing|WARN"
+    "AngelScript|https://github.com/codecat/angelscript-mirror.git|${_spark_angelscript_revision}|zlib|ThirdParty/Scripting/angelscript-mirror|sdk/angelscript/include|SPARK_HAS_ANGELSCRIPT (path-gated in CMake)|SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp (stub path)|WARN"
+    "RecastNavigation|https://github.com/recastnavigation/recastnavigation.git|${_spark_recast_revision}|zlib|ThirdParty/AI/recastnavigation|Recast/Source/Recast.cpp,Detour/Source/DetourNavMesh.cpp|SPARK_RECAST_AVAILABLE|SparkEngine/Source/Engine/AI/RecastDetourBackend.cpp (internal fallback backend)|WARN"
+    "SDL2|https://github.com/libsdl-org/SDL.git|${_spark_sdl2_revision}|zlib|ThirdParty/SDL2|CMakeLists.txt,include/SDL.h|SPARK_HAS_SDL2 (path/system-package-gated in CMake)|Headless mode (no window/input backend)|WARN"
     "tinyobjloader|https://github.com/tinyobjloader/tinyobjloader|v2.0.0 (vendored header snapshot)|MIT|ThirdParty/Utils/tinyobjloader|include/tiny_obj_loader.h|SPARK_HAS_TINYOBJLOADER (target-gated in CMake)|OBJ import disabled when missing|WARN"
     "stb_image|https://github.com/nothings/stb|snapshot (stb_image.h blob edff2054dfc231fe42c34bf620c913a90842c5c8)|Public Domain / MIT|ThirdParty/Utils/stb|stb_image.h,stb_image_write.h,stb_impl.cpp|SPARK_HAS_STB_IMAGE|SparkEngine/Source/Graphics/TextureSystem.cpp (DDS-only fallback)|WARN"
     "cgltf|https://github.com/jkuhlmann/cgltf|v1.15 (commit 360db1a95480fe102ae9c69b27c5d101167ff5ba, whitespace-normalized single-header SHA-256 8b778700e346af6f68b064110df0ff2a68c73ccd353ed84dec0509882a053ecb)|MIT|ThirdParty/Utils/cgltf|cgltf.h,cgltf_impl.cpp,LICENSE|SPARK_HAS_CGLTF|glTF import disabled when unavailable|WARN"

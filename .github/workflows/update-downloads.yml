@@ -34,19 +34,138 @@ jobs:
         NIGHTLY_BADGE=".github/badges/nightly-downloads.json"
         STABLE_BADGE=".github/badges/stable-downloads.json"
 
-        # Fetch the total download count for a release endpoint. Any failure
-        # (missing release, network error, non-numeric output) collapses to 0
-        # so that corrupt data can never leak into the badge JSON. We redirect
-        # both stderr AND stdout through the validator so a 404 body cannot
-        # be captured as the "count".
+        API_TEMP="$(mktemp -d)"
+        trap 'rm -rf "$API_TEMP"' EXIT
+
+        # GET one GitHub API endpoint with bounded retries. The response status
+        # is returned through the named variable; diagnostics go to stderr so
+        # they can never be mistaken for a download count.
+        api_get() {
+          local endpoint="$1"
+          local response_body="$2"
+          local response_headers="$3"
+          local status_variable="$4"
+          local attempt http_status curl_status retry api_message
+
+          for attempt in 1 2 3 4 5; do
+            : > "$response_body"
+            : > "$response_headers"
+            if http_status="$(curl \
+              --silent \
+              --show-error \
+              --location \
+              --connect-timeout 10 \
+              --max-time 60 \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --dump-header "$response_headers" \
+              --output "$response_body" \
+              --write-out '%{http_code}' \
+              "https://api.github.com/repos/$REPO/$endpoint")"; then
+              curl_status=0
+            else
+              curl_status=$?
+            fi
+
+            if test "$curl_status" -ne 0; then
+              if test "$attempt" -eq 5; then
+                echo "GitHub API request failed after $attempt attempts: $endpoint" >&2
+                return 1
+              fi
+              echo "GitHub API network failure for $endpoint; retrying (attempt $attempt/5)." >&2
+              sleep "$((attempt * 2))"
+              continue
+            fi
+
+            case "$http_status" in
+              200|404)
+                printf -v "$status_variable" '%s' "$http_status"
+                return 0
+                ;;
+              408|425|429|500|502|503|504)
+                retry=true
+                ;;
+              403)
+                # GitHub reports primary/secondary rate limits as 403. Other
+                # authorization failures are permanent and should fail now.
+                if jq -er '.message // ""' "$response_body" 2>/dev/null \
+                    | grep -Eqi 'rate limit|secondary rate|abuse detection'; then
+                  retry=true
+                else
+                  retry=false
+                fi
+                ;;
+              *)
+                retry=false
+                ;;
+            esac
+
+            if test "$retry" = true && test "$attempt" -lt 5; then
+              echo "GitHub API returned transient HTTP $http_status for $endpoint; retrying (attempt $attempt/5)." >&2
+              sleep "$((attempt * 2))"
+              continue
+            fi
+
+            api_message="$(jq -r '.message // empty' "$response_body" 2>/dev/null || true)"
+            echo "GitHub API request failed for $endpoint (HTTP $http_status${api_message:+: $api_message})." >&2
+            return 1
+          done
+        }
+
+        # A private/inaccessible repository can also produce HTTP 404. Verify
+        # repository access first so a later release 404 is genuinely "missing"
+        # rather than an authentication error disguised as an empty release.
+        REPO_BODY="$API_TEMP/repository.json"
+        REPO_HEADERS="$API_TEMP/repository.headers"
+        REPO_STATUS=""
+        api_get "" "$REPO_BODY" "$REPO_HEADERS" REPO_STATUS
+        if test "$REPO_STATUS" != 200; then
+          echo "Cannot verify GitHub API access to $REPO (HTTP $REPO_STATUS); preserving existing badges." >&2
+          exit 1
+        fi
+
+        # Fetch the total count for a release endpoint. Only a verified 404
+        # means the release does not exist and may legitimately publish zero.
+        # Every transport, auth, rate-limit, server, or schema error fails the
+        # job before either existing badge file is replaced.
         fetch_downloads() {
-          endpoint="$1"
-          raw=$(gh api "repos/$REPO/$endpoint" \
-            --jq '[.assets[].download_count] | add // 0' 2>/dev/null) || raw=""
-          case "$raw" in
-            ''|*[!0-9]*) printf '0' ;;
-            *)           printf '%s' "$raw" ;;
+          local endpoint="$1"
+          local label="$2"
+          local output_variable="$3"
+          local body="$API_TEMP/$label.json"
+          local headers="$API_TEMP/$label.headers"
+          local status=""
+          local count
+
+          api_get "$endpoint" "$body" "$headers" status
+          if test "$status" = 404; then
+            echo "$label release is absent (HTTP 404); using a genuine zero." >&2
+            printf -v "$output_variable" '0'
+            return 0
+          fi
+
+          if ! count="$(jq -er '
+              if type != "object" or (.assets | type) != "array" then
+                error("release response has no assets array")
+              elif all(.assets[]; ((.download_count | type) == "number") and
+                                    .download_count >= 0 and
+                                    (.download_count | floor) == .download_count) then
+                ([.assets[].download_count] | add // 0)
+              else
+                error("release response contains an invalid download_count")
+              end
+            ' "$body")"; then
+            echo "GitHub API returned an invalid $label release payload; preserving existing badges." >&2
+            return 1
+          fi
+          case "$count" in
+            ''|*[!0-9]*)
+              echo "GitHub API returned a non-integer $label count; preserving existing badges." >&2
+              return 1
+              ;;
           esac
+          printf -v "$output_variable" '%s' "$count"
         }
 
         # Format an integer with thousands separators. Falls back to the raw
@@ -66,19 +185,28 @@ jobs:
             > "$1"
         }
 
-        NIGHTLY_DL=$(fetch_downloads "releases/tags/nightly")
+        NIGHTLY_DL=""
+        STABLE_DL=""
+        fetch_downloads "releases/tags/nightly" "nightly" NIGHTLY_DL
+        fetch_downloads "releases/latest" "stable" STABLE_DL
+
         NIGHTLY_FMT=$(format_count "$NIGHTLY_DL")
         echo "Nightly downloads: $NIGHTLY_DL"
-        write_badge "$NIGHTLY_BADGE" "nightly downloads" "$NIGHTLY_FMT" "brightgreen"
-
-        STABLE_DL=$(fetch_downloads "releases/latest")
         STABLE_FMT=$(format_count "$STABLE_DL")
         echo "Stable downloads: $STABLE_DL"
-        write_badge "$STABLE_BADGE" "release downloads" "$STABLE_FMT" "blue"
+
+        # Generate both replacements in temporary files. If either fetch or
+        # validation fails, the checked-in badge values remain untouched.
+        NIGHTLY_CANDIDATE="$API_TEMP/nightly-downloads.json"
+        STABLE_CANDIDATE="$API_TEMP/stable-downloads.json"
+        write_badge "$NIGHTLY_CANDIDATE" "nightly downloads" "$NIGHTLY_FMT" "brightgreen"
+        write_badge "$STABLE_CANDIDATE" "release downloads" "$STABLE_FMT" "blue"
 
         # Sanity-check: both badge files must parse as JSON before we commit.
-        jq empty "$NIGHTLY_BADGE" "$STABLE_BADGE" \
+        jq empty "$NIGHTLY_CANDIDATE" "$STABLE_CANDIDATE" \
           || { echo "Generated badge JSON is invalid; aborting." >&2; exit 1; }
+        mv "$NIGHTLY_CANDIDATE" "$NIGHTLY_BADGE"
+        mv "$STABLE_CANDIDATE" "$STABLE_BADGE"
 
         # Only the run that still owns the exact Working head may advance it.
         REMOTE_HEAD="$(git ls-remote --heads origin refs/heads/Working | awk '{print $1}')"

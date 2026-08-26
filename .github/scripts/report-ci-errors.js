@@ -26,6 +26,23 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
     const artifactDir = process.env.ARTIFACT_DIR || 'ci-error-summaries';
     const jobResults = [];
 
+    // Artifact publication is best-effort and cancelled jobs cannot publish at
+    // all, so the workflow's `needs` context is the authoritative job-result
+    // source. Fail closed if that hand-off is malformed: unavailable status
+    // must never be presented as "all builds passing".
+    let neededJobs = {};
+    let needsParseError = '';
+    try {
+        neededJobs = JSON.parse(process.env.NEEDS_JSON || '{}');
+        if (!neededJobs || Array.isArray(neededJobs) || typeof neededJobs !== 'object') {
+            throw new Error('expected a JSON object');
+        }
+    } catch (error) {
+        needsParseError = `Could not parse required job results: ${error.message}`;
+        core.warning(needsParseError);
+        neededJobs = {};
+    }
+
     if (fs.existsSync(artifactDir)) {
         const entries = fs.readdirSync(artifactDir, { recursive: true });
         for (const entry of entries) {
@@ -65,6 +82,39 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
         }
     }
 
+    const artifactCoversJob = job => jobResults.some(result => {
+        const artifactJob = String(result.job || '');
+        return artifactJob === job || artifactJob.startsWith(`${job}-`);
+    });
+
+    const failedNeededJobs = [];
+    for (const [job, details] of Object.entries(neededJobs)) {
+        const result = details && typeof details.result === 'string' ? details.result : 'unknown';
+        if (result !== 'failure' && result !== 'cancelled') continue;
+        failedNeededJobs.push({ job, result });
+
+        // A parsed diagnostic artifact already makes the failure visible. When
+        // one is absent (the normal case for cancellation and early failures),
+        // synthesize a concrete error from the authoritative job conclusion.
+        if (!artifactCoversJob(job)) {
+            jobResults.push({
+                job,
+                errors: [`Required job '${job}' concluded '${result}' without a diagnostic error-summary artifact.`],
+                warnings: [],
+                tests: []
+            });
+        }
+    }
+
+    if (needsParseError) {
+        jobResults.push({
+            job: 'ci-result-metadata',
+            errors: [needsParseError],
+            warnings: [],
+            tests: []
+        });
+    }
+
     // ── 2. Find existing error report comment (PRs only) ──────────────
     let existingComment = null;
     if (isPullRequest) {
@@ -81,7 +131,7 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
     }
 
     // ── 3. If no errors found, clean up old comment ──────────────────
-    const hasIssues = jobResults.some(
+    const hasIssues = failedNeededJobs.length > 0 || !!needsParseError || jobResults.some(
         j => j.errors?.length > 0 || j.tests?.length > 0
     );
 
@@ -352,7 +402,10 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
         .filter(w => w.message.match(/\[ *WARN *\]/)).length;
     const compilerWarningCount = globalWarnings.size - testWarningCount;
 
-    const failedJobs = jobResults.map(r => r.job.replace('build-', '')).join(', ');
+    const failedJobs = [...new Set([
+        ...failedNeededJobs.map(({ job }) => job),
+        ...jobResults.map(result => result.job || 'unknown')
+    ])].map(job => job.replace('build-', '')).join(', ');
     const body = [
         COMMENT_MARKER,
         `## :x: CI Error Report`,

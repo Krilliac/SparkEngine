@@ -20,6 +20,10 @@ on:
     paths:
       - "wiki/**"
       - "docs/**"
+      - "CHANGELOG.md"
+      - "CODE_OF_CONDUCT.md"
+      - "CONTRIBUTING.md"
+      - "SECURITY.md"
       - "tools/publish-wiki.py"
       - "tools/check-wiki-quality.sh"
       - "tools/check-wiki-nav.sh"
