@@ -5,7 +5,6 @@
 #include <cerrno>
 #include <iostream>
 #include <filesystem>
-#include <iterator>
 #include <sstream>
 #include <thread>
 #include <atomic>
@@ -1079,12 +1078,11 @@ namespace SparkBuild
 
         const std::string configuration = BuildTypeToString(m_config.config.buildType);
         std::vector<std::filesystem::path> configuredCandidates;
-        std::copy_if(candidates.begin(), candidates.end(), std::back_inserter(configuredCandidates),
-                     [&configuration](const std::filesystem::path& candidate)
-                     {
-                         return std::find(candidate.begin(), candidate.end(), std::filesystem::path(configuration)) !=
-                                candidate.end();
-                     });
+        for (const auto& candidate : candidates)
+        {
+            if (std::find(candidate.begin(), candidate.end(), std::filesystem::path(configuration)) != candidate.end())
+                configuredCandidates.push_back(candidate);
+        }
         if (!configuredCandidates.empty())
             candidates = std::move(configuredCandidates);
 

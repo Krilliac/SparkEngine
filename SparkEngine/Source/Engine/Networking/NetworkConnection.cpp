@@ -82,29 +82,29 @@ namespace Spark::Net
         { m_internalHandlers[static_cast<uint16_t>(type)] = std::move(handler); };
         registerInternal(MessageType::Disconnect, [this](const NetworkMessage& msg) { HandleDisconnect(msg); });
         registerInternal(MessageType::ConnectAccepted,
-                        [this](const NetworkMessage& msg)
-                        {
-                            if (GetRole() == NetworkRole::Client)
-                            {
-                                NetBuffer buf;
-                                buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                                const ClientID assignedID = buf.ReadUint32();
-                                if (buf.HasError() || assignedID == INVALID_CLIENT)
-                                {
-                                    SPARK_LOG_WARN(Spark::LogCategory::Network,
-                                                   "Ignoring malformed ConnectAccepted packet");
-                                    return;
-                                }
+                         [this](const NetworkMessage& msg)
+                         {
+                             if (GetRole() == NetworkRole::Client)
+                             {
+                                 NetBuffer buf;
+                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
+                                 const ClientID assignedID = buf.ReadUint32();
+                                 if (buf.HasError() || assignedID == INVALID_CLIENT)
+                                 {
+                                     SPARK_LOG_WARN(Spark::LogCategory::Network,
+                                                    "Ignoring malformed ConnectAccepted packet");
+                                     return;
+                                 }
 
-                                std::lock_guard<std::mutex> stateLock(m_stateMutex);
-                                m_localClientID = assignedID;
-                                m_connectionState = ConnectionState::Connected;
+                                 std::lock_guard<std::mutex> stateLock(m_stateMutex);
+                                 m_localClientID = assignedID;
+                                 m_connectionState = ConnectionState::Connected;
 
-                                // Mark as connected for auto-reconnect tracking
-                                m_wasConnected = true;
-                                m_reconnectAttempts = 0;
-                            }
-                        });
+                                 // Mark as connected for auto-reconnect tracking
+                                 m_wasConnected = true;
+                                 m_reconnectAttempts = 0;
+                             }
+                         });
         registerInternal(MessageType::ConnectRejected,
                          [this](const NetworkMessage& msg)
                          {
@@ -136,109 +136,109 @@ namespace Spark::Net
                              SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection rejected: %s", reason.c_str());
                          });
         registerInternal(MessageType::Heartbeat,
-                        [this](const NetworkMessage& msg)
-                        {
-                            NetworkRole role;
-                            {
-                                std::lock_guard<std::mutex> lock(m_stateMutex);
-                                role = m_role;
-                            }
-                            if (role == NetworkRole::Server)
-                            {
-                                std::lock_guard<std::mutex> lock(m_clientsMutex);
-                                auto it = m_clients.find(msg.senderID);
-                                if (it != m_clients.end())
-                                {
-                                    it->second.lastHeartbeatTime = m_serverTime;
-                                }
-                            }
-                        });
+                         [this](const NetworkMessage& msg)
+                         {
+                             NetworkRole role;
+                             {
+                                 std::lock_guard<std::mutex> lock(m_stateMutex);
+                                 role = m_role;
+                             }
+                             if (role == NetworkRole::Server)
+                             {
+                                 std::lock_guard<std::mutex> lock(m_clientsMutex);
+                                 auto it = m_clients.find(msg.senderID);
+                                 if (it != m_clients.end())
+                                 {
+                                     it->second.lastHeartbeatTime = m_serverTime;
+                                 }
+                             }
+                         });
         registerInternal(MessageType::EntityStateUpdate,
-                        [this](const NetworkMessage& msg)
-                        {
-                            NetworkRole role;
-                            ClientID localID;
-                            {
-                                std::lock_guard<std::mutex> lock(m_stateMutex);
-                                role = m_role;
-                                localID = m_localClientID;
-                            }
-                            if (role == NetworkRole::Client)
-                            {
-                                NetBuffer buf;
-                                buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                                DeserializeEntityState(buf);
-                                if (GetRole() != NetworkRole::Client)
-                                    return;
+                         [this](const NetworkMessage& msg)
+                         {
+                             NetworkRole role;
+                             ClientID localID;
+                             {
+                                 std::lock_guard<std::mutex> lock(m_stateMutex);
+                                 role = m_role;
+                                 localID = m_localClientID;
+                             }
+                             if (role == NetworkRole::Client)
+                             {
+                                 NetBuffer buf;
+                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
+                                 DeserializeEntityState(buf);
+                                 if (GetRole() != NetworkRole::Client)
+                                     return;
 
-                                // Delta-ack echo: unreliable state updates carry the server's
-                                // per-connection delta sequence in the message header (its own
-                                // sequence space — the reliable-channel sequence is only ever
-                                // assigned on reliable messages, so the two cannot collide
-                                // here). Echo it so the server's DeltaSnapshotManager advances
-                                // this client's baseline and releases the pending delta.
-                                if (msg.channel == ChannelType::Unreliable && msg.sequence > 0)
-                                {
-                                    NetworkMessage deltaAck;
-                                    deltaAck.type = MessageType::DeltaAck;
-                                    deltaAck.channel = ChannelType::Unreliable;
-                                    deltaAck.senderID = localID;
-                                    NetBuffer ackBuf;
-                                    ackBuf.WriteUint32(msg.sequence);
-                                    deltaAck.payload = ackBuf.GetData();
-                                    SendMessage(deltaAck);
-                                }
-                            }
-                        });
+                                 // Delta-ack echo: unreliable state updates carry the server's
+                                 // per-connection delta sequence in the message header (its own
+                                 // sequence space — the reliable-channel sequence is only ever
+                                 // assigned on reliable messages, so the two cannot collide
+                                 // here). Echo it so the server's DeltaSnapshotManager advances
+                                 // this client's baseline and releases the pending delta.
+                                 if (msg.channel == ChannelType::Unreliable && msg.sequence > 0)
+                                 {
+                                     NetworkMessage deltaAck;
+                                     deltaAck.type = MessageType::DeltaAck;
+                                     deltaAck.channel = ChannelType::Unreliable;
+                                     deltaAck.senderID = localID;
+                                     NetBuffer ackBuf;
+                                     ackBuf.WriteUint32(msg.sequence);
+                                     deltaAck.payload = ackBuf.GetData();
+                                     SendMessage(deltaAck);
+                                 }
+                             }
+                         });
         registerInternal(MessageType::DeltaAck,
-                        [this](const NetworkMessage& msg)
-                        {
-                            // Server-only: advance the sending client's delta baseline.
-                            // senderID is trusted (stamped by ProcessIncoming from the
-                            // address->client table), so one client's ack can never advance
-                            // another client's baseline. Stale or duplicate sequences are
-                            // ignored inside AcknowledgeSequence (latest-wins).
-                            if (GetRole() != NetworkRole::Server || msg.senderID == INVALID_CLIENT)
-                                return;
-                            if (msg.payload.size() < sizeof(uint32_t))
-                                return;
+                         [this](const NetworkMessage& msg)
+                         {
+                             // Server-only: advance the sending client's delta baseline.
+                             // senderID is trusted (stamped by ProcessIncoming from the
+                             // address->client table), so one client's ack can never advance
+                             // another client's baseline. Stale or duplicate sequences are
+                             // ignored inside AcknowledgeSequence (latest-wins).
+                             if (GetRole() != NetworkRole::Server || msg.senderID == INVALID_CLIENT)
+                                 return;
+                             if (msg.payload.size() < sizeof(uint32_t))
+                                 return;
 
-                            NetBuffer buf;
-                            buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                            DeltaSnapshotManager::GetInstance().AcknowledgeSequence(msg.senderID, buf.ReadUint32());
-                        });
+                             NetBuffer buf;
+                             buf.WriteBytes(msg.payload.data(), msg.payload.size());
+                             DeltaSnapshotManager::GetInstance().AcknowledgeSequence(msg.senderID, buf.ReadUint32());
+                         });
         registerInternal(MessageType::ClientInput,
-                        [this](const NetworkMessage& msg)
-                        {
-                            NetworkRole role;
-                            {
-                                std::lock_guard<std::mutex> lock(m_stateMutex);
-                                role = m_role;
-                            }
-                            if (role == NetworkRole::Server)
-                            {
-                                NetBuffer buf;
-                                buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                                ClientInputState input;
-                                input.inputSequence = buf.ReadUint32();
-                                input.moveForward = buf.ReadFloat();
-                                input.moveRight = buf.ReadFloat();
-                                input.lookYaw = buf.ReadFloat();
-                                input.lookPitch = buf.ReadFloat();
-                                uint8_t flags = buf.ReadUint8();
-                                input.jump = (flags & 1) != 0;
-                                input.fire = (flags & 2) != 0;
-                                input.reload = (flags & 4) != 0;
-                                input.sprint = (flags & 8) != 0;
-                                input.crouch = (flags & 16) != 0;
-                                input.deltaTime = buf.ReadFloat();
-                                input.timestamp = m_serverTime;
-                                {
-                                    std::lock_guard<std::mutex> lock(m_inputMutex);
-                                    m_pendingInputs.push_back(input);
-                                }
-                            }
-                        });
+                         [this](const NetworkMessage& msg)
+                         {
+                             NetworkRole role;
+                             {
+                                 std::lock_guard<std::mutex> lock(m_stateMutex);
+                                 role = m_role;
+                             }
+                             if (role == NetworkRole::Server)
+                             {
+                                 NetBuffer buf;
+                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
+                                 ClientInputState input;
+                                 input.inputSequence = buf.ReadUint32();
+                                 input.moveForward = buf.ReadFloat();
+                                 input.moveRight = buf.ReadFloat();
+                                 input.lookYaw = buf.ReadFloat();
+                                 input.lookPitch = buf.ReadFloat();
+                                 uint8_t flags = buf.ReadUint8();
+                                 input.jump = (flags & 1) != 0;
+                                 input.fire = (flags & 2) != 0;
+                                 input.reload = (flags & 4) != 0;
+                                 input.sprint = (flags & 8) != 0;
+                                 input.crouch = (flags & 16) != 0;
+                                 input.deltaTime = buf.ReadFloat();
+                                 input.timestamp = m_serverTime;
+                                 {
+                                     std::lock_guard<std::mutex> lock(m_inputMutex);
+                                     m_pendingInputs.push_back(input);
+                                 }
+                             }
+                         });
 
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Network", 0.0);
         return true;

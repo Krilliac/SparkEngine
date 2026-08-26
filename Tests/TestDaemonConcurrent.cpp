@@ -73,10 +73,10 @@ namespace
         std::unique_ptr<Spark::Daemon::DaemonServer> server;
         std::thread thread;
         std::string sockPath;
+        bool ready = false;
 
-        explicit ConcurrentFixture(
-            const char* tag,
-            size_t maximumWorkers = Spark::Daemon::DaemonServer::kDefaultMaximumClientWorkers)
+        explicit ConcurrentFixture(const char* tag,
+                                   size_t maximumWorkers = Spark::Daemon::DaemonServer::kDefaultMaximumClientWorkers)
             : sockPath(UniqueConcurrentSockPath(tag))
         {
             server = std::make_unique<Spark::Daemon::DaemonServer>(maximumWorkers);
@@ -85,7 +85,13 @@ namespace
                 std::make_unique<Spark::Daemon::ControlService>(server->GetShouldStopFlag(), statsProvider));
             server->AddService(std::make_unique<Spark::Daemon::ShaderService>());
             thread = std::thread([this] { (void)server->Run(sockPath); });
-            EXPECT_TRUE(WaitForConcurrentSocket(sockPath, std::chrono::milliseconds(2000)));
+            ready = WaitForConcurrentSocket(sockPath, std::chrono::milliseconds(2000));
+            if (!ready)
+            {
+                server->Stop();
+                if (thread.joinable())
+                    thread.join();
+            }
         }
 
         ~ConcurrentFixture()
@@ -108,6 +114,7 @@ namespace
 TEST(DaemonConcurrent_TwoClientsShareCacheAndDontInterleaveResponses)
 {
     ConcurrentFixture fx("two-clients");
+    ASSERT_TRUE(fx.ready);
 
     // Client A stores 50 entries; client B, concurrently, issues 50 pings.
     // Both sequences must complete with correct, non-corrupt responses.
@@ -115,6 +122,8 @@ TEST(DaemonConcurrent_TwoClientsShareCacheAndDontInterleaveResponses)
 
     std::atomic<int> storesOk{0};
     std::atomic<int> pingsOk{0};
+    std::atomic<bool> writerConnected{false};
+    std::atomic<bool> pingerConnected{false};
     std::barrier connectRace(3);
 
     std::thread writer(
@@ -123,7 +132,7 @@ TEST(DaemonConcurrent_TwoClientsShareCacheAndDontInterleaveResponses)
             Spark::Daemon::DaemonClient client;
             connectRace.arrive_and_wait();
             const auto connected = client.Connect(fx.sockPath);
-            EXPECT_TRUE(connected.has_value());
+            writerConnected.store(connected.has_value(), std::memory_order_release);
             if (!connected)
                 return;
             Spark::Daemon::ShaderServiceClient shader(client);
@@ -143,7 +152,7 @@ TEST(DaemonConcurrent_TwoClientsShareCacheAndDontInterleaveResponses)
             Spark::Daemon::DaemonClient client;
             connectRace.arrive_and_wait();
             const auto connected = client.Connect(fx.sockPath);
-            EXPECT_TRUE(connected.has_value());
+            pingerConnected.store(connected.has_value(), std::memory_order_release);
             if (!connected)
                 return;
             for (int i = 0; i < kIterations; ++i)
@@ -161,13 +170,15 @@ TEST(DaemonConcurrent_TwoClientsShareCacheAndDontInterleaveResponses)
     writer.join();
     pinger.join();
 
+    ASSERT_TRUE(writerConnected.load(std::memory_order_acquire));
+    ASSERT_TRUE(pingerConnected.load(std::memory_order_acquire));
     EXPECT_EQ(storesOk.load(), kIterations);
     EXPECT_EQ(pingsOk.load(), kIterations);
 
     // Verify the writer's entries are readable from a third client — every
     // PutCacheEntry must have reached the cache.
     Spark::Daemon::DaemonClient reader;
-    EXPECT_TRUE(reader.Connect(fx.sockPath).has_value());
+    ASSERT_TRUE(reader.Connect(fx.sockPath).has_value());
     Spark::Daemon::ShaderServiceClient shader(reader);
 
     int hits = 0;
@@ -183,6 +194,7 @@ TEST(DaemonConcurrent_TwoClientsShareCacheAndDontInterleaveResponses)
 TEST(DaemonConcurrent_WorkerCapRefusesOverloadAndShutdownRemainsPrompt)
 {
     ConcurrentFixture fx("worker-cap", 1);
+    ASSERT_TRUE(fx.ready);
 
     Spark::Daemon::DaemonClient occupyingClient;
     ASSERT_TRUE(occupyingClient.Connect(fx.sockPath).has_value());
@@ -213,21 +225,22 @@ TEST(DaemonConcurrent_WorkerCapRefusesOverloadAndShutdownRemainsPrompt)
 TEST(DaemonStats_ReportsVersionAndRegisteredServices)
 {
     ConcurrentFixture fx("stats");
+    ASSERT_TRUE(fx.ready);
 
     Spark::Daemon::DaemonClient client;
-    EXPECT_TRUE(client.Connect(fx.sockPath).has_value());
+    ASSERT_TRUE(client.Connect(fx.sockPath).has_value());
 
     auto response = client.Request(Spark::Daemon::ServiceId::Control,
                                    static_cast<uint16_t>(Spark::Daemon::ControlMessage::StatsRequest), /*payload*/ {});
-    EXPECT_TRUE(response.has_value());
-    EXPECT_EQ(response->messageType, static_cast<uint16_t>(Spark::Daemon::ControlMessage::StatsResponse));
+    ASSERT_TRUE(response.has_value());
+    ASSERT_EQ(response->messageType, static_cast<uint16_t>(Spark::Daemon::ControlMessage::StatsResponse));
 
     Spark::Daemon::DaemonStats stats;
-    EXPECT_TRUE(Spark::Daemon::DecodeDaemonStats(response->payload, stats));
+    ASSERT_TRUE(Spark::Daemon::DecodeDaemonStats(response->payload, stats));
     EXPECT_EQ(stats.protocolVersion, std::string(Spark::Daemon::kProtocolVersion));
 
     // Control + Shader were both registered.
-    EXPECT_EQ(stats.registeredIds.size(), 2u);
+    ASSERT_EQ(stats.registeredIds.size(), 2u);
     EXPECT_EQ(stats.registeredIds[0], static_cast<uint16_t>(Spark::Daemon::ServiceId::Control));
     EXPECT_EQ(stats.registeredIds[1], static_cast<uint16_t>(Spark::Daemon::ServiceId::Shader));
 }
@@ -235,16 +248,17 @@ TEST(DaemonStats_ReportsVersionAndRegisteredServices)
 TEST(DaemonStats_UptimeAdvancesAcrossRequests)
 {
     ConcurrentFixture fx("uptime");
+    ASSERT_TRUE(fx.ready);
 
     Spark::Daemon::DaemonClient client;
-    EXPECT_TRUE(client.Connect(fx.sockPath).has_value());
+    ASSERT_TRUE(client.Connect(fx.sockPath).has_value());
 
     auto firstResponse =
         client.Request(Spark::Daemon::ServiceId::Control,
                        static_cast<uint16_t>(Spark::Daemon::ControlMessage::StatsRequest), /*payload*/ {});
-    EXPECT_TRUE(firstResponse.has_value());
+    ASSERT_TRUE(firstResponse.has_value());
     Spark::Daemon::DaemonStats firstStats;
-    EXPECT_TRUE(Spark::Daemon::DecodeDaemonStats(firstResponse->payload, firstStats));
+    ASSERT_TRUE(Spark::Daemon::DecodeDaemonStats(firstResponse->payload, firstStats));
 
     // Sleep for a bit over 1 second so the integer-seconds uptime ticks over
     // even on the tightest CI runner.
@@ -253,11 +267,11 @@ TEST(DaemonStats_UptimeAdvancesAcrossRequests)
     auto secondResponse =
         client.Request(Spark::Daemon::ServiceId::Control,
                        static_cast<uint16_t>(Spark::Daemon::ControlMessage::StatsRequest), /*payload*/ {});
-    EXPECT_TRUE(secondResponse.has_value());
+    ASSERT_TRUE(secondResponse.has_value());
     Spark::Daemon::DaemonStats secondStats;
-    EXPECT_TRUE(Spark::Daemon::DecodeDaemonStats(secondResponse->payload, secondStats));
+    ASSERT_TRUE(Spark::Daemon::DecodeDaemonStats(secondResponse->payload, secondStats));
 
-    EXPECT_TRUE(secondStats.uptimeSeconds >= firstStats.uptimeSeconds);
+    ASSERT_TRUE(secondStats.uptimeSeconds >= firstStats.uptimeSeconds);
     EXPECT_TRUE(secondStats.uptimeSeconds - firstStats.uptimeSeconds >= 1u);
 }
 
@@ -274,10 +288,10 @@ TEST(DaemonStats_CodecRoundTrip)
 
     auto bytes = Spark::Daemon::EncodeDaemonStats(in);
     Spark::Daemon::DaemonStats out;
-    EXPECT_TRUE(Spark::Daemon::DecodeDaemonStats(bytes, out));
+    ASSERT_TRUE(Spark::Daemon::DecodeDaemonStats(bytes, out));
     EXPECT_EQ(out.uptimeSeconds, in.uptimeSeconds);
     EXPECT_EQ(out.protocolVersion, in.protocolVersion);
-    EXPECT_EQ(out.registeredIds.size(), in.registeredIds.size());
+    ASSERT_EQ(out.registeredIds.size(), in.registeredIds.size());
     for (size_t i = 0; i < in.registeredIds.size(); ++i)
         EXPECT_EQ(out.registeredIds[i], in.registeredIds[i]);
 }

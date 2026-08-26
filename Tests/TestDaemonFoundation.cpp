@@ -77,13 +77,14 @@ TEST(DaemonFoundation_ConnectPingShutdown)
 
     std::atomic<bool> serverStarted{false};
     std::atomic<bool> serverExited{false};
+    std::atomic<bool> serverRunSucceeded{false};
     std::thread serverThread(
         [&]
         {
             serverStarted.store(true, std::memory_order_release);
             auto result = server->Run(sockPath);
+            serverRunSucceeded.store(result.has_value(), std::memory_order_release);
             serverExited.store(true, std::memory_order_release);
-            EXPECT_TRUE(result.has_value());
         });
 
     // Wait for the socket file to appear so connect() doesn't race the bind.
@@ -144,6 +145,7 @@ TEST(DaemonFoundation_ConnectPingShutdown)
 
     // Nudge the accept loop out of its blocking wait and join it.
     stopServer();
+    EXPECT_TRUE(serverRunSucceeded.load(std::memory_order_acquire));
     EXPECT_TRUE(serverExited.load(std::memory_order_acquire));
     EXPECT_FALSE(client.IsConnected());
 }
@@ -182,7 +184,9 @@ TEST(DaemonFoundation_SecondServerCannotStealActiveEndpoint)
     const std::string sockPath = UniqueSocketPath("exclusive");
     auto first = std::make_unique<Spark::Daemon::DaemonServer>();
     first->AddService(std::make_unique<Spark::Daemon::ControlService>(first->GetShouldStopFlag()));
-    std::thread firstThread([&] { EXPECT_TRUE(first->Run(sockPath).has_value()); });
+    std::atomic<bool> firstRunSucceeded{false};
+    std::thread firstThread([&]
+                            { firstRunSucceeded.store(first->Run(sockPath).has_value(), std::memory_order_release); });
     EXPECT_TRUE(WaitForSocketFile(sockPath, std::chrono::milliseconds(2000)));
 
     Spark::Daemon::DaemonServer second;
@@ -197,6 +201,7 @@ TEST(DaemonFoundation_SecondServerCannotStealActiveEndpoint)
     first->Stop();
     if (firstThread.joinable())
         firstThread.join();
+    EXPECT_TRUE(firstRunSucceeded.load(std::memory_order_acquire));
 #if !defined(_WIN32)
     ::unlink(sockPath.c_str());
 #endif
