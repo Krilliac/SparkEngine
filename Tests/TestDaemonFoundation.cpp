@@ -90,19 +90,43 @@ TEST(DaemonFoundation_ConnectPingShutdown)
     EXPECT_TRUE(WaitForSocketFile(sockPath, std::chrono::milliseconds(2000)));
 
     Spark::Daemon::DaemonClient client;
+    const auto stopServer = [&]
+    {
+        client.Disconnect();
+        server->Stop();
+        if (serverThread.joinable())
+            serverThread.join();
+#if !defined(_WIN32)
+        ::unlink(sockPath.c_str());
+#endif
+    };
     auto connectResult = client.Connect(sockPath);
     EXPECT_TRUE(connectResult.has_value());
+    if (!connectResult)
+    {
+        std::cerr << "  Daemon connect error: " << connectResult.error() << '\n';
+        stopServer();
+        return;
+    }
     EXPECT_TRUE(client.IsConnected());
 
     // Ping round-trip.
     auto pingResult = client.Ping();
     EXPECT_TRUE(pingResult.has_value());
+    if (!pingResult)
+        std::cerr << "  Daemon ping error: " << pingResult.error() << '\n';
 
     // Version request via the lower-level Request API.
     auto versionResult =
         client.Request(Spark::Daemon::ServiceId::Control,
                        static_cast<uint16_t>(Spark::Daemon::ControlMessage::VersionRequest), /*payload*/ {});
     EXPECT_TRUE(versionResult.has_value());
+    if (!versionResult)
+    {
+        std::cerr << "  Daemon version error: " << versionResult.error() << '\n';
+        stopServer();
+        return;
+    }
     EXPECT_EQ(versionResult->messageType, static_cast<uint16_t>(Spark::Daemon::ControlMessage::VersionResponse));
     std::string version(versionResult->payload.begin(), versionResult->payload.end());
     EXPECT_EQ(version, std::string(Spark::Daemon::kProtocolVersion));
@@ -113,21 +137,15 @@ TEST(DaemonFoundation_ConnectPingShutdown)
         client.Request(Spark::Daemon::ServiceId::Control,
                        static_cast<uint16_t>(Spark::Daemon::ControlMessage::ShutdownRequest), /*payload*/ {});
     EXPECT_TRUE(shutdownResult.has_value());
-    EXPECT_EQ(shutdownResult->messageType, static_cast<uint16_t>(Spark::Daemon::ControlMessage::ShutdownAck));
+    if (shutdownResult)
+        EXPECT_EQ(shutdownResult->messageType, static_cast<uint16_t>(Spark::Daemon::ControlMessage::ShutdownAck));
+    else
+        std::cerr << "  Daemon shutdown error: " << shutdownResult.error() << '\n';
 
-    client.Disconnect();
-
-    // Nudge the accept loop out of its blocking wait.
-    server->Stop();
-
-    if (serverThread.joinable())
-        serverThread.join();
+    // Nudge the accept loop out of its blocking wait and join it.
+    stopServer();
     EXPECT_TRUE(serverExited.load(std::memory_order_acquire));
     EXPECT_FALSE(client.IsConnected());
-
-#if !defined(_WIN32)
-    ::unlink(sockPath.c_str());
-#endif
 }
 
 TEST(DaemonFoundation_UnknownServiceReturnsError)

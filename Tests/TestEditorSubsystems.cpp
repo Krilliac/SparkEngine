@@ -1873,6 +1873,13 @@ TEST(BuildPipeline_CookCommandUsesAbsoluteBoundedPaths)
     EXPECT_EQ(args[6], "--dry-run");
 }
 
+TEST(BuildPipeline_FindsRunnableSparkCookerBesideTestHost)
+{
+    const std::filesystem::path cooker = BuildPipeline::FindSparkCookerExecutable();
+    EXPECT_FALSE(cooker.empty());
+    EXPECT_TRUE(std::filesystem::is_regular_file(cooker));
+}
+
 TEST(BuildPipeline_AutomationCommandIsFrameBoundedAndWritesReports)
 {
     const auto args =

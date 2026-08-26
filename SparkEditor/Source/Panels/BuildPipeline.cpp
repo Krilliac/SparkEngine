@@ -73,13 +73,24 @@ namespace SparkEditor
             buffer.resize(length);
             return fs::path(buffer);
 #elif defined(__APPLE__)
-            uint32_t size = 0;
-            _NSGetExecutablePath(nullptr, &size);
+            // Start with a real buffer, as documented by dyld, and retry with
+            // the required size when deeply nested executable paths exceed it.
+            uint32_t size = 1024;
             std::string buffer(size, '\0');
             if (_NSGetExecutablePath(buffer.data(), &size) != 0)
-                return {};
+            {
+                if (size == 0)
+                    return {};
+                buffer.assign(size, '\0');
+                if (_NSGetExecutablePath(buffer.data(), &size) != 0)
+                    return {};
+            }
             buffer.resize(std::char_traits<char>::length(buffer.c_str()));
-            return fs::path(buffer);
+            if (buffer.empty())
+                return {};
+            std::error_code ec;
+            const fs::path canonical = fs::weakly_canonical(fs::path(buffer), ec);
+            return ec ? fs::path(buffer) : canonical;
 #else
             std::error_code ec;
             return fs::read_symlink("/proc/self/exe", ec);

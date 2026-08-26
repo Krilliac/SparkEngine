@@ -13,6 +13,7 @@
 #include <array>
 #include <cerrno>
 #include <chrono>
+#include <cstring>
 #include <regex>
 
 #ifdef _WIN32
@@ -22,8 +23,11 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
+#include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+extern char** environ;
 #endif
 
 namespace SparkEditor
@@ -180,6 +184,15 @@ namespace SparkEditor
 
         return static_cast<int>(exitCode);
 #else
+        // Build the complete argument vector before posix_spawn so process
+        // creation does not depend on allocator state copied from other threads.
+        std::vector<char*> argv;
+        argv.reserve(arguments.size() + 2);
+        argv.push_back(const_cast<char*>(executable.c_str()));
+        for (const auto& argument : arguments)
+            argv.push_back(const_cast<char*>(argument.c_str()));
+        argv.push_back(nullptr);
+
         int pipefd[2];
         if (pipe(pipefd) != 0)
         {
@@ -187,36 +200,46 @@ namespace SparkEditor
             return -1;
         }
 
-        pid_t pid = fork();
-        if (pid == -1)
+        posix_spawn_file_actions_t fileActions;
+        posix_spawnattr_t attributes;
+        int spawnError = posix_spawn_file_actions_init(&fileActions);
+        bool fileActionsInitialized = spawnError == 0;
+        bool attributesInitialized = false;
+        if (spawnError == 0)
+        {
+            spawnError = posix_spawnattr_init(&attributes);
+            attributesInitialized = spawnError == 0;
+        }
+        if (spawnError == 0)
+            spawnError = posix_spawn_file_actions_addclose(&fileActions, pipefd[0]);
+        if (spawnError == 0)
+            spawnError = posix_spawn_file_actions_adddup2(&fileActions, pipefd[1], STDOUT_FILENO);
+        if (spawnError == 0)
+            spawnError = posix_spawn_file_actions_adddup2(&fileActions, pipefd[1], STDERR_FILENO);
+        if (spawnError == 0)
+            spawnError = posix_spawn_file_actions_addclose(&fileActions, pipefd[1]);
+        if (spawnError == 0)
+            spawnError = posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP);
+        if (spawnError == 0)
+            spawnError = posix_spawnattr_setpgroup(&attributes, 0);
+
+        pid_t pid = 0;
+        if (spawnError == 0)
+            spawnError = posix_spawnp(&pid, executable.c_str(), &fileActions, &attributes, argv.data(), environ);
+
+        if (attributesInitialized)
+            posix_spawnattr_destroy(&attributes);
+        if (fileActionsInitialized)
+            posix_spawn_file_actions_destroy(&fileActions);
+        close(pipefd[1]);
+
+        if (spawnError != 0)
         {
             close(pipefd[0]);
-            close(pipefd[1]);
-            PushLog(BuildLogLine::Level::Error, "Failed to fork subprocess");
+            PushLog(BuildLogLine::Level::Error,
+                    "Failed to launch subprocess '" + executable + "': " + std::strerror(spawnError));
             return -1;
         }
-
-        if (pid == 0)
-        {
-            setpgid(0, 0);
-            close(pipefd[0]);
-            dup2(pipefd[1], STDOUT_FILENO);
-            dup2(pipefd[1], STDERR_FILENO);
-            close(pipefd[1]);
-
-            std::vector<char*> argv;
-            argv.reserve(arguments.size() + 2);
-            argv.push_back(const_cast<char*>(executable.c_str()));
-            for (const auto& argument : arguments)
-                argv.push_back(const_cast<char*>(argument.c_str()));
-            argv.push_back(nullptr);
-
-            execvp(executable.c_str(), argv.data());
-            _exit(127);
-        }
-
-        close(pipefd[1]);
-        setpgid(pid, pid);
         const int pipeFlags = fcntl(pipefd[0], F_GETFL, 0);
         if (pipeFlags == -1 || fcntl(pipefd[0], F_SETFL, pipeFlags | O_NONBLOCK) == -1)
         {
