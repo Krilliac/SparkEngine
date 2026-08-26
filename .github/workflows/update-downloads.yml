@@ -46,6 +46,10 @@ jobs:
           local response_headers="$3"
           local status_variable="$4"
           local attempt http_status curl_status retry api_message
+          local api_url="https://api.github.com/repos/$REPO"
+          if test -n "$endpoint"; then
+            api_url="$api_url/$endpoint"
+          fi
 
           for attempt in 1 2 3 4 5; do
             : > "$response_body"
@@ -62,7 +66,7 @@ jobs:
               --dump-header "$response_headers" \
               --output "$response_body" \
               --write-out '%{http_code}' \
-              "https://api.github.com/repos/$REPO/$endpoint")"; then
+              "$api_url")"; then
               curl_status=0
             else
               curl_status=$?
