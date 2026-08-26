@@ -25,7 +25,7 @@
       "path": "Models/showcase_palette.mtl",
       "kind": "repository-authored six-color material palette for the 3D composition study",
       "origin": "SparkEngine project-authored asset",
-      "sha256": "496a77429fabf05ac285d35b63fd3262c6ad35a1f75129cfb917252fc59c8a8e"
+      "sha256": "b9e658985ca3e64d66d2e8255765d5d7a323575ef2331d49f0497b068c2307ee"
     },
     {
       "path": "Models/spectrum_block.obj",
@@ -37,7 +37,7 @@
       "path": "Models/studio_block.obj",
       "kind": "transform-friendly navy studio block",
       "origin": "SparkEngine project-authored asset",
-      "sha256": "b2a4feee38c48b992d7992fe529fa2fc378d56956c230f7fc418a803d3742e5c"
+      "sha256": "c554dc1698a73caffd7e53202d27154543ab0155e52e35a6421e368c1fb8417b"
     }
   ],
   "enginePrimitives": [

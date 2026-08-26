@@ -31,13 +31,13 @@
       "path": "Models/origin_palette.mtl",
       "kind": "repository-authored material palette for the runtime origin marker",
       "origin": "SparkEngine project-authored asset",
-      "sha256": "1e4322cd8c99606b5090724d2b02d145c7a3634ed6ef9c9c3afec01fc2cf16e5"
+      "sha256": "10f57d64bdc9e3ce5f1f970e233d3face5261c356be2537f47ef543297e434bc"
     },
     {
       "path": "Models/starter_stage.obj",
       "kind": "transform-friendly slate runtime preview stage",
       "origin": "SparkEngine project-authored asset",
-      "sha256": "447bde70aeafa805783ffee567bd027d4f334df335ea7244eb78e4353a5352b1"
+      "sha256": "33c53cdd8991ed1c1d299dc8604c3d940a69714577835b102f352f22bf972269"
     }
   ],
   "enginePrimitives": [
