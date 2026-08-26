@@ -7,6 +7,7 @@
 #include "EditorLaunchContext.h"
 
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #ifdef _WIN32
@@ -69,58 +70,133 @@ namespace SparkEditor
             quoted.push_back(L'"');
             return quoted;
         }
+
+        BOOL CALLBACK RequestGracefulWindowClose(HWND window, LPARAM parameter)
+        {
+            DWORD windowPid = 0;
+            GetWindowThreadProcessId(window, &windowPid);
+            if (windowPid == static_cast<DWORD>(parameter))
+                PostMessageW(window, WM_CLOSE, 0, 0);
+            return TRUE;
+        }
     } // namespace
 #endif
+
+    namespace
+    {
+        ProcessLaunchResult LaunchEditorProcessImpl(const std::filesystem::path& exePath,
+                                                    const std::wstring& commandLine,
+                                                    const std::filesystem::path& workingDir, bool ownProcessTree)
+        {
+            ProcessLaunchResult result;
+#ifdef _WIN32
+            std::wstring effectiveCommandLine = commandLine;
+            if (effectiveCommandLine.find(L" -manifest ") == std::wstring::npos)
+            {
+                const std::filesystem::path manifest = workingDir / "spark.modules.json";
+                std::error_code ec;
+                if (std::filesystem::is_regular_file(manifest, ec) && !ec)
+                    effectiveCommandLine += L" -manifest " + QuoteWindowsArgument(manifest.wstring());
+            }
+
+            // CreateProcessW may modify the command-line buffer — pass a writable copy.
+            std::vector<wchar_t> cmdBuf(effectiveCommandLine.begin(), effectiveCommandLine.end());
+            cmdBuf.push_back(L'\0');
+
+            HANDLE job = nullptr;
+            if (ownProcessTree)
+            {
+                job = CreateJobObjectW(nullptr, nullptr);
+                if (!job)
+                {
+                    result.error = "Launch failed: could not create process Job Object (Win32 error " +
+                                   std::to_string(GetLastError()) + ")";
+                    return result;
+                }
+
+                JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+                limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)))
+                {
+                    result.error = "Launch failed: could not configure process Job Object (Win32 error " +
+                                   std::to_string(GetLastError()) + ")";
+                    CloseHandle(job);
+                    return result;
+                }
+            }
+
+            STARTUPINFOW startup{};
+            startup.cb = sizeof(startup);
+            PROCESS_INFORMATION process{};
+
+            const std::wstring exeW = exePath.wstring();
+            const std::wstring workingDirW = workingDir.wstring();
+            // Owned launches start suspended so they cannot create descendants
+            // before assignment to the kill-on-close Job Object.
+            const DWORD creationFlags = CREATE_NO_WINDOW | (ownProcessTree ? CREATE_SUSPENDED : 0);
+            const BOOL ok = CreateProcessW(exeW.c_str(), cmdBuf.data(), nullptr, nullptr, FALSE, creationFlags, nullptr,
+                                           workingDirW.c_str(), &startup, &process);
+            if (!ok)
+            {
+                result.error = "Launch failed (Win32 error " + std::to_string(GetLastError()) + ")";
+                if (job)
+                    CloseHandle(job);
+                return result;
+            }
+
+            if (ownProcessTree && !AssignProcessToJobObject(job, process.hProcess))
+            {
+                const DWORD error = GetLastError();
+                TerminateProcess(process.hProcess, 1);
+                WaitForSingleObject(process.hProcess, 1000);
+                CloseHandle(process.hThread);
+                CloseHandle(process.hProcess);
+                CloseHandle(job);
+                result.error = "Launch failed: could not assign process to Job Object (Win32 error " +
+                               std::to_string(error) + ")";
+                return result;
+            }
+
+            if (ownProcessTree && ResumeThread(process.hThread) == static_cast<DWORD>(-1))
+            {
+                const DWORD error = GetLastError();
+                TerminateJobObject(job, 1);
+                WaitForSingleObject(process.hProcess, 1000);
+                CloseHandle(process.hThread);
+                CloseHandle(process.hProcess);
+                CloseHandle(job);
+                result.error = "Launch failed: could not resume owned process (Win32 error " +
+                               std::to_string(error) + ")";
+                return result;
+            }
+
+            CloseHandle(process.hThread);
+            result.success = true;
+            result.processHandle = process.hProcess;
+            result.jobHandle = job;
+            result.pid = process.dwProcessId;
+#else
+            (void)exePath;
+            (void)commandLine;
+            (void)workingDir;
+            (void)ownProcessTree;
+            result.error = "Process launch is available on Windows builds only.";
+#endif
+            return result;
+        }
+    } // namespace
 
     ProcessLaunchResult LaunchEditorProcess(const std::filesystem::path& exePath, const std::wstring& commandLine,
                                             const std::filesystem::path& workingDir)
     {
-        ProcessLaunchResult result;
-#ifdef _WIN32
-        std::wstring effectiveCommandLine = commandLine;
-        if (effectiveCommandLine.find(L" -manifest ") == std::wstring::npos)
-        {
-            const std::filesystem::path manifest = workingDir / "spark.modules.json";
-            std::error_code ec;
-            if (std::filesystem::is_regular_file(manifest, ec) && !ec)
-                effectiveCommandLine += L" -manifest " + QuoteWindowsArgument(manifest.wstring());
-        }
+        return LaunchEditorProcessImpl(exePath, commandLine, workingDir, false);
+    }
 
-        // CreateProcessW may modify the command-line buffer — pass a writable copy.
-        std::vector<wchar_t> cmdBuf(effectiveCommandLine.begin(), effectiveCommandLine.end());
-        cmdBuf.push_back(L'\0');
-
-        STARTUPINFOW startup{};
-        startup.cb = sizeof(startup);
-        PROCESS_INFORMATION process{};
-
-        const std::wstring exeW = exePath.wstring();
-        const std::wstring workingDirW = workingDir.wstring();
-        // Console-subsystem helpers (daemon, collaboration, gateway, server)
-        // must not steal focus by opening Windows Terminal over the editor.
-        // CREATE_NO_WINDOW suppresses only the inherited console; a launched
-        // game can still create and show its own native rendering window.
-        const BOOL ok = CreateProcessW(exeW.c_str(), cmdBuf.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr,
-                                       workingDirW.c_str(), &startup, &process);
-        if (!ok)
-        {
-            result.success = false;
-            result.error = "Launch failed (Win32 error " + std::to_string(GetLastError()) + ")";
-            return result;
-        }
-
-        CloseHandle(process.hThread);
-        result.success = true;
-        result.processHandle = process.hProcess;
-        result.pid = process.dwProcessId;
-#else
-        (void)exePath;
-        (void)commandLine;
-        (void)workingDir;
-        result.success = false;
-        result.error = "Process launch is available on Windows builds only.";
-#endif
-        return result;
+    ProcessLaunchResult LaunchOwnedEditorProcess(const std::filesystem::path& exePath,
+                                                 const std::wstring& commandLine,
+                                                 const std::filesystem::path& workingDir)
+    {
+        return LaunchEditorProcessImpl(exePath, commandLine, workingDir, true);
     }
 
     bool PollProcessExited(void* processHandle, unsigned long& outExitCode)
@@ -153,6 +229,132 @@ namespace SparkEditor
         (void)processHandle;
         (void)exitCode;
 #endif
+    }
+
+    void CloseEditorProcessHandles(void* processHandle, void* jobHandle)
+    {
+#ifdef _WIN32
+        if (processHandle)
+            CloseHandle(static_cast<HANDLE>(processHandle));
+        if (jobHandle)
+            CloseHandle(static_cast<HANDLE>(jobHandle));
+#else
+        (void)processHandle;
+        (void)jobHandle;
+#endif
+    }
+
+    EditorProcessStopResult StopEditorProcessTree(void* processHandle, void* jobHandle, unsigned long pid,
+                                                  unsigned long gracePeriodMs, unsigned int exitCode)
+    {
+#ifdef _WIN32
+        if (!processHandle)
+        {
+            CloseEditorProcessHandles(nullptr, jobHandle);
+            return EditorProcessStopResult::NotRunning;
+        }
+
+        HANDLE process = static_cast<HANDLE>(processHandle);
+        if (WaitForSingleObject(process, 0) == WAIT_OBJECT_0)
+        {
+            CloseEditorProcessHandles(processHandle, jobHandle);
+            return EditorProcessStopResult::Graceful;
+        }
+
+        // Windowed games get a normal close request first. Headless children have
+        // no top-level window, so they simply consume the same bounded grace time.
+        if (pid != 0)
+            EnumWindows(RequestGracefulWindowClose, static_cast<LPARAM>(pid));
+
+        if (WaitForSingleObject(process, gracePeriodMs) == WAIT_OBJECT_0)
+        {
+            CloseEditorProcessHandles(processHandle, jobHandle);
+            return EditorProcessStopResult::Graceful;
+        }
+
+        BOOL terminated = FALSE;
+        if (jobHandle)
+            terminated = TerminateJobObject(static_cast<HANDLE>(jobHandle), exitCode);
+        else
+            terminated = TerminateProcess(process, exitCode);
+
+        if (terminated)
+            (void)WaitForSingleObject(process, 1000);
+        CloseEditorProcessHandles(processHandle, jobHandle);
+        return terminated ? EditorProcessStopResult::Terminated : EditorProcessStopResult::Failed;
+#else
+        (void)processHandle;
+        (void)jobHandle;
+        (void)pid;
+        (void)gracePeriodMs;
+        (void)exitCode;
+        return EditorProcessStopResult::NotRunning;
+#endif
+    }
+
+    OwnedEditorProcess::OwnedEditorProcess(EditorProcessOperations operations) : m_operations(std::move(operations))
+    {
+        if (!m_operations.poll)
+            m_operations.poll = [](void* handle, unsigned long& exitCode)
+            { return PollProcessExited(handle, exitCode); };
+        if (!m_operations.stopAndClose)
+            m_operations.stopAndClose = [](void* processHandle, void* jobHandle, unsigned long pid,
+                                           unsigned long gracePeriodMs)
+            { return StopEditorProcessTree(processHandle, jobHandle, pid, gracePeriodMs); };
+        if (!m_operations.close)
+            m_operations.close = [](void* processHandle, void* jobHandle)
+            { CloseEditorProcessHandles(processHandle, jobHandle); };
+    }
+
+    OwnedEditorProcess::~OwnedEditorProcess()
+    {
+        (void)Stop();
+    }
+
+    bool OwnedEditorProcess::Adopt(ProcessLaunchResult launch)
+    {
+        if (!launch.success || !launch.processHandle)
+        {
+            if (launch.processHandle || launch.jobHandle)
+                m_operations.close(launch.processHandle, launch.jobHandle);
+            return false;
+        }
+
+        if (IsRunning())
+            (void)Stop();
+
+        m_processHandle = launch.processHandle;
+        m_jobHandle = launch.jobHandle;
+        m_pid = launch.pid;
+        return true;
+    }
+
+    bool OwnedEditorProcess::Poll(unsigned long& outExitCode)
+    {
+        if (!IsRunning() || !m_operations.poll(m_processHandle, outExitCode))
+            return false;
+
+        m_operations.close(m_processHandle, m_jobHandle);
+        Clear();
+        return true;
+    }
+
+    EditorProcessStopResult OwnedEditorProcess::Stop(unsigned long gracePeriodMs)
+    {
+        if (!IsRunning())
+            return EditorProcessStopResult::NotRunning;
+
+        const EditorProcessStopResult result =
+            m_operations.stopAndClose(m_processHandle, m_jobHandle, m_pid, gracePeriodMs);
+        Clear();
+        return result;
+    }
+
+    void OwnedEditorProcess::Clear() noexcept
+    {
+        m_processHandle = nullptr;
+        m_jobHandle = nullptr;
+        m_pid = 0;
     }
 
     std::string GetEditorExecutableDirectory()

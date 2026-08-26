@@ -227,9 +227,9 @@ class SparkEngineCamera
 
     /**
      * @brief Get the current camera position
-     * @return Position vector in world coordinates
+     * @return Owned position snapshot in world coordinates
      */
-    const XMFLOAT3& GetPosition() const
+    XMFLOAT3 GetPosition() const
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
         return m_position;
@@ -237,9 +237,9 @@ class SparkEngineCamera
 
     /**
      * @brief Get the current camera forward direction
-     * @return Normalized forward direction vector
+     * @return Owned normalized forward-direction snapshot
      */
-    const XMFLOAT3& GetForward() const
+    XMFLOAT3 GetForward() const
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
         return m_forward;

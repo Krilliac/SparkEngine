@@ -1,9 +1,10 @@
 # SparkDaemon
 
 Long-lived background process that owns shared mutable state (asset cache,
-shader cache, and — in future phases — collaborative editing sessions and
-build-watcher events) and serves multiple engine / editor / tool instances
-over a single IPC socket.
+shader cache, and the optional orchestration control plane) and serves multiple
+engine / editor / tool instances over local IPC. Collaboration is implemented
+by the separately isolated `SparkCollabServer`; build-watcher events remain a
+future service.
 
 Inspired by Wine's wineserver: one process serialises shared state, every
 client is a thin handle. The daemon is always **optional** — every engine
@@ -62,6 +63,8 @@ multiple clients solves all four with the same pattern.
           │  │  down)   │ │ (cache) │  │
           │  └──────────┘ └─────────┘  │
           └────────────────────────────┘
+
+          SparkCollabServer (separate process/trust boundary)
 ```
 
 Every client holds one `DaemonClient` (a single AF_UNIX socket). Each
@@ -107,8 +110,9 @@ Service IDs (`DaemonProtocol.h::ServiceId`):
 | 0x0000 | Control | shipped (ping, version, stats, shutdown) |
 | 0x0001 | Asset | shipped (cache get/put/invalidate/stats) |
 | 0x0002 | Shader | shipped (cache get/put/clear/stats) |
-| 0x0003 | Collab | reserved — future phase |
+| 0x0003 | Collab | shipped in standalone `SparkCollabServer` |
 | 0x0004 | Build | reserved — future phase |
+| 0x0005 | Orchestration | shipped, explicit opt-in in `SparkDaemon` |
 
 Message type `0x00FF` is **reserved across every service** as an error
 reply. Any service that can't handle a request returns a response with
@@ -181,6 +185,14 @@ the 255-byte NAME_MAX limit (tested with 500+ char paths).
 LRU eviction is enabled with `--asset-cache-max-mb <N>` (same semantics
 as the shader service) and `AssetCacheStats.evictionCount` is tracked
 on the wire.
+
+### Collaboration
+
+`SparkCollabServer` deliberately runs outside `SparkDaemon`. Its collaboration
+service uses capability tokens for session administration and peer operations,
+maintains authoritative presence and node locks, keeps bounded edit history,
+expires inactive peers, and releases their locks. The standalone binary uses
+the same local IPC framing and Control service as the daemon.
 
 ## Running the daemon
 
@@ -297,15 +309,11 @@ The pattern is established by `ShaderService` (Phase 2) and
 |----------|-----------|---------------|--------|
 | Linux | AF_UNIX sockets | ✅ | ✅ |
 | macOS | AF_UNIX sockets | ✅ (experimental, untested in CI) | ✅ |
-| Windows | Named pipes | ❌ (returns "not yet implemented") | Compiles but `Connect` fails |
+| Windows | Named pipes | ✅ | ✅ |
 
-Windows support is deferred until the first Windows-shipping service
-needs it. The CMake for `SparkDaemon` skips Windows targets entirely
-(`if(WIN32) return() endif()` in `SparkDaemon/CMakeLists.txt`).
-
-The engine client (`DaemonClient`) compiles cleanly on Windows — it
-just always reports "not supported" on `Connect`. Every engine code
-path degrades gracefully.
+Windows targets are built by `SparkDaemon/CMakeLists.txt`. The server uses
+same-user local named pipes and the engine client connects through
+`DaemonClient`; Unix platforms use owner-restricted domain sockets.
 
 ## Console commands
 
@@ -426,18 +434,11 @@ but summarised here for convenience:
 
 Still tracked in `.claude/knowledge/daemon-services-architecture-2026-04-16.md`:
 
-- **Collab broker.** Stateful sessions, lock arbitration, operation
-  history, presence tracking. Replaces the current P2P
-  `CollaborativeEditSession` with a daemon-brokered client-server
-  arrangement.
 - **Build monitor.** Watches CMake + source files, reports
   incremental rebuild events to editors.
 - **File watching + push notifications.** inotify/FSEvents/kqueue
   abstraction so the daemon can push `ShaderReloaded` / `AssetChanged`
   events to connected clients instead of every client polling.
-- **Windows named-pipe transport.** Real `CreateNamedPipe` /
-  `ConnectNamedPipe` implementation replacing the "not yet
-  implemented" stub.
 - **AssetPipeline engine wiring.** Bridge between the engine's typed
   `shared_ptr<Asset>` and the daemon's raw-blob Asset service.
 - **Actual shader compilation inside the daemon.** Warm DXC /

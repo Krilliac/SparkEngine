@@ -25,6 +25,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Spark::Daemon
@@ -126,14 +127,18 @@ namespace Spark::Daemon
     [[nodiscard]] inline bool DecodeGetAssetResponse(const std::vector<uint8_t>& bytes, GetAssetResponse& out)
     {
         Spark::BinaryReader r(bytes);
-        out.found = r.Read<uint8_t>() != 0;
+        GetAssetResponse decoded;
+        decoded.found = r.Read<uint8_t>() != 0;
         auto size = r.Read<uint32_t>();
+        if (r.HasError() || static_cast<size_t>(size) > r.Remaining())
+            return false;
+        decoded.blob.resize(size);
+        if (size > 0 && !r.ReadBytes(decoded.blob.data(), size))
+            return false;
         if (r.HasError())
             return false;
-        out.blob.resize(size);
-        if (size > 0 && !r.ReadBytes(out.blob.data(), size))
-            return false;
-        return !r.HasError();
+        out = std::move(decoded);
+        return true;
     }
 
     [[nodiscard]] inline std::vector<uint8_t> EncodePutAssetRequest(const PutAssetRequest& req)
@@ -150,15 +155,19 @@ namespace Spark::Daemon
     [[nodiscard]] inline bool DecodePutAssetRequest(const std::vector<uint8_t>& bytes, PutAssetRequest& out)
     {
         Spark::BinaryReader r(bytes);
-        out.key.path = r.ReadString();
-        out.key.platform = r.Read<uint8_t>();
+        PutAssetRequest decoded;
+        decoded.key.path = r.ReadString();
+        decoded.key.platform = r.Read<uint8_t>();
         auto size = r.Read<uint32_t>();
+        if (r.HasError() || static_cast<size_t>(size) > r.Remaining())
+            return false;
+        decoded.blob.resize(size);
+        if (size > 0 && !r.ReadBytes(decoded.blob.data(), size))
+            return false;
         if (r.HasError())
             return false;
-        out.blob.resize(size);
-        if (size > 0 && !r.ReadBytes(out.blob.data(), size))
-            return false;
-        return !r.HasError();
+        out = std::move(decoded);
+        return true;
     }
 
     [[nodiscard]] inline std::vector<uint8_t> EncodeInvalidateAssetRequest(const InvalidateAssetRequest& req)

@@ -34,7 +34,7 @@ namespace Terrafront
     {
         if (const SparkEngineCamera* cam = m_ctx->engine ? m_ctx->engine->GetCamera() : nullptr)
         {
-            const auto& p = cam->GetPosition();
+            const auto p = cam->GetPosition();
             out[0] = p.x;
             out[1] = p.y;
             out[2] = p.z;

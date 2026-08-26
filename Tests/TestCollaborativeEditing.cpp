@@ -6,14 +6,88 @@
  * peer management, and the live edit bridge.
  */
 
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
+
 #include "TestFramework.h"
 #include "Communication/CollaborativeEditSession.h"
 #include "Communication/LiveEditBridge.h"
+#include "Engine/Networking/NetworkBindPolicy.h"
 #include <cmath>
 #include <thread>
 #include <chrono>
 
 using namespace SparkEditor;
+
+namespace
+{
+#ifdef _WIN32
+    using TestSocketHandle = SOCKET;
+    constexpr TestSocketHandle INVALID_TEST_SOCKET = INVALID_SOCKET;
+
+    void CloseTestSocket(TestSocketHandle socket)
+    {
+        if (socket != INVALID_TEST_SOCKET)
+            ::closesocket(socket);
+    }
+#else
+    using TestSocketHandle = int;
+    constexpr TestSocketHandle INVALID_TEST_SOCKET = -1;
+
+    void CloseTestSocket(TestSocketHandle socket)
+    {
+        if (socket != INVALID_TEST_SOCKET)
+            ::close(socket);
+    }
+#endif
+
+    struct RefusedPortReservation
+    {
+        ~RefusedPortReservation()
+        {
+            CloseTestSocket(socket);
+        }
+
+        bool Reserve()
+        {
+            socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (socket == INVALID_TEST_SOCKET)
+                return false;
+
+            sockaddr_in address{};
+            address.sin_family = AF_INET;
+            address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            address.sin_port = htons(0);
+            if (::bind(socket, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0)
+                return false;
+
+#ifdef _WIN32
+            int addressLength = sizeof(address);
+#else
+            socklen_t addressLength = sizeof(address);
+#endif
+            if (::getsockname(socket, reinterpret_cast<sockaddr*>(&address), &addressLength) != 0)
+                return false;
+
+            port = ntohs(address.sin_port);
+            return port != 0;
+        }
+
+        TestSocketHandle socket = INVALID_TEST_SOCKET;
+        uint16_t port = 0;
+    };
+} // namespace
+
+#ifdef _WIN32
+static_assert(sizeof(CollaborativeSocketHandle) >= sizeof(void*),
+              "collaborative WinSock handles must remain pointer-width");
+#endif
 
 // ============================================================================
 // Serialization Tests
@@ -95,6 +169,35 @@ TEST(CollabEdit_SerializeDeserialize_LockRequest)
     EXPECT_TRUE(decoded.type == InternalMessageType::LockRequest);
     EXPECT_EQ(decoded.sourcePeer, 3u);
     EXPECT_EQ(decoded.nodeId, "Terrain_Root");
+}
+
+TEST(CollabEdit_NonEditSerialization_IsCanonical)
+{
+    InternalMessage baseline;
+    baseline.type = InternalMessageType::LockRequest;
+    baseline.sourcePeer = 3;
+    baseline.nodeId = "Terrain_Root";
+
+    InternalMessage withIrrelevantEdit = baseline;
+    withIrrelevantEdit.editMessage.type = EditMessageType::ComponentRemoved;
+    withIrrelevantEdit.editMessage.sourceEditor = 99;
+    withIrrelevantEdit.editMessage.nodeId = "must-not-reach-wire";
+    withIrrelevantEdit.editMessage.newValue = "must-not-reach-wire";
+
+    EXPECT_TRUE(baseline.editMessage.type == EditMessageType::NodeModified);
+    EXPECT_TRUE(SerializeMessage(baseline) == SerializeMessage(withIrrelevantEdit));
+}
+
+TEST(CollabEdit_LegacyP2PBindPolicy_DefaultsSafe)
+{
+    using namespace Spark::Net;
+    EXPECT_TRUE(ShouldUseLoopbackForUnauthenticatedTool(""));
+    EXPECT_TRUE(ShouldUseLoopbackForUnauthenticatedTool("loopback"));
+    EXPECT_TRUE(ShouldUseLoopbackForUnauthenticatedTool("typo"));
+    EXPECT_FALSE(ShouldUseLoopbackForUnauthenticatedTool("all"));
+    EXPECT_FALSE(ShouldUseLoopbackForUnauthenticatedTool("any"));
+    EXPECT_FALSE(ShouldUseLoopbackForUnauthenticatedTool("public"));
+    EXPECT_FALSE(ShouldUseLoopbackForUnauthenticatedTool("0.0.0.0"));
 }
 
 TEST(CollabEdit_DeserializeEmpty_ReturnsFalse)
@@ -391,6 +494,15 @@ TEST(CollabEdit_HostAndConnect)
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
     host.Update(0.1f);
     host.Disconnect();
+}
+
+TEST(CollabEdit_ConnectToRefusedPort)
+{
+    CollaborativeEditSession client;
+    RefusedPortReservation reservation;
+    EXPECT_TRUE(reservation.Reserve());
+    EXPECT_FALSE(client.Connect("127.0.0.1", reservation.port, "RefusedClient"));
+    EXPECT_FALSE(client.IsConnected());
 }
 
 // ============================================================================

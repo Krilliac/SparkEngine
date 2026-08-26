@@ -4,7 +4,8 @@
  *
  * Standalone application launched by SparkEngine at startup. Monitors the
  * engine process and, when a crash is detected, shows a user-facing dialog
- * with consent, description input, screenshot preview, and handles upload.
+ * with consent, description input, screenshot selection, and local report
+ * preparation. Network delivery is not implemented by this executable.
  *
  * Communication:
  *   Engine writes a crash manifest file (JSON) to a known path, then signals
@@ -15,7 +16,7 @@
  *   - Survives total process corruption (heap trashed, stack overflow)
  *   - Can show a proper GUI with text input (not just MessageBox buttons)
  *   - Non-blocking: engine process can terminate immediately
- *   - More reliable upload delivery
+ *   - Reliable crash-artifact collection after the engine exits
  */
 
 #pragma once
@@ -38,10 +39,10 @@ namespace SparkCrashReporter
         std::string uploadURL;              ///< Upload URL (auto-detect backend)
         std::string proxyURL;               ///< Proxy relay URL
         std::string githubRepo;             ///< GitHub repo for direct API
-        std::string githubToken;            ///< GitHub PAT (dev builds)
+        std::string githubToken;            ///< Legacy manifest input only; never persisted by the writer
         std::string githubLabels;           ///< Issue labels
         std::string smtpUser;               ///< SMTP username
-        std::string smtpPass;               ///< SMTP password
+        std::string smtpPass;               ///< Legacy manifest input only; never persisted by the writer
         std::string emailTo;                ///< Email recipient
         std::string emailFrom;              ///< Email sender
         bool requireConsent = true;         ///< Show consent dialog
@@ -56,7 +57,7 @@ namespace SparkCrashReporter
     /// Write a crash manifest to a JSON file
     bool WriteManifest(const std::string& path, const CrashManifest& manifest);
 
-    /// Run the crash reporter GUI and upload flow
+    /// Run the crash reporter UI and prepare the local report
     /// Returns 0 on success, non-zero on error
     int RunCrashReporter(const CrashManifest& manifest);
 

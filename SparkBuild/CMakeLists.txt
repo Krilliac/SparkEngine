@@ -83,6 +83,30 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(SparkBuild PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+option(SPARKBUILD_BUILD_TESTS "Build SparkBuild focused regression tests" ON)
+if(SPARKBUILD_BUILD_TESTS)
+    enable_testing()
+    add_executable(SparkBuildProcessRunnerTests
+        tests/ProcessRunnerTests.cpp
+    )
+    target_link_libraries(SparkBuildProcessRunnerTests PRIVATE SparkBuildCore)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(SparkBuildProcessRunnerTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME SparkBuildProcessRunnerTests COMMAND SparkBuildProcessRunnerTests)
+    set_tests_properties(SparkBuildProcessRunnerTests PROPERTIES TIMEOUT 25)
+
+    add_executable(SparkBuildDownloaderTests
+        tests/DownloaderTests.cpp
+    )
+    target_link_libraries(SparkBuildDownloaderTests PRIVATE SparkBuildCore)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(SparkBuildDownloaderTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME SparkBuildDownloaderTests COMMAND SparkBuildDownloaderTests)
+    set_tests_properties(SparkBuildDownloaderTests PROPERTIES TIMEOUT 10)
+endif()
+
 # Standalone consumers retain the historical flat output. The SparkEngine
 # superproject supplies configuration-specific directories for multi-config
 # generators so Debug and Release artifacts cannot overwrite one another.

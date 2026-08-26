@@ -4,12 +4,19 @@
 
 #ifdef ENABLE_NETWORKING
 
+#include <atomic>
+#include <chrono>
 #include <string>
+#include <thread>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 using namespace Spark::Net;
+
+static_assert(std::is_same_v<decltype(std::declval<const DedicatedServer&>().GetLanBroadcastSnapshot()),
+                             LanBroadcastSnapshot>);
 
 namespace
 {
@@ -230,6 +237,95 @@ TEST(DedicatedServerRuntime_StopClearsHandlersAndShutsDownRuntime)
     EXPECT_TRUE(runtime.shutdownCalled);
     EXPECT_TRUE(runtime.clearHandlersCalled);
     EXPECT_TRUE(runtime.handlers.empty());
+}
+
+TEST(DedicatedServerRuntime_LanBroadcastSocketFailureClearsActiveAndAllowsRestart)
+{
+    MockNetworkRuntime runtime;
+    std::atomic<int> socketAttempts{0};
+    DedicatedServer server(runtime,
+                           [&socketAttempts]()
+                           {
+                               socketAttempts.fetch_add(1, std::memory_order_relaxed);
+                               return INVALID_SOCKET;
+                           });
+
+    ServerConfig config;
+    config.enableLanBroadcast = false;
+    config.enableLogging = false;
+    EXPECT_TRUE(server.InitializeOnly(config));
+
+    const auto waitUntilInactive = [&server]()
+    {
+        for (int i = 0; i < 500 && server.IsLanBroadcastActive(); ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        return !server.IsLanBroadcastActive();
+    };
+
+    server.StartLanBroadcast();
+    EXPECT_TRUE(waitUntilInactive());
+    EXPECT_EQ(socketAttempts.load(std::memory_order_relaxed), 1);
+
+    // Starting again must first reclaim the failed joinable worker instead of
+    // assigning over it (which would terminate the process).
+    server.StartLanBroadcast();
+    EXPECT_TRUE(waitUntilInactive());
+    EXPECT_EQ(socketAttempts.load(std::memory_order_relaxed), 2);
+
+    server.StopLanBroadcast();
+    server.Stop();
+}
+
+TEST(DedicatedServerRuntime_LanBroadcastSnapshotIsOwnedAndConsistentDuringMapMutation)
+{
+    MockNetworkRuntime runtime;
+    DedicatedServer server(runtime);
+
+    ServerConfig config;
+    config.serverName = "Snapshot Server";
+    config.port = 28015;
+    config.maxClients = 24;
+    config.lanBroadcastPort = 28016;
+    config.enableLanBroadcast = false;
+    config.enableLogging = false;
+    config.mapRotation = {"map_alpha", "map_beta"};
+    EXPECT_TRUE(server.InitializeOnly(config));
+
+    const LanBroadcastSnapshot retained = server.GetLanBroadcastSnapshot();
+    EXPECT_EQ(retained.server.serverName, std::string("Snapshot Server"));
+    EXPECT_EQ(retained.server.mapName, std::string("map_alpha"));
+    EXPECT_EQ(retained.server.port, static_cast<uint16_t>(28015));
+    EXPECT_EQ(retained.server.maxPlayers, 24);
+    EXPECT_EQ(retained.broadcastPort, static_cast<uint16_t>(28016));
+
+    server.ChangeMap("map_beta");
+    const LanBroadcastSnapshot changed = server.GetLanBroadcastSnapshot();
+    EXPECT_EQ(changed.server.mapName, std::string("map_beta"));
+    EXPECT_EQ(retained.server.mapName, std::string("map_alpha"));
+
+    std::atomic<bool> badSnapshot{false};
+    std::thread mapWriter(
+        [&server]()
+        {
+            for (int i = 0; i < 64; ++i)
+                server.ChangeMap((i & 1) == 0 ? "map_alpha" : "map_beta");
+        });
+
+    for (int i = 0; i < 256; ++i)
+    {
+        const LanBroadcastSnapshot snapshot = server.GetLanBroadcastSnapshot();
+        if (snapshot.server.serverName != "Snapshot Server" ||
+            (snapshot.server.mapName != "map_alpha" && snapshot.server.mapName != "map_beta") ||
+            snapshot.server.port != 28015 || snapshot.server.maxPlayers != 24 || snapshot.broadcastPort != 28016)
+        {
+            badSnapshot.store(true, std::memory_order_relaxed);
+            break;
+        }
+    }
+    mapWriter.join();
+
+    EXPECT_FALSE(badSnapshot.load(std::memory_order_relaxed));
+    server.Stop();
 }
 
 #endif // ENABLE_NETWORKING

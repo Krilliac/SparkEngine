@@ -164,16 +164,31 @@ static std::string MakeManifestJson(const std::string& dumpFile, const std::stri
     auto jsonEsc = [](const std::string& s) -> std::string
     {
         std::string out;
-        for (char c : s)
+        constexpr char hex[] = "0123456789abcdef";
+        for (unsigned char c : s)
         {
             if (c == '"')
                 out += "\\\"";
             else if (c == '\\')
                 out += "\\\\";
+            else if (c == '\b')
+                out += "\\b";
+            else if (c == '\f')
+                out += "\\f";
             else if (c == '\n')
                 out += "\\n";
+            else if (c == '\r')
+                out += "\\r";
+            else if (c == '\t')
+                out += "\\t";
+            else if (c < 0x20)
+            {
+                out += "\\u00";
+                out.push_back(hex[c >> 4]);
+                out.push_back(hex[c & 0x0F]);
+            }
             else
-                out += c;
+                out += static_cast<char>(c);
         }
         return out;
     };
@@ -190,10 +205,8 @@ static std::string MakeManifestJson(const std::string& dumpFile, const std::stri
     j << "  \"uploadURL\": \"" << jsonEsc(g_cfg.uploadURL) << "\",\n";
     j << "  \"proxyURL\": \"" << jsonEsc(g_cfg.proxyURL) << "\",\n";
     j << "  \"githubRepo\": \"" << jsonEsc(g_cfg.githubRepo) << "\",\n";
-    j << "  \"githubToken\": \"" << jsonEsc(g_cfg.githubToken) << "\",\n";
     j << "  \"githubLabels\": \"" << jsonEsc(g_cfg.githubLabels) << "\",\n";
     j << "  \"smtpUser\": \"" << jsonEsc(g_cfg.smtpUser) << "\",\n";
-    j << "  \"smtpPass\": \"" << jsonEsc(g_cfg.smtpPass) << "\",\n";
     j << "  \"emailTo\": \"" << jsonEsc(g_cfg.emailTo) << "\",\n";
     j << "  \"emailFrom\": \"" << jsonEsc(g_cfg.emailFrom) << "\",\n";
     j << "  \"requireConsent\": " << (g_cfg.requireConsent ? "true" : "false") << ",\n";

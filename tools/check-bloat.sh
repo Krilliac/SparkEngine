@@ -110,7 +110,10 @@ check_new_only() {
     local current
     current=$(generate_violation_list)
     local new_violations
-    new_violations=$(comm -23 <(echo "$current") <(sort "$BASELINE"))
+    # Baselines are tracked in Git and may be checked out with CRLF on Windows.
+    # Normalize only the comparison stream so a platform line-ending change does
+    # not make every known violation appear new.
+    new_violations=$(comm -23 <(echo "$current") <(tr -d '\r' < "$BASELINE" | sort))
 
     if [ -z "$new_violations" ]; then
         local known

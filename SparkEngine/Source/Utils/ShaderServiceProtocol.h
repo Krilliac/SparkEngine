@@ -22,6 +22,7 @@
 #include "Serializer.h"
 
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace Spark::Daemon
@@ -118,14 +119,18 @@ namespace Spark::Daemon
     [[nodiscard]] inline bool DecodeGetCacheEntryResponse(const std::vector<uint8_t>& bytes, GetCacheEntryResponse& out)
     {
         Spark::BinaryReader r(bytes);
-        out.found = r.Read<uint8_t>() != 0;
+        GetCacheEntryResponse decoded;
+        decoded.found = r.Read<uint8_t>() != 0;
         auto size = r.Read<uint32_t>();
+        if (r.HasError() || static_cast<size_t>(size) > r.Remaining())
+            return false;
+        decoded.blob.resize(size);
+        if (size > 0 && !r.ReadBytes(decoded.blob.data(), size))
+            return false;
         if (r.HasError())
             return false;
-        out.blob.resize(size);
-        if (size > 0 && !r.ReadBytes(out.blob.data(), size))
-            return false;
-        return !r.HasError();
+        out = std::move(decoded);
+        return true;
     }
 
     [[nodiscard]] inline std::vector<uint8_t> EncodePutCacheEntryRequest(const PutCacheEntryRequest& req)
@@ -143,16 +148,20 @@ namespace Spark::Daemon
     [[nodiscard]] inline bool DecodePutCacheEntryRequest(const std::vector<uint8_t>& bytes, PutCacheEntryRequest& out)
     {
         Spark::BinaryReader r(bytes);
-        out.key.sourceHash = r.Read<uint64_t>();
-        out.key.target = r.Read<uint8_t>();
-        out.key.stage = r.Read<uint8_t>();
+        PutCacheEntryRequest decoded;
+        decoded.key.sourceHash = r.Read<uint64_t>();
+        decoded.key.target = r.Read<uint8_t>();
+        decoded.key.stage = r.Read<uint8_t>();
         auto size = r.Read<uint32_t>();
+        if (r.HasError() || static_cast<size_t>(size) > r.Remaining())
+            return false;
+        decoded.blob.resize(size);
+        if (size > 0 && !r.ReadBytes(decoded.blob.data(), size))
+            return false;
         if (r.HasError())
             return false;
-        out.blob.resize(size);
-        if (size > 0 && !r.ReadBytes(out.blob.data(), size))
-            return false;
-        return !r.HasError();
+        out = std::move(decoded);
+        return true;
     }
 
     [[nodiscard]] inline std::vector<uint8_t> EncodeShaderCacheStats(const ShaderCacheStats& stats)

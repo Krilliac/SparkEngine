@@ -356,12 +356,19 @@ static int CompileSingleShader(const CompilerConfig& config)
 // ARGUMENT PARSING
 // ============================================================================
 
-static bool ParseArgs(int argc, char* argv[], CompilerConfig& config)
+enum class ParseResult
+{
+    Success,
+    Help,
+    Error,
+};
+
+static ParseResult ParseArgs(int argc, char* argv[], CompilerConfig& config)
 {
     if (argc < 2)
     {
         PrintUsage(argv[0]);
-        return false;
+        return ParseResult::Error;
     }
 
     bool stageExplicit = false;
@@ -373,7 +380,7 @@ static bool ParseArgs(int argc, char* argv[], CompilerConfig& config)
         if (arg == "-h" || arg == "--help")
         {
             PrintUsage(argv[0]);
-            return false;
+            return ParseResult::Help;
         }
         else if (arg == "-o" && i + 1 < argc)
         {
@@ -435,7 +442,7 @@ static bool ParseArgs(int argc, char* argv[], CompilerConfig& config)
         else
         {
             std::cerr << "Unknown option: " << arg << "\n";
-            return false;
+            return ParseResult::Error;
         }
     }
 
@@ -449,10 +456,10 @@ static bool ParseArgs(int argc, char* argv[], CompilerConfig& config)
     {
         std::cerr << "Error: No input file specified.\n";
         PrintUsage(argv[0]);
-        return false;
+        return ParseResult::Error;
     }
 
-    return true;
+    return ParseResult::Success;
 }
 
 // ============================================================================
@@ -463,7 +470,10 @@ int main(int argc, char* argv[])
 {
     CompilerConfig config;
 
-    if (!ParseArgs(argc, argv, config))
+    const ParseResult parseResult = ParseArgs(argc, argv, config);
+    if (parseResult == ParseResult::Help)
+        return 0;
+    if (parseResult == ParseResult::Error)
         return 1;
 
     // Single file compilation

@@ -140,13 +140,13 @@ namespace SparkEditor
  */
     struct EngineCommand
     {
-        EngineCommandType type;                                  ///< Command type
-        uint64_t commandID;                                      ///< Unique command identifier
+        EngineCommandType type = EngineCommandType::CUSTOM_COMMAND; ///< Command type
+        uint64_t commandID = 0;                                  ///< Unique command identifier
         std::string targetObjectID;                              ///< Target object (if applicable)
         std::string componentType;                               ///< Component type (if applicable)
         std::unordered_map<std::string, std::string> parameters; ///< Command parameters
         std::vector<uint8_t> binaryData;                         ///< Binary data payload
-        uint64_t timestamp;                                      ///< Command timestamp
+        uint64_t timestamp = 0;                                  ///< Command timestamp
     };
 
     /**
@@ -154,13 +154,13 @@ namespace SparkEditor
  */
     struct EngineEvent
     {
-        EngineEventType type;                              ///< Event type
-        uint64_t eventID;                                  ///< Unique event identifier
+        EngineEventType type = EngineEventType::CUSTOM_EVENT; ///< Event type
+        uint64_t eventID = 0;                              ///< Unique event identifier
         std::string sourceObjectID;                        ///< Source object (if applicable)
         std::string message;                               ///< Event message
         std::unordered_map<std::string, std::string> data; ///< Event data
         std::vector<uint8_t> binaryData;                   ///< Binary data payload
-        uint64_t timestamp;                                ///< Event timestamp
+        uint64_t timestamp = 0;                            ///< Event timestamp
         int severity = 0;                                  ///< Event severity (0=info, 1=warning, 2=error)
     };
 
@@ -193,7 +193,7 @@ namespace SparkEditor
         std::string audioAPI;                      ///< Audio API in use
         std::vector<std::string> supportedFormats; ///< Supported asset formats
         std::vector<std::string> capabilities;     ///< Engine capabilities
-        uint64_t startTime;                        ///< Engine start timestamp
+        uint64_t startTime = 0;                    ///< Engine start timestamp
         bool debugMode = false;                    ///< Whether debug mode is enabled
     };
 
@@ -347,6 +347,15 @@ namespace SparkEditor
      */
         void ClearConnectionStats();
 
+        /// Maximum accepted serialized engine event size.
+        static constexpr size_t kMaxEventMessageSize = 16u * 1024u * 1024u;
+
+        /**
+         * @brief Decode one complete engine event without partially mutating output on failure.
+         * @return true only when every declared field fits in @p buffer.
+         */
+        static bool DeserializeEvent(const std::vector<uint8_t>& buffer, EngineEvent& event);
+
       private:
         /**
      * @brief Thread function for handling communication
@@ -375,14 +384,6 @@ namespace SparkEditor
      * @return true if serialization succeeded
      */
         bool SerializeCommand(const EngineCommand& command, std::vector<uint8_t>& buffer);
-
-        /**
-     * @brief Deserialize event from binary format
-     * @param buffer Input buffer
-     * @param event Output event
-     * @return true if deserialization succeeded
-     */
-        bool DeserializeEvent(const std::vector<uint8_t>& buffer, EngineEvent& event);
 
         /**
      * @brief Create named pipe for communication

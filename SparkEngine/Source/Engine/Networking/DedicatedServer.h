@@ -178,6 +178,16 @@ namespace Spark::Net
         float ping = 0.0f; ///< Filled in by the discovering client
     };
 
+    /// @brief Immutable state consumed by one LAN broadcast iteration.
+    struct LanBroadcastSnapshot
+    {
+        ServerBroadcastInfo server;
+        uint16_t broadcastPort = 27016;
+        float intervalSeconds = 3.0f;
+    };
+
+    using LanBroadcastSocketFactory = std::function<SOCKET()>;
+
     // ============================================================================
     // Dedicated Server
     // ============================================================================
@@ -199,6 +209,7 @@ namespace Spark::Net
       public:
         DedicatedServer();
         explicit DedicatedServer(INetworkRuntime& networkRuntime);
+        DedicatedServer(INetworkRuntime& networkRuntime, LanBroadcastSocketFactory lanSocketFactory);
         ~DedicatedServer();
 
         // Non-copyable
@@ -290,6 +301,12 @@ namespace Spark::Net
         /// @brief Stop LAN broadcasting.
         void StopLanBroadcast();
 
+        /// @brief Whether the LAN broadcast worker is currently active.
+        bool IsLanBroadcastActive() const { return m_lanBroadcastActive.load(std::memory_order_acquire); }
+
+        /// @brief Capture all state needed to produce one broadcast packet.
+        [[nodiscard]] LanBroadcastSnapshot GetLanBroadcastSnapshot() const;
+
         /// @brief Discover LAN servers (client-side static utility).
         /// @param broadcastPort Port to listen for server broadcasts.
         /// @param timeoutMs How long to listen.
@@ -337,6 +354,7 @@ namespace Spark::Net
         ServerConfig m_config;
         ServerCallbacks m_callbacks;
         ServerStats m_stats;
+        mutable std::mutex m_stateMutex; ///< Protects state copied into LAN broadcast snapshots.
         std::atomic<bool> m_running{false};
         bool m_matchInProgress = false;
         float m_matchTimeRemaining = 0.0f;
@@ -355,6 +373,8 @@ namespace Spark::Net
         // LAN broadcast
         std::atomic<bool> m_lanBroadcastActive{false};
         std::thread m_lanBroadcastThread;
+        mutable std::mutex m_lanBroadcastLifecycleMutex; ///< Serializes start/stop and thread replacement.
+        LanBroadcastSocketFactory m_lanSocketFactory;
         float m_lanBroadcastInterval = 3.0f; ///< Seconds between broadcasts
 
         // Bans (in-memory for the session)

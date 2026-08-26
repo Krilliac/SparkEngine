@@ -150,12 +150,37 @@ namespace Spark::Net
         }
     }
 
-    ReplicatedEntity* NetworkManager::GetReplicatedEntity(uint32_t networkID)
+    std::optional<ReplicatedEntity> NetworkManager::GetReplicatedEntitySnapshot(uint32_t networkID) const
     {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         std::lock_guard<std::mutex> lock(m_replicationMutex);
         auto it = m_replicatedEntities.find(networkID);
-        return (it != m_replicatedEntities.end()) ? &it->second : nullptr;
+        if (it == m_replicatedEntities.end())
+            return std::nullopt;
+        return it->second;
+    }
+
+    bool NetworkManager::UpdateReplicatedEntity(uint32_t networkID, const ReplicatedEntityUpdate& update)
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        std::lock_guard<std::mutex> lock(m_replicationMutex);
+        auto it = m_replicatedEntities.find(networkID);
+        if (it == m_replicatedEntities.end())
+            return false;
+
+        auto& entity = it->second;
+        if (update.position)
+            entity.position = *update.position;
+        if (update.rotation)
+            entity.rotation = *update.rotation;
+        if (update.velocity)
+            entity.velocity = *update.velocity;
+        if (update.areaId)
+            entity.areaId = *update.areaId;
+        if (update.needsFullSync)
+            entity.needsFullSync = *update.needsFullSync;
+        ++m_replicationMutationEpoch;
+        return true;
     }
 
     void NetworkManager::SendFullEntitySync(ClientID targetClient)

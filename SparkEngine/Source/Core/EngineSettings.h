@@ -822,13 +822,14 @@ class EngineSettings
     // Lifecycle
     // =========================================================================
 
-    /// Load settings from file. Creates defaults if file doesn't exist.
+    /// Load settings transactionally. Creates defaults if the file doesn't exist.
+    /// Returns false if an existing file/override cannot be parsed or defaults cannot be persisted.
     bool Load(const std::string& path = "");
 
-    /// Save current settings to file.
+    /// Atomically save current settings to the loaded file path.
     bool Save() const;
 
-    /// Save to a specific path.
+    /// Atomically save to a specific path without changing the loaded file path.
     bool SaveAs(const std::string& path) const;
 
     /// Reset all settings to defaults.

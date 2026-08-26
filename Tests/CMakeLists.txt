@@ -310,7 +310,9 @@ add_executable(SparkTests
     TestInputManagerState.cpp
     TestGamepadInputProcessing.cpp
     TestCameraTransforms.cpp
+    TestSparkEngineCameraOwnership.cpp
     TestWorldServerRouting.cpp
+    TestWorldServerConcurrency.cpp
     TestAudioMixerBus.cpp
     TestConsoleVariables.cpp
     TestWeaponMechanics.cpp
@@ -591,6 +593,8 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/BinarySceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp"
     # Editor sources needed by tests
+    TestEngineInterfaceProtocol.cpp
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/EngineInterface.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Workflow/EditorWorkflow.cpp"

@@ -30,6 +30,7 @@
 #include <memory>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <cstdint>
 #include <chrono>
@@ -268,6 +269,22 @@ namespace Spark::Net
         NetworkInterpolationBuffer interpolationBuffer;
     };
 
+    /**
+     * @brief Atomic field patch for a replicated entity.
+     *
+     * Only populated fields are changed. This value-only API lets callers update
+     * replication state without borrowing a pointer or reference to the manager's
+     * internal entity map.
+     */
+    struct ReplicatedEntityUpdate
+    {
+        std::optional<XMFLOAT3> position;
+        std::optional<XMFLOAT3> rotation;
+        std::optional<XMFLOAT3> velocity;
+        std::optional<uint32_t> areaId;
+        std::optional<bool> needsFullSync;
+    };
+
     // ============================================================================
     // Client Input (for prediction/reconciliation)
     // ============================================================================
@@ -411,8 +428,10 @@ namespace Spark::Net
         uint32_t RegisterReplicatedEntity(const ReplicatedEntity& entity);
         void UnregisterReplicatedEntity(uint32_t networkID);
         void MarkPropertyDirty(uint32_t networkID, const std::string& propertyName);
-        /// [game thread] Borrowed pointer; invalidated by unregister/shutdown.
-        ReplicatedEntity* GetReplicatedEntity(uint32_t networkID);
+        /// Return a value snapshot that remains valid across concurrent mutation or unregister.
+        [[nodiscard]] std::optional<ReplicatedEntity> GetReplicatedEntitySnapshot(uint32_t networkID) const;
+        /// Atomically apply populated fields without exposing internal map storage.
+        [[nodiscard]] bool UpdateReplicatedEntity(uint32_t networkID, const ReplicatedEntityUpdate& update);
 
         /// Serialize and send full state for all replicated entities (server only)
         void SendFullEntitySync(ClientID targetClient);

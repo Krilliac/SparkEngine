@@ -1147,9 +1147,23 @@ namespace Spark
     {
         try
         {
+            constexpr uintmax_t kMaxSaveFileSize = 512ull * 1024ull * 1024ull;
+
             // Parse transactionally so a malformed file never leaves callers
             // with a partially populated SaveData object.
             SaveData parsedData;
+
+            // Enforce the same cap before consulting LocalFileCache. Otherwise a
+            // cached read can materialize an oversized file and bypass the direct
+            // stream branch's limit entirely.
+            std::error_code sizeError;
+            const uintmax_t onDiskSize = std::filesystem::file_size(filepath, sizeError);
+            if (!sizeError && onDiskSize > kMaxSaveFileSize)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file too large: %llu bytes",
+                               static_cast<unsigned long long>(onDiskSize));
+                return false;
+            }
 
             // Try reading via file cache for binary data
             std::vector<uint8_t> fileData;
@@ -1187,8 +1201,7 @@ namespace Spark
                 file.seekg(0, std::ios::beg);
 
                 // Sanity cap: reject unreasonably large save files (512 MB)
-                constexpr auto kMaxSaveFileSize = static_cast<std::streamoff>(512 * 1024 * 1024);
-                if (size > kMaxSaveFileSize)
+                if (static_cast<uintmax_t>(size) > kMaxSaveFileSize)
                 {
                     SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file too large: %lld bytes",
                                    static_cast<long long>(size));
@@ -1203,6 +1216,15 @@ namespace Spark
                                    static_cast<long long>(size));
                     return false;
                 }
+            }
+
+            // A cache entry may outlive an external file replacement. Keep the
+            // parser cap authoritative even when the on-disk preflight raced or
+            // the value came from an existing cache entry.
+            if (fileData.size() > kMaxSaveFileSize)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Cached save file too large: %zu bytes", fileData.size());
+                return false;
             }
 
             if (fileData.size() < 8)

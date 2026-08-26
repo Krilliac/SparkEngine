@@ -136,7 +136,7 @@ namespace SparkEditor
         MessageCallback m_messageCallback;
 
         std::string m_host;
-        int m_port;
+        int m_port = 0;
 
         // External console process handles
 #ifdef _WIN32

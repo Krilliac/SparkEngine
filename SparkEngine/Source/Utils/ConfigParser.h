@@ -45,6 +45,7 @@
 #include <sstream>
 #include <algorithm>
 #include <optional>
+#include <utility>
 
 #include "StringUtils.h"
 
@@ -69,6 +70,8 @@ namespace Spark
             if (!file.is_open())
                 return false;
             std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            if (file.bad())
+                return false;
             return LoadFromString(content);
         }
 
@@ -78,13 +81,20 @@ namespace Spark
         /// Parse from a string
         bool LoadFromString(const std::string& content)
         {
-            m_sections.clear();
+            // Parse into a temporary map so a malformed reload cannot destroy
+            // the last known-good configuration.
+            decltype(m_sections) parsedSections;
             std::string currentSection;
             std::istringstream stream(content);
             std::string line;
+            bool firstLine = true;
 
             while (std::getline(stream, line))
             {
+                if (firstLine && line.starts_with("\xEF\xBB\xBF"))
+                    line.erase(0, 3);
+                firstLine = false;
+
                 line = Trim(line);
                 if (line.empty())
                     continue;
@@ -94,25 +104,33 @@ namespace Spark
                     continue;
 
                 // Section header
-                if (line.front() == '[' && line.back() == ']')
+                if (line.front() == '[')
                 {
+                    if (line.back() != ']')
+                        return false;
+
                     currentSection = Trim(line.substr(1, line.size() - 2));
-                    m_sections[currentSection]; // Create section if not exists
+                    if (currentSection.empty())
+                        return false;
+
+                    parsedSections[currentSection]; // Create section if not exists
                     continue;
                 }
 
                 // Key = Value
                 auto eq = line.find('=');
-                if (eq != std::string::npos)
-                {
-                    std::string key = Trim(line.substr(0, eq));
-                    std::string value = Trim(line.substr(eq + 1));
-                    if (!key.empty())
-                    {
-                        m_sections[currentSection][key] = value;
-                    }
-                }
+                if (eq == std::string::npos)
+                    return false;
+
+                std::string key = Trim(line.substr(0, eq));
+                if (key.empty())
+                    return false;
+
+                std::string value = Trim(line.substr(eq + 1));
+                parsedSections[currentSection][key] = value;
             }
+
+            m_sections = std::move(parsedSections);
             return true;
         }
 

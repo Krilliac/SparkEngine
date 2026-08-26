@@ -18,6 +18,7 @@
 #include <windows.h>
 #include <process.h>
 #else
+#include <cerrno>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
@@ -86,30 +87,17 @@ namespace SparkEditor
                 if (m_networkThread.joinable())
                 {
                     std::cout << "Waiting for network thread to finish...\n";
-
-                    auto start = std::chrono::steady_clock::now();
-                    while (m_networkThread.joinable())
+                    try
                     {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                        auto elapsed = std::chrono::steady_clock::now() - start;
-                        if (elapsed > std::chrono::seconds(2))
-                        {
-                            std::cout << "Network thread join timeout - forcing termination\n";
-                            break;
-                        }
+                        // joinable() only means the thread owns a handle; it does not
+                        // become false when the function returns. m_running is already
+                        // clear, so join directly instead of imposing a guaranteed delay.
+                        m_networkThread.join();
+                        std::cout << "Network thread joined successfully\n";
                     }
-
-                    if (m_networkThread.joinable())
+                    catch (const std::exception& e)
                     {
-                        try
-                        {
-                            m_networkThread.join();
-                            std::cout << "Network thread joined successfully\n";
-                        }
-                        catch (const std::exception& e)
-                        {
-                            std::cout << "Exception joining network thread: " << e.what() << "\n";
-                        }
+                        std::cout << "Exception joining network thread: " << e.what() << "\n";
                     }
                 }
 
@@ -187,18 +175,33 @@ namespace SparkEditor
                         }
                     }
 
-                    // Wait briefly for graceful shutdown
                     int status = 0;
-                    pid_t result = waitpid(m_consolePid, &status, WNOHANG);
-                    if (result == 0)
+                    auto waitForExit = [&](std::chrono::milliseconds timeout)
                     {
-                        usleep(500000); // 500ms grace period
-                        result = waitpid(m_consolePid, &status, WNOHANG);
-                        if (result == 0)
+                        const auto deadline = std::chrono::steady_clock::now() + timeout;
+                        while (std::chrono::steady_clock::now() < deadline)
                         {
-                            kill(m_consolePid, SIGTERM);
-                            usleep(200000);
-                            waitpid(m_consolePid, &status, WNOHANG);
+                            const pid_t result = waitpid(m_consolePid, &status, WNOHANG);
+                            if (result == m_consolePid || (result < 0 && errno == ECHILD))
+                                return true;
+                            if (result < 0 && errno != EINTR)
+                                return false;
+                            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                        }
+                        return false;
+                    };
+
+                    bool reaped = waitForExit(std::chrono::milliseconds(500));
+                    if (!reaped)
+                    {
+                        (void)kill(m_consolePid, SIGTERM);
+                        reaped = waitForExit(std::chrono::milliseconds(200));
+                    }
+                    if (!reaped)
+                    {
+                        (void)kill(m_consolePid, SIGKILL);
+                        while (waitpid(m_consolePid, &status, 0) < 0 && errno == EINTR)
+                        {
                         }
                     }
                     m_consolePid = -1;
@@ -574,7 +577,7 @@ namespace SparkEditor
 
             std::cout << "Creating console process: " << commandLine << "\n";
 
-            BOOL success = CreateProcessA(NULL, const_cast<char*>(commandLine.c_str()), NULL, NULL, TRUE, creationFlags,
+            BOOL success = CreateProcessA(NULL, commandLine.data(), NULL, NULL, TRUE, creationFlags,
                                           NULL, NULL, &si, &pi);
 
             if (!success)

@@ -53,6 +53,39 @@ if(REPORTER_SOURCES)
     endif()
 
     message(STATUS "SparkCrashReporter will be built")
+
+    if(BUILD_TESTS)
+        if(PROJECT_IS_TOP_LEVEL)
+            enable_testing()
+        endif()
+
+        add_executable(SparkCrashReporterManifestTests
+            tests/CrashReporterManifestTests.cpp
+            src/CrashReporterApp.cpp
+            src/CrashReporterApp.h
+        )
+        target_include_directories(SparkCrashReporterManifestTests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+        )
+        target_compile_definitions(SparkCrashReporterManifestTests PRIVATE
+            _CRT_SECURE_NO_WARNINGS
+        )
+        if(WIN32)
+            target_compile_definitions(SparkCrashReporterManifestTests PRIVATE
+                WIN32_LEAN_AND_MEAN
+                NOMINMAX
+                SPARK_PLATFORM_WINDOWS
+            )
+            target_link_libraries(SparkCrashReporterManifestTests PRIVATE
+                kernel32 user32
+            )
+        else()
+            target_link_libraries(SparkCrashReporterManifestTests PRIVATE Threads::Threads)
+        endif()
+
+        add_test(NAME SparkCrashReporter.ManifestCompatibility
+                 COMMAND SparkCrashReporterManifestTests)
+    endif()
 else()
     message(STATUS "SparkCrashReporter: no source files found, skipping")
 endif()

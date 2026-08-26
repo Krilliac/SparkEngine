@@ -30,6 +30,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <utility>
 
 namespace Spark::Net
 {
@@ -48,7 +49,17 @@ namespace Spark::Net
 
     DedicatedServer::DedicatedServer() : DedicatedServer(GetDefaultNetworkRuntime()) {}
 
-    DedicatedServer::DedicatedServer(INetworkRuntime& networkRuntime) : m_networkRuntime(&networkRuntime) {}
+    DedicatedServer::DedicatedServer(INetworkRuntime& networkRuntime)
+        : DedicatedServer(networkRuntime, []() { return ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP); })
+    {
+    }
+
+    DedicatedServer::DedicatedServer(INetworkRuntime& networkRuntime, LanBroadcastSocketFactory lanSocketFactory)
+        : m_lanSocketFactory(std::move(lanSocketFactory)), m_networkRuntime(&networkRuntime)
+    {
+        if (!m_lanSocketFactory)
+            m_lanSocketFactory = []() { return ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP); };
+    }
 
     DedicatedServer::~DedicatedServer()
     {
@@ -204,25 +215,26 @@ namespace Spark::Net
         SPARK_GUARDED_UPDATE("Server:Messages", "Network", { ProcessServerMessages(deltaTime); });
         SPARK_GUARDED_UPDATE("Server:MatchState", "Network", { UpdateMatchState(deltaTime); });
 
-        // Update stats
-        m_stats.totalTicksProcessed++;
         auto now = std::chrono::steady_clock::now();
-        m_stats.uptimeSeconds = std::chrono::duration<float>(now - m_startTime).count();
-
         float tickMs = std::chrono::duration<float, std::milli>(now - tickStart).count();
-        if (tickMs > m_stats.peakTickMs)
-            m_stats.peakTickMs = tickMs;
-
-        // Running average
-        float alpha = 0.05f;
-        m_stats.averageTickMs = m_stats.averageTickMs * (1.0f - alpha) + tickMs * alpha;
-        m_stats.currentTickRate = (tickMs > 0.0f) ? (1000.0f / tickMs) : m_config.tickRate;
-
-        // Update network byte counters
         const auto& netStats = m_networkRuntime->GetStats();
-        m_stats.totalBytesIn = netStats.bytesReceived;
-        m_stats.totalBytesOut = netStats.bytesSent;
-        m_stats.currentPlayers = GetPlayerCount();
+        const uint32_t playerCount = GetPlayerCount();
+
+        // Update stats under the same mutex used by LAN broadcast snapshots.
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            m_stats.totalTicksProcessed++;
+            m_stats.uptimeSeconds = std::chrono::duration<float>(now - m_startTime).count();
+            if (tickMs > m_stats.peakTickMs)
+                m_stats.peakTickMs = tickMs;
+
+            const float alpha = 0.05f;
+            m_stats.averageTickMs = m_stats.averageTickMs * (1.0f - alpha) + tickMs * alpha;
+            m_stats.currentTickRate = (tickMs > 0.0f) ? (1000.0f / tickMs) : m_config.tickRate;
+            m_stats.totalBytesIn = netStats.bytesReceived;
+            m_stats.totalBytesOut = netStats.bytesSent;
+            m_stats.currentPlayers = playerCount;
+        }
     }
 
     // ============================================================================
@@ -279,13 +291,16 @@ namespace Spark::Net
                     }
                 }
 
-                m_stats.totalConnectionsServed++;
                 SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u connected", msg.senderID);
 
                 uint32_t playerCount = GetPlayerCount();
-                if (playerCount > m_stats.peakPlayers)
-                    m_stats.peakPlayers = playerCount;
-                m_stats.currentPlayers = playerCount;
+                {
+                    std::lock_guard<std::mutex> lock(m_stateMutex);
+                    m_stats.totalConnectionsServed++;
+                    if (playerCount > m_stats.peakPlayers)
+                        m_stats.peakPlayers = playerCount;
+                    m_stats.currentPlayers = playerCount;
+                }
 
                 if (m_callbacks.onClientConnected)
                 {
@@ -301,7 +316,11 @@ namespace Spark::Net
         m_networkRuntime->RegisterHandler(MessageType::Disconnect,
                                           [this](const NetworkMessage& msg)
                                           {
-                                              m_stats.currentPlayers = GetPlayerCount();
+                                              const uint32_t playerCount = GetPlayerCount();
+                                              {
+                                                  std::lock_guard<std::mutex> lock(m_stateMutex);
+                                                  m_stats.currentPlayers = playerCount;
+                                              }
                                               SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u disconnected",
                                                              msg.senderID);
                                               if (m_callbacks.onClientDisconnected)
@@ -449,16 +468,19 @@ namespace Spark::Net
         if (m_matchInProgress)
             EndMatch();
 
-        m_currentMap = mapName;
-        m_stats.currentMap = m_currentMap;
-
-        // Update rotation index if this map is in the list
-        for (size_t i = 0; i < m_config.mapRotation.size(); ++i)
         {
-            if (m_config.mapRotation[i] == mapName)
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            m_currentMap = mapName;
+            m_stats.currentMap = m_currentMap;
+
+            // Update rotation index if this map is in the list
+            for (size_t i = 0; i < m_config.mapRotation.size(); ++i)
             {
-                m_currentMapIndex = static_cast<int>(i);
-                break;
+                if (m_config.mapRotation[i] == mapName)
+                {
+                    m_currentMapIndex = static_cast<int>(i);
+                    break;
+                }
             }
         }
 
@@ -472,28 +494,33 @@ namespace Spark::Net
 
     void DedicatedServer::RotateToNextMap()
     {
-        if (m_config.mapRotation.empty())
-            return;
-
-        if (m_config.randomizeMapOrder)
+        std::string nextMap;
         {
-            // Simple pseudo-random: use tick count as seed
-            int idx = static_cast<int>(m_stats.totalTicksProcessed % m_config.mapRotation.size());
-            m_currentMapIndex = idx;
-        }
-        else
-        {
-            m_currentMapIndex = (m_currentMapIndex + 1) % static_cast<int>(m_config.mapRotation.size());
-        }
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            if (m_config.mapRotation.empty())
+                return;
 
-        m_currentMap = m_config.mapRotation[static_cast<size_t>(m_currentMapIndex)];
-        m_stats.currentMap = m_currentMap;
-        m_stats.currentMapIndex = m_currentMapIndex;
+            if (m_config.randomizeMapOrder)
+            {
+                // Simple pseudo-random: use tick count as seed
+                int idx = static_cast<int>(m_stats.totalTicksProcessed % m_config.mapRotation.size());
+                m_currentMapIndex = idx;
+            }
+            else
+            {
+                m_currentMapIndex = (m_currentMapIndex + 1) % static_cast<int>(m_config.mapRotation.size());
+            }
+
+            m_currentMap = m_config.mapRotation[static_cast<size_t>(m_currentMapIndex)];
+            m_stats.currentMap = m_currentMap;
+            m_stats.currentMapIndex = m_currentMapIndex;
+            nextMap = m_currentMap;
+        }
 
         if (m_callbacks.onMapChanged)
-            m_callbacks.onMapChanged(m_currentMap);
+            m_callbacks.onMapChanged(nextMap);
 
-        Log("Map rotated to '" + m_currentMap + "'");
+        Log("Map rotated to '" + nextMap + "'");
     }
 
     // ============================================================================
@@ -504,7 +531,11 @@ namespace Spark::Net
     {
         SPARK_WARN_IF(Spark::LogCategory::Network, reason.empty(), "KickPlayer called with empty reason");
         m_networkRuntime->KickClient(id, reason);
-        m_stats.currentPlayers = GetPlayerCount();
+        const uint32_t playerCount = GetPlayerCount();
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            m_stats.currentPlayers = playerCount;
+        }
         Log("Kicked client " + std::to_string(id) + ": " + reason);
     }
 
@@ -718,68 +749,116 @@ namespace Spark::Net
     // LAN Discovery
     // ============================================================================
 
+    LanBroadcastSnapshot DedicatedServer::GetLanBroadcastSnapshot() const
+    {
+        std::lock_guard<std::mutex> lock(m_stateMutex);
+        LanBroadcastSnapshot snapshot;
+        snapshot.server.serverName = m_config.serverName;
+        snapshot.server.mapName = m_currentMap;
+        snapshot.server.gameMode = m_config.gameMode;
+        snapshot.server.port = m_config.port;
+        snapshot.server.currentPlayers = static_cast<int>(m_stats.currentPlayers);
+        snapshot.server.maxPlayers = m_config.maxClients;
+        snapshot.broadcastPort = m_config.lanBroadcastPort;
+        snapshot.intervalSeconds = m_lanBroadcastInterval;
+        return snapshot;
+    }
+
     void DedicatedServer::StartLanBroadcast()
     {
+        std::lock_guard<std::mutex> lifecycleLock(m_lanBroadcastLifecycleMutex);
         if (m_lanBroadcastActive.load(std::memory_order_acquire))
             return;
 
+        // A worker that failed during socket setup has exited but remains
+        // joinable until reclaimed. Join it before replacing the thread object.
+        if (m_lanBroadcastThread.joinable())
+            m_lanBroadcastThread.join();
+
         m_lanBroadcastActive.store(true, std::memory_order_release);
 
-        m_lanBroadcastThread = std::thread(
-            [this]()
-            {
-                // Create a UDP socket for broadcasting
-                SOCKET broadcastSocket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-                if (broadcastSocket == INVALID_SOCKET)
-                    return;
-
-                // Enable broadcast
-                int broadcastEnable = 1;
-                setsockopt(broadcastSocket, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&broadcastEnable),
-                           sizeof(broadcastEnable));
-
-                sockaddr_in broadcastAddr{};
-                broadcastAddr.sin_family = AF_INET;
-                broadcastAddr.sin_port = htons(m_config.lanBroadcastPort);
-                broadcastAddr.sin_addr.s_addr = INADDR_BROADCAST;
-
-                while (m_lanBroadcastActive.load(std::memory_order_acquire))
+        try
+        {
+            m_lanBroadcastThread = std::thread(
+                [this]()
                 {
-                    // Serialize broadcast info
-                    NetBuffer buf;
-                    // Magic header for identification
-                    buf.WriteUint32(0x5350524B); // "SPRK"
-                    buf.WriteString(m_config.serverName);
-                    buf.WriteString(m_currentMap);
-                    buf.WriteUint8(static_cast<uint8_t>(m_config.gameMode));
-                    buf.WriteUint16(m_config.port);
-                    buf.WriteUint32(m_stats.currentPlayers);
-                    buf.WriteUint32(static_cast<uint32_t>(m_config.maxClients));
-
-                    const auto& data = buf.GetData();
-                    sendto(broadcastSocket, reinterpret_cast<const char*>(data.data()), static_cast<int>(data.size()),
-                           0, reinterpret_cast<const sockaddr*>(&broadcastAddr), sizeof(broadcastAddr));
-
-                    // Sleep between broadcasts
-                    auto sleepTime = std::chrono::duration<float>(m_lanBroadcastInterval);
-                    auto endTime = std::chrono::steady_clock::now() + sleepTime;
-                    while (std::chrono::steady_clock::now() < endTime &&
-                           m_lanBroadcastActive.load(std::memory_order_acquire))
+                    struct ActiveReset
                     {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        std::atomic<bool>& active;
+                        ~ActiveReset() { active.store(false, std::memory_order_release); }
+                    } activeReset{m_lanBroadcastActive};
+
+                    // Create a UDP socket for broadcasting.
+                    const SOCKET broadcastSocket = m_lanSocketFactory();
+                    if (broadcastSocket == INVALID_SOCKET)
+                        return;
+
+                    // Enable broadcast
+                    int broadcastEnable = 1;
+                    if (setsockopt(broadcastSocket, SOL_SOCKET, SO_BROADCAST,
+                                   reinterpret_cast<const char*>(&broadcastEnable), sizeof(broadcastEnable)) ==
+                        SOCKET_ERROR)
+                    {
+#ifdef SPARK_PLATFORM_WINDOWS
+                        closesocket(broadcastSocket);
+#else
+                        close(broadcastSocket);
+#endif
+                        return;
                     }
-                }
+
+                    sockaddr_in broadcastAddr{};
+                    broadcastAddr.sin_family = AF_INET;
+                    broadcastAddr.sin_addr.s_addr = INADDR_BROADCAST;
+
+                    while (m_lanBroadcastActive.load(std::memory_order_acquire))
+                    {
+                        const LanBroadcastSnapshot snapshot = GetLanBroadcastSnapshot();
+                        broadcastAddr.sin_port = htons(snapshot.broadcastPort);
+
+                        // Serialize the immutable snapshot; no server-owned state is
+                        // read after the state mutex is released.
+                        NetBuffer buf;
+                        buf.WriteUint32(0x5350524B); // "SPRK"
+                        buf.WriteString(snapshot.server.serverName);
+                        buf.WriteString(snapshot.server.mapName);
+                        buf.WriteUint8(static_cast<uint8_t>(snapshot.server.gameMode));
+                        buf.WriteUint16(snapshot.server.port);
+                        buf.WriteUint32(static_cast<uint32_t>(snapshot.server.currentPlayers));
+                        buf.WriteUint32(static_cast<uint32_t>(snapshot.server.maxPlayers));
+
+                        const auto& data = buf.GetData();
+                        sendto(broadcastSocket, reinterpret_cast<const char*>(data.data()),
+                               static_cast<int>(data.size()), 0, reinterpret_cast<const sockaddr*>(&broadcastAddr),
+                               sizeof(broadcastAddr));
+
+                        // Sleep between broadcasts
+                        const auto sleepTime = std::chrono::duration<float>(snapshot.intervalSeconds);
+                        const auto endTime = std::chrono::steady_clock::now() + sleepTime;
+                        while (std::chrono::steady_clock::now() < endTime &&
+                               m_lanBroadcastActive.load(std::memory_order_acquire))
+                        {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        }
+                    }
 
 #ifdef SPARK_PLATFORM_WINDOWS
-                closesocket(broadcastSocket);
+                    closesocket(broadcastSocket);
 #else
-                close(broadcastSocket);
+                    close(broadcastSocket);
 #endif
-            });
+                });
+        }
+        catch (...)
+        {
+            m_lanBroadcastActive.store(false, std::memory_order_release);
+            throw;
+        }
     }
 
     void DedicatedServer::StopLanBroadcast()
     {
+        std::lock_guard<std::mutex> lifecycleLock(m_lanBroadcastLifecycleMutex);
         m_lanBroadcastActive.store(false, std::memory_order_release);
         if (m_lanBroadcastThread.joinable())
             m_lanBroadcastThread.join();

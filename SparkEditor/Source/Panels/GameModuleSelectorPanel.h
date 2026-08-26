@@ -21,6 +21,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include "../Utils/EditorProcessLaunch.h"
 #include <string>
 #include <vector>
 
@@ -57,6 +58,7 @@ namespace SparkEditor
         void SaveModuleManifest();
         void LaunchGame(bool headless);
         void PollLaunchedProcess();
+        void StopLaunchedProcess();
 
         struct ModuleEntry
         {
@@ -77,8 +79,7 @@ namespace SparkEditor
         // --- Launch state (separate-process game launch) ---
         int m_launchSelection = -1;        ///< Index into m_modules chosen for launch
         std::string m_launchSelectionPath; ///< Path of the selection (survives refresh reordering)
-        void* m_gameProcess = nullptr;     ///< HANDLE of the last launched game (kept as void* — no windows.h here)
-        unsigned long m_gamePid = 0;       ///< PID of the last launched game
+        OwnedEditorProcess m_gameProcess; ///< Owns the launched SparkEngine process tree.
         std::string m_launchStatus;        ///< Human-readable last-launch status line
     };
 

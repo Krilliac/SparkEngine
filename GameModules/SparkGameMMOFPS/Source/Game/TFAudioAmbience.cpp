@@ -385,7 +385,7 @@ namespace Terrafront
         // what you SEE (sanctuary sky) and what you HEAR always agree.
         if (const SparkEngineCamera* cam = m_ctx->engine ? m_ctx->engine->GetCamera() : nullptr)
         {
-            const auto& p = cam->GetPosition();
+            const auto p = cam->GetPosition();
             outX = p.x;
             outZ = p.z;
             return true;

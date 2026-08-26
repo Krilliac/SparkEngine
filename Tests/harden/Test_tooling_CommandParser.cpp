@@ -7,11 +7,14 @@
  *   quoted argument (echo "a b") must survive as a single token.
  * - Tokenize() classifies whitespace via std::isspace on unsigned char, so a
  *   high (>0x7F) byte must not invoke undefined behavior.
+ * - Engine pipe records survive arbitrary byte-stream read boundaries and an
+ *   oversized unterminated record cannot become a prompt/output flood.
  */
 
 #include "TestFramework.h"
 
 #include "../../SparkConsole/src/CommandParser.h"
+#include "../../SparkConsole/src/PipeMessageFramer.h"
 
 #include <string>
 #include <vector>
@@ -69,4 +72,39 @@ TEST(CommandParser_ParseCommandLineEmpty)
     std::vector<std::string> args;
     bool result = CommandParser::ParseCommandLine("", name, args);
     EXPECT_FALSE(result);
+}
+
+TEST(PipeMessageFramer_RetainsPartialRecordAcrossReads)
+{
+    PipeMessageFramer framer;
+    EXPECT_TRUE(framer.Push("[INFO] split").empty());
+
+    const auto lines = framer.Push(" record\n");
+    ASSERT_EQ(lines.size(), static_cast<size_t>(1));
+    EXPECT_EQ(lines[0], "[INFO] split record");
+}
+
+TEST(PipeMessageFramer_HandlesMultipleRecordsAndCRLF)
+{
+    PipeMessageFramer framer;
+    const auto lines = framer.Push("first\r\nsecond\n\nthird");
+    ASSERT_EQ(lines.size(), static_cast<size_t>(2));
+    EXPECT_EQ(lines[0], "first");
+    EXPECT_EQ(lines[1], "second");
+
+    const auto tail = framer.Push(" record\n");
+    ASSERT_EQ(tail.size(), static_cast<size_t>(1));
+    EXPECT_EQ(tail[0], "third record");
+}
+
+TEST(PipeMessageFramer_OversizedSplitRecordProducesOneNotice)
+{
+    PipeMessageFramer framer;
+    EXPECT_TRUE(framer.Push(std::string(PipeMessageFramer::kMaxLineBytes, 'x')).empty());
+    EXPECT_TRUE(framer.Push("more data without a delimiter").empty());
+
+    const auto lines = framer.Push(" and the end\nhealthy\n");
+    ASSERT_EQ(lines.size(), static_cast<size_t>(2));
+    EXPECT_EQ(lines[0], std::string(PipeMessageFramer::kOversizedLineNotice));
+    EXPECT_EQ(lines[1], "healthy");
 }

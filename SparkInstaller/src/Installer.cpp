@@ -9,6 +9,7 @@
 
 #include <filesystem>
 #include <sstream>
+#include <stdexcept>
 
 namespace SparkInstaller
 {
@@ -119,7 +120,16 @@ namespace SparkInstaller
         std::error_code ec;
         fs::create_directories(ctx.configManager.config.buildPath, ec);
 
-        std::string configureCmd = ctx.configManager.BuildCMakeConfigureCommand();
+        std::string configureCmd;
+        try
+        {
+            configureCmd = ctx.configManager.BuildCMakeConfigureCommand();
+        }
+        catch (const std::invalid_argument& error)
+        {
+            Emit(ctx.log, std::string("error: unsafe CMake configure input: ") + error.what());
+            return 6;
+        }
         Emit(ctx.log, "Configuring: " + configureCmd);
         {
             SparkBuild::ProcessRunner runner;
@@ -134,7 +144,16 @@ namespace SparkInstaller
             }
         }
 
-        std::string buildCmd = ctx.configManager.BuildCMakeBuildCommand();
+        std::string buildCmd;
+        try
+        {
+            buildCmd = ctx.configManager.BuildCMakeBuildCommand();
+        }
+        catch (const std::invalid_argument& error)
+        {
+            Emit(ctx.log, std::string("error: unsafe CMake build input: ") + error.what());
+            return 7;
+        }
         Emit(ctx.log, "Building: " + buildCmd);
         {
             SparkBuild::ProcessRunner runner;

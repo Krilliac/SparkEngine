@@ -18,6 +18,9 @@
 
 #include "Engine/Networking/NetworkManager.h"
 
+#include <optional>
+#include <type_traits>
+
 using namespace Spark::Net;
 
 // ============================================================================
@@ -159,8 +162,8 @@ TEST(NetworkManager_EntityRegisterUnregister)
     uint32_t netID = nm.RegisterReplicatedEntity(entity);
     EXPECT_GT(netID, static_cast<uint32_t>(0));
 
-    auto* found = nm.GetReplicatedEntity(netID);
-    EXPECT_TRUE(found != nullptr);
+    const auto found = nm.GetReplicatedEntitySnapshot(netID);
+    EXPECT_TRUE(found.has_value());
     EXPECT_EQ(found->networkID, netID);
     EXPECT_EQ(found->ownerID, static_cast<ClientID>(1));
     EXPECT_NEAR(found->position.x, 10.0f, 0.001f);
@@ -168,7 +171,50 @@ TEST(NetworkManager_EntityRegisterUnregister)
     EXPECT_NEAR(found->position.z, 30.0f, 0.001f);
 
     nm.UnregisterReplicatedEntity(netID);
-    EXPECT_TRUE(nm.GetReplicatedEntity(netID) == nullptr);
+    EXPECT_FALSE(nm.GetReplicatedEntitySnapshot(netID).has_value());
+
+    ResetNetworkManager();
+}
+
+TEST(NetworkManager_ReplicatedEntityAccessIsSnapshotAndAtomicUpdate)
+{
+    static_assert(std::is_same_v<decltype(NetworkManager::GetInstance().GetReplicatedEntitySnapshot(0)),
+                                 std::optional<ReplicatedEntity>>);
+
+    ResetNetworkManager();
+    auto& nm = NetworkManager::GetInstance();
+    nm.StartServer(27015, 16);
+
+    ReplicatedEntity entity;
+    entity.position = {1.0f, 2.0f, 3.0f};
+    const uint32_t netID = nm.RegisterReplicatedEntity(entity);
+
+    auto retainedSnapshot = nm.GetReplicatedEntitySnapshot(netID);
+    EXPECT_TRUE(retainedSnapshot.has_value());
+    retainedSnapshot->position.x = 999.0f;
+
+    const auto unchanged = nm.GetReplicatedEntitySnapshot(netID);
+    EXPECT_TRUE(unchanged.has_value());
+    EXPECT_NEAR(unchanged->position.x, 1.0f, 0.001f);
+
+    ReplicatedEntityUpdate update;
+    update.position = DirectX::XMFLOAT3{4.0f, 5.0f, 6.0f};
+    update.areaId = 42u;
+    update.needsFullSync = false;
+    EXPECT_TRUE(nm.UpdateReplicatedEntity(netID, update));
+    EXPECT_FALSE(nm.UpdateReplicatedEntity(netID + 1u, update));
+
+    const auto updated = nm.GetReplicatedEntitySnapshot(netID);
+    EXPECT_TRUE(updated.has_value());
+    EXPECT_NEAR(updated->position.x, 4.0f, 0.001f);
+    EXPECT_NEAR(updated->position.y, 5.0f, 0.001f);
+    EXPECT_NEAR(updated->position.z, 6.0f, 0.001f);
+    EXPECT_EQ(updated->areaId, 42u);
+    EXPECT_FALSE(updated->needsFullSync);
+
+    // A retained snapshot is caller-owned and does not observe later manager mutation.
+    EXPECT_NEAR(retainedSnapshot->position.x, 999.0f, 0.001f);
+    EXPECT_EQ(retainedSnapshot->areaId, 0u);
 
     ResetNetworkManager();
 }
@@ -194,14 +240,16 @@ TEST(NetworkManager_EntityPropertyDirtyTracking)
     entity.properties.push_back(healthProp);
 
     uint32_t netID = nm.RegisterReplicatedEntity(entity);
-    auto* ent = nm.GetReplicatedEntity(netID);
-    EXPECT_TRUE(ent != nullptr);
+    auto ent = nm.GetReplicatedEntitySnapshot(netID);
+    EXPECT_TRUE(ent.has_value());
 
     // Initially needsFullSync is true
     EXPECT_TRUE(ent->needsFullSync);
 
     // Mark a property dirty
     nm.MarkPropertyDirty(netID, "health");
+    ent = nm.GetReplicatedEntitySnapshot(netID);
+    EXPECT_TRUE(ent.has_value());
     bool foundDirty = false;
     for (const auto& prop : ent->properties)
     {
@@ -248,13 +296,13 @@ TEST(NetworkManager_MultipleEntities)
     for (size_t i = 0; i < 5; ++i)
     {
         nm.UnregisterReplicatedEntity(ids[i]);
-        EXPECT_TRUE(nm.GetReplicatedEntity(ids[i]) == nullptr);
+        EXPECT_FALSE(nm.GetReplicatedEntitySnapshot(ids[i]).has_value());
     }
 
     // Other half still exists
     for (size_t i = 5; i < 10; ++i)
     {
-        EXPECT_TRUE(nm.GetReplicatedEntity(ids[i]) != nullptr);
+        EXPECT_TRUE(nm.GetReplicatedEntitySnapshot(ids[i]).has_value());
     }
 
     ResetNetworkManager();
@@ -304,10 +352,11 @@ TEST(NetworkManager_SerializeDeserializeEntityState)
     EXPECT_GT(outBuf.GetSize(), static_cast<size_t>(0));
 
     // Modify local values to prove deserialization restores them
-    auto* ent = nm.GetReplicatedEntity(netID);
-    ent->position = {0.0f, 0.0f, 0.0f};
-    ent->rotation = {0.0f, 0.0f, 0.0f};
-    ent->velocity = {0.0f, 0.0f, 0.0f};
+    ReplicatedEntityUpdate resetUpdate;
+    resetUpdate.position = DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f};
+    resetUpdate.rotation = DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f};
+    resetUpdate.velocity = DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f};
+    EXPECT_TRUE(nm.UpdateReplicatedEntity(netID, resetUpdate));
     health = 0.0f;
     playerName = "RESET";
 
@@ -317,6 +366,8 @@ TEST(NetworkManager_SerializeDeserializeEntityState)
 
     nm.DeserializeEntityState(inBuf);
 
+    const auto ent = nm.GetReplicatedEntitySnapshot(netID);
+    EXPECT_TRUE(ent.has_value());
     EXPECT_NEAR(ent->position.x, 1.0f, 0.001f);
     EXPECT_NEAR(ent->position.y, 2.0f, 0.001f);
     EXPECT_NEAR(ent->position.z, 3.0f, 0.001f);
@@ -349,8 +400,8 @@ TEST(NetworkManager_DeserializeUnknownEntity_CreatesPlaceholder)
     nm.DeserializeEntityState(readBuf);
 
     // A placeholder should have been created
-    auto* placeholder = nm.GetReplicatedEntity(999);
-    EXPECT_TRUE(placeholder != nullptr);
+    const auto placeholder = nm.GetReplicatedEntitySnapshot(999);
+    EXPECT_TRUE(placeholder.has_value());
     EXPECT_NEAR(placeholder->position.x, 5.0f, 0.001f);
     EXPECT_NEAR(placeholder->position.y, 10.0f, 0.001f);
     EXPECT_NEAR(placeholder->position.z, 15.0f, 0.001f);
@@ -656,8 +707,8 @@ TEST(NetworkManager_ReplicationTimerFires)
     }
 
     // After replication fires, dirty flags should be cleared
-    auto* ent = nm.GetReplicatedEntity(netID);
-    EXPECT_TRUE(ent != nullptr);
+    const auto ent = nm.GetReplicatedEntitySnapshot(netID);
+    EXPECT_TRUE(ent.has_value());
     EXPECT_FALSE(ent->needsFullSync);
     bool anyDirty = false;
     for (const auto& prop : ent->properties)
@@ -783,7 +834,7 @@ TEST(NetworkManager_UnregisterNonexistentEntity)
 
     // Should not crash
     nm.UnregisterReplicatedEntity(99999);
-    EXPECT_TRUE(nm.GetReplicatedEntity(99999) == nullptr);
+    EXPECT_FALSE(nm.GetReplicatedEntitySnapshot(99999).has_value());
 
     ResetNetworkManager();
 }

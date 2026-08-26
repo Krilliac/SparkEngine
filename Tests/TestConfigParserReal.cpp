@@ -90,3 +90,23 @@ TEST(ConfigParserReal_BoolVariants)
     EXPECT_TRUE(cfg.GetBool("S", "c"));
     EXPECT_FALSE(cfg.GetBool("S", "d"));
 }
+
+TEST(ConfigParserReal_MalformedReloadIsRejectedTransactionally)
+{
+    Spark::ConfigParser cfg;
+    EXPECT_TRUE(cfg.LoadFromString("[Graphics]\nwidth = 1280\n"));
+
+    EXPECT_FALSE(cfg.LoadFromString("[Graphics\nwidth = 1920\n"));
+    EXPECT_EQ(cfg.GetInt("Graphics", "width"), 1280);
+
+    EXPECT_FALSE(cfg.LoadFromString("[Graphics]\nmalformed line\n"));
+    EXPECT_EQ(cfg.GetInt("Graphics", "width"), 1280);
+}
+
+TEST(ConfigParserReal_StrictParserPreservesSupportedValueForms)
+{
+    Spark::ConfigParser cfg;
+    EXPECT_TRUE(cfg.LoadFromString("\xEF\xBB\xBF[Data]\narray = [1, 2, 3]\nempty =\n"));
+    EXPECT_EQ(cfg.GetString("Data", "array"), std::string("[1, 2, 3]"));
+    EXPECT_EQ(cfg.GetString("Data", "empty", "missing"), std::string(""));
+}

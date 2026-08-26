@@ -15,9 +15,6 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
-using SocketType = SOCKET;
-constexpr SocketType INVALID_SOCK = INVALID_SOCKET;
-#define CLOSE_SOCKET closesocket
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -27,9 +24,6 @@ constexpr SocketType INVALID_SOCK = INVALID_SOCKET;
 #include <fcntl.h>
 #include <poll.h>
 #include <cerrno>
-using SocketType = int;
-constexpr SocketType INVALID_SOCK = -1;
-#define CLOSE_SOCKET ::close
 #endif
 
 namespace SparkEditor
@@ -41,6 +35,67 @@ namespace SparkEditor
 
     namespace
     {
+#ifdef _WIN32
+        using NativeSocket = SOCKET;
+
+        NativeSocket ToNativeSocket(CollaborativeSocketHandle socket)
+        {
+            return static_cast<NativeSocket>(socket);
+        }
+
+        CollaborativeSocketHandle ToStoredSocket(NativeSocket socket)
+        {
+            return static_cast<CollaborativeSocketHandle>(socket);
+        }
+#else
+        using NativeSocket = int;
+
+        NativeSocket ToNativeSocket(CollaborativeSocketHandle socket)
+        {
+            return socket;
+        }
+
+        CollaborativeSocketHandle ToStoredSocket(NativeSocket socket)
+        {
+            return socket;
+        }
+#endif
+
+        bool IsValidSocket(CollaborativeSocketHandle socket)
+        {
+            return socket != INVALID_COLLAB_SOCKET;
+        }
+
+        void CloseSocket(CollaborativeSocketHandle socket)
+        {
+            if (!IsValidSocket(socket))
+                return;
+#ifdef _WIN32
+            ::closesocket(ToNativeSocket(socket));
+#else
+            ::close(ToNativeSocket(socket));
+#endif
+        }
+
+        void ConfigureSigPipeSuppression(CollaborativeSocketHandle socket)
+        {
+#if !defined(_WIN32) && defined(SO_NOSIGPIPE)
+            const int enabled = 1;
+            (void)::setsockopt(ToNativeSocket(socket), SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled));
+#else
+            (void)socket;
+#endif
+        }
+
+        int SendFlags()
+        {
+#if !defined(_WIN32) && defined(MSG_NOSIGNAL)
+            return MSG_NOSIGNAL;
+#else
+            return 0;
+#endif
+        }
+
         void WriteU8(std::vector<uint8_t>& buf, uint8_t val)
         {
             buf.push_back(val);
@@ -205,9 +260,9 @@ namespace SparkEditor
         }
 
         // Send length-prefixed message over TCP (thread-safe per socket)
-        bool SendFramed(int sock, const std::vector<uint8_t>& data)
+        bool SendFramed(CollaborativeSocketHandle sock, const std::vector<uint8_t>& data)
         {
-            if (sock < 0 || data.empty())
+            if (!IsValidSocket(sock) || data.empty())
                 return false;
 
             uint32_t len = static_cast<uint32_t>(data.size());
@@ -217,13 +272,13 @@ namespace SparkEditor
             header[2] = static_cast<uint8_t>((len >> 8) & 0xFF);
             header[3] = static_cast<uint8_t>(len & 0xFF);
 
-            auto sendAll = [](int s, const void* buf, size_t totalLen) -> bool
+            auto sendAll = [](CollaborativeSocketHandle s, const void* buf, size_t totalLen) -> bool
             {
                 const auto* ptr = static_cast<const char*>(buf);
                 size_t sent = 0;
                 while (sent < totalLen)
                 {
-                    auto n = ::send(s, ptr + sent, static_cast<int>(totalLen - sent), 0);
+                    auto n = ::send(ToNativeSocket(s), ptr + sent, static_cast<int>(totalLen - sent), SendFlags());
                     if (n <= 0)
                         return false;
                     sent += static_cast<size_t>(n);
@@ -237,7 +292,7 @@ namespace SparkEditor
         // Receive one length-prefixed frame from TCP.
         // Socket should have SO_RCVTIMEO set so recv() returns periodically,
         // allowing us to check m_shuttingDown. Returns empty on disconnect/error.
-        std::vector<uint8_t> RecvFramed(int sock, const std::atomic<bool>& shuttingDown)
+        std::vector<uint8_t> RecvFramed(CollaborativeSocketHandle sock, const std::atomic<bool>& shuttingDown)
         {
             auto recvAll = [&](void* buf, size_t totalLen) -> bool
             {
@@ -247,7 +302,7 @@ namespace SparkEditor
                 {
                     if (shuttingDown.load(std::memory_order_acquire))
                         return false;
-                    auto n = ::recv(sock, ptr + received, static_cast<int>(totalLen - received), 0);
+                    auto n = ::recv(ToNativeSocket(sock), ptr + received, static_cast<int>(totalLen - received), 0);
                     if (n > 0)
                     {
                         received += static_cast<size_t>(n);
@@ -305,81 +360,96 @@ namespace SparkEditor
 #endif
 
         // Set socket receive/send timeout (seconds)
-        void SetSocketTimeout(int sock, int timeoutSec)
+        void SetSocketTimeout(CollaborativeSocketHandle sock, int timeoutSec)
         {
+            const NativeSocket nativeSocket = ToNativeSocket(sock);
 #ifdef _WIN32
             DWORD timeoutMs = static_cast<DWORD>(timeoutSec * 1000);
-            setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeoutMs), sizeof(timeoutMs));
-            setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&timeoutMs), sizeof(timeoutMs));
+            setsockopt(nativeSocket, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeoutMs),
+                       sizeof(timeoutMs));
+            setsockopt(nativeSocket, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&timeoutMs),
+                       sizeof(timeoutMs));
 #else
             timeval tv{timeoutSec, 0};
-            setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-            setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+            setsockopt(nativeSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+            setsockopt(nativeSocket, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 #endif
         }
 
         // Non-blocking connect with timeout (seconds). Returns true on success.
-        bool ConnectWithTimeout(int sock, sockaddr* addr, socklen_t addrLen, int timeoutSec)
+        bool ConnectWithTimeout(CollaborativeSocketHandle sock, sockaddr* addr, socklen_t addrLen, int timeoutSec)
         {
+            const NativeSocket nativeSocket = ToNativeSocket(sock);
 #ifdef _WIN32
             u_long mode = 1;
-            ioctlsocket(static_cast<SOCKET>(sock), FIONBIO, &mode);
+            if (::ioctlsocket(nativeSocket, FIONBIO, &mode) == SOCKET_ERROR)
+                return false;
 
-            int result = ::connect(sock, addr, addrLen);
+            int result = ::connect(nativeSocket, addr, addrLen);
             if (result == 0)
             {
                 mode = 0;
-                ioctlsocket(static_cast<SOCKET>(sock), FIONBIO, &mode);
+                ::ioctlsocket(nativeSocket, FIONBIO, &mode);
                 return true;
             }
 
             if (WSAGetLastError() != WSAEWOULDBLOCK)
             {
                 mode = 0;
-                ioctlsocket(static_cast<SOCKET>(sock), FIONBIO, &mode);
+                ::ioctlsocket(nativeSocket, FIONBIO, &mode);
                 return false;
             }
 
             fd_set writeSet;
+            fd_set errorSet;
             FD_ZERO(&writeSet);
-            FD_SET(static_cast<SOCKET>(sock), &writeSet);
+            FD_ZERO(&errorSet);
+            FD_SET(nativeSocket, &writeSet);
+            FD_SET(nativeSocket, &errorSet);
             timeval tv{timeoutSec, 0};
-            int ready = ::select(0, nullptr, &writeSet, nullptr, &tv);
+            int ready = ::select(0, nullptr, &writeSet, &errorSet, &tv);
 
             mode = 0;
-            ioctlsocket(static_cast<SOCKET>(sock), FIONBIO, &mode);
-            return ready > 0;
-#else
-            int flags = fcntl(sock, F_GETFL, 0);
-            fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+            ::ioctlsocket(nativeSocket, FIONBIO, &mode);
+            if (ready <= 0)
+                return false;
 
-            int result = ::connect(sock, addr, addrLen);
+            int error = 0;
+            int errorLength = sizeof(error);
+            return ::getsockopt(nativeSocket, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&error), &errorLength) ==
+                       0 &&
+                   error == 0;
+#else
+            int flags = fcntl(nativeSocket, F_GETFL, 0);
+            if (flags < 0 || fcntl(nativeSocket, F_SETFL, flags | O_NONBLOCK) != 0)
+                return false;
+
+            int result = ::connect(nativeSocket, addr, addrLen);
             if (result == 0)
             {
-                fcntl(sock, F_SETFL, flags);
+                fcntl(nativeSocket, F_SETFL, flags);
                 return true;
             }
 
             if (errno != EINPROGRESS)
             {
-                fcntl(sock, F_SETFL, flags);
+                fcntl(nativeSocket, F_SETFL, flags);
                 return false;
             }
 
             pollfd pfd{};
-            pfd.fd = sock;
+            pfd.fd = nativeSocket;
             pfd.events = POLLOUT;
             int ready = ::poll(&pfd, 1, timeoutSec * 1000);
 
-            fcntl(sock, F_SETFL, flags);
+            fcntl(nativeSocket, F_SETFL, flags);
 
             if (ready <= 0)
                 return false;
 
             int err = 0;
             socklen_t errLen = sizeof(err);
-            getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &errLen);
-            return err == 0;
+            return getsockopt(nativeSocket, SOL_SOCKET, SO_ERROR, &err, &errLen) == 0 && err == 0;
 #endif
         }
 
@@ -391,6 +461,7 @@ namespace SparkEditor
 
     std::vector<uint8_t> SerializeMessage(const InternalMessage& msg)
     {
+        static const EditMessage defaultEditMessage{};
         std::vector<uint8_t> buf;
         buf.reserve(256);
 
@@ -399,7 +470,11 @@ namespace SparkEditor
         WriteString(buf, msg.nodeId);
         WriteString(buf, msg.payload);
         WriteU64(buf, msg.timestamp);
-        WriteEditMessage(buf, msg.editMessage);
+        // The fixed-width legacy frame always carries an edit section. Keep that
+        // section canonical for non-edit messages so irrelevant caller state can
+        // never leak nondeterministic bytes onto the wire.
+        WriteEditMessage(buf,
+                         msg.type == InternalMessageType::EditBroadcast ? msg.editMessage : defaultEditMessage);
         WriteEditorPeer(buf, msg.peerInfo);
 
         return buf;
@@ -462,8 +537,8 @@ namespace SparkEditor
         }
 
         // Create TCP listen socket
-        m_listenSocket = static_cast<int>(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
-        if (m_listenSocket < 0)
+        m_listenSocket = ToStoredSocket(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
+        if (!IsValidSocket(m_listenSocket))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create listen socket.");
             return false;
@@ -471,26 +546,29 @@ namespace SparkEditor
 
         // Allow port reuse
         int optval = 1;
-        setsockopt(m_listenSocket, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&optval), sizeof(optval));
+        setsockopt(ToNativeSocket(m_listenSocket), SOL_SOCKET, SO_REUSEADDR,
+                   reinterpret_cast<const char*>(&optval), sizeof(optval));
+        ConfigureSigPipeSuppression(m_listenSocket);
 
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = Spark::Net::UseLoopbackNetworkBind() ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
+        addr.sin_addr.s_addr =
+            Spark::Net::UseLoopbackNetworkBindForUnauthenticatedTool() ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
         addr.sin_port = htons(port);
 
-        if (::bind(m_listenSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0)
+        if (::bind(ToNativeSocket(m_listenSocket), reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0)
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to bind on port %u.", port);
-            CLOSE_SOCKET(m_listenSocket);
-            m_listenSocket = -1;
+            CloseSocket(m_listenSocket);
+            m_listenSocket = INVALID_COLLAB_SOCKET;
             return false;
         }
 
-        if (::listen(m_listenSocket, 10) < 0)
+        if (::listen(ToNativeSocket(m_listenSocket), 10) < 0)
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to listen on port %u.", port);
-            CLOSE_SOCKET(m_listenSocket);
-            m_listenSocket = -1;
+            CloseSocket(m_listenSocket);
+            m_listenSocket = INVALID_COLLAB_SOCKET;
             return false;
         }
 
@@ -542,8 +620,8 @@ namespace SparkEditor
             return false;
         }
 
-        m_clientSocket = static_cast<int>(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
-        if (m_clientSocket < 0)
+        m_clientSocket = ToStoredSocket(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
+        if (!IsValidSocket(m_clientSocket))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create client socket.");
             return false;
@@ -558,12 +636,13 @@ namespace SparkEditor
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to connect to %s:%u (timeout 5s).", address.c_str(),
                             port);
-            CLOSE_SOCKET(m_clientSocket);
-            m_clientSocket = -1;
+            CloseSocket(m_clientSocket);
+            m_clientSocket = INVALID_COLLAB_SOCKET;
             return false;
         }
 
         // Set recv/send timeouts so threads can check m_shuttingDown periodically
+        ConfigureSigPipeSuppression(m_clientSocket);
         SetSocketTimeout(m_clientSocket, 2);
 
         m_isHost = false;
@@ -653,20 +732,20 @@ namespace SparkEditor
 
         // shutdown() unblocks recv()/accept() in network threads without closing the fd
 #ifdef _WIN32
-        auto shutdownSock = [](int fd) { ::shutdown(static_cast<SOCKET>(fd), SD_BOTH); };
+        auto shutdownSock = [](CollaborativeSocketHandle fd) { ::shutdown(ToNativeSocket(fd), SD_BOTH); };
 #else
-        auto shutdownSock = [](int fd) { ::shutdown(fd, SHUT_RDWR); };
+        auto shutdownSock = [](CollaborativeSocketHandle fd) { ::shutdown(ToNativeSocket(fd), SHUT_RDWR); };
 #endif
 
-        if (m_listenSocket >= 0)
+        if (IsValidSocket(m_listenSocket))
             shutdownSock(m_listenSocket);
 
-        if (m_clientSocket >= 0)
+        if (IsValidSocket(m_clientSocket))
             shutdownSock(m_clientSocket);
 
         for (auto& [peerId, sock] : m_peerSockets)
         {
-            if (sock >= 0)
+            if (IsValidSocket(sock))
                 shutdownSock(sock);
         }
     }
@@ -675,22 +754,22 @@ namespace SparkEditor
     {
         std::lock_guard<std::mutex> lock(m_socketMutex);
 
-        if (m_listenSocket >= 0)
+        if (IsValidSocket(m_listenSocket))
         {
-            CLOSE_SOCKET(m_listenSocket);
-            m_listenSocket = -1;
+            CloseSocket(m_listenSocket);
+            m_listenSocket = INVALID_COLLAB_SOCKET;
         }
 
-        if (m_clientSocket >= 0)
+        if (IsValidSocket(m_clientSocket))
         {
-            CLOSE_SOCKET(m_clientSocket);
-            m_clientSocket = -1;
+            CloseSocket(m_clientSocket);
+            m_clientSocket = INVALID_COLLAB_SOCKET;
         }
 
         for (auto& [peerId, sock] : m_peerSockets)
         {
-            if (sock >= 0)
-                CLOSE_SOCKET(sock);
+            if (IsValidSocket(sock))
+                CloseSocket(sock);
         }
         m_peerSockets.clear();
     }
@@ -706,12 +785,12 @@ namespace SparkEditor
         while (!m_shuttingDown.load(std::memory_order_acquire))
         {
             // Snapshot the listen socket under the lock to avoid racing with CloseAllSockets()
-            int listenFd;
+            CollaborativeSocketHandle listenFd;
             {
                 std::lock_guard<std::mutex> lock(m_socketMutex);
                 listenFd = m_listenSocket;
             }
-            if (listenFd < 0)
+            if (!IsValidSocket(listenFd))
             {
                 break;
             }
@@ -720,12 +799,12 @@ namespace SparkEditor
 #ifdef _WIN32
             fd_set readSet;
             FD_ZERO(&readSet);
-            FD_SET(static_cast<SOCKET>(listenFd), &readSet);
+            FD_SET(ToNativeSocket(listenFd), &readSet);
             timeval tv{0, 500000}; // 500ms
             int ready = ::select(0, &readSet, nullptr, nullptr, &tv);
 #else
             pollfd pfd{};
-            pfd.fd = listenFd;
+            pfd.fd = ToNativeSocket(listenFd);
             pfd.events = POLLIN;
             int ready = ::poll(&pfd, 1, 500);
 #endif
@@ -735,11 +814,13 @@ namespace SparkEditor
 
             sockaddr_in clientAddr{};
             socklen_t addrLen = sizeof(clientAddr);
-            int clientSock = static_cast<int>(::accept(listenFd, reinterpret_cast<sockaddr*>(&clientAddr), &addrLen));
-            if (clientSock < 0)
+            CollaborativeSocketHandle clientSock =
+                ToStoredSocket(::accept(ToNativeSocket(listenFd), reinterpret_cast<sockaddr*>(&clientAddr), &addrLen));
+            if (!IsValidSocket(clientSock))
                 continue;
 
             // Set recv timeout so handler thread can check m_shuttingDown
+            ConfigureSigPipeSuppression(clientSock);
             SetSocketTimeout(clientSock, 2);
 
             PeerID newPeerId = AllocatePeerID();
@@ -763,7 +844,7 @@ namespace SparkEditor
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Host accept thread stopped.");
     }
 
-    void CollaborativeEditSession::HandleClientSocket(int clientSocket, PeerID peerId,
+    void CollaborativeEditSession::HandleClientSocket(CollaborativeSocketHandle clientSocket, PeerID peerId,
                                                       std::shared_ptr<std::atomic<bool>> finished)
     {
         while (!m_shuttingDown.load(std::memory_order_acquire))
@@ -811,7 +892,7 @@ namespace SparkEditor
                 auto relayData = SerializeMessage(msg);
                 for (auto& [otherPeerId, otherSock] : m_peerSockets)
                 {
-                    if (otherPeerId != peerId && otherSock >= 0)
+                    if (otherPeerId != peerId && IsValidSocket(otherSock))
                     {
                         SendFramed(otherSock, relayData);
                     }
@@ -825,7 +906,7 @@ namespace SparkEditor
             auto it = m_peerSockets.find(peerId);
             if (it != m_peerSockets.end())
             {
-                CLOSE_SOCKET(it->second);
+                CloseSocket(it->second);
                 m_peerSockets.erase(it);
             }
         }
@@ -851,12 +932,12 @@ namespace SparkEditor
 
         while (!m_shuttingDown.load(std::memory_order_acquire))
         {
-            int clientFd;
+            CollaborativeSocketHandle clientFd;
             {
                 std::lock_guard<std::mutex> lock(m_socketMutex);
                 clientFd = m_clientSocket;
             }
-            if (clientFd < 0)
+            if (!IsValidSocket(clientFd))
                 break;
 
             auto data = RecvFramed(clientFd, m_shuttingDown);
@@ -895,14 +976,14 @@ namespace SparkEditor
             std::lock_guard<std::mutex> lock(m_socketMutex);
             for (auto& [peerId, sock] : m_peerSockets)
             {
-                if (sock >= 0)
+                if (IsValidSocket(sock))
                     SendFramed(sock, data);
             }
         }
         else
         {
             // Send to host
-            if (m_clientSocket >= 0)
+            if (IsValidSocket(m_clientSocket))
                 SendFramed(m_clientSocket, data);
         }
     }
@@ -912,7 +993,7 @@ namespace SparkEditor
         auto data = SerializeMessage(msg);
         std::lock_guard<std::mutex> lock(m_socketMutex);
         auto it = m_peerSockets.find(peerId);
-        if (it != m_peerSockets.end() && it->second >= 0)
+        if (it != m_peerSockets.end() && IsValidSocket(it->second))
         {
             SendFramed(it->second, data);
         }

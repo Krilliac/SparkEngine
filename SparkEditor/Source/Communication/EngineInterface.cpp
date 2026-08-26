@@ -11,6 +11,7 @@
 #include <chrono>
 #include <thread>
 #include <random>
+#include <utility>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -331,6 +332,18 @@ namespace SparkEditor
                     DWORD bytesAvailable = 0;
                     if (::PeekNamedPipe(hPipe, nullptr, 0, nullptr, &bytesAvailable, nullptr) && bytesAvailable > 0)
                     {
+                        if (bytesAvailable > kMaxEventMessageSize)
+                        {
+                            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                                            "Engine event exceeds the %zu-byte protocol limit; disconnecting",
+                                            kMaxEventMessageSize);
+                            ::DisconnectNamedPipe(hPipe);
+                            ::CloseHandle(hPipe);
+                            m_pipeHandle = nullptr;
+                            m_isConnected = false;
+                            ++m_connectionStats.disconnections;
+                            continue;
+                        }
                         std::vector<uint8_t> buffer(bytesAvailable);
                         DWORD bytesRead = 0;
                         if (::ReadFile(hPipe, buffer.data(), bytesAvailable, &bytesRead, nullptr) && bytesRead > 0)
@@ -471,43 +484,45 @@ namespace SparkEditor
         buf.insert(buf.end(), str.begin(), str.end());
     }
 
-    // Helper: read a uint32 from a byte buffer at the given offset
-    static uint32_t ReadU32(const std::vector<uint8_t>& buf, size_t& offset)
+    // Helpers for the bounded event decoder. Each reader advances only on success.
+    static bool ReadU32(const std::vector<uint8_t>& buf, size_t& offset, uint32_t& value)
     {
-        if (offset + 4 > buf.size())
-            return 0;
-        uint32_t value = 0;
+        if (offset > buf.size())
+            return false;
+        if (buf.size() - offset < 4)
+            return false;
+        value = 0;
         for (int i = 0; i < 4; ++i)
         {
             value |= static_cast<uint32_t>(buf[offset + i]) << (i * 8);
         }
         offset += 4;
-        return value;
+        return true;
     }
 
-    // Helper: read a uint64 from a byte buffer at the given offset
-    static uint64_t ReadU64(const std::vector<uint8_t>& buf, size_t& offset)
+    static bool ReadU64(const std::vector<uint8_t>& buf, size_t& offset, uint64_t& value)
     {
-        if (offset + 8 > buf.size())
-            return 0;
-        uint64_t value = 0;
+        if (offset > buf.size())
+            return false;
+        if (buf.size() - offset < 8)
+            return false;
+        value = 0;
         for (int i = 0; i < 8; ++i)
         {
             value |= static_cast<uint64_t>(buf[offset + i]) << (i * 8);
         }
         offset += 8;
-        return value;
+        return true;
     }
 
-    // Helper: read a length-prefixed string from a byte buffer
-    static std::string ReadString(const std::vector<uint8_t>& buf, size_t& offset)
+    static bool ReadString(const std::vector<uint8_t>& buf, size_t& offset, std::string& value)
     {
-        uint32_t len = ReadU32(buf, offset);
-        if (offset + len > buf.size())
-            return "";
-        std::string str(buf.begin() + offset, buf.begin() + offset + len);
+        uint32_t len = 0;
+        if (!ReadU32(buf, offset, len) || offset > buf.size() || len > buf.size() - offset)
+            return false;
+        value.assign(reinterpret_cast<const char*>(buf.data() + offset), len);
         offset += len;
-        return str;
+        return true;
     }
 
     bool EngineInterface::SerializeCommand(const EngineCommand& command, std::vector<uint8_t>& buffer)
@@ -570,40 +585,50 @@ namespace SparkEditor
         //   [4 bytes] binary data length
         //   [N bytes] binary data payload
 
-        if (buffer.size() < 4)
+        if (buffer.size() < 4 || buffer.size() > kMaxEventMessageSize)
             return false;
 
         size_t offset = 0;
-        uint32_t magic = ReadU32(buffer, offset);
-        if (magic != 0x53504B45)
+        EngineEvent decoded{};
+        uint32_t magic = 0;
+        uint32_t type = 0;
+        uint32_t severity = 0;
+        if (!ReadU32(buffer, offset, magic) || magic != 0x53504B45)
         {
             std::cout << "DeserializeEvent: invalid magic number\n";
             return false;
         }
 
-        event.type = static_cast<EngineEventType>(ReadU32(buffer, offset));
-        event.eventID = ReadU64(buffer, offset);
-        event.timestamp = ReadU64(buffer, offset);
-        event.severity = static_cast<int>(ReadU32(buffer, offset));
-        event.sourceObjectID = ReadString(buffer, offset);
-        event.message = ReadString(buffer, offset);
+        if (!ReadU32(buffer, offset, type) || !ReadU64(buffer, offset, decoded.eventID) ||
+            !ReadU64(buffer, offset, decoded.timestamp) || !ReadU32(buffer, offset, severity) ||
+            !ReadString(buffer, offset, decoded.sourceObjectID) || !ReadString(buffer, offset, decoded.message))
+            return false;
+        decoded.type = static_cast<EngineEventType>(type);
+        decoded.severity = static_cast<int>(severity);
 
-        uint32_t dataCount = ReadU32(buffer, offset);
-        event.data.clear();
+        uint32_t dataCount = 0;
+        if (!ReadU32(buffer, offset, dataCount) || dataCount > 65536u ||
+            dataCount > (buffer.size() - offset) / (sizeof(uint32_t) * 2u))
+            return false;
+        decoded.data.reserve(dataCount);
         for (uint32_t i = 0; i < dataCount; ++i)
         {
-            std::string key = ReadString(buffer, offset);
-            std::string value = ReadString(buffer, offset);
-            event.data[key] = value;
+            std::string key;
+            std::string value;
+            if (!ReadString(buffer, offset, key) || !ReadString(buffer, offset, value))
+                return false;
+            decoded.data[std::move(key)] = std::move(value);
         }
 
-        uint32_t binaryLen = ReadU32(buffer, offset);
-        if (offset + binaryLen <= buffer.size())
-        {
-            event.binaryData.assign(buffer.begin() + offset, buffer.begin() + offset + binaryLen);
-            offset += binaryLen;
-        }
+        uint32_t binaryLen = 0;
+        if (!ReadU32(buffer, offset, binaryLen) || binaryLen > buffer.size() - offset)
+            return false;
+        decoded.binaryData.assign(buffer.begin() + offset, buffer.begin() + offset + binaryLen);
+        offset += binaryLen;
+        if (offset != buffer.size())
+            return false;
 
+        event = std::move(decoded);
         return true;
     }
 

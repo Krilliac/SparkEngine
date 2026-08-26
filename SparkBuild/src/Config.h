@@ -102,9 +102,11 @@ namespace SparkBuild
         void ApplyPresetShipping();
         void ApplyPresetDevelopment();
 
-        // Build the cmake configure command line
+        // Build the cmake configure command line. Throws std::invalid_argument
+        // when a configured value cannot be represented safely in the shell
+        // command consumed by ProcessRunner::RunAsync.
         std::string BuildCMakeConfigureCommand() const;
-        // Build the cmake build command line
+        // Build the cmake build command line (same validation contract).
         std::string BuildCMakeBuildCommand() const;
 
         // Get path to the INI file (next to the exe or in home dir)

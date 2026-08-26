@@ -137,8 +137,6 @@ namespace SparkEditor
         bool SaveCrashDump(EXCEPTION_POINTERS* exceptionPointers, const std::string& filePath);
 #else
         static void SignalHandler(int signal);
-        void HandleCrashInternal(int signal);
-        std::string GenerateStackTrace();
 #endif
 
         std::string GetSystemInfo();

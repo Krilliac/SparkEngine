@@ -37,6 +37,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <string>
 #include <thread>
@@ -192,9 +193,12 @@ namespace Spark::Net
         void UnregisterAreaServer(AreaID areaId);
 
         /**
-         * @brief Get information about a registered area
+         * @brief Get an owned snapshot of a registered area
+         *
+         * The returned value remains valid after the area is updated or
+         * unregistered. No reference or pointer into the internal map escapes.
          */
-        const AreaRegistration* GetAreaInfo(AreaID areaId) const;
+        std::optional<AreaRegistration> GetAreaInfoSnapshot(AreaID areaId) const;
 
         /**
          * @brief Get all registered areas
@@ -249,9 +253,12 @@ namespace Spark::Net
         bool TransferPlayer(ClientID clientId, AreaID targetArea);
 
         /**
-         * @brief Get a player's current session
+         * @brief Get an owned snapshot of a player's current session
+         *
+         * The returned value remains valid after the session is updated or
+         * removed. No reference or pointer into the internal map escapes.
          */
-        const PlayerSession* GetPlayerSession(ClientID clientId) const;
+        std::optional<PlayerSession> GetPlayerSessionSnapshot(ClientID clientId) const;
 
         /**
          * @brief Get total player count across all areas
@@ -312,9 +319,9 @@ namespace Spark::Net
 
         WorldServerConfig m_config;
         WorldServerStats m_stats;
-        /// Guards m_stats: written by the tick thread (Tick / ProcessEntityMigrations),
-        /// read via GetStats() from console/other threads. Writers in WorldServer.cpp
-        /// must lock this to fully close torn reads.
+        /// Guards every read and write of m_stats. When a map count and its mirrored
+        /// statistic are updated atomically, acquire the owning map mutex first and
+        /// m_statsMutex second; no code acquires those mutexes in reverse order.
         mutable std::mutex m_statsMutex;
         std::atomic<bool> m_running{false};
         std::thread m_tickThread;

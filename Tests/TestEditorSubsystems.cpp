@@ -32,6 +32,7 @@
 #include <cmath>
 #include <chrono>
 #include <cstdio>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <set>
@@ -1831,6 +1832,97 @@ TEST(EditorProcessLaunch_QuotesUnicodePathsAndExplicitManifestAsDistinctArgument
     LocalFree(argv);
 }
 #endif
+
+TEST(EditorOwnedProcess_ReplacesWithoutOrphaningAndDestructorStops)
+{
+    int stopCalls = 0;
+    int closeCalls = 0;
+    std::vector<unsigned long> stoppedPids;
+    EditorProcessOperations operations;
+    operations.poll = [](void*, unsigned long&) { return false; };
+    operations.stopAndClose = [&](void*, void*, unsigned long pid, unsigned long gracePeriodMs)
+    {
+        ++stopCalls;
+        stoppedPids.push_back(pid);
+        EXPECT_EQ(gracePeriodMs, 1500ul);
+        return EditorProcessStopResult::Terminated;
+    };
+    operations.close = [&](void*, void*) { ++closeCalls; };
+
+    {
+        OwnedEditorProcess owner(operations);
+        ProcessLaunchResult first;
+        first.success = true;
+        first.processHandle = reinterpret_cast<void*>(static_cast<std::uintptr_t>(1));
+        first.jobHandle = reinterpret_cast<void*>(static_cast<std::uintptr_t>(2));
+        first.pid = 101;
+        ASSERT_TRUE(owner.Adopt(first));
+        EXPECT_TRUE(owner.IsRunning());
+        EXPECT_EQ(owner.GetPid(), 101ul);
+
+        ProcessLaunchResult second;
+        second.success = true;
+        second.processHandle = reinterpret_cast<void*>(static_cast<std::uintptr_t>(3));
+        second.jobHandle = reinterpret_cast<void*>(static_cast<std::uintptr_t>(4));
+        second.pid = 202;
+        ASSERT_TRUE(owner.Adopt(second));
+
+        EXPECT_EQ(stopCalls, 1);
+        ASSERT_EQ(stoppedPids.size(), 1u);
+        EXPECT_EQ(stoppedPids[0], 101ul);
+        EXPECT_EQ(owner.GetPid(), 202ul);
+    }
+
+    EXPECT_EQ(stopCalls, 2);
+    ASSERT_EQ(stoppedPids.size(), 2u);
+    EXPECT_EQ(stoppedPids[1], 202ul);
+    EXPECT_EQ(closeCalls, 0);
+}
+
+TEST(EditorOwnedProcess_PollClosesHandlesWithoutSecondStop)
+{
+    int pollCalls = 0;
+    int stopCalls = 0;
+    int closeCalls = 0;
+    EditorProcessOperations operations;
+    operations.poll = [&](void* processHandle, unsigned long& exitCode)
+    {
+        ++pollCalls;
+        EXPECT_TRUE(processHandle == reinterpret_cast<void*>(static_cast<std::uintptr_t>(5)));
+        exitCode = 23;
+        return true;
+    };
+    operations.stopAndClose = [&](void*, void*, unsigned long, unsigned long)
+    {
+        ++stopCalls;
+        return EditorProcessStopResult::Terminated;
+    };
+    operations.close = [&](void* processHandle, void* jobHandle)
+    {
+        ++closeCalls;
+        EXPECT_TRUE(processHandle == reinterpret_cast<void*>(static_cast<std::uintptr_t>(5)));
+        EXPECT_TRUE(jobHandle == reinterpret_cast<void*>(static_cast<std::uintptr_t>(6)));
+    };
+
+    {
+        OwnedEditorProcess owner(operations);
+        ProcessLaunchResult launch;
+        launch.success = true;
+        launch.processHandle = reinterpret_cast<void*>(static_cast<std::uintptr_t>(5));
+        launch.jobHandle = reinterpret_cast<void*>(static_cast<std::uintptr_t>(6));
+        launch.pid = 303;
+        ASSERT_TRUE(owner.Adopt(launch));
+
+        unsigned long exitCode = 0;
+        EXPECT_TRUE(owner.Poll(exitCode));
+        EXPECT_EQ(exitCode, 23ul);
+        EXPECT_FALSE(owner.IsRunning());
+    }
+
+    EXPECT_EQ(pollCalls, 1);
+    EXPECT_EQ(closeCalls, 1);
+    EXPECT_EQ(stopCalls, 0);
+}
 
 TEST(BuildPipeline_ConfigureUsesExplicitProjectAndInstalledPackage)
 {

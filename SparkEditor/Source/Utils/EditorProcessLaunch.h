@@ -19,6 +19,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <string>
 
 namespace SparkEditor
@@ -31,6 +32,7 @@ namespace SparkEditor
     {
         bool success = false;
         void* processHandle = nullptr; ///< HANDLE, owned by the caller — CloseHandle() once no longer polled.
+        void* jobHandle = nullptr;    ///< Optional owned Job Object handle for process-tree lifetime control.
         unsigned long pid = 0;
         std::string error; ///< Human-readable failure reason (empty on success).
     };
@@ -57,6 +59,17 @@ namespace SparkEditor
     ProcessLaunchResult LaunchEditorProcess(const std::filesystem::path& exePath, const std::wstring& commandLine,
                                             const std::filesystem::path& workingDir);
 
+    /**
+     * @brief Launch an editor-managed process in a kill-on-close Windows Job Object.
+     *
+     * The child starts suspended, is assigned to the job before it can create
+     * descendants, and is then resumed. Both processHandle and jobHandle in the
+     * successful result are owned by the caller.
+     */
+    ProcessLaunchResult LaunchOwnedEditorProcess(const std::filesystem::path& exePath,
+                                                 const std::wstring& commandLine,
+                                                 const std::filesystem::path& workingDir);
+
     /// @brief Non-blocking poll of a handle from LaunchEditorProcess. Returns true
     /// (and sets outExitCode) once the process has exited; false while still running
     /// or if processHandle is null.
@@ -65,6 +78,68 @@ namespace SparkEditor
     /// @brief Force-terminate a process launched via LaunchEditorProcess (used by
     /// "Stop All"). Safe to call on an already-exited handle or nullptr (no-op).
     void TerminateEditorProcess(void* processHandle, unsigned int exitCode = 1);
+
+    enum class EditorProcessStopResult
+    {
+        NotRunning,
+        Graceful,
+        Terminated,
+        Failed
+    };
+
+    /// @brief Close process/job handles without requesting shutdown. Closing a
+    /// kill-on-close job also terminates any descendants that outlived the root.
+    void CloseEditorProcessHandles(void* processHandle, void* jobHandle);
+
+    /**
+     * @brief Request graceful window closure, wait a bounded interval, then
+     * terminate the complete owned job tree if the root remains alive.
+     * Handles are always closed before returning.
+     */
+    EditorProcessStopResult StopEditorProcessTree(void* processHandle, void* jobHandle, unsigned long pid,
+                                                  unsigned long gracePeriodMs = 1500,
+                                                  unsigned int exitCode = 1);
+
+    /// @brief Injectable operations used by OwnedEditorProcess. Production uses
+    /// the platform helpers above; tests can provide deterministic fakes.
+    struct EditorProcessOperations
+    {
+        std::function<bool(void*, unsigned long&)> poll;
+        std::function<EditorProcessStopResult(void*, void*, unsigned long, unsigned long)> stopAndClose;
+        std::function<void(void*, void*)> close;
+    };
+
+    /**
+     * @brief Single-process-tree RAII owner for editor-launched children.
+     *
+     * Adopt() safely stops any previously tracked tree before replacing it.
+     * Poll() closes both handles when the root exits (which also cleans up any
+     * remaining descendants), and destruction performs a bounded stop.
+     */
+    class OwnedEditorProcess
+    {
+      public:
+        explicit OwnedEditorProcess(EditorProcessOperations operations = {});
+        ~OwnedEditorProcess();
+
+        OwnedEditorProcess(const OwnedEditorProcess&) = delete;
+        OwnedEditorProcess& operator=(const OwnedEditorProcess&) = delete;
+
+        bool Adopt(ProcessLaunchResult launch);
+        bool Poll(unsigned long& outExitCode);
+        EditorProcessStopResult Stop(unsigned long gracePeriodMs = 1500);
+
+        [[nodiscard]] bool IsRunning() const noexcept { return m_processHandle != nullptr; }
+        [[nodiscard]] unsigned long GetPid() const noexcept { return m_pid; }
+
+      private:
+        void Clear() noexcept;
+
+        EditorProcessOperations m_operations;
+        void* m_processHandle = nullptr;
+        void* m_jobHandle = nullptr;
+        unsigned long m_pid = 0;
+    };
 
     /**
      * @brief Build a `"<engineExe>" -game <dll> [-headless] [-exec <cfg>]

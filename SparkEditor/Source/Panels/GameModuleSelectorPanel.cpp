@@ -14,9 +14,6 @@
 #include <filesystem>
 #include <fstream>
 #include <vector>
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 namespace SparkEditor
 {
@@ -114,15 +111,10 @@ namespace SparkEditor
 
     void GameModuleSelectorPanel::Shutdown()
     {
+        if (m_gameProcess.IsRunning())
+            StopLaunchedProcess();
         m_modules.clear();
-#ifdef _WIN32
-        if (m_gameProcess)
-        {
-            // Do NOT terminate the game — the launched process is independent.
-            CloseHandle(static_cast<HANDLE>(m_gameProcess));
-            m_gameProcess = nullptr;
-        }
-#endif
+        m_isInitialized = false;
     }
 
     void GameModuleSelectorPanel::RefreshModuleList()
@@ -276,7 +268,8 @@ namespace SparkEditor
             ImGui::TextDisabled("Select a module (radio button) to enable launching.");
 
 #ifdef _WIN32
-        ImGui::BeginDisabled(!hasSelection);
+        const bool running = m_gameProcess.IsRunning();
+        ImGui::BeginDisabled(!hasSelection || running);
 
         if (ImGui::Button("Launch Game"))
             LaunchGame(false);
@@ -301,21 +294,41 @@ namespace SparkEditor
         }
 
         ImGui::EndDisabled();
+
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!running);
+        if (ImGui::Button("Stop"))
+            StopLaunchedProcess();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted("Requests a normal game-window close, then terminates the complete\n"
+                                   "owned process tree if it does not exit within the grace period.");
+            ImGui::EndTooltip();
+        }
+        ImGui::EndDisabled();
 #else
         ImGui::TextDisabled("Process launch is available on Windows builds only.");
 #endif
 
         if (!m_launchStatus.empty())
         {
-            const bool running = m_gameProcess != nullptr;
-            ImGui::TextColored(running ? ImVec4(0.3f, 0.9f, 0.3f, 1.0f) : ImVec4(0.75f, 0.75f, 0.75f, 1.0f), "%s",
-                               m_launchStatus.c_str());
+            ImGui::TextColored(m_gameProcess.IsRunning() ? ImVec4(0.3f, 0.9f, 0.3f, 1.0f)
+                                                         : ImVec4(0.75f, 0.75f, 0.75f, 1.0f),
+                               "%s", m_launchStatus.c_str());
         }
     }
 
     void GameModuleSelectorPanel::LaunchGame(bool headless)
     {
 #ifdef _WIN32
+        if (m_gameProcess.IsRunning())
+        {
+            m_launchStatus = "A game process is already running (PID " + std::to_string(m_gameProcess.GetPid()) +
+                             "); stop it before launching another";
+            return;
+        }
+
         if (m_launchSelection < 0 || m_launchSelection >= static_cast<int>(m_modules.size()))
         {
             m_launchStatus = "No module selected";
@@ -369,7 +382,7 @@ namespace SparkEditor
             return;
         }
 
-        const ProcessLaunchResult launch = LaunchEditorProcess(engineExe, cmd, workingDir);
+        const ProcessLaunchResult launch = LaunchOwnedEditorProcess(engineExe, cmd, workingDir);
         if (!launch.success)
         {
             m_launchStatus = launch.error;
@@ -378,13 +391,15 @@ namespace SparkEditor
             return;
         }
 
-        if (m_gameProcess)
-            CloseHandle(static_cast<HANDLE>(m_gameProcess)); // forget the previous launch (process keeps running)
-        m_gameProcess = launch.processHandle;
-        m_gamePid = launch.pid;
+        if (!m_gameProcess.Adopt(launch))
+        {
+            m_launchStatus = "Launch succeeded but process ownership could not be established";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
+            return;
+        }
 
         m_launchStatus = std::string(headless ? "Dedicated (headless)" : "Game") + " running — " + mod.name + ", PID " +
-                         std::to_string(m_gamePid);
+                         std::to_string(m_gameProcess.GetPid());
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
         Spark::SimpleConsole::GetInstance().LogSuccess("[Editor] " + m_launchStatus);
 #else
@@ -396,20 +411,39 @@ namespace SparkEditor
     void GameModuleSelectorPanel::PollLaunchedProcess()
     {
 #ifdef _WIN32
-        if (!m_gameProcess)
+        if (!m_gameProcess.IsRunning())
             return;
 
+        const unsigned long pid = m_gameProcess.GetPid();
         unsigned long exitCode = 0;
-        if (PollProcessExited(m_gameProcess, exitCode))
+        if (m_gameProcess.Poll(exitCode))
         {
-            m_launchStatus =
-                "Last launch (PID " + std::to_string(m_gamePid) + ") exited with code " + std::to_string(exitCode);
+            m_launchStatus = "Last launch (PID " + std::to_string(pid) + ") exited with code " +
+                             std::to_string(exitCode);
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
-            CloseHandle(static_cast<HANDLE>(m_gameProcess));
-            m_gameProcess = nullptr;
-            m_gamePid = 0;
         }
 #endif
+    }
+
+    void GameModuleSelectorPanel::StopLaunchedProcess()
+    {
+        const unsigned long pid = m_gameProcess.GetPid();
+        switch (m_gameProcess.Stop())
+        {
+        case EditorProcessStopResult::NotRunning:
+            m_launchStatus = "No game process is running";
+            break;
+        case EditorProcessStopResult::Graceful:
+            m_launchStatus = "Game process exited during the stop grace period (PID " + std::to_string(pid) + ")";
+            break;
+        case EditorProcessStopResult::Terminated:
+            m_launchStatus = "Game process tree terminated after grace period (PID " + std::to_string(pid) + ")";
+            break;
+        case EditorProcessStopResult::Failed:
+            m_launchStatus = "Failed to stop game process tree (PID " + std::to_string(pid) + ")";
+            break;
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
     }
 
     void GameModuleSelectorPanel::RenderManifestControls()

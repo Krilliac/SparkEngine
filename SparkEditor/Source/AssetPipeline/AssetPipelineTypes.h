@@ -161,7 +161,7 @@ namespace SparkEditor
         std::string guid;                                         ///< Unique asset identifier
         std::string sourceFilePath;                               ///< Source file path
         std::string processedFilePath;                            ///< Processed asset path
-        AssetType type;                                           ///< Asset type
+        AssetType type = AssetType::UNKNOWN;                      ///< Asset type
         size_t sourceFileSize = 0;                                ///< Source file size in bytes
         size_t processedFileSize = 0;                             ///< Processed file size in bytes
         std::chrono::system_clock::time_point sourceModifiedTime; ///< Source file modification time

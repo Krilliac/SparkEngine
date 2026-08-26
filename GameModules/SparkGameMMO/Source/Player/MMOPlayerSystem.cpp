@@ -355,13 +355,12 @@ namespace MMO
         if (!local || !netMgr)
             return;
 
-        if (auto* replicated = netMgr->GetReplicatedEntity(local->networkId))
-        {
-            replicated->position = {local->posX, local->posY, local->posZ};
-            replicated->velocity = {local->velocityX, local->velocityY, local->velocityZ};
-            replicated->areaId = local->currentAreaId;
-            replicated->needsFullSync = true;
-        }
+        Spark::Net::ReplicatedEntityUpdate update;
+        update.position = DirectX::XMFLOAT3{local->posX, local->posY, local->posZ};
+        update.velocity = DirectX::XMFLOAT3{local->velocityX, local->velocityY, local->velocityZ};
+        update.areaId = local->currentAreaId;
+        update.needsFullSync = true;
+        (void)netMgr->UpdateReplicatedEntity(local->networkId, update);
 
         if (netMgr->GetRole() == Spark::Net::NetworkRole::Client &&
             netMgr->GetConnectionState() == Spark::Net::ConnectionState::Connected)
@@ -431,7 +430,7 @@ namespace MMO
 
             if (netMgr)
             {
-                if (const auto* replicated = netMgr->GetReplicatedEntity(player.networkId))
+                if (const auto replicated = netMgr->GetReplicatedEntitySnapshot(player.networkId))
                 {
                     player.targetPosX = replicated->position.x;
                     player.targetPosY = replicated->position.y;

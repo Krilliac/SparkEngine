@@ -66,6 +66,16 @@ namespace SparkEditor
     using PeerID = uint32_t;
     constexpr PeerID INVALID_PEER = 0;
 
+#ifdef _WIN32
+    // WinSock SOCKET is UINT_PTR on 64-bit Windows. Never narrow it to int.
+    using CollaborativeSocketHandle = std::uintptr_t;
+    inline constexpr CollaborativeSocketHandle INVALID_COLLAB_SOCKET = static_cast<CollaborativeSocketHandle>(-1);
+    static_assert(sizeof(CollaborativeSocketHandle) >= sizeof(void*));
+#else
+    using CollaborativeSocketHandle = int;
+    inline constexpr CollaborativeSocketHandle INVALID_COLLAB_SOCKET = -1;
+#endif
+
     /**
      * @brief Information about a connected editor peer
      */
@@ -113,7 +123,7 @@ namespace SparkEditor
      */
     struct EditMessage
     {
-        EditMessageType type;
+        EditMessageType type = EditMessageType::NodeModified;
         PeerID sourceEditor = INVALID_PEER; ///< Who made the edit
         std::string nodeId;                 ///< Affected node/entity ID
         std::string componentType;          ///< Component type (if applicable)
@@ -173,7 +183,7 @@ namespace SparkEditor
      */
     struct InternalMessage
     {
-        InternalMessageType type;
+        InternalMessageType type = InternalMessageType::Presence;
         PeerID sourcePeer = INVALID_PEER; ///< Originating peer
         std::string nodeId;               ///< Relevant node ID (if applicable)
         std::string payload;              ///< Serialized data payload
@@ -318,7 +328,8 @@ namespace SparkEditor
         void SendToPeer(PeerID peerId, const InternalMessage& msg);
         void NetworkThreadHost();
         void NetworkThreadClient();
-        void HandleClientSocket(int clientSocket, PeerID peerId, std::shared_ptr<std::atomic<bool>> finished);
+        void HandleClientSocket(CollaborativeSocketHandle clientSocket, PeerID peerId,
+                                std::shared_ptr<std::atomic<bool>> finished);
         void ReapFinishedClientThreads(); ///< Join+remove client handler threads that have exited
         void ShutdownAllSockets();        ///< shutdown() all sockets to unblock recv()/accept()
         void CloseAllSockets();
@@ -365,9 +376,9 @@ namespace SparkEditor
         bool m_incomingOverflowWarned = false;
 
         // Networking — TCP sockets and threads
-        int m_listenSocket = -1;
-        int m_clientSocket = -1; ///< Client's connection to host
-        std::unordered_map<PeerID, int> m_peerSockets;
+        CollaborativeSocketHandle m_listenSocket = INVALID_COLLAB_SOCKET;
+        CollaborativeSocketHandle m_clientSocket = INVALID_COLLAB_SOCKET; ///< Client's connection to host
+        std::unordered_map<PeerID, CollaborativeSocketHandle> m_peerSockets;
         mutable std::mutex m_socketMutex;
         std::thread m_networkThread;
 

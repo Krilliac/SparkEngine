@@ -327,25 +327,8 @@ void ConsoleApp::Run()
 
 void ConsoleApp::ProcessPipeMessages(const std::string& message)
 {
-    std::istringstream iss(message);
-    std::string pipeLine;
-    while (std::getline(iss, pipeLine))
+    for (const std::string& pipeLine : m_pipeMessageFramer.Push(message))
     {
-        if (pipeLine.empty())
-        {
-            continue;
-        }
-
-        // Remove carriage return if present
-        if (pipeLine.back() == '\r')
-        {
-            pipeLine.pop_back();
-        }
-        if (pipeLine.empty())
-        {
-            continue;
-        }
-
 #ifdef SPARK_PLATFORM_WINDOWS
         OutputDebugStringA(("ReadEngineInput: Processing line: " + pipeLine + "\n").c_str());
 #endif

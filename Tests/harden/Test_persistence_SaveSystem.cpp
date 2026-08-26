@@ -10,6 +10,7 @@
 #include "TestFramework.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/ECS/Components.h"
+#include "Utils/LocalFileCache.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -147,6 +148,31 @@ TEST(SaveSystem_Load_RejectsTruncatedCustomStateCountWithoutChangingWorld)
         EXPECT_EQ(target.GetEntityCount(), 1u);
     }
 
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_Load_RejectsOversizedFileBeforeCacheRead)
+{
+    const std::string dir = MakeTempSaveDir("oversized_cached");
+    SaveSystem& ss = SaveSystem::GetInstance();
+    EXPECT_TRUE(ss.Initialize(dir));
+
+    LocalFileCache cache;
+    ss.SetFileCache(&cache);
+    const auto path = std::filesystem::path(dir) / "oversized.spark_save";
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output.write("SPRK", 4);
+    }
+    std::filesystem::resize_file(path, 512ull * 1024ull * 1024ull + 1ull);
+
+    World target;
+    target.CreateEntity("sentinel");
+    EXPECT_FALSE(ss.Load("oversized", target));
+    EXPECT_EQ(target.GetEntityCount(), 1u);
+    EXPECT_EQ(cache.GetMetrics().misses, uint64_t{0});
+
+    ss.SetFileCache(nullptr);
     std::filesystem::remove_all(dir);
 }
 

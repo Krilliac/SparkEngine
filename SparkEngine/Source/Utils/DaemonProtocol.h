@@ -24,8 +24,11 @@
 
 #pragma once
 
+#include "Serializer.h"
+
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Spark::Daemon
@@ -103,54 +106,32 @@ namespace Spark::Daemon
 
     [[nodiscard]] inline bool DecodeDaemonStats(const std::vector<uint8_t>& bytes, DaemonStats& out)
     {
-        size_t pos = 0;
-        auto need = [&](size_t n) { return pos + n <= bytes.size(); };
-        auto readU64 = [&](uint64_t& v) -> bool
-        {
-            if (!need(8))
-                return false;
-            v = 0;
-            for (int i = 0; i < 8; ++i)
-                v |= static_cast<uint64_t>(bytes[pos++]) << (i * 8);
-            return true;
-        };
-        auto readU32 = [&](uint32_t& v) -> bool
-        {
-            if (!need(4))
-                return false;
-            v = 0;
-            for (int i = 0; i < 4; ++i)
-                v |= static_cast<uint32_t>(bytes[pos++]) << (i * 8);
-            return true;
-        };
-        auto readU16 = [&](uint16_t& v) -> bool
-        {
-            if (!need(2))
-                return false;
-            v = static_cast<uint16_t>(bytes[pos] | (static_cast<uint16_t>(bytes[pos + 1]) << 8));
-            pos += 2;
-            return true;
-        };
+        Spark::BinaryReader r(bytes);
 
-        if (!readU64(out.uptimeSeconds))
+        const uint64_t uptimeSeconds = r.Read<uint64_t>();
+        const uint32_t versionLength = r.Read<uint32_t>();
+        if (r.HasError() || static_cast<size_t>(versionLength) > r.Remaining())
             return false;
-        uint32_t vLen = 0;
-        if (!readU32(vLen) || !need(vLen))
+
+        std::string protocolVersion(versionLength, '\0');
+        if (versionLength > 0 && !r.ReadBytes(protocolVersion.data(), versionLength))
             return false;
-        out.protocolVersion.assign(reinterpret_cast<const char*>(bytes.data() + pos), vLen);
-        pos += vLen;
-        uint32_t idCount = 0;
-        if (!readU32(idCount))
+
+        const uint32_t idCount = r.Read<uint32_t>();
+        if (r.HasError() || static_cast<size_t>(idCount) > r.Remaining() / sizeof(uint16_t))
             return false;
-        out.registeredIds.clear();
-        out.registeredIds.reserve(idCount);
+
+        std::vector<uint16_t> registeredIds;
+        registeredIds.reserve(idCount);
         for (uint32_t i = 0; i < idCount; ++i)
-        {
-            uint16_t id = 0;
-            if (!readU16(id))
-                return false;
-            out.registeredIds.push_back(id);
-        }
+            registeredIds.push_back(r.Read<uint16_t>());
+
+        if (r.HasError())
+            return false;
+
+        out.uptimeSeconds = uptimeSeconds;
+        out.protocolVersion = std::move(protocolVersion);
+        out.registeredIds = std::move(registeredIds);
         return true;
     }
 

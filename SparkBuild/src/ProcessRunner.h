@@ -49,6 +49,7 @@ namespace SparkBuild
 
 #ifdef SPARK_PLATFORM_WINDOWS
         HANDLE m_hProcess = nullptr;
+        HANDLE m_hJob = nullptr;
         void ReadPipeOutput(HANDLE hPipe, OutputCallback& onOutput, std::string& lineBuffer);
 #else
         pid_t m_childPid = -1;

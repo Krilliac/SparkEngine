@@ -16,6 +16,7 @@
 #include <cstring>
 #include <limits>
 #include <sstream>
+#include <utility>
 
 namespace Spark::Net
 {
@@ -46,7 +47,10 @@ namespace Spark::Net
 
         m_config = config;
         m_startTime = std::chrono::steady_clock::now();
-        m_stats = {};
+        {
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            m_stats = {};
+        }
         m_running.store(true, std::memory_order_release);
 
         m_tickThread = std::thread(&WorldServer::TickLoop, this);
@@ -72,10 +76,14 @@ namespace Spark::Net
         {
             std::lock_guard<std::mutex> lock(m_areaMutex);
             m_areas.clear();
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            m_stats.activeAreas = 0;
         }
         {
             std::lock_guard<std::mutex> lock(m_playerMutex);
             m_playerSessions.clear();
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            m_stats.totalPlayers = 0;
         }
 
         Log("World server stopped.");
@@ -101,7 +109,11 @@ namespace Spark::Net
         }
 
         auto now = std::chrono::steady_clock::now();
-        m_stats.uptimeSeconds = std::chrono::duration<float>(now - m_startTime).count();
+        const float uptimeSeconds = std::chrono::duration<float>(now - m_startTime).count();
+        {
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            m_stats.uptimeSeconds = uptimeSeconds;
+        }
     }
 
     // ============================================================================
@@ -110,20 +122,24 @@ namespace Spark::Net
 
     AreaID WorldServer::RegisterAreaServer(const AreaServerConfig& config)
     {
-        std::lock_guard<std::mutex> lock(m_areaMutex);
+        AreaID id = INVALID_AREA;
+        {
+            std::lock_guard<std::mutex> lock(m_areaMutex);
 
-        AreaID id = AllocateAreaID();
-        AreaRegistration reg;
-        reg.areaId = id;
-        reg.areaName = config.areaName;
-        reg.port = config.port;
-        reg.interServerPort = config.interServerPort;
-        reg.maxClients = config.maxClients;
-        reg.isOnline = true;
-        reg.lastHeartbeat = std::chrono::steady_clock::now();
+            id = AllocateAreaID();
+            AreaRegistration reg;
+            reg.areaId = id;
+            reg.areaName = config.areaName;
+            reg.port = config.port;
+            reg.interServerPort = config.interServerPort;
+            reg.maxClients = config.maxClients;
+            reg.isOnline = true;
+            reg.lastHeartbeat = std::chrono::steady_clock::now();
 
-        m_areas[id] = reg;
-        m_stats.activeAreas = static_cast<uint32_t>(m_areas.size());
+            m_areas[id] = std::move(reg);
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            m_stats.activeAreas = static_cast<uint32_t>(m_areas.size());
+        }
 
         Log("Registered area server '" + config.areaName + "' (ID=" + std::to_string(id) + ").");
         return id;
@@ -131,21 +147,33 @@ namespace Spark::Net
 
     void WorldServer::UnregisterAreaServer(AreaID areaId)
     {
-        std::lock_guard<std::mutex> lock(m_areaMutex);
-        auto it = m_areas.find(areaId);
-        if (it != m_areas.end())
+        std::string removedAreaName;
         {
-            Log("Unregistered area server '" + it->second.areaName + "'.");
+            std::lock_guard<std::mutex> lock(m_areaMutex);
+            auto it = m_areas.find(areaId);
+            if (it == m_areas.end())
+            {
+                return;
+            }
+
+            removedAreaName = it->second.areaName;
             m_areas.erase(it);
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
             m_stats.activeAreas = static_cast<uint32_t>(m_areas.size());
         }
+
+        Log("Unregistered area server '" + removedAreaName + "'.");
     }
 
-    const AreaRegistration* WorldServer::GetAreaInfo(AreaID areaId) const
+    std::optional<AreaRegistration> WorldServer::GetAreaInfoSnapshot(AreaID areaId) const
     {
         std::lock_guard<std::mutex> lock(m_areaMutex);
         auto it = m_areas.find(areaId);
-        return it != m_areas.end() ? &it->second : nullptr;
+        if (it == m_areas.end())
+        {
+            return std::nullopt;
+        }
+        return it->second;
     }
 
     std::vector<AreaRegistration> WorldServer::GetAllAreas() const
@@ -170,55 +198,58 @@ namespace Spark::Net
             return INVALID_AREA;
         }
 
-        std::lock_guard<std::mutex> lock(m_areaMutex);
-
-        // First pass: find an online area whose bounds contain the position
-        for (const auto& [id, reg] : m_areas)
-        {
-            if (!reg.isOnline)
-            {
-                continue;
-            }
-
-            float minX = reg.areaPosition.x;
-            float minY = reg.areaPosition.y;
-            float minZ = reg.areaPosition.z;
-            float maxX = minX + reg.areaSize.x;
-            float maxY = minY + reg.areaSize.y;
-            float maxZ = minZ + reg.areaSize.z;
-
-            if (position.x >= minX && position.x <= maxX && position.y >= minY && position.y <= maxY &&
-                position.z >= minZ && position.z <= maxZ)
-            {
-                return id;
-            }
-        }
-
-        // Second pass: fall back to the nearest online area by center distance
         AreaID nearestArea = INVALID_AREA;
-        float nearestDistSq = std::numeric_limits<float>::max();
-
-        for (const auto& [id, reg] : m_areas)
         {
-            if (!reg.isOnline)
+            std::lock_guard<std::mutex> lock(m_areaMutex);
+
+            // First pass: find an online area whose bounds contain the position
+            for (const auto& [id, reg] : m_areas)
             {
-                continue;
+                if (!reg.isOnline)
+                {
+                    continue;
+                }
+
+                float minX = reg.areaPosition.x;
+                float minY = reg.areaPosition.y;
+                float minZ = reg.areaPosition.z;
+                float maxX = minX + reg.areaSize.x;
+                float maxY = minY + reg.areaSize.y;
+                float maxZ = minZ + reg.areaSize.z;
+
+                if (position.x >= minX && position.x <= maxX && position.y >= minY && position.y <= maxY &&
+                    position.z >= minZ && position.z <= maxZ)
+                {
+                    return id;
+                }
             }
 
-            float centerX = reg.areaPosition.x + reg.areaSize.x * 0.5f;
-            float centerY = reg.areaPosition.y + reg.areaSize.y * 0.5f;
-            float centerZ = reg.areaPosition.z + reg.areaSize.z * 0.5f;
+            // Second pass: fall back to the nearest online area by center distance
+            float nearestDistSq = std::numeric_limits<float>::max();
 
-            float dx = position.x - centerX;
-            float dy = position.y - centerY;
-            float dz = position.z - centerZ;
-            float distSq = dx * dx + dy * dy + dz * dz;
-
-            if (distSq < nearestDistSq)
+            for (const auto& [id, reg] : m_areas)
             {
-                nearestDistSq = distSq;
-                nearestArea = id;
+                if (!reg.isOnline)
+                {
+                    continue;
+                }
+
+                float centerX = reg.areaPosition.x + reg.areaSize.x * 0.5f;
+                float centerY = reg.areaPosition.y + reg.areaSize.y * 0.5f;
+                float centerZ = reg.areaPosition.z + reg.areaSize.z * 0.5f;
+
+                float dx = position.x - centerX;
+                float dy = position.y - centerY;
+                float dz = position.z - centerZ;
+                float distSq = dx * dx + dy * dy + dz * dz;
+
+                if (distSq < nearestDistSq)
+                {
+                    nearestDistSq = distSq;
+                    nearestArea = id;
+                }
             }
+
         }
 
         if (nearestArea == INVALID_AREA)
@@ -233,7 +264,6 @@ namespace Spark::Net
                            "falling back to nearest area %u.",
                            position.x, position.y, position.z, nearestArea);
         }
-
         return nearestArea;
     }
 
@@ -254,6 +284,7 @@ namespace Spark::Net
             return INVALID_AREA;
         }
 
+        uint32_t playerCount = 0;
         {
             std::lock_guard<std::mutex> lock(m_playerMutex);
             PlayerSession session;
@@ -262,12 +293,10 @@ namespace Spark::Net
             session.currentArea = targetArea;
             session.lastKnownPosition = spawnPosition;
             m_playerSessions[clientId] = session;
-        }
-
-        m_stats.totalPlayers = GetTotalPlayerCount();
-        if (m_stats.totalPlayers > m_stats.peakPlayers)
-        {
-            m_stats.peakPlayers = m_stats.totalPlayers;
+            playerCount = static_cast<uint32_t>(m_playerSessions.size());
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            m_stats.totalPlayers = playerCount;
+            m_stats.peakPlayers = std::max(m_stats.peakPlayers, playerCount);
         }
 
         Log("Player '" + playerName + "' connected, assigned to area " + std::to_string(targetArea) + ".");
@@ -276,14 +305,23 @@ namespace Spark::Net
 
     void WorldServer::HandlePlayerDisconnect(ClientID clientId)
     {
-        std::lock_guard<std::mutex> lock(m_playerMutex);
-        auto it = m_playerSessions.find(clientId);
-        if (it != m_playerSessions.end())
+        std::string disconnectedPlayerName;
         {
-            Log("Player '" + it->second.playerName + "' disconnected.");
-            m_playerSessions.erase(it);
+            std::lock_guard<std::mutex> lock(m_playerMutex);
+            auto it = m_playerSessions.find(clientId);
+            if (it != m_playerSessions.end())
+            {
+                disconnectedPlayerName = it->second.playerName;
+                m_playerSessions.erase(it);
+            }
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            m_stats.totalPlayers = static_cast<uint32_t>(m_playerSessions.size());
         }
-        m_stats.totalPlayers = static_cast<uint32_t>(m_playerSessions.size());
+
+        if (!disconnectedPlayerName.empty())
+        {
+            Log("Player '" + disconnectedPlayerName + "' disconnected.");
+        }
 
         // Scope cleanup runs inside NetworkManager::HandleDisconnect as well,
         // but we call it here defensively for callers that bypass the network
@@ -317,34 +355,53 @@ namespace Spark::Net
 
     bool WorldServer::TransferPlayer(ClientID clientId, AreaID targetArea)
     {
-        std::lock_guard<std::mutex> lock(m_playerMutex);
-        auto it = m_playerSessions.find(clientId);
-        if (it == m_playerSessions.end())
+        std::string playerName;
+        AreaID currentArea = INVALID_AREA;
+        bool alreadyTransferring = false;
         {
+            std::lock_guard<std::mutex> lock(m_playerMutex);
+            auto it = m_playerSessions.find(clientId);
+            if (it == m_playerSessions.end())
+            {
+                return false;
+            }
+
+            auto& session = it->second;
+            playerName = session.playerName;
+            currentArea = session.currentArea;
+            alreadyTransferring = session.isTransferring;
+            if (!alreadyTransferring)
+            {
+                session.pendingArea = targetArea;
+                session.isTransferring = true;
+            }
+        }
+
+        if (alreadyTransferring)
+        {
+            Log("Player '" + playerName + "' is already transferring.");
             return false;
         }
 
-        auto& session = it->second;
-        if (session.isTransferring)
         {
-            Log("Player '" + session.playerName + "' is already transferring.");
-            return false;
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            ++m_stats.totalAreaTransfers;
         }
 
-        session.pendingArea = targetArea;
-        session.isTransferring = true;
-        m_stats.totalAreaTransfers++;
-
-        Log("Transferring player '" + session.playerName + "' from area " + std::to_string(session.currentArea) +
+        Log("Transferring player '" + playerName + "' from area " + std::to_string(currentArea) +
             " to area " + std::to_string(targetArea) + ".");
         return true;
     }
 
-    const PlayerSession* WorldServer::GetPlayerSession(ClientID clientId) const
+    std::optional<PlayerSession> WorldServer::GetPlayerSessionSnapshot(ClientID clientId) const
     {
         std::lock_guard<std::mutex> lock(m_playerMutex);
         auto it = m_playerSessions.find(clientId);
-        return it != m_playerSessions.end() ? &it->second : nullptr;
+        if (it == m_playerSessions.end())
+        {
+            return std::nullopt;
+        }
+        return it->second;
     }
 
     uint32_t WorldServer::GetTotalPlayerCount() const
@@ -359,27 +416,31 @@ namespace Spark::Net
 
     void WorldServer::PerformLoadBalancing()
     {
-        std::lock_guard<std::mutex> lock(m_areaMutex);
-
-        if (m_areas.empty())
+        const std::vector<AreaRegistration> areas = GetAllAreas();
+        if (areas.empty())
         {
             return;
         }
 
         // Calculate average load
         float totalLoad = 0.0f;
-        for (const auto& [id, reg] : m_areas)
+        for (const auto& reg : areas)
         {
             totalLoad += reg.cpuLoad;
         }
-        m_stats.averageAreaLoad = totalLoad / static_cast<float>(m_areas.size());
-        m_stats.loadBalanceEvents++;
+        const float averageAreaLoad = totalLoad / static_cast<float>(areas.size());
+        uint32_t loadBalanceEvent = 0;
+        {
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            m_stats.averageAreaLoad = averageAreaLoad;
+            loadBalanceEvent = ++m_stats.loadBalanceEvents;
+        }
 
         // Identify overloaded and underloaded areas
-        std::vector<AreaID> overloaded;
-        std::vector<AreaID> underloaded;
+        std::vector<AreaRegistration> overloaded;
+        std::vector<AreaRegistration> underloaded;
 
-        for (const auto& [id, reg] : m_areas)
+        for (const auto& reg : areas)
         {
             if (!reg.isOnline)
             {
@@ -388,14 +449,14 @@ namespace Spark::Net
 
             if (reg.cpuLoad > LOAD_BALANCE_OVERLOAD_THRESHOLD)
             {
-                overloaded.push_back(id);
-                SPARK_LOG_WARN("WorldServer", "Area '%s' (ID=%u) is overloaded: CPU=%.1f%%.", reg.areaName.c_str(), id,
+                overloaded.push_back(reg);
+                SPARK_LOG_WARN("WorldServer", "Area '%s' (ID=%u) is overloaded: CPU=%.1f%%.", reg.areaName.c_str(), reg.areaId,
                                reg.cpuLoad * 100.0f);
             }
             else if (reg.cpuLoad < LOAD_BALANCE_UNDERLOAD_THRESHOLD)
             {
-                underloaded.push_back(id);
-                SPARK_LOG_INFO("WorldServer", "Area '%s' (ID=%u) is underloaded: CPU=%.1f%%.", reg.areaName.c_str(), id,
+                underloaded.push_back(reg);
+                SPARK_LOG_INFO("WorldServer", "Area '%s' (ID=%u) is underloaded: CPU=%.1f%%.", reg.areaName.c_str(), reg.areaId,
                                reg.cpuLoad * 100.0f);
             }
         }
@@ -406,8 +467,8 @@ namespace Spark::Net
             size_t migrationCount = std::min(overloaded.size(), underloaded.size());
             for (size_t i = 0; i < migrationCount; ++i)
             {
-                const auto& srcReg = m_areas[overloaded[i]];
-                const auto& dstReg = m_areas[underloaded[i]];
+                const auto& srcReg = overloaded[i];
+                const auto& dstReg = underloaded[i];
                 SPARK_LOG_INFO("WorldServer",
                                "Load balance: would migrate work from '%s' (CPU=%.1f%%) "
                                "to '%s' (CPU=%.1f%%).",
@@ -422,8 +483,7 @@ namespace Spark::Net
         }
 
         SPARK_LOG_INFO("WorldServer", "Load balance pass #%u complete: avg=%.1f%%, overloaded=%zu, underloaded=%zu.",
-                       m_stats.loadBalanceEvents, m_stats.averageAreaLoad * 100.0f, overloaded.size(),
-                       underloaded.size());
+                       loadBalanceEvent, averageAreaLoad * 100.0f, overloaded.size(), underloaded.size());
     }
 
     // ============================================================================
@@ -438,24 +498,27 @@ namespace Spark::Net
             return;
         }
 
-        std::lock_guard<std::mutex> lock(m_areaMutex);
-
         uint32_t queuedCount = 0;
-        for (auto& [id, reg] : m_areas)
         {
-            if (!reg.isOnline)
+            std::lock_guard<std::mutex> lock(m_areaMutex);
+            for (const auto& [id, reg] : m_areas)
             {
-                continue;
+                if (reg.isOnline)
+                {
+                    ++queuedCount;
+                }
             }
+        }
 
-            // Queue the message for this area
+        // Queue one copy for each online area without holding the area map lock.
+        {
+            std::lock_guard<std::mutex> msgLock(m_messageMutex);
+            for (uint32_t i = 0; i < queuedCount; ++i)
             {
-                std::lock_guard<std::mutex> msgLock(m_messageMutex);
                 NetworkMessage areaCopy = msg;
                 areaCopy.senderID = INVALID_CLIENT; // Indicate world-server origin
                 m_worldMessageQueue.push(std::move(areaCopy));
             }
-            ++queuedCount;
         }
 
         SPARK_LOG_INFO("WorldServer", "Broadcast message (type=%u) queued for %u online area(s).",
@@ -470,37 +533,50 @@ namespace Spark::Net
             return;
         }
 
-        std::lock_guard<std::mutex> playerLock(m_playerMutex);
+        std::vector<ClientID> routedClients;
+        std::vector<std::pair<ClientID, std::string>> invalidAreaPlayers;
+        {
+            std::lock_guard<std::mutex> playerLock(m_playerMutex);
+            routedClients.reserve(m_playerSessions.size());
+            for (const auto& [clientId, session] : m_playerSessions)
+            {
+                if (session.currentArea == INVALID_AREA)
+                {
+                    invalidAreaPlayers.emplace_back(clientId, session.playerName);
+                }
+                else
+                {
+                    routedClients.push_back(clientId);
+                }
+            }
+        }
 
-        if (m_playerSessions.empty())
+        if (routedClients.empty() && invalidAreaPlayers.empty())
         {
             SPARK_LOG_INFO("WorldServer", "BroadcastToAllPlayers: no players connected; nothing to send.");
             return;
         }
 
-        uint32_t routedCount = 0;
-        for (const auto& [clientId, session] : m_playerSessions)
+        for (const auto& [clientId, playerName] : invalidAreaPlayers)
         {
-            if (session.currentArea == INVALID_AREA)
-            {
-                SPARK_LOG_WARN("WorldServer", "Player '%s' (client=%u) has no valid area; skipping broadcast.",
-                               session.playerName.c_str(), clientId);
-                continue;
-            }
+            SPARK_LOG_WARN("WorldServer", "Player '%s' (client=%u) has no valid area; skipping broadcast.",
+                           playerName.c_str(), clientId);
+        }
 
-            // Route through the player's current area server by queuing a copy
-            // addressed to this specific client.
+        // Route through each player's current area server by queuing a copy
+        // addressed to that specific client.
+        {
+            std::lock_guard<std::mutex> msgLock(m_messageMutex);
+            for (ClientID clientId : routedClients)
             {
-                std::lock_guard<std::mutex> msgLock(m_messageMutex);
                 NetworkMessage playerCopy = msg;
                 playerCopy.senderID = clientId;
                 m_worldMessageQueue.push(std::move(playerCopy));
             }
-            ++routedCount;
         }
 
         SPARK_LOG_INFO("WorldServer", "Broadcast message (type=%u) routed to %u player(s) across their area servers.",
-                       static_cast<unsigned>(msg.type), routedCount);
+                       static_cast<unsigned>(msg.type), static_cast<uint32_t>(routedClients.size()));
     }
 
     // ============================================================================
@@ -509,12 +585,13 @@ namespace Spark::Net
 
     std::string WorldServer::Console_GetStatus() const
     {
+        const WorldServerStats stats = GetStats();
         std::ostringstream oss;
         oss << "WorldServer '" << m_config.worldName << "': " << (m_running.load() ? "Running" : "Stopped")
-            << " | Areas: " << m_stats.activeAreas << " | Players: " << m_stats.totalPlayers
-            << " (peak: " << m_stats.peakPlayers << ")" << " | Transfers: " << m_stats.totalAreaTransfers
-            << " | Avg load: " << static_cast<int>(m_stats.averageAreaLoad * 100) << "%"
-            << " | Uptime: " << m_stats.uptimeSeconds << "s";
+            << " | Areas: " << stats.activeAreas << " | Players: " << stats.totalPlayers
+            << " (peak: " << stats.peakPlayers << ")" << " | Transfers: " << stats.totalAreaTransfers
+            << " | Avg load: " << static_cast<int>(stats.averageAreaLoad * 100) << "%"
+            << " | Uptime: " << stats.uptimeSeconds << "s";
         return oss.str();
     }
 
@@ -592,21 +669,30 @@ namespace Spark::Net
             case MessageType::Heartbeat:
             {
                 // Update the sending area's heartbeat timestamp
-                std::lock_guard<std::mutex> areaLock(m_areaMutex);
-                for (auto& [id, reg] : m_areas)
+                std::string recoveredAreaName;
+                AreaID recoveredAreaId = INVALID_AREA;
                 {
-                    // Match by sender ID interpreted as area ID for inter-server heartbeats
-                    if (id == static_cast<AreaID>(msg.senderID))
+                    std::lock_guard<std::mutex> areaLock(m_areaMutex);
+                    for (auto& [id, reg] : m_areas)
                     {
-                        reg.lastHeartbeat = std::chrono::steady_clock::now();
-                        if (!reg.isOnline)
+                        // Match by sender ID interpreted as area ID for inter-server heartbeats
+                        if (id == static_cast<AreaID>(msg.senderID))
                         {
-                            reg.isOnline = true;
-                            SPARK_LOG_INFO("WorldServer", "Area '%s' (ID=%u) back online via heartbeat.",
-                                           reg.areaName.c_str(), id);
+                            reg.lastHeartbeat = std::chrono::steady_clock::now();
+                            if (!reg.isOnline)
+                            {
+                                reg.isOnline = true;
+                                recoveredAreaName = reg.areaName;
+                                recoveredAreaId = id;
+                            }
+                            break;
                         }
-                        break;
                     }
+                }
+                if (recoveredAreaId != INVALID_AREA)
+                {
+                    SPARK_LOG_INFO("WorldServer", "Area '%s' (ID=%u) back online via heartbeat.",
+                                   recoveredAreaName.c_str(), recoveredAreaId);
                 }
                 break;
             }
@@ -618,34 +704,47 @@ namespace Spark::Net
             ++processedCount;
         }
 
-        m_stats.totalMessagesProcessed += processedCount;
+        uint32_t totalMessagesProcessed = 0;
+        {
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            m_stats.totalMessagesProcessed += processedCount;
+            totalMessagesProcessed = m_stats.totalMessagesProcessed;
+        }
 
         // Periodic logging of message processing stats (every 10 seconds)
         m_messageLogTimer += deltaTime;
         if (m_messageLogTimer >= 10.0f)
         {
             m_messageLogTimer = 0.0f;
-            if (m_stats.totalMessagesProcessed > 0)
+            if (totalMessagesProcessed > 0)
             {
                 SPARK_LOG_INFO("WorldServer", "Message stats: %u total processed, %u this interval.",
-                               m_stats.totalMessagesProcessed, processedCount);
+                               totalMessagesProcessed, processedCount);
             }
         }
     }
 
     void WorldServer::ProcessAreaHeartbeats()
     {
-        std::lock_guard<std::mutex> lock(m_areaMutex);
-        auto now = std::chrono::steady_clock::now();
-
-        for (auto& [id, reg] : m_areas)
+        std::vector<std::string> timedOutAreaNames;
         {
-            auto elapsed = std::chrono::duration<float>(now - reg.lastHeartbeat).count();
-            if (elapsed > 30.0f && reg.isOnline)
+            std::lock_guard<std::mutex> lock(m_areaMutex);
+            const auto now = std::chrono::steady_clock::now();
+
+            for (auto& [id, reg] : m_areas)
             {
-                reg.isOnline = false;
-                Log("Area '" + reg.areaName + "' heartbeat timeout — marked offline.");
+                const float elapsed = std::chrono::duration<float>(now - reg.lastHeartbeat).count();
+                if (elapsed > 30.0f && reg.isOnline)
+                {
+                    reg.isOnline = false;
+                    timedOutAreaNames.push_back(reg.areaName);
+                }
             }
+        }
+
+        for (const std::string& areaName : timedOutAreaNames)
+        {
+            Log("Area '" + areaName + "' heartbeat timeout — marked offline.");
         }
     }
 
@@ -668,9 +767,8 @@ namespace Spark::Net
 
     void WorldServer::ProcessEntityMigrations()
     {
-        std::lock_guard<std::mutex> lock(m_areaMutex);
-
-        if (m_areas.size() < 2)
+        const std::vector<AreaRegistration> areas = GetAllAreas();
+        if (areas.size() < 2)
         {
             // No migrations possible with fewer than two areas
             return;
@@ -679,7 +777,15 @@ namespace Spark::Net
         // Check all registered areas for potential pending entity migrations.
         // In a full implementation each AreaServer would maintain a pending-migration
         // queue; here we inspect area loads and log what would happen.
-        for (const auto& [srcId, srcReg] : m_areas)
+        struct PlannedMigration
+        {
+            AreaRegistration source;
+            AreaRegistration destination;
+            uint32_t totalMigrations = 0;
+        };
+        std::vector<PlannedMigration> migrations;
+
+        for (const auto& srcReg : areas)
         {
             if (!srcReg.isOnline)
             {
@@ -694,9 +800,9 @@ namespace Spark::Net
             }
 
             // Find a neighbouring online area with capacity
-            for (const auto& [dstId, dstReg] : m_areas)
+            for (const auto& dstReg : areas)
             {
-                if (dstId == srcId || !dstReg.isOnline)
+                if (dstReg.areaId == srcReg.areaId || !dstReg.isOnline)
                 {
                     continue;
                 }
@@ -706,23 +812,33 @@ namespace Spark::Net
                     continue;
                 }
 
-                // Route migrating entities: log the planned migration
-                SPARK_LOG_INFO("WorldServer",
-                               "Entity migration: would route entities from area '%s' (ID=%u, clients=%d/%d) "
-                               "to area '%s' (ID=%u, clients=%d/%d).",
-                               srcReg.areaName.c_str(), srcId, srcReg.currentClients, srcReg.maxClients,
-                               dstReg.areaName.c_str(), dstId, dstReg.currentClients, dstReg.maxClients);
-
-                m_stats.totalEntityMigrations++;
-
-                SPARK_LOG_INFO("WorldServer",
-                               "Entity migration confirmed (conceptual): area '%s' -> '%s'. "
-                               "Total migrations: %u.",
-                               srcReg.areaName.c_str(), dstReg.areaName.c_str(), m_stats.totalEntityMigrations);
+                migrations.push_back({srcReg, dstReg, 0});
 
                 // Only migrate to the first suitable target per source area
                 break;
             }
+        }
+
+        {
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            for (PlannedMigration& migration : migrations)
+            {
+                migration.totalMigrations = ++m_stats.totalEntityMigrations;
+            }
+        }
+
+        for (const PlannedMigration& migration : migrations)
+        {
+            const auto& srcReg = migration.source;
+            const auto& dstReg = migration.destination;
+            SPARK_LOG_INFO("WorldServer",
+                           "Entity migration: would route entities from area '%s' (ID=%u, clients=%d/%d) "
+                           "to area '%s' (ID=%u, clients=%d/%d).",
+                           srcReg.areaName.c_str(), srcReg.areaId, srcReg.currentClients, srcReg.maxClients,
+                           dstReg.areaName.c_str(), dstReg.areaId, dstReg.currentClients, dstReg.maxClients);
+            SPARK_LOG_INFO("WorldServer",
+                           "Entity migration confirmed (conceptual): area '%s' -> '%s'. Total migrations: %u.",
+                           srcReg.areaName.c_str(), dstReg.areaName.c_str(), migration.totalMigrations);
         }
     }
 

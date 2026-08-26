@@ -4,9 +4,12 @@
  */
 
 #include "TestFramework.h"
+#include "Utils/AssetServiceProtocol.h"
 #include "Utils/DaemonProtocol.h"
+#include "Utils/ShaderServiceProtocol.h"
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 using Spark::Daemon::ControlMessage;
@@ -93,4 +96,89 @@ TEST(DaemonProtocol_ServiceIdConstantsAreStable)
 TEST(DaemonProtocol_MaxPayloadSizeIs16MiB)
 {
     EXPECT_EQ(kMaxPayloadSize, 16u * 1024u * 1024u);
+}
+
+TEST(DaemonProtocol_AssetBlobDecodersRejectImpossibleLengthsBeforeResize)
+{
+    const std::vector<uint8_t> getPayload = {1u, 0xFFu, 0xFFu, 0xFFu, 0xFFu};
+    Spark::Daemon::GetAssetResponse getOut;
+    getOut.found = true;
+    getOut.blob = {0xA5u};
+    bool getDecoded = true;
+    EXPECT_NO_THROW(getDecoded = Spark::Daemon::DecodeGetAssetResponse(getPayload, getOut));
+    EXPECT_FALSE(getDecoded);
+    EXPECT_EQ(getOut.blob.size(), 1u);
+    EXPECT_EQ(getOut.blob[0], 0xA5u);
+    EXPECT_TRUE(getOut.found);
+
+    const std::vector<uint8_t> putPayload = {
+        0u, 0u, 0u, 0u, // empty path
+        0u,             // platform
+        0xFFu, 0xFFu, 0xFFu, 0xFFu};
+    Spark::Daemon::PutAssetRequest putOut;
+    putOut.key.path = "sentinel";
+    putOut.blob = {0x5Au};
+    bool putDecoded = true;
+    EXPECT_NO_THROW(putDecoded = Spark::Daemon::DecodePutAssetRequest(putPayload, putOut));
+    EXPECT_FALSE(putDecoded);
+    EXPECT_EQ(putOut.blob.size(), 1u);
+    EXPECT_EQ(putOut.blob[0], 0x5Au);
+    EXPECT_EQ(putOut.key.path, std::string("sentinel"));
+}
+
+TEST(DaemonProtocol_ShaderBlobDecodersRejectImpossibleLengthsBeforeResize)
+{
+    const std::vector<uint8_t> getPayload = {1u, 0xFFu, 0xFFu, 0xFFu, 0xFFu};
+    Spark::Daemon::GetCacheEntryResponse getOut;
+    getOut.found = true;
+    getOut.blob = {0xA5u};
+    bool getDecoded = true;
+    EXPECT_NO_THROW(getDecoded = Spark::Daemon::DecodeGetCacheEntryResponse(getPayload, getOut));
+    EXPECT_FALSE(getDecoded);
+    EXPECT_EQ(getOut.blob.size(), 1u);
+    EXPECT_EQ(getOut.blob[0], 0xA5u);
+    EXPECT_TRUE(getOut.found);
+
+    const std::vector<uint8_t> putPayload = {
+        0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, // source hash
+        0u,                               // target
+        0u,                               // stage
+        0xFFu, 0xFFu, 0xFFu, 0xFFu};
+    Spark::Daemon::PutCacheEntryRequest putOut;
+    putOut.key.sourceHash = 99u;
+    putOut.blob = {0x5Au};
+    bool putDecoded = true;
+    EXPECT_NO_THROW(putDecoded = Spark::Daemon::DecodePutCacheEntryRequest(putPayload, putOut));
+    EXPECT_FALSE(putDecoded);
+    EXPECT_EQ(putOut.blob.size(), 1u);
+    EXPECT_EQ(putOut.blob[0], 0x5Au);
+    EXPECT_EQ(putOut.key.sourceHash, uint64_t{99});
+}
+
+TEST(DaemonProtocol_StatsDecoderRejectsImpossibleVersionLengthBeforeAllocation)
+{
+    const std::vector<uint8_t> payload = {
+        0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, // uptime
+        0xFFu, 0xFFu, 0xFFu, 0xFFu};      // version length
+    Spark::Daemon::DaemonStats out;
+    out.protocolVersion = "sentinel";
+    bool decoded = true;
+    EXPECT_NO_THROW(decoded = Spark::Daemon::DecodeDaemonStats(payload, out));
+    EXPECT_FALSE(decoded);
+    EXPECT_EQ(out.protocolVersion, std::string("sentinel"));
+}
+
+TEST(DaemonProtocol_StatsDecoderRejectsImpossibleIdCountBeforeReserve)
+{
+    const std::vector<uint8_t> payload = {
+        0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, // uptime
+        0u, 0u, 0u, 0u,                   // empty protocol version
+        0xFFu, 0xFFu, 0xFFu, 0xFFu};      // registered ID count
+    Spark::Daemon::DaemonStats out;
+    out.registeredIds = {7u};
+    bool decoded = true;
+    EXPECT_NO_THROW(decoded = Spark::Daemon::DecodeDaemonStats(payload, out));
+    EXPECT_FALSE(decoded);
+    EXPECT_EQ(out.registeredIds.size(), 1u);
+    EXPECT_EQ(out.registeredIds[0], 7u);
 }

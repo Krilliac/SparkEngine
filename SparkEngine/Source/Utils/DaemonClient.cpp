@@ -6,8 +6,11 @@
 #include "DaemonClient.h"
 #include "DaemonFraming.h"
 
+#include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstring>
+#include <thread>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -71,15 +74,57 @@ namespace Spark::Daemon
             }
         }
 
-        if (!::WaitNamedPipeW(pipeName.c_str(), 5000))
+        constexpr DWORD connectTimeoutMs = 5000;
+        const auto connectDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(connectTimeoutMs);
+        if (!::WaitNamedPipeW(pipeName.c_str(), connectTimeoutMs))
             return Unexpected<std::string>("DaemonClient: WaitNamedPipeW failed (error " +
                                            std::to_string(::GetLastError()) + ")");
 
-        HANDLE pipe = ::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
-                                    FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (pipe == INVALID_HANDLE_VALUE)
-            return Unexpected<std::string>("DaemonClient: CreateFileW failed (error " +
-                                           std::to_string(::GetLastError()) + ")");
+        HANDLE pipe = INVALID_HANDLE_VALUE;
+        DWORD connectError = ERROR_SUCCESS;
+        while (pipe == INVALID_HANDLE_VALUE)
+        {
+            pipe = ::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                                 FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (pipe != INVALID_HANDLE_VALUE)
+                break;
+
+            connectError = ::GetLastError();
+            if (connectError != ERROR_PIPE_BUSY && connectError != ERROR_FILE_NOT_FOUND)
+                return Unexpected<std::string>("DaemonClient: CreateFileW failed (error " +
+                                               std::to_string(connectError) + ")");
+
+            // WaitNamedPipeW is only a readiness hint. Another client can claim
+            // the available instance before CreateFileW runs, and the server has
+            // a short zero-instance window while rolling its accept loop forward.
+            // Once this call has observed the endpoint, retry only those two
+            // contention errors until the original bounded deadline expires.
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= connectDeadline)
+                return Unexpected<std::string>("DaemonClient: named-pipe connect timed out after error " +
+                                               std::to_string(connectError));
+
+            const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(connectDeadline - now);
+            const DWORD waitMs = static_cast<DWORD>((std::max)(int64_t{1}, remaining.count()));
+            if (connectError == ERROR_PIPE_BUSY)
+            {
+                if (!::WaitNamedPipeW(pipeName.c_str(), waitMs))
+                {
+                    const DWORD waitError = ::GetLastError();
+                    if (waitError == ERROR_SEM_TIMEOUT)
+                        return Unexpected<std::string>("DaemonClient: named-pipe connect timed out after error " +
+                                                       std::to_string(connectError));
+                    if (waitError != ERROR_FILE_NOT_FOUND && waitError != ERROR_PIPE_BUSY)
+                        return Unexpected<std::string>("DaemonClient: WaitNamedPipeW retry failed (error " +
+                                                       std::to_string(waitError) + ")");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                }
+            }
+            else
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+        }
 
         DWORD mode = PIPE_READMODE_BYTE | PIPE_NOWAIT;
         if (!::SetNamedPipeHandleState(pipe, &mode, nullptr, nullptr))

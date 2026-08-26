@@ -12,9 +12,9 @@ A **SparkDaemon** is a long-lived background process (inspired by Wine's `winese
 
 Originally a plan, the daemon framework has since been implemented. The engine-side client and the standalone daemon both exist.
 
-## Current Status (as of 2026-06-08)
+## Current Status (as of 2026-08-26)
 
-**Overall: Implemented (framework + Control/Asset/Shader services). Collab broker and Build Monitor: foundation present, service backends partial/not built.**
+**Overall: Implemented across Windows named pipes and Unix-domain sockets. Control, Asset, Shader, and optional Orchestration run in `SparkDaemon`; collaboration runs in the separately isolated `SparkCollabServer`. Build Monitor remains reserved.**
 
 | Component | Plan | Status | Evidence |
 |-----------|------|--------|----------|
@@ -24,8 +24,9 @@ Originally a plan, the daemon framework has since been implemented. The engine-s
 | Control service | (new, not in original plan) | **Implemented** | `SparkDaemon/src/ControlService.{h,cpp}` — ping, shutdown, version, stats |
 | Asset service | Phase 3 | **Implemented** | `SparkDaemon/src/AssetService.{h,cpp}` |
 | Shader service | Phase 2 | **Implemented** | `SparkDaemon/src/ShaderService.{h,cpp}` |
-| Collab broker | Phase 4 | **Reserved** | `ServiceId::Collab = 0x0003` exists in the protocol; no `CollabService.cpp` in `SparkDaemon/src/` |
-| Build Monitor | (lightweight) | **Not built** | No service ID or file present |
+| Collab broker | Phase 4 | **Implemented, isolated process** | `CollaborationService.{h,cpp}`, `CollaborationProtocol.h`, and `SparkCollabServer` provide token-authenticated sessions, presence, locks, and edit history |
+| Build Monitor | (lightweight) | **Reserved, not built** | `ServiceId::Build = 0x0004` is allocated; no service implementation is present |
+| Orchestration | external-process expansion | **Implemented, opt-in** | `OrchestrationService`, journal, identity, and `SparkOrchestrator`; registered only when explicitly configured |
 | CMake wiring | — | **Wired** | `CMakeLists.txt:996` — `add_subdirectory(SparkDaemon)` guarded by `EXISTS SparkDaemon/CMakeLists.txt` |
 
 ### Service IDs (as implemented)
@@ -36,7 +37,9 @@ The implemented `ServiceId` enum (`DaemonProtocol.h:35`) differs from the plan's
 Control = 0x0000   // built-in: ping, shutdown, version query
 Asset   = 0x0001   // compiled-asset cache, cook pipeline
 Shader  = 0x0002   // compile, disk cache, hot reload
-Collab  = 0x0003   // collaborative editing broker (reserved)
+Collab  = 0x0003   // collaborative editing broker (SparkCollabServer)
+Build   = 0x0004   // reserved build-monitor protocol slot
+Orchestration = 0x0005 // trusted opt-in process control plane
 ```
 
 ## Architecture
@@ -55,10 +58,13 @@ Collab  = 0x0003   // collaborative editing broker (reserved)
           │  │ Control │ │ Asset   │  │
           │  │ Service │ │ Service │  │
           │  ├─────────┤ ├─────────┤  │
-          │  │ Shader  │ │ Collab  │  │
-          │  │ Service │ │ (resv.) │  │
+          │  │ Shader  │ │ Orchestr.│ │
+          │  │ Service │ │ (opt-in) │  │
           │  └─────────┘ └─────────┘  │
           └───────────────────────────┘
+
+          SparkCollabServer (separate trust boundary)
+          └─ token-authenticated sessions, locks, presence, edit history
 ```
 
 ## Wire Protocol
@@ -85,13 +91,13 @@ Backend for the compiled-asset cache and cook pipeline (mesh compression, textur
 
 Owns warm compiler state, a persistent shader disk cache, and a thread pool for parallel variant compilation. `ShaderHotReload` becomes a thin client receiving push events instead of polling. Client requests: `CompileShader`, `CompileBatch`, `WatchShaders`, `GetCacheEntry`, `WarmCache`.
 
-### Collaborative Editing Broker (reserved)
+### Collaborative Editing Broker
 
-`ServiceId::Collab` is allocated but no service backend is built yet. The intent: move `CollaborativeEditSession` from P2P TCP to a client–daemon model with authoritative scene state, a lock table, operation history (undo across editors, crash recovery), and presence tracking.
+`SparkCollabServer` hosts `CollaborationService` in a separate process because collaborative traffic has a different trust class from local cache and orchestration traffic. It provides capability-token-authenticated session creation/join/delete, presence, node locks, bounded operation history, snapshots, peer expiry, and lock cleanup. The legacy editor P2P path remains a distinct compatibility surface; it is not the daemon broker.
 
 ### Build Monitor (not built)
 
-Planned lightweight service to watch `CMakeLists.txt`/source files and stream `BuildStatus` events. No service ID or file present.
+Planned lightweight service to watch `CMakeLists.txt`/source files and stream `BuildStatus` events. The service ID is reserved, but no backend is present.
 
 ## Existing Code It Builds On
 
@@ -100,7 +106,7 @@ Planned lightweight service to watch `CMakeLists.txt`/source files and stream `B
 | `AssetPipeline` (`Graphics/AssetPipeline.h`) | Asset service backend |
 | `SparkShaderCompiler/src/` | Shader service backend |
 | `ShaderHotReload` (`Graphics/ShaderHotReload.h`) | Becomes a daemon client |
-| `CollaborativeEditSession` (editor `Communication/`) | Future collab service backend |
+| `CollaborationService` / `CollaborationProtocol` | Standalone authoritative collaboration broker |
 | `ConsoleProcessManager` (`Utils/`) | Pattern for daemon launch |
 | `Process::Builder` (`Utils/Process.h`) | Daemon process launcher (`Detached()`) |
 | `VirtualFileSystem` (`Engine/`) | Gets a `DaemonProvider` mount |
@@ -112,12 +118,13 @@ Each service is independently shippable, and the engine falls back to in-process
 ## Source & Freshness
 
 - **Original entry date:** 2026-04-16 (`daemon-services-architecture-2026-04-16.md`, type: Plan)
-- **Verified against codebase 2026-06-08.**
+- **Verified against codebase 2026-08-26.**
 - Status bullets:
   - **Framework Implemented** — `SparkDaemon/src/` (DaemonServer, ServiceBase, main) plus engine-side `DaemonClient/Connection/Protocol/Framing/Lifecycle/Diagnostics` under `SparkEngine/Source/Utils/`.
   - **Control / Asset / Shader services exist**; a built-in Control service (`0x0000`) was added that wasn't in the original plan.
   - **Service-ID numbering changed** from the plan's `0x01–0x04` to `Control=0x0000, Asset=0x0001, Shader=0x0002, Collab=0x0003`.
-  - **Collab is reserved** (enum value only, no backend file); **Build Monitor not built**.
+  - **Collaboration is implemented in isolated `SparkCollabServer`**; **Build Monitor remains reserved/not built**.
+  - Windows named-pipe and Unix-domain-socket transports are both implemented.
   - CMake wiring confirmed at `CMakeLists.txt:996`.
 
 ## Related Pages

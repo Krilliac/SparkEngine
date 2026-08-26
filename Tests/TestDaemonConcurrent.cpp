@@ -22,6 +22,7 @@
 #include "ShaderService.h"
 
 #include <atomic>
+#include <barrier>
 #include <chrono>
 #include <cstdio>
 #include <memory>
@@ -111,12 +112,17 @@ TEST(DaemonConcurrent_TwoClientsShareCacheAndDontInterleaveResponses)
 
     std::atomic<int> storesOk{0};
     std::atomic<int> pingsOk{0};
+    std::barrier connectRace(3);
 
     std::thread writer(
         [&]
         {
             Spark::Daemon::DaemonClient client;
-            EXPECT_TRUE(client.Connect(fx.sockPath).has_value());
+            connectRace.arrive_and_wait();
+            const auto connected = client.Connect(fx.sockPath);
+            EXPECT_TRUE(connected.has_value());
+            if (!connected)
+                return;
             Spark::Daemon::ShaderServiceClient shader(client);
             for (int i = 0; i < kIterations; ++i)
             {
@@ -132,7 +138,11 @@ TEST(DaemonConcurrent_TwoClientsShareCacheAndDontInterleaveResponses)
         [&]
         {
             Spark::Daemon::DaemonClient client;
-            EXPECT_TRUE(client.Connect(fx.sockPath).has_value());
+            connectRace.arrive_and_wait();
+            const auto connected = client.Connect(fx.sockPath);
+            EXPECT_TRUE(connected.has_value());
+            if (!connected)
+                return;
             for (int i = 0; i < kIterations; ++i)
             {
                 if (client.Ping())
@@ -141,6 +151,10 @@ TEST(DaemonConcurrent_TwoClientsShareCacheAndDontInterleaveResponses)
             client.Disconnect();
         });
 
+    // Release both clients onto the server's single listening pipe instance at
+    // the same time. On Windows one CreateFileW wins; the other must wait for
+    // the accept loop to publish the next instance instead of failing busy.
+    connectRace.arrive_and_wait();
     writer.join();
     pinger.join();
 

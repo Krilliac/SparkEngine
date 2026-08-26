@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <filesystem>
 #include <cstdlib>
+#include <stdexcept>
+#include <string_view>
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #ifndef WIN32_LEAN_AND_MEAN
@@ -17,6 +19,41 @@
 
 namespace SparkBuild
 {
+    namespace
+    {
+        std::string QuoteCommandArgument(const std::string& argument, std::string_view fieldName)
+        {
+            for (char character : argument)
+            {
+                const bool commonUnsafe =
+                    character == '\0' || character == '\r' || character == '\n' || character == '"';
+#ifdef SPARK_PLATFORM_WINDOWS
+                // cmd.exe expands percent variables even inside quotes and may
+                // expand exclamation variables when delayed expansion is on.
+                const bool shellExpansion = character == '%' || character == '!';
+#else
+                // ProcessRunner uses /bin/sh -c. These characters retain
+                // expansion or escaping semantics inside double quotes.
+                const bool shellExpansion = character == '$' || character == '`' || character == '\\';
+#endif
+                if (commonUnsafe || shellExpansion)
+                    throw std::invalid_argument("Unsafe character in SparkBuild " + std::string(fieldName));
+            }
+
+            std::string quoted;
+            quoted.reserve(argument.size() + 2);
+            quoted.push_back('"');
+            quoted += argument;
+#ifdef SPARK_PLATFORM_WINDOWS
+            // Preserve trailing backslashes through CommandLineToArgvW-style
+            // parsing: each one must be doubled before the closing quote.
+            for (auto it = argument.rbegin(); it != argument.rend() && *it == '\\'; ++it)
+                quoted.push_back('\\');
+#endif
+            quoted.push_back('"');
+            return quoted;
+        }
+    } // namespace
 
     const char* GeneratorToString(Generator gen)
     {
@@ -525,20 +562,21 @@ namespace SparkBuild
 
     std::string ConfigManager::BuildCMakeConfigureCommand() const
     {
-        std::string cmake = config.cmakePath.empty() ? "cmake" : ("\"" + config.cmakePath + "\"");
+        std::string cmake = config.cmakePath.empty() ? "cmake" : QuoteCommandArgument(config.cmakePath, "CMakePath");
+        const std::string sourcePath = config.enginePath.empty() ? "." : config.enginePath;
 
         // If using a preset, the command is much simpler
         if (!config.cmakePreset.empty())
         {
-            std::string srcDir = config.enginePath.empty() ? "." : ("\"" + config.enginePath + "\"");
-            return cmake + " --preset " + config.cmakePreset + " -S " + srcDir;
+            return cmake + " --preset " + QuoteCommandArgument(config.cmakePreset, "CMakePreset") + " -S " +
+                   QuoteCommandArgument(sourcePath, "EnginePath");
         }
 
-        std::string srcDir = config.enginePath.empty() ? "." : ("\"" + config.enginePath + "\"");
         std::string buildDir = config.buildPath.empty() ? "build" : config.buildPath;
 
-        std::string cmd = cmake + " -S " + srcDir + " -B \"" + buildDir + "\"";
-        cmd += " -G \"" + std::string(GeneratorToString(config.generator)) + "\"";
+        std::string cmd = cmake + " -S " + QuoteCommandArgument(sourcePath, "EnginePath") + " -B " +
+                          QuoteCommandArgument(buildDir, "BuildPath");
+        cmd += " -G " + QuoteCommandArgument(GeneratorToString(config.generator), "Generator");
 
         // Build type (for single-config generators like Ninja/Makefiles)
         bool singleConfig = (config.generator == Generator::Ninja || config.generator == Generator::UnixMakefiles);
@@ -554,7 +592,7 @@ namespace SparkBuild
         {
             // CMake selects a Visual Studio toolset when the build tree is
             // created. A cache variable cannot change that generator input.
-            cmd += " -T " + config.msvcToolset;
+            cmd += " -T " + QuoteCommandArgument(config.msvcToolset, "MSVCToolset");
         }
 
         // Platform for VS generators
@@ -567,7 +605,8 @@ namespace SparkBuild
         // All build options
         for (const auto& opt : config.options)
         {
-            cmd += " -D" + opt.cmakeVar + "=" + (opt.currentValue ? "ON" : "OFF");
+            cmd += " " +
+                   QuoteCommandArgument("-D" + opt.cmakeVar + "=" + (opt.currentValue ? "ON" : "OFF"), "CMake option");
         }
 
         return cmd;
@@ -575,10 +614,10 @@ namespace SparkBuild
 
     std::string ConfigManager::BuildCMakeBuildCommand() const
     {
-        std::string cmake = config.cmakePath.empty() ? "cmake" : ("\"" + config.cmakePath + "\"");
+        std::string cmake = config.cmakePath.empty() ? "cmake" : QuoteCommandArgument(config.cmakePath, "CMakePath");
         std::string buildDir = config.buildPath.empty() ? "build" : config.buildPath;
 
-        std::string cmd = cmake + " --build \"" + buildDir + "\"";
+        std::string cmd = cmake + " --build " + QuoteCommandArgument(buildDir, "BuildPath");
         cmd += " --config " + std::string(BuildTypeToString(config.buildType));
 
         if (config.parallelJobs > 0)

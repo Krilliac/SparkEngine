@@ -1,5 +1,6 @@
 #include "ProcessRunner.h"
 #include <cctype>
+#include <chrono>
 #include <cstring>
 #include <vector>
 
@@ -98,6 +99,36 @@ namespace SparkBuild
             quoted.push_back('"');
             return quoted;
         }
+#else
+        bool ProcessGroupExists(pid_t processGroup) noexcept
+        {
+            if (processGroup <= 1)
+                return false;
+            if (::kill(-processGroup, 0) == 0)
+                return true;
+            return errno == EPERM;
+        }
+
+        void WaitForProcessGroupExit(pid_t processGroup, std::chrono::milliseconds timeout) noexcept
+        {
+            const auto deadline = std::chrono::steady_clock::now() + timeout;
+            while (ProcessGroupExists(processGroup) && std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        void TerminateProcessGroup(pid_t processGroup) noexcept
+        {
+            if (processGroup <= 1 || !ProcessGroupExists(processGroup))
+                return;
+
+            (void)::kill(-processGroup, SIGTERM);
+            WaitForProcessGroupExit(processGroup, std::chrono::milliseconds(500));
+            if (!ProcessGroupExists(processGroup))
+                return;
+
+            (void)::kill(-processGroup, SIGKILL);
+            WaitForProcessGroupExit(processGroup, std::chrono::milliseconds(500));
+        }
 #endif
     } // namespace
 
@@ -132,17 +163,34 @@ namespace SparkBuild
     void ProcessRunner::Cancel()
     {
         m_cancelRequested.store(true);
-        std::lock_guard<std::mutex> lock(m_processMutex);
 #ifdef SPARK_PLATFORM_WINDOWS
-        if (m_hProcess)
+        HANDLE process = nullptr;
+        HANDLE job = nullptr;
         {
-            TerminateProcess(m_hProcess, 1);
+            std::lock_guard<std::mutex> lock(m_processMutex);
+            if (m_hProcess)
+                (void)::DuplicateHandle(::GetCurrentProcess(), m_hProcess, ::GetCurrentProcess(), &process, SYNCHRONIZE,
+                                        FALSE, 0);
+            if (m_hJob)
+                (void)::DuplicateHandle(::GetCurrentProcess(), m_hJob, ::GetCurrentProcess(), &job,
+                                        JOB_OBJECT_TERMINATE, FALSE, 0);
         }
+
+        if (job)
+            (void)::TerminateJobObject(job, 1);
+        if (process)
+            (void)::WaitForSingleObject(process, 5000);
+        if (job)
+            ::CloseHandle(job);
+        if (process)
+            ::CloseHandle(process);
 #else
-        if (m_childPid > 0)
+        pid_t processGroup = -1;
         {
-            kill(m_childPid, SIGTERM);
+            std::lock_guard<std::mutex> lock(m_processMutex);
+            processGroup = m_childPid;
         }
+        TerminateProcessGroup(processGroup);
 #endif
     }
 
@@ -241,13 +289,56 @@ namespace SparkBuild
         const char* dir = workingDir.empty() ? nullptr : workingDir.c_str();
         std::string cmdLine = "cmd /c " + command;
 
-        BOOL ok =
-            CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, dir, &si, &pi);
-        CloseHandle(hWritePipe);
+        HANDLE job = ::CreateJobObjectW(nullptr, nullptr);
+        if (!job)
+        {
+            ::CloseHandle(hWritePipe);
+            ::CloseHandle(hReadPipe);
+            m_exitCode = -1;
+            m_running.store(false);
+            if (onComplete)
+                onComplete(-1, false);
+            return;
+        }
+
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = {};
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if (!::SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)))
+        {
+            ::CloseHandle(job);
+            ::CloseHandle(hWritePipe);
+            ::CloseHandle(hReadPipe);
+            m_exitCode = -1;
+            m_running.store(false);
+            if (onComplete)
+                onComplete(-1, false);
+            return;
+        }
+
+        const BOOL ok = ::CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr, TRUE,
+                                         CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, dir, &si, &pi);
+        ::CloseHandle(hWritePipe);
 
         if (!ok)
         {
-            CloseHandle(hReadPipe);
+            ::CloseHandle(job);
+            ::CloseHandle(hReadPipe);
+            m_exitCode = -1;
+            m_running.store(false);
+            if (onComplete)
+                onComplete(-1, false);
+            return;
+        }
+
+        if (!::AssignProcessToJobObject(job, pi.hProcess))
+        {
+            (void)::TerminateProcess(pi.hProcess, 1);
+            (void)::WaitForSingleObject(pi.hProcess, 5000);
+            ::CloseHandle(pi.hProcess);
+            ::CloseHandle(pi.hThread);
+            ::CloseHandle(job);
+            ::CloseHandle(hReadPipe);
+            m_exitCode = -1;
             m_running.store(false);
             if (onComplete)
                 onComplete(-1, false);
@@ -257,6 +348,16 @@ namespace SparkBuild
         {
             std::lock_guard<std::mutex> lock(m_processMutex);
             m_hProcess = pi.hProcess;
+            m_hJob = job;
+        }
+
+        if (m_cancelRequested.load())
+        {
+            (void)::TerminateJobObject(job, 1);
+        }
+        else if (::ResumeThread(pi.hThread) == static_cast<DWORD>(-1))
+        {
+            (void)::TerminateJobObject(job, 1);
         }
 
         std::string lineBuffer;
@@ -275,11 +376,13 @@ namespace SparkBuild
         {
             std::lock_guard<std::mutex> lock(m_processMutex);
             m_hProcess = nullptr;
+            m_hJob = nullptr;
         }
 
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        CloseHandle(hReadPipe);
+        ::CloseHandle(pi.hProcess);
+        ::CloseHandle(pi.hThread);
+        ::CloseHandle(job);
+        ::CloseHandle(hReadPipe);
 
         m_running.store(false);
         bool success = (exitCode == 0) && !m_cancelRequested.load();
@@ -292,7 +395,9 @@ namespace SparkBuild
         char buf[1024];
         DWORD bytesRead;
 
-        while (!m_cancelRequested.load())
+        // Cancellation terminates the entire job, closing every inherited
+        // writer. Drain through EOF so already-produced output is not lost.
+        while (true)
         {
             BOOL ok = ReadFile(hPipe, buf, sizeof(buf) - 1, &bytesRead, nullptr);
             if (!ok || bytesRead == 0)
@@ -406,6 +511,8 @@ namespace SparkBuild
         if (pid == 0)
         {
             // Child process
+            if (setpgid(0, 0) != 0)
+                _exit(127);
             close(pipefd[0]); // Close read end
             dup2(pipefd[1], STDOUT_FILENO);
             dup2(pipefd[1], STDERR_FILENO);
@@ -427,10 +534,30 @@ namespace SparkBuild
         // Parent process
         close(pipefd[1]); // Close write end
 
+        // Close the race with the child's pre-exec setpgid(). EACCES means the
+        // child has already exec'd after successfully putting itself in the
+        // requested group; ESRCH means it exited before cancellation mattered.
+        if (setpgid(pid, pid) != 0 && errno != EACCES && errno != ESRCH)
+        {
+            (void)kill(pid, SIGKILL);
+            while (waitpid(pid, nullptr, 0) < 0 && errno == EINTR)
+            {
+            }
+            close(pipefd[0]);
+            m_exitCode = -1;
+            m_running.store(false);
+            if (onComplete)
+                onComplete(-1, false);
+            return;
+        }
+
         {
             std::lock_guard<std::mutex> lock(m_processMutex);
             m_childPid = pid;
         }
+
+        if (m_cancelRequested.load())
+            TerminateProcessGroup(pid);
 
         std::string lineBuffer;
         ReadPipeOutput(pipefd[0], onOutput, lineBuffer);
@@ -443,7 +570,9 @@ namespace SparkBuild
         close(pipefd[0]);
 
         int status = 0;
-        waitpid(pid, &status, 0);
+        while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+        {
+        }
 
         {
             std::lock_guard<std::mutex> lock(m_processMutex);
@@ -469,7 +598,9 @@ namespace SparkBuild
     {
         char buf[1024];
 
-        while (!m_cancelRequested.load())
+        // Process-group cancellation closes every inherited writer. Drain
+        // through EOF before reaping the group leader and firing completion.
+        while (true)
         {
             ssize_t n = read(fd, buf, sizeof(buf) - 1);
             if (n <= 0)

@@ -9,6 +9,9 @@
 #include "TestFramework.h"
 #include "Core/EngineSettings.h"
 
+#include <filesystem>
+#include <fstream>
+
 // ---------------------------------------------------------------------------
 // Default values
 // ---------------------------------------------------------------------------
@@ -215,4 +218,62 @@ TEST(EngineSettingsReal_LoggingDefaults)
     // Per-category overrides should be empty by default
     EXPECT_TRUE(settings.Logging().coreLevel.empty());
     EXPECT_TRUE(settings.Logging().graphicsLevel.empty());
+}
+
+TEST(EngineSettingsReal_LoadAndSaveFailuresAreTruthfulAndTransactional)
+{
+    namespace fs = std::filesystem;
+    const fs::path testRoot = fs::temp_directory_path() / "spark_engine_settings_contract";
+    std::error_code error;
+    fs::remove_all(testRoot, error);
+    EXPECT_TRUE(fs::create_directories(testRoot));
+
+    const fs::path settingsPath = testRoot / "settings.ini";
+    auto& settings = EngineSettings::GetInstance();
+    settings.Graphics().windowWidth = 999;
+    EXPECT_TRUE(settings.Load(settingsPath.string()));
+    EXPECT_TRUE(fs::exists(settingsPath));
+    EXPECT_EQ(settings.Graphics().windowWidth, 1280);
+
+    {
+        std::ofstream file(settingsPath);
+        file << "[Graphics]\nWindowWidth = 1600\n";
+    }
+
+    EXPECT_TRUE(settings.Load(settingsPath.string()));
+    EXPECT_EQ(settings.Graphics().windowWidth, 1600);
+    EXPECT_EQ(settings.GetFilePath(), settingsPath.string());
+
+    {
+        std::ofstream file(settingsPath, std::ios::trunc);
+        file << "[Graphics\nWindowWidth = 1920\n";
+    }
+    EXPECT_FALSE(settings.Load(settingsPath.string()));
+    EXPECT_EQ(settings.Graphics().windowWidth, 1600);
+    EXPECT_EQ(settings.GetFilePath(), settingsPath.string());
+
+    const fs::path localPath = testRoot / "settings.local.ini";
+    {
+        std::ofstream mainFile(settingsPath, std::ios::trunc);
+        mainFile << "[Graphics]\nWindowWidth = 1920\n";
+        std::ofstream localFile(localPath);
+        localFile << "not valid ini\n";
+    }
+    settings.Graphics().windowWidth = 1700;
+    EXPECT_FALSE(settings.Load(settingsPath.string()));
+    EXPECT_EQ(settings.Graphics().windowWidth, 1700);
+    EXPECT_EQ(settings.GetFilePath(), settingsPath.string());
+
+    const fs::path missingParentPath = testRoot / "missing" / "settings.ini";
+    EXPECT_FALSE(settings.Load(missingParentPath.string()));
+    EXPECT_EQ(settings.Graphics().windowWidth, 1700);
+    EXPECT_EQ(settings.GetFilePath(), settingsPath.string());
+
+    const fs::path directoryTarget = testRoot / "directory-target";
+    EXPECT_TRUE(fs::create_directory(directoryTarget));
+    EXPECT_FALSE(settings.SaveAs(directoryTarget.string()));
+    EXPECT_EQ(settings.Graphics().windowWidth, 1700);
+
+    fs::remove_all(testRoot, error);
+    settings.ResetToDefaults();
 }

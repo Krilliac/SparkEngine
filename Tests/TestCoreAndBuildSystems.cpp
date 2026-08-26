@@ -9,6 +9,7 @@
 #include "TestFramework.h"
 
 #include "Core/AssetHandle.h"
+#include "Core/AssetIntegration.h"
 #include "Core/Reflection.h"
 #include "Engine/Build/GamePackager.h"
 #include "Engine/LevelDesign/CSGSystem.h"
@@ -84,6 +85,26 @@ TEST(AssetHandle_EmptyPathStillHashes)
     EXPECT_TRUE(h.IsValid());
     // But default-constructed handle (hash=0) is the canonical "invalid" state
     EXPECT_TRUE(h != AssetHandle{});
+}
+
+TEST(AssetRegistry_MetadataLookupReturnsOwnedSnapshot)
+{
+    Spark::AssetRegistry registry;
+    const auto handle = AssetHandle::FromPath("textures/wood.png");
+    int resource = 7;
+    registry.Register(handle, "textures/wood.png", &resource, 4096);
+
+    const auto metadata = registry.GetMetadata(handle);
+    EXPECT_TRUE(metadata.has_value());
+    if (!metadata)
+        return;
+    EXPECT_EQ(metadata->path, std::string("textures/wood.png"));
+    EXPECT_EQ(metadata->sizeBytes, static_cast<size_t>(4096));
+
+    registry.Unregister(handle);
+    EXPECT_FALSE(registry.GetMetadata(handle).has_value());
+    EXPECT_EQ(metadata->path, std::string("textures/wood.png"));
+    EXPECT_EQ(metadata->sizeBytes, static_cast<size_t>(4096));
 }
 
 // ============================================================================

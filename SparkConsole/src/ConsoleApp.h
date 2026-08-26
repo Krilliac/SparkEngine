@@ -16,6 +16,7 @@
 #pragma once
 
 #include "CommandRegistry.h"
+#include "PipeMessageFramer.h"
 #include <string>
 #include <vector>
 #include <thread>
@@ -57,7 +58,7 @@ class ConsoleApp
     void PollStandaloneInput(std::string& input); ///< One iteration of standalone-mode input polling.
 
     // --- ReadEngineInput() helpers ---
-    void ProcessPipeMessages(const std::string& message); ///< Parse newline-delimited pipe data into log lines.
+    void ProcessPipeMessages(const std::string& message); ///< Frame newline-delimited pipe data into log lines.
 #ifdef SPARK_PLATFORM_WINDOWS
     bool PollWindowsPipeData(HANDLE hStdin); ///< Read one batch from pipe; returns false if pipe lost.
     void ReadEngineInputWindows();           ///< Windows pipe reading loop.
@@ -117,6 +118,7 @@ class ConsoleApp
     // --- Output buffer ---
     std::deque<std::wstring> m_messageBuffer; ///< Rolling log buffer for display.
     const size_t MAX_BUFFER_SIZE = 1000;      ///< Maximum retained log lines before oldest are discarded.
+    PipeMessageFramer m_pipeMessageFramer;    ///< Retains partial records across byte-stream reads.
 
     // --- Aliases ---
     std::unordered_map<std::string, std::string> m_aliases; ///< Shorthand -> full command mappings.

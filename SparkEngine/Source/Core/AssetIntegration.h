@@ -31,6 +31,7 @@
 #include <unordered_map>
 #include <vector>
 #include <mutex>
+#include <optional>
 
 namespace Spark
 {
@@ -200,13 +201,17 @@ namespace Spark
         }
 
         /**
-         * @brief Get metadata for a specific asset.
+         * @brief Get an owned metadata snapshot for a specific asset.
+         * @return A value copy that remains valid after the registry changes, or std::nullopt.
+         * @note [any thread, thread-safe]
          */
-        const AssetMetadata* GetMetadata(AssetHandle handle) const
+        [[nodiscard]] std::optional<AssetMetadata> GetMetadata(AssetHandle handle) const
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             auto it = m_assets.find(handle);
-            return it != m_assets.end() ? &it->second.metadata : nullptr;
+            if (it == m_assets.end())
+                return std::nullopt;
+            return it->second.metadata;
         }
 
         /**

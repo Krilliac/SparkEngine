@@ -14,6 +14,7 @@
 #include <optional>
 #include <thread>
 #include <chrono>
+#include <cerrno>
 #include <cstdint>
 #include <ctime>
 #include <cstdio>
@@ -27,7 +28,9 @@
 #pragma comment(lib, "dbghelp.lib")
 #else
 #include <csignal>
+#include <fcntl.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #if defined(__APPLE__)
 #include <sys/sysctl.h>
@@ -36,7 +39,6 @@
 #include <sys/sysinfo.h>
 #endif
 #include <cstring>
-#include <execinfo.h>
 #include <pthread.h>
 #endif
 
@@ -45,6 +47,112 @@ namespace SparkEditor
 #ifndef _WIN32
     namespace
     {
+        struct PosixSignalRegistration
+        {
+            explicit PosixSignalRegistration(int signal) : signalNumber(signal) {}
+
+            int signalNumber = 0;
+            struct sigaction previousAction = {};
+            bool installed = false;
+        };
+
+        PosixSignalRegistration g_fatalSignalRegistrations[] = {
+            {SIGSEGV}, {SIGABRT}, {SIGFPE}, {SIGILL}, {SIGBUS},
+        };
+        volatile sig_atomic_t g_emergencyCrashLogFd = -1;
+        volatile sig_atomic_t g_handlingFatalSignal = 0;
+
+        void WriteAllAsyncSignalSafe(int fd, const char* data, size_t size) noexcept
+        {
+            while (size > 0)
+            {
+                const ssize_t written = write(fd, data, size);
+                if (written > 0)
+                {
+                    data += written;
+                    size -= static_cast<size_t>(written);
+                    continue;
+                }
+                if (written < 0 && errno == EINTR)
+                {
+                    continue;
+                }
+                break;
+            }
+        }
+
+        size_t AppendUnsignedDecimal(char* output, size_t offset, size_t capacity, uint32_t value) noexcept
+        {
+            char reversed[32];
+            size_t digitCount = 0;
+            do
+            {
+                reversed[digitCount++] = static_cast<char>('0' + (value % 10));
+                value /= 10;
+            } while (value != 0 && digitCount < sizeof(reversed));
+
+            while (digitCount > 0 && offset < capacity)
+            {
+                output[offset++] = reversed[--digitCount];
+            }
+            return offset;
+        }
+
+        void WriteEmergencySignalRecord(int fd, int signalNumber) noexcept
+        {
+            if (fd < 0)
+            {
+                return;
+            }
+
+            constexpr char prefix[] = "SparkEditor caught fatal signal ";
+            constexpr char processPrefix[] = " in process ";
+            constexpr char suffix[] = "; detailed reporting skipped because the process is in an unsafe signal context.\n";
+            char message[192];
+            size_t length = 0;
+
+            for (size_t i = 0; i + 1 < sizeof(prefix) && length < sizeof(message); ++i)
+            {
+                message[length++] = prefix[i];
+            }
+            length = AppendUnsignedDecimal(message, length, sizeof(message), static_cast<uint32_t>(signalNumber));
+            for (size_t i = 0; i + 1 < sizeof(processPrefix) && length < sizeof(message); ++i)
+            {
+                message[length++] = processPrefix[i];
+            }
+            length = AppendUnsignedDecimal(message, length, sizeof(message), static_cast<uint32_t>(getpid()));
+            for (size_t i = 0; i + 1 < sizeof(suffix) && length < sizeof(message); ++i)
+            {
+                message[length++] = suffix[i];
+            }
+
+            WriteAllAsyncSignalSafe(fd, message, length);
+        }
+
+        void RestorePosixSignalHandlers() noexcept
+        {
+            for (auto& registration : g_fatalSignalRegistrations)
+            {
+                if (registration.installed)
+                {
+                    if (sigaction(registration.signalNumber, &registration.previousAction, nullptr) == 0)
+                    {
+                        registration.installed = false;
+                    }
+                }
+            }
+        }
+
+        void CloseEmergencyCrashLog() noexcept
+        {
+            const int fd = static_cast<int>(g_emergencyCrashLogFd);
+            g_emergencyCrashLogFd = -1;
+            if (fd >= 0)
+            {
+                close(fd);
+            }
+        }
+
         uint64_t GetCurrentPosixThreadId()
         {
 #if defined(__APPLE__)
@@ -69,6 +177,11 @@ namespace SparkEditor
 
     EditorCrashHandler::~EditorCrashHandler()
     {
+#ifndef _WIN32
+        RestorePosixSignalHandlers();
+        CloseEmergencyCrashLog();
+        g_handlingFatalSignal = 0;
+#endif
         // Ensure safe shutdown
         m_shouldStopAutoSave = true;
 
@@ -99,16 +212,52 @@ namespace SparkEditor
         m_sessionStartTime = std::chrono::steady_clock::now();
 
 #ifndef _WIN32
-        // Install signal handlers on Linux
-        struct sigaction sa;
+        // Open the emergency record before installing handlers. A fatal-signal
+        // callback may only use async-signal-safe operations, so it cannot
+        // create directories, allocate C++ objects, lock mutexes, or run the
+        // normal recovery callbacks after the fault has happened.
+        RestorePosixSignalHandlers();
+        CloseEmergencyCrashLog();
+        std::error_code directoryError;
+        std::filesystem::create_directories(m_crashDirectory, directoryError);
+        if (!directoryError)
+        {
+            const std::string emergencyLogPath = m_crashDirectory + "/editor_signal_crash.log";
+#ifdef O_CLOEXEC
+            constexpr int closeOnExecFlag = O_CLOEXEC;
+#else
+            constexpr int closeOnExecFlag = 0;
+#endif
+            g_emergencyCrashLogFd = open(emergencyLogPath.c_str(), O_WRONLY | O_CREAT | O_APPEND | closeOnExecFlag,
+                                         S_IRUSR | S_IWUSR);
+        }
+
+        struct sigaction sa = {};
         sa.sa_handler = SignalHandler;
         sigemptyset(&sa.sa_mask);
-        sa.sa_flags = SA_RESTART;
-        sigaction(SIGSEGV, &sa, nullptr);
-        sigaction(SIGABRT, &sa, nullptr);
-        sigaction(SIGFPE, &sa, nullptr);
-        sigaction(SIGILL, &sa, nullptr);
-        sigaction(SIGBUS, &sa, nullptr);
+        // Reset before entering the callback so a recursive fault terminates
+        // immediately instead of recursively entering compromised C++ state.
+        sa.sa_flags = SA_RESTART | SA_RESETHAND;
+        bool installedAllHandlers = true;
+        for (auto& registration : g_fatalSignalRegistrations)
+        {
+            if (sigaction(registration.signalNumber, &sa, &registration.previousAction) == 0)
+            {
+                registration.installed = true;
+            }
+            else
+            {
+                installedAllHandlers = false;
+                break;
+            }
+        }
+        if (!installedAllHandlers)
+        {
+            RestorePosixSignalHandlers();
+            CloseEmergencyCrashLog();
+            m_initialized = false;
+            return false;
+        }
 #endif
 
         std::cout << "EditorCrashHandler initialized successfully\n";
@@ -140,6 +289,10 @@ namespace SparkEditor
 
         m_initialized = false;
         m_logger = nullptr;
+#ifndef _WIN32
+        RestorePosixSignalHandlers();
+        CloseEmergencyCrashLog();
+#endif
         std::cout << "EditorCrashHandler shutdown complete\n";
     }
 
@@ -738,142 +891,32 @@ namespace SparkEditor
     }
 
     // =========================================================================
-    // Linux-specific crash handling
+    // POSIX-specific crash handling
     // =========================================================================
 #else
 
     void EditorCrashHandler::SignalHandler(int signal)
     {
-        if (s_instance)
+        const int savedErrno = errno;
+        if (g_handlingFatalSignal != 0)
         {
-            s_instance->HandleCrashInternal(signal);
+            _exit(128 + signal);
         }
-        // Re-raise the signal for default handling (core dump, etc.)
-        struct sigaction sa;
-        sa.sa_handler = SIG_DFL;
-        sigemptyset(&sa.sa_mask);
-        sa.sa_flags = 0;
-        sigaction(signal, &sa, nullptr);
-        raise(signal);
-    }
+        g_handlingFatalSignal = 1;
 
-    void EditorCrashHandler::HandleCrashInternal(int signal)
-    {
-        std::lock_guard<std::mutex> lock(m_statsMutex);
-        m_stats.totalCrashes++;
+        const int emergencyLogFd = static_cast<int>(g_emergencyCrashLogFd);
+        // Prefer the pre-opened regular file. stderr may be a full pipe, so it
+        // is only a fallback when initialization could not open the record.
+        WriteEmergencySignalRecord(emergencyLogFd >= 0 ? emergencyLogFd : STDERR_FILENO, signal);
 
-        CrashInfo info;
-        info.signalNumber = signal;
-        info.timestamp = std::chrono::system_clock::now();
-        info.processId = static_cast<uint32_t>(getpid());
-        info.threadId = static_cast<uint32_t>(GetCurrentPosixThreadId());
-        info.editorState = m_currentEditorState;
-
-        switch (signal)
+        // SA_RESETHAND has already restored the default disposition. Queue the
+        // same signal again; it is delivered with the default action as soon as
+        // this handler returns, retaining normal core-dump semantics.
+        errno = savedErrno;
+        if (kill(getpid(), signal) != 0)
         {
-        case SIGSEGV:
-            info.exceptionType = "SIGSEGV (Segmentation Fault)";
-            m_stats.accessViolations++;
-            break;
-        case SIGABRT:
-            info.exceptionType = "SIGABRT (Abort)";
-            m_stats.otherExceptions++;
-            break;
-        case SIGFPE:
-            info.exceptionType = "SIGFPE (Floating Point Exception)";
-            m_stats.otherExceptions++;
-            break;
-        case SIGILL:
-            info.exceptionType = "SIGILL (Illegal Instruction)";
-            m_stats.otherExceptions++;
-            break;
-        case SIGBUS:
-            info.exceptionType = "SIGBUS (Bus Error)";
-            m_stats.accessViolations++;
-            break;
-        default:
-        {
-            char buf[64];
-            snprintf(buf, sizeof(buf), "Signal %d", signal);
-            info.exceptionType = buf;
-            m_stats.otherExceptions++;
+            _exit(128 + signal);
         }
-        break;
-        }
-
-        info.stackTrace = GenerateStackTrace();
-        info.systemInfo = GetSystemInfo();
-        info.threadInfo = GetThreadInfo();
-
-        {
-            std::lock_guard<std::mutex> opsLock(m_operationsMutex);
-            std::string opsStr;
-            for (const auto& op : m_recentOperations)
-            {
-                opsStr += "  - " + op + "\n";
-            }
-            info.lastOperations = opsStr;
-        }
-
-        m_stats.lastCrash = info.timestamp;
-        m_stats.lastCrashType = info.exceptionType;
-
-        if (!m_crashDirectory.empty())
-        {
-            try
-            {
-                std::filesystem::create_directories(m_crashDirectory);
-
-                auto time_t = std::chrono::system_clock::to_time_t(info.timestamp);
-                char timeBuf[64];
-                strftime(timeBuf, sizeof(timeBuf), "%Y%m%d_%H%M%S", std::localtime(&time_t));
-
-                std::string logPath = m_crashDirectory + "/editor_crash_" + timeBuf + ".log";
-                SaveCrashLog(info, logPath);
-            }
-            catch (...)
-            {
-            }
-        }
-
-        try
-        {
-            SaveRecoveryData();
-        }
-        catch (...)
-        {
-        }
-
-        if (m_crashCallback)
-        {
-            m_crashCallback(info);
-        }
-    }
-
-    std::string EditorCrashHandler::GenerateStackTrace()
-    {
-        std::string result = "=== Stack Trace ===\n";
-
-        void* buffer[64];
-        int numFrames = backtrace(buffer, 64);
-        char** symbols = backtrace_symbols(buffer, numFrames);
-
-        if (symbols)
-        {
-            for (int i = 0; i < numFrames; ++i)
-            {
-                char line[512];
-                snprintf(line, sizeof(line), "  [%2d] %s\n", i, symbols[i]);
-                result += line;
-            }
-            free(symbols);
-        }
-        else
-        {
-            result += "Failed to get backtrace symbols\n";
-        }
-
-        return result;
     }
 
     std::string EditorCrashHandler::GetSystemInfo()

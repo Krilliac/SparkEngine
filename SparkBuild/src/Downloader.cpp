@@ -1,7 +1,12 @@
 #include "Downloader.h"
 #include <fstream>
 #include <filesystem>
+#include <atomic>
+#include <chrono>
+#include <cstdint>
 #include <cstdlib>
+#include <system_error>
+#include <utility>
 #include <vector>
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -23,12 +28,45 @@
 #pragma comment(lib, "oleaut32.lib")
 #pragma comment(lib, "uuid.lib")
 #else
+#include <cerrno>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
 
 namespace SparkBuild
 {
+    namespace
+    {
+        std::atomic<uint64_t> g_tempDownloadSequence{0};
+
+        uint64_t CurrentProcessId()
+        {
+#ifdef SPARK_PLATFORM_WINDOWS
+            return static_cast<uint64_t>(GetCurrentProcessId());
+#else
+            return static_cast<uint64_t>(getpid());
+#endif
+        }
+
+        class ScopedTemporaryDownload
+        {
+          public:
+            explicit ScopedTemporaryDownload(std::string path) : m_path(std::move(path)) {}
+            ~ScopedTemporaryDownload()
+            {
+                std::error_code ignored;
+                std::filesystem::remove(m_path, ignored);
+            }
+
+            ScopedTemporaryDownload(const ScopedTemporaryDownload&) = delete;
+            ScopedTemporaryDownload& operator=(const ScopedTemporaryDownload&) = delete;
+
+          private:
+            std::filesystem::path m_path;
+        };
+    } // namespace
 
 // ============================================================================
 // Windows implementation
@@ -365,22 +403,71 @@ namespace SparkBuild
 #endif
 
     // Common implementation
-    bool Downloader::DownloadAndExtract(const std::string& url, const std::string& destDir,
-                                        DownloadProgressCallback progress)
+    std::string Downloader::ReserveTempDownloadPath()
     {
-        std::string tempPath = GetTempDir() + SPARK_PATH_SEP + "sparkbuild_download.zip";
+        const std::filesystem::path tempDirectory(GetTempDir());
+        if (tempDirectory.empty())
+            return {};
+
+        std::error_code directoryError;
+        std::filesystem::create_directories(tempDirectory, directoryError);
+        if (directoryError)
+            return {};
+
+        const uint64_t processId = CurrentProcessId();
+        const uint64_t tick = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+
+        for (size_t attempt = 0; attempt < 128; ++attempt)
+        {
+            const uint64_t sequence = g_tempDownloadSequence.fetch_add(1, std::memory_order_relaxed);
+            const std::filesystem::path candidate =
+                tempDirectory / ("sparkbuild_download_" + std::to_string(processId) + "_" + std::to_string(tick) +
+                                 "_" + std::to_string(sequence) + ".zip");
+
+#ifdef SPARK_PLATFORM_WINDOWS
+            HANDLE file = CreateFileA(candidate.string().c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ,
+                                      nullptr, CREATE_NEW, FILE_ATTRIBUTE_TEMPORARY, nullptr);
+            if (file != INVALID_HANDLE_VALUE)
+            {
+                CloseHandle(file);
+                return candidate.string();
+            }
+            const DWORD error = GetLastError();
+            if (error != ERROR_FILE_EXISTS && error != ERROR_ALREADY_EXISTS)
+                return {};
+#else
+            int flags = O_CREAT | O_EXCL | O_WRONLY;
+#ifdef O_CLOEXEC
+            flags |= O_CLOEXEC;
+#endif
+            const int file = open(candidate.c_str(), flags, S_IRUSR | S_IWUSR);
+            if (file >= 0)
+            {
+                close(file);
+                return candidate.string();
+            }
+            if (errno != EEXIST)
+                return {};
+#endif
+        }
+
+        return {};
+    }
+
+    bool Downloader::DownloadAndExtract(const std::string& url, const std::string& destDir,
+                                         DownloadProgressCallback progress)
+    {
+        const std::string tempPath = ReserveTempDownloadPath();
+        if (tempPath.empty())
+            return false;
+        const ScopedTemporaryDownload cleanup(tempPath);
 
         if (!DownloadFile(url, tempPath, progress))
         {
             return false;
         }
 
-        bool ok = ExtractZip(tempPath, destDir);
-
-        // Clean up temp file
-        std::filesystem::remove(tempPath);
-
-        return ok;
+        return ExtractZip(tempPath, destDir);
     }
 
 } // namespace SparkBuild

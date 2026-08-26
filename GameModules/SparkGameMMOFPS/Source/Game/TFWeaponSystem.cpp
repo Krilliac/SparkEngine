@@ -407,8 +407,8 @@ namespace Terrafront
         const SparkEngineCamera* cam = m_ctx->engine ? m_ctx->engine->GetCamera() : nullptr;
         if (cam)
         {
-            const auto& p = cam->GetPosition();
-            const auto& f = cam->GetForward();
+            const auto p = cam->GetPosition();
+            const auto f = cam->GetForward();
             outOrigin[0] = p.x;
             outOrigin[1] = p.y;
             outOrigin[2] = p.z;

@@ -313,6 +313,7 @@ TEST(AdvancedAssetPipeline_UnsupportedTransformAndImporterFailClosed)
     EXPECT_FALSE(textureProcessor.GenerateThumbnail(textureMetadata, 64));
 
     SparkEditor::AssetMetadata defaultMetadata;
+    EXPECT_TRUE(defaultMetadata.type == SparkEditor::AssetType::UNKNOWN);
     defaultMetadata.sourceFilePath = texturePath.string();
     SparkEditor::AssetImportSettings defaultSettings;
     defaultSettings.outputDirectory = (assets.root / "default_processed").string();

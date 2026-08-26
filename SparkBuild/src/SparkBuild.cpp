@@ -7,6 +7,7 @@
 #include <thread>
 #include <atomic>
 #include <cstdlib>
+#include <stdexcept>
 #include <vector>
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -870,7 +871,16 @@ namespace SparkBuild
 
     void SparkBuildApp::GenerateProject()
     {
-        std::string cmd = m_config.BuildCMakeConfigureCommand();
+        std::string cmd;
+        try
+        {
+            cmd = m_config.BuildCMakeConfigureCommand();
+        }
+        catch (const std::invalid_argument& error)
+        {
+            std::cout << "\n" << Term::Red(std::string("Configuration command rejected: ") + error.what()) << "\n";
+            return;
+        }
 
         std::cout << "\n" << Term::Dim(">>> " + cmd) << "\n\n";
 
@@ -902,7 +912,16 @@ namespace SparkBuild
 
     void SparkBuildApp::BuildProject()
     {
-        std::string cmd = m_config.BuildCMakeBuildCommand();
+        std::string cmd;
+        try
+        {
+            cmd = m_config.BuildCMakeBuildCommand();
+        }
+        catch (const std::invalid_argument& error)
+        {
+            std::cout << "\n" << Term::Red(std::string("Build command rejected: ") + error.what()) << "\n";
+            return;
+        }
 
         std::cout << "\n" << Term::Dim(">>> " + cmd) << "\n\n";
 
@@ -1124,10 +1143,17 @@ namespace SparkBuild
             std::cout << "\n";
         }
 
-        std::cout << "\n  " << Term::Bold("CMake Configure Command:") << "\n";
-        std::cout << "  " << Term::Dim(m_config.BuildCMakeConfigureCommand()) << "\n";
-        std::cout << "\n  " << Term::Bold("CMake Build Command:") << "\n";
-        std::cout << "  " << Term::Dim(m_config.BuildCMakeBuildCommand()) << "\n";
+        try
+        {
+            std::cout << "\n  " << Term::Bold("CMake Configure Command:") << "\n";
+            std::cout << "  " << Term::Dim(m_config.BuildCMakeConfigureCommand()) << "\n";
+            std::cout << "\n  " << Term::Bold("CMake Build Command:") << "\n";
+            std::cout << "  " << Term::Dim(m_config.BuildCMakeBuildCommand()) << "\n";
+        }
+        catch (const std::invalid_argument& error)
+        {
+            std::cout << "\n  " << Term::Red(std::string("Command preview rejected: ") + error.what()) << "\n";
+        }
         std::cout << "\n";
     }
 

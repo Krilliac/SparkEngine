@@ -23,6 +23,11 @@ namespace SparkBuild
         static bool DownloadAndExtract(const std::string& url, const std::string& destDir,
                                        DownloadProgressCallback progress = nullptr);
 
+        // Atomically reserve a unique .zip file in the system temp directory.
+        // The caller owns the returned file and must remove it when finished.
+        // Returns an empty string when no file can be reserved.
+        static std::string ReserveTempDownloadPath();
+
         // Get the system temp directory
         static std::string GetTempDir();
     };

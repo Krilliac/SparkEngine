@@ -9,6 +9,7 @@
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
+#include <atomic>
 #include <cstring>
 #include <filesystem>
 #include <sstream>
@@ -737,7 +738,50 @@ namespace
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
+#else
+#include <unistd.h>
 #endif
+
+namespace
+{
+    bool SaveConfigAtomically(const Spark::ConfigParser& config, const std::string& path)
+    {
+        if (path.empty())
+            return false;
+
+        const std::filesystem::path target(path);
+        std::filesystem::path temporary = target;
+        static std::atomic<uint64_t> temporarySerial{0};
+#ifdef SPARK_PLATFORM_WINDOWS
+        const auto processId = static_cast<uint64_t>(GetCurrentProcessId());
+#else
+        const auto processId = static_cast<uint64_t>(getpid());
+#endif
+        temporary += ".tmp." + std::to_string(processId) + "." +
+                     std::to_string(temporarySerial.fetch_add(1, std::memory_order_relaxed));
+
+        std::error_code error;
+        std::filesystem::remove(temporary, error);
+        error.clear();
+
+        if (!config.Save(temporary.string()))
+        {
+            std::filesystem::remove(temporary, error);
+            return false;
+        }
+
+#ifdef SPARK_PLATFORM_WINDOWS
+        const bool replaced =
+            MoveFileExW(temporary.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE;
+#else
+        std::filesystem::rename(temporary, target, error);
+        const bool replaced = !error;
+#endif
+        if (!replaced)
+            std::filesystem::remove(temporary, error);
+        return replaced;
+    }
+} // namespace
 
 // =============================================================================
 // Singleton
@@ -782,54 +826,102 @@ bool EngineSettings::Load(const std::string& path)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
 
-    m_filePath = path.empty() ? FindSettingsPath() : path;
-    SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading engine settings from: %s", m_filePath.c_str());
-
-    if (m_config.Load(m_filePath))
+    std::string requestedPath;
+    try
     {
+        requestedPath = path.empty() ? FindSettingsPath() : path;
+    }
+    catch (const std::filesystem::filesystem_error& error)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Failed to resolve engine settings path: %s", error.what());
+        return false;
+    }
+
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading engine settings from: %s", requestedPath.c_str());
+
+    std::error_code fileError;
+    const bool settingsExist = std::filesystem::exists(requestedPath, fileError);
+    if (fileError)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Failed to inspect engine settings file '%s': %s",
+                        requestedPath.c_str(), fileError.message().c_str());
+        return false;
+    }
+
+    EngineSettings staged;
+    staged.m_filePath = requestedPath;
+
+    if (settingsExist)
+    {
+        if (!staged.m_config.Load(requestedPath))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "Failed to read or parse engine settings: %s",
+                            requestedPath.c_str());
+            return false;
+        }
+
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Engine settings loaded successfully");
 
         // Load local override file (gitignored — safe for secrets)
-        std::string localPath = m_filePath;
+        std::string localPath = requestedPath;
         auto dotPos = localPath.rfind('.');
         if (dotPos != std::string::npos)
             localPath = localPath.substr(0, dotPos) + ".local" + localPath.substr(dotPos);
         else
             localPath += ".local";
 
-        if (std::filesystem::exists(localPath))
+        fileError.clear();
+        const bool localExists = std::filesystem::exists(localPath, fileError);
+        if (fileError)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "Failed to inspect local settings override '%s': %s",
+                            localPath.c_str(), fileError.message().c_str());
+            return false;
+        }
+
+        if (localExists)
         {
             Spark::ConfigParser localConfig;
-            if (localConfig.Load(localPath))
+            if (!localConfig.Load(localPath))
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Core, "Loaded local settings override: %s", localPath.c_str());
-                // Merge local values into the main config (local takes precedence)
-                for (const auto& section : localConfig.GetSections())
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Failed to read or parse local settings override: %s",
+                                localPath.c_str());
+                return false;
+            }
+
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "Loaded local settings override: %s", localPath.c_str());
+            // Merge local values into the main config (local takes precedence)
+            for (const auto& section : localConfig.GetSections())
+            {
+                for (const auto& key : localConfig.GetKeys(section))
                 {
-                    for (const auto& key : localConfig.GetKeys(section))
-                    {
-                        std::string val = localConfig.GetString(section, key, "");
-                        if (!val.empty())
-                            m_config.SetString(section, key, val);
-                    }
+                    std::string val = localConfig.GetString(section, key, "");
+                    if (!val.empty())
+                        staged.m_config.SetString(section, key, val);
                 }
             }
         }
 
-        ReadFromConfig();
-        ApplyDebugSettings();
-        return true;
+        staged.ReadFromConfig();
+    }
+    else
+    {
+        // Preserve first-run behavior, but only report success when the default
+        // file was actually created.
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Settings file not found, creating defaults: %s",
+                       requestedPath.c_str());
+        staged.PopulateDefaults();
+        if (!SaveConfigAtomically(staged.m_config, requestedPath))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "Failed to create default engine settings: %s",
+                            requestedPath.c_str());
+            return false;
+        }
     }
 
-    // File doesn't exist or failed to parse - use defaults
-    SPARK_LOG_WARN(Spark::LogCategory::Core, "Settings file not found or failed to parse, using defaults: %s",
-                   m_filePath.c_str());
-    PopulateDefaults();
-    ReadFromConfig();
+    staged.m_changeCallbacks = m_changeCallbacks;
+    *this = std::move(staged);
     ApplyDebugSettings();
-
-    // Save defaults so the file exists for next time
-    Save();
     return true;
 }
 
@@ -841,19 +933,28 @@ bool EngineSettings::Save() const
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
 
     SPARK_LOG_INFO(Spark::LogCategory::Core, "Saving engine settings to: %s", m_filePath.c_str());
-    WriteToConfig();
-    bool result = m_config.Save(m_filePath);
+    EngineSettings staged = *this;
+    staged.WriteToConfig();
+    const bool result = SaveConfigAtomically(staged.m_config, m_filePath);
     if (!result)
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "Failed to save engine settings to: %s", m_filePath.c_str());
+        return false;
     }
-    return result;
+
+    m_config = std::move(staged.m_config);
+    return true;
 }
 
 bool EngineSettings::SaveAs(const std::string& path) const
 {
-    WriteToConfig();
-    return m_config.Save(path);
+    EngineSettings staged = *this;
+    staged.WriteToConfig();
+    if (!SaveConfigAtomically(staged.m_config, path))
+        return false;
+
+    m_config = std::move(staged.m_config);
+    return true;
 }
 
 // =============================================================================
