@@ -625,6 +625,7 @@ jobs:
 
     - name: Validate and summarize test statistics
       if: always() && matrix.config == 'Release'
+      shell: bash
       run: |
         python .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
