@@ -8,20 +8,22 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 72103 |
-| **SparkEditor/Source** | 107922 |
-| **GameModules** | 52217 |
-| **Tests** | 15579 |
+| **SparkEngine/Source** | 302685 |
+| **SparkEditor/Source** | 108813 |
+| **GameModules** | 139243 |
+| **External services** | 10048 |
+| **Asset pipeline** | 1877 |
+| **Tests** | 162864 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~250042** |
+| **Total C++ (excl. ThirdParty)** | **~727751** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 995 |
-| Implementation files (.cpp) | 1452 |
+| Header files (.h/.hpp) | 997 |
+| Implementation files (.cpp) | 1457 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
@@ -32,9 +34,9 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~308 |
-| Average lines per .h file | ~253 |
-| Largest codebase section | Graphics (3157 lines — 4% of SparkEngine/Source) |
+| Average lines per .cpp file | ~703 |
+| Average lines per .h file | ~577 |
+| Largest codebase section | Graphics (119374 lines — 39% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,17 +44,17 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 3157 | 4.3% |
-| Engine (all subsystems) | 85640 | 118.7% |
-| Utils | 41038 | 56.9% |
-| Core | 29196 | 40.4% |
-| Physics | 10814 | 14.9% |
-| Audio | 6090 | 8.4% |
-| Input | 3953 | 5.4% |
-| SceneManager | 2241 | 3.1% |
-| Enums | 1423 | 1.9% |
-| Game | 1734 | 2.4% |
-| Camera | 999 | 1.3% |
+| Graphics | 119374 | 39.4% |
+| Engine (all subsystems) | 85640 | 28.2% |
+| Utils | 41153 | 13.5% |
+| Core | 29196 | 9.6% |
+| Physics | 10814 | 3.5% |
+| Audio | 6090 | 2.0% |
+| Input | 3953 | 1.3% |
+| SceneManager | 2241 | 0.7% |
+| Enums | 1423 | 0.4% |
+| Game | 1734 | 0.5% |
+| Camera | 999 | 0.3% |
 
 ### Engine Subsystems (SparkEngine/Source/Engine/)
 
@@ -99,14 +101,14 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 65 |
-| Total editor lines | 107922 |
+| Total editor lines | 108813 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
 | Test files | 569 |
-| TEST() definitions | 6649 |
+| TEST() definitions | 6826 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
@@ -189,9 +191,9 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | `JSONSceneSerializer.cpp` | 2010 |
 | `VisualScriptPanel.cpp` | 1773 |
 | `BuildPipeline.cpp` | 1659 |
+| `CollaborativeEditSession.cpp` | 1613 |
 | `PerformanceProfiler.cpp` | 1609 |
 | `EditorTheme.cpp` | 1587 |
-| `CollaborativeEditSession.cpp` | 1578 |
 | `HierarchyPanel.cpp` | 1524 |
 | `ProjectSettingsPanel.cpp` | 1501 |
 

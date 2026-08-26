@@ -93,9 +93,17 @@ namespace SparkEditor
         {
             bool isHost = m_collabSession->IsHost();
             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "%s",
-                               isHost ? "Hosting session" : "Connected to session");
+                               m_collabSession->IsStandaloneBroker()
+                                   ? "Connected to standalone broker"
+                                   : (isHost ? "Hosting session" : "Connected to session"));
 
-            if (isHost)
+            if (m_collabSession->IsStandaloneBroker())
+            {
+                ImGui::SameLine();
+                ImGui::Text("at %s (session: %s)", m_collabSession->GetHostAddress().c_str(),
+                            m_collabSession->GetStandaloneSessionId().c_str());
+            }
+            else if (isHost)
             {
                 ImGui::SameLine();
                 ImGui::Text("on port %u", m_collabSession->GetPort());
@@ -119,58 +127,74 @@ namespace SparkEditor
             ImGui::SetNextItemWidth(150.0f);
             ImGui::InputText("##UserName", m_userNameBuffer, sizeof(m_userNameBuffer));
 
-            ImGui::Text("Port:");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(80.0f);
-            ImGui::InputInt("##Port", &m_portValue, 0, 0);
-
-            if (ImGui::Button("Host Session"))
+            ImGui::Checkbox("Use standalone SparkCollabServer", &m_useStandaloneBroker);
+            if (m_useStandaloneBroker)
             {
-                if (m_collabSession)
+                ImGui::Text("Endpoint:");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(260.0f);
+                ImGui::InputText("##BrokerEndpoint", m_brokerEndpointBuffer, sizeof(m_brokerEndpointBuffer));
+
+                ImGui::Text("Session:");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(180.0f);
+                ImGui::InputText("##BrokerSession", m_brokerSessionBuffer, sizeof(m_brokerSessionBuffer));
+
+                if (ImGui::Button("Create Broker Session"))
                 {
-                    auto port = static_cast<uint16_t>(m_portValue);
-                    if (m_collabSession->Host(port, m_userNameBuffer))
+                    if (m_collabSession && m_collabSession->HostStandaloneBroker(
+                                               m_brokerEndpointBuffer, m_brokerSessionBuffer, m_userNameBuffer))
                     {
-                        m_statusMessage = "Hosting on port " + std::to_string(port);
-                        SPARK_LOG_INFO(Spark::LogCategory::Editor, "CollaborationPanel: hosting session on port %u",
-                                       port);
+                        m_statusMessage = "Created broker session '" + std::string(m_brokerSessionBuffer) + "'.";
                     }
                     else
                     {
-                        m_statusMessage = "Failed to host session.";
-                        SPARK_LOG_ERROR(Spark::LogCategory::Editor,
-                                        "CollaborationPanel: failed to host session on port %u", port);
+                        m_statusMessage = "Failed to create broker session. Is SparkCollabServer running?";
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Join Broker Session"))
+                {
+                    if (m_collabSession && m_collabSession->ConnectStandaloneBroker(
+                                               m_brokerEndpointBuffer, m_brokerSessionBuffer, m_userNameBuffer))
+                    {
+                        m_statusMessage = "Joined broker session '" + std::string(m_brokerSessionBuffer) + "'.";
+                    }
+                    else
+                    {
+                        m_statusMessage = "Failed to join broker session.";
                     }
                 }
             }
-
-            ImGui::SameLine();
-            ImGui::Text("or");
-            ImGui::SameLine();
-
-            ImGui::Text("Address:");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(150.0f);
-            ImGui::InputText("##Address", m_hostAddressBuffer, sizeof(m_hostAddressBuffer));
-
-            ImGui::SameLine();
-            if (ImGui::Button("Join Session"))
+            else
             {
-                if (m_collabSession)
+                ImGui::Text("Port:");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(80.0f);
+                ImGui::InputInt("##Port", &m_portValue, 0, 0);
+
+                if (ImGui::Button("Host Peer Session"))
                 {
-                    auto port = static_cast<uint16_t>(m_portValue);
-                    if (m_collabSession->Connect(m_hostAddressBuffer, port, m_userNameBuffer))
-                    {
-                        m_statusMessage = "Connected to " + std::string(m_hostAddressBuffer);
-                        SPARK_LOG_INFO(Spark::LogCategory::Editor, "CollaborationPanel: connected to %s:%u",
-                                       m_hostAddressBuffer, port);
-                    }
+                    const auto port = static_cast<uint16_t>(m_portValue);
+                    if (m_collabSession && m_collabSession->Host(port, m_userNameBuffer))
+                        m_statusMessage = "Hosting peer session on port " + std::to_string(port) + ".";
                     else
-                    {
-                        m_statusMessage = "Failed to connect.";
-                        SPARK_LOG_ERROR(Spark::LogCategory::Editor, "CollaborationPanel: failed to connect to %s:%u",
-                                        m_hostAddressBuffer, port);
-                    }
+                        m_statusMessage = "Failed to host peer session.";
+                }
+
+                ImGui::SameLine();
+                ImGui::Text("Address:");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(150.0f);
+                ImGui::InputText("##Address", m_hostAddressBuffer, sizeof(m_hostAddressBuffer));
+                ImGui::SameLine();
+                if (ImGui::Button("Join Peer Session"))
+                {
+                    const auto port = static_cast<uint16_t>(m_portValue);
+                    if (m_collabSession && m_collabSession->Connect(m_hostAddressBuffer, port, m_userNameBuffer))
+                        m_statusMessage = "Connected to peer at " + std::string(m_hostAddressBuffer) + ".";
+                    else
+                        m_statusMessage = "Failed to join peer session.";
                 }
             }
         }

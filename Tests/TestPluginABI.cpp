@@ -10,7 +10,9 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
+#include <vector>
 
 namespace
 {
@@ -770,4 +772,55 @@ TEST(DynamicPluginHost_ValidatesMetadataAndSha256BeforeMapping)
 #else
     EXPECT_TRUE(error.find("dlopen") != std::string::npos || error.find("file too short") != std::string::npos);
 #endif
+}
+
+TEST(DynamicPluginHost_LoadsQueriesTicksAndUnloadsRealNativePlugin)
+{
+    const std::filesystem::path pluginPath = SPARK_TEST_VALID_PLUGIN_PATH;
+    EXPECT_TRUE(pluginPath.is_absolute());
+    EXPECT_TRUE(std::filesystem::is_regular_file(pluginPath));
+    EXPECT_TRUE(std::filesystem::is_regular_file(pluginPath.string() + ".sparkplugin.json"));
+
+    std::vector<std::string> lifecycle;
+    Spark::DynamicPluginHost host;
+    host.SetLogSink(
+        [&lifecycle](SparkPluginLogLevel, const char* category, const char* message)
+        {
+            if (category && std::string_view(category) == "PluginFixture" && message)
+                lifecycle.emplace_back(message);
+        });
+
+    std::string error;
+    EXPECT_TRUE(host.Load(pluginPath, &error));
+    ASSERT_TRUE(host.Descriptor() != nullptr);
+    EXPECT_EQ(std::string(host.Descriptor()->id), std::string("org.sparkengine.test.native-plugin"));
+    EXPECT_EQ(std::string(host.Descriptor()->name), std::string("Spark Native Plugin Fixture"));
+    EXPECT_EQ(host.Descriptor()->abi_major, SPARK_PLUGIN_ABI_MAJOR);
+    EXPECT_EQ(host.Descriptor()->abi_minor, SPARK_PLUGIN_ABI_MINOR);
+    EXPECT_TRUE((host.Descriptor()->api->capabilities & SPARK_PLUGIN_CAP_EDITOR_EXTENSION) != 0);
+
+    EXPECT_TRUE(host.Start(&error));
+    EXPECT_EQ(host.Tick(1.0 / 60.0), SPARK_PLUGIN_OK);
+    EXPECT_TRUE(host.Unload(std::chrono::seconds(1), &error));
+    EXPECT_FALSE(host.IsLoaded());
+
+    ASSERT_EQ(lifecycle.size(), size_t{5});
+    EXPECT_EQ(lifecycle[0], std::string("create"));
+    EXPECT_EQ(lifecycle[1], std::string("start"));
+    EXPECT_EQ(lifecycle[2], std::string("tick"));
+    EXPECT_EQ(lifecycle[3], std::string("stop"));
+    EXPECT_EQ(lifecycle[4], std::string("destroy"));
+}
+
+TEST(DynamicPluginHost_RejectsRealForwardMinorPluginBeforeCreate)
+{
+    Spark::DynamicPluginHost host;
+    bool createCalled = false;
+    host.SetLogSink([&createCalled](SparkPluginLogLevel, const char*, const char* message)
+                    { createCalled = message && std::string_view(message) == "forward-minor-create"; });
+    std::string error;
+    EXPECT_FALSE(host.Load(std::filesystem::path(SPARK_TEST_FORWARD_MINOR_PLUGIN_PATH), &error));
+    EXPECT_TRUE(error.find("descriptor validation failed with plugin result 8") != std::string::npos);
+    EXPECT_FALSE(createCalled);
+    EXPECT_FALSE(host.IsLoaded());
 }

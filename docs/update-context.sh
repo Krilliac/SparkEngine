@@ -40,6 +40,18 @@ log_success() { echo -e "${GREEN}[CONTEXT]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[CONTEXT]${NC} $1"; }
 
 CHANGES_MADE=0
+DRY_RUN=false
+
+if python3 -c 'import sys' >/dev/null 2>&1; then
+    PYTHON=(python3)
+elif python -c 'import sys' >/dev/null 2>&1; then
+    PYTHON=(python)
+elif py -3 -c 'import sys' >/dev/null 2>&1; then
+    PYTHON=(py -3)
+else
+    log_warning "Python 3 is required to collect deterministic context metrics"
+    exit 1
+fi
 
 # ============================================================================
 # Collect metrics
@@ -47,17 +59,14 @@ CHANGES_MADE=0
 collect_metrics() {
     log_info "Scanning codebase..."
 
-    TEST_CASES=$(grep -rch '^TEST(' "$TEST_DIR"/*.cpp 2>/dev/null | awk '{s+=$1} END {print s}')
-    TEST_FILES=$(find "$TEST_DIR" -name 'Test*.cpp' 2>/dev/null | wc -l | tr -d " ")
+    eval "$("${PYTHON[@]}" "$PROJECT_ROOT/docs/codebase-metrics.py" --shell)"
+    TEST_CASES="$TEST_DEFINITIONS"
+    TOTAL_FILES="$FILE_COUNT"
     PANEL_COUNT=$(find "$EDITOR_SRC/Panels" -name '*Panel.h' 2>/dev/null | wc -l | tr -d " ")
     COMP_STRUCTS=$(grep -rh "^struct " "$SRC/Engine/ECS/Components" 2>/dev/null | grep -v "//" | wc -l | tr -d " ")
     ECS_SYSTEMS=$(grep -c "class .*System" "$SRC/Engine/ECS/Systems/ECSystems.h" 2>/dev/null || echo "0")
     GAME_MODULES=$(find "$GAME_SRC" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d " ")
     WIKI_PAGES=$(find "$WIKI_DIR" -name '*.md' ! -name '_Sidebar.md' 2>/dev/null | wc -l | tr -d " ")
-    TOTAL_FILES=$(find "$SRC" "$EDITOR_SRC" "$GAME_SRC" "$CONSOLE_SRC" "$SHADER_SRC" "$TEST_DIR" \
-        -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | wc -l | tr -d " ")
-    TOTAL_LINES=$(find "$SRC" "$EDITOR_SRC" "$GAME_SRC" "$CONSOLE_SRC" "$SHADER_SRC" "$TEST_DIR" \
-        -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
     TOTAL_LINES_K=$((TOTAL_LINES / 1000))
 
     # Post-processing pass count
@@ -71,7 +80,7 @@ collect_metrics() {
     GAME_MODULE_NAMES=$(find "$GAME_SRC" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sed "s|.*/Spark||; s|Game||" | sort | tr '\n' ', ' | sed 's/,$//' | sed 's/,/, /g')
 
     FORMATTED_TESTS=$(printf "%'d" "$TEST_CASES" 2>/dev/null || echo "$TEST_CASES")
-    TODAY=$(date +%Y-%m-%d)
+    TODAY=$(date -u +%Y-%m-%d)
 
     log_info "Found: ${TEST_CASES} tests, ${PANEL_COUNT} panels, ${COMP_STRUCTS} components, ${ECS_SYSTEMS} systems"
 }
@@ -86,16 +95,18 @@ sed_replace() {
 
     if [ ! -f "$file" ]; then return; fi
 
-    local before_hash
-    before_hash=$(md5sum "$file" | awk '{print $1}')
-    sed -i "s|${pattern}|${replacement}|g" "$file"
-    local after_hash
-    after_hash=$(md5sum "$file" | awk '{print $1}')
+    local tmpfile
+    tmpfile=$(mktemp)
+    sed "s|${pattern}|${replacement}|g" "$file" > "$tmpfile"
 
-    if [ "$before_hash" != "$after_hash" ]; then
+    if ! cmp -s "$file" "$tmpfile"; then
         CHANGES_MADE=$((CHANGES_MADE + 1))
         log_info "  Updated $(basename "$file")"
+        if [ "$DRY_RUN" = false ]; then
+            cp "$tmpfile" "$file"
+        fi
     fi
+    rm -f "$tmpfile"
 }
 
 # ============================================================================
@@ -115,7 +126,10 @@ update_index() {
     # Tests line
     sed_replace "$INDEX_FILE" \
         '- \*\*Tests\*\*: [0-9]* test files, [0-9,]* tests' \
-        "- **Tests**: ${TEST_FILES} test files, ${FORMATTED_TESTS} tests"
+        "- **Tests**: ${TEST_FILES} test files, ${FORMATTED_TESTS} test definitions"
+    sed_replace "$INDEX_FILE" \
+        '- \*\*Tests\*\*: [0-9]* test files, [0-9,]* test definitions' \
+        "- **Tests**: ${TEST_FILES} test files, ${FORMATTED_TESTS} test definitions"
 
     # Editor panels
     sed_replace "$INDEX_FILE" \
@@ -150,7 +164,10 @@ update_claude_md() {
     # Tests line
     sed_replace "$CLAUDE_FILE" \
         '[0-9,]* unit tests across [0-9]* files, CTest' \
-        "${FORMATTED_TESTS} unit tests across ${TEST_FILES} files, CTest"
+        "${FORMATTED_TESTS} test definitions across ${TEST_FILES} files, CTest"
+    sed_replace "$CLAUDE_FILE" \
+        '[0-9,]* test definitions across [0-9]* files, CTest' \
+        "${FORMATTED_TESTS} test definitions across ${TEST_FILES} files, CTest"
 
     # Editor panel count
     sed_replace "$CLAUDE_FILE" \
@@ -179,7 +196,13 @@ update() {
 
 check_mode() {
     collect_metrics
+    DRY_RUN=true
     CHANGES_MADE=0
+    if [ -f "$INDEX_FILE" ]; then
+        local existing_date
+        existing_date=$(sed -n 's/^### Current Engine State (\([0-9-]*\))$/\1/p' "$INDEX_FILE" | head -n 1)
+        TODAY="${existing_date:-$TODAY}"
+    fi
     update_index
     update_claude_md
 

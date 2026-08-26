@@ -24,6 +24,7 @@
 #include "Utils/EditorProcessLaunch.h"
 #include "SceneManager/ReflectedSceneSerializer.h"
 #include "Engine/ECS/Components.h"
+#include <Spark/PluginABI.h>
 #include <algorithm>
 #ifdef _WIN32
 #include <shellapi.h>
@@ -2318,6 +2319,30 @@ TEST(PluginManager_FailedInitializationSupportsExplicitRollback)
     mgr.ShutdownAll();
     ASSERT_EQ(PluginLifecycleProbe::events.size(), static_cast<size_t>(3));
     EXPECT_EQ(PluginLifecycleProbe::events[2], std::string("successful-shutdown"));
+}
+
+TEST(PluginManager_LoadsStableABIEditorExtension)
+{
+    EditorPluginManager mgr;
+    EXPECT_TRUE(mgr.LoadPlugin(SPARK_TEST_VALID_PLUGIN_PATH));
+    EXPECT_EQ(mgr.GetPluginCount(), size_t{1});
+
+    const SparkPluginDescriptor* descriptor = mgr.GetDynamicPluginDescriptor("org.sparkengine.test.native-plugin");
+    ASSERT_TRUE(descriptor != nullptr);
+    EXPECT_EQ(std::string(descriptor->name), std::string("Spark Native Plugin Fixture"));
+    EXPECT_TRUE(mgr.GetPlugin("Spark Native Plugin Fixture") == nullptr);
+
+    EXPECT_TRUE(mgr.InitializeAll(nullptr));
+    mgr.UpdateAll(1.0f / 60.0f);
+    EXPECT_TRUE(mgr.UnloadPlugin("Spark Native Plugin Fixture"));
+    EXPECT_EQ(mgr.GetPluginCount(), size_t{0});
+}
+
+TEST(PluginManager_RejectsForwardMinorStableABIPlugin)
+{
+    EditorPluginManager mgr;
+    EXPECT_FALSE(mgr.LoadPlugin(SPARK_TEST_FORWARD_MINOR_PLUGIN_PATH));
+    EXPECT_EQ(mgr.GetPluginCount(), size_t{0});
 }
 
 // ============================================================================

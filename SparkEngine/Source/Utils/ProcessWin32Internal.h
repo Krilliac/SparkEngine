@@ -43,14 +43,19 @@ namespace Spark
             CloseH(stdoutRead);
             CloseH(stderrRead);
 
-            if (processHandle && !detached)
+            if (processHandle)
             {
-                DWORD ec;
-                if (GetExitCodeProcess(processHandle, &ec) && ec == STILL_ACTIVE)
+                if (!detached)
                 {
-                    TerminateProcess(processHandle, 1);
-                    WaitForSingleObject(processHandle, 1000);
+                    DWORD ec;
+                    if (GetExitCodeProcess(processHandle, &ec) && ec == STILL_ACTIVE)
+                    {
+                        TerminateProcess(processHandle, 1);
+                        WaitForSingleObject(processHandle, 1000);
+                    }
                 }
+                // Detached children are not terminated, but the launcher must
+                // still release its local kernel handle after CreateProcess.
                 CloseHandle(processHandle);
                 processHandle = NULL;
             }

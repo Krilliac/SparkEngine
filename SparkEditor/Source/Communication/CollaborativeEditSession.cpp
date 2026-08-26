@@ -4,6 +4,7 @@
  */
 
 #include "CollaborativeEditSession.h"
+#include "StandaloneCollaborationClient.h"
 #include "Engine/Networking/NetworkBindPolicy.h"
 #include "Utils/Validate.h"
 
@@ -692,6 +693,12 @@ namespace SparkEditor
         m_shuttingDown.store(true, std::memory_order_release);
         m_connected.store(false, std::memory_order_release);
 
+        if (m_standaloneClient)
+        {
+            DisconnectStandaloneBroker();
+            return;
+        }
+
         // Release all locks held by the local editor
         {
             std::lock_guard<std::mutex> lock(m_lockMutex);
@@ -1010,6 +1017,12 @@ namespace SparkEditor
 
         m_sessionTime += deltaTime;
 
+        if (m_standaloneClient)
+        {
+            UpdateStandaloneBroker(deltaTime);
+            return;
+        }
+
         // Process incoming messages from the network thread
         ProcessIncomingMessages();
 
@@ -1077,6 +1090,12 @@ namespace SparkEditor
             return;
         }
 
+        if (m_standaloneClient)
+        {
+            m_presenceBroadcastTimer = m_presenceBroadcastInterval;
+            return;
+        }
+
         {
             std::lock_guard<std::mutex> lock(m_peerMutex);
             auto it = m_peers.find(m_localPeerID);
@@ -1113,6 +1132,9 @@ namespace SparkEditor
 
     bool CollaborativeEditSession::RequestLock(const std::string& nodeId)
     {
+        if (m_standaloneClient)
+            return RequestStandaloneLock(nodeId);
+
         std::lock_guard<std::mutex> lock(m_lockMutex);
 
         auto it = m_nodeLocks.find(nodeId);
@@ -1149,6 +1171,12 @@ namespace SparkEditor
 
     void CollaborativeEditSession::ReleaseLock(const std::string& nodeId)
     {
+        if (m_standaloneClient)
+        {
+            ReleaseStandaloneLock(nodeId);
+            return;
+        }
+
         std::lock_guard<std::mutex> lock(m_lockMutex);
 
         auto it = m_nodeLocks.find(nodeId);
@@ -1224,6 +1252,12 @@ namespace SparkEditor
             outgoing.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
         }
 
+        if (m_standaloneClient)
+        {
+            BroadcastStandaloneEdit(outgoing);
+            return;
+        }
+
         m_editsBroadcast++;
 
         InternalMessage msg;
@@ -1266,9 +1300,10 @@ namespace SparkEditor
         auto stats = GetStats();
         std::ostringstream oss;
         oss << "CollabEdit: " << (m_connected.load() ? "Connected" : "Disconnected")
-            << (m_isHost ? " (Host)" : " (Client)") << " | Peers: " << stats.peerCount
-            << " | Locks: " << stats.activeLocks << " | Edits sent/recv: " << stats.editsBroadcast << "/"
-            << stats.editsReceived << " | Session: " << stats.sessionDuration << "s";
+            << (m_standaloneClient ? " (Standalone broker)" : (m_isHost ? " (Host)" : " (Client)"))
+            << " | Peers: " << stats.peerCount << " | Locks: " << stats.activeLocks
+            << " | Edits sent/recv: " << stats.editsBroadcast << "/" << stats.editsReceived
+            << " | Session: " << stats.sessionDuration << "s";
         return oss.str();
     }
 

@@ -20,10 +20,9 @@
 #include <sstream>
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <unistd.h>
 #endif
 
@@ -248,7 +247,7 @@ namespace SparkLauncher
                 }
                 else
                 {
-                    SpawnEditor(chosen.string());
+                    SpawnTarget(chosen.string(), LaunchTarget::Editor);
                 }
             }
         }
@@ -295,16 +294,25 @@ namespace SparkLauncher
                 ImGui::TextUnformatted(rp.engineVersion.c_str());
 
                 ImGui::TableNextColumn();
-                if (rp.valid && ImGui::SmallButton("Launch"))
+                if (rp.valid && ImGui::SmallButton("Editor"))
                 {
                     if (m_projectManager->OpenProject(rp.path))
-                        SpawnEditor(rp.path);
+                        SpawnTarget(rp.path, LaunchTarget::Editor);
                     else
                     {
                         m_statusMessage = "Failed to open " + rp.path;
                         m_statusIsError = true;
                     }
                 }
+                ImGui::SameLine();
+                if (rp.valid && ImGui::SmallButton("Play"))
+                    SpawnTarget(rp.path, LaunchTarget::Game);
+                ImGui::SameLine();
+                if (rp.valid && ImGui::SmallButton("Server"))
+                    SpawnTarget(rp.path, LaunchTarget::DedicatedServer);
+                ImGui::SameLine();
+                if (rp.valid && ImGui::SmallButton("Services"))
+                    SpawnTarget(rp.path, LaunchTarget::ServiceTopology);
                 ImGui::SameLine();
                 if (ImGui::SmallButton("Remove"))
                 {
@@ -397,11 +405,11 @@ namespace SparkLauncher
                 return;
             }
 
-            SpawnEditor(sparkproj);
+            SpawnTarget(sparkproj, LaunchTarget::Editor);
         }
     }
 
-    bool LauncherApp::SpawnEditor(const std::string& projectFilePath)
+    bool LauncherApp::SpawnTarget(const std::string& projectFilePath, LaunchTarget target)
     {
         const fs::path ownPath = OwnExecutablePath();
         if (ownPath.empty())
@@ -410,51 +418,23 @@ namespace SparkLauncher
             m_statusIsError = true;
             return false;
         }
-        const fs::path binDir = ownPath.parent_path();
-#ifdef _WIN32
-        const fs::path editor = binDir / "SparkEditor.exe";
-#else
-        const fs::path editor = binDir / "SparkEditor";
-#endif
-        if (!fs::exists(editor))
+        auto request = BuildLaunchRequest(ownPath.parent_path(), projectFilePath, target);
+        if (!request)
         {
-            m_statusMessage = "SparkEditor binary not found: " + editor.string();
+            m_statusMessage = request.error();
             m_statusIsError = true;
             return false;
         }
-
-#ifdef _WIN32
-        std::string cmdLine = "\"" + editor.string() + "\" --project \"" + projectFilePath + "\"";
-        STARTUPINFOA si{};
-        si.cb = sizeof(si);
-        PROCESS_INFORMATION pi{};
-        BOOL ok = CreateProcessA(editor.string().c_str(), cmdLine.data(), nullptr, nullptr, FALSE, DETACHED_PROCESS,
-                                 nullptr, nullptr, &si, &pi);
-        if (!ok)
+        auto launched = LaunchDetached(*request);
+        if (!launched)
         {
-            m_statusMessage = "CreateProcess failed (err " + std::to_string(GetLastError()) + ")";
+            m_statusMessage = launched.error();
             m_statusIsError = true;
             return false;
         }
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
-#else
-        pid_t pid = fork();
-        if (pid < 0)
-        {
-            m_statusMessage = "fork() failed";
-            m_statusIsError = true;
-            return false;
-        }
-        if (pid == 0)
-        {
-            // Detach from launcher so it can exit cleanly.
-            setsid();
-            execl(editor.c_str(), editor.c_str(), "--project", projectFilePath.c_str(), static_cast<char*>(nullptr));
-            _exit(127); // execl only returns on failure
-        }
-#endif
-        m_shouldClose = true;
+        m_statusMessage = std::string(LaunchTargetName(target)) + " started";
+        m_statusIsError = false;
+        m_shouldClose = target != LaunchTarget::DedicatedServer;
         return true;
     }
 } // namespace SparkLauncher

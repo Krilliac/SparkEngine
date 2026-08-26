@@ -13,6 +13,7 @@
 
 #include "Process.h"
 #include "ProcessWin32Internal.h"
+#include "ProcessWin32JobPolicy.h"
 
 #include <expected>
 #include <memory>
@@ -291,12 +292,18 @@ namespace Spark
         if (!ok)
             return std::unexpected("CreateProcessA failed (error " + std::to_string(GetLastError()) + ")");
 
-        // Reap the child automatically if this process dies unexpectedly.
+        // Reap tracked children automatically if this process dies
+        // unexpectedly. Detached means fire-and-forget: assigning those
+        // children to this kill-on-close job would silently terminate a
+        // SparkDaemon as soon as its launching engine/editor exits.
         // Best-effort: on the rare platform where the job can't be created or
         // assigned (e.g. an outer job that forbids nesting), fall through — the
         // child simply loses the auto-reap guarantee, same as before.
-        if (HANDLE job = GetChildKillJob())
-            AssignProcessToJobObject(job, pi.hProcess);
+        if (ProcessDetail::ShouldAssignToKillOnCloseJob(m_detached))
+        {
+            if (HANDLE job = GetChildKillJob())
+                AssignProcessToJobObject(job, pi.hProcess);
+        }
 
         ResumeThread(pi.hThread);
 

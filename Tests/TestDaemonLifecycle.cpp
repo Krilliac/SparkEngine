@@ -11,13 +11,14 @@
 
 #include "TestFramework.h"
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
 
 #include "Graphics/ShaderDiskCache.h"
 #include "Utils/AssetServiceClient.h"
 #include "Utils/ConsoleVariable.h"
 #include "Utils/DaemonClient.h"
 #include "Utils/DaemonConnection.h"
+#include "Utils/DaemonFraming.h"
 #include "Utils/DaemonLifecycle.h"
 #include "Utils/InGameConsole.h"
 
@@ -31,24 +32,38 @@
 #include <filesystem>
 #include <memory>
 #include <string>
-#include <sys/stat.h>
 #include <thread>
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 namespace
 {
     std::string UniqueLifecyclePath(const char* tag)
     {
+#if defined(_WIN32)
+        return std::string("spark-daemon-lifecycle-") + tag + "-" + std::to_string(::GetCurrentProcessId());
+#else
         char buf[96];
         std::snprintf(buf, sizeof(buf), "/tmp/spark-daemon-lifecycle-%s-%d.sock", tag, static_cast<int>(::getpid()));
         return buf;
+#endif
     }
 
     std::filesystem::path UniqueLifecycleCacheDir(const char* tag)
     {
-        char buf[96];
-        std::snprintf(buf, sizeof(buf), "/tmp/spark-daemon-lifecycle-cache-%s-%d", tag, static_cast<int>(::getpid()));
-        std::filesystem::path p(buf);
+        const auto processId =
+#if defined(_WIN32)
+            static_cast<unsigned long>(::GetCurrentProcessId());
+#else
+            static_cast<unsigned long>(::getpid());
+#endif
+        std::filesystem::path p =
+            std::filesystem::temp_directory_path() /
+            (std::string("spark-daemon-lifecycle-cache-") + tag + "-" + std::to_string(processId));
         std::error_code ec;
         std::filesystem::remove_all(p, ec);
         return p;
@@ -59,9 +74,15 @@ namespace
         auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline)
         {
+#if defined(_WIN32)
+            const std::wstring pipeName = Spark::Daemon::NormalizePipeName(path);
+            if (!pipeName.empty() && ::WaitNamedPipeW(pipeName.c_str(), 20))
+                return true;
+#else
             struct stat st;
             if (::stat(path.c_str(), &st) == 0)
                 return true;
+#endif
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         return false;
@@ -72,19 +93,31 @@ namespace
     struct DaemonCVarGuard
     {
         bool prevEnabled;
+        bool prevAutoSpawn;
         std::string prevSocket;
+        std::string prevBinary;
 
-        explicit DaemonCVarGuard(bool enable, const std::string& socketPath)
+        explicit DaemonCVarGuard(bool enable, const std::string& socketPath, bool autoSpawn = false,
+                                 const std::string& binaryPath = {})
             : prevEnabled(Spark::CVarRegistry::Get().Find("spark.daemon.enabled") &&
                           Spark::CVarRegistry::Get().Find("spark.daemon.enabled")->GetValueString() == "true"),
+              prevAutoSpawn(Spark::CVarRegistry::Get().Find("spark.daemon.auto_spawn") &&
+                            Spark::CVarRegistry::Get().Find("spark.daemon.auto_spawn")->GetValueString() == "true"),
               prevSocket(Spark::CVarRegistry::Get().Find("spark.daemon.socket_path")
                              ? Spark::CVarRegistry::Get().Find("spark.daemon.socket_path")->GetValueString()
+                             : ""),
+              prevBinary(Spark::CVarRegistry::Get().Find("spark.daemon.binary_path")
+                             ? Spark::CVarRegistry::Get().Find("spark.daemon.binary_path")->GetValueString()
                              : "")
         {
             if (auto* e = Spark::CVarRegistry::Get().Find("spark.daemon.enabled"))
                 e->SetFromString(enable ? "1" : "0");
             if (auto* s = Spark::CVarRegistry::Get().Find("spark.daemon.socket_path"))
                 s->SetFromString(socketPath);
+            if (auto* a = Spark::CVarRegistry::Get().Find("spark.daemon.auto_spawn"))
+                a->SetFromString(autoSpawn ? "1" : "0");
+            if (auto* b = Spark::CVarRegistry::Get().Find("spark.daemon.binary_path"))
+                b->SetFromString(binaryPath);
         }
 
         ~DaemonCVarGuard()
@@ -93,6 +126,10 @@ namespace
                 e->SetFromString(prevEnabled ? "1" : "0");
             if (auto* s = Spark::CVarRegistry::Get().Find("spark.daemon.socket_path"))
                 s->SetFromString(prevSocket);
+            if (auto* a = Spark::CVarRegistry::Get().Find("spark.daemon.auto_spawn"))
+                a->SetFromString(prevAutoSpawn ? "1" : "0");
+            if (auto* b = Spark::CVarRegistry::Get().Find("spark.daemon.binary_path"))
+                b->SetFromString(prevBinary);
         }
     };
 
@@ -118,7 +155,9 @@ namespace
                 server->Stop();
             if (thread.joinable())
                 thread.join();
+#if !defined(_WIN32)
             ::unlink(sockPath.c_str());
+#endif
         }
     };
 } // namespace
@@ -141,7 +180,7 @@ TEST(DaemonLifecycle_DisabledByDefaultDoesNothing)
 
 TEST(DaemonLifecycle_WithMissingSocketIsNoop)
 {
-    DaemonCVarGuard cvars(/*enable*/ true, /*socketPath*/ "/tmp/spark-does-not-exist-lc.sock");
+    DaemonCVarGuard cvars(/*enable*/ true, UniqueLifecyclePath("does-not-exist"));
 
     Spark::Daemon::ShutdownDaemonLifecycle();
     Spark::Daemon::InitializeDaemonLifecycle();
@@ -151,6 +190,30 @@ TEST(DaemonLifecycle_WithMissingSocketIsNoop)
 
     Spark::Daemon::ShutdownDaemonLifecycle();
 }
+
+#if defined(SPARK_TEST_DAEMON_PATH)
+TEST(DaemonLifecycle_AutoSpawnConnectsToDetachedDaemon)
+{
+    const std::string socketPath = UniqueLifecyclePath("auto-spawn");
+    DaemonCVarGuard cvars(/*enable*/ true, socketPath, /*autoSpawn*/ true, SPARK_TEST_DAEMON_PATH);
+
+    Spark::Daemon::ShutdownDaemonLifecycle();
+    Spark::Daemon::InitializeDaemonLifecycle();
+
+    auto& connection = Spark::Daemon::DaemonConnection::Instance();
+    EXPECT_TRUE(connection.IsConnected());
+    if (auto* client = connection.GetClient())
+    {
+        auto shutdown = client->Request(Spark::Daemon::ServiceId::Control,
+                                        static_cast<uint16_t>(Spark::Daemon::ControlMessage::ShutdownRequest), {});
+        EXPECT_TRUE(shutdown.has_value());
+        if (shutdown)
+            EXPECT_EQ(shutdown->messageType, static_cast<uint16_t>(Spark::Daemon::ControlMessage::ShutdownAck));
+    }
+
+    Spark::Daemon::ShutdownDaemonLifecycle();
+}
+#endif
 
 TEST(DaemonLifecycle_AttachesShaderClientWhenDaemonAvailable)
 {
@@ -383,4 +446,4 @@ TEST(DaemonLifecycle_ClearOnStartupDisabledLeavesCachesAlone)
     Spark::Daemon::ShutdownDaemonLifecycle();
 }
 
-#endif // POSIX
+#endif // supported local IPC platforms

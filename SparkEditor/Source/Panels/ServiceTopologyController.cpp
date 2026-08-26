@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 #include <string_view>
 
@@ -206,5 +207,23 @@ namespace SparkEditor
     std::vector<std::string> ServiceTopologyController::OrchestratorStatusArguments(std::string endpoint)
     {
         return {"--socket", std::move(endpoint), "list"};
+    }
+
+    std::vector<std::string> ServiceTopologyController::OrchestratorDefineArguments(
+        std::string endpoint, std::string processId, const std::filesystem::path& executable,
+        const std::filesystem::path& workingDirectory, std::vector<std::string> processArguments)
+    {
+        std::vector<std::string> arguments = {"--socket",           std::move(endpoint), "define",
+                                              std::move(processId), executable.string(), workingDirectory.string()};
+        arguments.insert(arguments.end(), std::make_move_iterator(processArguments.begin()),
+                         std::make_move_iterator(processArguments.end()));
+        return arguments;
+    }
+
+    std::vector<std::string> ServiceTopologyController::OrchestratorMutationArguments(std::string endpoint,
+                                                                                      std::string command,
+                                                                                      std::string processId)
+    {
+        return {"--socket", std::move(endpoint), std::move(command), std::move(processId)};
     }
 } // namespace SparkEditor

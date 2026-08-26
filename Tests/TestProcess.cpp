@@ -9,6 +9,7 @@
 #include "TestFramework.h"
 #include "Utils/Process.h"
 #include "Utils/ProcessPipeBuffer.h"
+#include "Utils/ProcessWin32JobPolicy.h"
 
 #include <chrono>
 #include <filesystem>
@@ -36,6 +37,12 @@ TEST(ProcessPipeBuffer_BoundsUnterminatedLinesAndPerCallDrain)
     EXPECT_EQ(RemainingReadCapacity(0, 0), MaxPipeDrainBytesPerCall);
     EXPECT_EQ(RemainingReadCapacity(MaxBufferedLineBytes, 0), static_cast<size_t>(0));
     EXPECT_EQ(RemainingReadCapacity(0, MaxPipeDrainBytesPerCall), static_cast<size_t>(0));
+}
+
+TEST(ProcessWin32JobPolicy_DetachedChildrenOutliveLauncher)
+{
+    EXPECT_TRUE(Spark::ProcessDetail::ShouldAssignToKillOnCloseJob(/*detached*/ false));
+    EXPECT_FALSE(Spark::ProcessDetail::ShouldAssignToKillOnCloseJob(/*detached*/ true));
 }
 
 #if defined(__APPLE__)

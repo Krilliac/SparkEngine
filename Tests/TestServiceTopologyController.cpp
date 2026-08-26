@@ -36,6 +36,28 @@ TEST(ServiceTopologyController_ConstructsOrchestratorStatusCommand)
     EXPECT_EQ(arguments[2], std::string("list"));
 }
 
+TEST(ServiceTopologyController_ConstructsOrchestratorServerLifecycleCommands)
+{
+    const auto define = ServiceTopologyController::OrchestratorDefineArguments(
+        "spark-daemon-test", "area-town", "D:/Spark/bin/SparkServer.exe", "D:/Projects/Game",
+        {"--config", "D:/Projects/Game/Config/server.ini"});
+    EXPECT_EQ(define.size(), static_cast<size_t>(8));
+    EXPECT_EQ(define[2], std::string("define"));
+    EXPECT_EQ(define[3], std::string("area-town"));
+    EXPECT_EQ(define[4], std::string("D:/Spark/bin/SparkServer.exe"));
+    EXPECT_EQ(define[5], std::string("D:/Projects/Game"));
+    EXPECT_EQ(define[6], std::string("--config"));
+
+    for (const std::string command : {"start", "drain", "restart", "stop", "undefine"})
+    {
+        const auto mutation =
+            ServiceTopologyController::OrchestratorMutationArguments("spark-daemon-test", command, "area-town");
+        EXPECT_EQ(mutation.size(), static_cast<size_t>(4));
+        EXPECT_EQ(mutation[2], command);
+        EXPECT_EQ(mutation[3], std::string("area-town"));
+    }
+}
+
 TEST(ServiceTopologyController_BoundsRetainedProcessOutput)
 {
     TopologyServiceSnapshot snapshot;
@@ -90,8 +112,7 @@ TEST(ServiceTopologyController_CapsHealthFileBeforeReading)
     fs::create_directories(root);
     const fs::path health = root / "health.json";
 
-    std::ofstream(health, std::ios::binary)
-        << std::string(ServiceTopologyController::MaxHealthFileBytes + 1, 'x');
+    std::ofstream(health, std::ios::binary) << std::string(ServiceTopologyController::MaxHealthFileBytes + 1, 'x');
     std::string contents = "stale";
     EXPECT_FALSE(ServiceTopologyController::ReadHealthFile(health, contents));
     EXPECT_TRUE(contents.empty());

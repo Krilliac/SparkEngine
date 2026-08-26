@@ -25,6 +25,17 @@ SDK_SRC="$PROJECT_ROOT/SparkSDK"
 TEST_DIR="$PROJECT_ROOT/Tests"
 SHADER_DIR="$PROJECT_ROOT/Shaders"
 
+if python3 -c 'import sys' >/dev/null 2>&1; then
+    PYTHON=(python3)
+elif python -c 'import sys' >/dev/null 2>&1; then
+    PYTHON=(python)
+elif py -3 -c 'import sys' >/dev/null 2>&1; then
+    PYTHON=(py -3)
+else
+    echo "Python 3 is required to collect deterministic codebase metrics" >&2
+    exit 1
+fi
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -42,7 +53,7 @@ log_warning() { echo -e "${YELLOW}[STATS]${NC} $1"; }
 count_lines() {
     local dir="$1"
     if [ -d "$dir" ]; then
-        find "$dir" -name '*.h' -o -name '*.hpp' -o -name '*.cpp' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}'
+        "${PYTHON[@]}" -c 'import pathlib,sys; root=pathlib.Path(sys.argv[1]); suffixes={".h",".hpp",".cpp"}; print(sum(path.read_bytes().count(b"\n") for path in root.rglob("*") if path.is_file() and not path.is_symlink() and path.suffix.lower() in suffixes))' "$dir"
     else
         echo "0"
     fi
@@ -65,7 +76,7 @@ count_cpp() { count_files "$1" "cpp"; }
 engine_subsystem_lines() {
     local subdir="$SRC/$1"
     if [ -d "$subdir" ]; then
-        find "$subdir" -name '*.h' -o -name '*.cpp' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}'
+        count_lines "$subdir"
     else
         echo "0"
     fi
@@ -91,22 +102,26 @@ format_number() {
 collect_metrics() {
     log_info "Scanning codebase..."
 
-    # Line counts per module
-    LINES_ENGINE=$(count_lines "$SRC")
-    LINES_EDITOR=$(count_lines "$EDITOR_SRC")
-    LINES_GAME=$(count_lines "$GAME_SRC")
-    LINES_TESTS=$(count_lines "$TEST_DIR")
+    # Use the same bounded, symlink-safe collector as README badges and CI.
+    # This avoids xargs command-line batching changing totals across platforms.
+    eval "$("${PYTHON[@]}" "$PROJECT_ROOT/docs/codebase-metrics.py" --shell)"
+    LINES_ENGINE="$ENGINE_LINES"
+    LINES_EDITOR="$EDITOR_LINES"
+    LINES_GAME="$GAME_LINES"
+    LINES_SERVICES="$SERVICES_LINES"
+    LINES_PIPELINE="$PIPELINE_LINES"
+    LINES_TESTS="$TEST_LINES"
     LINES_CONSOLE=$(count_lines "$CONSOLE_SRC")
     LINES_SHADER_COMPILER=$(count_lines "$SHADER_SRC")
-    LINES_TOTAL=$((LINES_ENGINE + LINES_EDITOR + LINES_GAME + LINES_TESTS + LINES_CONSOLE + LINES_SHADER_COMPILER))
+    LINES_TOTAL="$TOTAL_LINES"
 
     # File counts
     TOTAL_H=$(find "$SRC" "$EDITOR_SRC" "$CONSOLE_SRC" "$GAME_SRC" "$SHADER_SRC" "$SDK_SRC" "$TEST_DIR" -name '*.h' -o -name '*.hpp' 2>/dev/null | wc -l | tr -d " ")
     TOTAL_CPP=$(find "$SRC" "$EDITOR_SRC" "$CONSOLE_SRC" "$GAME_SRC" "$SHADER_SRC" "$TEST_DIR" -name '*.cpp' 2>/dev/null | wc -l | tr -d " ")
     HLSL_COUNT=$(find "$SHADER_DIR" -name '*.hlsl' 2>/dev/null | wc -l | tr -d " ")
     GLSL_COUNT=$(find "$SHADER_DIR" -name '*.glsl' 2>/dev/null | wc -l | tr -d " ")
-    TEST_FILE_COUNT=$(find "$TEST_DIR" -name 'Test*.cpp' 2>/dev/null | wc -l | tr -d " ")
-    TEST_CASE_COUNT=$(grep -rh '^TEST(' "$TEST_DIR"/*.cpp 2>/dev/null | wc -l | tr -d " ")
+    TEST_FILE_COUNT="$TEST_FILES"
+    TEST_CASE_COUNT="$TEST_DEFINITIONS"
     WIKI_COUNT=$(find "$WIKI_DIR" -name '*.md' ! -name '_Sidebar.md' 2>/dev/null | wc -l | tr -d " ")
     AS_COUNT=$(find "$PROJECT_ROOT/Assets" -name '*.as' 2>/dev/null | wc -l | tr -d " ")
 
@@ -171,7 +186,7 @@ collect_metrics() {
 # ============================================================================
 generate_page() {
     local today
-    today=$(date +%Y-%m-%d)
+    today="${GENERATED_DATE:-$(date -u +%Y-%m-%d)}"
 
     cat << HEREDOC
 # Codebase Statistics
@@ -187,6 +202,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated ${today}
 | **SparkEngine/Source** | $(format_number "$LINES_ENGINE") |
 | **SparkEditor/Source** | $(format_number "$LINES_EDITOR") |
 | **GameModules** | $(format_number "$LINES_GAME") |
+| **External services** | $(format_number "$LINES_SERVICES") |
+| **Asset pipeline** | $(format_number "$LINES_PIPELINE") |
 | **Tests** | $(format_number "$LINES_TESTS") |
 | **SparkConsole/src** | $(format_number "$LINES_CONSOLE") |
 | **SparkShaderCompiler/src** | $(format_number "$LINES_SHADER_COMPILER") |
@@ -379,7 +396,9 @@ check_mode() {
     collect_metrics
     local tmpout
     tmpout=$(mktemp)
-    generate_page > "$tmpout"
+    local existing_date
+    existing_date=$(sed -n 's/^Comprehensive metrics and analysis of the SparkEngine codebase\. Updated \([0-9-]*\)\.$/\1/p' "$OUTPUT" | head -n 1)
+    GENERATED_DATE="${existing_date:-$(date -u +%Y-%m-%d)}" generate_page > "$tmpout"
     local new_hash
     new_hash=$(md5sum "$tmpout" | awk '{ print $1 }')
     rm -f "$tmpout"

@@ -43,12 +43,53 @@ jobs:
     - name: Test Spark CLI
       run: python3 -m unittest discover -s Tools/spark-cli/tests -p "test_*.py" -v
 
-    - name: Verify generated repository and wiki statistics
+    - name: Verify every test source is registered
+      run: bash Tools/check-test-registration.sh
+
+    - name: Validate model and template asset contracts
+      run: python3 Tools/model_pipeline/validate_models.py --repo-root .
+
+    - name: Validate publishable wiki output
+      run: python3 Tools/publish-wiki.py --check
+
+    - name: Verify all generated documentation and statistics
+      id: generated-docs
       if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+      env:
+        LC_ALL: C.UTF-8
+        TZ: UTC
       run: |
-        bash docs/update-readme-badges.sh check
-        bash docs/update-codebase-stats.sh check
-        bash docs/sync-wiki.sh check
+        set -uo pipefail
+        bash docs/update-all-docs.sh check 2>&1 | tee generated-docs-check.log
+        status=${PIPESTATUS[0]}
+
+        {
+          echo "### Generated documentation gate"
+          echo
+          if test "$status" -eq 0; then
+            echo "All generated API references, indexes, diagrams, wiki inventories, codebase statistics, badges, and AI context are current."
+          else
+            echo "Generated content drift was detected. Run \`bash docs/update-all-docs.sh\`, review the changes, and commit the generated outputs."
+          fi
+          echo
+          echo "<details><summary>Check output</summary>"
+          echo
+          echo '```text'
+          cat generated-docs-check.log
+          echo '```'
+          echo "</details>"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        exit "$status"
+
+    - name: Upload generated documentation check log
+      if: always() && steps.generated-docs.outcome != 'skipped'
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: generated-docs-check-${{ github.run_attempt }}
+        path: generated-docs-check.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: error
 
   # ===========================================================================
   # Code Quality — clang-format enforcement
@@ -459,7 +500,9 @@ jobs:
       shell: bash
       run: |
         set -o pipefail
-        ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel 2>&1 | tee test-results.log
+        ctest --test-dir build -C ${{ matrix.config }} \
+          --output-on-failure --parallel 2 \
+          --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log
 
     - name: Validate and summarize test statistics
       if: always() && matrix.config == 'Release'
@@ -478,6 +521,7 @@ jobs:
         name: test-results-windows-vs2022-release
         path: |
           build/SparkTests-junit.xml
+          build/ctest-junit.xml
           test-stats-windows-vs2022-release.json
           test-results.log
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -574,7 +618,10 @@ jobs:
 
     - name: Run Tests
       if: matrix.config == 'Release'
-      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel
+      run: >-
+        ctest --test-dir build -C ${{ matrix.config }}
+        --output-on-failure --parallel 2
+        --output-junit build/ctest-junit.xml
 
     - name: Validate and summarize test statistics
       if: always() && matrix.config == 'Release'
@@ -592,6 +639,7 @@ jobs:
         name: test-results-windows-vs2026-release
         path: |
           build/SparkTests-junit.xml
+          build/ctest-junit.xml
           test-stats-windows-vs2026-release.json
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
         if-no-files-found: error
@@ -667,7 +715,9 @@ jobs:
     - name: Run Tests
       run: |
         set -o pipefail
-        cd build && ./bin/SparkTests --junit-xml SparkTests-junit.xml 2>&1 | tee ../test-results.log
+        ctest --test-dir build -C ${{ matrix.config }} \
+          --output-on-failure --parallel 2 \
+          --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log
 
     - name: Validate and summarize test statistics
       if: always()
@@ -685,6 +735,7 @@ jobs:
         name: test-results-linux-gcc-${{ matrix.config }}
         path: |
           build/SparkTests-junit.xml
+          build/ctest-junit.xml
           test-stats-linux-gcc-${{ matrix.config }}.json
           test-results.log
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -810,7 +861,9 @@ jobs:
     - name: Run Tests
       run: |
         set -o pipefail
-        cd build && ./bin/SparkTests --junit-xml SparkTests-junit.xml 2>&1 | tee ../test-results.log
+        ctest --test-dir build -C ${{ matrix.config }} \
+          --output-on-failure --parallel 2 \
+          --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log
 
     - name: Validate and summarize test statistics
       if: always()
@@ -828,6 +881,7 @@ jobs:
         name: test-results-linux-clang-${{ matrix.config }}
         path: |
           build/SparkTests-junit.xml
+          build/ctest-junit.xml
           test-stats-linux-clang-${{ matrix.config }}.json
           test-results.log
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -1064,7 +1118,9 @@ jobs:
       if: matrix.config == 'Release'
       run: |
         set -o pipefail
-        cd build && ./bin/SparkTests --junit-xml SparkTests-junit.xml 2>&1 | tee ../test-results.log
+        ctest --test-dir build -C ${{ matrix.config }} \
+          --output-on-failure --parallel 2 \
+          --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log
 
     - name: Validate and summarize test statistics
       if: always() && matrix.config == 'Release'
@@ -1082,6 +1138,7 @@ jobs:
         name: test-results-macos-${{ matrix.backend }}-release
         path: |
           build/SparkTests-junit.xml
+          build/ctest-junit.xml
           test-stats-macos-${{ matrix.backend }}-release.json
           test-results.log
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}

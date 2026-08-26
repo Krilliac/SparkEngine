@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace SparkEditor
 {
@@ -24,9 +25,12 @@ namespace SparkEditor
 
       private:
         void ConfigureController();
+        void RunOrchestrator(std::vector<std::string> arguments);
         std::unique_ptr<ServiceTopologyController> m_controller;
         std::string m_daemonEndpoint = ".spark-daemon.sock";
         std::string m_collabEndpoint = ".spark-collab.sock";
         std::string m_gatewayConfig = "Config/gateway.ini";
+        std::string m_serverConfig = "Config/server.ini";
+        std::string m_serverId = "local-area";
     };
 } // namespace SparkEditor

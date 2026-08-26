@@ -114,6 +114,19 @@ The service bounds every wire field, issues expiring capabilities, and owns
 presence, node locks, and edit history. Compromise or overload of a collaboration
 session therefore does not grant cache or process-supervision authority.
 
+In SparkEditor, open **Collaboration**, keep **Use standalone
+SparkCollabServer** selected, and enter the same endpoint plus a stable project
+session ID. **Create Broker Session** creates the capability-protected session;
+other editor instances use **Join Broker Session**. Existing hierarchy edits,
+selection presence, viewport peer overlays, lock indicators, and callbacks all
+flow through the broker-backed `CollaborativeEditSession` path. Direct
+peer-hosted TCP is retained only as an explicit fallback.
+
+CTest's `SparkCollabProcessSmoke` launches the real broker executable, waits for
+IPC readiness, connects two production clients, exercises presence, locking,
+ordered edits and snapshots, then requests and verifies graceful process
+shutdown.
+
 ## Operational checks
 
 The editor's Service Topology panel generates start/status/stop commands without

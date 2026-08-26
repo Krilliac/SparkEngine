@@ -43,6 +43,9 @@ namespace SparkEditor
         char m_hostAddressBuffer[128] = "127.0.0.1";
         int m_portValue = 27030;
         char m_userNameBuffer[64] = "Editor";
+        bool m_useStandaloneBroker = true;
+        char m_brokerEndpointBuffer[128] = ".spark-collab.sock";
+        char m_brokerSessionBuffer[65] = "default";
         std::string m_statusMessage;
 
         // Edit log (ring buffer of recent edits)

@@ -5,23 +5,28 @@ SparkEngine's collaborative editing system enables multiple editor instances to 
 ## Architecture
 
 ```
-[Editor A] ◄──── TCP ────► [CollaborativeEditSession Host] ◄──── TCP ────► [Editor B]
-                               │  Node Locking                                  │
-                               │  Edit Broadcasting                              │
-                               │  Presence Awareness                             │
-                               │                                                 │
-                               └──── LiveEditBridge (optional) ──────────────────┘
-                                              │
-                                      [AreaServer]
-                                              │
-                                      [Game Clients see changes]
+[Editor A] ── local IPC ──► [SparkCollabServer] ◄── local IPC ── [Editor B]
+       │                     presence / locks / edits                  │
+       └──────── CollaborativeEditSession editor API ─────────────────┘
+                                  │
+                         LiveEditBridge (optional)
+                                  │
+                            [AreaServer]
 ```
+
+`SparkCollabServer` is the production authority. The editor's existing
+`CollaborativeEditSession` API translates selection, camera presence, node
+locks, and serialized `EditMessage` objects through
+`StandaloneCollaborationClient`, so hierarchy and viewport callers do not need
+a second collaboration API. The older direct TCP peer-hosted mode remains
+available as an explicit fallback for ad-hoc sessions.
 
 ### Three Layers
 
 | Layer | System | Purpose |
 |-------|--------|---------|
-| **Editor Collaboration** | `CollaborativeEditSession` | Peer-to-peer editing between editor instances |
+| **Editor Collaboration** | `CollaborativeEditSession` + `StandaloneCollaborationClient` | Editor API backed by the standalone broker (or explicit peer fallback) |
+| **Collaboration Authority** | `SparkCollabServer` | Capability-authenticated presence, locks, ordered edit history, and snapshots |
 | **Editor ↔ Engine IPC** | `EngineInterface` | Named pipe communication with local engine process |
 | **Live Push** | `LiveEditBridge` | Forward edits to a running AreaServer for live game updates |
 
@@ -40,11 +45,12 @@ The C++ code examples below are **internal API reference** showing how the edito
 
 ## How to Use (No Code Needed)
 
-1. Open the **Collaboration** panel from **View > Collaboration**
-2. One editor clicks **Host Session** (sets port and username)
-3. Other editors enter the host's IP address and click **Join Session**
-4. Edit the scene normally — locking, broadcasting, and presence are automatic
-5. For persistent sessions without tying up an editor, run a **headless collab server** (see below)
+1. Start `SparkCollabServer --socket spark-collab-project-a` (the Service Topology panel can start it).
+2. Open the **Collaboration** panel from **View > Collaboration**.
+3. Leave **Use standalone SparkCollabServer** enabled and enter the matching endpoint and a project session ID.
+4. One editor clicks **Create Broker Session**; other editors click **Join Broker Session**.
+5. Edit the scene normally — locking, broadcasting, and presence are automatic.
+6. Disconnecting an editor releases its capabilities and locks without stopping the broker.
 
 ## Internal API Reference
 
@@ -127,26 +133,24 @@ session.SetLockChangedCallback([](const std::string& nodeId, SparkEditor::PeerID
 });
 ```
 
-## Headless Collab Server Mode
+## Standalone Collaboration Broker
 
-The editor can run as a dedicated headless collaboration server without a GUI:
+Run the isolated production broker without a GUI:
 
 ```bash
-# Basic usage
-SparkEditor --collab-server
-
-# With custom port and name
-SparkEditor --collab-server --collab-port 27030 --collab-name "TeamServer"
+SparkCollabServer --socket spark-collab-project-a
 ```
 
 This mode:
-- Starts a TCP listener on the specified port
-- Accepts editor connections and relays messages between them
-- Runs at 10 Hz with periodic status output
-- Handles Ctrl+C for graceful shutdown
-- Does not create a window or initialize graphics
+- Uses an owner-local Windows named pipe or POSIX Unix-domain socket
+- Authenticates each peer with an expiring capability token
+- Arbitrates node locks and retains bounded, ordered edit history
+- Serves canonical peer/lock/edit snapshots to every connected editor
+- Supports graceful shutdown through the shared control protocol
 
-Use this for persistent team collaboration sessions where you don't want one editor to be the host.
+The Collaboration panel defaults to this path. Uncheck **Use standalone
+SparkCollabServer** only when you intentionally want the legacy peer-hosted TCP
+mode.
 
 ## Live Push to Running Games
 
@@ -258,14 +262,19 @@ auto stats = session.GetStats();
 
 | File | Description |
 |------|-------------|
-| `SparkEditor/Source/Communication/CollaborativeEditSession.h` | Session class, types, wire protocol |
-| `SparkEditor/Source/Communication/CollaborativeEditSession.cpp` | Session implementation with TCP networking |
+| `SparkEditor/Source/Communication/CollaborativeEditSession.h` | Stable editor-facing session API and broker/peer mode ownership |
+| `SparkEditor/Source/Communication/CollaborativeEditSession.cpp` | Editor translation, snapshots, callbacks, and legacy TCP fallback |
+| `SparkEditor/Source/Communication/StandaloneCollaborationClient.*` | Typed production client for the broker protocol |
+| `SparkDaemon/src/CollaborationProtocol.h` | Bounded versioned collaboration wire DTOs and codecs |
+| `SparkDaemon/src/CollaborationService.*` | Authoritative presence, lock, and edit-history service |
+| `SparkDaemon/src/CollabServerMain.cpp` | Standalone process entry point |
 | `SparkEditor/Source/Communication/LiveEditBridge.h` | Live push bridge to AreaServer |
 | `SparkEditor/Source/Communication/LiveEditBridge.cpp` | Bridge implementation |
 | `SparkEditor/Source/Panels/CollaborationPanel.h` | Collaboration UI panel |
 | `SparkEditor/Source/Panels/CollaborationPanel.cpp` | Panel implementation |
 | `SparkEditor/Source/main.cpp` | `--collab-server` CLI mode |
 | `Tests/TestCollaborativeEditing.cpp` | Unit tests |
+| `SparkDaemon/tests/CollabProcessSmoke.cpp` | Black-box process/client startup, operation, and shutdown smoke test |
 
 ## Related Pages
 

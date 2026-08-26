@@ -36,6 +36,18 @@ log_info()    { echo -e "${BLUE}[FLOWCHART]${NC} $1"; }
 log_success() { echo -e "${GREEN}[FLOWCHART]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[FLOWCHART]${NC} $1"; }
 
+find_python() {
+    local candidate
+    for candidate in "${PYTHON:-}" python3 python py; do
+        [ -n "$candidate" ] || continue
+        if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "import sys" >/dev/null 2>&1; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # ============================================================================
 # Scan functions - extract live data from the codebase
 # ============================================================================
@@ -115,7 +127,12 @@ generate() {
 
     log_info "Generating $OUTPUT ..."
 
-    python3 "$SCRIPT_DIR/generate-flowchart-content.py"         --output "$OUTPUT"         --headers "$n_headers"         --sources "$n_cpp"         --components "$n_components"         --systems "$n_systems"         --panels "$n_panels"         --backends "$backends"         --modules "$modules"         --project-root "$PROJECT_ROOT"
+    local python_executable
+    if ! python_executable=$(find_python); then
+        log_warning "Python 3 is required; set PYTHON to a working interpreter"
+        return 1
+    fi
+    "$python_executable" "$SCRIPT_DIR/generate-flowchart-content.py"         --output "$OUTPUT"         --headers "$n_headers"         --sources "$n_cpp"         --components "$n_components"         --systems "$n_systems"         --panels "$n_panels"         --backends "$backends"         --modules "$modules"         --project-root "$PROJECT_ROOT"
 
     log_success "Generated $OUTPUT"
 }

@@ -46,6 +46,7 @@ endif()
 target_include_directories(SparkEditor PRIVATE
     "Source"
     "${CMAKE_SOURCE_DIR}/Shared"
+    "${CMAKE_SOURCE_DIR}/SparkDaemon/src"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
     "${CMAKE_SOURCE_DIR}/SparkSDK/Include"
 )

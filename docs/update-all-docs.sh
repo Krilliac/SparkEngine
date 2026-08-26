@@ -84,13 +84,10 @@ update_all() {
     # 1. Wiki sync (updates AUTO: sections — must run first so other scripts see fresh data)
     run_script "Wiki Sync" "$SCRIPT_DIR/sync-wiki.sh" "sync"
 
-    # 2. API docs (slow — checksum-based skip if unchanged)
+    # 2. API docs. docs/api is intentionally ignored, so a clean checkout must
+    # generate it before the tracked symbol and hierarchy indexes can refresh.
     if [ "$skip_slow" = "false" ]; then
-        run_script "API Docs" "$SCRIPT_DIR/generate-api-docs.sh" "check"
-        # Only regenerate if check failed (out of date)
-        if [ $? -ne 0 ] 2>/dev/null; then
-            run_script "API Docs (generate)" "$SCRIPT_DIR/generate-api-docs.sh" "generate"
-        fi
+        run_script "API Docs" "$SCRIPT_DIR/generate-api-docs.sh" "generate"
 
         # 2a. Symbol indexes (fast — pure TSV consumer)
         run_script "Symbol Indexes" "$SCRIPT_DIR/generate-symbol-index.sh" "generate"
@@ -125,8 +122,10 @@ update_all() {
     log_header "Summary"
     if [ "$FAILURES" -eq 0 ]; then
         log_success "All documentation is up to date ($UPDATES scripts ran successfully)"
+        return 0
     else
         log_warning "$FAILURES script(s) had issues, $UPDATES succeeded"
+        return 1
     fi
 }
 
@@ -159,14 +158,17 @@ check_all() {
 
         if [ ! -f "$full_path" ]; then
             log_warning "$name: script not found ($script)"
+            stale=$((stale + 1))
             continue
         fi
 
         echo -ne "${BLUE}[CHECK]${NC} $name... "
-        if bash "$full_path" "$mode" > /dev/null 2>&1; then
+        local check_output
+        if check_output=$(bash "$full_path" "$mode" 2>&1); then
             echo -e "${GREEN}✓ up to date${NC}"
         else
             echo -e "${YELLOW}✗ out of date${NC}"
+            printf '%s\n' "$check_output" | sed 's/^/    /'
             stale=$((stale + 1))
         fi
     done

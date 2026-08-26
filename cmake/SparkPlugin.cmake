@@ -14,6 +14,36 @@
 
 include_guard(GLOBAL)
 
+# PluginABI.h is the public, installed ABI contract. Derive package metadata
+# from it instead of duplicating version values in CMake, where they can drift
+# from the loader's compile-time constants.
+set(_SPARK_PLUGIN_ABI_HEADER "${SPARK_ENGINE_INCLUDE_DIR}/Spark/PluginABI.h")
+if(NOT EXISTS "${_SPARK_PLUGIN_ABI_HEADER}")
+    message(FATAL_ERROR "SparkPlugin.cmake: missing ABI header ${_SPARK_PLUGIN_ABI_HEADER}")
+endif()
+
+file(STRINGS "${_SPARK_PLUGIN_ABI_HEADER}" _SPARK_PLUGIN_ABI_MAJOR_LINE
+    REGEX "^#define[ \t]+SPARK_PLUGIN_ABI_MAJOR[ \t]+UINT32_C\\([0-9]+\\)")
+file(STRINGS "${_SPARK_PLUGIN_ABI_HEADER}" _SPARK_PLUGIN_ABI_MINOR_LINE
+    REGEX "^#define[ \t]+SPARK_PLUGIN_ABI_MINOR[ \t]+UINT32_C\\([0-9]+\\)")
+file(STRINGS "${_SPARK_PLUGIN_ABI_HEADER}" _SPARK_PLUGIN_ENTRY_POINT_LINE
+    REGEX "^#define[ \t]+SPARK_PLUGIN_ENTRY_POINT[ \t]+\"[^\"]+\"")
+
+string(REGEX MATCH "UINT32_C\\(([0-9]+)\\)" _SPARK_PLUGIN_ABI_MAJOR_MATCH
+    "${_SPARK_PLUGIN_ABI_MAJOR_LINE}")
+set(SPARK_PLUGIN_ABI_MAJOR "${CMAKE_MATCH_1}")
+string(REGEX MATCH "UINT32_C\\(([0-9]+)\\)" _SPARK_PLUGIN_ABI_MINOR_MATCH
+    "${_SPARK_PLUGIN_ABI_MINOR_LINE}")
+set(SPARK_PLUGIN_ABI_MINOR "${CMAKE_MATCH_1}")
+string(REGEX MATCH "\"([^\"]+)\"" _SPARK_PLUGIN_ENTRY_POINT_MATCH
+    "${_SPARK_PLUGIN_ENTRY_POINT_LINE}")
+set(SPARK_PLUGIN_ENTRY_POINT "${CMAKE_MATCH_1}")
+
+if(SPARK_PLUGIN_ABI_MAJOR STREQUAL "" OR SPARK_PLUGIN_ABI_MINOR STREQUAL "" OR
+   SPARK_PLUGIN_ENTRY_POINT STREQUAL "")
+    message(FATAL_ERROR "SparkPlugin.cmake: could not read the plugin ABI contract from ${_SPARK_PLUGIN_ABI_HEADER}")
+endif()
+
 function(spark_add_plugin TARGET_NAME)
     cmake_parse_arguments(SPARK_PLUGIN "" "ID;VERSION;TYPE" "SOURCES;LINK_LIBRARIES" ${ARGN})
     if(NOT SPARK_PLUGIN_ID)
@@ -50,6 +80,9 @@ function(spark_add_plugin TARGET_NAME)
             "-DPLUGIN_ID=${SPARK_PLUGIN_ID}"
             "-DPLUGIN_VERSION=${SPARK_PLUGIN_VERSION}"
             "-DPLUGIN_TYPE=${SPARK_PLUGIN_TYPE}"
+            "-DPLUGIN_ABI_MAJOR=${SPARK_PLUGIN_ABI_MAJOR}"
+            "-DPLUGIN_ABI_MINOR=${SPARK_PLUGIN_ABI_MINOR}"
+            "-DPLUGIN_ENTRY_POINT=${SPARK_PLUGIN_ENTRY_POINT}"
             -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/WriteSparkPluginMetadata.cmake"
         COMMENT "Writing ${TARGET_NAME} deterministic plugin metadata"
         VERBATIM)

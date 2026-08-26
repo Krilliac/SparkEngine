@@ -4,7 +4,7 @@ endif()
 if(NOT DEFINED METADATA_PATH OR METADATA_PATH STREQUAL "")
     message(FATAL_ERROR "WriteSparkPluginMetadata: METADATA_PATH is required")
 endif()
-foreach(_required IN ITEMS PLUGIN_ID PLUGIN_VERSION PLUGIN_TYPE)
+foreach(_required IN ITEMS PLUGIN_ID PLUGIN_VERSION PLUGIN_TYPE PLUGIN_ABI_MAJOR PLUGIN_ABI_MINOR PLUGIN_ENTRY_POINT)
     if(NOT DEFINED ${_required} OR "${${_required}}" STREQUAL "")
         message(FATAL_ERROR "WriteSparkPluginMetadata: ${_required} is required")
     endif()
@@ -25,6 +25,7 @@ _spark_json_escape("${PLUGIN_ID}" _id)
 _spark_json_escape("${PLUGIN_VERSION}" _version)
 _spark_json_escape("${PLUGIN_TYPE}" _type)
 _spark_json_escape("${_binary_name}" _binary)
+_spark_json_escape("${PLUGIN_ENTRY_POINT}" _entry_point)
 
 # Stable key order and LF endings keep packages byte-for-byte reproducible.
 file(WRITE "${METADATA_PATH}"
@@ -33,9 +34,9 @@ file(WRITE "${METADATA_PATH}"
     "  \"id\": \"${_id}\",\n"
     "  \"version\": \"${_version}\",\n"
     "  \"type\": \"${_type}\",\n"
-    "  \"abi_major\": 1,\n"
-    "  \"abi_minor\": 0,\n"
-    "  \"entry_point\": \"SparkGetPluginDescriptor\",\n"
+    "  \"abi_major\": ${PLUGIN_ABI_MAJOR},\n"
+    "  \"abi_minor\": ${PLUGIN_ABI_MINOR},\n"
+    "  \"entry_point\": \"${_entry_point}\",\n"
     "  \"binary\": \"${_binary}\",\n"
     "  \"sha256\": \"${_sha256}\"\n"
     "}\n")

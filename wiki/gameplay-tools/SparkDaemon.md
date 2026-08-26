@@ -211,7 +211,7 @@ Options:
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `--socket <path>` | `./.spark-daemon.sock` | AF_UNIX socket path (perm 0600) |
+| `--socket <path>` | `./.spark-daemon.sock` | Local endpoint: owner-only AF_UNIX socket on POSIX, same-user named pipe on Windows |
 | `--cache-dir <path>` | disabled | Shader cache directory — enables persistence |
 | `--asset-cache-dir <path>` | disabled | Asset cache directory — enables persistence |
 | `--shader-cache-max-mb <N>` | `0` (unbounded) | LRU eviction threshold for the shader service |
@@ -227,18 +227,18 @@ SparkDaemon: asset cache /home/alice/.cache/spark/assets (891 entries loaded)
 ```
 
 On `SIGINT` or `SIGTERM` (or a client's `Control::ShutdownRequest`) it
-exits cleanly, unlinking the socket file.
+exits cleanly, unlinking the POSIX socket file or closing the Windows pipe.
 
 ## Enabling it from the engine
 
-Two CVars control daemon use from the engine side:
+Five CVars control daemon use from the engine side:
 
 | CVar | Default | Purpose |
 |------|---------|---------|
 | `spark.daemon.enabled` | false | Master switch — when false the engine never talks to a daemon |
 | `spark.daemon.socket_path` | empty | Override socket path (empty = `./.spark-daemon.sock`) |
 | `spark.daemon.auto_spawn` | false | If no daemon is running, launch one as a detached subprocess |
-| `spark.daemon.binary_path` | empty | Override path to the `SparkDaemon` executable (empty = `./SparkDaemon`) |
+| `spark.daemon.binary_path` | empty | Override path to the executable (empty = `./SparkDaemon.exe` on Windows, `./SparkDaemon` elsewhere) |
 | `spark.daemon.clear_on_startup` | false | After a successful connect, run `daemon.clear_cache all` — useful when reattaching a daemon that has stale cooked blobs from a previous source tree |
 
 Typical power-user run:
@@ -260,8 +260,10 @@ The engine calls `Spark::Daemon::InitializeDaemonLifecycle()` from
 2. Calls `DaemonConnection::TryConnect(socketPath)`. If successful,
    proceeds to step 4.
 3. If `spark.daemon.auto_spawn` is true, launches `SparkDaemon` as a
-   detached subprocess, waits up to 2 seconds for the socket to
-   appear, then retries connect.
+   detached subprocess, waits up to 2 seconds for its named pipe
+   (Windows) or Unix-domain socket (Linux/macOS) to become ready, then
+   retries connect. Readiness failures include the endpoint and native
+   transport error in the log.
 4. On success, builds a process-wide `ShaderServiceClient` and wires
    it into `GetShaderDiskCache()` via `SetDaemonClient(&client)`.
 5. On failure, logs a warning and returns — engine continues with
@@ -313,7 +315,10 @@ The pattern is established by `ShaderService` (Phase 2) and
 
 Windows targets are built by `SparkDaemon/CMakeLists.txt`. The server uses
 same-user local named pipes and the engine client connects through
-`DaemonClient`; Unix platforms use owner-restricted domain sockets.
+`DaemonClient`; Unix platforms use owner-restricted domain sockets. An
+auto-spawned daemon is deliberately detached from the launching engine's
+kill-on-close process group, so closing the editor does not terminate the
+shared daemon.
 
 ## Console commands
 
@@ -341,6 +346,11 @@ ls -l /tmp/spark-daemon.sock
 
 Live socket = daemon is up. Missing socket = either it crashed or it
 was never started.
+
+On Windows the endpoint is a named pipe rather than a file. Use
+`daemon.stats` from an engine/editor console for a transport-independent
+health check; auto-spawn diagnostics report the normalized endpoint and
+Win32 error when the pipe does not become ready.
 
 ### Is the engine using it?
 
@@ -395,13 +405,14 @@ client.Request(ServiceId::Control,
 
 From the shell: `kill -TERM $(pgrep -f SparkDaemon)`.
 
-Both unlink the socket file on exit.
+Both release the local IPC endpoint on exit.
 
 ### When things go wrong
 
-- **Engine logs "Daemon requested but unreachable":** socket path is
-  wrong or daemon isn't running. Check `spark.daemon.socket_path` and
-  `ls /tmp/spark-daemon.sock` (or whatever path is set).
+- **Engine logs "Daemon requested but unreachable":** endpoint is wrong
+  or the daemon isn't running. Check `spark.daemon.socket_path`; on POSIX,
+  inspect the socket file, and on Windows inspect the preceding named-pipe
+  readiness diagnostic.
 - **Daemon launches but engine can't connect:** check the socket path
   matches on both sides. The daemon's CWD determines where
   `.spark-daemon.sock` lives if no `--socket` is passed.

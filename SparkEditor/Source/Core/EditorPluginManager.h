@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "Core/DynamicPluginHost.h"
 #include "EditorPanel.h"
 #include <cstdint>
 #include "IEditorPlugin.h"
@@ -25,17 +26,7 @@ namespace SparkEditor
 
     struct PluginDeleter
     {
-        DestroyEditorPluginFn destroyFn = nullptr;
-
-        void operator()(IEditorPlugin* plugin) const
-        {
-            if (!plugin)
-                return;
-            if (destroyFn)
-                destroyFn(plugin);
-            else
-                delete plugin;
-        }
+        void operator()(IEditorPlugin* plugin) const { delete plugin; }
     };
 
     using EditorPluginPtr = std::unique_ptr<IEditorPlugin, PluginDeleter>;
@@ -47,8 +38,15 @@ namespace SparkEditor
     {
         EditorPluginPtr plugin;
         bool isInitialized = false;
-        bool isFromDLL = false;
-        void* libraryHandle = nullptr;
+    };
+
+    /** @brief Stable-C-ABI editor extension owned by DynamicPluginHost. */
+    struct DynamicPluginEntry
+    {
+        std::unique_ptr<Spark::DynamicPluginHost> host;
+        std::string id;
+        std::string name;
+        std::string version;
     };
 
     /**
@@ -81,11 +79,15 @@ namespace SparkEditor
         {
             static_assert(std::is_base_of_v<IEditorPlugin, T>, "T must derive from IEditorPlugin");
             EditorPluginPtr plugin(new T(), PluginDeleter{});
-            return RegisterPluginInstance(std::move(plugin), /*isFromDLL=*/false, /*handle=*/nullptr);
+            return RegisterPluginInstance(std::move(plugin));
         }
 
         /**
-         * @brief Load a plugin from a shared library (DLL/.so/.dylib)
+         * @brief Load a stable-C-ABI editor extension from a shared library
+         *
+         * The library must export SparkGetPluginDescriptor, advertise
+         * SPARK_PLUGIN_CAP_EDITOR_EXTENSION, and have valid sibling
+         * .sparkplugin.json metadata. C++ vtables never cross this boundary.
          * @param path Path to the plugin shared library
          * @return true if loading and registration succeeded
          */
@@ -106,6 +108,9 @@ namespace SparkEditor
          * @return Pointer to the plugin, or nullptr if not found
          */
         IEditorPlugin* GetPlugin(const std::string& name) const;
+
+        /** @brief Query a loaded stable-C-ABI plugin descriptor by name or ID. */
+        const SparkPluginDescriptor* GetDynamicPluginDescriptor(const std::string& nameOrId) const;
 
         /**
          * @brief Get the number of registered plugins
@@ -198,7 +203,7 @@ namespace SparkEditor
         /**
          * @brief Internal helper to register a plugin instance
          */
-        bool RegisterPluginInstance(EditorPluginPtr plugin, bool isFromDLL, void* libraryHandle);
+        bool RegisterPluginInstance(EditorPluginPtr plugin);
 
         /**
          * @brief Find a plugin entry by name
@@ -207,19 +212,19 @@ namespace SparkEditor
         std::vector<PluginEntry>::iterator FindPlugin(const std::string& name);
         std::vector<PluginEntry>::const_iterator FindPlugin(const std::string& name) const;
 
-        /**
-         * @brief Unload a DLL handle in a platform-specific way
-         */
-        static void UnloadLibrary(void* handle);
-
         /// Shut down and destroy every panel registered while @p pluginName
         /// was initializing. Must run before unloading that plugin's library.
         void ReleasePanelsForPlugin(const std::string& pluginName);
 
+        std::vector<DynamicPluginEntry>::iterator FindDynamicPlugin(const std::string& nameOrId);
+        std::vector<DynamicPluginEntry>::const_iterator FindDynamicPlugin(const std::string& nameOrId) const;
+
         std::vector<PluginEntry> m_plugins;
+        std::vector<DynamicPluginEntry> m_dynamicPlugins;
         std::vector<std::unique_ptr<EditorPanel>> m_registeredPanels;
         std::vector<std::string> m_registeredPanelOwners;
         std::string m_registeringPlugin;
+        bool m_lifecycleInitialized = false;
     };
 
 } // namespace SparkEditor

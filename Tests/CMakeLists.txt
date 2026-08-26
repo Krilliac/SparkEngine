@@ -6,6 +6,30 @@ cmake_minimum_required(VERSION 3.25)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(TARGET SparkCollabServer AND TARGET SparkEngineLib)
+    add_executable(SparkCollabProcessSmoke
+        "${CMAKE_SOURCE_DIR}/SparkDaemon/tests/CollabProcessSmoke.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/StandaloneCollaborationClient.cpp"
+    )
+    target_include_directories(SparkCollabProcessSmoke PRIVATE
+        "${CMAKE_SOURCE_DIR}/SparkDaemon/src"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source"
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+    )
+    target_link_libraries(SparkCollabProcessSmoke PRIVATE SparkEngineLib)
+    if(MSVC)
+        target_compile_options(SparkCollabProcessSmoke PRIVATE /W4 /WX /permissive- /EHsc)
+    else()
+        target_compile_options(SparkCollabProcessSmoke PRIVATE -Wall -Wextra -Werror)
+    endif()
+    add_dependencies(SparkCollabProcessSmoke SparkCollabServer)
+    add_test(NAME SparkCollabProcessSmoke
+        COMMAND SparkCollabProcessSmoke "$<TARGET_FILE:SparkCollabServer>")
+    set_tests_properties(SparkCollabProcessSmoke PROPERTIES
+        LABELS "collaboration;integration;process"
+        TIMEOUT 20)
+endif()
+
 # Test executable
 add_executable(SparkTests
     TestMain.cpp
@@ -519,6 +543,8 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/DedicatedServerProcessController.cpp"
     TestServiceTopologyController.cpp
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/ServiceTopologyController.cpp"
+    TestLauncherProcess.cpp
+    "${CMAKE_SOURCE_DIR}/SparkLauncher/src/LauncherProcess.cpp"
     TestCoreAndBuildSystems.cpp
     TestOpenWorldModule.cpp
     TestGameModuleRTS.cpp
@@ -598,6 +624,8 @@ add_executable(SparkTests
     TestEngineInterfaceProtocol.cpp
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/EngineInterface.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSessionBroker.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/StandaloneCollaborationClient.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Workflow/EditorWorkflow.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prototyping/PrototypingSystem.cpp"
@@ -677,6 +705,31 @@ target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_MISMATCHED_MODULE_PATH="$<TARGET_FILE:SparkMismatchedModuleFixture>"
     SPARK_TEST_COMPATIBLE_MODULE_PATH="$<TARGET_FILE:SparkCompatibleModuleFixture>"
     SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH="$<TARGET_FILE:SparkSiblingDependentModuleFixture>")
+
+if(TARGET SparkDaemon)
+    add_dependencies(SparkTests SparkDaemon)
+    target_compile_definitions(SparkTests PRIVATE
+        SPARK_TEST_DAEMON_PATH="$<TARGET_FILE:SparkDaemon>")
+endif()
+
+# Real native images for the stable plugin C ABI. Metadata is produced by the
+# same public helper shipped to SDK consumers, so successful loading also
+# proves that generated ABI fields match Spark/PluginABI.h.
+spark_add_plugin(SparkValidPluginFixture
+    ID "org.sparkengine.test.native-plugin"
+    VERSION "1.0.0"
+    TYPE "editor-extension"
+    SOURCES Fixtures/PluginABI/ValidPlugin.cpp)
+spark_add_plugin(SparkForwardMinorPluginFixture
+    ID "org.sparkengine.test.forward-minor-plugin"
+    VERSION "1.0.0"
+    TYPE "editor-extension"
+    SOURCES Fixtures/PluginABI/ForwardMinorPlugin.cpp)
+
+add_dependencies(SparkTests SparkValidPluginFixture SparkForwardMinorPluginFixture)
+target_compile_definitions(SparkTests PRIVATE
+    SPARK_TEST_VALID_PLUGIN_PATH="$<TARGET_FILE:SparkValidPluginFixture>"
+    SPARK_TEST_FORWARD_MINOR_PLUGIN_PATH="$<TARGET_FILE:SparkForwardMinorPluginFixture>")
 
 # Objective-C++ test sources — only compile when the Metal backend is
 # actually available. SPARK_METAL_AVAILABLE is set by the root CMakeLists

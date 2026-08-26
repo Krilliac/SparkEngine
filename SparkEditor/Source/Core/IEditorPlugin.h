@@ -4,9 +4,9 @@
  * @author Spark Engine Team
  * @date 2025
  *
- * Defines the contract that all editor plugins must implement.
- * Plugins can be registered as built-in types or loaded at runtime
- * from shared libraries via EditorPluginManager.
+ * Defines the in-process C++ contract for editor plugins compiled into the
+ * editor. Runtime shared libraries use Spark/PluginABI.h instead so C++
+ * vtables, exceptions, and allocations never cross a DLL boundary.
  */
 
 #pragma once
@@ -26,9 +26,8 @@ namespace SparkEditor
      * by EditorPluginManager, which handles their lifecycle (init, update,
      * render, shutdown) and provides hooks for editor events.
      *
-     * Built-in plugins can be registered via RegisterPlugin<T>().
-     * External plugins are loaded from DLLs exporting a CreateEditorPlugin()
-     * factory function.
+     * Built-in plugins can be registered via RegisterPlugin<T>(). External
+     * plugins implement the stable C ABI declared by Spark/PluginABI.h.
      */
     class IEditorPlugin
     {
@@ -97,15 +96,5 @@ namespace SparkEditor
          */
         virtual void OnMenuBar() {}
     };
-
-    /**
-     * @brief Factory function signature for DLL-loaded plugins
-     *
-     * External plugin DLLs must export:
-     *   extern "C" IEditorPlugin* CreateEditorPlugin();
-     *   extern "C" void DestroyEditorPlugin(IEditorPlugin*);
-     */
-    using CreateEditorPluginFn = IEditorPlugin* (*)();
-    using DestroyEditorPluginFn = void (*)(IEditorPlugin*);
 
 } // namespace SparkEditor

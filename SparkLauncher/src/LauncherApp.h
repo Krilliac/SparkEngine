@@ -8,6 +8,7 @@
 #pragma once
 
 #include "Core/ProjectManager.h"
+#include "LauncherProcess.h"
 
 #include <memory>
 #include <string>
@@ -45,7 +46,7 @@ namespace SparkLauncher
         void DrawNewProjectTab();
         void LoadTemplates();
         void DefaultNewProjectLocation();
-        bool SpawnEditor(const std::string& projectFilePath);
+        bool SpawnTarget(const std::string& projectFilePath, LaunchTarget target);
 
         std::unique_ptr<SparkEditor::ProjectManager> m_projectManager;
         std::vector<TemplateEntry> m_templates;

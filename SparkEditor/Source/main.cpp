@@ -147,6 +147,7 @@ int main(int argc, char* argv[])
 
     std::string projectPathArg;
     std::string startupTheme;
+    std::string startupPanel;
     std::string saveScenePath; // --save-scene <path>: save seeded World then exit (D2 acceptance)
     std::string openScenePath; // --open-scene <path>: boot directly into a scene, skipping the project browser
 
@@ -185,6 +186,10 @@ int main(int argc, char* argv[])
         else if (strcmp(argv[i], "--theme") == 0 && i + 1 < argc)
         {
             startupTheme = argv[++i];
+        }
+        else if (strcmp(argv[i], "--open-panel") == 0 && i + 1 < argc)
+        {
+            startupPanel = argv[++i];
         }
         else if (strcmp(argv[i], "--save-scene") == 0 && i + 1 < argc)
         {
@@ -313,6 +318,15 @@ int main(int argc, char* argv[])
         }
 
         console.LogSuccess("SparkEditor application initialized successfully");
+
+        if (!startupPanel.empty())
+        {
+            if (SparkEditor::EditorUI* ui = app->GetUI())
+            {
+                ui->SetPanelVisible(startupPanel, true);
+                console.LogInfo("Opened startup panel: " + startupPanel);
+            }
+        }
 
         // --save-scene acceptance path (D2): the seeded World already exists
         // at this point (EditorUI::SetGraphicsDevice ran during Initialize(),

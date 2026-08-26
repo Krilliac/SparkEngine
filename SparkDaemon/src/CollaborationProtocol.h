@@ -212,6 +212,16 @@ namespace Spark::Daemon
         return true;
     }
 
+    inline bool DecodeBoolean(const std::vector<uint8_t>& bytes, bool& value)
+    {
+        Wire::Reader reader(bytes);
+        uint8_t encoded = 0;
+        if (!Wire::ReadVersion(reader) || !reader.Read(encoded) || encoded > 1 || !reader.Finished())
+            return false;
+        value = encoded != 0;
+        return true;
+    }
+
     inline bool EncodeSequence(uint64_t sequence, std::vector<uint8_t>& out)
     {
         Wire::Writer writer;
@@ -219,6 +229,12 @@ namespace Spark::Daemon
         writer.Write(sequence);
         out = writer.Take();
         return true;
+    }
+
+    inline bool DecodeSequence(const std::vector<uint8_t>& bytes, uint64_t& sequence)
+    {
+        Wire::Reader reader(bytes);
+        return Wire::ReadVersion(reader) && reader.Read(sequence) && reader.Finished();
     }
 
     inline bool EncodeSnapshot(const CollaborationSnapshot& snapshot, std::vector<uint8_t>& out)
@@ -253,6 +269,58 @@ namespace Spark::Daemon
                 return false;
         }
         out = writer.Take();
+        return true;
+    }
+
+
+    inline bool DecodeSnapshot(const std::vector<uint8_t>& bytes, CollaborationSnapshot& snapshot,
+                               uint32_t maximumPeers = 1024, uint32_t maximumLocks = 65'536,
+                               uint32_t maximumEdits = 65'536)
+    {
+        Wire::Reader reader(bytes);
+        CollaborationSnapshot decoded;
+        uint32_t count = 0;
+        if (!Wire::ReadVersion(reader) || !reader.ReadString(decoded.sessionId, kMaximumSessionIdLength) ||
+            !reader.Read(decoded.nextSequence) || !reader.Read(count) || count > maximumPeers)
+            return false;
+
+        decoded.peers.reserve(count);
+        for (uint32_t i = 0; i < count; ++i)
+        {
+            CollaborationPeer peer;
+            if (!reader.Read(peer.id) || !reader.ReadString(peer.name, kMaximumPeerNameLength) ||
+                !reader.ReadString(peer.presence, kMaximumPresenceLength))
+                return false;
+            decoded.peers.push_back(std::move(peer));
+        }
+
+        if (!reader.Read(count) || count > maximumLocks)
+            return false;
+        decoded.locks.reserve(count);
+        for (uint32_t i = 0; i < count; ++i)
+        {
+            CollaborationLock lock;
+            if (!reader.ReadString(lock.nodeId, kMaximumNodeIdLength) || !reader.Read(lock.ownerPeerId))
+                return false;
+            decoded.locks.push_back(std::move(lock));
+        }
+
+        if (!reader.Read(count) || count > maximumEdits)
+            return false;
+        decoded.edits.reserve(count);
+        for (uint32_t i = 0; i < count; ++i)
+        {
+            CollaborationEdit edit;
+            if (!reader.Read(edit.sequence) || !reader.Read(edit.authorPeerId) ||
+                !reader.ReadString(edit.nodeId, kMaximumNodeIdLength) ||
+                !reader.ReadString(edit.payload, kMaximumEditPayloadLength))
+                return false;
+            decoded.edits.push_back(std::move(edit));
+        }
+
+        if (!reader.Finished())
+            return false;
+        snapshot = std::move(decoded);
         return true;
     }
 } // namespace Spark::Daemon

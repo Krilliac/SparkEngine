@@ -10,6 +10,7 @@
 
 #include <cstring>
 #include <iostream>
+#include <string_view>
 
 namespace
 {
@@ -17,14 +18,32 @@ namespace
 }
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <shellapi.h>
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR cmdLine, int)
 {
-    if (cmdLine && std::strstr(cmdLine, "--version"))
+    (void)cmdLine;
+    int argumentCount = 0;
+    LPWSTR* arguments = CommandLineToArgvW(GetCommandLineW(), &argumentCount);
+    for (int index = 1; arguments && index < argumentCount; ++index)
     {
-        MessageBoxA(nullptr, kVersion, "SparkLauncher", MB_OK);
-        return 0;
+        const std::wstring_view argument(arguments[index]);
+        if (argument == L"--version" || argument == L"-v")
+        {
+            std::cout << kVersion << '\n';
+            LocalFree(arguments);
+            return 0;
+        }
+        if (argument == L"--help" || argument == L"-h")
+        {
+            std::cout << kVersion << "\nUsage: SparkLauncher [--version] [--help]\n";
+            LocalFree(arguments);
+            return 0;
+        }
     }
+    if (arguments)
+        LocalFree(arguments);
 #else
 int main(int argc, char** argv)
 {
@@ -37,7 +56,7 @@ int main(int argc, char** argv)
         }
         if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0)
         {
-            std::cout << kVersion << "\nUsage: SparkLauncher [--version]\n";
+            std::cout << kVersion << "\nUsage: SparkLauncher [--version] [--help]\n";
             return 0;
         }
     }

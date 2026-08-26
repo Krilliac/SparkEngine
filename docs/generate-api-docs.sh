@@ -285,7 +285,7 @@ parse_cpp() {
         # Out-of-line method definition: the line must START with an identifier
         # (not whitespace) so we skip indented calls like "    Class::Method()".
         # Pattern: ReturnType[<...>][*&]... Class::Method(
-        match($0, /^[A-Za-z_][A-Za-z0-9_:<>,\*\&[:space:]]*[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(/) {
+        match($0, /^[A-Za-z_][A-Za-z0-9_:<>,\*&[:space:]]*[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(/) {
             # Extract the Class::Method portion (the identifier pair immediately before "(")
             if (match($0, /[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(/)) {
                 qn = substr($0, RSTART, RLENGTH)
@@ -296,7 +296,7 @@ parse_cpp() {
         }
 
         # Free function at column 0: "Type[*&] Name(" — skip control-flow keywords.
-        match($0, /^(static[[:space:]]+|inline[[:space:]]+|constexpr[[:space:]]+)?[A-Za-z_][A-Za-z0-9_:<>,\*\&[:space:]]*[[:space:]][A-Za-z_][A-Za-z0-9_]+[[:space:]]*\(/) {
+        match($0, /^(static[[:space:]]+|inline[[:space:]]+|constexpr[[:space:]]+)?[A-Za-z_][A-Za-z0-9_:<>,\*&[:space:]]*[[:space:]][A-Za-z_][A-Za-z0-9_]+[[:space:]]*\(/) {
             sig = substr($0, RSTART, RLENGTH)
             if (match(sig, /[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\([[:space:]]*$/)) {
                 name_start = RSTART

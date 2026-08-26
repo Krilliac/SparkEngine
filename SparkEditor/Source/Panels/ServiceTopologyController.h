@@ -59,6 +59,12 @@ namespace SparkEditor
                                                                        const std::filesystem::path& stop);
         [[nodiscard]] static std::vector<std::string> EndpointArguments(std::string endpoint);
         [[nodiscard]] static std::vector<std::string> OrchestratorStatusArguments(std::string endpoint);
+        [[nodiscard]] static std::vector<std::string> OrchestratorDefineArguments(
+            std::string endpoint, std::string processId, const std::filesystem::path& executable,
+            const std::filesystem::path& workingDirectory, std::vector<std::string> processArguments);
+        [[nodiscard]] static std::vector<std::string> OrchestratorMutationArguments(std::string endpoint,
+                                                                                    std::string command,
+                                                                                    std::string processId);
 
         static constexpr size_t MaxRetainedLogLines = 1024;
         static constexpr size_t MaxRetainedLogLineBytes = 16 * 1024;

@@ -7,6 +7,7 @@
 #include <imgui.h>
 
 #include <filesystem>
+#include <string_view>
 
 namespace SparkEditor
 {
@@ -75,6 +76,46 @@ namespace SparkEditor
             if (ImGui::Button("Stop all"))
                 m_controller->StopAll();
 
+            ImGui::SeparatorText("Dedicated server orchestration");
+            ImGui::TextWrapped("The daemon owns this server process. Define it once, then start, drain, stop, restart, "
+                               "or remove it through the authenticated local orchestration service.");
+            std::filesystem::path project = ProjectManager::GetActiveProjectPath();
+            if (project.empty())
+                project = std::filesystem::current_path();
+            const std::filesystem::path serverConfig = project / m_serverConfig;
+            if (!std::filesystem::is_regular_file(serverConfig))
+                ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.25f, 1.0f), "Missing %s", serverConfig.string().c_str());
+
+            const std::filesystem::path binaries = GetEditorExecutableDirectory();
+#ifdef _WIN32
+            const std::filesystem::path serverExecutable = binaries / "SparkServer.exe";
+#else
+            const std::filesystem::path serverExecutable = binaries / "SparkServer";
+#endif
+            if (ImGui::Button("Define server"))
+                RunOrchestrator(ServiceTopologyController::OrchestratorDefineArguments(
+                    m_daemonEndpoint, m_serverId, serverExecutable, project, {"--config", serverConfig.string()}));
+            ImGui::SameLine();
+            if (ImGui::Button("Start server"))
+                RunOrchestrator(
+                    ServiceTopologyController::OrchestratorMutationArguments(m_daemonEndpoint, "start", m_serverId));
+            ImGui::SameLine();
+            if (ImGui::Button("Drain"))
+                RunOrchestrator(
+                    ServiceTopologyController::OrchestratorMutationArguments(m_daemonEndpoint, "drain", m_serverId));
+            ImGui::SameLine();
+            if (ImGui::Button("Restart"))
+                RunOrchestrator(
+                    ServiceTopologyController::OrchestratorMutationArguments(m_daemonEndpoint, "restart", m_serverId));
+            ImGui::SameLine();
+            if (ImGui::Button("Stop server"))
+                RunOrchestrator(
+                    ServiceTopologyController::OrchestratorMutationArguments(m_daemonEndpoint, "stop", m_serverId));
+            ImGui::SameLine();
+            if (ImGui::Button("Undefine"))
+                RunOrchestrator(
+                    ServiceTopologyController::OrchestratorMutationArguments(m_daemonEndpoint, "undefine", m_serverId));
+
             ImGui::Separator();
             for (size_t index = 0; index < static_cast<size_t>(TopologyService::Count); ++index)
             {
@@ -136,5 +177,17 @@ namespace SparkEditor
                                  {},
                                  health,
                                  stop});
+    }
+
+    void ServiceTopologyPanel::RunOrchestrator(std::vector<std::string> arguments)
+    {
+        const std::filesystem::path binaries = GetEditorExecutableDirectory();
+#ifdef _WIN32
+        const std::filesystem::path executable = binaries / "SparkOrchestrator.exe";
+#else
+        const std::filesystem::path executable = binaries / "SparkOrchestrator";
+#endif
+        m_controller->Configure(TopologyService::Orchestrator, {executable, std::move(arguments), m_daemonEndpoint});
+        (void)m_controller->Start(TopologyService::Orchestrator);
     }
 } // namespace SparkEditor

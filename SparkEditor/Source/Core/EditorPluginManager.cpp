@@ -7,25 +7,33 @@
 
 #include "EditorPluginManager.h"
 #include "EditorPanel.h"
+#include "Core/DynamicPluginHost.h"
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstddef>
-
-#ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <windows.h>
-#endif // SPARK_PLATFORM_WINDOWS
-#else
-#include <dlfcn.h>
-#endif
 
 namespace SparkEditor
 {
+
+    namespace
+    {
+        void LogDynamicPluginMessage(SparkPluginLogLevel level, const char* category, const char* message)
+        {
+            const std::string text =
+                "[" + std::string(category ? category : "Plugin") + "] " + std::string(message ? message : "");
+            auto& console = Spark::SimpleConsole::GetInstance();
+            if (level >= SPARK_PLUGIN_LOG_ERROR)
+                console.LogError(text);
+            else if (level >= SPARK_PLUGIN_LOG_WARNING)
+                console.LogWarning(text);
+            else
+                console.LogInfo(text);
+        }
+    } // namespace
 
     EditorPluginManager::~EditorPluginManager()
     {
@@ -34,7 +42,7 @@ namespace SparkEditor
 
     // ----- Registration -----
 
-    bool EditorPluginManager::RegisterPluginInstance(EditorPluginPtr plugin, bool isFromDLL, void* libraryHandle)
+    bool EditorPluginManager::RegisterPluginInstance(EditorPluginPtr plugin)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!plugin)
@@ -55,8 +63,6 @@ namespace SparkEditor
 
         PluginEntry entry;
         entry.plugin = std::move(plugin);
-        entry.isFromDLL = isFromDLL;
-        entry.libraryHandle = libraryHandle;
         entry.isInitialized = false;
 
         Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Registered plugin '" + name + "' v" +
@@ -80,72 +86,54 @@ namespace SparkEditor
 
         Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Loading plugin from '" + path + "'...");
 
-        void* handle = nullptr;
-        CreateEditorPluginFn createFn = nullptr;
-        DestroyEditorPluginFn destroyFn = nullptr;
+        auto host = std::make_unique<Spark::DynamicPluginHost>();
+        host->SetLogSink(&LogDynamicPluginMessage);
 
-#ifdef _WIN32
-        handle = LoadLibraryA(path.c_str());
-        if (!handle)
+        std::string error;
+        if (!host->Load(path, &error))
         {
-            DWORD err = GetLastError();
-            Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Failed to load '" + path + "' (error " +
-                                                         std::to_string(err) + ")");
+            Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Failed to load '" + path +
+                                                         "': " + error);
             return false;
         }
 
-        createFn =
-            reinterpret_cast<CreateEditorPluginFn>(GetProcAddress(static_cast<HMODULE>(handle), "CreateEditorPlugin"));
-        destroyFn = reinterpret_cast<DestroyEditorPluginFn>(
-            GetProcAddress(static_cast<HMODULE>(handle), "DestroyEditorPlugin"));
-#else
-        handle = dlopen(path.c_str(), RTLD_NOW);
-        if (!handle)
+        const SparkPluginDescriptor* descriptor = host->Descriptor();
+        if (!descriptor || !descriptor->api || (descriptor->api->capabilities & SPARK_PLUGIN_CAP_EDITOR_EXTENSION) == 0)
         {
-            const char* err = dlerror();
-            Spark::SimpleConsole::GetInstance().LogError(std::string("EditorPluginManager: Failed to load '") + path +
-                                                         "': " + (err ? err : "unknown error"));
+            Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Plugin '" + path +
+                                                         "' does not advertise editor-extension capability");
+            host->Unload();
             return false;
         }
 
-        createFn = reinterpret_cast<CreateEditorPluginFn>(dlsym(handle, "CreateEditorPlugin"));
-        destroyFn = reinterpret_cast<DestroyEditorPluginFn>(dlsym(handle, "DestroyEditorPlugin"));
-#endif
-
-        if (!createFn || !destroyFn)
+        const std::string id = descriptor->id;
+        const std::string name = descriptor->name;
+        if (FindPlugin(name) != m_plugins.end() || FindDynamicPlugin(name) != m_dynamicPlugins.end() ||
+            FindDynamicPlugin(id) != m_dynamicPlugins.end())
         {
-            Spark::SimpleConsole::GetInstance().LogError(
-                "EditorPluginManager: Plugin '" + path +
-                "' missing required exports (CreateEditorPlugin/DestroyEditorPlugin)");
-            UnloadLibrary(handle);
+            Spark::SimpleConsole::GetInstance().LogWarning("EditorPluginManager: Plugin '" + name +
+                                                           "' is already registered");
+            host->Unload();
             return false;
         }
 
-        IEditorPlugin* rawPlugin = createFn();
-        if (!rawPlugin)
+        if (m_lifecycleInitialized && !host->Start(&error))
         {
-            Spark::SimpleConsole::GetInstance().LogError(
-                "EditorPluginManager: CreateEditorPlugin() returned null for '" + path + "'");
-            UnloadLibrary(handle);
+            Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Failed to start plugin '" + name +
+                                                         "': " + error);
+            host->Unload();
             return false;
         }
 
-        EditorPluginPtr plugin(rawPlugin, PluginDeleter{destroyFn});
-        try
-        {
-            if (RegisterPluginInstance(std::move(plugin), /*isFromDLL=*/true, handle))
-                return true;
-        }
-        catch (...)
-        {
-            UnloadLibrary(handle);
-            throw;
-        }
-
-        // Registration failure destroys the instance through the DLL export
-        // before the library is released (including duplicate-name failures).
-        UnloadLibrary(handle);
-        return false;
+        DynamicPluginEntry entry;
+        entry.host = std::move(host);
+        entry.id = id;
+        entry.name = name;
+        entry.version = descriptor->version ? descriptor->version : "";
+        m_dynamicPlugins.push_back(std::move(entry));
+        Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Registered stable-ABI plugin '" + name +
+                                                    "' v" + m_dynamicPlugins.back().version);
+        return true;
     }
 
     bool EditorPluginManager::UnloadPlugin(const std::string& name)
@@ -153,6 +141,23 @@ namespace SparkEditor
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !name.empty(), false);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Unloading plugin '%s'", name.c_str());
+
+        auto dynamic = FindDynamicPlugin(name);
+        if (dynamic != m_dynamicPlugins.end())
+        {
+            std::string error;
+            if (!dynamic->host->Unload(std::chrono::seconds(5), &error))
+            {
+                Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Failed to unload plugin '" +
+                                                             dynamic->name + "': " + error);
+                return false;
+            }
+            const std::string unloadedName = dynamic->name;
+            m_dynamicPlugins.erase(dynamic);
+            Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Unloaded plugin '" + unloadedName + "'");
+            return true;
+        }
+
         auto it = FindPlugin(name);
         if (it == m_plugins.end())
         {
@@ -172,15 +177,8 @@ namespace SparkEditor
         // them before destroying the plugin instance or unloading the library.
         ReleasePanelsForPlugin(name);
 
-        void* handle = it->libraryHandle;
         it->plugin.reset();
         m_plugins.erase(it);
-
-        // Unload the library after erasing the entry
-        if (handle)
-        {
-            UnloadLibrary(handle);
-        }
 
         Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Unloaded plugin '" + name + "'");
         return true;
@@ -198,19 +196,27 @@ namespace SparkEditor
         return nullptr;
     }
 
+    const SparkPluginDescriptor* EditorPluginManager::GetDynamicPluginDescriptor(const std::string& nameOrId) const
+    {
+        const auto it = FindDynamicPlugin(nameOrId);
+        return it == m_dynamicPlugins.end() ? nullptr : it->host->Descriptor();
+    }
+
     size_t EditorPluginManager::GetPluginCount() const
     {
-        return m_plugins.size();
+        return m_plugins.size() + m_dynamicPlugins.size();
     }
 
     std::vector<std::string> EditorPluginManager::GetPluginNames() const
     {
         std::vector<std::string> names;
-        names.reserve(m_plugins.size());
+        names.reserve(GetPluginCount());
         for (const auto& entry : m_plugins)
         {
             names.emplace_back(entry.plugin->GetName());
         }
+        for (const auto& entry : m_dynamicPlugins)
+            names.push_back(entry.name);
         return names;
     }
 
@@ -252,11 +258,36 @@ namespace SparkEditor
             }
         }
 
+        for (auto& entry : m_dynamicPlugins)
+        {
+            if (entry.host->GetState() == Spark::DynamicPluginHost::State::Started)
+                continue;
+
+            std::string error;
+            if (!entry.host->Start(&error))
+            {
+                Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Plugin '" + entry.name +
+                                                             "' failed to start: " + error);
+                allSucceeded = false;
+            }
+        }
+
+        m_lifecycleInitialized = true;
+
         return allSucceeded;
     }
 
     void EditorPluginManager::ShutdownAll()
     {
+        for (auto it = m_dynamicPlugins.rbegin(); it != m_dynamicPlugins.rend(); ++it)
+        {
+            std::string error;
+            if (!it->host->Unload(std::chrono::seconds(5), &error))
+                Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Failed to unload plugin '" +
+                                                             it->name + "': " + error);
+        }
+        m_dynamicPlugins.clear();
+
         // Shutdown in reverse order
         for (auto it = m_plugins.rbegin(); it != m_plugins.rend(); ++it)
         {
@@ -281,17 +312,8 @@ namespace SparkEditor
         for (auto it = m_plugins.rbegin(); it != m_plugins.rend(); ++it)
             it->plugin.reset();
 
-        // Unload all DLL handles only after every DLL-owned object is gone.
-        for (auto& entry : m_plugins)
-        {
-            if (entry.libraryHandle)
-            {
-                UnloadLibrary(entry.libraryHandle);
-                entry.libraryHandle = nullptr;
-            }
-        }
-
         m_plugins.clear();
+        m_lifecycleInitialized = false;
     }
 
     void EditorPluginManager::UpdateAll(float deltaTime)
@@ -302,6 +324,18 @@ namespace SparkEditor
             {
                 SPARK_GUARDED_UPDATE("EditorPlugin:Update", "Editor", { entry.plugin->Update(deltaTime); });
             }
+        }
+
+        for (auto& entry : m_dynamicPlugins)
+        {
+            const SparkPluginDescriptor* descriptor = entry.host->Descriptor();
+            if (!descriptor || !descriptor->api || (descriptor->api->capabilities & SPARK_PLUGIN_CAP_TICK) == 0)
+                continue;
+
+            const SparkPluginResult result = entry.host->Tick(deltaTime);
+            if (result != SPARK_PLUGIN_OK)
+                Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Plugin '" + entry.name +
+                                                             "' tick failed with result " + std::to_string(result));
         }
     }
 
@@ -402,19 +436,24 @@ namespace SparkEditor
     {
         auto& console = Spark::SimpleConsole::GetInstance();
 
-        if (m_plugins.empty())
+        if (m_plugins.empty() && m_dynamicPlugins.empty())
         {
             console.LogInfo("No plugins loaded.");
             return;
         }
 
-        console.LogInfo("Loaded plugins (" + std::to_string(m_plugins.size()) + "):");
+        console.LogInfo("Loaded plugins (" + std::to_string(GetPluginCount()) + "):");
         for (const auto& entry : m_plugins)
         {
             const std::string status = entry.isInitialized ? "initialized" : "registered";
-            const std::string source = entry.isFromDLL ? "DLL" : "built-in";
             console.LogInfo("  - " + std::string(entry.plugin->GetName()) + " v" +
-                            std::string(entry.plugin->GetVersion()) + " [" + source + ", " + status + "]");
+                            std::string(entry.plugin->GetVersion()) + " [built-in, " + status + "]");
+        }
+        for (const auto& entry : m_dynamicPlugins)
+        {
+            const std::string status =
+                entry.host->GetState() == Spark::DynamicPluginHost::State::Started ? "initialized" : "registered";
+            console.LogInfo("  - " + entry.name + " v" + entry.version + " [stable C ABI, " + status + "]");
         }
     }
 
@@ -444,18 +483,19 @@ namespace SparkEditor
         return m_plugins.cend();
     }
 
-    void EditorPluginManager::UnloadLibrary(void* handle)
+    std::vector<DynamicPluginEntry>::iterator EditorPluginManager::FindDynamicPlugin(const std::string& nameOrId)
     {
-        if (!handle)
-        {
-            return;
-        }
+        return std::find_if(m_dynamicPlugins.begin(), m_dynamicPlugins.end(),
+                            [&nameOrId](const DynamicPluginEntry& entry)
+                            { return entry.name == nameOrId || entry.id == nameOrId; });
+    }
 
-#ifdef _WIN32
-        FreeLibrary(static_cast<HMODULE>(handle));
-#else
-        dlclose(handle);
-#endif
+    std::vector<DynamicPluginEntry>::const_iterator EditorPluginManager::FindDynamicPlugin(
+        const std::string& nameOrId) const
+    {
+        return std::find_if(m_dynamicPlugins.cbegin(), m_dynamicPlugins.cend(),
+                            [&nameOrId](const DynamicPluginEntry& entry)
+                            { return entry.name == nameOrId || entry.id == nameOrId; });
     }
 
 } // namespace SparkEditor

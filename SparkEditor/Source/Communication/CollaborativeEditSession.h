@@ -58,6 +58,7 @@
 
 namespace SparkEditor
 {
+    class StandaloneCollaborationClient;
 
     // ============================================================================
     // Peer Information
@@ -243,6 +244,19 @@ namespace SparkEditor
         bool Connect(const std::string& address, uint16_t port, const std::string& userName);
 
         /**
+         * @brief Create and join a session hosted by SparkCollabServer.
+         * @param endpoint Local named-pipe or Unix-domain socket endpoint.
+         * @param sessionId Stable project/session identifier.
+         * @param userName Display name for this editor.
+         */
+        bool HostStandaloneBroker(const std::string& endpoint, const std::string& sessionId,
+                                  const std::string& userName);
+
+        /** @brief Join an existing SparkCollabServer session. */
+        bool ConnectStandaloneBroker(const std::string& endpoint, const std::string& sessionId,
+                                     const std::string& userName);
+
+        /**
          * @brief Disconnect from the session, releasing all locks
          */
         void Disconnect();
@@ -256,6 +270,9 @@ namespace SparkEditor
          * @brief Check if this instance is the session host
          */
         bool IsHost() const { return m_isHost; }
+
+        /// True when the session authority is the standalone broker rather than a peer editor.
+        bool IsStandaloneBroker() const { return m_standaloneClient != nullptr; }
 
         /**
          * @brief Update the session (call each frame)
@@ -311,9 +328,20 @@ namespace SparkEditor
         /// @brief Get the address this session is connected to (client only)
         const std::string& GetHostAddress() const { return m_hostAddress; }
 
+        /// Session identifier used by the standalone broker connection.
+        const std::string& GetStandaloneSessionId() const { return m_standaloneSessionId; }
+
       private:
         // Application-level message processing
         void ProcessIncomingMessages();
+        bool ConnectStandaloneBrokerInternal(const std::string& endpoint, const std::string& sessionId,
+                                             const std::string& userName, bool createSession);
+        void DisconnectStandaloneBroker();
+        void UpdateStandaloneBroker(float deltaTime);
+        void PublishStandalonePresence();
+        bool RequestStandaloneLock(const std::string& nodeId);
+        void ReleaseStandaloneLock(const std::string& nodeId);
+        void BroadcastStandaloneEdit(const EditMessage& edit);
         void BroadcastPresence();
         void ExpireStaleNodes();
         PeerID AllocatePeerID();
@@ -343,6 +371,12 @@ namespace SparkEditor
         float m_sessionTime = 0.0f;
         uint16_t m_port = 0;
         std::string m_hostAddress;
+        std::string m_standaloneSessionId;
+        std::unique_ptr<StandaloneCollaborationClient> m_standaloneClient;
+        float m_standaloneSnapshotTimer = 0.0f;
+        uint64_t m_standaloneLastEditSequence = 0;
+        bool m_standaloneSnapshotInitialized = false;
+        std::unordered_set<uint64_t> m_standaloneLocalEditSequences;
 
         // Peers
         std::unordered_map<PeerID, EditorPeer> m_peers;

@@ -21,6 +21,8 @@ set(LAUNCHER_SOURCES
     src/main.cpp
     src/LauncherApp.cpp
     src/LauncherApp.h
+    src/LauncherProcess.cpp
+    src/LauncherProcess.h
     src/LauncherBackend.h
 )
 if(WIN32)
@@ -68,3 +70,9 @@ if(MSVC)
 endif()
 
 install(TARGETS SparkLauncher RUNTIME DESTINATION bin COMPONENT runtime)
+
+if(BUILD_TESTS)
+    enable_testing()
+    add_test(NAME SparkLauncherHelp COMMAND $<TARGET_FILE:SparkLauncher> --help)
+    set_tests_properties(SparkLauncherHelp PROPERTIES TIMEOUT 10)
+endif()

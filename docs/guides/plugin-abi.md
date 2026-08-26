@@ -58,7 +58,9 @@ spark_add_plugin(MyImporter
 The helper deliberately does not link `SparkEngineLib`. It exports only the
 entry point declared by `SPARK_DECLARE_PLUGIN_ENTRY_POINT()` and writes a
 deterministic `<binary>.sparkplugin.json` sidecar containing identity, ABI,
-entry-point, and SHA-256 metadata. `DynamicPluginHost` requires this sidecar,
+entry-point, and SHA-256 metadata. The helper reads ABI major/minor and the
+entry-point name from the installed `Spark/PluginABI.h`; there is no separate
+CMake version constant to update. `DynamicPluginHost` requires this sidecar,
 strictly validates its schema, ABI, entry point, and binary filename, then
 streams and verifies the binary SHA-256 before asking the operating system to
 map executable code. After mapping, the host also requires the sidecar identity
@@ -68,3 +70,10 @@ The SHA-256 binds a binary to its adjacent package metadata and detects damage
 or substitution within a package. It is not a publisher signature: distribution
 systems must authenticate or sign the package when provenance is a security
 requirement.
+
+`SparkEditor::EditorPluginManager::LoadPlugin` is the production editor caller
+for this host. It accepts only plugins that advertise
+`SPARK_PLUGIN_CAP_EDITOR_EXTENSION`, starts them with the editor lifecycle,
+ticks plugins that advertise `SPARK_PLUGIN_CAP_TICK`, and unloads them through
+the host's task fence. The C++ `IEditorPlugin` interface is reserved for
+extensions compiled into SparkEditor.

@@ -12,16 +12,18 @@ SparkEditor supports two kinds of plugins:
 
 | Type | Registration | Use case |
 |------|-------------|----------|
-| **Built-in** | `RegisterPlugin<T>()` at compile time | Engine-shipped panels and tools |
-| **DLL/SO** | `LoadPlugin(path)` at runtime | Third-party extensions |
+| **Built-in C++** | `RegisterPlugin<T>()` at compile time | Engine-shipped panels and tools |
+| **Stable C ABI** | `LoadPlugin(path)` at runtime | Third-party lifecycle/tick extensions |
 
-Both types implement the same `IEditorPlugin` interface.
+Built-ins implement `IEditorPlugin`. Native shared libraries use
+`Spark/PluginABI.h`; they never exchange C++ objects, STL types, exceptions,
+allocations, or vtables with the editor.
 
 ---
 
-## Plugin Interface
+## Built-In Plugin Interface
 
-Every plugin implements `IEditorPlugin`:
+Every built-in plugin implements `IEditorPlugin`:
 
 ```cpp
 class IEditorPlugin {
@@ -113,38 +115,70 @@ m_pluginManager.RegisterPlugin<MyToolPlugin>();
 
 ---
 
-## Creating a DLL Plugin
+## Creating a Native Shared-Library Plugin
 
-### Step 1: Export factory functions
+Use the SDK helper `spark_add_plugin(...)` and implement the stable C entry
+point. The generated sibling `.sparkplugin.json` records the ABI version read
+directly from `Spark/PluginABI.h`, binary name, identity, and SHA-256. The editor
+verifies that metadata before mapping the native image.
 
 ```cpp
-// MyDLLPlugin.cpp
-#include "IEditorPlugin.h"
+#include <Spark/PluginABI.h>
 
-class MyDLLPlugin : public IEditorPlugin {
-    // ... same interface as above
+namespace {
+SparkPluginResult Create(const SparkPluginHostAPI*, SparkPluginInstance* out) {
+    if (!out) return SPARK_PLUGIN_ERROR_INVALID_ARGUMENT;
+    *out = 1;
+    return SPARK_PLUGIN_OK;
+}
+void Destroy(SparkPluginInstance) {}
+SparkPluginResult Tick(SparkPluginInstance, double) { return SPARK_PLUGIN_OK; }
+
+const SparkPluginAPI api = {
+    sizeof(SparkPluginAPI), SPARK_PLUGIN_ABI_MAJOR, SPARK_PLUGIN_ABI_MINOR, 0,
+    SPARK_PLUGIN_CAP_EDITOR_EXTENSION | SPARK_PLUGIN_CAP_TICK,
+    &Create, &Destroy, nullptr, nullptr, &Tick,
+    nullptr, nullptr, nullptr, nullptr, {}
 };
 
-extern "C" __declspec(dllexport) IEditorPlugin* CreateEditorPlugin() {
-    return new MyDLLPlugin();
+const SparkPluginDescriptor descriptor = {
+    sizeof(SparkPluginDescriptor), SPARK_PLUGIN_ABI_MAGIC,
+    SPARK_PLUGIN_ABI_MAJOR, SPARK_PLUGIN_ABI_MINOR, 1, 0,
+    "org.example.my-tool", "My Tool", "Example", "1.0.0", &api, {}
+};
 }
 
-extern "C" __declspec(dllexport) void DestroyEditorPlugin(IEditorPlugin* plugin) {
-    delete plugin;
+SPARK_DECLARE_PLUGIN_ENTRY_POINT() {
+    if (host_abi_major != SPARK_PLUGIN_ABI_MAJOR ||
+        host_abi_minor < SPARK_PLUGIN_ABI_MINOR) return nullptr;
+    return &descriptor;
 }
 ```
 
-### Step 2: Load at runtime
+```cmake
+find_package(SparkEngine REQUIRED)
+spark_add_plugin(MyTool
+    ID "org.example.my-tool"
+    VERSION "1.0.0"
+    TYPE "editor-extension"
+    SOURCES MyTool.cpp)
+```
+
+Load at runtime:
 
 ```cpp
 m_pluginManager.LoadPlugin("plugins/MyDLLPlugin.dll");
 ```
 
-### Step 3: Unload (optional)
+Unload by descriptor name or stable ID:
 
 ```cpp
-m_pluginManager.UnloadPlugin("My DLL Plugin");
+m_pluginManager.UnloadPlugin("My Tool");
 ```
+
+The current stable ABI supports lifecycle, task/resource host services,
+per-frame ticks, and transactional hot reload. ImGui/panel hooks remain a
+built-in C++ surface until an append-only C UI service table is standardized.
 
 ---
 
@@ -160,6 +194,7 @@ public:
 
     // Query
     IEditorPlugin* GetPlugin(const std::string& name) const;
+    const SparkPluginDescriptor* GetDynamicPluginDescriptor(const std::string& nameOrId) const;
     size_t GetPluginCount() const;
     std::vector<std::string> GetPluginNames() const;
 
