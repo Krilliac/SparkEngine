@@ -26,6 +26,7 @@ docs/update-all-docs.sh check        # Dry-run: report what's stale
 | `docs/generate-flowchart.sh generate` | `wiki/getting-started/Engine-Architecture-Flowchart.md` | Python 3 | ~5s |
 | `docs/update-codebase-stats.sh generate` | `wiki/advanced/Codebase-Statistics.md` (LOC, metrics, largest files) | None | ~5s |
 | `docs/update-readme-badges.sh update` | `README.md` counts, badge JSON, AI prompt files | None | ~3s |
+| `docs/update-readme-badges.sh readme` | `README.md` generated counts only (narrow CI mode) | None | ~3s |
 | `docs/update-context.sh update` | `CLAUDE.md` counts | None | ~2s |
 
 All scripts support a `check` mode that exits 1 if stale (for CI use).

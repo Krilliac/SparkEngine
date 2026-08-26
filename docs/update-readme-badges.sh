@@ -15,6 +15,7 @@
 #   ./update-readme-badges.sh              # Update (default)
 #   ./update-readme-badges.sh update       # Same as above
 #   ./update-readme-badges.sh check        # Dry-run: report if out of date (exit 1 if stale)
+#   ./update-readme-badges.sh readme       # Update README counts only (CI-safe narrow mode)
 
 set -e
 
@@ -255,11 +256,24 @@ check_mode() {
     fi
 }
 
+update_readme_only() {
+    collect_metrics
+    log_info "Updating README.md only..."
+    update_readme
+
+    if [ "$CHANGES_MADE" -gt 0 ]; then
+        log_success "Applied $CHANGES_MADE README generated-value update(s)"
+    else
+        log_success "README generated values already up to date"
+    fi
+}
+
 case "${1:-update}" in
     update|full) update ;;
+    readme)      update_readme_only ;;
     check)       check_mode ;;
     *)
-        echo "Usage: $0 [update|check]"
+        echo "Usage: $0 [update|readme|check]"
         exit 1
         ;;
 esac
