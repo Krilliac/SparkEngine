@@ -2523,6 +2523,14 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/Templates")
         COMPONENT ${SPARK_INSTALL_COMPONENT_TEMPLATES}
         PATTERN "build" EXCLUDE
         PATTERN "build-*" EXCLUDE
+        PATTERN "dist" EXCLUDE
+        PATTERN "Binaries" EXCLUDE
+        PATTERN "Intermediate" EXCLUDE
+        PATTERN "Saved" EXCLUDE
+        PATTERN "Logs" EXCLUDE
+        PATTERN "Temp" EXCLUDE
+        PATTERN ".vs" EXCLUDE
+        PATTERN ".cache" EXCLUDE
         PATTERN "CMakeFiles" EXCLUDE
         PATTERN "CMakeCache.txt" EXCLUDE
         PATTERN "cmake_install.cmake" EXCLUDE
