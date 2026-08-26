@@ -19,6 +19,13 @@ CATEGORIES = {
     "engine": ("SparkEngine/Source",),
     "editor": ("SparkEditor/Source",),
     "game": ("GameModules",),
+    "services": ("SparkServer", "SparkGateway", "SparkDaemon"),
+    "pipeline": (
+        "SparkAssetPipelineCore",
+        "SparkCooker",
+        "SparkWorker",
+        "SparkAutomation",
+    ),
     "tests": ("Tests",),
     "tools": ("SparkConsole/src", "SparkShaderCompiler/src"),
 }

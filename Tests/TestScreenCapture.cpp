@@ -2,6 +2,28 @@
 #include "TestFramework.h"
 #include "Graphics/ScreenCapture.h"
 
+#include <atomic>
+#include <chrono>
+#include <filesystem>
+
+namespace
+{
+    std::filesystem::path CaptureTestDirectory(const char* testName)
+    {
+        static std::atomic_uint64_t sequence{0};
+        const auto tick = std::chrono::steady_clock::now().time_since_epoch().count();
+        return std::filesystem::temp_directory_path() / "SparkEngineScreenCaptureTests" /
+               (std::string(testName) + "_" + std::to_string(tick) + "_" +
+                std::to_string(sequence.fetch_add(1, std::memory_order_relaxed)));
+    }
+
+    void ResetCaptureTestDirectory(const std::filesystem::path& directory)
+    {
+        std::error_code error;
+        std::filesystem::remove_all(directory, error);
+    }
+} // namespace
+
 // ============================================================================
 // Initialization
 // ============================================================================
@@ -22,8 +44,11 @@ TEST(ScreenCapture_Initialize)
 
 TEST(ScreenCapture_TakeScreenshot)
 {
+    const auto outputDirectory = CaptureTestDirectory("take_screenshot");
+    ResetCaptureTestDirectory(outputDirectory);
+
     auto& cap = Spark::Graphics::ScreenCapture::GetInstance();
-    cap.Initialize("TestScreenshots");
+    cap.Initialize(outputDirectory.string());
 
     // Create a 2x2 RGBA test image
     uint8_t pixels[16] = {
@@ -37,6 +62,7 @@ TEST(ScreenCapture_TakeScreenshot)
     EXPECT_EQ(result.height, 2u);
     EXPECT_EQ(cap.GetScreenshotCount(), 1u);
     cap.Shutdown();
+    ResetCaptureTestDirectory(outputDirectory);
 }
 
 TEST(ScreenCapture_TakeScreenshot_NullData)
@@ -84,8 +110,11 @@ TEST(ScreenCapture_StartSequence)
 
 TEST(ScreenCapture_CaptureFrame)
 {
+    const auto outputDirectory = CaptureTestDirectory("capture_frame");
+    ResetCaptureTestDirectory(outputDirectory);
+
     auto& cap = Spark::Graphics::ScreenCapture::GetInstance();
-    cap.Initialize();
+    cap.Initialize(outputDirectory.string());
 
     cap.StartSequence("frames");
 
@@ -101,6 +130,7 @@ TEST(ScreenCapture_CaptureFrame)
     uint32_t totalFrames = cap.StopSequence();
     EXPECT_EQ(totalFrames, 2u);
     cap.Shutdown();
+    ResetCaptureTestDirectory(outputDirectory);
 }
 
 TEST(ScreenCapture_CaptureFrame_NoSequence)

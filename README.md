@@ -73,6 +73,41 @@ See [Templates/README.md](Templates/README.md) and [SparkTemplates](https://gith
 
 ---
 
+## Live Template Showcase
+
+These are direct 1904×1041 captures from the current SparkEngine runtime. Each project also ships with alternate wide and detail views under [`docs/images/model-pipeline`](docs/images/model-pipeline/).
+
+| First Person | Third Person | Top Down |
+|---|---|---|
+| ![FPS Starter live arena](docs/images/model-pipeline/fps_starter_hero_engine.png) | ![Third Person Starter live portal course](docs/images/model-pipeline/third_person_starter_hero_engine.png) | ![Top Down Starter live combat arena](docs/images/model-pipeline/top_down_starter_hero_engine.png) |
+
+| RPG | MMO | Multiplayer Arena |
+|---|---|---|
+| ![RPG Starter live village](docs/images/model-pipeline/rpg_starter_hero_engine.png) | ![MMO Starter live frontier](docs/images/model-pipeline/mmo_starter_hero_engine.png) | ![Multiplayer Arena live map](docs/images/model-pipeline/multiplayer_arena_hero_engine.png) |
+
+| Platformer | Blank 3D | Empty Project Runtime Preview |
+|---|---|---|
+| ![Platformer Kit live course](docs/images/model-pipeline/platformer_kit_hero_engine.png) | ![Blank 3D live material stage](docs/images/model-pipeline/blank_3d_hero_engine.png) | ![Empty Project live origin preview](docs/images/model-pipeline/empty_project_hero_engine.png) |
+
+<details>
+<summary>Full breadth and detail captures for every template</summary>
+
+| Template | Wide view | Detail view |
+|---|---|---|
+| FPS Starter | ![FPS Starter wide arena](docs/images/model-pipeline/fps_starter_wide_engine.png) | ![FPS Starter target detail](docs/images/model-pipeline/fps_starter_detail_engine.png) |
+| Third Person Starter | ![Third Person Starter wide portal course](docs/images/model-pipeline/third_person_starter_wide_engine.png) | ![Third Person Starter portal detail](docs/images/model-pipeline/third_person_starter_detail_engine.png) |
+| Top Down Starter | ![Top Down Starter wide combat arena](docs/images/model-pipeline/top_down_starter_wide_engine.png) | ![Top Down Starter combat detail](docs/images/model-pipeline/top_down_starter_detail_engine.png) |
+| RPG Starter | ![RPG Starter wide village](docs/images/model-pipeline/rpg_starter_wide_engine.png) | ![RPG Starter village detail](docs/images/model-pipeline/rpg_starter_detail_engine.png) |
+| MMO Starter | ![MMO Starter wide frontier](docs/images/model-pipeline/mmo_starter_wide_engine.png) | ![MMO Starter frontier detail](docs/images/model-pipeline/mmo_starter_detail_engine.png) |
+| Multiplayer Arena | ![Multiplayer Arena wide map](docs/images/model-pipeline/multiplayer_arena_wide_engine.png) | ![Multiplayer Arena tactical detail](docs/images/model-pipeline/multiplayer_arena_detail_engine.png) |
+| Platformer Kit | ![Platformer Kit wide course](docs/images/model-pipeline/platformer_kit_wide_engine.png) | ![Platformer Kit obstacle detail](docs/images/model-pipeline/platformer_kit_detail_engine.png) |
+| Blank 3D | ![Blank 3D wide material stage](docs/images/model-pipeline/blank_3d_wide_engine.png) | ![Blank 3D material detail](docs/images/model-pipeline/blank_3d_detail_engine.png) |
+| Empty Project | ![Empty Project wide runtime preview](docs/images/model-pipeline/empty_project_wide_engine.png) | ![Empty Project origin detail](docs/images/model-pipeline/empty_project_detail_engine.png) |
+
+</details>
+
+---
+
 ## Features
 
 ### Rendering
@@ -125,26 +160,25 @@ Scene hierarchy, Inspector, Asset browser, Game viewport, Gizmos (ImGuizmo), Nod
 
 ### Game Module Templates
 
-10 prebuilt modules loadable as `.dll`/`.so` at runtime, each buildable against the installed SDK independently of the engine:
+Nine complete project templates load as `.dll`/`.so` modules at runtime and build independently against the installed SDK:
 
 | Template | Highlights |
 |---|---|
-| FPS | Weapons, damage, HUD, ammo, crosshair |
-| RPG | Dialogue trees, quests, inventory, abilities |
-| MMO | Area servers, player sessions, entity migration |
-| Action RPG | Combat, loot, progression |
-| RTS | Unit selection, pathfinding groups, fog of war |
-| Racing | Vehicle physics, lap tracking, replays |
-| Platformer | Gravity, jumping, level design tools |
-| Battle Royale | Large world, multiple areas, loot spawning |
-| Open World | Seamless streaming, origin rebasing, NPC AI |
-| Visual Script | Node-based gameplay, no-code prototyping |
+| Empty Project | Clean authoring world plus an explicit runtime-origin preview |
+| Blank 3D | Camera controls, material studies, reusable primitive stage |
+| FPS Starter | Weapons, damage, ammo, crosshair, target range |
+| Third Person Starter | Character movement, pickups, portal objectives |
+| Top Down Starter | Click-to-move combat, enemies, arena objectives |
+| RPG Starter | Village exploration, dialogue, quests, inventory, abilities |
+| MMO Starter | Player sessions, frontier objectives, area-ready gameplay |
+| Platformer Kit | Gravity, sprinting, jumping, hazards, checkpoints |
+| Multiplayer Arena | Teams, scoring, sudden death, symmetric tactical cover |
 
 ---
 
 ## Quality Assurance
 
-**Tests:** 6,719 test definitions across 557 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 6,759 test definitions across 565 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
 
 ```bash
 cd build && ctest --output-on-failure
@@ -187,7 +221,10 @@ Key CMake options:
 | `ENABLE_VR` | OFF | VR/AR |
 | `ENABLE_MOBILE` | OFF | Mobile features |
 | `BUILD_TESTS` | ON | Test suite |
-| `BUILD_GAME_MODULES` | ON | 10 game templates |
+| `BUILD_GAME_MODULES` | ON | 11 in-tree game modules |
+| `ENABLE_SERVER_PROCESSES` | ON | Dedicated server, MMO gateway, daemon orchestration, and collaboration processes |
+| `ENABLE_ASSET_PIPELINE_TOOLS` | ON | Deterministic asset cooker and isolated worker |
+| `ENABLE_AUTOMATION_HOST` | ON | Black-box runtime automation and CI result host |
 
 Headless build (no GPU, no editor):
 ```bash
@@ -231,8 +268,11 @@ Headless/server deployments use `NullRHIDevice` — no GPU required.
 | [Project Status](docs/status/PROJECT_STATUS.md) | System status, recent changes |
 | [API Reference](wiki/reference/API-Reference.md) | Auto-generated symbol indexes, class hierarchy |
 | [Packaging Guide](docs/guides/packaging.md) | Install layout, components, versioning |
+| [External Services & Orchestration](docs/guides/External-Services-and-Orchestration.md) | Dedicated hosting, gateway, daemon supervision, and collaboration |
+| [Offline Cooking & Automation](docs/guides/Offline-Cooking-and-Automation.md) | Deterministic asset builds, workers, pak inspection, and runtime smoke tests |
+| [Stable Plugin ABI](docs/guides/plugin-abi.md) | Versioned C plugin boundary, sidecar integrity, tasks, and hot reload |
 | [Game Module Guide](Templates/README.md) | Building standalone games with the SDK |
-| [Networking Config](docs/guides/networking.md) | UDP, replication, MMO server setup |
+| [Networking Config](wiki/subsystems/Networking.md) | UDP, replication, MMO server setup |
 | [Wiki](wiki/) | 144+ pages covering all subsystems |
 | [DeepWiki](https://deepwiki.com/Krilliac/SparkEngine) | Community knowledge base |
 
@@ -257,8 +297,8 @@ SparkEngine/
 │       └── 20+ other systems
 ├── SparkEditor/Source/    59 dockable panels, collaboration
 ├── SparkConsole/src/      Standalone debug console
-├── GameModules/           10 prebuilt game templates
-├── Tests/                 6,719 test definitions, 557 files
+├── GameModules/           11 prebuilt game modules
+├── Tests/                 6,759 test definitions, 565 files
 ├── wiki/                  144+ wiki pages
 └── docs/                  API reference, guides
 ```

@@ -66,7 +66,7 @@ Wire formats, binary layouts, and stable ABI contracts.
 
 - [Asset Format](specs/asset-format.md) — SparkEngine native asset binary layout.
 - [Networking Wire Format](specs/networking-wire-format.md) — UDP packet structure and serialization rules.
-- [Plugin ABI Guide](specs/plugin-abi-guide.md) — Game-module DLL boundary, lifecycle, and version compatibility.
+- [C++ Game Module ABI Guide](specs/plugin-abi-guide.md) — Game-module DLL boundary, lifecycle, and version compatibility.
 
 ## Plans & Roadmaps
 
@@ -87,6 +87,9 @@ Snapshots of current subsystem maturity.
 User-facing how-to guides that live outside the wiki.
 
 - [Packaging Guide](guides/packaging.md) — Package formats, install layout, components, and versioning policy.
+- [External Services and Orchestration](guides/External-Services-and-Orchestration.md) — Dedicated hosting, gateway handoff, daemon supervision, orchestration, and collaboration isolation.
+- [Offline Cooking and Runtime Automation](guides/Offline-Cooking-and-Automation.md) — Deterministic cooking, bounded workers, runtime smoke tests, and read-only package inspection.
+- [Stable C Plugin ABI](guides/plugin-abi.md) — Versioned C extension boundary, sidecar integrity, task quiescence, and hot reload.
 
 ## Tooling
 

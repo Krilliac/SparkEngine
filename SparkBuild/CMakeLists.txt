@@ -95,4 +95,4 @@ if(NOT CMAKE_PROJECT_NAME STREQUAL "SparkEngine")
 endif()
 
 # Install alongside other SparkEngine tools so CPack picks it up.
-install(TARGETS SparkBuild RUNTIME DESTINATION bin)
+install(TARGETS SparkBuild RUNTIME DESTINATION bin COMPONENT tools)

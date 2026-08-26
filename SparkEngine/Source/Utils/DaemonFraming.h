@@ -8,26 +8,28 @@
  * free of engine dependencies.
  *
  * On POSIX (Linux, macOS) a `NativeSocket` is a Unix domain socket file
- * descriptor. On Windows a `NativeSocket` is a `HANDLE` to a named pipe, but
- * Phase 1 of the daemon feature targets POSIX only — the Windows side of this
- * header defines the types so `DaemonClient` compiles, but the send/recv
- * helpers always report failure. Named-pipe support can be added in a
- * follow-up phase.
+ * descriptor. On Windows it is a byte-mode named-pipe `HANDLE`.
  */
 
 #pragma once
 
 #include "DaemonProtocol.h"
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <limits>
+#include <string>
+#include <thread>
 #include <vector>
 
 #if defined(_WIN32)
 #include <windows.h>
 #else
 #include <cerrno>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -36,9 +38,40 @@
 namespace Spark::Daemon
 {
 
+    inline constexpr auto kDaemonIoTimeout = std::chrono::seconds(5);
+
 #if defined(_WIN32)
     using NativeSocket = HANDLE;
-    inline constexpr NativeSocket kInvalidSocket = nullptr;
+    inline const NativeSocket kInvalidSocket = INVALID_HANDLE_VALUE;
+
+    inline std::wstring NormalizePipeName(const std::string& endpoint)
+    {
+        std::string name = endpoint;
+        constexpr const char* prefix = "\\\\.\\pipe\\";
+        if (!name.starts_with(prefix))
+        {
+            const size_t separator = name.find_last_of("/\\");
+            name = separator == std::string::npos ? name : name.substr(separator + 1);
+            if (name.empty())
+                name = "spark-daemon";
+            for (char& character : name)
+            {
+                if (character == '/' || character == '\\' || character == ':' || character == '.')
+                    character = '-';
+            }
+            name = std::string(prefix) + name;
+        }
+
+        const int length = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, name.data(),
+                                                 static_cast<int>(name.size()), nullptr, 0);
+        if (length <= 0)
+            return {};
+        std::wstring wide(static_cast<size_t>(length), L'\0');
+        if (::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, name.data(), static_cast<int>(name.size()),
+                                  wide.data(), length) != length)
+            return {};
+        return wide;
+    }
 #else
     using NativeSocket = int;
     inline constexpr NativeSocket kInvalidSocket = -1;
@@ -73,14 +106,58 @@ namespace Spark::Daemon
             return false;
         const auto* p = static_cast<const uint8_t*>(buf);
         size_t sent = 0;
-        while (sent < totalLen)
+        const auto deadline = std::chrono::steady_clock::now() + kDaemonIoTimeout;
+        while (sent < totalLen && std::chrono::steady_clock::now() < deadline)
         {
 #if defined(_WIN32)
-            (void)p;
-            (void)shuttingDown;
-            return false; // Not yet implemented on Windows.
+            const DWORD chunk = static_cast<DWORD>(
+                (std::min)(totalLen - sent, static_cast<size_t>((std::numeric_limits<DWORD>::max)())));
+            DWORD written = 0;
+            const BOOL succeeded = ::WriteFile(s, p + sent, chunk, &written, nullptr);
+            if (succeeded && written > 0)
+            {
+                sent += static_cast<size_t>(written);
+                continue;
+            }
+            if (succeeded)
+            {
+                if (shuttingDown.load(std::memory_order_acquire))
+                    return false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                continue;
+            }
+            const DWORD error = ::GetLastError();
+            if (error == ERROR_NO_DATA || error == ERROR_PIPE_BUSY || error == ERROR_PIPE_LISTENING)
+            {
+                if (shuttingDown.load(std::memory_order_acquire))
+                    return false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                continue;
+            }
+            return false;
 #else
-            auto n = ::send(s, p + sent, totalLen - sent, 0);
+            pollfd descriptor{s, POLLOUT, 0};
+            const int polled = ::poll(&descriptor, 1, 50);
+            if (polled < 0)
+            {
+                if (errno == EINTR)
+                    continue;
+                return false;
+            }
+            if (polled == 0)
+            {
+                if (shuttingDown.load(std::memory_order_acquire))
+                    return false;
+                continue;
+            }
+            int flags = 0;
+#ifdef MSG_DONTWAIT
+            flags |= MSG_DONTWAIT;
+#endif
+#ifdef MSG_NOSIGNAL
+            flags |= MSG_NOSIGNAL;
+#endif
+            auto n = ::send(s, p + sent, totalLen - sent, flags);
             if (n > 0)
             {
                 sent += static_cast<size_t>(n);
@@ -97,15 +174,14 @@ namespace Spark::Daemon
             return false;
 #endif
         }
-        return true;
+        return sent == totalLen;
     }
 
     /**
      * @brief Read exactly @p totalLen bytes from the socket.
      *
-     * Same aborts-waiting-only semantics as `SendAll`. Assumes the socket has a
-     * recv timeout (`SO_RCVTIMEO`) so `EAGAIN`/`EWOULDBLOCK` cycles let us
-     * observe @p shuttingDown periodically.
+     * Same aborts-waiting-only semantics as `SendAll`. Polling and an absolute
+     * deadline bound partial or stalled peers on every platform.
      */
     inline bool RecvAll(NativeSocket s, void* buf, size_t totalLen, const std::atomic<bool>& shuttingDown) noexcept
     {
@@ -113,14 +189,55 @@ namespace Spark::Daemon
             return false;
         auto* p = static_cast<uint8_t*>(buf);
         size_t received = 0;
-        while (received < totalLen)
+        const auto deadline = std::chrono::steady_clock::now() + kDaemonIoTimeout;
+        while (received < totalLen && std::chrono::steady_clock::now() < deadline)
         {
 #if defined(_WIN32)
-            (void)p;
-            (void)shuttingDown;
-            return false; // Not yet implemented on Windows.
+            const DWORD chunk = static_cast<DWORD>(
+                (std::min)(totalLen - received, static_cast<size_t>((std::numeric_limits<DWORD>::max)())));
+            DWORD read = 0;
+            const BOOL succeeded = ::ReadFile(s, p + received, chunk, &read, nullptr);
+            if (succeeded && read > 0)
+            {
+                received += static_cast<size_t>(read);
+                continue;
+            }
+            if (succeeded)
+            {
+                if (shuttingDown.load(std::memory_order_acquire))
+                    return false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                continue;
+            }
+            const DWORD error = ::GetLastError();
+            if (error == ERROR_NO_DATA || error == ERROR_PIPE_BUSY || error == ERROR_PIPE_LISTENING)
+            {
+                if (shuttingDown.load(std::memory_order_acquire))
+                    return false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                continue;
+            }
+            return false;
 #else
-            auto n = ::recv(s, p + received, totalLen - received, 0);
+            pollfd descriptor{s, POLLIN, 0};
+            const int polled = ::poll(&descriptor, 1, 50);
+            if (polled < 0)
+            {
+                if (errno == EINTR)
+                    continue;
+                return false;
+            }
+            if (polled == 0)
+            {
+                if (shuttingDown.load(std::memory_order_acquire))
+                    return false;
+                continue;
+            }
+            int flags = 0;
+#ifdef MSG_DONTWAIT
+            flags |= MSG_DONTWAIT;
+#endif
+            auto n = ::recv(s, p + received, totalLen - received, flags);
             if (n > 0)
             {
                 received += static_cast<size_t>(n);
@@ -139,7 +256,7 @@ namespace Spark::Daemon
             return false;
 #endif
         }
-        return true;
+        return received == totalLen;
     }
 
     /**

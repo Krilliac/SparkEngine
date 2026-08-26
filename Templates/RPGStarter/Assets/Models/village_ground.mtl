@@ -1,0 +1,12 @@
+# Repository-original RPGStarter village-square palette.
+newmtl VillageGrass
+Kd 0.105000 0.300000 0.125000
+
+newmtl VillagePath
+Kd 0.470000 0.285000 0.135000
+
+newmtl VillagePlaza
+Kd 0.440000 0.405000 0.335000
+
+newmtl VillageHill
+Kd 0.075000 0.185000 0.105000

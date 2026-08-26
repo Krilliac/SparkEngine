@@ -3,8 +3,8 @@
 A minimal editable project whose empty authoring scene stays blank while graphical runs use an explicit starter preview.
 
 This is a standalone game-module example for an installed SparkEngine SDK. `Scenes/Default.sparkscene` remains a genuinely
-empty canvas for the editor. A graphical runtime selects `Scenes/RuntimePreview.sparkscene` first and shows a neutral
-ground, origin marker, camera, light, and starter HUD emblem, so a successful launch is visibly distinct from a failed or
+empty canvas for the editor. A graphical runtime selects `Scenes/RuntimePreview.sparkscene` first and shows a slate
+stage, crossed origin guides, color marker, camera, light, and beacon, so a successful launch is visibly distinct from a failed or
 misconfigured renderer. Null-graphics and null-context runs still load the empty authoring scene and keep the world empty.
 
 The module also exposes a lifecycle clock through public accessors. Its state API is independent of graphics and input and
@@ -23,7 +23,7 @@ graphical game run selects `Scenes/RuntimePreview.sparkscene` as its explicit su
 ## Expected run and first edit
 
 - Editor: an empty hierarchy and empty reflected scene, ready for the first entity.
-- Graphical runtime: a neutral floor, lit origin cube, and Spark starter emblem. A completely blank white client area
+- Graphical runtime: a slate floor, crossed origin guides, lit color marker, and beacon sphere. A completely blank white client area
   is not the intended result.
 - Null-graphics/headless test runtime: zero template-owned entities, plus the deterministic lifecycle counter.
 
@@ -33,7 +33,7 @@ packaging checks and editor automation.
 
 ## License and assets
 
-See the SparkEngine root license for template source terms. `Assets/README.md` and `Assets/manifest.json` document that this starter contains no copied third-party content; the preview uses engine-owned procedural primitives plus the existing repository-original runtime sheet.
+See the SparkEngine root license for template source terms. `Assets/README.md` and `Assets/manifest.json` document that this starter contains no copied third-party content; the preview uses tiny repository-authored OBJ/MTL markers, one engine-owned sphere primitive, and the existing repository-original runtime sheet.
 
 ## Runtime asset sheet
 

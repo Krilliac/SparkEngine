@@ -149,7 +149,7 @@ TEST(Templates_Blank3D_HeadlessRuntimeLoadsDrivesAndCleansScene)
     Blank3DModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_FALSE(mod.SupportsHotReload());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(11));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(16));
 
     input.HandleMessage(WM_KEYDOWN, 'W', 0);
     mod.OnUpdate(0.25f);
@@ -179,7 +179,7 @@ TEST(Templates_Blank3D_FallsBackAfterInvalidStartupContract)
         context.SetWorld(&world);
         Blank3DModule mod;
         EXPECT_TRUE(mod.OnLoad(&context));
-        EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(10));
+        EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(15));
         mod.OnUnload();
         EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(0));
     }
@@ -280,7 +280,7 @@ TEST(Templates_FPSStarter_ArenaContainsRuntimeContract)
     const std::filesystem::path arena = FPSStarterProjectRoot() / "Scenes" / "Arena.sparkscene";
     World world;
     EXPECT_TRUE(Spark::LoadWorld(world, arena.string()));
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(12));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(27));
 
     bool foundCamera = false;
     bool foundPlayer = false;
@@ -313,7 +313,7 @@ TEST(Templates_FPSStarter_HeadlessContextLoadsAndCleansRuntimeScene)
 
     FPSStarterModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(12));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(27));
     EXPECT_TRUE(mod.IsTargetUnderCrosshair());
     EXPECT_TRUE(mod.TryFire());
     mod.OnUpdate(0.2f);
@@ -400,7 +400,7 @@ TEST(Templates_FPSStarter_AppendsArenaAroundLowIdHostEntities)
     context.SetWorld(&world);
     FPSStarterModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(13));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(28));
     EXPECT_TRUE(world.GetRegistry().valid(hostEntity));
     EXPECT_NEAR(world.GetComponent<Transform>(hostEntity)->position.x, 41.0f, 0.001f);
 
@@ -428,7 +428,7 @@ TEST(Templates_FPSStarter_FallsBackWhenStartupLacksArenaContract)
 
         FPSStarterModule mod;
         EXPECT_TRUE(mod.OnLoad(&context));
-        EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(12));
+        EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(27));
         EXPECT_TRUE(mod.TryFire());
         EXPECT_NEAR(mod.GetTargetState().health, 75.0f, 0.001f);
         mod.OnUnload();
@@ -547,7 +547,7 @@ TEST(Templates_ThirdPersonStarter_HeadlessRuntimeMovesJumpsAndCleansScene)
     ThirdPersonStarterModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_FALSE(mod.SupportsHotReload());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(7));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(17));
 
     const float startZ = mod.GetState().z;
     input.HandleMessage(WM_KEYDOWN, 'W', 0);
@@ -580,7 +580,7 @@ TEST(Templates_EmptyProject_GraphicalRuntimeLoadsPreviewAndCleansOwnedEntities)
     EmptyProjectModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_TRUE(mod.IsPreviewActive());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(6));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(10));
 
     mod.OnUnload();
     EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));
@@ -627,7 +627,7 @@ TEST(Templates_TopDownStarter_HeadlessRuntimeMovesAndCleansScene)
     TopDownStarterModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_FALSE(mod.SupportsHotReload());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(11));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(26));
 
     const float startZ = mod.GetState().playerZ;
     input.HandleMessage(WM_KEYDOWN, 'W', 0);
@@ -667,7 +667,18 @@ TEST(Templates_TopDownStarter_InputAttackFlashSurvivesItsFirstFrame)
 
     TopDownStarterModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
-    mod.Move(1.0f, 1.0f, 1.18f);
+    const TopDownStarterState initial = mod.GetState();
+    const float enemyDeltaX = initial.enemyX - initial.playerX;
+    const float enemyDeltaZ = initial.enemyZ - initial.playerZ;
+    const float enemyDistance = std::sqrt(enemyDeltaX * enemyDeltaX + enemyDeltaZ * enemyDeltaZ);
+    EXPECT_TRUE(enemyDistance > 0.0f);
+    if (enemyDistance > 0.0f)
+    {
+        constexpr float desiredAttackDistance = 1.0f;
+        constexpr float playerMoveSpeed = 6.0f;
+        mod.Move(enemyDeltaX / enemyDistance, enemyDeltaZ / enemyDistance,
+                 std::max(0.0f, enemyDistance - desiredAttackDistance) / playerMoveSpeed);
+    }
     input.HandleMessage(WM_KEYDOWN, VK_SPACE, 0);
     mod.OnUpdate(0.25f);
     input.HandleMessage(WM_KEYUP, VK_SPACE, 0);
@@ -718,7 +729,7 @@ TEST(Templates_MMOStarter_HeadlessRuntimeLoadsMovesRespawnsAndCleansScene)
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_FALSE(mod.SupportsHotReload());
     EXPECT_TRUE(mod.CanPlay());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(8));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(20));
 
     EntityID player = entt::null;
     for (EntityID entity : world.GetEntitiesWith<NameComponent>())
@@ -848,7 +859,7 @@ TEST(Templates_MultiplayerArena_HeadlessRuntimeOwnsPlayableScene)
     MultiplayerArenaModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_FALSE(mod.SupportsHotReload());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(17));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(27));
     EXPECT_EQ(mod.GetPlayers().size(), static_cast<size_t>(2));
     mod.OnUpdate(0.1f);
     mod.OnUpdate(5.0f);
@@ -895,7 +906,7 @@ TEST(Templates_PlatformerKit_HeadlessRuntimeMovesAndCleansScene)
     PlatformerKitModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_FALSE(mod.SupportsHotReload());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(13));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(24));
 
     const float startX = mod.GetState().x;
     input.HandleMessage(WM_KEYDOWN, 'D', 0);
@@ -984,7 +995,7 @@ TEST(Templates_RPGStarter_HeadlessRuntimeMovesSavesAndCleansScene)
     RPGStarterModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_FALSE(mod.SupportsHotReload());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(10));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(15));
 
     const float startZ = mod.GetState().z;
     input.HandleMessage(WM_KEYDOWN, 'W', 0);

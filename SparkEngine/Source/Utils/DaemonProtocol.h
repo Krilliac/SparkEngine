@@ -34,11 +34,12 @@ namespace Spark::Daemon
     /// Wire-format service identifiers. One per daemon service.
     enum class ServiceId : uint16_t
     {
-        Control = 0x0000, ///< Built-in: ping, shutdown, version query.
-        Asset = 0x0001,   ///< Asset service (compiled asset cache, cook pipeline).
-        Shader = 0x0002,  ///< Shader service (compile, disk cache, hot reload).
-        Collab = 0x0003,  ///< Collaborative editing broker.
-        Build = 0x0004,   ///< Build monitor (watch + incremental rebuild events).
+        Control = 0x0000,       ///< Built-in: ping, shutdown, version query.
+        Asset = 0x0001,         ///< Asset service (compiled asset cache, cook pipeline).
+        Shader = 0x0002,        ///< Shader service (compile, disk cache, hot reload).
+        Collab = 0x0003,        ///< Collaborative editing broker.
+        Build = 0x0004,         ///< Build monitor (watch + incremental rebuild events).
+        Orchestration = 0x0005, ///< Trusted process supervision and control plane.
     };
 
     /// Messages handled by the built-in Control service. Always present on every daemon.

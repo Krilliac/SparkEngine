@@ -51,6 +51,8 @@ jobs:
         echo "engine_lines=$ENGINE_LINES" >> "$GITHUB_OUTPUT"
         echo "editor_lines=$EDITOR_LINES" >> "$GITHUB_OUTPUT"
         echo "game_lines=$GAME_LINES" >> "$GITHUB_OUTPUT"
+        echo "services_lines=$SERVICES_LINES" >> "$GITHUB_OUTPUT"
+        echo "pipeline_lines=$PIPELINE_LINES" >> "$GITHUB_OUTPUT"
         echo "test_lines=$TEST_LINES" >> "$GITHUB_OUTPUT"
         echo "tool_lines=$TOOL_LINES" >> "$GITHUB_OUTPUT"
 
@@ -60,6 +62,8 @@ jobs:
         echo "| Engine | $(format_count "$ENGINE_LINES") |" >> "$GITHUB_STEP_SUMMARY"
         echo "| Editor | $(format_count "$EDITOR_LINES") |" >> "$GITHUB_STEP_SUMMARY"
         echo "| Game   | $(format_count "$GAME_LINES") |" >> "$GITHUB_STEP_SUMMARY"
+        echo "| Services | $(format_count "$SERVICES_LINES") |" >> "$GITHUB_STEP_SUMMARY"
+        echo "| Asset pipeline | $(format_count "$PIPELINE_LINES") |" >> "$GITHUB_STEP_SUMMARY"
         echo "| Tests  | $(format_count "$TEST_LINES") |" >> "$GITHUB_STEP_SUMMARY"
         echo "| Tools  | $(format_count "$TOOL_LINES") |" >> "$GITHUB_STEP_SUMMARY"
         echo "| **Total** | **$FORMATTED_LOC** |" >> "$GITHUB_STEP_SUMMARY"
@@ -114,6 +118,8 @@ jobs:
           "engine": ${{ steps.loc.outputs.engine_lines }},
           "editor": ${{ steps.loc.outputs.editor_lines }},
           "game": ${{ steps.loc.outputs.game_lines }},
+          "services": ${{ steps.loc.outputs.services_lines }},
+          "pipeline": ${{ steps.loc.outputs.pipeline_lines }},
           "tests": ${{ steps.loc.outputs.test_lines }},
           "tools": ${{ steps.loc.outputs.tool_lines }},
           "updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"

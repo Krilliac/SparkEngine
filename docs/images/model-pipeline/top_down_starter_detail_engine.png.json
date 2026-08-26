@@ -1,0 +1,18 @@
+{
+    "schema":  2,
+    "commit":  "c1341e72beead74096a28997c6401462c722dcad",
+    "workingTreeDirty":  true,
+    "template":  "TopDownStarter",
+    "scene":  "Skirmish.sparkscene",
+    "sceneSha256":  "17edb70742bc84ccc664eba86671485d3ade38656ff1b70bc2c192aa074d3e4e",
+    "assetManifestSha256":  "bbc31ba6980b3a8f0f9649908499dc96ef020324372c1e672bb52f47e2d20917",
+    "imageSha256":  "76432e0615382d323ec16dbe5c1e500b79cbda42957081140b57accbff0e0133",
+    "shot":  "detail",
+    "cameraPosition":  "6.5 9 -7",
+    "cameraLookAt":  "1.5 0 1.5",
+    "captureAtSeconds":  6,
+    "requestedWindow":  "1920x1080",
+    "capturedImage":  "1904x1041",
+    "engine":  "D:\\SparkEngine\\build\\bin\\Debug\\SparkEngine.exe",
+    "engineSha256":  "bced497af10e308c0431f08529510d75cffa5ef4f9d06dc441c15ebbdbbea318"
+}

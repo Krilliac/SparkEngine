@@ -20,6 +20,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -30,6 +31,8 @@ namespace Spark::Editor
 
 namespace SparkEditor
 {
+    class BuildPipeline;
+    class DedicatedServerProcessController;
 
     /// @brief Editor panel for dedicated server configuration, cooking, and PIE launching
     class DedicatedServerPanel : public EditorPanel
@@ -43,7 +46,9 @@ namespace SparkEditor
         {
             WindowsX64,
             LinuxX64,
-            LinuxARM64
+            LinuxARM64,
+            MacOSX64,
+            MacOSARM64
         };
 
         enum class ServerBuildProfile
@@ -65,10 +70,10 @@ namespace SparkEditor
             bool stripGraphics = true; ///< True = headless (no GPU)
             bool stripAudio = true;
             bool includeDebugSymbols = false;
-            bool compressAssets = true;
+            bool compressAssets = false;
             int compressionLevel = 6; ///< 1-9
             bool enableLogging = true;
-            bool enableRcon = true;
+            bool enableRcon = false;
         };
 
         // ============================================================
@@ -83,10 +88,10 @@ namespace SparkEditor
             float tickRate = 60.0f;
             int gameMode = 0; ///< Index into game mode list
             std::string mapName = "default";
-            bool openConsoleWindow = true; ///< Show a console window for the server
-            bool autoConnect = true;       ///< Editor client auto-connects after spawn
+            bool openConsoleWindow = false; ///< Reserved until process-window control is implemented.
+            bool autoConnect = false;       ///< Reserved until editor client transport integration is implemented.
             bool lanOnly = true;
-            bool enableRcon = true;
+            bool enableRcon = false;
             std::string rconPassword = "dev";
         };
 
@@ -112,7 +117,7 @@ namespace SparkEditor
         // ============================================================
 
         DedicatedServerPanel();
-        ~DedicatedServerPanel() override = default;
+        ~DedicatedServerPanel() override;
 
         bool Initialize() override;
         void Update(float deltaTime) override;
@@ -185,11 +190,13 @@ namespace SparkEditor
             std::string level; // "info", "warning", "error", "success"
         };
         std::vector<CookLogEntry> m_cookLog;
+        std::unique_ptr<BuildPipeline> m_cookPipeline;
 
         // PIE server state
         bool m_pieServerRunning = false;
         float m_pieServerUptime = 0.0f;
         std::vector<std::string> m_pieServerLog;
+        std::unique_ptr<DedicatedServerProcessController> m_serverProcess;
         char m_pieRconInputBuf[512] = {};
 
         // Server browser

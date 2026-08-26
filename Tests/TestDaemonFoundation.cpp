@@ -6,15 +6,15 @@
  * connects with DaemonClient, exercises the built-in Control service (ping,
  * version, shutdown), and joins the server thread on clean exit.
  *
- * POSIX-only — matches the Phase 1 transport (AF_UNIX). When Windows
- * named-pipe support lands, mirror this test for HANDLE-based connections.
+ * Runs against AF_UNIX on POSIX and local named pipes on Windows.
  */
 
 #include "TestFramework.h"
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
 
 #include "Utils/DaemonClient.h"
+#include "Utils/DaemonFraming.h"
 #include "Utils/DaemonProtocol.h"
 
 // SparkDaemon sources are pulled into SparkTests directly.
@@ -26,18 +26,26 @@
 #include <cstdio>
 #include <memory>
 #include <string>
-#include <sys/stat.h>
 #include <thread>
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 namespace
 {
     std::string UniqueSocketPath(const char* tag)
     {
+#if defined(_WIN32)
+        return std::string("spark-daemon-test-") + tag + "-" + std::to_string(::GetCurrentProcessId());
+#else
         // Keep it short enough to fit in sockaddr_un::sun_path (108 bytes on Linux).
         char buf[96];
         std::snprintf(buf, sizeof(buf), "/tmp/spark-daemon-test-%s-%d.sock", tag, static_cast<int>(::getpid()));
         return buf;
+#endif
     }
 
     bool WaitForSocketFile(const std::string& path, std::chrono::milliseconds timeout)
@@ -45,9 +53,15 @@ namespace
         auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline)
         {
+#if defined(_WIN32)
+            const std::wstring pipeName = Spark::Daemon::NormalizePipeName(path);
+            if (!pipeName.empty() && ::WaitNamedPipeW(pipeName.c_str(), 20))
+                return true;
+#else
             struct stat st;
             if (::stat(path.c_str(), &st) == 0)
                 return true;
+#endif
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         return false;
@@ -111,7 +125,9 @@ TEST(DaemonFoundation_ConnectPingShutdown)
     EXPECT_TRUE(serverExited.load(std::memory_order_acquire));
     EXPECT_FALSE(client.IsConnected());
 
+#if !defined(_WIN32)
     ::unlink(sockPath.c_str());
+#endif
 }
 
 TEST(DaemonFoundation_UnknownServiceReturnsError)
@@ -138,7 +154,34 @@ TEST(DaemonFoundation_UnknownServiceReturnsError)
     if (serverThread.joinable())
         serverThread.join();
 
+#if !defined(_WIN32)
     ::unlink(sockPath.c_str());
+#endif
+}
+
+TEST(DaemonFoundation_SecondServerCannotStealActiveEndpoint)
+{
+    const std::string sockPath = UniqueSocketPath("exclusive");
+    auto first = std::make_unique<Spark::Daemon::DaemonServer>();
+    first->AddService(std::make_unique<Spark::Daemon::ControlService>(first->GetShouldStopFlag()));
+    std::thread firstThread([&] { EXPECT_TRUE(first->Run(sockPath).has_value()); });
+    EXPECT_TRUE(WaitForSocketFile(sockPath, std::chrono::milliseconds(2000)));
+
+    Spark::Daemon::DaemonServer second;
+    auto secondResult = second.Run(sockPath);
+    EXPECT_FALSE(secondResult.has_value());
+
+    Spark::Daemon::DaemonClient client;
+    EXPECT_TRUE(client.Connect(sockPath).has_value());
+    EXPECT_TRUE(client.Ping().has_value());
+    client.Disconnect();
+
+    first->Stop();
+    if (firstThread.joinable())
+        firstThread.join();
+#if !defined(_WIN32)
+    ::unlink(sockPath.c_str());
+#endif
 }
 
 TEST(DaemonFoundation_ClientReportsNotConnected)
@@ -153,9 +196,9 @@ TEST(DaemonFoundation_ClientReportsNotConnected)
 TEST(DaemonFoundation_ConnectToMissingSocketFails)
 {
     Spark::Daemon::DaemonClient client;
-    auto result = client.Connect("/tmp/spark-daemon-does-not-exist.sock");
+    auto result = client.Connect(UniqueSocketPath("does-not-exist"));
     EXPECT_FALSE(result.has_value());
     EXPECT_FALSE(client.IsConnected());
 }
 
-#endif // POSIX
+#endif // supported local IPC platforms

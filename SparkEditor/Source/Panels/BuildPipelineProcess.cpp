@@ -11,12 +11,17 @@
 #include "BuildPipeline.h"
 
 #include <array>
+#include <cerrno>
+#include <chrono>
 #include <regex>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
+#include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
@@ -69,6 +74,8 @@ namespace SparkEditor
 
     int BuildPipeline::RunCommand(const std::string& executable, const std::vector<std::string>& arguments)
     {
+        if (m_cancelRequested.load())
+            return 1;
 #ifdef _WIN32
         SECURITY_ATTRIBUTES sa = {};
         sa.nLength = sizeof(sa);
@@ -98,8 +105,8 @@ namespace SparkEditor
             commandLine += QuoteWindowsArgument(argument);
         }
 
-        BOOL ok = CreateProcessA(nullptr, commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
-                                 nullptr, &startup, &process);
+        BOOL ok = CreateProcessA(nullptr, commandLine.data(), nullptr, nullptr, TRUE,
+                                 CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr, &startup, &process);
         CloseHandle(writePipe);
         if (!ok)
         {
@@ -108,10 +115,30 @@ namespace SparkEditor
             return -1;
         }
 
+        HANDLE job = CreateJobObjectW(nullptr, nullptr);
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if (!job || !SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)) ||
+            !AssignProcessToJobObject(job, process.hProcess))
         {
-            std::lock_guard lock(m_statusMutex);
-            m_processHandle = process.hProcess;
+            TerminateProcess(process.hProcess, 1);
+            CloseHandle(process.hThread);
+            CloseHandle(process.hProcess);
+            CloseHandle(readPipe);
+            if (job)
+                CloseHandle(job);
+            PushLog(BuildLogLine::Level::Error, "Failed to contain subprocess tree in a Windows job");
+            return -1;
         }
+
+        {
+            std::lock_guard lock(m_processMutex);
+            m_processHandle = process.hProcess;
+            m_jobHandle = job;
+        }
+        ResumeThread(process.hThread);
+        if (m_cancelRequested.load())
+            TerminateJobObject(job, 1);
 
         std::array<char, 512> buffer{};
         std::string lineAccum;
@@ -141,12 +168,14 @@ namespace SparkEditor
         GetExitCodeProcess(process.hProcess, &exitCode);
 
         {
-            std::lock_guard lock(m_statusMutex);
+            std::lock_guard lock(m_processMutex);
             m_processHandle = nullptr;
+            m_jobHandle = nullptr;
         }
 
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
+        CloseHandle(job);
         CloseHandle(readPipe);
 
         return static_cast<int>(exitCode);
@@ -169,6 +198,7 @@ namespace SparkEditor
 
         if (pid == 0)
         {
+            setpgid(0, 0);
             close(pipefd[0]);
             dup2(pipefd[1], STDOUT_FILENO);
             dup2(pipefd[1], STDERR_FILENO);
@@ -186,20 +216,36 @@ namespace SparkEditor
         }
 
         close(pipefd[1]);
-        m_childPid = pid;
+        setpgid(pid, pid);
+        const int pipeFlags = fcntl(pipefd[0], F_GETFL, 0);
+        if (pipeFlags == -1 || fcntl(pipefd[0], F_SETFL, pipeFlags | O_NONBLOCK) == -1)
+        {
+            kill(-pid, SIGKILL);
+            int status = 0;
+            while (waitpid(pid, &status, 0) == -1 && errno == EINTR)
+            {
+            }
+            close(pipefd[0]);
+            PushLog(BuildLogLine::Level::Error, "Failed to configure subprocess output pipe");
+            return -1;
+        }
+        {
+            std::lock_guard lock(m_processMutex);
+            m_childPid = pid;
+        }
 
         std::array<char, 512> buffer{};
         std::string lineAccum;
+        bool pipeOpen = true;
+        bool childExited = false;
+        bool waitFailed = false;
+        bool terminationStarted = false;
+        int status = 0;
+        std::chrono::steady_clock::time_point terminationDeadline{};
+        constexpr auto cancellationGrace = std::chrono::seconds(2);
 
-        while (!m_cancelRequested.load())
+        const auto consumeCompleteLines = [&]()
         {
-            ssize_t bytesRead = read(pipefd[0], buffer.data(), buffer.size() - 1);
-            if (bytesRead <= 0)
-                break;
-
-            buffer[bytesRead] = '\0';
-            lineAccum += buffer.data();
-            // Flush complete lines
             size_t pos;
             while ((pos = lineAccum.find('\n')) != std::string::npos)
             {
@@ -209,19 +255,99 @@ namespace SparkEditor
                     line.pop_back();
                 ParseLine(line);
             }
+        };
+
+        const auto drainAvailableOutput = [&]()
+        {
+            while (pipeOpen)
+            {
+                const ssize_t bytesRead = read(pipefd[0], buffer.data(), buffer.size());
+                if (bytesRead > 0)
+                {
+                    lineAccum.append(buffer.data(), static_cast<size_t>(bytesRead));
+                    consumeCompleteLines();
+                    continue;
+                }
+                if (bytesRead == 0)
+                {
+                    pipeOpen = false;
+                    break;
+                }
+                if (errno == EINTR)
+                    continue;
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    break;
+                pipeOpen = false;
+            }
+        };
+
+        while (!childExited)
+        {
+            drainAvailableOutput();
+
+            pid_t waitResult;
+            do
+            {
+                waitResult = waitpid(pid, &status, WNOHANG);
+            } while (waitResult == -1 && errno == EINTR);
+            if (waitResult == pid)
+            {
+                childExited = true;
+                break;
+            }
+            if (waitResult == -1)
+            {
+                waitFailed = true;
+                break;
+            }
+
+            if (m_cancelRequested.load())
+            {
+                if (!terminationStarted)
+                {
+                    kill(-pid, SIGTERM);
+                    terminationStarted = true;
+                    terminationDeadline = std::chrono::steady_clock::now() + cancellationGrace;
+                }
+                else if (std::chrono::steady_clock::now() >= terminationDeadline)
+                {
+                    kill(-pid, SIGKILL);
+                    do
+                    {
+                        waitResult = waitpid(pid, &status, 0);
+                    } while (waitResult == -1 && errno == EINTR);
+                    childExited = waitResult == pid;
+                    waitFailed = !childExited;
+                    break;
+                }
+            }
+
+            pollfd outputPoll{pipefd[0], POLLIN | POLLHUP, 0};
+            const int pollResult = poll(pipeOpen ? &outputPoll : nullptr, pipeOpen ? 1 : 0, 50);
+            if (pollResult == -1 && errno != EINTR)
+            {
+                kill(-pid, SIGKILL);
+                do
+                {
+                    waitResult = waitpid(pid, &status, 0);
+                } while (waitResult == -1 && errno == EINTR);
+                childExited = waitResult == pid;
+                waitFailed = !childExited;
+                break;
+            }
         }
 
-        // Flush remainder
+        drainAvailableOutput();
         if (!lineAccum.empty())
             ParseLine(lineAccum);
 
         close(pipefd[0]);
+        {
+            std::lock_guard lock(m_processMutex);
+            m_childPid = 0;
+        }
 
-        int status = 0;
-        waitpid(pid, &status, 0);
-        m_childPid = 0;
-
-        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        return !waitFailed && WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 #endif
     }
 
@@ -239,8 +365,7 @@ namespace SparkEditor
         if (std::regex_search(line, match, progressPct))
         {
             float pct = std::stof(match[1].str()) / 100.0f;
-            // Map compile progress to [0.15, 0.95] range (configure takes 0-0.15)
-            m_progress.store(0.15f + pct * 0.80f);
+            m_progress.store(m_cooking.load() ? 0.10f + pct * 0.85f : 0.15f + pct * 0.80f);
         }
         else if (std::regex_search(line, match, progressFrac))
         {
@@ -249,10 +374,11 @@ namespace SparkEditor
             if (total > 0.0f)
             {
                 float pct = current / total;
-                m_progress.store(0.15f + pct * 0.80f);
+                m_progress.store(m_cooking.load() ? 0.10f + pct * 0.85f : 0.15f + pct * 0.80f);
 
                 std::lock_guard lk(m_statusMutex);
-                m_statusText = "Compiling [" + match[1].str() + "/" + match[2].str() + "]";
+                m_statusText = (m_cooking.load() ? "Cooking assets [" : "Compiling [") + match[1].str() + "/" +
+                               match[2].str() + "]";
             }
         }
 

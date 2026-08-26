@@ -202,6 +202,45 @@ if(TARGET SparkConsole)
     )
 endif()
 
+if(TARGET SparkCooker)
+    add_dependencies(SparkEditor SparkCooker)
+    add_custom_command(TARGET SparkEditor POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:SparkCooker>
+            $<TARGET_FILE_DIR:SparkEditor>/$<TARGET_FILE_NAME:SparkCooker>
+        COMMENT "Installing SparkCooker for editor build/cook workflows"
+    )
+endif()
+
+if(TARGET SparkAutomation)
+    add_dependencies(SparkEditor SparkAutomation)
+    add_custom_command(TARGET SparkEditor POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:SparkAutomation>
+            $<TARGET_FILE_DIR:SparkEditor>/$<TARGET_FILE_NAME:SparkAutomation>
+        COMMENT "Installing SparkAutomation for editor package smoke tests"
+    )
+endif()
+
+foreach(_spark_editor_service SparkServer SparkGateway SparkDaemon SparkCollabServer SparkOrchestrator)
+    if(TARGET ${_spark_editor_service})
+        add_dependencies(SparkEditor ${_spark_editor_service})
+        add_custom_command(TARGET SparkEditor POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:${_spark_editor_service}>
+                $<TARGET_FILE_DIR:SparkEditor>/$<TARGET_FILE_NAME:${_spark_editor_service}>
+            COMMENT "Installing ${_spark_editor_service} for editor service workflows"
+        )
+    endif()
+endforeach()
+
+install(TARGETS SparkEditor RUNTIME DESTINATION bin COMPONENT runtime)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Fonts")
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Fonts/"
+        DESTINATION bin/EditorAssets/Fonts
+        COMPONENT runtime)
+endif()
+
 # Visual Studio settings
 if(MSVC)
     set_property(TARGET SparkEditor PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")

@@ -111,6 +111,7 @@ add_executable(SparkTests
     TestModuleDependency.cpp
     TestModuleDiscovery.cpp
     TestModuleABI.cpp
+    TestPluginABI.cpp
     TestReflection.cpp
     TestPathCache.cpp
     TestShaderGraphCompiler.cpp
@@ -512,6 +513,10 @@ add_executable(SparkTests
     # Comprehensive subsystem coverage
     TestGraphicsSubsystems.cpp
     TestEditorSubsystems.cpp
+    TestDedicatedServerProcessController.cpp
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/DedicatedServerProcessController.cpp"
+    TestServiceTopologyController.cpp
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/ServiceTopologyController.cpp"
     TestCoreAndBuildSystems.cpp
     TestOpenWorldModule.cpp
     TestGameModuleRTS.cpp
@@ -746,6 +751,7 @@ target_sources(SparkTests PRIVATE
     TestRHICapabilityParity.cpp
     TestShaderDiskCache.cpp
     TestSubsystemConsoleCommands.cpp
+    TestEcsCameraConsole.cpp
     TestTextureZombiePool.cpp
 )
 
@@ -940,6 +946,36 @@ set_target_properties(SparkTests PROPERTIES
     INTERPROCEDURAL_OPTIMIZATION OFF
     INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF
 )
+
+# Standalone process cores remain independently testable while their thin
+# executable entry points are covered by --help CTests in each subtree.
+if(TARGET SparkServerCore)
+    target_sources(SparkTests PRIVATE TestSparkServerApplication.cpp)
+    target_link_libraries(SparkTests PRIVATE SparkServerCore)
+endif()
+if(TARGET SparkGatewayCore)
+    target_sources(SparkTests PRIVATE
+        TestSparkGatewayCoordinator.cpp
+        TestGatewaySecurity.cpp
+        TestGatewayAreaControl.cpp)
+    target_link_libraries(SparkTests PRIVATE SparkGatewayCore SparkGatewaySecurity)
+endif()
+if(TARGET SparkCooker)
+    add_dependencies(SparkTests SparkCooker)
+    add_custom_command(TARGET SparkTests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:SparkCooker>
+            $<TARGET_FILE_DIR:SparkTests>/$<TARGET_FILE_NAME:SparkCooker>
+    )
+endif()
+if(TARGET SparkAutomation)
+    add_dependencies(SparkTests SparkAutomation)
+    add_custom_command(TARGET SparkTests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:SparkAutomation>
+            $<TARGET_FILE_DIR:SparkTests>/$<TARGET_FILE_NAME:SparkAutomation>
+    )
+endif()
 
 # Add to CTest
 enable_testing()

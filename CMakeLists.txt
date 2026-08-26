@@ -150,6 +150,9 @@ option(ENABLE_EDITOR "Enable editor features" ON)
 option(ENABLE_LAUNCHER "Build SparkLauncher (Unity-Hub-style project picker)" ON)
 option(ENABLE_SPARKBUILD "Build SparkBuild (terminal-UI CMake configurator)" ON)
 option(ENABLE_INSTALLER "Build SparkInstaller (bootstrap installer/updater)" ON)
+option(ENABLE_SERVER_PROCESSES "Build dedicated server, gateway, and orchestration processes" ON)
+option(ENABLE_ASSET_PIPELINE_TOOLS "Build deterministic cooker and worker processes" ON)
+option(ENABLE_AUTOMATION_HOST "Build the standalone automation host" ON)
 
 # Build profile options — controls what ships in the final binary
 option(ENABLE_CONSOLE_IN_SHIPPING "Include SparkConsole in Shipping builds" OFF)
@@ -546,13 +549,11 @@ if(NOT WIN32 AND ENABLE_SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/CMakeLists.txt")
     set(SDL_STATIC   OFF CACHE BOOL "" FORCE)
     set(SDL_TEST     OFF CACHE BOOL "" FORCE)
     set(SDL_OPENGL   ON  CACHE BOOL "" FORCE)
-    # SparkEngineLib's installed target links SDL2::SDL2. SDL defaults to
-    # disabling its install/export rules when embedded as a subproject, which
-    # leaves the vendored SDL2 target outside every export set and makes CMake
-    # reject SparkEngineTargets during generation. Ship SDL's own package with
-    # the SDK so installed consumers can resolve the advertised dependency.
-    set(SDL2_DISABLE_INSTALL OFF CACHE BOOL
-        "Allow SDL2 to participate in package exports" FORCE)
+    # SparkEngine owns the component-aware SDL install rules below. Disable
+    # SDL's generic no-component rules so CPack never installs the same DLL or
+    # import library twice and component-only installs remain self-contained.
+    set(SDL2_DISABLE_INSTALL ON CACHE BOOL
+        "SparkEngine provides component-aware SDL2 install rules" FORCE)
 
     if(APPLE)
         # macOS: Cocoa + CoreAudio. X11/Wayland/ALSA etc. are irrelevant.
@@ -1123,7 +1124,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/SparkCrashReporter/CMakeLists.txt")
 endif()
 
 # Build SparkDaemon (long-lived shared-state service: Asset/Shader/Collab/Build)
-if(EXISTS "${CMAKE_SOURCE_DIR}/SparkDaemon/CMakeLists.txt")
+if(ENABLE_SERVER_PROCESSES AND EXISTS "${CMAKE_SOURCE_DIR}/SparkDaemon/CMakeLists.txt")
     message(STATUS "Building SparkDaemon...")
     add_subdirectory(SparkDaemon)
 endif()
@@ -1557,13 +1558,45 @@ if(TARGET SparkConsole)
 endif()
 
 # ---------------------------------------------------------------------
+# 9.4) Standalone runtime and production-pipeline processes
+# ---------------------------------------------------------------------
+if(ENABLE_SERVER_PROCESSES)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGateway/CMakeLists.txt")
+        add_subdirectory(SparkGateway)
+    endif()
+    if(EXISTS "${CMAKE_SOURCE_DIR}/SparkServer/CMakeLists.txt")
+        add_subdirectory(SparkServer)
+    endif()
+endif()
+
+if(ENABLE_ASSET_PIPELINE_TOOLS)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/SparkAssetPipelineCore/CMakeLists.txt")
+        add_subdirectory(SparkAssetPipelineCore)
+    endif()
+    if(EXISTS "${CMAKE_SOURCE_DIR}/SparkCooker/CMakeLists.txt")
+        add_subdirectory(SparkCooker)
+    endif()
+    if(EXISTS "${CMAKE_SOURCE_DIR}/SparkWorker/CMakeLists.txt")
+        add_subdirectory(SparkWorker)
+    endif()
+endif()
+
+if(ENABLE_AUTOMATION_HOST AND EXISTS "${CMAKE_SOURCE_DIR}/SparkAutomation/CMakeLists.txt")
+    add_subdirectory(SparkAutomation)
+endif()
+
+# ---------------------------------------------------------------------
 # 9.5) Build game modules from GameModules/ directory (auto-discovery)
 #
 # Drop a game module folder into GameModules/ with a CMakeLists.txt and
 # it will be built automatically.  Remove the folder to exclude it.
 # Set BUILD_GAME_MODULES=OFF to skip all game modules entirely.
 # ---------------------------------------------------------------------
+if(NOT DEFINED SPARK_ENGINE_INCLUDE_DIR OR SPARK_ENGINE_INCLUDE_DIR STREQUAL "")
+    set(SPARK_ENGINE_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/SparkSDK/Include")
+endif()
 include("${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/SparkPlugin.cmake")
 
 if(BUILD_GAME_MODULES)
     file(GLOB _SPARK_GAME_MODULE_DIRS "${CMAKE_SOURCE_DIR}/GameModules/*/CMakeLists.txt")
@@ -2310,7 +2343,7 @@ set(SPARK_INSTALL_COMPONENT_TEMPLATES "templates")
 set(SPARK_INSTALL_COMPONENT_SAMPLES "samples")
 
 set(_SPARK_INSTALL_TARGETS SparkEngineLib)
-foreach(_spark_dependency miniz tinyexr zstd tinyobjloader stb_image cgltf miniaudio nlohmann_json glad Jolt Recast Detour angelscript)
+foreach(_spark_dependency SparkAssetPipelineCore miniz tinyexr zstd tinyobjloader stb_image cgltf miniaudio nlohmann_json glad Jolt Recast Detour angelscript)
     if(TARGET ${_spark_dependency})
         list(APPEND _SPARK_INSTALL_TARGETS ${_spark_dependency})
     endif()
@@ -2326,6 +2359,13 @@ install(DIRECTORY SparkSDK/Include/Spark
     DESTINATION include
     COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
 )
+
+if(TARGET SparkAssetPipelineCore)
+    install(DIRECTORY "SparkAssetPipelineCore/include/"
+        DESTINATION include
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+    )
+endif()
 
 # Install the engine's public headers (needed by modules that use engine types directly)
 install(DIRECTORY "SparkEngine/Source/"
@@ -2358,6 +2398,50 @@ install(EXPORT SparkEngineTargets
 
 # Package config
 include(CMakePackageConfigHelpers)
+
+# The vendored shared SDL target is a public SDK dependency and a runtime DLL.
+# Export it once, split by artifact kind, rather than layering duplicate install
+# rules over SDL's upstream no-component installation.
+if(TARGET SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/include")
+    install(TARGETS SDL2
+        EXPORT SparkSDL2Targets
+        RUNTIME DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+        LIBRARY DESTINATION lib COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+                NAMELINK_COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+        ARCHIVE DESTINATION lib COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+        FRAMEWORK DESTINATION lib COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+        INCLUDES DESTINATION include include/SDL2
+    )
+    install(EXPORT SparkSDL2Targets
+        FILE SDL2Targets.cmake
+        NAMESPACE SDL2::
+        DESTINATION lib/cmake/SDL2
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+    )
+    install(FILES ${_SDL2_PUBLIC_HEADERS}
+        "${CMAKE_BINARY_DIR}/ThirdParty/SDL2/include/SDL2/SDL_revision.h"
+        "${CMAKE_BINARY_DIR}/ThirdParty/SDL2/include-config-$<LOWER_CASE:$<CONFIG>>/SDL2/SDL_config.h"
+        DESTINATION include/SDL2
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+    )
+    if(MSVC)
+        install(FILES "$<TARGET_PDB_FILE:SDL2>"
+            DESTINATION bin
+            COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+            OPTIONAL
+        )
+    endif()
+    configure_package_config_file(
+        "${CMAKE_SOURCE_DIR}/cmake/SparkSDL2Config.cmake.in"
+        "${CMAKE_BINARY_DIR}/SDL2Config.cmake"
+        INSTALL_DESTINATION lib/cmake/SDL2
+    )
+    install(FILES "${CMAKE_BINARY_DIR}/SDL2Config.cmake"
+        DESTINATION lib/cmake/SDL2
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+    )
+endif()
+
 set(SPARK_PACKAGE_HAS_CURL 0)
 if(TARGET CURL::libcurl)
     set(SPARK_PACKAGE_HAS_CURL 1)
@@ -2382,6 +2466,8 @@ install(FILES
     "${CMAKE_BINARY_DIR}/SparkEngineConfigVersion.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/WriteSparkModuleABI.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/SparkPlugin.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/WriteSparkPluginMetadata.cmake"
     DESTINATION lib/cmake/SparkEngine
     COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
 )

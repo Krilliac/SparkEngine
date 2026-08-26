@@ -36,5 +36,6 @@ set(SPARK_ENGINE_FOUND TRUE)
 
 include("${CMAKE_CURRENT_LIST_DIR}/SparkEngineTargets.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/SparkGameModule.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/SparkPlugin.cmake")
 
 check_required_components(SparkEngine)

@@ -10,9 +10,10 @@
 
 #include "TestFramework.h"
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
 
 #include "Utils/DaemonClient.h"
+#include "Utils/DaemonFraming.h"
 #include "Utils/DaemonProtocol.h"
 #include "Utils/ShaderServiceClient.h"
 
@@ -25,18 +26,26 @@
 #include <cstdio>
 #include <memory>
 #include <string>
-#include <sys/stat.h>
 #include <thread>
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <sys/stat.h>
 #include <unistd.h>
+#endif
 #include <vector>
 
 namespace
 {
     std::string UniqueConcurrentSockPath(const char* tag)
     {
+#if defined(_WIN32)
+        return std::string("spark-daemon-concurrent-") + tag + "-" + std::to_string(::GetCurrentProcessId());
+#else
         char buf[96];
         std::snprintf(buf, sizeof(buf), "/tmp/spark-daemon-concurrent-%s-%d.sock", tag, static_cast<int>(::getpid()));
         return buf;
+#endif
     }
 
     bool WaitForConcurrentSocket(const std::string& path, std::chrono::milliseconds timeout)
@@ -44,9 +53,15 @@ namespace
         auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline)
         {
+#if defined(_WIN32)
+            const std::wstring pipeName = Spark::Daemon::NormalizePipeName(path);
+            if (!pipeName.empty() && ::WaitNamedPipeW(pipeName.c_str(), 20))
+                return true;
+#else
             struct stat st;
             if (::stat(path.c_str(), &st) == 0)
                 return true;
+#endif
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         return false;
@@ -75,7 +90,9 @@ namespace
                 server->Stop();
             if (thread.joinable())
                 thread.join();
+#if !defined(_WIN32)
             ::unlink(sockPath.c_str());
+#endif
         }
     };
 } // namespace
@@ -235,4 +252,4 @@ TEST(DaemonStats_CodecRejectsTruncatedPayload)
     EXPECT_FALSE(Spark::Daemon::DecodeDaemonStats(truncated, out));
 }
 
-#endif // POSIX
+#endif // supported local IPC platforms

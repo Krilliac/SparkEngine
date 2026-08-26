@@ -6,7 +6,7 @@
           "fields": {
             "position": "0.000000,0.000000,0.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "50.000000,0.100000,50.000000"
+            "scale": "36.000000,0.100000,36.000000"
           },
           "type": "Transform"
         },
@@ -58,8 +58,8 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,7.000000,-12.000000",
-            "rotation": "25.000000,0.000000,0.000000",
+            "position": "0.000000,4.800000,-10.000000",
+            "rotation": "14.000000,0.000000,0.000000",
             "scale": "1.000000,1.000000,1.000000"
           },
           "type": "Transform"
@@ -82,9 +82,9 @@
       "components": [
         {
           "fields": {
-            "position": "-3.000000,1.000000,0.000000",
+            "position": "-4.000000,0.000000,2.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "0.800000,2.000000,0.800000"
+            "scale": "2.000000,2.800000,2.000000"
           },
           "type": "Transform"
         },
@@ -108,9 +108,9 @@
       "components": [
         {
           "fields": {
-            "position": "5.000000,1.000000,2.000000",
+            "position": "4.000000,0.000000,2.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "0.800000,2.000000,0.800000"
+            "scale": "2.000000,2.800000,2.000000"
           },
           "type": "Transform"
         },
@@ -134,9 +134,9 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,0.250000,8.000000",
+            "position": "0.000000,0.150000,7.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "4.000000,0.500000,4.000000"
+            "scale": "5.500000,0.800000,5.500000"
           },
           "type": "Transform"
         },
@@ -160,9 +160,9 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,2.000000,8.000000",
+            "position": "0.000000,0.000000,13.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "1.000000,4.000000,1.000000"
+            "scale": "3.000000,7.000000,3.000000"
           },
           "type": "Transform"
         },
@@ -180,6 +180,322 @@
       ],
       "id": 6,
       "name": "Frontier Relay",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-7.000000,0.000000,7.000000",
+            "rotation": "0.000000,20.000000,0.000000",
+            "scale": "1.800000,2.600000,1.800000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.020000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/astra.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 7,
+      "name": "Astra Scout",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-3.500000,0.000000,11.000000",
+            "rotation": "0.000000,-15.000000,0.000000",
+            "scale": "2.000000,2.900000,2.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.020000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/astra.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 8,
+      "name": "Astra Vanguard",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "7.000000,0.000000,7.000000",
+            "rotation": "0.000000,-20.000000,0.000000",
+            "scale": "1.800000,2.600000,1.800000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.020000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/training_bot.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 9,
+      "name": "Frontier Drone East",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "3.500000,0.000000,11.000000",
+            "rotation": "0.000000,15.000000,0.000000",
+            "scale": "2.000000,2.900000,2.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.020000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/training_bot.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 10,
+      "name": "Frontier Drone North",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-8.000000,0.100000,13.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "3.800000,0.650000,3.800000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.060000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/capture_beacon.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 11,
+      "name": "West Transit Pad",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "8.000000,0.100000,13.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "3.800000,0.650000,3.800000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.060000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/capture_beacon.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 12,
+      "name": "East Transit Pad",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-8.000000,0.000000,16.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "2.200000,6.000000,2.200000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.050000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/frontier_relay.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 13,
+      "name": "West Relay",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "8.000000,0.000000,16.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "2.200000,6.000000,2.200000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.050000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/frontier_relay.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 14,
+      "name": "East Relay",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-3.500000,0.100000,5.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "2.700000,0.500000,2.700000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.080000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/capture_beacon.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 15,
+      "name": "West Objective Ring",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "3.500000,0.100000,5.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "2.700000,0.500000,2.700000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.080000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/capture_beacon.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 16,
+      "name": "East Objective Ring",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-6.000000,5.000000,10.000000",
+            "rotation": "90.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "0.050000,0.700000,1.000000",
+            "intensity": "2.250000",
+            "range": "16.000000",
+            "shadowMapResolution": "512",
+            "spotAngle": "60.000000",
+            "spotInnerAngle": "38.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 17,
+      "name": "Alliance Beacon Light",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "6.000000,5.000000,10.000000",
+            "rotation": "90.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "1.000000,0.280000,0.040000",
+            "intensity": "2.250000",
+            "range": "16.000000",
+            "shadowMapResolution": "512",
+            "spotAngle": "60.000000",
+            "spotInnerAngle": "38.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 18,
+      "name": "Frontier Beacon Light",
       "parent": -1
     }
   ],

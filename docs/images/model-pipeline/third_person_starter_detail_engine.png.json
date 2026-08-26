@@ -1,0 +1,18 @@
+{
+    "schema":  2,
+    "commit":  "c1341e72beead74096a28997c6401462c722dcad",
+    "workingTreeDirty":  true,
+    "template":  "ThirdPersonStarter",
+    "scene":  "Adventure.sparkscene",
+    "sceneSha256":  "79e3786aec61c1bc4cb1d746a07e55da7f5bd1f78621b8f5a3590f77b1229afb",
+    "assetManifestSha256":  "7750e7b6c9169776d7e61b1381ff8a8b1cc424d7f54d75f48bd58787afbfa854",
+    "imageSha256":  "0c310e28674f59c90ce2e2e265ecf40da0cd818e6f75d42ccabaf5a106148b6a",
+    "shot":  "detail",
+    "cameraPosition":  "-2.8 2.2 -0.5",
+    "cameraLookAt":  "0 1 7.5",
+    "captureAtSeconds":  6,
+    "requestedWindow":  "1920x1080",
+    "capturedImage":  "1904x1041",
+    "engine":  "D:\\SparkEngine\\build\\bin\\Debug\\SparkEngine.exe",
+    "engineSha256":  "bced497af10e308c0431f08529510d75cffa5ef4f9d06dc441c15ebbdbbea318"
+}

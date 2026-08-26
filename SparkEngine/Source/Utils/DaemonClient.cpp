@@ -9,7 +9,9 @@
 #include <cerrno>
 #include <cstring>
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#include <windows.h>
+#else
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -53,8 +55,47 @@ namespace Spark::Daemon
     Expected<void, std::string> DaemonClient::Connect(const std::string& socketPath)
     {
 #if defined(_WIN32)
-        (void)socketPath;
-        return Unexpected<std::string>("DaemonClient: Windows named-pipe transport not yet implemented");
+        if (socketPath.empty())
+            return Unexpected<std::string>("DaemonClient: pipe endpoint is empty");
+        const std::wstring pipeName = NormalizePipeName(socketPath);
+        if (pipeName.empty())
+            return Unexpected<std::string>("DaemonClient: pipe endpoint is not valid UTF-8");
+
+        {
+            std::lock_guard lock(m_mutex);
+            auto existing = ToNative(m_nativeSocket);
+            if (existing != kInvalidSocket)
+            {
+                CloseSocket(existing);
+                m_nativeSocket = FromNative(kInvalidSocket);
+            }
+        }
+
+        if (!::WaitNamedPipeW(pipeName.c_str(), 5000))
+            return Unexpected<std::string>("DaemonClient: WaitNamedPipeW failed (error " +
+                                           std::to_string(::GetLastError()) + ")");
+
+        HANDLE pipe = ::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                                    FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (pipe == INVALID_HANDLE_VALUE)
+            return Unexpected<std::string>("DaemonClient: CreateFileW failed (error " +
+                                           std::to_string(::GetLastError()) + ")");
+
+        DWORD mode = PIPE_READMODE_BYTE | PIPE_NOWAIT;
+        if (!::SetNamedPipeHandleState(pipe, &mode, nullptr, nullptr))
+        {
+            const DWORD error = ::GetLastError();
+            ::CloseHandle(pipe);
+            return Unexpected<std::string>("DaemonClient: SetNamedPipeHandleState failed (error " +
+                                           std::to_string(error) + ")");
+        }
+
+        m_shuttingDown.store(false, std::memory_order_release);
+        {
+            std::lock_guard lock(m_mutex);
+            m_nativeSocket = FromNative(pipe);
+        }
+        return {};
 #else
         if (socketPath.empty())
             return Unexpected<std::string>("DaemonClient: socket path is empty");
@@ -74,6 +115,15 @@ namespace Spark::Daemon
         int sock = ::socket(AF_UNIX, SOCK_STREAM, 0);
         if (sock < 0)
             return Unexpected<std::string>(std::string("DaemonClient: socket() failed: ") + std::strerror(errno));
+#if defined(SO_NOSIGPIPE) && !defined(MSG_NOSIGNAL)
+        const int noSigPipe = 1;
+        if (::setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, sizeof(noSigPipe)) != 0)
+        {
+            const std::string err = std::strerror(errno);
+            ::close(sock);
+            return Unexpected<std::string>("DaemonClient: could not disable SIGPIPE: " + err);
+        }
+#endif
 
         sockaddr_un addr{};
         addr.sun_family = AF_UNIX;

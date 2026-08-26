@@ -6,6 +6,11 @@ runtime and dynamically loaded game modules (DLLs on Windows, `.so` on Linux,
 remain compatible across engine updates, and avoid the subtle memory corruption
 bugs that plague cross-DLL C++ code.
 
+This guide covers the compiler-specific C++ game-module boundary. Importers,
+processors, editor extensions, runtime extensions, and external tools that need
+a compiler-independent C boundary should use the
+[Stable C Plugin ABI](../guides/plugin-abi.md).
+
 **Audience:** Game module authors, engine contributors adding SDK surface area.
 
 ---

@@ -23,6 +23,7 @@
 #include "AssetService.h"
 #include "ControlService.h"
 #include "DaemonServer.h"
+#include "OrchestrationService.h"
 #include "ShaderService.h"
 
 #include <atomic>
@@ -32,6 +33,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
 #if !defined(_WIN32)
 #include <csignal>
@@ -67,6 +69,9 @@ int main(int argc, char** argv)
     std::string assetCacheDir;
     uint64_t shaderMaxBytes = 0;
     uint64_t assetMaxBytes = 0;
+    std::vector<std::filesystem::path> orchestrationRoots;
+    size_t orchestrationMaxProcesses = 16;
+    std::filesystem::path orchestrationStateFile = "./.spark-orchestration.state";
     auto parseMb = [](const char* s, uint64_t& out) -> bool
     {
         try
@@ -110,11 +115,38 @@ int main(int argc, char** argv)
                 return 2;
             }
         }
+        else if (arg == "--orchestrator-allow-root" && i + 1 < argc)
+        {
+            orchestrationRoots.emplace_back(argv[++i]);
+        }
+        else if (arg == "--orchestrator-max-processes" && i + 1 < argc)
+        {
+            try
+            {
+                orchestrationMaxProcesses = static_cast<size_t>(std::stoull(argv[++i]));
+            }
+            catch (...)
+            {
+                std::fprintf(stderr, "SparkDaemon: invalid --orchestrator-max-processes value '%s'\n", argv[i]);
+                return 2;
+            }
+            if (orchestrationMaxProcesses == 0 || orchestrationMaxProcesses > 256)
+            {
+                std::fprintf(stderr, "SparkDaemon: --orchestrator-max-processes must be between 1 and 256\n");
+                return 2;
+            }
+        }
+        else if (arg == "--orchestrator-state-file" && i + 1 < argc)
+        {
+            orchestrationStateFile = argv[++i];
+        }
         else if (arg == "--help" || arg == "-h")
         {
             std::puts("SparkDaemon [--socket <path>]\n"
                       "            [--cache-dir <path>] [--shader-cache-max-mb <N>]\n"
-                      "            [--asset-cache-dir <path>] [--asset-cache-max-mb <N>]");
+                      "            [--asset-cache-dir <path>] [--asset-cache-max-mb <N>]\n"
+                      "            --orchestrator-allow-root <path> [--orchestrator-max-processes <N>]\n"
+                      "            [--orchestrator-state-file <path>]");
             return 0;
         }
         else
@@ -165,6 +197,16 @@ int main(int argc, char** argv)
                     static_cast<unsigned long long>(assetMaxBytes / (1024ull * 1024ull)));
     }
     server.AddService(std::move(asset));
+
+    if (!orchestrationRoots.empty())
+    {
+        Spark::Daemon::OrchestrationConfig orchestrationConfig;
+        orchestrationConfig.allowedExecutableRoots = std::move(orchestrationRoots);
+        orchestrationConfig.maximumRunningProcesses = orchestrationMaxProcesses;
+        orchestrationConfig.journalPath = std::move(orchestrationStateFile);
+        server.AddService(std::make_unique<Spark::Daemon::OrchestrationService>(std::move(orchestrationConfig)));
+        std::printf("SparkDaemon: orchestration enabled (%zu process cap)\n", orchestrationMaxProcesses);
+    }
 
     g_serverForSignal = &server;
 #if !defined(_WIN32)

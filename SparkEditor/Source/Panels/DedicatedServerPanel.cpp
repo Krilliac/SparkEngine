@@ -6,17 +6,97 @@
  */
 
 #include "DedicatedServerPanel.h"
+#include "BuildPipeline.h"
+#include "DedicatedServerProcessController.h"
 #include <algorithm>
+#include <filesystem>
 #include <iostream>
 
 #include <imgui.h>
 
 #include "../Core/EditorIcons.h"
+#include "../Core/ProjectManager.h"
+#include "../Utils/EditorProcessLaunch.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
+    namespace
+    {
+        std::filesystem::path FindSparkServerExecutable()
+        {
+            const auto directory = std::filesystem::path(GetEditorExecutableDirectory());
+#ifdef _WIN32
+            constexpr std::string_view filename = "SparkServer.exe";
+#else
+            constexpr std::string_view filename = "SparkServer";
+#endif
+            const std::filesystem::path candidates[] = {directory / filename, directory.parent_path() / filename};
+            std::error_code error;
+            for (const auto& candidate : candidates)
+            {
+                if (std::filesystem::is_regular_file(candidate, error))
+                    return candidate;
+                error.clear();
+            }
+            return {};
+        }
+
+        BuildSettings MakeCookSettings(const DedicatedServerPanel::ServerCookSettings& server)
+        {
+            BuildSettings settings;
+            settings.profile = server.profile == DedicatedServerPanel::ServerBuildProfile::Debug
+                                   ? BuildCookPanel::BuildProfile::Debug
+                               : server.profile == DedicatedServerPanel::ServerBuildProfile::Shipping
+                                   ? BuildCookPanel::BuildProfile::Shipping
+                                   : BuildCookPanel::BuildProfile::Development;
+            switch (server.platform)
+            {
+            case DedicatedServerPanel::ServerPlatform::WindowsX64:
+                settings.platform = BuildCookPanel::TargetPlatform::WindowsX64;
+                break;
+            case DedicatedServerPanel::ServerPlatform::LinuxX64:
+                settings.platform = BuildCookPanel::TargetPlatform::LinuxX64;
+                break;
+            case DedicatedServerPanel::ServerPlatform::LinuxARM64:
+                settings.platform = BuildCookPanel::TargetPlatform::LinuxARM64;
+                break;
+            case DedicatedServerPanel::ServerPlatform::MacOSX64:
+                settings.platform = BuildCookPanel::TargetPlatform::MacOSX64;
+                break;
+            case DedicatedServerPanel::ServerPlatform::MacOSARM64:
+                settings.platform = BuildCookPanel::TargetPlatform::MacOSARM64;
+                break;
+            }
+            settings.includeDebugSymbols = server.includeDebugSymbols;
+            settings.cookAssets = true;
+            settings.outputDirectory = server.outputDirectory;
+            settings.executableName = "SparkGame";
+            settings.packageDedicatedServer = true;
+            settings.dedicatedServerExecutableName = server.executableName;
+            return settings;
+        }
+
+        DedicatedServerPanel::ServerPlatform NativeServerPlatform()
+        {
+            switch (BuildPipeline::NativeTargetPlatform())
+            {
+            case BuildCookPanel::TargetPlatform::WindowsX64:
+                return DedicatedServerPanel::ServerPlatform::WindowsX64;
+            case BuildCookPanel::TargetPlatform::LinuxARM64:
+                return DedicatedServerPanel::ServerPlatform::LinuxARM64;
+            case BuildCookPanel::TargetPlatform::LinuxX64:
+                return DedicatedServerPanel::ServerPlatform::LinuxX64;
+            case BuildCookPanel::TargetPlatform::MacOSARM64:
+                return DedicatedServerPanel::ServerPlatform::MacOSARM64;
+            case BuildCookPanel::TargetPlatform::MacOSX64:
+                return DedicatedServerPanel::ServerPlatform::MacOSX64;
+            default:
+                return DedicatedServerPanel::ServerPlatform::WindowsX64;
+            }
+        }
+    } // namespace
 
     // ============================================================================
     // Construction / Lifecycle
@@ -29,34 +109,60 @@ namespace SparkEditor
         m_mapRotation.push_back("dm_compound");
     }
 
+    DedicatedServerPanel::~DedicatedServerPanel() = default;
+
     bool DedicatedServerPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Dedicated Server panel");
+        m_cookPipeline = std::make_unique<BuildPipeline>();
+        m_serverProcess = std::make_unique<DedicatedServerProcessController>();
+        m_cookSettings.platform = NativeServerPlatform();
         return true;
     }
 
     void DedicatedServerPanel::Update(float deltaTime)
     {
-        // Update cook progress simulation
-        if (m_isCooking && m_cookProgress < 1.0f)
+        if (m_cookPipeline)
         {
-            m_cookProgress += deltaTime * 0.04f;
-            if (m_cookProgress >= 1.0f)
+            for (auto& line : m_cookPipeline->DrainLogLines())
+                m_cookLog.push_back({std::move(line.text), line.level == BuildLogLine::Level::Error     ? "error"
+                                                           : line.level == BuildLogLine::Level::Warning ? "warning"
+                                                                                                        : "info"});
+            m_cookProgress = m_cookPipeline->GetProgress();
+            m_cookStatus = m_cookPipeline->GetStatusText();
+            if (m_isCooking && !m_cookPipeline->IsRunning())
             {
-                m_cookProgress = 1.0f;
                 m_isCooking = false;
-                m_cookStatus = "Cook Complete";
-                m_cookLog.push_back({"Server cook completed successfully!", "success"});
-                m_cookLog.push_back(
-                    {"Output: " + m_cookSettings.outputDirectory + "/" + m_cookSettings.executableName, "info"});
+                if (m_cookPipeline->GetResult() == BuildResult::Success)
+                {
+                    m_cookProgress = 1.0f;
+                    m_cookStatus = "Native server package complete";
+                    m_cookLog.push_back(
+                        {"Built the game module, cooked content, and packaged SparkServer with native launchers",
+                         "success"});
+                }
+                else
+                {
+                    m_cookStatus =
+                        m_cookPipeline->GetResult() == BuildResult::Cancelled ? "Cook cancelled" : "Cook failed";
+                }
             }
         }
 
-        // Update PIE server uptime
-        if (m_pieServerRunning)
+        if (m_serverProcess)
         {
-            m_pieServerUptime += deltaTime;
+            m_serverProcess->Update();
+            for (auto& line : m_serverProcess->DrainLogLines())
+                m_pieServerLog.push_back(std::move(line));
+            const auto snapshot = m_serverProcess->GetSnapshot();
+            m_pieServerRunning = snapshot.state == DedicatedServerProcessState::Running ||
+                                 snapshot.state == DedicatedServerProcessState::Stopping;
+            if (m_pieServerRunning)
+                m_pieServerUptime += deltaTime;
+            if (!snapshot.error.empty() &&
+                (m_pieServerLog.empty() || m_pieServerLog.back() != "[Editor] " + snapshot.error))
+                m_pieServerLog.push_back("[Editor] " + snapshot.error);
         }
 
         // Update server browser scan
@@ -129,6 +235,8 @@ namespace SparkEditor
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Stopping PIE server during shutdown");
             StopPIEServer();
         }
+        if (m_cookPipeline && m_cookPipeline->IsRunning())
+            m_cookPipeline->Cancel();
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Dedicated Server panel");
     }
 
@@ -190,11 +298,13 @@ namespace SparkEditor
         ImGui::Text(ICON_FA_GAMEPAD " Game Settings");
         ImGui::Separator();
 
-        // Game mode
-        if (ImGui::Combo("Game Mode", &m_pieConfig.gameMode, GAME_MODE_NAMES, NUM_GAME_MODES))
-        {
-            SetModified(true);
-        }
+        // SparkServer currently receives the map through its real CLI contract;
+        // game-mode selection remains module-owned until that contract exists.
+        ImGui::BeginDisabled();
+        ImGui::Combo("Game Mode", &m_pieConfig.gameMode, GAME_MODE_NAMES, NUM_GAME_MODES);
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("Unavailable: SparkServer has no game-mode command-line/config contract yet.");
 
         // Map
         char mapBuf[256];
@@ -210,17 +320,12 @@ namespace SparkEditor
         ImGui::Text(ICON_FA_TERMINAL " Administration");
         ImGui::Separator();
 
+        m_pieConfig.enableRcon = false;
+        ImGui::BeginDisabled();
         ImGui::Checkbox("Enable RCON", &m_pieConfig.enableRcon);
-        if (m_pieConfig.enableRcon)
-        {
-            char rconBuf[128];
-            strncpy(rconBuf, m_pieConfig.rconPassword.c_str(), sizeof(rconBuf) - 1);
-            rconBuf[sizeof(rconBuf) - 1] = '\0';
-            if (ImGui::InputText("RCON Password", rconBuf, sizeof(rconBuf), ImGuiInputTextFlags_Password))
-            {
-                m_pieConfig.rconPassword = rconBuf;
-            }
-        }
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("Unavailable: SparkServer intentionally exposes no authenticated remote RCON transport.");
     }
 
     // ============================================================================
@@ -301,12 +406,10 @@ namespace SparkEditor
 
         // Platform
         ImGui::Text("Target Platform:");
-        const char* platforms[] = {"Windows x64", "Linux x64", "Linux ARM64"};
-        int platformIdx = static_cast<int>(m_cookSettings.platform);
-        if (ImGui::Combo("##ServerPlatform", &platformIdx, platforms, 3))
-        {
-            m_cookSettings.platform = static_cast<ServerPlatform>(platformIdx);
-        }
+        m_cookSettings.platform = NativeServerPlatform();
+        ImGui::Text("%s (native)", GetPlatformName(m_cookSettings.platform));
+        ImGui::TextDisabled("Server packages include native runtime dependencies. Cross-compilation requires an "
+                            "external matching host/toolchain and is not simulated here.");
 
         // Build profile
         ImGui::Text("Build Profile:");
@@ -340,20 +443,28 @@ namespace SparkEditor
         ImGui::Text(ICON_FA_COG " Server Cook Options:");
         ImGui::Indent(8.0f);
 
-        ImGui::Checkbox("Headless (no graphics/GPU)", &m_cookSettings.stripGraphics);
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Strip all rendering code. Server runs without a GPU.\nRequired for cloud deployment.");
-
-        ImGui::Checkbox("Strip Audio", &m_cookSettings.stripAudio);
-        ImGui::Checkbox("Strip Editor Code", &m_cookSettings.stripEditor);
+        m_cookSettings.stripGraphics = true;
+        m_cookSettings.stripAudio = true;
+        m_cookSettings.stripEditor = true;
+        ImGui::TextDisabled(
+            "SparkServer is a dedicated headless host and never bundles editor, graphics, or audio UI.");
+        ImGui::BeginDisabled();
+        ImGui::Checkbox("Headless dedicated host", &m_cookSettings.stripGraphics);
+        ImGui::Checkbox("Audio omitted by dedicated host", &m_cookSettings.stripAudio);
+        ImGui::Checkbox("Editor omitted by dedicated host", &m_cookSettings.stripEditor);
+        ImGui::EndDisabled();
         ImGui::Checkbox("Include Debug Symbols", &m_cookSettings.includeDebugSymbols);
-        ImGui::Checkbox("Compress Assets", &m_cookSettings.compressAssets);
-        if (m_cookSettings.compressAssets)
-        {
-            ImGui::SliderInt("Compression Level", &m_cookSettings.compressionLevel, 1, 9);
-        }
-        ImGui::Checkbox("Enable Logging", &m_cookSettings.enableLogging);
-        ImGui::Checkbox("Enable RCON", &m_cookSettings.enableRcon);
+        m_cookSettings.compressAssets = false;
+        m_cookSettings.enableLogging = true;
+        m_cookSettings.enableRcon = false;
+        ImGui::BeginDisabled();
+        ImGui::Checkbox("Compress Package", &m_cookSettings.compressAssets);
+        ImGui::Checkbox("Engine Logging", &m_cookSettings.enableLogging);
+        ImGui::Checkbox("Remote RCON", &m_cookSettings.enableRcon);
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("Unavailable: SparkServer has no authenticated remote RCON transport.");
+        ImGui::TextDisabled("Package archives are not implemented; SparkServer logging remains enabled.");
 
         ImGui::Unindent(8.0f);
 
@@ -373,7 +484,7 @@ namespace SparkEditor
         strncpy(exeName, m_cookSettings.executableName.c_str(), sizeof(exeName) - 1);
         exeName[sizeof(exeName) - 1] = '\0';
         ImGui::SetNextItemWidth(-1);
-        if (ImGui::InputText("Executable Name", exeName, sizeof(exeName)))
+        if (ImGui::InputText("Server Executable Name", exeName, sizeof(exeName)))
         {
             m_cookSettings.executableName = exeName;
         }
@@ -381,14 +492,12 @@ namespace SparkEditor
         ImGui::Separator();
 
         // Cook actions
-        float halfWidth = (ImGui::GetContentRegionAvail().x - 4.0f) / 2.0f;
-
         ImVec4 cookColor(0.2f, 0.55f, 0.2f, 1.0f);
         ImGui::PushStyleColor(ImGuiCol_Button, cookColor);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.65f, 0.3f, 1.0f));
         if (!m_isCooking)
         {
-            if (ImGui::Button(ICON_FA_HAMMER " Cook Server", ImVec2(halfWidth, 36.0f)))
+            if (ImGui::Button(ICON_FA_DOWNLOAD " Build, Cook & Package Server", ImVec2(-1.0f, 36.0f)))
             {
                 StartCookServer();
             }
@@ -396,20 +505,10 @@ namespace SparkEditor
         else
         {
             ImGui::BeginDisabled();
-            ImGui::Button(ICON_FA_SPINNER " Cooking...", ImVec2(halfWidth, 36.0f));
+            ImGui::Button(ICON_FA_SPINNER " Building native server package...", ImVec2(-1.0f, 36.0f));
             ImGui::EndDisabled();
         }
         ImGui::PopStyleColor(2);
-
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_DOWNLOAD " Cook & Package", ImVec2(halfWidth, 36.0f)))
-        {
-            if (!m_isCooking)
-            {
-                m_cookSettings.compressAssets = true;
-                StartCookServer();
-            }
-        }
 
         // Progress
         RenderCookProgress();
@@ -455,7 +554,11 @@ namespace SparkEditor
             }
 
             ImGui::SliderInt("Max Players##PIE", &m_pieConfig.maxPlayers, 2, 32);
+            ImGui::BeginDisabled();
             ImGui::Combo("Game Mode##PIE", &m_pieConfig.gameMode, GAME_MODE_NAMES, NUM_GAME_MODES);
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("Unavailable: SparkServer does not accept a game-mode option yet.");
 
             // Map selection from rotation
             if (!m_mapRotation.empty())
@@ -496,12 +599,15 @@ namespace SparkEditor
             }
 
             ImGui::Spacing();
+            m_pieConfig.openConsoleWindow = false;
+            m_pieConfig.autoConnect = false;
+            ImGui::BeginDisabled();
             ImGui::Checkbox("Open Console Window", &m_pieConfig.openConsoleWindow);
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Opens a separate console window showing server output");
             ImGui::Checkbox("Auto-Connect Editor Client", &m_pieConfig.autoConnect);
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Automatically connect the editor viewport as a client");
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("Unavailable: editor client connection transport is not integrated yet.");
+            ImGui::TextDisabled("Server output is streamed here; automatic client connection is pending.");
 
             ImGui::Unindent(8.0f);
 
@@ -709,37 +815,35 @@ namespace SparkEditor
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Starting dedicated server cook (platform=%s, profile=%s)",
                        GetPlatformName(m_cookSettings.platform), GetProfileName(m_cookSettings.profile));
+        m_cookLog.clear();
+        if (!m_cookPipeline)
+        {
+            m_cookStatus = "Cook pipeline is unavailable";
+            m_cookLog.push_back({m_cookStatus, "error"});
+            return;
+        }
+        const std::string projectRoot = ProjectManager::GetActiveProjectPath();
+        if (projectRoot.empty())
+        {
+            m_cookStatus = "Open a project before cooking a server";
+            m_cookLog.push_back({m_cookStatus, "error"});
+            return;
+        }
+        if (!m_cookPipeline->StartBuild(MakeCookSettings(m_cookSettings), projectRoot))
+        {
+            for (auto& line : m_cookPipeline->DrainLogLines())
+                m_cookLog.push_back(
+                    {std::move(line.text), line.level == BuildLogLine::Level::Error ? "error" : "info"});
+            m_cookStatus = m_cookPipeline->GetStatusText();
+            if (m_cookLog.empty())
+                m_cookLog.push_back({"Could not start the native module/server build", "error"});
+            return;
+        }
         m_isCooking = true;
         m_cookProgress = 0.0f;
-        m_cookStatus = "Cooking dedicated server...";
-        m_cookLog.clear();
-
-        m_cookLog.push_back({"Starting " + std::string(GetProfileName(m_cookSettings.profile)) + " server cook for " +
-                                 GetPlatformName(m_cookSettings.platform),
-                             "info"});
-        m_cookLog.push_back({"Headless mode: " + std::string(m_cookSettings.stripGraphics ? "YES" : "NO"), "info"});
+        m_cookStatus = "Building game module and native server hosts...";
         m_cookLog.push_back(
-            {"Output: " + m_cookSettings.outputDirectory + "/" + m_cookSettings.executableName, "info"});
-
-        if (m_cookSettings.stripGraphics)
-            m_cookLog.push_back({"Stripping: Graphics/GPU subsystem", "warning"});
-        if (m_cookSettings.stripAudio)
-            m_cookLog.push_back({"Stripping: Audio subsystem", "warning"});
-        if (m_cookSettings.stripEditor)
-            m_cookLog.push_back({"Stripping: Editor code", "warning"});
-
-        m_cookLog.push_back({"Configuring CMake with -DENABLE_NETWORKING=ON -DSPARK_HEADLESS_SUPPORT=ON...", "info"});
-        m_cookLog.push_back({"Compiling server target...", "info"});
-
-        if (m_cookSettings.compressAssets)
-            m_cookLog.push_back(
-                {"Compressing assets (level " + std::to_string(m_cookSettings.compressionLevel) + ")...", "info"});
-
-        if (!m_mapRotation.empty())
-        {
-            m_cookLog.push_back(
-                {"Packaging " + std::to_string(m_mapRotation.size()) + " maps from rotation...", "info"});
-        }
+            {"Native build, content cook, and complete package flow started for " + projectRoot, "info"});
     }
 
     void DedicatedServerPanel::RenderCookProgress()
@@ -794,6 +898,10 @@ namespace SparkEditor
             return "Linux x64";
         case ServerPlatform::LinuxARM64:
             return "Linux ARM64";
+        case ServerPlatform::MacOSX64:
+            return "macOS x64";
+        case ServerPlatform::MacOSARM64:
+            return "macOS ARM64";
         default:
             return "Unknown";
         }
@@ -823,37 +931,49 @@ namespace SparkEditor
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Launching PIE server: %s port=%d map=%s mode=%s maxPlayers=%d",
                        m_pieConfig.serverName.c_str(), m_pieConfig.port, m_pieConfig.mapName.c_str(),
                        GAME_MODE_NAMES[m_pieConfig.gameMode], m_pieConfig.maxPlayers);
-        m_pieServerRunning = true;
         m_pieServerUptime = 0.0f;
         m_pieServerLog.clear();
-
-        m_pieServerLog.push_back("[Server] Initializing dedicated server...");
-        m_pieServerLog.push_back("[Server] Name: " + m_pieConfig.serverName);
-        m_pieServerLog.push_back("[Server] Port: " + std::to_string(m_pieConfig.port));
-        m_pieServerLog.push_back("[Server] Map: " + m_pieConfig.mapName);
-        m_pieServerLog.push_back("[Server] Mode: " + std::string(GAME_MODE_NAMES[m_pieConfig.gameMode]));
-        m_pieServerLog.push_back("[Server] Max players: " + std::to_string(m_pieConfig.maxPlayers));
-        m_pieServerLog.push_back("[Server] Tick rate: " + std::to_string(static_cast<int>(m_pieConfig.tickRate)) +
-                                 " Hz");
-        m_pieServerLog.push_back("[Server] LAN broadcast: " + std::string(m_pieConfig.lanOnly ? "ON" : "OFF"));
-        m_pieServerLog.push_back("[Server] RCON: " + std::string(m_pieConfig.enableRcon ? "ENABLED" : "DISABLED"));
-        m_pieServerLog.push_back("[Server] --- Server started successfully ---");
-
-        if (m_pieConfig.autoConnect)
+        if (!m_serverProcess)
         {
-            m_pieServerLog.push_back(
-                "[Client] Auto-connecting editor viewport to 127.0.0.1:" + std::to_string(m_pieConfig.port) + "...");
-            m_pieServerLog.push_back("[Client] Connected as Client 1");
+            m_pieServerLog.push_back("[Editor] SparkServer process controller is unavailable");
+            return;
         }
+        const auto projectRoot = std::filesystem::path(ProjectManager::GetActiveProjectPath());
+        const auto executable = FindSparkServerExecutable();
+        const auto manifest = projectRoot / "spark.modules.json";
+        std::error_code error;
+        if (projectRoot.empty() || !std::filesystem::is_regular_file(manifest, error))
+        {
+            m_pieServerLog.push_back("[Editor] Open a built project with spark.modules.json before launching");
+            return;
+        }
+
+        DedicatedServerLaunchRequest request;
+        request.executable = executable;
+        request.workingDirectory = projectRoot;
+        request.manifest = manifest;
+        request.healthFile = projectRoot / "Temp" / "spark-pie-server-health.json";
+        request.stopFile = projectRoot / "Temp" / "spark-pie-server.stop";
+        request.serverName = m_pieConfig.serverName;
+        request.map = m_pieConfig.mapName;
+        request.port = m_pieConfig.port;
+        request.maxClients = static_cast<uint32_t>(m_pieConfig.maxPlayers);
+        request.tickRate = m_pieConfig.tickRate;
+        request.lanOnly = m_pieConfig.lanOnly;
+        request.lanBroadcast = m_pieConfig.lanOnly;
+        m_pieServerRunning = m_serverProcess->Launch(request);
+        for (auto& line : m_serverProcess->DrainLogLines())
+            m_pieServerLog.push_back(std::move(line));
+        if (m_pieConfig.autoConnect && m_pieServerRunning)
+            m_pieServerLog.push_back("[Editor] Server launched; editor client auto-connect transport is unavailable");
     }
 
     void DedicatedServerPanel::StopPIEServer()
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Stopping PIE server (uptime: %.0fs)", m_pieServerUptime);
-        m_pieServerLog.push_back("[Server] Shutting down...");
-        m_pieServerLog.push_back("[Server] Notifying connected clients...");
-        m_pieServerLog.push_back("[Server] Server stopped.");
-        m_pieServerRunning = false;
+        if (m_serverProcess)
+            m_serverProcess->RequestStop();
+        m_pieServerLog.push_back("[Editor] Waiting for SparkServer graceful shutdown...");
     }
 
     void DedicatedServerPanel::RenderPIEServerConsole()
@@ -875,43 +995,7 @@ namespace SparkEditor
             ImGui::SetScrollHereY(1.0f);
         ImGui::EndChild();
 
-        // Input
-        bool entered = false;
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 70);
-        if (ImGui::InputText("##PIERcon", m_pieRconInputBuf, sizeof(m_pieRconInputBuf),
-                             ImGuiInputTextFlags_EnterReturnsTrue))
-        {
-            entered = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Send##PIE", ImVec2(62, 0)) || entered)
-        {
-            if (m_pieRconInputBuf[0] != '\0')
-            {
-                m_pieServerLog.push_back(std::string("[RCON] > ") + m_pieRconInputBuf);
-                // Simulate RCON response
-                std::string cmd(m_pieRconInputBuf);
-                if (cmd == "status")
-                {
-                    m_pieServerLog.push_back("[RCON] Server: " + m_pieConfig.serverName);
-                    m_pieServerLog.push_back("[RCON] Map: " + m_pieConfig.mapName);
-                    int upMins = static_cast<int>(m_pieServerUptime) / 60;
-                    int upSecs = static_cast<int>(m_pieServerUptime) % 60;
-                    m_pieServerLog.push_back("[RCON] Uptime: " + std::to_string(upMins) + ":" +
-                                             (upSecs < 10 ? "0" : "") + std::to_string(upSecs));
-                }
-                else if (cmd == "help")
-                {
-                    m_pieServerLog.push_back("[RCON] Commands: status, help, kick, ban, map, say, players, endmatch, "
-                                             "nextmap, quit");
-                }
-                else
-                {
-                    m_pieServerLog.push_back("[RCON] Executed: " + cmd);
-                }
-                m_pieRconInputBuf[0] = '\0';
-            }
-        }
+        ImGui::TextDisabled("Remote console is disabled until SparkServer exposes an authenticated RCON transport.");
     }
 
     // ============================================================================
@@ -935,7 +1019,7 @@ namespace SparkEditor
             local.currentPlayers = 0;
             local.maxPlayers = m_pieConfig.maxPlayers;
             local.gameMode = m_pieConfig.gameMode;
-            local.ping = 1.0f;
+            local.ping = 0.0f;
             local.discoveredAt = std::chrono::steady_clock::now();
             m_discoveredServers.push_back(local);
         }
@@ -943,13 +1027,9 @@ namespace SparkEditor
 
     void DedicatedServerPanel::ConnectToServer(const DiscoveredServer& server)
     {
-        // Log connection attempt
         if (m_pieServerRunning)
-        {
-            m_pieServerLog.push_back("[Client] Connecting to " + server.address + ":" + std::to_string(server.port) +
-                                     "...");
-            m_pieServerLog.push_back("[Client] Connected to '" + server.name + "'");
-        }
+            m_pieServerLog.push_back("[Editor] Client connect requested for " + server.address + ":" +
+                                     std::to_string(server.port) + "; no editor client transport is wired");
     }
 
     // ============================================================================
@@ -959,7 +1039,7 @@ namespace SparkEditor
     void DedicatedServerPanel::RenderPlayerList()
     {
         ImGui::BeginChild("##PlayerList", ImVec2(0, 100), true);
-        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "No players connected (PIE simulation)");
+        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "SparkServer health reports aggregate player count only.");
         ImGui::EndChild();
     }
 
@@ -974,23 +1054,7 @@ namespace SparkEditor
             ImGui::SetScrollHereY(1.0f);
         ImGui::EndChild();
 
-        bool entered = false;
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 70);
-        if (ImGui::InputText("##RconInput", m_rconInputBuf, sizeof(m_rconInputBuf),
-                             ImGuiInputTextFlags_EnterReturnsTrue))
-        {
-            entered = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Send##Rcon", ImVec2(62, 0)) || entered)
-        {
-            if (m_rconInputBuf[0] != '\0')
-            {
-                m_rconHistory.push_back(std::string("> ") + m_rconInputBuf);
-                m_rconHistory.push_back("OK");
-                m_rconInputBuf[0] = '\0';
-            }
-        }
+        ImGui::TextDisabled("No authenticated RCON transport is configured.");
     }
 
     void DedicatedServerPanel::RenderServerStats()
@@ -1010,6 +1074,14 @@ namespace SparkEditor
         ImGui::Text("Port: %d", m_pieConfig.port);
 
         ImGui::Columns(1);
+        if (m_serverProcess)
+        {
+            const auto snapshot = m_serverProcess->GetSnapshot();
+            if (!snapshot.healthJson.empty())
+                ImGui::TextWrapped("Health: %s", snapshot.healthJson.c_str());
+            if (snapshot.exitCode)
+                ImGui::Text("Last exit code: %d", *snapshot.exitCode);
+        }
     }
 
 } // namespace SparkEditor

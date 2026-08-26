@@ -19,7 +19,7 @@ namespace Spark::PasswordHash
 {
     namespace
     {
-        using Digest = std::array<uint8_t, 32>;
+        using Digest = Sha256Digest;
         constexpr uint32_t kIterations = 600000;
         constexpr uint32_t kMinimumIterations = 600000;
         constexpr uint32_t kMaximumIterations = 1000000;
@@ -301,6 +301,13 @@ namespace Spark::PasswordHash
             return parts;
         }
     } // namespace
+
+    Sha256Digest ComputeHmacSha256(std::span<const uint8_t> key, std::span<const uint8_t> data)
+    {
+        HmacSha256Key prepared = PrepareHmacSha256Key(key.data(), key.size());
+        const auto clearPrepared = Spark::MakeScopeExit([&] { SecureErase(&prepared, sizeof(prepared)); });
+        return HmacSha256(prepared, data.data(), data.size());
+    }
 
     std::string Create(std::string_view password)
     {

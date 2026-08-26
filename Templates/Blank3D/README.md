@@ -20,7 +20,7 @@ Load `Blank3D.dll` through `spark.modules.json`; the starter scene is `Scenes/De
 - Hold right mouse and move: yaw and pitch the camera
 - `R`: reset the camera to the authored overview
 
-Start by duplicating `Starter Cube`, changing its transform, and renaming it. The `Scale Study` pair demonstrates non-uniform scale; the three `Composition Arch` entities demonstrate a small modular assembly. All six mesh entities intentionally use the built-in cube so a copied project stays immediately packageable.
+Start by duplicating `Starter Cube`, changing its transform, and renaming it. The `Scale Study` pair demonstrates non-uniform scale; the three `Composition Arch` entities demonstrate a small modular assembly. The copied project remains immediately packageable: sphere and cylinder are engine primitives, while the tiny studio and spectrum blocks are repository-authored OBJ/MTL assets stored under `Assets/Models`.
 
 ## Live playtest checkpoints
 
@@ -30,7 +30,7 @@ Start by duplicating `Starter Cube`, changing its transform, and renaming it. Th
 
 ## License and assets
 
-See the SparkEngine root license. The asset manifest records repository-original HUD artwork and the built-in procedural primitives used by the scene.
+See the SparkEngine root license. The asset manifest records repository-original HUD artwork, OBJ/MTL transform blocks, and the built-in procedural primitives used by the scene.
 
 ## Runtime asset sheet
 

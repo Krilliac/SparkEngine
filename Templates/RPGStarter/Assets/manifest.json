@@ -92,10 +92,20 @@
       "kind": "Wavefront material color library",
       "origin": "SparkEngine deterministic Blender 5.2.0 LTS model pipeline",
       "sha256": "2b3132e4bc7efde82535780dd8f850994a697d16e52c374e1b01be716ff78c4b"
+    },
+    {
+      "path": "Models/village_ground.obj",
+      "kind": "triangulated Wavefront OBJ village ground, road, and quest plaza",
+      "origin": "SparkEngine repository-authored showcase environment",
+      "sha256": "b8d16f3f5c6c512409befeff4affac34f64220b2ddc229120a2a32ba867ef69e"
+    },
+    {
+      "path": "Models/village_ground.mtl",
+      "kind": "Wavefront material color library for the village environment",
+      "origin": "SparkEngine repository-authored showcase environment",
+      "sha256": "fe4d485ef46413da78b6543793b6ae07db3610cdfed3c410d813b4c1836d0c4e"
     }
   ],
-  "enginePrimitives": [
-    "__spark_primitive_ground__.obj"
-  ],
-  "notes": "The reflected scene uses repository-original authored OBJ/MTL models; the built-in ground primitive remains for the world floor, and the atlas provides complementary UI and sprite art."
+  "enginePrimitives": [],
+  "notes": "The reflected scene uses repository-original authored OBJ/MTL models, including a color-blocked village road and quest plaza; the atlas provides complementary UI and sprite art."
 }

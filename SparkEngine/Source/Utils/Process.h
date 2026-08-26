@@ -63,11 +63,21 @@ namespace Spark
             /// Append a command-line argument.
             Builder& Arg(std::string arg);
 
+            /// Set the child process working directory. An empty path inherits
+            /// the parent's current directory.
+            Builder& WorkingDirectory(std::string directory);
+
             /// Capture the child's stdout so it can be read via ReadAllStdout()/TryReadLine().
             Builder& CaptureStdout();
 
             /// Capture the child's stderr so it can be read via ReadAllStderr().
             Builder& CaptureStderr();
+
+            /// Route the child's stderr to its stdout destination. When stdout
+            /// is captured, both streams are drained through TryReadLine() or
+            /// ReadAllStdout(), avoiding deadlocks caused by an unread stderr pipe.
+            /// This takes precedence over CaptureStderr().
+            Builder& MergeStderrIntoStdout();
 
             /// Enable writing to the child's stdin via WriteStdin()/CloseStdin().
             Builder& CaptureStdin();
@@ -82,10 +92,12 @@ namespace Spark
 
           private:
             std::string m_executable;
+            std::string m_workingDirectory;
             std::vector<std::string> m_args;
             PipeMode m_stdinMode = PipeMode::None;
             PipeMode m_stdoutMode = PipeMode::None;
             PipeMode m_stderrMode = PipeMode::None;
+            bool m_mergeStderrIntoStdout = false;
             bool m_detached = false;
         };
 

@@ -4,8 +4,8 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,0.750000,0.000000",
-            "rotation": "0.000000,22.500000,0.000000",
+            "position": "0.000000,1.450000,0.000000",
+            "rotation": "12.000000,32.000000,8.000000",
             "scale": "1.500000,1.500000,1.500000"
           },
           "type": "Transform"
@@ -15,7 +15,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/spectrum_block.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -30,9 +30,9 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,0.000000,0.000000",
+            "position": "0.000000,-0.150000,2.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "30.000000,0.100000,30.000000"
+            "scale": "18.000000,0.300000,18.000000"
           },
           "type": "Transform"
         },
@@ -41,7 +41,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_ground__.obj",
+            "meshPath": "Assets/Models/studio_block.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -84,8 +84,8 @@
       "components": [
         {
           "fields": {
-            "position": "2.000000,2.500000,-6.000000",
-            "rotation": "15.000000,-15.000000,0.000000",
+            "position": "8.000000,5.000000,-10.000000",
+            "rotation": "17.000000,-31.000000,0.000000",
             "scale": "1.000000,1.000000,1.000000"
           },
           "type": "Transform"
@@ -108,9 +108,9 @@
       "components": [
         {
           "fields": {
-            "position": "-3.000000,1.000000,2.000000",
-            "rotation": "0.000000,-15.000000,0.000000",
-            "scale": "1.000000,2.000000,1.000000"
+            "position": "-3.200000,1.150000,1.600000",
+            "rotation": "0.000000,-18.000000,0.000000",
+            "scale": "1.100000,2.300000,1.100000"
           },
           "type": "Transform"
         },
@@ -119,7 +119,7 @@
             "castShadows": "true",
             "emissive": "0.020000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/spectrum_block.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -134,9 +134,9 @@
       "components": [
         {
           "fields": {
-            "position": "3.000000,0.500000,2.000000",
+            "position": "3.200000,0.650000,1.600000",
             "rotation": "0.000000,25.000000,0.000000",
-            "scale": "2.500000,1.000000,0.750000"
+            "scale": "2.600000,1.300000,0.900000"
           },
           "type": "Transform"
         },
@@ -145,7 +145,7 @@
             "castShadows": "true",
             "emissive": "0.020000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/spectrum_block.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -160,9 +160,9 @@
       "components": [
         {
           "fields": {
-            "position": "-1.800000,1.500000,5.000000",
+            "position": "-2.300000,1.700000,5.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "0.700000,3.000000,0.700000"
+            "scale": "0.750000,3.400000,0.750000"
           },
           "type": "Transform"
         },
@@ -171,7 +171,7 @@
             "castShadows": "true",
             "emissive": "0.040000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/spectrum_block.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -186,9 +186,9 @@
       "components": [
         {
           "fields": {
-            "position": "1.800000,1.500000,5.000000",
+            "position": "2.300000,1.700000,5.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "0.700000,3.000000,0.700000"
+            "scale": "0.750000,3.400000,0.750000"
           },
           "type": "Transform"
         },
@@ -197,7 +197,7 @@
             "castShadows": "true",
             "emissive": "0.040000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/spectrum_block.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -212,9 +212,9 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,3.250000,5.000000",
+            "position": "0.000000,3.650000,5.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "4.300000,0.500000,0.900000"
+            "scale": "5.350000,0.650000,0.900000"
           },
           "type": "Transform"
         },
@@ -223,7 +223,7 @@
             "castShadows": "true",
             "emissive": "0.060000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_Cube.obj",
+            "meshPath": "Assets/Models/spectrum_block.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -260,6 +260,136 @@
       ],
       "id": 9,
       "name": "Composition Fill Light",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,0.200000,0.000000",
+            "rotation": "0.000000,12.000000,0.000000",
+            "scale": "3.600000,0.400000,3.600000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/studio_block.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 10,
+      "name": "Hero Plinth - Base",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,0.550000,0.000000",
+            "rotation": "0.000000,-8.000000,0.000000",
+            "scale": "2.600000,0.300000,2.600000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/spectrum_block.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 11,
+      "name": "Hero Plinth - Accent",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-5.000000,1.250000,3.300000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "1.300000,1.300000,1.300000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Sphere.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 12,
+      "name": "Primitive Study - Sphere",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "5.000000,1.450000,3.300000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "1.100000,2.900000,1.100000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Cylinder.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 13,
+      "name": "Primitive Study - Cylinder",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,5.150000,5.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.550000,0.550000,0.550000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.100000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Sphere.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 14,
+      "name": "Composition Crown",
       "parent": -1
     }
   ],

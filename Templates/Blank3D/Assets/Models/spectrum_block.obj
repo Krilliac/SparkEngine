@@ -1,0 +1,35 @@
+# SparkEngine Blank3D spectrum block: a transform-friendly six-color unit cube.
+mtllib showcase_palette.mtl
+o spectrum_block
+v -0.5 -0.5 -0.5
+v 0.5 -0.5 -0.5
+v 0.5 0.5 -0.5
+v -0.5 0.5 -0.5
+v -0.5 -0.5 0.5
+v 0.5 -0.5 0.5
+v 0.5 0.5 0.5
+v -0.5 0.5 0.5
+vn 0 0 -1
+vn 0 0 1
+vn -1 0 0
+vn 1 0 0
+vn 0 -1 0
+vn 0 1 0
+usemtl M_cyan
+f 1//1 3//1 2//1
+f 1//1 4//1 3//1
+usemtl M_orange
+f 5//2 6//2 7//2
+f 5//2 7//2 8//2
+usemtl M_magenta
+f 1//3 5//3 8//3
+f 1//3 8//3 4//3
+usemtl M_gold
+f 2//4 3//4 7//4
+f 2//4 7//4 6//4
+usemtl M_navy
+f 1//5 2//5 6//5
+f 1//5 6//5 5//5
+usemtl M_ice
+f 4//6 8//6 7//6
+f 4//6 7//6 3//6

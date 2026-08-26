@@ -311,6 +311,296 @@
       "id": 11,
       "name": "Finish",
       "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-5.000000,0.500000,5.500000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "6.000000,0.300000,2.500000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/platform_straight.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 12,
+      "name": "Backdrop Terrace West",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "4.000000,3.000000,6.500000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "4.000000,0.300000,2.500000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.020000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/platform_straight.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 13,
+      "name": "Backdrop Terrace Mid",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "13.000000,6.000000,7.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "5.000000,0.300000,2.500000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.020000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/platform_straight.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 14,
+      "name": "Backdrop Terrace East",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-4.000000,-0.300000,-4.500000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "5.000000,0.250000,2.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/platform_straight.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 15,
+      "name": "Foreground Terrace West",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "14.500000,0.500000,-4.500000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "5.000000,0.250000,2.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/platform_straight.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 16,
+      "name": "Foreground Terrace East",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-4.000000,3.300000,5.500000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.280000,1.500000,0.280000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.150000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/checkpoint.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 17,
+      "name": "Backdrop Beacon West",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "4.000000,5.600000,6.500000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.280000,1.500000,0.280000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.150000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/checkpoint.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 18,
+      "name": "Backdrop Beacon Mid",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "13.000000,8.000000,7.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.350000,2.000000,1.800000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.120000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/finish_gate.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 19,
+      "name": "Backdrop Summit Gate",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "8.000000,3.600000,6.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "1.600000,0.450000,2.200000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.080000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/spike_hazard.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 20,
+      "name": "Backdrop Hazard",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-2.000000,5.000000,3.000000",
+            "rotation": "90.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "0.100000,0.750000,1.000000",
+            "intensity": "3.000000",
+            "range": "12.000000",
+            "shadowMapResolution": "512",
+            "spotAngle": "55.000000",
+            "spotInnerAngle": "35.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 21,
+      "name": "Cool Course Light",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "15.000000,7.000000,2.000000",
+            "rotation": "90.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "1.000000,0.450000,0.100000",
+            "intensity": "3.500000",
+            "range": "14.000000",
+            "shadowMapResolution": "512",
+            "spotAngle": "55.000000",
+            "spotInnerAngle": "35.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 22,
+      "name": "Warm Finish Light",
+      "parent": -1
     }
   ],
   "version": 1

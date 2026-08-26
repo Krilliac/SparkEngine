@@ -69,7 +69,7 @@ namespace SparkEditor
         /// @return false if a build is already running.
         bool StartBuild(const BuildSettings& settings, const std::string& projectRoot);
 
-        /// @brief Launch an asset-cook-only pass (copies + placeholder transforms).
+        /// @brief Launch an asset-cook-only pass through SparkCooker.
         bool StartCookOnly(const BuildSettings& settings, const std::string& projectRoot);
 
         /// @brief Request cancellation of the running build.
@@ -90,6 +90,26 @@ namespace SparkEditor
         /// @brief Human-readable status phrase ("Configuring...", "Compiling [12/48]", etc.).
         std::string GetStatusText() const;
 
+        /// @brief Whether the current/last operation is an asset cook.
+        bool IsCookOperation() const { return m_cooking.load(std::memory_order_relaxed); }
+
+        /// @brief Locate the shipped SparkCooker executable using bounded paths.
+        static std::string FindSparkCookerExecutable();
+
+        /// @brief Locate the shipped SparkAutomation executable using bounded paths.
+        static std::string FindSparkAutomationExecutable();
+
+        /// @brief Construct SparkCooker's deterministic argument vector.
+        static std::vector<std::string> CreateCookArguments(const std::string& sourceRoot,
+                                                            const std::string& outputRoot,
+                                                            const std::string& manifestPath, bool dryRun = false);
+
+        /// @brief Construct a frame-bounded SparkAutomation runtime smoke-test plan.
+        static std::vector<std::string> CreateAutomationArguments(const std::string& executable,
+                                                                  const std::string& workingDirectory,
+                                                                  const std::string& reportDirectory, int frames,
+                                                                  int timeoutSeconds);
+
         /// @brief Validate an installed SparkEngine CMake package directory.
         /// Build-tree-only configs are rejected because they do not contain
         /// the exported targets and module helper required by game projects.
@@ -108,17 +128,29 @@ namespace SparkEditor
                                                                  const std::string& sparkEngineDirectory,
                                                                  const std::vector<std::string>& extraDefines);
 
-        /// @brief Assemble a runnable Windows package from already-built artifacts.
+        /// @brief Return the only target that this editor host can package and execute natively.
+        static BuildCookPanel::TargetPlatform NativeTargetPlatform();
+        static bool IsNativeTargetPlatform(BuildCookPanel::TargetPlatform platform);
+
+        /// @brief Assemble a runnable native package from already-built artifacts.
         ///
         /// The package contains two deliberately separate launch modes: the
         /// renamed host plus module manifest for game-module execution, and an
         /// isolated scene-preview host with no manifest so `-scene` is honored.
         /// Exposed for focused filesystem regression tests.
-        static bool AssembleWindowsPackage(const BuildSettings& settings, const std::string& projectRoot,
-                                           const std::string& runtimeHost, const std::string& moduleBinary,
-                                           const std::string& outputDirectory, std::string* error = nullptr);
+        static bool AssembleNativePackage(const BuildSettings& settings, const std::string& projectRoot,
+                                          const std::string& runtimeHost, const std::string& moduleBinary,
+                                          const std::string& outputDirectory, std::string* error = nullptr,
+                                          const std::string& dedicatedServerHost = {});
 
       private:
+        /// Populate an already-isolated staging directory. The public wrapper
+        /// owns activation/rollback so callers never observe a partial package.
+        static bool AssembleNativePackageContents(const BuildSettings& settings, const std::string& projectRoot,
+                                                  const std::string& runtimeHost, const std::string& moduleBinary,
+                                                  const std::string& stagingDirectory, std::string* error,
+                                                  const std::string& dedicatedServerHost);
+
         /// Worker entry point — runs CMake configure then build.
         void WorkerThread(BuildSettings settings, std::string buildType, std::string buildDir, std::string projectRoot,
                           std::vector<std::string> extraDefines);
@@ -144,6 +176,7 @@ namespace SparkEditor
         // --- shared state (UI thread reads, worker writes) ---
         std::atomic<bool> m_running{false};
         std::atomic<bool> m_cancelRequested{false};
+        std::atomic<bool> m_cooking{false};
         std::atomic<float> m_progress{0.0f};
         std::atomic<BuildResult> m_result{BuildResult::None};
 
@@ -153,13 +186,16 @@ namespace SparkEditor
         mutable std::mutex m_statusMutex;
         std::string m_statusText = "Idle";
 
+        mutable std::mutex m_processMutex;
+
         // Background thread (joined in destructor).
         std::thread m_worker;
 
 #ifdef _WIN32
-        void* m_processHandle = nullptr; ///< HANDLE for TerminateProcess on cancel.
+        void* m_processHandle = nullptr; ///< HANDLE for the immediate child.
+        void* m_jobHandle = nullptr;     ///< Kill-on-close Job Object for the process tree.
 #else
-        pid_t m_childPid = 0; ///< PID for kill() on cancel.
+        pid_t m_childPid = 0; ///< Process-group leader PID for cancellation.
 #endif
     };
 

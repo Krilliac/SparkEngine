@@ -1,6 +1,6 @@
 # Blank3D asset provenance
 
-`blank3d_atlas.png` is repository-original generated artwork with transform gizmos, cameras, lights, primitive previews, technical materials, and viewport glyphs. `Scenes/Default.sparkscene` remains renderer-independent and builds its hero, scale studies, and modular arch entirely from built-in primitives. No third-party content is bundled; the manifest records the atlas and normalized runtime-sheet SHA-256 values.
+`blank3d_atlas.png` is repository-original generated artwork with transform gizmos, cameras, lights, primitive previews, technical materials, and viewport glyphs. `Scenes/Default.sparkscene` builds its hero, scale studies, modular arch, sphere, and cylinder from built-in primitives plus the tiny repository-authored `Models/spectrum_block.obj` and `Models/studio_block.obj` transform blocks. Their shared MTL palette makes material grouping visible in a live engine run without external textures. No third-party content is bundled; the manifest records every shipped showcase asset and its SHA-256 value.
 
 ## Normalized sprite sheet
 

@@ -1,0 +1,18 @@
+{
+    "schema":  2,
+    "commit":  "c1341e72beead74096a28997c6401462c722dcad",
+    "workingTreeDirty":  true,
+    "template":  "FPSStarter",
+    "scene":  "Arena.sparkscene",
+    "sceneSha256":  "f25da6807b46e151aaf207d0d312c6ccac9fc98824a78342764b4b95b8102688",
+    "assetManifestSha256":  "95888a1a536450d07acc5c1532201a9ebfde768287bf018f026211f465281df7",
+    "imageSha256":  "ba6f675c86651f31ea79161c5a4ef4c6097528d7309ab73633793ffd19dbc7c1",
+    "shot":  "wide",
+    "cameraPosition":  "12 8 -13",
+    "cameraLookAt":  "0 1.5 8",
+    "captureAtSeconds":  4,
+    "requestedWindow":  "1920x1080",
+    "capturedImage":  "1904x1041",
+    "engine":  "D:\\SparkEngine\\build\\bin\\Debug\\SparkEngine.exe",
+    "engineSha256":  "bced497af10e308c0431f08529510d75cffa5ef4f9d06dc441c15ebbdbbea318"
+}

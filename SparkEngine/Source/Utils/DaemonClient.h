@@ -13,8 +13,7 @@
  *
  * ## Platforms
  * - **Linux, macOS:** full support via `AF_UNIX` sockets.
- * - **Windows:** compiles but `Connect()` fails with "not yet supported"; real
- *   named-pipe support lands with the first Windows-shipping service.
+ * - **Windows:** byte-mode named pipes scoped to the local machine.
  *
  * ## Thread safety
  * A single `DaemonClient` may be used from multiple threads — every public

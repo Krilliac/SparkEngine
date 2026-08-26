@@ -27,6 +27,7 @@ namespace SparkEditor
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Build & Cook panel\n";
         m_pipeline = std::make_unique<BuildPipeline>();
+        m_settings.platform = BuildPipeline::NativeTargetPlatform();
         ApplyProfileDefaults(BuildProfile::Development);
         return true;
     }
@@ -54,15 +55,18 @@ namespace SparkEditor
             {
                 m_isBuildRunning = false;
                 auto result = m_pipeline->GetResult();
+                const bool cooked = m_pipeline->IsCookOperation();
                 if (result == BuildResult::Success)
                 {
-                    m_buildLog.push_back({"Build completed successfully!", "info"});
-                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Build completed successfully");
+                    m_buildLog.push_back(
+                        {cooked ? "Cook completed successfully!" : "Build completed successfully!", "info"});
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "%s completed successfully", cooked ? "Cook" : "Build");
                 }
                 else if (result == BuildResult::Failed)
                 {
-                    m_buildLog.push_back({"Build failed — see log above", "error"});
-                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Build failed");
+                    m_buildLog.push_back(
+                        {cooked ? "Cook failed — see log above" : "Build failed — see log above", "error"});
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "%s failed", cooked ? "Cook" : "Build");
                 }
                 else if (result == BuildResult::Cancelled)
                 {
@@ -192,9 +196,10 @@ namespace SparkEditor
     void BuildCookPanel::RenderPlatformSelector()
     {
         ImGui::Text(ICON_FA_GLOBE " Target Platform");
-        m_settings.platform = TargetPlatform::WindowsX64;
-        ImGui::Text("Windows x64");
-        ImGui::TextDisabled("Other targets require a matching native/cross toolchain and runtime host.");
+        m_settings.platform = BuildPipeline::NativeTargetPlatform();
+        ImGui::Text("%s (native)", GetPlatformName(m_settings.platform));
+        ImGui::TextDisabled("This editor produces complete native packages only. Cross-compilation requires an "
+                            "external toolchain and matching runtime host.");
     }
 
     void BuildCookPanel::RenderBuildOptions()
@@ -391,6 +396,19 @@ namespace SparkEditor
         }
 
         ImGui::Separator();
+        ImGui::Checkbox("Run packaged game smoke test", &m_settings.runAutomationAfterBuild);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Launch the package through SparkAutomation with a frame limit, timeout, log, JSON, "
+                              "and JUnit reports.");
+        if (m_settings.runAutomationAfterBuild)
+        {
+            ImGui::Indent();
+            ImGui::SliderInt("Automation Frames", &m_settings.automationFrames, 1, 3600);
+            ImGui::SliderInt("Automation Timeout (seconds)", &m_settings.automationTimeoutSeconds, 1, 300);
+            ImGui::Unindent();
+        }
+
+        ImGui::Separator();
         m_settings.compressPackage = false;
         m_settings.createInstaller = false;
         m_settings.signExecutable = false;
@@ -448,7 +466,12 @@ namespace SparkEditor
             }
             else
             {
-                m_buildLog.push_back({"Failed to start build — another build may be running", "error"});
+                for (auto& line : m_pipeline->DrainLogLines())
+                    m_buildLog.push_back(
+                        {std::move(line.text), line.level == BuildLogLine::Level::Error ? "error" : "info"});
+                m_buildStatus = m_pipeline->GetStatusText();
+                if (m_buildLog.empty())
+                    m_buildLog.push_back({"Failed to start build — another build may be running", "error"});
             }
         }
         if (!canBuild)
@@ -644,6 +667,8 @@ namespace SparkEditor
             return "Windows x86";
         case TargetPlatform::LinuxX64:
             return "Linux x64";
+        case TargetPlatform::LinuxARM64:
+            return "Linux ARM64";
         case TargetPlatform::MacOSX64:
             return "macOS x64";
         case TargetPlatform::MacOSARM64:

@@ -85,6 +85,8 @@ namespace Spark::Daemon
             return "collab";
         case ServiceId::Build:
             return "build";
+        case ServiceId::Orchestration:
+            return "orchestration";
         }
         char buf[32];
         std::snprintf(buf, sizeof(buf), "unknown(0x%04x)", static_cast<unsigned>(id));

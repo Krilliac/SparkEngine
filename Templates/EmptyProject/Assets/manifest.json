@@ -20,11 +20,28 @@
       "kind": "named source-rectangle metadata for the runtime sheet",
       "origin": "SparkEngine project-authored metadata",
       "sha256": "5691b2069ecae19a97452ed6f086044bed5b02537d7f72c9abde10cd59040037"
+    },
+    {
+      "path": "Models/origin_marker.obj",
+      "kind": "transform-friendly multi-color runtime origin marker",
+      "origin": "SparkEngine project-authored asset",
+      "sha256": "c4f635d0781fa07815fdde56e250370fe707ee1164eb29d4e21ed6682c250835"
+    },
+    {
+      "path": "Models/origin_palette.mtl",
+      "kind": "repository-authored material palette for the runtime origin marker",
+      "origin": "SparkEngine project-authored asset",
+      "sha256": "1e4322cd8c99606b5090724d2b02d145c7a3634ed6ef9c9c3afec01fc2cf16e5"
+    },
+    {
+      "path": "Models/starter_stage.obj",
+      "kind": "transform-friendly slate runtime preview stage",
+      "origin": "SparkEngine project-authored asset",
+      "sha256": "447bde70aeafa805783ffee567bd027d4f334df335ea7244eb78e4353a5352b1"
     }
   ],
   "enginePrimitives": [
-    "__spark_primitive_ground__.obj",
-    "__spark_primitive_Cube.obj"
+    "__spark_primitive_Sphere.obj"
   ],
-  "notes": "The editable Default scene remains intentionally empty. Graphical game runs select RuntimePreview, which uses engine-owned procedural primitives and the runtime-sheet starter emblem so successful rendering is unambiguous."
+  "notes": "The editable Default scene remains intentionally empty. Graphical game runs select RuntimePreview, which uses a repository-authored stage and multi-color origin guide plus an engine-owned sphere so successful rendering is unambiguous."
 }

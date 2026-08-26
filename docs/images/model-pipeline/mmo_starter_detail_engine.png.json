@@ -1,0 +1,18 @@
+{
+    "schema":  2,
+    "commit":  "c1341e72beead74096a28997c6401462c722dcad",
+    "workingTreeDirty":  true,
+    "template":  "MMOStarter",
+    "scene":  "Frontier.sparkscene",
+    "sceneSha256":  "ec46c533407c058b579ca8c8db2a4b6f10dc9a40e79adcf6cc6df57519a8692d",
+    "assetManifestSha256":  "a8dce9ad680f9d6d47fc5d7ea848afeef7eb106ecec0b4d612ab748755ea3438",
+    "imageSha256":  "9495f079546482469bfa2493f70baddfbed3a5ca1ce323d90130ef6b9b3eb458",
+    "shot":  "detail",
+    "cameraPosition":  "-6 3 -4",
+    "cameraLookAt":  "-3 1.5 8",
+    "captureAtSeconds":  6,
+    "requestedWindow":  "1920x1080",
+    "capturedImage":  "1904x1041",
+    "engine":  "D:\\SparkEngine\\build\\bin\\Debug\\SparkEngine.exe",
+    "engineSha256":  "bced497af10e308c0431f08529510d75cffa5ef4f9d06dc441c15ebbdbbea318"
+}

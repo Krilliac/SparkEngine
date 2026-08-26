@@ -1,0 +1,18 @@
+{
+    "schema":  2,
+    "commit":  "c1341e72beead74096a28997c6401462c722dcad",
+    "workingTreeDirty":  true,
+    "template":  "MultiplayerArena",
+    "scene":  "Arena.sparkscene",
+    "sceneSha256":  "3ff3c6a0fdcbcdded4f4b04115c72d9e14b2c843679ce22d0dcb4fff4c06f3fd",
+    "assetManifestSha256":  "a41543a8766f8cf208aa8149ef67af70ba84648862e1685627ac977a3c479cab",
+    "imageSha256":  "b3c1bbe3bf6b03b023828b17f92d8e432c1a6d564422ae59105aa69bcf2029c4",
+    "shot":  "detail",
+    "cameraPosition":  "-4.5 2.8 -5",
+    "cameraLookAt":  "-2.5 1 0",
+    "captureAtSeconds":  6,
+    "requestedWindow":  "1920x1080",
+    "capturedImage":  "1904x1041",
+    "engine":  "D:\\SparkEngine\\build\\bin\\Debug\\SparkEngine.exe",
+    "engineSha256":  "bced497af10e308c0431f08529510d75cffa5ef4f9d06dc441c15ebbdbbea318"
+}

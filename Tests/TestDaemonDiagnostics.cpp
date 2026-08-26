@@ -129,6 +129,7 @@ TEST(DaemonDiagnostics_ServiceIdNameMapping)
     EXPECT_EQ(ServiceIdName(static_cast<uint16_t>(ServiceId::Shader)), "shader");
     EXPECT_EQ(ServiceIdName(static_cast<uint16_t>(ServiceId::Collab)), "collab");
     EXPECT_EQ(ServiceIdName(static_cast<uint16_t>(ServiceId::Build)), "build");
+    EXPECT_EQ(ServiceIdName(static_cast<uint16_t>(ServiceId::Orchestration)), "orchestration");
     EXPECT_EQ(ServiceIdName(0x4242), "unknown(0x4242)");
 }
 

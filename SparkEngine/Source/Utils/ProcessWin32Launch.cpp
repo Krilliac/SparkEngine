@@ -169,6 +169,12 @@ namespace Spark
         return *this;
     }
 
+    Process::Builder& Process::Builder::WorkingDirectory(std::string directory)
+    {
+        m_workingDirectory = std::move(directory);
+        return *this;
+    }
+
     Process::Builder& Process::Builder::CaptureStdout()
     {
         m_stdoutMode = PipeMode::Capture;
@@ -178,6 +184,12 @@ namespace Spark
     Process::Builder& Process::Builder::CaptureStderr()
     {
         m_stderrMode = PipeMode::Capture;
+        return *this;
+    }
+
+    Process::Builder& Process::Builder::MergeStderrIntoStdout()
+    {
+        m_mergeStderrIntoStdout = true;
         return *this;
     }
 
@@ -225,7 +237,7 @@ namespace Spark
             SetHandleInformation(stdoutReadH.h, HANDLE_FLAG_INHERIT, 0);
         }
 
-        if (m_stderrMode == PipeMode::Capture)
+        if (m_stderrMode == PipeMode::Capture && !m_mergeStderrIntoStdout)
         {
             HANDLE r, w;
             if (!CreatePipe(&r, &w, &sa, 0))
@@ -248,12 +260,14 @@ namespace Spark
 
         STARTUPINFOA si{};
         si.cb = sizeof(si);
-        if (m_stdinMode == PipeMode::Capture || m_stdoutMode == PipeMode::Capture || m_stderrMode == PipeMode::Capture)
+        if (m_stdinMode == PipeMode::Capture || m_stdoutMode == PipeMode::Capture ||
+            m_stderrMode == PipeMode::Capture || m_mergeStderrIntoStdout)
         {
             si.dwFlags |= STARTF_USESTDHANDLES;
             si.hStdInput = stdinReadH.h ? stdinReadH.h : GetStdHandle(STD_INPUT_HANDLE);
             si.hStdOutput = stdoutWriteH.h ? stdoutWriteH.h : GetStdHandle(STD_OUTPUT_HANDLE);
-            si.hStdError = stderrWriteH.h ? stderrWriteH.h : GetStdHandle(STD_ERROR_HANDLE);
+            si.hStdError = m_mergeStderrIntoStdout ? si.hStdOutput
+                                                   : (stderrWriteH.h ? stderrWriteH.h : GetStdHandle(STD_ERROR_HANDLE));
         }
 
         // CREATE_SUSPENDED so the child is assigned to the kill-on-close job
@@ -264,7 +278,8 @@ namespace Spark
             flags |= CREATE_NO_WINDOW | DETACHED_PROCESS;
 
         PROCESS_INFORMATION pi{};
-        BOOL ok = CreateProcessA(NULL, cmdLine.data(), NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+        const char* workingDirectory = m_workingDirectory.empty() ? nullptr : m_workingDirectory.c_str();
+        BOOL ok = CreateProcessA(NULL, cmdLine.data(), NULL, NULL, TRUE, flags, NULL, workingDirectory, &si, &pi);
         if (!ok)
             return std::unexpected("CreateProcessA failed (error " + std::to_string(GetLastError()) + ")");
 

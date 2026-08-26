@@ -11,6 +11,7 @@
 #include "EngineSettings.h"
 #include "Camera/SparkEngineCamera.h"
 #include "Engine/AI/AISystem.h"
+#include "Engine/ECS/Components.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/PostProcessingPipeline.h"
 #include "Graphics/WeatherSystem.h"
@@ -18,6 +19,7 @@
 
 #include <sstream>
 #include <string>
+#include <cmath>
 
 // Forward declaration for ext commands
 namespace Spark
@@ -27,6 +29,33 @@ namespace Spark
 
 namespace Spark
 {
+
+    struct EcsCameraBinding
+    {
+        Transform* transform = nullptr;
+        Camera* camera = nullptr;
+    };
+
+    static EcsCameraBinding FindMainEcsCamera()
+    {
+        EngineContext* context = EngineContext::Get();
+        World* world = context ? context->GetWorld() : nullptr;
+        if (!world)
+            return {};
+
+        EntityID fallback = entt::null;
+        for (EntityID entity : world->GetEntitiesWith<Transform, Camera>())
+        {
+            Camera* camera = world->GetComponent<Camera>(entity);
+            if (fallback == entt::null)
+                fallback = entity;
+            if (camera && camera->isMainCamera)
+                return {world->GetComponent<Transform>(entity), camera};
+        }
+        return fallback == entt::null
+                   ? EcsCameraBinding{}
+                   : EcsCameraBinding{world->GetComponent<Transform>(fallback), world->GetComponent<Camera>(fallback)};
+    }
 
     // ========================================================================
     // Camera commands
@@ -41,11 +70,17 @@ namespace Spark
                 if (args.empty())
                     return "Usage: cam_fov <degrees>  (e.g. 90, 120)";
                 auto* cam = EngineContext::Get() ? EngineContext::Get()->GetCamera() : nullptr;
-                if (!cam)
-                    return "Camera not available";
                 try
                 {
-                    cam->Console_SetFOV(std::stof(args[0]));
+                    const float fov = std::stof(args[0]);
+                    if (fov < 10.0f || fov > 170.0f)
+                        return "Invalid FOV. Must be between 10 and 170 degrees";
+                    if (cam)
+                        cam->Console_SetFOV(fov);
+                    else if (const EcsCameraBinding binding = FindMainEcsCamera(); binding.camera)
+                        binding.camera->fov = fov;
+                    else
+                        return "Camera not available";
                     return "FOV set to " + args[0];
                 }
                 catch (const std::exception&)
@@ -119,11 +154,17 @@ namespace Spark
                 if (args.size() < 3)
                     return "Usage: cam_pos <x> <y> <z>";
                 auto* cam = EngineContext::Get() ? EngineContext::Get()->GetCamera() : nullptr;
-                if (!cam)
-                    return "Camera not available";
                 try
                 {
-                    cam->Console_SetPosition(std::stof(args[0]), std::stof(args[1]), std::stof(args[2]));
+                    const float x = std::stof(args[0]);
+                    const float y = std::stof(args[1]);
+                    const float z = std::stof(args[2]);
+                    if (cam)
+                        cam->Console_SetPosition(x, y, z);
+                    else if (const EcsCameraBinding binding = FindMainEcsCamera(); binding.transform)
+                        binding.transform->position = {x, y, z};
+                    else
+                        return "Camera not available";
                     return "Camera position set";
                 }
                 catch (const std::exception&)
@@ -140,12 +181,17 @@ namespace Spark
                 if (args.size() < 2)
                     return "Usage: cam_rotation <pitch> <yaw> [roll]";
                 auto* cam = EngineContext::Get() ? EngineContext::Get()->GetCamera() : nullptr;
-                if (!cam)
-                    return "Camera not available";
                 try
                 {
-                    float roll = (args.size() >= 3) ? std::stof(args[2]) : 0.0f;
-                    cam->Console_SetRotation(std::stof(args[0]), std::stof(args[1]), roll);
+                    const float pitch = std::stof(args[0]);
+                    const float yaw = std::stof(args[1]);
+                    const float roll = (args.size() >= 3) ? std::stof(args[2]) : 0.0f;
+                    if (cam)
+                        cam->Console_SetRotation(pitch, yaw, roll);
+                    else if (const EcsCameraBinding binding = FindMainEcsCamera(); binding.transform)
+                        binding.transform->rotation = {pitch, yaw, roll};
+                    else
+                        return "Camera not available";
                     return "Camera rotation set";
                 }
                 catch (const std::exception&)
@@ -162,11 +208,21 @@ namespace Spark
                 if (args.size() < 2)
                     return "Usage: cam_clipping <near> <far>";
                 auto* cam = EngineContext::Get() ? EngineContext::Get()->GetCamera() : nullptr;
-                if (!cam)
-                    return "Camera not available";
                 try
                 {
-                    cam->Console_SetClippingPlanes(std::stof(args[0]), std::stof(args[1]));
+                    const float nearPlane = std::stof(args[0]);
+                    const float farPlane = std::stof(args[1]);
+                    if (nearPlane <= 0.0f || farPlane <= nearPlane)
+                        return "Invalid clipping planes";
+                    if (cam)
+                        cam->Console_SetClippingPlanes(nearPlane, farPlane);
+                    else if (const EcsCameraBinding binding = FindMainEcsCamera(); binding.camera)
+                    {
+                        binding.camera->nearPlane = nearPlane;
+                        binding.camera->farPlane = farPlane;
+                    }
+                    else
+                        return "Camera not available";
                     return "Clipping planes set to near=" + args[0] + " far=" + args[1];
                 }
                 catch (const std::exception&)
@@ -183,11 +239,28 @@ namespace Spark
                 if (args.size() < 3)
                     return "Usage: cam_lookat <x> <y> <z>";
                 auto* cam = EngineContext::Get() ? EngineContext::Get()->GetCamera() : nullptr;
-                if (!cam)
-                    return "Camera not available";
                 try
                 {
-                    cam->Console_LookAt(std::stof(args[0]), std::stof(args[1]), std::stof(args[2]));
+                    const float x = std::stof(args[0]);
+                    const float y = std::stof(args[1]);
+                    const float z = std::stof(args[2]);
+                    if (cam)
+                        cam->Console_LookAt(x, y, z);
+                    else if (const EcsCameraBinding binding = FindMainEcsCamera(); binding.transform)
+                    {
+                        const float dx = x - binding.transform->position.x;
+                        const float dy = y - binding.transform->position.y;
+                        const float dz = z - binding.transform->position.z;
+                        const float horizontal = std::hypot(dx, dz);
+                        if (horizontal < 0.0001f && std::abs(dy) < 0.0001f)
+                            return "Look-at target matches camera position";
+                        constexpr float radiansToDegrees = 180.0f / 3.14159265358979323846f;
+                        binding.transform->rotation.x = -std::atan2(dy, horizontal) * radiansToDegrees;
+                        binding.transform->rotation.y = std::atan2(dx, dz) * radiansToDegrees;
+                        binding.transform->rotation.z = 0.0f;
+                    }
+                    else
+                        return "Camera not available";
                     return "Camera looking at target";
                 }
                 catch (const std::exception&)

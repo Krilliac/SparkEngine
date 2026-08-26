@@ -22,6 +22,7 @@
 #include "IModule.h"
 #include "ILogger.h"
 #include "ModuleABI.h"
+#include "PluginABI.h"
 #include "ModuleRegistry.h"
 #include "MathTypes.h"
 #include "InputTypes.h"

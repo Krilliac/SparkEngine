@@ -87,6 +87,20 @@ dependencies according to the target platform's deployment policy.
 would invalidate the pre-load ABI hash. `--compress` also remains accepted; the current runnable-package
 contract keeps assets raw and records both requested and effective states in `manifest.json`.
 
+## Inspect SparkPak archives
+
+```powershell
+python <engine-root>/Tools/spark-cli/spark_cli.py pak inspect Data/base.spk --format json
+python <engine-root>/Tools/spark-cli/spark_cli.py pak list Data/base.spk
+python <engine-root>/Tools/spark-cli/spark_cli.py pak verify Data/base.spk --format json
+python <engine-root>/Tools/spark-cli/spark_cli.py pak diff Data/base.spk Data/patch.spk
+```
+
+These commands are strictly read-only. They validate bounded header, table-of-contents, path, hash, size,
+and data-range contracts without extracting files. `verify` streams and SHA-256 hashes stored and deflate
+entries; `diff` compares those decompressed hashes. Zstd entries remain visible to `inspect` and `list`,
+while verification fails explicitly when no optional zstd provider is available.
+
 ## Focused tests
 
 ```powershell

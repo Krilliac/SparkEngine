@@ -37,6 +37,7 @@ namespace SparkEditor
             WindowsX64,
             WindowsX86,
             LinuxX64,
+            LinuxARM64,
             MacOSX64,
             MacOSARM64
         };
@@ -89,6 +90,13 @@ namespace SparkEditor
             int compressionLevel = 6;                     ///< Compression strength [1-9].
             std::string outputDirectory = "Build/Output"; ///< Output directory for the build.
             std::string executableName = "SparkGame";     ///< Name of the output executable.
+            bool packageDedicatedServer = false;          ///< Add the native SparkServer host and launcher.
+            std::string dedicatedServerExecutableName = "SparkDedicatedServer"; ///< Packaged server host name.
+
+            // Post-package runtime validation
+            bool runAutomationAfterBuild = false; ///< Launch the packaged runtime through SparkAutomation.
+            int automationFrames = 120;           ///< Deterministic frame budget for the runtime smoke test.
+            int automationTimeoutSeconds = 30;    ///< Hard wall-clock limit for the process tree.
 
             // Code signing
             bool signExecutable = false;    ///< Reserved: code signing is not yet supported.

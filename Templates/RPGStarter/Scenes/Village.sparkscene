@@ -6,7 +6,7 @@
           "fields": {
             "position": "0.000000,0.000000,0.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "50.000000,0.100000,50.000000"
+            "scale": "1.000000,1.000000,1.000000"
           },
           "type": "Transform"
         },
@@ -15,7 +15,7 @@
             "castShadows": "true",
             "emissive": "0.000000",
             "materialPath": "",
-            "meshPath": "__spark_primitive_ground__.obj",
+            "meshPath": "Assets/Models/village_ground.obj",
             "receiveShadows": "true",
             "visible": "true"
           },
@@ -40,7 +40,7 @@
           "fields": {
             "castShadows": "false",
             "color": "1.000000,0.960000,0.840000",
-            "intensity": "1.000000",
+            "intensity": "1.150000",
             "range": "10.000000",
             "shadowMapResolution": "1024",
             "spotAngle": "45.000000",
@@ -58,8 +58,8 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,8.000000,-10.000000",
-            "rotation": "30.000000,0.000000,0.000000",
+            "position": "0.000000,3.200000,-7.500000",
+            "rotation": "16.000000,0.000000,0.000000",
             "scale": "1.000000,1.000000,1.000000"
           },
           "type": "Transform"
@@ -82,9 +82,9 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,1.000000,0.000000",
-            "rotation": "0.000000,0.000000,0.000000",
-            "scale": "0.800000,1.800000,0.800000"
+            "position": "0.000000,0.000000,0.000000",
+            "rotation": "0.000000,180.000000,0.000000",
+            "scale": "1.550000,1.550000,1.550000"
           },
           "type": "Transform"
         },
@@ -108,9 +108,9 @@
       "components": [
         {
           "fields": {
-            "position": "3.000000,1.000000,2.000000",
-            "rotation": "0.000000,0.000000,0.000000",
-            "scale": "0.800000,1.800000,0.800000"
+            "position": "2.400000,0.000000,1.500000",
+            "rotation": "0.000000,205.000000,0.000000",
+            "scale": "1.450000,1.450000,1.450000"
           },
           "type": "Transform"
         },
@@ -134,9 +134,9 @@
       "components": [
         {
           "fields": {
-            "position": "-4.000000,0.400000,5.000000",
+            "position": "-2.200000,0.120000,1.600000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "0.600000,0.600000,0.600000"
+            "scale": "0.900000,0.900000,0.900000"
           },
           "type": "Transform"
         },
@@ -160,9 +160,9 @@
       "components": [
         {
           "fields": {
-            "position": "7.000000,1.000000,6.000000",
-            "rotation": "0.000000,0.000000,0.000000",
-            "scale": "1.000000,2.000000,1.000000"
+            "position": "4.600000,0.000000,3.800000",
+            "rotation": "0.000000,220.000000,0.000000",
+            "scale": "1.550000,1.550000,1.550000"
           },
           "type": "Transform"
         },
@@ -186,9 +186,9 @@
       "components": [
         {
           "fields": {
-            "position": "-7.000000,2.000000,0.000000",
-            "rotation": "0.000000,0.000000,0.000000",
-            "scale": "5.000000,4.000000,5.000000"
+            "position": "-6.200000,0.000000,3.800000",
+            "rotation": "0.000000,18.000000,0.000000",
+            "scale": "4.600000,4.600000,4.600000"
           },
           "type": "Transform"
         },
@@ -212,9 +212,9 @@
       "components": [
         {
           "fields": {
-            "position": "8.000000,2.000000,-2.000000",
-            "rotation": "0.000000,0.000000,0.000000",
-            "scale": "4.000000,4.000000,4.000000"
+            "position": "6.200000,0.000000,2.300000",
+            "rotation": "0.000000,-22.000000,0.000000",
+            "scale": "4.400000,4.400000,4.400000"
           },
           "type": "Transform"
         },
@@ -232,6 +232,140 @@
       ],
       "id": 8,
       "name": "Village House B",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-1.400000,0.000000,8.200000",
+            "rotation": "0.000000,5.000000,0.000000",
+            "scale": "3.800000,3.800000,3.800000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/village_house_a.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 9,
+      "name": "Village Inn",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-4.000000,0.000000,7.200000",
+            "rotation": "0.000000,155.000000,0.000000",
+            "scale": "1.250000,1.250000,1.250000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/village_elder.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 10,
+      "name": "Village Merchant",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "4.400000,0.000000,7.000000",
+            "rotation": "0.000000,210.000000,0.000000",
+            "scale": "1.300000,1.300000,1.300000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/training_warden.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 11,
+      "name": "Gate Sentinel",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-3.600000,3.000000,2.800000",
+            "rotation": "90.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "1.000000,0.600000,0.240000",
+            "intensity": "2.400000",
+            "range": "8.000000",
+            "shadowMapResolution": "512",
+            "spotAngle": "55.000000",
+            "spotInnerAngle": "35.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 12,
+      "name": "Village Hearth Light",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "3.800000,3.300000,3.800000",
+            "rotation": "90.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "0.350000,0.650000,1.000000",
+            "intensity": "1.700000",
+            "range": "7.000000",
+            "shadowMapResolution": "512",
+            "spotAngle": "55.000000",
+            "spotInnerAngle": "35.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 13,
+      "name": "Relic Moonlight",
       "parent": -1
     }
   ],

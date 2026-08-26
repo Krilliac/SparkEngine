@@ -25,6 +25,11 @@ namespace Spark
         m_args.push_back(std::move(arg));
         return *this;
     }
+    Process::Builder& Process::Builder::WorkingDirectory(std::string directory)
+    {
+        m_workingDirectory = std::move(directory);
+        return *this;
+    }
     Process::Builder& Process::Builder::CaptureStdout()
     {
         m_stdoutMode = PipeMode::Capture;
@@ -33,6 +38,11 @@ namespace Spark
     Process::Builder& Process::Builder::CaptureStderr()
     {
         m_stderrMode = PipeMode::Capture;
+        return *this;
+    }
+    Process::Builder& Process::Builder::MergeStderrIntoStdout()
+    {
+        m_mergeStderrIntoStdout = true;
         return *this;
     }
     Process::Builder& Process::Builder::CaptureStdin()

@@ -19,6 +19,7 @@
 #include "Engine/Modding/ModSystem.h"
 #include "Engine/UI/UISystem.h"
 #include "EngineSettings.h"
+#include "EngineContext.h"
 #include "EngineRuntime.h"
 #include "FaultIsolation.h"
 #include "FixedTimestepAccumulator.h"
@@ -74,6 +75,12 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
     {
         if (Spark::LoadWorld(g_sceneWorld, g_scenePath))
         {
+            // Explicit scene preview renders this dedicated world rather than
+            // the ordinary runtime world. Publish that same instance through
+            // EngineContext so camera/debug console commands operate on what
+            // the user can actually see.
+            if (EngineContext* context = EngineContext::Get())
+                context->SetWorld(&g_sceneWorld);
             if (const auto root = Spark::DeriveProjectRootFromScenePath(g_scenePath))
                 sceneProjectRoot = *root;
             else

@@ -21,12 +21,28 @@
 #include "Graphics/Neural/NeuralTypes.h"
 #include "Graphics/Neural/NeuralWeights.h"
 
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <random>
 #include <vector>
 
 using namespace Spark::Graphics::Neural;
+
+namespace
+{
+    std::string NeuralTestPath(const char* fileName)
+    {
+        static std::atomic_uint64_t sequence{0};
+        const auto tick = std::chrono::steady_clock::now().time_since_epoch().count();
+        return (std::filesystem::temp_directory_path() /
+                (std::string("spark_neural_") + fileName + "_" + std::to_string(tick) + "_" +
+                 std::to_string(sequence.fetch_add(1, std::memory_order_relaxed))))
+            .string();
+    }
+} // namespace
 
 // ============================================================================
 // Loss functions
@@ -267,11 +283,11 @@ TEST(NFA_SaveLoadProducesSamePredictions)
         nfa.TrainIncremental(in, &t, LossType::MSE);
     }
 
-    const std::string path = "nfa_roundtrip.nnw";
-    EXPECT_TRUE(nfa.Save(path, false));
+    const std::string path = NeuralTestPath("nfa_roundtrip.nnw");
+    ASSERT_TRUE(nfa.Save(path, false));
 
     NeuralFunctionApproximator loaded;
-    EXPECT_TRUE(loaded.Load(path));
+    ASSERT_TRUE(loaded.Load(path));
 
     EXPECT_EQ(loaded.GetInputSize(), 2u);
     EXPECT_EQ(loaded.GetOutputSize(), 1u);
@@ -305,16 +321,16 @@ TEST(NNW_V2OptimizerStateRoundTrip)
     net.optimizer.firstMoment.assign(total, 0.01f);
     net.optimizer.secondMoment.assign(total, 0.0005f);
 
-    const std::string path = "nnw_v2_optstate.nnw";
-    EXPECT_TRUE(SaveWeights(net, path));
+    const std::string path = NeuralTestPath("nnw_v2_optstate.nnw");
+    ASSERT_TRUE(SaveWeights(net, path));
 
     TrainedNetwork loaded = LoadWeights(path);
-    EXPECT_EQ(loaded.desc.layers.size(), 2u);
-    EXPECT_EQ(loaded.weights.size(), total);
+    ASSERT_EQ(loaded.desc.layers.size(), 2u);
+    ASSERT_EQ(loaded.weights.size(), total);
     EXPECT_TRUE(loaded.optimizer.kind == OptimizerKind::Adam);
     EXPECT_EQ(loaded.optimizer.stepCount, 42u);
-    EXPECT_EQ(loaded.optimizer.firstMoment.size(), total);
-    EXPECT_EQ(loaded.optimizer.secondMoment.size(), total);
+    ASSERT_EQ(loaded.optimizer.firstMoment.size(), total);
+    ASSERT_EQ(loaded.optimizer.secondMoment.size(), total);
     for (uint32_t i = 0; i < total; ++i)
     {
         EXPECT_NEAR(loaded.optimizer.firstMoment[i], 0.01f, 1e-6f);
@@ -328,9 +344,9 @@ TEST(NNW_V2LoadsV1FileAsNoOptimizer)
 {
     // Hand-write a v1 file (4-uint32 header, no flags, no trailer) and verify
     // the v2 loader still accepts it with optimizer.kind == None.
-    const std::string path = "nnw_v1_legacy.nnw";
+    const std::string path = NeuralTestPath("nnw_v1_legacy.nnw");
     FILE* f = std::fopen(path.c_str(), "wb");
-    EXPECT_TRUE(f != nullptr);
+    ASSERT_TRUE(f != nullptr);
 
     // 1 layer, 1→1, totalParameters = 1*1 + 1 = 2.
     const uint32_t header[4] = {0x574E4E53u, 1u, 1u, 2u};
@@ -343,7 +359,7 @@ TEST(NNW_V2LoadsV1FileAsNoOptimizer)
 
     TrainedNetwork loaded = LoadWeights(path);
     EXPECT_EQ(loaded.desc.layers.size(), 1u);
-    EXPECT_EQ(loaded.weights.size(), 2u);
+    ASSERT_EQ(loaded.weights.size(), 2u);
     EXPECT_TRUE(loaded.optimizer.kind == OptimizerKind::None);
     EXPECT_NEAR(loaded.weights[0], 0.5f, 1e-6f);
     EXPECT_NEAR(loaded.weights[1], 0.1f, 1e-6f);

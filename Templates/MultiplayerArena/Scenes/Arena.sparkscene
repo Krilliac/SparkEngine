@@ -419,6 +419,270 @@
       "id": 15,
       "name": "Southeast Corner Pylon",
       "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-4.000000,0.000000,3.500000",
+            "rotation": "0.000000,25.000000,0.000000",
+            "scale": "4.500000,1.250000,0.750000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.060000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_divider.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 16,
+      "name": "Cyan Midfield Cover",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "4.000000,0.000000,-3.500000",
+            "rotation": "0.000000,25.000000,0.000000",
+            "scale": "4.500000,1.250000,0.750000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.060000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_divider.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 17,
+      "name": "Magenta Midfield Cover",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-6.500000,0.000000,-4.500000",
+            "rotation": "0.000000,-55.000000,0.000000",
+            "scale": "3.000000,1.000000,0.650000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.040000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_divider.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 18,
+      "name": "Southwest Cover",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "6.500000,0.000000,4.500000",
+            "rotation": "0.000000,-55.000000,0.000000",
+            "scale": "3.000000,1.000000,0.650000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.040000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_divider.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 19,
+      "name": "Northeast Cover",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-7.000000,0.000000,7.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.700000,0.700000,0.700000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.180000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/shield_pickup.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 20,
+      "name": "Northwest Energy Node",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "7.000000,0.000000,7.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.700000,0.700000,0.700000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.180000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/shield_pickup.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 21,
+      "name": "Northeast Energy Node",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-7.000000,0.000000,-7.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.700000,0.700000,0.700000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.180000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/shield_pickup.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 22,
+      "name": "Southwest Energy Node",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "7.000000,0.000000,-7.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.700000,0.700000,0.700000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.180000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/shield_pickup.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 23,
+      "name": "Southeast Energy Node",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,5.000000,6.000000",
+            "rotation": "90.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "0.030000,0.720000,1.000000",
+            "intensity": "3.000000",
+            "range": "13.000000",
+            "shadowMapResolution": "512",
+            "spotAngle": "55.000000",
+            "spotInnerAngle": "35.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 24,
+      "name": "North Arena Light",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,5.000000,-6.000000",
+            "rotation": "90.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "0.920000,0.060000,0.620000",
+            "intensity": "3.000000",
+            "range": "13.000000",
+            "shadowMapResolution": "512",
+            "spotAngle": "55.000000",
+            "spotInnerAngle": "35.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 25,
+      "name": "South Arena Light",
+      "parent": -1
     }
   ],
   "version": 1

@@ -59,6 +59,7 @@
 #include "../Panels/GameModuleSelectorPanel.h"
 #include "../Panels/PlayControlPanel.h"
 #include "../Panels/CollaborationPanel.h"
+#include "../Panels/ServiceTopologyPanel.h"
 #include "../Panels/TimeOfDayPanel.h"
 #include "../Panels/AbilityEditorPanel.h"
 #include "../Panels/TriggerEditorPanel.h"
@@ -206,6 +207,7 @@ namespace SparkEditor
         tryRegister("RegionMapEditor", [&] { return std::make_shared<RegionMapEditorPanel>(); });
         tryRegister("DecorLayoutEditor", [&] { return std::make_shared<DecorLayoutEditorPanel>(); });
         tryRegister("Collaboration", [&] { return std::make_shared<CollaborationPanel>(m_collabSession.get()); });
+        tryRegister("ServiceTopology", [&] { return std::make_shared<ServiceTopologyPanel>(); });
 
         tryRegister("TimeOfDay", [&] { return std::make_shared<TimeOfDayPanel>(); });
         tryRegister("AbilityEditor", [&] { return std::make_shared<AbilityEditorPanel>(); });

@@ -1,6 +1,9 @@
 # SparkEngine installed-SDK project templates
 
-These eight packages are the physical source for SparkEditor's built-in project templates. Each is a standalone CMake project that consumes an installed SparkEngine SDK, produces one game-module shared library, loads a current reflected `.sparkscene`, and drives a live input/update/render loop with template-specific gameplay and artwork.
+These nine packages are the physical source for SparkEditor's project templates and compatibility samples. Each is a standalone CMake project that consumes an installed SparkEngine SDK, produces one game-module shared library, loads a current reflected `.sparkscene`, and drives a live input/update/render loop with template-specific gameplay and artwork.
+
+See the root README's [Live Template Showcase](../README.md#live-template-showcase)
+for runtime hero, wide, and detail captures of every package.
 
 | Package | Editor template | Default scene |
 |---|---|---|
@@ -12,8 +15,9 @@ These eight packages are the physical source for SparkEditor's built-in project 
 | `MMOStarter` | MMO | `Scenes/Frontier.sparkscene` |
 | `PlatformerKit` | Platformer | `Scenes/Level01.sparkscene` |
 | `RPGStarter` | RPG | `Scenes/Village.sparkscene` |
+| `MultiplayerArena` | Multiplayer Arena | `Scenes/Arena.sparkscene` |
 
-`MultiplayerArena` is a complete legacy compatibility sample outside the built-in registry. It now follows the same installed-SDK, reflected-scene, deterministic-gameplay, and asset-provenance contract.
+`MultiplayerArena` remains a legacy compatibility sample outside the built-in registry, but follows the same installed-SDK, reflected-scene, deterministic-gameplay, and asset-provenance contract.
 
 ## SDK requirement
 

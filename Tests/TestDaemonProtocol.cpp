@@ -87,6 +87,7 @@ TEST(DaemonProtocol_ServiceIdConstantsAreStable)
     EXPECT_EQ(static_cast<uint16_t>(ServiceId::Shader), 0x0002u);
     EXPECT_EQ(static_cast<uint16_t>(ServiceId::Collab), 0x0003u);
     EXPECT_EQ(static_cast<uint16_t>(ServiceId::Build), 0x0004u);
+    EXPECT_EQ(static_cast<uint16_t>(ServiceId::Orchestration), 0x0005u);
 }
 
 TEST(DaemonProtocol_MaxPayloadSizeIs16MiB)

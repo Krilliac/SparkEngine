@@ -147,6 +147,12 @@ namespace Spark
         return *this;
     }
 
+    Process::Builder& Process::Builder::WorkingDirectory(std::string directory)
+    {
+        m_workingDirectory = std::move(directory);
+        return *this;
+    }
+
     Process::Builder& Process::Builder::CaptureStdout()
     {
         m_stdoutMode = PipeMode::Capture;
@@ -156,6 +162,12 @@ namespace Spark
     Process::Builder& Process::Builder::CaptureStderr()
     {
         m_stderrMode = PipeMode::Capture;
+        return *this;
+    }
+
+    Process::Builder& Process::Builder::MergeStderrIntoStdout()
+    {
+        m_mergeStderrIntoStdout = true;
         return *this;
     }
 
@@ -214,7 +226,7 @@ namespace Spark
                 return std::unexpected(r.error());
             }
         }
-        if (m_stderrMode == PipeMode::Capture)
+        if (m_stderrMode == PipeMode::Capture && !m_mergeStderrIntoStdout)
         {
             if (auto r = makePipe(stderrPipe, "stderr"); !r)
             {
@@ -246,6 +258,9 @@ namespace Spark
             if (m_detached)
                 setsid(); // Detach from parent's session
 
+            if (!m_workingDirectory.empty() && chdir(m_workingDirectory.c_str()) != 0)
+                _exit(126);
+
             // Redirect stdin/stdout/stderr via dup2.
             // Pipes are O_CLOEXEC so originals auto-close on exec;
             // we only need dup2 (which clears CLOEXEC on the target fd).
@@ -271,7 +286,9 @@ namespace Spark
                 redirectFd(stdinPipe[0], STDIN_FILENO);
             if (stdoutPipe[1] >= 0)
                 redirectFd(stdoutPipe[1], STDOUT_FILENO);
-            if (stderrPipe[1] >= 0)
+            if (m_mergeStderrIntoStdout)
+                redirectFd(stdoutPipe[1] >= 0 ? stdoutPipe[1] : STDOUT_FILENO, STDERR_FILENO);
+            else if (stderrPipe[1] >= 0)
                 redirectFd(stderrPipe[1], STDERR_FILENO);
 
             execvp(m_executable.c_str(), const_cast<char* const*>(argv.data()));

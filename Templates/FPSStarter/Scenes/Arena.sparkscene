@@ -6,7 +6,7 @@
           "fields": {
             "position": "0.000000,0.000000,0.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "50.000000,0.100000,50.000000"
+            "scale": "36.000000,0.100000,36.000000"
           },
           "type": "Transform"
         },
@@ -111,9 +111,9 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,0.000000,6.000000",
+            "position": "0.000000,0.000000,7.000000",
             "rotation": "0.000000,180.000000,0.000000",
-            "scale": "1.500000,2.000000,1.500000"
+            "scale": "2.000000,2.600000,2.000000"
           },
           "type": "Transform"
         },
@@ -137,9 +137,9 @@
       "components": [
         {
           "fields": {
-            "position": "3.000000,0.000000,3.000000",
+            "position": "4.500000,0.000000,3.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "2.500000,2.000000,1.000000"
+            "scale": "3.500000,2.400000,1.400000"
           },
           "type": "Transform"
         },
@@ -163,9 +163,9 @@
       "components": [
         {
           "fields": {
-            "position": "-3.000000,0.000000,3.000000",
+            "position": "-4.500000,0.000000,3.000000",
             "rotation": "0.000000,180.000000,0.000000",
-            "scale": "2.500000,2.000000,1.000000"
+            "scale": "3.500000,2.400000,1.400000"
           },
           "type": "Transform"
         },
@@ -189,9 +189,9 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,0.000000,24.000000",
+            "position": "0.000000,0.000000,18.000000",
             "rotation": "0.000000,0.000000,0.000000",
-            "scale": "48.000000,3.000000,1.000000"
+            "scale": "9.000000,4.000000,1.000000"
           },
           "type": "Transform"
         },
@@ -215,9 +215,9 @@
       "components": [
         {
           "fields": {
-            "position": "0.000000,0.000000,-24.000000",
+            "position": "0.000000,0.000000,-4.000000",
             "rotation": "0.000000,180.000000,0.000000",
-            "scale": "48.000000,3.000000,1.000000"
+            "scale": "8.000000,0.600000,1.000000"
           },
           "type": "Transform"
         },
@@ -241,9 +241,9 @@
       "components": [
         {
           "fields": {
-            "position": "24.000000,0.000000,0.000000",
+            "position": "13.000000,0.000000,7.000000",
             "rotation": "0.000000,90.000000,0.000000",
-            "scale": "48.000000,3.000000,1.000000"
+            "scale": "22.000000,3.200000,1.000000"
           },
           "type": "Transform"
         },
@@ -267,9 +267,9 @@
       "components": [
         {
           "fields": {
-            "position": "-24.000000,0.000000,0.000000",
+            "position": "-13.000000,0.000000,7.000000",
             "rotation": "0.000000,-90.000000,0.000000",
-            "scale": "48.000000,3.000000,1.000000"
+            "scale": "22.000000,3.200000,1.000000"
           },
           "type": "Transform"
         },
@@ -293,9 +293,9 @@
       "components": [
         {
           "fields": {
-            "position": "-5.000000,0.000000,-1.500000",
+            "position": "-7.500000,0.850000,-1.000000",
             "rotation": "0.000000,-20.000000,-8.000000",
-            "scale": "2.500000,2.500000,2.500000"
+            "scale": "2.000000,2.000000,2.000000"
           },
           "type": "Transform"
         },
@@ -313,6 +313,400 @@
       ],
       "id": 11,
       "name": "Training Rifle Display",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-6.000000,0.000000,7.000000",
+            "rotation": "0.000000,180.000000,0.000000",
+            "scale": "1.700000,2.300000,1.700000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/training_target.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 12,
+      "name": "Left Lane Target",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "6.000000,0.000000,7.000000",
+            "rotation": "0.000000,180.000000,0.000000",
+            "scale": "1.700000,2.300000,1.700000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/training_target.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 13,
+      "name": "Right Lane Target",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-6.000000,0.000000,14.000000",
+            "rotation": "0.000000,180.000000,0.000000",
+            "scale": "2.000000,2.800000,2.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.030000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/training_target.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 14,
+      "name": "Left Distance Target",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "6.000000,0.000000,14.000000",
+            "rotation": "0.000000,180.000000,0.000000",
+            "scale": "2.000000,2.800000,2.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.030000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/training_target.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 15,
+      "name": "Right Distance Target",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-4.500000,0.000000,10.500000",
+            "rotation": "0.000000,10.000000,0.000000",
+            "scale": "3.800000,2.000000,1.300000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.020000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/cover_barrier.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 16,
+      "name": "Left Midfield Cover",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "4.500000,0.000000,10.500000",
+            "rotation": "0.000000,-10.000000,0.000000",
+            "scale": "3.800000,2.000000,1.300000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.020000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/cover_barrier.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 17,
+      "name": "Right Midfield Cover",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,0.000000,13.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "4.200000,2.200000,1.500000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.030000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/cover_barrier.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 18,
+      "name": "Command Cover",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-9.000000,0.000000,18.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "9.000000,4.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.050000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_wall.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 19,
+      "name": "North Wall Left Wing",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "9.000000,0.000000,18.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "9.000000,4.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.050000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/arena_wall.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 20,
+      "name": "North Wall Right Wing",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-8.500000,0.000000,1.000000",
+            "rotation": "0.000000,18.000000,0.000000",
+            "scale": "3.000000,1.600000,1.200000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.020000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/cover_barrier.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 21,
+      "name": "Left Spawn Cover",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "8.500000,0.000000,1.000000",
+            "rotation": "0.000000,-18.000000,0.000000",
+            "scale": "3.000000,1.600000,1.200000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.020000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/cover_barrier.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 22,
+      "name": "Right Spawn Cover",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,0.000000,3.500000",
+            "rotation": "0.000000,180.000000,0.000000",
+            "scale": "1.400000,1.800000,1.400000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.020000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/training_target.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 23,
+      "name": "Close Reflex Target",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "7.500000,0.850000,-1.000000",
+            "rotation": "0.000000,20.000000,8.000000",
+            "scale": "2.000000,2.000000,2.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.080000",
+            "materialPath": "",
+            "meshPath": "Assets/Models/training_rifle.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 24,
+      "name": "Training Rifle Display Right",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "-7.000000,5.000000,8.000000",
+            "rotation": "90.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "0.100000,0.750000,1.000000",
+            "intensity": "2.000000",
+            "range": "14.000000",
+            "shadowMapResolution": "512",
+            "spotAngle": "55.000000",
+            "spotInnerAngle": "35.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 25,
+      "name": "Blue Lane Accent",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "7.000000,5.000000,8.000000",
+            "rotation": "90.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "1.000000,0.300000,0.050000",
+            "intensity": "2.000000",
+            "range": "14.000000",
+            "shadowMapResolution": "512",
+            "spotAngle": "55.000000",
+            "spotInnerAngle": "35.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 26,
+      "name": "Orange Lane Accent",
       "parent": -1
     }
   ],

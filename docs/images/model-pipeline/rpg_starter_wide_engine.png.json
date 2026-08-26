@@ -1,0 +1,18 @@
+{
+    "schema":  2,
+    "commit":  "c1341e72beead74096a28997c6401462c722dcad",
+    "workingTreeDirty":  true,
+    "template":  "RPGStarter",
+    "scene":  "Village.sparkscene",
+    "sceneSha256":  "37f2d702b003e91656caecc3b3c6d9f07724b268dab9ad84dfe43e4915c13b81",
+    "assetManifestSha256":  "6960c8421ba510de9ae10a2703da7f80b168c75c5a9f3e2d9746dd7b762fd6f3",
+    "imageSha256":  "ccb62ab49f1f7ee0738cabc3dbdd09facf9b10598c620c4854184ce9f2fc62c3",
+    "shot":  "wide",
+    "cameraPosition":  "11 7.5 -14",
+    "cameraLookAt":  "0 1.5 3.5",
+    "captureAtSeconds":  4,
+    "requestedWindow":  "1920x1080",
+    "capturedImage":  "1904x1041",
+    "engine":  "D:\\SparkEngine\\build\\bin\\Debug\\SparkEngine.exe",
+    "engineSha256":  "bced497af10e308c0431f08529510d75cffa5ef4f9d06dc441c15ebbdbbea318"
+}

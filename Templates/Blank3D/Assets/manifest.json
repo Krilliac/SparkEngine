@@ -20,11 +20,29 @@
       "kind": "named source-rectangle metadata for the runtime sheet",
       "origin": "SparkEngine project-authored metadata",
       "sha256": "e3186778bfc989ffd578fb073de129ccb2c5172d8cf29d73893ffd6d220f0e31"
+    },
+    {
+      "path": "Models/showcase_palette.mtl",
+      "kind": "repository-authored six-color material palette for the 3D composition study",
+      "origin": "SparkEngine project-authored asset",
+      "sha256": "496a77429fabf05ac285d35b63fd3262c6ad35a1f75129cfb917252fc59c8a8e"
+    },
+    {
+      "path": "Models/spectrum_block.obj",
+      "kind": "transform-friendly six-face color block",
+      "origin": "SparkEngine project-authored asset",
+      "sha256": "265f824453b7bc50643122fc208c206c30c9919ee5992a4a806af9249f196407"
+    },
+    {
+      "path": "Models/studio_block.obj",
+      "kind": "transform-friendly navy studio block",
+      "origin": "SparkEngine project-authored asset",
+      "sha256": "b2a4feee38c48b992d7992fe529fa2fc378d56956c230f7fc418a803d3742e5c"
     }
   ],
   "enginePrimitives": [
-    "__spark_primitive_Cube.obj",
-    "__spark_primitive_ground__.obj"
+    "__spark_primitive_Sphere.obj",
+    "__spark_primitive_Cylinder.obj"
   ],
-  "notes": "The scene uses built-in primitives; the atlas supplies an original cyan/magenta technical visual kit."
+  "notes": "The scene combines built-in sphere/cylinder primitives with repository-authored MTL-colored transform blocks; the atlas supplies an original cyan/magenta technical visual kit."
 }

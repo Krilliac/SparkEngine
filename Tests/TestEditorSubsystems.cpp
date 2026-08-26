@@ -862,7 +862,7 @@ TEST(ProjectManager_AllRegisteredTemplatesCreateMappedPhysicalPackages)
     manager.SetEngineRoot(sourceRoot.string());
     size_t callbackCount = 0;
     manager.SetOnProjectOpened([&](const ProjectInfo&) { ++callbackCount; });
-    constexpr std::array<size_t, 8> expectedEntityCountsByType = {0, 12, 6, 10, 10, 7, 12, 9};
+    constexpr std::array<size_t, 8> expectedEntityCountsByType = {0, 27, 16, 25, 15, 19, 23, 14};
 
     size_t templateIndex = 0;
     for (const auto& descriptor : ProjectManager::GetProjectTemplateDescriptors())
@@ -1849,6 +1849,50 @@ TEST(BuildPipeline_ConfigureUsesExplicitProjectAndInstalledPackage)
                             [](const std::string& arg) { return arg.rfind("-DSparkEngine_DIR=", 0) == 0; }));
 }
 
+TEST(BuildPipeline_OnlyAcceptsTheNativePackageTarget)
+{
+    const auto native = BuildPipeline::NativeTargetPlatform();
+    EXPECT_TRUE(BuildPipeline::IsNativeTargetPlatform(native));
+    const auto nonNative = native == BuildCookPanel::TargetPlatform::WindowsX64
+                               ? BuildCookPanel::TargetPlatform::LinuxX64
+                               : BuildCookPanel::TargetPlatform::WindowsX64;
+    EXPECT_FALSE(BuildPipeline::IsNativeTargetPlatform(nonNative));
+}
+
+TEST(BuildPipeline_CookCommandUsesAbsoluteBoundedPaths)
+{
+    const auto args = BuildPipeline::CreateCookArguments("Project Root/Assets", "Project Root/Cooked/Assets",
+                                                         "Project Root/Cooked/manifest.json", true);
+    EXPECT_EQ(args.size(), 7u);
+    EXPECT_EQ(args[0], "--source");
+    EXPECT_TRUE(std::filesystem::path(args[1]).is_absolute());
+    EXPECT_EQ(args[2], "--output");
+    EXPECT_TRUE(std::filesystem::path(args[3]).is_absolute());
+    EXPECT_EQ(args[4], "--manifest");
+    EXPECT_TRUE(std::filesystem::path(args[5]).is_absolute());
+    EXPECT_EQ(args[6], "--dry-run");
+}
+
+TEST(BuildPipeline_AutomationCommandIsFrameBoundedAndWritesReports)
+{
+    const auto args =
+        BuildPipeline::CreateAutomationArguments("Package/Game.exe", "Package", "Package/Reports", 240, 45);
+    EXPECT_EQ(args.size(), 18u);
+    EXPECT_EQ(args[0], "--name");
+    EXPECT_EQ(args[2], "--executable");
+    EXPECT_TRUE(std::filesystem::path(args[3]).is_absolute());
+    EXPECT_EQ(args[4], "--working-dir");
+    EXPECT_TRUE(std::filesystem::path(args[5]).is_absolute());
+    EXPECT_EQ(args[6], "--frames");
+    EXPECT_EQ(args[7], "240");
+    EXPECT_EQ(args[8], "--timeout-ms");
+    EXPECT_EQ(args[9], "45000");
+    EXPECT_EQ(args[12], "--captured-log");
+    EXPECT_TRUE(std::filesystem::path(args[13]).is_absolute());
+    EXPECT_EQ(args[14], "--json");
+    EXPECT_EQ(args[16], "--junit");
+}
+
 TEST(BuildPipeline_RejectsIncompleteBuildTreePackage)
 {
     const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -1896,6 +1940,10 @@ TEST(BuildPipeline_CookPackagesAssetsScenesConfigAndMetadata)
     EXPECT_TRUE(std::filesystem::is_regular_file(root / "Cooked" / "Config" / "EditorSettings.json"));
     EXPECT_TRUE(std::filesystem::is_regular_file(root / "Cooked" / "Cookable.sparkproject"));
     EXPECT_TRUE(std::filesystem::is_regular_file(root / "Cooked" / "spark.modules.json"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(root / "Cooked" / "Assets" / "spark-cook-manifest.json"));
+    const auto lines = pipeline.DrainLogLines();
+    EXPECT_TRUE(std::any_of(lines.begin(), lines.end(), [](const BuildLogLine& line)
+                            { return line.text.find("SparkCooker:") != std::string::npos; }));
 
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
@@ -1904,6 +1952,40 @@ TEST(BuildPipeline_CookPackagesAssetsScenesConfigAndMetadata)
 
 TEST(BuildPipeline_AssemblesRunnableModuleAndIsolatedScenePackage)
 {
+#ifdef _WIN32
+    constexpr const char* hostFilename = "SparkEngine.exe";
+    constexpr const char* serverFilename = "SparkServer.exe";
+    constexpr const char* moduleFilename = "Runnable.dll";
+    constexpr const char* runtimeDependency = "RuntimeDependency.dll";
+    constexpr const char* packagedGame = "Playable Game.exe";
+    constexpr const char* packagedServer = "Arena Server.exe";
+    constexpr const char* gameLauncherFilename = "LaunchGame.cmd";
+    constexpr const char* serverLauncherFilename = "LaunchServer.cmd";
+    constexpr const char* sceneLauncherFilename = "LaunchScene.cmd";
+    constexpr const char* sceneHost = "Playable Game Scene.exe";
+#elif defined(__APPLE__)
+    constexpr const char* hostFilename = "SparkEngine";
+    constexpr const char* serverFilename = "SparkServer";
+    constexpr const char* moduleFilename = "Runnable.dylib";
+    constexpr const char* runtimeDependency = "libRuntimeDependency.dylib";
+    constexpr const char* packagedGame = "Playable Game";
+    constexpr const char* packagedServer = "Arena Server";
+    constexpr const char* gameLauncherFilename = "LaunchGame.sh";
+    constexpr const char* serverLauncherFilename = "LaunchServer.sh";
+    constexpr const char* sceneLauncherFilename = "LaunchScene.sh";
+    constexpr const char* sceneHost = "Playable Game Scene";
+#else
+    constexpr const char* hostFilename = "SparkEngine";
+    constexpr const char* serverFilename = "SparkServer";
+    constexpr const char* moduleFilename = "Runnable.so";
+    constexpr const char* runtimeDependency = "libRuntimeDependency.so";
+    constexpr const char* packagedGame = "Playable Game";
+    constexpr const char* packagedServer = "Arena Server";
+    constexpr const char* gameLauncherFilename = "LaunchGame.sh";
+    constexpr const char* serverLauncherFilename = "LaunchServer.sh";
+    constexpr const char* sceneLauncherFilename = "LaunchScene.sh";
+    constexpr const char* sceneHost = "Playable Game Scene";
+#endif
     const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     const std::filesystem::path root =
         std::filesystem::temp_directory_path() / ("spark-runnable-package-test-" + std::to_string(stamp));
@@ -1916,31 +1998,43 @@ TEST(BuildPipeline_AssemblesRunnableModuleAndIsolatedScenePackage)
     std::filesystem::create_directories(project / "Config");
     std::filesystem::create_directories(runtime / "Shaders");
     std::filesystem::create_directories(artifacts);
+    std::filesystem::create_directories(output / "Assets");
+    std::ofstream(output / "stale-runtime.dll") << "stale";
+    std::ofstream(output / "Assets" / "removed-asset.txt") << "stale";
     std::ofstream(project / "Assets" / "asset.txt") << "asset";
     std::ofstream(project / "Scenes" / "Default.sparkscene") << "{\"entities\":[]}";
     std::ofstream(project / "Config" / "settings.json") << "{}";
     std::ofstream(project / "Runnable.sparkproject") << "{}";
-    std::ofstream(project / "spark.modules.json") << "{\"modules\":[{\"path\":\"Stale.dll\"}]}";
-    std::ofstream(runtime / "SparkEngine.exe") << "host";
+    std::ofstream(project / "spark.modules.json") << "{\"modules\":[{\"path\":\"Stale.module\"}]}";
+    std::ofstream(runtime / hostFilename) << "host";
+    std::ofstream(runtime / serverFilename) << "server";
+    std::ofstream(runtime / runtimeDependency) << "dependency";
     std::ofstream(runtime / "Shaders" / "Basic.hlsl") << "shader";
-    std::ofstream(artifacts / "Runnable.dll") << "module";
-    std::ofstream(artifacts / "Runnable.dll.sparkabi") << "abi";
+    std::ofstream(artifacts / moduleFilename) << "module";
+    std::ofstream(artifacts / (std::string(moduleFilename) + ".sparkabi")) << "abi";
 
     BuildCookPanel::BuildSettings settings;
+    settings.platform = BuildPipeline::NativeTargetPlatform();
     settings.executableName = "Playable Game";
+    settings.packageDedicatedServer = true;
+    settings.dedicatedServerExecutableName = "Arena Server";
     settings.cookAssets = true;
     std::string error;
-    EXPECT_TRUE(BuildPipeline::AssembleWindowsPackage(settings, project.string(),
-                                                      (runtime / "SparkEngine.exe").string(),
-                                                      (artifacts / "Runnable.dll").string(), output.string(), &error));
+    EXPECT_TRUE(BuildPipeline::AssembleNativePackage(settings, project.string(), (runtime / hostFilename).string(),
+                                                     (artifacts / moduleFilename).string(), output.string(), &error,
+                                                     (runtime / serverFilename).string()));
     EXPECT_TRUE(error.empty());
-    EXPECT_TRUE(std::filesystem::is_regular_file(output / "Playable Game.exe"));
-    EXPECT_TRUE(std::filesystem::is_regular_file(output / "Runnable.dll"));
-    EXPECT_TRUE(std::filesystem::is_regular_file(output / "Runnable.dll.sparkabi"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / packagedGame));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / packagedServer));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / moduleFilename));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / (std::string(moduleFilename) + ".sparkabi")));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / runtimeDependency));
     EXPECT_TRUE(std::filesystem::is_regular_file(output / "Shaders" / "Basic.hlsl"));
     EXPECT_TRUE(std::filesystem::is_regular_file(output / "Assets" / "asset.txt"));
+    EXPECT_FALSE(std::filesystem::exists(output / "stale-runtime.dll"));
+    EXPECT_FALSE(std::filesystem::exists(output / "Assets" / "removed-asset.txt"));
     EXPECT_TRUE(std::filesystem::is_regular_file(output / "Startup.sparkscene"));
-    EXPECT_TRUE(std::filesystem::is_regular_file(output / "ScenePreview" / "Playable Game Scene.exe"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / "ScenePreview" / sceneHost));
 
     auto readText = [](const std::filesystem::path& path)
     {
@@ -1948,21 +2042,35 @@ TEST(BuildPipeline_AssemblesRunnableModuleAndIsolatedScenePackage)
         return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     };
     const std::string manifest = readText(output / "spark.modules.json");
-    EXPECT_STR_CONTAINS(manifest, "\"path\": \"Runnable.dll\"");
-    EXPECT_TRUE(manifest.find("Stale.dll") == std::string::npos);
-    const std::string gameLauncher = readText(output / "LaunchGame.cmd");
-    EXPECT_STR_CONTAINS(gameLauncher, "\"Playable Game.exe\"");
+    EXPECT_STR_CONTAINS(manifest, std::string("\"path\": \"") + moduleFilename + "\"");
+    EXPECT_TRUE(manifest.find("Stale.module") == std::string::npos);
+    const std::string gameLauncher = readText(output / gameLauncherFilename);
+    EXPECT_STR_CONTAINS(gameLauncher, packagedGame);
     EXPECT_TRUE(gameLauncher.find("-scene") == std::string::npos);
-    const std::string sceneLauncher = readText(output / "LaunchScene.cmd");
-    EXPECT_STR_CONTAINS(sceneLauncher, "\"ScenePreview\\Playable Game Scene.exe\"");
+    const std::string serverLauncher = readText(output / serverLauncherFilename);
+    EXPECT_STR_CONTAINS(serverLauncher, packagedServer);
+    EXPECT_STR_CONTAINS(serverLauncher, "--manifest spark.modules.json");
+    const std::string sceneLauncher = readText(output / sceneLauncherFilename);
+    EXPECT_STR_CONTAINS(sceneLauncher, sceneHost);
     EXPECT_STR_CONTAINS(sceneLauncher, "-scene Startup.sparkscene");
     const std::string readme = readText(output / "PACKAGE_README.txt");
     EXPECT_STR_CONTAINS(readme, "separate from module execution");
 
+    // A failed replacement must leave the last complete package untouched and
+    // must not expose files from the failed staging attempt.
+    std::ofstream(output / "preserved-package.txt") << "preserve";
+    std::filesystem::remove(runtime / "Shaders" / "Basic.hlsl");
+    std::filesystem::remove(runtime / "Shaders");
+    EXPECT_FALSE(BuildPipeline::AssembleNativePackage(settings, project.string(), (runtime / hostFilename).string(),
+                                                      (artifacts / moduleFilename).string(), output.string(), &error,
+                                                      (runtime / serverFilename).string()));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / "preserved-package.txt"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / packagedGame));
+
     settings.executableName = "..\\Unsafe";
-    EXPECT_FALSE(BuildPipeline::AssembleWindowsPackage(
-        settings, project.string(), (runtime / "SparkEngine.exe").string(), (artifacts / "Runnable.dll").string(),
-        (project / "UnsafeOutput").string(), &error));
+    EXPECT_FALSE(BuildPipeline::AssembleNativePackage(
+        settings, project.string(), (runtime / hostFilename).string(), (artifacts / moduleFilename).string(),
+        (project / "UnsafeOutput").string(), &error, (runtime / serverFilename).string()));
 
     std::error_code ec;
     std::filesystem::remove_all(root, ec);

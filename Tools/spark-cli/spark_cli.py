@@ -26,10 +26,15 @@ Examples:
     spark package --config Release --strip --compress
     spark validate Assets/ --strict
     spark migrate Assets/ --dry-run
+    spark pak inspect Data/base.spk --format json
+    spark pak list Data/base.spk
+    spark pak verify Data/base.spk
+    spark pak diff Data/base.spk Data/patch.spk
     spark templates
 """
 
 import argparse
+import importlib.util
 import os
 import shutil
 import stat
@@ -38,6 +43,23 @@ import sys
 import json
 import tempfile
 from pathlib import Path
+
+try:
+    from spark_pak import SparkPakArchive, SparkPakError, diff_archives, inspect_text, stable_json
+except ModuleNotFoundError:
+    # Some embedders load spark_cli.py directly from a file spec without adding
+    # its directory to sys.path. Resolve the adjacent helper deterministically.
+    _pak_spec = importlib.util.spec_from_file_location("spark_pak", Path(__file__).with_name("spark_pak.py"))
+    if _pak_spec is None or _pak_spec.loader is None:
+        raise
+    _pak_module = importlib.util.module_from_spec(_pak_spec)
+    sys.modules[_pak_spec.name] = _pak_module
+    _pak_spec.loader.exec_module(_pak_module)
+    SparkPakArchive = _pak_module.SparkPakArchive
+    SparkPakError = _pak_module.SparkPakError
+    diff_archives = _pak_module.diff_archives
+    inspect_text = _pak_module.inspect_text
+    stable_json = _pak_module.stable_json
 
 
 MODULE_EXTENSIONS = {
@@ -1574,6 +1596,45 @@ def cmd_info(args):
     return 0
 
 
+def cmd_pak(args):
+    """Inspect and verify SparkPak archives without extracting or writing."""
+    try:
+        if args.pak_command == "diff":
+            result = diff_archives(SparkPakArchive(args.left), SparkPakArchive(args.right))
+            print(stable_json(result), end="")
+            return 1 if result["added"] or result["removed"] or result["changed"] else 0
+
+        archive = SparkPakArchive(args.archive)
+        if args.pak_command == "list":
+            for entry in archive.entries:
+                print(entry.path)
+            return 0
+        if args.pak_command == "inspect":
+            print(stable_json(archive.metadata()) if args.format == "json" else inspect_text(archive), end="")
+            if args.format != "json":
+                print()
+            return 0
+        if args.pak_command == "verify":
+            hashes = archive.hashes()
+            result = {
+                "archive": str(archive.path),
+                "fileCount": len(hashes),
+                "files": [{"path": path, "sha256": hashes[path]} for path in sorted(hashes)],
+                "verified": True,
+            }
+            if args.format == "json":
+                print(stable_json(result), end="")
+            else:
+                for item in result["files"]:
+                    print(f"{item['sha256']}  {item['path']}")
+                print(f"Verified {len(hashes)} file(s).")
+            return 0
+        raise SparkPakError("Choose one of: inspect, list, verify, diff", 2)
+    except SparkPakError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="spark",
@@ -1649,6 +1710,21 @@ def main():
     # spark templates
     subparsers.add_parser("templates", help="List available project templates")
 
+    # spark pak (strictly read-only archive tooling)
+    pak_parser = subparsers.add_parser("pak", help="Inspect SparkPak archives without extracting them")
+    pak_subparsers = pak_parser.add_subparsers(dest="pak_command", required=True)
+    pak_inspect = pak_subparsers.add_parser("inspect", help="Show validated archive metadata")
+    pak_inspect.add_argument("archive")
+    pak_inspect.add_argument("--format", choices=["text", "json"], default="text")
+    pak_list = pak_subparsers.add_parser("list", help="List validated virtual paths")
+    pak_list.add_argument("archive")
+    pak_verify = pak_subparsers.add_parser("verify", help="Hash every stored or deflate entry")
+    pak_verify.add_argument("archive")
+    pak_verify.add_argument("--format", choices=["text", "json"], default="text")
+    pak_diff = pak_subparsers.add_parser("diff", help="Compare two archives by decompressed content")
+    pak_diff.add_argument("left")
+    pak_diff.add_argument("right")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -1664,6 +1740,7 @@ def main():
         "validate": cmd_validate,
         "migrate": cmd_migrate,
         "templates": cmd_templates,
+        "pak": cmd_pak,
     }
 
     return commands[args.command](args)

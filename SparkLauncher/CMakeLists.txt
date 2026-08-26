@@ -67,4 +67,4 @@ if(MSVC)
         "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
-install(TARGETS SparkLauncher RUNTIME DESTINATION bin)
+install(TARGETS SparkLauncher RUNTIME DESTINATION bin COMPONENT runtime)

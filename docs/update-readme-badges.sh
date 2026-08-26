@@ -195,7 +195,7 @@ update_badges() {
     local tests_json='{"schemaVersion":1,"label":"test definitions","message":"'"$FORMATTED_TESTS"'","color":"brightgreen","cacheSeconds":300}'
     local loc_json='{"schemaVersion":1,"label":"C++ lines of code","message":"'"$formatted_loc"'","color":"blue","logo":"cplusplus","cacheSeconds":300}'
     local files_json='{"schemaVersion":1,"label":"source files","message":"'"$formatted_files"'","color":"green","cacheSeconds":300}'
-    local breakdown_json='{"schemaVersion":1,"total":'"$TOTAL_LINES"',"files":'"$FILE_COUNT"',"engine":'"$ENGINE_LINES"',"editor":'"$EDITOR_LINES"',"game":'"$GAME_LINES"',"tests":'"$TEST_LINES"',"tools":'"$TOOL_LINES"',"updated":"'"$ts"'"}'
+    local breakdown_json='{"schemaVersion":1,"total":'"$TOTAL_LINES"',"files":'"$FILE_COUNT"',"engine":'"$ENGINE_LINES"',"editor":'"$EDITOR_LINES"',"game":'"$GAME_LINES"',"services":'"$SERVICES_LINES"',"pipeline":'"$PIPELINE_LINES"',"tests":'"$TEST_LINES"',"tools":'"$TOOL_LINES"',"updated":"'"$ts"'"}'
 
     for pair in "tests.json:$tests_json" "loc.json:$loc_json" "files.json:$files_json" "loc-breakdown.json:$breakdown_json"; do
         local name="${pair%%:*}"

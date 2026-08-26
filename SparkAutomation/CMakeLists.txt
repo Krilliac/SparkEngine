@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.25)
+project(SparkAutomation LANGUAGES CXX)
+add_executable(SparkAutomation src/main.cpp)
+target_compile_features(SparkAutomation PRIVATE cxx_std_23)
+if(MSVC)
+    target_compile_definitions(SparkAutomation PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_options(SparkAutomation PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(SparkAutomation PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+set_target_properties(SparkAutomation PROPERTIES FOLDER "Tools")
+install(TARGETS SparkAutomation RUNTIME DESTINATION bin COMPONENT tools)
+
+if(BUILD_TESTS)
+    enable_testing()
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_test(NAME SparkAutomationContract
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_automation.py"
+                "$<TARGET_FILE:SparkAutomation>")
+endif()

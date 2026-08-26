@@ -62,9 +62,9 @@ namespace Spark::Daemon
          *   - clean shutdown (success);
          *   - fatal `poll()` / `accept()` error (returns the error string).
          *
-         * @param socketPath  AF_UNIX socket path. File is unlinked first if it
-         *                    exists, recreated with permissions 0600 so only
-         *                    the owning user can connect.
+         * @param socketPath  Local IPC endpoint. POSIX accepts only an inactive,
+         *                    owner-controlled socket and publishes it as 0600;
+         *                    Windows holds an endpoint ownership mutex.
          * @return            Empty success, or an error string.
          */
         Expected<void, std::string> Run(const std::string& socketPath);

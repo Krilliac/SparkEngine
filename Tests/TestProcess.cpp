@@ -10,6 +10,7 @@
 #include "Utils/Process.h"
 
 #include <chrono>
+#include <filesystem>
 #include <string>
 #include <thread>
 
@@ -119,6 +120,40 @@ TEST(Process_CaptureStderr)
     result->WaitForExit();
 
     EXPECT_TRUE(errOutput.find("error_msg") != std::string::npos);
+}
+
+TEST(Process_MergeStderrIntoStdout)
+{
+    auto result = Spark::Process::Builder(kShellCmd)
+                      .Arg("-c")
+                      .Arg("echo normal; echo error_msg >&2")
+                      .CaptureStdout()
+                      .MergeStderrIntoStdout()
+                      .Launch();
+    EXPECT_TRUE(result.has_value());
+
+    std::string output = result->ReadAllStdout();
+    result->WaitForExit();
+
+    EXPECT_TRUE(output.find("normal") != std::string::npos);
+    EXPECT_TRUE(output.find("error_msg") != std::string::npos);
+}
+
+TEST(Process_WorkingDirectory)
+{
+    const auto directory = std::filesystem::temp_directory_path();
+    auto result = Spark::Process::Builder(kShellCmd)
+                      .Arg("-c")
+                      .Arg("pwd")
+                      .WorkingDirectory(directory.string())
+                      .CaptureStdout()
+                      .Launch();
+    EXPECT_TRUE(result.has_value());
+
+    const std::string output = result->ReadAllStdout();
+    EXPECT_EQ(result->WaitForExit(), 0);
+    EXPECT_TRUE(
+        std::filesystem::equivalent(std::filesystem::path(output.substr(0, output.find_first_of("\r\n"))), directory));
 }
 
 // ============================================================================
@@ -294,8 +329,10 @@ TEST(Process_BuilderChaining)
     auto builder = Spark::Process::Builder("some_executable")
                        .Arg("arg1")
                        .Arg("arg2")
+                       .WorkingDirectory(".")
                        .CaptureStdout()
                        .CaptureStderr()
+                       .MergeStderrIntoStdout()
                        .CaptureStdin();
 
     // Launch will fail since "some_executable" doesn't exist, but builder is valid

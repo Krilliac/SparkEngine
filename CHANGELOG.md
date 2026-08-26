@@ -10,10 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Live authored-scene, input, render, HUD, and cleanup loops for every built-in project template and the MultiplayerArena compatibility sample
 - Installed-SDK and packaged headless smoke coverage for all nine shipped template projects
+- Standalone `SparkServer` dedicated host with dynamic game-module selection, bounded health/stop controls, and gateway-facing area handoff fencing
+- `SparkGateway` authenticated ingress and idempotent, epoch-fenced area transfer coordination across owner-local named-pipe and Unix-domain-socket transports
+- `SparkOrchestrator` and standalone `SparkCollabServer` processes for daemon-backed lifecycle control and isolated presence, locking, and edit-history traffic
+- Deterministic `SparkCooker` and digest-pinned `SparkWorker` asset pipeline, plus `SparkAutomation` black-box runtime, screenshot, log, JSON, and JUnit smoke-test hosting
+- Stable, versioned C plugin ABI for importers, processors, editor/runtime extensions, and tools, with deterministic metadata sidecars and a hardened `DynamicPluginHost`
+- Editor Dedicated Server and Service Topology panels for configuring, launching, monitoring, draining, and stopping the external service fleet
+- Read-only SparkPak inspection commands and unified CLI entry points for cooking, packaging, validation, migration, templates, and package diagnostics
+- Provenance-backed hero, wide, and detail runtime galleries for all nine installed-SDK project templates
 
 ### Changed
 - Project scaffolding now rewrites `.sparkproject` identity before renaming the descriptor
 - Public README, wiki, and badge metrics are generated from the current source and test inventory
+- Server, asset-pipeline, automation, SDK, plugin-helper, and public-header targets now install and export with the cross-platform runtime and tools packages
+- Editor build/cook packaging now stages complete native dedicated-server packages with rewritten manifests, ABI sidecars, runtime dependencies, and platform launchers before automation runs
+- Daemon orchestration persists owner-local client identity, mutation sequences, definitions, desired state, and crash-recovery journals across controller and service restarts
 
 ### Fixed
 - Editor module discovery, project paths, UTF-8 handling, long-path launches, and fail-closed module loading
@@ -21,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Template module manifests no longer advertise an ignored `loadOrder` field
 - Local badge generation now preserves Shields-compatible logos and cache metadata
 - World-save readers now classify directories and other non-file paths as unreadable consistently across platforms
+- Plugin load and hot-reload now verify binary identity before and after mapping, quiesce scheduled work before unload, reject unsafe package paths, and preserve the working image on staged-load failure
+- Asset cooking now hashes the exact staged bytes, rejects manifest escapes and linked outputs, and atomically replaces cooked artifacts and manifests
+- External-process launch, cancellation, timeout, stderr capture, process-tree teardown, gateway partial-frame handling, endpoint ownership, and crash-state persistence are bounded and fail closed across Windows, Linux, and macOS
 
 ## [1.0.0] - 2026-04-04
 
