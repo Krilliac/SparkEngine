@@ -96,7 +96,7 @@ SparkEngine is licensed under the [Spark Open License](https://github.com/Krilli
 | Engine System Classes | 75 |
 | Editor Panels | 65 |
 | Test files | 565 |
-| Test definitions | 6759 |
+| Test definitions | 6760 |
 | Wiki pages | 198 |
-| *Last synced* | *2026-08-25 19:45* |
+| *Last synced* | *2026-08-25 21:29* |
 <!-- /AUTO:stats -->

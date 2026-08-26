@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*565 test files, 6759 source-level test definitions*
+*565 test files, 6760 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -679,7 +679,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEditorCommands` | 8 |
 | `TestEditorDocumentTransition` | 7 |
 | `TestEditorLayoutManager` | 13 |
-| `TestEditorSubsystems` | 114 |
+| `TestEditorSubsystems` | 115 |
 | `TestEditorWindowManager` | 14 |
 | `TestEngineBootPlatforms` | 41 |
 | `TestEngineContext` | 18 |
