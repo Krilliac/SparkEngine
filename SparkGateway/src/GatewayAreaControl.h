@@ -61,6 +61,7 @@ namespace Spark::Gateway
         [[nodiscard]] bool Start();
         void Stop();
         [[nodiscard]] bool IsReady() const { return m_ready.load(std::memory_order_acquire); }
+        [[nodiscard]] std::string GetLastError() const;
 
       private:
         struct SessionFence
@@ -69,6 +70,7 @@ namespace Spark::Gateway
             AreaControlPhase phase = AreaControlPhase::Abort;
         };
         void Run();
+        void SetError(std::string error);
         [[nodiscard]] HandoffOperationResult Apply(std::string_view sessionId, uint64_t epoch, AreaControlPhase phase);
         [[nodiscard]] bool LoadState();
         [[nodiscard]] bool SaveState() const;
@@ -78,12 +80,14 @@ namespace Spark::Gateway
         std::filesystem::path m_epochStateFile;
         std::vector<uint8_t> m_key;
         std::string m_error;
+        mutable std::mutex m_errorMutex;
         std::unordered_map<std::string, SessionFence> m_sessions;
         std::unordered_map<uint64_t, int64_t> m_seenNonces;
         mutable std::mutex m_mutex;
         std::thread m_thread;
         std::atomic<bool> m_stop{false};
         std::atomic<bool> m_ready{false};
+        std::atomic<bool> m_startupComplete{false};
     };
 
     class LocalGatewayIngressClient

@@ -435,7 +435,9 @@ namespace Spark::Server
                 m_options.controlEndpoint, m_options.gatewayKeyFile, m_options.controlStateFile);
             if (!m_controlService->Start())
             {
-                SetError("Failed to start authenticated gateway area-control service");
+                const std::string detail = m_controlService->GetLastError();
+                SetError(detail.empty() ? "Failed to start authenticated gateway area-control service"
+                                        : "Failed to start authenticated gateway area-control service: " + detail);
                 m_server->Stop();
                 m_server.reset();
                 DestroyModuleRuntime(true);

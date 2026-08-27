@@ -116,6 +116,18 @@ def make_private_key(path: Path) -> None:
         secured.returncode == 0,
         f"could not make gateway key owner-only: {secured.stdout}{secured.stderr}",
     )
+    owned = subprocess.run(
+        ["icacls", str(path), "/setowner", identity],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+        shell=False,
+    )
+    require(
+        owned.returncode == 0,
+        f"could not assign gateway key ownership to its only ACL trustee: {owned.stdout}{owned.stderr}",
+    )
 
 
 def read_json(path: Path) -> dict:

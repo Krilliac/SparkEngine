@@ -245,6 +245,7 @@ TEST(GatewayAreaControl_SecondServiceCannotStealLiveEndpoint)
     LocalAreaControlService second(endpoint, key, secondState);
     EXPECT_TRUE(first.Start());
     EXPECT_FALSE(second.Start());
+    EXPECT_TRUE(second.GetLastError().find("area-control") != std::string::npos);
     EXPECT_TRUE(first.IsReady());
     first.Stop();
     std::error_code error;

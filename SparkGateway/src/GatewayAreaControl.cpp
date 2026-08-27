@@ -26,6 +26,7 @@
 #include <iomanip>
 #include <limits>
 #include <sstream>
+#include <system_error>
 
 namespace Spark::Gateway
 {
@@ -274,14 +275,23 @@ namespace Spark::Gateway
         {
             const std::string endpoint = NormalizeLocalEndpoint(rawEndpoint);
             if (endpoint.empty() || endpoint.size() >= sizeof(sockaddr_un{}.sun_path))
+            {
+                errno = EINVAL;
                 return -1;
+            }
             struct stat existing{};
             if (::lstat(endpoint.c_str(), &existing) == 0)
             {
                 if (!S_ISSOCK(existing.st_mode) || existing.st_uid != ::geteuid())
+                {
+                    errno = EACCES;
                     return -1;
+                }
                 if (EndpointIsActive(endpoint))
+                {
+                    errno = EADDRINUSE;
                     return -1;
+                }
                 if (::unlink(endpoint.c_str()) != 0)
                     return -1;
             }
@@ -298,8 +308,10 @@ namespace Spark::Gateway
             if (::bind(listener, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0 ||
                 ::chmod(endpoint.c_str(), S_IRUSR | S_IWUSR) != 0 || ::listen(listener, 8) != 0)
             {
+                const int listenerError = errno;
                 ::close(listener);
                 ::unlink(endpoint.c_str());
+                errno = listenerError;
                 return -1;
             }
             const int flags = ::fcntl(listener, F_GETFL, 0);
@@ -696,22 +708,66 @@ namespace Spark::Gateway
 
     bool LocalAreaControlService::Start()
     {
-        if (m_thread.joinable() || (m_key.empty() && !LoadPrivateGatewayKey(m_keyFile, m_key, m_error)) ||
-            m_key.size() < 32)
+        SetError({});
+        if (m_thread.joinable())
+        {
+            SetError("Gateway area-control service is already running");
             return false;
+        }
+        if (m_key.empty())
+        {
+            std::string keyError;
+            if (!LoadPrivateGatewayKey(m_keyFile, m_key, keyError))
+            {
+                SetError("Cannot load gateway area-control key '" + m_keyFile.string() + "': " + keyError);
+                return false;
+            }
+        }
+        if (m_key.size() < 32)
+        {
+            SetError("Gateway area-control key must contain at least 32 bytes");
+            return false;
+        }
         if (!LoadState())
         {
-            m_error = "Gateway area-control epoch state is corrupt or unreadable";
+            SetError("Cannot load gateway area-control epoch state '" + m_epochStateFile.string() +
+                     "': corrupt or unreadable");
             return false;
         }
         m_stop.store(false, std::memory_order_release);
-        m_thread = std::thread(&LocalAreaControlService::Run, this);
-        for (int attempt = 0; attempt < 100 && !m_ready.load(std::memory_order_acquire); ++attempt)
+        m_ready.store(false, std::memory_order_release);
+        m_startupComplete.store(false, std::memory_order_release);
+        try
+        {
+            m_thread = std::thread(&LocalAreaControlService::Run, this);
+        }
+        catch (const std::system_error& error)
+        {
+            SetError(std::string("Cannot create gateway area-control worker thread: ") + error.what());
+            m_startupComplete.store(true, std::memory_order_release);
+            return false;
+        }
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!m_startupComplete.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline)
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         if (IsReady())
             return true;
+        if (!m_startupComplete.load(std::memory_order_acquire))
+            SetError("Gateway area-control listener startup timed out after 5 seconds");
         Stop();
         return false;
+    }
+
+    std::string LocalAreaControlService::GetLastError() const
+    {
+        std::lock_guard lock(m_errorMutex);
+        return m_error;
+    }
+
+    void LocalAreaControlService::SetError(std::string error)
+    {
+        std::lock_guard lock(m_errorMutex);
+        m_error = std::move(error);
     }
 
     void LocalAreaControlService::Stop()
@@ -732,19 +788,31 @@ namespace Spark::Gateway
     {
 #ifdef _WIN32
         const std::wstring pipeName = Daemon::NormalizePipeName(NormalizeLocalEndpoint(m_endpoint));
+        if (pipeName.empty())
+        {
+            SetError("Gateway area-control endpoint is not valid UTF-8: '" + m_endpoint + "'");
+            m_startupComplete.store(true, std::memory_order_release);
+            return;
+        }
         HANDLE pipe = CreateNamedPipeW(pipeName.c_str(), PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
                                        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT | PIPE_REJECT_REMOTE_CLIENTS,
                                        1, 5120, 5120, 1000, nullptr);
         if (pipe == INVALID_HANDLE_VALUE)
         {
+            const DWORD error = ::GetLastError();
+            const std::error_code systemError(static_cast<int>(error), std::system_category());
+            SetError("Cannot create gateway area-control named pipe '" + m_endpoint + "': " +
+                     systemError.message() + " (Windows error " + std::to_string(error) + ")");
             m_ready.store(false, std::memory_order_release);
+            m_startupComplete.store(true, std::memory_order_release);
             return;
         }
         m_ready.store(true, std::memory_order_release);
+        m_startupComplete.store(true, std::memory_order_release);
         while (!m_stop.load(std::memory_order_acquire))
         {
             const bool connectedCall = ConnectNamedPipe(pipe, nullptr) != 0;
-            const DWORD connectError = connectedCall ? ERROR_SUCCESS : GetLastError();
+            const DWORD connectError = connectedCall ? ERROR_SUCCESS : ::GetLastError();
             const bool connected = connectedCall || connectError == ERROR_PIPE_CONNECTED;
             if (!connected)
             {
@@ -800,10 +868,16 @@ namespace Spark::Gateway
         const int listener = CreateLocalListener(endpoint);
         if (listener < 0)
         {
+            const int error = errno;
+            const std::error_code systemError(error, std::system_category());
+            SetError("Cannot create gateway area-control local listener '" + endpoint + "': " +
+                     systemError.message() + " (errno " + std::to_string(error) + ")");
             m_ready.store(false, std::memory_order_release);
+            m_startupComplete.store(true, std::memory_order_release);
             return;
         }
         m_ready.store(true, std::memory_order_release);
+        m_startupComplete.store(true, std::memory_order_release);
         while (!m_stop.load(std::memory_order_acquire))
         {
             pollfd descriptor{listener, POLLIN, 0};
