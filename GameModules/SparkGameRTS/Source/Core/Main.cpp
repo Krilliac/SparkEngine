@@ -178,6 +178,10 @@ void SparkGameRTSModule::OnUnload()
     if (!m_initialized)
         return;
 
+    // Validation callbacks are std::functions implemented in this DLL. Drop
+    // them before the module image is unmapped during hot unload/reload.
+    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("RTS");
+
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[RTS] Unloading Spark RTS module...");
     SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS module shutting down");
@@ -364,14 +368,12 @@ void SparkGameRTSModule::RegisterConsoleCommands()
                                 }
                             });
 
-    console.RegisterCommand("rts_hold",
-                            [this](const std::vector<std::string>&) -> std::string {
-                                return m_demoPresentation->HoldSelection() ? "Hold order issued" : "No units selected";
-                            });
-    console.RegisterCommand("rts_stop",
-                            [this](const std::vector<std::string>&) -> std::string {
-                                return m_demoPresentation->StopSelection() ? "Stop order issued" : "No units selected";
-                            });
+    console.RegisterCommand(
+        "rts_hold", [this](const std::vector<std::string>&) -> std::string
+        { return m_demoPresentation->HoldSelection() ? "Hold order issued" : "No units selected"; });
+    console.RegisterCommand(
+        "rts_stop", [this](const std::vector<std::string>&) -> std::string
+        { return m_demoPresentation->StopSelection() ? "Stop order issued" : "No units selected"; });
     console.RegisterCommand("rts_train_marine", [this](const std::vector<std::string>&) -> std::string
                             { return m_demoPresentation->TrainMarine() ? "Marine queued" : "Marine queue rejected"; });
 

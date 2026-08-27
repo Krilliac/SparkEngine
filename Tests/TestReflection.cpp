@@ -201,7 +201,7 @@ TEST(Reflection_FindType)
     reg.RegisterType(GetTypeId<Transform>(), "Transform", sizeof(Transform), alignof(Transform));
 
     const auto* found = reg.FindType(GetTypeId<Transform>());
-    EXPECT_TRUE(found != nullptr);
+    ASSERT_TRUE(found != nullptr);
     EXPECT_EQ(found->name, std::string("Transform"));
 
     const auto* notFound = reg.FindType(GetTypeId<Light>());
@@ -246,12 +246,12 @@ TEST(Reflection_RegisterFields)
     EXPECT_EQ(info.fields.size(), 2u);
 
     const auto* pos = info.FindField("position");
-    EXPECT_TRUE(pos != nullptr);
+    ASSERT_TRUE(pos != nullptr);
     EXPECT_EQ(pos->name, std::string("Position"));
     EXPECT_TRUE(pos->type == FieldType::Custom);
 
     const auto* vis = info.FindField("visible");
-    EXPECT_TRUE(vis != nullptr);
+    ASSERT_TRUE(vis != nullptr);
     EXPECT_TRUE(vis->type == FieldType::Bool);
 }
 
@@ -311,7 +311,7 @@ TEST(Reflection_FieldRange)
     info.fields.push_back(intensityField);
 
     const auto* f = info.FindField("intensity");
-    EXPECT_TRUE(f != nullptr);
+    ASSERT_TRUE(f != nullptr);
     EXPECT_TRUE(f->hasRange);
     EXPECT_NEAR(f->rangeMin, 0.0f, 0.001f);
     EXPECT_NEAR(f->rangeMax, 100.0f, 0.001f);
@@ -620,8 +620,8 @@ TEST(Reflection_RoundTrip_AllTypes)
     Light light;
     const auto* intensityF = info.FindField("intensity");
     const auto* rangeF = info.FindField("range");
-    EXPECT_TRUE(intensityF != nullptr);
-    EXPECT_TRUE(rangeF != nullptr);
+    ASSERT_TRUE(intensityF != nullptr);
+    ASSERT_TRUE(rangeF != nullptr);
 
     TestReflect::SetFieldFromString(&light, *intensityF, "3.14");
     TestReflect::SetFieldFromString(&light, *rangeF, "25.0");

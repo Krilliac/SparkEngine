@@ -108,7 +108,7 @@ TEST(NeuralDenoise_WithWeightsProducesOutput)
     EXPECT_TRUE(denoiser.Execute());
 
     const float* output = denoiser.GetOutput();
-    EXPECT_TRUE(output != nullptr);
+    ASSERT_TRUE(output != nullptr);
 
     // With sigmoid output, values should be in [0, 1]
     for (uint32_t i = 0; i < w * h * 3; ++i)

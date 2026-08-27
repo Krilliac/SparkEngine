@@ -65,7 +65,7 @@ TEST(Racing_VehicleSystem_CreateAndGetVehicle)
     EXPECT_GT(id, 0u);
 
     const VehicleInstance* vehicle = sys.GetVehicle(id);
-    EXPECT_TRUE(vehicle != nullptr);
+    ASSERT_TRUE(vehicle != nullptr);
     EXPECT_EQ(vehicle->name, std::string("Speedster"));
     EXPECT_TRUE(vehicle->isPlayer);
     sys.Shutdown();
@@ -334,6 +334,7 @@ TEST(Racing_RaceFlow_AIDriverMovesAlongAuthoredTrack)
 
     const uint32_t vehicleId = vehicles.CreateVehicle("AI", VehicleType::SportsCar, false);
     VehicleInstance* vehicle = vehicles.GetVehicle(vehicleId);
+    ASSERT_TRUE(vehicle != nullptr);
     const auto& start = track.GetWaypoint(0);
     const auto& next = track.GetWaypoint(1);
     vehicle->positionX = start.x;
@@ -347,7 +348,7 @@ TEST(Racing_RaceFlow_AIDriverMovesAlongAuthoredTrack)
     ai.AddDriver(config);
     ai.Update(0.1f);
     const AIDriverState* state = ai.GetDriverState(vehicleId);
-    EXPECT_TRUE(state != nullptr);
+    ASSERT_TRUE(state != nullptr);
     EXPECT_GT(state->throttle, 0.0f);
 
     const float startX = vehicle->positionX;

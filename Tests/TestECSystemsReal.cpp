@@ -143,7 +143,7 @@ TEST(ECSystemsReal_ManagerAddSystemReturnsPointer)
 {
     TestSystemManager mgr;
     auto* sysA = mgr.AddSystem<StubSystemA>();
-    EXPECT_TRUE(sysA != nullptr);
+    ASSERT_TRUE(sysA != nullptr);
     EXPECT_EQ(std::string(sysA->GetName()), std::string("StubSystemA"));
 }
 
@@ -201,7 +201,7 @@ TEST(ECSystemsReal_ManagerGetSystemByName)
     mgr.AddSystem<StubSystemC>();
 
     auto* found = mgr.GetSystem("StubSystemB");
-    EXPECT_TRUE(found != nullptr);
+    ASSERT_TRUE(found != nullptr);
     EXPECT_EQ(std::string(found->GetName()), std::string("StubSystemB"));
 
     auto* notFound = mgr.GetSystem("NonExistentSystem");

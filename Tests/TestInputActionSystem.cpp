@@ -78,7 +78,7 @@ TEST(InputAction_BindKey)
     sys.RegisterAction("Jump", Spark::Input::ActionType::Button);
     EXPECT_TRUE(sys.BindKey("Jump", 0x20)); // VK_SPACE
     auto* bindings = sys.GetBindings("Jump");
-    EXPECT_TRUE(bindings != nullptr);
+    ASSERT_TRUE(bindings != nullptr);
     EXPECT_EQ(bindings->size(), static_cast<size_t>(1));
     sys.Shutdown();
 }

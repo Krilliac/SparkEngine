@@ -50,7 +50,7 @@ TEST(LockFreeRingAllocatorReal_WriteAndRead)
 {
     SmallRing ring;
     void* ptr = ring.Allocate(16);
-    EXPECT_TRUE(ptr != nullptr);
+    ASSERT_TRUE(ptr != nullptr);
 
     // Write data into the allocation
     std::memset(ptr, 0xAB, 16);

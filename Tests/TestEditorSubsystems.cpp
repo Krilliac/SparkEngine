@@ -183,7 +183,7 @@ TEST(Tutorial_GetCurrentStepAndAdvance)
     tut.StartTutorial("AdvTest");
 
     const TutorialStep* step = tut.GetCurrentStep();
-    EXPECT_TRUE(step != nullptr);
+    ASSERT_TRUE(step != nullptr);
     EXPECT_EQ(step->message, std::string("A"));
 
     tut.AdvanceStep();
@@ -340,7 +340,7 @@ TEST(Prototyping_PlaceAndGetBlockout)
     EXPECT_TRUE(id > 0);
 
     const BlockoutPrimitive* bp = proto.GetBlockout(id);
-    EXPECT_TRUE(bp != nullptr);
+    ASSERT_TRUE(bp != nullptr);
     EXPECT_TRUE(bp->shape == BlockoutShape::Cube);
     EXPECT_NEAR(bp->posX, 1.0f, 0.01f);
 }
@@ -412,7 +412,7 @@ TEST(UIDesigner_CreateScreenAndWidget)
     EXPECT_TRUE(sid > 0);
 
     auto* screen = ui.GetScreen(sid);
-    EXPECT_TRUE(screen != nullptr);
+    ASSERT_TRUE(screen != nullptr);
     EXPECT_EQ(screen->name, std::string("MainHUD"));
     EXPECT_EQ(screen->category, std::string("HUD"));
 

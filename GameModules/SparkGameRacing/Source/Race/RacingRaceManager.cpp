@@ -372,7 +372,7 @@ namespace Racing
                       // Finished racers first, sorted by finish time
                       if (ra.finished != rb.finished)
                           return ra.finished;
-                      if (ra.finished && rb.finished)
+                      if (ra.finished)
                           return ra.finishTime < rb.finishTime;
 
                       // DNF last

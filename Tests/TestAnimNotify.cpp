@@ -32,8 +32,8 @@ TEST(AnimNotify_AddNotify)
 
     EXPECT_EQ(mgr.GetTrackCount(), static_cast<size_t>(1));
     const auto* track = mgr.GetTrack("Walk");
-    EXPECT_TRUE(track != nullptr);
-    EXPECT_EQ(track->events.size(), static_cast<size_t>(1));
+    ASSERT_TRUE(track != nullptr);
+    ASSERT_EQ(track->events.size(), static_cast<size_t>(1));
     EXPECT_NEAR(track->events[0].triggerTime, 0.3f, 0.001f);
     mgr.Shutdown();
 }
@@ -155,8 +155,8 @@ TEST(AnimNotify_MultipleNotifies_SortedByTime)
     mgr.AddNotify("Combo", e2);
 
     const auto* track = mgr.GetTrack("Combo");
-    EXPECT_TRUE(track != nullptr);
-    EXPECT_EQ(track->events.size(), static_cast<size_t>(2));
+    ASSERT_TRUE(track != nullptr);
+    ASSERT_EQ(track->events.size(), static_cast<size_t>(2));
     // Should be sorted by time
     EXPECT_TRUE(track->events[0].triggerTime <= track->events[1].triggerTime);
     mgr.Shutdown();

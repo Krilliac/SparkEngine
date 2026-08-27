@@ -136,12 +136,12 @@ TEST(AssetDB_MetadataIndexing)
     db.IndexFile("audio/explosion.wav", "explosion");
 
     const auto* brick = db.LookupByPath("textures/brick.png");
-    EXPECT_TRUE(brick != nullptr);
+    ASSERT_TRUE(brick != nullptr);
     EXPECT_EQ(brick->name, std::string("brick"));
     EXPECT_EQ(brick->path, std::string("textures/brick.png"));
 
     const auto* hero = db.LookupByPath("models/hero.fbx");
-    EXPECT_TRUE(hero != nullptr);
+    ASSERT_TRUE(hero != nullptr);
     EXPECT_EQ(hero->name, std::string("hero"));
 
     const auto* missing = db.LookupByPath("nonexistent/file.dat");

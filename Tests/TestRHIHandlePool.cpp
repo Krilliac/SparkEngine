@@ -155,7 +155,7 @@ TEST(RHIHandlePool_AllocateAndGet)
     EXPECT_EQ(pool.Count(), 1u);
 
     auto* result = pool.Get(handle);
-    EXPECT_TRUE(result != nullptr);
+    ASSERT_TRUE(result != nullptr);
     EXPECT_EQ(result->data, 42);
 }
 

@@ -240,7 +240,7 @@ TEST(ServiceLocator_RegisterAndRetrieve)
     loc.RegisterSystem<TestSystemA>(&sysA);
 
     auto* retrieved = loc.GetSystem<TestSystemA>();
-    EXPECT_TRUE(retrieved != nullptr);
+    ASSERT_TRUE(retrieved != nullptr);
     EXPECT_EQ(retrieved->value, 42);
 }
 
@@ -311,7 +311,7 @@ TEST(ServiceLocator_ConstAccess)
 
     const ServiceLocator& constRef = loc;
     auto* retrieved = constRef.GetSystem<TestSystemA>();
-    EXPECT_TRUE(retrieved != nullptr);
+    ASSERT_TRUE(retrieved != nullptr);
     EXPECT_EQ(retrieved->value, 42);
 }
 
@@ -604,6 +604,6 @@ TEST(SubsystemInit_RegisterSubsystemAlsoRegistersInGenericRegistry)
     loc.RegisterSubsystem<TestSystemA>(&sysA, DependsOn<>{});
 
     auto* retrieved = loc.GetSystem<TestSystemA>();
-    EXPECT_TRUE(retrieved != nullptr);
+    ASSERT_TRUE(retrieved != nullptr);
     EXPECT_EQ(retrieved->value, 99);
 }

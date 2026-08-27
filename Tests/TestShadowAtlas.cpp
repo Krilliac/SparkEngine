@@ -32,7 +32,7 @@ TEST(ShadowAtlas_AllocateTile)
 
     EXPECT_TRUE(atlas.RequestTile(1, 1.0f, 1024));
     const auto* tile = atlas.GetTile(1);
-    EXPECT_TRUE(tile != nullptr);
+    ASSERT_TRUE(tile != nullptr);
     EXPECT_EQ(tile->size, 1024u);
     EXPECT_TRUE(tile->active);
 

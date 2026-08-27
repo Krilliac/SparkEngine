@@ -652,7 +652,7 @@ TEST(AIStress_CoverPointFlood)
 
     // Nearest cover should still work efficiently
     const auto* nearest = sys.FindNearestCover({0, 0, 0});
-    EXPECT_TRUE(nearest != nullptr);
+    ASSERT_TRUE(nearest != nullptr);
     EXPECT_NEAR(nearest->position.x, 0.0f, 0.001f);
     EXPECT_NEAR(nearest->position.z, 0.0f, 0.001f);
 }

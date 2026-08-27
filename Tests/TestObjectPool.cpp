@@ -109,7 +109,7 @@ TEST(ObjectPool_MultipleAcquireRelease)
     for (int i = 0; i < 10; ++i)
     {
         auto* obj = pool.Acquire();
-        EXPECT_TRUE(obj != nullptr);
+        ASSERT_TRUE(obj != nullptr);
         obj->value = i;
         acquired.push_back(obj);
     }

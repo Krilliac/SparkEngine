@@ -87,27 +87,28 @@ HRESULT Terrain::Initialize(ID3D11Device* device, ID3D11DeviceContext* ctx, cons
     return hr;
 }
 
-void Terrain::BuildMesh(const std::vector<uint8_t>& h, UINT w, UINT hgt, float s)
+void Terrain::BuildMesh(const std::vector<uint8_t>& rawHeightData, UINT w, UINT h, float s)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, h.size() == w * hgt, "Height data size mismatch");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, rawHeightData.size() == w * h, "Height data size mismatch");
 
-    m_vertices.resize(static_cast<std::vector<TerrainVertex, std::allocator<TerrainVertex>>::size_type>(w) * hgt);
+    m_vertices.resize(static_cast<std::vector<TerrainVertex, std::allocator<TerrainVertex>>::size_type>(w) * h);
     m_indices.clear();
 
     // Vertices
-    for (UINT z = 0; z < hgt; ++z)
+    for (UINT z = 0; z < h; ++z)
     {
         for (UINT x = 0; x < w; ++x)
         {
-            float height = h[static_cast<std::vector<uint8_t, std::allocator<uint8_t>>::size_type>(z) * w + x] *
-                           0.1f; // scale factor
+            float height =
+                rawHeightData[static_cast<std::vector<uint8_t, std::allocator<uint8_t>>::size_type>(z) * w + x] *
+                0.1f; // scale factor
             m_vertices[static_cast<std::vector<TerrainVertex, std::allocator<TerrainVertex>>::size_type>(z) * w + x] = {
-                {(x - w / 2) * s, height, (z - hgt / 2) * s}, {0, 1, 0}, {float(x) / (w - 1), float(z) / (hgt - 1)}};
+                {(x - w / 2) * s, height, (z - h / 2) * s}, {0, 1, 0}, {float(x) / (w - 1), float(z) / (h - 1)}};
         }
     }
 
     // Indices (two tris per quad)
-    for (UINT z = 0; z < hgt - 1; ++z)
+    for (UINT z = 0; z < h - 1; ++z)
     {
         for (UINT x = 0; x < w - 1; ++x)
         {
@@ -241,33 +242,33 @@ HRESULT Terrain::Initialize(ID3D11Device* device, ID3D11DeviceContext* ctx, cons
     return Initialize(device, ctx, file, desc);
 }
 
-void Terrain::BuildMesh(const std::vector<uint8_t>& h, UINT w, UINT hgt, float s)
+void Terrain::BuildMesh(const std::vector<uint8_t>& rawHeightData, UINT w, UINT h, float s)
 {
-    m_vertices.resize(static_cast<size_t>(w) * hgt);
-    m_heightData.resize(static_cast<size_t>(w) * hgt);
+    m_vertices.resize(static_cast<size_t>(w) * h);
+    m_heightData.resize(static_cast<size_t>(w) * h);
     m_indices.clear();
 
     float heightScale = m_desc.heightScale;
 
-    for (UINT z = 0; z < hgt; ++z)
+    for (UINT z = 0; z < h; ++z)
     {
         for (UINT x = 0; x < w; ++x)
         {
             size_t idx = static_cast<size_t>(z) * w + x;
-            float normalizedHeight = h[idx] / 255.0f;
+            float normalizedHeight = rawHeightData[idx] / 255.0f;
             m_heightData[idx] = normalizedHeight;
             float height = normalizedHeight * heightScale;
 
-            m_vertices[idx] = {{static_cast<float>(x) - w / 2.0f, height, static_cast<float>(z) - hgt / 2.0f},
+            m_vertices[idx] = {{static_cast<float>(x) - w / 2.0f, height, static_cast<float>(z) - h / 2.0f},
                                {0, 1, 0},
-                               {static_cast<float>(x) / (w - 1), static_cast<float>(z) / (hgt - 1)},
+                               {static_cast<float>(x) / (w - 1), static_cast<float>(z) / (h - 1)},
                                {1, 0, 0, 0}};
             m_vertices[idx].Position.x *= s;
             m_vertices[idx].Position.z *= s;
         }
     }
 
-    for (UINT z = 0; z < hgt - 1; ++z)
+    for (UINT z = 0; z < h - 1; ++z)
     {
         for (UINT x = 0; x < w - 1; ++x)
         {

@@ -20,8 +20,9 @@ TEST(MaterialDefinition_Construction)
     EXPECT_TRUE(def.name == "TestPBR");
 
     auto* metallic = def.FindParameter("metallic");
-    EXPECT_TRUE(metallic != nullptr);
-    EXPECT_TRUE(metallic->minValue.has_value());
+    ASSERT_TRUE(metallic != nullptr);
+    ASSERT_TRUE(metallic->minValue.has_value());
+    ASSERT_TRUE(metallic->maxValue.has_value());
     EXPECT_NEAR(*metallic->minValue, 0.0f, 1e-6f);
     EXPECT_NEAR(*metallic->maxValue, 1.0f, 1e-6f);
 
@@ -39,11 +40,11 @@ TEST(MaterialDefinition_TextureSlots)
     EXPECT_EQ(def.textureSlots.size(), static_cast<size_t>(2));
 
     auto* albedo = def.FindTextureSlot("albedoMap");
-    EXPECT_TRUE(albedo != nullptr);
+    ASSERT_TRUE(albedo != nullptr);
     EXPECT_TRUE(albedo->required);
 
     auto* normal = def.FindTextureSlot("normalMap");
-    EXPECT_TRUE(normal != nullptr);
+    ASSERT_TRUE(normal != nullptr);
     EXPECT_FALSE(normal->required);
 
     EXPECT_TRUE(def.FindTextureSlot("missing") == nullptr);

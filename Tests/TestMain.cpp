@@ -58,6 +58,11 @@ int g_assertionsFailed = 0;
 int g_testsWarned = 0;
 std::string g_currentTest;
 
+TEST(TestFramework_DynamicSkipIsReported)
+{
+    SKIP_TEST("Intentional regression coverage for dynamic skip accounting");
+}
+
 // ============================================================================
 // Per-test result storage (for timing, JUnit XML, and slowest-test summary)
 // ============================================================================
@@ -69,7 +74,9 @@ struct TestResult
     int assertions = 0;
     bool passed = true;
     bool warned = false;
+    bool skipped = false;
     std::string warningReason;
+    std::string skipReason;
     std::string failureOutput;
 };
 
@@ -371,25 +378,31 @@ static void WriteJUnitXml(const std::string& path, const std::vector<TestResult>
 
     int totalTests = static_cast<int>(results.size());
     int failures = 0;
-    int warnings = 0;
+    int skipped = 0;
     for (const auto& r : results)
     {
-        if (r.warned)
-            ++warnings;
+        if (r.warned || r.skipped)
+            ++skipped;
         else if (!r.passed)
             ++failures;
     }
 
     xml << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-    xml << "<testsuites tests=\"" << totalTests << "\" failures=\"" << failures << "\" skipped=\"" << warnings
+    xml << "<testsuites tests=\"" << totalTests << "\" failures=\"" << failures << "\" skipped=\"" << skipped
         << "\" time=\"" << (totalTimeMs / 1000.0) << "\">\n";
     xml << "  <testsuite name=\"SparkEngine\" tests=\"" << totalTests << "\" failures=\"" << failures << "\" skipped=\""
-        << warnings << "\" time=\"" << (totalTimeMs / 1000.0) << "\">\n";
+        << skipped << "\" time=\"" << (totalTimeMs / 1000.0) << "\">\n";
 
     for (const auto& r : results)
     {
         xml << "    <testcase name=\"" << XmlEscape(r.name) << "\" time=\"" << (r.durationMs / 1000.0) << "\"";
-        if (r.passed && !r.warned)
+        if (r.skipped)
+        {
+            xml << ">\n";
+            xml << "      <skipped message=\"" << XmlEscape(r.skipReason) << "\"/>\n";
+            xml << "    </testcase>\n";
+        }
+        else if (r.passed && !r.warned)
         {
             xml << "/>\n";
         }
@@ -569,6 +582,7 @@ int main(int argc, char** argv)
     int passed = 0;
     int failed = 0;
     int warned = 0;
+    int skipped = 0;
 
     // Shuffle test order if requested
     if (shuffle)
@@ -647,6 +661,8 @@ int main(int argc, char** argv)
         g_currentTest = test->name;
         int prevFailed = g_assertionsFailed;
         int prevPassed = g_assertionsPassed;
+        bool skipRequested = false;
+        std::string skipReason;
 
         // Clear the stderr capture buffer for this test
         if (out.hasFile)
@@ -668,6 +684,11 @@ int main(int argc, char** argv)
             // A fatal ASSERT_* aborted this test. The failure was already
             // recorded and its reason printed by the macro; nothing more to
             // do — the abort intentionally isolates the failure to this test.
+        }
+        catch (const TestSkip& skip)
+        {
+            skipRequested = true;
+            skipReason = skip.reason;
         }
         catch (const std::exception& e)
         {
@@ -717,8 +738,15 @@ int main(int argc, char** argv)
         // Check if a failing test matches a known-flaky warning pattern
         const char* warnReason = testFailed ? GetTestWarningReason(test->name) : nullptr;
         bool isWarning = warnReason != nullptr && !warnIsError;
+        const bool isSkipped = skipRequested && !testFailed;
 
-        if (!testFailed)
+        if (isSkipped)
+        {
+            out.Print("[ SKIP   ] " + g_currentTest + suffix + "\n");
+            out.Print("           " + skipReason + "\n");
+            skipped++;
+        }
+        else if (!testFailed)
         {
             out.Print("[   OK   ] " + g_currentTest + suffix + "\n");
             passed++;
@@ -745,9 +773,11 @@ int main(int argc, char** argv)
         result.name = test->name;
         result.durationMs = durationMs;
         result.assertions = testAssertions;
-        result.passed = !testFailed || isWarning;
+        result.passed = (!testFailed && !isSkipped) || isWarning;
         result.warned = isWarning;
+        result.skipped = isSkipped;
         result.warningReason = warnReason ? warnReason : "";
+        result.skipReason = skipReason;
         result.failureOutput = capturedErrors;
         results.push_back(std::move(result));
     }
@@ -761,7 +791,7 @@ int main(int argc, char** argv)
         std::vector<size_t> failedIndices;
         for (size_t i = 0; i < results.size(); ++i)
         {
-            if (!results[i].passed)
+            if (!results[i].passed && !results[i].skipped)
                 failedIndices.push_back(i);
         }
 
@@ -851,7 +881,9 @@ int main(int argc, char** argv)
     out.PrintSummary("Tests:      " + std::to_string(passed) + " passed, " + std::to_string(failed) + " failed");
     if (warned > 0)
         out.PrintSummary(", " + std::to_string(warned) + " warned");
-    out.PrintSummary(", " + std::to_string(passed + failed + warned) + " total\n");
+    if (skipped > 0)
+        out.PrintSummary(", " + std::to_string(skipped) + " skipped");
+    out.PrintSummary(", " + std::to_string(passed + failed + warned + skipped) + " total\n");
     out.PrintSummary("Assertions: " + std::to_string(g_assertionsPassed) + " passed, " +
                      std::to_string(g_assertionsFailed) + " failed\n");
     out.PrintSummary("Duration:   " + FormatDuration(totalMs) + "\n");

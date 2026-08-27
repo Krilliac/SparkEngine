@@ -160,6 +160,24 @@ namespace Spark::Graphics
             return result;
         }
 
+        if (indexCount % 3 != 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "LODGenerator::Simplify — index count %u does not contain whole triangles", indexCount);
+            return result;
+        }
+
+        for (uint32_t index = 0; index < indexCount; ++index)
+        {
+            if (indices[index] >= vertexCount)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                               "LODGenerator::Simplify — index %u references vertex %u, but vertex count is %u", index,
+                               indices[index], vertexCount);
+                return result;
+            }
+        }
+
         SPARK_LOG_DEBUG(Spark::LogCategory::Graphics,
                         "LODGenerator::Simplify — %u verts, %u indices, target=%u tris, maxErr=%.4f", vertexCount,
                         indexCount, targetTriangles, maxError);
@@ -188,9 +206,6 @@ namespace Spark::Graphics
             uint32_t i1 = tris[t * 3 + 1];
             uint32_t i2 = tris[t * 3 + 2];
 
-            if (i0 >= vertexCount || i1 >= vertexCount || i2 >= vertexCount)
-                continue;
-
             Quadric fq = ComputeFaceQuadric(&verts[i0 * 3], &verts[i1 * 3], &verts[i2 * 3]);
             quadrics[i0] += fq;
             quadrics[i1] += fq;
@@ -203,12 +218,14 @@ namespace Spark::Graphics
         {
             double cost;
             uint32_t v0, v1;
+            uint32_t revision0, revision1;
             float midpoint[3];
             bool operator>(const EdgeCollapse& other) const { return cost > other.cost; }
         };
 
         std::priority_queue<EdgeCollapse, std::vector<EdgeCollapse>, std::greater<>> pq;
         std::vector<bool> vertexRemoved(vertexCount, false);
+        std::vector<uint32_t> vertexRevision(vertexCount, 0);
 
         // Collect unique edges from triangles
         auto edgeKey = [](uint32_t a, uint32_t b) -> uint64_t
@@ -216,6 +233,24 @@ namespace Spark::Graphics
             if (a > b)
                 std::swap(a, b);
             return (static_cast<uint64_t>(a) << 32) | b;
+        };
+
+        // A collapse changes the surviving endpoint's position and accumulated
+        // quadric. Tag every candidate with the endpoint revisions used to
+        // calculate it so stale costs and midpoints can never govern a later
+        // maxError decision.
+        auto queueEdge = [&](uint32_t a, uint32_t b)
+        {
+            if (a == b || a >= vertexCount || b >= vertexCount || vertexRemoved[a] || vertexRemoved[b])
+                return;
+
+            Quadric combined = quadrics[a];
+            combined += quadrics[b];
+
+            float mid[3] = {(verts[a * 3] + verts[b * 3]) * 0.5f, (verts[a * 3 + 1] + verts[b * 3 + 1]) * 0.5f,
+                            (verts[a * 3 + 2] + verts[b * 3 + 2]) * 0.5f};
+            const double cost = EvaluateQuadric(combined, mid);
+            pq.push({cost, a, b, vertexRevision[a], vertexRevision[b], {mid[0], mid[1], mid[2]}});
         };
 
         std::unordered_set<uint64_t> seenEdges;
@@ -227,16 +262,7 @@ namespace Spark::Graphics
                 uint32_t a = idx[e], b = idx[(e + 1) % 3];
                 uint64_t key = edgeKey(a, b);
                 if (seenEdges.insert(key).second)
-                {
-                    Quadric combined = quadrics[a];
-                    combined += quadrics[b];
-
-                    float mid[3] = {(verts[a * 3] + verts[b * 3]) * 0.5f, (verts[a * 3 + 1] + verts[b * 3 + 1]) * 0.5f,
-                                    (verts[a * 3 + 2] + verts[b * 3 + 2]) * 0.5f};
-
-                    double cost = EvaluateQuadric(combined, mid);
-                    pq.push({cost, a, b, {mid[0], mid[1], mid[2]}});
-                }
+                    queueEdge(a, b);
             }
         }
 
@@ -269,8 +295,10 @@ namespace Spark::Graphics
 
             if (vertexRemoved[top.v0] || vertexRemoved[top.v1])
                 continue;
+            if (top.revision0 != vertexRevision[top.v0] || top.revision1 != vertexRevision[top.v1])
+                continue;
 
-            if (top.cost > static_cast<double>(maxError) && currentTriCount <= targetTriangles)
+            if (top.cost > static_cast<double>(maxError))
                 break;
 
             // Collapse v1 into v0: move v0 to midpoint, remove v1
@@ -280,6 +308,7 @@ namespace Spark::Graphics
 
             quadrics[top.v0] += quadrics[top.v1];
             vertexRemoved[top.v1] = true;
+            ++vertexRevision[top.v0];
 
             maxObservedError = std::max(maxObservedError, static_cast<float>(top.cost));
 
@@ -323,6 +352,28 @@ namespace Spark::Graphics
             vertexTris[top.v1].shrink_to_fit();
 
             currentTriCount -= removedTris;
+
+            // Collapsing v1 can create new v0-neighbor edges, while every old
+            // v0 candidate now carries a stale midpoint/quadric. Requeue the
+            // current live one-ring with v0's new revision. A local set avoids
+            // pushing the same edge once per incident triangle.
+            std::unordered_set<uint64_t> refreshedEdges;
+            for (uint32_t t : vertexTris[top.v0])
+            {
+                if (triRemoved[t])
+                    continue;
+
+                const uint32_t* tri = &tris[t * 3];
+                for (int i = 0; i < 3; ++i)
+                {
+                    const uint32_t neighbor = tri[i];
+                    if (neighbor == top.v0 || neighbor >= vertexCount || vertexRemoved[neighbor])
+                        continue;
+
+                    if (refreshedEdges.insert(edgeKey(top.v0, neighbor)).second)
+                        queueEdge(top.v0, neighbor);
+                }
+            }
         }
 
         // Compact: remove degenerate triangles and unused vertices
@@ -390,6 +441,24 @@ namespace Spark::Graphics
         {
             SPARK_LOG_WARN(Spark::LogCategory::Graphics, "LODGenerator::Generate — invalid mesh data");
             return result;
+        }
+
+        if (indexCount % 3 != 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "LODGenerator::Generate — index count %u does not contain whole triangles", indexCount);
+            return result;
+        }
+
+        for (uint32_t index = 0; index < indexCount; ++index)
+        {
+            if (indices[index] >= vertexCount)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                               "LODGenerator::Generate — index %u references vertex %u, but vertex count is %u", index,
+                               indices[index], vertexCount);
+                return result;
+            }
         }
 
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LODGenerator::Generate — %u verts, %u tris, %u LOD levels",

@@ -118,7 +118,7 @@ TEST(GLSLPipeline_CreateShaderOnNullDevice_Succeeds)
     EXPECT_TRUE(bridge.Initialize(nullptr, 1280, 720, GraphicsBackend::None, false));
 
     auto* device = bridge.GetDevice();
-    EXPECT_TRUE(device != nullptr);
+    ASSERT_TRUE(device != nullptr);
 
     RHIShaderDesc desc;
     desc.stage = RHIShaderStage::Vertex;

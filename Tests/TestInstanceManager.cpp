@@ -257,7 +257,7 @@ TEST(Instance_RegisterTemplateAndRetrieve)
     auto tmpl = MakeTestTemplate();
     EXPECT_TRUE(mgr.RegisterTemplate(tmpl));
     const auto* ret = mgr.GetTemplate(1);
-    EXPECT_TRUE(ret != nullptr);
+    ASSERT_TRUE(ret != nullptr);
     EXPECT_EQ(ret->name, std::string("Test Dungeon"));
     EXPECT_EQ(ret->maxPlayers, 5);
     EXPECT_EQ(static_cast<int>(ret->encounters.size()), 3);
@@ -271,7 +271,7 @@ TEST(Instance_CreateFromTemplate)
     auto id = mgr.CreateInstance(1);
     EXPECT_NE(id, (InstanceID)0);
     const auto* inst = mgr.GetInstance(id);
-    EXPECT_TRUE(inst != nullptr);
+    ASSERT_TRUE(inst != nullptr);
     EXPECT_EQ(inst->templateId, (uint32_t)1);
     EXPECT_FALSE(inst->completed);
     EXPECT_EQ(static_cast<int>(inst->encounterStates.size()), 3);

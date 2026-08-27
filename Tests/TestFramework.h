@@ -14,6 +14,7 @@
 
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 #include <functional>
 #include <cstdlib>
@@ -84,6 +85,21 @@ extern std::string g_currentTest;
 struct TestAbort
 {
 };
+
+// Thrown by SKIP_TEST to report that a runtime capability required by the test
+// is genuinely unavailable. The runner records this separately from passes,
+// failures, and known-flaky warnings.
+struct TestSkip
+{
+    std::string reason;
+};
+
+[[noreturn]] inline void SkipTest(std::string reason)
+{
+    throw TestSkip{std::move(reason)};
+}
+
+#define SKIP_TEST(reason) SkipTest(std::string(reason))
 
 #define TEST(name)                                                                                                     \
     void test_##name();                                                                                                \

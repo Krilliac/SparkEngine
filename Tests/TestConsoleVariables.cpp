@@ -466,7 +466,7 @@ TEST(CVarRegistry_RegisterAndFind)
 
     registry.Register(&fov);
     auto* found = registry.Find("r.fov");
-    EXPECT_TRUE(found != nullptr);
+    ASSERT_TRUE(found != nullptr);
     EXPECT_EQ(found->GetName(), std::string("r.fov"));
 }
 

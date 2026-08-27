@@ -50,7 +50,7 @@ TEST(ReflectedScene_RoundTrip_TransformAndMesh)
             EXPECT_NEAR(t->position.z, 3.0f, 0.001f);
             EXPECT_NEAR(t->scale.x, 10.0f, 0.001f);
             const MeshRenderer* mr = dst.GetComponent<MeshRenderer>(e);
-            EXPECT_TRUE(mr != nullptr);
+            ASSERT_TRUE(mr != nullptr);
             EXPECT_STR_CONTAINS(mr->meshPath, "x.obj");
             EXPECT_STR_CONTAINS(mr->materialPath, "y.json");
         }
@@ -120,12 +120,12 @@ TEST(ReflectedScene_RoundTrip_EnumAndMaskFieldsSurvive)
         found = true;
 
         const RigidBodyComponent* rb2 = dst.GetComponent<RigidBodyComponent>(ent);
-        EXPECT_TRUE(rb2 != nullptr);
+        ASSERT_TRUE(rb2 != nullptr);
         EXPECT_TRUE(rb2->type == RigidBodyComponent::Type::Kinematic);
         EXPECT_TRUE(rb2->motionQuality == RigidBodyComponent::MotionQuality::LinearCast);
 
         const CollisionMaskComponent* cm2 = dst.GetComponent<CollisionMaskComponent>(ent);
-        EXPECT_TRUE(cm2 != nullptr);
+        ASSERT_TRUE(cm2 != nullptr);
         EXPECT_TRUE(cm2->fromMask == CollisionLayer::Enemy);
         EXPECT_TRUE(cm2->intoMask == (CollisionLayer::Player | CollisionLayer::Environment));
     }
@@ -211,7 +211,7 @@ TEST(ReflectedScene_MixedExplicitAndImplicitIdsRemainDistinct)
     EXPECT_EQ(static_cast<uint32_t>(explicitZero), 0u);
     EXPECT_EQ(static_cast<uint32_t>(parent), 7u);
     const Transform* implicitTransform = world.GetComponent<Transform>(implicit);
-    EXPECT_TRUE(implicitTransform != nullptr);
+    ASSERT_TRUE(implicitTransform != nullptr);
     EXPECT_TRUE(implicitTransform->parent == parent);
 }
 

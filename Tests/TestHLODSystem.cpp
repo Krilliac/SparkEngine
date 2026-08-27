@@ -31,7 +31,7 @@ TEST(HLODSystem_CellAssignment)
     sys.GetGrid().AssignEntity(2, {100.0f, 0.0f, 150.0f});
     sys.GetGrid().AssignEntity(3, {500.0f, 0.0f, 500.0f});
     const auto* cell = sys.GetGrid().GetCellAt({100.0f, 0.0f, 100.0f});
-    EXPECT_TRUE(cell != nullptr);
+    ASSERT_TRUE(cell != nullptr);
     EXPECT_EQ(static_cast<size_t>(2), cell->entities.size());
     sys.Shutdown();
 }
@@ -46,7 +46,7 @@ TEST(HLODSystem_RemoveEntity)
     sys.GetGrid().AssignEntity(20, {50.0f, 0.0f, 50.0f});
     sys.GetGrid().RemoveEntity(10);
     const auto* cell = sys.GetGrid().GetCellAt({50.0f, 0.0f, 50.0f});
-    EXPECT_TRUE(cell != nullptr);
+    ASSERT_TRUE(cell != nullptr);
     EXPECT_EQ(static_cast<size_t>(1), cell->entities.size());
     sys.Shutdown();
 }

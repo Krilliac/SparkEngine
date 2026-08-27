@@ -43,7 +43,7 @@ TEST(AchievementSystemReal_RegisterAndQuery)
     EXPECT_FALSE(sys.IsUnlocked(1));
 
     auto* prog = sys.GetProgress(1);
-    EXPECT_TRUE(prog != nullptr);
+    ASSERT_TRUE(prog != nullptr);
     EXPECT_NEAR(prog->currentValue, 0.0f, 0.01f);
 }
 

@@ -71,7 +71,7 @@ TEST(ObjectPoolReal_AcquiredObjectsAreUsable)
 {
     Spark::ObjectPool<TestObject> pool(2);
     auto* a = pool.Acquire();
-    EXPECT_TRUE(a != nullptr);
+    ASSERT_TRUE(a != nullptr);
     a->value = 42;
     EXPECT_EQ(a->value, 42);
 

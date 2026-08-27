@@ -116,7 +116,7 @@ TEST(FaultIsolation_SingleFaultDoesNotDisable)
     EXPECT_TRUE(isolator.IsEnabled("Weather"));
 
     auto* record = isolator.GetRecord("Weather");
-    EXPECT_TRUE(record != nullptr);
+    ASSERT_TRUE(record != nullptr);
     EXPECT_EQ(record->faultCount, 1u);
     EXPECT_EQ(record->lastError, std::string("test error"));
 }

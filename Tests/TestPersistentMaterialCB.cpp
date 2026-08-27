@@ -225,7 +225,7 @@ TEST(PersistentMaterialCB_GetMaterialDataReturnsShadowPointer)
     mgr.UpdateMaterial(5, &data, sizeof(data));
 
     const uint8_t* shadow = mgr.GetMaterialData(5);
-    EXPECT_TRUE(shadow != nullptr);
+    ASSERT_TRUE(shadow != nullptr);
 
     FakeMaterialData readBack;
     memcpy(&readBack, shadow, sizeof(readBack));

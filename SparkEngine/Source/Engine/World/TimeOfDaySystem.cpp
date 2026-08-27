@@ -39,7 +39,7 @@ namespace Spark
         {
             m_hour -= 24.0f;
             m_dayCount++;
-            SPARK_LOG_INFO(Spark::LogCategory::Scene, "Day cycle advanced to day %u", m_dayCount);
+            SPARK_LOG_INFO(Spark::LogCategory::Scene, "Day cycle advanced to day %d", m_dayCount);
         }
 
         UpdateSunState();

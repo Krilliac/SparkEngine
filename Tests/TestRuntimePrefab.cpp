@@ -165,7 +165,7 @@ TEST(PrefabRegistry_RegisterPrefab_ById)
     EXPECT_GT(id, 0u);
 
     const auto* found = reg.GetPrefab(id);
-    EXPECT_TRUE(found != nullptr);
+    ASSERT_TRUE(found != nullptr);
     EXPECT_TRUE(found->GetName() == "Barrel");
 
     reg.RemovePrefab(id);
@@ -179,7 +179,7 @@ TEST(PrefabRegistry_GetPrefab_ByName)
     uint32_t id = reg.RegisterPrefab(std::move(prefab));
 
     const auto* found = reg.GetPrefab("Crate");
-    EXPECT_TRUE(found != nullptr);
+    ASSERT_TRUE(found != nullptr);
     EXPECT_TRUE(found->HasComponent("MeshRenderer"));
 
     reg.RemovePrefab(id);

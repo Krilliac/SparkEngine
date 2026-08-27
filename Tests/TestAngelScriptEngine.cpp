@@ -257,7 +257,7 @@ TEST(AngelScript_AttachAndLookup)
     EXPECT_TRUE(engine.AttachScript(42, "Player", "PlayerMod"));
 
     auto* inst = engine.GetScriptInstance(42);
-    EXPECT_TRUE(inst != nullptr);
+    ASSERT_TRUE(inst != nullptr);
     EXPECT_EQ(inst->className, std::string("Player"));
     EXPECT_EQ(inst->moduleName, std::string("PlayerMod"));
 
@@ -290,7 +290,7 @@ TEST(AngelScript_MethodCaching)
     engine.AttachScript(5, "Bot", "BotMod");
 
     auto* inst = engine.GetScriptInstance(5);
-    EXPECT_TRUE(inst != nullptr);
+    ASSERT_TRUE(inst != nullptr);
     EXPECT_TRUE(inst->hasStart);
     EXPECT_TRUE(inst->hasUpdate);
     EXPECT_TRUE(inst->hasOnCollision);

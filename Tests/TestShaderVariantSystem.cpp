@@ -103,7 +103,7 @@ TEST(ShaderVariantSystem_GetKeywordByIndex)
     svs.Initialize();
     svs.RegisterKeyword(MakeKeyword("_NORMALMAP"));
     const auto* kw = svs.GetKeyword(0);
-    EXPECT_TRUE(kw != nullptr);
+    ASSERT_TRUE(kw != nullptr);
     EXPECT_EQ(kw->name, std::string("_NORMALMAP"));
     // Out-of-range indices return null.
     EXPECT_TRUE(svs.GetKeyword(-1) == nullptr);

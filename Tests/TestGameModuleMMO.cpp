@@ -129,7 +129,7 @@ TEST(MMO_CharacterSystem_GetCharacters)
     sys.CreateCharacter(1, req);
 
     auto chars = sys.GetCharacters(1);
-    EXPECT_FALSE(chars.empty());
+    ASSERT_FALSE(chars.empty());
     EXPECT_EQ(chars[0].name, std::string("Elara"));
     sys.Shutdown();
 }
@@ -207,7 +207,7 @@ TEST(MMO_GuildSystem_GetGuild)
 
     uint32_t guildId = sys.CreateGuild("Silver Dawn", "SD", 200, "Elara");
     const Guild* guild = sys.GetGuild(guildId);
-    EXPECT_TRUE(guild != nullptr);
+    ASSERT_TRUE(guild != nullptr);
     EXPECT_EQ(guild->name, std::string("Silver Dawn"));
     EXPECT_EQ(guild->leaderId, 200u);
     sys.Shutdown();
@@ -338,7 +338,7 @@ TEST(MMO_ChatSystem_GetHistory)
 
     sys.SendMessage(ChatChannel::Global, "Test message");
     const auto& history = sys.GetHistory();
-    EXPECT_FALSE(history.empty());
+    ASSERT_FALSE(history.empty());
     EXPECT_EQ(history.back().text, std::string("Test message"));
     sys.Shutdown();
 }
@@ -608,13 +608,14 @@ TEST(MMO_WorldBoss_RejectsNonPositiveOrNonFiniteContribution)
     bosses.Initialize(nullptr);
     EXPECT_TRUE(bosses.SpawnBoss(1));
     const auto* before = bosses.GetBossInstance(1);
-    EXPECT_TRUE(before != nullptr);
+    ASSERT_TRUE(before != nullptr);
     const float initialHealth = before->currentHealth;
 
     EXPECT_FALSE(bosses.DamageBoss(1, 7, "Tester", 0.0f));
     EXPECT_FALSE(bosses.DamageBoss(1, 7, "Tester", -100.0f));
     EXPECT_FALSE(bosses.DamageBoss(1, 7, "Tester", std::numeric_limits<float>::quiet_NaN()));
     const auto* after = bosses.GetBossInstance(1);
+    ASSERT_TRUE(after != nullptr);
     EXPECT_NEAR(after->currentHealth, initialHealth, 0.0001f);
     EXPECT_TRUE(after->contributions.empty());
     bosses.Shutdown();

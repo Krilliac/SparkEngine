@@ -59,7 +59,7 @@ TEST(RTHandleSystem_AllocateFullResolutionHandle)
     uint32_t id = sys.Allocate(1.0f, 1.0f);
     EXPECT_TRUE(id != 0);
     const RTHandle* h = sys.GetHandle(id);
-    EXPECT_TRUE(h != nullptr);
+    ASSERT_TRUE(h != nullptr);
     EXPECT_EQ(h->currentWidth, 1920u);
     EXPECT_EQ(h->currentHeight, 1080u);
     EXPECT_EQ(h->allocatedWidth, 1920u);
@@ -73,7 +73,7 @@ TEST(RTHandleSystem_AllocateHalfResolutionHandle)
     sys.Initialize(1920, 1080);
     uint32_t id = sys.Allocate(0.5f, 0.5f);
     const RTHandle* h = sys.GetHandle(id);
-    EXPECT_TRUE(h != nullptr);
+    ASSERT_TRUE(h != nullptr);
     EXPECT_EQ(h->currentWidth, 960u);
     EXPECT_EQ(h->currentHeight, 540u);
     sys.Shutdown();
@@ -117,7 +117,7 @@ TEST(RTHandleSystem_SetReferenceSize_GrowsHandles)
 
     sys.SetReferenceSize(2560, 1440);
     const RTHandle* h = sys.GetHandle(id);
-    EXPECT_TRUE(h != nullptr);
+    ASSERT_TRUE(h != nullptr);
     EXPECT_EQ(h->currentWidth, 2560u);
     EXPECT_EQ(h->currentHeight, 1440u);
     // Growing past the max-history triggers an allocation bump.

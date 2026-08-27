@@ -136,7 +136,7 @@ TEST(RemoteDebugSystem_SessionUptime)
     sys.Update(1.0f);
 
     const auto* serverSession = sys.GetServerSession();
-    EXPECT_TRUE(serverSession != nullptr);
+    ASSERT_TRUE(serverSession != nullptr);
     EXPECT_GT(serverSession->GetUptime(), 1.5f);
 
     sys.Shutdown();

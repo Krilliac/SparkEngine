@@ -177,7 +177,7 @@ TEST(GameplayExtRegistry_QuestRegistrationAndLookup)
     registry.RegisterQuestExtension(std::make_unique<EscortQuestExtension>());
 
     auto* ext = registry.GetQuestExtension("escort");
-    EXPECT_TRUE(ext != nullptr);
+    ASSERT_TRUE(ext != nullptr);
     EXPECT_EQ(ext->GetTypeName(), std::string("escort"));
 
     auto* missing = registry.GetQuestExtension("nonexistent");
@@ -192,7 +192,7 @@ TEST(GameplayExtRegistry_DialogueRegistration)
     registry.RegisterDialogueExtension(std::make_unique<RPGDialogueExtension>());
 
     auto* ext = registry.GetDialogueExtension("rpg_conditions");
-    EXPECT_TRUE(ext != nullptr);
+    ASSERT_TRUE(ext != nullptr);
     EXPECT_EQ(ext->GetExtensionName(), std::string("rpg_conditions"));
 
     EXPECT_TRUE(ext->EvaluateCondition("has_item", "sword"));
@@ -250,7 +250,7 @@ TEST(GameplayExtRegistry_ExtensionLifecycle)
 
     registry.RegisterQuestExtension(std::make_unique<EscortQuestExtension>());
     auto* ext = registry.GetQuestExtension("escort");
-    EXPECT_TRUE(ext != nullptr);
+    ASSERT_TRUE(ext != nullptr);
 
     QuestDefinition quest;
     quest.questId = 1;

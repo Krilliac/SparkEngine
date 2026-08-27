@@ -402,7 +402,7 @@ TEST(MaterialSystem_SystemCreateInstance)
     base->SetPBRProperties(props);
 
     auto instance = sys.CreateMaterialInstance("Template", "Instance1");
-    EXPECT_TRUE(instance != nullptr);
+    ASSERT_TRUE(instance != nullptr);
     EXPECT_NEAR(instance->GetPBRProperties().metallicFactor, 0.9f, 0.001f);
     EXPECT_EQ(sys.GetMaterialCount(), (size_t)2);
 }
@@ -560,7 +560,7 @@ TEST(MaterialSystem_CreateAndRetrieve)
     EXPECT_TRUE(mat != nullptr);
 
     auto retrieved = sys.GetMaterial("TestMat");
-    EXPECT_TRUE(retrieved != nullptr);
+    ASSERT_TRUE(retrieved != nullptr);
     EXPECT_EQ(retrieved->GetName(), std::string("TestMat"));
 }
 

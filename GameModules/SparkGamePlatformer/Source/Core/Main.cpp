@@ -186,6 +186,10 @@ void SparkGamePlatformerModule::OnUnload()
     if (!m_initialized)
         return;
 
+    // Validation callbacks are std::functions implemented in this DLL. Drop
+    // them before the module image is unmapped during hot unload/reload.
+    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("Platformer");
+
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[Platformer] Unloading Spark Platformer module...");
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer module shutting down");

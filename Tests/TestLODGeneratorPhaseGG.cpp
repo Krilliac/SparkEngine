@@ -106,6 +106,45 @@ TEST(LODGeneratorPhaseGG_SimplifyReducesTriangles)
     EXPECT_TRUE(!simplified.indices.empty());
 }
 
+TEST(LODGeneratorPhaseGG_SimplifyHonorsMaximumError)
+{
+    std::vector<float> verts;
+    std::vector<uint32_t> idx;
+    MakeCube(verts, idx);
+
+    auto& gen = Spark::Graphics::LODGenerator::GetInstance();
+    auto simplified = gen.Simplify(verts.data(), static_cast<uint32_t>(verts.size() / 3), idx.data(),
+                                   static_cast<uint32_t>(idx.size()), /*targetTriangles*/ 1, /*maxError*/ 0.0f);
+
+    // Every cube-edge collapse has non-zero quadric error. The error ceiling
+    // therefore takes precedence over the requested triangle target.
+    EXPECT_EQ(simplified.triangleCount, static_cast<uint32_t>(12));
+    EXPECT_EQ(simplified.geometricError, 0.0f);
+}
+
+TEST(LODGeneratorPhaseGG_SimplifyRepricesEdgesAfterCollapse)
+{
+    // A non-planar 3x3 patch whose third cheapest original edge becomes much
+    // more expensive after the first two collapses. The stale queue used to
+    // accept that edge at its original 0.264 cost even though its live QEM cost
+    // had risen to about 0.588, crossing this 0.3 error ceiling.
+    const std::vector<float> verts = {
+        0.0f, -0.75f, 0.0f,  1.0f, 1.25f, 0.0f, 2.0f, 1.25f, 0.0f,  0.0f, -0.25f, 1.0f, 1.0f, 1.0f,
+        1.0f, 2.0f,   -0.5f, 1.0f, 0.0f,  1.0f, 2.0f, 1.0f,  0.75f, 2.0f, 2.0f,   0.5f, 2.0f,
+    };
+    const std::vector<uint32_t> idx = {
+        0, 1, 4, 0, 4, 3, 1, 2, 5, 1, 5, 4, 3, 4, 7, 3, 7, 6, 4, 5, 7, 5, 8, 7,
+    };
+
+    auto& gen = Spark::Graphics::LODGenerator::GetInstance();
+    const auto simplified = gen.Simplify(verts.data(), static_cast<uint32_t>(verts.size() / 3), idx.data(),
+                                         static_cast<uint32_t>(idx.size()), /*targetTriangles*/ 1,
+                                         /*maxError*/ 0.3f);
+
+    EXPECT_EQ(simplified.triangleCount, static_cast<uint32_t>(5));
+    EXPECT_TRUE(simplified.geometricError <= 0.3f);
+}
+
 TEST(LODGeneratorPhaseGG_SimplifiedMeshTopologyIsValid)
 {
     // Guards the edge-collapse rewrite (adjacency-map based): the simplified
@@ -161,6 +200,31 @@ TEST(LODGeneratorPhaseGG_EmptyInputIsSafe)
     // unsigned, so `>= 0` is tautological; assert the call returned.
     (void)result.levels.size();
     EXPECT_TRUE(true);
+}
+
+TEST(LODGeneratorPhaseGG_RejectsMalformedIndexBuffers)
+{
+    const std::vector<float> verts = {
+        0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+    };
+    auto& gen = Spark::Graphics::LODGenerator::GetInstance();
+
+    const std::vector<uint32_t> outOfBounds = {0, 1, 3};
+    const auto invalidVertex =
+        gen.Simplify(verts.data(), 3, outOfBounds.data(), static_cast<uint32_t>(outOfBounds.size()), 1, 1.0f);
+    EXPECT_TRUE(invalidVertex.indices.empty());
+    EXPECT_EQ(invalidVertex.triangleCount, static_cast<uint32_t>(0));
+
+    const std::vector<uint32_t> partialTriangle = {0, 1, 2, 0};
+    const auto incomplete =
+        gen.Simplify(verts.data(), 3, partialTriangle.data(), static_cast<uint32_t>(partialTriangle.size()), 2, 1.0f);
+    EXPECT_TRUE(incomplete.indices.empty());
+    EXPECT_EQ(incomplete.triangleCount, static_cast<uint32_t>(0));
+
+    Spark::Graphics::LODGenerationOptions options;
+    const auto invalidChain =
+        gen.Generate(verts.data(), 3, outOfBounds.data(), static_cast<uint32_t>(outOfBounds.size()), options);
+    EXPECT_TRUE(invalidChain.levels.empty());
 }
 
 TEST(LODGeneratorPhaseGG_DefaultOptionsProduceFourLevels)

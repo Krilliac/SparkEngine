@@ -266,7 +266,7 @@ TEST(Ability_RegisterAndRetrieve)
     sys.RegisterAbility({1, "Fireball", AbilityTargetType::SingleTarget, 1.5f, 0.0f, 0.0f});
 
     const auto* result = sys.GetAbility(1);
-    EXPECT_TRUE(result != nullptr);
+    ASSERT_TRUE(result != nullptr);
     EXPECT_EQ(result->name, std::string("Fireball"));
     EXPECT_EQ(static_cast<int>(result->targetType), static_cast<int>(AbilityTargetType::SingleTarget));
     EXPECT_NEAR(result->castTime, 1.5f, 0.001f);
@@ -279,7 +279,7 @@ TEST(Aura_RegisterAndRetrieve)
     sys.RegisterAura({10, "Burning", AuraType::DamageOverTime, AuraStackType::None, 1, 8.0f, 2.0f});
 
     const auto* result = sys.GetAuraDef(10);
-    EXPECT_TRUE(result != nullptr);
+    ASSERT_TRUE(result != nullptr);
     EXPECT_EQ(result->name, std::string("Burning"));
     EXPECT_EQ(static_cast<int>(result->type), static_cast<int>(AuraType::DamageOverTime));
     EXPECT_NEAR(result->duration, 8.0f, 0.001f);

@@ -528,9 +528,9 @@ TEST(NavMeshBuilder_BuildFromSimpleGeometry)
 {
     auto navMesh = TestNav::MakeFlatQuadNavMesh();
 
-    EXPECT_TRUE(navMesh != nullptr);
+    ASSERT_TRUE(navMesh != nullptr);
     EXPECT_EQ(navMesh->vertices.size(), 4u);
-    EXPECT_EQ(navMesh->triangles.size(), 2u);
+    ASSERT_EQ(navMesh->triangles.size(), 2u);
 
     // Check that triangles have valid indices
     for (const auto& tri : navMesh->triangles)

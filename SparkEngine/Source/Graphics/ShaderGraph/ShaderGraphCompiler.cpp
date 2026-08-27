@@ -386,7 +386,7 @@ VSOutput main(VSInput input)
         output.pixelShader = ps.str();
         output.success = true;
         SPARK_LOG_INFO(Spark::LogCategory::Graphics,
-                       "Shader graph compiled: %zu nodes processed, %u texture slots, %s output", sortedIDs.size(),
+                       "Shader graph compiled: %zu nodes processed, %d texture slots, %s output", sortedIDs.size(),
                        output.textureSlotCount, isPBR ? "PBR" : "Unlit");
         return output;
     }

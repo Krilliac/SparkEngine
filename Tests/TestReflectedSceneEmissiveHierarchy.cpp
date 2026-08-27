@@ -58,13 +58,13 @@ TEST(ReflectedScene_RoundTrip_EmissiveSurvives)
     EntityID glow2 = FindByName(dst, "GlowStrip");
     EXPECT_TRUE(glow2 != entt::null);
     const MeshRenderer* gm2 = dst.GetComponent<MeshRenderer>(glow2);
-    EXPECT_TRUE(gm2 != nullptr);
+    ASSERT_TRUE(gm2 != nullptr);
     EXPECT_NEAR(gm2->emissive, 1.5f, 0.001f);
 
     EntityID crate2 = FindByName(dst, "Crate");
     EXPECT_TRUE(crate2 != entt::null);
     const MeshRenderer* cm2 = dst.GetComponent<MeshRenderer>(crate2);
-    EXPECT_TRUE(cm2 != nullptr);
+    ASSERT_TRUE(cm2 != nullptr);
     EXPECT_NEAR(cm2->emissive, 0.0f, 0.001f);
 }
 
@@ -114,15 +114,15 @@ TEST(ReflectedScene_RoundTrip_ParentChainAndChildrenRebuilt)
 
     // Parent links resolved to the correct entities.
     const Transform* ct2 = dst.GetComponent<Transform>(child2);
-    EXPECT_TRUE(ct2 != nullptr);
+    ASSERT_TRUE(ct2 != nullptr);
     EXPECT_TRUE(ct2->parent == root2);
     const Transform* gt2 = dst.GetComponent<Transform>(grand2);
-    EXPECT_TRUE(gt2 != nullptr);
+    ASSERT_TRUE(gt2 != nullptr);
     EXPECT_TRUE(gt2->parent == child2);
 
     // Children vectors rebuilt on load (serializer stores only parent ids).
     const Transform* rt2 = dst.GetComponent<Transform>(root2);
-    EXPECT_TRUE(rt2 != nullptr);
+    ASSERT_TRUE(rt2 != nullptr);
     bool rootHasChild = false;
     for (EntityID c : rt2->children)
         rootHasChild = rootHasChild || (c == child2);
@@ -190,7 +190,7 @@ TEST(World_DestroyLeafRemovesEveryDuplicateParentBacklink)
     world.DestroyEntity(child);
 
     parentTransform = world.GetComponent<Transform>(parent);
-    EXPECT_TRUE(parentTransform != nullptr);
+    ASSERT_TRUE(parentTransform != nullptr);
     EXPECT_TRUE(parentTransform->children.empty());
 }
 
@@ -244,7 +244,7 @@ TEST(ReflectedScene_RoundTrip_CameraAndScriptFields)
     EntityID camEnt2 = FindByName(dst, "MainCam");
     EXPECT_TRUE(camEnt2 != entt::null);
     const Camera* cam2 = dst.GetComponent<Camera>(camEnt2);
-    EXPECT_TRUE(cam2 != nullptr);
+    ASSERT_TRUE(cam2 != nullptr);
     EXPECT_NEAR(cam2->fov, 75.0f, 0.001f);
     EXPECT_NEAR(cam2->nearPlane, 0.25f, 0.001f);
     EXPECT_NEAR(cam2->farPlane, 512.0f, 0.001f);
@@ -253,7 +253,7 @@ TEST(ReflectedScene_RoundTrip_CameraAndScriptFields)
     EntityID scriptEnt2 = FindByName(dst, "Scripted");
     EXPECT_TRUE(scriptEnt2 != entt::null);
     const Script* sc2 = dst.GetComponent<Script>(scriptEnt2);
-    EXPECT_TRUE(sc2 != nullptr);
+    ASSERT_TRUE(sc2 != nullptr);
     EXPECT_STR_CONTAINS(sc2->scriptPath, "turret.as");
     EXPECT_STR_CONTAINS(sc2->className, "TurretBrain");
     EXPECT_STR_CONTAINS(sc2->moduleName, "gameplay");

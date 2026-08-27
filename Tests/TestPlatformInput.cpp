@@ -14,7 +14,7 @@ TEST(PlatformInput_RegisterAction_GetAction)
     map.RegisterAction("Jump", PlatformKeyCode::Space);
 
     const auto* action = map.GetAction("Jump");
-    EXPECT_TRUE(action != nullptr);
+    ASSERT_TRUE(action != nullptr);
     EXPECT_TRUE(action->name == "Jump");
     EXPECT_EQ(static_cast<uint16_t>(action->primaryKey), static_cast<uint16_t>(PlatformKeyCode::Space));
     EXPECT_EQ(static_cast<uint16_t>(action->secondaryKey), static_cast<uint16_t>(PlatformKeyCode::None));
@@ -26,7 +26,7 @@ TEST(PlatformInput_RegisterAction_WithSecondaryKey)
     map.RegisterAction("Fire", PlatformKeyCode::Mouse_Left, PlatformKeyCode::Gamepad_RT);
 
     const auto* action = map.GetAction("Fire");
-    EXPECT_TRUE(action != nullptr);
+    ASSERT_TRUE(action != nullptr);
     EXPECT_EQ(static_cast<uint16_t>(action->primaryKey), static_cast<uint16_t>(PlatformKeyCode::Mouse_Left));
     EXPECT_EQ(static_cast<uint16_t>(action->secondaryKey), static_cast<uint16_t>(PlatformKeyCode::Gamepad_RT));
 }
@@ -127,11 +127,11 @@ TEST(PlatformInput_SaveLoad_Roundtrip)
     loaded.LoadFromConfig(config);
 
     const auto* jump = loaded.GetAction("Jump");
-    EXPECT_TRUE(jump != nullptr);
+    ASSERT_TRUE(jump != nullptr);
     EXPECT_EQ(static_cast<uint16_t>(jump->primaryKey), static_cast<uint16_t>(PlatformKeyCode::Space));
 
     const auto* fire = loaded.GetAction("Fire");
-    EXPECT_TRUE(fire != nullptr);
+    ASSERT_TRUE(fire != nullptr);
     EXPECT_EQ(static_cast<uint16_t>(fire->primaryKey), static_cast<uint16_t>(PlatformKeyCode::Mouse_Left));
     EXPECT_EQ(static_cast<uint16_t>(fire->secondaryKey), static_cast<uint16_t>(PlatformKeyCode::Gamepad_RT));
 }

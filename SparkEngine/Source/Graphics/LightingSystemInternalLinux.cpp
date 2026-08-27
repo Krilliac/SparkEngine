@@ -34,9 +34,7 @@ void LightingSystem::CalculateCSMSplits(float /*nearPlane*/, float /*farPlane*/,
 XMMATRIX LightingSystem::CalculateLightMatrix(const Light& /*light*/, const XMMATRIX& /*viewMatrix*/,
                                               float /*nearPlane*/, float /*farPlane*/)
 {
-    XMMATRIX m;
-    memset(&m, 0, sizeof(m));
-    return m;
+    return XMMATRIX{};
 }
 HRESULT LightingSystem::GenerateIrradianceMap(ID3D11ShaderResourceView* /*environmentMap*/)
 {

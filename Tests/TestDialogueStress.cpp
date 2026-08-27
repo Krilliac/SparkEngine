@@ -279,7 +279,7 @@ TEST(DialogueStress_EmptyNodeText)
     EXPECT_TRUE(sys.StartConversation("blanks"));
 
     const auto* node = sys.GetCurrentNode();
-    EXPECT_TRUE(node != nullptr);
+    ASSERT_TRUE(node != nullptr);
     EXPECT_EQ(node->text, std::string(""));
     EXPECT_EQ(node->speakerName, std::string(""));
 
@@ -307,7 +307,7 @@ TEST(DialogueStress_StartConversationWhileActive)
 
     // Current node should be from the second tree
     const auto* node = sys.GetCurrentNode();
-    EXPECT_TRUE(node != nullptr);
+    ASSERT_TRUE(node != nullptr);
     EXPECT_EQ(node->id, std::string("node_0"));
 
     // Walk to end of second conversation

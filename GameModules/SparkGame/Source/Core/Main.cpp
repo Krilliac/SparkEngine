@@ -116,7 +116,7 @@ void SparkGameDefaultModule::OnUnload()
     // This callback's std::function manager lives in this dynamic module.
     // Remove it while the image is still mapped so host-static registry
     // destruction cannot call into unloaded code.
-    Spark::InvalidStateDetector::GetInstance().RemoveRule("Base.HealthInvariant");
+    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("Base");
 
     m_context = nullptr;
     m_initialized = false;

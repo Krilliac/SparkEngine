@@ -84,7 +84,7 @@ namespace Spark::Graphics
 
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Graphics,
-                       "ProbeSystem initialized: %ux%ux%u grid (%u probes), spacing=%.1f, %d rays/probe",
+                       "ProbeSystem initialized: %dx%dx%d grid (%u probes), spacing=%.1f, %d rays/probe",
                        m_config.dimensionsX, m_config.dimensionsY, m_config.dimensionsZ, GetProbeCount(),
                        m_config.spacing, m_config.raysPerProbe);
         return true;

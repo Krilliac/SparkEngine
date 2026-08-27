@@ -359,7 +359,7 @@ namespace ARPG
         EXPECT_GT(id, 0u);
 
         const HeroData* hero = heroes.GetHero(id);
-        EXPECT_TRUE(hero != nullptr);
+        ASSERT_TRUE(hero != nullptr);
         EXPECT_EQ(hero->name, std::string("Kratos"));
         EXPECT_TRUE(hero->heroClass == ARPGHeroClass::Barbarian);
         heroes.Shutdown();
@@ -680,7 +680,8 @@ namespace ARPG
         EXPECT_TRUE(skills.Initialize(nullptr, &heroes));
 
         const auto available = skills.GetAvailableSkills(ARPGHeroClass::Sorceress, 1);
-        EXPECT_FALSE(available.empty());
+        ASSERT_FALSE(available.empty());
+        ASSERT_TRUE(available.front() != nullptr);
         const uint32_t skillId = available.front()->skillId;
         const uint32_t sorceress = heroes.CreateHero("Test Sorceress", ARPGHeroClass::Sorceress);
         const uint32_t barbarian = heroes.CreateHero("Test Barbarian", ARPGHeroClass::Barbarian);
@@ -707,7 +708,7 @@ namespace ARPG
 
         const MonsterData boss = monsters.SpawnBoss(5);
         const MonsterData* stored = monsters.GetMonster(boss.monsterId);
-        EXPECT_TRUE(stored != nullptr);
+        ASSERT_TRUE(stored != nullptr);
         EXPECT_EQ(stored->name, boss.name);
         EXPECT_TRUE(stored->rank == ARPGMonsterRank::Boss);
         EXPECT_EQ(stored->affixes.size(), boss.affixes.size());

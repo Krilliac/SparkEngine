@@ -55,7 +55,7 @@ TEST(SceneConfigDB_RegisterLookup)
     EXPECT_FALSE(db.Has("level02"));
 
     auto* found = db.Get("level01");
-    EXPECT_TRUE(found != nullptr);
+    ASSERT_TRUE(found != nullptr);
     EXPECT_NEAR(found->shadowDistance, 200.0f, 0.01f);
     EXPECT_EQ(found->reverbPreset, std::string("Cave"));
 }
@@ -83,7 +83,7 @@ TEST(SceneConfigDB_CustomOverrides)
     db.Register(config);
 
     auto* found = db.Get("boss_room");
-    EXPECT_TRUE(found != nullptr);
+    ASSERT_TRUE(found != nullptr);
     EXPECT_EQ(found->custom.at("fog_density"), std::string("0.8"));
     EXPECT_EQ(found->custom.at("particle_limit"), std::string("5000"));
 }

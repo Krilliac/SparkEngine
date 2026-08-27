@@ -48,7 +48,7 @@ TEST(SceneConfigDatabaseReal_RegisterAndGet)
 
     EXPECT_TRUE(db.HasConfig("level_01"));
     auto* cfg = db.GetConfig("level_01");
-    EXPECT_TRUE(cfg != nullptr);
+    ASSERT_TRUE(cfg != nullptr);
     EXPECT_EQ(cfg->displayName, std::string("Tutorial"));
 }
 
@@ -100,7 +100,7 @@ TEST(SceneConfigDatabaseReal_RenderOverrides)
     db.RegisterScene(entry);
 
     auto* cfg = db.GetConfig("level_03");
-    EXPECT_TRUE(cfg != nullptr);
+    ASSERT_TRUE(cfg != nullptr);
     EXPECT_TRUE(cfg->render.shadowDistance.has_value());
     EXPECT_NEAR(cfg->render.shadowDistance.value(), 200.0f, 0.01f);
     EXPECT_TRUE(cfg->render.enableSSAO.value());

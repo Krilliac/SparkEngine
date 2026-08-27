@@ -53,7 +53,7 @@ TEST(RPG_Character_GetCharacter)
     charSys.Initialize(nullptr);
     uint32_t id = charSys.CreateCharacter("Aldric", CharacterClass::Mage);
     const CharacterData* data = charSys.GetCharacter(id);
-    EXPECT_TRUE(data != nullptr);
+    ASSERT_TRUE(data != nullptr);
     EXPECT_EQ(data->name, std::string("Aldric"));
     EXPECT_EQ(static_cast<uint8_t>(data->classId), static_cast<uint8_t>(CharacterClass::Mage));
 }
@@ -237,7 +237,7 @@ TEST(RPG_Combat_ComboSystem)
     combat.RegisterHit(1);
     combat.RegisterHit(1);
     const ComboState* combo = combat.GetComboState(1);
-    EXPECT_TRUE(combo != nullptr);
+    ASSERT_TRUE(combo != nullptr);
     EXPECT_TRUE(combo->hitCount > 0);
     EXPECT_TRUE(combo->damageMultiplier > 1.0f);
 
@@ -320,7 +320,7 @@ TEST(RPG_Quest_RegisterAndGetDef)
     quests.RegisterQuest(def);
 
     const QuestDef* fetched = quests.GetQuestDef(9001);
-    EXPECT_TRUE(fetched != nullptr);
+    ASSERT_TRUE(fetched != nullptr);
     EXPECT_EQ(fetched->name, std::string("Test Quest"));
 }
 
@@ -382,7 +382,8 @@ TEST(RPG_Quest_UpdateObjective)
 
     quests.UpdateObjective(1, ObjectiveType::Kill, 42, 1);
     const QuestProgress* prog = quests.GetQuestProgress(1, 9004);
-    EXPECT_TRUE(prog != nullptr);
+    ASSERT_TRUE(prog != nullptr);
+    ASSERT_FALSE(prog->objectives.empty());
     EXPECT_TRUE(prog->objectives[0].currentCount > 0);
 }
 
@@ -515,7 +516,8 @@ TEST(RPG_Quest_AbandonedQuestCanRestartCleanly)
     EXPECT_TRUE(quests.AcceptQuest(1, 9102));
 
     const auto* progress = quests.GetQuestProgress(1, 9102);
-    EXPECT_TRUE(progress != nullptr);
+    ASSERT_TRUE(progress != nullptr);
+    ASSERT_FALSE(progress->objectives.empty());
     EXPECT_EQ(progress->objectives[0].currentCount, 0);
 }
 
@@ -534,7 +536,8 @@ TEST(RPG_Quest_NonPositiveProgressCannotRollbackObjective)
     quests.UpdateObjective(1, ObjectiveType::Kill, 300, -5);
 
     const auto* progress = quests.GetQuestProgress(1, 9103);
-    EXPECT_TRUE(progress != nullptr);
+    ASSERT_TRUE(progress != nullptr);
+    ASSERT_FALSE(progress->objectives.empty());
     EXPECT_EQ(progress->objectives[0].currentCount, 2);
 }
 

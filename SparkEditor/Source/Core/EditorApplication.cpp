@@ -154,10 +154,7 @@ namespace SparkEditor
             console.LogError("Graphics device/context became unavailable during editor initialization");
             return failInitialization();
         }
-        if (m_device && m_context)
-        {
-            m_ui->SetGraphicsDevice(m_device.Get(), m_context.Get());
-        }
+        m_ui->SetGraphicsDevice(m_device.Get(), m_context.Get());
 #endif
 
         // Explicit plugin directories are project-rooted and bounded by the

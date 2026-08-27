@@ -49,7 +49,7 @@ TEST(PhaseN_RTHandleSystem_AllocateViaPipeline)
     uint32_t id = pp.GetRTHandleSystem().Allocate(0.5f, 0.5f);
     EXPECT_TRUE(id != 0);
     const auto* h = pp.GetRTHandleSystem().GetHandle(id);
-    EXPECT_TRUE(h != nullptr);
+    ASSERT_TRUE(h != nullptr);
     EXPECT_EQ(h->currentWidth, 960u);
     EXPECT_EQ(h->currentHeight, 540u);
     pp.Shutdown();
@@ -63,7 +63,7 @@ TEST(PhaseN_RTHandleSystem_ResizeForwardsReferenceSize)
 
     pp.Resize(1280, 720);
     const auto* h = pp.GetRTHandleSystem().GetHandle(id);
-    EXPECT_TRUE(h != nullptr);
+    ASSERT_TRUE(h != nullptr);
     EXPECT_EQ(h->currentWidth, 1280u);
     EXPECT_EQ(h->currentHeight, 720u);
     EXPECT_EQ(pp.GetRTHandleSystem().GetReferenceWidth(), 1280u);

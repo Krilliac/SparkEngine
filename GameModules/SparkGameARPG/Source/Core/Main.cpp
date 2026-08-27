@@ -194,6 +194,11 @@ void SparkGameARPGModule::OnUnload()
     if (!m_initialized)
         return;
 
+    // Validation callbacks are std::functions implemented in this DLL. Drop
+    // them while the module image is still mapped so hot unload/reload cannot
+    // leave the host detector pointing at unmapped code.
+    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("ARPG");
+
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[ARPG] Unloading Spark ARPG module...");
     SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module shutting down");

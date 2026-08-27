@@ -386,7 +386,7 @@ TEST(Perception_RememberTarget)
     comp.Remember(42, Vec3(10, 0, 5), 1.0f, 0.9f);
 
     auto* mem = comp.GetMemory(42);
-    EXPECT_TRUE(mem != nullptr);
+    ASSERT_TRUE(mem != nullptr);
     EXPECT_NEAR(mem->confidence, 0.9f, 0.01f);
     EXPECT_NEAR(mem->lastSeenPosition.x, 10.0f, 0.01f);
 }
@@ -415,7 +415,7 @@ TEST(Perception_DecayAndPrune)
     comp.DecayAndPrune(3.0f);
 
     EXPECT_TRUE(comp.GetMemory(1) == nullptr);
-    EXPECT_TRUE(comp.GetMemory(2) != nullptr);
+    ASSERT_TRUE(comp.GetMemory(2) != nullptr);
     EXPECT_NEAR(comp.GetMemory(2)->confidence, 0.4f, 0.01f);
 }
 
