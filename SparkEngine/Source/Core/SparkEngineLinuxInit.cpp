@@ -124,8 +124,7 @@ static bool LoadGameModulesLinux(ModuleManager& manager, int argc, char* argv[])
     if (std::filesystem::is_regular_file(manifestPath, error) && !error)
     {
         const std::u8string utf8 = manifestPath.generic_u8string();
-        return manager.LoadModulesFromManifest(
-            std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size()));
+        return manager.LoadModulesFromManifest(std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size()));
     }
 
     // 4. Fall back to directory scan.
