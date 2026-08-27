@@ -195,7 +195,9 @@ function(spark_thirdparty_generate_notice manifest_file output_file)
         file(READ "${_manifest_root}/${_notice_rel}" _notice_content)
         string(REPLACE "\r\n" "\n" _notice_content "${_notice_content}")
         string(REPLACE "\r" "\n" _notice_content "${_notice_content}")
-        string(REGEX REPLACE "\n*$" "" _notice_content "${_notice_content}")
+        # Require at least one trailing newline in the match. Newer CMake
+        # rejects REGEX REPLACE expressions that can match the empty string.
+        string(REGEX REPLACE "\n+$" "" _notice_content "${_notice_content}")
         file(APPEND "${output_file}"
             "----- ${_notice_rel} -----\n\n"
             "${_notice_content}\n\n")
