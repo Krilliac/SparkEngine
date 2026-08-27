@@ -1530,7 +1530,7 @@ graph LR
 - [`SparkEngine.h`](../../SparkEngine/Source/Core/SparkEngine.h) — 41 LOC — Main engine header - SparkEngine is the executable runtime host
 - [`SparkEngineLinux.cpp`](../../SparkEngine/Source/Core/SparkEngineLinux.cpp) — 243 LOC — POSIX entry point (main), signal handling, and command-line parsing (Linux + macOS).
 - [`SparkEngineLinuxHeadless.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp) — 246 LOC — Headless/dedicated-server loop and no-SDL2 fallback path (Linux + macOS).
-- [`SparkEngineLinuxInit.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxInit.cpp) — 411 LOC — Shared POSIX startup, per-frame tick, and shutdown helpers (Linux + macOS).
+- [`SparkEngineLinuxInit.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxInit.cpp) — 410 LOC — Shared POSIX startup, per-frame tick, and shutdown helpers (Linux + macOS).
 - [`SparkEngineLinuxInternal.h`](../../SparkEngine/Source/Core/SparkEngineLinuxInternal.h) — 69 LOC — Internal declarations shared by the POSIX (Linux + macOS) entry-point files.
 - [`SparkEngineLinuxSDL2.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxSDL2.cpp) — 464 LOC — SDL2 windowed-mode bring-up: window/backend selection and RunSDL2Windowed (Linux + macOS).
 - [`SparkEngineLinuxSDL2Events.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxSDL2Events.cpp) — 232 LOC — SDL2 event translation, dispatch, and per-frame main loop (Linux + macOS).
@@ -3291,5 +3291,5 @@ graph LR
 | Metric | Count |
 |--------|-------|
 | Source files scanned | 2458 |
-| Total lines of code  | 718893 |
+| Total lines of code  | 718892 |
 | Source directories   | 17 |
