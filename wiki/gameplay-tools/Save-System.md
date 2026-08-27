@@ -188,6 +188,7 @@ public:
     void Register(const std::string& typeName,
                   SerializeFunc serialize,
                   DeserializeFunc deserialize);
+    bool Unregister(const std::string& typeName);
 
     bool HasSerializer(const std::string& typeName) const;
 
@@ -205,6 +206,7 @@ public:
 |--------|-------------|
 | `GetInstance()` | Meyer's singleton, thread-safe on first call (C++11 guarantee) |
 | `Register(name, ser, deser)` | Register a serialize/deserialize pair for a component type |
+| `Unregister(name)` | Remove an owned callback pair before its dynamic module unloads |
 | `HasSerializer(name)` | Check if a serializer is registered |
 | `Serialize(name, comp)` | Serialize a component via its registered function |
 | `Deserialize(name, world, entity, data)` | Deserialize and attach component to entity |
@@ -255,10 +257,12 @@ registry.Register("CustomInventory",
 ### Registration Guidelines
 
 1. Call `Register()` once per type during single-threaded initialization
-2. The `typeName` string must match exactly between serializer and deserializer
-3. Use `std::to_string()` for numeric values and parse with `std::stoi()` / `std::stof()`
-4. For vectors, encode as space-separated floats: `"1.0 2.0 3.0"`
-5. For booleans, use `"true"` / `"false"` strings
+2. A dynamic game module must call `Unregister(typeName)` during `OnUnload()` for every serializer it installed
+3. Do not unregister a built-in or another module's entry; track whether your module performed the registration
+4. The `typeName` string must match exactly between serializer and deserializer
+5. Use `std::to_string()` for numeric values and parse with `std::stoi()` / `std::stof()`
+6. For vectors, encode as space-separated floats: `"1.0 2.0 3.0"`
+7. For booleans, use `"true"` / `"false"` strings
 
 ## SaveSystem
 

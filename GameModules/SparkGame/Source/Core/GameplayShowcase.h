@@ -89,6 +89,11 @@ class GameplayShowcase
     // Tracked showcase entities for cleanup
     std::vector<uint32_t> m_spawnedEntities;
 
+    // True only when this module installed the TagComponent serializer. The
+    // engine may already own a built-in registration, which must survive this
+    // module's teardown.
+    bool m_registeredTagSerializer{false};
+
     // Weather cycling state
     int m_currentWeatherIndex{0};
     float m_weatherTimer{0.0f};

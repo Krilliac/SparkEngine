@@ -75,10 +75,17 @@ Start each area server first, then the gateway using a configuration derived
 from [`SparkGateway/config/gateway.example.ini`](../../SparkGateway/config/gateway.example.ini):
 
 ```powershell
+SparkGateway --generate-key Config/gateway.key
 SparkGateway --config Config/gateway.ini `
   --health-file Temp/gateway-health.json `
   --stop-file Temp/gateway.stop
 ```
+
+`--generate-key` creates a new 256-bit key with owner-only permissions and
+refuses to overwrite an existing path. Point both the gateway configuration and
+each area's `--gateway-key-file` at that file. Using the executable for
+provisioning keeps Windows ACLs and POSIX mode bits consistent with the same
+validation enforced at service startup.
 
 The gateway authenticates short-lived admission credentials, rejects replay,
 registers only loopback area-control endpoints, and performs

@@ -64,6 +64,12 @@ void GameplayShowcase::Shutdown()
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[Showcase] Shutting down gameplay showcase...");
 
+    if (m_registeredTagSerializer)
+    {
+        Spark::ComponentSerializerRegistry::GetInstance().Unregister("TagComponent");
+        m_registeredTagSerializer = false;
+    }
+
     // Destroy spawned entities
     auto* world = m_context ? m_context->GetWorld() : nullptr;
     if (world)
@@ -240,6 +246,7 @@ void GameplayShowcase::RegisterCustomSerializer()
                     tag.tags.insert(tagsStr.substr(start));
                 world.AddComponent<TagComponent>(entity, tag);
             });
+        m_registeredTagSerializer = true;
     }
 
     auto& console = Spark::SimpleConsole::GetInstance();

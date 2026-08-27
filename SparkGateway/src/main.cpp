@@ -6,6 +6,7 @@
 #include "GatewayApplication.h"
 #include "GatewayAreaControl.h"
 #include "GatewaySecurity.h"
+#include "Utils/SecureRandom.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -70,6 +71,19 @@ int main(int argc, char** argv)
     if (parsed.options->showHelp)
     {
         std::cout << Spark::Gateway::GatewayHelpText();
+        return 0;
+    }
+    if (!parsed.options->generateKeyFile.empty())
+    {
+        const std::string key = Spark::SecureRandom::HexToken(32);
+        std::string error;
+        if (key.empty() || !Spark::SecureRandom::CreatePrivateFile(parsed.options->generateKeyFile, key + "\n", &error))
+        {
+            std::cerr << "SparkGateway: could not create owner-only key '" << parsed.options->generateKeyFile.string()
+                      << "': " << (error.empty() ? "secure random generation failed" : error) << '\n';
+            return 1;
+        }
+        std::cout << "Created owner-only gateway key: " << parsed.options->generateKeyFile.string() << '\n';
         return 0;
     }
 

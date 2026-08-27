@@ -189,6 +189,22 @@ namespace Spark
         void Register(const std::string& typeName, SerializeFunc serialize, DeserializeFunc deserialize);
 
         /**
+         * @brief Remove a serializer registration by component type name.
+         *
+         * Game modules must unregister callbacks they installed before their
+         * dynamic library is unloaded. A retained @c std::function target may
+         * otherwise point into an unmapped module image during later use or
+         * process-static destruction.
+         *
+         * @param typeName  Component type name to remove.
+         * @return          @c true when an entry was removed; @c false when no
+         *                  entry with that name existed.
+         *
+         * @note [game thread] Call during single-threaded module teardown.
+         */
+        bool Unregister(const std::string& typeName);
+
+        /**
      * @brief Check whether a serializer is registered for the given type name.
      *
      * @param typeName  Component type name to query.

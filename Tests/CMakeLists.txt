@@ -720,6 +720,12 @@ target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_COMPATIBLE_MODULE_PATH="$<TARGET_FILE:SparkCompatibleModuleFixture>"
     SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH="$<TARGET_FILE:SparkSiblingDependentModuleFixture>")
 
+if(TARGET SparkGame AND NOT WIN32)
+    add_dependencies(SparkTests SparkGame)
+    target_compile_definitions(SparkTests PRIVATE
+        SPARK_TEST_SPARK_GAME_MODULE_PATH="$<TARGET_FILE:SparkGame>")
+endif()
+
 if(TARGET SparkDaemon)
     add_dependencies(SparkTests SparkDaemon)
     target_compile_definitions(SparkTests PRIVATE

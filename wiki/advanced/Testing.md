@@ -528,7 +528,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*574 test files, 6859 source-level test definitions*
+*574 test files, 6864 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -661,7 +661,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestDecalSystem` | 7 |
 | `TestDedicatedServer` | 27 |
 | `TestDedicatedServerProcessController` | 3 |
-| `TestDedicatedServerRuntime` | 5 |
+| `TestDedicatedServerRuntime` | 7 |
 | `TestDeferredDeletion` | 6 |
 | `TestDeferredDeletionReal` | 6 |
 | `TestDeferredQueue` | 6 |
@@ -770,7 +770,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameplaySystemExtension` | 6 |
 | `TestGameplayTags` | 14 |
 | `TestGameplayTagsReal` | 7 |
-| `TestGatewayAreaControl` | 7 |
+| `TestGatewayAreaControl` | 8 |
 | `TestGatewaySecurity` | 5 |
 | `TestGizmoMath` | 3 |
 | `TestGoldenImageTest` | 14 |
@@ -835,7 +835,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMetalRayTracing` | 16 |
 | `TestMetalRayTracingLive` | 10 |
 | `TestModSystem` | 9 |
-| `TestModuleABI` | 21 |
+| `TestModuleABI` | 22 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 12 |
@@ -1098,7 +1098,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `Test_persistence_AsyncDatabasePool` | 3 |
 | `Test_persistence_ModSystem` | 2 |
 | `Test_persistence_ReplaySystem` | 3 |
-| `Test_persistence_SaveSystem` | 9 |
+| `Test_persistence_SaveSystem` | 10 |
 | `Test_scripting_hardening` | 8 |
 | `Test_tests_ecsystemordering_real` | 5 |
 | `Test_tests_enginecontext_real` | 3 |

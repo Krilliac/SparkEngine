@@ -159,6 +159,7 @@ namespace Spark::Gateway
                "  --port <1..65535>            Override the client-facing coordinator port\n"
                "  --health-file <path>         Publish a JSON health snapshot\n"
                "  --key-file <path>            Owner-only >=256-bit local authentication key\n"
+               "  --generate-key <path>        Create a new owner-only 256-bit key, then exit\n"
                "  --stop-file <path>           Stop when this sentinel file appears\n"
                "  --status-interval-ms <ms>    Health/status cadence\n"
                "  --run-for-ms <ms>            Bounded run for smoke automation\n"
@@ -177,12 +178,20 @@ namespace Spark::Gateway
                     return {{}, "--config requires a path"};
                 options.configPath = arguments[index];
             }
+            else if (arguments[index] == "--generate-key")
+            {
+                if (++index == arguments.size())
+                    return {{}, "--generate-key requires a path"};
+                options.generateKeyFile = arguments[index];
+            }
         }
 
         const bool helpRequested = std::find(arguments.begin(), arguments.end(), "--help") != arguments.end() ||
                                    std::find(arguments.begin(), arguments.end(), "-h") != arguments.end();
-        if (options.configPath.empty() && !helpRequested)
-            return {{}, "--config is required"};
+        if (!options.configPath.empty() && !options.generateKeyFile.empty())
+            return {{}, "--config and --generate-key are mutually exclusive"};
+        if (options.configPath.empty() && options.generateKeyFile.empty() && !helpRequested)
+            return {{}, "--config or --generate-key is required"};
         if (!options.configPath.empty())
         {
             std::string error;
@@ -202,6 +211,8 @@ namespace Spark::Gateway
             if (argument == "--help" || argument == "-h")
                 options.showHelp = true;
             else if (argument == "--config")
+                ++index;
+            else if (argument == "--generate-key")
                 ++index;
             else if (argument == "--health-file" || argument == "--key-file" || argument == "--stop-file")
             {
@@ -238,6 +249,12 @@ namespace Spark::Gateway
             }
             else
                 return {{}, "Unknown argument: " + std::string(argument)};
+        }
+        if (!options.generateKeyFile.empty())
+        {
+            if (arguments.size() != 2)
+                return {{}, "--generate-key cannot be combined with runtime options"};
+            return {std::move(options), {}};
         }
         if (!options.showHelp && options.keyFile.empty())
             return {{}, "A gateway --key-file is required"};

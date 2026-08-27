@@ -107,6 +107,17 @@ void SparkGameDefaultModule::OnUnload()
         m_showcase.reset();
     }
 
+    console.UnregisterCommand("showcase_status");
+    console.UnregisterCommand("showcase_weather");
+    console.UnregisterCommand("showcase_save");
+    console.UnregisterCommand("showcase_load");
+    console.UnregisterCommand("showcase_spawn");
+
+    // This callback's std::function manager lives in this dynamic module.
+    // Remove it while the image is still mapped so host-static registry
+    // destruction cannot call into unloaded code.
+    Spark::InvalidStateDetector::GetInstance().RemoveRule("Base.HealthInvariant");
+
     m_context = nullptr;
     m_initialized = false;
 

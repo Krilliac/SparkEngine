@@ -28,6 +28,7 @@ namespace Spark::Gateway
         std::filesystem::path configPath;
         std::filesystem::path healthFile;
         std::filesystem::path keyFile;
+        std::filesystem::path generateKeyFile;
         std::filesystem::path stopFile;
         std::string ingressEndpoint;
         std::chrono::milliseconds statusInterval{5000};

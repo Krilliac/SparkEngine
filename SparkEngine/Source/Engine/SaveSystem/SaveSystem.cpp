@@ -162,6 +162,11 @@ namespace Spark
         m_serializers[typeName] = {std::move(serialize), std::move(deserialize)};
     }
 
+    bool ComponentSerializerRegistry::Unregister(const std::string& typeName)
+    {
+        return m_serializers.erase(typeName) != 0;
+    }
+
     bool ComponentSerializerRegistry::HasSerializer(const std::string& typeName) const
     {
         return m_serializers.contains(typeName);

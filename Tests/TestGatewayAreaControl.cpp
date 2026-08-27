@@ -45,6 +45,20 @@ namespace
     }
 } // namespace
 
+TEST(GatewayOptions_GenerateKeyModeIsStandalone)
+{
+    const std::vector<std::string_view> generate{"--generate-key", "private/gateway.key"};
+    const GatewayParseResult parsed = ParseGatewayOptions(generate);
+    ASSERT_TRUE(parsed.options.has_value());
+    EXPECT_EQ(parsed.options->generateKeyFile, std::filesystem::path("private/gateway.key"));
+    EXPECT_TRUE(parsed.options->configPath.empty());
+
+    const std::vector<std::string_view> mixed{"--generate-key", "private/gateway.key", "--config", "gateway.ini"};
+    const GatewayParseResult rejected = ParseGatewayOptions(mixed);
+    EXPECT_FALSE(rejected.options.has_value());
+    EXPECT_TRUE(rejected.error.find("mutually exclusive") != std::string::npos);
+}
+
 TEST(GatewayAreaControl_LiveLoopbackIsIdempotentAndPersistsEpochFence)
 {
     const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-area-state") + ".txt");

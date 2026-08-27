@@ -15,8 +15,9 @@
 
 using namespace Spark::Net;
 
-static_assert(std::is_same_v<decltype(std::declval<const DedicatedServer&>().GetLanBroadcastSnapshot()),
-                             LanBroadcastSnapshot>);
+static_assert(
+    std::is_same_v<decltype(std::declval<const DedicatedServer&>().GetLanBroadcastSnapshot()), LanBroadcastSnapshot>);
+static_assert(std::is_same_v<decltype(std::declval<const DedicatedServer&>().GetStats()), ServerStats>);
 
 namespace
 {
@@ -326,6 +327,84 @@ TEST(DedicatedServerRuntime_LanBroadcastSnapshotIsOwnedAndConsistentDuringMapMut
 
     EXPECT_FALSE(badSnapshot.load(std::memory_order_relaxed));
     server.Stop();
+}
+
+TEST(DedicatedServerRuntime_StatsSnapshotIsOwnedAndConsistentDuringMapMutation)
+{
+    MockNetworkRuntime runtime;
+    DedicatedServer server(runtime);
+
+    ServerConfig config;
+    config.enableLanBroadcast = false;
+    config.enableLogging = false;
+    config.mapRotation = {"map_alpha", "map_beta"};
+    EXPECT_TRUE(server.InitializeOnly(config));
+
+    const ServerStats retained = server.GetStats();
+    EXPECT_EQ(retained.currentMap, std::string("map_alpha"));
+
+    std::atomic<bool> badSnapshot{false};
+    std::thread mapWriter(
+        [&server]()
+        {
+            for (int i = 0; i < 64; ++i)
+                server.ChangeMap((i & 1) == 0 ? "map_alpha" : "map_beta");
+        });
+
+    for (int i = 0; i < 256; ++i)
+    {
+        const ServerStats snapshot = server.GetStats();
+        if (snapshot.currentMap != "map_alpha" && snapshot.currentMap != "map_beta")
+        {
+            badSnapshot.store(true, std::memory_order_relaxed);
+            break;
+        }
+    }
+    mapWriter.join();
+
+    EXPECT_FALSE(badSnapshot.load(std::memory_order_relaxed));
+    EXPECT_EQ(retained.currentMap, std::string("map_alpha"));
+    server.Stop();
+}
+
+TEST(DedicatedServerRuntime_StatsSnapshotsRemainMonotonicWhileTickThreadRuns)
+{
+    MockNetworkRuntime runtime;
+    DedicatedServer server(runtime);
+
+    ServerConfig config;
+    config.enableLanBroadcast = false;
+    config.enableLogging = false;
+    config.mapRotation = {"arena"};
+    config.tickRate = 1000.0f;
+    const bool started = server.Start(config);
+    EXPECT_TRUE(started);
+    if (!started)
+        return;
+
+    uint64_t previousTicks = 0;
+    uint32_t snapshotsObserved = 0;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        const ServerStats snapshot = server.GetStats();
+        ++snapshotsObserved;
+        if (snapshot.totalTicksProcessed < previousTicks)
+        {
+            server.Stop();
+            EXPECT_TRUE(false);
+            return;
+        }
+        previousTicks = snapshot.totalTicksProcessed;
+        if (previousTicks >= 16)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    server.Stop();
+    EXPECT_TRUE(snapshotsObserved > 1);
+    EXPECT_TRUE(previousTicks >= 16);
+    EXPECT_EQ(server.GetStats().currentMap, std::string("arena"));
 }
 
 #endif // ENABLE_NETWORKING

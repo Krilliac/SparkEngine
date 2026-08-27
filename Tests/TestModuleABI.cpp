@@ -2,7 +2,10 @@
 
 #include "Core/ModuleHotReload.h"
 #include "Core/ModuleManager.h"
+#include "Engine/SaveSystem/SaveSystem.h"
+#include "Utils/InvalidStateDetector.h"
 #include "Utils/LocalFileCache.h"
+#include "Utils/SparkConsole.h"
 #include <Spark/ModuleABI.h>
 #include <Spark/Version.h>
 
@@ -524,6 +527,47 @@ TEST(ModuleABI_StartupRollbackTearsDownVetoingUncommittedModule)
     EXPECT_EQ(manager.GetModuleCount(), size_t{0});
     RemoveModuleCopy(modulePath);
 }
+
+#if !defined(_WIN32) && defined(SPARK_TEST_SPARK_GAME_MODULE_PATH)
+TEST(ModuleABI_SparkGameShutdownReleasesHostRegistryCallbacksBeforeUnload)
+{
+    auto& serializers = Spark::ComponentSerializerRegistry::GetInstance();
+    auto& detector = Spark::InvalidStateDetector::GetInstance();
+    serializers.Unregister("TagComponent");
+    detector.RemoveRule("Base.HealthInvariant");
+    const uint32_t initialRuleCount = detector.GetRuleCount();
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_SPARK_GAME_MODULE_PATH));
+    manager.InitializeAll(&context);
+
+    ASSERT_TRUE(manager.GetModule("Spark Default - Engine Showcase") != nullptr);
+    EXPECT_TRUE(serializers.HasSerializer("TagComponent"));
+    EXPECT_EQ(detector.GetRuleCount(), initialRuleCount + 1);
+    EXPECT_TRUE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_status"));
+    EXPECT_TRUE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_weather"));
+    EXPECT_TRUE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_save"));
+    EXPECT_TRUE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_load"));
+    EXPECT_TRUE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_spawn"));
+
+    manager.ShutdownAllAfterPreflight();
+    EXPECT_FALSE(serializers.HasSerializer("TagComponent"));
+    EXPECT_EQ(detector.GetRuleCount(), initialRuleCount);
+    EXPECT_FALSE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_status"));
+    EXPECT_FALSE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_weather"));
+    EXPECT_FALSE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_save"));
+    EXPECT_FALSE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_load"));
+    EXPECT_FALSE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_spawn"));
+
+    manager.UnloadAll();
+    EXPECT_EQ(manager.GetModuleCount(), size_t{0});
+
+    // Restore the process-global core serializer state for later tests in the
+    // same native test executable.
+    serializers.RegisterBuiltins();
+}
+#endif
 
 TEST(ModuleABI_FailedReplacementInitializationPreservesWorkingModule)
 {

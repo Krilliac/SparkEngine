@@ -570,7 +570,7 @@ namespace Spark::Server
         }
         if (m_server)
         {
-            const Net::ServerStats& stats = m_server->GetStats();
+            const Net::ServerStats stats = m_server->GetStats();
             health.players = stats.currentPlayers;
             health.ticks = stats.totalTicksProcessed;
             health.currentMap = stats.currentMap;

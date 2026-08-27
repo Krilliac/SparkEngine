@@ -80,7 +80,10 @@ namespace Spark::Net
             return false;
 
         m_config = config;
-        m_stats = ServerStats{};
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            m_stats = ServerStats{};
+        }
         m_currentRound = 1;
         m_matchInProgress = false;
 
@@ -118,7 +121,10 @@ namespace Spark::Net
         {
             m_currentMap = "default";
         }
-        m_stats.currentMap = m_currentMap;
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            m_stats.currentMap = m_currentMap;
+        }
 
         m_startTime = std::chrono::steady_clock::now();
         m_running.store(true, std::memory_order_release);
@@ -162,8 +168,9 @@ namespace Spark::Net
         if (!m_running.load(std::memory_order_acquire))
             return;
 
+        const ServerStats stoppingStats = GetStats();
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Server shutting down (uptime: %.0fs, total connections: %u)",
-                       m_stats.uptimeSeconds, m_stats.totalConnectionsServed);
+                       stoppingStats.uptimeSeconds, stoppingStats.totalConnectionsServed);
         Log("Server shutting down...");
 
         // Stop the tick thread before touching the network runtime — NetworkManager::Update
@@ -200,7 +207,8 @@ namespace Spark::Net
         if (m_callbacks.onServerStopped)
             m_callbacks.onServerStopped();
 
-        Log("Server stopped. Uptime: " + std::to_string(static_cast<int>(m_stats.uptimeSeconds)) + "s");
+        const ServerStats stoppedStats = GetStats();
+        Log("Server stopped. Uptime: " + std::to_string(static_cast<int>(stoppedStats.uptimeSeconds)) + "s");
     }
 
     void DedicatedServer::Tick(float deltaTime)
@@ -370,8 +378,11 @@ namespace Spark::Net
         m_matchInProgress = true;
         m_matchTimeRemaining = m_config.timeLimitMinutes * 60.0f;
         m_currentRound = 1;
-        m_stats.matchTimeRemaining = m_matchTimeRemaining;
-        m_stats.currentRound = m_currentRound;
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            m_stats.matchTimeRemaining = m_matchTimeRemaining;
+            m_stats.currentRound = m_currentRound;
+        }
 
         // Broadcast match start to all clients
         NetworkMessage msg;
@@ -413,7 +424,10 @@ namespace Spark::Net
         if (m_currentRound < m_config.roundCount)
         {
             m_currentRound++;
-            m_stats.currentRound = m_currentRound;
+            {
+                std::lock_guard<std::mutex> lock(m_stateMutex);
+                m_stats.currentRound = m_currentRound;
+            }
             StartMatch();
         }
         else
@@ -421,7 +435,10 @@ namespace Spark::Net
             // Rotate to next map
             RotateToNextMap();
             m_currentRound = 1;
-            m_stats.currentRound = m_currentRound;
+            {
+                std::lock_guard<std::mutex> lock(m_stateMutex);
+                m_stats.currentRound = m_currentRound;
+            }
             StartMatch();
         }
     }
@@ -432,7 +449,10 @@ namespace Spark::Net
             return;
 
         m_matchTimeRemaining -= deltaTime;
-        m_stats.matchTimeRemaining = m_matchTimeRemaining;
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            m_stats.matchTimeRemaining = m_matchTimeRemaining;
+        }
 
         if (m_matchTimeRemaining <= 0.0f)
         {
@@ -452,7 +472,8 @@ namespace Spark::Net
             NetBuffer buf;
             buf.WriteFloat(m_matchTimeRemaining);
             buf.WriteUint32(static_cast<uint32_t>(m_currentRound));
-            buf.WriteUint32(m_stats.currentPlayers);
+            const ServerStats stats = GetStats();
+            buf.WriteUint32(stats.currentPlayers);
             msg.payload = buf.GetData();
             m_networkRuntime->SendToAll(msg);
         }
@@ -764,6 +785,12 @@ namespace Spark::Net
         return snapshot;
     }
 
+    ServerStats DedicatedServer::GetStats() const
+    {
+        std::lock_guard<std::mutex> lock(m_stateMutex);
+        return m_stats;
+    }
+
     void DedicatedServer::StartLanBroadcast()
     {
         std::lock_guard<std::mutex> lifecycleLock(m_lanBroadcastLifecycleMutex);
@@ -956,13 +983,14 @@ namespace Spark::Net
 
     std::string DedicatedServer::Console_GetStatus() const
     {
+        const ServerStats stats = GetStats();
         std::ostringstream oss;
         oss << "=== Dedicated Server Status ===\n";
         oss << "Name:       " << m_config.serverName << "\n";
         oss << "Running:    " << (m_running.load(std::memory_order_acquire) ? "YES" : "NO") << "\n";
         oss << "Port:       " << m_config.port << "\n";
-        oss << "Players:    " << m_stats.currentPlayers << "/" << m_config.maxClients
-            << " (peak: " << m_stats.peakPlayers << ")\n";
+        oss << "Players:    " << stats.currentPlayers << "/" << m_config.maxClients << " (peak: " << stats.peakPlayers
+            << ")\n";
         oss << "Map:        " << m_currentMap << "\n";
         oss << "Game Mode:  " << static_cast<int>(m_config.gameMode) << "\n";
         oss << "Match:      " << (m_matchInProgress ? "In Progress" : "Not Active") << "\n";
@@ -973,12 +1001,12 @@ namespace Spark::Net
             oss << "Time Left:  " << mins << ":" << std::setw(2) << std::setfill('0') << secs << "\n";
             oss << "Round:      " << m_currentRound << "/" << m_config.roundCount << "\n";
         }
-        oss << "Tick Rate:  " << std::fixed << std::setprecision(1) << m_stats.currentTickRate << " Hz\n";
-        oss << "Avg Tick:   " << std::fixed << std::setprecision(2) << m_stats.averageTickMs << " ms\n";
-        oss << "Peak Tick:  " << std::fixed << std::setprecision(2) << m_stats.peakTickMs << " ms\n";
-        oss << "Uptime:     " << static_cast<int>(m_stats.uptimeSeconds) << "s\n";
-        oss << "Total Ticks:" << m_stats.totalTicksProcessed << "\n";
-        oss << "Connections:" << m_stats.totalConnectionsServed << "\n";
+        oss << "Tick Rate:  " << std::fixed << std::setprecision(1) << stats.currentTickRate << " Hz\n";
+        oss << "Avg Tick:   " << std::fixed << std::setprecision(2) << stats.averageTickMs << " ms\n";
+        oss << "Peak Tick:  " << std::fixed << std::setprecision(2) << stats.peakTickMs << " ms\n";
+        oss << "Uptime:     " << static_cast<int>(stats.uptimeSeconds) << "s\n";
+        oss << "Total Ticks:" << stats.totalTicksProcessed << "\n";
+        oss << "Connections:" << stats.totalConnectionsServed << "\n";
         oss << "LAN Bcast:  " << (m_lanBroadcastActive.load(std::memory_order_acquire) ? "ON" : "OFF") << "\n";
         oss << "Admin Cmds: LOCAL API ONLY\n";
         return oss.str();

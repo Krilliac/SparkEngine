@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -48,6 +49,34 @@ namespace
     // timestamp playTime health armor posX posY posZ kills deaths.
     const std::string kValidMeta = "My Save\nLevel1\nSoldier\n1234 56.5 100 50 1 2 3 4 5\n";
 } // namespace
+
+TEST(ComponentSerializerRegistry_UnregisterDestroysOwnedCallbacks)
+{
+    auto& registry = ComponentSerializerRegistry::GetInstance();
+    constexpr const char* typeName = "Test.ModuleOwnedSerializer";
+    registry.Unregister(typeName);
+
+    auto callbackLifetime = std::make_shared<int>(42);
+    const std::weak_ptr<int> callbackLifetimeObserver = callbackLifetime;
+    registry.Register(
+        typeName,
+        [callbackLifetime](const void*)
+        {
+            (void)callbackLifetime;
+            SerializedComponent component;
+            component.typeName = "Test.ModuleOwnedSerializer";
+            return component;
+        },
+        [callbackLifetime](World&, EntityID, const SerializedComponent&) { (void)callbackLifetime; });
+    callbackLifetime.reset();
+
+    EXPECT_TRUE(registry.HasSerializer(typeName));
+    EXPECT_FALSE(callbackLifetimeObserver.expired());
+    EXPECT_TRUE(registry.Unregister(typeName));
+    EXPECT_FALSE(registry.HasSerializer(typeName));
+    EXPECT_TRUE(callbackLifetimeObserver.expired());
+    EXPECT_FALSE(registry.Unregister(typeName));
+}
 
 TEST(SaveSystem_GetSaveMetadata_ParsesHeader)
 {

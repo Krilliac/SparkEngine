@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
 import socket
@@ -93,34 +92,9 @@ def reserve_udp_ports(count: int) -> list[int]:
             reservation.close()
 
 
-def make_private_key(path: Path) -> None:
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(descriptor, "wb") as output:
-        output.write(b"SparkGatewayTopologyKey-32bytes!!")
-    if os.name != "nt":
-        os.chmod(path, 0o600)
-        return
-
-    identity_record = subprocess.run(
-        ["whoami", "/user", "/fo", "csv", "/nh"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=5,
-        shell=False,
-    ).stdout.strip()
-    identity_fields = next(csv.reader([identity_record]), [])
-    require(
-        len(identity_fields) >= 2 and identity_fields[1].startswith("S-1-"),
-        f"whoami returned no usable Windows user SID: {identity_record}",
-    )
-    # icacls accepts a leading '*' to force an unambiguous numeric SID. User
-    # names can resolve differently on hosted-runner images (for example to an
-    # administrators group), leaving the only allow ACE different from the
-    # file owner even though both commands report success.
-    identity = f"*{identity_fields[1]}"
-    secured = subprocess.run(
-        ["icacls", str(path), "/inheritance:r", "/grant:r", f"{identity}:(F)"],
+def make_private_key(path: Path, gateway: Path) -> None:
+    generated = subprocess.run(
+        [str(gateway), "--generate-key", str(path)],
         capture_output=True,
         text=True,
         check=False,
@@ -128,20 +102,8 @@ def make_private_key(path: Path) -> None:
         shell=False,
     )
     require(
-        secured.returncode == 0,
-        f"could not make gateway key owner-only: {secured.stdout}{secured.stderr}",
-    )
-    owned = subprocess.run(
-        ["icacls", str(path), "/setowner", identity],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=10,
-        shell=False,
-    )
-    require(
-        owned.returncode == 0,
-        f"could not assign gateway key ownership to its only ACL trustee: {owned.stdout}{owned.stderr}",
+        generated.returncode == 0 and path.is_file(),
+        f"SparkGateway could not provision its private key: {generated.stdout}{generated.stderr}",
     )
 
 
@@ -329,7 +291,7 @@ def main() -> int:
         root = Path(temporary)
         try:
             key_file = root / "gateway.key"
-            make_private_key(key_file)
+            make_private_key(key_file, args.gateway)
             ports = reserve_udp_ports(5)
             server_ports = ports[:2]
             control_ports = ports[2:4]

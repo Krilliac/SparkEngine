@@ -317,7 +317,8 @@ namespace Spark::Net
         // -- Configuration & Stats --
 
         const ServerConfig& GetConfig() const { return m_config; }
-        const ServerStats& GetStats() const { return m_stats; }
+        /// @brief Capture an owned, internally consistent server statistics snapshot.
+        [[nodiscard]] ServerStats GetStats() const;
         void SetCallbacks(const ServerCallbacks& callbacks) { m_callbacks = callbacks; }
 
         /// @brief Console integration: full server status string.
@@ -354,7 +355,7 @@ namespace Spark::Net
         ServerConfig m_config;
         ServerCallbacks m_callbacks;
         ServerStats m_stats;
-        mutable std::mutex m_stateMutex; ///< Protects state copied into LAN broadcast snapshots.
+        mutable std::mutex m_stateMutex; ///< Protects statistics and state copied into external snapshots.
         std::atomic<bool> m_running{false};
         bool m_matchInProgress = false;
         float m_matchTimeRemaining = 0.0f;
