@@ -51,6 +51,76 @@ class ProcessLogCaptureTests(unittest.TestCase):
         self.assertEqual(commands[0], ["taskkill", "/PID", "100", "/T", "/F"])
         self.assertEqual(commands[1], ["taskkill", "/PID", "200", "/T", "/F"])
 
+    def test_posix_cleanup_reaches_child_group_after_daemon_group_is_gone(self) -> None:
+        daemon = mock.Mock()
+        daemon.pid = 100
+        daemon.poll.return_value = 0
+        group_signals: list[tuple[int, int]] = []
+        process_signals: list[tuple[int, int]] = []
+
+        def killpg(pid: int, signal_number: int) -> None:
+            group_signals.append((pid, signal_number))
+            raise ProcessLookupError
+
+        def kill(pid: int, signal_number: int) -> None:
+            process_signals.append((pid, signal_number))
+            raise ProcessLookupError
+
+        with (
+            mock.patch.object(HARNESS.os, "name", "posix"),
+            mock.patch.object(HARNESS.os, "killpg", side_effect=killpg, create=True),
+            mock.patch.object(HARNESS.os, "kill", side_effect=kill),
+        ):
+            HARNESS.force_terminate_process_tree(daemon, {200})
+
+        self.assertIn((100, HARNESS.signal.SIGTERM), group_signals)
+        self.assertIn((200, HARNESS.signal.SIGTERM), group_signals)
+        self.assertIn((200, HARNESS.signal.SIGTERM), process_signals)
+
+    def test_posix_cleanup_force_kills_a_child_group_that_does_not_exit(self) -> None:
+        daemon = mock.Mock()
+        daemon.pid = 100
+        daemon.poll.return_value = 0
+        group_signals: list[tuple[int, int]] = []
+        live_groups = {200}
+        sigkill = 9
+
+        def killpg(pid: int, signal_number: int) -> None:
+            group_signals.append((pid, signal_number))
+            if pid not in live_groups:
+                raise ProcessLookupError
+            if signal_number == sigkill:
+                live_groups.remove(pid)
+
+        with (
+            mock.patch.object(HARNESS.os, "name", "posix"),
+            mock.patch.object(HARNESS.os, "killpg", side_effect=killpg, create=True),
+            mock.patch.object(HARNESS.os, "kill", side_effect=ProcessLookupError),
+            mock.patch.object(HARNESS.signal, "SIGKILL", sigkill, create=True),
+            mock.patch.object(HARNESS.time, "monotonic", side_effect=[0.0, 4.0]),
+        ):
+            HARNESS.force_terminate_process_tree(daemon, {200})
+
+        self.assertIn((200, HARNESS.signal.SIGTERM), group_signals)
+        self.assertIn((200, sigkill), group_signals)
+        self.assertNotIn(200, live_groups)
+
+    def test_udp_reservation_is_held_until_context_exit(self) -> None:
+        with HARNESS.reserve_udp_port() as port:
+            contender = HARNESS.socket.socket(
+                HARNESS.socket.AF_INET, HARNESS.socket.SOCK_DGRAM
+            )
+            try:
+                with self.assertRaises(OSError):
+                    contender.bind(("127.0.0.1", port))
+            finally:
+                contender.close()
+
+        with HARNESS.socket.socket(
+            HARNESS.socket.AF_INET, HARNESS.socket.SOCK_DGRAM
+        ) as successor:
+            successor.bind(("127.0.0.1", port))
+
 
 class SupervisedEngineHostTests(unittest.TestCase):
     """The graceful-stop assertion must fail closed on a terminated host.

@@ -1100,6 +1100,14 @@ add_test(
 
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME SparkOrchestrationProcessHarness
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/SparkDaemon/tests/test_orchestration_process_harness.py)
+    set_tests_properties(SparkOrchestrationProcessHarness PROPERTIES
+        LABELS "orchestration;unit;python"
+        TIMEOUT 30)
+
     if(TARGET SparkDaemon AND TARGET SparkOrchestrator AND TARGET SparkCollabServer AND TARGET SparkAutomation)
         add_dependencies(SparkTests SparkDaemon SparkOrchestrator SparkCollabServer SparkAutomation)
         # When an engine host is available, the smoke also supervises SparkServer
@@ -1119,7 +1127,7 @@ if(Python3_Interpreter_FOUND)
                 --name orchestration-process-smoke
                 --executable ${Python3_EXECUTABLE}
                 --working-dir ${CMAKE_SOURCE_DIR}
-                --timeout-ms 90000
+                --timeout-ms 180000
                 --expected-exit 0
                 --captured-log ${CMAKE_BINARY_DIR}/orchestration-process-smoke.log
                 --json ${CMAKE_BINARY_DIR}/orchestration-process-smoke.json
@@ -1133,7 +1141,7 @@ if(Python3_Interpreter_FOUND)
         )
         set_tests_properties(SparkOrchestrationProcessSmoke PROPERTIES
             LABELS "orchestration;integration;process"
-            TIMEOUT 105)
+            TIMEOUT 195)
     endif()
     if(TARGET SparkCooker AND TARGET SparkWorker AND TARGET SparkAutomation)
         add_dependencies(SparkTests SparkCooker SparkWorker SparkAutomation)

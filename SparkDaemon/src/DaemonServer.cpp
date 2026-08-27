@@ -282,7 +282,6 @@ namespace Spark::Daemon
         }
 
         m_boundPath = socketPath;
-        m_shouldStop.store(false, std::memory_order_release);
         m_runStartedAt = std::chrono::steady_clock::now();
         std::string fatalError;
 
@@ -371,6 +370,10 @@ namespace Spark::Daemon
         m_boundPath.clear();
         (void)::ReleaseMutex(endpointMutex);
         ::CloseHandle(endpointMutex);
+        // Do not re-arm until every listener and client worker is gone. This
+        // preserves a Stop() received while Run() is still establishing its
+        // endpoint, while allowing an explicitly reused server to run later.
+        m_shouldStop.store(false, std::memory_order_release);
         if (!fatalError.empty())
             return Unexpected<std::string>(std::move(fatalError));
         return {};
@@ -443,7 +446,6 @@ namespace Spark::Daemon
 
         m_listenFd = FromNative(static_cast<NativeSocket>(listenFd));
         m_boundPath = socketPath;
-        m_shouldStop.store(false, std::memory_order_release);
         m_runStartedAt = std::chrono::steady_clock::now();
 
         std::string fatalError;
@@ -540,6 +542,9 @@ namespace Spark::Daemon
         UnlinkOwnedEndpoint(m_boundPath, boundEndpoint.st_dev, boundEndpoint.st_ino);
         m_boundPath.clear();
 
+        // As on Windows, startup-time stop requests stay sticky until endpoint
+        // and worker teardown completes; only a completed Run() re-arms them.
+        m_shouldStop.store(false, std::memory_order_release);
         if (!fatalError.empty())
             return Unexpected<std::string>(std::move(fatalError));
         return {};

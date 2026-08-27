@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -30,7 +31,7 @@ def read_process_log(path: Path) -> str:
 
 
 def record_supervised_pids(output: str, known_pids: set[int]) -> None:
-    """Remember supervised descendants so abnormal Windows cleanup is bounded."""
+    """Remember supervised descendants so abnormal cleanup stays bounded."""
     for line in output.splitlines():
         for field in line.split("\t"):
             if not field.startswith("pid="):
@@ -65,24 +66,47 @@ def force_terminate_process_tree(
             daemon_process.wait(timeout=3)
         return
 
-    process_group = daemon_process.pid
-    try:
-        os.killpg(process_group, signal.SIGTERM)
-    except ProcessLookupError:
-        return
+    # SparkDaemon creates every supervised POSIX child as the leader of its
+    # own process group.  They therefore do not share the daemon's session
+    # group and must be contained explicitly if the daemon dies before its
+    # normal StopAll() path can run.
+    targets = tuple(dict.fromkeys([daemon_process.pid, *sorted(supervised_pids)]))
+
+    def signal_target(pid: int, signal_number: int) -> None:
+        try:
+            os.killpg(pid, signal_number)
+            return
+        except ProcessLookupError:
+            pass
+        try:
+            os.kill(pid, signal_number)
+        except ProcessLookupError:
+            pass
+
+    def target_exists(pid: int) -> bool:
+        try:
+            os.killpg(pid, 0)
+            return True
+        except ProcessLookupError:
+            pass
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+
+    for pid in targets:
+        signal_target(pid, signal.SIGTERM)
 
     deadline = time.monotonic() + 3
     while time.monotonic() < deadline:
-        try:
-            os.killpg(process_group, 0)
-        except ProcessLookupError:
-            return
+        if not any(target_exists(pid) for pid in targets):
+            break
         time.sleep(0.05)
 
-    try:
-        os.killpg(process_group, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
+    for pid in targets:
+        if target_exists(pid):
+            signal_target(pid, signal.SIGKILL)
     if daemon_process.poll() is None:
         daemon_process.wait(timeout=3)
 
@@ -100,10 +124,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def reserve_udp_port() -> int:
+@contextmanager
+def reserve_udp_port():
+    """Hold an ephemeral UDP port until immediately before server startup."""
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as reservation:
         reservation.bind(("127.0.0.1", 0))
-        return int(reservation.getsockname()[1])
+        yield int(reservation.getsockname()[1])
 
 
 def read_health(path: Path) -> dict | None:
@@ -183,21 +209,25 @@ def run_supervised_engine_host(invoke, server: Path, game_module: Path, working_
     """
     service_id = "live-server"
     health_path = scratch / "supervised-server-health.json"
-    invoke(
-        "define",
-        service_id,
-        str(server),
-        str(working_dir),
-        "--module",
-        str(game_module),
-        "--port",
-        str(reserve_udp_port()),
-        "--no-lan-broadcast",
-        "--health-file",
-        str(health_path),
-        "--status-interval-ms",
-        "200",
-    )
+    # Keep the selected port bound while the definition is transmitted.  The
+    # reservation must be released for SparkServer itself to bind, but doing
+    # so only after define narrows the unavoidable bind/start handoff race.
+    with reserve_udp_port() as server_port:
+        invoke(
+            "define",
+            service_id,
+            str(server),
+            str(working_dir),
+            "--module",
+            str(game_module),
+            "--port",
+            str(server_port),
+            "--no-lan-broadcast",
+            "--health-file",
+            str(health_path),
+            "--status-interval-ms",
+            "200",
+        )
     invoke("start", service_id)
 
     deadline = time.monotonic() + 15

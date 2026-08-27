@@ -25,7 +25,7 @@ namespace
 
     void RequestApplicationStop()
     {
-        if (auto* application = g_application.load(std::memory_order_relaxed))
+        if (auto* application = g_application.load(std::memory_order_acquire))
             application->RequestStop();
     }
 
@@ -37,8 +37,11 @@ namespace
     // console control handler is the only path that reaches GatewayApplication.
     BOOL WINAPI HandleConsoleControl(DWORD controlType)
     {
-        if (controlType != CTRL_C_EVENT && controlType != CTRL_BREAK_EVENT && controlType != CTRL_CLOSE_EVENT &&
-            controlType != CTRL_LOGOFF_EVENT && controlType != CTRL_SHUTDOWN_EVENT)
+        // Close/logoff/shutdown callbacks have bounded OS deadlines and cannot
+        // promise that this process's asynchronous drain will finish. Only
+        // claim the console events for which the main loop remains available
+        // to observe the request and execute the graceful path.
+        if (controlType != CTRL_C_EVENT && controlType != CTRL_BREAK_EVENT)
             return FALSE;
         RequestApplicationStop();
         return TRUE;

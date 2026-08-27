@@ -429,7 +429,6 @@ namespace Spark::Server
         }
 
         Spark::FixedTimestepAccumulator::GetInstance().Initialize(1.0f / m_options.server.tickRate);
-        m_stopRequested.store(false, std::memory_order_release);
         if (!m_options.controlEndpoint.empty())
         {
             m_controlService = std::make_unique<Gateway::LocalAreaControlService>(
@@ -541,6 +540,11 @@ namespace Spark::Server
         runtime.timer.reset();
         m_started.store(false, std::memory_order_release);
         m_stopping.store(false, std::memory_order_release);
+        // A stop request remains sticky throughout startup and teardown. Clear
+        // it only after the lifecycle has fully stopped so a later explicit
+        // Start() can begin a fresh lifecycle without losing an in-flight
+        // startup request in the current one.
+        m_stopRequested.store(false, std::memory_order_release);
         PublishHealth();
         return true;
     }

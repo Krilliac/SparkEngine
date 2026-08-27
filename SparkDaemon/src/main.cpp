@@ -63,8 +63,10 @@ namespace
     // its supervised children.
     BOOL WINAPI HandleConsoleControl(DWORD controlType)
     {
-        if (controlType != CTRL_C_EVENT && controlType != CTRL_BREAK_EVENT && controlType != CTRL_CLOSE_EVENT &&
-            controlType != CTRL_LOGOFF_EVENT && controlType != CTRL_SHUTDOWN_EVENT)
+        // The OS can terminate close/logoff/shutdown handlers before the
+        // orchestration service drains its children. Return FALSE for those
+        // events instead of claiming a graceful path we cannot guarantee.
+        if (controlType != CTRL_C_EVENT && controlType != CTRL_BREAK_EVENT)
             return FALSE;
         if (auto* server = g_serverForSignal.load(std::memory_order_acquire))
             server->Stop();

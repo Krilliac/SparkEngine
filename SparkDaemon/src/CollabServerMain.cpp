@@ -7,6 +7,7 @@
 #include "ControlService.h"
 #include "DaemonServer.h"
 
+#include <atomic>
 #include <cstdio>
 #include <memory>
 #include <string>
@@ -20,23 +21,22 @@
 
 namespace
 {
-    Spark::Daemon::DaemonServer* g_serverForSignal = nullptr;
+    std::atomic<Spark::Daemon::DaemonServer*> g_serverForSignal{nullptr};
 
 #if defined(_WIN32)
     BOOL WINAPI HandleConsoleControl(DWORD controlType)
     {
-        if (controlType != CTRL_C_EVENT && controlType != CTRL_BREAK_EVENT && controlType != CTRL_CLOSE_EVENT &&
-            controlType != CTRL_LOGOFF_EVENT && controlType != CTRL_SHUTDOWN_EVENT)
+        if (controlType != CTRL_C_EVENT && controlType != CTRL_BREAK_EVENT)
             return FALSE;
-        if (g_serverForSignal)
-            g_serverForSignal->Stop();
+        if (auto* server = g_serverForSignal.load(std::memory_order_acquire))
+            server->Stop();
         return TRUE;
     }
 #else
     void HandleSignal(int)
     {
-        if (g_serverForSignal)
-            g_serverForSignal->Stop();
+        if (auto* server = g_serverForSignal.load(std::memory_order_acquire))
+            server->Stop();
     }
 #endif
 } // namespace
@@ -66,12 +66,12 @@ int main(int argc, char** argv)
     auto statsProvider = [&server] { return server.SnapshotStats(); };
     server.AddService(std::make_unique<Spark::Daemon::ControlService>(server.GetShouldStopFlag(), statsProvider));
     server.AddService(std::make_unique<Spark::Daemon::CollaborationService>(config));
-    g_serverForSignal = &server;
+    g_serverForSignal.store(&server, std::memory_order_release);
 #if defined(_WIN32)
     if (!::SetConsoleCtrlHandler(HandleConsoleControl, TRUE))
     {
         std::fprintf(stderr, "SparkCollabServer: could not install console control handler\n");
-        g_serverForSignal = nullptr;
+        g_serverForSignal.store(nullptr, std::memory_order_release);
         return 1;
     }
 #else
@@ -84,7 +84,7 @@ int main(int argc, char** argv)
 #if defined(_WIN32)
     (void)::SetConsoleCtrlHandler(HandleConsoleControl, FALSE);
 #endif
-    g_serverForSignal = nullptr;
+    g_serverForSignal.store(nullptr, std::memory_order_release);
     if (!result)
     {
         std::fprintf(stderr, "SparkCollabServer: %s\n", result.error().c_str());

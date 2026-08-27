@@ -22,7 +22,7 @@ namespace
 
     void RequestApplicationStop()
     {
-        if (auto* application = g_application.load(std::memory_order_relaxed))
+        if (auto* application = g_application.load(std::memory_order_acquire))
             application->RequestStop();
     }
 
@@ -34,8 +34,12 @@ namespace
     // console control handler is the only path that reaches ServerApplication.
     BOOL WINAPI HandleConsoleControl(DWORD controlType)
     {
-        if (controlType != CTRL_C_EVENT && controlType != CTRL_BREAK_EVENT && controlType != CTRL_CLOSE_EVENT &&
-            controlType != CTRL_LOGOFF_EVENT && controlType != CTRL_SHUTDOWN_EVENT)
+        // CTRL_CLOSE/LOGOFF/SHUTDOWN handlers run under short OS deadlines and
+        // may be terminated before application-owned teardown completes. Do
+        // not claim those events were handled when this callback only posts an
+        // asynchronous request. CTRL_C/BREAK leave the normal main loop alive
+        // long enough to observe the flag and complete graceful shutdown.
+        if (controlType != CTRL_C_EVENT && controlType != CTRL_BREAK_EVENT)
             return FALSE;
         RequestApplicationStop();
         return TRUE;

@@ -313,7 +313,6 @@ namespace Spark::Gateway
             m_worldServer.reset();
             return false;
         }
-        m_stopRequested.store(false, std::memory_order_release);
         m_started.store(true, std::memory_order_release);
         PublishHealth();
         return true;
@@ -381,6 +380,10 @@ namespace Spark::Gateway
         m_worldServer.reset();
         m_started.store(false, std::memory_order_release);
         m_stopping.store(false, std::memory_order_release);
+        // Keep startup-time requests sticky until all ingress/world resources
+        // are down; only then is the application safe to re-arm for a future
+        // explicit Start().
+        m_stopRequested.store(false, std::memory_order_release);
         PublishHealth();
     }
 
