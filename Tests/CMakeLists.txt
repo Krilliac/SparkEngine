@@ -1114,6 +1114,27 @@ if(Python3_Interpreter_FOUND)
             LABELS "orchestration;integration;process"
             TIMEOUT 75)
     endif()
+    if(TARGET SparkCooker AND TARGET SparkWorker AND TARGET SparkAutomation)
+        add_dependencies(SparkTests SparkCooker SparkWorker SparkAutomation)
+        add_test(
+            NAME SparkCookerWorkerProcessSmoke
+            COMMAND $<TARGET_FILE:SparkAutomation>
+                --name cooker-worker-process-smoke
+                --executable ${Python3_EXECUTABLE}
+                --working-dir ${CMAKE_SOURCE_DIR}
+                --timeout-ms 60000
+                --expected-exit 0
+                --captured-log ${CMAKE_BINARY_DIR}/cooker-worker-process-smoke.log
+                --json ${CMAKE_BINARY_DIR}/cooker-worker-process-smoke.json
+                --junit ${CMAKE_BINARY_DIR}/cooker-worker-process-smoke.xml
+                --
+                ${CMAKE_SOURCE_DIR}/SparkCooker/tests/test_cooker_worker_process.py
+                --cooker $<TARGET_FILE:SparkCooker>
+                --worker $<TARGET_FILE:SparkWorker>)
+        set_tests_properties(SparkCookerWorkerProcessSmoke PROPERTIES
+            LABELS "cooker;worker;integration;process"
+            TIMEOUT 75)
+    endif()
     add_test(
         NAME SparkTemplateRuntimeSheets
         COMMAND ${Python3_EXECUTABLE}

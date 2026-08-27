@@ -12,11 +12,11 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | **SparkEditor/Source** | 108813 |
 | **GameModules** | 139243 |
 | **External services** | 10109 |
-| **Asset pipeline** | 2026 |
+| **Asset pipeline** | 2377 |
 | **Tests** | 163733 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~728854** |
+| **Total C++ (excl. ThirdParty)** | **~729205** |
 
 ### File Counts
 

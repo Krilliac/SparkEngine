@@ -9,6 +9,8 @@ and `ENABLE_AUTOMATION_HOST` in the root CMake configuration.
 ```powershell
 SparkCooker --source Assets --output Cooked/Assets
 SparkCooker --source Assets --output Cooked/Assets --dry-run
+SparkCooker --source Assets --output Cooked/Assets `
+  --worker build/bin/Release/SparkWorker.exe --jobs 4
 ```
 
 `SparkCooker` walks regular files in normalized lexical order, rejects linked
@@ -22,6 +24,15 @@ the cooked asset tree (`Cooked/Assets/spark-cook-manifest.json` in editor packag
 `SparkAssetPipelineCore` owns these reusable operations. Format-specific
 processors can be layered on it later without putting editor UI code in the
 headless pipeline.
+
+With `--worker`, the cooker becomes the bounded scheduler while each
+`SparkWorker` retains authority over exactly one digest-pinned job. `--jobs`
+selects 1–64 concurrent lanes. Worker output is written to an isolated scratch
+generation, then the cooker re-hashes and verifies the complete scheduled set
+before the existing atomic manifest/publication path runs. A failed worker,
+missing output, digest mismatch, unexpected extra file, or linked scratch output
+aborts the generation and preserves the previously published cook. `--dry-run`
+still dispatches digest-pinned workers but publishes nothing.
 
 The editor's **Build & Cook → Cook Only** action launches this same executable
 and streams its `[current/total]` output into the panel. Scenes, configuration,
