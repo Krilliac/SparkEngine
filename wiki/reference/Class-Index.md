@@ -923,7 +923,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `EntityStats` | struct | SparkEditor | [SceneStatisticsPanel.h:L54](../../SparkEditor/Source/Panels/SceneStatisticsPanel.h#L54) |  |
 | `EntitySubscriptionHandle` | class | SparkEngine | [EntityEventBus.h:L56](../../SparkEngine/Source/Utils/EntityEventBus.h#L56) | RAII handle for entity-scoped subscriptions. |
 | `EntityTransformTrack` | class | SparkEngine | [Sequencer.h:L156](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L156) |  |
-| `Entry` | struct | SparkEngine | [SaveSystem.h:L255](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L255) | Internal storage node pairing a serializer with its deserializer. |
+| `Entry` | struct | SparkEngine | [SaveSystem.h:L271](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L271) | Internal storage node pairing a serializer with its deserializer. |
 | `Entry` | struct | SparkEngine | [EntityEventBus.h:L270](../../SparkEngine/Source/Utils/EntityEventBus.h#L270) |  |
 | `Entry` | struct | SparkEngine | [EventBus.h:L282](../../SparkEngine/Source/Utils/EventBus.h#L282) |  |
 | `Entry` | struct | SparkEngine | [Octree.h:L192](../../SparkEngine/Source/Utils/Octree.h#L192) |  |
@@ -2613,7 +2613,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `SaveSlotInfo` | struct | SparkEditor | [SaveSystemPanel.h:L34](../../SparkEditor/Source/Panels/SaveSystemPanel.h#L34) |  |
 | `SaveSystem` | class | GameModules | [Game.h:L44](../../GameModules/SparkGameFPS/Source/Game/Game.h#L44) |  |
 | `SaveSystem` | class | SparkEngine | [EngineSetup.h:L39](../../SparkEngine/Source/Core/EngineSetup.h#L39) |  |
-| `SaveSystem` | class | SparkEngine | [SaveSystem.h:L325](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L325) | Singleton façade that orchestrates all save and load operations. |
+| `SaveSystem` | class | SparkEngine | [SaveSystem.h:L341](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L341) | Singleton façade that orchestrates all save and load operations. |
 | `SaveSystem` | class | SparkSDK | [IEngineContext.h:L83](../../SparkSDK/Include/Spark/IEngineContext.h#L83) |  |
 | `SaveSystemPanel` | class | SparkEditor | [SaveSystemPanel.h:L22](../../SparkEditor/Source/Panels/SaveSystemPanel.h#L22) | Panel for browsing and managing save slots |
 | `SaveSystemSettings` | struct | SparkEngine | [EngineSettings.h:L721](../../SparkEngine/Source/Core/EngineSettings.h#L721) |  |

@@ -225,9 +225,9 @@ graph LR
 
 ### `GameModules/SparkGame/Source/Core/`
 
-- [`GameplayShowcase.cpp`](../../GameModules/SparkGame/Source/Core/GameplayShowcase.cpp) — 472 LOC — Implementation of GameplayShowcase — engine subsystem demonstration
-- [`GameplayShowcase.h`](../../GameModules/SparkGame/Source/Core/GameplayShowcase.h) — 102 LOC — Demonstrates usage of multiple SparkEngine subsystems from a game module
-- [`Main.cpp`](../../GameModules/SparkGame/Source/Core/Main.cpp) — 222 LOC — SparkGame DLL - IModule implementation and exports
+- [`GameplayShowcase.cpp`](../../GameModules/SparkGame/Source/Core/GameplayShowcase.cpp) — 479 LOC — Implementation of GameplayShowcase — engine subsystem demonstration
+- [`GameplayShowcase.h`](../../GameModules/SparkGame/Source/Core/GameplayShowcase.h) — 107 LOC — Demonstrates usage of multiple SparkEngine subsystems from a game module
+- [`Main.cpp`](../../GameModules/SparkGame/Source/Core/Main.cpp) — 233 LOC — SparkGame DLL - IModule implementation and exports
 - [`SparkGame.h`](../../GameModules/SparkGame/Source/Core/SparkGame.h) — 62 LOC — SparkGame module - engine capabilities showcase
 
 ### `GameModules/SparkGameARPG/Source/Combat/`
@@ -1807,8 +1807,8 @@ graph LR
 - [`ConnectionScope.h`](../../SparkEngine/Source/Engine/Networking/ConnectionScope.h) — 260 LOC — Per-connection object scoping for entity replication (Torque3D ghost-inspired)
 - [`ConnectionScopeFilter.h`](../../SparkEngine/Source/Engine/Networking/ConnectionScopeFilter.h) — 212 LOC — Per-connection entity visibility filtering for network replication
 - [`DatablockRegistry.h`](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h) — 408 LOC — Immutable shared-data objects sent once at connection time (Torque3D-inspired)
-- [`DedicatedServer.cpp`](../../SparkEngine/Source/Engine/Networking/DedicatedServer.cpp) — 1021 LOC — Dedicated game server implementation
-- [`DedicatedServer.h`](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h) — 391 LOC — Dedicated game server with full lifecycle management
+- [`DedicatedServer.cpp`](../../SparkEngine/Source/Engine/Networking/DedicatedServer.cpp) — 1049 LOC — Dedicated game server implementation
+- [`DedicatedServer.h`](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h) — 392 LOC — Dedicated game server with full lifecycle management
 - [`DeltaSnapshotManager.cpp`](../../SparkEngine/Source/Engine/Networking/DeltaSnapshotManager.cpp) — 329 LOC — Implementation of per-connection delta snapshot tracking
 - [`DeltaSnapshotManager.h`](../../SparkEngine/Source/Engine/Networking/DeltaSnapshotManager.h) — 199 LOC — Per-connection delta snapshot tracking for replicated entity fields
 - [`EntityReplicator.cpp`](../../SparkEngine/Source/Engine/Networking/EntityReplicator.cpp) — 266 LOC — Implementation of dirty-tracked entity replication
@@ -1883,8 +1883,8 @@ graph LR
 ### `SparkEngine/Source/Engine/SaveSystem/`
 
 - [`FreezeSystem.h`](../../SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h) — 305 LOC — Tag-validated, per-subsystem save state serialization
-- [`SaveSystem.cpp`](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp) — 1558 LOC — Save/load system implementation with JSON serialization
-- [`SaveSystem.h`](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h) — 675 LOC — Game state serialization and save/load system for Spark Engine.
+- [`SaveSystem.cpp`](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp) — 1563 LOC — Save/load system implementation with JSON serialization
+- [`SaveSystem.h`](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h) — 691 LOC — Game state serialization and save/load system for Spark Engine.
 - [`SaveSystemTypes.h`](../../SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h) — 288 LOC — Data types used by the save/load system (metadata, serialized entities, save data).
 
 ### `SparkEngine/Source/Engine/Scripting/`
@@ -2836,7 +2836,7 @@ graph LR
 - [`TestDecalSystem.cpp`](../../Tests/TestDecalSystem.cpp) — 88 LOC
 - [`TestDedicatedServer.cpp`](../../Tests/TestDedicatedServer.cpp) — 729 LOC
 - [`TestDedicatedServerProcessController.cpp`](../../Tests/TestDedicatedServerProcessController.cpp) — 69 LOC — Focused editor-to-SparkServer argument and packaging tests.
-- [`TestDedicatedServerRuntime.cpp`](../../Tests/TestDedicatedServerRuntime.cpp) — 331 LOC
+- [`TestDedicatedServerRuntime.cpp`](../../Tests/TestDedicatedServerRuntime.cpp) — 410 LOC
 - [`TestDeferredDeletion.cpp`](../../Tests/TestDeferredDeletion.cpp) — 162 LOC
 - [`TestDeferredDeletionReal.cpp`](../../Tests/TestDeferredDeletionReal.cpp) — 72 LOC — Real-class tests for Spark::RHI::DeferredDeletionQueue
 - [`TestDeferredQueue.cpp`](../../Tests/TestDeferredQueue.cpp) — 110 LOC
@@ -2946,7 +2946,7 @@ graph LR
 - [`TestGameplaySystemExtension.cpp`](../../Tests/TestGameplaySystemExtension.cpp) — 177 LOC
 - [`TestGameplayTags.cpp`](../../Tests/TestGameplayTags.cpp) — 256 LOC
 - [`TestGameplayTagsReal.cpp`](../../Tests/TestGameplayTagsReal.cpp) — 96 LOC — Real-class tests for Spark::Gameplay::GameplayTagRegistry and GameplayTagContainer
-- [`TestGatewayAreaControl.cpp`](../../Tests/TestGatewayAreaControl.cpp) — 312 LOC
+- [`TestGatewayAreaControl.cpp`](../../Tests/TestGatewayAreaControl.cpp) — 326 LOC
 - [`TestGatewaySecurity.cpp`](../../Tests/TestGatewaySecurity.cpp) — 90 LOC — HMAC admission and replay tests.
 - [`TestGizmoMath.cpp`](../../Tests/TestGizmoMath.cpp) — 214 LOC — Tests for gizmo math (ray-plane/ray-axis intersection)
 - [`TestGoldenImageTest.cpp`](../../Tests/TestGoldenImageTest.cpp) — 212 LOC
@@ -3011,7 +3011,7 @@ graph LR
 - [`TestMeshShaderPipeline.cpp`](../../Tests/TestMeshShaderPipeline.cpp) — 222 LOC
 - [`TestMetalRayTracing.cpp`](../../Tests/TestMetalRayTracing.cpp) — 194 LOC — macOS-only smoke tests for MetalRayTracingSystem lifecycle.
 - [`TestModSystem.cpp`](../../Tests/TestModSystem.cpp) — 224 LOC
-- [`TestModuleABI.cpp`](../../Tests/TestModuleABI.cpp) — 627 LOC
+- [`TestModuleABI.cpp`](../../Tests/TestModuleABI.cpp) — 671 LOC
 - [`TestModuleDependency.cpp`](../../Tests/TestModuleDependency.cpp) — 139 LOC
 - [`TestModuleDiscovery.cpp`](../../Tests/TestModuleDiscovery.cpp) — 137 LOC
 - [`TestModuleHotReload.cpp`](../../Tests/TestModuleHotReload.cpp) — 170 LOC
@@ -3278,7 +3278,7 @@ graph LR
 - [`Test_persistence_AsyncDatabasePool.cpp`](../../Tests/harden/Test_persistence_AsyncDatabasePool.cpp) — 184 LOC
 - [`Test_persistence_ModSystem.cpp`](../../Tests/harden/Test_persistence_ModSystem.cpp) — 84 LOC
 - [`Test_persistence_ReplaySystem.cpp`](../../Tests/harden/Test_persistence_ReplaySystem.cpp) — 92 LOC
-- [`Test_persistence_SaveSystem.cpp`](../../Tests/harden/Test_persistence_SaveSystem.cpp) — 319 LOC
+- [`Test_persistence_SaveSystem.cpp`](../../Tests/harden/Test_persistence_SaveSystem.cpp) — 348 LOC
 - [`Test_scripting_hardening.cpp`](../../Tests/harden/Test_scripting_hardening.cpp) — 339 LOC — Regression tests for the scripting-lane hardening fixes.
 - [`Test_tests_ecsystemordering_real.cpp`](../../Tests/harden/Test_tests_ecsystemordering_real.cpp) — 134 LOC — Real-class tests for Spark::ECS::PhaseSystemManager.
 - [`Test_tests_enginecontext_real.cpp`](../../Tests/harden/Test_tests_enginecontext_real.cpp) — 106 LOC — Real-class tests for the dependency-aware subsystem init in EngineContext.
@@ -3294,5 +3294,5 @@ graph LR
 | Metric | Count |
 |--------|-------|
 | Source files scanned | 2461 |
-| Total lines of code  | 719720 |
+| Total lines of code  | 719959 |
 | Source directories   | 17 |
