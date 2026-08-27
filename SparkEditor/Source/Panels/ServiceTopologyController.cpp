@@ -1,6 +1,8 @@
 #include "ServiceTopologyController.h"
 
 #include "Utils/DaemonClient.h"
+#include "Utils/EditorLaunchContext.h"
+#include "Utils/SecureRandom.h"
 
 #include <algorithm>
 #include <array>
@@ -39,6 +41,15 @@ namespace SparkEditor
             return false;
         }
         record.snapshot = {};
+        if (service == TopologyService::Gateway)
+        {
+            std::string keyError;
+            if (!EnsureProjectPrivateKey(record.spec.workingDirectory, record.spec.privateKeyFile, keyError))
+            {
+                record.snapshot.status = "Gateway key unavailable: " + keyError;
+                return false;
+            }
+        }
         const auto removeStaleFile = [&record](const std::filesystem::path& path, const char* description)
         {
             if (path.empty())
@@ -54,9 +65,11 @@ namespace SparkEditor
             !removeStaleFile(record.spec.healthFile, "health file"))
             return false;
 
-        Spark::Process::Builder builder(record.spec.executable.string());
+        Spark::Process::Builder builder(LaunchContext::PathToUtf8(record.spec.executable));
         for (const auto& argument : record.spec.arguments)
             builder.Arg(argument);
+        if (!record.spec.workingDirectory.empty())
+            builder.WorkingDirectory(LaunchContext::PathToUtf8(record.spec.workingDirectory));
         auto launched = builder.CaptureStdout().MergeStderrIntoStdout().NoWindow().Launch();
         if (!launched)
         {
@@ -67,6 +80,78 @@ namespace SparkEditor
         record.snapshot.running = true;
         record.snapshot.status = "Running";
         return true;
+    }
+
+    bool ServiceTopologyController::EnsureProjectPrivateKey(const std::filesystem::path& projectRoot,
+                                                            const std::filesystem::path& keyFile, std::string& error)
+    {
+        error.clear();
+        if (projectRoot.empty() || keyFile.empty())
+        {
+            error = "project root or key path is empty";
+            return false;
+        }
+
+        std::error_code pathError;
+        const std::filesystem::path canonicalRoot = std::filesystem::canonical(projectRoot, pathError);
+        if (pathError || !std::filesystem::is_directory(canonicalRoot))
+        {
+            error = "project root is not an accessible directory";
+            return false;
+        }
+
+        const std::filesystem::path absoluteKey = std::filesystem::absolute(keyFile, pathError).lexically_normal();
+        if (pathError || absoluteKey.filename().empty())
+        {
+            error = "gateway key path is invalid";
+            return false;
+        }
+
+        std::filesystem::create_directories(absoluteKey.parent_path(), pathError);
+        if (pathError)
+        {
+            error = "could not create gateway key directory: " + pathError.message();
+            return false;
+        }
+        const std::filesystem::path canonicalParent = std::filesystem::canonical(absoluteKey.parent_path(), pathError);
+        if (pathError)
+        {
+            error = "gateway key directory is not accessible";
+            return false;
+        }
+
+        const std::filesystem::path relativeParent = canonicalParent.lexically_relative(canonicalRoot);
+        if (relativeParent.empty() || relativeParent.is_absolute() ||
+            std::find(relativeParent.begin(), relativeParent.end(), std::filesystem::path("..")) !=
+                relativeParent.end())
+        {
+            error = "gateway key must remain inside the active project";
+            return false;
+        }
+
+        const std::filesystem::file_status status = std::filesystem::symlink_status(absoluteKey, pathError);
+        if (!pathError && std::filesystem::exists(status))
+        {
+            if (std::filesystem::is_symlink(status) || !std::filesystem::is_regular_file(status))
+            {
+                error = "existing gateway key path is not a regular file";
+                return false;
+            }
+            return true;
+        }
+        if (pathError && pathError != std::errc::no_such_file_or_directory)
+        {
+            error = "could not inspect gateway key path: " + pathError.message();
+            return false;
+        }
+
+        const std::string key = Spark::SecureRandom::HexToken(32);
+        if (key.empty())
+        {
+            error = "operating-system random generation failed";
+            return false;
+        }
+        return Spark::SecureRandom::CreatePrivateFile(absoluteKey, key + "\n", &error);
     }
 
     void ServiceTopologyController::Stop(TopologyService service)
@@ -188,15 +273,20 @@ namespace SparkEditor
                                                                         const std::filesystem::path& allowedRoot,
                                                                         const std::filesystem::path& stateFile)
     {
-        return {"--socket",           std::move(endpoint),         "--orchestrator-allow-root",
-                allowedRoot.string(), "--orchestrator-state-file", stateFile.string()};
+        return {"--socket",
+                std::move(endpoint),
+                "--orchestrator-allow-root",
+                LaunchContext::PathToUtf8(allowedRoot),
+                "--orchestrator-state-file",
+                LaunchContext::PathToUtf8(stateFile)};
     }
 
     std::vector<std::string> ServiceTopologyController::GatewayArguments(const std::filesystem::path& config,
                                                                          const std::filesystem::path& health,
                                                                          const std::filesystem::path& stop)
     {
-        return {"--config", config.string(), "--health-file", health.string(), "--stop-file", stop.string()};
+        return {"--config",    LaunchContext::PathToUtf8(config), "--health-file", LaunchContext::PathToUtf8(health),
+                "--stop-file", LaunchContext::PathToUtf8(stop)};
     }
 
     std::vector<std::string> ServiceTopologyController::EndpointArguments(std::string endpoint)
@@ -213,8 +303,12 @@ namespace SparkEditor
         std::string endpoint, std::string processId, const std::filesystem::path& executable,
         const std::filesystem::path& workingDirectory, std::vector<std::string> processArguments)
     {
-        std::vector<std::string> arguments = {"--socket",           std::move(endpoint), "define",
-                                              std::move(processId), executable.string(), workingDirectory.string()};
+        std::vector<std::string> arguments = {"--socket",
+                                              std::move(endpoint),
+                                              "define",
+                                              std::move(processId),
+                                              LaunchContext::PathToUtf8(executable),
+                                              LaunchContext::PathToUtf8(workingDirectory)};
         arguments.insert(arguments.end(), std::make_move_iterator(processArguments.begin()),
                          std::make_move_iterator(processArguments.end()));
         return arguments;

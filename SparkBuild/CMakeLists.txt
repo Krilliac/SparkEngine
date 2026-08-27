@@ -23,6 +23,8 @@ set(SPARKBUILDCORE_SOURCES
     src/ProcessRunner.cpp
     src/Downloader.h
     src/Downloader.cpp
+    src/DownloadSecurity.h
+    src/DownloadSecurity.cpp
     src/Terminal.h
     src/Terminal.cpp
 )

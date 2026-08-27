@@ -25,9 +25,11 @@ namespace SparkEditor
     {
         std::filesystem::path executable;
         std::vector<std::string> arguments;
+        std::filesystem::path workingDirectory;
         std::string localEndpoint;
         std::filesystem::path healthFile;
         std::filesystem::path stopFile;
+        std::filesystem::path privateKeyFile;
     };
 
     struct TopologyServiceSnapshot
@@ -72,6 +74,8 @@ namespace SparkEditor
         static constexpr size_t MaxHealthFileBytes = 256 * 1024;
         static void AppendLogLine(TopologyServiceSnapshot& snapshot, std::string line);
         static bool ReadHealthFile(const std::filesystem::path& path, std::string& contents);
+        [[nodiscard]] static bool EnsureProjectPrivateKey(const std::filesystem::path& projectRoot,
+                                                          const std::filesystem::path& keyFile, std::string& error);
 
       private:
         struct Record

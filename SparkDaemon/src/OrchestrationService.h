@@ -29,6 +29,13 @@ namespace Spark::Daemon
         uint32_t restartBackoffMilliseconds = 500;
         uint32_t maximumCrashesPerMinute = 5;
         std::filesystem::path journalPath;
+#if !defined(_WIN32)
+        // Test seam invoked after a launch identity is durably published but
+        // before the waiting child is released into exec. Production leaves
+        // this null; tests use it to model an abrupt daemon death at the exact
+        // crash boundary without adding a command-line or environment hook.
+        void (*beforeExecReleaseForTesting)(int64_t processId) = nullptr;
+#endif
     };
 
     /**

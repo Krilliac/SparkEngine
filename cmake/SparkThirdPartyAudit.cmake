@@ -93,13 +93,56 @@ function(spark_thirdparty_validate_manifest_schema manifest_file)
         math(EXPR _entry_count "${_entry_count}+1")
         string(REPLACE "|" ";" _fields "${_entry}")
         list(LENGTH _fields _field_count)
-        if(NOT _field_count EQUAL 9)
-            message(FATAL_ERROR "[ThirdParty Audit] Invalid manifest entry (expected 9 fields): ${_entry}")
+        if(NOT _field_count EQUAL 10)
+            message(FATAL_ERROR "[ThirdParty Audit] Invalid manifest entry (expected 10 fields): ${_entry}")
         endif()
         list(GET _fields 8 _severity)
         if(NOT _severity STREQUAL "ERROR" AND NOT _severity STREQUAL "WARN")
             message(FATAL_ERROR "[ThirdParty Audit] Invalid severity '${_severity}' in entry: ${_entry}")
         endif()
+        list(GET _fields 9 _notice_files_csv)
+        if(_notice_files_csv STREQUAL "")
+            message(FATAL_ERROR "[ThirdParty Audit] ${_entry}: license notice file list is empty")
+        endif()
+
+        get_filename_component(_manifest_directory "${manifest_file}" DIRECTORY)
+        get_filename_component(_manifest_root "${_manifest_directory}/.." REALPATH)
+        file(TO_CMAKE_PATH "${_manifest_root}/" _manifest_root_prefix)
+        string(TOLOWER "${_manifest_root_prefix}" _manifest_root_prefix_lower)
+        string(REPLACE "," ";" _notice_files "${_notice_files_csv}")
+        foreach(_notice_rel IN LISTS _notice_files)
+            if(_notice_rel STREQUAL "")
+                message(FATAL_ERROR "[ThirdParty Audit] ${_entry}: license notice path is empty")
+            endif()
+            set(_notice_candidate "${_manifest_root}/${_notice_rel}")
+            if(NOT EXISTS "${_notice_candidate}" OR IS_DIRECTORY "${_notice_candidate}")
+                message(FATAL_ERROR
+                    "[ThirdParty Audit] ${_entry}: license notice file does not exist: ${_notice_rel}")
+            endif()
+            get_filename_component(_notice_abs "${_notice_candidate}" REALPATH)
+            file(TO_CMAKE_PATH "${_notice_abs}" _notice_abs_normalized)
+            string(TOLOWER "${_notice_abs_normalized}" _notice_abs_lower)
+            string(FIND "${_notice_abs_lower}" "${_manifest_root_prefix_lower}" _notice_root_index)
+            if(NOT _notice_root_index EQUAL 0)
+                message(FATAL_ERROR
+                    "[ThirdParty Audit] ${_entry}: license notice escapes the repository root: ${_notice_rel}")
+            endif()
+            file(SIZE "${_notice_abs}" _notice_size)
+            if(_notice_size LESS 200)
+                message(FATAL_ERROR
+                    "[ThirdParty Audit] ${_entry}: license notice is implausibly short: ${_notice_rel}")
+            endif()
+            file(READ "${_notice_abs}" _notice_content)
+            if(NOT _notice_content MATCHES "[Cc]opyright")
+                message(FATAL_ERROR
+                    "[ThirdParty Audit] ${_entry}: license notice lacks a copyright statement: ${_notice_rel}")
+            endif()
+            if(NOT _notice_content MATCHES
+                "Permission is (hereby )?granted|Redistribution and use|public domain|TERMS AND CONDITIONS FOR USE")
+                message(FATAL_ERROR
+                    "[ThirdParty Audit] ${_entry}: license notice lacks operative license terms: ${_notice_rel}")
+            endif()
+        endforeach()
     endforeach()
 
     if(_entry_count EQUAL 0)
@@ -107,6 +150,56 @@ function(spark_thirdparty_validate_manifest_schema manifest_file)
     endif()
 
     message(STATUS "[ThirdParty Audit] Manifest schema valid (${_entry_count} entries)")
+endfunction()
+
+function(spark_thirdparty_generate_notice manifest_file output_file)
+    spark_thirdparty_validate_manifest_schema("${manifest_file}")
+    include("${manifest_file}")
+
+    file(WRITE "${output_file}"
+        "SparkEngine Third-Party Notices\n"
+        "================================\n\n"
+        "SparkEngine includes or can link the dependencies listed below. "
+        "Their copyrights and license terms remain with their respective owners.\n\n"
+        "Dependency inventory\n"
+        "--------------------\n\n")
+    set(_all_notice_files "")
+    foreach(_entry IN LISTS SPARK_THIRDPARTY_AUDIT_ENTRIES)
+        string(REPLACE "|" ";" _fields "${_entry}")
+        list(GET _fields 0 _name)
+        list(GET _fields 1 _source)
+        list(GET _fields 2 _version)
+        list(GET _fields 3 _license)
+        list(GET _fields 9 _notice_files_csv)
+        file(APPEND "${output_file}"
+            "${_name}\n"
+            "  Source: ${_source}\n"
+            "  Version: ${_version}\n"
+            "  License: ${_license}\n"
+            "  Notice files: ${_notice_files_csv}\n\n")
+        string(REPLACE "," ";" _notice_files "${_notice_files_csv}")
+        foreach(_notice_rel IN LISTS _notice_files)
+            list(FIND _all_notice_files "${_notice_rel}" _notice_index)
+            if(_notice_index EQUAL -1)
+                list(APPEND _all_notice_files "${_notice_rel}")
+            endif()
+        endforeach()
+    endforeach()
+
+    get_filename_component(_manifest_directory "${manifest_file}" DIRECTORY)
+    get_filename_component(_manifest_root "${_manifest_directory}/.." REALPATH)
+    file(APPEND "${output_file}"
+        "Complete license and notice texts\n"
+        "=================================\n\n")
+    foreach(_notice_rel IN LISTS _all_notice_files)
+        file(READ "${_manifest_root}/${_notice_rel}" _notice_content)
+        string(REPLACE "\r\n" "\n" _notice_content "${_notice_content}")
+        string(REPLACE "\r" "\n" _notice_content "${_notice_content}")
+        string(REGEX REPLACE "\n*$" "" _notice_content "${_notice_content}")
+        file(APPEND "${output_file}"
+            "----- ${_notice_rel} -----\n\n"
+            "${_notice_content}\n\n")
+    endforeach()
 endfunction()
 
 function(spark_thirdparty_audit manifest_file)
@@ -129,7 +222,7 @@ function(spark_thirdparty_audit manifest_file)
     foreach(_entry IN LISTS SPARK_THIRDPARTY_AUDIT_ENTRIES)
         string(REPLACE "|" ";" _fields "${_entry}")
         list(LENGTH _fields _field_count)
-        # Schema validation above guarantees the nine fields used below.
+        # Schema validation above guarantees the ten fields used below.
 
         list(GET _fields 0 _name)
         list(GET _fields 1 _source)
@@ -202,4 +295,9 @@ if(SPARK_THIRDPARTY_AUDIT_VALIDATE_ONLY)
         message(FATAL_ERROR "SPARK_THIRDPARTY_MANIFEST is required in validation-only mode")
     endif()
     spark_thirdparty_validate_manifest_schema("${SPARK_THIRDPARTY_MANIFEST}")
+    if(DEFINED SPARK_THIRDPARTY_NOTICE_OUTPUT)
+        spark_thirdparty_generate_notice(
+            "${SPARK_THIRDPARTY_MANIFEST}"
+            "${SPARK_THIRDPARTY_NOTICE_OUTPUT}")
+    endif()
 endif()

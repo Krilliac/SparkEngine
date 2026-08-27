@@ -7,8 +7,10 @@
 
 #include "TestFramework.h"
 #include "GatewaySecurity.h"
+#include "Utils/SecureRandom.h"
 
 #include <chrono>
+#include <filesystem>
 #include <vector>
 
 using namespace Spark::Gateway;
@@ -69,4 +71,20 @@ TEST(GatewaySecurity_RejectsWeakKey)
 {
     KeyFileAuthenticator authenticator(std::vector<uint8_t>(31, 0x11));
     EXPECT_FALSE(authenticator.IsReady());
+}
+
+TEST(GatewaySecurity_AcceptsOwnerOnlyGeneratedKeyFile)
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / Spark::SecureRandom::HexToken(12);
+    const std::filesystem::path keyFile = root / "gateway.key";
+    const std::string token = Spark::SecureRandom::HexToken(32);
+    std::string error;
+    EXPECT_TRUE(Spark::SecureRandom::CreatePrivateFile(keyFile, token + "\n", &error));
+
+    std::vector<uint8_t> key;
+    EXPECT_TRUE(LoadPrivateGatewayKey(keyFile, key, error));
+    EXPECT_EQ(key.size(), token.size() / 2);
+
+    std::error_code ignored;
+    std::filesystem::remove_all(root, ignored);
 }

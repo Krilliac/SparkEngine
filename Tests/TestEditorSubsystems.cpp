@@ -2338,6 +2338,117 @@ TEST(PluginManager_LoadsStableABIEditorExtension)
     EXPECT_EQ(mgr.GetPluginCount(), size_t{0});
 }
 
+TEST(PluginManager_DiscoversProjectOwnedStableABIEditorExtensions)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-editor-plugin-discovery-" + std::to_string(stamp));
+    const fs::path pluginDirectory = root / "Plugins" / "Editor";
+    ASSERT_TRUE(fs::create_directories(pluginDirectory));
+
+    const fs::path fixture = SPARK_TEST_VALID_PLUGIN_PATH;
+    const fs::path discoveredPlugin = pluginDirectory / fixture.filename();
+    ASSERT_TRUE(fs::copy_file(fixture, discoveredPlugin));
+    ASSERT_TRUE(fs::copy_file(fixture.string() + ".sparkplugin.json", discoveredPlugin.string() + ".sparkplugin.json"));
+
+    // A native-looking file without integrity metadata is not a candidate.
+    std::ofstream(pluginDirectory / ("Decoy" + fixture.extension().string())) << "not a plugin";
+
+    EditorPluginManager mgr;
+    size_t loadedCount = 0;
+    EXPECT_TRUE(mgr.LoadPluginsFromProjectDirectory(TestPathUtf8(root), "Plugins/Editor", &loadedCount));
+    EXPECT_EQ(loadedCount, size_t{1});
+    EXPECT_EQ(mgr.GetPluginCount(), size_t{1});
+    EXPECT_TRUE(mgr.GetDynamicPluginDescriptor("org.sparkengine.test.native-plugin") != nullptr);
+
+    mgr.ShutdownAll();
+
+    // Loading a directory is transactional: a later invalid candidate rolls
+    // back the valid candidate loaded earlier in deterministic filename order.
+    const fs::path invalidPlugin = pluginDirectory / ("zz-invalid" + fixture.extension().string());
+    std::ofstream(invalidPlugin) << "not a plugin";
+    std::ofstream(invalidPlugin.string() + ".sparkplugin.json") << "{}";
+    loadedCount = 99;
+    EXPECT_FALSE(mgr.LoadPluginsFromProjectDirectory(TestPathUtf8(root), "Plugins/Editor", &loadedCount));
+    EXPECT_EQ(loadedCount, size_t{0});
+    EXPECT_EQ(mgr.GetPluginCount(), size_t{0});
+
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(PluginManager_RejectsNonexistentProjectFileAsDiscoveryRoot)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-editor-plugin-root-" + std::to_string(stamp));
+    ASSERT_TRUE(fs::create_directories(root / "Plugins" / "Editor"));
+
+    EditorPluginManager mgr;
+    size_t loadedCount = 99;
+    EXPECT_FALSE(mgr.LoadPluginsFromProjectDirectory(TestPathUtf8(root / "Missing.sparkproject"), "Plugins/Editor",
+                                                     &loadedCount));
+    EXPECT_EQ(loadedCount, size_t{0});
+
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(PluginManager_ReportsFailClosedOwnershipWhenDirectoryRollbackIsRefused)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-editor-plugin-rollback-" + std::to_string(stamp));
+    const fs::path pluginDirectory = root / "Plugins" / "Editor";
+    ASSERT_TRUE(fs::create_directories(pluginDirectory));
+
+    const fs::path fixture = SPARK_TEST_ROLLBACK_REFUSING_PLUGIN_PATH;
+    const fs::path discoveredPlugin = pluginDirectory / fixture.filename();
+    ASSERT_TRUE(fs::copy_file(fixture, discoveredPlugin));
+    ASSERT_TRUE(fs::copy_file(fixture.string() + ".sparkplugin.json", discoveredPlugin.string() + ".sparkplugin.json"));
+
+    const fs::path invalidPlugin = pluginDirectory / ("zz-invalid" + fixture.extension().string());
+    std::ofstream(invalidPlugin) << "not a plugin";
+    std::ofstream(invalidPlugin.string() + ".sparkplugin.json") << "{}";
+
+    EditorPluginManager mgr;
+    size_t ownedCount = 0;
+    EXPECT_FALSE(mgr.LoadPluginsFromProjectDirectory(TestPathUtf8(root), "Plugins/Editor", &ownedCount));
+    EXPECT_EQ(ownedCount, size_t{1});
+    EXPECT_EQ(mgr.GetPluginCount(), size_t{1});
+    EXPECT_TRUE(mgr.GetDynamicPluginDescriptor("org.sparkengine.test.rollback-refusing-plugin") != nullptr);
+
+    // The fixture refuses only the rollback attempt. A later explicit unload
+    // proves that the manager retained valid ownership rather than leaking it.
+    EXPECT_TRUE(mgr.UnloadPlugin("org.sparkengine.test.rollback-refusing-plugin"));
+    EXPECT_EQ(mgr.GetPluginCount(), size_t{0});
+
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+TEST(PluginManager_RejectsPluginDirectoryOutsideProject)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-editor-plugin-boundary-" + std::to_string(stamp));
+    ASSERT_TRUE(fs::create_directories(root / "Project"));
+    ASSERT_TRUE(fs::create_directories(root / "Outside"));
+
+    EditorPluginManager mgr;
+    size_t loadedCount = 99;
+    EXPECT_FALSE(mgr.LoadPluginsFromProjectDirectory(TestPathUtf8(root / "Project"), "../Outside", &loadedCount));
+    EXPECT_EQ(loadedCount, size_t{0});
+    EXPECT_EQ(mgr.GetPluginCount(), size_t{0});
+
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
 TEST(PluginManager_RejectsForwardMinorStableABIPlugin)
 {
     EditorPluginManager mgr;

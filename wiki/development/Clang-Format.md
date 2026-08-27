@@ -8,21 +8,21 @@
 
 ## Overview
 
-The CI `check-format` job runs clang-format over the full source tree on every push and pull request. Local pre-commit runs must scan the **same paths** as CI, or a local pass will be followed by a CI failure on files the local run never touched.
+The CI `check-format` job enforces clang-format on changed C++ files across the full engine surface on every push and pull request. It compares the pushed range or pull-request base to `HEAD`, so legacy formatting debt does not conceal new debt and does not require unrelated mass rewrites.
 
 The single source of truth for formatting rules is `.clang-format` at the repo root. Never pass `--style=...` explicitly — clang-format discovers the root config automatically.
 
 ## What CI Actually Runs
 
-The exact command lives in `.github/workflows/build.yml` under the `check-format` job. As of 2026-06-08 it is:
+The exact command lives in `.github/workflows/build.yml` under the `check-format` job. Its source roots are:
 
 ```bash
-find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source \
-     SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkBuild/src SparkInstaller/src \
-  -not -path '*/Metal/*' \
-  \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
-  xargs clang-format --dry-run --Werror > check-format-output.log 2>&1 || true
+SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
+SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests
 ```
+
+CI obtains changed paths with `git diff --name-only --diff-filter=ACMR -z <base> HEAD`, keeps `*.h`, `*.hpp`, and `*.cpp`, excludes `*/Metal/*`, and passes that bounded list directly to clang-format.
 
 CI then **greps the log for the violation marker** rather than trusting the exit code:
 
@@ -32,9 +32,9 @@ if echo "$OUTPUT" | grep -q "\-Wclang-format-violations"; then
 fi
 ```
 
-This grep-based check exists because clang-format 18+ emits a spurious "missing Objective-C config" warning and returns exit code 1 even with zero violations. The `|| true` swallows that false failure; the grep finds real ones.
+The workflow records the formatter exit code, verifies every source root and the tool first, fails on real violation markers, and also rejects abnormal formatter exits. A normal exit 1 without a violation marker remains tolerated because clang-format 18+ can emit a spurious "missing Objective-C config" warning.
 
-Note the path list has grown beyond the historical `SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules` set — it now scans specific GameModules subtrees (`SparkGame`, `SparkGameMMO`), plus `SparkBuild/src` and `SparkInstaller/src`, includes `*.hpp`, and excludes `*/Metal/*` (the Objective-C++ Metal sources are not C++-formatted).
+The path list covers the engine, every game module, editor, standalone processes and tools, launcher, and tests; it includes `*.hpp` and excludes `*/Metal/*` (the Objective-C++ Metal sources are not C++-formatted). A docs-only change therefore performs no formatter invocation and succeeds explicitly.
 
 ## Wrong (commonly seen in old examples)
 
@@ -49,7 +49,7 @@ find SparkEngine/Source SparkEditor/Source SparkConsole/src GameModules \
 
 ## Right — local check
 
-For a quick local check, point clang-format at the directories you changed (or the full CI path list above):
+For a local check that mirrors CI, format the C++ files changed from your base branch. For a quick manual check, point clang-format at the directories you changed:
 
 ```bash
 find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
@@ -71,7 +71,7 @@ find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/
 
 ## Rules
 
-- **Never use `head -N`** in a format check. If the argv is too long, batch with `xargs -n 500` instead.
+- **Never use `head -N`** in a format check. If the argv is too long locally, batch without truncating the inventory.
 - **`--Werror` is required** — without it, `--dry-run` only reports diffs and exits 0.
 - **Exclude `*/Metal/*`** to match CI (Objective-C++ sources are not C++-formatted).
 - **Include `*.hpp`** — CI does.
@@ -83,7 +83,7 @@ find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/
 - **Original entry date:** 2026-04-17 (`.claude/knowledge/clang-format.md`, type: Pattern)
 - **Verified against codebase 2026-06-08.**
 - **UPDATED:** The CI `check-format` path list has expanded — it now scans `SparkGame`/`SparkGameMMO` GameModules subtrees, `SparkBuild/src`, and `SparkInstaller/src`, includes `*.hpp`, and excludes `*/Metal/*`. The old entry's path list was stale.
-- **UPDATED:** CI no longer relies on the clang-format exit code — it captures output to a log, runs with `|| true`, and greps for `-Wclang-format-violations` (works around the clang-format 18+ Objective-C-config false failure). The old entry implied a raw exit-code check.
+- **UPDATED:** CI validates every configured source root and clang-format installation, preserves the Objective-C warning workaround, and incrementally enforces all engine/module/tool/test surfaces without failing on unrelated legacy formatting debt.
 - **VERIFIED:** `--Werror` requirement, no `head -N`, no `--style=` override, `.clang-format` at repo root all still hold. CI command still lives in `.github/workflows/build.yml`.
 
 ## Related Pages

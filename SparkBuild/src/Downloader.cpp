@@ -1,4 +1,5 @@
 #include "Downloader.h"
+#include "DownloadSecurity.h"
 #include <fstream>
 #include <filesystem>
 #include <atomic>
@@ -20,6 +21,29 @@
 #include <shlobj.h>
 #include <shlwapi.h>
 #include <shldisp.h>
+
+namespace
+{
+    class ScopedWinHttpHandle
+    {
+      public:
+        explicit ScopedWinHttpHandle(HINTERNET handle = nullptr) : m_handle(handle) {}
+        ~ScopedWinHttpHandle()
+        {
+            if (m_handle)
+                WinHttpCloseHandle(m_handle);
+        }
+
+        ScopedWinHttpHandle(const ScopedWinHttpHandle&) = delete;
+        ScopedWinHttpHandle& operator=(const ScopedWinHttpHandle&) = delete;
+
+        [[nodiscard]] HINTERNET Get() const { return m_handle; }
+        [[nodiscard]] explicit operator bool() const { return m_handle != nullptr; }
+
+      private:
+        HINTERNET m_handle;
+    };
+} // namespace
 
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "shlwapi.lib")
@@ -104,135 +128,81 @@ namespace SparkBuild
         if (!ParseUrl(url, host, path, isHttps))
             return false;
 
-        HINTERNET hSession = WinHttpOpen(L"SparkBuild/2.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME,
-                                         WINHTTP_NO_PROXY_BYPASS, 0);
+        ScopedWinHttpHandle hSession(WinHttpOpen(L"SparkBuild/2.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                                                 WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0));
         if (!hSession)
             return false;
 
         INTERNET_PORT port = isHttps ? INTERNET_DEFAULT_HTTPS_PORT : INTERNET_DEFAULT_HTTP_PORT;
-        HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
+        ScopedWinHttpHandle hConnect(WinHttpConnect(hSession.Get(), host.c_str(), port, 0));
         if (!hConnect)
-        {
-            WinHttpCloseHandle(hSession);
             return false;
-        }
 
         DWORD flags = isHttps ? WINHTTP_FLAG_SECURE : 0;
-        HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER,
-                                                WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
+        ScopedWinHttpHandle hRequest(WinHttpOpenRequest(hConnect.Get(), L"GET", path.c_str(), nullptr,
+                                                        WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, flags));
         if (!hRequest)
-        {
-            WinHttpCloseHandle(hConnect);
-            WinHttpCloseHandle(hSession);
             return false;
-        }
 
+        // Make the secure redirect contract explicit instead of depending on
+        // WinHTTP's default policy. Automatic handling also keeps each handle
+        // single-owner, eliminating the old redirect failure double-close path.
+        DWORD redirectPolicy = WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP;
+        if (!WinHttpSetOption(hRequest.Get(), WINHTTP_OPTION_REDIRECT_POLICY, &redirectPolicy, sizeof(redirectPolicy)))
+            return false;
         DWORD maxRedirects = 5;
-        for (DWORD attempt = 0; attempt <= maxRedirects; ++attempt)
+        if (!WinHttpSetOption(hRequest.Get(), WINHTTP_OPTION_MAX_HTTP_AUTOMATIC_REDIRECTS, &maxRedirects,
+                              sizeof(maxRedirects)))
+            return false;
+
+        if (!WinHttpSendRequest(hRequest.Get(), WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0))
+            return false;
+        if (!WinHttpReceiveResponse(hRequest.Get(), nullptr))
+            return false;
+
+        DWORD statusCode = 0;
+        DWORD statusSize = sizeof(statusCode);
+        if (!WinHttpQueryHeaders(hRequest.Get(), WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                                 WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusSize, WINHTTP_NO_HEADER_INDEX) ||
+            statusCode != 200)
+            return false;
+
+        size_t totalBytes = 0;
+        wchar_t contentLength[32] = {};
+        DWORD contentLengthSize = sizeof(contentLength);
+        if (WinHttpQueryHeaders(hRequest.Get(), WINHTTP_QUERY_CONTENT_LENGTH, WINHTTP_HEADER_NAME_BY_INDEX,
+                                contentLength, &contentLengthSize, WINHTTP_NO_HEADER_INDEX))
+            totalBytes = static_cast<size_t>(_wtoi64(contentLength));
+
+        std::filesystem::path outPath(outputPath);
+        if (outPath.has_parent_path())
+            std::filesystem::create_directories(outPath.parent_path());
+
+        std::ofstream outFile(outputPath, std::ios::binary | std::ios::trunc);
+        if (!outFile.is_open())
+            return false;
+
+        size_t bytesDownloaded = 0;
+        while (true)
         {
-            if (!WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0))
-                break;
-            if (!WinHttpReceiveResponse(hRequest, nullptr))
-                break;
-
-            DWORD statusCode = 0;
-            DWORD statusSize = sizeof(statusCode);
-            WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-                                WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusSize, WINHTTP_NO_HEADER_INDEX);
-
-            if (statusCode >= 300 && statusCode < 400)
-            {
-                wchar_t redirectUrl[2048] = {};
-                DWORD redirectSize = sizeof(redirectUrl);
-                if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_LOCATION, WINHTTP_HEADER_NAME_BY_INDEX, redirectUrl,
-                                        &redirectSize, WINHTTP_NO_HEADER_INDEX))
-                {
-                    WinHttpCloseHandle(hRequest);
-                    WinHttpCloseHandle(hConnect);
-
-                    URL_COMPONENTS uc = {};
-                    uc.dwStructSize = sizeof(uc);
-                    wchar_t hostBuf[256] = {};
-                    wchar_t pathBuf[2048] = {};
-                    uc.lpszHostName = hostBuf;
-                    uc.dwHostNameLength = 256;
-                    uc.lpszUrlPath = pathBuf;
-                    uc.dwUrlPathLength = 2048;
-
-                    if (!WinHttpCrackUrl(redirectUrl, 0, 0, &uc))
-                        break;
-                    host = hostBuf;
-                    path = pathBuf;
-                    isHttps = (uc.nScheme == INTERNET_SCHEME_HTTPS);
-                    port = isHttps ? INTERNET_DEFAULT_HTTPS_PORT : INTERNET_DEFAULT_HTTP_PORT;
-
-                    hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
-                    if (!hConnect)
-                        break;
-                    flags = isHttps ? WINHTTP_FLAG_SECURE : 0;
-                    hRequest = WinHttpOpenRequest(hConnect, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER,
-                                                  WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
-                    if (!hRequest)
-                        break;
-                    continue;
-                }
-                break;
-            }
-
-            if (statusCode != 200)
-                break;
-
-            size_t totalBytes = 0;
-            wchar_t contentLength[32] = {};
-            DWORD clSize = sizeof(contentLength);
-            if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_CONTENT_LENGTH, WINHTTP_HEADER_NAME_BY_INDEX, contentLength,
-                                    &clSize, WINHTTP_NO_HEADER_INDEX))
-            {
-                totalBytes = static_cast<size_t>(_wtoi64(contentLength));
-            }
-
-            std::filesystem::path outPath(outputPath);
-            if (outPath.has_parent_path())
-            {
-                std::filesystem::create_directories(outPath.parent_path());
-            }
-
-            std::ofstream outFile(outputPath, std::ios::binary);
-            if (!outFile.is_open())
-                break;
-
-            size_t bytesDownloaded = 0;
             DWORD bytesAvail = 0;
-            bool downloadOk = true;
+            if (!WinHttpQueryDataAvailable(hRequest.Get(), &bytesAvail))
+                return false;
+            if (bytesAvail == 0)
+                break;
 
-            while (WinHttpQueryDataAvailable(hRequest, &bytesAvail) && bytesAvail > 0)
-            {
-                std::vector<char> buf(bytesAvail);
-                DWORD bytesRead = 0;
-                if (!WinHttpReadData(hRequest, buf.data(), bytesAvail, &bytesRead))
-                {
-                    downloadOk = false;
-                    break;
-                }
-                outFile.write(buf.data(), bytesRead);
-                bytesDownloaded += bytesRead;
-                if (progress)
-                    progress(bytesDownloaded, totalBytes);
-            }
-
-            outFile.close();
-            WinHttpCloseHandle(hRequest);
-            WinHttpCloseHandle(hConnect);
-            WinHttpCloseHandle(hSession);
-            return downloadOk;
+            std::vector<char> buffer(bytesAvail);
+            DWORD bytesRead = 0;
+            if (!WinHttpReadData(hRequest.Get(), buffer.data(), bytesAvail, &bytesRead) || bytesRead == 0)
+                return false;
+            outFile.write(buffer.data(), static_cast<std::streamsize>(bytesRead));
+            if (!outFile)
+                return false;
+            bytesDownloaded += bytesRead;
+            if (progress)
+                progress(bytesDownloaded, totalBytes);
         }
-
-        if (hRequest)
-            WinHttpCloseHandle(hRequest);
-        if (hConnect)
-            WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
-        return false;
+        return true;
     }
 
     bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destDir)
@@ -370,7 +340,9 @@ namespace SparkBuild
             std::filesystem::create_directories(parent);
         }
 
-        return RunProcess("curl", {"-fSL", "--progress-bar", "-o", outputPath, url});
+        return RunProcess("curl",
+                          {"-fSL", "--progress-bar", "--max-redirs", "5", "--proto", "=http,https", "--proto-redir",
+                           DownloadSecurity::RedirectProtocolPolicy(url), "-o", outputPath, url});
     }
 
     bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destDir)
@@ -403,8 +375,10 @@ namespace SparkBuild
 #endif
 
     // Common implementation
-    std::string Downloader::ReserveTempDownloadPath()
+    std::string Downloader::ReserveTempDownloadPath(const std::string& archiveSuffix)
     {
+        if (archiveSuffix != ".zip" && archiveSuffix != ".tar.gz")
+            return {};
         const std::filesystem::path tempDirectory(GetTempDir());
         if (tempDirectory.empty())
             return {};
@@ -422,7 +396,7 @@ namespace SparkBuild
             const uint64_t sequence = g_tempDownloadSequence.fetch_add(1, std::memory_order_relaxed);
             const std::filesystem::path candidate =
                 tempDirectory / ("sparkbuild_download_" + std::to_string(processId) + "_" + std::to_string(tick) + "_" +
-                                 std::to_string(sequence) + ".zip");
+                                 std::to_string(sequence) + archiveSuffix);
 
 #ifdef SPARK_PLATFORM_WINDOWS
             HANDLE file = CreateFileA(candidate.string().c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ,
@@ -454,10 +428,21 @@ namespace SparkBuild
         return {};
     }
 
-    bool Downloader::DownloadAndExtract(const std::string& url, const std::string& destDir,
-                                        DownloadProgressCallback progress)
+    bool Downloader::ExtractVerifiedArchive(const std::string& archivePath, const std::string& destDir,
+                                            const std::string& expectedSha256)
     {
-        const std::string tempPath = ReserveTempDownloadPath();
+        std::string verificationError;
+        if (!DownloadSecurity::VerifySha256(archivePath, expectedSha256, verificationError))
+            return false;
+        return ExtractZip(archivePath, destDir);
+    }
+
+    bool Downloader::DownloadAndExtract(const std::string& url, const std::string& destDir,
+                                        const std::string& expectedSha256, DownloadProgressCallback progress)
+    {
+        const std::string archiveSuffix =
+            (url.find(".tar.gz") != std::string::npos || url.find(".tgz") != std::string::npos) ? ".tar.gz" : ".zip";
+        const std::string tempPath = ReserveTempDownloadPath(archiveSuffix);
         if (tempPath.empty())
             return false;
         const ScopedTemporaryDownload cleanup(tempPath);
@@ -467,7 +452,7 @@ namespace SparkBuild
             return false;
         }
 
-        return ExtractZip(tempPath, destDir);
+        return ExtractVerifiedArchive(tempPath, destDir, expectedSha256);
     }
 
 } // namespace SparkBuild

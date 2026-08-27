@@ -36,6 +36,14 @@ class ProcessLogCaptureTests(unittest.TestCase):
         )
         self.assertEqual(known, {4123})
 
+    def test_supervised_pid_inventory_accepts_extended_status_fields(self) -> None:
+        known: set[int] = set()
+        HARNESS.record_supervised_pids(
+            "live\trunning\tpid=4123\thealth=1\texit=0\trestarts=0\tcrashes=0\n",
+            known,
+        )
+        self.assertEqual(known, {4123})
+
     def test_windows_tree_cleanup_uses_taskkill_tree_mode(self) -> None:
         daemon = mock.Mock()
         daemon.pid = 100

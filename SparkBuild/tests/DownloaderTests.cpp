@@ -1,4 +1,5 @@
 #include "Downloader.h"
+#include "DownloadSecurity.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -133,7 +134,8 @@ namespace
         // An empty URL is rejected before network I/O on Windows and causes
         // curl to exit with an argument error on Unix. Both paths must remove
         // the atomically reserved archive before returning.
-        const bool result = SparkBuild::Downloader::DownloadAndExtract("", unusedDestination.string());
+        const bool result = SparkBuild::Downloader::DownloadAndExtract(
+            "", unusedDestination.string(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
         const auto after = CurrentProcessTempDownloads();
 
         std::error_code ignored;
@@ -150,11 +152,65 @@ namespace
         }
         return 0;
     }
+
+    int RunSha256VerificationTest()
+    {
+        const std::filesystem::path archive = std::filesystem::path(SparkBuild::Downloader::GetTempDir()) /
+                                              ("sparkbuild_sha256_" + std::to_string(CurrentProcessId()) + ".zip");
+        const std::filesystem::path destination =
+            std::filesystem::path(SparkBuild::Downloader::GetTempDir()) /
+            ("sparkbuild_sha256_destination_" + std::to_string(CurrentProcessId()));
+        std::error_code ignored;
+        std::filesystem::remove(archive, ignored);
+        std::filesystem::remove_all(destination, ignored);
+        {
+            std::ofstream output(archive, std::ios::binary | std::ios::trunc);
+            output << "abc";
+        }
+
+        int failures = 0;
+        auto check = [&failures](bool condition, const std::string& message)
+        {
+            if (!condition)
+            {
+                ++failures;
+                std::cerr << "FAIL: " << message << '\n';
+            }
+        };
+        std::string error;
+        check(SparkBuild::DownloadSecurity::VerifySha256(
+                  archive, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", error),
+              "published SHA-256 known-answer vector was rejected: " + error);
+        error.clear();
+        check(!SparkBuild::DownloadSecurity::VerifySha256(
+                  archive, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", error),
+              "mismatched SHA-256 unexpectedly passed verification");
+        check(error.find("mismatch") != std::string::npos, "checksum mismatch did not produce a useful diagnostic");
+        error.clear();
+        check(!SparkBuild::DownloadSecurity::VerifySha256(archive, "not-a-sha256", error),
+              "malformed expected SHA-256 unexpectedly passed validation");
+        check(!SparkBuild::Downloader::ExtractVerifiedArchive(
+                  archive.string(), destination.string(),
+                  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+              "mismatched archive unexpectedly reached extraction");
+        check(!std::filesystem::exists(destination), "checksum mismatch created an extraction destination");
+        check(SparkBuild::DownloadSecurity::RedirectProtocolPolicy("https://example.test/archive.zip") == "=https",
+              "HTTPS source did not restrict redirect protocols to HTTPS");
+        check(SparkBuild::DownloadSecurity::RedirectProtocolPolicy("HTTPS://example.test/archive.zip") == "=https",
+              "HTTPS redirect policy was case-sensitive");
+        check(SparkBuild::DownloadSecurity::RedirectProtocolPolicy("http://example.test/archive.zip") == "=http,https",
+              "HTTP source redirect policy escaped the HTTP(S) protocol family");
+
+        std::filesystem::remove(archive, ignored);
+        std::filesystem::remove_all(destination, ignored);
+        return failures == 0 ? 0 : 1;
+    }
 } // namespace
 
 int main()
 {
     const int reservationResult = RunUniqueReservationTest();
     const int cleanupResult = RunFailedDownloadCleanupTest();
-    return reservationResult == 0 && cleanupResult == 0 ? 0 : 1;
+    const int sha256Result = RunSha256VerificationTest();
+    return reservationResult == 0 && cleanupResult == 0 && sha256Result == 0 ? 0 : 1;
 }

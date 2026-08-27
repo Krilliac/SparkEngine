@@ -16,8 +16,11 @@
 #include "ProcessWin32JobPolicy.h"
 
 #include <expected>
+#include <limits>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include <windows.h>
 
@@ -115,20 +118,42 @@ namespace Spark
         // Without this, an argument containing `"` (or a trailing run of
         // `\`) can break out of its quoted field and inject additional
         // command-line tokens into the child process.
-        void AppendQuotedArg(std::string& cmdLine, const std::string& arg)
+        std::expected<std::wstring, std::string> Utf8ToWide(std::string_view text, std::string_view field)
         {
-            if (!arg.empty() && arg.find_first_of(" \t\n\v\"") == std::string::npos)
+            if (text.empty())
+                return std::wstring{};
+            if (text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+                return std::unexpected(std::string(field) + " exceeds the Win32 UTF-8 conversion limit");
+
+            const int inputLength = static_cast<int>(text.size());
+            const int outputLength =
+                MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), inputLength, nullptr, 0);
+            if (outputLength <= 0)
+                return std::unexpected(std::string(field) + " is not valid UTF-8 (error " +
+                                       std::to_string(GetLastError()) + ")");
+
+            std::wstring result(static_cast<size_t>(outputLength), L'\0');
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), inputLength, result.data(),
+                                    outputLength) != outputLength)
+                return std::unexpected("failed to convert " + std::string(field) + " to UTF-16 (error " +
+                                       std::to_string(GetLastError()) + ")");
+            return result;
+        }
+
+        void AppendQuotedArg(std::wstring& cmdLine, const std::wstring& arg)
+        {
+            if (!arg.empty() && arg.find_first_of(L" \t\n\v\"") == std::wstring::npos)
             {
                 // No characters that require quoting.
                 cmdLine += arg;
                 return;
             }
 
-            cmdLine += '"';
+            cmdLine += L'"';
             for (auto it = arg.begin();; ++it)
             {
                 unsigned numBackslashes = 0;
-                while (it != arg.end() && *it == '\\')
+                while (it != arg.end() && *it == L'\\')
                 {
                     ++it;
                     ++numBackslashes;
@@ -138,23 +163,23 @@ namespace Spark
                 {
                     // Escape all backslashes, since they immediately precede
                     // the closing quote we're about to append.
-                    cmdLine.append(numBackslashes * 2, '\\');
+                    cmdLine.append(numBackslashes * 2, L'\\');
                     break;
                 }
-                else if (*it == '"')
+                else if (*it == L'"')
                 {
                     // Escape all backslashes and the following quote.
-                    cmdLine.append(numBackslashes * 2 + 1, '\\');
+                    cmdLine.append(numBackslashes * 2 + 1, L'\\');
                     cmdLine.push_back(*it);
                 }
                 else
                 {
                     // A regular character; backslashes before it are literal.
-                    cmdLine.append(numBackslashes, '\\');
+                    cmdLine.append(numBackslashes, L'\\');
                     cmdLine.push_back(*it);
                 }
             }
-            cmdLine += '"';
+            cmdLine += L'"';
         }
     } // namespace
 
@@ -214,6 +239,24 @@ namespace Spark
 
     std::expected<Process, std::string> Process::Builder::Launch()
     {
+        auto executable = Utf8ToWide(m_executable, "process executable");
+        if (!executable)
+            return std::unexpected(executable.error());
+
+        std::vector<std::wstring> arguments;
+        arguments.reserve(m_args.size());
+        for (const std::string& argument : m_args)
+        {
+            auto wide = Utf8ToWide(argument, "process argument");
+            if (!wide)
+                return std::unexpected(wide.error());
+            arguments.push_back(std::move(*wide));
+        }
+
+        auto workingDirectory = Utf8ToWide(m_workingDirectory, "process working directory");
+        if (!workingDirectory)
+            return std::unexpected(workingDirectory.error());
+
         SECURITY_ATTRIBUTES sa{};
         sa.nLength = sizeof(sa);
         sa.bInheritHandle = TRUE;
@@ -257,15 +300,15 @@ namespace Spark
         // Build command line string (Windows-style: executable + space-separated
         // args), quoting/escaping each field so it round-trips correctly
         // through CommandLineToArgvW-compatible argv parsing in the child.
-        std::string cmdLine;
-        AppendQuotedArg(cmdLine, m_executable);
-        for (const auto& a : m_args)
+        std::wstring cmdLine;
+        AppendQuotedArg(cmdLine, *executable);
+        for (const auto& argument : arguments)
         {
-            cmdLine += ' ';
-            AppendQuotedArg(cmdLine, a);
+            cmdLine += L' ';
+            AppendQuotedArg(cmdLine, argument);
         }
 
-        STARTUPINFOA si{};
+        STARTUPINFOW si{};
         si.cb = sizeof(si);
         if (m_stdinMode == PipeMode::Capture || m_stdoutMode == PipeMode::Capture ||
             m_stderrMode == PipeMode::Capture || m_mergeStderrIntoStdout)
@@ -287,10 +330,11 @@ namespace Spark
             flags |= CREATE_NO_WINDOW | DETACHED_PROCESS;
 
         PROCESS_INFORMATION pi{};
-        const char* workingDirectory = m_workingDirectory.empty() ? nullptr : m_workingDirectory.c_str();
-        BOOL ok = CreateProcessA(NULL, cmdLine.data(), NULL, NULL, TRUE, flags, NULL, workingDirectory, &si, &pi);
+        const wchar_t* workingDirectoryValue = workingDirectory->empty() ? nullptr : workingDirectory->c_str();
+        BOOL ok = CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, TRUE, flags, nullptr, workingDirectoryValue,
+                                 &si, &pi);
         if (!ok)
-            return std::unexpected("CreateProcessA failed (error " + std::to_string(GetLastError()) + ")");
+            return std::unexpected("CreateProcessW failed (error " + std::to_string(GetLastError()) + ")");
 
         // Reap tracked children automatically if this process dies
         // unexpectedly. Detached means fire-and-forget: assigning those

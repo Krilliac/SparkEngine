@@ -15,8 +15,10 @@
  */
 
 #include "TestFramework.h"
+#include "Physics/CharacterController.h"
 #include "Physics/PhysicsSystem.h"
 
+#include <cmath>
 #include <memory>
 
 TEST(PhysicsTeardown_RemoveBodyAfterShutdown_IsSafeNoOp)
@@ -161,6 +163,111 @@ TEST(PhysicsConstraints_CreateAndRemoveRealJoltConstraints)
 
     physics->RemoveBody(first);
     physics->RemoveBody(second);
+#else
+    (void)hr;
+#endif
+    physics->Shutdown();
+}
+
+TEST(PhysicsCharacterController_NullWorldRetainsConfiguredSafeState)
+{
+    CharacterControllerDesc desc;
+    desc.position = {3.0f, 4.0f, 5.0f};
+    desc.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+    desc.up = {0.0f, 0.0f, 1.0f};
+    desc.mass = 95.0f;
+
+    // A controller can be assembled before the physics world exists. Its
+    // observable state must remain deterministic, and every mutator/update
+    // must remain a safe no-op until a real Jolt world is available.
+    CharacterController controller(nullptr, desc);
+
+    const XMFLOAT3 initialPosition = controller.GetPosition();
+    EXPECT_NEAR(initialPosition.x, desc.position.x, 0.001f);
+    EXPECT_NEAR(initialPosition.y, desc.position.y, 0.001f);
+    EXPECT_NEAR(initialPosition.z, desc.position.z, 0.001f);
+
+    const XMFLOAT4 initialRotation = controller.GetRotation();
+    EXPECT_NEAR(initialRotation.w, desc.rotation.w, 0.001f);
+    EXPECT_NEAR(controller.GetMass(), desc.mass, 0.001f);
+    EXPECT_TRUE(controller.GetGroundState() == CharacterGroundState::InAir);
+    EXPECT_TRUE(!controller.IsOnGround());
+
+    const XMFLOAT3 velocity = controller.GetLinearVelocity();
+    const XMFLOAT3 groundNormal = controller.GetGroundNormal();
+    const XMFLOAT3 groundVelocity = controller.GetGroundVelocity();
+    const XMFLOAT3 up = controller.GetUp();
+    EXPECT_NEAR(velocity.x, 0.0f, 0.001f);
+    EXPECT_NEAR(groundNormal.y, 1.0f, 0.001f);
+    EXPECT_NEAR(groundVelocity.y, 0.0f, 0.001f);
+    EXPECT_NEAR(up.z, 1.0f, 0.001f);
+
+    controller.SetPosition({10.0f, 20.0f, 30.0f});
+    controller.SetRotation({0.0f, 0.0f, 1.0f, 0.0f});
+    controller.SetLinearVelocity({1.0f, 2.0f, 3.0f});
+    controller.SetUp({0.0f, 1.0f, 0.0f});
+    controller.Update(1.0f / 60.0f, {0.0f, -9.81f, 0.0f});
+    controller.Update(1.0f / 60.0f, {0.0f, -9.81f, 0.0f});
+
+    const XMFLOAT3 unchangedPosition = controller.GetPosition();
+    EXPECT_NEAR(unchangedPosition.x, desc.position.x, 0.001f);
+    EXPECT_NEAR(unchangedPosition.y, desc.position.y, 0.001f);
+    EXPECT_NEAR(unchangedPosition.z, desc.position.z, 0.001f);
+}
+
+TEST(PhysicsCharacterController_RealJoltWorldExercisesRuntimeSurface)
+{
+    auto physics = std::make_unique<PhysicsSystem>();
+    const HRESULT hr = physics->Initialize();
+#ifdef SPARK_TEST_HAS_PHYSICS
+    ASSERT_TRUE(SUCCEEDED(hr));
+
+    CharacterControllerDesc desc;
+    desc.height = 0.4f;
+    desc.radius = 0.3f; // Deliberately exercises the minimum capsule-height path.
+    desc.position = {1.0f, 2.0f, 3.0f};
+    desc.mass = 72.0f;
+
+    auto controller = physics->CreateCharacterController(desc);
+    ASSERT_TRUE(controller != nullptr);
+    EXPECT_NEAR(controller->GetMass(), desc.mass, 0.001f);
+
+    const XMFLOAT3 initialPosition = controller->GetPosition();
+    EXPECT_NEAR(initialPosition.x, desc.position.x, 0.001f);
+    EXPECT_NEAR(initialPosition.y, desc.position.y, 0.001f);
+    EXPECT_NEAR(initialPosition.z, desc.position.z, 0.001f);
+
+    controller->SetPosition({2.0f, 4.0f, 6.0f});
+    controller->SetRotation({0.0f, 0.0f, 0.0f, 1.0f});
+    controller->SetLinearVelocity({1.0f, 0.0f, -2.0f});
+    controller->SetUp({0.0f, 1.0f, 0.0f});
+
+    const XMFLOAT3 movedPosition = controller->GetPosition();
+    const XMFLOAT4 rotation = controller->GetRotation();
+    const XMFLOAT3 velocity = controller->GetLinearVelocity();
+    const XMFLOAT3 up = controller->GetUp();
+    EXPECT_NEAR(movedPosition.x, 2.0f, 0.001f);
+    EXPECT_NEAR(movedPosition.y, 4.0f, 0.001f);
+    EXPECT_NEAR(movedPosition.z, 6.0f, 0.001f);
+    EXPECT_NEAR(rotation.w, 1.0f, 0.001f);
+    EXPECT_NEAR(velocity.x, 1.0f, 0.001f);
+    EXPECT_NEAR(velocity.z, -2.0f, 0.001f);
+    EXPECT_NEAR(up.y, 1.0f, 0.001f);
+
+    controller->Update(1.0f / 60.0f, {0.0f, -9.81f, 0.0f});
+    const XMFLOAT3 updatedPosition = controller->GetPosition();
+    const XMFLOAT3 groundNormal = controller->GetGroundNormal();
+    const XMFLOAT3 groundVelocity = controller->GetGroundVelocity();
+    EXPECT_TRUE(std::isfinite(updatedPosition.x));
+    EXPECT_TRUE(std::isfinite(updatedPosition.y));
+    EXPECT_TRUE(std::isfinite(updatedPosition.z));
+    EXPECT_TRUE(std::isfinite(groundNormal.y));
+    EXPECT_TRUE(std::isfinite(groundVelocity.y));
+    EXPECT_TRUE(controller->GetGroundState() == CharacterGroundState::InAir || controller->IsOnGround());
+
+    // The CharacterVirtual owns Jolt objects, so release it before shutting
+    // down the backing PhysicsSystem.
+    controller.reset();
 #else
     (void)hr;
 #endif

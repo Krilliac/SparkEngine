@@ -25,6 +25,7 @@
 #include "Utils/LogMacros.h" // SPARK_LOG_*
 #include "Utils/WineDetection.h"
 #include "Utils/CrashHandler.h"
+#include <Spark/Version.h>
 #include <csignal>
 #include <cstring>
 #include <atomic>
@@ -106,6 +107,30 @@ static void ParseWindowSizeOverrideArgs(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
+    if (ParseFlag(argc, argv, "--help") || ParseFlag(argc, argv, "-h") || ParseFlag(argc, argv, "-help"))
+    {
+        std::printf("SparkEngine %d.%d.%d\n"
+                    "Usage: SparkEngine [options]\n\n"
+                    "Core options:\n"
+                    "  --help, -h                 Show this help and exit\n"
+                    "  --version                  Show the engine version and exit\n"
+                    "  -game <module>             Load a game module\n"
+                    "  -manifest <path>           Load a packaged runtime manifest\n"
+                    "  -scene <path>              Load a reflected-scene document\n"
+                    "  -headless, -dedicated      Run without a graphics window\n"
+                    "  -threads <count>           Set the worker-thread limit\n"
+                    "  -test-frames <count>       Exit after a fixed frame count\n"
+                    "  -window-size <WxH>         Override the initial window size\n",
+                    SPARK_ENGINE_VERSION_MAJOR, SPARK_ENGINE_VERSION_MINOR, SPARK_ENGINE_VERSION_PATCH);
+        return 0;
+    }
+    if (ParseFlag(argc, argv, "--version") || ParseFlag(argc, argv, "-version"))
+    {
+        std::printf("SparkEngine %d.%d.%d\n", SPARK_ENGINE_VERSION_MAJOR, SPARK_ENGINE_VERSION_MINOR,
+                    SPARK_ENGINE_VERSION_PATCH);
+        return 0;
+    }
+
     std::signal(SIGINT, SignalHandler);
     std::signal(SIGTERM, SignalHandler);
 #ifndef _WIN32

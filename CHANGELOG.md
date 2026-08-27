@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Editor Dedicated Server and Service Topology panels for configuring, launching, monitoring, draining, and stopping the external service fleet
 - Read-only SparkPak inspection commands and unified CLI entry points for cooking, packaging, validation, migration, templates, and package diagnostics
 - Provenance-backed hero, wide, and detail runtime galleries for all nine installed-SDK project templates
+- Stable rolling Debug/Release installer and ZIP download aliases, lifetime download badges, SPDX release SBOMs, and build-provenance attestations
 
 ### Changed
 - Project scaffolding now rewrites `.sparkproject` identity before renaming the descriptor
@@ -25,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Server, asset-pipeline, automation, SDK, plugin-helper, and public-header targets now install and export with the cross-platform runtime and tools packages
 - Editor build/cook packaging now stages complete native dedicated-server packages with rewritten manifests, ABI sidecars, runtime dependencies, and platform launchers before automation runs
 - Daemon orchestration persists owner-local client identity, mutation sequences, definitions, desired state, and crash-recovery journals across controller and service restarts
+- Every project template now includes validated server/gateway topology configuration; the editor securely provisions each project's owner-only gateway key on first launch
+- Runtime packages now include complete deterministic third-party license notices rather than dependency metadata alone
 
 ### Fixed
 - Editor module discovery, project paths, UTF-8 handling, long-path launches, and fail-closed module loading
@@ -35,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Plugin load and hot-reload now verify binary identity before and after mapping, quiesce scheduled work before unload, reject unsafe package paths, and preserve the working image on staged-load failure
 - Asset cooking now hashes the exact staged bytes, rejects manifest escapes and linked outputs, and atomically replaces cooked artifacts and manifests
 - External-process launch, cancellation, timeout, stderr capture, process-tree teardown, gateway partial-frame handling, endpoint ownership, and crash-state persistence are bounded and fail closed across Windows, Linux, and macOS
+- Windows external-process launch now preserves UTF-8 project paths through `CreateProcessW`; installed launcher templates outrank caller working directories, and failed editor-plugin rollback retains truthful fail-closed ownership
+- POSIX orchestration now durably records child identity before releasing `exec`, closing the daemon-crash orphan window
 
 ## [1.0.0] - 2026-04-04
 

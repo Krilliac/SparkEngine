@@ -150,6 +150,7 @@ int main(int argc, char* argv[])
     std::string startupPanel;
     std::string saveScenePath; // --save-scene <path>: save seeded World then exit (D2 acceptance)
     std::string openScenePath; // --open-scene <path>: boot directly into a scene, skipping the project browser
+    std::vector<std::string> editorPluginDirectories;
 
     // Check command line arguments
     for (int i = 1; i < argc; i++)
@@ -182,6 +183,15 @@ int main(int argc, char* argv[])
         else if (strcmp(argv[i], "--project") == 0 && i + 1 < argc)
         {
             projectPathArg = argv[++i];
+        }
+        else if (strcmp(argv[i], "--editor-plugin-dir") == 0)
+        {
+            if (i + 1 >= argc || argv[i + 1][0] == '\0')
+            {
+                std::cerr << "ERROR: --editor-plugin-dir requires a project-owned directory" << std::endl;
+                return 2;
+            }
+            editorPluginDirectories.emplace_back(argv[++i]);
         }
         else if (strcmp(argv[i], "--theme") == 0 && i + 1 < argc)
         {
@@ -290,6 +300,7 @@ int main(int argc, char* argv[])
         config.testMode = testMode;
         config.testFrameLimit = testFrameLimit;
         config.startupTheme = startupTheme;
+        config.editorPluginDirectories = std::move(editorPluginDirectories);
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Editor config: %dx%d testMode=%s testFrames=%d", config.windowWidth,
                        config.windowHeight, testMode ? "true" : "false", testFrameLimit);

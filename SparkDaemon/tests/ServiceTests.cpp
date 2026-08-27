@@ -14,9 +14,43 @@
 #include <iostream>
 #include <thread>
 
+#if defined(__linux__)
+#include <cerrno>
+#include <csignal>
+#include <sys/prctl.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
 namespace
 {
     int g_failures = 0;
+
+#if defined(__linux__)
+    int g_preExecIdentityDescriptor = -1;
+
+    [[noreturn]] void AbortAfterDurableLaunchIdentity(int64_t processId)
+    {
+        const char* cursor = reinterpret_cast<const char*>(&processId);
+        size_t remaining = sizeof(processId);
+        while (remaining > 0)
+        {
+            const ssize_t written = ::write(g_preExecIdentityDescriptor, cursor, remaining);
+            if (written > 0)
+            {
+                cursor += written;
+                remaining -= static_cast<size_t>(written);
+                continue;
+            }
+            if (written < 0 && errno == EINTR)
+                continue;
+            _exit(84);
+        }
+        // Model power loss / SIGKILL semantics: no stack unwinding and no
+        // OrchestrationService destructor to close the crash window for us.
+        _exit(86);
+    }
+#endif
 
     void Check(bool condition, const char* description)
     {
@@ -120,8 +154,7 @@ namespace
         Spark::Daemon::CollaborationService service(config);
 
         auto created = *service.HandleMessage(
-            static_cast<uint16_t>(Spark::Daemon::CollaborationMessage::CreateSessionRequest),
-            CreatePayload("bounded"));
+            static_cast<uint16_t>(Spark::Daemon::CollaborationMessage::CreateSessionRequest), CreatePayload("bounded"));
         Check(!IsError(created), "bounded collaboration session creates");
 
         std::vector<uint8_t> payload;
@@ -130,8 +163,7 @@ namespace
             static_cast<uint16_t>(Spark::Daemon::CollaborationMessage::JoinSessionRequest), payload);
         uint32_t peerId = 0;
         std::string token;
-        Check(Spark::Daemon::DecodeJoinResponse(joined.payload, peerId, token),
-              "bounded collaboration peer joins");
+        Check(Spark::Daemon::DecodeJoinResponse(joined.payload, peerId, token), "bounded collaboration peer joins");
         Spark::Daemon::CollaborationAuth auth{"bounded", peerId, token};
 
         Spark::Daemon::EncodeAuthString(auth, "node", Spark::Daemon::kMaximumNodeIdLength, payload);
@@ -223,7 +255,7 @@ namespace
     }
 
     void TestSupervisorRevalidatesExecutableAtLaunch(const std::filesystem::path& executable,
-                                                      const std::filesystem::path& scratch)
+                                                     const std::filesystem::path& scratch)
     {
         const auto allowed = scratch / "swap-allowed";
         const auto outside = scratch / "swap-outside";
@@ -246,8 +278,8 @@ namespace
         definition.gracefulStopMilliseconds = 200;
         std::vector<uint8_t> payload;
         Spark::Daemon::EncodeProcessDefinition({"swap-client", 1}, definition, payload);
-        const auto defined = *service.HandleMessage(
-            static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::DefineRequest), payload);
+        const auto defined =
+            *service.HandleMessage(static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::DefineRequest), payload);
         Check(!IsError(defined), "allow-root executable definition is accepted before a path swap");
 
         std::error_code swapError;
@@ -370,6 +402,127 @@ namespace
         }
     }
 
+    void TestPreExecReleaseFailsClosedAfterAbruptDaemonDeath(const std::filesystem::path& executable,
+                                                             const std::filesystem::path& scratch)
+    {
+#if defined(__linux__)
+        int previousSubreaper = 0;
+        if (::prctl(PR_GET_CHILD_SUBREAPER, &previousSubreaper) != 0 || ::prctl(PR_SET_CHILD_SUBREAPER, 1) != 0)
+        {
+            Check(false, "pre-exec crash test configures child subreaping");
+            return;
+        }
+
+        int identityPipe[2] = {-1, -1};
+        if (::pipe(identityPipe) != 0)
+        {
+            Check(false, "pre-exec crash test creates identity pipe");
+            (void)::prctl(PR_SET_CHILD_SUBREAPER, previousSubreaper);
+            return;
+        }
+
+        const auto journal = scratch / "pre-exec-crash.state";
+        const pid_t daemon = ::fork();
+        if (daemon == 0)
+        {
+            ::close(identityPipe[0]);
+            g_preExecIdentityDescriptor = identityPipe[1];
+
+            Spark::Daemon::OrchestrationConfig config;
+            config.allowedExecutableRoots = {executable.parent_path()};
+            config.journalPath = journal;
+            config.beforeExecReleaseForTesting = &AbortAfterDurableLaunchIdentity;
+            Spark::Daemon::OrchestrationService service(config);
+
+            Spark::Daemon::ProcessDefinition definition;
+            definition.id = "pre-exec-crash";
+            definition.executable = executable.string();
+            definition.workingDirectory = executable.parent_path().string();
+            definition.arguments = {"--supervised-child"};
+            definition.gracefulStopMilliseconds = 200;
+
+            std::vector<uint8_t> payload;
+            if (!Spark::Daemon::EncodeProcessDefinition({"pre-exec-client", 1}, definition, payload))
+                _exit(87);
+            const auto defined = *service.HandleMessage(
+                static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::DefineRequest), payload);
+            if (IsError(defined) ||
+                !Spark::Daemon::EncodeProcessMutation({"pre-exec-client", 2}, definition.id, payload))
+                _exit(88);
+            (void)service.HandleMessage(static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::StartRequest),
+                                        payload);
+            _exit(89); // The pre-release hook must terminate this daemon.
+        }
+
+        ::close(identityPipe[1]);
+        if (daemon < 0)
+        {
+            ::close(identityPipe[0]);
+            Check(false, "pre-exec crash test forks daemon process");
+            (void)::prctl(PR_SET_CHILD_SUBREAPER, previousSubreaper);
+            return;
+        }
+
+        int64_t supervisedProcessId = 0;
+        char* cursor = reinterpret_cast<char*>(&supervisedProcessId);
+        size_t remaining = sizeof(supervisedProcessId);
+        while (remaining > 0)
+        {
+            const ssize_t received = ::read(identityPipe[0], cursor, remaining);
+            if (received > 0)
+            {
+                cursor += received;
+                remaining -= static_cast<size_t>(received);
+                continue;
+            }
+            if (received < 0 && errno == EINTR)
+                continue;
+            break;
+        }
+        ::close(identityPipe[0]);
+
+        int daemonStatus = 0;
+        Check(::waitpid(daemon, &daemonStatus, 0) == daemon, "abrupt test daemon is reaped");
+        Check(remaining == 0 && supervisedProcessId > 0,
+              "durably published supervised identity reaches the test parent");
+        Check(WIFEXITED(daemonStatus) && WEXITSTATUS(daemonStatus) == 86,
+              "daemon exits exactly after durable identity and before exec release");
+
+        const auto recovered = Spark::Daemon::RecoverOrchestrationJournal(journal, 16, 16);
+        Check(recovered && recovered->processes.size() == 1,
+              "pre-exec crash leaves a readable durable process snapshot");
+        Check(recovered &&
+                  recovered->processes.front().status.state == Spark::Daemon::SupervisedProcessState::Starting &&
+                  recovered->processes.front().status.processId == supervisedProcessId &&
+                  recovered->processes.front().status.processStartToken != 0,
+              "durable snapshot identifies the exact child held before exec");
+        Check(recovered && recovered->interruptedMutations.size() == 1,
+              "pre-exec identity publication preserves the uncommitted start intent");
+
+        int childStatus = 0;
+        pid_t reaped = 0;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+        do
+        {
+            reaped = ::waitpid(static_cast<pid_t>(supervisedProcessId), &childStatus, WNOHANG);
+            if (reaped == 0)
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        } while (reaped == 0 && std::chrono::steady_clock::now() < deadline);
+        if (reaped == 0)
+        {
+            (void)::kill(-static_cast<pid_t>(supervisedProcessId), SIGKILL);
+            reaped = ::waitpid(static_cast<pid_t>(supervisedProcessId), &childStatus, 0);
+        }
+        Check(reaped == supervisedProcessId, "pre-release child is reaped after daemon death");
+        Check(reaped == supervisedProcessId && WIFEXITED(childStatus) && WEXITSTATUS(childStatus) == 125,
+              "pre-release EOF exits the child without executing supervised code");
+        (void)::prctl(PR_SET_CHILD_SUBREAPER, previousSubreaper);
+#else
+        (void)executable;
+        (void)scratch;
+#endif
+    }
+
     void TestWindowsOrPosixLaunchAndDurableReplay(const std::filesystem::path& executable,
                                                   const std::filesystem::path& scratch)
     {
@@ -443,6 +596,7 @@ int main(int argc, char** argv)
     TestJournalTornTailAndStalePid(scratch, executable);
     TestJournalWriteBoundsPreservePublishedSnapshot(scratch);
     TestPersistentOrchestratorIdentity(scratch);
+    TestPreExecReleaseFailsClosedAfterAbruptDaemonDeath(executable, scratch);
     TestWindowsOrPosixLaunchAndDurableReplay(executable, scratch);
     std::error_code cleanupError;
     std::filesystem::remove_all(scratch, cleanupError);

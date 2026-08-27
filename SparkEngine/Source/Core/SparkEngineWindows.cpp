@@ -30,6 +30,7 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "Utils/WineDetection.h"
+#include <Spark/Version.h>
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -40,10 +41,33 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <shellapi.h>
+
+namespace
+{
+    void WriteCommandOutput(std::string_view text)
+    {
+        // GUI-subsystem executables do not bind the CRT stdout stream to a
+        // redirected parent pipe. CMake/PowerShell still provide an inherited
+        // Win32 standard handle, so write to that handle directly for CLI
+        // introspection and fall back to the CRT for attached consoles.
+        const HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (output != nullptr && output != INVALID_HANDLE_VALUE)
+        {
+            DWORD written = 0;
+            if (WriteFile(output, text.data(), static_cast<DWORD>(text.size()), &written, nullptr) &&
+                written == text.size())
+                return;
+        }
+
+        std::fwrite(text.data(), 1, text.size(), stdout);
+        std::fflush(stdout);
+    }
+} // namespace
 
 /**
  * @brief Parse -test-frames N from a wide command line string (Windows).
@@ -424,7 +448,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     // On a native Windows double-click launch there's no parent console,
     // AttachConsole returns FALSE, and we fall back to the usual GUI
     // behaviour (nothing visible on stdio, which is what GUI apps do).
-    if (AttachConsole(ATTACH_PARENT_PROCESS))
+    const HANDLE inheritedOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+    const bool hasRedirectedOutput = inheritedOutput != nullptr && inheritedOutput != INVALID_HANDLE_VALUE &&
+                                     GetFileType(inheritedOutput) != FILE_TYPE_CHAR;
+    if (!hasRedirectedOutput && AttachConsole(ATTACH_PARENT_PROCESS))
     {
         FILE* fp = nullptr;
         freopen_s(&fp, "CONOUT$", "w", stdout);
@@ -432,6 +459,39 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         // Don't rebind stdin: under Wine in a headless sandbox there's no
         // interactive input, and CONIN$ can block during open.
     }
+
+    // Introspection must stay safe in staged packages and on machines without
+    // graphics/audio drivers. Handle it before logging, crash hooks, settings,
+    // package-root changes, or any subsystem initialization.
+    const bool showHelp = Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"--help") ||
+                          Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-h") ||
+                          Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-help");
+    if (showHelp)
+    {
+        WriteCommandOutput(std::format("SparkEngine {}.{}.{}\n"
+                                       "Usage: SparkEngine [options]\n\n"
+                                       "Core options:\n"
+                                       "  --help, -h                 Show this help and exit\n"
+                                       "  --version                  Show the engine version and exit\n"
+                                       "  -game <module>             Load a game module\n"
+                                       "  -manifest <path>           Load a packaged runtime manifest\n"
+                                       "  -scene <path>              Load a reflected-scene document\n"
+                                       "  -headless, -dedicated      Run without a graphics window\n"
+                                       "  -threads <count>           Set the worker-thread limit\n"
+                                       "  -test-frames <count>       Exit after a fixed frame count\n"
+                                       "  -window-size <WxH>         Override the initial window size\n",
+                                       SPARK_ENGINE_VERSION_MAJOR, SPARK_ENGINE_VERSION_MINOR,
+                                       SPARK_ENGINE_VERSION_PATCH));
+        return 0;
+    }
+    if (Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"--version") ||
+        Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-version"))
+    {
+        WriteCommandOutput(std::format("SparkEngine {}.{}.{}\n", SPARK_ENGINE_VERSION_MAJOR, SPARK_ENGINE_VERSION_MINOR,
+                                       SPARK_ENGINE_VERSION_PATCH));
+        return 0;
+    }
+
     // Initialize the unified Logger with a stderr sink as the *very first*
     // engine action — before SetupCrashHandler, before anything that could
     // fault — so any crash in EngineSettings or the crash handler install

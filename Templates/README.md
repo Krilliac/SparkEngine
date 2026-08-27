@@ -52,6 +52,9 @@ Package/
 |   |-- GameModule.cpp
 |   `-- GameModule.h
 |-- CMakeLists.txt
+|-- Config/
+|   |-- gateway.ini
+|   `-- server.ini
 |-- Package.sparkproject
 |-- README.md
 |-- spark.modules.json
@@ -59,6 +62,15 @@ Package/
 ```
 
 The package directory name remains a literal source token throughout its text files. SparkEditor can therefore safely materialize a project by replacing that token with the requested project name.
+
+## Local service topology
+
+Every template includes the two project-relative files used by the launcher and editor:
+
+- `Config/server.ini` selects the template's `spark.modules.json`, default scene, dedicated-server port, status file, and local gateway-control endpoint.
+- `Config/gateway.ini` defines a matching one-area gateway topology and its status/stop files.
+
+The server and gateway intentionally share `Config/gateway.key`. The editor provisions that project-local file from the operating-system random source the first time **Start gateway** is used, applies owner-only access (mode `0600` on POSIX), and never overwrites an existing key. Command-line deployments must provision the same file themselves with at least 32 cryptographically random bytes. The key is never included in a template or source-control commit. Build the template module before launching its dedicated server so the manifest can resolve the platform's module binary and ABI sidecar.
 
 ## Licensing and provenance
 

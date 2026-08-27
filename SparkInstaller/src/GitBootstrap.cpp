@@ -27,10 +27,11 @@ namespace SparkInstaller
         }
 
 #ifdef SPARK_PLATFORM_WINDOWS
-        // MinGit portable release. Pinned URL; the installer validates archive integrity by unpack success.
+        // MinGit portable release. URL and SHA-256 are pinned to the upstream release manifest.
         constexpr const char* kPortableGitUrl =
             "https://github.com/git-for-windows/git/releases/download/v2.45.2.windows.1/"
             "MinGit-2.45.2-64-bit.zip";
+        constexpr const char* kPortableGitSha256 = "7ed2a3ce5bbbf8eea976488de5416894ca3e6a0347cee195a7d768ac146d5290";
         constexpr const char* kPortableGitExeRel = "cmd\\git.exe";
 #endif
     } // namespace
@@ -84,7 +85,7 @@ namespace SparkInstaller
             fs::create_directories(gitRoot, ec);
             if (log)
                 log(std::string("Downloading: ") + kPortableGitUrl);
-            if (!SparkBuild::Downloader::DownloadAndExtract(kPortableGitUrl, gitRoot.string()))
+            if (!SparkBuild::Downloader::DownloadAndExtract(kPortableGitUrl, gitRoot.string(), kPortableGitSha256))
             {
                 result.diagnosticMessage = "Failed to download/extract MinGit. Please install Git manually and retry.";
                 return result;

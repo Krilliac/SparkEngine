@@ -8,33 +8,33 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 308080 |
-| **SparkEditor/Source** | 108813 |
+| **SparkEngine/Source** | 308414 |
+| **SparkEditor/Source** | 109164 |
 | **GameModules** | 142900 |
-| **External services** | 10426 |
+| **External services** | 10687 |
 | **Asset pipeline** | 2399 |
-| **Tests** | 164187 |
+| **Tests** | 164698 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~747768** |
+| **Total C++ (excl. ThirdParty)** | **~749561** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 997 |
-| Implementation files (.cpp) | 1461 |
+| Header files (.h/.hpp) | 998 |
+| Implementation files (.cpp) | 1463 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 573 |
+| Test files (.cpp) | 574 |
 | Wiki pages (.md) | 198 |
 
 ### Code Density
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~705 |
+| Average lines per .cpp file | ~706 |
 | Average lines per .h file | ~580 |
 | Largest codebase section | Graphics (119374 lines — 38% of SparkEngine/Source) |
 
@@ -45,9 +45,9 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 119374 | 38.7% |
-| Engine (all subsystems) | 85648 | 27.8% |
-| Utils | 41153 | 13.3% |
-| Core | 29328 | 9.5% |
+| Engine (all subsystems) | 85648 | 27.7% |
+| Utils | 41402 | 13.4% |
+| Core | 29413 | 9.5% |
 | Physics | 10814 | 3.5% |
 | Audio | 6090 | 1.9% |
 | Input | 3953 | 1.2% |
@@ -101,14 +101,14 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 65 |
-| Total editor lines | 108813 |
+| Total editor lines | 109164 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 573 |
-| TEST() definitions | 6844 |
+| Test files | 574 |
+| TEST() definitions | 6859 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 

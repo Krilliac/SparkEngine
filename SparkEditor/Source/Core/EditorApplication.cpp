@@ -18,6 +18,7 @@
 #include "Core/FaultIsolation.h"
 #include "EditorCrashHandler.h"
 #include "EditorPluginManager.h"
+#include "ProjectManager.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "Utils/LogMacros.h"
@@ -159,9 +160,30 @@ namespace SparkEditor
         }
 #endif
 
+        // Explicit plugin directories are project-rooted and bounded by the
+        // discovery policy. Mark ownership active before loading so any
+        // partial failure is rolled back by the normal initialization cleanup.
+        m_pluginLifecycleStarted = true;
+        const std::string activeProjectRoot = ProjectManager::GetActiveProjectPath();
+        if (!config.editorPluginDirectories.empty() && activeProjectRoot.empty())
+        {
+            console.LogError("Editor plugin directories require a successfully opened active project");
+            return failInitialization();
+        }
+        for (const std::string& pluginDirectory : config.editorPluginDirectories)
+        {
+            size_t loadedCount = 0;
+            if (!m_pluginManager.LoadPluginsFromProjectDirectory(activeProjectRoot, pluginDirectory, &loadedCount))
+            {
+                console.LogError("Failed to load editor plugins from '" + pluginDirectory + "'");
+                return failInitialization();
+            }
+            console.LogInfo("Loaded " + std::to_string(loadedCount) + " editor plugin(s) from '" + pluginDirectory +
+                            "'");
+        }
+
         // Initialize plugin system
         console.LogInfo("Initializing editor plugins...");
-        m_pluginLifecycleStarted = true;
         if (!m_pluginManager.InitializeAll(this))
         {
             console.LogError("One or more editor plugins failed to initialize");

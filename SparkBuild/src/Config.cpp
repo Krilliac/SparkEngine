@@ -177,7 +177,7 @@ namespace SparkBuild
 
         // ========================================================================
         // Build options matching SparkEngine's CMakeLists.txt exactly
-        // See: https://github.com/Krilliac/SparkEngine/blob/master/CMakeLists.txt
+        // See: https://github.com/Krilliac/SparkEngine/blob/Working/CMakeLists.txt
         // ========================================================================
 
         // Core Systems

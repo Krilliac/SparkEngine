@@ -170,6 +170,21 @@ Load at runtime:
 m_pluginManager.LoadPlugin("plugins/MyDLLPlugin.dll");
 ```
 
+For a production editor launch, opt in to a project-owned plugin directory:
+
+```bash
+SparkEditor --project path/to/MyGame.sparkproject --editor-plugin-dir Plugins/Editor
+```
+
+`--editor-plugin-dir` is repeatable. Relative paths are resolved from the project root;
+absolute paths are accepted only when they remain inside that root. Discovery is
+non-recursive and only loads regular native libraries that have regular sibling
+`.sparkplugin.json` metadata. Symlinks and traversal outside the project are rejected.
+The `--project` file must open successfully; the editor never derives plugin ownership
+from a missing, malformed, or merely requested project path. If a plugin refuses its
+unload fence during a failed directory load, the manager retains fail-closed ownership
+and reports the retained count instead of claiming a complete rollback.
+
 Unload by descriptor name or stable ID:
 
 ```cpp

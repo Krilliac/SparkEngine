@@ -19,14 +19,19 @@ namespace SparkBuild
         // Extract a ZIP file to a directory.
         static bool ExtractZip(const std::string& zipPath, const std::string& destDir);
 
-        // Download and extract a ZIP in one step.
-        static bool DownloadAndExtract(const std::string& url, const std::string& destDir,
-                                       DownloadProgressCallback progress = nullptr);
+        // Verify an already-downloaded archive before extraction.
+        static bool ExtractVerifiedArchive(const std::string& archivePath, const std::string& destDir,
+                                           const std::string& expectedSha256);
 
-        // Atomically reserve a unique .zip file in the system temp directory.
+        // Download, verify, and extract an archive in one step. The expected
+        // SHA-256 is mandatory so callers cannot silently skip integrity checks.
+        static bool DownloadAndExtract(const std::string& url, const std::string& destDir,
+                                       const std::string& expectedSha256, DownloadProgressCallback progress = nullptr);
+
+        // Atomically reserve a unique archive file in the system temp directory.
         // The caller owns the returned file and must remove it when finished.
         // Returns an empty string when no file can be reserved.
-        static std::string ReserveTempDownloadPath();
+        static std::string ReserveTempDownloadPath(const std::string& archiveSuffix = ".zip");
 
         // Get the system temp directory
         static std::string GetTempDir();

@@ -57,14 +57,14 @@ namespace Spark
         class Builder
         {
           public:
-            /// @param executable Path or name of the executable to launch.
+            /// @param executable UTF-8 path or name of the executable to launch.
             explicit Builder(std::string executable);
 
-            /// Append a command-line argument.
+            /// Append a UTF-8 command-line argument.
             Builder& Arg(std::string arg);
 
-            /// Set the child process working directory. An empty path inherits
-            /// the parent's current directory.
+            /// Set the UTF-8 child process working directory. An empty path
+            /// inherits the parent's current directory.
             Builder& WorkingDirectory(std::string directory);
 
             /// Capture the child's stdout so it can be read via ReadAllStdout()/TryReadLine().

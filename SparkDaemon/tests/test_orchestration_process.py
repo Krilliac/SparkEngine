@@ -400,7 +400,10 @@ def run_console_interrupt_scenario(
                     break
                 time.sleep(0.1)
             else:
-                raise RuntimeError(f"supervised child did not become IPC-ready:\n{status.stdout}")
+                raise RuntimeError(
+                    "supervised child did not become IPC-ready:\n"
+                    f"{status.stdout}\nDaemon/child log:\n{read_process_log(daemon_log_path)}"
+                )
 
             interrupt(daemon_process)
 
@@ -550,7 +553,10 @@ def main() -> int:
                     break
                 time.sleep(0.1)
             else:
-                raise RuntimeError(f"supervised child did not become IPC-ready:\n{status.stdout}")
+                raise RuntimeError(
+                    "supervised child did not become IPC-ready:\n"
+                    f"{status.stdout}\nDaemon/child log:\n{read_process_log(daemon_log_path)}"
+                )
 
             invoke("drain", service_id)
             deadline = time.monotonic() + 4
@@ -573,7 +579,10 @@ def main() -> int:
                     break
                 time.sleep(0.1)
             else:
-                raise RuntimeError(f"restarted child did not become IPC-ready:\n{status.stdout}")
+                raise RuntimeError(
+                    "restarted child did not become IPC-ready:\n"
+                    f"{status.stdout}\nDaemon/child log:\n{read_process_log(daemon_log_path)}"
+                )
 
             invoke("stop", service_id)
             deadline = time.monotonic() + 4

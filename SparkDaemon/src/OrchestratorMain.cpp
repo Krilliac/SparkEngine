@@ -221,9 +221,10 @@ int main(int argc, char** argv)
             return 1;
         }
         for (const auto& status : statuses)
-            std::printf("%s\t%s\tpid=%lld\thealth=%u\trestarts=%u\tcrashes=%u\n", status.id.c_str(),
+            std::printf("%s\t%s\tpid=%lld\thealth=%u\texit=%d\trestarts=%u\tcrashes=%u\n", status.id.c_str(),
                         StateName(status.state), static_cast<long long>(status.processId),
-                        static_cast<unsigned>(status.health), status.restartCount, status.crashLoopCount);
+                        static_cast<unsigned>(status.health), status.exitCode, status.restartCount,
+                        status.crashLoopCount);
     }
     else
     {

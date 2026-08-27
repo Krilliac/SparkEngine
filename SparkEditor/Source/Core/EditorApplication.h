@@ -7,9 +7,10 @@
 
 #pragma once
 
-#include <string>
-#include <memory>
 #include <chrono>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include "EditorPluginManager.h"
 
@@ -37,17 +38,18 @@ namespace SparkEditor
  */
     struct EditorConfig
     {
-        std::string projectPath = ".";           ///< Root directory of the project being edited.
-        std::string layoutDirectory = "Layouts"; ///< Directory for saved ImGui layout files (.ini).
-        std::string logDirectory = "Logs";       ///< Directory for editor log output files.
-        bool enableLogging = true;               ///< Whether to write log files to disk.
-        bool startMaximized = true;              ///< Whether to maximize the window on startup.
-        float autoSaveInterval = 30.0f;          ///< Seconds between auto-save of the current scene.
-        int windowWidth = 1600;                  ///< Initial window width (pixels).
-        int windowHeight = 900;                  ///< Initial window height (pixels).
-        bool testMode = false;                   ///< Skip project browser, auto-create test project.
-        int testFrameLimit = 0;                  ///< If >0, exit after this many frames (test mode).
-        std::string startupTheme;                ///< Override default theme by name (empty = use default).
+        std::string projectPath = ".";                    ///< Root directory of the project being edited.
+        std::string layoutDirectory = "Layouts";          ///< Directory for saved ImGui layout files (.ini).
+        std::string logDirectory = "Logs";                ///< Directory for editor log output files.
+        bool enableLogging = true;                        ///< Whether to write log files to disk.
+        bool startMaximized = true;                       ///< Whether to maximize the window on startup.
+        float autoSaveInterval = 30.0f;                   ///< Seconds between auto-save of the current scene.
+        int windowWidth = 1600;                           ///< Initial window width (pixels).
+        int windowHeight = 900;                           ///< Initial window height (pixels).
+        bool testMode = false;                            ///< Skip project browser, auto-create test project.
+        int testFrameLimit = 0;                           ///< If >0, exit after this many frames (test mode).
+        std::string startupTheme;                         ///< Override default theme by name (empty = use default).
+        std::vector<std::string> editorPluginDirectories; ///< Explicit project-owned plugin directories.
     };
 
     /**

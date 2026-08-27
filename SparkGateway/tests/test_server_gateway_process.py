@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import socket
@@ -100,10 +101,24 @@ def make_private_key(path: Path) -> None:
         os.chmod(path, 0o600)
         return
 
-    identity = subprocess.run(
-        ["whoami"], capture_output=True, text=True, check=True, timeout=5, shell=False
+    identity_record = subprocess.run(
+        ["whoami", "/user", "/fo", "csv", "/nh"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=5,
+        shell=False,
     ).stdout.strip()
-    require(bool(identity), "whoami returned an empty Windows identity")
+    identity_fields = next(csv.reader([identity_record]), [])
+    require(
+        len(identity_fields) >= 2 and identity_fields[1].startswith("S-1-"),
+        f"whoami returned no usable Windows user SID: {identity_record}",
+    )
+    # icacls accepts a leading '*' to force an unambiguous numeric SID. User
+    # names can resolve differently on hosted-runner images (for example to an
+    # administrators group), leaving the only allow ACE different from the
+    # file owner even though both commands report success.
+    identity = f"*{identity_fields[1]}"
     secured = subprocess.run(
         ["icacls", str(path), "/inheritance:r", "/grant:r", f"{identity}:(F)"],
         capture_output=True,

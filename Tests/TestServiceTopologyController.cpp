@@ -6,6 +6,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <thread>
 #include <utility>
 
 using namespace SparkEditor;
@@ -87,8 +88,10 @@ TEST(ServiceTopologyController_RemovesStaleControlFilesBeforeLaunch)
     ServiceTopologyController controller;
     TopologyServiceSpec spec;
     spec.executable = root / "missing-service";
+    spec.workingDirectory = root;
     spec.healthFile = health;
     spec.stopFile = stop;
+    spec.privateKeyFile = root / "Config/gateway.key";
     controller.Configure(TopologyService::Gateway, std::move(spec));
 
     // CreateProcess reports a missing executable synchronously on Windows, while
@@ -98,6 +101,69 @@ TEST(ServiceTopologyController_RemovesStaleControlFilesBeforeLaunch)
     (void)controller.Start(TopologyService::Gateway);
     EXPECT_FALSE(fs::exists(health));
     EXPECT_FALSE(fs::exists(stop));
+
+    std::error_code error;
+    fs::remove_all(root, error);
+    EXPECT_FALSE(error);
+}
+
+TEST(ServiceTopologyController_LaunchesProcessInsideConfiguredWorkingDirectory)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    fs::path root = fs::temp_directory_path() / ("spark-topology-working-dir-" + std::to_string(stamp));
+#ifdef _WIN32
+    root /= L"Caf\u00e9 Project";
+#endif
+    fs::create_directories(root);
+
+    TopologyServiceSpec spec;
+#ifdef _WIN32
+    spec.executable = "cmd.exe";
+    std::ofstream(root / "cwd-marker.txt") << "ready\n";
+    spec.arguments = {"/d", "/c", "if exist cwd-marker.txt (echo cwd-ok) else (exit /b 9)"};
+#else
+    spec.executable = "/bin/pwd";
+#endif
+    spec.workingDirectory = root;
+
+    ServiceTopologyController controller;
+    controller.Configure(TopologyService::Orchestrator, std::move(spec));
+    ASSERT_TRUE(controller.Start(TopologyService::Orchestrator));
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (controller.Snapshot(TopologyService::Orchestrator).running && std::chrono::steady_clock::now() < deadline)
+    {
+        controller.Update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    controller.Update();
+
+    const auto& snapshot = controller.Snapshot(TopologyService::Orchestrator);
+    EXPECT_FALSE(snapshot.running);
+    EXPECT_TRUE(snapshot.exitCode.has_value());
+    if (snapshot.exitCode)
+        EXPECT_EQ(*snapshot.exitCode, 0);
+
+    bool reportedConfiguredDirectory = false;
+    for (const std::string& line : snapshot.log)
+    {
+#ifdef _WIN32
+        if (line == "cwd-ok")
+        {
+            reportedConfiguredDirectory = true;
+            break;
+        }
+#else
+        std::error_code equivalentError;
+        if (fs::equivalent(fs::path(line), root, equivalentError) && !equivalentError)
+        {
+            reportedConfiguredDirectory = true;
+            break;
+        }
+#endif
+    }
+    EXPECT_TRUE(reportedConfiguredDirectory);
 
     std::error_code error;
     fs::remove_all(root, error);
@@ -124,4 +190,49 @@ TEST(ServiceTopologyController_CapsHealthFileBeforeReading)
     std::error_code error;
     fs::remove_all(root, error);
     EXPECT_FALSE(error);
+}
+
+TEST(ServiceTopologyController_ProvisionsProjectPrivateKeyOnce)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-topology-key-" + std::to_string(stamp));
+    fs::create_directories(root);
+    const fs::path keyFile = root / "Config/gateway.key";
+    std::string error;
+
+    EXPECT_TRUE(ServiceTopologyController::EnsureProjectPrivateKey(root, keyFile, error));
+    EXPECT_TRUE(fs::is_regular_file(keyFile));
+    std::ifstream first(keyFile, std::ios::binary);
+    const std::string original((std::istreambuf_iterator<char>(first)), std::istreambuf_iterator<char>());
+    EXPECT_EQ(original.size(), size_t{65});
+
+    EXPECT_TRUE(ServiceTopologyController::EnsureProjectPrivateKey(root, keyFile, error));
+    std::ifstream second(keyFile, std::ios::binary);
+    const std::string unchanged((std::istreambuf_iterator<char>(second)), std::istreambuf_iterator<char>());
+    EXPECT_EQ(unchanged, original);
+    first.close();
+    second.close();
+
+    std::error_code cleanupError;
+    fs::remove_all(root, cleanupError);
+    EXPECT_FALSE(cleanupError);
+}
+
+TEST(ServiceTopologyController_RejectsPrivateKeyOutsideProject)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-topology-key-root-" + std::to_string(stamp));
+    const fs::path outside = root.parent_path() / ("spark-topology-key-outside-" + std::to_string(stamp));
+    fs::create_directories(root);
+    std::string error;
+
+    EXPECT_FALSE(ServiceTopologyController::EnsureProjectPrivateKey(root, outside / "gateway.key", error));
+    EXPECT_FALSE(error.empty());
+    EXPECT_FALSE(fs::exists(outside / "gateway.key"));
+
+    std::error_code cleanupError;
+    fs::remove_all(root, cleanupError);
+    fs::remove_all(outside, cleanupError);
 }

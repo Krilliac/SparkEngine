@@ -528,7 +528,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*573 test files, 6844 source-level test definitions*
+*574 test files, 6859 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -693,7 +693,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEditorCommands` | 8 |
 | `TestEditorDocumentTransition` | 7 |
 | `TestEditorLayoutManager` | 13 |
-| `TestEditorSubsystems` | 124 |
+| `TestEditorSubsystems` | 128 |
 | `TestEditorWindowManager` | 14 |
 | `TestEngineBootPlatforms` | 41 |
 | `TestEngineContext` | 18 |
@@ -771,7 +771,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameplayTags` | 14 |
 | `TestGameplayTagsReal` | 7 |
 | `TestGatewayAreaControl` | 7 |
-| `TestGatewaySecurity` | 4 |
+| `TestGatewaySecurity` | 5 |
 | `TestGizmoMath` | 3 |
 | `TestGoldenImageTest` | 14 |
 | `TestGraphicsEngine` | 14 |
@@ -803,6 +803,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLODGeneratorPhaseGG` | 6 |
 | `TestLagCompensation` | 12 |
 | `TestLagCompensationIntegration` | 4 |
+| `TestLauncherPaths` | 4 |
 | `TestLauncherProcess` | 4 |
 | `TestLevelStreamingSystemPhaseAA` | 11 |
 | `TestLightManager` | 13 |
@@ -889,7 +890,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestPhysicsInterpolation` | 8 |
 | `TestPhysicsStress` | 16 |
 | `TestPhysicsSystem` | 29 |
-| `TestPhysicsTeardownGuard` | 3 |
+| `TestPhysicsTeardownGuard` | 5 |
 | `TestPlatformInput` | 11 |
 | `TestPlayModeManager` | 34 |
 | `TestPluginABI` | 17 |
@@ -954,7 +955,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestScriptHotReload` | 16 |
 | `TestScriptSandbox` | 7 |
 | `TestSeamlessAreaManager` | 14 |
-| `TestSecureRandom` | 2 |
+| `TestSecureRandom` | 3 |
 | `TestSelectionManager` | 23 |
 | `TestSelfRecovery` | 16 |
 | `TestSequencer` | 10 |
@@ -963,7 +964,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSerializer` | 17 |
 | `TestServerLiveMockClient` | 10 |
 | `TestServerMockClient` | 31 |
-| `TestServiceTopologyController` | 7 |
+| `TestServiceTopologyController` | 10 |
 | `TestShaderCrossCompilerPhaseW` | 19 |
 | `TestShaderDiskCache` | 6 |
 | `TestShaderDiskCacheDaemon` | 8 |

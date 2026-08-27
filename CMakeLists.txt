@@ -173,6 +173,10 @@ option(STRIP_DEBUG_SYMBOLS "Strip debug symbols from the final binary" OFF)
 # Third-party manifest audit (single source of truth lives in ThirdParty/dependencies.lock)
 include("${CMAKE_SOURCE_DIR}/cmake/SparkThirdPartyAudit.cmake")
 spark_thirdparty_audit("${CMAKE_SOURCE_DIR}/ThirdParty/dependencies.lock")
+set(SPARK_THIRD_PARTY_NOTICES_FILE "${CMAKE_BINARY_DIR}/SparkEngineThirdPartyNotices.txt")
+spark_thirdparty_generate_notice(
+    "${CMAKE_SOURCE_DIR}/ThirdParty/dependencies.lock"
+    "${SPARK_THIRD_PARTY_NOTICES_FILE}")
 
 # ---------------------------------------------------------------------
 # 4) C++ standard and in-source build guard
@@ -3086,17 +3090,26 @@ set(CPACK_COMPONENT_SAMPLES_DISPLAY_NAME "Sample Content")
 set(CPACK_COMPONENT_SAMPLES_DESCRIPTION "Reference sample modules and sample project content")
 set(CPACK_COMPONENT_SAMPLES_DEPENDS runtime)
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/LICENSE")
-    # WiX rejects license resources without a recognized extension. Keep the
-    # repository's canonical LICENSE file extensionless, but stage an identical
-    # .txt copy for all CPack generators so scheduled Windows packaging works.
-    configure_file(
-        "${CMAKE_SOURCE_DIR}/LICENSE"
-        "${CMAKE_BINARY_DIR}/SparkEngineLicense.txt"
-        COPYONLY
-    )
-    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_BINARY_DIR}/SparkEngineLicense.txt")
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/LICENSE")
+    message(FATAL_ERROR "SparkEngine packaging requires the repository LICENSE file")
 endif()
+# WiX rejects license resources without a recognized extension. Keep the
+# repository's canonical LICENSE file extensionless, but stage an identical
+# .txt copy for all CPack generators and ship it in every runtime payload.
+configure_file(
+    "${CMAKE_SOURCE_DIR}/LICENSE"
+    "${CMAKE_BINARY_DIR}/SparkEngineLicense.txt"
+    COPYONLY
+)
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_BINARY_DIR}/SparkEngineLicense.txt")
+install(FILES "${CMAKE_BINARY_DIR}/SparkEngineLicense.txt"
+    DESTINATION .
+    RENAME LICENSE.txt
+    COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME})
+install(FILES "${SPARK_THIRD_PARTY_NOTICES_FILE}"
+    DESTINATION .
+    RENAME THIRD_PARTY_NOTICES.txt
+    COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME})
 if(EXISTS "${CMAKE_SOURCE_DIR}/README.md")
     set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
 endif()

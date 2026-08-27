@@ -2,7 +2,7 @@ name: Build SparkEngine
 
 on:
   push:
-    branches: [ main, develop, Working, 'feature/**', 'claude/**' ]
+    branches: [ main, develop, Working, 'feature/**', 'claude/**', 'release/**' ]
   pull_request:
     branches: [ main, develop, Working ]
   workflow_dispatch:
@@ -111,6 +111,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v7.0.1
+      with:
+        fetch-depth: 0
 
     - name: Install clang-format
       run: |
@@ -123,19 +125,82 @@ jobs:
         sudo apt-get install -y clang-format
 
     - name: Check formatting
+      env:
+        FORMAT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
       run: |
-        # clang-format 18+ warns about missing Objective-C config and returns
-        # exit code 1 even with zero violations.  Capture output and check for
-        # actual violation markers instead of relying on the exit code.
-        find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkBuild/src SparkInstaller/src \
-          -not -path '*/Metal/*' \
-          \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
-          xargs clang-format --dry-run --Werror > check-format-output.log 2>&1 || true
-        OUTPUT=$(cat check-format-output.log)
-        if echo "$OUTPUT" | grep -q "\-Wclang-format-violations"; then
-          echo "$OUTPUT"
-          echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
+        set -euo pipefail
+        # Every C++ surface is in scope, but source checks are incremental so
+        # unrelated legacy formatting debt does not hide new debt. The style
+        # file itself is always validated and is part of change detection.
+        FORMAT_ROOTS=(SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests)
+        for root in "${FORMAT_ROOTS[@]}"; do
+          if [[ ! -d "$root" ]]; then
+            echo "::error::Formatting source root is missing: $root"
+            exit 1
+          fi
+        done
+        BASE_SHA="${FORMAT_BASE_SHA:-}"
+        if [[ ! "$BASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] ||
+           [[ "$BASE_SHA" == "0000000000000000000000000000000000000000" ]] ||
+           ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+          BASE_SHA=$(git rev-parse HEAD^ 2>/dev/null || true)
+        fi
+
+        if [[ -n "$BASE_SHA" ]]; then
+          mapfile -d '' CHANGED_PATHS < <(
+            git diff --name-only --diff-filter=ACMRD -z "$BASE_SHA" HEAD -- "${FORMAT_ROOTS[@]}" .clang-format
+          )
+        else
+          mapfile -d '' CHANGED_PATHS < <(git ls-files -z -- "${FORMAT_ROOTS[@]}" .clang-format)
+        fi
+
+        FORMAT_SOURCES=()
+        FORMAT_CONFIG_CHANGED=false
+        for source in "${CHANGED_PATHS[@]}"; do
+          case "$source" in
+            .clang-format) FORMAT_CONFIG_CHANGED=true ;;
+            */Metal/*) ;;
+            *.h|*.hpp|*.cpp)
+              if [[ -f "$source" ]]; then
+                FORMAT_SOURCES+=("$source")
+              fi
+              ;;
+          esac
+        done
+
+        if ! command -v clang-format >/dev/null 2>&1; then
+          echo "::error::clang-format is not installed."
           exit 1
+        fi
+        if [[ ! -f .clang-format ]]; then
+          echo "::error::.clang-format is missing."
+          exit 1
+        fi
+        if ! clang-format --style=file --dump-config > /dev/null 2> check-format-output.log; then
+          cat check-format-output.log
+          echo "::error::.clang-format could not be parsed."
+          exit 1
+        fi
+        if [[ "$FORMAT_CONFIG_CHANGED" == true ]]; then
+          echo "Validated changed .clang-format configuration."
+        fi
+        if (( ${#FORMAT_SOURCES[@]} == 0 )); then
+          echo "No changed C++ sources require formatting."
+          exit 0
+        fi
+
+        set +e
+        clang-format --dry-run --Werror "${FORMAT_SOURCES[@]}" > check-format-output.log 2>&1
+        FORMAT_STATUS=$?
+        set -e
+        if (( FORMAT_STATUS != 0 )); then
+          cat check-format-output.log
+          if grep -q -- "-Wclang-format-violations" check-format-output.log; then
+            echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
+          else
+            echo "::error::clang-format failed to parse or format the changed sources (exit ${FORMAT_STATUS})."
+          fi
+          exit "$FORMAT_STATUS"
         fi
 
     - name: Extract check-format error summary

@@ -407,23 +407,26 @@ namespace SparkBuild
 
 #ifdef SPARK_PLATFORM_WINDOWS
         std::string url = "https://github.com/Kitware/CMake/releases/download/v3.31.5/cmake-3.31.5-windows-x86_64.zip";
+        std::string sha256 = "d4d2d4b9ccd68dae975a066fcd42ea9807ef40f79ee6971923fd3788e7917585";
         std::string cmakeBin =
             (std::filesystem::path(destDir) / "cmake-3.31.5-windows-x86_64" / "bin" / "cmake.exe").string();
 #elif defined(SPARK_PLATFORM_MACOS)
         std::string url =
             "https://github.com/Kitware/CMake/releases/download/v3.31.5/cmake-3.31.5-macos-universal.tar.gz";
+        std::string sha256 = "cc8e3d9bef7eee70db52601a5ed60d221436a8def18388effdab0e7d0866f50d";
         std::string cmakeBin = (std::filesystem::path(destDir) / "cmake-3.31.5-macos-universal" / "CMake.app" /
                                 "Contents" / "bin" / "cmake")
                                    .string();
 #else
         std::string url = "https://github.com/Kitware/CMake/releases/download/v3.31.5/cmake-3.31.5-linux-x86_64.tar.gz";
+        std::string sha256 = "2984e70515ff60c5e4a41922b5d715a8168a696a89721e3b114e36f453244f72";
         std::string cmakeBin =
             (std::filesystem::path(destDir) / "cmake-3.31.5-linux-x86_64" / "bin" / "cmake").string();
 #endif
 
         std::cout << "\n" << Term::Yellow("Downloading CMake 3.31.5...") << "\n";
 
-        bool ok = Downloader::DownloadAndExtract(url, destDir);
+        bool ok = Downloader::DownloadAndExtract(url, destDir, sha256);
 
         if (ok)
         {

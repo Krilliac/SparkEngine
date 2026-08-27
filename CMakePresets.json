@@ -142,6 +142,7 @@
                 "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
                 "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
                 "STRIP_DEBUG_SYMBOLS": "ON",
+                "SPARK_STRICT_DEPS": "ON",
                 "BUILD_TESTS": "OFF"
             },
             "condition": {
@@ -184,6 +185,7 @@
                 "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
                 "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
                 "STRIP_DEBUG_SYMBOLS": "ON",
+                "SPARK_STRICT_DEPS": "ON",
                 "BUILD_TESTS": "OFF"
             },
             "condition": {

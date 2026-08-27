@@ -8,6 +8,8 @@ A C++23 open-source 3D game engine with a full RHI abstraction layer, ECS (EnTT)
 [![Test definitions](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2FWorking%2F.github%2Fbadges%2Ftests.json&style=flat-square)](Tests)
 [![C++ lines of code](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2FWorking%2F.github%2Fbadges%2Floc.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
 [![Source files](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2FWorking%2F.github%2Fbadges%2Ffiles.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
+[![Lifetime downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2FWorking%2F.github%2Fbadges%2Fdownloads.json&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases)
+[![Installer downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2FWorking%2F.github%2Fbadges%2Finstaller-downloads.json&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases)
 [![License: Spark Open](https://img.shields.io/badge/License-Spark_Open-blue?style=flat-square)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-community-5865F2?style=flat-square&logo=discord)](https://discord.gg/NyX8d9UZM)
 
@@ -15,10 +17,19 @@ A C++23 open-source 3D game engine with a full RHI abstraction layer, ECS (EnTT)
 
 ## Getting Started
 
-SparkEngine is currently distributed as source. No versioned installer or
-prebuilt release has been published yet; the release-readiness gates remain
-authoritative. The in-tree [installer documentation](SparkInstaller/README.md)
-describes development and packaging workflows, not an available download.
+Rolling Windows packages are published from the exact commit certified by CI.
+Release builds are recommended for normal use; Debug builds include additional
+runtime diagnostics. The bootstrap installer clones and builds the selected
+engine revision locally.
+
+[![Windows Release Installer](https://img.shields.io/badge/Download-Windows_Release_Installer-2ea44f?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Release-Installer.exe)
+[![Windows Release ZIP](https://img.shields.io/badge/Download-Windows_Release_ZIP-0969da?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Release.zip)
+[![Windows Debug Installer](https://img.shields.io/badge/Download-Windows_Debug_Installer-8a2be2?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Debug-Installer.exe)
+[![Windows Debug ZIP](https://img.shields.io/badge/Download-Windows_Debug_ZIP-6f42c1?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Debug.zip)
+[![Bootstrap Installer](https://img.shields.io/badge/Download-Windows_Bootstrap_Installer-f97316?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkInstaller-Windows-x64.exe)
+
+[All platforms and checksums](https://github.com/Krilliac/SparkEngine/releases/tag/nightly) ·
+[installer documentation](SparkInstaller/README.md)
 
 **Build from source:**
 
@@ -182,7 +193,7 @@ Nine complete project templates load as `.dll`/`.so` modules at runtime and buil
 
 ## Quality Assurance
 
-**Tests:** 6,844 test definitions across 573 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 6,859 test definitions across 574 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
 
 ```bash
 cd build && ctest --output-on-failure
@@ -307,7 +318,7 @@ SparkEngine/
 ├── SparkEditor/Source/    59 dockable panels, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 prebuilt game modules
-├── Tests/                 6,844 test definitions, 573 files
+├── Tests/                 6,859 test definitions, 574 files
 ├── wiki/                  144+ wiki pages
 └── docs/                  API reference, guides
 ```

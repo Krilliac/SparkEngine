@@ -1084,8 +1084,8 @@ graph LR
 
 ### `SparkEditor/Source/Core/`
 
-- [`EditorApplication.cpp`](../../SparkEditor/Source/Core/EditorApplication.cpp) — 294 LOC — Implementation of the enhanced editor application class
-- [`EditorApplication.h`](../../SparkEditor/Source/Core/EditorApplication.h) — 153 LOC — Main SparkEditor application class with cross-platform graphics and ImGui integration
+- [`EditorApplication.cpp`](../../SparkEditor/Source/Core/EditorApplication.cpp) — 316 LOC — Implementation of the enhanced editor application class
+- [`EditorApplication.h`](../../SparkEditor/Source/Core/EditorApplication.h) — 155 LOC — Main SparkEditor application class with cross-platform graphics and ImGui integration
 - [`EditorApplicationLinux.cpp`](../../SparkEditor/Source/Core/EditorApplicationLinux.cpp) — 349 LOC — Linux/SDL2+OpenGL editor application — window creation, graphics init, run loop, shutdown
 - [`EditorApplicationWindows.cpp`](../../SparkEditor/Source/Core/EditorApplicationWindows.cpp) — 467 LOC — Windows/D3D11 editor application — window creation, graphics init, run loop, shutdown
 - [`EditorCommandRegistry.cpp`](../../SparkEditor/Source/Core/EditorCommandRegistry.cpp) — 187 LOC — Command palette registration for the SparkEditor UI.
@@ -1105,8 +1105,9 @@ graph LR
 - [`EditorPanel.h`](../../SparkEditor/Source/Core/EditorPanel.h) — 301 LOC — Base class for all editor UI panels
 - [`EditorPanelFactory.cpp`](../../SparkEditor/Source/Core/EditorPanelFactory.cpp) — 362 LOC — Panel creation for the SparkEditor UI
 - [`EditorPanelFactoryMetadata.cpp`](../../SparkEditor/Source/Core/EditorPanelFactoryMetadata.cpp) — 211 LOC — Panel metadata setup (icons, categories, default visibility) for the SparkEditor UI
-- [`EditorPluginManager.cpp`](../../SparkEditor/Source/Core/EditorPluginManager.cpp) — 501 LOC — Implementation of the editor plugin manager (R7.1)
-- [`EditorPluginManager.h`](../../SparkEditor/Source/Core/EditorPluginManager.h) — 230 LOC — Manages editor plugin lifecycle and registration (R7.1)
+- [`EditorPluginDiscovery.h`](../../SparkEditor/Source/Core/EditorPluginDiscovery.h) — 138 LOC — Safe, bounded discovery policy for project-owned editor plugins.
+- [`EditorPluginManager.cpp`](../../SparkEditor/Source/Core/EditorPluginManager.cpp) — 545 LOC — Implementation of the editor plugin manager (R7.1)
+- [`EditorPluginManager.h`](../../SparkEditor/Source/Core/EditorPluginManager.h) — 249 LOC — Manages editor plugin lifecycle and registration (R7.1)
 - [`EditorTheme.cpp`](../../SparkEditor/Source/Core/EditorTheme.cpp) — 1587 LOC — Theme system implementation for the Spark Engine Editor
 - [`EditorTheme.h`](../../SparkEditor/Source/Core/EditorTheme.h) — 339 LOC — Professional theme management system with Unity/Unreal-inspired styling
 - [`EditorUI.cpp`](../../SparkEditor/Source/Core/EditorUI.cpp) — 2247 LOC — Core editor UI system — lifecycle, rendering dispatch, layout, commands
@@ -1294,9 +1295,9 @@ graph LR
 - [`SearchPanel.cpp`](../../SparkEditor/Source/Panels/SearchPanel.cpp) — 438 LOC — Implementation of the search panel
 - [`SearchPanel.h`](../../SparkEditor/Source/Panels/SearchPanel.h) — 117 LOC — Search panel for finding entities, components, and assets
 - [`SelectionManager.h`](../../SparkEditor/Source/Panels/SelectionManager.h) — 623 LOC — Centralized editor object selection and picking pipeline
-- [`ServiceTopologyController.cpp`](../../SparkEditor/Source/Panels/ServiceTopologyController.cpp) — 229 LOC
-- [`ServiceTopologyController.h`](../../SparkEditor/Source/Panels/ServiceTopologyController.h) — 86 LOC — Real local service process/control model.
-- [`ServiceTopologyPanel.cpp`](../../SparkEditor/Source/Panels/ServiceTopologyPanel.cpp) — 193 LOC
+- [`ServiceTopologyController.cpp`](../../SparkEditor/Source/Panels/ServiceTopologyController.cpp) — 323 LOC
+- [`ServiceTopologyController.h`](../../SparkEditor/Source/Panels/ServiceTopologyController.h) — 90 LOC — Real local service process/control model.
+- [`ServiceTopologyPanel.cpp`](../../SparkEditor/Source/Panels/ServiceTopologyPanel.cpp) — 210 LOC
 - [`ServiceTopologyPanel.h`](../../SparkEditor/Source/Panels/ServiceTopologyPanel.h) — 36 LOC — Local daemon/collab/gateway topology controls.
 - [`SplineEditorPanel.cpp`](../../SparkEditor/Source/Panels/SplineEditorPanel.cpp) — 241 LOC — Implementation of the spline path editor panel
 - [`SplineEditorPanel.h`](../../SparkEditor/Source/Panels/SplineEditorPanel.h) — 65 LOC — Spline path editor panel for the Spark Engine Editor
@@ -1419,7 +1420,7 @@ graph LR
 
 ### `SparkEditor/Source/`
 
-- [`main.cpp`](../../SparkEditor/Source/main.cpp) — 533 LOC — SparkEditor entry point with integrated debug and collab server support
+- [`main.cpp`](../../SparkEditor/Source/main.cpp) — 544 LOC — SparkEditor entry point with integrated debug and collab server support
 
 ### `SparkEngine/Source/Audio/`
 
@@ -1528,7 +1529,7 @@ graph LR
 - [`SafeCast.h`](../../SparkEngine/Source/Core/SafeCast.h) — 99 LOC — Type-safe cast utilities with debug-mode validation
 - [`SparkEngine.cpp`](../../SparkEngine/Source/Core/SparkEngine.cpp) — 527 LOC — SparkEngine executable entry point - loads game modules dynamically
 - [`SparkEngine.h`](../../SparkEngine/Source/Core/SparkEngine.h) — 41 LOC — Main engine header - SparkEngine is the executable runtime host
-- [`SparkEngineLinux.cpp`](../../SparkEngine/Source/Core/SparkEngineLinux.cpp) — 243 LOC — POSIX entry point (main), signal handling, and command-line parsing (Linux + macOS).
+- [`SparkEngineLinux.cpp`](../../SparkEngine/Source/Core/SparkEngineLinux.cpp) — 268 LOC — POSIX entry point (main), signal handling, and command-line parsing (Linux + macOS).
 - [`SparkEngineLinuxHeadless.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp) — 246 LOC — Headless/dedicated-server loop and no-SDL2 fallback path (Linux + macOS).
 - [`SparkEngineLinuxInit.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxInit.cpp) — 410 LOC — Shared POSIX startup, per-frame tick, and shutdown helpers (Linux + macOS).
 - [`SparkEngineLinuxInternal.h`](../../SparkEngine/Source/Core/SparkEngineLinuxInternal.h) — 69 LOC — Internal declarations shared by the POSIX (Linux + macOS) entry-point files.
@@ -1536,7 +1537,7 @@ graph LR
 - [`SparkEngineLinuxSDL2Events.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxSDL2Events.cpp) — 232 LOC — SDL2 event translation, dispatch, and per-frame main loop (Linux + macOS).
 - [`SparkEngineMacOS.cpp`](../../SparkEngine/Source/Core/SparkEngineMacOS.cpp) — 136 LOC — macOS-specific engine entry-point helpers (Metal view lifecycle, exe path).
 - [`SparkEngineMacOS.h`](../../SparkEngine/Source/Core/SparkEngineMacOS.h) — 54 LOC — macOS-specific engine entry-point helpers (Metal view, exe path).
-- [`SparkEngineWindows.cpp`](../../SparkEngine/Source/Core/SparkEngineWindows.cpp) — 558 LOC — Windows entry point (wWinMain), command-line parsing, and -exec script playback
+- [`SparkEngineWindows.cpp`](../../SparkEngine/Source/Core/SparkEngineWindows.cpp) — 618 LOC — Windows entry point (wWinMain), command-line parsing, and -exec script playback
 - [`SparkEngineWindowsHeadless.cpp`](../../SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp) — 389 LOC — Headless/dedicated-server loop (Windows).
 - [`SparkEngineWindowsInit.cpp`](../../SparkEngine/Source/Core/SparkEngineWindowsInit.cpp) — 308 LOC — Windowed-mode subsystem initialization (Windows).
 - [`SparkEngineWindowsInternal.h`](../../SparkEngine/Source/Core/SparkEngineWindowsInternal.h) — 108 LOC — Internal declarations shared by the Windows entry-point files.
@@ -2605,7 +2606,7 @@ graph LR
 - [`ProcessWin32.cpp`](../../SparkEngine/Source/Utils/ProcessWin32.cpp) — 145 LOC — Windows implementation of Spark::Process
 - [`ProcessWin32Internal.h`](../../SparkEngine/Source/Utils/ProcessWin32Internal.h) — 130 LOC — Shared Windows-only Process::Impl definition for the ProcessWin32*.cpp split parts
 - [`ProcessWin32JobPolicy.h`](../../SparkEngine/Source/Utils/ProcessWin32JobPolicy.h) — 23 LOC — Testable lifetime policy for Win32 child-process job assignment.
-- [`ProcessWin32Launch.cpp`](../../SparkEngine/Source/Utils/ProcessWin32Launch.cpp) — 329 LOC — Windows implementation of Spark::Process::Builder (configuration and launch)
+- [`ProcessWin32Launch.cpp`](../../SparkEngine/Source/Utils/ProcessWin32Launch.cpp) — 373 LOC — Windows implementation of Spark::Process::Builder (configuration and launch)
 - [`ProfileProperties.cpp`](../../SparkEngine/Source/Utils/ProfileProperties.cpp) — 118 LOC — Implementation of frame-resetting typed profile properties
 - [`ProfileProperties.h`](../../SparkEngine/Source/Utils/ProfileProperties.h) — 126 LOC — Typed profile properties that auto-reset each frame
 - [`Profiler.cpp`](../../SparkEngine/Source/Utils/Profiler.cpp) — 457 LOC — Frame profiling and performance analysis implementation
@@ -2619,8 +2620,8 @@ graph LR
 - [`ScopeGuard.h`](../../SparkEngine/Source/Utils/ScopeGuard.h) — 285 LOC — RAII scope-exit guards that execute cleanup code on scope exit
 - [`ScopedTimer.h`](../../SparkEngine/Source/Utils/ScopedTimer.h) — 103 LOC — RAII-based scoped timing utility for quick performance measurements
 - [`SecureMemory.h`](../../SparkEngine/Source/Utils/SecureMemory.h) — 119 LOC — Small, portable helpers for promptly erasing live credential buffers.
-- [`SecureRandom.cpp`](../../SparkEngine/Source/Utils/SecureRandom.cpp) — 88 LOC — Operating-system-backed cryptographic random byte generation.
-- [`SecureRandom.h`](../../SparkEngine/Source/Utils/SecureRandom.h) — 17 LOC — Operating-system-backed cryptographic random byte generation.
+- [`SecureRandom.cpp`](../../SparkEngine/Source/Utils/SecureRandom.cpp) — 284 LOC — Operating-system-backed cryptographic random byte generation.
+- [`SecureRandom.h`](../../SparkEngine/Source/Utils/SecureRandom.h) — 26 LOC — Operating-system-backed cryptographic random byte generation.
 - [`Serializer.h`](../../SparkEngine/Source/Utils/Serializer.h) — 349 LOC — Lightweight binary serialization and deserialization utilities
 - [`ShaderServiceClient.cpp`](../../SparkEngine/Source/Utils/ShaderServiceClient.cpp) — 86 LOC — Implementation of the typed Shader service client wrapper.
 - [`ShaderServiceClient.h`](../../SparkEngine/Source/Utils/ShaderServiceClient.h) — 71 LOC — Engine-side wrapper for the SparkDaemon Shader service.
@@ -2688,6 +2689,7 @@ graph LR
 ### `Tests/Fixtures/PluginABI/`
 
 - [`ForwardMinorPlugin.cpp`](../../Tests/Fixtures/PluginABI/ForwardMinorPlugin.cpp) — 56 LOC
+- [`RollbackRefusingPlugin.cpp`](../../Tests/Fixtures/PluginABI/RollbackRefusingPlugin.cpp) — 66 LOC
 - [`ValidPlugin.cpp`](../../Tests/Fixtures/PluginABI/ValidPlugin.cpp) — 92 LOC
 
 ### `Tests/Integration/`
@@ -2866,7 +2868,7 @@ graph LR
 - [`TestEditorCommands.cpp`](../../Tests/TestEditorCommands.cpp) — 321 LOC
 - [`TestEditorDocumentTransition.cpp`](../../Tests/TestEditorDocumentTransition.cpp) — 83 LOC
 - [`TestEditorLayoutManager.cpp`](../../Tests/TestEditorLayoutManager.cpp) — 461 LOC — Tests for editor layout management
-- [`TestEditorSubsystems.cpp`](../../Tests/TestEditorSubsystems.cpp) — 2745 LOC — Tests for editor subsystems that operate without ImGui or GPU
+- [`TestEditorSubsystems.cpp`](../../Tests/TestEditorSubsystems.cpp) — 2856 LOC — Tests for editor subsystems that operate without ImGui or GPU
 - [`TestEditorWindowManager.cpp`](../../Tests/TestEditorWindowManager.cpp) — 349 LOC
 - [`TestEngineBootPlatforms.cpp`](../../Tests/TestEngineBootPlatforms.cpp) — 496 LOC — Tests for engine boot sequence across platforms
 - [`TestEngineContext.cpp`](../../Tests/TestEngineContext.cpp) — 609 LOC
@@ -2945,7 +2947,7 @@ graph LR
 - [`TestGameplayTags.cpp`](../../Tests/TestGameplayTags.cpp) — 256 LOC
 - [`TestGameplayTagsReal.cpp`](../../Tests/TestGameplayTagsReal.cpp) — 96 LOC — Real-class tests for Spark::Gameplay::GameplayTagRegistry and GameplayTagContainer
 - [`TestGatewayAreaControl.cpp`](../../Tests/TestGatewayAreaControl.cpp) — 312 LOC
-- [`TestGatewaySecurity.cpp`](../../Tests/TestGatewaySecurity.cpp) — 72 LOC — HMAC admission and replay tests.
+- [`TestGatewaySecurity.cpp`](../../Tests/TestGatewaySecurity.cpp) — 90 LOC — HMAC admission and replay tests.
 - [`TestGizmoMath.cpp`](../../Tests/TestGizmoMath.cpp) — 214 LOC — Tests for gizmo math (ray-plane/ray-axis intersection)
 - [`TestGoldenImageTest.cpp`](../../Tests/TestGoldenImageTest.cpp) — 212 LOC
 - [`TestGraphicsEngine.cpp`](../../Tests/TestGraphicsEngine.cpp) — 384 LOC — Unit tests for GraphicsEngine state management, draw list, and statistics
@@ -2977,6 +2979,7 @@ graph LR
 - [`TestLODGeneratorPhaseGG.cpp`](../../Tests/TestLODGeneratorPhaseGG.cpp) — 178 LOC — Phase GG Theme 3D tests for Spark::Graphics::LODGenerator
 - [`TestLagCompensation.cpp`](../../Tests/TestLagCompensation.cpp) — 233 LOC — Tests for Spark::Net::LagCompensation (engine hit-rewind ring buffer)
 - [`TestLagCompensationIntegration.cpp`](../../Tests/TestLagCompensationIntegration.cpp) — 288 LOC — Tests for lag compensation integrated with hit detection
+- [`TestLauncherPaths.cpp`](../../Tests/TestLauncherPaths.cpp) — 74 LOC — SparkLauncher path discovery contract tests.
 - [`TestLauncherProcess.cpp`](../../Tests/TestLauncherProcess.cpp) — 253 LOC — SparkLauncher project-action command contract tests.
 - [`TestLevelStreamingSystemPhaseAA.cpp`](../../Tests/TestLevelStreamingSystemPhaseAA.cpp) — 188 LOC — Phase AA Theme 3C tests for SparkEditor::LevelStreamingSystem
 - [`TestLightManager.cpp`](../../Tests/TestLightManager.cpp) — 282 LOC
@@ -3063,7 +3066,7 @@ graph LR
 - [`TestPhysicsInterpolation.cpp`](../../Tests/TestPhysicsInterpolation.cpp) — 262 LOC
 - [`TestPhysicsStress.cpp`](../../Tests/TestPhysicsStress.cpp) — 566 LOC
 - [`TestPhysicsSystem.cpp`](../../Tests/TestPhysicsSystem.cpp) — 694 LOC
-- [`TestPhysicsTeardownGuard.cpp`](../../Tests/TestPhysicsTeardownGuard.cpp) — 168 LOC — Regression tests for the physics teardown-order guard (W10 exit AV).
+- [`TestPhysicsTeardownGuard.cpp`](../../Tests/TestPhysicsTeardownGuard.cpp) — 275 LOC — Regression tests for the physics teardown-order guard (W10 exit AV).
 - [`TestPlatformInput.cpp`](../../Tests/TestPlatformInput.cpp) — 150 LOC
 - [`TestPlayModeManager.cpp`](../../Tests/TestPlayModeManager.cpp) — 541 LOC — Tests for Spark::Editor::PlayModeManager
 - [`TestPluginABI.cpp`](../../Tests/TestPluginABI.cpp) — 826 LOC
@@ -3128,7 +3131,7 @@ graph LR
 - [`TestScriptHotReload.cpp`](../../Tests/TestScriptHotReload.cpp) — 481 LOC
 - [`TestScriptSandbox.cpp`](../../Tests/TestScriptSandbox.cpp) — 99 LOC — Real-class tests for Spark::ScriptSandbox.
 - [`TestSeamlessAreaManager.cpp`](../../Tests/TestSeamlessAreaManager.cpp) — 546 LOC
-- [`TestSecureRandom.cpp`](../../Tests/TestSecureRandom.cpp) — 26 LOC
+- [`TestSecureRandom.cpp`](../../Tests/TestSecureRandom.cpp) — 50 LOC
 - [`TestSelectionManager.cpp`](../../Tests/TestSelectionManager.cpp) — 494 LOC
 - [`TestSelfRecovery.cpp`](../../Tests/TestSelfRecovery.cpp) — 551 LOC
 - [`TestSequencer.cpp`](../../Tests/TestSequencer.cpp) — 174 LOC
@@ -3137,7 +3140,7 @@ graph LR
 - [`TestSerializer.cpp`](../../Tests/TestSerializer.cpp) — 200 LOC
 - [`TestServerLiveMockClient.cpp`](../../Tests/TestServerLiveMockClient.cpp) — 590 LOC — Live integration tests — starts a real NetworkManager server and
 - [`TestServerMockClient.cpp`](../../Tests/TestServerMockClient.cpp) — 1222 LOC
-- [`TestServiceTopologyController.cpp`](../../Tests/TestServiceTopologyController.cpp) — 127 LOC — Deterministic topology command contract tests.
+- [`TestServiceTopologyController.cpp`](../../Tests/TestServiceTopologyController.cpp) — 238 LOC — Deterministic topology command contract tests.
 - [`TestShaderCrossCompilerPhaseW.cpp`](../../Tests/TestShaderCrossCompilerPhaseW.cpp) — 326 LOC — Phase W activation tests for Spark::Graphics::ShaderCrossCompiler
 - [`TestShaderDiskCache.cpp`](../../Tests/TestShaderDiskCache.cpp) — 166 LOC
 - [`TestShaderDiskCacheDaemon.cpp`](../../Tests/TestShaderDiskCacheDaemon.cpp) — 298 LOC — End-to-end tests for the ShaderDiskCache <-> daemon integration.
@@ -3290,6 +3293,6 @@ graph LR
 
 | Metric | Count |
 |--------|-------|
-| Source files scanned | 2458 |
-| Total lines of code  | 718524 |
+| Source files scanned | 2461 |
+| Total lines of code  | 719720 |
 | Source directories   | 17 |

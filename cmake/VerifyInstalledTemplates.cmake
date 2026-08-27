@@ -33,6 +33,10 @@ file(MAKE_DIRECTORY "${SPARK_TEMPLATE_BUILD_ROOT}")
 file(GLOB template_candidates LIST_DIRECTORIES true "${SPARK_TEMPLATE_ROOT}/*")
 list(SORT template_candidates)
 
+# Validate the operational files that SparkLauncher and SparkEditor's service
+# topology open from each installed project before spending time building it.
+include("${CMAKE_CURRENT_LIST_DIR}/VerifyTemplateServiceConfigs.cmake")
+
 set(installed_template_names "")
 foreach(template_dir IN LISTS template_candidates)
     if(IS_DIRECTORY "${template_dir}" AND EXISTS "${template_dir}/CMakeLists.txt")

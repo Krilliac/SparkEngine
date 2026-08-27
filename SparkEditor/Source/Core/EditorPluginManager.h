@@ -94,6 +94,25 @@ namespace SparkEditor
         bool LoadPlugin(const std::string& path);
 
         /**
+         * @brief Discover and load stable-ABI plugins from one project-owned directory.
+         *
+         * The directory may be absolute or project-relative but must resolve inside
+         * @p projectPath. Discovery is non-recursive and requires each native library
+         * to have regular sibling .sparkplugin.json metadata. If any candidate fails,
+         * plugins loaded by this call are rolled back. A plugin that refuses
+         * its unload fence remains owned by the manager; this is reported via
+         * @p loadedCount while the operation returns false.
+         *
+         * @param projectPath Existing authoritative active-project directory used as the trust root.
+         * @param directory Explicit plugin directory to scan.
+         * @param loadedCount Optional number of plugins owned from this call:
+         * the successful load count, or the retained count after failed rollback.
+         * @return true when discovery and every load succeed.
+         */
+        bool LoadPluginsFromProjectDirectory(const std::string& projectPath, const std::string& directory,
+                                             size_t* loadedCount = nullptr);
+
+        /**
          * @brief Unload a plugin by name
          * @param name Name of the plugin to unload (as returned by IEditorPlugin::GetName)
          * @return true if the plugin was found and unloaded

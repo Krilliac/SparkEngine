@@ -6,6 +6,7 @@
  */
 
 #include "EditorPluginManager.h"
+#include "EditorPluginDiscovery.h"
 #include "EditorPanel.h"
 #include "Core/DynamicPluginHost.h"
 #include "Core/FaultIsolation.h"
@@ -133,6 +134,49 @@ namespace SparkEditor
         m_dynamicPlugins.push_back(std::move(entry));
         Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Registered stable-ABI plugin '" + name +
                                                     "' v" + m_dynamicPlugins.back().version);
+        return true;
+    }
+
+    bool EditorPluginManager::LoadPluginsFromProjectDirectory(const std::string& projectPath,
+                                                              const std::string& directory, size_t* loadedCount)
+    {
+        if (loadedCount)
+            *loadedCount = 0;
+
+        std::vector<std::filesystem::path> candidates;
+        std::string error;
+        if (!PluginDiscovery::Discover(projectPath, directory, candidates, error))
+        {
+            Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: " + error);
+            return false;
+        }
+
+        std::vector<std::string> loadedNames;
+        loadedNames.reserve(candidates.size());
+        for (const std::filesystem::path& candidate : candidates)
+        {
+            if (!LoadPlugin(LaunchContext::PathToUtf8(candidate)))
+            {
+                size_t retainedCount = 0;
+                for (auto it = loadedNames.rbegin(); it != loadedNames.rend(); ++it)
+                {
+                    if (!UnloadPlugin(*it))
+                        ++retainedCount;
+                }
+                if (loadedCount)
+                    *loadedCount = retainedCount;
+                if (retainedCount != 0)
+                    Spark::SimpleConsole::GetInstance().LogError(
+                        "EditorPluginManager: directory load rollback retained " + std::to_string(retainedCount) +
+                        " plugin(s) in fail-closed ownership");
+                return false;
+            }
+
+            loadedNames.push_back(m_dynamicPlugins.back().name);
+        }
+
+        if (loadedCount)
+            *loadedCount = loadedNames.size();
         return true;
     }
 

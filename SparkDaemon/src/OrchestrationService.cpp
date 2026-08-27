@@ -25,9 +25,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#if defined(__linux__)
-#include <sys/prctl.h>
-#endif
 #endif
 
 namespace Spark::Daemon
@@ -49,6 +46,8 @@ namespace Spark::Daemon
         }
 
 #if !defined(_WIN32)
+        constexpr uint8_t kExecReleaseToken = 0xa5;
+
         void WriteChildError(int descriptor, int errorCode) noexcept
         {
             const char* cursor = reinterpret_cast<const char*>(&errorCode);
@@ -65,6 +64,36 @@ namespace Spark::Daemon
                 if (written < 0 && errno == EINTR)
                     continue;
                 break;
+            }
+        }
+
+        bool WaitForExecRelease(int descriptor) noexcept
+        {
+            uint8_t token = 0;
+            for (;;)
+            {
+                const ssize_t received = ::read(descriptor, &token, sizeof(token));
+                if (received == static_cast<ssize_t>(sizeof(token)))
+                    return token == kExecReleaseToken;
+                if (received < 0 && errno == EINTR)
+                    continue;
+                // EOF means the daemon died or rejected the launch before it
+                // could durably publish ownership. Never enter exec in either
+                // case, because no future daemon could safely discover us.
+                return false;
+            }
+        }
+
+        bool ReleaseExec(int descriptor) noexcept
+        {
+            for (;;)
+            {
+                const ssize_t written = ::write(descriptor, &kExecReleaseToken, sizeof(kExecReleaseToken));
+                if (written == static_cast<ssize_t>(sizeof(kExecReleaseToken)))
+                    return true;
+                if (written < 0 && errno == EINTR)
+                    continue;
+                return false;
             }
         }
 #endif
@@ -449,6 +478,7 @@ namespace Spark::Daemon
             record.definition = std::move(persisted.definition);
             record.status = std::move(persisted.status);
             record.desiredRunning = persisted.desiredRunning;
+            const bool interruptedLaunch = record.status.state == SupervisedProcessState::Starting;
             const auto wallNow = std::chrono::system_clock::now();
             for (int64_t timestamp : persisted.crashTimestampsUnixMilliseconds)
             {
@@ -462,7 +492,7 @@ namespace Spark::Daemon
                 record.desiredRunning = false;
                 record.status.state = SupervisedProcessState::Quarantined;
             }
-            bool reconciled = record.status.processId > 0 && StillOwnsProcessLocked(record);
+            bool reconciled = !interruptedLaunch && record.status.processId > 0 && StillOwnsProcessLocked(record);
 #if defined(_WIN32)
             if (reconciled)
             {
@@ -488,7 +518,31 @@ namespace Spark::Daemon
                 }
             }
 #endif
-            if (reconciled)
+            if (interruptedLaunch)
+            {
+#if !defined(_WIN32)
+                // A durable Starting record means the prior daemon died after
+                // publishing the PID/start token but before committing the
+                // launch. The release-pipe EOF makes a still-waiting child
+                // exit; if it crossed the release boundary just before the
+                // crash, terminate the exact recorded process group instead
+                // of adopting an operation whose caller never received an ack.
+                if (record.status.processId > 0 && StillOwnsProcessLocked(record))
+                {
+                    const pid_t pid = static_cast<pid_t>(record.status.processId);
+                    if (::kill(-pid, SIGKILL) != 0 && errno == ESRCH)
+                        (void)::kill(pid, SIGKILL);
+                }
+#endif
+                record.status.processId = 0;
+                record.status.processStartToken = 0;
+                record.status.health = ProcessHealth::Unknown;
+                if (record.status.state != SupervisedProcessState::Quarantined)
+                    record.status.state =
+                        record.desiredRunning ? SupervisedProcessState::Backoff : SupervisedProcessState::Stopped;
+                record.restartAt = std::chrono::steady_clock::now();
+            }
+            else if (reconciled)
             {
                 if (record.status.state == SupervisedProcessState::Stopping ||
                     record.status.state == SupervisedProcessState::Draining)
@@ -729,6 +783,15 @@ namespace Spark::Daemon
             error = std::string("pipe failed: ") + std::strerror(errno);
             return false;
         }
+        int releasePipe[2] = {-1, -1};
+        if (::pipe(releasePipe) != 0)
+        {
+            const int pipeError = errno;
+            ::close(errorPipe[0]);
+            ::close(errorPipe[1]);
+            error = std::string("release pipe failed: ") + std::strerror(pipeError);
+            return false;
+        }
         ::fcntl(errorPipe[1], F_SETFD, FD_CLOEXEC);
 
         std::vector<char*> argv;
@@ -743,14 +806,15 @@ namespace Spark::Daemon
         if (pid == 0)
         {
             ::close(errorPipe[0]);
+            ::close(releasePipe[1]);
             ::setpgid(0, 0);
-#if defined(__linux__)
-            // Close the fork->journal-commit crash window: a daemon crash
-            // cannot strand a child whose PID was never durably recorded.
-            (void)::prctl(PR_SET_PDEATHSIG, SIGKILL);
-            if (::getppid() == 1)
+            // The child may enter exec only after the parent has durably
+            // published this launch's PID/start token. EOF or a bad token
+            // means the daemon died or rejected the launch before ownership
+            // became recoverable, so fail closed without running user code.
+            if (!WaitForExecRelease(releasePipe[0]))
                 _exit(125);
-#endif
+            ::close(releasePipe[0]);
             if (::chdir(record.definition.workingDirectory.c_str()) != 0)
             {
                 int childError = errno;
@@ -764,43 +828,78 @@ namespace Spark::Daemon
         }
 
         ::close(errorPipe[1]);
+        ::close(releasePipe[0]);
         if (pid < 0)
         {
             ::close(errorPipe[0]);
+            ::close(releasePipe[1]);
             record.status.state = SupervisedProcessState::Failed;
             error = std::string("fork failed: ") + std::strerror(errno);
             return false;
         }
 
-        int childError = 0;
-        const ssize_t received = ::read(errorPipe[0], &childError, sizeof(childError));
-        ::close(errorPipe[0]);
-        if (received > 0)
-        {
-            (void)::waitpid(pid, nullptr, 0);
-            record.status.state = SupervisedProcessState::Failed;
-            record.status.health = ProcessHealth::Unhealthy;
-            error = std::string("exec failed: ") + std::strerror(childError);
-            return false;
-        }
-
         record.status.processId = static_cast<int64_t>(pid);
         record.status.processStartToken = ReadProcessStartToken(record.status.processId);
-        if (record.status.processStartToken == 0)
+        const auto failPendingLaunch = [&](std::string message)
         {
-            (void)::kill(-pid, SIGKILL);
+            if (releasePipe[1] >= 0)
+                ::close(releasePipe[1]);
+            if (errorPipe[0] >= 0)
+                ::close(errorPipe[0]);
+            if (::kill(-pid, SIGKILL) != 0 && errno == ESRCH)
+                (void)::kill(pid, SIGKILL);
             (void)::waitpid(pid, nullptr, 0);
             record.status.processId = 0;
+            record.status.processStartToken = 0;
             record.status.state = SupervisedProcessState::Failed;
-            error = "could not establish child process start token";
+            record.status.health = ProcessHealth::Unhealthy;
+            error = std::move(message);
             return false;
-        }
+        };
+        if (record.status.processStartToken == 0)
+            return failPendingLaunch("could not establish child process start token");
 #if !defined(__linux__)
         // A live parent-child relationship is the only portable identity
         // primitive available on generic POSIX. This in-memory marker is
         // intentionally not reconstructed from the journal after restart.
         record.nativeProcessHandle = static_cast<std::intptr_t>(pid);
 #endif
+        // Publish the Starting identity without closing the mutation's WAL
+        // intent. If the daemon dies from this point until the final mutation
+        // commit, recovery can identify and terminate this exact launch.
+        if (!m_config.journalPath.empty() && !WriteOrchestrationJournal(m_config.journalPath, MakeJournalStateLocked()))
+            return failPendingLaunch("could not durably record child process identity");
+
+        if (m_config.beforeExecReleaseForTesting)
+            m_config.beforeExecReleaseForTesting(record.status.processId);
+
+        if (!ReleaseExec(releasePipe[1]))
+            return failPendingLaunch("could not release durably recorded child process");
+        ::close(releasePipe[1]);
+        releasePipe[1] = -1;
+
+        int childError = 0;
+        ssize_t received = 0;
+        do
+        {
+            received = ::read(errorPipe[0], &childError, sizeof(childError));
+        } while (received < 0 && errno == EINTR);
+        ::close(errorPipe[0]);
+        errorPipe[0] = -1;
+        if (received > 0)
+        {
+            (void)::waitpid(pid, nullptr, 0);
+            record.status.processId = 0;
+            record.status.processStartToken = 0;
+            record.nativeProcessHandle = 0;
+            record.status.state = SupervisedProcessState::Failed;
+            record.status.health = ProcessHealth::Unhealthy;
+            error = std::string("exec failed: ") + std::strerror(childError);
+            return false;
+        }
+        if (received < 0)
+            return failPendingLaunch(std::string("could not read child exec status: ") + std::strerror(errno));
+
         record.status.state = SupervisedProcessState::Running;
         record.status.health = ProcessHealth::Healthy;
         record.status.exitCode = 0;

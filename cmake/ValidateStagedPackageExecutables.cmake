@@ -49,6 +49,8 @@ if(_spark_missing_executables)
 endif()
 
 set(_spark_required_runtime_files
+    LICENSE.txt
+    THIRD_PARTY_NOTICES.txt
     bin/Shaders/BasicVS.hlsl
     bin/Shaders/HLSL/BasicVS.hlsl
     bin/Shaders/HLSL/Compute/GPUCull.hlsl
@@ -72,10 +74,19 @@ if(_spark_missing_runtime_files)
 endif()
 
 set(_spark_help_smoke_executables
+    SparkEngine
+    SparkLauncher
+    SparkServer
+    SparkGateway
     SparkDaemon
     SparkCollabServer
     SparkOrchestrator
     SparkCooker
+    SparkWorker
+    SparkAutomation
+    SparkBuild
+    SparkInstaller
+    SparkShaderCompiler
     SparkCrashReporter
 )
 foreach(_spark_executable IN LISTS _spark_help_smoke_executables)
@@ -95,6 +106,21 @@ foreach(_spark_executable IN LISTS _spark_help_smoke_executables)
             "stderr:\n${_spark_help_stderr}")
     endif()
 endforeach()
+
+execute_process(
+    COMMAND "${SPARK_PACKAGE_ROOT}/bin/SparkEngine${SPARK_EXECUTABLE_SUFFIX}" --version
+    RESULT_VARIABLE _spark_version_result
+    OUTPUT_VARIABLE _spark_version_stdout
+    ERROR_VARIABLE _spark_version_stderr
+    TIMEOUT 10
+)
+if(NOT _spark_version_result EQUAL 0 OR
+   NOT _spark_version_stdout MATCHES "SparkEngine [0-9]+\\.[0-9]+\\.[0-9]+")
+    message(FATAL_ERROR
+        "Staged SparkEngine --version smoke failed (exit ${_spark_version_result})\n"
+        "stdout:\n${_spark_version_stdout}\n"
+        "stderr:\n${_spark_version_stderr}")
+endif()
 
 list(LENGTH _spark_required_executables _spark_executable_count)
 message(STATUS

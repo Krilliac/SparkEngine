@@ -584,7 +584,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `SceneChangedCallback` | alias | SparkEditor | [IntegrationTypes.h:L160](../../SparkEditor/Source/Integration/IntegrationTypes.h#L160) |  |
 | `SceneChangedCallback` | alias | SparkEditor | [SparkEngineIntegration.h:L170](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L170) |  |
 | `SceneLoadCallback` | alias | SparkEngine | [SceneManagerTypes.h:L229](../../SparkEngine/Source/SceneManager/SceneManagerTypes.h#L229) |  |
-| `SDL_GLContext` | alias | SparkEditor | [EditorApplication.h:L23](../../SparkEditor/Source/Core/EditorApplication.h#L23) |  |
+| `SDL_GLContext` | alias | SparkEditor | [EditorApplication.h:L24](../../SparkEditor/Source/Core/EditorApplication.h#L24) |  |
 | `SeatRef` | alias | GameModules | [TFVehicleSystem.h:L146](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L146) |  |
 | `SelectionCallback` | alias | SparkEditor | [SelectionManager.h:L141](../../SparkEditor/Source/Panels/SelectionManager.h#L141) |  |
 | `SentState` | alias | GameModules | [TFVehicleSystem.h:L148](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L148) |  |

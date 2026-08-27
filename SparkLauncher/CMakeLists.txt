@@ -21,6 +21,8 @@ set(LAUNCHER_SOURCES
     src/main.cpp
     src/LauncherApp.cpp
     src/LauncherApp.h
+    src/LauncherPaths.cpp
+    src/LauncherPaths.h
     src/LauncherProcess.cpp
     src/LauncherProcess.h
     src/LauncherBackend.h

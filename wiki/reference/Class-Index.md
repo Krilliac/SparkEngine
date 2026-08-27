@@ -842,7 +842,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `DynamicResponseSystem` | class | SparkEngine | [DynamicResponseSystem.h:L156](../../SparkEngine/Source/Engine/Dialogue/DynamicResponseSystem.h#L156) | Singleton managing signal-driven contextual responses. |
 | `EditLogEntry` | struct | SparkEditor | [CollaborationPanel.h:L52](../../SparkEditor/Source/Panels/CollaborationPanel.h#L52) |  |
 | `EditMessage` | struct | SparkEditor | [CollaborativeEditSession.h:L125](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L125) | An edit operation broadcast to all connected editors |
-| `EditorApplication` | class | SparkEditor | [EditorApplication.h:L56](../../SparkEditor/Source/Core/EditorApplication.h#L56) | Main SparkEditor application class with full GUI support |
+| `EditorApplication` | class | SparkEditor | [EditorApplication.h:L58](../../SparkEditor/Source/Core/EditorApplication.h#L58) | Main SparkEditor application class with full GUI support |
 | `EditorApplication` | class | SparkEditor | [EditorPluginManager.h:L25](../../SparkEditor/Source/Core/EditorPluginManager.h#L25) | Manages editor plugin lifecycle and registration (R7.1) |
 | `EditorApplication` | class | SparkEditor | [IEditorPlugin.h:L20](../../SparkEditor/Source/Core/IEditorPlugin.h#L20) | Abstract interface for editor plugins (R7.1) |
 | `EditorAssetData` | struct | SparkEditor | [IntegrationTypes.h:L73](../../SparkEditor/Source/Integration/IntegrationTypes.h#L73) | Asset data for real-time engine integration |
@@ -851,7 +851,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `EditorCommand` | class | SparkEditor | [EditorCommand.h:L41](../../SparkEditor/Source/UndoRedo/EditorCommand.h#L41) | Base class for all editor commands supporting undo/redo |
 | `EditorCommandInfo` | struct | SparkEditor | [EditorAutomation.h:L94](../../SparkEditor/Source/Panels/EditorAutomation.h#L94) | A registered editor command |
 | `EditorCommandResult` | struct | SparkEditor | [EditorAutomation.h:L86](../../SparkEditor/Source/Panels/EditorAutomation.h#L86) | Result of an editor command execution |
-| `EditorConfig` | struct | SparkEditor | [EditorApplication.h:L38](../../SparkEditor/Source/Core/EditorApplication.h#L38) | Configuration for the editor |
+| `EditorConfig` | struct | SparkEditor | [EditorApplication.h:L39](../../SparkEditor/Source/Core/EditorApplication.h#L39) | Configuration for the editor |
 | `EditorConsoleBridge` | class | SparkEditor | [EditorConsoleBridge.h:L54](../../SparkEditor/Source/Utils/EditorConsoleBridge.h#L54) | Singleton bridge connecting editor logging/commands to the engine console. |
 | `EditorCrashHandler` | class | SparkEditor | [EditorCrashHandler.h:L80](../../SparkEditor/Source/Core/EditorCrashHandler.h#L80) | Enhanced crash handling system for Spark Engine Editor |
 | `EditorEntityData` | struct | SparkEditor | [IntegrationTypes.h:L56](../../SparkEditor/Source/Integration/IntegrationTypes.h#L56) | Entity component data for editor integration |
@@ -872,7 +872,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `EditorSettings` | struct | SparkEngine | [EngineSettings.h:L374](../../SparkEngine/Source/Core/EngineSettings.h#L374) |  |
 | `EditorTheme` | class | SparkEditor | [EditorTheme.h:L201](../../SparkEditor/Source/Core/EditorTheme.h#L201) | Professional theme management system |
 | `EditorThemeData` | struct | SparkEditor | [EditorTheme.h:L80](../../SparkEditor/Source/Core/EditorTheme.h#L80) | Complete theme data structure with professional styling options |
-| `EditorUI` | class | SparkEditor | [EditorApplication.h:L29](../../SparkEditor/Source/Core/EditorApplication.h#L29) |  |
+| `EditorUI` | class | SparkEditor | [EditorApplication.h:L30](../../SparkEditor/Source/Core/EditorApplication.h#L30) |  |
 | `EditorUI` | class | SparkEditor | [EditorUI.h:L130](../../SparkEditor/Source/Core/EditorUI.h#L130) | Simple UI management system for the Spark Engine Editor |
 | `EditorUI` | class | SparkEditor | [HierarchyPanel.h:L32](../../SparkEditor/Source/Panels/HierarchyPanel.h#L32) | Scene hierarchy panel for the Spark Engine Editor |
 | `EditorUI` | class | SparkEditor | [InspectorPanel.h:L29](../../SparkEditor/Source/Panels/InspectorPanel.h#L29) | Inspector panel for property editing in the Spark Engine Editor |
@@ -2081,7 +2081,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `PerezCoefficients` | struct | SparkEngine | [SkyAtmosphere.h:L87](../../SparkEngine/Source/Graphics/SkyAtmosphere.h#L87) | The five Perez distribution coefficients (A through E) for one color channel. |
 | `PerformanceBottleneck` | struct | SparkEditor | [ProfilerTypes.h:L204](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L204) | Performance bottleneck identification |
 | `PerformanceCounter` | struct | SparkEditor | [ProfilerTypes.h:L54](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L54) | Performance counter data |
-| `PerformanceMetrics` | struct | SparkEditor | [EditorApplication.h:L62](../../SparkEditor/Source/Core/EditorApplication.h#L62) | Performance metrics structure |
+| `PerformanceMetrics` | struct | SparkEditor | [EditorApplication.h:L64](../../SparkEditor/Source/Core/EditorApplication.h#L64) | Performance metrics structure |
 | `PerformanceProfiler` | class | SparkEditor | [PerformanceProfiler.h:L58](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L58) | Performance profiling and optimization system |
 | `PerformanceSettings` | struct | SparkEngine | [EngineSettings.h:L540](../../SparkEngine/Source/Core/EngineSettings.h#L540) |  |
 | `PerformanceSnapshot` | struct | SparkEditor | [PerformanceProfiler.h:L448](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L448) |  |
@@ -2389,7 +2389,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `RecentRec` | struct | GameModules | [TFSocialSystem.h:L132](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L132) |  |
 | `RecoilPattern` | struct | SparkEngine | [WeaponManager.h:L71](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L71) | Defines how a weapon's aim deviates during sustained fire |
 | `RecompileResult` | struct | SparkEngine | [ScriptHotReload.h:L58](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L58) |  |
-| `Record` | struct | SparkEditor | [ServiceTopologyController.h:L77](../../SparkEditor/Source/Panels/ServiceTopologyController.h#L77) |  |
+| `Record` | struct | SparkEditor | [ServiceTopologyController.h:L81](../../SparkEditor/Source/Panels/ServiceTopologyController.h#L81) |  |
 | `RecoveryData` | struct | SparkEditor | [EditorCrashHandler.h:L53](../../SparkEditor/Source/Core/EditorCrashHandler.h#L53) | Crash recovery data |
 | `Rect` | struct | SparkEngine | [UILayoutExtensions.h:L98](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L98) |  |
 | `ReflectionProbe` | struct | SparkEngine | [ReflectionProbeCache.h:L35](../../SparkEngine/Source/Graphics/ReflectionProbeCache.h#L35) | Cached reflection probe cubemaps with LRU eviction |
@@ -2692,7 +2692,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `ScriptResult` | struct | SparkEditor | [EditorAutomation.h:L143](../../SparkEditor/Source/Panels/EditorAutomation.h#L143) | Script execution result |
 | `ScriptSandbox` | class | SparkEngine | [ScriptSandbox.h:L73](../../SparkEngine/Source/Engine/Scripting/ScriptSandbox.h#L73) | Runtime sandbox for AngelScript execution |
 | `SDFSceneManager` | class | SparkEngine | [SDFSceneManager.h:L39](../../SparkEngine/Source/Graphics/HybridRT/SDFSceneManager.h#L39) |  |
-| `SDL_Window` | struct | SparkEditor | [EditorApplication.h:L22](../../SparkEditor/Source/Core/EditorApplication.h#L22) | Main SparkEditor application class with cross-platform graphics and ImGui integration |
+| `SDL_Window` | struct | SparkEditor | [EditorApplication.h:L23](../../SparkEditor/Source/Core/EditorApplication.h#L23) | Main SparkEditor application class with cross-platform graphics and ImGui integration |
 | `SeamlessAreaManager` | class | SparkEngine | [SeamlessAreaManager.h:L77](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.h#L77) | Predictive area streaming manager |
 | `SeamlessAreaManager` | class | SparkSDK | [IEngineContext.h:L68](../../SparkSDK/Include/Spark/IEngineContext.h#L68) |  |
 | `SearchPanel` | class | SparkEditor | [SearchPanel.h:L61](../../SparkEditor/Source/Panels/SearchPanel.h#L61) | Global search panel for the editor |
@@ -2725,7 +2725,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `ServerRec` | struct | GameModules | [TFAbilitySystem.h:L150](../../GameModules/SparkGameMMOFPS/Source/Game/TFAbilitySystem.h#L150) |  |
 | `ServerRec` | struct | GameModules | [TFMedalSystem.h:L214](../../GameModules/SparkGameMMOFPS/Source/Game/TFMedalSystem.h#L214) |  |
 | `ServerStats` | struct | SparkEngine | [DedicatedServer.h:L133](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L133) | Aggregate server performance and match-state metrics. |
-| `ServiceTopologyController` | class | SparkEditor | [ServiceTopologyController.h:L42](../../SparkEditor/Source/Panels/ServiceTopologyController.h#L42) |  |
+| `ServiceTopologyController` | class | SparkEditor | [ServiceTopologyController.h:L44](../../SparkEditor/Source/Panels/ServiceTopologyController.h#L44) |  |
 | `ServiceTopologyController` | class | SparkEditor | [ServiceTopologyPanel.h:L12](../../SparkEditor/Source/Panels/ServiceTopologyPanel.h#L12) | Local daemon/collab/gateway topology controls. |
 | `ServiceTopologyPanel` | class | SparkEditor | [ServiceTopologyPanel.h:L14](../../SparkEditor/Source/Panels/ServiceTopologyPanel.h#L14) |  |
 | `SessionData` | struct | GameModules | [MMOAccountSystem.h:L80](../../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h#L80) | Active session for a logged-in account |
@@ -3341,7 +3341,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `TonemapColorGrading` | class | SparkEngine | [TonemapColorGrading.h:L113](../../SparkEngine/Source/Graphics/TonemapColorGrading.h#L113) | Combined auto-exposure, tonemapping, and color grading pass |
 | `TonemappingSettings` | struct | SparkEngine | [PostProcessingTypes.h:L240](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L240) | Tonemapping settings (HDR to LDR conversion) |
 | `TonemapSettings` | struct | SparkEngine | [TonemapColorGrading.h:L51](../../SparkEngine/Source/Graphics/TonemapColorGrading.h#L51) |  |
-| `TopologyServiceSnapshot` | struct | SparkEditor | [ServiceTopologyController.h:L33](../../SparkEditor/Source/Panels/ServiceTopologyController.h#L33) |  |
+| `TopologyServiceSnapshot` | struct | SparkEditor | [ServiceTopologyController.h:L35](../../SparkEditor/Source/Panels/ServiceTopologyController.h#L35) |  |
 | `TopologyServiceSpec` | struct | SparkEditor | [ServiceTopologyController.h:L24](../../SparkEditor/Source/Panels/ServiceTopologyController.h#L24) |  |
 | `TouchEvent` | struct | SparkEngine | [MobilePlatform.h:L47](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.h#L47) | A single touch point event. |
 | `TraceEntry` | struct | SparkEditor | [ScriptDebugPanel.h:L43](../../SparkEditor/Source/Panels/ScriptDebugPanel.h#L43) | An entry in the execution trace log |

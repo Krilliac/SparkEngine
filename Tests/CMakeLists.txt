@@ -548,6 +548,8 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/ServiceTopologyController.cpp"
     TestLauncherProcess.cpp
     "${CMAKE_SOURCE_DIR}/SparkLauncher/src/LauncherProcess.cpp"
+    TestLauncherPaths.cpp
+    "${CMAKE_SOURCE_DIR}/SparkLauncher/src/LauncherPaths.cpp"
     TestCoreAndBuildSystems.cpp
     TestOpenWorldModule.cpp
     TestGameModuleRTS.cpp
@@ -737,11 +739,17 @@ spark_add_plugin(SparkForwardMinorPluginFixture
     VERSION "1.0.0"
     TYPE "editor-extension"
     SOURCES Fixtures/PluginABI/ForwardMinorPlugin.cpp)
+spark_add_plugin(SparkRollbackRefusingPluginFixture
+    ID "org.sparkengine.test.rollback-refusing-plugin"
+    VERSION "1.0.0"
+    TYPE "editor-extension"
+    SOURCES Fixtures/PluginABI/RollbackRefusingPlugin.cpp)
 
-add_dependencies(SparkTests SparkValidPluginFixture SparkForwardMinorPluginFixture)
+add_dependencies(SparkTests SparkValidPluginFixture SparkForwardMinorPluginFixture SparkRollbackRefusingPluginFixture)
 target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_VALID_PLUGIN_PATH="$<TARGET_FILE:SparkValidPluginFixture>"
-    SPARK_TEST_FORWARD_MINOR_PLUGIN_PATH="$<TARGET_FILE:SparkForwardMinorPluginFixture>")
+    SPARK_TEST_FORWARD_MINOR_PLUGIN_PATH="$<TARGET_FILE:SparkForwardMinorPluginFixture>"
+    SPARK_TEST_ROLLBACK_REFUSING_PLUGIN_PATH="$<TARGET_FILE:SparkRollbackRefusingPluginFixture>")
 
 # Objective-C++ test sources — only compile when the Metal backend is
 # actually available. SPARK_METAL_AVAILABLE is set by the root CMakeLists
@@ -1102,6 +1110,21 @@ add_test(
     COMMAND ${CMAKE_COMMAND}
         -DSPARK_TEMPLATE_ROOT=${CMAKE_SOURCE_DIR}/Templates
         -P ${CMAKE_SOURCE_DIR}/cmake/VerifyTemplateAssets.cmake
+)
+add_test(
+    NAME SparkTemplateServiceConfigs
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_TEMPLATE_ROOT=${CMAKE_SOURCE_DIR}/Templates
+        -P ${CMAKE_SOURCE_DIR}/cmake/VerifyTemplateServiceConfigs.cmake
+)
+add_test(
+    NAME SparkTemplateServiceConfigValidatorTests
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_TEMPLATE_SOURCE=${CMAKE_SOURCE_DIR}/Templates
+        -DSPARK_VALIDATOR=${CMAKE_SOURCE_DIR}/cmake/VerifyTemplateServiceConfigs.cmake
+        -DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/template-service-validator-tests
+        -DSPARK_BINARY_ROOT=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/TestTemplateServiceConfigValidator.cmake
 )
 
 find_package(Python3 QUIET COMPONENTS Interpreter)

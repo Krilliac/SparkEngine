@@ -6,6 +6,7 @@
  */
 
 #include "LauncherApp.h"
+#include "LauncherPaths.h"
 
 #include "Utils/FolderDialog.h"
 
@@ -19,55 +20,12 @@
 #include <fstream>
 #include <sstream>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
-
 namespace fs = std::filesystem;
 
 namespace SparkLauncher
 {
     namespace
     {
-        // Location of the Templates/ directory, relative to the launcher binary or CWD.
-        fs::path FindTemplatesDirectory()
-        {
-            const fs::path candidates[] = {
-                fs::current_path() / "Templates",
-                fs::current_path().parent_path() / "Templates",
-                fs::current_path() / ".." / "Templates",
-            };
-            for (const auto& c : candidates)
-            {
-                if (fs::exists(c) && fs::is_directory(c))
-                {
-                    return fs::canonical(c);
-                }
-            }
-            return {};
-        }
-
-        fs::path OwnExecutablePath()
-        {
-#ifdef _WIN32
-            char buf[MAX_PATH] = {};
-            DWORD n = GetModuleFileNameA(nullptr, buf, MAX_PATH);
-            return (n > 0) ? fs::path(buf) : fs::path{};
-#else
-            char buf[4096] = {};
-            ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-            if (n > 0)
-            {
-                buf[n] = '\0';
-                return fs::path(buf);
-            }
-            return {};
-#endif
-        }
-
         std::string ReadSmallFile(const fs::path& p)
         {
             std::ifstream in(p);
@@ -134,7 +92,7 @@ namespace SparkLauncher
     void LauncherApp::LoadTemplates()
     {
         m_templates.clear();
-        const fs::path templatesDir = FindTemplatesDirectory();
+        const fs::path templatesDir = FindLauncherTemplatesDirectory(GetLauncherExecutablePath(), fs::current_path());
         if (templatesDir.empty())
         {
             return;
@@ -331,7 +289,7 @@ namespace SparkLauncher
         if (m_templates.empty())
         {
             ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
-                               "No templates found. Expected Templates/ directory next to the launcher binary.");
+                               "No templates found in the development tree or installed SparkEngine share directory.");
             return;
         }
 
@@ -411,7 +369,7 @@ namespace SparkLauncher
 
     bool LauncherApp::SpawnTarget(const std::string& projectFilePath, LaunchTarget target)
     {
-        const fs::path ownPath = OwnExecutablePath();
+        const fs::path ownPath = GetLauncherExecutablePath();
         if (ownPath.empty())
         {
             m_statusMessage = "Could not determine launcher path";
