@@ -14,8 +14,10 @@
  *   --asset-cache-dir        disabled (in-memory asset cache only)
  *   --asset-cache-max-mb     0  (unbounded)
  *
- * The socket file is removed on clean shutdown. SIGINT / SIGTERM trigger a
- * graceful exit. `--cache-dir` enables shader blob persistence (loaded on
+ * The socket file is removed on clean shutdown. SIGINT / SIGTERM (POSIX) and
+ * console control events such as Ctrl+C / Ctrl+Break (Windows) trigger a
+ * graceful exit, which drains every supervised orchestration child before the
+ * process leaves. `--cache-dir` enables shader blob persistence (loaded on
  * startup, written on PutCacheEntry); `--asset-cache-dir` enables the same
  * for the asset service.
  */
@@ -36,6 +38,12 @@
 #include <vector>
 
 #if defined(_WIN32)
+#if !defined(WIN32_LEAN_AND_MEAN)
+#define WIN32_LEAN_AND_MEAN
+#endif
+#if !defined(NOMINMAX)
+#define NOMINMAX
+#endif
 #include <windows.h>
 #else
 #include <csignal>
@@ -44,27 +52,29 @@
 
 namespace
 {
-    Spark::Daemon::DaemonServer* g_serverForSignal = nullptr;
+    // Read from the Win32 console-control thread as well as the main thread.
+    std::atomic<Spark::Daemon::DaemonServer*> g_serverForSignal{nullptr};
 
 #if defined(_WIN32)
     // Windows raises no SIGTERM and disables CTRL+C for a supervised process
     // group, so without this handler the daemon has no graceful-stop path at
-    // all: an interactive CTRL+BREAK or console close would hard-kill it before
-    // OrchestrationService could stop and reap its supervised children.
+    // all: the OS default handler would terminate it with
+    // STATUS_CONTROL_C_EXIT before OrchestrationService could stop and reap
+    // its supervised children.
     BOOL WINAPI HandleConsoleControl(DWORD controlType)
     {
         if (controlType != CTRL_C_EVENT && controlType != CTRL_BREAK_EVENT && controlType != CTRL_CLOSE_EVENT &&
             controlType != CTRL_LOGOFF_EVENT && controlType != CTRL_SHUTDOWN_EVENT)
             return FALSE;
-        if (g_serverForSignal)
-            g_serverForSignal->Stop();
+        if (auto* server = g_serverForSignal.load(std::memory_order_acquire))
+            server->Stop();
         return TRUE;
     }
 #else
     void HandleSignal(int /*sig*/)
     {
-        if (g_serverForSignal)
-            g_serverForSignal->Stop();
+        if (auto* server = g_serverForSignal.load(std::memory_order_acquire))
+            server->Stop();
     }
 #endif
 
@@ -224,12 +234,12 @@ int main(int argc, char** argv)
         std::printf("SparkDaemon: orchestration enabled (%zu process cap)\n", orchestrationMaxProcesses);
     }
 
-    g_serverForSignal = &server;
+    g_serverForSignal.store(&server, std::memory_order_release);
 #if defined(_WIN32)
     if (!::SetConsoleCtrlHandler(HandleConsoleControl, TRUE))
     {
         std::fprintf(stderr, "SparkDaemon: could not install console control handler\n");
-        g_serverForSignal = nullptr;
+        g_serverForSignal.store(nullptr, std::memory_order_release);
         return 1;
     }
 #else
@@ -243,7 +253,7 @@ int main(int argc, char** argv)
 #if defined(_WIN32)
     (void)::SetConsoleCtrlHandler(HandleConsoleControl, FALSE);
 #endif
-    g_serverForSignal = nullptr;
+    g_serverForSignal.store(nullptr, std::memory_order_release);
 
     if (!result)
     {

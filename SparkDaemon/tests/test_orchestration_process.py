@@ -237,6 +237,181 @@ def run_supervised_engine_host(invoke, server: Path, game_module: Path, working_
     invoke("undefine", service_id)
 
 
+ERROR_ACCESS_DENIED = 5
+
+
+def attach_console() -> None:
+    """Console control events need a console; CTest may be started without one.
+
+    GetConsoleWindow() is not a usable probe here because a ConPTY pseudoconsole
+    owns no window and reports NULL, so ask for a console and read the refusal:
+    ERROR_ACCESS_DENIED means this process already has one.
+    """
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    if kernel32.AllocConsole():
+        return
+    error = ctypes.get_last_error()
+    if error == ERROR_ACCESS_DENIED:
+        return
+    raise RuntimeError(
+        "could not obtain a console, so no console control event can be "
+        f"delivered (AllocConsole failed with {error})"
+    )
+
+
+def interrupt(process: subprocess.Popen[str]) -> None:
+    """Deliver the operator's 'stop this service' signal to a daemon process."""
+    if os.name == "nt":
+        process.send_signal(signal.CTRL_BREAK_EVENT)
+    else:
+        os.killpg(process.pid, signal.SIGINT)
+
+
+def run_console_interrupt_scenario(
+    daemon: Path, orchestrator: Path, child: Path, binary_dir: Path, token: str
+) -> None:
+    """A console interrupt must drain supervised children, not abandon them.
+
+    SparkDaemon owns its supervised processes through job objects that carry
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, so an abrupt daemon exit takes the
+    children down with it -- but by termination, never by asking them to stop.
+    Only ~OrchestrationService() -> StopAll() sends each child the graceful
+    stop it is written to honour, and that destructor runs only when the
+    process leaves main() normally.  On Windows the OS default console handler
+    ends the daemon with STATUS_CONTROL_C_EXIT (0xC000013A) instead, which is
+    why the daemon installs its own handler.
+    """
+    if os.name == "nt":
+        attach_console()
+
+    daemon_endpoint = endpoint("spark-orch-interrupt", token)
+    child_endpoint = endpoint("spark-collab-interrupt", token)
+
+    with tempfile.TemporaryDirectory(prefix="spark-orchestration-interrupt-") as temporary:
+        scratch = Path(temporary)
+        daemon_log_path = scratch / "daemon.log"
+        environment = os.environ.copy()
+        environment["SPARK_ORCHESTRATOR_IDENTITY"] = str(scratch / "identity.state")
+        known_supervised_pids: set[int] = set()
+
+        # The daemon must share this harness's console and own its process
+        # group, so the control event reaches the daemon and nothing else.
+        with open_process_log(daemon_log_path) as daemon_log:
+            daemon_process = subprocess.Popen(
+                [
+                    str(daemon),
+                    "--socket",
+                    daemon_endpoint,
+                    "--orchestrator-allow-root",
+                    str(binary_dir),
+                    "--orchestrator-max-processes",
+                    "2",
+                    "--orchestrator-state-file",
+                    str(scratch / "orchestration.state"),
+                ],
+                cwd=binary_dir,
+                env=environment,
+                stdout=daemon_log,
+                stderr=subprocess.STDOUT,
+                text=True,
+                creationflags=(
+                    subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+                ),
+                start_new_session=os.name != "nt",
+            )
+
+        def invoke(
+            *command: str, check: bool = True, timeout: float = 5
+        ) -> subprocess.CompletedProcess[str]:
+            completed = subprocess.run(
+                [str(orchestrator), "--socket", daemon_endpoint, *command],
+                cwd=binary_dir,
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=timeout,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                check=False,
+            )
+            record_supervised_pids(completed.stdout, known_supervised_pids)
+            if check and completed.returncode != 0:
+                raise RuntimeError(
+                    f"SparkOrchestrator {' '.join(command)} failed with "
+                    f"{completed.returncode}:\n{completed.stdout}"
+                )
+            return completed
+
+        completed_normally = False
+        try:
+            deadline = time.monotonic() + 8
+            while time.monotonic() < deadline:
+                if daemon_process.poll() is not None:
+                    raise RuntimeError(
+                        "SparkDaemon exited before readiness:\n"
+                        f"{read_process_log(daemon_log_path)}"
+                    )
+                if invoke("list", check=False).returncode == 0:
+                    break
+                time.sleep(0.1)
+            else:
+                raise RuntimeError("SparkDaemon did not become ready within 8 seconds")
+
+            service_id = "interrupt-collab"
+            invoke("define", service_id, str(child), str(binary_dir), "--socket", child_endpoint)
+            invoke("start", service_id)
+
+            deadline = time.monotonic() + 8
+            while time.monotonic() < deadline:
+                status = invoke("status", service_id)
+                if f"{service_id}\trunning\tpid=" in status.stdout and control_ping(child_endpoint):
+                    break
+                time.sleep(0.1)
+            else:
+                raise RuntimeError(f"supervised child did not become IPC-ready:\n{status.stdout}")
+
+            interrupt(daemon_process)
+
+            try:
+                daemon_exit = daemon_process.wait(timeout=20)
+            except subprocess.TimeoutExpired as expired:
+                raise RuntimeError(
+                    "SparkDaemon ignored the console interrupt and was still running "
+                    "after 20 seconds"
+                ) from expired
+
+            daemon_output = read_process_log(daemon_log_path)
+            if daemon_exit != 0:
+                raise RuntimeError(
+                    f"console interrupt ended SparkDaemon with {daemon_exit} "
+                    f"(0x{daemon_exit & 0xFFFFFFFF:08X}) instead of a clean exit; "
+                    "0xC000013A means the OS default handler killed it and no "
+                    f"graceful shutdown ran:\n{daemon_output}"
+                )
+            if "SparkDaemon: shutdown complete" not in daemon_output:
+                raise RuntimeError(
+                    "SparkDaemon exited 0 without reaching its shutdown message, so "
+                    f"the graceful path did not run:\n{daemon_output}"
+                )
+            if "SparkCollabServer: shutdown complete" not in daemon_output:
+                raise RuntimeError(
+                    "the supervised child was not drained before the daemon left; it "
+                    "was terminated with the job object rather than asked to stop:\n"
+                    f"{daemon_output}"
+                )
+            completed_normally = True
+        finally:
+            try:
+                if not completed_normally and daemon_process.poll() is None:
+                    force_terminate_process_tree(daemon_process, known_supervised_pids)
+            finally:
+                if os.name != "nt":
+                    for socket_path in (daemon_endpoint, child_endpoint):
+                        Path(socket_path).unlink(missing_ok=True)
+
+
 def main() -> int:
     args = parse_args()
     daemon = args.daemon.resolve(strict=True)
@@ -405,8 +580,6 @@ def main() -> int:
                     f"{daemon_output}"
                 )
             completed_normally = True
-            print("Spark orchestration process smoke passed")
-            return 0
         finally:
             try:
                 if not completed_normally:
@@ -428,6 +601,10 @@ def main() -> int:
                 for socket_path in (daemon_endpoint, child_endpoint):
                     if os.name != "nt":
                         Path(socket_path).unlink(missing_ok=True)
+
+    run_console_interrupt_scenario(daemon, orchestrator, child, binary_dir, token)
+    print("Spark orchestration process smoke passed")
+    return 0
 
 
 if __name__ == "__main__":
