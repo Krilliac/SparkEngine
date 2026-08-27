@@ -528,7 +528,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*573 test files, 6859 source-level test definitions*
+*573 test files, 6861 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -803,7 +803,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLODGeneratorPhaseGG` | 6 |
 | `TestLagCompensation` | 12 |
 | `TestLagCompensationIntegration` | 4 |
-| `TestLauncherProcess` | 2 |
+| `TestLauncherProcess` | 4 |
 | `TestLevelStreamingSystemPhaseAA` | 11 |
 | `TestLightManager` | 13 |
 | `TestLightmapBaker` | 9 |

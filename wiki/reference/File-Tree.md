@@ -299,8 +299,6 @@ graph LR
 - [`ClassSystem.h`](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h) — 304 LOC — FPS class system for the Spark Engine showcase
 - [`Console.cpp`](../../GameModules/SparkGameFPS/Source/Game/Console.cpp) — 268 LOC
 - [`Console.h`](../../GameModules/SparkGameFPS/Source/Game/Console.h) — 205 LOC — Debug console system for runtime commands and logging
-- [`CubeObject.cpp`](../../GameModules/SparkGameFPS/Source/Game/CubeObject.cpp) — 67 LOC
-- [`CubeObject.h`](../../GameModules/SparkGameFPS/Source/Game/CubeObject.h) — 115 LOC — Axis-aligned cube primitive game object for prototyping and level design
 - [`Enemy.cpp`](../../GameModules/SparkGameFPS/Source/Game/Enemy.cpp) — 432 LOC — AI-driven enemy implementation using engine BehaviorTree system
 - [`Enemy.h`](../../GameModules/SparkGameFPS/Source/Game/Enemy.h) — 140 LOC — AI-driven enemy entity for the SparkGame arena
 - [`Game.cpp`](../../GameModules/SparkGameFPS/Source/Game/Game.cpp) — 855 LOC
@@ -326,27 +324,17 @@ graph LR
 - [`ModelObject.h`](../../GameModules/SparkGameFPS/Source/Game/ModelObject.h) — 75 LOC — GameObject that renders .obj model files
 - [`MultiplayerSystem.cpp`](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp) — 659 LOC — FPS multiplayer system implementation
 - [`MultiplayerSystem.h`](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h) — 389 LOC — Networked multiplayer system for the FPS game module
-- [`PlaneObject.cpp`](../../GameModules/SparkGameFPS/Source/Game/PlaneObject.cpp) — 62 LOC
-- [`PlaneObject.h`](../../GameModules/SparkGameFPS/Source/Game/PlaneObject.h) — 119 LOC — Flat rectangular plane primitive for ground surfaces and level design
 - [`Player.cpp`](../../GameModules/SparkGameFPS/Source/Game/Player.cpp) — 1084 LOC
 - [`Player.h`](../../GameModules/SparkGameFPS/Source/Game/Player.h) — 795 LOC — Player character controller with movement, combat, and health systems
 - [`PlayerConsole.cpp`](../../GameModules/SparkGameFPS/Source/Game/PlayerConsole.cpp) — 251 LOC
 - [`PlayerTypes.h`](../../GameModules/SparkGameFPS/Source/Game/PlayerTypes.h) — 80 LOC — Player-related type definitions and state structures
 - [`ProgressionSystem.cpp`](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.cpp) — 200 LOC — XP, leveling, and unlock progression
 - [`ProgressionSystem.h`](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h) — 152 LOC — XP, leveling, and unlock progression system
-- [`PyramidObject.cpp`](../../GameModules/SparkGameFPS/Source/Game/PyramidObject.cpp) — 70 LOC
-- [`PyramidObject.h`](../../GameModules/SparkGameFPS/Source/Game/PyramidObject.h) — 107 LOC — Four-sided pyramid primitive game object for decorative and test geometry
 - [`QuestSystem.h`](../../GameModules/SparkGameFPS/Source/Game/QuestSystem.h) — 396 LOC — Objective-based quest tracking system with progress and rewards
-- [`RampObject.cpp`](../../GameModules/SparkGameFPS/Source/Game/RampObject.cpp) — 63 LOC
-- [`RampObject.h`](../../GameModules/SparkGameFPS/Source/Game/RampObject.h) — 111 LOC — Inclined ramp primitive game object for slopes and traversal surfaces
-- [`SphereObject.cpp`](../../GameModules/SparkGameFPS/Source/Game/SphereObject.cpp) — 65 LOC
-- [`SphereObject.h`](../../GameModules/SparkGameFPS/Source/Game/SphereObject.h) — 118 LOC — UV-sphere primitive game object for prototyping and physics testing
 - [`Terrain.cpp`](../../GameModules/SparkGameFPS/Source/Game/Terrain.cpp) — 647 LOC
 - [`Terrain.h`](../../GameModules/SparkGameFPS/Source/Game/Terrain.h) — 209 LOC — Enhanced terrain system with LOD, texture splatting, and RAII safety
 - [`VehicleSystem.cpp`](../../GameModules/SparkGameFPS/Source/Game/VehicleSystem.cpp) — 1009 LOC
 - [`VehicleSystem.h`](../../GameModules/SparkGameFPS/Source/Game/VehicleSystem.h) — 364 LOC — Ground and aerial vehicle system for Spark Engine
-- [`WallObject.cpp`](../../GameModules/SparkGameFPS/Source/Game/WallObject.cpp) — 53 LOC
-- [`WallObject.h`](../../GameModules/SparkGameFPS/Source/Game/WallObject.h) — 111 LOC — Vertical wall primitive game object for barriers and level boundaries
 - [`WaveSpawner.cpp`](../../GameModules/SparkGameFPS/Source/Game/WaveSpawner.cpp) — 284 LOC — Wave-based enemy spawning with escalating difficulty
 - [`WaveSpawner.h`](../../GameModules/SparkGameFPS/Source/Game/WaveSpawner.h) — 166 LOC — Wave-based enemy spawning system with escalating difficulty
 
@@ -1542,7 +1530,7 @@ graph LR
 - [`SparkEngine.h`](../../SparkEngine/Source/Core/SparkEngine.h) — 41 LOC — Main engine header - SparkEngine is the executable runtime host
 - [`SparkEngineLinux.cpp`](../../SparkEngine/Source/Core/SparkEngineLinux.cpp) — 243 LOC — POSIX entry point (main), signal handling, and command-line parsing (Linux + macOS).
 - [`SparkEngineLinuxHeadless.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp) — 246 LOC — Headless/dedicated-server loop and no-SDL2 fallback path (Linux + macOS).
-- [`SparkEngineLinuxInit.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxInit.cpp) — 374 LOC — Shared POSIX startup, per-frame tick, and shutdown helpers (Linux + macOS).
+- [`SparkEngineLinuxInit.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxInit.cpp) — 411 LOC — Shared POSIX startup, per-frame tick, and shutdown helpers (Linux + macOS).
 - [`SparkEngineLinuxInternal.h`](../../SparkEngine/Source/Core/SparkEngineLinuxInternal.h) — 69 LOC — Internal declarations shared by the POSIX (Linux + macOS) entry-point files.
 - [`SparkEngineLinuxSDL2.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxSDL2.cpp) — 464 LOC — SDL2 windowed-mode bring-up: window/backend selection and RunSDL2Windowed (Linux + macOS).
 - [`SparkEngineLinuxSDL2Events.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxSDL2Events.cpp) — 232 LOC — SDL2 event translation, dispatch, and per-frame main loop (Linux + macOS).
@@ -1975,15 +1963,27 @@ graph LR
 
 ### `SparkEngine/Source/Game/`
 
+- [`CubeObject.cpp`](../../SparkEngine/Source/Game/CubeObject.cpp) — 67 LOC
+- [`CubeObject.h`](../../SparkEngine/Source/Game/CubeObject.h) — 115 LOC — Engine-owned axis-aligned cube primitive for prototyping and level design
 - [`GameObject.cpp`](../../SparkEngine/Source/Game/GameObject.cpp) — 261 LOC
 - [`GameObject.h`](../../SparkEngine/Source/Game/GameObject.h) — 333 LOC — Base class for all interactive objects in the game world
 - [`Model.cpp`](../../SparkEngine/Source/Game/Model.cpp) — 215 LOC
 - [`Model.h`](../../SparkEngine/Source/Game/Model.h) — 43 LOC — Default constructor
 - [`ModelVertex.h`](../../SparkEngine/Source/Game/ModelVertex.h) — 80 LOC — Standard vertex structure for imported 3D models
 - [`PlaceholderMesh.h`](../../SparkEngine/Source/Game/PlaceholderMesh.h) — 157 LOC — Robust mesh loading helper with automatic procedural fallback
+- [`PlaneObject.cpp`](../../SparkEngine/Source/Game/PlaneObject.cpp) — 62 LOC
+- [`PlaneObject.h`](../../SparkEngine/Source/Game/PlaneObject.h) — 118 LOC — Engine-owned rectangular plane primitive for ground surfaces and level design
 - [`Primitives.cpp`](../../SparkEngine/Source/Game/Primitives.cpp) — 109 LOC
 - [`Primitives.h`](../../SparkEngine/Source/Game/Primitives.h) — 86 LOC — Procedural primitive mesh generators for common 3D shapes
+- [`PyramidObject.cpp`](../../SparkEngine/Source/Game/PyramidObject.cpp) — 70 LOC
+- [`PyramidObject.h`](../../SparkEngine/Source/Game/PyramidObject.h) — 107 LOC — Engine-owned four-sided pyramid primitive for decorative and test geometry
+- [`RampObject.cpp`](../../SparkEngine/Source/Game/RampObject.cpp) — 63 LOC
+- [`RampObject.h`](../../SparkEngine/Source/Game/RampObject.h) — 111 LOC — Engine-owned ramp primitive for slopes and traversal surfaces
+- [`SphereObject.cpp`](../../SparkEngine/Source/Game/SphereObject.cpp) — 65 LOC
+- [`SphereObject.h`](../../SparkEngine/Source/Game/SphereObject.h) — 118 LOC — Engine-owned UV-sphere primitive for prototyping and physics testing
 - [`TemplateRuntime.h`](../../SparkEngine/Source/Game/TemplateRuntime.h) — 450 LOC — Small runtime bridge for installed-SDK game templates.
+- [`WallObject.cpp`](../../SparkEngine/Source/Game/WallObject.cpp) — 53 LOC
+- [`WallObject.h`](../../SparkEngine/Source/Game/WallObject.h) — 111 LOC — Engine-owned wall primitive for barriers and level boundaries
 
 ### `SparkEngine/Source/Graphics/2D/`
 
@@ -2944,7 +2944,7 @@ graph LR
 - [`TestGameplaySystemExtension.cpp`](../../Tests/TestGameplaySystemExtension.cpp) — 177 LOC
 - [`TestGameplayTags.cpp`](../../Tests/TestGameplayTags.cpp) — 256 LOC
 - [`TestGameplayTagsReal.cpp`](../../Tests/TestGameplayTagsReal.cpp) — 96 LOC — Real-class tests for Spark::Gameplay::GameplayTagRegistry and GameplayTagContainer
-- [`TestGatewayAreaControl.cpp`](../../Tests/TestGatewayAreaControl.cpp) — 251 LOC
+- [`TestGatewayAreaControl.cpp`](../../Tests/TestGatewayAreaControl.cpp) — 312 LOC
 - [`TestGatewaySecurity.cpp`](../../Tests/TestGatewaySecurity.cpp) — 72 LOC — HMAC admission and replay tests.
 - [`TestGizmoMath.cpp`](../../Tests/TestGizmoMath.cpp) — 214 LOC — Tests for gizmo math (ray-plane/ray-axis intersection)
 - [`TestGoldenImageTest.cpp`](../../Tests/TestGoldenImageTest.cpp) — 212 LOC
@@ -2977,7 +2977,7 @@ graph LR
 - [`TestLODGeneratorPhaseGG.cpp`](../../Tests/TestLODGeneratorPhaseGG.cpp) — 178 LOC — Phase GG Theme 3D tests for Spark::Graphics::LODGenerator
 - [`TestLagCompensation.cpp`](../../Tests/TestLagCompensation.cpp) — 233 LOC — Tests for Spark::Net::LagCompensation (engine hit-rewind ring buffer)
 - [`TestLagCompensationIntegration.cpp`](../../Tests/TestLagCompensationIntegration.cpp) — 288 LOC — Tests for lag compensation integrated with hit detection
-- [`TestLauncherProcess.cpp`](../../Tests/TestLauncherProcess.cpp) — 91 LOC — SparkLauncher project-action command contract tests.
+- [`TestLauncherProcess.cpp`](../../Tests/TestLauncherProcess.cpp) — 243 LOC — SparkLauncher project-action command contract tests.
 - [`TestLevelStreamingSystemPhaseAA.cpp`](../../Tests/TestLevelStreamingSystemPhaseAA.cpp) — 188 LOC — Phase AA Theme 3C tests for SparkEditor::LevelStreamingSystem
 - [`TestLightManager.cpp`](../../Tests/TestLightManager.cpp) — 282 LOC
 - [`TestLightmapBaker.cpp`](../../Tests/TestLightmapBaker.cpp) — 202 LOC
@@ -3291,5 +3291,5 @@ graph LR
 | Metric | Count |
 |--------|-------|
 | Source files scanned | 2458 |
-| Total lines of code  | 718644 |
+| Total lines of code  | 718893 |
 | Source directories   | 17 |

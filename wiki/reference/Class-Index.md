@@ -653,7 +653,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `CSGTransform` | struct | SparkEngine | [CSGSystem.h:L62](../../SparkEngine/Source/Engine/LevelDesign/CSGSystem.h#L62) | Simple transform for CSG brushes |
 | `CSGVec3` | struct | SparkEngine | [CSGSystem.h:L44](../../SparkEngine/Source/Engine/LevelDesign/CSGSystem.h#L44) | 3D vector for CSG operations |
 | `CSGVertex` | struct | SparkEngine | [CSGSystem.h:L88](../../SparkEngine/Source/Engine/LevelDesign/CSGSystem.h#L88) | A single vertex in a CSG mesh |
-| `CubeObject` | class | GameModules | [CubeObject.h:L53](../../GameModules/SparkGameFPS/Source/Game/CubeObject.h#L53) | Axis-aligned cube primitive for prototyping and level blocking |
+| `CubeObject` | class | SparkEngine | [CubeObject.h:L53](../../SparkEngine/Source/Game/CubeObject.h#L53) | Axis-aligned cube primitive for prototyping and level blocking |
 | `Cue` | struct | GameModules | [TFUiSounds.h:L63](../../GameModules/SparkGameMMOFPS/Source/Game/TFUiSounds.h#L63) |  |
 | `CullingSphere` | struct | SparkEngine | [FrustumCulling.h:L72](../../SparkEngine/Source/Graphics/FrustumCulling.h#L72) | Bounding sphere for frustum culling (center/radius). |
 | `CullSettings` | struct | SparkEngine | [GPUDrivenRenderer.h:L42](../../SparkEngine/Source/Graphics/GPUDrivenRenderer.h#L42) | Configuration for the GPU culling pass |
@@ -2158,7 +2158,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `PixelShaderResource` | class | SparkEngine | [Shader.h:L254](../../SparkEngine/Source/Graphics/Shader.h#L254) | Pixel shader resource |
 | `PlacementBrush` | struct | SparkEditor | [ObjectPlacementPanel.h:L39](../../SparkEditor/Source/Panels/ObjectPlacementPanel.h#L39) |  |
 | `Plane` | struct | SparkEngine | [FrustumCulling.h:L81](../../SparkEngine/Source/Graphics/FrustumCulling.h#L81) | A single plane in Hessian normal form (ax + by + cz + d = 0). |
-| `PlaneObject` | class | GameModules | [PlaneObject.h:L52](../../GameModules/SparkGameFPS/Source/Game/PlaneObject.h#L52) | Flat rectangular plane primitive for floors, platforms, and surfaces |
+| `PlaneObject` | class | SparkEngine | [PlaneObject.h:L51](../../SparkEngine/Source/Game/PlaneObject.h#L51) | Flat rectangular plane primitive for floors, platforms, and surfaces |
 | `PlatformCapabilities` | struct | SparkEngine | [OnlineServices.h:L116](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L116) | Feature capability mask for a platform backend |
 | `PlatformDef` | struct | GameModules | [PlatformerLevelSystem.h:L28](../../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h#L28) | A single platform placement within a level |
 | `PlatformerCameraSystem` | class | GameModules | [PlatformerCameraSystem.h:L54](../../GameModules/SparkGamePlatformer/Source/Camera/PlatformerCameraSystem.h#L54) | Third-person follow camera with smooth tracking and collision |
@@ -2299,7 +2299,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `PushedMesh` | struct | SparkEngine | [HybridRTManager.h:L214](../../SparkEngine/Source/Graphics/HybridRT/HybridRTManager.h#L214) |  |
 | `PutAssetRequest` | struct | SparkEngine | [AssetServiceProtocol.h:L69](../../SparkEngine/Source/Utils/AssetServiceProtocol.h#L69) |  |
 | `PutCacheEntryRequest` | struct | SparkEngine | [ShaderServiceProtocol.h:L69](../../SparkEngine/Source/Utils/ShaderServiceProtocol.h#L69) |  |
-| `PyramidObject` | class | GameModules | [PyramidObject.h:L45](../../GameModules/SparkGameFPS/Source/Game/PyramidObject.h#L45) | Four-sided pyramid (square base) primitive game object |
+| `PyramidObject` | class | SparkEngine | [PyramidObject.h:L45](../../SparkEngine/Source/Game/PyramidObject.h#L45) | Four-sided pyramid (square base) primitive game object |
 | `Quadric` | struct | SparkEngine | [LODGenerator.h:L128](../../SparkEngine/Source/Graphics/LODGenerator.h#L128) | Symmetric 4x4 matrix stored as upper triangle (10 elements) |
 | `QualityChangedEvent` | struct | SparkEngine | [EventSystem.h:L241](../../SparkEngine/Source/Engine/Events/EventSystem.h#L241) | Fired when the graphics quality preset changes. |
 | `QuantAim` | struct | GameModules | [TFRepProtocol.h:L59](../../GameModules/SparkGameMMOFPS/Source/Net/TFRepProtocol.h#L59) |  |
@@ -2371,7 +2371,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `RagdollJointLimit` | struct | SparkEngine | [RagdollSystem.h:L89](../../SparkEngine/Source/Engine/Animation/RagdollSystem.h#L89) | Angular limits for a ragdoll joint connecting two bones. |
 | `RagdollPartDesc` | struct | SparkEngine | [PhysicsTypes.h:L769](../../SparkEngine/Source/Physics/PhysicsTypes.h#L769) | Ragdoll limb/part descriptor. |
 | `RagdollSystem` | class | SparkEngine | [RagdollSystem.h:L187](../../SparkEngine/Source/Engine/Animation/RagdollSystem.h#L187) | Manages ragdoll instances and animation-physics blending. |
-| `RampObject` | class | GameModules | [RampObject.h:L47](../../GameModules/SparkGameFPS/Source/Game/RampObject.h#L47) | Inclined ramp (wedge) primitive for slopes and physics testing |
+| `RampObject` | class | SparkEngine | [RampObject.h:L47](../../SparkEngine/Source/Game/RampObject.h#L47) | Inclined ramp (wedge) primitive for slopes and physics testing |
 | `RandomEngine` | class | SparkEngine | [RandomEngine.h:L49](../../SparkEngine/Source/Utils/RandomEngine.h#L49) | Modern C++ random number generator with multiple distribution types. |
 | `RandomWanderGenerator` | struct | SparkEngine | [MovementSystem.h:L152](../../SparkEngine/Source/Engine/AI/MovementSystem.h#L152) | Wander randomly within a radius, pausing between moves. |
 | `RateLimiter` | class | SparkEngine | [NetworkEncryption.h:L123](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h#L123) | Per-client rate limiter to prevent packet flooding |
@@ -2882,7 +2882,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `SpawnPointComponent` | struct | SparkEngine | [VolumeComponents.h:L261](../../SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h#L261) | Marks an entity position as a spawn point for gameplay entities. |
 | `SpawnPointData` | struct | SparkEditor | [FPSToolsPanel.h:L47](../../SparkEditor/Source/Panels/FPSToolsPanel.h#L47) |  |
 | `SpawnPointData` | struct | SparkEditor | [SceneFileTypes.h:L654](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L654) | Spawn point scene data |
-| `SphereObject` | class | GameModules | [SphereObject.h:L52](../../GameModules/SparkGameFPS/Source/Game/SphereObject.h#L52) | UV-sphere primitive for physics testing, decoration, and prototyping |
+| `SphereObject` | class | SparkEngine | [SphereObject.h:L52](../../SparkEngine/Source/Game/SphereObject.h#L52) | UV-sphere primitive for physics testing, decoration, and prototyping |
 | `SphericalHarmonics` | struct | SparkEngine | [LightProbeSystem.h:L33](../../SparkEngine/Source/Graphics/LightProbeSystem.h#L33) | L2 spherical harmonics (9 coefficients per color channel) |
 | `SpinlockGuard` | class | SparkEngine | [GraphicsEngine.h:L157](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L157) | RAII guard for std::atomic_flag spinlocks — ensures release even on exception. |
 | `SplineComponent` | struct | SparkEngine | [SplineComponents.h:L37](../../SparkEngine/Source/Engine/ECS/Components/SplineComponents.h#L37) | Stores a spline path that can be followed by other entities. |
@@ -3542,7 +3542,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `WaitForSeconds` | class | SparkEngine | [CoroutineTypes.h:L56](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h#L56) | Yield for a specified duration in seconds. |
 | `WaitNode` | class | SparkEngine | [BehaviorTreeNodes.h:L387](../../SparkEngine/Source/Engine/AI/BehaviorTreeNodes.h#L387) | Leaf node that pauses execution for a specified duration. |
 | `WaitUntil` | class | SparkEngine | [CoroutineTypes.h:L94](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h#L94) | Yield until a predicate returns true. |
-| `WallObject` | class | GameModules | [WallObject.h:L47](../../GameModules/SparkGameFPS/Source/Game/WallObject.h#L47) | Vertical wall (thin box) primitive for barriers and boundaries |
+| `WallObject` | class | SparkEngine | [WallObject.h:L47](../../SparkEngine/Source/Game/WallObject.h#L47) | Vertical wall (thin box) primitive for barriers and boundaries |
 | `WatchedModule` | struct | SparkEngine | [ModuleHotReload.h:L115](../../SparkEngine/Source/Core/ModuleHotReload.h#L115) |  |
 | `WatchedModule` | struct | SparkEngine | [ModuleHotReload.h:L56](../../SparkEngine/Source/Engine/HotReload/ModuleHotReload.h#L56) | Information about a single watched module |
 | `WatchEntry` | struct | SparkEngine | [FileWatcher.h:L75](../../SparkEngine/Source/Utils/FileWatcher/FileWatcher.h#L75) | A watched path entry |
