@@ -536,7 +536,7 @@ jobs:
       actions: write
       contents: write
     concurrency:
-      group: publish-builds-${{ needs.prepare.outputs.tag }}
+      group: sparkengine-publication-global
       cancel-in-progress: false
 
     steps:
@@ -545,6 +545,13 @@ jobs:
       with:
         ref: ${{ github.sha }}
         fetch-depth: 0
+
+    - name: Verify exact source commit passed Required CI Gate
+      id: required-ci
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TARGET_SHA: ${{ github.sha }}
+      run: python3 .github/scripts/verify-exact-required-gate.py
 
     # Counters are repository-global/default-branch state, not tag state. A
     # separate checkout keeps release tags immutable and preserves the exact

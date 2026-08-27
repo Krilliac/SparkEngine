@@ -46,6 +46,9 @@ jobs:
     - name: Test required-job gate
       run: python3 .github/scripts/test-verify-required-jobs.py
 
+    - name: Test exact-commit release gate
+      run: python3 .github/scripts/test-verify-exact-required-gate.py
+
     - name: Test coverage evidence semantics
       run: bash .github/scripts/test-coverage-report.sh
 

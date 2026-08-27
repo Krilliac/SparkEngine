@@ -24,7 +24,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: loc-counter-${{ github.ref }}
+  group: sparkengine-publication-global
   cancel-in-progress: false
 
 jobs:

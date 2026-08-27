@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: update-download-badges-Working
+  group: sparkengine-publication-global
   cancel-in-progress: false
 
 jobs:
