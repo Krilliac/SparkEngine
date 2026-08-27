@@ -186,12 +186,25 @@ namespace Spark::SecureRandom
             }
 
             SECURITY_DESCRIPTOR descriptor{};
-            if (!InitializeSecurityDescriptor(&descriptor, SECURITY_DESCRIPTOR_REVISION) ||
-                !SetSecurityDescriptorDacl(&descriptor, TRUE, acl, FALSE))
+            if (!InitializeSecurityDescriptor(&descriptor, SECURITY_DESCRIPTOR_REVISION))
+            {
+                const DWORD code = GetLastError();
+                LocalFree(acl);
+                SetError(error, WindowsError("InitializeSecurityDescriptor", code));
+                return false;
+            }
+            if (!SetSecurityDescriptorDacl(&descriptor, TRUE, acl, FALSE))
             {
                 const DWORD code = GetLastError();
                 LocalFree(acl);
                 SetError(error, WindowsError("SetSecurityDescriptorDacl", code));
+                return false;
+            }
+            if (!SetSecurityDescriptorControl(&descriptor, SE_DACL_PROTECTED, SE_DACL_PROTECTED))
+            {
+                const DWORD code = GetLastError();
+                LocalFree(acl);
+                SetError(error, WindowsError("SetSecurityDescriptorControl", code));
                 return false;
             }
 

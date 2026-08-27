@@ -1,6 +1,6 @@
 /**
  * @file CrashHandler.h
- * @brief Unhandled-exception crash handler with minidump generation and upload
+ * @brief Unhandled-exception crash handler with process-dump generation and upload
  * @author Spark Engine Team
  * @date 2025
  *
@@ -8,7 +8,7 @@
  * Structured Exception Handling (SEH) unhandled-exception filter. When the
  * application crashes or an assertion fails, the handler can:
  *
- * - Generate a minidump (.dmp) file for post-mortem debugging
+ * - Generate a minimal Windows process dump (.dmp) for post-mortem debugging
  * - Capture a screenshot of the last rendered frame
  * - Collect system information (OS version, GPU, memory, etc.)
  * - Dump all thread call stacks for multi-threaded diagnosis
@@ -44,11 +44,12 @@
  */
 struct CrashConfig
 {
-    std::wstring dumpPrefix = L"GameEngineCrash"; ///< Filename prefix for generated minidump files
+    std::wstring dumpPrefix = L"GameEngineCrash"; ///< Filename prefix for generated process-dump files
     std::string uploadURL = "";                   ///< Remote URL to upload crash reports (empty = no upload)
     bool captureScreenshot = true;                ///< Whether to capture a screenshot at crash time
     bool captureSystemInfo = true;                ///< Whether to collect OS/GPU/memory information
     bool captureAllThreads = true;                ///< Whether to dump call stacks for all threads
+    bool captureFullMemoryDump = false;           ///< Opt-in; allowed only without configured automatic transport
     bool zipBeforeUpload = true;                  ///< Whether to compress the report before uploading
     bool triggerCrashOnAssert = false;            ///< Whether assertion failures should generate a full crash report
     int connectTimeoutSeconds = 5;                ///< HTTP connection timeout for crash report uploads
@@ -89,8 +90,8 @@ struct CrashConfig
  * @brief Install the crash handler with the given configuration
  *
  * On Windows: registers an SEH unhandled-exception filter that catches crashes
- * and generates minidumps. On Linux: installs signal handlers for SIGSEGV,
- * SIGFPE, SIGABRT, etc. On other platforms: a no-op stub.
+ * and generates minimal process dumps unless local-only full-memory capture was explicitly enabled. On Linux:
+ * installs signal handlers for SIGSEGV, SIGFPE, SIGABRT, etc. On other platforms: a no-op stub.
  *
  * @param cfg Configuration controlling crash report behavior
  */
@@ -100,7 +101,7 @@ void InstallCrashHandler(const CrashConfig& cfg);
  * @brief Called by Assert::Fail to optionally trigger a crash report
  *
  * If CrashConfig::triggerCrashOnAssert is true, this generates a full crash
- * report including minidump and system information. Otherwise, it only logs
+ * report including a process dump and system information. Otherwise, it only logs
  * the assertion message without generating a crash dump.
  *
  * @param assertMsg The formatted assertion failure message
