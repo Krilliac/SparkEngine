@@ -8,6 +8,8 @@ For MMO-scale multiplayer with multiple server processes managing different worl
 
 > **Note:** Both approaches require `ENABLE_NETWORKING=ON` during CMake configuration. See [Networking](Networking.md) for full networking documentation.
 
+> **Security status:** The gameplay UDP path is experimental and unauthenticated. Servers bind to IPv4 loopback by default, and a requested concrete port either binds exactly or startup fails. All-interface exposure requires an explicit bind-mode opt-in captured into immutable server configuration. Gateway-managed `SparkServer` processes force that captured scope to loopback during option parsing, so later environment changes cannot widen an area listener.
+
 ## Architecture Overview
 
 ### Game Module Approach

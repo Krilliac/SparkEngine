@@ -2,11 +2,11 @@
 
 # SparkEngine AI Context Updater
 # Scans the live codebase and updates .claude/index.md quick reference section
-# with accurate, current metrics. Also updates CLAUDE.md test/panel counts.
+# with accurate, current metrics. Also updates CLAUDE.md test/panel/module counts.
 #
 # What it updates:
 #   - .claude/index.md: Quick Reference → Current Engine State section
-#   - CLAUDE.md: test count, panel count in architecture section
+#   - CLAUDE.md: test count, panel count, and module count in architecture section
 #
 # Usage:
 #   ./update-context.sh              # Update (default)
@@ -173,6 +173,11 @@ update_claude_md() {
     sed_replace "$CLAUDE_FILE" \
         '[0-9]* specialized panels' \
         "${PANEL_COUNT} specialized panels"
+
+    # Auto-discovered game-module count in the repository map
+    sed_replace "$CLAUDE_FILE" \
+        'Game module directory (auto-discovered by CMake, [0-9]* modules)' \
+        "Game module directory (auto-discovered by CMake, ${GAME_MODULES} modules)"
 }
 
 # ============================================================================

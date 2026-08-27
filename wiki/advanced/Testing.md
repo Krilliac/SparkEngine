@@ -528,7 +528,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*574 test files, 6864 source-level test definitions*
+*574 test files, 6892 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -770,8 +770,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameplaySystemExtension` | 6 |
 | `TestGameplayTags` | 14 |
 | `TestGameplayTagsReal` | 7 |
-| `TestGatewayAreaControl` | 8 |
-| `TestGatewaySecurity` | 5 |
+| `TestGatewayAreaControl` | 10 |
+| `TestGatewaySecurity` | 11 |
 | `TestGizmoMath` | 3 |
 | `TestGoldenImageTest` | 14 |
 | `TestGraphicsEngine` | 14 |
@@ -800,7 +800,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestJsonStrict` | 20 |
 | `TestJsonUtils` | 23 |
 | `TestLODGenerator` | 7 |
-| `TestLODGeneratorPhaseGG` | 6 |
+| `TestLODGeneratorPhaseGG` | 9 |
 | `TestLagCompensation` | 12 |
 | `TestLagCompensationIntegration` | 4 |
 | `TestLauncherPaths` | 4 |
@@ -835,7 +835,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMetalRayTracing` | 16 |
 | `TestMetalRayTracingLive` | 10 |
 | `TestModSystem` | 9 |
-| `TestModuleABI` | 22 |
+| `TestModuleABI` | 23 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 12 |
@@ -854,8 +854,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNetworkIntegration` | 32 |
 | `TestNetworkInterpolation` | 12 |
 | `TestNetworkMMOIntegration` | 11 |
-| `TestNetworkManagerEdgeCases` | 29 |
-| `TestNetworkManagerIntegration` | 21 |
+| `TestNetworkManagerEdgeCases` | 30 |
+| `TestNetworkManagerIntegration` | 33 |
 | `TestNetworkManagerOrchestration` | 27 |
 | `TestNetworkManagerReal` | 23 |
 | `TestNetworkReplicationIntegration` | 13 |
@@ -989,7 +989,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkGameRacing` | 5 |
 | `TestSparkGatewayCoordinator` | 7 |
 | `TestSparkPak` | 15 |
-| `TestSparkServerApplication` | 5 |
+| `TestSparkServerApplication` | 8 |
 | `TestSpatialGrid` | 16 |
 | `TestSpatialGridReal` | 7 |
 | `TestSplineMath` | 24 |

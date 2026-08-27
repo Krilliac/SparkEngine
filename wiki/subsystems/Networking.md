@@ -1,10 +1,12 @@
 # Networking
 
-SparkEngine includes a UDP-based networking system for multiplayer games with entity replication, client-side prediction, lag compensation, pluggable transports, packet encryption, and dedicated server support.
+SparkEngine includes an **experimental, unauthenticated** UDP networking system for local multiplayer development, with entity replication, client-side prediction, lag compensation, pluggable transports, and dedicated server support. The security helper classes are prototypes and are not integrated into the active `NetworkManager` wire path strongly enough to support confidentiality or peer-authentication claims.
 
 **Source:** `SparkEngine/Source/Engine/Networking/`
 
-> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). It uses raw UDP sockets with no external dependencies. When disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
+> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). Raw UDP listeners bind to IPv4 loopback by default. Remote exposure requires an exact `SPARK_NETWORK_BIND_MODE=all`/`any`/`public`/`0.0.0.0` opt-in captured before startup, and clients reject non-127/8 destinations while the safe policy is active. Unknown or misspelled modes remain loopback-only. Gateway-managed area processes override the captured scope to loopback. Concrete ports bind exactly; on Windows the listener also requires `SO_EXCLUSIVEADDRUSE`. This opt-in does not add authentication or encryption. When networking is disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
+
+`NetworkMessage::localOnly` is process-local ownership metadata and is never encoded in the wire format. TERRAFRONT login and registration requests set it together with the sensitive-payload erasure marker. `NetworkManager` rechecks the resolved destination while holding its API lock at queueing, delayed release, and retransmission boundaries; a non-loopback destination rejects and erases the credential-bearing state before transmission.
 
 ## Architecture
 
@@ -411,7 +413,8 @@ The default transport uses platform BSD/Winsock UDP sockets:
 
 - Creates a **non-blocking** UDP socket
 - Enlarges OS send/receive buffers to **64 KB** each for game traffic
-- Supports binding to a specific port or ephemeral port (port 0)
+- Binds exactly to a requested concrete port, or to an OS-assigned ephemeral port when given port 0
+- Uses IPv4 loopback unless the process explicitly opts into all interfaces
 - Cross-platform: Winsock on Windows, POSIX sockets on Linux/macOS
 
 ### SteamTransport (Stub)
@@ -462,7 +465,7 @@ NetworkSecurity* security = stack.GetSecurity();
 
 ### NetworkSecurity
 
-Provides XOR-based packet encryption and single-use connection tokens:
+Provides experimental XOR-based obfuscation and token utilities for callers that explicitly integrate them. These helpers do not authenticate or encrypt the active `NetworkManager` UDP path:
 
 ```cpp
 static constexpr size_t SECURITY_KEY_SIZE = 32;       // 256-bit keys
@@ -481,7 +484,7 @@ static constexpr float CONNECTION_TOKEN_LIFETIME = 30.0f; // 30 second expiry
 | `GenerateKey(outKey)` | Generate random 256-bit key |
 | `SetEncryptionEnabled(bool)` | Enable/disable encryption path |
 
-> **Warning:** XOR encryption is a placeholder. Production games should replace it with DTLS or AES-GCM.
+> **Warning:** XOR is not encryption suitable for credentials or hostile networks. Keep the current networking path on loopback; a remotely reachable production design requires a separately integrated authenticated-encryption transport.
 
 ### NetworkEncryption (Advanced)
 

@@ -88,11 +88,17 @@ provisioning keeps Windows ACLs and POSIX mode bits consistent with the same
 validation enforced at service startup.
 
 The gateway authenticates short-lived admission credentials, rejects replay,
-registers only loopback area-control endpoints, and performs
+registers only area hosts spelled exactly `127.0.0.1`, and performs
 prepare/transfer/commit/acknowledge as an idempotent epoch-fenced state machine.
 Routing acceptance does not move gameplay authority until the target and source
 phases have completed. On Windows the owner-local control links use named pipes;
 POSIX hosts use Unix-domain sockets.
+
+Gateway credentials protect the owner-local ingress and control plane, not the
+gameplay UDP transport. The current gameplay path is experimental and
+unauthenticated, binds to loopback by default, and must not be presented as an
+Internet-ready service. A gateway-managed `SparkServer` refuses an explicit
+all-interface bind override.
 
 ## Daemon supervision
 

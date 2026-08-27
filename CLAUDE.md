@@ -120,7 +120,7 @@ SparkEngine/Source/Engine/VR/            — VR headset/controller/tracking (Ope
 SparkEngine/Source/Utils/                — Console, Logger, Profiler, Assert
 SparkEditor/Source/Communication/        — CollaborativeEditSession (multi-user editing)
 SparkEditor/Source/                      — ImGui editor (22 subsystems, 65 specialized panels)
-GameModules/                             — Game module directory (auto-discovered by CMake, 10 modules)
+GameModules/                             — Game module directory (auto-discovered by CMake, 11 modules)
 GameModules/SparkGame/Source/            — Base game module (DLL)
 GameModules/SparkGameFPS/Source/         — FPS game module (DLL)
 GameModules/SparkGameMMO/Source/         — MMO game module (DLL)
@@ -134,7 +134,7 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 6864 test definitions across 574 files, CTest
+Tests/                                   — 6893 test definitions across 575 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
