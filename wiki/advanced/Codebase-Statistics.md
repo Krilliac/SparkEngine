@@ -8,15 +8,15 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 308414 |
+| **SparkEngine/Source** | 308464 |
 | **SparkEditor/Source** | 109164 |
-| **GameModules** | 142900 |
-| **External services** | 10687 |
+| **GameModules** | 142923 |
+| **External services** | 10719 |
 | **Asset pipeline** | 2399 |
-| **Tests** | 164698 |
+| **Tests** | 164864 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~749566** |
+| **Total C++ (excl. ThirdParty)** | **~749837** |
 
 ### File Counts
 
@@ -44,8 +44,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 119374 | 38.7% |
-| Engine (all subsystems) | 85648 | 27.7% |
+| Graphics | 119374 | 38.6% |
+| Engine (all subsystems) | 85698 | 27.7% |
 | Utils | 41402 | 13.4% |
 | Core | 29413 | 9.5% |
 | Physics | 10814 | 3.5% |
@@ -60,13 +60,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 
 | Subsystem | Lines |
 |-----------|------:|
-| Networking | 14176 |
+| Networking | 14205 |
 | AI | 13490 |
 | ECS | 8381 |
 | Gameplay | 7755 |
 | Animation | 6700 |
 | Scripting | 5093 |
-| SaveSystem | 2826 |
+| SaveSystem | 2847 |
 | UI | 2522 |
 | Streaming | 2009 |
 | Editor | 1737 |
@@ -108,7 +108,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | Metric | Count |
 |--------|------:|
 | Test files | 574 |
-| TEST() definitions | 6859 |
+| TEST() definitions | 6864 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
@@ -162,7 +162,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | `EngineSettings.cpp` | 1623 |
 | `PostProcessingPipeline.cpp` | 1602 |
 | `D3D12Device.cpp` | 1593 |
-| `SaveSystem.cpp` | 1558 |
+| `SaveSystem.cpp` | 1563 |
 | `D3D11Device.cpp` | 1543 |
 | `AngelScriptEngine.cpp` | 1473 |
 | `CrashHandler.cpp` | 1469 |
