@@ -41,6 +41,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Validate Codacy SARIF normalizer
+        run: python3 -I .github/scripts/test_normalize_codacy_sarif.py
+
       # Execute Codacy Analysis CLI and generate a SARIF output with the security issues identified during the analysis
       - name: Run Codacy Analysis CLI
         # v4.4.7 pins the classic CLI wrapper to Codacy CLI 7.9.25. Codacy's
@@ -66,7 +69,7 @@ jobs:
           # This will handover control about PR rejection to the GitHub side
           max-allowed-issues: 2147483647
 
-      - name: Assign stable categories to Codacy's C and C++ SARIF runs
+      - name: Bound and categorize Codacy's C and C++ SARIF runs
         run: python3 -I .github/scripts/normalize-codacy-sarif.py results.sarif
 
       # Upload the SARIF file generated in the previous step
