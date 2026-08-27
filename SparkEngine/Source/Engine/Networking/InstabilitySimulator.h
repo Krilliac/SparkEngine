@@ -58,12 +58,29 @@ namespace Spark::Net
      *   }
      *   // Later, in the send loop:
      *   auto ready = sim.GetReadyPackets(currentTimeMs);
-     *   for (auto& pkt : ready) { actualSend(pkt); }
+     *   for (auto& pkt : ready) { actualSend(pkt.data); }
      * @endcode
      */
     class InstabilitySimulator
     {
       public:
+        /** A serialized packet plus process-local transmission policy metadata. */
+        struct DelayedPacket
+        {
+            DelayedPacket() = default;
+            DelayedPacket(const DelayedPacket&) = delete;
+            DelayedPacket& operator=(const DelayedPacket&) = delete;
+            DelayedPacket(DelayedPacket&&) noexcept = default;
+            DelayedPacket& operator=(DelayedPacket&& other) noexcept;
+            ~DelayedPacket();
+
+            std::vector<uint8_t> data;
+            float deliveryTimeMs = 0.0f; ///< Absolute time when this packet should be sent
+            uint32_t sequence = 0;       ///< Reliable sequence, or zero for unreliable packets
+            uint64_t lifecycleEpoch = 0; ///< Owning connection lifecycle, or zero for generic simulator users
+            bool localOnly = false;      ///< Process-local policy marker; never serialized into data
+        };
+
         /// @brief Get the singleton instance
         static InstabilitySimulator& GetInstance()
         {
@@ -79,8 +96,8 @@ namespace Spark::Net
         void SetSettings(const InstabilitySettings& settings);
 
         /// @brief Get the current instability settings
-        /// @return Current settings (read-only reference)
-        const InstabilitySettings& GetSettings() const;
+        /// @return Thread-safe snapshot of the current settings
+        InstabilitySettings GetSettings() const;
 
         /// @brief Check if a packet should be dropped based on packetLossPercent
         /// @return true if the packet should be discarded
@@ -97,36 +114,32 @@ namespace Spark::Net
         /// @brief Queue a packet for delayed delivery
         /// @param data        Raw packet bytes
         /// @param sendTimeMs  Absolute time (ms) when the packet should be released
-        void QueuePacket(std::vector<uint8_t> data, float sendTimeMs);
+        void QueuePacket(std::vector<uint8_t> data, float sendTimeMs, bool localOnly = false, uint32_t sequence = 0,
+                         uint64_t lifecycleEpoch = 0);
 
         /// @brief Retrieve all packets whose delivery time has passed
         /// @param currentTimeMs  Current time in milliseconds
-        /// @return Vector of packet data buffers ready for actual transmission
-        std::vector<std::vector<uint8_t>> GetReadyPackets(float currentTimeMs);
+        /// @return Packets ready for actual transmission, retaining local policy metadata
+        std::vector<DelayedPacket> GetReadyPackets(float currentTimeMs);
 
         /// @brief Get a human-readable status string for console display
         /// @return Formatted status string
         std::string Console_GetStatus() const;
+
+        /// @brief Number of serialized packets currently retained for delayed delivery.
+        [[nodiscard]] size_t GetQueuedPacketCount() const;
+
+        /// @brief Securely discard packets owned by a completed network lifecycle.
+        /// @param lifecycleEpoch Highest completed lifecycle epoch to discard. Generic
+        ///        simulator packets (epoch zero) and packets from later lifecycles remain.
+        /// @return Number of delayed packets discarded.
+        size_t DiscardPacketsThroughLifecycle(uint64_t lifecycleEpoch);
 
         /// @brief Release all queued packets and reset state
         void Shutdown();
 
       private:
         InstabilitySimulator();
-
-        /// A packet waiting for its scheduled delivery time
-        struct DelayedPacket
-        {
-            DelayedPacket() = default;
-            DelayedPacket(const DelayedPacket&) = delete;
-            DelayedPacket& operator=(const DelayedPacket&) = delete;
-            DelayedPacket(DelayedPacket&&) noexcept = default;
-            DelayedPacket& operator=(DelayedPacket&& other) noexcept;
-            ~DelayedPacket();
-
-            std::vector<uint8_t> data;
-            float deliveryTimeMs = 0.0f; ///< Absolute time when this packet should be sent
-        };
 
         mutable std::mutex m_mutex;
         InstabilitySettings m_settings;

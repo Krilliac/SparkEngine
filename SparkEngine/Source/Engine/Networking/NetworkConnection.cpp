@@ -13,6 +13,7 @@
 #include "ConnectionScopeFilter.h"
 #include "DeltaSnapshotManager.h"
 #include "InstabilitySimulator.h"
+#include "NetworkBindPolicy.h"
 #include "../Security/MemoryIntegrity.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/DebugHookManager.h"
@@ -37,6 +38,11 @@ namespace Spark::Net
         {
             return lhs.sin_family == rhs.sin_family && lhs.sin_port == rhs.sin_port &&
                    lhs.sin_addr.s_addr == rhs.sin_addr.s_addr;
+        }
+
+        bool IsLoopbackEndpoint(const sockaddr_in& address) noexcept
+        {
+            return address.sin_family == AF_INET && (ntohl(address.sin_addr.s_addr) & 0xFF000000u) == 0x7F000000u;
         }
     } // namespace
 
@@ -118,21 +124,24 @@ namespace Spark::Net
                                      reason = std::move(suppliedReason);
                              }
 
+                             uint64_t rejectedLifecycleEpoch = 0;
                              {
                                  std::lock_guard<std::mutex> stateLock(m_stateMutex);
                                  if (m_role.load(std::memory_order_acquire) != NetworkRole::Client ||
                                      m_connectionState != ConnectionState::Connecting)
                                      return;
+                                 rejectedLifecycleEpoch = m_lifecycleEpoch;
                                  m_lastConnectionError = reason;
                                  m_connectionState = ConnectionState::Disconnected;
                                  m_role = NetworkRole::None;
                                  m_localClientID = INVALID_CLIENT;
                                  m_wasConnected = false;
                              }
+                             ++m_lifecycleEpoch;
 #ifdef ENABLE_NETWORKING
                              CloseSocket();
 #endif
-                             m_peers.clear();
+                             DiscardClientLifecycleTraffic(rejectedLifecycleEpoch);
                              SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection rejected: %s", reason.c_str());
                          });
         registerInternal(MessageType::Heartbeat,
@@ -256,6 +265,7 @@ namespace Spark::Net
         {
             Disconnect();
         }
+        InstabilitySimulator::GetInstance().DiscardPacketsThroughLifecycle(m_lifecycleEpoch);
 
 #ifdef ENABLE_NETWORKING
         CloseSocket();
@@ -325,6 +335,11 @@ namespace Spark::Net
 
     bool NetworkManager::StartServer(uint16_t port, int maxClients)
     {
+        return StartServer(port, maxClients, CaptureNetworkBindScope());
+    }
+
+    bool NetworkManager::StartServer(uint16_t port, int maxClients, NetworkBindScope bindScope)
+    {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         // Port 0 requests an OS-assigned ephemeral port and is the only
@@ -339,7 +354,7 @@ namespace Spark::Net
         }
 
 #ifdef ENABLE_NETWORKING
-        if (!CreateSocket(port))
+        if (!CreateSocket(port, bindScope))
             return false;
 #endif // ENABLE_NETWORKING
 
@@ -391,6 +406,10 @@ namespace Spark::Net
 
         // Flush the outgoing queue so disconnect messages are sent
         ProcessOutgoing();
+        // ProcessOutgoing may have handed serialized datagrams to the global
+        // instability simulator. Securely erase only completed manager
+        // lifecycles; generic simulator users and later lifecycles remain.
+        InstabilitySimulator::GetInstance().DiscardPacketsThroughLifecycle(m_lifecycleEpoch);
 
 #ifdef ENABLE_NETWORKING
         CloseSocket();
@@ -425,6 +444,29 @@ namespace Spark::Net
     // Connect / Disconnect
     // --------------------------------------------------------------------------
 
+    void NetworkManager::DiscardClientLifecycleTraffic(uint64_t lifecycleEpoch)
+    {
+        // The API mutex serializes lifecycle changes, but queue ownership has
+        // its own lock. Swap first and let the temporary queues destroy their
+        // messages after releasing m_queueMutex so sensitive payload wiping
+        // never nests another subsystem's lock under the queue lock.
+        std::queue<NetworkMessage> discardedOutgoing;
+        std::queue<NetworkMessage> discardedIncoming;
+        {
+            std::lock_guard<std::mutex> queueLock(m_queueMutex);
+            std::swap(discardedOutgoing, m_outgoingQueue);
+            std::swap(discardedIncoming, m_incomingQueue);
+        }
+
+        // A client has one remote peer. Clearing its reliability state destroys
+        // sensitive unacknowledged and ordered-buffer copies from this lifecycle.
+        m_peers.clear();
+
+        // The simulator is process-global, so discard only manager-owned packets
+        // from completed lifecycles and preserve epoch-zero generic traffic.
+        InstabilitySimulator::GetInstance().DiscardPacketsThroughLifecycle(lifecycleEpoch);
+    }
+
     bool NetworkManager::Connect(const std::string& address, uint16_t port, const std::string& playerName)
     {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
@@ -432,6 +474,14 @@ namespace Spark::Net
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, !address.empty(), "address must not be empty");
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, port > 0, "port must be greater than 0");
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, !playerName.empty(), "playerName must not be empty");
+        const NetworkBindScope bindScope = CaptureNetworkBindScope();
+        if (bindScope == NetworkBindScope::LoopbackOnly && !IsIPv4LoopbackAddress(address))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing non-loopback destination %s while SPARK_NETWORK_BIND_MODE is loopback-safe",
+                            address.c_str());
+            return false;
+        }
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Connecting to %s:%u as '%s'", address.c_str(), port,
                        playerName.c_str());
 
@@ -447,7 +497,7 @@ namespace Spark::Net
 
 #ifdef ENABLE_NETWORKING
         // Create a client socket on an ephemeral port (0)
-        if (!CreateSocket(0))
+        if (!CreateSocket(0, bindScope))
             return false;
 
         // Resolve the server address
@@ -506,6 +556,10 @@ namespace Spark::Net
 
         // Flush so the disconnect message actually goes out
         ProcessOutgoing();
+        // A delayed credential or reliable packet must never survive into a
+        // reconnect. Discarding its lifecycle invokes DelayedPacket's secure
+        // wire-buffer erasure without resetting unrelated simulator traffic.
+        InstabilitySimulator::GetInstance().DiscardPacketsThroughLifecycle(m_lifecycleEpoch);
 
 #ifdef ENABLE_NETWORKING
         CloseSocket();
@@ -552,6 +606,17 @@ namespace Spark::Net
             return;
         }
 
+#ifdef ENABLE_NETWORKING
+        if (msg.localOnly && GetRole() == NetworkRole::Client && !IsLoopbackEndpoint(m_serverAddress))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Rejecting local-only network message before queueing for a non-loopback server");
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.packetsDropped++;
+            return;
+        }
+#endif
+
         // Server-side reliable broadcasts must fan out per client: each peer
         // has its own sequence stream and unacked map, so a single broadcast
         // sequence number cannot represent delivery to N independent peers.
@@ -565,6 +630,7 @@ namespace Spark::Net
 
         NetworkMessage queued = msg;
         queued.timestamp = m_serverTime;
+        queued.ownerLifecycleEpoch = m_lifecycleEpoch;
 
         // Back-pressure only on Unreliable. Dropping a ReliableOrdered message
         // after sequence assignment would create a permanent gap the receiver
@@ -606,11 +672,20 @@ namespace Spark::Net
         NetworkMessage copy = msg;
         copy.senderID = 0; // From server
         copy.timestamp = m_serverTime;
+        copy.ownerLifecycleEpoch = m_lifecycleEpoch;
 
 #ifdef ENABLE_NETWORKING
         auto addrIt = m_clientAddresses.find(client);
         if (addrIt == m_clientAddresses.end())
             return;
+        if (copy.localOnly && !IsLoopbackEndpoint(addrIt->second))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Rejecting local-only network message for a non-loopback client");
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.packetsDropped++;
+            return;
+        }
 
         // Assign this client's own reliable sequence and track for
         // retransmission — sequence streams and unacked maps are per peer, so
@@ -630,7 +705,7 @@ namespace Spark::Net
                 if (sensitive)
                     Spark::SecureClear(serialized);
             });
-        SendRawTo(serialized, addrIt->second);
+        SendRawTo(serialized, addrIt->second, copy.localOnly);
         m_stats.packetsSent++;
 #else
         // Without networking, just enqueue for local testing
@@ -762,6 +837,27 @@ namespace Spark::Net
     // HandleConnect / HandleDisconnect
     // --------------------------------------------------------------------------
 
+    ClientID NetworkManager::PrepareNextClientID()
+    {
+        std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
+        ClientID candidate = NormalizeGeneratedClientID(m_nextClientID);
+
+        // There are vastly more generated IDs than live clients. Examining one
+        // more candidate than the number of occupied IDs guarantees a free ID
+        // without ever walking the application-reserved high range.
+        const size_t attempts = m_clients.size() + 1;
+        for (size_t attempt = 0; attempt < attempts; ++attempt)
+        {
+            if (!m_clients.contains(candidate))
+            {
+                m_nextClientID = candidate;
+                return candidate;
+            }
+            candidate = AdvanceGeneratedClientID(candidate);
+        }
+        return INVALID_CLIENT;
+    }
+
     ClientID NetworkManager::HandleConnect(const NetworkMessage& msg)
     {
         if (GetRole() != NetworkRole::Server)
@@ -795,7 +891,8 @@ namespace Spark::Net
             return INVALID_CLIENT;
         }
 
-        ClientID newID = m_nextClientID++;
+        const ClientID newID = m_nextClientID;
+        m_nextClientID = AdvanceGeneratedClientID(newID);
         ClientInfo info;
         info.id = newID;
         info.state = ConnectionState::Connected;
@@ -1044,7 +1141,13 @@ namespace Spark::Net
 
                     // Pre-register the client address so HandleConnect's
                     // SendToClient(ConnectAccepted) can reach the new client.
-                    const ClientID pendingID = m_nextClientID;
+                    const ClientID pendingID = PrepareNextClientID();
+                    if (pendingID == INVALID_CLIENT)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                                        "Cannot admit client: generated client ID space is exhausted");
+                        continue;
+                    }
                     m_clientAddresses[pendingID] = senderAddr;
 
                     const ClientID admittedID = HandleConnect(msg);
@@ -1063,6 +1166,7 @@ namespace Spark::Net
                 }
             }
 
+            msg.ownerLifecycleEpoch = m_lifecycleEpoch;
             std::lock_guard<std::mutex> lock(m_queueMutex);
             // Unreliable can be dropped under flood; reliable/ordered must be kept
             // so the ack/resequence path stays consistent.
@@ -1122,23 +1226,36 @@ namespace Spark::Net
         if (instability.GetSettings().enabled)
         {
             auto readyPackets = instability.GetReadyPackets(currentTimeMs);
-            const auto clearReadyPackets = Spark::MakeScopeExit(
-                [&readyPackets]
-                {
-                    for (auto& data : readyPackets)
-                        Spark::SecureClear(data);
-                });
-            for (auto& pktData : readyPackets)
+            for (auto& packet : readyPackets)
             {
+                if (packet.lifecycleEpoch != 0 && packet.lifecycleEpoch != m_lifecycleEpoch)
+                {
+                    m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+                    m_stats.packetsDropped++;
+                    continue;
+                }
                 if (m_role == NetworkRole::Client)
                 {
-                    SendRawTo(pktData, m_serverAddress);
+                    if (packet.localOnly && !IsLoopbackEndpoint(m_serverAddress))
+                    {
+                        if (packet.sequence != 0)
+                        {
+                            PeerState& peer = GetPeerState(SERVER_PEER);
+                            peer.unacknowledgedMessages.erase(packet.sequence);
+                            peer.reliableOriginalSendTime.erase(packet.sequence);
+                            peer.retransmitCounts.erase(packet.sequence);
+                        }
+                        m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+                        m_stats.packetsDropped++;
+                        continue;
+                    }
+                    SendRawTo(packet.data, m_serverAddress, packet.localOnly);
                 }
                 else if (m_role == NetworkRole::Server)
                 {
                     for (const auto& [id, addr] : m_clientAddresses)
                     {
-                        SendRawTo(pktData, addr);
+                        SendRawTo(packet.data, addr, packet.localOnly);
                     }
                 }
             }
@@ -1147,6 +1264,20 @@ namespace Spark::Net
         while (!toSend.empty())
         {
             const auto& msg = toSend.front();
+            if (msg.ownerLifecycleEpoch != 0 && msg.ownerLifecycleEpoch != m_lifecycleEpoch)
+            {
+                m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+                m_stats.packetsDropped++;
+                toSend.pop();
+                continue;
+            }
+            if (m_role == NetworkRole::Client && msg.localOnly && !IsLoopbackEndpoint(m_serverAddress))
+            {
+                m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+                m_stats.packetsDropped++;
+                toSend.pop();
+                continue;
+            }
             auto serialized = SerializeMessage(msg);
             const auto clearSerialized = Spark::MakeScopeExit(
                 [sensitive = msg.sensitive, &serialized]
@@ -1162,8 +1293,12 @@ namespace Spark::Net
                 continue;
             }
 
-            // Apply instability simulation if enabled
-            if (instability.GetSettings().enabled)
+            // Disconnect is a terminal control packet: Disconnect() immediately
+            // closes the socket and purges this lifecycle after this flush, so
+            // delaying or dropping it here would guarantee that it is never
+            // transmitted. Other traffic continues to use the configured
+            // impairment simulation.
+            if (instability.GetSettings().enabled && msg.type != MessageType::Disconnect)
             {
                 // Simulated packet loss
                 if (instability.ShouldDropPacket())
@@ -1179,7 +1314,8 @@ namespace Spark::Net
                 float delayMs = instability.GetDelayMs();
                 if (delayMs > 0.0f)
                 {
-                    instability.QueuePacket(std::move(serialized), currentTimeMs + delayMs);
+                    instability.QueuePacket(std::move(serialized), currentTimeMs + delayMs, msg.localOnly, msg.sequence,
+                                            msg.ownerLifecycleEpoch);
 
                     // Track reliable messages for retransmission
                     trackReliable(msg);
@@ -1191,13 +1327,13 @@ namespace Spark::Net
             // No instability or zero delay — send immediately
             if (m_role == NetworkRole::Client)
             {
-                SendRawTo(serialized, m_serverAddress);
+                SendRawTo(serialized, m_serverAddress, msg.localOnly);
             }
             else if (m_role == NetworkRole::Server)
             {
                 for (const auto& [id, addr] : m_clientAddresses)
                 {
-                    SendRawTo(serialized, addr);
+                    SendRawTo(serialized, addr, msg.localOnly);
                 }
             }
 
@@ -1288,6 +1424,24 @@ namespace Spark::Net
                 }
 
                 auto& retransmitMsg = it->second;
+                if (retransmitMsg.ownerLifecycleEpoch != 0 && retransmitMsg.ownerLifecycleEpoch != m_lifecycleEpoch)
+                {
+                    peer.unacknowledgedMessages.erase(it);
+                    peer.reliableOriginalSendTime.erase(seq);
+                    peer.retransmitCounts.erase(seq);
+                    m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+                    m_stats.packetsDropped++;
+                    continue;
+                }
+                if (retransmitMsg.localOnly && !IsLoopbackEndpoint(*destination))
+                {
+                    peer.unacknowledgedMessages.erase(it);
+                    peer.reliableOriginalSendTime.erase(seq);
+                    peer.retransmitCounts.erase(seq);
+                    m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+                    m_stats.packetsDropped++;
+                    continue;
+                }
                 retransmitMsg.timestamp = m_serverTime; // Reset retransmit timer
                 auto serialized = SerializeMessage(retransmitMsg);
                 const auto clearSerialized = Spark::MakeScopeExit(
@@ -1296,7 +1450,7 @@ namespace Spark::Net
                         if (sensitive)
                             Spark::SecureClear(serialized);
                     });
-                SendRawTo(serialized, *destination);
+                SendRawTo(serialized, *destination, retransmitMsg.localOnly);
             }
         }
 #endif // ENABLE_NETWORKING
@@ -1339,6 +1493,25 @@ namespace Spark::Net
         return ntohs(address.sin_port);
 #else
         return 0;
+#endif
+    }
+
+    bool NetworkManager::IsClientLoopback(ClientID client) const
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+#ifdef ENABLE_NETWORKING
+        {
+            std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
+            if (!m_clients.contains(client))
+                return false;
+        }
+        const auto address = m_clientAddresses.find(client);
+        if (address == m_clientAddresses.end())
+            return false;
+        return (ntohl(address->second.sin_addr.s_addr) & 0xFF000000u) == 0x7F000000u;
+#else
+        (void)client;
+        return false;
 #endif
     }
 

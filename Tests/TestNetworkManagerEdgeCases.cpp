@@ -25,15 +25,32 @@
 
 using namespace Spark::Net;
 
-TEST(NetworkBindPolicy_AcceptsOnlyExplicitLoopbackModes)
+TEST(NetworkBindPolicy_DefaultsUnknownModesToLoopbackAndRecognizesIPv4LoopbackBlock)
 {
     EXPECT_TRUE(UseLoopbackNetworkBind());
+    EXPECT_TRUE(ShouldUseLoopbackNetworkBind(nullptr));
+    EXPECT_TRUE(ShouldUseLoopbackNetworkBind(""));
+    EXPECT_TRUE(ShouldUseLoopbackNetworkBind("typo"));
+    EXPECT_TRUE(ShouldUseLoopbackNetworkBind("ALL"));
+    EXPECT_FALSE(ShouldUseLoopbackNetworkBind("all"));
+    EXPECT_FALSE(ShouldUseLoopbackNetworkBind("any"));
+    EXPECT_FALSE(ShouldUseLoopbackNetworkBind("public"));
+    EXPECT_FALSE(ShouldUseLoopbackNetworkBind("0.0.0.0"));
+    EXPECT_EQ(static_cast<int>(ResolveNetworkBindScope(nullptr)), static_cast<int>(NetworkBindScope::LoopbackOnly));
+    EXPECT_EQ(static_cast<int>(ResolveNetworkBindScope("all")), static_cast<int>(NetworkBindScope::AllInterfaces));
     EXPECT_TRUE(IsLoopbackBindMode("loopback"));
     EXPECT_TRUE(IsLoopbackBindMode("localhost"));
     EXPECT_TRUE(IsLoopbackBindMode("127.0.0.1"));
     EXPECT_FALSE(IsLoopbackBindMode(""));
     EXPECT_FALSE(IsLoopbackBindMode("0.0.0.0"));
     EXPECT_FALSE(IsLoopbackBindMode("LOOPBACK"));
+    EXPECT_TRUE(IsIPv4LoopbackAddress("127.0.0.1"));
+    EXPECT_TRUE(IsIPv4LoopbackAddress("127.255.8.9"));
+    EXPECT_FALSE(IsIPv4LoopbackAddress("126.255.255.255"));
+    EXPECT_FALSE(IsIPv4LoopbackAddress("128.0.0.1"));
+    EXPECT_FALSE(IsIPv4LoopbackAddress("127.0.0"));
+    EXPECT_FALSE(IsIPv4LoopbackAddress("127.0.0.256"));
+    EXPECT_FALSE(IsIPv4LoopbackAddress("127.invalid.0.1"));
 }
 
 static void ResetNM()
@@ -250,6 +267,17 @@ TEST(NetworkManager_ConnectWithoutInitialize)
     ResetNM();
 }
 
+TEST(NetworkManager_LoopbackPolicyRejectsRemoteClientDestination)
+{
+    ResetNM();
+    auto& nm = NetworkManager::GetInstance();
+
+    EXPECT_FALSE(nm.Connect("192.0.2.10", 27015));
+    EXPECT_FALSE(nm.IsInitialized());
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::None));
+    EXPECT_FALSE(nm.IsClientLoopback(1));
+}
+
 TEST(NetworkManager_StopServerTwice)
 {
     ResetNM();
@@ -314,6 +342,8 @@ TEST(NetworkMessage_DefaultValues)
     EXPECT_EQ(msg.sequence, static_cast<SequenceNumber>(0));
     EXPECT_TRUE(msg.payload.empty());
     EXPECT_FALSE(msg.sensitive);
+    EXPECT_FALSE(msg.localOnly);
+    EXPECT_EQ(msg.ownerLifecycleEpoch, static_cast<uint64_t>(0));
 }
 
 TEST(NetworkMessage_PayloadCopy)
@@ -338,20 +368,30 @@ TEST(NetworkMessage_SensitiveOwnershipSurvivesCopiesAndCanBeRevoked)
     original.channel = ChannelType::Reliable;
     original.payload = {'s', 'e', 'c', 'r', 'e', 't'};
     original.sensitive = true;
+    original.localOnly = true;
+    original.ownerLifecycleEpoch = 42;
 
     NetworkMessage copied = original;
     EXPECT_TRUE(copied.sensitive);
+    EXPECT_TRUE(copied.localOnly);
+    EXPECT_EQ(copied.ownerLifecycleEpoch, static_cast<uint64_t>(42));
     EXPECT_TRUE(copied.payload == original.payload);
 
     NetworkMessage assigned;
     assigned = copied;
     EXPECT_TRUE(assigned.sensitive);
+    EXPECT_TRUE(assigned.localOnly);
+    EXPECT_EQ(assigned.ownerLifecycleEpoch, static_cast<uint64_t>(42));
     EXPECT_TRUE(assigned.payload == original.payload);
 
     NetworkMessage moved = std::move(assigned);
     EXPECT_TRUE(moved.sensitive);
+    EXPECT_TRUE(moved.localOnly);
+    EXPECT_EQ(moved.ownerLifecycleEpoch, static_cast<uint64_t>(42));
     EXPECT_TRUE(moved.payload == original.payload);
     EXPECT_FALSE(assigned.sensitive);
+    EXPECT_FALSE(assigned.localOnly);
+    EXPECT_EQ(assigned.ownerLifecycleEpoch, static_cast<uint64_t>(0));
 
     NetworkMessage moveAssigned;
     moveAssigned.payload = {'o', 'l', 'd'};

@@ -33,7 +33,7 @@ namespace Spark::Gateway
 
         for (const AreaEndpoint& endpoint : endpoints)
         {
-            if (endpoint.area.areaName.empty() || endpoint.host.empty() || endpoint.area.port == 0 ||
+            if (endpoint.area.areaName.empty() || endpoint.host != "127.0.0.1" || endpoint.area.port == 0 ||
                 endpoint.area.maxClients <= 0)
                 return false;
         }

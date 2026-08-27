@@ -7,9 +7,45 @@
 #include "ServerApplication.h"
 
 #include <array>
+#include <cstdlib>
+#include <optional>
+#include <string>
 #include <string_view>
 
 using namespace Spark::Server;
+
+namespace
+{
+    class ScopedNetworkBindMode
+    {
+      public:
+        explicit ScopedNetworkBindMode(const char* value)
+        {
+            if (const char* previous = std::getenv("SPARK_NETWORK_BIND_MODE"))
+                m_previous = previous;
+#ifdef SPARK_PLATFORM_WINDOWS
+            _putenv_s("SPARK_NETWORK_BIND_MODE", value);
+#else
+            setenv("SPARK_NETWORK_BIND_MODE", value, 1);
+#endif
+        }
+
+        ~ScopedNetworkBindMode()
+        {
+#ifdef SPARK_PLATFORM_WINDOWS
+            _putenv_s("SPARK_NETWORK_BIND_MODE", m_previous ? m_previous->c_str() : "");
+#else
+            if (m_previous)
+                setenv("SPARK_NETWORK_BIND_MODE", m_previous->c_str(), 1);
+            else
+                unsetenv("SPARK_NETWORK_BIND_MODE");
+#endif
+        }
+
+      private:
+        std::optional<std::string> m_previous;
+    };
+} // namespace
 
 TEST(SparkServerOptions_RequiresDynamicGameSelection)
 {
@@ -66,4 +102,50 @@ TEST(SparkServerOptions_ParsesEditorStopSentinel)
     const ParseResult result = ParseServerOptions(arguments);
     EXPECT_TRUE(result.options.has_value());
     EXPECT_EQ(result.options->stopFile.string(), std::string("Temp/server.stop"));
+}
+
+TEST(SparkServerOptions_GatewayManagedServerForcesLoopbackScopeAtParseTime)
+{
+    const ScopedNetworkBindMode bindMode("all");
+    const std::array arguments = {std::string_view{"--module"},           std::string_view{"Game.dll"},
+                                  std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+                                  std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"}};
+
+    const ParseResult result = ParseServerOptions(arguments);
+    ASSERT_TRUE(result.options.has_value());
+    EXPECT_EQ(static_cast<int>(result.options->server.bindScope),
+              static_cast<int>(Spark::Net::NetworkBindScope::LoopbackOnly));
+}
+
+TEST(SparkServerOptions_CapturedGatewayScopeCannotBeWidenedAfterParse)
+{
+    Spark::Net::ServerConfig captured;
+    {
+        const ScopedNetworkBindMode bindMode("loopback");
+        const std::array arguments = {
+            std::string_view{"--module"},           std::string_view{"Game.dll"},
+            std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+            std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"}};
+        const ParseResult result = ParseServerOptions(arguments);
+        ASSERT_TRUE(result.options.has_value());
+        captured = result.options->server;
+    }
+
+    const ScopedNetworkBindMode widenedEnvironment("all");
+    EXPECT_EQ(static_cast<int>(captured.bindScope), static_cast<int>(Spark::Net::NetworkBindScope::LoopbackOnly));
+}
+
+TEST(SparkServerOptions_NonGatewayAllInterfaceOptInIsCapturedOnce)
+{
+    Spark::Net::ServerConfig captured;
+    {
+        const ScopedNetworkBindMode bindMode("all");
+        const std::array arguments = {std::string_view{"--module"}, std::string_view{"Game.dll"}};
+        const ParseResult result = ParseServerOptions(arguments);
+        ASSERT_TRUE(result.options.has_value());
+        captured = result.options->server;
+    }
+
+    const ScopedNetworkBindMode narrowedEnvironment("loopback");
+    EXPECT_EQ(static_cast<int>(captured.bindScope), static_cast<int>(Spark::Net::NetworkBindScope::AllInterfaces));
 }

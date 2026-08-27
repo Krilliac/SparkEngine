@@ -2,9 +2,9 @@
  * @file NetworkIntegration.h
  * @brief Cross-links ITransport and NetworkSecurity with NetworkManager
  *
- * Integrates the pluggable transport layer (R6.1) and security features
- * (R6.3) with the existing NetworkManager to provide a complete, secure
- * networking stack.
+ * Experimental helper that composes a pluggable transport with placeholder
+ * security utilities. It is not the active NetworkManager wire path and must
+ * not be treated as authenticated or production-secure networking.
  *
  * ## Transport layer
  * ```

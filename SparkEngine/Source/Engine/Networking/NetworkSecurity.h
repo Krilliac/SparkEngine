@@ -4,11 +4,11 @@
  * @author Spark Engine Team
  * @date 2025
  *
- * Provides a lightweight security layer for the networking subsystem:
+ * Provides experimental security-shaped utilities for isolated prototypes:
  * - XOR-based packet encryption/decryption (placeholder for a future
  *   DTLS or AES-GCM implementation).
- * - Connection token generation and validation so that only clients
- *   holding a valid token can join the server.
+ * - Connection token generation and validation for callers that explicitly
+ *   integrate it. NetworkManager admission does not currently use these tokens.
  *
  * All networking code is guarded by ENABLE_NETWORKING.
  */
@@ -43,7 +43,8 @@ namespace Spark::Net
     ///
     /// Encrypts / decrypts packets with XOR (a simple starting point --
     /// production games should replace this with DTLS or AES-GCM).
-    /// Also manages short-lived connection tokens for server authentication.
+    /// Also manages short-lived tokens for explicitly integrated prototypes;
+    /// these do not authenticate the active NetworkManager UDP connection.
     class NetworkSecurity
     {
       public:

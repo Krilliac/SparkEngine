@@ -319,6 +319,7 @@ namespace Terrafront
         msg.channel =
             (id == TFMsg::ClientInput) ? Spark::Net::ChannelType::Unreliable : Spark::Net::ChannelType::Reliable;
         msg.sensitive = (id == TFMsg::LoginRequest || id == TFMsg::RegisterRequest);
+        msg.localOnly = msg.sensitive;
         msg.payload.resize(size);
         if (size > 0)
             std::memcpy(msg.payload.data(), payload, size);

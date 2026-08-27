@@ -18,7 +18,7 @@ namespace Spark::Net
         explicit NetworkManagerRuntimeAdapter(NetworkManager& networkManager);
 
         bool Initialize() override;
-        bool StartServer(uint16_t port, int maxClients) override;
+        bool StartServer(uint16_t port, int maxClients, NetworkBindScope bindScope) override;
         void StopServer() override;
         void Shutdown() override;
         void Update(float deltaTime) override;

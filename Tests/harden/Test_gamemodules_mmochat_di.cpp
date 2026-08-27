@@ -82,7 +82,7 @@ TEST(MMO_ChatSystem_ResolvesNetworkViaInjectedContext)
     // With a context whose GetNetwork() yields null, networking is skipped but the
     // local history path still records the message — no crash, no global fallback.
     const auto& history = sys.GetHistory();
-    EXPECT_FALSE(history.empty());
+    ASSERT_FALSE(history.empty());
     EXPECT_EQ(history.back().text, std::string("regression"));
 
     sys.Shutdown();

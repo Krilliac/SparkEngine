@@ -25,6 +25,9 @@ namespace Spark::Net
         Spark::SecureClear(data);
         data = std::move(other.data);
         deliveryTimeMs = other.deliveryTimeMs;
+        sequence = other.sequence;
+        lifecycleEpoch = other.lifecycleEpoch;
+        localOnly = other.localOnly;
         return *this;
     }
 
@@ -85,6 +88,8 @@ namespace Spark::Net
         m_settings.reorderPercent = std::clamp(m_settings.reorderPercent, 0.0f, 100.0f);
         m_settings.latencyMs = std::max(m_settings.latencyMs, 0.0f);
         m_settings.jitterMs = std::max(m_settings.jitterMs, 0.0f);
+        if (!m_settings.enabled)
+            m_delayedQueue.clear();
         SPARK_LOG_INFO(
             Spark::LogCategory::Network,
             "InstabilitySimulator settings: enabled=%d loss=%.1f%% latency=%.1fms jitter=%.1fms reorder=%.1f%%",
@@ -92,10 +97,9 @@ namespace Spark::Net
             m_settings.reorderPercent);
     }
 
-    const InstabilitySettings& InstabilitySimulator::GetSettings() const
+    InstabilitySettings InstabilitySimulator::GetSettings() const
     {
-        // No lock needed — InstabilitySettings is small and read atomically enough
-        // for diagnostic purposes. The send path locks before calling decision methods.
+        std::lock_guard lock(m_mutex);
         return m_settings;
     }
 
@@ -154,17 +158,23 @@ namespace Spark::Net
     // Packet Queue
     // ========================================================================
 
-    void InstabilitySimulator::QueuePacket(std::vector<uint8_t> data, float sendTimeMs)
+    void InstabilitySimulator::QueuePacket(std::vector<uint8_t> data, float sendTimeMs, bool localOnly,
+                                           uint32_t sequence, uint64_t lifecycleEpoch)
     {
         // The caller moves its serialized wire buffer into this parameter. If
         // locking or insertion throws before DelayedPacket takes ownership,
         // make sure that plaintext copy is still overwritten.
         const auto clearInput = Spark::MakeScopeExit([&data] { Spark::SecureClear(data); });
         std::lock_guard lock(m_mutex);
+        if (!m_settings.enabled)
+            return;
 
         DelayedPacket packet;
         packet.data = std::move(data);
         packet.deliveryTimeMs = sendTimeMs;
+        packet.sequence = sequence;
+        packet.lifecycleEpoch = lifecycleEpoch;
+        packet.localOnly = localOnly;
 
         // Insert sorted by delivery time for efficient retrieval
         auto insertPos =
@@ -174,31 +184,20 @@ namespace Spark::Net
         m_delayedQueue.insert(insertPos, std::move(packet));
     }
 
-    std::vector<std::vector<uint8_t>> InstabilitySimulator::GetReadyPackets(float currentTimeMs)
+    std::vector<InstabilitySimulator::DelayedPacket> InstabilitySimulator::GetReadyPackets(float currentTimeMs)
     {
         std::lock_guard lock(m_mutex);
 
-        std::vector<std::vector<uint8_t>> ready;
-        bool releaseReady = false;
-        const auto clearReadyOnFailure = Spark::MakeScopeExit(
-            [&ready, &releaseReady]
-            {
-                if (!releaseReady)
-                {
-                    for (auto& data : ready)
-                        Spark::SecureClear(data);
-                }
-            });
+        std::vector<DelayedPacket> ready;
 
         // Since the queue is sorted by delivery time, we can stop at the first
         // packet that isn't ready yet.
         while (!m_delayedQueue.empty() && m_delayedQueue.front().deliveryTimeMs <= currentTimeMs)
         {
-            ready.push_back(std::move(m_delayedQueue.front().data));
+            ready.push_back(std::move(m_delayedQueue.front()));
             m_delayedQueue.erase(m_delayedQueue.begin());
         }
 
-        releaseReady = true;
         return ready;
     }
 
@@ -223,6 +222,19 @@ namespace Spark::Net
         }
 
         return status;
+    }
+
+    size_t InstabilitySimulator::GetQueuedPacketCount() const
+    {
+        std::lock_guard lock(m_mutex);
+        return m_delayedQueue.size();
+    }
+
+    size_t InstabilitySimulator::DiscardPacketsThroughLifecycle(uint64_t lifecycleEpoch)
+    {
+        std::lock_guard lock(m_mutex);
+        return std::erase_if(m_delayedQueue, [lifecycleEpoch](const DelayedPacket& packet)
+                             { return packet.lifecycleEpoch != 0 && packet.lifecycleEpoch <= lifecycleEpoch; });
     }
 
     // ========================================================================

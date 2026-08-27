@@ -28,6 +28,7 @@ namespace Spark::Gateway
       public:
         explicit LocalAreaControlPlane(const std::filesystem::path& keyFile);
         explicit LocalAreaControlPlane(std::vector<uint8_t> key);
+        ~LocalAreaControlPlane() override;
 
         [[nodiscard]] bool IsReady() const override;
         [[nodiscard]] bool IsEndpointReady(Net::AreaID id) const override;

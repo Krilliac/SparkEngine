@@ -30,11 +30,12 @@ namespace
             return initializeResult;
         }
 
-        bool StartServer(uint16_t port, int maxClients) override
+        bool StartServer(uint16_t port, int maxClients, NetworkBindScope bindScope) override
         {
             startServerCalled = true;
             startedPort = port;
             startedMaxClients = maxClients;
+            startedBindScope = bindScope;
             return startServerResult;
         }
 
@@ -100,6 +101,7 @@ namespace
         float lastUpdateDelta = 0.0f;
         uint16_t startedPort = 0;
         int startedMaxClients = 0;
+        NetworkBindScope startedBindScope = NetworkBindScope::AllInterfaces;
 
         NetworkStats stats{};
         std::unordered_map<ClientID, ClientInfo> clients;
@@ -132,6 +134,7 @@ TEST(DedicatedServerRuntime_ConnectDisconnectCallbacks)
     config.enableLanBroadcast = false;
     config.mapRotation = {"arena"};
     config.maxClients = 8;
+    config.bindScope = NetworkBindScope::LoopbackOnly;
 
     ClientInfo client;
     client.id = 7;
@@ -161,6 +164,7 @@ TEST(DedicatedServerRuntime_ConnectDisconnectCallbacks)
     EXPECT_TRUE(runtime.startServerCalled);
     EXPECT_EQ(runtime.startedPort, config.port);
     EXPECT_EQ(runtime.startedMaxClients, config.maxClients);
+    EXPECT_EQ(static_cast<int>(runtime.startedBindScope), static_cast<int>(config.bindScope));
 
     NetworkMessage connect;
     connect.type = MessageType::Connect;

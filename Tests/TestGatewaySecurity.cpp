@@ -3,14 +3,18 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
+#include <windows.h>
+#include <aclapi.h>
 #endif
 
 #include "TestFramework.h"
 #include "GatewaySecurity.h"
 #include "Utils/SecureRandom.h"
 
+#include <array>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <vector>
 
 using namespace Spark::Gateway;
@@ -32,6 +36,166 @@ namespace
         request.playerName = "Player";
         return request;
     }
+
+#ifdef _WIN32
+    enum class AclFixtureResult
+    {
+        Ready,
+        Unsupported,
+        Failed
+    };
+
+    bool IsUnsupportedAclFixtureError(DWORD status)
+    {
+        return status == ERROR_ACCESS_DENIED || status == ERROR_PRIVILEGE_NOT_HELD || status == ERROR_NOT_SUPPORTED ||
+               status == ERROR_INVALID_OWNER;
+    }
+
+    AclFixtureResult AclFixtureError(std::string_view operation, DWORD status, std::string& error)
+    {
+        error = std::string(operation) + " failed with Windows error " + std::to_string(status);
+        return IsUnsupportedAclFixtureError(status) ? AclFixtureResult::Unsupported : AclFixtureResult::Failed;
+    }
+
+    bool FinishAclFixtureSetup(AclFixtureResult result, std::string_view testName, const std::string& error)
+    {
+        if (result == AclFixtureResult::Ready)
+            return true;
+        if (result == AclFixtureResult::Unsupported)
+        {
+            SKIP_TEST(std::string(testName) + ": Windows ACL fixture is unsupported (" + error + ")");
+        }
+        std::cerr << "  FAIL: Windows ACL fixture construction failed: " << error << '\n';
+        EXPECT_TRUE(false);
+        return false;
+    }
+
+    AclFixtureResult AddInheritableWorldReadAce(const std::filesystem::path& directory, std::string& error)
+    {
+        PACL existingDacl = nullptr;
+        PSECURITY_DESCRIPTOR descriptor = nullptr;
+        DWORD status = GetNamedSecurityInfoW(directory.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr,
+                                             nullptr, &existingDacl, nullptr, &descriptor);
+        if (status != ERROR_SUCCESS || !existingDacl)
+        {
+            if (descriptor)
+                LocalFree(descriptor);
+            return AclFixtureError("GetNamedSecurityInfoW", status, error);
+        }
+
+        std::array<unsigned char, SECURITY_MAX_SID_SIZE> worldSid{};
+        DWORD worldSidSize = static_cast<DWORD>(worldSid.size());
+        if (!CreateWellKnownSid(WinWorldSid, nullptr, worldSid.data(), &worldSidSize))
+        {
+            const DWORD code = GetLastError();
+            LocalFree(descriptor);
+            return AclFixtureError("CreateWellKnownSid", code, error);
+        }
+
+        EXPLICIT_ACCESSW access{};
+        access.grfAccessPermissions = FILE_GENERIC_READ;
+        access.grfAccessMode = GRANT_ACCESS;
+        access.grfInheritance = OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE;
+        access.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+        access.Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
+        access.Trustee.ptstrName = reinterpret_cast<LPWSTR>(worldSid.data());
+
+        PACL updatedDacl = nullptr;
+        status = SetEntriesInAclW(1, &access, existingDacl, &updatedDacl);
+        LocalFree(descriptor);
+        if (status != ERROR_SUCCESS)
+            return AclFixtureError("SetEntriesInAclW", status, error);
+
+        status = SetNamedSecurityInfoW(const_cast<LPWSTR>(directory.c_str()), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
+                                       nullptr, nullptr, updatedDacl, nullptr);
+        LocalFree(updatedDacl);
+        if (status != ERROR_SUCCESS)
+            return AclFixtureError("SetNamedSecurityInfoW", status, error);
+        return AclFixtureResult::Ready;
+    }
+
+    AclFixtureResult AssignAlternateOwnerOnlyAcl(const std::filesystem::path& file, std::string& error)
+    {
+        HANDLE token = nullptr;
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token))
+            return AclFixtureError("OpenProcessToken", GetLastError(), error);
+
+        DWORD userSize = 0;
+        (void)GetTokenInformation(token, TokenUser, nullptr, 0, &userSize);
+        if (GetLastError() != ERROR_INSUFFICIENT_BUFFER || userSize == 0)
+        {
+            const DWORD status = GetLastError();
+            CloseHandle(token);
+            return AclFixtureError("GetTokenInformation(TokenUser size)", status, error);
+        }
+        std::vector<uint8_t> userBuffer(userSize);
+        if (!GetTokenInformation(token, TokenUser, userBuffer.data(), userSize, &userSize))
+        {
+            const DWORD status = GetLastError();
+            CloseHandle(token);
+            return AclFixtureError("GetTokenInformation(TokenUser)", status, error);
+        }
+        const auto* tokenUser = reinterpret_cast<const TOKEN_USER*>(userBuffer.data());
+
+        DWORD groupsSize = 0;
+        (void)GetTokenInformation(token, TokenGroups, nullptr, 0, &groupsSize);
+        if (GetLastError() != ERROR_INSUFFICIENT_BUFFER || groupsSize == 0)
+        {
+            const DWORD status = GetLastError();
+            CloseHandle(token);
+            return AclFixtureError("GetTokenInformation(TokenGroups size)", status, error);
+        }
+        std::vector<uint8_t> groupsBuffer(groupsSize);
+        if (!GetTokenInformation(token, TokenGroups, groupsBuffer.data(), groupsSize, &groupsSize))
+        {
+            const DWORD status = GetLastError();
+            CloseHandle(token);
+            return AclFixtureError("GetTokenInformation(TokenGroups)", status, error);
+        }
+        CloseHandle(token);
+
+        const auto* tokenGroups = reinterpret_cast<const TOKEN_GROUPS*>(groupsBuffer.data());
+        PSID alternateOwner = nullptr;
+        for (DWORD index = 0; index < tokenGroups->GroupCount; ++index)
+        {
+            const SID_AND_ATTRIBUTES& group = tokenGroups->Groups[index];
+            if ((group.Attributes & (SE_GROUP_OWNER | SE_GROUP_ENABLED)) == (SE_GROUP_OWNER | SE_GROUP_ENABLED) &&
+                (group.Attributes & SE_GROUP_USE_FOR_DENY_ONLY) == 0 && IsValidSid(group.Sid) &&
+                !EqualSid(group.Sid, tokenUser->User.Sid))
+            {
+                alternateOwner = group.Sid;
+                break;
+            }
+        }
+        if (!alternateOwner)
+        {
+            error = "the process token has no alternate owner-capable group SID";
+            return AclFixtureResult::Unsupported;
+        }
+
+        EXPLICIT_ACCESSW access{};
+        access.grfAccessPermissions = FILE_GENERIC_READ;
+        access.grfAccessMode = SET_ACCESS;
+        access.grfInheritance = NO_INHERITANCE;
+        access.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+        access.Trustee.TrusteeType = TRUSTEE_IS_GROUP;
+        access.Trustee.ptstrName = static_cast<LPWSTR>(alternateOwner);
+
+        PACL ownerOnlyDacl = nullptr;
+        DWORD status = SetEntriesInAclW(1, &access, nullptr, &ownerOnlyDacl);
+        if (status != ERROR_SUCCESS)
+            return AclFixtureError("SetEntriesInAclW", status, error);
+
+        status = SetNamedSecurityInfoW(const_cast<LPWSTR>(file.c_str()), SE_FILE_OBJECT,
+                                       OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION |
+                                           PROTECTED_DACL_SECURITY_INFORMATION,
+                                       alternateOwner, nullptr, ownerOnlyDacl, nullptr);
+        LocalFree(ownerOnlyDacl);
+        if (status != ERROR_SUCCESS)
+            return AclFixtureError("SetNamedSecurityInfoW alternate owner", status, error);
+        return AclFixtureResult::Ready;
+    }
+#endif
 } // namespace
 
 TEST(GatewaySecurity_AcceptsOnceAndRejectsReplay)
@@ -73,6 +237,42 @@ TEST(GatewaySecurity_RejectsWeakKey)
     EXPECT_FALSE(authenticator.IsReady());
 }
 
+TEST(GatewaySecurity_RejectsOversizedCredential)
+{
+    KeyFileAuthenticator authenticator(std::vector<uint8_t>(32, 0x5a));
+    AdmissionRequest request = Request();
+    request.credential.assign(GatewayMaximumCredentialSize + 1, 'x');
+
+    const AuthenticationResult result = authenticator.Authenticate(request);
+    EXPECT_FALSE(result.accepted);
+    EXPECT_EQ(result.reason, std::string("Malformed gateway credential"));
+}
+
+TEST(GatewaySecurity_RejectsNumericFieldsWithTrailingData)
+{
+    KeyFileAuthenticator authenticator(std::vector<uint8_t>(32, 0x5a));
+
+    AdmissionRequest request = Request();
+    request.credential = authenticator.CreateCredential(request, NowMilliseconds(), 123456);
+    const size_t timestampEnd = request.credential.find('.', 3);
+    ASSERT_TRUE(timestampEnd != std::string::npos);
+    request.credential.insert(timestampEnd, 1, 'x');
+    const AuthenticationResult timestampResult = authenticator.Authenticate(request);
+    EXPECT_FALSE(timestampResult.accepted);
+    EXPECT_EQ(timestampResult.reason, std::string("Malformed gateway credential"));
+
+    request = Request();
+    request.credential = authenticator.CreateCredential(request, NowMilliseconds(), 654321);
+    const size_t nonceBegin = request.credential.find('.', 3);
+    ASSERT_TRUE(nonceBegin != std::string::npos);
+    const size_t nonceEnd = request.credential.find('.', nonceBegin + 1);
+    ASSERT_TRUE(nonceEnd != std::string::npos);
+    request.credential.insert(nonceEnd, 1, 'x');
+    const AuthenticationResult nonceResult = authenticator.Authenticate(request);
+    EXPECT_FALSE(nonceResult.accepted);
+    EXPECT_EQ(nonceResult.reason, std::string("Malformed gateway credential"));
+}
+
 TEST(GatewaySecurity_AcceptsOwnerOnlyGeneratedKeyFile)
 {
     const std::filesystem::path root = std::filesystem::temp_directory_path() / Spark::SecureRandom::HexToken(12);
@@ -88,3 +288,133 @@ TEST(GatewaySecurity_AcceptsOwnerOnlyGeneratedKeyFile)
     std::error_code ignored;
     std::filesystem::remove_all(root, ignored);
 }
+
+TEST(GatewaySecurity_FailedReloadRevokesPriorOutputKey)
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / Spark::SecureRandom::HexToken(12);
+    const std::filesystem::path keyFile = root / "gateway.key";
+    std::string error;
+    ASSERT_TRUE(Spark::SecureRandom::CreatePrivateFile(keyFile, "too-short\n", &error));
+
+    std::vector<uint8_t> key(64, 0xA5);
+    EXPECT_FALSE(LoadPrivateGatewayKey(keyFile, key, error));
+    EXPECT_TRUE(key.empty());
+    EXPECT_EQ(error, std::string("Gateway key must contain between 32 and 4096 bytes"));
+
+    std::error_code ignored;
+    std::filesystem::remove_all(root, ignored);
+}
+
+TEST(GatewaySecurity_RejectsHardLinkedKeyFile)
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / Spark::SecureRandom::HexToken(12);
+    const std::filesystem::path keyFile = root / "gateway.key";
+    const std::filesystem::path linkedKeyFile = root / "gateway-link.key";
+    const std::string token = Spark::SecureRandom::HexToken(32);
+    std::string error;
+    ASSERT_TRUE(Spark::SecureRandom::CreatePrivateFile(keyFile, token + "\n", &error));
+
+    std::error_code filesystemError;
+    std::filesystem::create_hard_link(keyFile, linkedKeyFile, filesystemError);
+    ASSERT_FALSE(static_cast<bool>(filesystemError));
+
+    std::vector<uint8_t> key;
+    EXPECT_FALSE(LoadPrivateGatewayKey(keyFile, key, error));
+    EXPECT_TRUE(key.empty());
+    EXPECT_EQ(error, std::string("Gateway key must be a regular, single-link file"));
+
+    std::filesystem::remove_all(root, filesystemError);
+}
+
+#ifdef _WIN32
+TEST(GatewaySecurity_GeneratedKeyRemainsPrivateUnderInheritableParentAcl)
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / Spark::SecureRandom::HexToken(12);
+    const std::filesystem::path keyFile = root / "gateway.key";
+    std::error_code filesystemError;
+    std::filesystem::create_directories(root, filesystemError);
+    EXPECT_FALSE(static_cast<bool>(filesystemError));
+    if (filesystemError)
+        return;
+
+    std::string error;
+    const AclFixtureResult parentAclResult = AddInheritableWorldReadAce(root, error);
+    if (!FinishAclFixtureSetup(parentAclResult, "GatewaySecurity_GeneratedKeyRemainsPrivateUnderInheritableParentAcl",
+                               error))
+    {
+        std::filesystem::remove_all(root, filesystemError);
+        return;
+    }
+
+    const std::string token = Spark::SecureRandom::HexToken(32);
+    const std::filesystem::path inheritedProbeFile = root / "inherited-probe.key";
+    bool inheritedProbeCreated = false;
+    {
+        std::ofstream inheritedProbe(inheritedProbeFile, std::ios::binary);
+        inheritedProbe << token << '\n';
+        inheritedProbeCreated = inheritedProbe.good();
+    }
+    EXPECT_TRUE(inheritedProbeCreated);
+    if (!inheritedProbeCreated)
+    {
+        std::filesystem::remove_all(root, filesystemError);
+        return;
+    }
+
+    std::vector<uint8_t> inheritedKey;
+    error.clear();
+    EXPECT_FALSE(LoadPrivateGatewayKey(inheritedProbeFile, inheritedKey, error));
+    EXPECT_EQ(error, std::string("Gateway key ACL must grant read access only to its owner"));
+
+    const bool created = Spark::SecureRandom::CreatePrivateFile(keyFile, token + "\n", &error);
+    EXPECT_TRUE(created);
+    if (created)
+    {
+        PSECURITY_DESCRIPTOR descriptor = nullptr;
+        const DWORD status = GetNamedSecurityInfoW(keyFile.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr,
+                                                   nullptr, nullptr, nullptr, &descriptor);
+        SECURITY_DESCRIPTOR_CONTROL control{};
+        DWORD revision = 0;
+        const bool protectedDacl = status == ERROR_SUCCESS && descriptor &&
+                                   GetSecurityDescriptorControl(descriptor, &control, &revision) &&
+                                   (control & SE_DACL_PROTECTED) != 0;
+        EXPECT_TRUE(protectedDacl);
+        if (descriptor)
+            LocalFree(descriptor);
+
+        std::vector<uint8_t> key;
+        error.clear();
+        EXPECT_TRUE(LoadPrivateGatewayKey(keyFile, key, error));
+        EXPECT_EQ(key.size(), token.size() / 2);
+    }
+
+    std::filesystem::remove_all(root, filesystemError);
+}
+
+TEST(GatewaySecurity_RejectsOwnerOnlyAclWhenOwnerIsNotCurrentProcessUser)
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / Spark::SecureRandom::HexToken(12);
+    const std::filesystem::path keyFile = root / "gateway.key";
+    const std::string token = Spark::SecureRandom::HexToken(32);
+    std::string error;
+    ASSERT_TRUE(Spark::SecureRandom::CreatePrivateFile(keyFile, token + "\n", &error));
+
+    const AclFixtureResult ownerAclResult = AssignAlternateOwnerOnlyAcl(keyFile, error);
+    if (!FinishAclFixtureSetup(ownerAclResult, "GatewaySecurity_RejectsOwnerOnlyAclWhenOwnerIsNotCurrentProcessUser",
+                               error))
+    {
+        std::error_code ignored;
+        std::filesystem::remove_all(root, ignored);
+        return;
+    }
+
+    std::vector<uint8_t> key(32, 0xA5);
+    error.clear();
+    EXPECT_FALSE(LoadPrivateGatewayKey(keyFile, key, error));
+    EXPECT_TRUE(key.empty());
+    EXPECT_EQ(error, std::string("Gateway key file must be owned by the current process user"));
+
+    std::error_code ignored;
+    std::filesystem::remove_all(root, ignored);
+}
+#endif

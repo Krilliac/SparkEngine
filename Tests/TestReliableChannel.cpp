@@ -923,6 +923,7 @@ TEST(NetworkWire_SensitiveOwnershipIsLocalAndHighChannelBitsAreRejected)
     reply.channel = Net::ChannelType::Reliable;
     reply.payload = {'r', 'e', 'p', 'l', 'y'};
     reply.sensitive = true;
+    reply.localOnly = true;
     nm.SendToClient(client.GetClientID(), reply);
 
     Net::NetworkMessage received;
@@ -946,6 +947,8 @@ TEST(NetworkWire_SensitiveOwnershipIsLocalAndHighChannelBitsAreRejected)
     EXPECT_EQ(client.GetLastWireChannel(), static_cast<uint8_t>(Net::ChannelType::Reliable));
     EXPECT_EQ(client.GetLastWireSize(), Net::NETWORK_WIRE_HEADER_SIZE + reply.payload.size());
     EXPECT_FALSE(received.sensitive);
+    EXPECT_FALSE(received.localOnly);
+    EXPECT_EQ(received.ownerLifecycleEpoch, static_cast<uint64_t>(0));
     EXPECT_TRUE(received.payload == reply.payload);
     Spark::SecureClear(request);
     Spark::SecureClear(serverPayload);

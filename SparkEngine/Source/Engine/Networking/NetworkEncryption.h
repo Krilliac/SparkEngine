@@ -4,10 +4,10 @@
  * @author Spark Engine Team
  * @date 2026
  *
- * Provides packet-level encryption for game network traffic using XOR-based
- * stream cipher with per-connection session keys. This is not a replacement
- * for TLS/DTLS but provides adequate protection against casual packet
- * sniffing and replay attacks for real-time game data.
+ * Provides experimental packet-obfuscation helpers using an XOR-based stream
+ * construction. This is not cryptographic confidentiality or authentication,
+ * is not the active NetworkManager wire path, and must not protect credentials
+ * or remotely exposed production game traffic.
  *
  * Features:
  * - Per-connection 256-bit session keys derived from handshake

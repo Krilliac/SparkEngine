@@ -38,6 +38,7 @@
 
 #include "Engine/Networking/ClientPrediction.h"
 #include "Engine/Networking/InterpolationBuffer.h"
+#include "Engine/Networking/NetworkClientId.h"
 
 #include <deque>
 #include <string>
@@ -53,7 +54,9 @@ namespace Terrafront
     /// PlayerId used for the in-process local player on authority roles
     /// (listen host / standalone). Deliberately far above NetworkManager's
     /// incrementing client ids and distinct from kInvalidPlayer.
-    constexpr PlayerId kTFLocalHostPlayer = 0xFFFFFF01u;
+    constexpr PlayerId kTFLocalHostPlayer = Spark::Net::FIRST_RESERVED_CLIENT_ID + 1u;
+    static_assert(kTFLocalHostPlayer == 0xFFFFFF01u);
+    static_assert(Spark::Net::IsReservedClientID(kTFLocalHostPlayer));
 
     class TFClientNet
     {

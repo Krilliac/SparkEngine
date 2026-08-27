@@ -68,8 +68,9 @@ namespace Spark::Net
         // Network
         uint16_t port = DEFAULT_PORT;
         int maxClients = 32;
-        float tickRate = 60.0f;             ///< Server simulation ticks per second
-        float clientTimeoutSeconds = 30.0f; ///< Kick after this many seconds of silence
+        NetworkBindScope bindScope = CaptureNetworkBindScope(); ///< Captured once; never reread during bind.
+        float tickRate = 60.0f;                                 ///< Server simulation ticks per second
+        float clientTimeoutSeconds = 30.0f;                     ///< Kick after this many seconds of silence
         float heartbeatIntervalSeconds = 1.0f;
         bool lanOnly = false; ///< Restrict to LAN connections
 

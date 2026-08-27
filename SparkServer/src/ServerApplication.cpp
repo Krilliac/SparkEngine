@@ -11,6 +11,7 @@
 #include "Core/EngineRuntime.h"
 #include "Core/FixedTimestepAccumulator.h"
 #include "Core/ModuleManager.h"
+#include "Engine/Networking/NetworkBindPolicy.h"
 #include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Engine/ECS/Components.h"
@@ -316,6 +317,11 @@ namespace Spark::Server
             return {{}, "A dynamic game module is required (--module or --manifest)"};
         if (!options.showHelp && (options.controlEndpoint.empty() != options.gatewayKeyFile.empty()))
             return {{}, "--control-endpoint and --gateway-key-file must be supplied together"};
+        // Gateway-owned area servers are always local processes. Freeze that
+        // trust boundary into ServerConfig now so later environment mutation,
+        // module loading, and startup cannot widen the game listener.
+        if (!options.controlEndpoint.empty())
+            options.server.bindScope = Net::NetworkBindScope::LoopbackOnly;
         if (!options.controlEndpoint.empty() && options.controlStateFile.empty())
             options.controlStateFile = "Temp/spark-area-control-epochs.txt";
         if (options.server.mapRotation.empty())
@@ -386,7 +392,6 @@ namespace Spark::Server
             SetError("SparkServer is already running");
             return false;
         }
-
         auto& runtime = GetEngineRuntime();
         runtime.timer = std::make_unique<Timer>();
         runtime.timer->Start();

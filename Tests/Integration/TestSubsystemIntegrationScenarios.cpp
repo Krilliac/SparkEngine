@@ -437,9 +437,9 @@ TEST(Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation)
     while (deliveredPackets < 8 && currentTimeMs < 700.0f)
     {
         auto readyPackets = simulator.GetReadyPackets(currentTimeMs);
-        for (const auto& payload : readyPackets)
+        for (const auto& delayedPacket : readyPackets)
         {
-            ReplicationPacket packet = DeserializePacket(payload);
+            ReplicationPacket packet = DeserializePacket(delayedPacket.data);
             Spark::PredictedState serverState = prediction.GetState();
             serverState.position = packet.authoritativePosition;
             serverState.lastProcessedInput = packet.ackInput;

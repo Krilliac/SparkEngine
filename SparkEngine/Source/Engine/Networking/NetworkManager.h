@@ -18,6 +18,8 @@
 
 #pragma once
 #include "../../Core/Platform.h"
+#include "NetworkBindPolicy.h"
+#include "NetworkClientId.h"
 #include "Spark/ServiceInterfaces.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -83,11 +85,9 @@ namespace Spark::Net
     // Network Types
     // ============================================================================
 
-    using ClientID = uint32_t;
     using SequenceNumber = uint32_t;
     using NetworkTime = float;
 
-    constexpr ClientID INVALID_CLIENT = 0;
     constexpr uint16_t DEFAULT_PORT = 27015;
 
     enum class ChannelType
@@ -174,7 +174,10 @@ namespace Spark::Net
         SequenceNumber sequence = 0;        ///< Monotonic counter for reliable-ordered delivery.
         std::vector<uint8_t> payload;       ///< Raw serialized message body.
         float timestamp = 0.0f;             ///< Server time when the message was created (seconds).
-        bool sensitive = false;             ///< Local-only ownership marker; never serialized onto the network.
+        bool sensitive = false;             ///< Sensitive-payload ownership marker; never serialized onto the network.
+        bool localOnly =
+            false; ///< Refuse transmission to non-loopback destinations; never serialized onto the network.
+        uint64_t ownerLifecycleEpoch = 0; ///< Owning connection lifecycle; process-local and never serialized.
     };
 
     // ============================================================================
@@ -394,6 +397,7 @@ namespace Spark::Net
 
         /// Initialize as server
         bool StartServer(uint16_t port = DEFAULT_PORT, int maxClients = 32);
+        bool StartServer(uint16_t port, int maxClients, NetworkBindScope bindScope);
 
         /// Stop the server and disconnect all clients
         void StopServer();
@@ -505,6 +509,8 @@ namespace Spark::Net
             return m_clients;
         }
         uint16_t GetBoundPort() const;
+        /** [any thread, thread-safe] True only for a known client whose endpoint is in IPv4 127/8. */
+        [[nodiscard]] bool IsClientLoopback(ClientID client) const;
         void KickClient(ClientID client, const std::string& reason = "");
 
         // ====================================================================
@@ -635,6 +641,8 @@ namespace Spark::Net
         NetworkManager(const NetworkManager&) = delete;
         NetworkManager& operator=(const NetworkManager&) = delete;
 
+        friend struct NetworkManagerClientIdTestAccess;
+
         // Outermost lock for public API/lifecycle access. Recursive because
         // Update dispatches user handlers which may call SendMessage or query
         // state on the same thread. Always acquire this before narrow locks.
@@ -646,16 +654,19 @@ namespace Spark::Net
         void ProcessOutgoing();
         void FlushOutgoingQueue();
         void HandleRetransmissions();
+        /// Requires m_apiMutex and no narrower subsystem lock to be held.
+        void DiscardClientLifecycleTraffic(uint64_t lifecycleEpoch);
         std::vector<ClientID> GetConnectedClientIDs() const;
         bool UpdateReplication(float deltaTime, std::unique_lock<std::recursive_mutex>& apiLock,
                                uint64_t lifecycleEpoch);
         void UpdateHeartbeat(float deltaTime);
+        ClientID PrepareNextClientID();
         ClientID HandleConnect(const NetworkMessage& msg);
         void HandleDisconnect(const NetworkMessage& msg);
 
 #ifdef ENABLE_NETWORKING
         /// Create, bind, and configure a non-blocking UDP socket
-        bool CreateSocket(uint16_t port);
+        bool CreateSocket(uint16_t port, NetworkBindScope bindScope);
 
         /// Close the socket
         void CloseSocket();
@@ -667,7 +678,7 @@ namespace Spark::Net
         bool DeserializeMessage(const uint8_t* data, size_t length, NetworkMessage& outMsg) const;
 
         /// Send raw bytes to a specific address
-        bool SendRawTo(const std::vector<uint8_t>& data, const sockaddr_in& addr);
+        bool SendRawTo(const std::vector<uint8_t>& data, const sockaddr_in& addr, bool localOnly = false);
 
         /// Receive raw data from socket (non-blocking)
         int ReceiveRaw(std::vector<uint8_t>& outData, sockaddr_in& outSender);

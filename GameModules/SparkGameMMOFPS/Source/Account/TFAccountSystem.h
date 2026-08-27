@@ -26,7 +26,8 @@ namespace Terrafront
         PasswordTooShort,
         ServerError,
         NotLoggedIn,
-        SessionActive
+        SessionActive,
+        RemoteOnboardingDisabled
     };
 
     struct TFAuthResult

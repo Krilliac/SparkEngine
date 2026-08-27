@@ -35,7 +35,8 @@ namespace Spark::Net
     NetworkMessage::NetworkMessage(NetworkMessage&& other) noexcept
         : type(other.type), channel(other.channel), senderID(other.senderID), sequence(other.sequence),
           payload(std::move(other.payload)), timestamp(other.timestamp),
-          sensitive(std::exchange(other.sensitive, false))
+          sensitive(std::exchange(other.sensitive, false)), localOnly(std::exchange(other.localOnly, false)),
+          ownerLifecycleEpoch(std::exchange(other.ownerLifecycleEpoch, 0))
     {
     }
 
@@ -65,6 +66,8 @@ namespace Spark::Net
         payload = std::move(other.payload);
         timestamp = other.timestamp;
         sensitive = std::exchange(other.sensitive, false);
+        localOnly = std::exchange(other.localOnly, false);
+        ownerLifecycleEpoch = std::exchange(other.ownerLifecycleEpoch, 0);
         return *this;
     }
 
@@ -207,7 +210,7 @@ namespace Spark::Net
 
 #ifdef ENABLE_NETWORKING
 
-    bool NetworkManager::CreateSocket(uint16_t port)
+    bool NetworkManager::CreateSocket(uint16_t port, NetworkBindScope bindScope)
     {
         // Retry socket creation up to 3 times for transient OS-level failures
         constexpr int kMaxSocketRetries = 3;
@@ -253,45 +256,31 @@ namespace Spark::Net
         setsockopt(m_socket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&sendBufSize), sizeof(sendBufSize));
         setsockopt(m_socket, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&recvBufSize), sizeof(recvBufSize));
 
-        // Allow port reuse so rapid server restarts don't fail with EADDRINUSE
-        int reuseAddr = 1;
-        setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuseAddr), sizeof(reuseAddr));
-
-        // Bind to the specified port (0 = OS-assigned ephemeral port for clients)
-        // If the requested port is in use, try up to 5 consecutive ports
-        constexpr int kMaxPortRetries = 5;
-        uint16_t bindPort = port;
-        bool bound = false;
-
-        for (int attempt = 0; attempt <= kMaxPortRetries; ++attempt)
+#ifdef SPARK_PLATFORM_WINDOWS
+        // A game listener owns its requested endpoint exclusively. Fail closed
+        // if Windows cannot apply this before bind; SO_REUSEADDR would permit a
+        // second socket to intercept or split UDP traffic on the same port.
+        const int exclusiveAddressUse = 1;
+        if (setsockopt(m_socket, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&exclusiveAddressUse),
+                       sizeof(exclusiveAddressUse)) == SOCKET_ERROR)
         {
-            sockaddr_in localAddr{};
-            localAddr.sin_family = AF_INET;
-            localAddr.sin_addr.s_addr = UseLoopbackNetworkBind() ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
-            localAddr.sin_port = htons(bindPort);
-
-            if (::bind(m_socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) != SOCKET_ERROR)
-            {
-                bound = true;
-                if (attempt > 0)
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Network,
-                                   "Port %u was unavailable — bound to fallback port %u instead", port, bindPort);
-                }
-                break;
-            }
-
-            // Port 0 means OS-assigned — no point retrying with port 1
-            if (port == 0)
-                break;
-
-            ++bindPort;
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to make UDP socket address-exclusive");
+            CloseSocket();
+            return false;
         }
+#endif
 
-        if (!bound)
+        // Bind exactly to the requested port (0 = OS-assigned ephemeral port
+        // for clients/tests). A caller that requests a concrete port must never
+        // be silently moved to an adjacent endpoint.
+        sockaddr_in localAddr{};
+        localAddr.sin_family = AF_INET;
+        localAddr.sin_addr.s_addr = bindScope == NetworkBindScope::LoopbackOnly ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
+        localAddr.sin_port = htons(port);
+
+        if (::bind(m_socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) == SOCKET_ERROR)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to bind socket to port %u (tried %d ports)", port,
-                            kMaxPortRetries + 1);
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to bind socket to requested port %u", port);
             CloseSocket();
             return false;
         }
@@ -359,6 +348,8 @@ namespace Spark::Net
         // Callers may reuse an output object across receives. Never let a later
         // packet assignment release an earlier sensitive payload un-scrubbed.
         outMsg.ClearSensitivePayload();
+        outMsg.localOnly = false;
+        outMsg.ownerLifecycleEpoch = 0;
 
         // Minimum header: magic(4) + type(2) + channel(1) + sender(4) + seq(4) + timestamp(4) + payloadLen(4) = 23
         if (length < NETWORK_WIRE_HEADER_SIZE)
@@ -424,8 +415,21 @@ namespace Spark::Net
         return true;
     }
 
-    bool NetworkManager::SendRawTo(const std::vector<uint8_t>& data, const sockaddr_in& addr)
+    bool NetworkManager::SendRawTo(const std::vector<uint8_t>& data, const sockaddr_in& addr, bool localOnly)
     {
+        // This is the final transmission boundary. Reacquire the recursive API
+        // lock here so local-only policy is checked against the exact resolved
+        // destination that sendto will consume, including delayed/retry paths.
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        if (localOnly && (addr.sin_family != AF_INET || (ntohl(addr.sin_addr.s_addr) & 0xFF000000u) != 0x7F000000u))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing local-only network message transmission to a non-loopback destination");
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.packetsDropped++;
+            return false;
+        }
+
         if (m_socket == INVALID_SOCKET || data.empty() || data.size() > MAX_UDP_WIRE_DATAGRAM_SIZE)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Network, "SendRawTo failed: %s",
@@ -598,12 +602,14 @@ namespace Spark::Net
             // Protocol state changes stay under the API lock. Application code
             // runs afterward with that lock fully released and can never replace
             // the mandatory handler that established the invariant.
+            bool lifecycleChanged = false;
             if (internalHandler)
             {
                 internalHandler(message);
-                if (m_lifecycleEpoch != updateLifecycleEpoch)
-                    return false;
+                lifecycleChanged = (m_lifecycleEpoch != updateLifecycleEpoch);
             }
+            // A terminal protocol message still reaches its observer. The
+            // epoch check below then stops every remaining item in this batch.
             if (applicationObserver)
             {
                 NetworkMessage callbackMessage = message;
@@ -616,7 +622,7 @@ namespace Spark::Net
                 SPARK_LOG_WARN(Spark::LogCategory::Network, "Unknown message type %u — dropping",
                                static_cast<unsigned>(message.type));
             }
-            return true;
+            return !lifecycleChanged;
         };
 
         // Receive from socket and enqueue. Successful admission events are
@@ -646,6 +652,15 @@ namespace Spark::Net
                 return;
         }
 
+        auto isDispatchableSender = [this](const NetworkMessage& message)
+        {
+            if (GetRole() != NetworkRole::Server)
+                return true;
+
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            return message.senderID != INVALID_CLIENT && m_clients.contains(message.senderID);
+        };
+
         // Dispatch queued messages to handlers
         {
             std::queue<NetworkMessage> toDispatch;
@@ -657,6 +672,24 @@ namespace Spark::Net
             while (!toDispatch.empty())
             {
                 const auto& msg = toDispatch.front();
+
+                if (msg.ownerLifecycleEpoch != 0 && msg.ownerLifecycleEpoch != updateLifecycleEpoch)
+                {
+                    m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
+                    toDispatch.pop();
+                    continue;
+                }
+
+                // Admission can be revoked by an earlier callback after this
+                // datagram was authenticated and queued. Fence before ACK,
+                // reliability, or application handling so a removed client
+                // cannot recreate peer state or produce gameplay effects.
+                if (!isDispatchableSender(msg))
+                {
+                    m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
+                    toDispatch.pop();
+                    continue;
+                }
 
                 // Handle ACK messages internally (not dispatched to user handlers)
                 if (msg.type == MessageType::Ack)
@@ -741,6 +774,17 @@ namespace Spark::Net
                     NetworkMessage orderedMessage;
                     while (PopNextOrderedMessage(peerKey, orderedMessage))
                     {
+                        if (orderedMessage.ownerLifecycleEpoch != 0 &&
+                            orderedMessage.ownerLifecycleEpoch != updateLifecycleEpoch)
+                        {
+                            m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
+                            continue;
+                        }
+                        if (!isDispatchableSender(orderedMessage))
+                        {
+                            m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
+                            continue;
+                        }
                         if (!dispatchMessage(orderedMessage))
                             return;
                     }

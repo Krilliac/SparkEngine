@@ -100,7 +100,7 @@ namespace Spark::Net
             return false;
         }
 
-        if (!m_networkRuntime->StartServer(m_config.port, m_config.maxClients))
+        if (!m_networkRuntime->StartServer(m_config.port, m_config.maxClients, m_config.bindScope))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to start server on port %d", m_config.port);
             Log("ERROR: Failed to start server on port " + std::to_string(m_config.port));
@@ -894,6 +894,7 @@ namespace Spark::Net
     std::vector<ServerBroadcastInfo> DedicatedServer::DiscoverLanServers(uint16_t broadcastPort, int timeoutMs)
     {
         std::vector<ServerBroadcastInfo> servers;
+        const NetworkBindScope bindScope = CaptureNetworkBindScope();
 
         SOCKET listenSocket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (listenSocket == INVALID_SOCKET)
@@ -908,7 +909,7 @@ namespace Spark::Net
         sockaddr_in bindAddr{};
         bindAddr.sin_family = AF_INET;
         bindAddr.sin_port = htons(broadcastPort);
-        bindAddr.sin_addr.s_addr = UseLoopbackNetworkBind() ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
+        bindAddr.sin_addr.s_addr = bindScope == NetworkBindScope::LoopbackOnly ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
 
         if (::bind(listenSocket, reinterpret_cast<const sockaddr*>(&bindAddr), sizeof(bindAddr)) == SOCKET_ERROR)
         {

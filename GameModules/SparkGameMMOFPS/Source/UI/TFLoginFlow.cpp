@@ -47,6 +47,8 @@ namespace Terrafront
                 return "You are not logged in.";
             case TFAuthErr::SessionActive:
                 return "Disconnect before changing accounts.";
+            case TFAuthErr::RemoteOnboardingDisabled:
+                return "Login and registration are available only from this machine.";
             default:
                 return "Unknown error.";
             }

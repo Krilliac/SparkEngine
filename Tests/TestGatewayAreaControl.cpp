@@ -104,15 +104,39 @@ TEST(GatewayAreaControl_LiveLoopbackIsIdempotentAndPersistsEpochFence)
     std::filesystem::remove(state, error);
 }
 
-TEST(GatewayAreaControl_RemoteEndpointIsExplicitlyUnsupported)
+TEST(GatewayAreaControl_RequiresExactIPv4LoopbackHost)
 {
-    LocalAreaControlPlane control(std::vector<uint8_t>(32, 0x65));
+    for (const std::string host : {"localhost", "::1", "203.0.113.10"})
+    {
+        LocalAreaControlPlane control(std::vector<uint8_t>(32, 0x65));
+        AreaEndpoint area;
+        area.host = host;
+        area.area.interServerPort = UniquePort(31);
+        control.RegisterEndpoint(31, area);
+        EXPECT_FALSE(control.IsReady());
+        EXPECT_FALSE(control.IsEndpointReady(31));
+    }
+}
+
+TEST(GatewayCoordinator_RejectsNonCanonicalLoopbackAreaBeforeRegistration)
+{
+    const std::vector<uint8_t> key(32, 0x66);
+    LocalAreaControlPlane control(key);
+    KeyFileAuthenticator authenticator(key);
+    Spark::Net::WorldServer world;
+    Spark::Net::WorldServerConfig worldConfig;
+    ASSERT_TRUE(world.Start(worldConfig));
+
+    GatewayCoordinator coordinator(world, authenticator, control);
     AreaEndpoint area;
-    area.host = "203.0.113.10";
-    area.area.interServerPort = UniquePort(31);
-    control.RegisterEndpoint(31, area);
-    EXPECT_FALSE(control.IsReady());
-    EXPECT_FALSE(control.IsEndpointReady(31));
+    area.host = "localhost";
+    area.area.areaName = "NonCanonicalLoopback";
+    area.area.port = UniquePort(32);
+    area.area.interServerPort = UniquePort(33);
+    area.area.maxClients = 8;
+    EXPECT_FALSE(coordinator.RegisterAreas({area}));
+
+    world.Stop();
 }
 
 TEST(GatewayIngress_LiveLoopbackAuthenticatesAndRoutes)
@@ -145,8 +169,8 @@ TEST(GatewayIngress_LiveLoopbackAuthenticatesAndRoutes)
     EXPECT_TRUE(ingress.Start());
     AdmissionRequest request;
     request.clientId = 88;
-    request.sessionId = "live-ingress-session";
-    request.playerName = "Loopback Player";
+    request.sessionId = "live-\"quoted\\session";
+    request.playerName = "Loopback \"Player\" \\";
     const int64_t now =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
             .count();
@@ -159,6 +183,20 @@ TEST(GatewayIngress_LiveLoopbackAuthenticatesAndRoutes)
     areaService.Stop();
     world.Stop();
     std::filesystem::remove(state, error);
+}
+
+TEST(GatewayIngress_RejectsOversizedCredentialBeforeConnecting)
+{
+    AdmissionRequest request;
+    request.clientId = 88;
+    request.sessionId = "oversized-admission";
+    request.playerName = "Player";
+    request.credential.assign(GatewayMaximumCredentialSize + 1, 'x');
+
+    const RouteResult result = LocalGatewayIngressClient("unused-oversized-ingress").Admit(request);
+    EXPECT_FALSE(result.accepted);
+    EXPECT_TRUE(result.failure == RouteFailure::InvalidRequest);
+    EXPECT_EQ(result.reason, std::string("Admission exceeds local ingress frame bounds"));
 }
 
 TEST(GatewayAreaControl_LiveTwoAreaHandoffReachesSourceAndTarget)

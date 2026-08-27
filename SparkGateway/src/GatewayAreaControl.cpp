@@ -17,6 +17,8 @@
 
 #include "Utils/DaemonClient.h"
 #include "Utils/DaemonFraming.h"
+#include "Utils/ScopeGuard.h"
+#include "Utils/SecureMemory.h"
 #include "Utils/SecureRandom.h"
 
 #include <algorithm>
@@ -464,20 +466,21 @@ namespace Spark::Gateway
             return "spark-area-control-" + std::to_string(endpoint.area.interServerPort);
         }
 
-        std::string Hex(std::span<const uint8_t> bytes)
+        void AppendHex(std::string& output, std::span<const uint8_t> bytes)
         {
             static constexpr char Digits[] = "0123456789abcdef";
-            std::string output(bytes.size() * 2, '\0');
+            const size_t begin = output.size();
+            output.resize(begin + bytes.size() * 2);
             for (size_t index = 0; index < bytes.size(); ++index)
             {
-                output[index * 2] = Digits[bytes[index] >> 4];
-                output[index * 2 + 1] = Digits[bytes[index] & 0x0f];
+                output[begin + index * 2] = Digits[bytes[index] >> 4];
+                output[begin + index * 2 + 1] = Digits[bytes[index] & 0x0f];
             }
-            return output;
         }
 
         bool DecodeHex(std::string_view text, std::vector<uint8_t>& output)
         {
+            Spark::SecureClear(output);
             if (text.size() != 64)
                 return false;
             output.resize(32);
@@ -487,7 +490,10 @@ namespace Spark::Gateway
                 const auto [end, error] =
                     std::from_chars(text.data() + index * 2, text.data() + index * 2 + 2, value, 16);
                 if (error != std::errc{} || end != text.data() + index * 2 + 2)
+                {
+                    Spark::SecureClear(output);
                     return false;
+                }
                 output[index] = static_cast<uint8_t>(value);
             }
             return true;
@@ -506,7 +512,11 @@ namespace Spark::Gateway
                                            const HandoffCommand& command, int64_t timestamp, uint64_t nonce)
         {
             std::string body = SignedBody(phase, command, timestamp, nonce);
-            body += "\n" + Hex(ComputeGatewayMac(key, body));
+            const auto clearBody = Spark::MakeScopeExit([&] { Spark::SecureClear(body); });
+            auto mac = ComputeGatewayMac(key, body);
+            const auto clearMac = Spark::MakeScopeExit([&] { Spark::SecureClear(mac); });
+            body.push_back('\n');
+            AppendHex(body, mac);
             if (body.size() > GatewayMaximumBodySize)
                 return {};
             return {body.begin(), body.end()};
@@ -518,8 +528,10 @@ namespace Spark::Gateway
             HandoffCommand command;
             int64_t timestamp = 0;
             uint64_t nonce = 0;
-            std::string signedBody;
+            std::string_view signedBody;
             std::vector<uint8_t> mac;
+
+            ~DecodedRequest() { Spark::SecureClear(mac); }
         };
 
         bool ParseUnsigned(std::string_view text, uint64_t& value)
@@ -530,9 +542,11 @@ namespace Spark::Gateway
 
         bool DecodeRequest(const std::vector<uint8_t>& payload, DecodedRequest& request)
         {
+            Spark::SecureClear(request.mac);
+            request.signedBody = {};
             if (payload.empty() || payload.size() > GatewayMaximumBodySize)
                 return false;
-            const std::string text(payload.begin(), payload.end());
+            const std::string_view text(reinterpret_cast<const char*>(payload.data()), payload.size());
             std::vector<std::string_view> fields;
             size_t begin = 0;
             while (begin <= text.size())
@@ -570,7 +584,7 @@ namespace Spark::Gateway
         (void)LoadPrivateGatewayKey(keyFile, m_key, m_error);
         if (!SeedNonce(m_nonce))
         {
-            m_key.clear();
+            Spark::SecureClear(m_key);
             m_error = "Operating-system secure random source is unavailable";
         }
     }
@@ -578,9 +592,14 @@ namespace Spark::Gateway
     LocalAreaControlPlane::LocalAreaControlPlane(std::vector<uint8_t> key) : m_key(std::move(key))
     {
         if (m_key.size() < 32)
-            m_key.clear();
+            Spark::SecureClear(m_key);
         if (!SeedNonce(m_nonce))
-            m_key.clear();
+            Spark::SecureClear(m_key);
+    }
+
+    LocalAreaControlPlane::~LocalAreaControlPlane()
+    {
+        Spark::SecureClear(m_key);
     }
 
     bool LocalAreaControlPlane::IsReady() const
@@ -639,7 +658,7 @@ namespace Spark::Gateway
     void LocalAreaControlPlane::RegisterEndpoint(Net::AreaID id, const AreaEndpoint& endpoint)
     {
         std::lock_guard lock(m_mutex);
-        if (endpoint.host == "127.0.0.1" || endpoint.host == "localhost" || endpoint.host == "::1")
+        if (endpoint.host == "127.0.0.1")
             m_endpoints[id] = EndpointFor(endpoint);
         else
             m_endpoints[id].clear();
@@ -673,7 +692,8 @@ namespace Spark::Gateway
                                                                  const HandoffCommand& command) const
     {
         const uint64_t nonce = m_nonce.fetch_add(1, std::memory_order_relaxed);
-        const auto payload = EncodeRequest(m_key, phase, command, NowMilliseconds(), nonce);
+        auto payload = EncodeRequest(m_key, phase, command, NowMilliseconds(), nonce);
+        const auto clearPayload = Spark::MakeScopeExit([&] { Spark::SecureClear(payload); });
         if (payload.empty())
             return HandoffOperationResult::Rejected;
         Daemon::DaemonClient client;
@@ -698,12 +718,13 @@ namespace Spark::Gateway
         : m_endpoint(std::move(endpoint)), m_epochStateFile(std::move(epochStateFile)), m_key(std::move(key))
     {
         if (m_key.size() < 32)
-            m_key.clear();
+            Spark::SecureClear(m_key);
     }
 
     LocalAreaControlService::~LocalAreaControlService()
     {
         Stop();
+        Spark::SecureClear(m_key);
     }
 
     bool LocalAreaControlService::Start()
@@ -801,8 +822,8 @@ namespace Spark::Gateway
         {
             const DWORD error = ::GetLastError();
             const std::error_code systemError(static_cast<int>(error), std::system_category());
-            SetError("Cannot create gateway area-control named pipe '" + m_endpoint + "': " +
-                     systemError.message() + " (Windows error " + std::to_string(error) + ")");
+            SetError("Cannot create gateway area-control named pipe '" + m_endpoint + "': " + systemError.message() +
+                     " (Windows error " + std::to_string(error) + ")");
             m_ready.store(false, std::memory_order_release);
             m_startupComplete.store(true, std::memory_order_release);
             return;
@@ -825,6 +846,7 @@ namespace Spark::Gateway
                 bool responseSent = false;
                 Daemon::FrameHeader header{};
                 std::vector<uint8_t> payload;
+                const auto clearPayload = Spark::MakeScopeExit([&] { Spark::SecureClear(payload); });
                 HandoffOperationResult result = HandoffOperationResult::Rejected;
                 const bool received = ReceiveFrameUntil(pipe, header, payload, m_stop);
                 const bool trusted = received && SameUserPeer(pipe);
@@ -870,8 +892,8 @@ namespace Spark::Gateway
         {
             const int error = errno;
             const std::error_code systemError(error, std::system_category());
-            SetError("Cannot create gateway area-control local listener '" + endpoint + "': " +
-                     systemError.message() + " (errno " + std::to_string(error) + ")");
+            SetError("Cannot create gateway area-control local listener '" + endpoint + "': " + systemError.message() +
+                     " (errno " + std::to_string(error) + ")");
             m_ready.store(false, std::memory_order_release);
             m_startupComplete.store(true, std::memory_order_release);
             return;
@@ -899,6 +921,7 @@ namespace Spark::Gateway
             }
             Daemon::FrameHeader header{};
             std::vector<uint8_t> payload;
+            const auto clearPayload = Spark::MakeScopeExit([&] { Spark::SecureClear(payload); });
             HandoffOperationResult result = HandoffOperationResult::Rejected;
             const bool received = ReceiveFrameUntil(connection, header, payload, m_stop);
             if (received && payload.size() <= GatewayMaximumBodySize &&
@@ -1030,33 +1053,100 @@ namespace Spark::Gateway
         constexpr uint16_t IngressRequest = 0x40;
         constexpr uint16_t IngressResponse = 0x140;
 
+        class ReadOnlyAdmissionBuffer final : public std::streambuf
+        {
+          public:
+            explicit ReadOnlyAdmissionBuffer(std::span<const uint8_t> payload)
+            {
+                auto* first = reinterpret_cast<char*>(const_cast<uint8_t*>(payload.data()));
+                setg(first, first, first + payload.size());
+            }
+        };
+
+        bool AppendAdmissionText(std::vector<uint8_t>& payload, std::string_view text)
+        {
+            if (payload.size() > GatewayMaximumBodySize || text.size() > GatewayMaximumBodySize - payload.size())
+                return false;
+            if (text.empty())
+                return true;
+            const auto* first = reinterpret_cast<const uint8_t*>(text.data());
+            payload.insert(payload.end(), first, first + text.size());
+            return true;
+        }
+
+        template <typename Value> bool AppendAdmissionValue(std::vector<uint8_t>& payload, Value value)
+        {
+            char encoded[64]{};
+            const auto [end, error] = std::to_chars(encoded, encoded + sizeof(encoded), value);
+            return error == std::errc{} && AppendAdmissionText(payload, {encoded, static_cast<size_t>(end - encoded)});
+        }
+
+        bool AppendQuotedAdmissionText(std::vector<uint8_t>& payload, std::string_view text)
+        {
+            if (!AppendAdmissionText(payload, "\""))
+                return false;
+            for (const char& character : text)
+            {
+                if ((character == '\\' || character == '"') && !AppendAdmissionText(payload, "\\"))
+                    return false;
+                if (!AppendAdmissionText(payload, {&character, 1}))
+                    return false;
+            }
+            return AppendAdmissionText(payload, "\"");
+        }
+
         std::vector<uint8_t> EncodeAdmission(const AdmissionRequest& request)
         {
-            std::ostringstream output;
-            output << GatewayProtocolMajor << ' ' << GatewayProtocolMinor << ' ' << request.clientId << ' '
-                   << request.spawnPosition.x << ' ' << request.spawnPosition.y << ' ' << request.spawnPosition.z << ' '
-                   << std::quoted(request.sessionId) << ' ' << std::quoted(request.playerName) << ' '
-                   << std::quoted(request.credential);
-            const std::string text = output.str();
-            if (text.size() > GatewayMaximumBodySize)
+            if (request.credential.size() > GatewayMaximumCredentialSize)
                 return {};
-            return {text.begin(), text.end()};
+            std::vector<uint8_t> payload;
+            payload.reserve(GatewayMaximumBodySize);
+            bool complete = false;
+            const auto clearOnFailure = Spark::MakeScopeExit(
+                [&]
+                {
+                    if (!complete)
+                        Spark::SecureClear(payload);
+                });
+            if (!AppendAdmissionValue(payload, GatewayProtocolMajor) || !AppendAdmissionText(payload, " ") ||
+                !AppendAdmissionValue(payload, GatewayProtocolMinor) || !AppendAdmissionText(payload, " ") ||
+                !AppendAdmissionValue(payload, request.clientId) || !AppendAdmissionText(payload, " ") ||
+                !AppendAdmissionValue(payload, request.spawnPosition.x) || !AppendAdmissionText(payload, " ") ||
+                !AppendAdmissionValue(payload, request.spawnPosition.y) || !AppendAdmissionText(payload, " ") ||
+                !AppendAdmissionValue(payload, request.spawnPosition.z) || !AppendAdmissionText(payload, " ") ||
+                !AppendQuotedAdmissionText(payload, request.sessionId) || !AppendAdmissionText(payload, " ") ||
+                !AppendQuotedAdmissionText(payload, request.playerName) || !AppendAdmissionText(payload, " ") ||
+                !AppendQuotedAdmissionText(payload, request.credential))
+                return {};
+            complete = true;
+            return payload;
         }
 
         bool DecodeAdmission(const std::vector<uint8_t>& payload, AdmissionRequest& request)
         {
+            Spark::SecureClear(request.credential);
+            bool complete = false;
+            const auto clearCredentialOnFailure = Spark::MakeScopeExit(
+                [&]
+                {
+                    if (!complete)
+                        Spark::SecureClear(request.credential);
+                });
+            request.credential.reserve(GatewayMaximumCredentialSize);
             if (payload.empty() || payload.size() > GatewayMaximumBodySize)
                 return false;
-            const std::string text(payload.begin(), payload.end());
-            std::istringstream input(text);
+            ReadOnlyAdmissionBuffer buffer(payload);
+            std::istream input(&buffer);
             uint16_t major = 0, minor = 0;
             if (!(input >> major >> minor >> request.clientId >> request.spawnPosition.x >> request.spawnPosition.y >>
                   request.spawnPosition.z >> std::quoted(request.sessionId) >> std::quoted(request.playerName) >>
                   std::quoted(request.credential)) ||
-                major != GatewayProtocolMajor || minor > GatewayProtocolMinor || request.credential.size() > 512)
+                major != GatewayProtocolMajor || minor > GatewayProtocolMinor ||
+                request.credential.size() > GatewayMaximumCredentialSize)
                 return false;
             input >> std::ws;
-            return input.eof();
+            complete = input.eof();
+            return complete;
         }
 
         std::vector<uint8_t> EncodeRoute(const RouteResult& result)
@@ -1088,7 +1178,8 @@ namespace Spark::Gateway
     RouteResult LocalGatewayIngressClient::Admit(const AdmissionRequest& request) const
     {
         RouteResult result;
-        const auto payload = EncodeAdmission(request);
+        auto payload = EncodeAdmission(request);
+        const auto clearPayload = Spark::MakeScopeExit([&] { Spark::SecureClear(payload); });
         if (payload.empty())
         {
             result.failure = RouteFailure::InvalidRequest;
@@ -1178,6 +1269,7 @@ namespace Spark::Gateway
                 bool responseSent = false;
                 Daemon::FrameHeader header{};
                 std::vector<uint8_t> payload;
+                const auto clearPayload = Spark::MakeScopeExit([&] { Spark::SecureClear(payload); });
                 RouteResult route;
                 const bool received = ReceiveFrameUntil(pipe, header, payload, m_stop);
                 const bool trusted = received && SameUserPeer(pipe);
@@ -1185,6 +1277,7 @@ namespace Spark::Gateway
                     header.messageType == IngressRequest)
                 {
                     AdmissionRequest request;
+                    const auto clearCredential = Spark::MakeScopeExit([&] { Spark::SecureClear(request.credential); });
                     if (DecodeAdmission(payload, request))
                         route = m_coordinator->Admit(request);
                     else
@@ -1237,12 +1330,14 @@ namespace Spark::Gateway
             }
             Daemon::FrameHeader header{};
             std::vector<uint8_t> payload;
+            const auto clearPayload = Spark::MakeScopeExit([&] { Spark::SecureClear(payload); });
             RouteResult route;
             const bool received = ReceiveFrameUntil(connection, header, payload, m_stop);
             if (received && header.serviceId == static_cast<uint16_t>(Daemon::ServiceId::Orchestration) &&
                 header.messageType == IngressRequest)
             {
                 AdmissionRequest request;
+                const auto clearCredential = Spark::MakeScopeExit([&] { Spark::SecureClear(request.credential); });
                 if (DecodeAdmission(payload, request))
                     route = m_coordinator->Admit(request);
                 else

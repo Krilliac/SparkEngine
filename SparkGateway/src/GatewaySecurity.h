@@ -20,6 +20,7 @@ namespace Spark::Gateway
     inline constexpr uint16_t GatewayProtocolMajor = 1;
     inline constexpr uint16_t GatewayProtocolMinor = 0;
     inline constexpr size_t GatewayMaximumBodySize = 4096;
+    inline constexpr size_t GatewayMaximumCredentialSize = 512;
 
     /** Loads a >=256-bit secret and rejects key files readable by other users. */
     [[nodiscard]] bool LoadPrivateGatewayKey(const std::filesystem::path& path, std::vector<uint8_t>& key,
@@ -36,6 +37,7 @@ namespace Spark::Gateway
                                       std::chrono::milliseconds replayWindow = std::chrono::seconds(60));
         explicit KeyFileAuthenticator(std::vector<uint8_t> key,
                                       std::chrono::milliseconds replayWindow = std::chrono::seconds(60));
+        ~KeyFileAuthenticator() override;
 
         [[nodiscard]] AuthenticationResult Authenticate(const AdmissionRequest& request) override;
         [[nodiscard]] bool IsReady() const override { return m_key.size() >= 32; }

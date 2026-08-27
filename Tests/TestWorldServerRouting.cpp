@@ -350,7 +350,7 @@ TEST(WorldServer_RegisterArea)
     EXPECT_TRUE(id > 0);
 
     auto* info = server.GetAreaInfo(id);
-    EXPECT_TRUE(info != nullptr);
+    ASSERT_TRUE(info != nullptr);
     EXPECT_EQ(info->areaName, std::string("Town"));
     server.Stop();
 }
@@ -413,7 +413,7 @@ TEST(WorldServer_PlayerConnect)
     EXPECT_EQ(server.GetTotalPlayerCount(), (uint32_t)1);
 
     auto* session = server.GetPlayerSession(1);
-    EXPECT_TRUE(session != nullptr);
+    ASSERT_TRUE(session != nullptr);
     EXPECT_EQ(session->playerName, std::string("Alice"));
     EXPECT_EQ(session->currentArea, areaId);
     server.Stop();

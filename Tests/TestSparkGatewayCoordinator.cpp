@@ -81,12 +81,12 @@ namespace
         first.area.areaName = "Town";
         first.area.port = 31001;
         first.area.interServerPort = 31101;
-        first.host = "10.0.0.1";
+        first.host = "127.0.0.1";
         AreaEndpoint second;
         second.area.areaName = "Forest";
         second.area.port = 31002;
         second.area.interServerPort = 31102;
-        second.host = "10.0.0.2";
+        second.host = "127.0.0.1";
         return {first, second};
     }
 

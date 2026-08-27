@@ -52,9 +52,8 @@ namespace Spark::Net
 
     static void GenerateKeyStream(const SessionKey& key, uint64_t nonce, uint8_t* stream, size_t length)
     {
-        // Simple but effective: mix key bytes with nonce bytes using rotation and XOR.
-        // This is NOT cryptographically secure but sufficient for game traffic where
-        // the goal is preventing casual packet sniffing, not defending against state actors.
+        // Deterministic XOR obfuscation only. This is not cryptographically
+        // secure and provides no confidentiality or peer authentication.
         uint8_t state[SESSION_KEY_SIZE];
         std::memcpy(state, key.data(), SESSION_KEY_SIZE);
 

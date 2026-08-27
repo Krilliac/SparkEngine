@@ -113,6 +113,11 @@ namespace Spark::Gateway
                 endpoint.area.enablePhysics = config.GetBool(section, "enable_physics", endpoint.area.enablePhysics);
                 endpoint.area.enableScripting =
                     config.GetBool(section, "enable_scripting", endpoint.area.enableScripting);
+                if (endpoint.host != "127.0.0.1")
+                {
+                    error = "Area endpoint in config section [" + section + "] must use the exact host 127.0.0.1";
+                    return false;
+                }
                 if (endpoint.area.areaName.empty() || endpoint.host.empty() || areaPort < 1 || areaPort > 65535 ||
                     areaInterPort < 1 || areaInterPort > 65535 || endpoint.area.maxClients < 1 ||
                     !std::isfinite(endpoint.area.tickRate) || endpoint.area.tickRate < 1.0f ||

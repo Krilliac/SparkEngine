@@ -15,6 +15,7 @@
 #include "Account/TFCharacterSystem.h"
 #include "Account/TFCrypto.h"
 #include "Net/TFNetProtocol.h"
+#include "Net/TFClientNet.h"
 #include "Net/TFClientSessionState.h"
 #include "Net/TFClientSessionEnd.h"
 #include "Net/TFNetworkLifecycle.h"
@@ -160,6 +161,11 @@ TEST(TFClientSessionEnd_UnexpectedRemoteDropRestoresStandaloneLogin)
 
 TEST(TFOnboardingSessionRules_RejectReauthAndMidWorldProfileMutation)
 {
+    EXPECT_EQ(kTFLocalHostPlayer, PlayerId{0xFFFFFF01u});
+    EXPECT_TRUE(Spark::Net::IsReservedClientID(kTFLocalHostPlayer));
+    EXPECT_TRUE(CanUseCredentialOnboarding(kTFLocalHostPlayer == Spark::Net::FIRST_RESERVED_CLIENT_ID + 1u, false));
+    EXPECT_TRUE(CanUseCredentialOnboarding(false, true));
+    EXPECT_FALSE(CanUseCredentialOnboarding(false, false));
     EXPECT_TRUE(CanBeginAuthentication(false, false));
     EXPECT_FALSE(CanBeginAuthentication(true, false));
     EXPECT_FALSE(CanBeginAuthentication(false, true));
@@ -167,6 +173,9 @@ TEST(TFOnboardingSessionRules_RejectReauthAndMidWorldProfileMutation)
     EXPECT_TRUE(CanMutateCharacterProfile(false));
     EXPECT_FALSE(CanMutateCharacterProfile(true));
 }
+
+static_assert(static_cast<uint8_t>(TFAuthErr::RemoteOnboardingDisabled) == 8,
+              "append-only onboarding error wire contract");
 
 TEST(TFNetworkLifecycle_DrainsRemoteSessionsAndSupportsImmediateRehost)
 {
