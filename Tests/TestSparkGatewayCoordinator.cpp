@@ -7,6 +7,7 @@
 #include "GatewayCoordinator.h"
 
 #include <deque>
+#include <unordered_set>
 
 using namespace Spark::Gateway;
 namespace Net = Spark::Net;
@@ -32,6 +33,7 @@ namespace
     {
       public:
         bool IsReady() const override { return ready; }
+        bool IsEndpointReady(Net::AreaID id) const override { return ready && !offline.contains(id); }
         HandoffOperationResult Prepare(const HandoffCommand& command) override
         {
             return Next("prepare", prepare, command);
@@ -63,6 +65,7 @@ namespace
         }
 
         bool ready = true;
+        std::unordered_set<Net::AreaID> offline;
         std::deque<HandoffOperationResult> prepare;
         std::deque<HandoffOperationResult> transfer;
         std::deque<HandoffOperationResult> commit;
@@ -222,4 +225,19 @@ TEST(SparkGateway_DrainRejectsAdmissionUntilHandoffResolves)
     EXPECT_TRUE(fixture.coordinator.AdvanceHandoff(route.session.sessionId, *epoch) == AdvanceResult::Aborting);
     EXPECT_TRUE(fixture.coordinator.AdvanceHandoff(route.session.sessionId, *epoch) == AdvanceResult::Completed);
     EXPECT_TRUE(fixture.coordinator.CanShutdown());
+}
+
+TEST(SparkGateway_EndpointHealthUpdatesRoutingMirror)
+{
+    GatewayFixture fixture;
+    EXPECT_EQ(fixture.world.GetStats().activeAreas, 2u);
+    fixture.control.offline.insert(1);
+    EXPECT_FALSE(fixture.coordinator.IsReady());
+    EXPECT_EQ(fixture.world.GetStats().activeAreas, 1u);
+    fixture.control.offline.insert(2);
+    EXPECT_FALSE(fixture.coordinator.IsReady());
+    EXPECT_EQ(fixture.world.GetStats().activeAreas, 0u);
+    fixture.control.offline.clear();
+    EXPECT_TRUE(fixture.coordinator.IsReady());
+    EXPECT_EQ(fixture.world.GetStats().activeAreas, 2u);
 }

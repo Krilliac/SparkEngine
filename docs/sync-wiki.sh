@@ -128,11 +128,13 @@ collect_inventory() {
     # --- Tests ---
     TEST_DEFINITION_COUNT=0
     TEST_FILES=""
-    find "$PROJECT_ROOT/Tests" -name 'Test*.cpp' ! -name 'TestMain.cpp' ! -name 'TestFramework*' 2>/dev/null | sort > "$tmpfile"
+    find "$PROJECT_ROOT/Tests" -type f \( -name 'Test*.cpp' -o -name 'Test*.mm' \) \
+        ! -name 'TestMain.cpp' ! -name 'TestFramework*' 2>/dev/null | sort > "$tmpfile"
     while IFS= read -r tfile; do
         [ -z "$tfile" ] && continue
         local tname
-        tname=$(basename "$tfile" .cpp)
+        tname=$(basename "$tfile")
+        tname=${tname%.*}
         TEST_FILES="${TEST_FILES}${tname}\n"
         local tc
         tc=$(grep -Ec '^[[:space:]]*TEST(_F)?[[:space:]]*\(' "$tfile" 2>/dev/null) || tc=0
@@ -227,10 +229,12 @@ sync_testing_page() {
     local test_content=""
     test_content="*${TEST_FILE_COUNT} test files, ${TEST_DEFINITION_COUNT} source-level test definitions*\n\n"
     test_content+="| Test File | Test Definitions |\n|-----------|------------------|\n"
-    test_content+=$(find "$PROJECT_ROOT/Tests" -name 'Test*.cpp' ! -name 'TestMain.cpp' ! -name 'TestFramework*' 2>/dev/null | \
+    test_content+=$(find "$PROJECT_ROOT/Tests" -type f \( -name 'Test*.cpp' -o -name 'Test*.mm' \) \
+        ! -name 'TestMain.cpp' ! -name 'TestFramework*' 2>/dev/null | \
         sort | while IFS= read -r tfile; do
             local tname
-            tname=$(basename "$tfile" .cpp)
+            tname=$(basename "$tfile")
+            tname=${tname%.*}
             local tc
             tc=$(grep -Ec '^[[:space:]]*TEST(_F)?[[:space:]]*\(' "$tfile" 2>/dev/null) || tc=0
             echo "| \`$tname\` | $tc |"

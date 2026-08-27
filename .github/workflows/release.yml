@@ -84,9 +84,17 @@ jobs:
 
     - name: Determine build configurations
       id: matrix
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        REQUESTED_CONFIGS: ${{ inputs.build_configs || 'both' }}
       run: |
-        # Default to 'both' for tag pushes, use input for workflow_dispatch
-        BUILD_CONFIGS="${{ inputs.build_configs || 'both' }}"
+        # Nightlies certify the shippable configuration. Tags and manual runs
+        # retain the explicit Debug/Release choice.
+        if [[ "$EVENT_NAME" == "schedule" ]]; then
+          BUILD_CONFIGS="release"
+        else
+          BUILD_CONFIGS="$REQUESTED_CONFIGS"
+        fi
         echo "build_type=$BUILD_CONFIGS" >> "$GITHUB_OUTPUT"
 
         if [[ "$BUILD_CONFIGS" == "both" ]]; then
@@ -174,6 +182,31 @@ jobs:
           exit $cpackExitCode
         }
 
+    - name: Extract and smoke-test portable package
+      shell: pwsh
+      run: |
+        $archives = @(Get-ChildItem -LiteralPath build/packages -Filter *.zip -File)
+        if ($archives.Count -ne 1) {
+          throw "Expected exactly one portable ZIP package; found $($archives.Count)"
+        }
+        Remove-Item -LiteralPath build/packages/_CPack_Packages -Recurse -Force -ErrorAction SilentlyContinue
+        $extractRoot = Join-Path "${{ github.workspace }}" "package-extract"
+        New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
+        Expand-Archive -LiteralPath $archives[0].FullName -DestinationPath $extractRoot
+        if (Test-Path (Join-Path $extractRoot "bin")) {
+          $packageRoot = $extractRoot
+        } else {
+          $roots = @(Get-ChildItem -LiteralPath $extractRoot -Directory)
+          if ($roots.Count -ne 1) {
+            throw "Portable ZIP must contain one package root; found $($roots.Count)"
+          }
+          $packageRoot = $roots[0].FullName
+        }
+        cmake -DSPARK_PACKAGE_ROOT="$packageRoot" -DSPARK_EXECUTABLE_SUFFIX=.exe -P cmake/ValidateStagedPackageExecutables.cmake
+        cmake -S Tests/PackageSmoke -B package-smoke-build -G "Visual Studio 17 2022" -A x64 -T v143 -DSparkEngine_DIR="$packageRoot/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+        cmake --build package-smoke-build --config ${{ matrix.config }} --parallel
+        ctest --test-dir package-smoke-build -C ${{ matrix.config }} --output-on-failure
+
     - name: Upload CPack failure diagnostics
       if: failure()
       uses: actions/upload-artifact@v7.0.1
@@ -194,6 +227,7 @@ jobs:
           build/packages/*.exe
           build/packages/*.msi
         retention-days: 7
+        if-no-files-found: error
 
   # ===========================================================================
   # Linux Build — GCC
@@ -272,6 +306,32 @@ jobs:
       run: |
         cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
 
+    - name: Extract and smoke-test portable package
+      run: |
+        archive_count=$(find build/packages -maxdepth 1 -type f -name '*.tar.gz' | wc -l)
+        if [ "$archive_count" -ne 1 ]; then
+          echo "Expected exactly one portable TGZ package; found $archive_count" >&2
+          exit 1
+        fi
+        archive=$(find build/packages -maxdepth 1 -type f -name '*.tar.gz' -print -quit)
+        rm -rf build/packages/_CPack_Packages
+        mkdir package-extract
+        tar -xzf "$archive" -C package-extract
+        if [ -d package-extract/bin ]; then
+          package_root="$(pwd)/package-extract"
+        else
+          root_count=$(find package-extract -mindepth 1 -maxdepth 1 -type d | wc -l)
+          if [ "$root_count" -ne 1 ]; then
+            echo "Portable TGZ must contain one package root; found $root_count" >&2
+            exit 1
+          fi
+          package_root=$(find package-extract -mindepth 1 -maxdepth 1 -type d -print -quit)
+        fi
+        cmake -DSPARK_PACKAGE_ROOT="$package_root" -P cmake/ValidateStagedPackageExecutables.cmake
+        cmake -S Tests/PackageSmoke -B package-smoke-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -DSparkEngine_DIR="$package_root/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+        cmake --build package-smoke-build --parallel $(nproc)
+        ctest --test-dir package-smoke-build --output-on-failure
+
     - name: Upload packaged artifact
       uses: actions/upload-artifact@v7.0.1
       with:
@@ -280,6 +340,7 @@ jobs:
           build/packages/*.zip
           build/packages/*.tar.gz
         retention-days: 7
+        if-no-files-found: error
 
   # ===========================================================================
   # macOS Build — Apple Clang, installed SDK, templates, and CPack
@@ -355,6 +416,32 @@ jobs:
     - name: Generate CPack packages
       run: cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
 
+    - name: Extract and smoke-test portable package
+      run: |
+        archive_count=$(find build/packages -maxdepth 1 -type f -name '*.tar.gz' | wc -l)
+        if [ "$archive_count" -ne 1 ]; then
+          echo "Expected exactly one portable TGZ package; found $archive_count" >&2
+          exit 1
+        fi
+        archive=$(find build/packages -maxdepth 1 -type f -name '*.tar.gz' -print -quit)
+        rm -rf build/packages/_CPack_Packages
+        mkdir package-extract
+        tar -xzf "$archive" -C package-extract
+        if [ -d package-extract/bin ]; then
+          package_root="$(pwd)/package-extract"
+        else
+          root_count=$(find package-extract -mindepth 1 -maxdepth 1 -type d | wc -l)
+          if [ "$root_count" -ne 1 ]; then
+            echo "Portable TGZ must contain one package root; found $root_count" >&2
+            exit 1
+          fi
+          package_root=$(find package-extract -mindepth 1 -maxdepth 1 -type d -print -quit)
+        fi
+        cmake -DSPARK_PACKAGE_ROOT="$package_root" -P cmake/ValidateStagedPackageExecutables.cmake
+        cmake -S Tests/PackageSmoke -B package-smoke-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DSparkEngine_DIR="$package_root/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+        cmake --build package-smoke-build --parallel $(sysctl -n hw.logicalcpu)
+        ctest --test-dir package-smoke-build --output-on-failure
+
     - name: Upload packaged artifact
       uses: actions/upload-artifact@v7.0.1
       with:
@@ -363,6 +450,7 @@ jobs:
           build/packages/*.zip
           build/packages/*.tar.gz
         retention-days: 7
+        if-no-files-found: error
 
   # ===========================================================================
   # SparkInstaller — standalone bootstrap binary for the README "Install" buttons
@@ -394,22 +482,36 @@ jobs:
           cat > build-installer/CMakeLists.txt <<'EOF'
           cmake_minimum_required(VERSION 3.16)
           project(SparkInstallerCombo LANGUAGES CXX)
+          include(CTest)
           add_subdirectory(${CMAKE_SOURCE_DIR}/../SparkBuild SparkBuild)
           add_subdirectory(${CMAKE_SOURCE_DIR}/../SparkInstaller SparkInstaller)
           EOF
           cmake -S build-installer -B build-installer/build \
                 -DCMAKE_BUILD_TYPE=Release \
-                -DSPARKINSTALLER_ENABLE_GUI=OFF
+                -DSPARKINSTALLER_ENABLE_GUI=OFF \
+                -DSPARKINSTALLER_BUILD_TESTS=ON
 
       - name: Build SparkInstaller
         shell: bash
-        run: cmake --build build-installer/build --config Release --target SparkInstaller -j
+        run: cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests -j
+
+      - name: Run SparkInstaller contract tests
+        shell: bash
+        run: ctest --test-dir build-installer/build -C Release --output-on-failure --no-tests=error
 
       - name: Stage artifact with release-ready name
         shell: bash
         run: |
           mkdir -p staging
           cp "build-installer/build/bin/${{ matrix.bin_name }}" "staging/${{ matrix.artifact_name }}"
+
+      - name: Launch staged executable
+        shell: bash
+        run: |
+          "./staging/${{ matrix.artifact_name }}" --version | tee installer-version.txt
+          "./staging/${{ matrix.artifact_name }}" --help | tee installer-help.txt
+          grep -Fq "SparkInstaller" installer-version.txt
+          grep -Fq "Usage:" installer-help.txt
 
       - name: Upload installer binary
         uses: actions/upload-artifact@v7.0.1
@@ -447,14 +549,13 @@ jobs:
         ref: Working
         path: badge-repository
 
-    - name: Snapshot download counts and update badges
-      id: badge-commit
+    - name: Snapshot download counts and prepare badges
+      id: badge-prepare
       working-directory: badge-repository
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
-        echo "changed=false" >> "$GITHUB_OUTPUT"
         mkdir -p .github/badges
         DATA_FILE=".github/badges/downloads-data.json"
         LIFETIME_BADGE=".github/badges/downloads.json"
@@ -552,48 +653,11 @@ jobs:
         fi
         [[ "$INSTALLER_TOTAL" =~ ^[0-9]+$ ]] || INSTALLER_TOTAL=0
         echo "Installer total downloads: $INSTALLER_TOTAL"
+        echo "new_total=$NEW_TOTAL" >> "$GITHUB_OUTPUT"
+        echo "installer_total=$INSTALLER_TOTAL" >> "$GITHUB_OUTPUT"
         INSTALLER_FORMATTED=$(printf "%'d" "$INSTALLER_TOTAL" 2>/dev/null || echo "$INSTALLER_TOTAL")
         printf '{\n    "schemaVersion": 1,\n    "label": "installer downloads",\n    "message": "%s",\n    "color": "blueviolet",\n    "namedLogo": "github",\n    "logoColor": "white"\n}\n' \
           "$INSTALLER_FORMATTED" > "$INSTALLER_BADGE"
-
-        # This release snapshot must not be silently lost. Fail on supersession
-        # so a rerun can regenerate it from the new Working head.
-        REMOTE_HEAD="$(git ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
-        if test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
-          echo "Working advanced while download data was generated; rerun this release."
-          exit 1
-        fi
-
-        # Commit updated counters.
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add .github/badges/
-        git diff --cached --quiet && echo "No download count change" && exit 0
-        git commit -m "chore: update download counters (lifetime: $NEW_TOTAL, installer: $INSTALLER_TOTAL) [skip ci]"
-        git push origin "HEAD:refs/heads/Working"
-        echo "changed=true" >> "$GITHUB_OUTPUT"
-
-    # GITHUB_TOKEN pushes do not trigger ordinary push workflows, so explicitly
-    # prove and publish the generated Working head.
-    - name: Dispatch exact-head build after Working badge commit
-      if: steps.badge-commit.outputs.changed == 'true'
-      working-directory: badge-repository
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        set -euo pipefail
-        REMOTE_HEAD="$(git ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
-        if test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
-          echo "Working advanced after this counter push; the newer head owns the build."
-          exit 0
-        fi
-        for attempt in 1 2 3 4 5; do
-          if gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref Working; then
-            exit 0
-          fi
-          test "$attempt" -lt 5 || exit 1
-          sleep "$((attempt * 2))"
-        done
 
     - name: Resolve short commit SHA
       id: sha
@@ -624,10 +688,8 @@ jobs:
         FILES=""
         TABLE="| Asset | Size | Notes |"$'\n'"|---|---:|---|"
         : > SHA256SUMS
-        for artifact in *.zip *.tar.gz *.exe *.msi SparkInstaller-*; do
-          if [ ! -f "$artifact" ]; then
-            continue
-          fi
+        while IFS= read -r -d '' artifact; do
+          artifact=${artifact#./}
 
           note="CPack package"
           if [[ "$artifact" == SparkInstaller-* ]]; then
@@ -643,7 +705,11 @@ jobs:
           sha256sum "$artifact" >> SHA256SUMS
           FILES="${FILES}${artifact}"$'\n'
           TABLE="${TABLE}"$'\n'"| \`${artifact}\` | ${size_human} | ${note} |"
-        done
+        done < <(
+          find . -maxdepth 1 -type f \
+            \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \
+               -o -name "SparkInstaller-*" \) -print0 | sort -z
+        )
 
         if [ ! -s SHA256SUMS ]; then
           echo "No release assets were collected; refusing to publish an empty release." >&2
@@ -686,6 +752,51 @@ jobs:
           echo "label=" >> "$GITHUB_OUTPUT"
         fi
 
+    - name: Bind release tag to workflow commit
+      env:
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        TARGET_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+
+        TARGET_COMMIT="$(git rev-parse "${TARGET_SHA}^{commit}")"
+        REMOTE_TAG_OBJECT="$(git ls-remote --refs origin "refs/tags/${RELEASE_TAG}" | awk 'NR == 1 { print $1 }')"
+
+        if [[ "$IS_VERSIONED" == "true" ]]; then
+          if [[ -n "$REMOTE_TAG_OBJECT" ]]; then
+            git fetch --force --no-tags origin \
+              "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          else
+            # A manual versioned release may introduce a new immutable tag.
+            # A normal push fails if another writer creates it between the
+            # remote lookup and this push; stable tags are never force-moved.
+            git tag "$RELEASE_TAG" "$TARGET_COMMIT"
+            git push origin \
+              "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          fi
+        else
+          if [[ "$RELEASE_TAG" != "nightly" ]]; then
+            echo "Refusing to force-move non-nightly tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+          git tag --force nightly "$TARGET_COMMIT"
+          git push --force-with-lease="refs/tags/nightly:${REMOTE_TAG_OBJECT}" origin \
+            "refs/tags/nightly:refs/tags/nightly"
+        fi
+
+        # Re-read the remote ref after any create/move and prove the tag peels
+        # to the exact commit whose artifacts this workflow built.
+        git fetch --force --no-tags origin \
+          "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+        BOUND_COMMIT="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+        if [[ "$BOUND_COMMIT" != "$TARGET_COMMIT" ]]; then
+          echo "Release tag ${RELEASE_TAG} resolves to ${BOUND_COMMIT}, expected ${TARGET_COMMIT}." >&2
+          exit 1
+        fi
+        echo "Release tag ${RELEASE_TAG} is bound to ${BOUND_COMMIT}."
+
     - name: Create stable versioned release
       if: needs.prepare.outputs.is_versioned == 'true'
       uses: softprops/action-gh-release@v3
@@ -726,3 +837,50 @@ jobs:
         prerelease: false
         make_latest: false
         files: ${{ steps.assets.outputs.files }}
+
+    # The old release's counts must be captured before replacement, but they
+    # must not become canonical until the replacement release is published.
+    - name: Commit published-release download counters
+      id: badge-commit
+      working-directory: badge-repository
+      run: |
+        set -euo pipefail
+        echo "changed=false" >> "$GITHUB_OUTPUT"
+
+        # This release snapshot must not be silently lost or applied to a
+        # different Working revision.
+        REMOTE_HEAD="$(git ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
+        if test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
+          echo "Working advanced before published-release counters could be committed; rerun this release."
+          exit 1
+        fi
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add .github/badges/
+        git diff --cached --quiet && echo "No download count change" && exit 0
+        git commit -m "chore: update download counters (lifetime: ${{ steps.badge-prepare.outputs.new_total }}, installer: ${{ steps.badge-prepare.outputs.installer_total }}) [skip ci]"
+        git push origin "HEAD:refs/heads/Working"
+        echo "changed=true" >> "$GITHUB_OUTPUT"
+
+    # GITHUB_TOKEN pushes do not trigger ordinary push workflows, so explicitly
+    # prove and publish the generated Working head.
+    - name: Dispatch exact-head build after Working badge commit
+      if: steps.badge-commit.outputs.changed == 'true'
+      working-directory: badge-repository
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        REMOTE_HEAD="$(git ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
+        if test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
+          echo "Working advanced after this counter push; the newer head owns the build."
+          exit 0
+        fi
+        for attempt in 1 2 3 4 5; do
+          if gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref Working; then
+            exit 0
+          fi
+          test "$attempt" -lt 5 || exit 1
+          sleep "$((attempt * 2))"
+        done

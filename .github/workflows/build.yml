@@ -40,6 +40,15 @@ jobs:
     - name: Test JUnit statistics parser
       run: python3 .github/scripts/test-summarize-test-results.py
 
+    - name: Test aggregate test evidence
+      run: python3 .github/scripts/test-aggregate-test-stats.py
+
+    - name: Test required-job gate
+      run: python3 .github/scripts/test-verify-required-jobs.py
+
+    - name: Test coverage evidence semantics
+      run: bash .github/scripts/test-coverage-report.sh
+
     - name: Test Spark CLI
       run: python3 -m unittest discover -s Tools/spark-cli/tests -p "test_*.py" -v
 
@@ -1278,10 +1287,16 @@ jobs:
           list_exit=${PIPESTATUS[0]}
           echo "lcov --list exit: $list_exit"
 
-          # Fail the step only if NO coverage file was produced at all —
-          # individual file warnings should not block the report.
           if [ ! -s coverage.info ]; then
             echo "::error::coverage.info is empty or missing — lcov produced no usable data"
+            exit 1
+          fi
+          # --ignore-errors already defines the warnings this lane permits.
+          # Any remaining non-zero status means capture, filtering, or report
+          # validation was incomplete; a non-empty partial trace is not enough
+          # evidence for subsystem thresholds.
+          if [ "$cap_exit" -ne 0 ] || [ "$rm_exit" -ne 0 ] || [ "$list_exit" -ne 0 ]; then
+            echo "::error::lcov coverage evidence is incomplete (capture=$cap_exit remove=$rm_exit list=$list_exit)"
             exit 1
           fi
       - name: Per-subsystem coverage analysis
@@ -1347,7 +1362,11 @@ jobs:
                   const icon = s.pass ? ':white_check_mark:' : ':x:';
                   body += `| ${s.subsystem} | ${s.lines} | ${s.hit} | ${s.coverage}% | ${s.threshold}% | ${icon} |\n`;
                 }
-                body += `\n**Total: ${json.total_coverage}%** (${json.total_hit}/${json.total_lines} lines)\n`;
+                body += `\n**Selected-subsystem coverage: ${json.selected_subsystem_coverage}%** `;
+                body += `(${json.selected_subsystem_hit}/${json.selected_subsystem_lines} lines)\n`;
+                body += `\nLCOV corpus coverage: ${json.lcov_corpus_coverage}% `;
+                body += `(${json.lcov_corpus_hit}/${json.lcov_corpus_lines} lines); `;
+                body += `${json.unclassified_lines} instrumented lines are outside the threshold table.\n`;
               } catch (e2) {
                 // subsystem data not available
               }
@@ -1495,6 +1514,61 @@ jobs:
           if-no-files-found: ignore
 
   # ===========================================================================
+  # Exact-commit test/statistics evidence — merge existing lane artifacts
+  # without compiling the engine again.
+  # ===========================================================================
+  aggregate-test-stats:
+    name: "Aggregate test and source statistics"
+    if: always()
+    needs:
+      - validate-ci-tools
+      - build-windows-vs2022
+      - build-linux-gcc
+      - build-linux-clang
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Download primary-lane test evidence
+        uses: actions/download-artifact@v8.0.1
+        continue-on-error: true
+        with:
+          pattern: test-results-*
+          path: ci-test-results
+          merge-multiple: false
+
+      - name: Collect deterministic repository metrics
+        run: python3 docs/codebase-metrics.py > repository-metrics.json
+
+      - name: Require and aggregate primary-lane evidence
+        run: |
+          python3 .github/scripts/aggregate-test-stats.py \
+            --input-root ci-test-results \
+            --repository-metrics repository-metrics.json \
+            --ratchet .github/test-count-ratchet.json \
+            --minimum-tests 5000 \
+            --commit "${{ github.sha }}" \
+            --expected-lane windows-vs2022-release \
+            --expected-lane linux-gcc-Debug \
+            --expected-lane linux-gcc-Release \
+            --expected-lane linux-clang-Debug \
+            --expected-lane linux-clang-Release \
+            --output ci-metrics.json
+
+      - name: Upload exact-commit CI metrics
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ci-metrics-${{ github.sha }}
+          path: |
+            ci-metrics.json
+            repository-metrics.json
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: warn
+
+  # ===========================================================================
   # Consolidated CI Error Report — PR comment or job summary
   # Runs after all build jobs, collects error summaries, and posts/updates
   # one comment (on PRs) or writes a job summary (on push).
@@ -1520,6 +1594,7 @@ jobs:
       - clang-tidy
       - todo-count
       - build-installer
+      - aggregate-test-stats
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -1608,16 +1683,22 @@ jobs:
           cat > build-installer/CMakeLists.txt <<'EOF'
           cmake_minimum_required(VERSION 3.16)
           project(SparkInstallerCombo LANGUAGES CXX)
+          include(CTest)
           add_subdirectory(${CMAKE_SOURCE_DIR}/../SparkBuild SparkBuild)
           add_subdirectory(${CMAKE_SOURCE_DIR}/../SparkInstaller SparkInstaller)
           EOF
           cmake -S build-installer -B build-installer/build \
                 -DCMAKE_BUILD_TYPE=Release \
-                -DSPARKINSTALLER_ENABLE_GUI=OFF
+                -DSPARKINSTALLER_ENABLE_GUI=OFF \
+                -DSPARKINSTALLER_BUILD_TESTS=ON
 
       - name: Build SparkInstaller
         shell: bash
-        run: cmake --build build-installer/build --config Release --target SparkInstaller -j
+        run: cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests -j
+
+      - name: Run SparkInstaller contract tests
+        shell: bash
+        run: ctest --test-dir build-installer/build -C Release --output-on-failure --no-tests=error
 
       - name: Stage artifact
         shell: bash
@@ -1625,9 +1706,51 @@ jobs:
           mkdir -p staging
           cp "build-installer/build/bin/${{ matrix.bin_name }}" "staging/${{ matrix.bin_name }}"
 
+      - name: Launch staged executable
+        shell: bash
+        run: |
+          "./staging/${{ matrix.bin_name }}" --version | tee installer-version.txt
+          "./staging/${{ matrix.bin_name }}" --help | tee installer-help.txt
+          grep -Fq "SparkInstaller" installer-version.txt
+          grep -Fq "Usage:" installer-help.txt
+
       - name: Upload installer binary
         uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ matrix.artifact }}
           path: staging/${{ matrix.bin_name }}
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  # ===========================================================================
+  # One stable branch-protection target. A cancelled, skipped, or missing
+  # required lane is a failure instead of an accidental green aggregate.
+  # Advisory/future-platform lanes remain visible but are deliberately omitted.
+  # ===========================================================================
+  required-ci-gate:
+    name: "Required CI Gate"
+    if: always()
+    needs:
+      - validate-ci-tools
+      - check-format
+      - validate-prompts
+      - check-thirdparty-manifest
+      - build-linux-asan
+      - build-linux-tsan
+      - build-windows-vs2022
+      - build-linux-gcc
+      - build-linux-clang
+      - coverage
+      - clang-tidy
+      - todo-count
+      - build-installer
+      - aggregate-test-stats
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Verify every required job succeeded
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python3 .github/scripts/verify-required-jobs.py

@@ -76,6 +76,12 @@ namespace Spark::Gateway
         virtual ~IAreaControlPlane() = default;
         // All methods may run concurrently for different sessions and must be thread-safe.
         [[nodiscard]] virtual bool IsReady() const = 0;
+        /** [any thread] Authenticated liveness of one registered area endpoint. */
+        [[nodiscard]] virtual bool IsEndpointReady(Net::AreaID id) const
+        {
+            (void)id;
+            return IsReady();
+        }
         [[nodiscard]] virtual HandoffOperationResult Prepare(const HandoffCommand& command) = 0;
         [[nodiscard]] virtual HandoffOperationResult Transfer(const HandoffCommand& command) = 0;
         [[nodiscard]] virtual HandoffOperationResult Commit(const HandoffCommand& command) = 0;

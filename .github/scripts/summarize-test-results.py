@@ -71,22 +71,24 @@ def read_cases(report: Path) -> list[TestCase]:
 
 
 def summarize_cases(cases: list[TestCase], reports: list[Path], minimum_tests: int) -> dict[str, object]:
-
-    if len(cases) < minimum_tests:
+    skipped = sum(case.skipped for case in cases)
+    executed = len(cases) - skipped
+    if executed < minimum_tests:
         raise ValueError(
-            f"JUnit reports contain {len(cases)} test cases; expected at least {minimum_tests}. "
+            f"JUnit reports contain {executed} executed test cases and {skipped} skipped; "
+            f"expected at least {minimum_tests} executed tests. "
             "The test executable may not have launched or registration may have regressed."
         )
 
     failures = sum(case.failed for case in cases)
     errors = sum(case.errored for case in cases)
-    skipped = sum(case.skipped for case in cases)
     passed = len(cases) - failures - errors - skipped
     slowest = sorted(cases, key=lambda case: case.duration_seconds, reverse=True)[:10]
     return {
         "schemaVersion": 1,
         "reports": [str(report) for report in reports],
         "tests": len(cases),
+        "executed": executed,
         "passed": passed,
         "failures": failures,
         "errors": errors,
@@ -110,10 +112,10 @@ def markdown(title: str, stats: dict[str, object]) -> str:
     lines = [
         f"### {title}",
         "",
-        "| Tests | Passed | Failed | Errors | Skipped | Test time |",
-        "|------:|-------:|-------:|-------:|--------:|----------:|",
+        "| Tests | Executed | Passed | Failed | Errors | Skipped | Test time |",
+        "|------:|---------:|-------:|-------:|-------:|--------:|----------:|",
         (
-            f"| {stats['tests']} | {stats['passed']} | {stats['failures']} | "
+            f"| {stats['tests']} | {stats['executed']} | {stats['passed']} | {stats['failures']} | "
             f"{stats['errors']} | {stats['skipped']} | {stats['durationSeconds']:.3f}s |"
         ),
         "",

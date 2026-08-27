@@ -177,6 +177,9 @@ namespace Spark::Net
          */
         void Tick(float deltaTime);
 
+        /** Update one registered area's externally verified availability. */
+        bool SetAreaOnline(AreaID areaId, bool online);
+
         // -- Area Management --
 
         /**

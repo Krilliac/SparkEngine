@@ -98,6 +98,7 @@ namespace Spark::Server
 
       private:
         [[nodiscard]] bool LoadSelectedModules();
+        void DestroyModuleRuntime(bool startupRollback);
         void PublishHealth() const;
         void SetError(std::string message);
 

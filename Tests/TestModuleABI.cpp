@@ -443,6 +443,24 @@ TEST(ModuleABI_CommittedShutdownDoesNotRepeatFalliblePreflight)
     RemoveModuleCopy(modulePath);
 }
 
+TEST(ModuleABI_StartupRollbackTearsDownVetoingUncommittedModule)
+{
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkStartupRollbackModule");
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(modulePath.string()));
+    manager.InitializeAll(&context);
+
+    SetVetoUnloadEnvironment(true);
+    EXPECT_FALSE(manager.CanShutdownAll());
+    manager.RollbackStartup();
+    SetVetoUnloadEnvironment(false);
+
+    manager.UnloadAll();
+    EXPECT_EQ(manager.GetModuleCount(), size_t{0});
+    RemoveModuleCopy(modulePath);
+}
+
 TEST(ModuleABI_FailedReplacementInitializationPreservesWorkingModule)
 {
     const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkReloadInitFailureModule");
@@ -466,6 +484,40 @@ TEST(ModuleABI_FailedReplacementInitializationPreservesWorkingModule)
     manager.UnloadAll();
     RemoveModuleCopy(modulePath);
 }
+
+#ifdef _WIN32
+TEST(ModuleABI_WindowsReloadCleanupPreservesModuleParentDirectory)
+{
+    const std::filesystem::path sourcePath = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
+    const std::filesystem::path moduleDirectory =
+        std::filesystem::temp_directory_path() / "SparkWindowsReloadParentPreservation";
+    const std::filesystem::path modulePath = moduleDirectory / sourcePath.filename();
+    const std::filesystem::path sentinelPath = moduleDirectory / "parent-directory-sentinel.txt";
+
+    std::error_code ec;
+    std::filesystem::remove_all(moduleDirectory, ec);
+    ASSERT_TRUE(std::filesystem::create_directories(moduleDirectory));
+    std::filesystem::copy_file(sourcePath, modulePath, std::filesystem::copy_options::overwrite_existing);
+    std::filesystem::copy_file(SidecarPath(sourcePath), SidecarPath(modulePath),
+                               std::filesystem::copy_options::overwrite_existing);
+    {
+        std::ofstream sentinel(sentinelPath, std::ios::trunc);
+        sentinel << "must survive module shadow cleanup";
+    }
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+    manager.InitializeAll(&context);
+    ASSERT_TRUE(manager.ReloadModule("Spark Compatible ABI Fixture", &context));
+    EXPECT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+
+    EXPECT_TRUE(std::filesystem::is_directory(moduleDirectory));
+    EXPECT_TRUE(std::filesystem::is_regular_file(sentinelPath));
+    std::filesystem::remove_all(moduleDirectory, ec);
+}
+#endif
 
 TEST(ModuleABI_HotReloadCallbackCanReenterManagerWithoutDeadlock)
 {

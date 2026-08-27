@@ -1520,8 +1520,8 @@ graph LR
 
 - [`ModuleHotReload.cpp`](../../SparkEngine/Source/Core/ModuleHotReload.cpp) — 308 LOC — DLL/SO hot-reload file watcher implementation
 - [`ModuleHotReload.h`](../../SparkEngine/Source/Core/ModuleHotReload.h) — 148 LOC — Watches module DLLs for changes and triggers automatic hot-reload
-- [`ModuleManager.cpp`](../../SparkEngine/Source/Core/ModuleManager.cpp) — 1728 LOC — Multi-module loader and lifecycle manager implementation
-- [`ModuleManager.h`](../../SparkEngine/Source/Core/ModuleManager.h) — 263 LOC — Multi-module loader and lifecycle manager
+- [`ModuleManager.cpp`](../../SparkEngine/Source/Core/ModuleManager.cpp) — 1741 LOC — Multi-module loader and lifecycle manager implementation
+- [`ModuleManager.h`](../../SparkEngine/Source/Core/ModuleManager.h) — 272 LOC — Multi-module loader and lifecycle manager
 - [`ModuleRuntimeInjection.cpp`](../../SparkEngine/Source/Core/ModuleRuntimeInjection.cpp) — 21 LOC — Private implementation of the public module runtime injection bridge.
 - [`NonNull.h`](../../SparkEngine/Source/Core/NonNull.h) — 73 LOC — Lightweight non-null pointer wrapper with debug-mode enforcement
 - [`Platform.h`](../../SparkEngine/Source/Core/Platform.h) — 269 LOC — Cross-platform type definitions and compatibility layer
@@ -1858,8 +1858,8 @@ graph LR
 - [`SubTickInput.cpp`](../../SparkEngine/Source/Engine/Networking/SubTickInput.cpp) — 114 LOC — Implementation of sub-tick input recording and processing
 - [`SubTickInput.h`](../../SparkEngine/Source/Engine/Networking/SubTickInput.h) — 103 LOC — Sub-tick input recording for precise input timing within server ticks
 - [`UDPTransport.h`](../../SparkEngine/Source/Engine/Networking/UDPTransport.h) — 248 LOC — UDP socket transport implementation of ITransport
-- [`WorldServer.cpp`](../../SparkEngine/Source/Engine/Networking/WorldServer.cpp) — 857 LOC — World server coordinator implementation
-- [`WorldServer.h`](../../SparkEngine/Source/Engine/Networking/WorldServer.h) — 353 LOC — Central coordinator for area-based multiplayer world architecture
+- [`WorldServer.cpp`](../../SparkEngine/Source/Engine/Networking/WorldServer.cpp) — 862 LOC — World server coordinator implementation
+- [`WorldServer.h`](../../SparkEngine/Source/Engine/Networking/WorldServer.h) — 356 LOC — Central coordinator for area-based multiplayer world architecture
 
 ### `SparkEngine/Source/Engine/OnlineServices/`
 
@@ -2674,6 +2674,10 @@ graph LR
 
 - [`main.cpp`](../../SparkShaderCompiler/src/main.cpp) — 588 LOC — SparkShaderCompiler - Standalone offline shader compilation tool
 
+### `Tests/Fixtures/`
+
+- [`GatewayTopologyProbe.cpp`](../../Tests/Fixtures/GatewayTopologyProbe.cpp) — 198 LOC — Black-box client for the production SparkGateway local ingress API.
+
 ### `Tests/Fixtures/ModuleABI/`
 
 - [`CompatibleModule.cpp`](../../Tests/Fixtures/ModuleABI/CompatibleModule.cpp) — 69 LOC
@@ -2940,7 +2944,7 @@ graph LR
 - [`TestGameplaySystemExtension.cpp`](../../Tests/TestGameplaySystemExtension.cpp) — 177 LOC
 - [`TestGameplayTags.cpp`](../../Tests/TestGameplayTags.cpp) — 256 LOC
 - [`TestGameplayTagsReal.cpp`](../../Tests/TestGameplayTagsReal.cpp) — 96 LOC — Real-class tests for Spark::Gameplay::GameplayTagRegistry and GameplayTagContainer
-- [`TestGatewayAreaControl.cpp`](../../Tests/TestGatewayAreaControl.cpp) — 235 LOC
+- [`TestGatewayAreaControl.cpp`](../../Tests/TestGatewayAreaControl.cpp) — 251 LOC
 - [`TestGatewaySecurity.cpp`](../../Tests/TestGatewaySecurity.cpp) — 72 LOC — HMAC admission and replay tests.
 - [`TestGizmoMath.cpp`](../../Tests/TestGizmoMath.cpp) — 214 LOC — Tests for gizmo math (ray-plane/ray-axis intersection)
 - [`TestGoldenImageTest.cpp`](../../Tests/TestGoldenImageTest.cpp) — 212 LOC
@@ -3004,7 +3008,7 @@ graph LR
 - [`TestMeshShaderPipeline.cpp`](../../Tests/TestMeshShaderPipeline.cpp) — 222 LOC
 - [`TestMetalRayTracing.cpp`](../../Tests/TestMetalRayTracing.cpp) — 194 LOC — macOS-only smoke tests for MetalRayTracingSystem lifecycle.
 - [`TestModSystem.cpp`](../../Tests/TestModSystem.cpp) — 224 LOC
-- [`TestModuleABI.cpp`](../../Tests/TestModuleABI.cpp) — 506 LOC
+- [`TestModuleABI.cpp`](../../Tests/TestModuleABI.cpp) — 558 LOC
 - [`TestModuleDependency.cpp`](../../Tests/TestModuleDependency.cpp) — 139 LOC
 - [`TestModuleDiscovery.cpp`](../../Tests/TestModuleDiscovery.cpp) — 137 LOC
 - [`TestModuleHotReload.cpp`](../../Tests/TestModuleHotReload.cpp) — 170 LOC
@@ -3156,7 +3160,7 @@ graph LR
 - [`TestSparkGameRPG.cpp`](../../Tests/TestSparkGameRPG.cpp) — 187 LOC
 - [`TestSparkGameRTS.cpp`](../../Tests/TestSparkGameRTS.cpp) — 272 LOC
 - [`TestSparkGameRacing.cpp`](../../Tests/TestSparkGameRacing.cpp) — 264 LOC
-- [`TestSparkGatewayCoordinator.cpp`](../../Tests/TestSparkGatewayCoordinator.cpp) — 225 LOC — Deterministic fenced-handoff and gateway failure-matrix tests.
+- [`TestSparkGatewayCoordinator.cpp`](../../Tests/TestSparkGatewayCoordinator.cpp) — 243 LOC — Deterministic fenced-handoff and gateway failure-matrix tests.
 - [`TestSparkPak.cpp`](../../Tests/TestSparkPak.cpp) — 590 LOC
 - [`TestSparkServerApplication.cpp`](../../Tests/TestSparkServerApplication.cpp) — 69 LOC — Focused SparkServer command-line contract tests.
 - [`TestSpatialGrid.cpp`](../../Tests/TestSpatialGrid.cpp) — 466 LOC
@@ -3286,6 +3290,6 @@ graph LR
 
 | Metric | Count |
 |--------|-------|
-| Source files scanned | 2457 |
-| Total lines of code  | 718330 |
+| Source files scanned | 2458 |
+| Total lines of code  | 718644 |
 | Source directories   | 17 |

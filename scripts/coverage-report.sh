@@ -119,6 +119,12 @@ for subsystem in $(echo "${!SUBSYSTEMS[@]}" | tr ' ' '\n' | sort); do
             icon="FAIL"
             all_pass=false
         fi
+    elif [[ $threshold -gt 0 ]]; then
+        # A configured subsystem with no instrumented lines is missing
+        # evidence, not 0% coverage that may silently pass.
+        pass="false"
+        icon="MISSING"
+        all_pass=false
     fi
 
     printf "%-15s %8d %8d %8d %5s%% [%s >= %d%%]\n" \
@@ -141,15 +147,45 @@ if [[ $total_lines -gt 0 ]]; then
 else
     total_pct="0.0"
 fi
-printf "%-15s %8d %8d %8d %5s%%\n" "TOTAL" "$total_lines" "$total_hit" "$total_missed" "$total_pct"
+printf "%-15s %8d %8d %8d %5s%%\n" "SELECTED" "$total_lines" "$total_hit" "$total_missed" "$total_pct"
+
+# The threshold table is intentionally curated. Report how much of the LCOV
+# corpus falls outside it so selected-subsystem coverage is never presented as
+# whole-repository coverage.
+lcov_lines=0
+lcov_hit=0
+while IFS= read -r line; do
+    case "$line" in
+        DA:*)
+            count="${line##*,}"
+            ((lcov_lines++)) || true
+            if [[ "$count" -gt 0 ]] 2>/dev/null; then
+                ((lcov_hit++)) || true
+            fi
+            ;;
+    esac
+done < "$COVERAGE_FILE"
+lcov_missed=$((lcov_lines - lcov_hit))
+unclassified_lines=$((lcov_lines - total_lines))
+if [[ $lcov_lines -gt 0 ]]; then
+    lcov_pct=$(awk "BEGIN { printf \"%.1f\", ($lcov_hit / $lcov_lines) * 100 }")
+else
+    lcov_pct="0.0"
+fi
+printf "%-15s %8d %8d %8d %5s%%\n" "LCOV CORPUS" "$lcov_lines" "$lcov_hit" "$lcov_missed" "$lcov_pct"
+printf "%-15s %8d\n" "UNCLASSIFIED" "$unclassified_lines"
 
 # Output JSON if requested
 if [[ -n "$JSON_OUTPUT" ]]; then
     cat > "$JSON_OUTPUT" <<JSONEOF
 {
-  "total_lines": $total_lines,
-  "total_hit": $total_hit,
-  "total_coverage": $total_pct,
+  "selected_subsystem_lines": $total_lines,
+  "selected_subsystem_hit": $total_hit,
+  "selected_subsystem_coverage": $total_pct,
+  "lcov_corpus_lines": $lcov_lines,
+  "lcov_corpus_hit": $lcov_hit,
+  "lcov_corpus_coverage": $lcov_pct,
+  "unclassified_lines": $unclassified_lines,
   "all_pass": $all_pass,
   "subsystems": [$json_entries]
 }

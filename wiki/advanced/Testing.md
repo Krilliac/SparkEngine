@@ -334,7 +334,7 @@ TEST(MyFeature_Comparisons) {
 }
 ```
 
-2. The test is automatically discovered by CMake (tests are globbed in `Tests/CMakeLists.txt`). See [Build System and CMake Modules](Build-System-and-CMake-Modules.md) for build configuration.
+2. Add the source file to the explicit test-source list in `Tests/CMakeLists.txt`. CI runs `Tools/check-test-registration.sh` and fails when a test source is present but not registered. See [Build System and CMake Modules](Build-System-and-CMake-Modules.md) for build configuration.
 
 3. Build and run:
 
@@ -528,7 +528,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*572 test files, 6844 source-level test definitions*
+*573 test files, 6858 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -770,7 +770,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameplaySystemExtension` | 6 |
 | `TestGameplayTags` | 14 |
 | `TestGameplayTagsReal` | 7 |
-| `TestGatewayAreaControl` | 5 |
+| `TestGatewayAreaControl` | 6 |
 | `TestGatewaySecurity` | 4 |
 | `TestGizmoMath` | 3 |
 | `TestGoldenImageTest` | 14 |
@@ -832,8 +832,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMeshOptimizer` | 15 |
 | `TestMeshShaderPipeline` | 9 |
 | `TestMetalRayTracing` | 16 |
+| `TestMetalRayTracingLive` | 10 |
 | `TestModSystem` | 9 |
-| `TestModuleABI` | 16 |
+| `TestModuleABI` | 18 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 12 |
@@ -985,7 +986,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkGameRPG` | 5 |
 | `TestSparkGameRTS` | 5 |
 | `TestSparkGameRacing` | 5 |
-| `TestSparkGatewayCoordinator` | 6 |
+| `TestSparkGatewayCoordinator` | 7 |
 | `TestSparkPak` | 15 |
 | `TestSparkServerApplication` | 5 |
 | `TestSpatialGrid` | 16 |

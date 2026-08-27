@@ -116,6 +116,31 @@ namespace Spark::Net
         }
     }
 
+    bool WorldServer::SetAreaOnline(AreaID areaId, bool online)
+    {
+        std::string areaName;
+        bool changed = false;
+        {
+            std::lock_guard<std::mutex> lock(m_areaMutex);
+            const auto found = m_areas.find(areaId);
+            if (found == m_areas.end())
+                return false;
+            AreaRegistration& area = found->second;
+            if (online)
+                area.lastHeartbeat = std::chrono::steady_clock::now();
+            changed = area.isOnline != online;
+            area.isOnline = online;
+            areaName = area.areaName;
+            const uint32_t activeAreas = static_cast<uint32_t>(
+                std::ranges::count_if(m_areas, [](const auto& entry) { return entry.second.isOnline; }));
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            m_stats.activeAreas = activeAreas;
+        }
+        if (changed)
+            Log("Area '" + areaName + (online ? "' is online." : "' is offline."));
+        return true;
+    }
+
     // ============================================================================
     // Area Management
     // ============================================================================
@@ -667,32 +692,7 @@ namespace Spark::Net
             }
             case MessageType::Heartbeat:
             {
-                // Update the sending area's heartbeat timestamp
-                std::string recoveredAreaName;
-                AreaID recoveredAreaId = INVALID_AREA;
-                {
-                    std::lock_guard<std::mutex> areaLock(m_areaMutex);
-                    for (auto& [id, reg] : m_areas)
-                    {
-                        // Match by sender ID interpreted as area ID for inter-server heartbeats
-                        if (id == static_cast<AreaID>(msg.senderID))
-                        {
-                            reg.lastHeartbeat = std::chrono::steady_clock::now();
-                            if (!reg.isOnline)
-                            {
-                                reg.isOnline = true;
-                                recoveredAreaName = reg.areaName;
-                                recoveredAreaId = id;
-                            }
-                            break;
-                        }
-                    }
-                }
-                if (recoveredAreaId != INVALID_AREA)
-                {
-                    SPARK_LOG_INFO("WorldServer", "Area '%s' (ID=%u) back online via heartbeat.",
-                                   recoveredAreaName.c_str(), recoveredAreaId);
-                }
+                (void)SetAreaOnline(static_cast<AreaID>(msg.senderID), true);
                 break;
             }
             default:
@@ -726,6 +726,7 @@ namespace Spark::Net
     void WorldServer::ProcessAreaHeartbeats()
     {
         std::vector<std::string> timedOutAreaNames;
+        uint32_t activeAreas = 0;
         {
             std::lock_guard<std::mutex> lock(m_areaMutex);
             const auto now = std::chrono::steady_clock::now();
@@ -739,6 +740,10 @@ namespace Spark::Net
                     timedOutAreaNames.push_back(reg.areaName);
                 }
             }
+            activeAreas = static_cast<uint32_t>(
+                std::ranges::count_if(m_areas, [](const auto& entry) { return entry.second.isOnline; }));
+            std::lock_guard<std::mutex> statsLock(m_statsMutex);
+            m_stats.activeAreas = activeAreas;
         }
 
         for (const std::string& areaName : timedOutAreaNames)

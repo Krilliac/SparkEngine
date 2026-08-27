@@ -21,7 +21,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 API_DIR="$SCRIPT_DIR/api"
-WIKI_DIR="$PROJECT_ROOT/wiki"
+WIKI_DIR="${SPARK_SYMBOL_INDEX_OUTPUT_DIR:-$PROJECT_ROOT/wiki}"
 SYMBOLS_TSV="$API_DIR/.symbols.tsv"
 
 RED='\033[0;31m'
@@ -126,19 +126,34 @@ generate_all() {
 }
 
 check_stale() {
+    require_tsv
+
+    # Timestamps are not reliable evidence here: generate-api-docs.sh check may
+    # refresh the ignored .symbols.tsv on a clean checkout even when its content
+    # is unchanged. Render into an isolated directory and compare bytes instead
+    # so check mode is read-only and deterministic.
+    local check_root
+    check_root=$(mktemp -d)
+    trap 'rm -rf "$check_root"' RETURN
+    if ! SPARK_SYMBOL_INDEX_OUTPUT_DIR="$check_root" bash "$0" generate >/dev/null; then
+        log_error "Failed to render symbol indexes for comparison"
+        return 1
+    fi
+
     for f in Symbol-Index.md Function-Index.md Class-Index.md Enum-Index.md Macro-Index.md; do
         local full="$WIKI_DIR/reference/$f"
+        local expected="$check_root/reference/$f"
         if [ ! -f "$full" ]; then
             log_warning "$f missing"
-            exit 1
+            return 1
         fi
-        if [ -f "$SYMBOLS_TSV" ] && [ "$SYMBOLS_TSV" -nt "$full" ]; then
-            log_warning "$f is older than $SYMBOLS_TSV"
-            exit 1
+        if ! cmp -s "$expected" "$full"; then
+            log_warning "$f content does not match $SYMBOLS_TSV"
+            return 1
         fi
     done
     log_info "Symbol indexes up to date"
-    exit 0
+    return 0
 }
 
 main() {

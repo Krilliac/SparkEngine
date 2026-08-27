@@ -5,9 +5,9 @@ A C++23 open-source 3D game engine with a full RHI abstraction layer, ECS (EnTT)
 > 🌐 **Website now live:** [sparkengine.dev](https://sparkengine.dev/)
 
 [![Build SparkEngine](https://img.shields.io/github/actions/workflow/status/Krilliac/SparkEngine/build.yml?branch=Working&style=flat-square&label=CI)](https://github.com/Krilliac/SparkEngine/actions)
-[![Test definitions](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/tests.json&style=flat-square)](Tests)
-[![C++ lines of code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/loc.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
-[![Source files](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/files.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
+[![Test definitions](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2FWorking%2F.github%2Fbadges%2Ftests.json&style=flat-square)](Tests)
+[![C++ lines of code](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2FWorking%2F.github%2Fbadges%2Floc.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
+[![Source files](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2FWorking%2F.github%2Fbadges%2Ffiles.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
 [![License: Spark Open](https://img.shields.io/badge/License-Spark_Open-blue?style=flat-square)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-community-5865F2?style=flat-square&logo=discord)](https://discord.gg/NyX8d9UZM)
 
@@ -182,7 +182,7 @@ Nine complete project templates load as `.dll`/`.so` modules at runtime and buil
 
 ## Quality Assurance
 
-**Tests:** 6,844 test definitions across 572 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 6,858 test definitions across 573 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
 
 ```bash
 cd build && ctest --output-on-failure
@@ -307,7 +307,7 @@ SparkEngine/
 ├── SparkEditor/Source/    59 dockable panels, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 prebuilt game modules
-├── Tests/                 6,844 test definitions, 572 files
+├── Tests/                 6,858 test definitions, 573 files
 ├── wiki/                  144+ wiki pages
 └── docs/                  API reference, guides
 ```

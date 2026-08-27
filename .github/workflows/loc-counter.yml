@@ -7,7 +7,12 @@ on:
       - '**.cpp'
       - '**.h'
       - '**.hpp'
+      - '**.mm'
+      - '**.inl'
       - 'docs/codebase-metrics.py'
+      - '.github/scripts/test-codebase-metrics.py'
+      - 'Tools/check-test-registration.sh'
+      - '.github/scripts/test-check-test-registration.py'
       - 'docs/update-codebase-stats.sh'
       - 'docs/sync-wiki.sh'
       - 'docs/update-readme-badges.sh'
@@ -31,10 +36,18 @@ jobs:
       with:
         persist-credentials: false
 
+    - name: Test source inventory and registration guards
+      run: |
+        set -euo pipefail
+        python3 .github/scripts/test-codebase-metrics.py -v
+        python3 .github/scripts/test-check-test-registration.py -v
+        bash Tools/check-test-registration.sh
+
     - name: Count lines of code
       id: loc
       run: |
         set -euo pipefail
+        python3 docs/codebase-metrics.py > repository-metrics.json
         eval "$(python3 docs/codebase-metrics.py --shell)"
         CPP_LINES="$TOTAL_LINES"
         format_count() {
@@ -78,6 +91,30 @@ jobs:
         bash docs/update-readme-badges.sh update
         bash docs/update-codebase-stats.sh generate
         bash docs/sync-wiki.sh sync
+
+    - name: Prove generated metrics are deterministic
+      run: |
+        set -euo pipefail
+        python3 -m json.tool repository-metrics.json >/dev/null
+        python3 -m json.tool .github/badges/tests.json >/dev/null
+        python3 -m json.tool .github/badges/loc.json >/dev/null
+        python3 -m json.tool .github/badges/files.json >/dev/null
+        python3 -m json.tool .github/badges/loc-breakdown.json >/dev/null
+        bash docs/update-readme-badges.sh check
+        bash docs/update-codebase-stats.sh check
+
+    - name: Upload exact-commit repository metrics
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: repository-metrics-${{ github.sha }}
+        path: |
+          repository-metrics.json
+          .github/badges/tests.json
+          .github/badges/loc.json
+          .github/badges/files.json
+          .github/badges/loc-breakdown.json
+        retention-days: 14
+        if-no-files-found: error
 
     - name: Commit badge data
       id: badge-commit

@@ -1302,6 +1302,13 @@ void ModuleManager::ShutdownAllAfterPreflight()
     }
 }
 
+void ModuleManager::RollbackStartup()
+{
+    Spark::SimpleConsole::GetInstance().LogWarning(
+        "Rolling back module initialization after host startup failed; unload vetoes do not apply");
+    ShutdownAllAfterPreflight();
+}
+
 bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext* context)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
@@ -1642,7 +1649,13 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
     {
         std::error_code cleanupError;
         const std::filesystem::path transientPath = PathFromUtf8(entry.transientImagePath);
+#ifdef _WIN32
+        std::filesystem::remove(SidecarPath(transientPath), cleanupError);
+        cleanupError.clear();
+        std::filesystem::remove(transientPath, cleanupError);
+#else
         std::filesystem::remove_all(transientPath.parent_path(), cleanupError);
+#endif
         entry.transientImagePath.clear();
     }
 }

@@ -283,10 +283,36 @@ namespace Spark::Gateway
 
     bool GatewayCoordinator::IsReady() const
     {
-        std::lock_guard lock(m_mutex);
-        return m_worldServer != nullptr && m_worldServer->IsRunning() && m_authenticator != nullptr &&
-               m_authenticator->IsReady() && m_controlPlane != nullptr && m_controlPlane->IsReady() &&
-               !m_endpoints.empty() && m_accepting;
+        std::vector<Net::AreaID> areas;
+        Net::WorldServer* world = nullptr;
+        IGatewayAuthenticator* authenticator = nullptr;
+        IAreaControlPlane* control = nullptr;
+        bool accepting = false;
+        {
+            std::lock_guard lock(m_mutex);
+            world = m_worldServer;
+            authenticator = m_authenticator;
+            control = m_controlPlane;
+            accepting = m_accepting;
+            areas.reserve(m_endpoints.size());
+            for (const auto& [id, endpoint] : m_endpoints)
+            {
+                (void)endpoint;
+                areas.push_back(id);
+            }
+        }
+        if (!world || !world->IsRunning() || !authenticator || !authenticator->IsReady() || !control || areas.empty() ||
+            !accepting)
+            return false;
+
+        bool allReady = true;
+        for (const Net::AreaID id : areas)
+        {
+            const bool ready = control->IsEndpointReady(id);
+            (void)world->SetAreaOnline(id, ready);
+            allReady &= ready;
+        }
+        return allReady;
     }
 
     const AreaEndpoint* GatewayCoordinator::FindEndpoint(Net::AreaID areaId) const

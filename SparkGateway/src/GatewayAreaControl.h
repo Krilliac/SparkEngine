@@ -18,7 +18,8 @@ namespace Spark::Gateway
         Transfer = 2,
         Commit = 3,
         Acknowledge = 4,
-        Abort = 5
+        Abort = 5,
+        Probe = 6
     };
 
     /** Gateway-side one-request-per-connection local named-pipe adapter. */
@@ -29,6 +30,7 @@ namespace Spark::Gateway
         explicit LocalAreaControlPlane(std::vector<uint8_t> key);
 
         [[nodiscard]] bool IsReady() const override;
+        [[nodiscard]] bool IsEndpointReady(Net::AreaID id) const override;
         [[nodiscard]] HandoffOperationResult Prepare(const HandoffCommand& command) override;
         [[nodiscard]] HandoffOperationResult Transfer(const HandoffCommand& command) override;
         [[nodiscard]] HandoffOperationResult Commit(const HandoffCommand& command) override;
@@ -38,12 +40,14 @@ namespace Spark::Gateway
 
       private:
         [[nodiscard]] HandoffOperationResult Send(AreaControlPhase phase, const HandoffCommand& command);
+        [[nodiscard]] HandoffOperationResult SendToEndpoint(std::string_view endpoint, AreaControlPhase phase,
+                                                            const HandoffCommand& command) const;
 
         std::vector<uint8_t> m_key;
         std::string m_error;
         std::unordered_map<Net::AreaID, std::string> m_endpoints;
         mutable std::mutex m_mutex;
-        std::atomic<uint64_t> m_nonce{0};
+        mutable std::atomic<uint64_t> m_nonce{0};
     };
 
     /** SparkServer-side authority for handoff phase fencing and idempotency. */

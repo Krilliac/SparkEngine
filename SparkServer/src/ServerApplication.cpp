@@ -11,11 +11,14 @@
 #include "Core/EngineRuntime.h"
 #include "Core/FixedTimestepAccumulator.h"
 #include "Core/ModuleManager.h"
+#include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/Events/EventSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Utils/ConfigParser.h"
+#include "Utils/ConsoleProcessManager.h"
+#include "Utils/SparkConsole.h"
 #include "Utils/Timer.h"
 
 #include <algorithm>
@@ -342,11 +345,36 @@ namespace Spark::Server
         if (m_modules->GetGameModuleName().empty())
         {
             SetError("The selected module set contains no initialized Game module");
-            (void)m_modules->ShutdownAll();
-            m_modules->UnloadAll();
             return false;
         }
         return true;
+    }
+
+    void ServerApplication::DestroyModuleRuntime(bool startupRollback)
+    {
+        if (m_modules)
+        {
+            if (startupRollback)
+                m_modules->RollbackStartup();
+            else
+                m_modules->ShutdownAllAfterPreflight();
+        }
+
+        // Module callbacks and type-erased targets must be destroyed before
+        // their defining DLL is unmapped.
+        Spark::SimpleConsole::GetInstance().Shutdown();
+        Spark::ConsoleProcessManager::GetInstance().Shutdown();
+        Spark::Cinematic::SequencerManager::GetInstance().ClearSequences();
+        auto& runtime = GetEngineRuntime();
+        if (runtime.eventBus)
+            runtime.eventBus->ClearAll();
+
+        if (EngineContext* context = EngineContext::Get())
+            context->SetWorld(nullptr);
+        m_world.reset();
+        if (m_modules)
+            m_modules->UnloadAll();
+        m_modules.reset();
     }
 
     bool ServerApplication::Start()
@@ -379,6 +407,7 @@ namespace Spark::Server
         m_modules->SetFileCache(runtime.fileCache.get());
         if (!LoadSelectedModules())
         {
+            DestroyModuleRuntime(true);
             runtime.ShutdownHeadlessAssetServices();
             EngineContext::ResetOwned();
             runtime.eventBus.reset();
@@ -390,9 +419,8 @@ namespace Spark::Server
         if (!m_server->Start(m_options.server))
         {
             SetError("DedicatedServer failed to bind or initialize networking");
-            (void)m_modules->ShutdownAll();
-            m_modules->UnloadAll();
-            m_modules.reset();
+            m_server.reset();
+            DestroyModuleRuntime(true);
             runtime.ShutdownHeadlessAssetServices();
             EngineContext::ResetOwned();
             runtime.eventBus.reset();
@@ -411,9 +439,7 @@ namespace Spark::Server
                 SetError("Failed to start authenticated gateway area-control service");
                 m_server->Stop();
                 m_server.reset();
-                m_modules->UnloadAll();
-                m_modules.reset();
-                m_world.reset();
+                DestroyModuleRuntime(true);
                 Spark::FixedTimestepAccumulator::GetInstance().Shutdown();
                 runtime.ShutdownHeadlessAssetServices();
                 EngineContext::ResetOwned();
@@ -499,19 +525,14 @@ namespace Spark::Server
             return false;
         }
 
-        if (m_modules)
-            m_modules->ShutdownAllAfterPreflight();
         if (m_controlService)
             m_controlService->Stop();
         m_controlService.reset();
         if (m_server)
             m_server->Stop();
-        if (m_modules)
-            m_modules->UnloadAll();
         m_server.reset();
-        m_modules.reset();
+        DestroyModuleRuntime(false);
         Spark::FixedTimestepAccumulator::GetInstance().Shutdown();
-        m_world.reset();
 
         auto& runtime = GetEngineRuntime();
         runtime.ShutdownHeadlessAssetServices();

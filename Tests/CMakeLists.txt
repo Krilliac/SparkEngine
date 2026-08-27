@@ -645,6 +645,15 @@ add_dependencies(SparkTests SparkDebugHookTeardownProbe)
 target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_DEBUG_HOOK_TEARDOWN_PROBE_PATH="$<TARGET_FILE:SparkDebugHookTeardownProbe>")
 
+if(TARGET SparkGatewayCore)
+    add_executable(SparkGatewayTopologyProbe
+        Fixtures/GatewayTopologyProbe.cpp)
+    target_compile_features(SparkGatewayTopologyProbe PRIVATE cxx_std_23)
+    target_link_libraries(SparkGatewayTopologyProbe PRIVATE SparkGatewayCore)
+    set_target_properties(SparkGatewayTopologyProbe PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+endif()
+
 # Real shared-library fixtures for the pre-instantiation module ABI gate.
 # They intentionally do not link SparkEngineLib: the boundary under test must
 # be satisfied by SDK headers and the exported C ABI alone.
@@ -1134,6 +1143,31 @@ if(Python3_Interpreter_FOUND)
         set_tests_properties(SparkCookerWorkerProcessSmoke PROPERTIES
             LABELS "cooker;worker;integration;process"
             TIMEOUT 75)
+    endif()
+    if(TARGET SparkServer AND TARGET SparkGateway AND TARGET SparkGame AND
+       TARGET SparkGatewayTopologyProbe AND TARGET SparkAutomation)
+        add_dependencies(SparkTests SparkServer SparkGateway SparkGame SparkGatewayTopologyProbe SparkAutomation)
+        add_test(
+            NAME SparkServerGatewayProcessSmoke
+            COMMAND $<TARGET_FILE:SparkAutomation>
+                --name server-gateway-process-smoke
+                --executable ${Python3_EXECUTABLE}
+                --working-dir ${CMAKE_SOURCE_DIR}
+                --timeout-ms 90000
+                --expected-exit 0
+                --captured-log ${CMAKE_BINARY_DIR}/server-gateway-process-smoke.log
+                --json ${CMAKE_BINARY_DIR}/server-gateway-process-smoke.json
+                --junit ${CMAKE_BINARY_DIR}/server-gateway-process-smoke.xml
+                --
+                ${CMAKE_SOURCE_DIR}/SparkGateway/tests/test_server_gateway_process.py
+                --server $<TARGET_FILE:SparkServer>
+                --gateway $<TARGET_FILE:SparkGateway>
+                --module $<TARGET_FILE:SparkGame>
+                --probe $<TARGET_FILE:SparkGatewayTopologyProbe>
+                --working-dir ${CMAKE_SOURCE_DIR})
+        set_tests_properties(SparkServerGatewayProcessSmoke PROPERTIES
+            LABELS "server;gateway;integration;network;process"
+            TIMEOUT 105)
     endif()
     add_test(
         NAME SparkTemplateRuntimeSheets

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import signal
 import socket
 import struct
 import subprocess
@@ -13,6 +14,76 @@ import sys
 import tempfile
 import time
 import uuid
+
+
+def open_process_log(path: Path):
+    """Open an inherited process log without introducing pipe backpressure."""
+    return path.open("ab", buffering=0)
+
+
+def read_process_log(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        return ""
+
+
+def record_supervised_pids(output: str, known_pids: set[int]) -> None:
+    """Remember supervised descendants so abnormal Windows cleanup is bounded."""
+    for line in output.splitlines():
+        for field in line.split("\t"):
+            if not field.startswith("pid="):
+                continue
+            try:
+                pid = int(field.removeprefix("pid="))
+            except ValueError:
+                continue
+            if pid > 0:
+                known_pids.add(pid)
+
+
+def force_terminate_process_tree(
+    daemon_process: subprocess.Popen[str], supervised_pids: set[int]
+) -> None:
+    """Contain a failed smoke test to the process tree it created."""
+    if os.name == "nt":
+        targets = dict.fromkeys([daemon_process.pid, *sorted(supervised_pids)])
+        for pid in targets:
+            try:
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=5,
+                    check=False,
+                )
+            except (OSError, subprocess.SubprocessError):
+                pass
+        if daemon_process.poll() is None:
+            daemon_process.kill()
+            daemon_process.wait(timeout=3)
+        return
+
+    process_group = daemon_process.pid
+    try:
+        os.killpg(process_group, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(process_group, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.05)
+
+    try:
+        os.killpg(process_group, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    if daemon_process.poll() is None:
+        daemon_process.wait(timeout=3)
 
 
 def parse_args() -> argparse.Namespace:
@@ -92,11 +163,13 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="spark-orchestration-smoke-") as temporary:
         scratch = Path(temporary)
+        daemon_log_path = scratch / "daemon.log"
         environment = os.environ.copy()
         environment["SPARK_ORCHESTRATOR_IDENTITY"] = str(scratch / "identity.state")
         cli_creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         daemon_creation_flags = 0
         daemon_startup_info = None
+        known_supervised_pids: set[int] = set()
         if os.name == "nt":
             # The supervisor sends CTRL_BREAK to graceful-stop Windows process
             # groups. Give it a real, hidden console even when CTest itself is
@@ -105,27 +178,33 @@ def main() -> int:
             daemon_startup_info = subprocess.STARTUPINFO()
             daemon_startup_info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             daemon_startup_info.wShowWindow = subprocess.SW_HIDE
-        daemon_process = subprocess.Popen(
-            [
-                str(daemon),
-                "--socket",
-                daemon_endpoint,
-                "--orchestrator-allow-root",
-                str(binary_dir),
-                "--orchestrator-max-processes",
-                "2",
-                "--orchestrator-state-file",
-                str(scratch / "orchestration.state"),
-            ],
-            cwd=binary_dir,
-            env=environment,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            creationflags=daemon_creation_flags,
-            startupinfo=daemon_startup_info,
-            start_new_session=os.name != "nt",
-        )
+        # SparkDaemon's supervised children inherit its standard output.  An
+        # unread subprocess.PIPE can therefore fill and stall the entire
+        # process tree before the harness reaches shutdown.  An append-only
+        # file preserves diagnostics while allowing writers to make progress
+        # independently of when the parent reads them.
+        with open_process_log(daemon_log_path) as daemon_log:
+            daemon_process = subprocess.Popen(
+                [
+                    str(daemon),
+                    "--socket",
+                    daemon_endpoint,
+                    "--orchestrator-allow-root",
+                    str(binary_dir),
+                    "--orchestrator-max-processes",
+                    "2",
+                    "--orchestrator-state-file",
+                    str(scratch / "orchestration.state"),
+                ],
+                cwd=binary_dir,
+                env=environment,
+                stdout=daemon_log,
+                stderr=subprocess.STDOUT,
+                text=True,
+                creationflags=daemon_creation_flags,
+                startupinfo=daemon_startup_info,
+                start_new_session=os.name != "nt",
+            )
 
         def invoke(
             *command: str, check: bool = True, timeout: float = 3
@@ -141,6 +220,7 @@ def main() -> int:
                 creationflags=cli_creation_flags,
                 check=False,
             )
+            record_supervised_pids(completed.stdout, known_supervised_pids)
             if check and completed.returncode != 0:
                 raise RuntimeError(
                     f"SparkOrchestrator {' '.join(command)} failed with "
@@ -148,11 +228,12 @@ def main() -> int:
                 )
             return completed
 
+        completed_normally = False
         try:
             deadline = time.monotonic() + 8
             while time.monotonic() < deadline:
                 if daemon_process.poll() is not None:
-                    output = daemon_process.stdout.read() if daemon_process.stdout else ""
+                    output = read_process_log(daemon_log_path)
                     raise RuntimeError(f"SparkDaemon exited before readiness:\n{output}")
                 if invoke("list", check=False).returncode == 0:
                     break
@@ -212,7 +293,7 @@ def main() -> int:
             invoke("undefine", service_id)
             invoke("daemon-shutdown")
             daemon_exit = daemon_process.wait(timeout=8)
-            daemon_output = daemon_process.stdout.read() if daemon_process.stdout else ""
+            daemon_output = read_process_log(daemon_log_path)
             if daemon_exit != 0:
                 raise RuntimeError(f"SparkDaemon exited with {daemon_exit}:\n{daemon_output}")
             if daemon_output.count("SparkCollabServer: shutdown complete") < 2:
@@ -220,24 +301,26 @@ def main() -> int:
                     "supervised child did not report graceful shutdown after drain and stop:\n"
                     f"{daemon_output}"
                 )
+            completed_normally = True
             print("Spark orchestration process smoke passed")
             return 0
         finally:
             try:
-                if daemon_process.poll() is None:
-                    try:
-                        invoke("daemon-shutdown", check=False, timeout=1)
-                    except (OSError, subprocess.SubprocessError):
-                        pass
-                    try:
-                        daemon_process.wait(timeout=3)
-                    except subprocess.TimeoutExpired:
-                        daemon_process.terminate()
+                if not completed_normally:
+                    parent_exited_before_cleanup = daemon_process.poll() is not None
+                    fallback_shutdown_completed = False
+                    if not parent_exited_before_cleanup:
+                        try:
+                            invoke("daemon-shutdown", check=False, timeout=1)
+                        except (OSError, subprocess.SubprocessError):
+                            pass
                         try:
                             daemon_process.wait(timeout=3)
+                            fallback_shutdown_completed = True
                         except subprocess.TimeoutExpired:
-                            daemon_process.kill()
-                            daemon_process.wait(timeout=3)
+                            pass
+                    if parent_exited_before_cleanup or not fallback_shutdown_completed:
+                        force_terminate_process_tree(daemon_process, known_supervised_pids)
             finally:
                 for socket_path in (daemon_endpoint, child_endpoint):
                     if os.name != "nt":

@@ -180,6 +180,15 @@ class ModuleManager
     void ShutdownAllAfterPreflight();
 
     /**
+     * @brief Roll back modules initialized by a host startup that cannot commit.
+     *
+     * A startup failure has no usable running state to preserve, so this
+     * explicitly bypasses CanUnload vetoes while still invoking OnUnload in
+     * reverse dependency order. Do not use this for a live host shutdown.
+     */
+    void RollbackStartup();
+
+    /**
      * @brief Reload a specific module by name (for hot-reload)
      *
      * Shuts down the module, unloads the DLL, reloads it, and re-initializes.

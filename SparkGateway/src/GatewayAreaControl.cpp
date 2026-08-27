@@ -19,6 +19,7 @@
 #include "Utils/DaemonFraming.h"
 #include "Utils/SecureRandom.h"
 
+#include <algorithm>
 #include <cctype>
 #include <charconv>
 #include <fstream>
@@ -535,7 +536,8 @@ namespace Spark::Gateway
             uint64_t minor = 0, timestamp = 0, nonce = 0, phase = 0, epoch = 0, source = 0, target = 0;
             if (!ParseUnsigned(fields[1], minor) || minor > GatewayProtocolMinor ||
                 !ParseUnsigned(fields[2], timestamp) || !ParseUnsigned(fields[3], nonce) ||
-                !ParseUnsigned(fields[4], phase) || phase < 1 || phase > 5 || !ParseUnsigned(fields[5], epoch) ||
+                !ParseUnsigned(fields[4], phase) || phase < 1 ||
+                phase > static_cast<uint64_t>(AreaControlPhase::Probe) || !ParseUnsigned(fields[5], epoch) ||
                 !ParseUnsigned(fields[6], source) || source > std::numeric_limits<Net::AreaID>::max() ||
                 !ParseUnsigned(fields[7], target) || target > std::numeric_limits<Net::AreaID>::max() ||
                 fields[8].empty() || fields[8].size() > 128 || !DecodeHex(fields[9], request.mac))
@@ -571,28 +573,34 @@ namespace Spark::Gateway
 
     bool LocalAreaControlPlane::IsReady() const
     {
-        std::lock_guard lock(m_mutex);
-        if (m_key.size() < 32 || m_endpoints.empty())
-            return false;
-#ifdef _WIN32
-        for (const auto& [id, endpoint] : m_endpoints)
+        std::vector<Net::AreaID> ids;
         {
-            (void)id;
-            const std::wstring pipe = Daemon::NormalizePipeName(endpoint);
-            if (pipe.empty() || !WaitNamedPipeW(pipe.c_str(), 50))
+            std::lock_guard lock(m_mutex);
+            if (m_key.size() < 32 || m_endpoints.empty())
                 return false;
+            ids.reserve(m_endpoints.size());
+            for (const auto& [id, endpoint] : m_endpoints)
+            {
+                (void)endpoint;
+                ids.push_back(id);
+            }
         }
-        return true;
-#else
-        for (const auto& [id, endpoint] : m_endpoints)
+        return std::ranges::all_of(ids, [this](Net::AreaID id) { return IsEndpointReady(id); });
+    }
+
+    bool LocalAreaControlPlane::IsEndpointReady(Net::AreaID id) const
+    {
+        std::string endpoint;
         {
-            (void)id;
-            Daemon::DaemonClient client;
-            if (!client.Connect(NormalizeLocalEndpoint(endpoint)))
+            std::lock_guard lock(m_mutex);
+            const auto found = m_endpoints.find(id);
+            if (m_key.size() < 32 || found == m_endpoints.end() || found->second.empty())
                 return false;
+            endpoint = found->second;
         }
-        return true;
-#endif
+        const HandoffCommand probe{"spark-readiness", 0, id, id};
+        const auto result = SendToEndpoint(endpoint, AreaControlPhase::Probe, probe);
+        return result == HandoffOperationResult::Applied || result == HandoffOperationResult::Duplicate;
     }
 
     HandoffOperationResult LocalAreaControlPlane::Prepare(const HandoffCommand& command)
@@ -618,11 +626,11 @@ namespace Spark::Gateway
 
     void LocalAreaControlPlane::RegisterEndpoint(Net::AreaID id, const AreaEndpoint& endpoint)
     {
+        std::lock_guard lock(m_mutex);
         if (endpoint.host == "127.0.0.1" || endpoint.host == "localhost" || endpoint.host == "::1")
-        {
-            std::lock_guard lock(m_mutex);
             m_endpoints[id] = EndpointFor(endpoint);
-        }
+        else
+            m_endpoints[id].clear();
     }
 
     HandoffOperationResult LocalAreaControlPlane::Send(AreaControlPhase phase, const HandoffCommand& command)
@@ -638,27 +646,33 @@ namespace Spark::Gateway
             if (target->second != source->second)
                 endpoints.push_back(target->second);
         }
-        const uint64_t nonce = m_nonce.fetch_add(1, std::memory_order_relaxed);
-        const auto payload = EncodeRequest(m_key, phase, command, NowMilliseconds(), nonce);
-        if (payload.empty())
-            return HandoffOperationResult::Rejected;
         bool anyApplied = false;
         for (const std::string& endpoint : endpoints)
         {
-            Daemon::DaemonClient client;
-            if (auto connected = client.Connect(NormalizeLocalEndpoint(endpoint)); !connected)
-                return HandoffOperationResult::Unavailable;
-            auto response = client.Request(Daemon::ServiceId::Orchestration, static_cast<uint16_t>(phase), payload);
-            if (!response || response->messageType != static_cast<uint16_t>(phase) + ResponseFlag ||
-                response->payload.size() != 1 ||
-                response->payload[0] > static_cast<uint8_t>(HandoffOperationResult::Unavailable))
-                return HandoffOperationResult::Unavailable;
-            const auto result = static_cast<HandoffOperationResult>(response->payload[0]);
+            const auto result = SendToEndpoint(endpoint, phase, command);
             if (result == HandoffOperationResult::Rejected || result == HandoffOperationResult::Unavailable)
                 return result;
             anyApplied |= result == HandoffOperationResult::Applied;
         }
         return anyApplied ? HandoffOperationResult::Applied : HandoffOperationResult::Duplicate;
+    }
+
+    HandoffOperationResult LocalAreaControlPlane::SendToEndpoint(std::string_view endpoint, AreaControlPhase phase,
+                                                                 const HandoffCommand& command) const
+    {
+        const uint64_t nonce = m_nonce.fetch_add(1, std::memory_order_relaxed);
+        const auto payload = EncodeRequest(m_key, phase, command, NowMilliseconds(), nonce);
+        if (payload.empty())
+            return HandoffOperationResult::Rejected;
+        Daemon::DaemonClient client;
+        if (!client.Connect(NormalizeLocalEndpoint(std::string(endpoint))))
+            return HandoffOperationResult::Unavailable;
+        auto response = client.Request(Daemon::ServiceId::Orchestration, static_cast<uint16_t>(phase), payload);
+        if (!response || response->messageType != static_cast<uint16_t>(phase) + ResponseFlag ||
+            response->payload.size() != 1 ||
+            response->payload[0] > static_cast<uint8_t>(HandoffOperationResult::Unavailable))
+            return HandoffOperationResult::Unavailable;
+        return static_cast<HandoffOperationResult>(response->payload[0]);
     }
 
     LocalAreaControlService::LocalAreaControlService(std::string endpoint, std::filesystem::path keyFile,
@@ -849,6 +863,8 @@ namespace Spark::Gateway
     HandoffOperationResult LocalAreaControlService::Apply(std::string_view sessionId, uint64_t epoch,
                                                           AreaControlPhase phase)
     {
+        if (phase == AreaControlPhase::Probe)
+            return HandoffOperationResult::Applied;
         auto found = m_sessions.find(std::string(sessionId));
         if (found == m_sessions.end())
         {

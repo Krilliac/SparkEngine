@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "lanes": {
+    "linux-clang-Debug": {
+      "minimumRecorded": 6600,
+      "minimumExecuted": 6600,
+      "maximumSkipped": 25
+    },
+    "linux-clang-Release": {
+      "minimumRecorded": 6600,
+      "minimumExecuted": 6600,
+      "maximumSkipped": 25
+    },
+    "linux-gcc-Debug": {
+      "minimumRecorded": 6600,
+      "minimumExecuted": 6600,
+      "maximumSkipped": 25
+    },
+    "linux-gcc-Release": {
+      "minimumRecorded": 6600,
+      "minimumExecuted": 6600,
+      "maximumSkipped": 25
+    },
+    "windows-vs2022-release": {
+      "minimumRecorded": 6600,
+      "minimumExecuted": 6600,
+      "maximumSkipped": 25
+    }
+  }
+}

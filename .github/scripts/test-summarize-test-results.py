@@ -29,9 +29,10 @@ class SummarizeTestResultsTests(unittest.TestCase):
 """,
             source=report,
         )
-        stats = MODULE.summarize_cases(cases, [report], 3)
+        stats = MODULE.summarize_cases(cases, [report], 2)
 
         self.assertEqual(stats["tests"], 3)
+        self.assertEqual(stats["executed"], 2)
         self.assertEqual(stats["passed"], 1)
         self.assertEqual(stats["failures"], 1)
         self.assertEqual(stats["errors"], 0)
@@ -47,6 +48,17 @@ class SummarizeTestResultsTests(unittest.TestCase):
         cases = MODULE.parse_cases("<testsuites/>", source=Path("empty.xml"))
         with self.assertRaisesRegex(ValueError, "expected at least 1"):
             MODULE.summarize_cases(cases, [Path("empty.xml")], 1)
+
+    def test_rejects_all_skipped_test_run(self) -> None:
+        cases = MODULE.parse_cases(
+            """<testsuite>
+  <testcase name="skip-one"><skipped/></testcase>
+  <testcase name="skip-two"><skipped/></testcase>
+</testsuite>""",
+            source=Path("skipped.xml"),
+        )
+        with self.assertRaisesRegex(ValueError, "0 executed test cases and 2 skipped"):
+            MODULE.summarize_cases(cases, [Path("skipped.xml")], 1)
 
     def test_rejects_registration_floor_regression(self) -> None:
         cases = MODULE.parse_cases(

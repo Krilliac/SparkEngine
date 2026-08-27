@@ -59,6 +59,10 @@ TEST(GatewayAreaControl_LiveLoopbackIsIdempotentAndPersistsEpochFence)
     // Match the deterministic endpoint derived by RegisterEndpoint.
     LocalAreaControlService service("spark-area-control-" + std::to_string(controlPort), key, state);
     EXPECT_TRUE(service.Start());
+    EXPECT_TRUE(client.IsReady());
+    LocalAreaControlPlane wrongKey(std::vector<uint8_t>(32, 0x4d));
+    wrongKey.RegisterEndpoint(7, area);
+    EXPECT_FALSE(wrongKey.IsReady());
 
     LocalAreaControlPlane secondClient(key);
     secondClient.RegisterEndpoint(7, area);
@@ -72,6 +76,7 @@ TEST(GatewayAreaControl_LiveLoopbackIsIdempotentAndPersistsEpochFence)
     EXPECT_EQ(static_cast<int>(client.Commit(command)), static_cast<int>(HandoffOperationResult::Applied));
     EXPECT_EQ(static_cast<int>(client.Acknowledge(command)), static_cast<int>(HandoffOperationResult::Applied));
     service.Stop();
+    EXPECT_FALSE(client.IsReady());
 
     LocalAreaControlService restarted("spark-area-control-" + std::to_string(controlPort), key, state);
     EXPECT_TRUE(restarted.Start());
@@ -81,6 +86,17 @@ TEST(GatewayAreaControl_LiveLoopbackIsIdempotentAndPersistsEpochFence)
     EXPECT_TRUE(client.Prepare(next) == HandoffOperationResult::Applied);
     restarted.Stop();
     std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_RemoteEndpointIsExplicitlyUnsupported)
+{
+    LocalAreaControlPlane control(std::vector<uint8_t>(32, 0x65));
+    AreaEndpoint area;
+    area.host = "203.0.113.10";
+    area.area.interServerPort = UniquePort(31);
+    control.RegisterEndpoint(31, area);
+    EXPECT_FALSE(control.IsReady());
+    EXPECT_FALSE(control.IsEndpointReady(31));
 }
 
 TEST(GatewayIngress_LiveLoopbackAuthenticatesAndRoutes)
