@@ -68,6 +68,8 @@ else()
     project(SparkEngine VERSION ${SPARK_ENGINE_VERSION} LANGUAGES CXX C)
 endif()
 
+include("${CMAKE_SOURCE_DIR}/cmake/SparkWindowsVersionInfo.cmake")
+
 # Keep the public SDK's semantic version in lockstep with project()/CPack.
 # Version.h retains the independently managed SDK ABI number and includes this
 # generated header for the release version macros.
@@ -1704,6 +1706,7 @@ if(BUILD_GAME_MODULES)
 else()
     message(STATUS "Game modules: SKIPPED (BUILD_GAME_MODULES=OFF)")
 endif()
+set(SPARK_PACKAGE_GAME_MODULES "${_SPARK_GAME_MODULE_NAMES}")
 
 # ---------------------------------------------------------------------
 # 9.6) Build SparkEditor if enabled and exists
@@ -2385,6 +2388,24 @@ endif()
 # ---------------------------------------------------------------------
 if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
     enable_testing()
+    add_test(
+        NAME SparkWindowsVersionInfo.Metadata
+        COMMAND ${CMAKE_COMMAND}
+            -DSPARK_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -DSPARK_TEST_OUTPUT_DIR=${CMAKE_BINARY_DIR}/spark-version-info-test
+            -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkWindowsVersionInfo.cmake)
+    set_tests_properties(SparkWindowsVersionInfo.Metadata PROPERTIES
+        LABELS "cmake;packaging")
+    add_test(
+        NAME SparkTrackedInstall.Contract
+        COMMAND ${CMAKE_COMMAND}
+            -DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/spark-tracked-install-test
+            -DSPARK_BINARY_ROOT=${CMAKE_BINARY_DIR}
+            -DSPARK_TRACKED_INSTALL_HELPER=${CMAKE_SOURCE_DIR}/cmake/SparkTrackedInstall.cmake
+            -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkTrackedInstall.cmake)
+    set_tests_properties(SparkTrackedInstall.Contract PROPERTIES
+        LABELS "cmake;packaging;unit"
+        TIMEOUT 30)
     message(STATUS "Adding test suite...")
     add_subdirectory(Tests)
 endif()
@@ -2399,11 +2420,29 @@ endif()
 # Install with: cmake --install build --prefix /path/to/install
 # ---------------------------------------------------------------------
 
+include("${CMAKE_SOURCE_DIR}/cmake/SparkTrackedInstall.cmake")
+
 set(SPARK_INSTALL_COMPONENT_RUNTIME "runtime")
 set(SPARK_INSTALL_COMPONENT_SDK "sdk")
 set(SPARK_INSTALL_COMPONENT_TOOLS "tools")
 set(SPARK_INSTALL_COMPONENT_TEMPLATES "templates")
 set(SPARK_INSTALL_COMPONENT_SAMPLES "samples")
+
+function(_spark_install_tracked_source_directory source_directory destination component)
+    set(_spark_absolute_source "${source_directory}")
+    cmake_path(ABSOLUTE_PATH _spark_absolute_source
+        BASE_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        NORMALIZE)
+    cmake_path(RELATIVE_PATH _spark_absolute_source
+        BASE_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE _spark_relative_source)
+    string(REPLACE "\\" "/" _spark_relative_source "${_spark_relative_source}")
+    spark_install_tracked_directory(
+        SOURCE "${_spark_relative_source}"
+        DESTINATION "${destination}"
+        COMPONENT "${component}"
+        ${ARGN})
+endfunction()
 
 set(_SPARK_INSTALL_TARGETS SparkEngineLib)
 foreach(_spark_dependency SparkAssetPipelineCore miniz tinyexr zstd tinyobjloader stb_image cgltf miniaudio nlohmann_json glad Jolt Recast Detour angelscript)
@@ -2423,9 +2462,16 @@ if(TARGET SparkEngineInterface)
     )
 endif()
 
-# Install SparkSDK public headers
-install(DIRECTORY SparkSDK/Include/Spark
-    DESTINATION include
+# Keep the shipped Windows executable metadata in lockstep with
+# SPARK_ENGINE_VERSION. The helper is idempotent because SparkBuild and
+# SparkInstaller also attach their resources when configured standalone.
+spark_attach_shipped_windows_version_info()
+
+# Install root-owned SDK sources from a configure-time snapshot of the Git
+# index, so local untracked headers cannot enter a package.
+spark_install_tracked_directory(
+    SOURCE SparkSDK/Include/Spark
+    DESTINATION include/Spark
     COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
 )
 install(FILES "${SPARK_GENERATED_INCLUDE_DIR}/Spark/GeneratedVersion.h"
@@ -2434,31 +2480,29 @@ install(FILES "${SPARK_GENERATED_INCLUDE_DIR}/Spark/GeneratedVersion.h"
 )
 
 if(TARGET SparkAssetPipelineCore)
-    install(DIRECTORY "SparkAssetPipelineCore/include/"
+    spark_install_tracked_directory(
+        SOURCE SparkAssetPipelineCore/include
         DESTINATION include
         COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
     )
 endif()
 
 # Install the engine's public headers (needed by modules that use engine types directly)
-install(DIRECTORY "SparkEngine/Source/"
+spark_install_tracked_directory(
+    SOURCE SparkEngine/Source
     DESTINATION include/SparkEngine
     COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
-    FILES_MATCHING
-        PATTERN "*.h"
-        PATTERN "*.hpp"
+    INCLUDE_REGEXES "\\.(h|hpp)$"
 )
 
 # Install third-party headers that are part of the public interface
 foreach(dir ${THIRDPARTY_INCLUDE_DIRS})
     if(EXISTS "${dir}")
-        install(DIRECTORY "${dir}/"
-            DESTINATION include/SparkEngine/ThirdParty
-            COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
-            FILES_MATCHING
-                PATTERN "*.h"
-                PATTERN "*.hpp"
-        )
+        _spark_install_tracked_source_directory(
+            "${dir}"
+            include/SparkEngine/ThirdParty
+            ${SPARK_INSTALL_COMPONENT_SDK}
+            INCLUDE_REGEXES "\\.(h|hpp)$")
     endif()
 endforeach()
 
@@ -2528,6 +2572,12 @@ configure_package_config_file(
     "${CMAKE_BINARY_DIR}/SparkEngineConfig.cmake"
     INSTALL_DESTINATION lib/cmake/SparkEngine
 )
+configure_file(
+    "${CMAKE_SOURCE_DIR}/cmake/SparkEngineGameModules.cmake.in"
+    "${CMAKE_BINARY_DIR}/SparkEngineGameModules.cmake"
+    @ONLY
+    NEWLINE_STYLE LF
+)
 write_basic_package_version_file(
     "${CMAKE_BINARY_DIR}/SparkEngineConfigVersion.cmake"
     VERSION ${PROJECT_VERSION}
@@ -2537,6 +2587,7 @@ write_basic_package_version_file(
 install(FILES
     "${CMAKE_BINARY_DIR}/SparkEngineConfig.cmake"
     "${CMAKE_BINARY_DIR}/SparkEngineConfigVersion.cmake"
+    "${CMAKE_BINARY_DIR}/SparkEngineGameModules.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/WriteSparkModuleABI.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/SparkPlugin.cmake"
@@ -2545,20 +2596,22 @@ install(FILES
     COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
 )
 
-# Install engine executable and game DLL
+# Install the engine executable and every auto-discovered game module. Keeping
+# this driven by the same target list used for the build prevents a newly added
+# module from compiling successfully but silently disappearing from packages.
 install(TARGETS SparkEngine
     RUNTIME DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
 )
-if(TARGET SparkGameFPS)
-    install(TARGETS SparkGameFPS
+foreach(_SPARK_GAME_MODULE IN LISTS _SPARK_GAME_MODULE_NAMES)
+    install(TARGETS ${_SPARK_GAME_MODULE}
         RUNTIME DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
         LIBRARY DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
     )
-    install(FILES "$<TARGET_FILE:SparkGameFPS>.sparkabi"
+    install(FILES "$<TARGET_FILE:${_SPARK_GAME_MODULE}>.sparkabi"
         DESTINATION bin
         COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
     )
-endif()
+endforeach()
 
 if(TARGET SparkCrashReporter)
     install(TARGETS SparkCrashReporter
@@ -2570,22 +2623,27 @@ endif()
 # into Shaders/, while the repo-root shader tree remains under Shaders/HLSL/.
 # Keeping the layouts distinct also avoids overwriting the differently authored
 # BasicVS/DebugUtils/GaussianBlur/PBRSurface/Water variants shared by both trees.
-if(ENGINE_SHADER_FILES)
-    install(FILES ${ENGINE_SHADER_FILES}
+if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders/HLSL")
+    spark_install_tracked_directory(
+        SOURCE SparkEngine/Shaders/HLSL
         DESTINATION bin/Shaders
         COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+        INCLUDE_REGEXES "\\.hlsl$"
+        FLATTEN
     )
 endif()
-file(GLOB _spark_precompiled_engine_shaders
-    "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders/Compiled/*.cso")
-if(_spark_precompiled_engine_shaders)
-    install(FILES ${_spark_precompiled_engine_shaders}
+if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders/Compiled")
+    spark_install_tracked_directory(
+        SOURCE SparkEngine/Shaders/Compiled
         DESTINATION bin/Shaders
         COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+        INCLUDE_REGEXES "\\.cso$"
+        FLATTEN
     )
 endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders")
-    install(DIRECTORY "Shaders/"
+    spark_install_tracked_directory(
+        SOURCE Shaders
         DESTINATION bin/Shaders
         COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
     )
@@ -2596,14 +2654,16 @@ endif()
 # registration, while Engine contains startup branding used before project load.
 foreach(_spark_runtime_asset_dir Models Textures Audio Materials Scenes Scripts MMO MMOFPS Engine)
     if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${_spark_runtime_asset_dir}")
-        install(DIRECTORY "Assets/${_spark_runtime_asset_dir}/"
+        spark_install_tracked_directory(
+            SOURCE "Assets/${_spark_runtime_asset_dir}"
             DESTINATION "bin/Assets/${_spark_runtime_asset_dir}"
             COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
         )
     endif()
 endforeach()
 if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Resources/Config")
-    install(DIRECTORY "SparkEngine/Resources/Config/"
+    spark_install_tracked_directory(
+        SOURCE SparkEngine/Resources/Config
         DESTINATION bin/Resources/Config
         COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
     )
@@ -2616,53 +2676,45 @@ if(TARGET SparkShaderCompiler)
     )
 endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/Tools")
-    install(DIRECTORY "Tools/"
+    spark_install_tracked_directory(
+        SOURCE Tools
         DESTINATION tools
         COMPONENT ${SPARK_INSTALL_COMPONENT_TOOLS}
-        PATTERN "__pycache__" EXCLUDE
-        PATTERN "*.pyc" EXCLUDE
-        PATTERN "*.pyo" EXCLUDE
-        PATTERN "tests" EXCLUDE
+        EXCLUDE_REGEXES
+            "/__pycache__(/|$)"
+            "\\.py[co]$"
+            "/tests(/|$)"
     )
 endif()
 
 # Install project templates and samples
 if(EXISTS "${CMAKE_SOURCE_DIR}/Templates")
-    install(DIRECTORY "Templates/"
+    spark_install_tracked_directory(
+        SOURCE Templates
         DESTINATION share/SparkEngine/templates
         COMPONENT ${SPARK_INSTALL_COMPONENT_TEMPLATES}
-        PATTERN "build" EXCLUDE
-        PATTERN "build-*" EXCLUDE
-        PATTERN "dist" EXCLUDE
-        PATTERN "Binaries" EXCLUDE
-        PATTERN "Intermediate" EXCLUDE
-        PATTERN "Saved" EXCLUDE
-        PATTERN "Logs" EXCLUDE
-        PATTERN "Temp" EXCLUDE
-        PATTERN ".vs" EXCLUDE
-        PATTERN ".cache" EXCLUDE
-        PATTERN "CMakeFiles" EXCLUDE
-        PATTERN "CMakeCache.txt" EXCLUDE
-        PATTERN "cmake_install.cmake" EXCLUDE
-        PATTERN "*.user" EXCLUDE
+        EXCLUDE_REGEXES
+            "/(build[^/]*|dist|Binaries|Intermediate|Saved|Saves|Logs|Screenshots|TestScreenshots|Temp|[.]vs|[.]cache|CMakeFiles|__pycache__|[.]pytest_cache)(/|$)"
+            "/(CMakeCache[.]txt|cmake_install[.]cmake|CTestTestfile[.]cmake|compile_commands[.]json|install_manifest[.]txt|[.]ninja_deps|[.]ninja_log|exec_audit[.]log|spark_trace[.]json|mmo_data[.]db)$"
+            "[.]py[co]$"
+            "[.]user$"
     )
 endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/Samples")
-    install(DIRECTORY "Samples/"
+    spark_install_tracked_directory(
+        SOURCE Samples
         DESTINATION share/SparkEngine/samples
         COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
     )
 endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/GameModules/SparkGame")
-    install(DIRECTORY "GameModules/SparkGame/"
+    spark_install_tracked_directory(
+        SOURCE GameModules/SparkGame
         DESTINATION share/SparkEngine/samples/SparkGame
         COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
-        FILES_MATCHING
-            PATTERN "*.h"
-            PATTERN "*.hpp"
-            PATTERN "*.cpp"
-            PATTERN "*.json"
-            PATTERN "CMakeLists.txt"
+        INCLUDE_REGEXES
+            "\\.(h|hpp|cpp|json)$"
+            "/CMakeLists[.]txt$"
     )
 endif()
 
@@ -3128,29 +3180,29 @@ set(CPACK_PACKAGE_FILE_NAME
 )
 
 if(TARGET miniz)
-    install(DIRECTORY "${MINIZ_ROOT}/"
-        DESTINATION include/SparkEngine/ThirdParty/miniz
-        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
-        FILES_MATCHING PATTERN "*.h"
-    )
+    _spark_install_tracked_source_directory(
+        "${MINIZ_ROOT}"
+        include/SparkEngine/ThirdParty/miniz
+        ${SPARK_INSTALL_COMPONENT_SDK}
+        INCLUDE_REGEXES "\\.h$")
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/miniz_export.h"
         DESTINATION include/SparkEngine/ThirdParty/miniz
         COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
     )
 endif()
 if(TARGET tinyexr)
-    install(DIRECTORY "${TINYEXR_DIR}/"
-        DESTINATION include/SparkEngine/ThirdParty/tinyexr
-        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
-        FILES_MATCHING PATTERN "*.h" PATTERN "*.hh"
-    )
+    _spark_install_tracked_source_directory(
+        "${TINYEXR_DIR}"
+        include/SparkEngine/ThirdParty/tinyexr
+        ${SPARK_INSTALL_COMPONENT_SDK}
+        INCLUDE_REGEXES "\\.(h|hh)$")
 endif()
 if(TARGET glad)
-    install(DIRECTORY "${GLAD_INCLUDE_DIR}/"
-        DESTINATION include/SparkEngine/ThirdParty/glad
-        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
-        FILES_MATCHING PATTERN "*.h"
-    )
+    _spark_install_tracked_source_directory(
+        "${GLAD_INCLUDE_DIR}"
+        include/SparkEngine/ThirdParty/glad
+        ${SPARK_INSTALL_COMPONENT_SDK}
+        INCLUDE_REGEXES "\\.h$")
 endif()
 foreach(_spark_header_install
         "${ZSTD_ROOT}|include/SparkEngine/ThirdParty/zstd"
@@ -3163,33 +3215,33 @@ foreach(_spark_header_install
     list(GET _spark_header_parts 0 _spark_header_source)
     list(GET _spark_header_parts 1 _spark_header_destination)
     if(EXISTS "${_spark_header_source}")
-        install(DIRECTORY "${_spark_header_source}/"
-            DESTINATION "${_spark_header_destination}"
-            COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
-            FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-        )
+        _spark_install_tracked_source_directory(
+            "${_spark_header_source}"
+            "${_spark_header_destination}"
+            ${SPARK_INSTALL_COMPONENT_SDK}
+            INCLUDE_REGEXES "\\.(h|hpp)$")
     endif()
 endforeach()
 if(TARGET Jolt)
-    install(DIRECTORY "${JOLT_PHYSICS_SOURCE_DIR}/Jolt/"
-        DESTINATION include/Jolt
-        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
-        FILES_MATCHING PATTERN "*.h" PATTERN "*.inl"
-    )
+    _spark_install_tracked_source_directory(
+        "${JOLT_PHYSICS_SOURCE_DIR}/Jolt"
+        include/Jolt
+        ${SPARK_INSTALL_COMPONENT_SDK}
+        INCLUDE_REGEXES "\\.(h|inl)$")
 endif()
 if(TARGET Recast)
-    install(DIRECTORY "${RECAST_DIR}/Recast/Include/"
-        DESTINATION include/SparkEngine/ThirdParty/recast/Recast
-        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
-        FILES_MATCHING PATTERN "*.h"
-    )
+    _spark_install_tracked_source_directory(
+        "${RECAST_DIR}/Recast/Include"
+        include/SparkEngine/ThirdParty/recast/Recast
+        ${SPARK_INSTALL_COMPONENT_SDK}
+        INCLUDE_REGEXES "\\.h$")
 endif()
 if(TARGET Detour)
-    install(DIRECTORY "${RECAST_DIR}/Detour/Include/"
-        DESTINATION include/SparkEngine/ThirdParty/recast/Detour
-        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
-        FILES_MATCHING PATTERN "*.h"
-    )
+    _spark_install_tracked_source_directory(
+        "${RECAST_DIR}/Detour/Include"
+        include/SparkEngine/ThirdParty/recast/Detour
+        ${SPARK_INSTALL_COMPONENT_SDK}
+        INCLUDE_REGEXES "\\.h$")
 endif()
 set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_SOURCE_DIR}/cmake/SparkCPackOptions.cmake")
 

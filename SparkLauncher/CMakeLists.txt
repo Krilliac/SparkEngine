@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(SparkLauncher VERSION 1.0.0 LANGUAGES CXX)
+project(SparkLauncher VERSION ${SPARK_ENGINE_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -57,9 +57,9 @@ endif()
 
 # Match the version macros SparkEditor defines so the shared ProjectManager.cpp compiles here.
 target_compile_definitions(SparkLauncher PRIVATE
-    EDITOR_VERSION_MAJOR=1
-    EDITOR_VERSION_MINOR=0
-    EDITOR_VERSION_PATCH=0
+    EDITOR_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+    EDITOR_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+    EDITOR_VERSION_PATCH=${PROJECT_VERSION_PATCH}
 )
 
 if(MSVC)

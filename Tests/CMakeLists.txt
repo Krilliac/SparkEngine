@@ -808,9 +808,9 @@ endif()
 # Editor version defines needed by ProjectManager.cpp
 target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    EDITOR_VERSION_MAJOR=1
-    EDITOR_VERSION_MINOR=0
-    EDITOR_VERSION_PATCH=0
+    EDITOR_VERSION_MAJOR=${SparkEngine_VERSION_MAJOR}
+    EDITOR_VERSION_MINOR=${SparkEngine_VERSION_MINOR}
+    EDITOR_VERSION_PATCH=${SparkEngine_VERSION_PATCH}
     SPARK_SOCIAL_STORE_TESTS
 )
 
@@ -1132,6 +1132,17 @@ add_test(
         -DSPARK_BINARY_ROOT=${CMAKE_BINARY_DIR}
         -P ${CMAKE_SOURCE_DIR}/cmake/TestTemplateServiceConfigValidator.cmake
 )
+add_test(
+    NAME SparkPackageModuleSidecarValidatorTests
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_VALIDATOR=${CMAKE_SOURCE_DIR}/cmake/ValidateStagedPackageExecutables.cmake
+        -DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/module-sidecar-validator-ctest
+        -DSPARK_BINARY_ROOT=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/TestValidateStagedPackageModuleSidecars.cmake
+)
+set_tests_properties(SparkPackageModuleSidecarValidatorTests PROPERTIES
+    LABELS "package;unit"
+    TIMEOUT 30)
 
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)

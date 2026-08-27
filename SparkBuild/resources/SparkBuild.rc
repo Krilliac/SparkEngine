@@ -1,30 +1,5 @@
 #include "resource.h"
-#include <winver.h>
 
-VS_VERSION_INFO VERSIONINFO
-    FILEVERSION 2,1,0,0
-    PRODUCTVERSION 2,1,0,0
-    FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
-    FILEFLAGS 0
-    FILEOS VOS_NT_WINDOWS32
-    FILETYPE VFT_APP
-    FILESUBTYPE VFT2_UNKNOWN
-BEGIN
-    BLOCK "StringFileInfo"
-    BEGIN
-        BLOCK "040904b0"
-        BEGIN
-            VALUE "CompanyName", "SparkEngine"
-            VALUE "FileDescription", "SparkBuild - Cross-Platform Build Tool"
-            VALUE "FileVersion", "2.1.0.0"
-            VALUE "InternalName", "SparkBuild"
-            VALUE "OriginalFilename", "SparkBuild.exe"
-            VALUE "ProductName", "SparkBuild"
-            VALUE "ProductVersion", "2.1.0.0"
-        END
-    END
-    BLOCK "VarFileInfo"
-    BEGIN
-        VALUE "Translation", 0x0409, 1200
-    END
-END
+// VERSIONINFO is generated from SPARK_ENGINE_VERSION by
+// cmake/SparkWindowsVersionInfo.cmake. Keep this file for non-version
+// SparkBuild resources.

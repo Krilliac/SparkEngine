@@ -149,6 +149,15 @@ foreach(template_dir IN LISTS template_candidates)
                 "${module_candidate_count}: ${module_candidates}")
         endif()
 
+        # The runtime emits logs, traces, saved state, and other mutable files
+        # relative to its working directory. Run against a disposable copy so
+        # package verification cannot modify the staged template it validates.
+        string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef live_smoke_nonce)
+        set(live_smoke_work
+            "${SPARK_TEMPLATE_BUILD_ROOT}/live-smoke-${template_name}-${live_smoke_nonce}")
+        file(MAKE_DIRECTORY "${live_smoke_work}")
+        file(COPY "${template_dir}/" DESTINATION "${live_smoke_work}")
+
         execute_process(
             COMMAND "${SPARK_ENGINE_EXECUTABLE}"
                 -headless
@@ -157,12 +166,13 @@ foreach(template_dir IN LISTS template_candidates)
                 -require-game
                 -no-subprocess
                 -no-jobsystem
-            WORKING_DIRECTORY "${template_dir}"
+            WORKING_DIRECTORY "${live_smoke_work}"
             RESULT_VARIABLE live_smoke_result
             OUTPUT_VARIABLE live_smoke_stdout
             ERROR_VARIABLE live_smoke_stderr
             TIMEOUT 30
         )
+        file(REMOVE_RECURSE "${live_smoke_work}")
         if(NOT live_smoke_result EQUAL 0)
             message(FATAL_ERROR
                 "Installed ${template_name} live-load smoke failed (exit ${live_smoke_result})\n"

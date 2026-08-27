@@ -1,0 +1,5 @@
+format=1
+target_system=@CMAKE_SYSTEM_NAME@
+module_prefix=@CMAKE_SHARED_LIBRARY_PREFIX@
+module_suffix=@CMAKE_SHARED_LIBRARY_SUFFIX@
+modules=@SPARK_PACKAGE_GAME_MODULES@

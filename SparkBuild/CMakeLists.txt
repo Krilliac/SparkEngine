@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
-project(SparkBuild LANGUAGES CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/SparkWindowsVersionInfo.cmake")
+spark_resolve_engine_version(_spark_engine_version)
+project(SparkBuild VERSION ${_spark_engine_version} LANGUAGES CXX)
+set(SPARK_ENGINE_VERSION "${_spark_engine_version}")
+unset(_spark_engine_version)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -73,9 +77,7 @@ set(SPARKBUILD_SOURCES
 
 add_executable(SparkBuild ${SPARKBUILD_SOURCES})
 
-if(WIN32)
-    target_sources(SparkBuild PRIVATE resources/SparkBuild.rc)
-endif()
+spark_target_windows_version_info(SparkBuild)
 
 target_link_libraries(SparkBuild PRIVATE SparkBuildCore)
 

@@ -57,6 +57,8 @@ namespace
     class NullEngineContext final : public Spark::IEngineContext
     {
       public:
+        explicit NullEngineContext(Spark::SaveSystem* saveSystem = nullptr) : m_saveSystem(saveSystem) {}
+
         GraphicsEngine* GetGraphics() override { return nullptr; }
         const GraphicsEngine* GetGraphics() const override { return nullptr; }
         InputManager* GetInput() override { return nullptr; }
@@ -69,8 +71,13 @@ namespace
         const AudioEngine* GetAudio() const override { return nullptr; }
         PhysicsSystem* GetPhysics() override { return nullptr; }
         const PhysicsSystem* GetPhysics() const override { return nullptr; }
+        Spark::SaveSystem* GetSaveSystem() override { return m_saveSystem; }
+        const Spark::SaveSystem* GetSaveSystem() const override { return m_saveSystem; }
         uint32_t GetEngineVersion() const override { return SPARK_ENGINE_VERSION_PACKED; }
         uint32_t GetSDKVersion() const override { return SPARK_SDK_VERSION; }
+
+      private:
+        Spark::SaveSystem* m_saveSystem = nullptr;
     };
 
     std::filesystem::path CopyCompatibleFixtureToTemp(const std::filesystem::path& stem)
@@ -528,6 +535,76 @@ TEST(ModuleABI_StartupRollbackTearsDownVetoingUncommittedModule)
     RemoveModuleCopy(modulePath);
 }
 
+TEST(ModuleABI_AllValidationRuleOwnersReleaseCallbacksBeforeUnload)
+{
+    struct ModuleContract
+    {
+        const char* directory;
+        const char* category;
+    };
+    constexpr ModuleContract contracts[] = {{"SparkGame", "Base"},
+                                            {"SparkGameARPG", "ARPG"},
+                                            {"SparkGameFPS", "FPS"},
+                                            {"SparkGameMMO", "MMO"},
+                                            {"SparkGameOpenWorld", "OpenWorld"},
+                                            {"SparkGamePlatformer", "Platformer"},
+                                            {"SparkGameRacing", "Racing"},
+                                            {"SparkGameRPG", "RPG"},
+                                            {"SparkGameRTS", "RTS"},
+                                            {"SparkGameVisualScript", "VisualScript"}};
+
+    const auto sourceRoot = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "GameModules";
+    for (const auto& contract : contracts)
+    {
+        const auto moduleSource = sourceRoot / contract.directory / "Source" / "Core" / "Main.cpp";
+        std::ifstream stream(moduleSource, std::ios::binary);
+        EXPECT_TRUE(stream.is_open());
+        if (!stream)
+            continue;
+
+        const std::string source{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+        const std::string cleanup = "RemoveRulesByCategory(\"" + std::string(contract.category) + "\")";
+        const auto unloadStart = source.find("::OnUnload()");
+        ASSERT_TRUE(unloadStart != std::string::npos);
+        const auto unloadBodyStart = source.find('{', unloadStart);
+        ASSERT_TRUE(unloadBodyStart != std::string::npos);
+        const auto findBodyEnd = [&source](size_t bodyStart)
+        {
+            size_t braceDepth = 0;
+            for (size_t cursor = bodyStart; cursor < source.size(); ++cursor)
+            {
+                if (source[cursor] == '{')
+                    ++braceDepth;
+                else if (source[cursor] == '}' && --braceDepth == 0)
+                    return cursor;
+            }
+            return std::string::npos;
+        };
+        const auto unloadBodyEnd = findBodyEnd(unloadBodyStart);
+        ASSERT_TRUE(unloadBodyEnd != std::string::npos);
+        const auto cleanupPosition = source.find(cleanup, unloadBodyStart);
+        if (cleanupPosition < unloadBodyEnd)
+            continue;
+
+        // A module may centralize teardown in Shutdown(), provided OnUnload()
+        // delegates to that exact owner method before its image is unmapped.
+        const auto shutdownCall = source.find("Shutdown()", unloadBodyStart);
+        ASSERT_TRUE(shutdownCall < unloadBodyEnd);
+        const auto ownerStart = source.rfind("void ", unloadStart);
+        ASSERT_TRUE(ownerStart != std::string::npos);
+        const auto ownerNameStart = ownerStart + std::string_view("void ").size();
+        const auto ownerName = source.substr(ownerNameStart, unloadStart - ownerNameStart);
+        const auto shutdownStart = source.find(ownerName + "::Shutdown()", unloadBodyEnd);
+        ASSERT_TRUE(shutdownStart != std::string::npos);
+        const auto shutdownBodyStart = source.find('{', shutdownStart);
+        ASSERT_TRUE(shutdownBodyStart != std::string::npos);
+        const auto shutdownBodyEnd = findBodyEnd(shutdownBodyStart);
+        ASSERT_TRUE(shutdownBodyEnd != std::string::npos);
+        const auto delegatedCleanup = source.find(cleanup, shutdownBodyStart);
+        EXPECT_TRUE(delegatedCleanup < shutdownBodyEnd);
+    }
+}
+
 #if !defined(_WIN32) && defined(SPARK_TEST_SPARK_GAME_MODULE_PATH)
 TEST(ModuleABI_SparkGameShutdownReleasesHostRegistryCallbacksBeforeUnload)
 {
@@ -537,7 +614,11 @@ TEST(ModuleABI_SparkGameShutdownReleasesHostRegistryCallbacksBeforeUnload)
     detector.RemoveRule("Base.HealthInvariant");
     const uint32_t initialRuleCount = detector.GetRuleCount();
 
-    NullEngineContext context;
+    // GameplayShowcase intentionally registers serializers only when the host
+    // exposes a SaveSystem. Supply that real capability so this test exercises
+    // registration and, critically, removal before the module image unloads.
+    auto& saveSystem = Spark::SaveSystem::GetInstance();
+    NullEngineContext context(&saveSystem);
     ModuleManager manager;
     ASSERT_TRUE(manager.LoadModule(SPARK_TEST_SPARK_GAME_MODULE_PATH));
     manager.InitializeAll(&context);

@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
-project(SparkInstaller VERSION 1.0.0 LANGUAGES CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/SparkWindowsVersionInfo.cmake")
+spark_resolve_engine_version(_spark_engine_version)
+project(SparkInstaller VERSION ${_spark_engine_version} LANGUAGES CXX)
+set(SPARK_ENGINE_VERSION "${_spark_engine_version}")
+unset(_spark_engine_version)
 
 # SparkInstaller — bootstrap installer/updater for SparkEngine.
 # Depends only on SparkBuildCore (no engine headers, no runtime linkage).
@@ -62,9 +66,7 @@ endif()
 
 add_executable(SparkInstaller ${INSTALLER_SOURCES})
 
-if(WIN32)
-    target_sources(SparkInstaller PRIVATE resources/SparkInstaller.rc)
-endif()
+spark_target_windows_version_info(SparkInstaller)
 
 target_include_directories(SparkInstaller PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
