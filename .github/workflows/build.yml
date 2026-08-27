@@ -1692,11 +1692,17 @@ jobs:
                 -DSPARKINSTALLER_ENABLE_GUI=OFF \
                 -DSPARKINSTALLER_BUILD_TESTS=ON
 
-      - name: Build SparkInstaller
+      - name: Build SparkInstaller and registered contract tests
         shell: bash
-        run: cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests -j
+        run: >-
+          cmake --build build-installer/build --config Release --target
+          SparkInstaller
+          SparkInstallerGitTests
+          SparkBuildProcessRunnerTests
+          SparkBuildDownloaderTests
+          -j
 
-      - name: Run SparkInstaller contract tests
+      - name: Run installer dependency contract tests
         shell: bash
         run: ctest --test-dir build-installer/build -C Release --output-on-failure --no-tests=error
 
