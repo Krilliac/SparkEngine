@@ -63,10 +63,15 @@ namespace SparkLauncher
 
         for (const auto& candidate : candidates)
         {
+            // Normalize "bin/../share" before touching the filesystem.  POSIX
+            // path traversal requires every intermediate component to exist;
+            // an installed-layout probe must still work when the synthetic or
+            // not-yet-launched executable path has no physical bin directory.
+            const auto normalizedCandidate = candidate.lexically_normal();
             std::error_code error;
-            if (!std::filesystem::is_directory(candidate, error) || error)
+            if (!std::filesystem::is_directory(normalizedCandidate, error) || error)
                 continue;
-            const auto canonical = std::filesystem::canonical(candidate, error);
+            const auto canonical = std::filesystem::canonical(normalizedCandidate, error);
             if (!error)
                 return canonical;
         }
