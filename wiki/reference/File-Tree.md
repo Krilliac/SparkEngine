@@ -1508,8 +1508,8 @@ graph LR
 
 - [`ModuleHotReload.cpp`](../../SparkEngine/Source/Core/ModuleHotReload.cpp) — 308 LOC — DLL/SO hot-reload file watcher implementation
 - [`ModuleHotReload.h`](../../SparkEngine/Source/Core/ModuleHotReload.h) — 148 LOC — Watches module DLLs for changes and triggers automatic hot-reload
-- [`ModuleManager.cpp`](../../SparkEngine/Source/Core/ModuleManager.cpp) — 1741 LOC — Multi-module loader and lifecycle manager implementation
-- [`ModuleManager.h`](../../SparkEngine/Source/Core/ModuleManager.h) — 272 LOC — Multi-module loader and lifecycle manager
+- [`ModuleManager.cpp`](../../SparkEngine/Source/Core/ModuleManager.cpp) — 1777 LOC — Multi-module loader and lifecycle manager implementation
+- [`ModuleManager.h`](../../SparkEngine/Source/Core/ModuleManager.h) — 286 LOC — Multi-module loader and lifecycle manager
 - [`ModuleRuntimeInjection.cpp`](../../SparkEngine/Source/Core/ModuleRuntimeInjection.cpp) — 21 LOC — Private implementation of the public module runtime injection bridge.
 - [`NonNull.h`](../../SparkEngine/Source/Core/NonNull.h) — 73 LOC — Lightweight non-null pointer wrapper with debug-mode enforcement
 - [`Platform.h`](../../SparkEngine/Source/Core/Platform.h) — 269 LOC — Cross-platform type definitions and compatibility layer
@@ -2680,7 +2680,7 @@ graph LR
 
 ### `Tests/Fixtures/ModuleABI/`
 
-- [`CompatibleModule.cpp`](../../Tests/Fixtures/ModuleABI/CompatibleModule.cpp) — 69 LOC
+- [`CompatibleModule.cpp`](../../Tests/Fixtures/ModuleABI/CompatibleModule.cpp) — 70 LOC
 - [`MismatchedModule.cpp`](../../Tests/Fixtures/ModuleABI/MismatchedModule.cpp) — 82 LOC
 - [`SiblingDependency.cpp`](../../Tests/Fixtures/ModuleABI/SiblingDependency.cpp) — 12 LOC
 - [`SiblingDependentModule.cpp`](../../Tests/Fixtures/ModuleABI/SiblingDependentModule.cpp) — 28 LOC
@@ -2755,7 +2755,7 @@ graph LR
 - [`TestAtomicSharedPtrReal.cpp`](../../Tests/TestAtomicSharedPtrReal.cpp) — 95 LOC — Real-class tests for Spark::AtomicSharedPtr<T>
 - [`TestAudioBackendFactory.cpp`](../../Tests/TestAudioBackendFactory.cpp) — 102 LOC — Verifies platform-specific audio backend selection
 - [`TestAudioEngine.cpp`](../../Tests/TestAudioEngine.cpp) — 478 LOC
-- [`TestAudioMixerBus.cpp`](../../Tests/TestAudioMixerBus.cpp) — 523 LOC — Tests for AudioMixer: bus hierarchy, volume cascading, mute/solo,
+- [`TestAudioMixerBus.cpp`](../../Tests/TestAudioMixerBus.cpp) — 185 LOC — Production AudioMixer coverage: hierarchy, routing, reverb, occlusion, and DSP state.
 - [`TestAutoLODPerformance.cpp`](../../Tests/TestAutoLODPerformance.cpp) — 159 LOC
 - [`TestBVHAccelerator.cpp`](../../Tests/TestBVHAccelerator.cpp) — 255 LOC — Phase L — tests for the BVHAccelerator orphan
 - [`TestBehaviorTreeNodes.cpp`](../../Tests/TestBehaviorTreeNodes.cpp) — 247 LOC
@@ -2878,7 +2878,7 @@ graph LR
 - [`TestEngineSettingsEdgeCases.cpp`](../../Tests/TestEngineSettingsEdgeCases.cpp) — 679 LOC — Edge-case tests for EngineSettings: boundary values, setting interactions
 - [`TestEngineSettingsParser.cpp`](../../Tests/TestEngineSettingsParser.cpp) — 731 LOC — Tests for EngineSettings: INI parsing, type conversion, default values,
 - [`TestEngineSettingsReal.cpp`](../../Tests/TestEngineSettingsReal.cpp) — 279 LOC — Real-class tests for EngineSettings singleton
-- [`TestEntityArchetype.cpp`](../../Tests/TestEntityArchetype.cpp) — 152 LOC
+- [`TestEntityArchetype.cpp`](../../Tests/TestEntityArchetype.cpp) — 116 LOC — Production tests for archetype registration, lookup, and lifecycle.
 - [`TestEntityEventBus.cpp`](../../Tests/TestEntityEventBus.cpp) — 187 LOC
 - [`TestEntityEventBusReal.cpp`](../../Tests/TestEntityEventBusReal.cpp) — 94 LOC — Real-class tests for Spark::EntityEventBus
 - [`TestEntityPresetManager.cpp`](../../Tests/TestEntityPresetManager.cpp) — 236 LOC
@@ -2977,7 +2977,7 @@ graph LR
 - [`TestLODGeneratorPhaseGG.cpp`](../../Tests/TestLODGeneratorPhaseGG.cpp) — 178 LOC — Phase GG Theme 3D tests for Spark::Graphics::LODGenerator
 - [`TestLagCompensation.cpp`](../../Tests/TestLagCompensation.cpp) — 233 LOC — Tests for Spark::Net::LagCompensation (engine hit-rewind ring buffer)
 - [`TestLagCompensationIntegration.cpp`](../../Tests/TestLagCompensationIntegration.cpp) — 288 LOC — Tests for lag compensation integrated with hit detection
-- [`TestLauncherProcess.cpp`](../../Tests/TestLauncherProcess.cpp) — 243 LOC — SparkLauncher project-action command contract tests.
+- [`TestLauncherProcess.cpp`](../../Tests/TestLauncherProcess.cpp) — 253 LOC — SparkLauncher project-action command contract tests.
 - [`TestLevelStreamingSystemPhaseAA.cpp`](../../Tests/TestLevelStreamingSystemPhaseAA.cpp) — 188 LOC — Phase AA Theme 3C tests for SparkEditor::LevelStreamingSystem
 - [`TestLightManager.cpp`](../../Tests/TestLightManager.cpp) — 282 LOC
 - [`TestLightmapBaker.cpp`](../../Tests/TestLightmapBaker.cpp) — 202 LOC
@@ -3008,14 +3008,14 @@ graph LR
 - [`TestMeshShaderPipeline.cpp`](../../Tests/TestMeshShaderPipeline.cpp) — 222 LOC
 - [`TestMetalRayTracing.cpp`](../../Tests/TestMetalRayTracing.cpp) — 194 LOC — macOS-only smoke tests for MetalRayTracingSystem lifecycle.
 - [`TestModSystem.cpp`](../../Tests/TestModSystem.cpp) — 224 LOC
-- [`TestModuleABI.cpp`](../../Tests/TestModuleABI.cpp) — 558 LOC
+- [`TestModuleABI.cpp`](../../Tests/TestModuleABI.cpp) — 627 LOC
 - [`TestModuleDependency.cpp`](../../Tests/TestModuleDependency.cpp) — 139 LOC
 - [`TestModuleDiscovery.cpp`](../../Tests/TestModuleDiscovery.cpp) — 137 LOC
 - [`TestModuleHotReload.cpp`](../../Tests/TestModuleHotReload.cpp) — 170 LOC
 - [`TestMovementSystem.cpp`](../../Tests/TestMovementSystem.cpp) — 540 LOC
 - [`TestMovieRenderPipeline.cpp`](../../Tests/TestMovieRenderPipeline.cpp) — 180 LOC
 - [`TestMultiISADispatch.cpp`](../../Tests/TestMultiISADispatch.cpp) — 136 LOC — Tests for multi-ISA CPU function dispatch
-- [`TestMusicManager.cpp`](../../Tests/TestMusicManager.cpp) — 573 LOC — Tests for MusicManager: playlists, crossfade, dynamic intensity,
+- [`TestMusicManager.cpp`](../../Tests/TestMusicManager.cpp) — 307 LOC — Production MusicManager coverage: playlists, crossfades, buses, intensity, and reverb.
 - [`TestNavMesh.cpp`](../../Tests/TestNavMesh.cpp) — 739 LOC
 - [`TestNavMeshLink.cpp`](../../Tests/TestNavMeshLink.cpp) — 132 LOC
 - [`TestNavMeshObstacles.cpp`](../../Tests/TestNavMeshObstacles.cpp) — 87 LOC
@@ -3063,12 +3063,12 @@ graph LR
 - [`TestPhysicsInterpolation.cpp`](../../Tests/TestPhysicsInterpolation.cpp) — 262 LOC
 - [`TestPhysicsStress.cpp`](../../Tests/TestPhysicsStress.cpp) — 566 LOC
 - [`TestPhysicsSystem.cpp`](../../Tests/TestPhysicsSystem.cpp) — 694 LOC
-- [`TestPhysicsTeardownGuard.cpp`](../../Tests/TestPhysicsTeardownGuard.cpp) — 66 LOC — Regression tests for the physics teardown-order guard (W10 exit AV).
+- [`TestPhysicsTeardownGuard.cpp`](../../Tests/TestPhysicsTeardownGuard.cpp) — 168 LOC — Regression tests for the physics teardown-order guard (W10 exit AV).
 - [`TestPlatformInput.cpp`](../../Tests/TestPlatformInput.cpp) — 150 LOC
 - [`TestPlayModeManager.cpp`](../../Tests/TestPlayModeManager.cpp) — 541 LOC — Tests for Spark::Editor::PlayModeManager
 - [`TestPluginABI.cpp`](../../Tests/TestPluginABI.cpp) — 826 LOC
 - [`TestPortalCulling.cpp`](../../Tests/TestPortalCulling.cpp) — 502 LOC — Tests for portal-based visibility culling (cell graph, portal traversal, frustum narrowing)
-- [`TestPoseModifier.cpp`](../../Tests/TestPoseModifier.cpp) — 171 LOC
+- [`TestPoseModifier.cpp`](../../Tests/TestPoseModifier.cpp) — 211 LOC — Production tests for pose modifiers and the prioritized modifier stack.
 - [`TestPostProcessingPipeline.cpp`](../../Tests/TestPostProcessingPipeline.cpp) — 452 LOC
 - [`TestPostProcessingPipelineD3D11.cpp`](../../Tests/TestPostProcessingPipelineD3D11.cpp) — 200 LOC — Live D3D11 regression coverage for post-process target routing.
 - [`TestPostProcessingPipelinePhaseJ.cpp`](../../Tests/TestPostProcessingPipelinePhaseJ.cpp) — 255 LOC — Phase J — integration tests for the Tier 2 orphan activations
@@ -3291,5 +3291,5 @@ graph LR
 | Metric | Count |
 |--------|-------|
 | Source files scanned | 2458 |
-| Total lines of code  | 718892 |
+| Total lines of code  | 718524 |
 | Source directories   | 17 |

@@ -528,7 +528,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*573 test files, 6861 source-level test definitions*
+*573 test files, 6844 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -583,7 +583,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAtomicSharedPtrReal` | 7 |
 | `TestAudioBackendFactory` | 5 |
 | `TestAudioEngine` | 18 |
-| `TestAudioMixerBus` | 17 |
+| `TestAudioMixerBus` | 7 |
 | `TestAutoLODPerformance` | 2 |
 | `TestBVHAccelerator` | 10 |
 | `TestBehaviorTreeNodes` | 22 |
@@ -705,7 +705,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEngineSettingsEdgeCases` | 45 |
 | `TestEngineSettingsParser` | 27 |
 | `TestEngineSettingsReal` | 13 |
-| `TestEntityArchetype` | 6 |
+| `TestEntityArchetype` | 5 |
 | `TestEntityEventBus` | 11 |
 | `TestEntityEventBusReal` | 6 |
 | `TestEntityPresetManager` | 10 |
@@ -834,14 +834,14 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMetalRayTracing` | 16 |
 | `TestMetalRayTracingLive` | 10 |
 | `TestModSystem` | 9 |
-| `TestModuleABI` | 18 |
+| `TestModuleABI` | 21 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 12 |
 | `TestMovementSystem` | 18 |
 | `TestMovieRenderPipeline` | 11 |
 | `TestMultiISADispatch` | 7 |
-| `TestMusicManager` | 24 |
+| `TestMusicManager` | 9 |
 | `TestNavMesh` | 11 |
 | `TestNavMeshLink` | 5 |
 | `TestNavMeshObstacles` | 7 |
@@ -889,12 +889,12 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestPhysicsInterpolation` | 8 |
 | `TestPhysicsStress` | 16 |
 | `TestPhysicsSystem` | 29 |
-| `TestPhysicsTeardownGuard` | 1 |
+| `TestPhysicsTeardownGuard` | 3 |
 | `TestPlatformInput` | 11 |
 | `TestPlayModeManager` | 34 |
 | `TestPluginABI` | 17 |
 | `TestPortalCulling` | 14 |
-| `TestPoseModifier` | 4 |
+| `TestPoseModifier` | 8 |
 | `TestPostProcessingPipeline` | 16 |
 | `TestPostProcessingPipelineD3D11` | 1 |
 | `TestPostProcessingPipelinePhaseJ` | 20 |

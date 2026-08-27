@@ -1582,7 +1582,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `LiveVariable` | struct | SparkEditor | [SparkEngineIntegration.h:L141](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L141) | Live variable editing support |
 | `LoadedFont` | struct | SparkEngine | [FontSystem.h:L136](../../SparkEngine/Source/Engine/Text/FontSystem.h#L136) | Internal font data |
 | `LoadedFont` | struct | SparkEngine | [MSDFTextRenderer.h:L215](../../SparkEngine/Source/Graphics/MSDFTextRenderer.h#L215) |  |
-| `LoadedModule` | struct | SparkEngine | [ModuleManager.h:L249](../../SparkEngine/Source/Core/ModuleManager.h#L249) | Get info about all currently loaded modules |
+| `LoadedModule` | struct | SparkEngine | [ModuleManager.h:L262](../../SparkEngine/Source/Core/ModuleManager.h#L262) | Get info about all currently loaded modules |
 | `LoadingRequest` | struct | SparkEditor | [LevelStreamingSystem.h:L421](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L421) |  |
 | `LoadingScreen` | class | SparkEngine | [LoadingScreen.h:L85](../../SparkEngine/Source/Engine/Loading/LoadingScreen.h#L85) | Manages async loading with progress tracking and display. |
 | `LoadingTask` | struct | SparkEngine | [LoadingScreen.h:L52](../../SparkEngine/Source/Engine/Loading/LoadingScreen.h#L52) | A single loading task with weight and callback. |

@@ -8,15 +8,15 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 308030 |
+| **SparkEngine/Source** | 308080 |
 | **SparkEditor/Source** | 108813 |
 | **GameModules** | 142900 |
-| **External services** | 10423 |
+| **External services** | 10426 |
 | **Asset pipeline** | 2399 |
-| **Tests** | 164605 |
+| **Tests** | 164187 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~748131** |
+| **Total C++ (excl. ThirdParty)** | **~747768** |
 
 ### File Counts
 
@@ -47,7 +47,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | Graphics | 119374 | 38.7% |
 | Engine (all subsystems) | 85648 | 27.8% |
 | Utils | 41153 | 13.3% |
-| Core | 29278 | 9.5% |
+| Core | 29328 | 9.5% |
 | Physics | 10814 | 3.5% |
 | Audio | 6090 | 1.9% |
 | Input | 3953 | 1.2% |
@@ -108,7 +108,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | Metric | Count |
 |--------|------:|
 | Test files | 573 |
-| TEST() definitions | 6861 |
+| TEST() definitions | 6844 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
@@ -158,7 +158,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 |------|------:|
 | `OpenGLDevice.cpp` | 2160 |
 | `VulkanDevice.cpp` | 1991 |
-| `ModuleManager.cpp` | 1741 |
+| `ModuleManager.cpp` | 1777 |
 | `EngineSettings.cpp` | 1623 |
 | `PostProcessingPipeline.cpp` | 1602 |
 | `D3D12Device.cpp` | 1593 |
