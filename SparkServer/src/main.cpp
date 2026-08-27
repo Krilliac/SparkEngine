@@ -5,8 +5,13 @@
 
 #include "ServerApplication.h"
 
-#include <atomic>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <csignal>
+#endif
+
+#include <atomic>
 #include <iostream>
 #include <string_view>
 #include <vector>
@@ -15,11 +20,32 @@ namespace
 {
     std::atomic<Spark::Server::ServerApplication*> g_application{nullptr};
 
-    void HandleSignal(int)
+    void RequestApplicationStop()
     {
         if (auto* application = g_application.load(std::memory_order_relaxed))
             application->RequestStop();
     }
+
+#ifdef _WIN32
+    // A supervisor graceful-stops this process with CTRL_BREAK_EVENT, and the
+    // CREATE_NEW_PROCESS_GROUP it launches us in disables CTRL+C for that whole
+    // group. A CRT SIGINT handler therefore never observes a stop request on
+    // Windows, and the operating system never raises SIGTERM at all, so the
+    // console control handler is the only path that reaches ServerApplication.
+    BOOL WINAPI HandleConsoleControl(DWORD controlType)
+    {
+        if (controlType != CTRL_C_EVENT && controlType != CTRL_BREAK_EVENT && controlType != CTRL_CLOSE_EVENT &&
+            controlType != CTRL_LOGOFF_EVENT && controlType != CTRL_SHUTDOWN_EVENT)
+            return FALSE;
+        RequestApplicationStop();
+        return TRUE;
+    }
+#else
+    void HandleSignal(int)
+    {
+        RequestApplicationStop();
+    }
+#endif
 } // namespace
 
 int main(int argc, char** argv)
@@ -43,16 +69,25 @@ int main(int argc, char** argv)
 
     Spark::Server::ServerApplication application(std::move(*parsed.options));
     g_application.store(&application, std::memory_order_release);
-    std::signal(SIGINT, HandleSignal);
-    std::signal(SIGTERM, HandleSignal);
-
-    if (!application.Start())
+#ifdef _WIN32
+    if (!::SetConsoleCtrlHandler(HandleConsoleControl, TRUE))
     {
-        std::cerr << application.GetHealthJson() << '\n';
+        std::cerr << "SparkServer: could not install the console control handler\n";
         g_application.store(nullptr, std::memory_order_release);
         return 1;
     }
-    const int result = application.Run();
+#else
+    std::signal(SIGINT, HandleSignal);
+    std::signal(SIGTERM, HandleSignal);
+#endif
+
+    const bool started = application.Start();
+    if (!started)
+        std::cerr << application.GetHealthJson() << '\n';
+    const int result = started ? application.Run() : 1;
+#ifdef _WIN32
+    (void)::SetConsoleCtrlHandler(HandleConsoleControl, FALSE);
+#endif
     g_application.store(nullptr, std::memory_order_release);
     return result;
 }

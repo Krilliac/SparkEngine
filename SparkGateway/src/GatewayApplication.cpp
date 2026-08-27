@@ -303,6 +303,11 @@ namespace Spark::Gateway
         if (!m_ingress->Start())
         {
             SetError("Authenticated local gateway ingress failed to start");
+            // The ingress holds a GatewayCoordinator reference, so it must be
+            // destroyed before the coordinator it borrows — otherwise the
+            // failed-start object outlives its referent until ~GatewayApplication.
+            m_ingress->Stop();
+            m_ingress.reset();
             m_coordinator.reset();
             m_worldServer->Stop();
             m_worldServer.reset();
@@ -428,16 +433,30 @@ namespace Spark::Gateway
         if (!parent.empty())
             std::filesystem::create_directories(parent, error);
         const std::filesystem::path temporary = m_options.healthFile.string() + ".tmp";
+        bool wrote = false;
         {
             std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
             output << json << '\n';
+            output.flush();
+            wrote = output.good();
+        }
+        if (!wrote)
+        {
+            // A snapshot that could not be staged must never destroy the
+            // previous one: a readiness watchdog reads a missing health file as
+            // a hard failure, which is strictly worse than a stale-but-valid one.
+            std::filesystem::remove(temporary, error);
+            return;
         }
         std::filesystem::rename(temporary, m_options.healthFile, error);
         if (error)
         {
+            error.clear();
             std::filesystem::remove(m_options.healthFile, error);
             error.clear();
             std::filesystem::rename(temporary, m_options.healthFile, error);
+            if (error)
+                std::filesystem::remove(temporary, error);
         }
     }
 

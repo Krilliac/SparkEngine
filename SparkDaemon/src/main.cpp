@@ -35,7 +35,9 @@
 #include <string>
 #include <vector>
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#include <windows.h>
+#else
 #include <csignal>
 #include <unistd.h>
 #endif
@@ -44,7 +46,21 @@ namespace
 {
     Spark::Daemon::DaemonServer* g_serverForSignal = nullptr;
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    // Windows raises no SIGTERM and disables CTRL+C for a supervised process
+    // group, so without this handler the daemon has no graceful-stop path at
+    // all: an interactive CTRL+BREAK or console close would hard-kill it before
+    // OrchestrationService could stop and reap its supervised children.
+    BOOL WINAPI HandleConsoleControl(DWORD controlType)
+    {
+        if (controlType != CTRL_C_EVENT && controlType != CTRL_BREAK_EVENT && controlType != CTRL_CLOSE_EVENT &&
+            controlType != CTRL_LOGOFF_EVENT && controlType != CTRL_SHUTDOWN_EVENT)
+            return FALSE;
+        if (g_serverForSignal)
+            g_serverForSignal->Stop();
+        return TRUE;
+    }
+#else
     void HandleSignal(int /*sig*/)
     {
         if (g_serverForSignal)
@@ -209,7 +225,14 @@ int main(int argc, char** argv)
     }
 
     g_serverForSignal = &server;
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    if (!::SetConsoleCtrlHandler(HandleConsoleControl, TRUE))
+    {
+        std::fprintf(stderr, "SparkDaemon: could not install console control handler\n");
+        g_serverForSignal = nullptr;
+        return 1;
+    }
+#else
     std::signal(SIGINT, HandleSignal);
     std::signal(SIGTERM, HandleSignal);
     std::signal(SIGPIPE, SIG_IGN);
@@ -217,6 +240,9 @@ int main(int argc, char** argv)
 
     std::printf("SparkDaemon: listening on %s\n", socketPath.c_str());
     auto result = server.Run(socketPath);
+#if defined(_WIN32)
+    (void)::SetConsoleCtrlHandler(HandleConsoleControl, FALSE);
+#endif
     g_serverForSignal = nullptr;
 
     if (!result)

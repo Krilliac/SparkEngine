@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import signal
@@ -91,7 +92,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--daemon", required=True, type=Path)
     parser.add_argument("--orchestrator", required=True, type=Path)
     parser.add_argument("--child", required=True, type=Path)
+    # Optional: when SparkServer and a game module are available, the smoke also
+    # proves that an engine host honours the supervisor's graceful-stop signal.
+    parser.add_argument("--server", type=Path)
+    parser.add_argument("--game-module", type=Path)
+    parser.add_argument("--working-dir", type=Path)
     return parser.parse_args()
+
+
+def reserve_udp_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as reservation:
+        reservation.bind(("127.0.0.1", 0))
+        return int(reservation.getsockname()[1])
+
+
+def read_health(path: Path) -> dict | None:
+    """Read one atomically published health snapshot, tolerating a rename race."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
 
 
 def endpoint(prefix: str, token: str) -> str:
@@ -151,12 +171,81 @@ def control_ping(endpoint_name: str) -> bool:
         return False
 
 
+def run_supervised_engine_host(invoke, server: Path, game_module: Path, working_dir: Path, scratch: Path) -> None:
+    """Prove a supervised engine host stops gracefully instead of being killed.
+
+    SparkDaemon graceful-stops a supervised process with CTRL_BREAK_EVENT on
+    Windows and SIGTERM on POSIX. Only a host that installs the matching handler
+    reaches ServerApplication::Stop(), and only Stop() publishes a final
+    live=false snapshot. A host that is merely terminated leaves its last
+    periodic live=true snapshot behind, so this assertion fails closed rather
+    than silently accepting a hard kill as a graceful stop.
+    """
+    service_id = "live-server"
+    health_path = scratch / "supervised-server-health.json"
+    invoke(
+        "define",
+        service_id,
+        str(server),
+        str(working_dir),
+        "--module",
+        str(game_module),
+        "--port",
+        str(reserve_udp_port()),
+        "--no-lan-broadcast",
+        "--health-file",
+        str(health_path),
+        "--status-interval-ms",
+        "200",
+    )
+    invoke("start", service_id)
+
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        health = read_health(health_path)
+        if health is not None and health.get("live") is True and health.get("ready") is True:
+            break
+        time.sleep(0.1)
+    else:
+        raise RuntimeError(
+            "supervised SparkServer never published ready health; "
+            f"last snapshot={read_health(health_path)!r}"
+        )
+
+    invoke("stop", service_id)
+    status = None
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        status = invoke("status", service_id)
+        if f"{service_id}\tstopped\tpid=0" in status.stdout:
+            break
+        time.sleep(0.1)
+    else:
+        raise RuntimeError(
+            "supervisor could not stop SparkServer before its forced-termination deadline:\n"
+            f"{status.stdout if status else '<no status>'}"
+        )
+
+    final = read_health(health_path)
+    if final is None:
+        raise RuntimeError("supervised SparkServer left no readable final health snapshot")
+    if final.get("live") is not False or final.get("ready") is not False:
+        raise RuntimeError(
+            "supervised SparkServer was terminated instead of honouring the graceful-stop "
+            f"signal; final health={final!r}"
+        )
+    invoke("undefine", service_id)
+
+
 def main() -> int:
     args = parse_args()
     daemon = args.daemon.resolve(strict=True)
     orchestrator = args.orchestrator.resolve(strict=True)
     child = args.child.resolve(strict=True)
     binary_dir = daemon.parent
+    server = args.server.resolve(strict=True) if args.server else None
+    game_module = args.game_module.resolve(strict=True) if args.game_module else None
+    host_working_dir = args.working_dir.resolve(strict=True) if args.working_dir else binary_dir
     token = uuid.uuid4().hex[:12]
     daemon_endpoint = endpoint("spark-orch-smoke", token)
     child_endpoint = endpoint("spark-collab-smoke", token)
@@ -170,6 +259,11 @@ def main() -> int:
         daemon_creation_flags = 0
         daemon_startup_info = None
         known_supervised_pids: set[int] = set()
+        # Both the executable and the working directory of every supervised
+        # definition must resolve beneath an allow root.
+        allow_roots = ["--orchestrator-allow-root", str(binary_dir)]
+        if host_working_dir != binary_dir:
+            allow_roots += ["--orchestrator-allow-root", str(host_working_dir)]
         if os.name == "nt":
             # The supervisor sends CTRL_BREAK to graceful-stop Windows process
             # groups. Give it a real, hidden console even when CTest itself is
@@ -189,8 +283,7 @@ def main() -> int:
                     str(daemon),
                     "--socket",
                     daemon_endpoint,
-                    "--orchestrator-allow-root",
-                    str(binary_dir),
+                    *allow_roots,
                     "--orchestrator-max-processes",
                     "2",
                     "--orchestrator-state-file",
@@ -291,6 +384,16 @@ def main() -> int:
                 )
 
             invoke("undefine", service_id)
+
+            if server is not None and game_module is not None:
+                run_supervised_engine_host(
+                    invoke,
+                    server=server,
+                    game_module=game_module,
+                    working_dir=host_working_dir,
+                    scratch=scratch,
+                )
+
             invoke("daemon-shutdown")
             daemon_exit = daemon_process.wait(timeout=8)
             daemon_output = read_process_log(daemon_log_path)

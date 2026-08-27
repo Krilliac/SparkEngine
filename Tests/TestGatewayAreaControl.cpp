@@ -9,6 +9,7 @@
 #endif
 
 #include "TestFramework.h"
+#include "GatewayApplication.h"
 #include "GatewayAreaControl.h"
 
 #include <chrono>
@@ -16,6 +17,7 @@
 #include <atomic>
 #include <filesystem>
 #include <future>
+#include <memory>
 
 using namespace Spark::Gateway;
 
@@ -248,4 +250,62 @@ TEST(GatewayAreaControl_SecondServiceCannotStealLiveEndpoint)
     std::error_code error;
     std::filesystem::remove(firstState, error);
     std::filesystem::remove(secondState, error);
+}
+
+TEST(GatewayApplication_IngressStartupFailureUnwindsAWorkingCoordinator)
+{
+    // Start() only reaches the ingress step after the WorldServer, the area
+    // registrations and the authenticated area-control readiness probe already
+    // succeeded, so this pins the one startup-failure path that has live state
+    // to unwind. The ingress borrows a GatewayCoordinator reference and must not
+    // survive it, which is only observable if the teardown order is preserved.
+    const auto areaState = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-app-area") + ".txt");
+    const auto squatterState =
+        std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-app-squat") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(areaState, error);
+    std::filesystem::remove(squatterState, error);
+    const std::vector<uint8_t> key(32, 0x3c);
+
+    const uint16_t controlPort = UniquePort(41);
+    const std::string ingressEndpoint = UniqueName("spark-gateway-app-ingress");
+
+    LocalAreaControlService areaService("spark-area-control-" + std::to_string(controlPort), key, areaState);
+    EXPECT_TRUE(areaService.Start());
+    // Own the ingress endpoint first so the application's own listener cannot
+    // be created on either a named pipe or a unix socket.
+    LocalAreaControlService ingressSquatter(ingressEndpoint, key, squatterState);
+    EXPECT_TRUE(ingressSquatter.Start());
+
+    GatewayOptions options;
+    options.world.worldName = "GatewayApplicationIngressFailure";
+    options.world.port = UniquePort(42);
+    options.world.interServerPort = UniquePort(43);
+    options.ingressEndpoint = ingressEndpoint;
+    AreaEndpoint area;
+    area.host = "127.0.0.1";
+    area.area.areaName = "Loopback";
+    area.area.port = UniquePort(44);
+    area.area.interServerPort = controlPort;
+    area.area.maxClients = 8;
+    options.areas = {area};
+
+    {
+        GatewayApplication application(std::move(options), std::make_unique<KeyFileAuthenticator>(key),
+                                       std::make_unique<LocalAreaControlPlane>(key));
+        EXPECT_FALSE(application.Start());
+        const GatewayHealth health = application.GetHealth();
+        EXPECT_FALSE(health.live);
+        EXPECT_FALSE(health.ready);
+        EXPECT_FALSE(health.ingressReady);
+        EXPECT_TRUE(health.lastError.find("ingress") != std::string::npos);
+    }
+
+    // The failed startup released the endpoint it could not claim, so the
+    // owning service is still the only listener and is still serving.
+    EXPECT_TRUE(ingressSquatter.IsReady());
+    ingressSquatter.Stop();
+    areaService.Stop();
+    std::filesystem::remove(areaState, error);
+    std::filesystem::remove(squatterState, error);
 }

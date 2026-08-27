@@ -1102,13 +1102,24 @@ find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
     if(TARGET SparkDaemon AND TARGET SparkOrchestrator AND TARGET SparkCollabServer AND TARGET SparkAutomation)
         add_dependencies(SparkTests SparkDaemon SparkOrchestrator SparkCollabServer SparkAutomation)
+        # When an engine host is available, the smoke also supervises SparkServer
+        # so the supervisor's graceful-stop signal is proven against a real
+        # module-owning process, not only against the collaboration broker.
+        set(SPARK_ORCHESTRATION_SMOKE_HOST_ARGS)
+        if(TARGET SparkServer AND TARGET SparkGame)
+            add_dependencies(SparkTests SparkServer SparkGame)
+            set(SPARK_ORCHESTRATION_SMOKE_HOST_ARGS
+                --server $<TARGET_FILE:SparkServer>
+                --game-module $<TARGET_FILE:SparkGame>
+                --working-dir ${CMAKE_SOURCE_DIR})
+        endif()
         add_test(
             NAME SparkOrchestrationProcessSmoke
             COMMAND $<TARGET_FILE:SparkAutomation>
                 --name orchestration-process-smoke
                 --executable ${Python3_EXECUTABLE}
                 --working-dir ${CMAKE_SOURCE_DIR}
-                --timeout-ms 60000
+                --timeout-ms 90000
                 --expected-exit 0
                 --captured-log ${CMAKE_BINARY_DIR}/orchestration-process-smoke.log
                 --json ${CMAKE_BINARY_DIR}/orchestration-process-smoke.json
@@ -1118,10 +1129,11 @@ if(Python3_Interpreter_FOUND)
                 --daemon $<TARGET_FILE:SparkDaemon>
                 --orchestrator $<TARGET_FILE:SparkOrchestrator>
                 --child $<TARGET_FILE:SparkCollabServer>
+                ${SPARK_ORCHESTRATION_SMOKE_HOST_ARGS}
         )
         set_tests_properties(SparkOrchestrationProcessSmoke PROPERTIES
             LABELS "orchestration;integration;process"
-            TIMEOUT 75)
+            TIMEOUT 105)
     endif()
     if(TARGET SparkCooker AND TARGET SparkWorker AND TARGET SparkAutomation)
         add_dependencies(SparkTests SparkCooker SparkWorker SparkAutomation)
