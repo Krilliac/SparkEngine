@@ -4,6 +4,21 @@
 Run it from a project root containing `CMakeLists.txt`, one `*.sparkproject` descriptor, and
 `spark.modules.json`.
 
+It is also the unified entry point for the engine's external-process surfaces. `spark tools` reports the
+exact discovered path and availability of every companion executable. The `server`, `gateway`, `daemon`,
+`orchestrator`, `collab`, `cooker` (alias `cook`), `worker`, and `automation` commands resolve the selected
+build configuration and forward arguments after `--` without invoking a shell:
+
+```powershell
+python <engine-root>/Tools/spark-cli/spark_cli.py tools --config Release --format json
+python <engine-root>/Tools/spark-cli/spark_cli.py daemon --config Release -- --socket spark-local
+python <engine-root>/Tools/spark-cli/spark_cli.py orchestrator --config Release -- --socket spark-local list
+python <engine-root>/Tools/spark-cli/spark_cli.py cooker --config Release -- --help
+```
+
+Resolution is bounded to `SPARKENGINE_TOOL_DIR` and the engine's known build/install layouts. Use
+`--executable <path>` for an operator-selected binary or `--dry-run` to inspect the exact invocation.
+
 ## Run a project
 
 ```powershell

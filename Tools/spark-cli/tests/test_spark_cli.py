@@ -76,6 +76,95 @@ class SparkNewTests(unittest.TestCase):
         self.assertIn("FrontierGameModule", (project / "Source" / "GameModule.h").read_text(encoding="utf-8"))
 
 
+class SparkExternalToolTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.engine = self.root / "Engine"
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def create_tool(self, executable_name, config="Release"):
+        suffix = ".exe" if spark_cli.current_platform() == "windows" else ""
+        path = self.engine / "build" / "bin" / config / f"{executable_name}{suffix}"
+        touch(path)
+        if spark_cli.current_platform() != "windows":
+            path.chmod(0o755)
+        return path.resolve()
+
+    def args(self, **overrides):
+        values = {
+            "tool_command": "daemon",
+            "tool_executable": "SparkDaemon",
+            "config": "Release",
+            "executable": None,
+            "dry_run": False,
+            "tool_args": ["--", "--socket", "owner-endpoint"],
+        }
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    def test_external_tool_resolves_build_output_and_forwards_arguments(self):
+        executable = self.create_tool("SparkDaemon")
+        with working_directory(self.root), mock.patch.object(
+            spark_cli, "find_engine_root", return_value=self.engine
+        ), mock.patch.object(
+            spark_cli.subprocess, "run", return_value=subprocess_result(23)
+        ) as run:
+            result = spark_cli.cmd_external_tool(self.args())
+
+        self.assertEqual(result, 23)
+        run.assert_called_once_with(
+            [str(executable), "--socket", "owner-endpoint"],
+            cwd=self.root.resolve(),
+        )
+
+    def test_external_tool_accepts_explicit_executable_without_engine_root(self):
+        executable = self.create_tool("SparkWorker")
+        with working_directory(self.root), mock.patch.object(
+            spark_cli, "find_engine_root", return_value=None
+        ), mock.patch.object(
+            spark_cli.subprocess, "run", return_value=subprocess_result(0)
+        ) as run:
+            result = spark_cli.cmd_external_tool(
+                self.args(tool_command="worker", tool_executable="SparkWorker", executable=executable,
+                          tool_args=["--input", "job.json"])
+            )
+
+        self.assertEqual(result, 0)
+        run.assert_called_once_with(
+            [str(executable), "--input", "job.json"],
+            cwd=self.root.resolve(),
+        )
+
+    def test_external_tool_reports_bounded_resolution_failure(self):
+        error = io.StringIO()
+        with contextlib.redirect_stderr(error), mock.patch.object(
+            spark_cli, "find_engine_root", return_value=self.engine
+        ), mock.patch.object(spark_cli.subprocess, "run") as run:
+            result = spark_cli.cmd_external_tool(self.args())
+
+        self.assertEqual(result, 1)
+        self.assertIn("Could not find runnable SparkDaemon", error.getvalue())
+        self.assertIn("SPARKENGINE_TOOL_DIR", error.getvalue())
+        run.assert_not_called()
+
+    def test_tools_json_inventory_is_deterministic(self):
+        for executable_name, _ in spark_cli.EXTERNAL_TOOLS.values():
+            self.create_tool(executable_name)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), mock.patch.object(
+            spark_cli, "find_engine_root", return_value=self.engine
+        ):
+            result = spark_cli.cmd_tools(SimpleNamespace(config="Release", format="json"))
+
+        report = json.loads(output.getvalue())
+        self.assertEqual(result, 0)
+        self.assertEqual([entry["command"] for entry in report["tools"]], list(spark_cli.EXTERNAL_TOOLS))
+        self.assertTrue(all(entry["available"] for entry in report["tools"]))
+
+
 class SparkRunTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

@@ -11,6 +11,8 @@ Usage:
     spark migrate [path] [--dry-run] [--backup]
     spark templates
     spark info
+    spark tools [--config <Debug|Release>] [--format text|json]
+    spark <server|gateway|daemon|orchestrator|collab|cooker|worker|automation> [options] -- [tool arguments]
 
 Templates:
     EmptyProject    — Empty project with minimal boilerplate (default)
@@ -73,6 +75,17 @@ PACKAGE_FORMAT_VERSION = 1
 TRANSACTION_OWNER = "spark-cli-package-transaction"
 TRANSACTION_FORMAT_VERSION = 1
 TRANSACTION_MARKER = ".spark-cli-transaction.json"
+
+EXTERNAL_TOOLS = {
+    "server": ("SparkServer", "Run a dedicated game server"),
+    "gateway": ("SparkGateway", "Run the MMO routing gateway"),
+    "daemon": ("SparkDaemon", "Run the local engine service daemon"),
+    "orchestrator": ("SparkOrchestrator", "Control daemon-supervised processes"),
+    "collab": ("SparkCollabServer", "Run the standalone collaboration broker"),
+    "cooker": ("SparkCooker", "Cook deterministic runtime assets"),
+    "worker": ("SparkWorker", "Run one isolated asset-processing worker"),
+    "automation": ("SparkAutomation", "Run a process under the automation harness"),
+}
 
 
 def current_platform():
@@ -500,6 +513,107 @@ def find_engine_root():
 def get_templates_dir(engine_root):
     """Get the templates directory."""
     return engine_root / "Templates"
+
+
+def _tool_is_runnable(path):
+    return path.is_file() and (current_platform() == "windows" or os.access(path, os.X_OK))
+
+
+def find_engine_tool(engine_root, executable_name, config, explicit=None):
+    """Resolve one shipped companion executable without searching outside owned roots."""
+    suffix = ".exe" if current_platform() == "windows" else ""
+    filename = executable_name + suffix
+    if explicit:
+        candidate = Path(explicit).expanduser().resolve()
+        return (candidate, None) if _tool_is_runnable(candidate) else (
+            None,
+            f"Tool executable is missing or not runnable: {candidate}",
+        )
+
+    roots = []
+    configured_tool_dir = os.environ.get("SPARKENGINE_TOOL_DIR")
+    if configured_tool_dir:
+        roots.append(Path(configured_tool_dir).expanduser().resolve())
+    if engine_root:
+        roots.extend(
+            (
+                engine_root / "build" / "bin" / config,
+                engine_root / "build" / "bin",
+                engine_root / "build" / config,
+                engine_root / "bin" / config,
+                engine_root / "bin",
+                engine_root,
+            )
+        )
+
+    candidates = []
+    for root in roots:
+        candidate = (root / filename).resolve()
+        if candidate not in candidates:
+            candidates.append(candidate)
+        if _tool_is_runnable(candidate):
+            return candidate, None
+
+    searched = ", ".join(str(path) for path in candidates) or "no engine/tool root was available"
+    return None, (
+        f"Could not find runnable {filename}; searched: {searched}. "
+        "Build the target, set SPARKENGINE_TOOL_DIR, or pass --executable."
+    )
+
+
+def cmd_external_tool(args):
+    """Resolve and run one shipped external-process surface."""
+    engine_root = find_engine_root()
+    executable, error = find_engine_tool(
+        engine_root,
+        args.tool_executable,
+        args.config,
+        args.executable,
+    )
+    if error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+
+    forwarded = list(args.tool_args)
+    if forwarded and forwarded[0] == "--":
+        forwarded.pop(0)
+    command = [str(executable), *forwarded]
+    if args.dry_run:
+        print(json.dumps({"command": args.tool_command, "executable": str(executable), "arguments": forwarded}))
+        return 0
+    try:
+        return subprocess.run(command, cwd=Path.cwd().resolve()).returncode
+    except OSError as exc:
+        print(f"Error: Failed to start {args.tool_executable}: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_tools(args):
+    """List the availability and exact path of every shipped companion tool."""
+    engine_root = find_engine_root()
+    entries = []
+    for command, (executable_name, description) in EXTERNAL_TOOLS.items():
+        executable, _ = find_engine_tool(engine_root, executable_name, args.config)
+        entries.append(
+            {
+                "command": command,
+                "executable": executable_name,
+                "description": description,
+                "available": executable is not None,
+                "path": str(executable) if executable else None,
+            }
+        )
+
+    if args.format == "json":
+        print(stable_json({"config": args.config, "engineRoot": str(engine_root) if engine_root else None,
+                           "tools": entries}), end="")
+    else:
+        print(f"SparkEngine companion tools ({args.config}):")
+        for entry in entries:
+            state = "ready" if entry["available"] else "missing"
+            detail = entry["path"] or entry["executable"]
+            print(f"  {entry['command']:14s} {state:7s} {detail}")
+    return 0 if all(entry["available"] for entry in entries) else 1
 
 
 def cmd_new(args):
@@ -1646,7 +1760,7 @@ def cmd_pak(args):
 def main():
     parser = argparse.ArgumentParser(
         prog="spark",
-        description="SparkEngine project scaffolding and build tool"
+        description="SparkEngine project, package, service, and automation command surface"
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
@@ -1718,6 +1832,27 @@ def main():
     # spark templates
     subparsers.add_parser("templates", help="List available project templates")
 
+    # spark tools and direct companion-process routing
+    tools_parser = subparsers.add_parser("tools", help="List shipped companion executable availability")
+    tools_parser.add_argument("--config", "-c", default="Release",
+                              choices=["Debug", "Release", "RelWithDebInfo", "MinSizeRel"])
+    tools_parser.add_argument("--format", choices=["text", "json"], default="text")
+
+    for command, (executable_name, description) in EXTERNAL_TOOLS.items():
+        aliases = ["cook"] if command == "cooker" else []
+        tool_parser = subparsers.add_parser(command, aliases=aliases, help=description)
+        tool_parser.add_argument("--config", "-c", default="Release",
+                                 choices=["Debug", "Release", "RelWithDebInfo", "MinSizeRel"],
+                                 help="Build configuration used to locate the tool (default: Release)")
+        tool_parser.add_argument("--executable", default=None,
+                                 help="Explicit companion executable path")
+        tool_parser.add_argument("--dry-run", action="store_true",
+                                 help="Print the resolved invocation without starting it")
+        tool_parser.add_argument("tool_args", nargs=argparse.REMAINDER,
+                                 help="Arguments after -- are forwarded unchanged")
+        tool_parser.set_defaults(handler=cmd_external_tool, tool_command=command,
+                                 tool_executable=executable_name)
+
     # spark pak (strictly read-only archive tooling)
     pak_parser = subparsers.add_parser("pak", help="Inspect SparkPak archives without extracting them")
     pak_subparsers = pak_parser.add_subparsers(dest="pak_command", required=True)
@@ -1739,6 +1874,9 @@ def main():
         parser.print_help()
         return 0
 
+    if hasattr(args, "handler"):
+        return args.handler(args)
+
     commands = {
         "new": cmd_new,
         "build": cmd_build,
@@ -1748,6 +1886,7 @@ def main():
         "validate": cmd_validate,
         "migrate": cmd_migrate,
         "templates": cmd_templates,
+        "tools": cmd_tools,
         "pak": cmd_pak,
     }
 

@@ -1128,6 +1128,41 @@ if(Python3_Interpreter_FOUND)
             -v
     )
     set_tests_properties(SparkCliContract PROPERTIES LABELS "cli;integration" TIMEOUT 180)
+
+    set(_spark_cli_companion_targets
+        SparkServer SparkGateway SparkDaemon SparkOrchestrator
+        SparkCollabServer SparkCooker SparkWorker SparkAutomation)
+    set(_spark_cli_companions_available TRUE)
+    foreach(_target IN LISTS _spark_cli_companion_targets)
+        if(NOT TARGET ${_target})
+            set(_spark_cli_companions_available FALSE)
+        endif()
+    endforeach()
+    if(_spark_cli_companions_available)
+        add_dependencies(SparkTests ${_spark_cli_companion_targets})
+        add_test(
+            NAME SparkCliToolInventory
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/spark-cli/spark_cli.py
+                tools --config $<CONFIG> --format json)
+        set_tests_properties(SparkCliToolInventory PROPERTIES LABELS "cli;integration;process" TIMEOUT 30)
+
+        function(add_spark_cli_route_test suffix command target)
+            add_test(
+                NAME SparkCli${suffix}Route
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/spark-cli/spark_cli.py
+                    ${command} --config $<CONFIG> --executable $<TARGET_FILE:${target}> -- --help)
+            set_tests_properties(SparkCli${suffix}Route PROPERTIES LABELS "cli;integration;process" TIMEOUT 30)
+        endfunction()
+
+        add_spark_cli_route_test(Server server SparkServer)
+        add_spark_cli_route_test(Gateway gateway SparkGateway)
+        add_spark_cli_route_test(Daemon daemon SparkDaemon)
+        add_spark_cli_route_test(Orchestrator orchestrator SparkOrchestrator)
+        add_spark_cli_route_test(Collaboration collab SparkCollabServer)
+        add_spark_cli_route_test(Cooker cooker SparkCooker)
+        add_spark_cli_route_test(Worker worker SparkWorker)
+        add_spark_cli_route_test(Automation automation SparkAutomation)
+    endif()
 else()
     message(WARNING "Python 3 not found; template runtime-sheet and Spark CLI validation are disabled")
 endif()

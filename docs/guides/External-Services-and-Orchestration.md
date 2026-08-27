@@ -31,6 +31,22 @@ cmake --build build --config RelWithDebInfo --parallel 1
 Installed server processes are part of the runtime component; the cooker,
 worker, and automation host are installed as tools.
 
+The Python `spark` CLI is the unified discovery and launch surface for all of
+these executables. `tools` emits a deterministic text or JSON inventory, and
+each process command resolves only known engine build/install roots unless an
+operator supplies an explicit executable:
+
+```powershell
+python Tools/spark-cli/spark_cli.py tools --config Release --format json
+python Tools/spark-cli/spark_cli.py daemon --config Release -- --socket spark-local
+python Tools/spark-cli/spark_cli.py orchestrator --config Release -- --socket spark-local list
+python Tools/spark-cli/spark_cli.py server --config Release -- --help
+```
+
+The same routing is available for `gateway`, `collab`, `cooker`/`cook`,
+`worker`, and `automation`. Arguments after `--` are passed directly without a
+shell, and `--dry-run` reports the exact resolved invocation.
+
 ## Dedicated server
 
 `SparkServer` requires dynamic game selection. It never silently links a

@@ -72,8 +72,10 @@ files; directories and symbolic links are refused, so stale output cannot make
 a run pass.
 JSON is intended for detailed artifacts and JUnit for CI ingestion. On Windows,
 the runtime is placed in a kill-on-close Job Object; on POSIX it receives its
-own process group. A timeout therefore terminates descendants as well as the
-immediate host.
+own process group. The POSIX timeout path also freezes and enumerates descendants
+that created a new process group or session before terminating the complete
+tree; Linux additionally adopts orphaned grandchildren as a subreaper. A
+timeout therefore terminates escaped descendants as well as the immediate host.
 
 The editor packaging panel can enable **Run packaged game smoke test**. After
 a successful native package, the editor launches `SparkAutomation` with the
