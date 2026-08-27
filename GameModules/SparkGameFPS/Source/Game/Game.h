@@ -62,9 +62,9 @@ namespace Spark
 
 #include "Game/Primitives.h"
 #include "Game/PlaceholderMesh.h"
-#include "CubeObject.h"
-#include "PlaneObject.h"
-#include "SphereObject.h"
+#include "Game/CubeObject.h"
+#include "Game/PlaneObject.h"
+#include "Game/SphereObject.h"
 #include "SceneManager/SceneManager.h"
 
 using SparkEditor::PlayerClass;

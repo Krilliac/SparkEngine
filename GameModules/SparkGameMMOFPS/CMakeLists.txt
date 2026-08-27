@@ -81,20 +81,6 @@ file(GLOB_RECURSE SPARK_GAME_MMOFPS_SOURCES
 list(FILTER SPARK_GAME_MMOFPS_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
 list(FILTER SPARK_GAME_MMOFPS_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 
-# SceneManager's [Object] primitives (CubeObject & co.) are declared in the
-# engine include path but defined in SparkGameFPS sources; SparkEngineLib does
-# not compile them, so any module that pulls SceneManager.obj must build them
-# itself (SparkGameFPS does the same implicitly via its glob).
-set(_TF_FPS_GAME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../SparkGameFPS/Source/Game")
-list(APPEND SPARK_GAME_MMOFPS_SOURCES
-    "${_TF_FPS_GAME_DIR}/CubeObject.cpp"
-    "${_TF_FPS_GAME_DIR}/PlaneObject.cpp"
-    "${_TF_FPS_GAME_DIR}/SphereObject.cpp"
-    "${_TF_FPS_GAME_DIR}/PyramidObject.cpp"
-    "${_TF_FPS_GAME_DIR}/RampObject.cpp"
-    "${_TF_FPS_GAME_DIR}/WallObject.cpp"
-)
-
 # ---------------------------------------------------------------------
 # Create the game as a SHARED library (DLL)
 # ---------------------------------------------------------------------

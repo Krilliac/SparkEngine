@@ -1,4 +1,4 @@
-#include "WallObject.h"
+#include "Game/WallObject.h"
 #include "Core/Platform.h"
 #include "Utils/Validate.h"
 #include <string>

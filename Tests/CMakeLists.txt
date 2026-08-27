@@ -759,6 +759,9 @@ endif()
 
 target_include_directories(SparkTests PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+    # Tests that compile the real FPS GameMode request module headers
+    # explicitly; SparkEngineLib no longer exports a game-module include path.
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source"
     "${CMAKE_SOURCE_DIR}/SparkDaemon/src"
     "${CMAKE_SOURCE_DIR}/ThirdParty"

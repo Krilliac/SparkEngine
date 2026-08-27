@@ -1186,6 +1186,15 @@ set(SPARK_ENGINE_ENTRY_POINTS
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsModules.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineLinux.cpp"
+    # SparkEngineLinux.cpp split parts: executable-only. They consume the
+    # process entry-point globals declared by SparkEngineLinuxInternal.h and
+    # implement the headless, SDL2, and shared POSIX startup/shutdown paths.
+    # Keeping them in SparkEngineLib makes the reusable archive depend on
+    # globals that only the SparkEngine executable owns.
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineLinuxInit.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineLinuxSDL2.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineLinuxSDL2Events.cpp"
     # Game-mode ImGui overlay: exe-only (owns the ImGui context that is
     # injected into module DLLs; must NOT live in SparkEngineLib which the
     # module DLLs also link).
@@ -1199,6 +1208,26 @@ set(SPARK_ENGINE_LIB_SOURCES ${SPARK_ENGINE_SOURCES})
 foreach(_ep ${SPARK_ENGINE_ENTRY_POINTS})
     list(REMOVE_ITEM SPARK_ENGINE_LIB_SOURCES "${_ep}")
 endforeach()
+
+# The engine archive is reused by non-SparkEngine hosts (SparkServer, tools,
+# tests), so it must never retain an executable entry-point split. Require all
+# current and future SparkEngineLinux*/SparkEngineWindows* implementation
+# splits to be registered above instead of silently entering the library glob.
+file(GLOB _SPARK_PLATFORM_ENTRY_POINT_SPLITS CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineLinux*.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindows*.cpp"
+)
+foreach(_platform_ep ${_SPARK_PLATFORM_ENTRY_POINT_SPLITS})
+    if(NOT _platform_ep IN_LIST SPARK_ENGINE_ENTRY_POINTS)
+        message(FATAL_ERROR "Platform entry-point split is not registered in SPARK_ENGINE_ENTRY_POINTS: ${_platform_ep}")
+    endif()
+endforeach()
+foreach(_ep ${SPARK_ENGINE_ENTRY_POINTS})
+    if(_ep IN_LIST SPARK_ENGINE_LIB_SOURCES)
+        message(FATAL_ERROR "Executable entry-point source leaked into SparkEngineLib: ${_ep}")
+    endif()
+endforeach()
+unset(_SPARK_PLATFORM_ENTRY_POINT_SPLITS)
 
 # Exclude source files whose third-party dependencies are missing
 if(NOT JOLT_FOUND)
@@ -1947,7 +1976,6 @@ endif()
 # ---------------------------------------------------------------------
 target_include_directories(SparkEngineLib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkEngine/Source>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/GameModules/SparkGameFPS/Source>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkSDK/Include>
     $<BUILD_INTERFACE:${SPARK_GENERATED_INCLUDE_DIR}>
     $<INSTALL_INTERFACE:include>

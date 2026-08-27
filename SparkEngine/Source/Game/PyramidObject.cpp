@@ -1,4 +1,4 @@
-#include "PyramidObject.h"
+#include "Game/PyramidObject.h"
 #include "Core/Platform.h"
 #include "Utils/Validate.h"
 #include <string>

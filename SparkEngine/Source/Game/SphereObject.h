@@ -1,6 +1,6 @@
 /**
  * @file SphereObject.h
- * @brief UV-sphere primitive game object for prototyping and physics testing
+ * @brief Engine-owned UV-sphere primitive for prototyping and physics testing
  * @author Spark Engine Team
  * @date 2025
  *

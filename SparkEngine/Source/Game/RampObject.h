@@ -1,18 +1,18 @@
 /**
- * @file PyramidObject.h
- * @brief Four-sided pyramid primitive game object for decorative and test geometry
+ * @file RampObject.h
+ * @brief Engine-owned ramp primitive for slopes and traversal surfaces
  * @author Spark Engine Team
  * @date 2025
  *
- * Provides a square-base pyramid primitive that can be used for decorative
- * elements, physics tests, or level-design blocking. The pyramid's base size
- * is configurable at construction time.
+ * Provides an inclined ramp (wedge) primitive useful for slopes, stairs
+ * approximations, and physics-driven sliding tests. The ramp is defined by
+ * its horizontal @p length and vertical @p height.
  *
  * Typical usage:
  * @code
- *   auto pyramid = std::make_unique<PyramidObject>(3.0f);
- *   pyramid->Initialize(device, context);
- *   pyramid->SetPosition({5, 0, 5});
+ *   auto ramp = std::make_unique<RampObject>(4.0f, 2.0f);
+ *   ramp->Initialize(device, context);
+ *   ramp->SetPosition({10, 0, 0});
  * @endcode
  *
  * @see GameObject, LoadOrPlaceholderMesh
@@ -30,34 +30,37 @@
 #include <string>
 
 /**
- * @brief Four-sided pyramid (square base) primitive game object
+ * @brief Inclined ramp (wedge) primitive for slopes and physics testing
  *
- * PyramidObject wraps a pyramid mesh with a square base. The @p size parameter
- * controls the base edge length; the pyramid height equals the base size by
- * default (the aspect ratio is baked into the OBJ or procedural fallback).
+ * RampObject wraps a triangular-cross-section ramp mesh. The ramp rises from
+ * ground level at the front to @p height at the back over a horizontal
+ * distance of @p length. This makes it ideal for testing character controllers,
+ * vehicle physics, and projectile trajectories on inclined surfaces.
  *
- * The mesh is loaded from @c Assets/Models/Pyramid.obj when available;
+ * The mesh is loaded from @c Assets/Models/Ramp.obj when available;
  * otherwise a procedural placeholder is generated at initialization.
  *
- * @note The apex of the pyramid is aligned with the positive Y-axis.
- * @see CubeObject, PlaneObject, SphereObject, RampObject, WallObject
+ * @note The ramp's inclined surface faces the positive Y direction and extends
+ *       along the positive Z-axis.
+ * @see CubeObject, PlaneObject, SphereObject, PyramidObject, WallObject
  */
-class PyramidObject : public GameObject
+class RampObject : public GameObject
 {
   public:
     /**
-     * @brief Construct a pyramid with the given base size
-     * @param size Base edge length in world units (default: 1.0f)
+     * @brief Construct a ramp with the given dimensions
+     * @param length Horizontal extent of the ramp in world units (default: 2.0f)
+     * @param height Vertical rise of the ramp in world units (default: 1.0f)
      */
-    PyramidObject(float size = 1.0f);
+    RampObject(float length = 2.0f, float height = 1.0f);
 
     /** @brief Default virtual destructor */
-    ~PyramidObject() override = default;
+    ~RampObject() override = default;
 
     /**
-     * @brief Initialize the pyramid's mesh and DirectX resources
+     * @brief Initialize the ramp's mesh and DirectX resources
      *
-     * Loads the pyramid mesh from disk or falls back to a procedural shape via
+     * Loads the ramp mesh from disk or falls back to a procedural shape via
      * LoadOrPlaceholderMesh(). Must be called before Update() or Render().
      *
      * @param device  DirectX 11 device for GPU resource creation
@@ -73,7 +76,7 @@ class PyramidObject : public GameObject
     void Update(float dt) override { GameObject::Update(dt); }
 
     /**
-     * @brief Render the pyramid — delegates to GameObject::Render
+     * @brief Render the ramp — delegates to GameObject::Render
      * @param v Camera view matrix
      * @param p Camera projection matrix
      */
@@ -94,7 +97,7 @@ class PyramidObject : public GameObject
 
   protected:
     /**
-     * @brief Create or load the pyramid mesh geometry
+     * @brief Create or load the ramp mesh geometry
      *
      * Called during Initialize(). Uses LoadOrPlaceholderMesh() to attempt
      * loading from m_modelPath, falling back to a procedural shape.
@@ -102,6 +105,7 @@ class PyramidObject : public GameObject
     void CreateMesh() override;
 
   private:
-    float m_size;                                           ///< Base edge length in world units
-    std::wstring m_modelPath{L"Assets/Models/Pyramid.obj"}; ///< Path to the pyramid OBJ model on disk
+    float m_length;                                      ///< Horizontal extent of the ramp in world units
+    float m_height;                                      ///< Vertical rise of the ramp in world units
+    std::wstring m_modelPath{L"Assets/Models/Ramp.obj"}; ///< Path to the ramp OBJ model on disk
 };

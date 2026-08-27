@@ -1,6 +1,6 @@
 /**
  * @file WallObject.h
- * @brief Vertical wall primitive game object for barriers and level boundaries
+ * @brief Engine-owned wall primitive for barriers and level boundaries
  * @author Spark Engine Team
  * @date 2025
  *

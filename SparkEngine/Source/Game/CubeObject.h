@@ -1,6 +1,6 @@
 /**
  * @file CubeObject.h
- * @brief Axis-aligned cube primitive game object for prototyping and level design
+ * @brief Engine-owned axis-aligned cube primitive for prototyping and level design
  * @author Spark Engine Team
  * @date 2025
  *

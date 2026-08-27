@@ -1,6 +1,6 @@
 /**
  * @file PlaneObject.h
- * @brief Flat rectangular plane primitive for ground surfaces and level design
+ * @brief Engine-owned rectangular plane primitive for ground surfaces and level design
  * @author Spark Engine Team
  * @date 2025
  *
@@ -24,7 +24,6 @@
 
 #include "Game/GameObject.h"
 #include "Game/PlaceholderMesh.h"
-#include "Projectiles/WeaponStats.h"
 #include "Game/Primitives.h"
 #include "Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
