@@ -45,11 +45,12 @@
 #include "Utils/Assert.h"
 #include "Utils/FreezeDetector.h" // SPARK_HEARTBEAT / SPARK_FREEZE_RECOVERY_*
 #include "FixedTimestepAccumulator.h"
-#include <cstring>
 #include <cstdio>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #ifndef SPARK_PLATFORM_WINDOWS
 
@@ -60,40 +61,76 @@ static std::filesystem::path GetExecutableDirectoryLinux()
     return std::filesystem::current_path();
 }
 
-static std::string FindGameModuleFromArgs(int argc, char* argv[])
+static bool HasArgument(int argc, char* argv[], std::string_view option)
 {
-    for (int i = 1; i < argc - 1; ++i)
-    {
-        if (strcmp(argv[i], "-game") == 0)
-        {
-            std::string path = argv[i + 1];
-            // Use the error_code overload so hostile -game values (e.g. paths longer
-            // than NAME_MAX, null bytes, unreadable parents) don't throw and escape
-            // to main() as a FATAL.
-            std::error_code ec;
-            if (std::filesystem::exists(path, ec) && !ec)
-                return path;
-        }
-    }
-    return "";
+    for (int i = 1; i < argc; ++i)
+        if (argv[i] && option == argv[i])
+            return true;
+    return false;
+}
+
+static std::optional<std::string> ArgumentValue(int argc, char* argv[], std::string_view option)
+{
+    for (int i = 1; i + 1 < argc; ++i)
+        if (argv[i] && option == argv[i] && argv[i + 1] && argv[i + 1][0] != '\0')
+            return std::string(argv[i + 1]);
+    return std::nullopt;
 }
 
 static bool LoadGameModulesLinux(ModuleManager& manager, int argc, char* argv[])
 {
-    auto exeDir = GetExecutableDirectoryLinux();
+    auto& console = Spark::SimpleConsole::GetInstance();
+    const auto exeDir = GetExecutableDirectoryLinux();
 
     // 1. Check command line for specific module
-    std::string cmdLineModule = FindGameModuleFromArgs(argc, argv);
-    if (!cmdLineModule.empty())
-        return manager.LoadModule(cmdLineModule);
+    if (HasArgument(argc, argv, "-game"))
+    {
+        const auto module = ArgumentValue(argc, argv, "-game");
+        if (!module)
+        {
+            console.LogError("-game requires a non-empty path");
+            return false;
+        }
+        std::error_code error;
+        if (!std::filesystem::is_regular_file(std::filesystem::u8path(*module), error) || error)
+        {
+            console.LogError("Explicit game module not found: " + *module);
+            return false;
+        }
+        return manager.LoadModule(*module);
+    }
 
-    // 2. Check for module manifest
-    auto manifestPath = exeDir / "spark.modules.json";
-    if (std::filesystem::exists(manifestPath))
-        return manager.LoadModulesFromManifest(manifestPath.string());
+    // 2. An explicit project manifest wins over the executable-directory fallback.
+    if (HasArgument(argc, argv, "-manifest"))
+    {
+        const auto manifest = ArgumentValue(argc, argv, "-manifest");
+        if (!manifest)
+        {
+            console.LogError("-manifest requires a non-empty path");
+            return false;
+        }
+        std::error_code error;
+        if (!std::filesystem::is_regular_file(std::filesystem::u8path(*manifest), error) || error)
+        {
+            console.LogError("Explicit module manifest not found: " + *manifest);
+            return false;
+        }
+        return manager.LoadModulesFromManifest(*manifest);
+    }
 
-    // 3. Fall back to directory scan
-    return manager.LoadModulesFromDirectory(exeDir.string());
+    // 3. Check for the executable-directory module manifest.
+    const auto manifestPath = exeDir / "spark.modules.json";
+    std::error_code error;
+    if (std::filesystem::is_regular_file(manifestPath, error) && !error)
+    {
+        const std::u8string utf8 = manifestPath.generic_u8string();
+        return manager.LoadModulesFromManifest(
+            std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size()));
+    }
+
+    // 4. Fall back to directory scan.
+    const std::u8string utf8 = exeDir.generic_u8string();
+    return manager.LoadModulesFromDirectory(std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size()));
 }
 
 
