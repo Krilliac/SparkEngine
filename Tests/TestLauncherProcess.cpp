@@ -204,12 +204,22 @@ TEST(LauncherProcess_GameLaunchUsesSelfContainedPackageContext)
 
     auto game = BuildLaunchRequest(binaries, project, LaunchTarget::Game);
     EXPECT_TRUE(game.has_value());
-    EXPECT_EQ(game->executable, Executable(package, "SparkEngine"));
+    EXPECT_EQ(game->executable, std::filesystem::weakly_canonical(Executable(package, "SparkEngine")));
     EXPECT_EQ(game->workingDirectory, std::filesystem::weakly_canonical(package));
+    EXPECT_EQ(game->arguments.size(), static_cast<size_t>(4));
+    EXPECT_EQ(game->arguments[0], std::string("-manifest"));
     EXPECT_EQ(std::filesystem::u8path(game->arguments[1]),
               std::filesystem::weakly_canonical(package / "spark.modules.json"));
+    EXPECT_EQ(game->arguments[2], std::string("--project"));
     EXPECT_EQ(std::filesystem::u8path(game->arguments[3]),
               std::filesystem::weakly_canonical(package / project.filename()));
+
+    const auto packageManifest = ReadJson(std::filesystem::u8path(game->arguments[1]));
+    EXPECT_EQ(packageManifest["modules"].Size(), static_cast<size_t>(1));
+    const auto declaredModule =
+        std::filesystem::u8path(packageManifest["modules"][static_cast<size_t>(0)]["path"].AsString());
+    EXPECT_TRUE(declaredModule.is_relative());
+    EXPECT_EQ(std::filesystem::weakly_canonical(package / declaredModule), std::filesystem::weakly_canonical(module));
 
     std::error_code error;
     std::filesystem::remove_all(root, error);

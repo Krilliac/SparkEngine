@@ -285,18 +285,20 @@ namespace SparkLauncher
             const auto packageContext = [&](const std::filesystem::path& packageRoot)
                 -> std::expected<GameLaunchContext, std::string>
             {
-                const auto packageManifest = packageRoot / "spark.modules.json";
-                const auto packageExecutable = ExecutablePath(packageRoot, "SparkEngine");
+                const auto canonicalPackageRoot = CanonicalPath(packageRoot);
+                const auto packageManifest = canonicalPackageRoot / "spark.modules.json";
+                const auto packageExecutable = ExecutablePath(canonicalPackageRoot, "SparkEngine");
                 if (!std::filesystem::is_regular_file(packageManifest, error) || error ||
                     !std::filesystem::is_regular_file(packageExecutable, error) || error)
-                    return std::unexpected("Packaged runtime is incomplete under " + PathToUtf8(packageRoot));
-                auto resolved = ReadAndResolveManifest(packageManifest, {packageRoot});
+                    return std::unexpected("Packaged runtime is incomplete under " + PathToUtf8(canonicalPackageRoot));
+                auto resolved = ReadAndResolveManifest(packageManifest, {canonicalPackageRoot});
                 if (!resolved)
                     return std::unexpected(resolved.error());
-                auto packagedProject = packageRoot / projectFile.filename();
+                auto packagedProject = canonicalPackageRoot / projectFile.filename();
                 if (!std::filesystem::is_regular_file(packagedProject, error) || error)
                     packagedProject = projectFile;
-                return GameLaunchContext{packageExecutable, CanonicalPath(packageRoot), CanonicalPath(packagedProject),
+                return GameLaunchContext{CanonicalPath(packageExecutable), canonicalPackageRoot,
+                                         CanonicalPath(packagedProject),
                                          CanonicalPath(packageManifest)};
             };
 
