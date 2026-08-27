@@ -1,171 +1,211 @@
-// TestPoseModifier.cpp - Tests for pose modifier stack: add, apply, and clear
-// Standalone implementations for CI testing
+/**
+ * @file TestPoseModifier.cpp
+ * @brief Production tests for pose modifiers and the prioritized modifier stack.
+ */
 
 #include "TestFramework.h"
+#include "Engine/Animation/PoseModifier.h"
+
 #include <cmath>
-#include <cstdint>
-#include <functional>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
-namespace TestPoseMod
+namespace
 {
+    using namespace Spark::Animation;
 
-    struct Vec3
+    constexpr float kTolerance = 0.001f;
+
+    float QuaternionLength(const XMFLOAT4& quaternion)
     {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-    };
+        return std::sqrt(quaternion.x * quaternion.x + quaternion.y * quaternion.y + quaternion.z * quaternion.z +
+                         quaternion.w * quaternion.w);
+    }
 
-    struct Quat
+    class TrackingModifier final : public IPoseModifier
     {
-        float x = 0.0f, y = 0.0f, z = 0.0f, w = 1.0f;
-    };
-
-    struct BoneTransform
-    {
-        Vec3 position;
-        Quat rotation;
-        Vec3 scale = {1.0f, 1.0f, 1.0f};
-    };
-
-    struct Pose
-    {
-        std::vector<BoneTransform> bones;
-    };
-
-    // A modifier is a function that transforms a pose
-    using ModifierFunc = std::function<void(Pose&)>;
-
-    struct PoseModifier
-    {
-        std::string name;
-        int priority = 0;
-        ModifierFunc func;
-    };
-
-    struct PoseModifierStack
-    {
-        std::vector<PoseModifier> modifiers;
-
-        void AddModifier(const std::string& name, int priority, ModifierFunc func)
+      public:
+        TrackingModifier(std::string name, int priority, int marker, std::vector<int>& order)
+            : m_name(std::move(name)), m_priority(priority), m_marker(marker), m_order(order)
         {
-            modifiers.push_back({name, priority, std::move(func)});
-            // Sort by priority (lower runs first)
-            for (size_t i = modifiers.size() - 1; i > 0; i--)
-            {
-                if (modifiers[i].priority < modifiers[i - 1].priority)
-                    std::swap(modifiers[i], modifiers[i - 1]);
-            }
         }
 
-        void Apply(Pose& pose) const
+        void Apply(PoseContext& pose) override
         {
-            for (const auto& mod : modifiers)
-                mod.func(pose);
+            m_order.push_back(m_marker);
+            if (!pose.boneTransforms.empty())
+                pose.boneTransforms[0].position.x = pose.boneTransforms[0].position.x * 10.0f + m_marker;
         }
 
-        void Clear() { modifiers.clear(); }
+        const char* GetName() const override { return m_name.c_str(); }
+        int GetPriority() const override { return m_priority; }
 
-        int GetModifierCount() const { return static_cast<int>(modifiers.size()); }
+      private:
+        std::string m_name;
+        int m_priority;
+        int m_marker;
+        std::vector<int>& m_order;
     };
+} // namespace
 
-} // namespace TestPoseMod
-
-// ============================================================================
-// Add and Count
-// ============================================================================
-
-TEST(PoseModifier_AddModifier)
+TEST(PoseModifierStack_UsesPriorityAndOwnsProductionModifiers)
 {
-    TestPoseMod::PoseModifierStack stack;
-    stack.AddModifier("IKLeg", 10, [](TestPoseMod::Pose&) {});
-    stack.AddModifier("LookAt", 5, [](TestPoseMod::Pose&) {});
-    EXPECT_EQ(stack.GetModifierCount(), 2);
+    PoseModifierStack stack;
+    std::vector<int> order;
 
-    // Lower priority should be first
-    EXPECT_EQ(stack.modifiers[0].name, std::string("LookAt"));
-    EXPECT_EQ(stack.modifiers[1].name, std::string("IKLeg"));
-}
+    stack.AddModifier(nullptr);
+    stack.AddModifier(std::make_unique<TrackingModifier>("Late", 20, 2, order));
+    stack.AddModifier(std::make_unique<TrackingModifier>("Early", 10, 1, order));
+    EXPECT_EQ(stack.GetCount(), static_cast<size_t>(2));
 
-// ============================================================================
-// Apply — verify transforms change
-// ============================================================================
-
-TEST(PoseModifier_Apply_TransformsChange)
-{
-    TestPoseMod::PoseModifierStack stack;
-
-    // Modifier that offsets all bones upward
-    stack.AddModifier("LiftAll", 0,
-                      [](TestPoseMod::Pose& pose)
-                      {
-                          for (auto& bone : pose.bones)
-                              bone.position.y += 5.0f;
-                      });
-
-    TestPoseMod::Pose pose;
-    pose.bones.resize(3);
-    pose.bones[0].position = {0, 0, 0};
-    pose.bones[1].position = {1, 1, 0};
-    pose.bones[2].position = {2, 2, 0};
-
+    PoseContext pose;
+    pose.boneTransforms.resize(1);
     stack.Apply(pose);
-    EXPECT_NEAR(pose.bones[0].position.y, 5.0f, 0.001f);
-    EXPECT_NEAR(pose.bones[1].position.y, 6.0f, 0.001f);
-    EXPECT_NEAR(pose.bones[2].position.y, 7.0f, 0.001f);
-}
 
-TEST(PoseModifier_Apply_MultipleModifiers)
-{
-    TestPoseMod::PoseModifierStack stack;
+    ASSERT_EQ(order.size(), static_cast<size_t>(2));
+    EXPECT_EQ(order[0], 1);
+    EXPECT_EQ(order[1], 2);
+    EXPECT_NEAR(pose.boneTransforms[0].position.x, 12.0f, kTolerance);
 
-    // First: scale positions by 2
-    stack.AddModifier("Scale", 0,
-                      [](TestPoseMod::Pose& pose)
-                      {
-                          for (auto& bone : pose.bones)
-                          {
-                              bone.position.x *= 2.0f;
-                              bone.position.y *= 2.0f;
-                              bone.position.z *= 2.0f;
-                          }
-                      });
-
-    // Second: offset by 1
-    stack.AddModifier("Offset", 10,
-                      [](TestPoseMod::Pose& pose)
-                      {
-                          for (auto& bone : pose.bones)
-                              bone.position.x += 1.0f;
-                      });
-
-    TestPoseMod::Pose pose;
-    pose.bones.resize(1);
-    pose.bones[0].position = {3.0f, 0.0f, 0.0f};
-
-    stack.Apply(pose);
-    // 3 * 2 = 6, then + 1 = 7
-    EXPECT_NEAR(pose.bones[0].position.x, 7.0f, 0.001f);
-}
-
-// ============================================================================
-// Clear
-// ============================================================================
-
-TEST(PoseModifier_Clear)
-{
-    TestPoseMod::PoseModifierStack stack;
-    stack.AddModifier("A", 0, [](TestPoseMod::Pose&) {});
-    stack.AddModifier("B", 1, [](TestPoseMod::Pose&) {});
-    EXPECT_EQ(stack.GetModifierCount(), 2);
-
+    EXPECT_TRUE(stack.RemoveModifier("Early"));
+    EXPECT_FALSE(stack.RemoveModifier("Missing"));
+    EXPECT_EQ(stack.GetCount(), static_cast<size_t>(1));
     stack.Clear();
-    EXPECT_EQ(stack.GetModifierCount(), 0);
+    EXPECT_EQ(stack.GetCount(), static_cast<size_t>(0));
+}
 
-    // Apply on empty stack should not modify pose
-    TestPoseMod::Pose pose;
-    pose.bones.resize(1);
-    pose.bones[0].position = {1, 2, 3};
-    stack.Apply(pose);
-    EXPECT_NEAR(pose.bones[0].position.x, 1.0f, 0.001f);
+TEST(LookAtModifier_InvalidAndDegenerateTargetsLeavePoseUntouched)
+{
+    PoseContext pose;
+    pose.boneTransforms.resize(1);
+
+    LookAtModifier lookAt;
+    lookAt.Apply(pose);
+    EXPECT_NEAR(pose.boneTransforms[0].rotation.w, 1.0f, kTolerance);
+
+    lookAt.SetBoneIndex(0);
+    lookAt.SetTargetPosition(pose.boneTransforms[0].position);
+    lookAt.Apply(pose);
+    EXPECT_NEAR(pose.boneTransforms[0].rotation.w, 1.0f, kTolerance);
+
+    lookAt.SetTargetPosition({0.0f, 0.0f, 10.0f});
+    lookAt.Apply(pose);
+    EXPECT_NEAR(pose.boneTransforms[0].rotation.w, 1.0f, kTolerance);
+}
+
+TEST(LookAtModifier_RotatesTowardTargetWithWeightAndAngleLimits)
+{
+    PoseContext pose;
+    pose.boneTransforms.resize(1);
+
+    LookAtModifier lookAt;
+    lookAt.SetBoneIndex(0);
+    lookAt.SetTargetPosition({10.0f, 0.0f, 0.0f});
+    lookAt.SetMaxAngle(0.5f);
+    lookAt.SetWeight(2.0f); // Clamped to one.
+    lookAt.Apply(pose);
+
+    EXPECT_NEAR(QuaternionLength(pose.boneTransforms[0].rotation), 1.0f, kTolerance);
+    EXPECT_NEAR(pose.boneTransforms[0].rotation.y, std::sin(0.25f), kTolerance);
+    EXPECT_NEAR(pose.boneTransforms[0].rotation.w, std::cos(0.25f), kTolerance);
+
+    pose.boneTransforms[0].rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+    lookAt.SetWeight(-1.0f); // Clamped to zero.
+    lookAt.Apply(pose);
+    EXPECT_NEAR(pose.boneTransforms[0].rotation.y, 0.0f, kTolerance);
+    EXPECT_NEAR(pose.boneTransforms[0].rotation.w, 1.0f, kTolerance);
+}
+
+TEST(AimIKModifier_ValidatesBoneChainAndHandlesDegenerateTarget)
+{
+    PoseContext pose;
+    pose.boneTransforms.resize(3);
+
+    AimIKModifier aim;
+    aim.Apply(pose);
+    EXPECT_NEAR(pose.boneTransforms[2].rotation.w, 1.0f, kTolerance);
+
+    aim.SetBoneChain(0, 1, 2);
+    aim.SetTargetPosition(pose.boneTransforms[2].position);
+    aim.Apply(pose);
+    EXPECT_NEAR(pose.boneTransforms[0].rotation.w, 1.0f, kTolerance);
+
+    aim.SetTargetPosition({0.0f, 0.0f, 10.0f});
+    aim.Apply(pose);
+    EXPECT_NEAR(pose.boneTransforms[1].rotation.w, 1.0f, kTolerance);
+}
+
+TEST(AimIKModifier_DistributesNormalizedRotationAcrossChain)
+{
+    PoseContext pose;
+    pose.boneTransforms.resize(3);
+
+    AimIKModifier aim;
+    aim.SetBoneChain(0, 1, 2);
+    aim.SetTargetPosition({10.0f, 0.0f, 0.0f});
+    aim.SetWeight(1.0f);
+    aim.Apply(pose);
+
+    EXPECT_NEAR(QuaternionLength(pose.boneTransforms[0].rotation), 1.0f, kTolerance);
+    EXPECT_NEAR(QuaternionLength(pose.boneTransforms[1].rotation), 1.0f, kTolerance);
+    EXPECT_NEAR(QuaternionLength(pose.boneTransforms[2].rotation), 1.0f, kTolerance);
+    EXPECT_GT(pose.boneTransforms[0].rotation.y, pose.boneTransforms[1].rotation.y);
+    EXPECT_NEAR(pose.boneTransforms[1].rotation.y, pose.boneTransforms[2].rotation.y, kTolerance);
+}
+
+TEST(FootPlacementModifier_NoValidFeetLeavesPoseUntouched)
+{
+    PoseContext pose;
+    pose.boneTransforms.resize(3);
+    pose.boneTransforms[0].position.y = 2.0f;
+
+    FootPlacementModifier feet;
+    feet.SetPelvisIndex(0);
+    feet.SetGroundHeights(-1.0f, 1.0f);
+    feet.Apply(pose);
+
+    EXPECT_NEAR(pose.boneTransforms[0].position.y, 2.0f, kTolerance);
+}
+
+TEST(FootPlacementModifier_AdjustsFeetPelvisAndClampsOffsets)
+{
+    PoseContext pose;
+    pose.boneTransforms.resize(3);
+    pose.boneTransforms[0].position.y = 2.0f;
+    pose.boneTransforms[1].position.y = 1.0f;
+    pose.boneTransforms[2].position.y = 1.0f;
+
+    FootPlacementModifier feet;
+    feet.SetPelvisIndex(0);
+    feet.SetLeftFootIndex(1);
+    feet.SetRightFootIndex(2);
+    feet.SetGroundHeights(0.0f, 2.0f);
+    feet.SetMaxAdjustment(0.5f);
+    feet.SetWeight(1.0f);
+    feet.Apply(pose);
+
+    EXPECT_NEAR(pose.boneTransforms[0].position.y, 1.5f, kTolerance);
+    EXPECT_NEAR(pose.boneTransforms[1].position.y, 0.5f, kTolerance);
+    EXPECT_NEAR(pose.boneTransforms[2].position.y, 1.5f, kTolerance);
+}
+
+TEST(FootPlacementModifier_SupportsSingleFootAndClampedWeight)
+{
+    PoseContext pose;
+    pose.boneTransforms.resize(2);
+    pose.boneTransforms[0].position.y = 1.0f;
+    pose.boneTransforms[1].position.y = 0.0f;
+
+    FootPlacementModifier feet;
+    feet.SetPelvisIndex(0);
+    feet.SetLeftFootIndex(1);
+    feet.SetGroundHeights(1.0f, 0.0f);
+    feet.SetMaxAdjustment(2.0f);
+    feet.SetWeight(2.0f); // Clamped to one.
+    feet.Apply(pose);
+
+    EXPECT_NEAR(pose.boneTransforms[0].position.y, 1.0f, kTolerance);
+    EXPECT_NEAR(pose.boneTransforms[1].position.y, 1.0f, kTolerance);
 }

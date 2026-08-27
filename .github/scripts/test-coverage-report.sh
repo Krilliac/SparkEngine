@@ -22,6 +22,15 @@ TN:
 SF:/repo/SparkEngine/Source/Core/Core.cpp
 DA:1,1
 end_of_record
+SF:/repo/SparkEngine/Source/Audio/AudioMixer.cpp
+DA:1,1
+DA:2,0
+end_of_record
+SF:/repo/SparkEngine/Source/Physics/PhysicsSystem.cpp
+DA:1,1
+DA:2,1
+DA:3,0
+end_of_record
 SF:/repo/SparkEngine/Source/Unclassified/Other.cpp
 DA:1,0
 end_of_record
@@ -45,10 +54,20 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as stream:
     report = json.load(stream)
 assert report["all_pass"] is False
-assert report["selected_subsystem_lines"] == 1
-assert report["lcov_corpus_lines"] == 2
+assert report["selected_subsystem_lines"] == 6
+assert report["selected_subsystem_hit"] == 4
+assert report["lcov_corpus_lines"] == 7
+assert report["lcov_corpus_hit"] == 4
 assert report["unclassified_lines"] == 1
 assert "total_coverage" not in report
+
+subsystems = {entry["subsystem"]: entry for entry in report["subsystems"]}
+assert subsystems["Audio"]["lines"] == 2
+assert subsystems["Audio"]["hit"] == 1
+assert subsystems["Audio"]["coverage"] == 50.0
+assert subsystems["Physics"]["lines"] == 3
+assert subsystems["Physics"]["hit"] == 2
+assert subsystems["Physics"]["coverage"] == 66.7
 PY
 
 grep -Fq "MISSING" "$TMP_ROOT/output.txt"
