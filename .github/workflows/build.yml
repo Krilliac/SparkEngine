@@ -531,6 +531,9 @@ jobs:
         path: |
           build/SparkTests-junit.xml
           build/ctest-junit.xml
+          build/*-process-smoke.log
+          build/*-process-smoke.json
+          build/*-process-smoke.xml
           test-stats-windows-vs2022-release.json
           test-results.log
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -650,6 +653,9 @@ jobs:
         path: |
           build/SparkTests-junit.xml
           build/ctest-junit.xml
+          build/*-process-smoke.log
+          build/*-process-smoke.json
+          build/*-process-smoke.xml
           test-stats-windows-vs2026-release.json
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
         if-no-files-found: error
@@ -746,6 +752,9 @@ jobs:
         path: |
           build/SparkTests-junit.xml
           build/ctest-junit.xml
+          build/*-process-smoke.log
+          build/*-process-smoke.json
+          build/*-process-smoke.xml
           test-stats-linux-gcc-${{ matrix.config }}.json
           test-results.log
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -892,6 +901,9 @@ jobs:
         path: |
           build/SparkTests-junit.xml
           build/ctest-junit.xml
+          build/*-process-smoke.log
+          build/*-process-smoke.json
+          build/*-process-smoke.xml
           test-stats-linux-clang-${{ matrix.config }}.json
           test-results.log
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -1149,6 +1161,9 @@ jobs:
         path: |
           build/SparkTests-junit.xml
           build/ctest-junit.xml
+          build/*-process-smoke.log
+          build/*-process-smoke.json
+          build/*-process-smoke.xml
           test-stats-macos-${{ matrix.backend }}-release.json
           test-results.log
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}

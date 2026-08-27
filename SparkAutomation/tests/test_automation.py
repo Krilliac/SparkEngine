@@ -81,6 +81,33 @@ class AutomationContractTests(unittest.TestCase):
         self.assertIn("screenshot is missing or empty", completed.stdout)
         self.assertFalse(screenshot.exists())
 
+    def test_failure_surfaces_captured_child_diagnostics(self):
+        log = self.root / "failure.log"
+        report = self.root / "failure.json"
+        junit = self.root / "failure.xml"
+        marker = "SPARK_AUTOMATION_CHILD_DIAGNOSTIC"
+        child_script = f"import sys; print('{marker}', file=sys.stderr, flush=True); raise SystemExit(7)"
+        completed = subprocess.run(
+            [
+                str(AUTOMATION), "--name", "diagnostic-failure",
+                "--executable", sys.executable, "--working-dir", str(self.root),
+                "--timeout-ms", "5000", "--expected-exit", "0",
+                "--captured-log", str(log), "--json", str(report),
+                "--junit", str(junit), "--", "-c", child_script,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn(marker, completed.stderr)
+        payload = json.loads(report.read_text(encoding="utf-8"))
+        self.assertEqual(payload["exitCode"], 7)
+        self.assertIn(marker, payload["capturedLogTail"])
+        system_out = ET.parse(junit).getroot().find("testcase/system-out")
+        self.assertIsNotNone(system_out)
+        self.assertIn(marker, system_out.text or "")
+
     def test_timeout_kills_descendant_process(self):
         log = self.root / "timeout.log"
         child_script = (

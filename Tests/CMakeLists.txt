@@ -1146,6 +1146,13 @@ if(Python3_Interpreter_FOUND)
     endif()
     if(TARGET SparkServer AND TARGET SparkGateway AND TARGET SparkGame AND
        TARGET SparkGatewayTopologyProbe AND TARGET SparkAutomation)
+        if(NOT WIN32)
+            get_target_property(_spark_server_exports SparkServer ENABLE_EXPORTS)
+            if(NOT _spark_server_exports)
+                message(FATAL_ERROR
+                    "SparkServerGatewayProcessSmoke requires SparkServer ENABLE_EXPORTS on POSIX so game modules can resolve engine symbols")
+            endif()
+        endif()
         add_dependencies(SparkTests SparkServer SparkGateway SparkGame SparkGatewayTopologyProbe SparkAutomation)
         add_test(
             NAME SparkServerGatewayProcessSmoke

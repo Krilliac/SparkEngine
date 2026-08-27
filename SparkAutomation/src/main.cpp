@@ -469,6 +469,14 @@ namespace
         return static_cast<bool>(output);
     }
 
+    std::string DiagnosticTail(const std::string& log)
+    {
+        constexpr size_t kMaximumDiagnosticBytes = 12'000;
+        if (log.size() <= kMaximumDiagnosticBytes)
+            return log;
+        return log.substr(log.size() - kMaximumDiagnosticBytes);
+    }
+
     void Usage()
     {
         std::cout << "Usage: SparkAutomation --executable <path> [--working-dir <dir>] [--frames N] "
@@ -603,6 +611,7 @@ int main(int argc, char** argv)
 
     std::ifstream logFile(plan.capturedLog, std::ios::binary);
     const std::string log((std::istreambuf_iterator<char>(logFile)), std::istreambuf_iterator<char>());
+    const std::string diagnosticTail = DiagnosticTail(log);
     for (const auto& expected : plan.logContains)
     {
         if (log.find(expected) == std::string::npos)
@@ -621,7 +630,11 @@ int main(int argc, char** argv)
          << "  \"passed\": " << (passed ? "true" : "false")
          << ",\n  \"timedOut\": " << (process.timedOut ? "true" : "false") << ",\n  \"exitCode\": " << process.exitCode
          << ",\n  \"expectedExit\": " << plan.expectedExit << ",\n  \"frameLimit\": " << plan.frames
-         << ",\n  \"durationMs\": " << process.durationMs << ",\n  \"failures\": [";
+         << ",\n  \"durationMs\": " << process.durationMs
+         << ",\n  \"capturedLogPath\": \"" << Escape(plan.capturedLog.string(), false) << "\""
+         << ",\n  \"capturedLogTruncated\": " << (log.size() > diagnosticTail.size() ? "true" : "false")
+         << ",\n  \"capturedLogTail\": \"" << Escape(diagnosticTail, false) << "\""
+         << ",\n  \"failures\": [";
     for (size_t index = 0; index < failures.size(); ++index)
         json << (index ? ", " : "") << "\"" << Escape(failures[index], false) << "\"";
     json << "]\n}\n";
@@ -638,6 +651,8 @@ int main(int argc, char** argv)
         junit << "\n    <failure message=\"automation expectation failed\">" << Escape(detail.str(), true)
               << "</failure>\n  ";
     }
+    if (!diagnosticTail.empty())
+        junit << "\n    <system-out>" << Escape(diagnosticTail, true) << "</system-out>\n  ";
     junit << "</testcase>\n</testsuite>\n";
 
     if (!WriteFile(plan.jsonReport, json.str()) || !WriteFile(plan.junitReport, junit.str()))
@@ -646,5 +661,12 @@ int main(int argc, char** argv)
         return 3;
     }
     std::cout << json.str();
+    if (!passed && !diagnosticTail.empty())
+    {
+        std::cerr << "--- captured log tail: " << plan.capturedLog.string() << " ---\n"
+                  << diagnosticTail;
+        if (diagnosticTail.back() != '\n')
+            std::cerr << '\n';
+    }
     return passed ? 0 : 1;
 }
