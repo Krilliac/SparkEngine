@@ -1091,6 +1091,29 @@ add_test(
 
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    if(TARGET SparkDaemon AND TARGET SparkOrchestrator AND TARGET SparkCollabServer AND TARGET SparkAutomation)
+        add_dependencies(SparkTests SparkDaemon SparkOrchestrator SparkCollabServer SparkAutomation)
+        add_test(
+            NAME SparkOrchestrationProcessSmoke
+            COMMAND $<TARGET_FILE:SparkAutomation>
+                --name orchestration-process-smoke
+                --executable ${Python3_EXECUTABLE}
+                --working-dir ${CMAKE_SOURCE_DIR}
+                --timeout-ms 60000
+                --expected-exit 0
+                --captured-log ${CMAKE_BINARY_DIR}/orchestration-process-smoke.log
+                --json ${CMAKE_BINARY_DIR}/orchestration-process-smoke.json
+                --junit ${CMAKE_BINARY_DIR}/orchestration-process-smoke.xml
+                --
+                ${CMAKE_SOURCE_DIR}/SparkDaemon/tests/test_orchestration_process.py
+                --daemon $<TARGET_FILE:SparkDaemon>
+                --orchestrator $<TARGET_FILE:SparkOrchestrator>
+                --child $<TARGET_FILE:SparkCollabServer>
+        )
+        set_tests_properties(SparkOrchestrationProcessSmoke PROPERTIES
+            LABELS "orchestration;integration;process"
+            TIMEOUT 75)
+    endif()
     add_test(
         NAME SparkTemplateRuntimeSheets
         COMMAND ${Python3_EXECUTABLE}

@@ -107,6 +107,33 @@ class AutomationContractTests(unittest.TestCase):
             time.sleep(0.05)
         self.assertFalse(process_exists(child_pid), f"descendant process {child_pid} survived timeout")
 
+    @unittest.skipIf(os.name == "nt", "POSIX process-group escape regression")
+    def test_timeout_kills_descendant_that_creates_new_session(self):
+        log = self.root / "escaped-timeout.log"
+        child_script = (
+            "import subprocess,sys,time; "
+            "p=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'],start_new_session=True); "
+            "print(p.pid,flush=True); time.sleep(60)"
+        )
+        completed = subprocess.run(
+            [
+                str(AUTOMATION), "--executable", sys.executable, "--working-dir", str(self.root),
+                "--timeout-ms", "750", "--captured-log", str(log), "--", "-c", child_script,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertTrue(json.loads(completed.stdout)["timedOut"])
+        escaped_pid = int(log.read_text(encoding="utf-8").strip().splitlines()[0])
+        for _ in range(40):
+            if not process_exists(escaped_pid):
+                break
+            time.sleep(0.05)
+        self.assertFalse(process_exists(escaped_pid), f"escaped descendant {escaped_pid} survived timeout")
+
     def test_numeric_options_reject_signs_junk_and_overflow(self):
         cases = (
             ("--frames", "-1"),

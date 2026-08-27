@@ -15,6 +15,7 @@
 
 #if defined(_WIN32)
 #include <processthreadsapi.h>
+#include <sddl.h>
 #include <securitybaseapi.h>
 #include <windows.h>
 #else
@@ -111,6 +112,38 @@ namespace Spark::Daemon
                 (void)::unlink(endpoint.c_str());
         }
 #else
+        class OwnerOnlySecurity final
+        {
+          public:
+            OwnerOnlySecurity()
+            {
+                constexpr wchar_t kDescriptor[] = L"D:P(A;;GA;;;OW)(A;;GA;;;SY)(A;;GA;;;BA)";
+                if (::ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                        kDescriptor, SDDL_REVISION_1, &m_descriptor, nullptr))
+                {
+                    m_attributes.nLength = sizeof(m_attributes);
+                    m_attributes.lpSecurityDescriptor = m_descriptor;
+                    m_attributes.bInheritHandle = FALSE;
+                }
+            }
+
+            ~OwnerOnlySecurity()
+            {
+                if (m_descriptor)
+                    ::LocalFree(m_descriptor);
+            }
+
+            OwnerOnlySecurity(const OwnerOnlySecurity&) = delete;
+            OwnerOnlySecurity& operator=(const OwnerOnlySecurity&) = delete;
+
+            [[nodiscard]] bool IsValid() const noexcept { return m_descriptor != nullptr; }
+            [[nodiscard]] SECURITY_ATTRIBUTES* Attributes() noexcept { return &m_attributes; }
+
+          private:
+            PSECURITY_DESCRIPTOR m_descriptor = nullptr;
+            SECURITY_ATTRIBUTES m_attributes{};
+        };
+
         bool QueryTokenUser(HANDLE token, std::vector<uint8_t>& storage, TOKEN_USER*& user) noexcept
         {
             DWORD required = 0;
@@ -228,7 +261,12 @@ namespace Spark::Daemon
         if (pipeName.empty())
             return Unexpected<std::string>("DaemonServer: pipe endpoint is not valid UTF-8");
 
-        HANDLE endpointMutex = ::CreateMutexW(nullptr, TRUE, EndpointMutexName(pipeName).c_str());
+        OwnerOnlySecurity endpointSecurity;
+        if (!endpointSecurity.IsValid())
+            return Unexpected<std::string>("DaemonServer: could not create owner-only endpoint security descriptor");
+
+        HANDLE endpointMutex =
+            ::CreateMutexW(endpointSecurity.Attributes(), TRUE, EndpointMutexName(pipeName).c_str());
         if (!endpointMutex)
             return Unexpected<std::string>("DaemonServer: could not create endpoint ownership mutex");
         bool ownsEndpoint = ::GetLastError() != ERROR_ALREADY_EXISTS;
@@ -253,7 +291,8 @@ namespace Spark::Daemon
             HANDLE pipe =
                 ::CreateNamedPipeW(pipeName.c_str(), PIPE_ACCESS_DUPLEX,
                                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                                   PIPE_UNLIMITED_INSTANCES, 64u * 1024u, 64u * 1024u, 0, nullptr);
+                                   PIPE_UNLIMITED_INSTANCES, 64u * 1024u, 64u * 1024u, 0,
+                                   endpointSecurity.Attributes());
             if (pipe == INVALID_HANDLE_VALUE)
             {
                 fatalError = "DaemonServer: CreateNamedPipeW failed (error " + std::to_string(::GetLastError()) + ")";

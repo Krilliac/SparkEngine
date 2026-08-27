@@ -144,3 +144,10 @@ SparkAutomation --name server-smoke `
 Treat health JSON, orchestration status, JUnit, and captured logs as distinct
 signals. A process existing is not the same as readiness, and a routed session
 is not proof that an area has accepted gameplay authority.
+
+CTest's `SparkOrchestrationProcessSmoke` also exercises the production process
+boundary directly. It starts a real `SparkDaemon`, drives the real
+`SparkOrchestrator` CLI through define/start/status/drain/stop/undefine, supervises
+a real `SparkCollabServer` child, and verifies an orderly daemon shutdown. The
+test uses unique owner-local endpoints and isolated identity/journal state, so it
+can run unattended on Windows, Linux, and macOS CI hosts.

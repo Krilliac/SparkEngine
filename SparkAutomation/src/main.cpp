@@ -13,6 +13,7 @@
 #include <string_view>
 #include <system_error>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 #ifdef _WIN32
@@ -22,6 +23,11 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#elif defined(__APPLE__)
+#include <libproc.h>
+#endif
 #endif
 
 namespace
@@ -153,6 +159,134 @@ namespace
     }
 #endif
 
+#ifndef _WIN32
+    struct ProcessEntry
+    {
+        pid_t pid = 0;
+        pid_t parent = 0;
+    };
+
+    bool ReadProcessTable(std::vector<ProcessEntry>& processes, std::string& error)
+    {
+        processes.clear();
+#ifdef __linux__
+        std::error_code iteratorError;
+        for (std::filesystem::directory_iterator entry("/proc", iteratorError), end; entry != end;
+             entry.increment(iteratorError))
+        {
+            if (iteratorError)
+                break;
+            const std::string name = entry->path().filename().string();
+            pid_t pid = 0;
+            const auto [parsed, parseError] = std::from_chars(name.data(), name.data() + name.size(), pid, 10);
+            if (parseError != std::errc{} || parsed != name.data() + name.size() || pid <= 0)
+                continue;
+
+            std::ifstream stat(entry->path() / "stat");
+            std::string line;
+            if (!std::getline(stat, line))
+                continue;
+            const size_t commandEnd = line.rfind(')');
+            if (commandEnd == std::string::npos || commandEnd + 2 >= line.size())
+                continue;
+            std::istringstream fields(line.substr(commandEnd + 2));
+            char state = '\0';
+            pid_t parent = 0;
+            if (fields >> state >> parent)
+                processes.push_back({pid, parent});
+        }
+        if (iteratorError)
+        {
+            error = "failed to enumerate /proc while containing timed-out process tree: " + iteratorError.message();
+            return false;
+        }
+        return true;
+#elif defined(__APPLE__)
+        const int requiredBytes = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
+        if (requiredBytes <= 0)
+        {
+            error = "failed to size the macOS process table while containing timed-out process tree";
+            return false;
+        }
+        std::vector<pid_t> pids(static_cast<size_t>(requiredBytes) / sizeof(pid_t) + 64u);
+        const int populatedBytes =
+            proc_listpids(PROC_ALL_PIDS, 0, pids.data(), static_cast<int>(pids.size() * sizeof(pid_t)));
+        if (populatedBytes < 0)
+        {
+            error = "failed to enumerate the macOS process table while containing timed-out process tree";
+            return false;
+        }
+        pids.resize(static_cast<size_t>(populatedBytes) / sizeof(pid_t));
+        for (const pid_t pid : pids)
+        {
+            if (pid <= 0)
+                continue;
+            proc_bsdinfo info{};
+            if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof(info)) == static_cast<int>(sizeof(info)))
+                processes.push_back({pid, static_cast<pid_t>(info.pbi_ppid)});
+        }
+        return true;
+#else
+        error = "process-tree containment is not implemented on this POSIX platform";
+        return false;
+#endif
+    }
+
+    bool KillProcessTree(pid_t root, std::string& error)
+    {
+        // Freeze the original process group first. Descendants that created their own
+        // session/group are discovered below and frozen individually before anything
+        // is killed, preserving their ancestry long enough to contain them reliably.
+        (void)kill(-root, SIGSTOP);
+        (void)kill(root, SIGSTOP);
+
+        std::unordered_set<pid_t> victims{root};
+        unsigned stableScans = 0;
+        for (unsigned scan = 0; scan < 20 && stableScans < 2; ++scan)
+        {
+            std::vector<ProcessEntry> processes;
+            if (!ReadProcessTable(processes, error))
+                break;
+
+            bool addedAny = false;
+            bool addedPass = true;
+            while (addedPass)
+            {
+                addedPass = false;
+                for (const ProcessEntry& process : processes)
+                {
+                    // Linux subreapers adopt descendants whose intermediate parent
+                    // already exited, so direct children of this supervisor also
+                    // belong to its otherwise single-child containment tree.
+                    const bool isDescendant = victims.contains(process.parent) || process.parent == getpid();
+                    if (process.pid == getpid() || !isDescendant)
+                        continue;
+                    if (victims.insert(process.pid).second)
+                    {
+                        (void)kill(process.pid, SIGSTOP);
+                        addedAny = true;
+                        addedPass = true;
+                    }
+                }
+            }
+            stableScans = addedAny ? 0u : stableScans + 1u;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+
+        // Kill individually discovered descendants in addition to the original
+        // process group; session leaders are intentionally absent from that group.
+        for (const pid_t victim : victims)
+        {
+            if (victim != root && kill(victim, SIGKILL) != 0 && errno != ESRCH && error.empty())
+                error = "failed to kill escaped descendant " + std::to_string(victim) + ": " + std::strerror(errno);
+        }
+        (void)kill(-root, SIGKILL);
+        if (kill(root, SIGKILL) != 0 && errno != ESRCH && error.empty())
+            error = "failed to kill timed-out process: " + std::string(std::strerror(errno));
+        return error.empty();
+    }
+#endif
+
     ProcessResult RunProcess(const Plan& plan)
     {
         ProcessResult result;
@@ -227,6 +361,16 @@ namespace
             result.error = "failed to create captured log";
             return result;
         }
+#ifdef __linux__
+        // Adopt orphaned grandchildren so a timed-out process cannot evade cleanup
+        // by briefly double-forking while the process tree is being frozen.
+        if (prctl(PR_SET_CHILD_SUBREAPER, 1) != 0)
+        {
+            result.error = "failed to enable Linux child-subreaper containment: " + std::string(std::strerror(errno));
+            close(log);
+            return result;
+        }
+#endif
         const pid_t child = fork();
         if (child == 0)
         {
@@ -274,8 +418,7 @@ namespace
             if (std::chrono::steady_clock::now() >= deadline)
             {
                 result.timedOut = true;
-                if (kill(-child, SIGKILL) != 0)
-                    (void)kill(child, SIGKILL);
+                (void)KillProcessTree(child, result.error);
                 const auto reapDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
                 while (std::chrono::steady_clock::now() < reapDeadline)
                 {
@@ -293,6 +436,12 @@ namespace
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
+#ifdef __linux__
+                // Reap any descendants adopted through PR_SET_CHILD_SUBREAPER.
+                while (waitpid(-1, nullptr, WNOHANG) > 0)
+                {
+                }
+#endif
                 if (!reaped && result.error.empty())
                     result.error = "timed-out process could not be reaped within 5 seconds";
                 break;

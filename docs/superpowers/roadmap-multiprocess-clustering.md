@@ -3,6 +3,15 @@
 Date: 2026-07-05. Captured while the editor ECS round-trip (sub-project 1) was in flight.
 Status: **backlog** — not scheduled except where noted. Each item gets its own brainstorm → spec → plan when picked up.
 
+> **Historical planning snapshot.** The external-service program described here
+> subsequently shipped `SparkServer`, `SparkGateway`, `SparkOrchestrator`,
+> `SparkCollabServer`, `SparkCooker`, `SparkWorker`, and `SparkAutomation`. See
+> [External Services and Orchestration](../guides/External-Services-and-Orchestration.md)
+> and [Offline Cooking and Runtime Automation](../guides/Offline-Cooking-and-Automation.md)
+> for the current contracts and validation surface. The remaining aspirational
+> items below are retained as design history, not as a statement of current
+> implementation status.
+
 ## Existing multi-process substrate (the bones already present)
 - Engine networking: `SparkEngine/Source/Engine/Networking/WorldServer.h` + `AreaServer.h` — a realmd→worldd→map-server hierarchy, already abstracted. TERRAFRONT boots **one** `AreaServer` per continent today.
 - Standalone exes: `SparkDaemon`, `SparkConsole`, `SparkShaderCompiler`, `SparkBuild`, `SparkLauncher`, `SparkCrashReporter`, `SparkInstaller` (each its own `add_executable`).

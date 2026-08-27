@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-26.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-27.
 
 ## Code Volume
 
@@ -11,12 +11,12 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | **SparkEngine/Source** | 302709 |
 | **SparkEditor/Source** | 108813 |
 | **GameModules** | 139243 |
-| **External services** | 10048 |
-| **Asset pipeline** | 1877 |
+| **External services** | 10109 |
+| **Asset pipeline** | 2026 |
 | **Tests** | 163733 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~728644** |
+| **Total C++ (excl. ThirdParty)** | **~728854** |
 
 ### File Counts
 

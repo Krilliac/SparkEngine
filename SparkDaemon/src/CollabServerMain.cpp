@@ -12,7 +12,9 @@
 #include <string>
 #include <string_view>
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#include <windows.h>
+#else
 #include <csignal>
 #endif
 
@@ -20,7 +22,17 @@ namespace
 {
     Spark::Daemon::DaemonServer* g_serverForSignal = nullptr;
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    BOOL WINAPI HandleConsoleControl(DWORD controlType)
+    {
+        if (controlType != CTRL_C_EVENT && controlType != CTRL_BREAK_EVENT && controlType != CTRL_CLOSE_EVENT &&
+            controlType != CTRL_LOGOFF_EVENT && controlType != CTRL_SHUTDOWN_EVENT)
+            return FALSE;
+        if (g_serverForSignal)
+            g_serverForSignal->Stop();
+        return TRUE;
+    }
+#else
     void HandleSignal(int)
     {
         if (g_serverForSignal)
@@ -55,13 +67,23 @@ int main(int argc, char** argv)
     server.AddService(std::make_unique<Spark::Daemon::ControlService>(server.GetShouldStopFlag(), statsProvider));
     server.AddService(std::make_unique<Spark::Daemon::CollaborationService>(config));
     g_serverForSignal = &server;
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    if (!::SetConsoleCtrlHandler(HandleConsoleControl, TRUE))
+    {
+        std::fprintf(stderr, "SparkCollabServer: could not install console control handler\n");
+        g_serverForSignal = nullptr;
+        return 1;
+    }
+#else
     std::signal(SIGINT, HandleSignal);
     std::signal(SIGTERM, HandleSignal);
     std::signal(SIGPIPE, SIG_IGN);
 #endif
     std::printf("SparkCollabServer: listening on %s\n", socketPath.c_str());
     auto result = server.Run(socketPath);
+#if defined(_WIN32)
+    (void)::SetConsoleCtrlHandler(HandleConsoleControl, FALSE);
+#endif
     g_serverForSignal = nullptr;
     if (!result)
     {
