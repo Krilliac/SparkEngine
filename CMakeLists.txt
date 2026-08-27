@@ -1324,7 +1324,15 @@ if(WIN32)
 else()
     add_executable(SparkEngine ${SPARK_ENGINE_ENTRY_POINTS})
 endif()
-target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
+if(WIN32)
+    target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
+else()
+    # POSIX game modules resolve engine calls from the host at dlopen() time.
+    # Retain archive members that the executable itself does not reference so
+    # ENABLE_EXPORTS/-export_dynamic below can expose the complete SDK surface.
+    target_link_libraries(SparkEngine PRIVATE
+        "$<LINK_LIBRARY:WHOLE_ARCHIVE,SparkEngineLib>")
+endif()
 # MinGW: -municode enables wWinMain as the entry point (Unicode command line)
 if(MINGW)
     target_link_options(SparkEngine PRIVATE -municode)
@@ -1347,6 +1355,13 @@ endif()
 # duplicate singletons (NetworkManager, EngineContext, etc.) and ABI mismatches.
 if(NOT WIN32)
     set_target_properties(SparkEngine PROPERTIES ENABLE_EXPORTS ON)
+    if(APPLE)
+        # Darwin's ENABLE_EXPORTS support primarily enables CMake's
+        # -bundle_loader relationship when a module target links an executable.
+        # Spark game dylibs are host-agnostic and use dynamic_lookup instead,
+        # so preserve the executable's complete global symbol surface explicitly.
+        target_link_options(SparkEngine PRIVATE "LINKER:-export_dynamic")
+    endif()
 endif()
 
 # Link third-party libraries to the static lib (both exe and game DLL get them)

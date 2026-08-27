@@ -817,6 +817,9 @@ if(NOT WIN32)
 
     # Export symbols so backtrace_symbols() can resolve function names in stack traces
     set_target_properties(SparkTests PROPERTIES ENABLE_EXPORTS ON)
+    if(APPLE)
+        target_link_options(SparkTests PRIVATE "LINKER:-export_dynamic")
+    endif()
 endif()
 
 if(WIN32)
@@ -1174,6 +1177,18 @@ if(Python3_Interpreter_FOUND)
             if(NOT _spark_server_exports)
                 message(FATAL_ERROR
                     "SparkServerGatewayProcessSmoke requires SparkServer ENABLE_EXPORTS on POSIX so game modules can resolve engine symbols")
+            endif()
+            get_target_property(_spark_engine_links SparkEngine LINK_LIBRARIES)
+            if(NOT "$<LINK_LIBRARY:WHOLE_ARCHIVE,SparkEngineLib>" IN_LIST _spark_engine_links)
+                message(FATAL_ERROR
+                    "SparkEngine must whole-archive SparkEngineLib on POSIX so loaded game modules can resolve the complete engine surface")
+            endif()
+            if(APPLE)
+                get_target_property(_spark_server_link_options SparkServer LINK_OPTIONS)
+                if(NOT "LINKER:-export_dynamic" IN_LIST _spark_server_link_options)
+                    message(FATAL_ERROR
+                        "SparkServerGatewayProcessSmoke requires -export_dynamic on macOS so dynamic_lookup game modules can bind engine symbols")
+                endif()
             endif()
         endif()
         add_dependencies(SparkTests SparkServer SparkGateway SparkGame SparkGatewayTopologyProbe SparkAutomation)

@@ -602,18 +602,27 @@ ModuleManager::~ModuleManager()
 
 bool ModuleManager::LoadModule(const std::string& path)
 {
+    auto& console = Spark::SimpleConsole::GetInstance();
+    m_lastLoadError.clear();
+
+    const auto failLoad = [&](std::string message)
+    {
+        m_lastLoadError = std::move(message);
+        console.LogError(m_lastLoadError);
+        return false;
+    };
+
+    if (path.empty())
+        return failLoad("Module path must not be empty");
+
     SPARK_EXPECTS(!path.empty());
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
-    SPARK_VALIDATE_RET(Spark::LogCategory::Core, !path.empty(), false);
     SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading module: %s", path.c_str());
-
-    auto& console = Spark::SimpleConsole::GetInstance();
 
     // Security: reject path traversal sequences
     if (path.contains(".."))
     {
-        console.LogError("Module path rejected — contains '..' traversal: " + path);
-        return false;
+        return failLoad("Module path rejected — contains '..' traversal: " + path);
     }
 
     const std::filesystem::path modulePath = PathFromUtf8(path);
@@ -628,8 +637,7 @@ bool ModuleManager::LoadModule(const std::string& path)
     std::string stagingError;
     if (!StageModuleForPosixLoad(modulePath, stagedImage, stagingError))
     {
-        console.LogError(std::format("Failed to stage module '{}' for validation: {}", path, stagingError));
-        return false;
+        return failLoad(std::format("Failed to stage module '{}' for validation: {}", path, stagingError));
     }
     const std::filesystem::path& validatedModulePath = stagedImage.Get();
 #else
@@ -645,8 +653,7 @@ bool ModuleManager::LoadModule(const std::string& path)
                                       FILE_ATTRIBUTE_NORMAL, nullptr);
     if (pinnedModule == INVALID_HANDLE_VALUE)
     {
-        console.LogError(std::format("Failed to pin module '{}' for validation (error {})", path, GetLastError()));
-        return false;
+        return failLoad(std::format("Failed to pin module '{}' for validation (error {})", path, GetLastError()));
     }
 #endif
 
@@ -659,8 +666,7 @@ bool ModuleManager::LoadModule(const std::string& path)
 #ifdef _WIN32
         CloseHandle(pinnedModule);
 #endif
-        console.LogError(std::format("Module '{}' rejected before OS load: {}", path, sidecarError));
-        return false;
+        return failLoad(std::format("Module '{}' rejected before OS load: {}", path, sidecarError));
     }
 
     // Load the shared library only after the non-executing compatibility gate.
@@ -671,8 +677,7 @@ bool ModuleManager::LoadModule(const std::string& path)
     if (!handle)
     {
         DWORD err = GetLastError();
-        console.LogError(std::format("Failed to load module '{}' (error {})", path, err));
-        return false;
+        return failLoad(std::format("Failed to load module '{}' with LoadLibraryW (error {})", path, err));
     }
 #else
     const std::string loadPath = PathToUtf8(validatedModulePath);
@@ -680,8 +685,8 @@ bool ModuleManager::LoadModule(const std::string& path)
     if (!handle)
     {
         const char* err = dlerror();
-        console.LogError(std::format("Failed to load module '{}': {}", path, err ? err : "unknown"));
-        return false;
+        return failLoad(std::format("Failed to load module '{}' (staged as '{}') with dlopen(RTLD_NOW): {}", path,
+                                    loadPath, err ? err : "unknown dynamic-loader error"));
     }
 #endif
 
@@ -693,23 +698,24 @@ bool ModuleManager::LoadModule(const std::string& path)
         ResolveModuleExport<SparkGetModuleCompatibilityFn>(handle, SPARK_MODULE_COMPATIBILITY_EXPORT_NAME);
     if (!compatibilityFn)
     {
-        console.LogError(std::format(
+        const std::string message = std::format(
             "Module '{}' rejected before injection/factory: missing mandatory {} export. "
             "Rebuild the module with the current Spark SDK (SPARK_IMPLEMENT_MODULE exports it automatically).",
-            path, SPARK_MODULE_COMPATIBILITY_EXPORT_NAME));
+            path, SPARK_MODULE_COMPATIBILITY_EXPORT_NAME);
         CloseModuleLibrary(handle);
-        return false;
+        return failLoad(message);
     }
 
     const SparkModuleCompatibilityDescriptor* compatibility = compatibilityFn();
     const Spark::ModuleCompatibilityStatus compatibilityStatus = Spark::CheckModuleCompatibility(compatibility);
     if (compatibilityStatus != Spark::ModuleCompatibilityStatus::Compatible)
     {
-        console.LogError(std::format("Module '{}' rejected before injection/factory: {}. Rebuild it with the same "
-                                     "Spark SDK, compiler ABI, C++ mode, architecture, and runtime configuration.",
-                                     path, Spark::ModuleCompatibilityStatusName(compatibilityStatus)));
+        const std::string message =
+            std::format("Module '{}' rejected before injection/factory: {}. Rebuild it with the same "
+                        "Spark SDK, compiler ABI, C++ mode, architecture, and runtime configuration.",
+                        path, Spark::ModuleCompatibilityStatusName(compatibilityStatus));
         CloseModuleLibrary(handle);
-        return false;
+        return failLoad(message);
     }
 
 #ifdef _WIN32
@@ -771,13 +777,13 @@ bool ModuleManager::LoadModule(const std::string& path)
         Spark::IModule* instance = createFn();
         if (!instance)
         {
-            console.LogError(std::format("CreateModule() returned null for '{}'", path));
+            const std::string message = std::format("CreateModule() returned null for '{}'", path);
 #ifdef _WIN32
             FreeLibrary(static_cast<HMODULE>(handle));
 #else
             dlclose(handle);
 #endif
-            return false;
+            return failLoad(message);
         }
 
         auto info = instance->GetModuleInfo();
@@ -785,15 +791,15 @@ bool ModuleManager::LoadModule(const std::string& path)
         // SDK version compatibility check
         if (!Spark::IsSDKCompatible(info.sdkVersion))
         {
-            console.LogError(std::format("Module '{}' SDK version mismatch (module={}, engine={})", info.name,
-                                         info.sdkVersion, SPARK_SDK_VERSION));
+            const std::string message = std::format("Module '{}' SDK version mismatch (module={}, engine={})",
+                                                    info.name, info.sdkVersion, SPARK_SDK_VERSION);
             destroyFn(instance);
 #ifdef _WIN32
             FreeLibrary(static_cast<HMODULE>(handle));
 #else
             dlclose(handle);
 #endif
-            return false;
+            return failLoad(message);
         }
 
         // Single-game-module policy: game modules own the simulation (physics
@@ -804,17 +810,18 @@ bool ModuleManager::LoadModule(const std::string& path)
             const std::string existing = GetGameModuleName();
             if (!existing.empty())
             {
-                console.LogError(std::format("REFUSED to load game module '{}': game module '{}' is already loaded. "
-                                             "One game module per process; mark libraries/extensions with "
-                                             "ModuleKind::Addon in their ModuleInfo.",
-                                             info.name, existing));
+                const std::string message =
+                    std::format("REFUSED to load game module '{}': game module '{}' is already loaded. "
+                                "One game module per process; mark libraries/extensions with "
+                                "ModuleKind::Addon in their ModuleInfo.",
+                                info.name, existing);
                 destroyFn(instance);
 #ifdef _WIN32
                 FreeLibrary(static_cast<HMODULE>(handle));
 #else
                 dlclose(handle);
 #endif
-                return false;
+                return failLoad(message);
             }
         }
 
@@ -860,13 +867,13 @@ bool ModuleManager::LoadModule(const std::string& path)
         IGameModule* legacyModule = legacyCreateFn();
         if (!legacyModule)
         {
-            console.LogError("CreateGameModule() returned null for '" + path + "'");
+            const std::string message = "CreateGameModule() returned null for '" + path + "'";
 #ifdef _WIN32
             FreeLibrary(static_cast<HMODULE>(handle));
 #else
             dlclose(handle);
 #endif
-            return false;
+            return failLoad(message);
         }
 
         // Wrap in adapter (unique_ptr for exception safety)
@@ -881,9 +888,10 @@ bool ModuleManager::LoadModule(const std::string& path)
             const std::string existing = GetGameModuleName();
             if (!existing.empty())
             {
-                console.LogError(std::format("REFUSED to load legacy game module '{}': game module '{}' is already "
-                                             "loaded (one game module per process).",
-                                             info.name, existing));
+                const std::string message =
+                    std::format("REFUSED to load legacy game module '{}': game module '{}' is already "
+                                "loaded (one game module per process).",
+                                info.name, existing);
                 // Destroy the adapter (and therefore the legacy object through
                 // its DLL export) while the library code is still resident.
                 adapterOwner.reset();
@@ -892,7 +900,7 @@ bool ModuleManager::LoadModule(const std::string& path)
 #else
                 dlclose(handle);
 #endif
-                return false;
+                return failLoad(message);
             }
         }
 
@@ -922,19 +930,21 @@ bool ModuleManager::LoadModule(const std::string& path)
     }
 
     // No recognized exports
-    console.LogError(std::format("Module '{}' has no recognized exports (CreateModule or CreateGameModule)", path));
+    const std::string message =
+        std::format("Module '{}' has no recognized exports (CreateModule or CreateGameModule)", path);
 #ifdef _WIN32
     FreeLibrary(static_cast<HMODULE>(handle));
 #else
     dlclose(handle);
 #endif
-    return false;
+    return failLoad(message);
 }
 
 bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
     const std::filesystem::path manifestFile = PathFromUtf8(manifestPath);
+    m_lastLoadError.clear();
 
     std::string content;
 
@@ -959,7 +969,8 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Core, "ModuleManager: cannot open manifest '%s' (errno=%d)",
                             manifestPath.c_str(), errno);
-            console.LogWarning("Could not open module manifest: " + manifestPath);
+            m_lastLoadError = "Could not open module manifest: " + manifestPath;
+            console.LogWarning(m_lastLoadError);
             return false;
         }
         content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
@@ -973,15 +984,17 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
     std::string parseError;
     if (!Spark::Json::ParseStrict(content, &manifest, &parseError) || !manifest.IsObject())
     {
-        console.LogError("Module manifest is not valid JSON: " + manifestPath +
-                         (parseError.empty() ? std::string{} : " (" + parseError + ")"));
+        m_lastLoadError = "Module manifest is not valid JSON: " + manifestPath +
+                          (parseError.empty() ? std::string{} : " (" + parseError + ")");
+        console.LogError(m_lastLoadError);
         return false;
     }
 
     const Spark::Json::Value& modules = manifest["modules"];
     if (!modules.IsArray() || modules.Size() == 0)
     {
-        console.LogError("Module manifest must contain a non-empty modules array: " + manifestPath);
+        m_lastLoadError = "Module manifest must contain a non-empty modules array: " + manifestPath;
+        console.LogError(m_lastLoadError);
         return false;
     }
 
@@ -1019,21 +1032,28 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
         }
         else
         {
-            console.LogWarning("Module not found: " + PathToUtf8(fullPath));
+            m_lastLoadError = "Module not found: " + PathToUtf8(fullPath);
+            console.LogWarning(m_lastLoadError);
         }
     }
 
+    if (anyLoaded)
+        m_lastLoadError.clear();
+    else if (m_lastLoadError.empty())
+        m_lastLoadError = "Module manifest did not contain a loadable module: " + manifestPath;
     return anyLoaded;
 }
 
 bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
+    m_lastLoadError.clear();
     bool anyLoaded = false;
 
     if (!std::filesystem::exists(PathFromUtf8(directory)))
     {
-        console.LogWarning("Module directory does not exist: " + directory);
+        m_lastLoadError = "Module directory does not exist: " + directory;
+        console.LogWarning(m_lastLoadError);
         return false;
     }
 
@@ -1044,6 +1064,10 @@ bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
             anyLoaded = true;
     }
 
+    if (anyLoaded)
+        m_lastLoadError.clear();
+    else if (m_lastLoadError.empty())
+        m_lastLoadError = "Module directory did not contain a loadable module: " + directory;
     return anyLoaded;
 }
 
@@ -1123,6 +1147,16 @@ std::string ModuleManager::GetGameModuleName() const
     {
         if (m.kind == Spark::ModuleKind::Game)
             return m.name;
+    }
+    return {};
+}
+
+std::string ModuleManager::GetInitializedGameModuleName() const
+{
+    for (const auto& module : m_modules)
+    {
+        if (module.kind == Spark::ModuleKind::Game && module.initialized && module.instance)
+            return module.name;
     }
     return {};
 }
@@ -1312,11 +1346,19 @@ void ModuleManager::RollbackStartup()
 bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext* context)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
+    m_lastLoadError.clear();
+
+    const auto failReload = [&](std::string message)
+    {
+        m_lastLoadError = std::move(message);
+        console.LogError(m_lastLoadError);
+        return false;
+    };
 
     if (!context)
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "ReloadModule called with null context");
-        return false;
+        return failReload("Cannot reload module '" + name + "' with a null engine context");
     }
 
     for (size_t index = 0; index < m_modules.size(); ++index)
@@ -1327,8 +1369,7 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
 
         if (entry.instance && !entry.instance->SupportsHotReload())
         {
-            console.LogError("Module does not support transactional hot reload; perform a full restart: " + name);
-            return false;
+            return failReload("Module does not support transactional hot reload; perform a full restart: " + name);
         }
 
         // A stateful module may need to checkpoint before an image swap. Run
@@ -1336,8 +1377,7 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         // leaves the working instance and all of its dependencies untouched.
         if (entry.initialized && entry.instance && !entry.instance->CanUnload())
         {
-            console.LogError("Module refused hot reload and remains active: " + name);
-            return false;
+            return failReload("Module refused hot reload and remains active: " + name);
         }
 
         const std::string savedPath = entry.path;
@@ -1375,17 +1415,15 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         }
         if (copyError)
         {
-            console.LogError("Failed to stage module reload for '" + name + "': " + copyError.message());
             removeShadowFiles();
-            return false;
+            return failReload("Failed to stage module reload for '" + name + "': " + copyError.message());
         }
 #else
         ScopedStagedModuleImage reloadShadow;
         std::string reloadStagingError;
         if (!StageModuleForPosixLoad(sourcePath, reloadShadow, reloadStagingError))
         {
-            console.LogError("Failed to stage module reload for '" + name + "': " + reloadStagingError);
-            return false;
+            return failReload("Failed to stage module reload for '" + name + "': " + reloadStagingError);
         }
         const std::filesystem::path shadowPath = reloadShadow.Get();
         const auto removeShadowFiles = []() {};
@@ -1395,18 +1433,19 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         stagedManager.m_fileCache = m_fileCache;
         if (!stagedManager.LoadModule(PathToUtf8(shadowPath)))
         {
-            console.LogError("Failed to validate staged replacement for module: " + name);
+            const std::string detail = stagedManager.GetLastLoadError();
             stagedManager.UnloadAll();
             removeShadowFiles();
-            return false;
+            return failReload(detail.empty()
+                                  ? "Failed to validate staged replacement for module: " + name
+                                  : "Failed to validate staged replacement for module '" + name + "': " + detail);
         }
 
         if (stagedManager.m_modules.size() != 1 || stagedManager.m_modules.front().name != name)
         {
-            console.LogError("Staged replacement identity does not match module: " + name);
             stagedManager.UnloadAll();
             removeShadowFiles();
-            return false;
+            return failReload("Staged replacement identity does not match module: " + name);
         }
 
         const Spark::ModuleKind replacementKind = stagedManager.m_modules.front().kind;
@@ -1416,10 +1455,9 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
             {
                 if (otherIndex != index && m_modules[otherIndex].kind == Spark::ModuleKind::Game)
                 {
-                    console.LogError("Staged replacement would violate the one-game-module policy: " + name);
                     stagedManager.UnloadAll();
                     removeShadowFiles();
-                    return false;
+                    return failReload("Staged replacement would violate the one-game-module policy: " + name);
                 }
             }
         }
@@ -1430,10 +1468,9 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         stagedManager.InitializeAll(context);
         if (!stagedManager.m_modules.front().initialized || !stagedManager.m_modules.front().instance)
         {
-            console.LogError("Staged replacement initialization failed; preserving module: " + name);
             stagedManager.UnloadAll();
             removeShadowFiles();
-            return false;
+            return failReload("Staged replacement initialization failed; preserving module: " + name);
         }
 
         LoadedModule replacement = std::move(stagedManager.m_modules.front());
@@ -1460,8 +1497,7 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         return true;
     }
 
-    console.LogError("Module not found for reload: " + name);
-    return false;
+    return failReload("Module not found for reload: " + name);
 }
 
 void ModuleManager::UnloadAll()

@@ -122,6 +122,18 @@ namespace
 #endif
     }
 
+    void SetGameKindEnvironment(bool enabled)
+    {
+#ifdef _WIN32
+        _putenv_s("SPARK_MODULE_ABI_KIND_GAME", enabled ? "1" : "");
+#else
+        if (enabled)
+            setenv("SPARK_MODULE_ABI_KIND_GAME", "1", 1);
+        else
+            unsetenv("SPARK_MODULE_ABI_KIND_GAME");
+#endif
+    }
+
     void SetVetoUnloadEnvironment(bool enabled)
     {
 #ifdef _WIN32
@@ -160,6 +172,55 @@ TEST(ModuleABI_ExpectedDescriptorIsCompatible)
     auto mismatch = Spark::kExpectedModuleCompatibility;
     ++mismatch.sdkVersion;
     EXPECT_TRUE(Spark::CheckModuleCompatibility(&mismatch) == Spark::ModuleCompatibilityStatus::SDKVersionMismatch);
+}
+
+TEST(ModuleABI_LoadErrorIncludesRequestedPathAndLoaderStage)
+{
+    const std::filesystem::path missingPath =
+        std::filesystem::temp_directory_path() / "spark-module-that-does-not-exist.invalid";
+    std::error_code ec;
+    std::filesystem::remove(missingPath, ec);
+
+    ModuleManager manager;
+    EXPECT_FALSE(manager.LoadModule(PathToUtf8(missingPath)));
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), PathToUtf8(missingPath));
+#ifdef _WIN32
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "validation");
+#else
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "stage");
+#endif
+}
+
+TEST(ModuleABI_LoadErrorTracksDirectoryFailureAndClearsAfterSuccess)
+{
+    const std::filesystem::path missingDirectory =
+        std::filesystem::temp_directory_path() / "spark-module-directory-that-does-not-exist";
+    std::error_code ec;
+    std::filesystem::remove_all(missingDirectory, ec);
+
+    ModuleManager manager;
+    EXPECT_FALSE(manager.LoadModulesFromDirectory(PathToUtf8(missingDirectory)));
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), PathToUtf8(missingDirectory));
+
+    EXPECT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    EXPECT_TRUE(manager.GetLastLoadError().empty());
+}
+
+TEST(ModuleABI_FailedGameInitializationIsNotReportedAsUsable)
+{
+    SetGameKindEnvironment(true);
+    SetFailOnLoadEnvironment(true);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    EXPECT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    EXPECT_FALSE(manager.GetGameModuleName().empty());
+    manager.InitializeAll(&context);
+
+    SetFailOnLoadEnvironment(false);
+    SetGameKindEnvironment(false);
+    EXPECT_TRUE(manager.GetInitializedGameModuleName().empty());
+    manager.UnloadAll();
 }
 
 TEST(ModuleABI_DiscoveryDoesNotExecuteCandidate)
@@ -395,6 +456,8 @@ TEST(ModuleABI_FailedTransactionalReloadPreservesWorkingModule)
     }
 
     EXPECT_FALSE(manager.ReloadModule("Spark Compatible ABI Fixture", &context));
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "Spark Compatible ABI Fixture");
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "staged replacement");
     EXPECT_TRUE(manager.GetModule("Spark Compatible ABI Fixture") == workingInstance);
     EXPECT_EQ(std::string(workingInstance->GetModuleInfo().name), std::string("Spark Compatible ABI Fixture"));
 
@@ -416,6 +479,7 @@ TEST(ModuleABI_UnloadVetoPreservesInitializedWorkingModule)
     EXPECT_FALSE(manager.ShutdownAll());
     EXPECT_TRUE(manager.GetModule("Spark Compatible ABI Fixture") == workingInstance);
     EXPECT_FALSE(manager.ReloadModule("Spark Compatible ABI Fixture", &context));
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "refused hot reload");
     EXPECT_TRUE(manager.GetModule("Spark Compatible ABI Fixture") == workingInstance);
 
     SetVetoUnloadEnvironment(false);
@@ -477,6 +541,7 @@ TEST(ModuleABI_FailedReplacementInitializationPreservesWorkingModule)
     SetFailOnLoadEnvironment(false);
 
     EXPECT_FALSE(reloadSucceeded);
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "initialization failed");
     EXPECT_TRUE(manager.GetModule("Spark Compatible ABI Fixture") == workingInstance);
     EXPECT_EQ(std::string(workingInstance->GetModuleInfo().name), std::string("Spark Compatible ABI Fixture"));
 
@@ -527,6 +592,9 @@ TEST(ModuleABI_HotReloadCallbackCanReenterManagerWithoutDeadlock)
     ASSERT_TRUE(manager.LoadModule(modulePath.string()));
     manager.InitializeAll(&context);
 
+    EXPECT_FALSE(manager.ReloadModule("Missing Module", &context));
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "Missing Module");
+
     Spark::ModuleHotReloadManager hotReload;
     hotReload.Initialize(&manager, &context);
     hotReload.WatchModule("Spark Compatible ABI Fixture", modulePath.string());
@@ -542,6 +610,7 @@ TEST(ModuleABI_HotReloadCallbackCanReenterManagerWithoutDeadlock)
         });
 
     EXPECT_TRUE(hotReload.ForceReload("Spark Compatible ABI Fixture"));
+    EXPECT_TRUE(manager.GetLastLoadError().empty());
     EXPECT_TRUE(callbackRan);
     EXPECT_TRUE(statusFromCallback.find("Reloads:  1") != std::string::npos);
     EXPECT_EQ(hotReload.GetReloadCount(), 1);

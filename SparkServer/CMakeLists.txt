@@ -43,6 +43,12 @@ target_link_libraries(SparkServer PRIVATE SparkServerCore)
 # libSparkGame.so/libSparkGame.dylib immediately at runtime.
 if(NOT WIN32)
     set_target_properties(SparkServer PROPERTIES ENABLE_EXPORTS ON)
+    if(APPLE)
+        # SparkGame is shared by multiple hosts, so it cannot use CMake's
+        # single-executable -bundle_loader relationship. Its dynamic_lookup
+        # references require the dedicated host to retain all global symbols.
+        target_link_options(SparkServer PRIVATE "LINKER:-export_dynamic")
+    endif()
 endif()
 
 if(MSVC)

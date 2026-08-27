@@ -38,7 +38,8 @@ namespace
             Spark::ModuleInfo info{};
             info.name = "Spark Compatible ABI Fixture";
             info.version = "1.0.0";
-            info.kind = Spark::ModuleKind::Addon;
+            const char* gameKind = std::getenv("SPARK_MODULE_ABI_KIND_GAME");
+            info.kind = gameKind && gameKind[0] != '\0' ? Spark::ModuleKind::Game : Spark::ModuleKind::Addon;
             return info;
         }
 

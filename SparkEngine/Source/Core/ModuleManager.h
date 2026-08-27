@@ -122,6 +122,9 @@ class ModuleManager
     /** @brief Name of the loaded Game-kind module, or empty when none. */
     std::string GetGameModuleName() const;
 
+    /** @brief Name of the initialized Game-kind module, or empty when none is usable. */
+    std::string GetInitializedGameModuleName() const;
+
     /**
      * @brief Initialize all loaded modules (sorted by loadOrder)
      * @param context Engine context passed to each module's OnLoad()
@@ -218,6 +221,16 @@ class ModuleManager
     /** @brief Get the number of modules whose OnLoad completed successfully. */
     size_t GetInitializedModuleCount() const;
 
+    /**
+     * @brief Detailed reason from the most recent load operation.
+     *
+     * Empty after a successful LoadModule/LoadModulesFromManifest/
+     * LoadModulesFromDirectory/ReloadModule call. The borrowed reference
+     * remains valid only until the next load operation; ModuleManager load
+     * calls are serialized.
+     */
+    const std::string& GetLastLoadError() const { return m_lastLoadError; }
+
     /** @brief Check if any modules are loaded */
     bool HasModules() const { return !m_modules.empty(); }
 
@@ -269,4 +282,5 @@ class ModuleManager
 
     std::vector<LoadedModule> m_modules;
     Spark::LocalFileCache* m_fileCache = nullptr;
+    std::string m_lastLoadError;
 };

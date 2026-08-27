@@ -338,11 +338,13 @@ namespace Spark::Server
                                 : m_modules->LoadModulesFromManifest(m_options.manifestPath.string());
         if (!loaded)
         {
-            SetError("Failed to load the selected dynamic game module(s)");
+            const std::string detail = m_modules->GetLastLoadError();
+            SetError(detail.empty() ? "Failed to load the selected dynamic game module(s)"
+                                    : "Failed to load the selected dynamic game module(s): " + detail);
             return false;
         }
         m_modules->InitializeAll(EngineContext::Get());
-        if (m_modules->GetGameModuleName().empty())
+        if (m_modules->GetInitializedGameModuleName().empty())
         {
             SetError("The selected module set contains no initialized Game module");
             return false;
@@ -556,14 +558,15 @@ namespace Spark::Server
         ServerHealth health;
         health.live = m_started.load(std::memory_order_acquire);
         health.stopping = m_stopping.load(std::memory_order_acquire);
+        const std::string initializedGame = m_modules ? m_modules->GetInitializedGameModuleName() : std::string{};
         health.ready = health.live && !health.stopping && m_server && m_server->IsRunning() && m_modules &&
-                       !m_modules->GetGameModuleName().empty() &&
+                       !initializedGame.empty() &&
                        (m_options.controlEndpoint.empty() || (m_controlService && m_controlService->IsReady()));
         health.port = m_options.server.port;
         if (m_modules)
         {
             health.loadedModules = m_modules->GetModuleCount();
-            health.gameModule = m_modules->GetGameModuleName();
+            health.gameModule = initializedGame;
         }
         if (m_server)
         {
