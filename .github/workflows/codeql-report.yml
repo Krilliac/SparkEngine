@@ -1,0 +1,223 @@
+# Privileged CodeQL reporting runs only from the default branch after the
+# unprivileged scanner has completed. Raw SARIF is untrusted data: it is
+# preflighted through the Actions API, downloaded outside the checkout, and
+# parsed without executing any source-run files.
+name: "CodeQL Trusted Reporter"
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: ["CodeQL Advanced"]
+    types: [completed]
+
+jobs:
+  invalidate:
+    name: Invalidate prior CodeQL report for new PR head
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    concurrency:
+      group: codeql-trusted-invalidate-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      pull-requests: write
+    steps:
+    - name: Mark prior CodeQL report pending
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      with:
+        script: |
+          const marker = '<!-- spark-codeql-report -->';
+          const shaPattern = /^[0-9a-f]{40}$/i;
+          const payloadPull = context.payload.pull_request;
+          const repository = context.payload.repository;
+          if (!payloadPull || !repository || !Number.isInteger(payloadPull.number) || payloadPull.number < 1 ||
+              payloadPull.state !== 'open' || payloadPull.base?.repo?.id !== repository.id ||
+              payloadPull.base?.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}` ||
+              !Number.isInteger(payloadPull.head?.repo?.id) || payloadPull.head.repo.id < 1 ||
+              typeof payloadPull.head.repo.full_name !== 'string' ||
+              !shaPattern.test(payloadPull.head?.sha || '')) {
+            throw new Error('pull_request_target payload does not identify an exact open PR head');
+          }
+
+          const pull = (await github.rest.pulls.get({
+            ...context.repo, pull_number: payloadPull.number
+          })).data;
+          if (pull?.number !== payloadPull.number || pull.state !== 'open' ||
+              pull.base?.repo?.id !== repository.id ||
+              pull.base?.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}` ||
+              pull.head?.repo?.id !== payloadPull.head.repo.id ||
+              pull.head?.repo?.full_name !== payloadPull.head.repo.full_name ||
+              pull.head?.sha?.toLowerCase() !== payloadPull.head.sha.toLowerCase()) {
+            core.info('A newer pull-request head superseded this invalidation event.');
+            return;
+          }
+
+          const isOwned = comment =>
+            comment?.body?.split(/\r?\n/, 1)[0] === marker && comment.user?.type === 'Bot' &&
+            (comment.user.login === 'github-actions[bot]' ||
+              comment.performed_via_github_app?.slug === 'github-actions');
+          const lastPage = link => {
+            const match = String(link || '').match(/[?&]page=(\d+)[^>]*>;\s*rel="last"/);
+            const page = match ? Number(match[1]) : 1;
+            return Number.isSafeInteger(page) && page > 0 ? page : 1;
+          };
+
+          const first = await github.rest.issues.listComments({
+            ...context.repo, issue_number: pull.number, per_page: 100, page: 1
+          });
+          const finalPage = lastPage(first.headers?.link);
+          const pages = new Set([1]);
+          for (let page = Math.max(2, finalPage - 3); page <= finalPage; page += 1) pages.add(page);
+          const comments = [...first.data];
+          for (const page of [...pages].sort((left, right) => left - right)) {
+            if (page === 1) continue;
+            const response = await github.rest.issues.listComments({
+              ...context.repo, issue_number: pull.number, per_page: 100, page
+            });
+            comments.push(...response.data);
+          }
+          if (finalPage > 5) core.warning('PR comment search was bounded to the oldest and newest pages.');
+
+          const existing = comments.filter(isOwned)
+            .sort((left, right) => (right.id || 0) - (left.id || 0))[0] || null;
+          const head = pull.head.sha.toLowerCase();
+          const currentState = existing?.body?.match(
+            /<!-- spark-codeql-report-state run-number=\d+ run-attempt=\d+ run-id=\d+ pr-head=([0-9a-f]{40}|none) run-head=([0-9a-f]{40}|none) -->/i
+          );
+          const currentPending = existing?.body?.match(
+            /<!-- spark-codeql-report-pending pr-head=([0-9a-f]{40}) -->/i
+          );
+          if ((currentState?.[1]?.toLowerCase() === head && currentState?.[2]?.toLowerCase() === head) ||
+              currentPending?.[1]?.toLowerCase() === head) {
+            core.info('The owned CodeQL comment already applies to this PR head.');
+            return;
+          }
+          const body = [
+            marker,
+            `<!-- spark-codeql-report-pending pr-head=${head} -->`,
+            '## :hourglass_flowing_sand: CodeQL Report Pending',
+            '',
+            'The pull-request head changed. Results from earlier commits do not apply while the new head is being scanned.',
+            '',
+            `**Current PR head:** \`${head}\``
+          ].join('\n');
+          if (existing) {
+            await github.rest.issues.updateComment({
+              ...context.repo, comment_id: existing.id, body
+            });
+          } else {
+            await github.rest.issues.createComment({
+              ...context.repo, issue_number: pull.number, body
+            });
+          }
+
+  report:
+    name: Validate and report CodeQL evidence
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: codeql-trusted-report-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha }}
+      cancel-in-progress: true
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+    - name: Checkout trusted default-branch reporter
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ${{ github.repository }}
+        ref: ${{ github.event.repository.default_branch }}
+        path: trusted-reporter
+        persist-credentials: false
+        fetch-depth: 1
+
+    - name: Resolve trusted reporter commit
+      id: trusted-checkout
+      run: echo "sha=$(git -C trusted-reporter rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+    # Prove the checked-out scripts are from the exact commit whose reporter
+    # workflow GitHub is executing before any repository code is loaded.
+    - name: Attest exact default-branch reporter before execution
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
+        TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
+        TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      with:
+        script: |
+          const sha = /^[0-9a-f]{40}$/i;
+          const repository = (await github.rest.repos.get(context.repo)).data;
+          const checkoutSha = process.env.TRUSTED_CHECKOUT_SHA;
+          const workflowSha = process.env.TRUSTED_WORKFLOW_SHA;
+          const expectedRef = `${repository.full_name}/.github/workflows/codeql-report.yml@refs/heads/${repository.default_branch}`;
+          const defaultCommit = (await github.rest.repos.getCommit({
+            ...context.repo, ref: repository.default_branch
+          })).data;
+          if (!sha.test(checkoutSha || '') || !sha.test(workflowSha || '') ||
+              checkoutSha.toLowerCase() !== workflowSha.toLowerCase() ||
+              checkoutSha.toLowerCase() !== String(defaultCommit.sha || '').toLowerCase() ||
+              process.env.TRUSTED_WORKFLOW_REF !== expectedRef) {
+            throw new Error('Reporter checkout, executing workflow, and current default branch are not exact.');
+          }
+
+    - name: Test trusted CodeQL reporter
+      id: reporter-tests
+      run: node trusted-reporter/.github/scripts/test-report-codeql-findings.js
+
+    - name: Authorize source run and artifact inventory
+      id: preflight
+      if: always()
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        REPORT_MODE: trusted-preflight
+        EXPECTED_LANGUAGES: '["actions", "c-cpp", "python"]'
+        REPORTER_TEST_OUTCOME: ${{ steps.reporter-tests.outcome }}
+        WORKFLOW_RUN_EVENT_PATH: ${{ github.event_path }}
+      with:
+        script: |
+          const report = require('./trusted-reporter/.github/scripts/report-codeql-findings.js');
+          await report({ github, context, core });
+
+    - name: Download exact source-run SARIF artifacts
+      id: download
+      if: always() && steps.preflight.outputs.authorized == 'true'
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        artifact-ids: ${{ steps.preflight.outputs.artifact-ids }}
+        path: ${{ runner.temp }}/codeql-sarif-artifacts
+        merge-multiple: true
+        skip-decompress: true
+        digest-mismatch: error
+        repository: ${{ github.repository }}
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ github.token }}
+
+    - name: Publish trusted CodeQL report
+      if: always()
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        REPORT_MODE: trusted-report
+        ARTIFACT_DIR: ${{ runner.temp }}/codeql-sarif-artifacts
+        EXPECTED_LANGUAGES: '["actions", "c-cpp", "python"]'
+        REPORTER_TEST_OUTCOME: ${{ steps.reporter-tests.outcome }}
+        PREFLIGHT_OUTCOME: ${{ steps.preflight.outcome }}
+        PREFLIGHT_ARTIFACT_MANIFEST: ${{ steps.preflight.outputs.artifact-manifest }}
+        DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+        WORKFLOW_RUN_EVENT_PATH: ${{ github.event_path }}
+        SUMMARY_PATH: ${{ runner.temp }}/codeql-summary.json
+      with:
+        script: |
+          const report = require('./trusted-reporter/.github/scripts/report-codeql-findings.js');
+          await report({ github, context, core });
+
+    - name: Upload trusted CodeQL summary
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: codeql-trusted-summary-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+        path: ${{ runner.temp }}/codeql-summary.json
+        retention-days: 7
+        if-no-files-found: error

@@ -81,3 +81,67 @@ grep -Fq "UNCLASSIFIED" "$TMP_ROOT/output.txt"
 WORKFLOW="$REPO_ROOT/.github/workflows/build.yml"
 grep -Fq 'if [ "$cap_exit" -ne 0 ] || [ "$rm_exit" -ne 0 ] || [ "$list_exit" -ne 0 ]; then' "$WORKFLOW"
 grep -Fq 'lcov coverage evidence is incomplete' "$WORKFLOW"
+
+# PR-controlled build code must never share a job with pull-request write
+# permission. Coverage crosses that boundary through one small, same-run data
+# artifact into a reporter that does not check out or execute repository code.
+"${PYTHON[@]}" - "$WORKFLOW" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
+
+
+def job_block(name: str) -> str:
+    match = re.search(
+        rf"(?ms)^  {re.escape(name)}:\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
+        workflow,
+    )
+    assert match, f"missing workflow job: {name}"
+    return match.group(1)
+
+
+top_permissions = re.search(r"(?ms)^permissions:\n((?:  [^\n]*\n)+)", workflow)
+assert top_permissions, "missing workflow-wide permissions"
+assert "contents: read" in top_permissions.group(1)
+assert "pull-requests: write" not in top_permissions.group(1)
+
+coverage_job = job_block("coverage")
+assert re.search(r"(?m)^    permissions:\n      contents: read$", coverage_job)
+assert "pull-requests: write" not in coverage_job
+assert "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in coverage_job
+assert "Upload bounded coverage comment payload" in coverage_job
+assert "coverage-pr-comment-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}" in coverage_job
+assert "path: coverage-pr-comment-payload/payload.json" in coverage_job
+assert "retention-days: 1" in coverage_job
+
+reporter_job = job_block("report-coverage")
+assert "needs: coverage" in reporter_job
+assert re.search(r"(?m)^    permissions:\n      actions: read\n      pull-requests: write$", reporter_job)
+assert "actions/checkout@" not in reporter_job
+assert not re.search(r"(?m)^      - .*\n(?:        .*\n)*?        run:", reporter_job)
+assert "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" in reporter_job
+assert "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3" in reporter_job
+assert "listWorkflowRunArtifacts" in reporter_job
+for field in (
+    "artifact_name",
+    "source_event",
+    "source_run_id",
+    "source_run_attempt",
+    "source_sha",
+    "source_head_sha",
+    "source_repository",
+    "pull_request_number",
+):
+    assert f"payload[field]" in reporter_job or field in reporter_job
+assert "payloadStat.size > 131072" in reporter_job
+assert "payload.body.length > 60000" in reporter_job
+
+ci_error_reporter = job_block("report-ci-errors")
+assert "pull-requests: write" in ci_error_reporter
+assert "ref: Working" in ci_error_reporter
+assert "persist-credentials: false" in ci_error_reporter
+
+assert workflow.count("pull-requests: write") == 2
+PY

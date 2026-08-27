@@ -1,0 +1,713 @@
+const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const reportCodeqlFindings = require('./report-codeql-findings.js');
+
+const ENV_KEYS = [
+    'REPORT_MODE', 'ARTIFACT_DIR', 'EXPECTED_LANGUAGES', 'REPORTER_TEST_OUTCOME',
+    'PREFLIGHT_OUTCOME', 'PREFLIGHT_ARTIFACT_MANIFEST', 'DOWNLOAD_OUTCOME',
+    'SUMMARY_PATH', 'WORKFLOW_RUN_EVENT_PATH', 'GITHUB_EVENT_PATH'
+];
+const EXPECTED_LANGUAGES = ['actions', 'c-cpp', 'python'];
+const ARTIFACT_FILES = { actions: 'actions.sarif', 'c-cpp': 'cpp.sarif', python: 'python.sarif' };
+const REPOSITORY_ID = 1001;
+const HEAD_REPOSITORY_ID = 2002;
+const RUN_ID = 3003;
+const WORKFLOW_ID = 4004;
+const MERGE_SHA = '1111111111111111111111111111111111111111';
+const SOURCE_HEAD_SHA = '2222222222222222222222222222222222222222';
+const WORKFLOW_BLOB_SHA = '3333333333333333333333333333333333333333';
+const CHANGED_SHA = '4444444444444444444444444444444444444444';
+const MARKER = '<!-- spark-codeql-report -->';
+
+const clone = value => JSON.parse(JSON.stringify(value));
+
+async function withEnvironment(values, action) {
+    const previous = Object.fromEntries(ENV_KEYS.map(key => [key, process.env[key]]));
+    try {
+        for (const key of ENV_KEYS) delete process.env[key];
+        for (const [key, value] of Object.entries(values)) process.env[key] = String(value);
+        return await action();
+    } finally {
+        for (const key of ENV_KEYS) {
+            if (previous[key] === undefined) delete process.env[key];
+            else process.env[key] = previous[key];
+        }
+    }
+}
+
+function fixture() {
+    const repository = {
+        id: REPOSITORY_ID,
+        full_name: 'Krilliac/SparkEngine',
+        default_branch: 'Working'
+    };
+    const headRepository = {
+        id: HEAD_REPOSITORY_ID,
+        full_name: 'contributor/SparkEngine'
+    };
+    const pullReference = {
+        number: 42,
+        head: { sha: SOURCE_HEAD_SHA },
+        base: { repo: repository }
+    };
+    const run = {
+        id: RUN_ID,
+        workflow_id: WORKFLOW_ID,
+        run_number: 50,
+        run_attempt: 1,
+        name: 'CodeQL Advanced',
+        path: '.github/workflows/codeql.yml@refs/pull/42/merge',
+        event: 'pull_request',
+        status: 'completed',
+        conclusion: 'success',
+        head_sha: SOURCE_HEAD_SHA,
+        head_branch: 'hostile-sarif',
+        repository,
+        head_repository: headRepository,
+        pull_requests: [pullReference]
+    };
+    const event = {
+        action: 'completed',
+        repository,
+        workflow_run: clone(run)
+    };
+    const artifacts = EXPECTED_LANGUAGES.map((language, index) => ({
+        id: 5000 + index,
+        name: ARTIFACT_FILES[language],
+        size_in_bytes: 1024 + index,
+        expired: false,
+        digest: `sha256:${String(index + 6).repeat(64)}`,
+        workflow_run: {
+            id: RUN_ID,
+            repository_id: REPOSITORY_ID,
+            head_repository_id: HEAD_REPOSITORY_ID,
+            head_branch: run.head_branch,
+            head_sha: SOURCE_HEAD_SHA
+        }
+    }));
+    const pull = {
+        number: 42,
+        state: 'open',
+        merge_commit_sha: MERGE_SHA,
+        base: { repo: repository },
+        head: { sha: SOURCE_HEAD_SHA, repo: headRepository }
+    };
+    return {
+        repository,
+        run,
+        event,
+        artifacts,
+        pull,
+        pullCandidates: [pull],
+        workflowRuns: [run],
+        comments: [],
+        sourceWorkflowBlobSha: WORKFLOW_BLOB_SHA,
+        trustedWorkflowBlobSha: WORKFLOW_BLOB_SHA
+    };
+}
+
+function writeEvent(root, event) {
+    const eventPath = path.join(root, `event-${Math.random().toString(16).slice(2)}.json`);
+    fs.writeFileSync(eventPath, JSON.stringify(event), 'utf8');
+    return eventPath;
+}
+
+function harness(data) {
+    const state = clone(data);
+    const observed = {
+        failed: [], info: [], warnings: [], outputs: {}, jobSummary: '',
+        createdComments: [], updatedComments: [], listCommentsCalls: 0,
+        workflowRunCalls: 0, artifactListCalls: 0,
+        getContentCalls: [], pullGetCalls: [], pullListCalls: [], commentRequests: []
+    };
+    const github = {
+        rest: {
+            repos: {
+                async get() { return { data: clone(state.repository) }; },
+                async getContent(request) {
+                    observed.getContentCalls.push(clone(request));
+                    const sha = request.ref === state.repository.default_branch
+                        ? state.trustedWorkflowBlobSha : state.sourceWorkflowBlobSha;
+                    return { data: { type: 'file', sha } };
+                },
+                async getCommit() {
+                    return { data: { parents: [{ sha: CHANGED_SHA }, { sha: SOURCE_HEAD_SHA }] } };
+                }
+            },
+            actions: {
+                async getWorkflowRun() {
+                    observed.workflowRunCalls += 1;
+                    return { data: clone(state.run) };
+                },
+                async listWorkflowRunArtifacts(request) {
+                    observed.artifactListCalls += 1;
+                    return { data: { artifacts: clone(state.artifacts) }, headers: {} };
+                },
+                async listWorkflowRuns() {
+                    return { data: { workflow_runs: clone(state.workflowRuns) }, headers: {} };
+                }
+            },
+            pulls: {
+                async get(request) {
+                    observed.pullGetCalls.push(clone(request));
+                    return { data: clone(state.pull) };
+                },
+                async list(request) {
+                    observed.pullListCalls.push(clone(request));
+                    return { data: clone(state.pullCandidates), headers: {} };
+                }
+            },
+            issues: {
+                async listComments(request) {
+                    observed.listCommentsCalls += 1;
+                    observed.commentRequests.push(clone(request));
+                    if (!state.commentPages) return { data: clone(state.comments), headers: {} };
+                    const finalPage = state.commentLastPage || Math.max(...Object.keys(state.commentPages).map(Number));
+                    const page = request.page || 1;
+                    const link = finalPage > 1
+                        ? `<https://api.github.test/comments?page=${finalPage}>; rel="last"` : '';
+                    return { data: clone(state.commentPages[page] || []), headers: { link } };
+                },
+                async createComment(request) {
+                    observed.createdComments.push(request);
+                    return { data: { id: 9001 } };
+                },
+                async updateComment(request) {
+                    observed.updatedComments.push(request);
+                    return { data: { id: request.comment_id } };
+                }
+            }
+        }
+    };
+    const summary = {
+        addRaw(body) { observed.jobSummary = body; return this; },
+        async write() {}
+    };
+    const core = {
+        info: message => observed.info.push(message),
+        warning: message => observed.warnings.push(message),
+        setFailed: message => observed.failed.push(message),
+        setOutput: (name, value) => { observed.outputs[name] = String(value); },
+        summary
+    };
+    const context = { repo: { owner: 'Krilliac', repo: 'SparkEngine' } };
+    return { observed, github, core, context };
+}
+
+function sarif(language, results = [], automationLanguage = language) {
+    return {
+        version: '2.1.0',
+        runs: [{
+            automationDetails: { id: `/language:${automationLanguage}` },
+            tool: {
+                driver: {
+                    name: 'CodeQL',
+                    rules: [{
+                        id: 'cpp/test-finding',
+                        name: 'TestFinding',
+                        shortDescription: { text: 'Test finding' },
+                        defaultConfiguration: { level: 'warning' }
+                    }]
+                }
+            },
+            results
+        }]
+    };
+}
+
+function finding(overrides = {}) {
+    return {
+        ruleId: 'cpp/test-finding',
+        level: 'warning',
+        message: { text: 'Untrusted data reaches a sensitive operation.' },
+        locations: [{
+            physicalLocation: {
+                artifactLocation: { uri: 'SparkEngine/Source/Test.cpp' },
+                region: { startLine: 17 }
+            }
+        }],
+        ...overrides
+    };
+}
+
+function writeArtifacts(root, values = {}) {
+    const artifactRoot = path.join(root, `artifacts-${Math.random().toString(16).slice(2)}`);
+    fs.mkdirSync(artifactRoot, { recursive: true });
+    for (const language of EXPECTED_LANGUAGES) {
+        if (values[language] === null) continue;
+        const value = Object.hasOwn(values, language) ? values[language] : sarif(language);
+        const content = typeof value === 'string' ? value : JSON.stringify(value);
+        fs.writeFileSync(path.join(artifactRoot, ARTIFACT_FILES[language]), content, 'utf8');
+    }
+    return artifactRoot;
+}
+
+async function runPreflight(root, data) {
+    const runtime = harness(data);
+    const eventPath = writeEvent(root, data.event);
+    await withEnvironment({
+        REPORT_MODE: 'trusted-preflight',
+        EXPECTED_LANGUAGES: JSON.stringify(EXPECTED_LANGUAGES),
+        REPORTER_TEST_OUTCOME: 'success',
+        WORKFLOW_RUN_EVENT_PATH: eventPath
+    }, () => reportCodeqlFindings(runtime));
+    return runtime;
+}
+
+async function runTrustedReport(root, data, manifest, artifactRoot, envOverrides = {}) {
+    const runtime = harness(data);
+    const eventPath = writeEvent(root, data.event);
+    const summaryPath = path.join(root, `summary-${Math.random().toString(16).slice(2)}.json`);
+    await withEnvironment({
+        REPORT_MODE: 'trusted-report',
+        ARTIFACT_DIR: artifactRoot,
+        EXPECTED_LANGUAGES: JSON.stringify(EXPECTED_LANGUAGES),
+        REPORTER_TEST_OUTCOME: 'success',
+        PREFLIGHT_OUTCOME: 'success',
+        PREFLIGHT_ARTIFACT_MANIFEST: manifest,
+        DOWNLOAD_OUTCOME: 'success',
+        SUMMARY_PATH: summaryPath,
+        WORKFLOW_RUN_EVENT_PATH: eventPath,
+        ...envOverrides
+    }, () => reportCodeqlFindings(runtime));
+    assert(fs.existsSync(summaryPath), 'trusted reporting must always emit a machine-readable summary');
+    return { runtime, summary: JSON.parse(fs.readFileSync(summaryPath, 'utf8')) };
+}
+
+async function preflightAndReport(root, preflightData, reportData, artifactRoot, envOverrides = {}) {
+    const preflight = await runPreflight(root, preflightData);
+    assert.strictEqual(preflight.observed.outputs.authorized, 'true');
+    assert.strictEqual(preflight.observed.failed.length, 0);
+    assert.strictEqual(preflight.observed.outputs['artifact-ids'], '5000,5001,5002');
+    return runTrustedReport(
+        root,
+        reportData,
+        preflight.observed.outputs['artifact-manifest'],
+        artifactRoot,
+        envOverrides
+    );
+}
+
+function assertNoMutation(result) {
+    assert.strictEqual(result.runtime.observed.createdComments.length, 0);
+    assert.strictEqual(result.runtime.observed.updatedComments.length, 0);
+}
+
+function testWorkflowShape() {
+    const scanner = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'codeql.yml'), 'utf8');
+    const reporter = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'codeql-report.yml'), 'utf8');
+    const combined = `${scanner}\n${reporter}`;
+    const actionUses = [...combined.matchAll(/^\s*uses:\s*([^\s#]+)/gm)].map(match => match[1]);
+
+    assert(!/^\s*(?:-\s*)?run:\s*/m.test(scanner), 'the source scanner must not execute repository code');
+    assert(!scanner.includes('pull-requests: write'));
+    assert(!scanner.includes('issues: write'));
+    assert(scanner.includes('build-mode: none'));
+    assert(scanner.includes('config: |'));
+    assert(!scanner.includes('config-file:'));
+    assert(scanner.includes('archive: false'));
+    assert(scanner.includes('repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}'));
+    assert(scanner.includes('ref: ${{ github.event.pull_request.head.sha || github.sha }}'));
+    assert(actionUses.length >= 7 && actionUses.every(action => /^[^@\s]+@[0-9a-f]{40}$/.test(action)),
+        'all actions must be remote actions pinned to full commit SHAs');
+
+    assert(reporter.includes('pull_request_target:'));
+    assert(reporter.includes('types: [opened, synchronize, reopened]'));
+    assert(reporter.includes("if: github.event_name == 'workflow_run'"));
+    assert(reporter.includes("if: github.event_name == 'pull_request_target'"));
+    const invalidation = reporter.slice(reporter.indexOf('  invalidate:'), reporter.indexOf('  report:'));
+    assert(!invalidation.includes('actions/checkout@'), 'PR-head invalidation must not check out untrusted code');
+    assert(invalidation.includes('spark-codeql-report-pending'));
+    assert(invalidation.includes('pull.head.sha.toLowerCase()'));
+    assert(reporter.includes('ref: ${{ github.event.repository.default_branch }}'));
+    assert(reporter.includes('artifact-ids: ${{ steps.preflight.outputs.artifact-ids }}'));
+    assert(reporter.includes('skip-decompress: true'));
+    assert(reporter.includes('digest-mismatch: error'));
+    assert(reporter.includes("require('./trusted-reporter/.github/scripts/report-codeql-findings.js')"));
+    assert(reporter.includes('node trusted-reporter/.github/scripts/test-report-codeql-findings.js'));
+}
+
+function invalidationScript() {
+    const reporter = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'codeql-report.yml'), 'utf8');
+    const marker = '        script: |\n';
+    const step = reporter.indexOf('    - name: Mark prior CodeQL report pending');
+    const start = reporter.indexOf(marker, step);
+    assert(step >= 0 && start >= 0, 'invalidation script must be present in the trusted workflow');
+    const lines = reporter.slice(start + marker.length).split(/\r?\n/);
+    const scriptLines = [];
+    for (const line of lines) {
+        if (line && !line.startsWith('          ')) break;
+        scriptLines.push(line ? line.slice(10) : '');
+    }
+    return scriptLines.join('\n');
+}
+
+async function runInvalidation(comments, head = SOURCE_HEAD_SHA, liveHead = head) {
+    const observed = { created: [], updated: [], info: [], warnings: [] };
+    const repository = { id: REPOSITORY_ID, full_name: 'Krilliac/SparkEngine' };
+    const headRepository = { id: HEAD_REPOSITORY_ID, full_name: 'contributor/SparkEngine' };
+    const livePull = {
+        number: 42, state: 'open', base: { repo: repository },
+        head: { sha: liveHead, repo: headRepository }
+    };
+    const github = { rest: {
+        pulls: { async get() { return { data: clone(livePull) }; } },
+        issues: {
+        async listComments() { return { data: clone(comments), headers: {} }; },
+        async createComment(request) { observed.created.push(request); return { data: { id: 1 } }; },
+        async updateComment(request) { observed.updated.push(request); return { data: { id: request.comment_id } }; }
+    } } };
+    const context = {
+        repo: { owner: 'Krilliac', repo: 'SparkEngine' },
+        payload: {
+            repository,
+            pull_request: {
+                number: 42,
+                state: 'open',
+                base: { repo: repository },
+                head: { sha: head, repo: headRepository }
+            }
+        }
+    };
+    const core = {
+        info: message => observed.info.push(message),
+        warning: message => observed.warnings.push(message)
+    };
+    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    await new AsyncFunction('github', 'context', 'core', invalidationScript())(github, context, core);
+    return observed;
+}
+
+async function testInvalidation() {
+    const ownedOld = [{
+        id: 8001,
+        body: `${MARKER}\n<!-- spark-codeql-report-state run-number=49 run-attempt=1 run-id=2999 pr-head=${CHANGED_SHA} run-head=${CHANGED_SHA} -->\nclean`,
+        user: { type: 'Bot', login: 'github-actions[bot]' },
+        performed_via_github_app: { slug: 'github-actions' }
+    }];
+    const invalidated = await runInvalidation(ownedOld);
+    assert.strictEqual(invalidated.created.length, 0);
+    assert.strictEqual(invalidated.updated.length, 1);
+    assert.strictEqual(invalidated.updated[0].comment_id, 8001);
+    assert(invalidated.updated[0].body.includes(`spark-codeql-report-pending pr-head=${SOURCE_HEAD_SHA}`));
+    assert(!invalidationScript().includes('actions/checkout@'));
+
+    const attacker = [{
+        id: 8002,
+        body: `${MARKER}\nattacker-controlled marker`,
+        user: { type: 'User', login: 'attacker' }
+    }];
+    const spoof = await runInvalidation(attacker);
+    assert.strictEqual(spoof.updated.length, 0);
+    assert.strictEqual(spoof.created.length, 1);
+
+    const current = clone(ownedOld);
+    current[0].body = current[0].body.replaceAll(CHANGED_SHA, SOURCE_HEAD_SHA);
+    const alreadyCurrent = await runInvalidation(current);
+    assert.strictEqual(alreadyCurrent.created.length, 0);
+    assert.strictEqual(alreadyCurrent.updated.length, 0,
+        'late invalidation must not overwrite a completed report for the same head');
+
+    const staleEvent = await runInvalidation(ownedOld, CHANGED_SHA, SOURCE_HEAD_SHA);
+    assert.strictEqual(staleEvent.created.length, 0);
+    assert.strictEqual(staleEvent.updated.length, 0,
+        'an out-of-order invalidation event must not overwrite state for the current PR head');
+}
+
+async function main() {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spark-codeql-report-'));
+    try {
+        testWorkflowShape();
+        await testInvalidation();
+
+        await assert.rejects(
+            () => withEnvironment({ REPORT_MODE: 'collect' }, () => reportCodeqlFindings(harness(fixture()))),
+            /not permitted/
+        );
+
+        const workflowMismatch = fixture();
+        workflowMismatch.sourceWorkflowBlobSha = CHANGED_SHA;
+        const rejectedWorkflow = await runPreflight(root, workflowMismatch);
+        assert.strictEqual(rejectedWorkflow.observed.outputs.authorized, 'false');
+        assert(rejectedWorkflow.observed.failed.some(message => message.includes('does not match')));
+        assert.strictEqual(rejectedWorkflow.observed.listCommentsCalls, 0);
+        assert.strictEqual(rejectedWorkflow.observed.artifactListCalls, 0,
+            'identity failure must stop before enumerating attacker-controlled artifacts');
+        assert.strictEqual(rejectedWorkflow.observed.pullListCalls.length, 0,
+            'identity failure must stop before PR candidate enumeration');
+
+        const badProvenance = fixture();
+        badProvenance.artifacts[1].workflow_run.head_repository_id = 9999;
+        const rejectedProvenance = await runPreflight(root, badProvenance);
+        assert.strictEqual(rejectedProvenance.observed.outputs.authorized, 'false');
+        assert(rejectedProvenance.observed.failed.some(message => message.includes('exact source run')));
+
+        const badDigest = fixture();
+        badDigest.artifacts[0].digest = 'sha256:not-a-digest';
+        const rejectedDigest = await runPreflight(root, badDigest);
+        assert.strictEqual(rejectedDigest.observed.outputs.authorized, 'false');
+        assert(rejectedDigest.observed.failed.some(message => message.includes('valid SHA-256 digest')));
+
+        const wrongRepository = fixture();
+        wrongRepository.event.workflow_run.repository.id += 1;
+        const rejectedRepository = await runPreflight(root, wrongRepository);
+        assert.strictEqual(rejectedRepository.observed.outputs.authorized, 'false');
+        assert(rejectedRepository.observed.failed.some(message => message.includes('expected repository')));
+
+        const invalidRepositoryId = fixture();
+        invalidRepositoryId.event.repository.id = 0;
+        invalidRepositoryId.event.workflow_run.repository.id = 0;
+        invalidRepositoryId.run.repository.id = 0;
+        const rejectedRepositoryId = await runPreflight(root, invalidRepositoryId);
+        assert.strictEqual(rejectedRepositoryId.observed.outputs.authorized, 'false');
+        assert(rejectedRepositoryId.observed.failed.some(message => message.includes('expected repository')));
+
+        const newerAttempt = fixture();
+        newerAttempt.run.run_attempt = 2;
+        const rejectedAttempt = await runPreflight(root, newerAttempt);
+        assert.strictEqual(rejectedAttempt.observed.outputs.authorized, 'false');
+        assert(rejectedAttempt.observed.failed.some(message => message.includes('newer attempt')));
+
+        const missingApiArtifact = fixture();
+        missingApiArtifact.artifacts.pop();
+        const rejectedInventory = await runPreflight(root, missingApiArtifact);
+        assert.strictEqual(rejectedInventory.observed.outputs.authorized, 'false');
+        assert(rejectedInventory.observed.failed.some(message => message.includes("exactly one 'python.sarif'")));
+
+        const excessiveInventory = fixture();
+        excessiveInventory.artifacts = Array.from({ length: 101 }, (_, index) => ({
+            ...clone(excessiveInventory.artifacts[index % excessiveInventory.artifacts.length]),
+            id: 6000 + index,
+            name: `attacker-${index}.sarif`
+        }));
+        const rejectedExcessiveInventory = await runPreflight(root, excessiveInventory);
+        assert.strictEqual(rejectedExcessiveInventory.observed.outputs.authorized, 'false');
+        assert(rejectedExcessiveInventory.observed.failed.some(message => message.includes('100-item limit')));
+
+        const missingPullReferences = fixture();
+        missingPullReferences.event.workflow_run.pull_requests = [];
+        missingPullReferences.run.pull_requests = [];
+        const resolvedAssociation = await runPreflight(root, missingPullReferences);
+        assert.strictEqual(resolvedAssociation.observed.outputs.authorized, 'true');
+        assert.strictEqual(resolvedAssociation.observed.pullListCalls.length, 1);
+        assert.strictEqual(resolvedAssociation.observed.pullListCalls[0].head, 'contributor:hostile-sarif');
+        assert(resolvedAssociation.observed.getContentCalls.some(request =>
+            request.owner === 'contributor' && request.repo === 'SparkEngine' && request.ref === SOURCE_HEAD_SHA),
+        'source workflow blob must be fetched from the fork head repository');
+
+        const mismatchedSelector = fixture();
+        mismatchedSelector.event.workflow_run.pull_requests = [];
+        mismatchedSelector.run.pull_requests = [];
+        mismatchedSelector.pullCandidates = [clone(mismatchedSelector.pull)];
+        mismatchedSelector.pullCandidates[0].head.repo.id = 9999;
+        const rejectedSelector = await runPreflight(root, mismatchedSelector);
+        assert.strictEqual(rejectedSelector.observed.outputs.authorized, 'false');
+        assert(rejectedSelector.observed.failed.some(message => /exact source pull request/i.test(message)));
+
+        const ambiguousSelector = fixture();
+        ambiguousSelector.event.workflow_run.pull_requests = [];
+        ambiguousSelector.run.pull_requests = [];
+        const secondPull = clone(ambiguousSelector.pullCandidates[0]);
+        secondPull.number = 43;
+        ambiguousSelector.pullCandidates.push(secondPull);
+        const rejectedAmbiguity = await runPreflight(root, ambiguousSelector);
+        assert.strictEqual(rejectedAmbiguity.observed.outputs.authorized, 'false');
+        assert(rejectedAmbiguity.observed.failed.some(message => message.includes('found 2')));
+
+        const cleanData = fixture();
+        const clean = await preflightAndReport(root, cleanData, cleanData, writeArtifacts(root));
+        assert.strictEqual(clean.summary.status, 'complete');
+        assert.strictEqual(clean.summary.uniqueFindings, 0);
+        assert.deepStrictEqual(clean.summary.completedLanguages, EXPECTED_LANGUAGES);
+        assert.strictEqual(clean.summary.artifactEvidence.length, 3);
+        assert.strictEqual(clean.runtime.observed.createdComments.length, 1);
+        assert(clean.runtime.observed.createdComments[0].body.includes('valid SARIF and no findings'));
+
+        const hostile = finding({
+            ruleId: 'cpp/evil|@reviewers[rule]',
+            message: {
+                text: '@reviewers [click](https://evil.example) **bold** <details> | `tick`\nnext'
+            },
+            locations: [{
+                physicalLocation: {
+                    artifactLocation: { uri: 'bad|@team[link](https://evil.example).cpp' },
+                    region: { startLine: 9 }
+                }
+            }]
+        });
+        const hostileData = fixture();
+        const hostileResult = await preflightAndReport(root, hostileData, hostileData, writeArtifacts(root, {
+            'c-cpp': sarif('c-cpp', [hostile])
+        }));
+        const hostileBody = hostileResult.runtime.observed.createdComments[0].body;
+        assert.strictEqual(hostileResult.summary.status, 'complete');
+        assert(hostileBody.includes('&#64;reviewers'));
+        assert(hostileBody.includes('\\[click\\]\\('));
+        assert(hostileBody.includes('&lt;details&gt;'));
+        assert(!hostileBody.includes('@reviewers'));
+        assert(!hostileBody.includes('[click](https://evil.example)'));
+
+        const manyFindings = Array.from({ length: 350 }, (_, index) => finding({
+            ruleId: `@reviewers/${'\u{1f4a3}'.repeat(120)}`,
+            level: ['error', 'warning', 'note'][index % 3],
+            message: { text: `@reviewers hostile-${index} ${'\u{1f4a3}'.repeat(300)}` },
+            locations: [{
+                physicalLocation: {
+                    artifactLocation: { uri: `bad|@team/${'\u{1f4a3}'.repeat(300)}-${index}.cpp` },
+                    region: { startLine: index + 1 }
+                }
+            }]
+        }));
+        const boundedData = fixture();
+        const bounded = await preflightAndReport(root, boundedData, boundedData, writeArtifacts(root, {
+            'c-cpp': sarif('c-cpp', manyFindings)
+        }));
+        const boundedBody = bounded.runtime.observed.createdComments[0].body;
+        assert.strictEqual(bounded.summary.uniqueFindings, 350);
+        assert.strictEqual(bounded.summary.retainedFindings, 300);
+        assert.strictEqual(bounded.summary.omittedFindings, 50);
+        assert.strictEqual(bounded.summary.findings.length, 300);
+        assert(bounded.summary.errors.length <= 100 && bounded.summary.warnings.length <= 100);
+        assert(Buffer.byteLength(boundedBody, 'utf8') <= 65000);
+        assert(boundedBody.includes(`**Analyzed commit:** \`${SOURCE_HEAD_SHA}\``),
+            'bounded report body must retain analyzed-commit provenance');
+        assert(boundedBody.includes('*Updated:'), 'bounded report body must retain its provenance footer');
+        assert(!boundedBody.includes('@reviewers'));
+
+        const forcedTruncation = reportCodeqlFindings._test.finishComment(
+            ['\u{1f4a3}'.repeat(40000)],
+            ['', `**Analyzed commit:** \`${SOURCE_HEAD_SHA}\``, '', '*Updated: test*']
+        );
+        assert(Buffer.byteLength(forcedTruncation, 'utf8') <= 65000);
+        assert(forcedTruncation.includes('Report body truncated'));
+        assert(forcedTruncation.includes(`**Analyzed commit:** \`${SOURCE_HEAD_SHA}\``));
+        assert(forcedTruncation.endsWith('*Updated: test*'));
+
+        const excessiveResultsData = fixture();
+        const excessiveResults = Array.from({ length: 10001 }, () => finding());
+        const rejectedResults = await preflightAndReport(root, excessiveResultsData, excessiveResultsData,
+            writeArtifacts(root, { 'c-cpp': sarif('c-cpp', excessiveResults) }));
+        assert.strictEqual(rejectedResults.summary.status, 'incomplete');
+        assert(rejectedResults.summary.evidenceErrors.some(error => error.includes('result limit')));
+
+        const malformedData = fixture();
+        const malformed = await preflightAndReport(root, malformedData, malformedData, writeArtifacts(root, {
+            actions: '{not-json'
+        }));
+        assert.strictEqual(malformed.summary.status, 'incomplete');
+        assert.deepStrictEqual(malformed.summary.invalidLanguages, ['actions']);
+        assert(malformed.summary.evidenceErrors.some(error => error.includes('invalid JSON')));
+        assert(malformed.runtime.observed.failed.length >= 1);
+        assert(!malformed.runtime.observed.createdComments[0].body.includes(':white_check_mark:'));
+
+        const missingData = fixture();
+        const missing = await preflightAndReport(root, missingData, missingData, writeArtifacts(root, { python: null }));
+        assert.strictEqual(missing.summary.status, 'incomplete');
+        assert.deepStrictEqual(missing.summary.missingLanguages, ['python']);
+        assert(missing.summary.evidenceErrors.some(error => error.includes("'python.sarif' is missing")));
+        assert(missing.runtime.observed.failed.length >= 1);
+
+        const languageData = fixture();
+        const wrongLanguage = await preflightAndReport(root, languageData, languageData, writeArtifacts(root, {
+            'c-cpp': sarif('c-cpp', [], 'python')
+        }));
+        assert.strictEqual(wrongLanguage.summary.status, 'incomplete');
+        assert.deepStrictEqual(wrongLanguage.summary.invalidLanguages, ['c-cpp']);
+        assert(wrongLanguage.summary.evidenceErrors.some(error => error.includes("expected 'c-cpp' language")));
+
+        const manifestData = fixture();
+        const manifestPreflight = await runPreflight(root, manifestData);
+        const changedManifest = JSON.parse(manifestPreflight.observed.outputs['artifact-manifest']);
+        changedManifest[0].digest = `sha256:${'f'.repeat(64)}`;
+        const manifestMismatch = await runTrustedReport(
+            root,
+            manifestData,
+            JSON.stringify(changedManifest),
+            writeArtifacts(root)
+        );
+        assert.strictEqual(manifestMismatch.summary.status, 'incomplete');
+        assert(manifestMismatch.summary.evidenceErrors.some(error => error.includes('manifest changed')));
+
+        const currentHeadData = fixture();
+        const changedHead = fixture();
+        changedHead.pull.head.sha = CHANGED_SHA;
+        const staleHead = await preflightAndReport(root, currentHeadData, changedHead, writeArtifacts(root));
+        assert.strictEqual(staleHead.summary.status, 'incomplete');
+        assert(staleHead.summary.evidenceErrors.some(error => /exact source pull request/i.test(error)));
+        assertNoMutation(staleHead);
+
+        const newerRunData = fixture();
+        const newerRun = clone(newerRunData.run);
+        newerRun.id += 1;
+        newerRun.run_number += 1;
+        newerRunData.workflowRuns = [newerRun, newerRunData.run];
+        const staleRun = await preflightAndReport(root, fixture(), newerRunData, writeArtifacts(root));
+        assert.strictEqual(staleRun.summary.status, 'stale');
+        assert(staleRun.summary.staleReasons.some(reason => reason.includes('newer source workflow run')));
+        assertNoMutation(staleRun);
+
+        const spoofData = fixture();
+        spoofData.comments = [{
+            id: 7001,
+            body: `${MARKER}\n<!-- spark-codeql-report-state run-number=999 run-attempt=1 run-id=999 pr-head=${SOURCE_HEAD_SHA} run-head=${SOURCE_HEAD_SHA} -->`,
+            user: { type: 'User', login: 'attacker' }
+        }];
+        const spoof = await preflightAndReport(root, fixture(), spoofData, writeArtifacts(root));
+        assert.strictEqual(spoof.runtime.observed.updatedComments.length, 0);
+        assert.strictEqual(spoof.runtime.observed.createdComments.length, 1);
+
+        const ownedData = fixture();
+        ownedData.comments = [{
+            id: 7002,
+            body: `${MARKER}\nold report`,
+            user: { type: 'Bot', login: 'github-actions[bot]' },
+            performed_via_github_app: { slug: 'github-actions' }
+        }];
+        const owned = await preflightAndReport(root, fixture(), ownedData, writeArtifacts(root));
+        assert.strictEqual(owned.runtime.observed.createdComments.length, 0);
+        assert.strictEqual(owned.runtime.observed.updatedComments.length, 1);
+        assert.strictEqual(owned.runtime.observed.updatedComments[0].comment_id, 7002);
+
+        const pagedCommentsData = fixture();
+        pagedCommentsData.commentLastPage = 20;
+        pagedCommentsData.commentPages = {
+            1: [{ id: 1, body: 'ordinary first-page comment', user: { type: 'User', login: 'user' } }],
+            20: [{
+                id: 7020,
+                body: `${MARKER}\nold paged report`,
+                user: { type: 'Bot', login: 'github-actions[bot]' },
+                performed_via_github_app: { slug: 'github-actions' }
+            }]
+        };
+        const pagedComments = await preflightAndReport(root, fixture(), pagedCommentsData, writeArtifacts(root));
+        assert.strictEqual(pagedComments.runtime.observed.listCommentsCalls, 5);
+        assert.deepStrictEqual(pagedComments.runtime.observed.commentRequests.map(request => request.page),
+            [1, 17, 18, 19, 20]);
+        assert.strictEqual(pagedComments.runtime.observed.createdComments.length, 0);
+        assert.strictEqual(pagedComments.runtime.observed.updatedComments[0].comment_id, 7020);
+        assert(pagedComments.runtime.observed.warnings.some(message => message.includes('bounded')));
+
+        const newerCommentData = fixture();
+        newerCommentData.comments = [{
+            id: 7003,
+            body: `${MARKER}\n<!-- spark-codeql-report-state run-number=51 run-attempt=1 run-id=9999 pr-head=${SOURCE_HEAD_SHA} run-head=${SOURCE_HEAD_SHA} -->`,
+            user: { type: 'Bot', login: 'github-actions[bot]' },
+            performed_via_github_app: { slug: 'github-actions' }
+        }];
+        const newerComment = await preflightAndReport(root, fixture(), newerCommentData, writeArtifacts(root));
+        assert.strictEqual(newerComment.summary.status, 'stale');
+        assertNoMutation(newerComment);
+
+        console.log('report-codeql-findings trusted scenarios passed');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+}
+
+main().catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+});

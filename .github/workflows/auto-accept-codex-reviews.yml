@@ -1,30 +1,17 @@
-name: Auto-accept Codex reviews
+name: Codex review automation (disabled)
 
-# Applies Codex review suggestions to the PR branch, then dismisses the
-# "changes requested" review and resolves the review threads.
-#
-# Scope:
-#   1. Parse ```suggestion blocks out of every review comment authored by a
-#      known Codex bot and commit the replacements to the PR head branch.
-#   2. Dismiss the Codex review so it does not block merging.
-#   3. Resolve Codex-authored review threads so the conversation tab is clean.
-#
-# Cross-fork PRs are skipped for the apply step because GITHUB_TOKEN cannot
-# push to a fork's branch. Codex reviews on fork PRs still get dismissed and
-# their threads resolved — a maintainer can apply the suggestions manually.
-#
-# A human reviewer must still approve the PR via branch protection rules if
-# required. These changes are advisory integration, not a trust boundary.
+# Event-triggered review application is deliberately disabled. PR review text
+# is untrusted input, and no workflow in this file receives repository-write or
+# review-dismissal capability. Maintainers apply suggestions and resolve or
+# dismiss reviews explicitly after inspecting the resulting diff.
 
 on:
   pull_request_review:
     types: [submitted]
-  pull_request_review_comment:
-    types: [created]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
 
 # Serialize runs on the same PR so two concurrent Codex events never push
 # conflicting commits to the head branch.
@@ -35,16 +22,13 @@ concurrency:
 jobs:
   auto-accept:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     # Only run on reviews/comments from known Codex bot accounts.
     # Extend this list if OpenAI adds new bot identities.
-    if: >-
-      github.event.sender.login == 'chatgpt-codex-connector[bot]' ||
-      github.event.sender.login == 'codex[bot]' ||
-      github.event.sender.login == 'openai-codex[bot]' ||
-      github.event.sender.login == 'chatgpt-codex[bot]'
+    if: ${{ false }}
     steps:
       - name: Apply Codex suggestion blocks to PR branch
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -227,83 +211,3 @@ jobs:
               `Codex suggestion apply summary: ${totalApplied} applied, ${totalSkipped} skipped ` +
               `across ${suggestionsByFile.size} file(s).`
             );
-
-      - name: Dismiss changes-requested review from Codex
-        if: >-
-          github.event_name == 'pull_request_review' &&
-          github.event.review.state == 'changes_requested'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const pull_number = context.payload.pull_request.number;
-            const review_id = context.payload.review.id;
-
-            core.info(`Dismissing Codex review #${review_id} on PR #${pull_number}`);
-            await github.rest.pulls.dismissReview({
-              owner,
-              repo,
-              pull_number,
-              review_id,
-              message: 'Codex review auto-accepted — suggestions applied (same-repo PRs) and review dismissed.',
-              event: 'DISMISS',
-            });
-
-      - name: Resolve Codex review threads
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const pull_number = context.payload.pull_request.number;
-            const sender = context.payload.sender.login;
-
-            // Fetch all review threads on this PR via GraphQL
-            const query = `
-              query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
-                repository(owner: $owner, name: $repo) {
-                  pullRequest(number: $number) {
-                    reviewThreads(first: 50, after: $cursor) {
-                      pageInfo { hasNextPage endCursor }
-                      nodes {
-                        id
-                        isResolved
-                        comments(first: 1) {
-                          nodes { author { login } }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            `;
-
-            const resolveMutation = `
-              mutation($threadId: ID!) {
-                resolveReviewThread(input: { threadId: $threadId }) {
-                  thread { id isResolved }
-                }
-              }
-            `;
-
-            let cursor = null;
-            let resolved = 0;
-            do {
-              const result = await github.graphql(query, {
-                owner, repo, number: pull_number, cursor,
-              });
-              const threadsPage = result.repository.pullRequest.reviewThreads;
-              for (const thread of threadsPage.nodes) {
-                if (thread.isResolved) continue;
-                const firstAuthor = thread.comments.nodes[0]?.author?.login;
-                if (firstAuthor !== sender) continue;
-                try {
-                  await github.graphql(resolveMutation, { threadId: thread.id });
-                  resolved++;
-                } catch (e) {
-                  core.warning(`Failed to resolve thread ${thread.id}: ${e.message}`);
-                }
-              }
-              cursor = threadsPage.pageInfo.hasNextPage ? threadsPage.pageInfo.endCursor : null;
-            } while (cursor);
-
-            core.info(`Resolved ${resolved} Codex review thread(s) on PR #${pull_number}`);

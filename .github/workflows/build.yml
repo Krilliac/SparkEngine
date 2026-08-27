@@ -14,7 +14,6 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write
 
 env:
   ARTIFACT_RETENTION_DAYS: 14
@@ -33,9 +32,11 @@ jobs:
   validate-ci-tools:
     name: "Validate CI tooling"
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Test JUnit statistics parser
       run: python3 .github/scripts/test-summarize-test-results.py
@@ -48,6 +49,12 @@ jobs:
 
     - name: Test exact-commit release gate
       run: python3 .github/scripts/test-verify-exact-required-gate.py
+
+    - name: Test crash-consistent release download counters
+      run: python3 .github/scripts/test_prepare_download_badges.py
+
+    - name: Test extracted portable-package validation
+      run: python3 .github/scripts/test_validate_extracted_package.py
 
     - name: Test coverage evidence semantics
       run: bash .github/scripts/test-coverage-report.sh
@@ -99,7 +106,7 @@ jobs:
 
     - name: Upload generated documentation check log
       if: always() && steps.generated-docs.outcome != 'skipped'
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: generated-docs-check-${{ github.run_attempt }}
         path: generated-docs-check.log
@@ -113,7 +120,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
 
@@ -216,7 +223,7 @@ jobs:
 
     - name: Upload check-format error summary
       if: failure()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ci-errors-check-format
         path: error-summary.json
@@ -230,7 +237,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Validate prompt system
       run: ./tools/validate-prompts.sh --ci
@@ -239,7 +246,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
 
@@ -253,7 +260,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
 
@@ -263,7 +270,7 @@ jobs:
         sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.ccache
         key: ccache-linux-asan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -272,7 +279,7 @@ jobs:
           ccache-linux-asan-
 
     - name: Restore build directory
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: build
         key: build-linux-asan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -325,7 +332,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ci-errors-linux-asan
         path: error-summary.json
@@ -333,7 +340,7 @@ jobs:
 
     - name: Upload ASan + UBSan + LSan report
       if: always()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: sanitizer-report-asan-ubsan-lsan
         path: |
@@ -349,7 +356,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
 
@@ -359,7 +366,7 @@ jobs:
         sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.ccache
         key: ccache-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -368,7 +375,7 @@ jobs:
           ccache-linux-tsan-
 
     - name: Restore build directory
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: build
         key: build-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -419,7 +426,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ci-errors-linux-tsan
         path: error-summary.json
@@ -427,7 +434,7 @@ jobs:
 
     - name: Upload TSan report
       if: always()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: sanitizer-report-tsan
         path: |
@@ -450,7 +457,7 @@ jobs:
     continue-on-error: true
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
 
@@ -460,7 +467,7 @@ jobs:
         sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev
 
     - name: Setup ccache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.ccache
         key: ccache-linux-msan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -469,7 +476,7 @@ jobs:
           ccache-linux-msan-
 
     - name: Restore build directory
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: build
         key: build-linux-msan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -521,7 +528,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ci-errors-linux-msan
         path: error-summary.json
@@ -529,7 +536,7 @@ jobs:
 
     - name: Upload MSan report
       if: always()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: sanitizer-report-msan
         path: |
@@ -549,18 +556,18 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
 
     - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v3
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
     - name: Setup sccache
-      uses: mozilla-actions/sccache-action@v0.0.11
+      uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
 
     - name: Restore build directory
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: build
         key: build-windows-vs2022-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -605,7 +612,7 @@ jobs:
 
     - name: Upload machine-readable test results
       if: always() && matrix.config == 'Release'
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-results-windows-vs2022-release
         path: |
@@ -630,7 +637,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ci-errors-windows-vs2022-${{ matrix.config }}
         path: error-summary.json
@@ -651,7 +658,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: SparkEngine-Windows-VS2022-${{ matrix.config }}
         path: SparkEngine-Windows-${{ matrix.config }}.zip
@@ -673,15 +680,15 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
 
     - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v3
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
     - name: Restore build directory
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: build
         key: build-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -727,7 +734,7 @@ jobs:
 
     - name: Upload machine-readable test results
       if: always() && matrix.config == 'Release'
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-results-windows-vs2026-release
         path: |
@@ -742,7 +749,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: SparkEngine-Windows-VS2026-${{ matrix.config }}
         path: build/bin/${{ matrix.config }}/
@@ -760,7 +767,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
 
@@ -770,7 +777,7 @@ jobs:
         sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.ccache
         key: ccache-linux-gcc-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -779,7 +786,7 @@ jobs:
           ccache-linux-gcc-${{ matrix.config }}-
 
     - name: Restore build directory
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: build
         key: build-linux-gcc-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -826,7 +833,7 @@ jobs:
 
     - name: Upload machine-readable test results
       if: always()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-results-linux-gcc-${{ matrix.config }}
         path: |
@@ -861,7 +868,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ci-errors-linux-gcc-${{ matrix.config }}
         path: error-summary.json
@@ -877,7 +884,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: SparkEngine-Linux-GCC-${{ matrix.config }}
         path: SparkEngine-Linux-GCC-${{ matrix.config }}.tar.gz
@@ -895,7 +902,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
 
@@ -905,7 +912,7 @@ jobs:
         sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev
 
     - name: Setup ccache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.ccache
         key: ccache-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -914,7 +921,7 @@ jobs:
           ccache-linux-clang-${{ matrix.config }}-
 
     - name: Restore build directory
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: build
         key: build-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -975,7 +982,7 @@ jobs:
 
     - name: Upload machine-readable test results
       if: always()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-results-linux-clang-${{ matrix.config }}
         path: |
@@ -999,7 +1006,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ci-errors-linux-clang-${{ matrix.config }}
         path: error-summary.json
@@ -1015,7 +1022,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: SparkEngine-Linux-Clang-${{ matrix.config }}
         path: SparkEngine-Linux-Clang-${{ matrix.config }}.tar.gz
@@ -1030,7 +1037,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
 
@@ -1044,7 +1051,7 @@ jobs:
           mesa-vulkan-drivers
 
     - name: Setup ccache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.ccache
         key: ccache-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1053,7 +1060,7 @@ jobs:
           ccache-linux-mingw-
 
     - name: Restore build directory
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: build
         key: build-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1112,7 +1119,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ci-errors-linux-mingw-wine
         path: error-summary.json
@@ -1120,7 +1127,7 @@ jobs:
 
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: mingw-wine-test-results
         path: wine-test-results.txt
@@ -1151,7 +1158,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
 
@@ -1165,7 +1172,7 @@ jobs:
         brew install molten-vk || echo "::warning::MoltenVK install failed — Vulkan path will be disabled"
 
     - name: Setup ccache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/Library/Caches/ccache
         key: ccache-macos-${{ matrix.config }}-${{ matrix.backend }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1174,7 +1181,7 @@ jobs:
           ccache-macos-${{ matrix.config }}-${{ matrix.backend }}-
 
     - name: Restore build directory
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: build
         key: build-macos-${{ matrix.config }}-${{ matrix.backend }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1235,7 +1242,7 @@ jobs:
 
     - name: Upload machine-readable test results
       if: always() && matrix.config == 'Release'
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-results-macos-${{ matrix.backend }}-release
         path: |
@@ -1259,7 +1266,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ci-errors-macos-${{ matrix.config }}-${{ matrix.backend }}
         path: error-summary.json
@@ -1272,7 +1279,7 @@ jobs:
     # each failure instead of rerunning the job locally.
     - name: Upload Golden Image Diffs
       if: failure() && matrix.backend == 'Metal'
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: rt-goldens-macos-${{ matrix.config }}-${{ github.run_id }}
         path: |
@@ -1283,7 +1290,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: SparkEngine-macOS-${{ matrix.config }}-${{ matrix.backend }}
         path: build/bin/
@@ -1296,17 +1303,16 @@ jobs:
     name: "Code Coverage (GCC + per-subsystem thresholds)"
     permissions:
       contents: read
-      pull-requests: write
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 lcov ccache libgl-dev libsdl2-dev libfreetype-dev
       - name: Setup ccache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.ccache
           key: ccache-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1317,7 +1323,7 @@ jobs:
         # Coverage build trees are ~1.5 GB. Saving one for every commit can
         # consume the job's entire post-step budget after all evidence passed.
         # Restore prior trees for speed; ccache remains the durable write cache.
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: build
           key: build-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1428,56 +1434,92 @@ jobs:
            steps.coverage-tests.outcome == 'failure' ||
            steps.generate-coverage.outcome == 'failure' ||
            steps.subsystem-coverage.outcome == 'failure')
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-errors-coverage
           path: error-summary.json
           retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
-      - name: Post coverage summary to PR
+      - name: Prepare bounded coverage comment payload
         if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          COVERAGE_COMMENT_ARTIFACT: coverage-pr-comment-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          SOURCE_EVENT: ${{ github.event_name }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ github.run_attempt }}
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_PR_NUMBER: ${{ github.event.pull_request.number }}
         with:
           script: |
             const fs = require('fs');
-            try {
+            const outputDirectory = 'coverage-pr-comment-payload';
+            fs.rmSync(outputDirectory, { recursive: true, force: true });
+            fs.mkdirSync(outputDirectory, { mode: 0o700 });
+
+            let body = `## Code Coverage (GCC + lcov)\n\n`;
+            if (fs.existsSync('coverage-summary.txt') &&
+                fs.statSync('coverage-summary.txt').size <= 131072) {
               const summary = fs.readFileSync('coverage-summary.txt', 'utf8');
               const lines = summary.split('\n');
               const table = lines.slice(-35).join('\n');
-              let body = `## Code Coverage (GCC + lcov)\n\n`;
               body += `\`\`\`\n${table}\n\`\`\`\n`;
 
-              // Append per-subsystem breakdown if available
-              try {
-                const json = JSON.parse(fs.readFileSync('coverage.json', 'utf8'));
-                body += `\n### Per-Subsystem Coverage\n\n`;
-                body += `| Subsystem | Lines | Hit | Coverage | Threshold | Status |\n`;
-                body += `|-----------|-------|-----|----------|-----------|--------|\n`;
-                for (const s of json.subsystems) {
-                  const icon = s.pass ? ':white_check_mark:' : ':x:';
-                  body += `| ${s.subsystem} | ${s.lines} | ${s.hit} | ${s.coverage}% | ${s.threshold}% | ${icon} |\n`;
+              if (fs.existsSync('coverage.json') &&
+                  fs.statSync('coverage.json').size <= 262144) {
+                try {
+                  const json = JSON.parse(fs.readFileSync('coverage.json', 'utf8'));
+                  body += `\n### Per-Subsystem Coverage\n\n`;
+                  body += `| Subsystem | Lines | Hit | Coverage | Threshold | Status |\n`;
+                  body += `|-----------|-------|-----|----------|-----------|--------|\n`;
+                  for (const s of json.subsystems) {
+                    const icon = s.pass ? ':white_check_mark:' : ':x:';
+                    body += `| ${s.subsystem} | ${s.lines} | ${s.hit} | ${s.coverage}% | ${s.threshold}% | ${icon} |\n`;
+                  }
+                  body += `\n**Selected-subsystem coverage: ${json.selected_subsystem_coverage}%** `;
+                  body += `(${json.selected_subsystem_hit}/${json.selected_subsystem_lines} lines)\n`;
+                  body += `\nLCOV corpus coverage: ${json.lcov_corpus_coverage}% `;
+                  body += `(${json.lcov_corpus_hit}/${json.lcov_corpus_lines} lines); `;
+                  body += `${json.unclassified_lines} instrumented lines are outside the threshold table.\n`;
+                } catch (error) {
+                  core.warning(`Ignoring invalid coverage.json: ${error.message}`);
                 }
-                body += `\n**Selected-subsystem coverage: ${json.selected_subsystem_coverage}%** `;
-                body += `(${json.selected_subsystem_hit}/${json.selected_subsystem_lines} lines)\n`;
-                body += `\nLCOV corpus coverage: ${json.lcov_corpus_coverage}% `;
-                body += `(${json.lcov_corpus_hit}/${json.lcov_corpus_lines} lines); `;
-                body += `${json.unclassified_lines} instrumented lines are outside the threshold table.\n`;
-              } catch (e2) {
-                // subsystem data not available
               }
-
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: body.slice(0, 65000)
-              });
-            } catch (e) {
-              console.log('Could not post coverage:', e.message);
+            } else {
+              body += `Coverage summary was unavailable for this run.\n`;
             }
+
+            const payload = {
+              schema_version: 1,
+              artifact_name: process.env.COVERAGE_COMMENT_ARTIFACT,
+              source_event: process.env.SOURCE_EVENT,
+              source_run_id: Number(process.env.SOURCE_RUN_ID),
+              source_run_attempt: Number(process.env.SOURCE_RUN_ATTEMPT),
+              source_sha: process.env.SOURCE_SHA,
+              source_head_sha: process.env.SOURCE_HEAD_SHA,
+              source_repository: process.env.SOURCE_REPOSITORY,
+              pull_request_number: Number(process.env.SOURCE_PR_NUMBER),
+              body: body.slice(0, 60000)
+            };
+            fs.writeFileSync(
+              `${outputDirectory}/payload.json`,
+              `${JSON.stringify(payload)}\n`,
+              { encoding: 'utf8', mode: 0o600 }
+            );
+
+      - name: Upload bounded coverage comment payload
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-pr-comment-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          path: coverage-pr-comment-payload/payload.json
+          retention-days: 1
+          if-no-files-found: error
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report
           path: |
@@ -1510,6 +1552,112 @@ jobs:
           exit "$failed"
 
   # ===========================================================================
+  # Coverage PR Comment — privileged, data-only reporter
+  # Downloads one bounded artifact from this workflow run. It never checks out
+  # or executes pull-request-controlled repository content.
+  # ===========================================================================
+  report-coverage:
+    name: "Coverage PR Comment"
+    if: always() && github.event_name == 'pull_request'
+    needs: coverage
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      - name: Download same-run coverage comment payload
+        id: download-coverage-comment
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          name: coverage-pr-comment-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          path: coverage-pr-comment-artifact
+
+      - name: Validate artifact identity and post coverage comment
+        if: steps.download-coverage-comment.outcome == 'success'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          EXPECTED_ARTIFACT: coverage-pr-comment-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          EXPECTED_EVENT: ${{ github.event_name }}
+          EXPECTED_RUN_ID: ${{ github.run_id }}
+          EXPECTED_RUN_ATTEMPT: ${{ github.run_attempt }}
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          EXPECTED_PR_NUMBER: ${{ github.event.pull_request.number }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const expectedArtifact = process.env.EXPECTED_ARTIFACT;
+            const expectedRunId = Number(process.env.EXPECTED_RUN_ID);
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: expectedRunId,
+              name: expectedArtifact,
+              per_page: 100
+            });
+            const matchingArtifacts = artifacts.filter(
+              artifact => artifact.name === expectedArtifact && !artifact.expired
+            );
+            if (matchingArtifacts.length !== 1) {
+              throw new Error('Expected exactly one non-expired coverage comment artifact from this workflow run');
+            }
+
+            const artifactDirectory = fs.realpathSync('coverage-pr-comment-artifact');
+            const entries = fs.readdirSync(artifactDirectory, { withFileTypes: true });
+            if (entries.length !== 1 || entries[0].name !== 'payload.json' || !entries[0].isFile()) {
+              throw new Error('Coverage comment artifact must contain exactly one regular payload.json file');
+            }
+
+            const payloadPath = fs.realpathSync(path.join(artifactDirectory, 'payload.json'));
+            if (payloadPath !== path.join(artifactDirectory, 'payload.json')) {
+              throw new Error('Coverage comment payload resolved outside its artifact directory');
+            }
+
+            const payloadStat = fs.statSync(payloadPath);
+            if (!payloadStat.isFile() || payloadStat.size > 131072) {
+              throw new Error('Coverage comment payload is not a bounded regular file');
+            }
+
+            const payload = JSON.parse(fs.readFileSync(payloadPath, 'utf8'));
+            const expected = {
+              schema_version: 1,
+              artifact_name: expectedArtifact,
+              source_event: process.env.EXPECTED_EVENT,
+              source_run_id: expectedRunId,
+              source_run_attempt: Number(process.env.EXPECTED_RUN_ATTEMPT),
+              source_sha: process.env.EXPECTED_SOURCE_SHA,
+              source_head_sha: process.env.EXPECTED_HEAD_SHA,
+              source_repository: process.env.EXPECTED_REPOSITORY,
+              pull_request_number: Number(process.env.EXPECTED_PR_NUMBER)
+            };
+            for (const [field, value] of Object.entries(expected)) {
+              if (payload[field] !== value) {
+                throw new Error(`Coverage comment payload ${field} does not match this workflow run`);
+              }
+            }
+            if (payload.source_event !== 'pull_request') {
+              throw new Error('Coverage comments may only originate from pull_request runs');
+            }
+            if (!/^[0-9a-f]{40}$/.test(payload.source_sha) ||
+                !/^[0-9a-f]{40}$/.test(payload.source_head_sha)) {
+              throw new Error('Coverage comment payload contains an invalid commit SHA');
+            }
+            if (typeof payload.body !== 'string' || payload.body.length === 0 || payload.body.length > 60000) {
+              throw new Error('Coverage comment body is missing or exceeds the allowed size');
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: expected.pull_request_number,
+              body: payload.body
+            });
+
+  # ===========================================================================
   # Static Analysis — Clang-Tidy
   # ===========================================================================
   clang-tidy:
@@ -1518,7 +1666,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Install dependencies
@@ -1537,7 +1685,7 @@ jobs:
           done
           sudo apt-get install -y clang-tidy ccache libgl-dev libsdl2-dev libfreetype-dev libc++-dev libc++abi-dev
       - name: Setup ccache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.ccache
           key: ccache-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1545,7 +1693,7 @@ jobs:
             ccache-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
             ccache-clang-tidy-
       - name: Restore build directory
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: build
           key: build-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1593,7 +1741,7 @@ jobs:
             clang-tidy-output.log || true
       - name: Upload clang-tidy error summary
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-errors-clang-tidy
           path: error-summary.json
@@ -1601,7 +1749,7 @@ jobs:
           if-no-files-found: ignore
       - name: Upload clang-tidy full log
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: clang-tidy-output
           path: clang-tidy-output.log
@@ -1624,10 +1772,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download primary-lane test evidence
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         continue-on-error: true
         with:
           pattern: test-results-*
@@ -1654,7 +1802,7 @@ jobs:
 
       - name: Upload exact-commit CI metrics
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-metrics-${{ github.sha }}
           path: |
@@ -1695,13 +1843,18 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v7.0.1
+      # This job has pull-request write permission. Always load its executable
+      # reporter from the trusted Working branch, never from the PR checkout.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: Working
+          persist-credentials: false
 
       - name: Test CI error reporter
         run: node .github/scripts/test-report-ci-errors.js
 
       - name: Download all error summaries
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: ci-errors-*
           path: ci-error-summaries
@@ -1709,7 +1862,7 @@ jobs:
         continue-on-error: true
 
       - name: Post consolidated error report
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           ARTIFACT_DIR: ci-error-summaries
           NEEDS_JSON: ${{ toJSON(needs) }}
@@ -1727,7 +1880,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Count TODO/FIXME/HACK comments
         id: todo-count-run
         run: |
@@ -1741,7 +1894,7 @@ jobs:
           fi
       - name: Upload todo-count summary artifact
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: todo-count-report
           path: todo-list.log
@@ -1769,7 +1922,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Configure SparkBuild + SparkInstaller (standalone, no engine)
         shell: bash
@@ -1816,7 +1969,7 @@ jobs:
           grep -Fq "Usage:" installer-help.txt
 
       - name: Upload installer binary
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.artifact }}
           path: staging/${{ matrix.bin_name }}
@@ -1849,7 +2002,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Verify every required job succeeded
         env:

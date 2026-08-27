@@ -174,10 +174,16 @@ jobs:
             "$JOB_COUNT" "$NORMALIZED_CONCLUSION"
           printf 'conclusion=%s\n' "$NORMALIZED_CONCLUSION" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout the evaluated source commit without persisted credentials
+      # Always check out the protected publication branch itself. The evidence
+      # run's SHA is validated against that checkout immediately below before
+      # any repository-controlled generator executes. Feeding an API-derived
+      # SHA directly to checkout would let a privileged workflow run code from
+      # an arbitrary historical commit and is flagged by CodeQL as a
+      # poisonable-step trust-boundary violation.
+      - name: Checkout the protected Working branch without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ steps.resolve_evidence.outputs.source_commit }}
+          ref: Working
           fetch-depth: 0
           persist-credentials: false
 

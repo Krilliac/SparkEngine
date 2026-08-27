@@ -1,0 +1,149 @@
+# Privileged SARIF upload runs only from the default branch after the
+# unprivileged Codacy scanner completes. The reporter never checks out or
+# executes source-run code; it treats the exact immutable artifact as data.
+name: Codacy Trusted Reporter
+
+on:
+  workflow_run:
+    workflows: ["Codacy Security Scan"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  report:
+    name: Validate and upload Codacy SARIF
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: codacy-trusted-report-${{ github.event.workflow_run.id }}
+      cancel-in-progress: true
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout trusted default-branch reporter
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.repository.default_branch }}
+          path: trusted-reporter
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Resolve trusted reporter commit
+        id: trusted-checkout
+        run: echo "sha=$(git -C trusted-reporter rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # This inline step is part of the default-branch workflow definition; it
+      # runs before any checked-out script and closes the bootstrap loop.
+      - name: Attest exact default-branch reporter before execution
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
+          TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
+          TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        with:
+          script: |
+            const sha = /^[0-9a-f]{40}$/i;
+            const repository = (await github.rest.repos.get(context.repo)).data;
+            const checkoutSha = process.env.TRUSTED_CHECKOUT_SHA;
+            const workflowSha = process.env.TRUSTED_WORKFLOW_SHA;
+            const expectedRef = `${repository.full_name}/.github/workflows/codacy-report.yml@refs/heads/${repository.default_branch}`;
+            const defaultCommit = (await github.rest.repos.getCommit({
+              ...context.repo, ref: repository.default_branch
+            })).data;
+            if (!sha.test(checkoutSha || '') || !sha.test(workflowSha || '') ||
+                checkoutSha.toLowerCase() !== workflowSha.toLowerCase() ||
+                checkoutSha.toLowerCase() !== String(defaultCommit.sha || '').toLowerCase() ||
+                process.env.TRUSTED_WORKFLOW_REF !== expectedRef) {
+              throw new Error('Reporter checkout, executing workflow, and current default branch are not exact.');
+            }
+
+      - name: Test trusted Codacy reporter
+        id: reporter-tests
+        run: |
+          python3 -I trusted-reporter/.github/scripts/test_workflow_privilege_boundaries.py
+          node trusted-reporter/.github/scripts/test-authorize-codacy-sarif.js
+          python3 -I trusted-reporter/.github/scripts/test_validate_codacy_sarif.py
+
+      - name: Authorize exact source run and artifact
+        id: preflight
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          REPORT_MODE: trusted-preflight
+          REPORTER_TEST_OUTCOME: ${{ steps.reporter-tests.outcome }}
+          TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
+          TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
+          TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          WORKFLOW_RUN_EVENT_PATH: ${{ github.event_path }}
+        with:
+          script: |
+            const authorize = require('./trusted-reporter/.github/scripts/authorize-codacy-sarif.js');
+            await authorize({ github, context, core });
+
+      - name: Download exact direct SARIF artifact
+        id: download
+        if: steps.preflight.outputs.authorized == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.preflight.outputs.artifact-id }}
+          path: ${{ runner.temp }}/codacy-sarif
+          skip-decompress: true
+          digest-mismatch: error
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Validate exact Codacy SARIF semantics
+        id: validate
+        if: steps.download.outcome == 'success'
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/codacy-sarif
+          EXPECTED_ARTIFACT_DIGEST: ${{ steps.preflight.outputs.artifact-digest }}
+          EXPECTED_DEFAULT_BRANCH: ${{ steps.preflight.outputs.default-branch }}
+          EXPECTED_PR_NUMBER: ${{ steps.preflight.outputs.pull-request-number }}
+          EXPECTED_SOURCE_EVENT: ${{ steps.preflight.outputs.source-event }}
+          EXPECTED_SOURCE_SHA: ${{ steps.preflight.outputs.source-sha }}
+          EXPECTED_UPLOAD_REF: ${{ steps.preflight.outputs.upload-ref }}
+          EXPECTED_UPLOAD_SHA: ${{ steps.preflight.outputs.upload-sha }}
+        run: python3 -I trusted-reporter/.github/scripts/validate-codacy-sarif.py
+
+      - name: Reauthorize immediately before privileged upload
+        id: final-auth
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          REPORT_MODE: trusted-final
+          REPORTER_TEST_OUTCOME: ${{ steps.reporter-tests.outcome }}
+          TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
+          TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
+          TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          PREFLIGHT_ARTIFACT_MANIFEST: ${{ steps.preflight.outputs.artifact-manifest }}
+          PREFLIGHT_UPLOAD_REF: ${{ steps.preflight.outputs.upload-ref }}
+          PREFLIGHT_UPLOAD_SHA: ${{ steps.preflight.outputs.upload-sha }}
+          DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+          SARIF_VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
+          WORKFLOW_RUN_EVENT_PATH: ${{ github.event_path }}
+        with:
+          script: |
+            const authorize = require('./trusted-reporter/.github/scripts/authorize-codacy-sarif.js');
+            await authorize({ github, context, core });
+
+      - name: Prepare non-repository SARIF source root
+        if: steps.final-auth.outputs.authorized == 'true'
+        run: mkdir -- "$RUNNER_TEMP/codacy-no-checkout"
+
+      - name: Upload exact SARIF results
+        if: steps.final-auth.outputs.authorized == 'true'
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        with:
+          sarif_file: ${{ runner.temp }}/codacy-sarif/results.sarif
+          # The pinned action consults checkout_path before falling back to the
+          # explicit SHA input. This fresh non-repository directory guarantees
+          # it cannot substitute the trusted reporter checkout's commit.
+          checkout_path: ${{ runner.temp }}/codacy-no-checkout
+          ref: ${{ steps.final-auth.outputs.upload-ref }}
+          sha: ${{ steps.final-auth.outputs.upload-sha }}

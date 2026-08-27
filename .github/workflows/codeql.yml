@@ -1,14 +1,6 @@
-# For most projects, this workflow file will not need changing; you simply need
-# to commit it to your repository.
-#
-# You may wish to alter this file to override the set of languages analyzed,
-# or to provide custom queries or build logic.
-#
-# ******** NOTE ********
-# We have attempted to detect the languages in your repository. Please check
-# the `language` matrix defined below to confirm you have the correct set of
-# supported CodeQL languages.
-#
+# CodeQL scanning is intentionally data-only. This workflow may analyze
+# pull-request-controlled code while holding security-events:write, so it must
+# never execute repository reporter/test scripts or mutate PR comments.
 name: "CodeQL Advanced"
 
 on:
@@ -23,129 +15,64 @@ on:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # Runner size impacts CodeQL analysis time. To learn more, please see:
-    #   - https://gh.io/recommended-hardware-resources-for-running-codeql
-    #   - https://gh.io/supported-runners-and-hardware-resources
-    #   - https://gh.io/using-larger-runners (GitHub.com only)
-    # Consider using larger runners or machines with greater resources for possible analysis time improvements.
-    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     permissions:
-      # required for all workflows
       security-events: write
-
-      # required to fetch internal or private CodeQL packs
-      packages: read
-
-      # only required for workflows in private repositories
       actions: read
       contents: read
-
-      # required for Copilot Autofix to propose pull request suggestions
-      # and for the "Post CodeQL findings" step to create/update a
-      # consolidated report comment on the PR (matches the CI Error
-      # Report pattern in build.yml).
-      pull-requests: write
-      issues: write
-
     strategy:
       fail-fast: false
       matrix:
         include:
         - language: actions
           build-mode: none
+          artifact-file: actions.sarif
         - language: c-cpp
-          build-mode: manual
+          build-mode: none
+          artifact-file: cpp.sarif
         - language: python
           build-mode: none
-        # CodeQL supports the following values keywords for 'language': 'actions', 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'rust', 'swift'
-        # Use `c-cpp` to analyze code written in C, C++ or both
-        # Use 'java-kotlin' to analyze code written in Java, Kotlin or both
-        # Use 'javascript-typescript' to analyze code written in JavaScript, TypeScript or both
-        # To learn more about changing the languages that are analyzed or customizing the build mode for your analysis,
-        # see https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/customizing-your-advanced-setup-for-code-scanning.
-        # If you are analyzing a compiled language, you can modify the 'build-mode' for that language to customize how
-        # your codebase is analyzed, see https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/codeql-code-scanning-for-compiled-languages
+          artifact-file: python.sarif
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7.0.1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
-        submodules: recursive
+        repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+        # workflow_run.head_sha identifies the PR head, not GitHub's synthetic
+        # merge ref. Analyze that exact immutable commit so artifact provenance,
+        # freshness checks, and the actual CodeQL input all agree.
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        persist-credentials: false
+        fetch-depth: 1
 
-    - name: Install build dependencies (C/C++)
-      if: matrix.language == 'c-cpp'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev
-
-    # Add any setup steps before running the `github/codeql-action/init` action.
-    # This includes steps like installing compilers or runtimes (`actions/setup-node`
-    # or others). This is typically only required for manual builds.
-    # - name: Setup runtime (example)
-    #   uses: actions/setup-example@v1
-
-    # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v4
+      uses: github/codeql-action/init@a35ac6e6798d72df5475948b28efb89edc2e19ca # v4.37.9
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
-        config-file: ./.github/codeql/codeql-config.yml
-        # For more details on CodeQL's query packs, refer to: https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
-        # queries: security-extended,security-and-quality
-
-    # If the analyze step fails for one of the languages you are analyzing with
-    # "We were unable to automatically build your code", modify the matrix above
-    # to set the build mode to "manual" for that language. Then modify this step
-    # to build your code.
-    # ℹ️ Command-line programs to run using the OS shell.
-    # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
-    - name: Build (C/C++ manual)
-      if: matrix.language == 'c-cpp'
-      shell: bash
-      run: |
-        cmake -B build \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DBUILD_TESTS=OFF \
-          -DCMAKE_C_COMPILER=gcc \
-          -DCMAKE_CXX_COMPILER=g++ \
-          -DENABLE_EDITOR=OFF
-        cmake --build build --parallel $(nproc) --target SparkEngineLib
+        # Keep all scanner configuration in this attested workflow. PR code is
+        # source data only and cannot supply query packs, scripts, or config.
+        config: |
+          paths-ignore:
+            - "ThirdParty"
+            - "ThirdParty/**"
 
     - name: Perform CodeQL Analysis
-      id: codeql-analyze
-      uses: github/codeql-action/analyze@v4
+      uses: github/codeql-action/analyze@a35ac6e6798d72df5475948b28efb89edc2e19ca # v4.37.9
       with:
-        category: "/language:${{matrix.language}}"
-        # Write SARIF files to a known path so the follow-up reporter
-        # step can parse and post findings as a PR comment (matching the
-        # CI Error Report pattern in build.yml).
+        category: "/language:${{ matrix.language }}"
         output: sarif-results
         upload: always
+        upload-database: false
 
-    # ------------------------------------------------------------------
-    # Consolidated PR comment — mirrors the "CI Error Report" pattern
-    # in build.yml. Uses .github/scripts/report-codeql-findings.js to
-    # parse the SARIF files emitted by the analyze step and post a
-    # single in-place-updated comment summarizing errors / warnings /
-    # notes per language. On push (non-PR) runs this writes a job
-    # summary visible in the Actions UI instead of a comment.
-    # ------------------------------------------------------------------
-    - name: Post CodeQL findings
+    - name: Upload raw CodeQL SARIF
       if: always()
-      uses: actions/github-script@v9
-      env:
-        SARIF_DIR: sarif-results
-        CODEQL_LANGUAGE: ${{ matrix.language }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        script: |
-          const report = require('./.github/scripts/report-codeql-findings.js');
-          await report({ github, context, core });
-
-    - name: Upload CodeQL summary artifact
-      if: always()
-      uses: actions/upload-artifact@v7.0.1
-      with:
-        name: ci-errors-codeql-${{ matrix.language }}
-        path: codeql-summary.json
+        # Direct single-file artifacts avoid compressed-archive expansion in
+        # the privileged reporter. With archive:false the file name is the
+        # immutable artifact name and the name input is intentionally omitted.
+        path: sarif-results/${{ matrix.artifact-file }}
+        archive: false
         retention-days: 7
-        if-no-files-found: ignore
+        if-no-files-found: error
