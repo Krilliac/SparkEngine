@@ -1198,6 +1198,8 @@ namespace Spark
         World candidateWorld;
         struct StagedStorage
         {
+            std::string typeName;
+            Spark::ComponentOps::HasFn has = nullptr;
             Spark::ComponentOps::PrepareStorageFn prepare = nullptr;
             Spark::ComponentOps::SwapStorageContentsFn swap = nullptr;
         };
@@ -1208,7 +1210,7 @@ namespace Spark
         };
         std::vector<StagedStorage> stagedStorages;
         std::vector<ReboundNotification> reboundNotifications;
-        std::vector<EntityID> liveEntities;
+        std::vector<World::EntityRetirementPlan> liveRetirementPlans;
         std::vector<EntityID> incomingEntities;
         try
         {
@@ -1261,18 +1263,67 @@ namespace Spark
                                              "' has incomplete transactional component operations");
                 }
 
-                stagedStorages.push_back({operations->prepareStorage, operations->swapStorageContents});
+                stagedStorages.push_back(
+                    {typeName, operations->has, operations->prepareStorage, operations->swapStorageContents});
             };
 
-            bool hasIncomingNames = false;
-            for (const auto& serializedEntity : migratedData.entities)
+            std::unordered_map<std::string, std::unordered_set<uint32_t>> declaredComponentEntities;
+            for (size_t entityIndex = 0; entityIndex < migratedData.entities.size(); ++entityIndex)
             {
-                hasIncomingNames = hasIncomingNames || !serializedEntity.name.empty();
+                const auto& serializedEntity = migratedData.entities[entityIndex];
+                const uint32_t entity = static_cast<uint32_t>(incomingEntities[entityIndex]);
+                if (!serializedEntity.name.empty())
+                {
+                    stageComponentType("NameComponent");
+                    declaredComponentEntities["NameComponent"].insert(entity);
+                }
                 for (const auto& component : serializedEntity.components)
+                {
                     stageComponentType(component.typeName);
+                    declaredComponentEntities[component.typeName].insert(entity);
+                }
             }
-            if (hasIncomingNames)
-                stageComponentType("NameComponent");
+
+            if (candidateWorld.GetEntityCount() != incomingEntities.size())
+                throw std::runtime_error("candidate entity count does not match the serialized snapshot");
+
+            std::vector<EntityID> candidateEntities;
+            candidateEntities.reserve(candidateWorld.GetEntityCount());
+            auto&& candidateEntityStorage = candidateWorld.GetRegistry().storage<entt::entity>();
+            for (auto&& [entity] : candidateEntityStorage.each())
+                candidateEntities.push_back(entity);
+
+            auto expectedEntities = incomingEntities;
+            const auto entityLess = [](EntityID left, EntityID right)
+            { return static_cast<uint32_t>(left) < static_cast<uint32_t>(right); };
+            std::sort(candidateEntities.begin(), candidateEntities.end(), entityLess);
+            std::sort(expectedEntities.begin(), expectedEntities.end(), entityLess);
+            if (candidateEntities != expectedEntities)
+                throw std::runtime_error("candidate entity identifiers do not match the serialized snapshot");
+
+            size_t candidateStorageCount = 0;
+            for ([[maybe_unused]] auto&& storage : candidateWorld.GetRegistry().storage())
+                ++candidateStorageCount;
+            if (candidateStorageCount != stagedStorages.size())
+                throw std::runtime_error("candidate world contains an undeclared component storage");
+
+            for (const StagedStorage& storage : stagedStorages)
+            {
+                const auto declared = declaredComponentEntities.find(storage.typeName);
+                if (declared == declaredComponentEntities.end())
+                    throw std::runtime_error("candidate component type '" + storage.typeName + "' was not declared");
+                for (const EntityID entity : incomingEntities)
+                {
+                    const uint32_t rawEntity = static_cast<uint32_t>(entity);
+                    const bool expected = declared->second.contains(rawEntity);
+                    const bool actual = storage.has(&candidateWorld, rawEntity);
+                    if (actual != expected)
+                    {
+                        throw std::runtime_error("candidate component topology for '" + storage.typeName +
+                                                 "' does not match the serialized snapshot");
+                    }
+                }
+            }
 
             size_t notificationCount = 0;
             for (const auto& serializedEntity : migratedData.entities)
@@ -1284,14 +1335,6 @@ namespace Spark
                 notificationCount += entityNotifications;
             }
             reboundNotifications.reserve(notificationCount);
-
-            auto&& currentStorage = world.GetRegistry().storage<entt::entity>();
-            liveEntities.reserve(world.GetEntityCount());
-            for (auto&& [entity] : currentStorage.each())
-                liveEntities.push_back(entity);
-
-            if (incomingEntities.size() != migratedData.entities.size())
-                throw std::runtime_error("candidate entity count changed during transactional restore");
 
             for (size_t entityIndex = 0; entityIndex < migratedData.entities.size(); ++entityIndex)
             {
@@ -1313,6 +1356,13 @@ namespace Spark
                 for (const auto& component : serializedEntity.components)
                     stageNotification(component.typeName);
             }
+
+            // Snapshot every hierarchy edge while allocation failures can still
+            // return false without touching live registry topology or lifecycle.
+            auto&& currentStorage = world.GetRegistry().storage<entt::entity>();
+            liveRetirementPlans.reserve(world.GetEntityCount());
+            for (auto&& [entity] : currentStorage.each())
+                liveRetirementPlans.push_back(world.PrepareEntityRetirement(entity));
         }
         catch (const std::exception& error)
         {
@@ -1343,8 +1393,8 @@ namespace Spark
         // incoming identifiers can be reused. Observer exceptions are programmer
         // faults and deliberately propagate; catching here cannot roll back their
         // side effects and must not masquerade as an ordinary unchanged-world false.
-        for (const EntityID entity : liveEntities)
-            world.DestroyEntity(entity);
+        for (const World::EntityRetirementPlan& plan : liveRetirementPlans)
+            world.DestroyEntity(plan);
         for (const EntityID entity : incomingEntities)
             Spark::EntityEventBus::Global().RemoveEntity(static_cast<Spark::EventEntityID>(entity));
 

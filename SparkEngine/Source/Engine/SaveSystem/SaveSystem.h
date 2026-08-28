@@ -315,17 +315,19 @@ namespace Spark
  * ### Error handling
  * All public save/load methods return `bool` for ordinary validation, I/O, migration,
  * and candidate-deserialization failures. Load() builds a fresh candidate World and
- * verifies every declared component, type-erased operation, representation bound, and
- * custom-state copy before touching live component storage. Therefore an ordinary
- * `false` leaves the caller's exact registry topology, entities, components, per-entity
- * event subscriptions, and custom-state output unchanged.
+ * verifies the exact candidate entity/component topology, every type-erased operation,
+ * representation bound, custom-state copy, and complete live hierarchy retirement plan
+ * before touching live component storage. Therefore an ordinary `false` leaves the
+ * caller's exact registry topology, entities, components, hierarchy, per-entity event
+ * subscriptions, and custom-state output unchanged.
  *
  * Preparing a previously absent live component pool is the explicit commit boundary.
  * Allocation or callback exceptions at that boundary propagate; they are never converted
  * to `false`, because an empty pool may already have changed registry topology even though
  * entity/component payloads, per-entity subscriptions, and custom state remain unchanged.
- * After preparation, the commit preserves the live registry's signal objects while
- * retiring old entity lifecycle state and explicitly rebinding live reactive consumers.
+ * After preparation, the commit uses only the preallocated hierarchy plan, preserves
+ * the live registry's signal objects, retires old entity lifecycle state, and explicitly
+ * rebinds live reactive consumers.
  *
  * EnTT lifecycle observers are application callbacks and are not constrained to be
  * non-throwing by the current World API. If one throws after retirement begins, the
@@ -583,10 +585,11 @@ namespace Spark
      * old entities, swaps validated storage payloads into the existing live registry,
      * and emits explicit reactive rebind notifications for incoming components.
      * Unknown/duplicate component types, unsupported versions, representation-limit
-     * failures, incomplete type-erased operations, and candidate-deserializer failures
-     * (including a callback that does not materialize its declared component) return
-     * `false` without changing exact registry topology, entity/component state, or
-     * per-entity EventBus subscriptions.
+     * failures, incomplete type-erased operations, candidate topology mismatches, live
+     * hierarchy-plan allocation failures, and candidate-deserializer failures (including
+     * a callback that omits its declared component or creates undeclared state) return
+     * `false` without changing exact registry topology, hierarchy, entity/component state,
+     * or per-entity EventBus subscriptions.
      * Pair with SerializeWorld() for in-memory snapshot/restore patterns.
      *
      * @param data   SaveData snapshot (e.g. from a previous SerializeWorld() call).

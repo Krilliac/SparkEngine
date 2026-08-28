@@ -101,6 +101,22 @@
 class World
 {
   public:
+    /**
+     * @brief Immutable hierarchy snapshot used to retire an entity without allocating.
+     *
+     * Build every plan before crossing a transaction's live-world boundary, then pass
+     * the plans to DestroyEntity(const EntityRetirementPlan&). Lifecycle observers and
+     * EntityEventBus cleanup retain the same ordering as DestroyEntity(EntityID).
+     */
+    struct EntityRetirementPlan
+    {
+        EntityID entity = entt::null;
+        EntityID parent = entt::null;
+        std::vector<EntityID> children;
+    };
+
+    using RetirementSnapshotProbe = void (*)(EntityID entity);
+
     EntityID CreateEntity(const std::string& name = "")
     {
         EntityID entity = m_registry.create();
@@ -159,8 +175,46 @@ class World
         return true;
     }
 
-    void DestroyEntity(EntityID entity)
+    /**
+     * @brief Snapshot hierarchy links for a later allocation-free retirement.
+     *
+     * The returned child list owns its copy. Allocation and the optional testing
+     * probe therefore run before callers enter an irreversible live-world commit.
+     */
+    [[nodiscard]] EntityRetirementPlan PrepareEntityRetirement(EntityID entity) const
     {
+        EntityRetirementPlan plan;
+        plan.entity = entity;
+        if (!m_registry.valid(entity))
+            return plan;
+
+        if (m_retirementSnapshotProbe)
+            m_retirementSnapshotProbe(entity);
+        if (const Transform* transform = m_registry.try_get<Transform>(entity))
+        {
+            plan.parent = transform->parent;
+            plan.children = transform->children;
+        }
+        return plan;
+    }
+
+    /** @brief Install a narrow per-World probe used by transactional boundary tests. */
+    void SetRetirementSnapshotProbeForTesting(RetirementSnapshotProbe probe) noexcept
+    {
+        m_retirementSnapshotProbe = probe;
+    }
+
+    void DestroyEntity(EntityID entity) { DestroyEntity(PrepareEntityRetirement(entity)); }
+
+    /**
+     * @brief Retire an entity using hierarchy links copied before the commit boundary.
+     *
+     * This path performs no hierarchy allocation. EnTT lifecycle observers still run
+     * synchronously during registry destruction and their exceptions propagate.
+     */
+    void DestroyEntity(const EntityRetirementPlan& plan)
+    {
+        const EntityID entity = plan.entity;
         if (!m_registry.valid(entity))
         {
             SPARK_LOG_WARN(Spark::LogCategory::ECS, "DestroyEntity called with invalid entity %u",
@@ -175,18 +229,15 @@ class World
         // Parent/children are maintained as reciprocal links by SetParent,
         // so cleanup is proportional to this entity's
         // immediate family instead of the entire world.
-        if (const Transform* transform = m_registry.try_get<Transform>(entity))
+        if (m_registry.try_get<Transform>(entity))
         {
-            const EntityID parent = transform->parent;
-            const std::vector<EntityID> children = transform->children;
-
-            if (parent != entt::null && m_registry.valid(parent))
+            if (plan.parent != entt::null && m_registry.valid(plan.parent))
             {
-                if (Transform* parentTransform = m_registry.try_get<Transform>(parent))
+                if (Transform* parentTransform = m_registry.try_get<Transform>(plan.parent))
                     std::erase(parentTransform->children, entity);
             }
 
-            for (EntityID child : children)
+            for (EntityID child : plan.children)
             {
                 if (child == entity || child == entt::null || !m_registry.valid(child))
                     continue;
@@ -254,4 +305,5 @@ class World
 
   private:
     entt::registry m_registry;
+    RetirementSnapshotProbe m_retirementSnapshotProbe = nullptr;
 };

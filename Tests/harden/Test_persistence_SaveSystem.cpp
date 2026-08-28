@@ -329,8 +329,29 @@ namespace
         uint8_t marker = 0;
     };
 
+    struct CandidateGhostProbe
+    {
+        uint8_t marker = 0;
+    };
+
+    struct CandidateExtraComponentProbe
+    {
+        uint8_t marker = 0;
+    };
+
+    struct RetirementPlanProbe
+    {
+        uint8_t marker = 0;
+    };
+
     int g_missingRestorePrepareCalls = 0;
     int g_prepareFailureCalls = 0;
+    int g_candidateTopologyPrepareCalls = 0;
+    int g_retirementPrepareCalls = 0;
+    int g_retirementSnapshotCalls = 0;
+    bool g_throwRetirementSnapshot = false;
+    bool g_liveStorageBoundaryCrossed = false;
+    bool g_snapshotObservedAfterBoundary = false;
 
     template <typename Type> void SwapProbeStorageContents(void* destinationWorld, void* sourceWorld) noexcept
     {
@@ -359,6 +380,34 @@ namespace
         ++g_prepareFailureCalls;
         (void)static_cast<World*>(world)->GetRegistry().storage<PrepareFailureProbe>();
         throw std::runtime_error("intentional live storage preparation failure");
+    }
+
+    template <typename Type> void CountCandidateTopologyPrepare(void* world)
+    {
+        ++g_candidateTopologyPrepareCalls;
+        (void)static_cast<World*>(world)->GetRegistry().storage<Type>();
+    }
+
+    void CountRetirementPrepare(void* world)
+    {
+        ++g_retirementPrepareCalls;
+        (void)static_cast<World*>(world)->GetRegistry().storage<RetirementPlanProbe>();
+    }
+
+    void MarkLiveStorageBoundary(void* world)
+    {
+        ++g_retirementPrepareCalls;
+        g_liveStorageBoundaryCrossed = true;
+        (void)static_cast<World*>(world)->GetRegistry().storage<RetirementPlanProbe>();
+    }
+
+    void ObserveRetirementSnapshot(EntityID)
+    {
+        ++g_retirementSnapshotCalls;
+        if (g_liveStorageBoundaryCrossed)
+            g_snapshotObservedAfterBoundary = true;
+        if (g_throwRetirementSnapshot)
+            throw std::runtime_error("intentional retirement-plan snapshot failure");
     }
 
     template <typename Type> ComponentOps MakeProbeComponentOps(ComponentOps::PrepareStorageFn prepareStorage)
@@ -1126,6 +1175,279 @@ TEST(SaveMigration_LiveStoragePreparationFailurePropagatesWithoutFalseRollbackCl
     Spark::EntityEventBus::Global().Publish<SaveLoadLifecycleProbeEvent>(static_cast<Spark::EventEntityID>(sentinel),
                                                                          {1});
     EXPECT_EQ(deliveries, 1);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_ExtraCandidateEntityFailsBeforeLiveStoragePreparation)
+{
+    const std::string dir = MakeTempSaveDir("extra_candidate_entity");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("ghost-source");
+    source.AddComponent<Transform>(sourceEntity).position.x = 41.0f;
+    SaveMetadata metadata;
+    metadata.saveName = "Ghost candidate entity";
+    EXPECT_TRUE(saveSystem.Save("ghost-candidate", source, metadata, {{"candidate", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "ghost-candidate.spark_save";
+    std::vector<char> bytes = ReadBytes(path);
+    ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "GhostTx"));
+    ASSERT_TRUE(WriteBytes(path, bytes));
+
+    auto& serializers = ComponentSerializerRegistry::GetInstance();
+    serializers.Unregister("GhostTx");
+    serializers.Register(
+        "GhostTx", [](const void*) { return SerializedComponent{"GhostTx", {}}; },
+        [](World& world, EntityID entity, const SerializedComponent&)
+        {
+            world.AddComponent<CandidateGhostProbe>(entity);
+            const EntityID ghost = world.CreateEntity("deserializer-created-ghost");
+            world.AddComponent<CandidateGhostProbe>(ghost);
+        });
+    ComponentFactory::Get().Register(
+        "GhostTx", MakeProbeComponentOps<CandidateGhostProbe>(&CountCandidateTopologyPrepare<CandidateGhostProbe>));
+    g_candidateTopologyPrepareCalls = 0;
+
+    World liveWorld;
+    const EntityID sentinel = liveWorld.CreateEntity("ghost-live-sentinel");
+    liveWorld.AddComponent<Transform>(sentinel).position.x = 818.0f;
+    int deliveries = 0;
+    auto subscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(sentinel), [&](const SaveLoadLifecycleProbeEvent&) { ++deliveries; });
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+    const auto topologyBefore = RegistryStorageIds(liveWorld);
+
+    const bool loaded = saveSystem.Load("ghost-candidate", liveWorld, customState);
+    serializers.Unregister("GhostTx");
+
+    EXPECT_FALSE(loaded);
+    EXPECT_EQ(g_candidateTopologyPrepareCalls, 0);
+    EXPECT_TRUE(RegistryStorageIds(liveWorld) == topologyBefore);
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "ghost-live-sentinel"));
+    EXPECT_FALSE(WorldContainsNamedEntity(liveWorld, "deserializer-created-ghost"));
+    EXPECT_NEAR(liveWorld.GetComponent<Transform>(sentinel)->position.x, 818.0f, 0.0001f);
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("live"), std::string("sentinel"));
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(sentinel)),
+              1u);
+    Spark::EntityEventBus::Global().Publish<SaveLoadLifecycleProbeEvent>(static_cast<Spark::EventEntityID>(sentinel),
+                                                                         {1});
+    EXPECT_EQ(deliveries, 1);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_ExtraStagedComponentFailsBeforeLiveStoragePreparation)
+{
+    const std::string dir = MakeTempSaveDir("extra_staged_component");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID first = source.CreateEntity("extra-component-source");
+    source.AddComponent<Transform>(first).position.x = 51.0f;
+    const EntityID second = source.CreateEntity("declared-transform-source");
+    source.AddComponent<Transform>(second).position.x = 52.0f;
+    SaveMetadata metadata;
+    metadata.saveName = "Extra staged component";
+    EXPECT_TRUE(saveSystem.Save("extra-staged-component", source, metadata, {{"candidate", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "extra-staged-component.spark_save";
+    std::vector<char> bytes = ReadBytes(path);
+    ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "ExtraTx"));
+    ASSERT_TRUE(WriteBytes(path, bytes));
+
+    auto& serializers = ComponentSerializerRegistry::GetInstance();
+    serializers.Unregister("ExtraTx");
+    serializers.Register(
+        "ExtraTx", [](const void*) { return SerializedComponent{"ExtraTx", {}}; },
+        [](World& world, EntityID entity, const SerializedComponent&)
+        {
+            world.AddComponent<CandidateExtraComponentProbe>(entity);
+            world.AddComponent<Transform>(entity);
+        });
+    ComponentFactory::Get().Register("ExtraTx", MakeProbeComponentOps<CandidateExtraComponentProbe>(
+                                                    &CountCandidateTopologyPrepare<CandidateExtraComponentProbe>));
+    g_candidateTopologyPrepareCalls = 0;
+
+    World liveWorld;
+    const EntityID sentinel = liveWorld.CreateEntity("extra-component-live-sentinel");
+    liveWorld.AddComponent<Transform>(sentinel).position.x = 919.0f;
+    int deliveries = 0;
+    auto subscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(sentinel), [&](const SaveLoadLifecycleProbeEvent&) { ++deliveries; });
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+    const auto topologyBefore = RegistryStorageIds(liveWorld);
+
+    const bool loaded = saveSystem.Load("extra-staged-component", liveWorld, customState);
+    serializers.Unregister("ExtraTx");
+
+    EXPECT_FALSE(loaded);
+    EXPECT_EQ(g_candidateTopologyPrepareCalls, 0);
+    EXPECT_TRUE(RegistryStorageIds(liveWorld) == topologyBefore);
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "extra-component-live-sentinel"));
+    EXPECT_NEAR(liveWorld.GetComponent<Transform>(sentinel)->position.x, 919.0f, 0.0001f);
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("live"), std::string("sentinel"));
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(sentinel)),
+              1u);
+    Spark::EntityEventBus::Global().Publish<SaveLoadLifecycleProbeEvent>(static_cast<Spark::EventEntityID>(sentinel),
+                                                                         {1});
+    EXPECT_EQ(deliveries, 1);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_HierarchyPlanFailureLeavesExactLiveStateBeforeStoragePreparation)
+{
+    const std::string dir = MakeTempSaveDir("hierarchy_plan_failure");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("hierarchy-plan-source");
+    source.AddComponent<Transform>(sourceEntity);
+    SaveMetadata metadata;
+    metadata.saveName = "Hierarchy plan failure";
+    EXPECT_TRUE(saveSystem.Save("hierarchy-plan", source, metadata, {{"candidate", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "hierarchy-plan.spark_save";
+    std::vector<char> bytes = ReadBytes(path);
+    ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "PlanTx"));
+    ASSERT_TRUE(WriteBytes(path, bytes));
+
+    auto& serializers = ComponentSerializerRegistry::GetInstance();
+    serializers.Unregister("PlanTx");
+    serializers.Register(
+        "PlanTx", [](const void*) { return SerializedComponent{"PlanTx", {}}; },
+        [](World& world, EntityID entity, const SerializedComponent&)
+        { world.AddComponent<RetirementPlanProbe>(entity); });
+    ComponentFactory::Get().Register("PlanTx", MakeProbeComponentOps<RetirementPlanProbe>(&CountRetirementPrepare));
+
+    World liveWorld;
+    const EntityID parent = liveWorld.CreateEntity("hierarchy-live-parent");
+    const EntityID child = liveWorld.CreateEntity("hierarchy-live-child");
+    liveWorld.AddComponent<Transform>(parent).position.x = 101.0f;
+    liveWorld.AddComponent<Transform>(child).position.x = 202.0f;
+    ASSERT_TRUE(liveWorld.SetParent(child, parent));
+    int deliveries = 0;
+    auto subscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(child), [&](const SaveLoadLifecycleProbeEvent&) { ++deliveries; });
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+    const auto topologyBefore = RegistryStorageIds(liveWorld);
+
+    g_retirementPrepareCalls = 0;
+    g_retirementSnapshotCalls = 0;
+    g_throwRetirementSnapshot = true;
+    g_liveStorageBoundaryCrossed = false;
+    g_snapshotObservedAfterBoundary = false;
+    liveWorld.SetRetirementSnapshotProbeForTesting(&ObserveRetirementSnapshot);
+    const bool loaded = saveSystem.Load("hierarchy-plan", liveWorld, customState);
+    liveWorld.SetRetirementSnapshotProbeForTesting(nullptr);
+    g_throwRetirementSnapshot = false;
+    serializers.Unregister("PlanTx");
+
+    EXPECT_FALSE(loaded);
+    EXPECT_EQ(g_retirementSnapshotCalls, 1);
+    EXPECT_EQ(g_retirementPrepareCalls, 0);
+    EXPECT_FALSE(g_liveStorageBoundaryCrossed);
+    EXPECT_FALSE(g_snapshotObservedAfterBoundary);
+    EXPECT_TRUE(RegistryStorageIds(liveWorld) == topologyBefore);
+    EXPECT_EQ(liveWorld.GetEntityCount(), 2u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "hierarchy-live-parent"));
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "hierarchy-live-child"));
+    const Transform* parentTransform = liveWorld.GetComponent<Transform>(parent);
+    const Transform* childTransform = liveWorld.GetComponent<Transform>(child);
+    ASSERT_TRUE(parentTransform != nullptr);
+    ASSERT_TRUE(childTransform != nullptr);
+    EXPECT_TRUE(std::find(parentTransform->children.begin(), parentTransform->children.end(), child) !=
+                parentTransform->children.end());
+    EXPECT_TRUE(childTransform->parent == parent);
+    EXPECT_NEAR(parentTransform->position.x, 101.0f, 0.0001f);
+    EXPECT_NEAR(childTransform->position.x, 202.0f, 0.0001f);
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("live"), std::string("sentinel"));
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(child)),
+              1u);
+    Spark::EntityEventBus::Global().Publish<SaveLoadLifecycleProbeEvent>(static_cast<Spark::EventEntityID>(child), {1});
+    EXPECT_EQ(deliveries, 1);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_HierarchyRetirementUsesOnlyPreBoundarySnapshots)
+{
+    const std::string dir = MakeTempSaveDir("hierarchy_snapshot_guard");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("hierarchy-guard-source");
+    source.AddComponent<Transform>(sourceEntity);
+    SaveMetadata metadata;
+    metadata.saveName = "Hierarchy snapshot guard";
+    EXPECT_TRUE(saveSystem.Save("hierarchy-guard", source, metadata, {{"loaded", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "hierarchy-guard.spark_save";
+    std::vector<char> bytes = ReadBytes(path);
+    ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "GuardTx"));
+    ASSERT_TRUE(WriteBytes(path, bytes));
+
+    auto& serializers = ComponentSerializerRegistry::GetInstance();
+    serializers.Unregister("GuardTx");
+    serializers.Register(
+        "GuardTx", [](const void*) { return SerializedComponent{"GuardTx", {}}; },
+        [](World& world, EntityID entity, const SerializedComponent&)
+        { world.AddComponent<RetirementPlanProbe>(entity); });
+    ComponentFactory::Get().Register("GuardTx", MakeProbeComponentOps<RetirementPlanProbe>(&MarkLiveStorageBoundary));
+
+    World liveWorld;
+    const EntityID parent = liveWorld.CreateEntity("guard-live-parent");
+    const EntityID child = liveWorld.CreateEntity("guard-live-child");
+    liveWorld.AddComponent<Transform>(parent);
+    liveWorld.AddComponent<Transform>(child);
+    ASSERT_TRUE(liveWorld.SetParent(child, parent));
+    auto parentSubscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(parent), [](const SaveLoadLifecycleProbeEvent&) {});
+    auto childSubscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(child), [](const SaveLoadLifecycleProbeEvent&) {});
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+
+    g_retirementPrepareCalls = 0;
+    g_retirementSnapshotCalls = 0;
+    g_throwRetirementSnapshot = false;
+    g_liveStorageBoundaryCrossed = false;
+    g_snapshotObservedAfterBoundary = false;
+    liveWorld.SetRetirementSnapshotProbeForTesting(&ObserveRetirementSnapshot);
+    const bool loaded = saveSystem.Load("hierarchy-guard", liveWorld, customState);
+    liveWorld.SetRetirementSnapshotProbeForTesting(nullptr);
+    serializers.Unregister("GuardTx");
+
+    EXPECT_TRUE(loaded);
+    EXPECT_EQ(g_retirementSnapshotCalls, 2);
+    EXPECT_EQ(g_retirementPrepareCalls, 1);
+    EXPECT_TRUE(g_liveStorageBoundaryCrossed);
+    EXPECT_FALSE(g_snapshotObservedAfterBoundary);
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    const EntityID incoming = FindNamedEntity(liveWorld, "hierarchy-guard-source");
+    ASSERT_TRUE(incoming != entt::null);
+    EXPECT_TRUE(liveWorld.HasComponent<RetirementPlanProbe>(incoming));
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("loaded"), std::string("state"));
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(parent)),
+              0u);
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(child)),
+              0u);
 
     std::filesystem::remove_all(dir);
 }
