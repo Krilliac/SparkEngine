@@ -599,6 +599,49 @@ async function main() {
         );
         assert.strictEqual(warningNotification.summary.status, 'complete');
 
+        const omittedWarningDescriptorData = fixture();
+        const omittedWarningDescriptor = await preflightAndReport(
+            root,
+            omittedWarningDescriptorData,
+            omittedWarningDescriptorData,
+            writeArtifacts(root, {
+                'c-cpp': sarif('c-cpp', [], 'c-cpp', {
+                    invocations: [{
+                        executionSuccessful: true,
+                        toolExecutionNotifications: [{
+                            level: 'warning',
+                            message: { text: 'Extraction failed in SparkEngine/Source/Broken.cpp.' }
+                        }]
+                    }]
+                })
+            })
+        );
+        assert.strictEqual(omittedWarningDescriptor.summary.status, 'incomplete');
+        assert(omittedWarningDescriptor.summary.evidenceErrors.some(error =>
+            error.includes('has no resolvable descriptor identity')));
+
+        const emptyWarningDescriptorData = fixture();
+        const emptyWarningDescriptor = await preflightAndReport(
+            root,
+            emptyWarningDescriptorData,
+            emptyWarningDescriptorData,
+            writeArtifacts(root, {
+                'c-cpp': sarif('c-cpp', [], 'c-cpp', {
+                    invocations: [{
+                        executionSuccessful: true,
+                        toolExecutionNotifications: [{
+                            level: 'warning',
+                            descriptor: {},
+                            message: { text: 'Extraction failed in SparkEngine/Source/Broken.cpp.' }
+                        }]
+                    }]
+                })
+            })
+        );
+        assert.strictEqual(emptyWarningDescriptor.summary.status, 'incomplete');
+        assert(emptyWarningDescriptor.summary.evidenceErrors.some(error =>
+            error.includes('has no resolvable descriptor identity')));
+
         const extractionWarningData = fixture();
         const extractionWarning = await preflightAndReport(
             root,
@@ -624,6 +667,31 @@ async function main() {
         assert(extractionWarning.summary.evidenceErrors.some(error =>
             error.includes("extraction-failure diagnostic 'cpp/diagnostics/extraction-warnings'")));
         assert(extractionWarning.runtime.observed.failed.length >= 1);
+
+        const slashExtractionWarningData = fixture();
+        const slashExtractionWarning = await preflightAndReport(
+            root,
+            slashExtractionWarningData,
+            slashExtractionWarningData,
+            writeArtifacts(root, {
+                'c-cpp': sarif('c-cpp', [], 'c-cpp', {
+                    invocations: [{
+                        executionSuccessful: true,
+                        toolExecutionNotifications: [{
+                            level: 'warning',
+                            descriptor: { id: 'cpp/diagnostics/extraction-warnings/', index: 1 },
+                            message: {
+                                text: 'Extraction failed in SparkEngine/Source/Broken.cpp with warning compiler exited early.'
+                            }
+                        }]
+                    }]
+                })
+            })
+        );
+        assert.strictEqual(slashExtractionWarning.summary.status, 'incomplete');
+        assert(slashExtractionWarning.summary.evidenceErrors.some(error =>
+            error.includes("extraction-failure diagnostic 'cpp/diagnostics/extraction-warnings/'")),
+        'an empty child component must retain the extraction-failure identity');
 
         const missingDiagnosticsData = fixture();
         const missingDiagnosticsSarif = sarif('c-cpp');
@@ -757,6 +825,75 @@ async function main() {
         assert.strictEqual(duplicateDescriptorId.summary.status, 'incomplete');
         assert(duplicateDescriptorId.summary.evidenceErrors.some(error =>
             error.includes('duplicate notification descriptor ID')));
+
+        const malformedComponentGuidData = fixture();
+        const malformedComponentGuidSarif = sarif('c-cpp');
+        malformedComponentGuidSarif.runs[0].tool.driver.guid =
+            'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaZ';
+        const malformedComponentGuid = await preflightAndReport(
+            root,
+            malformedComponentGuidData,
+            malformedComponentGuidData,
+            writeArtifacts(root, { 'c-cpp': malformedComponentGuidSarif })
+        );
+        assert.strictEqual(malformedComponentGuid.summary.status, 'incomplete');
+        assert(malformedComponentGuid.summary.evidenceErrors.some(error =>
+            error.includes('tool.driver has an invalid GUID')));
+
+        const malformedDescriptorGuidData = fixture();
+        const malformedDescriptorGuidSarif = sarif('c-cpp');
+        malformedDescriptorGuidSarif.runs[0].tool.driver.notifications[0].guid =
+            'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbZ';
+        const malformedDescriptorGuid = await preflightAndReport(
+            root,
+            malformedDescriptorGuidData,
+            malformedDescriptorGuidData,
+            writeArtifacts(root, { 'c-cpp': malformedDescriptorGuidSarif })
+        );
+        assert.strictEqual(malformedDescriptorGuid.summary.status, 'incomplete');
+        assert(malformedDescriptorGuid.summary.evidenceErrors.some(error =>
+            error.includes('tool.driver.notifications[0] has an invalid GUID')));
+
+        const malformedComponentReferenceGuidData = fixture();
+        const malformedComponentReferenceGuidSarif = sarif('c-cpp');
+        malformedComponentReferenceGuidSarif.runs[0].invocations = [{
+            executionSuccessful: true,
+            toolExecutionNotifications: [{
+                level: 'warning',
+                descriptor: {
+                    id: 'cpp/diagnostics/example-warning',
+                    toolComponent: { guid: 'cccccccc-cccc-4ccc-8ccc-cccccccccccZ' }
+                }
+            }]
+        }];
+        const malformedComponentReferenceGuid = await preflightAndReport(
+            root,
+            malformedComponentReferenceGuidData,
+            malformedComponentReferenceGuidData,
+            writeArtifacts(root, { 'c-cpp': malformedComponentReferenceGuidSarif })
+        );
+        assert.strictEqual(malformedComponentReferenceGuid.summary.status, 'incomplete');
+        assert(malformedComponentReferenceGuid.summary.evidenceErrors.some(error =>
+            error.includes('invalid tool component GUID')));
+
+        const malformedDescriptorReferenceGuidData = fixture();
+        const malformedDescriptorReferenceGuidSarif = sarif('c-cpp');
+        malformedDescriptorReferenceGuidSarif.runs[0].invocations = [{
+            executionSuccessful: true,
+            toolExecutionNotifications: [{
+                level: 'warning',
+                descriptor: { guid: 'dddddddd-dddd-4ddd-8ddd-dddddddddddZ' }
+            }]
+        }];
+        const malformedDescriptorReferenceGuid = await preflightAndReport(
+            root,
+            malformedDescriptorReferenceGuidData,
+            malformedDescriptorReferenceGuidData,
+            writeArtifacts(root, { 'c-cpp': malformedDescriptorReferenceGuidSarif })
+        );
+        assert.strictEqual(malformedDescriptorReferenceGuid.summary.status, 'incomplete');
+        assert(malformedDescriptorReferenceGuid.summary.evidenceErrors.some(error =>
+            error.includes('invalid descriptor GUID')));
 
         const failedInvocationData = fixture();
         const failedInvocation = await preflightAndReport(

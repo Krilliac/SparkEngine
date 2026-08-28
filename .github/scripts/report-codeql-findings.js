@@ -20,6 +20,7 @@ const SCHEMA_VERSION = 2;
 const LANGUAGE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9+._-]*$/;
 const SHA_PATTERN = /^[0-9a-f]{40}$/i;
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/i;
+const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ARTIFACT_BYTES = 25 * 1024 * 1024;
 const MAX_TOTAL_ARTIFACT_BYTES = 75 * 1024 * 1024;
 const MAX_SARIF_BYTES = 25 * 1024 * 1024;
@@ -477,7 +478,7 @@ function notificationComponents(tool, runIndex, language) {
     for (const entry of components) {
         const componentGuid = entry.component.guid;
         if (componentGuid !== undefined) {
-            if (typeof componentGuid !== 'string' || componentGuid.length === 0 || componentGuid.length > 200) {
+            if (typeof componentGuid !== 'string' || !GUID_PATTERN.test(componentGuid)) {
                 throw new Error(`run ${runIndex} ${entry.label} has an invalid GUID`);
             }
             const canonicalComponentGuid = normalizedGuid(componentGuid);
@@ -508,8 +509,7 @@ function notificationComponents(tool, runIndex, language) {
             descriptorIds.add(descriptor.id);
 
             if (descriptor.guid !== undefined) {
-                if (typeof descriptor.guid !== 'string' ||
-                    descriptor.guid.length === 0 || descriptor.guid.length > 200) {
+                if (typeof descriptor.guid !== 'string' || !GUID_PATTERN.test(descriptor.guid)) {
                     throw new Error(
                         `run ${runIndex} ${entry.label}.notifications[${descriptorIndex}] has an invalid GUID`
                     );
@@ -538,7 +538,7 @@ function notificationComponents(tool, runIndex, language) {
 }
 
 function referencedNotificationDescriptorId(reference, components, context) {
-    if (reference === undefined) return null;
+    if (reference === undefined) throw new Error(`${context} has no resolvable descriptor identity`);
     if (!isObject(reference)) throw new Error(`${context} has a malformed descriptor reference`);
 
     const directId = reference.id;
@@ -560,7 +560,8 @@ function referencedNotificationDescriptorId(reference, components, context) {
             }
             componentIndex = componentReference.index + 1;
         } else if (componentReference.guid !== undefined) {
-            if (typeof componentReference.guid !== 'string') {
+            if (typeof componentReference.guid !== 'string' ||
+                !GUID_PATTERN.test(componentReference.guid)) {
                 throw new Error(`${context} has an invalid tool component GUID`);
             }
             const referencedGuid = normalizedGuid(componentReference.guid);
@@ -590,7 +591,9 @@ function referencedNotificationDescriptorId(reference, components, context) {
         }
         descriptor = component.notifications[reference.index];
     } else if (reference.guid !== undefined) {
-        if (typeof reference.guid !== 'string') throw new Error(`${context} has an invalid descriptor GUID`);
+        if (typeof reference.guid !== 'string' || !GUID_PATTERN.test(reference.guid)) {
+            throw new Error(`${context} has an invalid descriptor GUID`);
+        }
         const referencedGuid = normalizedGuid(reference.guid);
         descriptor = component.notifications.find(
             candidate => normalizedGuid(candidate.guid) === referencedGuid
@@ -604,15 +607,18 @@ function referencedNotificationDescriptorId(reference, components, context) {
     }
     if (descriptor && directId !== undefined && directId !== descriptor.id) {
         // SARIF 2.1.0 section 3.52.4 permits exactly one additional
-        // hierarchical component. Keep that more specific ID canonical so a
-        // broad indexed descriptor cannot mask an extraction-failure child.
+        // hierarchical component, including an empty component. Keep that
+        // more specific ID canonical so a broad indexed descriptor cannot
+        // mask an extraction-failure child.
         const childPrefix = `${descriptor.id}/`;
         const child = directId.startsWith(childPrefix) ? directId.slice(childPrefix.length) : '';
-        if (child.length === 0 || child.includes('/')) {
+        if (!directId.startsWith(childPrefix) || child.includes('/')) {
             throw new Error(`${context} has inconsistent notification descriptor metadata`);
         }
     }
-    return directId || descriptor?.id || null;
+    const identifier = directId || descriptor?.id || null;
+    if (!identifier) throw new Error(`${context} has no resolvable descriptor identity`);
+    return identifier;
 }
 
 function isExtractionFailureDescriptor(id) {
