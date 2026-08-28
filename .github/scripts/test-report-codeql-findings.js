@@ -219,11 +219,13 @@ function harness(data) {
     return { observed, github, core, context };
 }
 
-function sarif(language, results = [], automationLanguage = language) {
+function sarif(language, results = [], automationLanguage = language, runOverrides = {}) {
     return {
         version: '2.1.0',
         runs: [{
-            automationDetails: { id: `/language:${automationLanguage}` },
+            // CodeQL currently serializes the category with a trailing slash.
+            // The reporter also accepts the historical no-slash form.
+            automationDetails: { id: `/language:${automationLanguage}/` },
             tool: {
                 driver: {
                     name: 'CodeQL',
@@ -235,7 +237,13 @@ function sarif(language, results = [], automationLanguage = language) {
                     }]
                 }
             },
-            results
+            results,
+            invocations: [{
+                executionSuccessful: true,
+                toolExecutionNotifications: [],
+                configurationNotifications: []
+            }],
+            ...runOverrides
         }]
     };
 }
@@ -354,11 +362,11 @@ function testWorkflowShape() {
 
 function invalidationScript() {
     const reporter = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'codeql-report.yml'), 'utf8');
-    const marker = '        script: |\n';
     const step = reporter.indexOf('    - name: Mark prior CodeQL report pending');
-    const start = reporter.indexOf(marker, step);
-    assert(step >= 0 && start >= 0, 'invalidation script must be present in the trusted workflow');
-    const lines = reporter.slice(start + marker.length).split(/\r?\n/);
+    const marker = step >= 0 ? reporter.slice(step).match(/^        script: \|\r?$/m) : null;
+    const start = marker ? step + marker.index + marker[0].length : -1;
+    assert(step >= 0 && marker && start >= 0, 'invalidation script must be present in the trusted workflow');
+    const lines = reporter.slice(start).replace(/^\r?\n/, '').split(/\r?\n/);
     const scriptLines = [];
     for (const line of lines) {
         if (line && !line.startsWith('          ')) break;
@@ -557,6 +565,95 @@ async function main() {
         assert.strictEqual(clean.summary.artifactEvidence.length, 3);
         assert.strictEqual(clean.runtime.observed.createdComments.length, 1);
         assert(clean.runtime.observed.createdComments[0].body.includes('valid SARIF and no findings'));
+
+        const warningNotificationData = fixture();
+        const warningNotification = await preflightAndReport(
+            root,
+            warningNotificationData,
+            warningNotificationData,
+            writeArtifacts(root, {
+                'c-cpp': sarif('c-cpp', [], 'c-cpp', {
+                    invocations: [{
+                        executionSuccessful: true,
+                        toolExecutionNotifications: [{
+                            level: 'warning',
+                            descriptor: { id: 'cpp/diagnostics/example-warning' },
+                            message: { text: 'Non-fatal diagnostic.' }
+                        }]
+                    }]
+                })
+            })
+        );
+        assert.strictEqual(warningNotification.summary.status, 'complete');
+
+        const failedInvocationData = fixture();
+        const failedInvocation = await preflightAndReport(
+            root,
+            failedInvocationData,
+            failedInvocationData,
+            writeArtifacts(root, {
+                'c-cpp': sarif('c-cpp', [], 'c-cpp', {
+                    invocations: [{ executionSuccessful: false }]
+                })
+            })
+        );
+        assert.strictEqual(failedInvocation.summary.status, 'incomplete');
+        assert.deepStrictEqual(failedInvocation.summary.invalidLanguages, ['c-cpp']);
+        assert(failedInvocation.summary.evidenceErrors.some(error => error.includes('did not complete successfully')));
+        assert(failedInvocation.runtime.observed.failed.length >= 1);
+
+        const extractorErrorData = fixture();
+        const extractorError = await preflightAndReport(
+            root,
+            extractorErrorData,
+            extractorErrorData,
+            writeArtifacts(root, {
+                'c-cpp': sarif('c-cpp', [], 'c-cpp', {
+                    invocations: [{
+                        executionSuccessful: true,
+                        toolExecutionNotifications: [{
+                            level: 'error',
+                            descriptor: { id: 'cpp/diagnostics/failed-extractor-invocations' },
+                            message: { text: 'Extraction aborted for compiler invocation.' }
+                        }]
+                    }]
+                })
+            })
+        );
+        assert.strictEqual(extractorError.summary.status, 'incomplete');
+        assert.deepStrictEqual(extractorError.summary.invalidLanguages, ['c-cpp']);
+        assert(extractorError.summary.evidenceErrors.some(error =>
+            error.includes('cpp/diagnostics/failed-extractor-invocations')));
+
+        const missingInvocationData = fixture();
+        const missingInvocation = await preflightAndReport(
+            root,
+            missingInvocationData,
+            missingInvocationData,
+            writeArtifacts(root, {
+                'c-cpp': sarif('c-cpp', [], 'c-cpp', { invocations: [] })
+            })
+        );
+        assert.strictEqual(missingInvocation.summary.status, 'incomplete');
+        assert(missingInvocation.summary.evidenceErrors.some(error => error.includes('no invocation evidence')));
+
+        const excessiveNotificationsData = fixture();
+        const excessiveNotifications = Array.from({ length: 10001 }, () => ({ level: 'none' }));
+        const rejectedNotifications = await preflightAndReport(
+            root,
+            excessiveNotificationsData,
+            excessiveNotificationsData,
+            writeArtifacts(root, {
+                'c-cpp': sarif('c-cpp', [], 'c-cpp', {
+                    invocations: [{
+                        executionSuccessful: true,
+                        toolExecutionNotifications: excessiveNotifications
+                    }]
+                })
+            })
+        );
+        assert.strictEqual(rejectedNotifications.summary.status, 'incomplete');
+        assert(rejectedNotifications.summary.evidenceErrors.some(error => error.includes('notification limit')));
 
         const hostile = finding({
             ruleId: 'cpp/evil|@reviewers[rule]',

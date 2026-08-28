@@ -27,6 +27,8 @@ const MAX_TOTAL_SARIF_BYTES = 75 * 1024 * 1024;
 const MAX_RESULTS_PER_FILE = 10000;
 const MAX_TOTAL_RESULTS = 10000;
 const MAX_RUNS_PER_FILE = 10;
+const MAX_INVOCATIONS_PER_RUN = 20;
+const MAX_NOTIFICATIONS_PER_RUN = 10000;
 const MAX_ARTIFACTS = 100;
 const MAX_SAME_COMMIT_RUNS = 1000;
 const MAX_PULL_REQUEST_CANDIDATES = 100;
@@ -444,14 +446,64 @@ function parseSarif(filePath, language) {
         const driver = run.tool.driver;
         const rules = driver.rules === undefined ? [] : driver.rules;
         const results = run.results === undefined ? [] : run.results;
+        const invocations = run.invocations;
         if (driver.name !== 'CodeQL' || !Array.isArray(rules) || !Array.isArray(results)) {
             throw new Error(`run ${runIndex} has malformed tool, rules, or results metadata`);
         }
-        if (!isObject(run.automationDetails) || run.automationDetails.id !== `/language:${language}`) {
+        const automationId = run.automationDetails?.id;
+        if (automationId !== `/language:${language}` && automationId !== `/language:${language}/`) {
             throw new Error(`run ${runIndex} does not attest the expected '${language}' language category`);
         }
         if (rules.length > MAX_RESULTS_PER_FILE) throw new Error(`run ${runIndex} exceeds the rule limit`);
         if (results.length > MAX_RESULTS_PER_FILE) throw new Error(`run ${runIndex} exceeds the result limit`);
+        if (!Array.isArray(invocations) || invocations.length === 0) {
+            throw new Error(`run ${runIndex} has no invocation evidence`);
+        }
+        if (invocations.length > MAX_INVOCATIONS_PER_RUN) {
+            throw new Error(`run ${runIndex} exceeds the invocation limit`);
+        }
+
+        let notificationCount = 0;
+        for (const [invocationIndex, invocation] of invocations.entries()) {
+            if (!isObject(invocation)) {
+                throw new Error(`run ${runIndex} invocation ${invocationIndex} is not an object`);
+            }
+            if (invocation.executionSuccessful !== true) {
+                throw new Error(`run ${runIndex} invocation ${invocationIndex} did not complete successfully`);
+            }
+            for (const field of ['toolExecutionNotifications', 'configurationNotifications']) {
+                const notifications = invocation[field] === undefined ? [] : invocation[field];
+                if (!Array.isArray(notifications)) {
+                    throw new Error(`run ${runIndex} invocation ${invocationIndex} has malformed ${field}`);
+                }
+                notificationCount += notifications.length;
+                if (notificationCount > MAX_NOTIFICATIONS_PER_RUN) {
+                    throw new Error(`run ${runIndex} exceeds the notification limit`);
+                }
+                for (const [notificationIndex, notification] of notifications.entries()) {
+                    if (!isObject(notification)) {
+                        throw new Error(
+                            `run ${runIndex} invocation ${invocationIndex} ${field}[${notificationIndex}] is not an object`
+                        );
+                    }
+                    if (notification.level !== undefined &&
+                        !['error', 'warning', 'note', 'none'].includes(notification.level)) {
+                        throw new Error(
+                            `run ${runIndex} invocation ${invocationIndex} ${field}[${notificationIndex}] has an invalid level`
+                        );
+                    }
+                    if (notification.level === 'error') {
+                        const identifier = typeof notification.descriptor?.id === 'string'
+                            ? notification.descriptor.id.slice(0, 200) : 'unknown';
+                        const message = typeof notification.message?.text === 'string'
+                            ? notification.message.text.slice(0, 300) : 'CodeQL reported an execution error';
+                        throw new Error(
+                            `run ${runIndex} reports CodeQL error notification '${identifier}': ${message}`
+                        );
+                    }
+                }
+            }
+        }
 
         const rulesByKey = new Map();
         rules.forEach((rule, index) => {
@@ -974,4 +1026,4 @@ module.exports = async args => {
     throw new Error(`Untrusted REPORT_MODE '${mode || '<empty>'}' is not permitted.`);
 };
 
-module.exports._test = Object.freeze({ finishComment });
+module.exports._test = Object.freeze({ finishComment, parseSarif });
