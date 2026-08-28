@@ -23,7 +23,9 @@
 #include "Utils/Timer.h"
 
 #include <algorithm>
+#include <array>
 #include <charconv>
+#include <cctype>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -113,7 +115,66 @@ namespace Spark::Server
             return stream.str();
         }
 
-        bool ApplyConfigFile(const std::filesystem::path& path, ServerOptions& options, std::string& error)
+        std::string LowerAscii(std::string_view value)
+        {
+            std::string lowered(value);
+            std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                           [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+            return lowered;
+        }
+
+        bool ValidateUniqueNetworkBoundaryKeys(const ConfigParser& config, std::string& error)
+        {
+            constexpr std::array<std::string_view, 3> securityKeys{"lan_only", "bind_address", "lan_broadcast"};
+            for (const std::string_view canonicalKey : securityKeys)
+            {
+                size_t occurrences = 0;
+                for (const std::string& section : config.GetSections())
+                {
+                    if (LowerAscii(section) != "network")
+                        continue;
+                    for (const std::string& key : config.GetKeys(section))
+                    {
+                        if (LowerAscii(key) != canonicalKey)
+                            continue;
+                        if (section != "Network" || key != canonicalKey)
+                        {
+                            error = "Security-sensitive server config key must use canonical spelling Network." +
+                                    std::string(canonicalKey);
+                            return false;
+                        }
+                        occurrences += config.GetKeyOccurrenceCount(section, key);
+                    }
+                }
+                if (occurrences > 1)
+                {
+                    error = "Duplicate security-sensitive server config key Network." + std::string(canonicalKey);
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        bool ReadStrictNetworkBool(const ConfigParser& config, std::string_view key, bool& value, std::string& error)
+        {
+            const std::string keyText(key);
+            const std::string lowered = LowerAscii(config.GetString("Network", keyText));
+            if (lowered == "true" || lowered == "1" || lowered == "yes" || lowered == "on")
+            {
+                value = true;
+                return true;
+            }
+            if (lowered == "false" || lowered == "0" || lowered == "no" || lowered == "off")
+            {
+                value = false;
+                return true;
+            }
+            error = "Network." + keyText + " must be an explicit boolean (true/false, yes/no, on/off, or 1/0)";
+            return false;
+        }
+
+        bool ApplyConfigFile(const std::filesystem::path& path, ServerOptions& options,
+                             std::optional<bool>& configuredLanBroadcast, std::string& error)
         {
             ConfigParser config;
             if (!config.Load(path.string()))
@@ -121,6 +182,8 @@ namespace Spark::Server
                 error = "Cannot load server config: " + path.string();
                 return false;
             }
+            if (!ValidateUniqueNetworkBoundaryKeys(config, error))
+                return false;
 
             options.server.serverName = config.GetString("Server", "name", options.server.serverName);
             options.server.motd = config.GetString("Server", "motd", options.server.motd);
@@ -144,7 +207,10 @@ namespace Spark::Server
                             "lan_only";
                     return false;
                 }
-                if (!config.GetBool("Network", "lan_only", true))
+                bool legacyLanOnly = false;
+                if (!ReadStrictNetworkBool(config, "lan_only", legacyLanOnly, error))
+                    return false;
+                if (!legacyLanOnly)
                 {
                     error = "Network.lan_only=false is no longer supported; set Network.bind_address to 'loopback' "
                             "or a concrete RFC1918 interface CIDR such as 192.168.1.20/24";
@@ -164,8 +230,13 @@ namespace Spark::Server
                 }
                 options.server.endpointPolicy = requestedPolicy;
             }
-            options.server.enableLanBroadcast =
-                config.GetBool("Network", "lan_broadcast", options.server.enableLanBroadcast);
+            if (config.HasKey("Network", "lan_broadcast"))
+            {
+                bool requested = false;
+                if (!ReadStrictNetworkBool(config, "lan_broadcast", requested, error))
+                    return false;
+                configuredLanBroadcast = requested;
+            }
             options.server.mapRotation = SplitCommaSeparated(config.GetString("Game", "maps", "default"));
             options.server.scoreLimit = config.GetInt("Game", "score_limit", options.server.scoreLimit);
             options.server.timeLimitMinutes =
@@ -237,7 +308,8 @@ namespace Spark::Server
         // module directly without an explicit --map override.
         options.server.mapRotation = {"default"};
         std::filesystem::path configPath;
-        std::optional<bool> commandLineLanBroadcast;
+        std::optional<bool> requestedLanBroadcast;
+        std::string lanBroadcastSource;
         for (size_t index = 0; index < arguments.size(); ++index)
         {
             if (arguments[index] == "--config")
@@ -251,8 +323,10 @@ namespace Spark::Server
         {
             options.configPath = configPath;
             std::string error;
-            if (!ApplyConfigFile(configPath, options, error))
+            if (!ApplyConfigFile(configPath, options, requestedLanBroadcast, error))
                 return {{}, std::move(error)};
+            if (requestedLanBroadcast)
+                lanBroadcastSource = "Network.lan_broadcast";
         }
 
         auto requireValue = [&](size_t& index) -> std::optional<std::string_view>
@@ -347,10 +421,14 @@ namespace Spark::Server
             else if (argument == "--lan-broadcast" || argument == "--no-lan-broadcast")
             {
                 const bool requested = argument == "--lan-broadcast";
-                if (commandLineLanBroadcast && *commandLineLanBroadcast != requested)
+                if (requestedLanBroadcast && *requestedLanBroadcast != requested)
+                {
+                    if (lanBroadcastSource == "Network.lan_broadcast")
+                        return {{}, std::string(argument) + " contradicts Network.lan_broadcast"};
                     return {{}, "--lan-broadcast and --no-lan-broadcast cannot be combined"};
-                commandLineLanBroadcast = requested;
-                options.server.enableLanBroadcast = requested;
+                }
+                requestedLanBroadcast = requested;
+                lanBroadcastSource = std::string(argument);
             }
             else
                 return {{}, "Unknown argument: " + std::string(argument)};
@@ -362,11 +440,15 @@ namespace Spark::Server
             return {{}, "A dynamic game module is required (--module or --manifest)"};
         if (!options.showHelp && (options.controlEndpoint.empty() != options.gatewayKeyFile.empty()))
             return {{}, "--control-endpoint and --gateway-key-file must be supplied together"};
+        options.server.enableLanBroadcast = requestedLanBroadcast.value_or(false);
         // Gateway-owned area servers are always local processes. Freeze that
         // trust boundary into ServerConfig now so later environment mutation,
         // module loading, and startup cannot widen the game listener.
         if (!options.controlEndpoint.empty())
         {
+            if (requestedLanBroadcast.value_or(false))
+                return {{}, "Gateway-managed servers cannot enable LAN broadcast; remove Network.lan_broadcast=true "
+                            "or --lan-broadcast"};
             if (options.server.endpointPolicy.IsValid() &&
                 options.server.endpointPolicy.PeerScope() == Net::NetworkPeerScope::PrivateLan)
                 return {{}, "Gateway-managed servers cannot combine local control with an RFC1918 game bind; use "

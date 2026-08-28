@@ -217,3 +217,16 @@ TEST(ConfigParser_GlobalKeys)
     EXPECT_EQ(cfg.GetString("", "global_key"), std::string("global_value"));
     EXPECT_EQ(cfg.GetString("Section", "key"), std::string("value"));
 }
+
+TEST(ConfigParser_TracksDuplicateKeyOccurrences)
+{
+    Spark::ConfigParser cfg;
+    EXPECT_TRUE(cfg.LoadFromString("[Network]\n"
+                                   "bind_address = loopback\n"
+                                   "bind_address = 192.168.1.20/24\n"));
+    EXPECT_EQ(cfg.GetKeyOccurrenceCount("Network", "bind_address"), static_cast<size_t>(2));
+    EXPECT_EQ(cfg.GetString("Network", "bind_address"), std::string("192.168.1.20/24"));
+
+    cfg.SetString("Network", "bind_address", "loopback");
+    EXPECT_EQ(cfg.GetKeyOccurrenceCount("Network", "bind_address"), static_cast<size_t>(1));
+}

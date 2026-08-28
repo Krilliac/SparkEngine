@@ -84,6 +84,7 @@ namespace Spark
             // Parse into a temporary map so a malformed reload cannot destroy
             // the last known-good configuration.
             decltype(m_sections) parsedSections;
+            decltype(m_keyOccurrences) parsedKeyOccurrences;
             std::string currentSection;
             std::istringstream stream(content);
             std::string line;
@@ -128,9 +129,11 @@ namespace Spark
 
                 std::string value = Trim(line.substr(eq + 1));
                 parsedSections[currentSection][key] = value;
+                ++parsedKeyOccurrences[currentSection][key];
             }
 
             m_sections = std::move(parsedSections);
+            m_keyOccurrences = std::move(parsedKeyOccurrences);
             return true;
         }
 
@@ -244,6 +247,7 @@ namespace Spark
         void SetString(const std::string& section, const std::string& key, const std::string& value)
         {
             m_sections[section][key] = value;
+            m_keyOccurrences[section][key] = 1;
         }
 
         void SetInt(const std::string& section, const std::string& key, int value)
@@ -275,6 +279,21 @@ namespace Spark
             return sit->second.contains(key);
         }
 
+        /** Number of times a key appeared in the last parsed document.
+         *
+         * Programmatically assigned keys have one occurrence.  This lets
+         * security-sensitive consumers reject duplicate declarations instead
+         * of inheriting ordinary INI last-write-wins behavior.
+         */
+        size_t GetKeyOccurrenceCount(const std::string& section, const std::string& key) const
+        {
+            auto sit = m_keyOccurrences.find(section);
+            if (sit == m_keyOccurrences.end())
+                return 0;
+            auto kit = sit->second.find(key);
+            return kit == sit->second.end() ? 0 : kit->second;
+        }
+
         std::vector<std::string> GetSections() const
         {
             std::vector<std::string> result;
@@ -304,20 +323,33 @@ namespace Spark
             auto sit = m_sections.find(section);
             if (sit == m_sections.end())
                 return false;
-            return sit->second.erase(key) > 0;
+            const bool removed = sit->second.erase(key) > 0;
+            if (auto occurrences = m_keyOccurrences.find(section); occurrences != m_keyOccurrences.end())
+                occurrences->second.erase(key);
+            return removed;
         }
 
         /// Remove an entire section
-        bool RemoveSection(const std::string& section) { return m_sections.erase(section) > 0; }
+        bool RemoveSection(const std::string& section)
+        {
+            m_keyOccurrences.erase(section);
+            return m_sections.erase(section) > 0;
+        }
 
         /// Clear all data
-        void Clear() { m_sections.clear(); }
+        void Clear()
+        {
+            m_sections.clear();
+            m_keyOccurrences.clear();
+        }
 
       private:
         static std::string Trim(const std::string& str) { return StringUtils::Trim(str); }
 
         /// section name -> (key -> value)
         std::map<std::string, std::map<std::string, std::string>> m_sections;
+        /// section name -> (key -> parse occurrence count)
+        std::map<std::string, std::map<std::string, size_t>> m_keyOccurrences;
     };
 
 } // namespace Spark

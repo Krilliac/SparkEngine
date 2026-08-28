@@ -36,6 +36,8 @@ TEST(DedicatedServerProcessController_BuildsManifestLaunchArguments)
     EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "--bind-address") != arguments.end());
     EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "loopback") != arguments.end());
     EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "--no-lan-broadcast") != arguments.end());
+    EXPECT_EQ(std::count(arguments.begin(), arguments.end(), "--no-lan-broadcast"), static_cast<std::ptrdiff_t>(1));
+    EXPECT_EQ(std::count(arguments.begin(), arguments.end(), "--lan-broadcast"), static_cast<std::ptrdiff_t>(0));
     EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "28015") != arguments.end());
 }
 
@@ -53,6 +55,7 @@ TEST(DedicatedServerProcessController_EmitsExplicitLanBroadcastEnable)
     EXPECT_TRUE(error.empty());
     EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "--lan-broadcast") != arguments.end());
     EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "--no-lan-broadcast") == arguments.end());
+    EXPECT_EQ(std::count(arguments.begin(), arguments.end(), "--lan-broadcast"), static_cast<std::ptrdiff_t>(1));
 }
 
 TEST(DedicatedServerProcessController_RejectsWildcardBindAddress)

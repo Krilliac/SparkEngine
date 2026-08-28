@@ -107,7 +107,7 @@ TEST(SparkServerOptions_RejectsConflictingLanBroadcastFlags)
     EXPECT_TRUE(result.error.find("cannot be combined") != std::string::npos);
 }
 
-TEST(SparkServerOptions_ConfigLanBroadcastCanBeExplicitlyOverridden)
+TEST(SparkServerOptions_RejectsConfigCliLanBroadcastContradiction)
 {
     const auto configPath = std::filesystem::temp_directory_path() / "spark-net100-broadcast-server.ini";
     {
@@ -124,8 +124,118 @@ TEST(SparkServerOptions_ConfigLanBroadcastCanBeExplicitlyOverridden)
     const std::array disabledArguments = {std::string_view{"--config"}, std::string_view{configPathText},
                                           std::string_view{"--no-lan-broadcast"}};
     const ParseResult disabled = ParseServerOptions(disabledArguments);
-    ASSERT_TRUE(disabled.options.has_value());
-    EXPECT_FALSE(disabled.options->server.enableLanBroadcast);
+    EXPECT_FALSE(disabled.options.has_value());
+    EXPECT_TRUE(disabled.error.find("contradicts Network.lan_broadcast") != std::string::npos);
+
+    {
+        std::ofstream config(configPath, std::ios::binary | std::ios::trunc);
+        config << "[Network]\nlan_broadcast = false\n[Modules]\nmodule = Game.dll\n";
+    }
+    const std::array enabledArguments = {std::string_view{"--config"}, std::string_view{configPathText},
+                                         std::string_view{"--lan-broadcast"}};
+    const ParseResult enabled = ParseServerOptions(enabledArguments);
+    EXPECT_FALSE(enabled.options.has_value());
+    EXPECT_TRUE(enabled.error.find("contradicts Network.lan_broadcast") != std::string::npos);
+
+    std::error_code error;
+    std::filesystem::remove(configPath, error);
+}
+
+TEST(SparkServerOptions_GatewayManagedRejectsCliLanBroadcastEnable)
+{
+    const std::array arguments = {
+        std::string_view{"--module"},           std::string_view{"Game.dll"},
+        std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+        std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"},
+        std::string_view{"--lan-broadcast"}};
+    const ParseResult result = ParseServerOptions(arguments);
+    EXPECT_FALSE(result.options.has_value());
+    EXPECT_TRUE(result.error.find("cannot enable LAN broadcast") != std::string::npos);
+}
+
+TEST(SparkServerOptions_GatewayManagedRejectsConfigLanBroadcastEnable)
+{
+    const auto configPath = std::filesystem::temp_directory_path() / "spark-net100-gateway-broadcast.ini";
+    {
+        std::ofstream config(configPath, std::ios::binary | std::ios::trunc);
+        config << "[Network]\nlan_broadcast = true\n[Modules]\nmodule = Game.dll\n";
+    }
+
+    const std::string configPathText = configPath.string();
+    const std::array arguments = {
+        std::string_view{"--config"},           std::string_view{configPathText},
+        std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+        std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"}};
+    const ParseResult result = ParseServerOptions(arguments);
+    EXPECT_FALSE(result.options.has_value());
+    EXPECT_TRUE(result.error.find("cannot enable LAN broadcast") != std::string::npos);
+
+    std::error_code error;
+    std::filesystem::remove(configPath, error);
+}
+
+TEST(SparkServerOptions_GatewayManagedAcceptsExplicitLanBroadcastDisable)
+{
+    const std::array arguments = {
+        std::string_view{"--module"},           std::string_view{"Game.dll"},
+        std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+        std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"},
+        std::string_view{"--no-lan-broadcast"}};
+    const ParseResult result = ParseServerOptions(arguments);
+    ASSERT_TRUE(result.options.has_value());
+    EXPECT_FALSE(result.options->server.enableLanBroadcast);
+}
+
+TEST(SparkServerOptions_RejectsMalformedLanBroadcastConfig)
+{
+    const auto configPath = std::filesystem::temp_directory_path() / "spark-net100-malformed-broadcast.ini";
+    {
+        std::ofstream config(configPath, std::ios::binary | std::ios::trunc);
+        config << "[Network]\nlan_broadcast = perhaps\n[Modules]\nmodule = Game.dll\n";
+    }
+
+    const std::string configPathText = configPath.string();
+    const std::array arguments = {std::string_view{"--config"}, std::string_view{configPathText}};
+    const ParseResult result = ParseServerOptions(arguments);
+    EXPECT_FALSE(result.options.has_value());
+    EXPECT_TRUE(result.error.find("must be an explicit boolean") != std::string::npos);
+
+    std::error_code error;
+    std::filesystem::remove(configPath, error);
+}
+
+TEST(SparkServerOptions_RejectsDuplicateLanBroadcastConfig)
+{
+    const auto configPath = std::filesystem::temp_directory_path() / "spark-net100-duplicate-broadcast.ini";
+    {
+        std::ofstream config(configPath, std::ios::binary | std::ios::trunc);
+        config << "[Network]\nlan_broadcast = false\nlan_broadcast = true\n[Modules]\nmodule = Game.dll\n";
+    }
+
+    const std::string configPathText = configPath.string();
+    const std::array arguments = {std::string_view{"--config"}, std::string_view{configPathText}};
+    const ParseResult result = ParseServerOptions(arguments);
+    EXPECT_FALSE(result.options.has_value());
+    EXPECT_TRUE(result.error.find("Duplicate") != std::string::npos);
+
+    std::error_code error;
+    std::filesystem::remove(configPath, error);
+}
+
+TEST(SparkServerOptions_RejectsDuplicateBindAddressConfig)
+{
+    const auto configPath = std::filesystem::temp_directory_path() / "spark-net100-duplicate-bind.ini";
+    {
+        std::ofstream config(configPath, std::ios::binary | std::ios::trunc);
+        config << "[Network]\nbind_address = loopback\nbind_address = 192.168.1.20/24\n"
+                  "lan_broadcast = false\n[Modules]\nmodule = Game.dll\n";
+    }
+
+    const std::string configPathText = configPath.string();
+    const std::array arguments = {std::string_view{"--config"}, std::string_view{configPathText}};
+    const ParseResult result = ParseServerOptions(arguments);
+    EXPECT_FALSE(result.options.has_value());
+    EXPECT_TRUE(result.error.find("Duplicate") != std::string::npos);
 
     std::error_code error;
     std::filesystem::remove(configPath, error);
@@ -247,6 +357,24 @@ TEST(SparkServerOptions_LegacyLanOnlyConfigFailsClosed)
     const ParseResult result = ParseServerOptions(arguments);
     EXPECT_FALSE(result.options.has_value());
     EXPECT_TRUE(result.error.find("lan_only=false") != std::string::npos);
+
+    std::error_code error;
+    std::filesystem::remove(configPath, error);
+}
+
+TEST(SparkServerOptions_MalformedLegacyLanOnlyConfigFailsClosed)
+{
+    const auto configPath = std::filesystem::temp_directory_path() / "spark-net100-malformed-legacy-server.ini";
+    {
+        std::ofstream config(configPath, std::ios::binary | std::ios::trunc);
+        config << "[Network]\nlan_only = maybe\n[Modules]\nmodule = Game.dll\n";
+    }
+
+    const std::string configPathText = configPath.string();
+    const std::array arguments = {std::string_view{"--config"}, std::string_view{configPathText}};
+    const ParseResult result = ParseServerOptions(arguments);
+    EXPECT_FALSE(result.options.has_value());
+    EXPECT_TRUE(result.error.find("must be an explicit boolean") != std::string::npos);
 
     std::error_code error;
     std::filesystem::remove(configPath, error);
