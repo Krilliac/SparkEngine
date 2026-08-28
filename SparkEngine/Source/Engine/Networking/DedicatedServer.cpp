@@ -803,6 +803,10 @@ namespace Spark::Net
     void DedicatedServer::StartLanBroadcast()
     {
         std::lock_guard<std::mutex> lifecycleLock(m_lanBroadcastLifecycleMutex);
+        // The captured ServerConfig is the sole authority for advertisement.
+        // A direct method call must not widen a disabled server policy.
+        if (!m_config.enableLanBroadcast || !m_config.endpointPolicy.IsValid())
+            return;
         if (m_lanBroadcastActive.load(std::memory_order_acquire))
             return;
 

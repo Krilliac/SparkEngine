@@ -25,6 +25,34 @@
 
 using namespace Spark::Net;
 
+#ifdef ENABLE_NETWORKING
+namespace Spark::Net
+{
+    struct NetworkManagerEndpointLifecycleTestAccess
+    {
+        static SOCKET Socket(const NetworkManager& manager) { return manager.m_socket; }
+    };
+} // namespace Spark::Net
+#endif
+
+TEST(NetworkBindPolicy_PrefixMaskIsTotal)
+{
+    const auto prefix0 = IPv4PrefixMask(0u);
+    const auto prefix30 = IPv4PrefixMask(30u);
+    const auto prefix31 = IPv4PrefixMask(31u);
+    const auto prefix32 = IPv4PrefixMask(32u);
+    ASSERT_TRUE(prefix0.has_value());
+    ASSERT_TRUE(prefix30.has_value());
+    ASSERT_TRUE(prefix31.has_value());
+    ASSERT_TRUE(prefix32.has_value());
+    EXPECT_EQ(*prefix0, uint32_t{0x00000000u});
+    EXPECT_EQ(*prefix30, uint32_t{0xFFFFFFFCu});
+    EXPECT_EQ(*prefix31, uint32_t{0xFFFFFFFEu});
+    EXPECT_EQ(*prefix32, uint32_t{0xFFFFFFFFu});
+    EXPECT_FALSE(IPv4PrefixMask(33u).has_value());
+    EXPECT_FALSE(IPv4PrefixMask(255u).has_value());
+}
+
 TEST(NetworkBindPolicy_RequiresCanonicalLoopbackOrExactRfc1918SubnetHost)
 {
     const NetworkEndpointPolicy defaultPolicy = ResolveNetworkEndpointPolicy(nullptr);
@@ -324,6 +352,94 @@ TEST(NetworkManager_ConnectWithoutInitialize)
 
     ResetNM();
 }
+
+#ifdef ENABLE_NETWORKING
+TEST(NetworkManager_RepeatedServerStartPreservesNativeHandleAndState)
+{
+    ResetNM();
+    auto& nm = NetworkManager::GetInstance();
+    ASSERT_TRUE(nm.StartServer(0, 4));
+    const uint16_t originalPort = nm.GetBoundPort();
+    const SOCKET originalSocket = NetworkManagerEndpointLifecycleTestAccess::Socket(nm);
+    ASSERT_TRUE(originalPort != 0);
+    ASSERT_TRUE(originalSocket != INVALID_SOCKET);
+
+    EXPECT_FALSE(nm.StartServer(originalPort, 4));
+    EXPECT_EQ(NetworkManagerEndpointLifecycleTestAccess::Socket(nm), originalSocket);
+    EXPECT_EQ(nm.GetBoundPort(), originalPort);
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Server));
+    EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Connected));
+
+    const uint16_t differentPort = originalPort == 65535u ? static_cast<uint16_t>(originalPort - 1u)
+                                                           : static_cast<uint16_t>(originalPort + 1u);
+    EXPECT_FALSE(nm.StartServer(differentPort, 4));
+    EXPECT_EQ(NetworkManagerEndpointLifecycleTestAccess::Socket(nm), originalSocket);
+    EXPECT_EQ(nm.GetBoundPort(), originalPort);
+    nm.StopServer();
+    EXPECT_EQ(NetworkManagerEndpointLifecycleTestAccess::Socket(nm), INVALID_SOCKET);
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::None));
+    EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Disconnected));
+    nm.Shutdown();
+}
+
+TEST(NetworkManager_RepeatedClientConnectPreservesNativeHandleAndState)
+{
+    ResetNM();
+    auto& nm = NetworkManager::GetInstance();
+    ASSERT_TRUE(nm.Connect("127.0.0.1", 27015, "first"));
+    const uint16_t originalPort = nm.GetBoundPort();
+    const SOCKET originalSocket = NetworkManagerEndpointLifecycleTestAccess::Socket(nm);
+    ASSERT_TRUE(originalPort != 0);
+    ASSERT_TRUE(originalSocket != INVALID_SOCKET);
+
+    EXPECT_FALSE(nm.Connect("127.0.0.1", 27016, "second"));
+    EXPECT_EQ(NetworkManagerEndpointLifecycleTestAccess::Socket(nm), originalSocket);
+    EXPECT_EQ(nm.GetBoundPort(), originalPort);
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Client));
+    EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Connecting));
+    nm.Disconnect();
+    EXPECT_EQ(NetworkManagerEndpointLifecycleTestAccess::Socket(nm), INVALID_SOCKET);
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::None));
+    EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Disconnected));
+    nm.Shutdown();
+}
+
+TEST(NetworkManager_ServerToClientTransitionRequiresExplicitTeardown)
+{
+    ResetNM();
+    auto& nm = NetworkManager::GetInstance();
+    ASSERT_TRUE(nm.StartServer(0, 4));
+    const uint16_t originalPort = nm.GetBoundPort();
+    const SOCKET originalSocket = NetworkManagerEndpointLifecycleTestAccess::Socket(nm);
+
+    EXPECT_FALSE(nm.Connect("127.0.0.1", 27015, "client"));
+    EXPECT_EQ(NetworkManagerEndpointLifecycleTestAccess::Socket(nm), originalSocket);
+    EXPECT_EQ(nm.GetBoundPort(), originalPort);
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Server));
+    EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Connected));
+    nm.StopServer();
+    EXPECT_EQ(NetworkManagerEndpointLifecycleTestAccess::Socket(nm), INVALID_SOCKET);
+    nm.Shutdown();
+}
+
+TEST(NetworkManager_ClientToServerTransitionRequiresExplicitTeardown)
+{
+    ResetNM();
+    auto& nm = NetworkManager::GetInstance();
+    ASSERT_TRUE(nm.Connect("127.0.0.1", 27015, "client"));
+    const uint16_t originalPort = nm.GetBoundPort();
+    const SOCKET originalSocket = NetworkManagerEndpointLifecycleTestAccess::Socket(nm);
+
+    EXPECT_FALSE(nm.StartServer(0, 4));
+    EXPECT_EQ(NetworkManagerEndpointLifecycleTestAccess::Socket(nm), originalSocket);
+    EXPECT_EQ(nm.GetBoundPort(), originalPort);
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Client));
+    EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Connecting));
+    nm.Disconnect();
+    EXPECT_EQ(NetworkManagerEndpointLifecycleTestAccess::Socket(nm), INVALID_SOCKET);
+    nm.Shutdown();
+}
+#endif
 
 TEST(NetworkManager_LoopbackPolicyRejectsRemoteClientDestination)
 {

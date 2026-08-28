@@ -218,6 +218,7 @@ namespace Spark::Server
                "  --name <display-name>        Override the server name\n"
                "  --bind-address <IPv4/CIDR>   Bind loopback or one concrete RFC1918 interface and prefix\n"
                "  --lan-only                   Legacy alias for --bind-address loopback\n"
+               "  --lan-broadcast              Enable LAN discovery broadcasts\n"
                "  --no-lan-broadcast           Disable LAN discovery broadcasts\n"
                "  --health-file <path>         Publish a JSON health snapshot\n"
                "  --stop-file <path>           Stop when this sentinel file appears\n"
@@ -236,6 +237,7 @@ namespace Spark::Server
         // module directly without an explicit --map override.
         options.server.mapRotation = {"default"};
         std::filesystem::path configPath;
+        std::optional<bool> commandLineLanBroadcast;
         for (size_t index = 0; index < arguments.size(); ++index)
         {
             if (arguments[index] == "--config")
@@ -342,8 +344,14 @@ namespace Spark::Server
             }
             else if (argument == "--lan-only")
                 options.server.endpointPolicy = Net::NetworkEndpointPolicy::Loopback();
-            else if (argument == "--no-lan-broadcast")
-                options.server.enableLanBroadcast = false;
+            else if (argument == "--lan-broadcast" || argument == "--no-lan-broadcast")
+            {
+                const bool requested = argument == "--lan-broadcast";
+                if (commandLineLanBroadcast && *commandLineLanBroadcast != requested)
+                    return {{}, "--lan-broadcast and --no-lan-broadcast cannot be combined"};
+                commandLineLanBroadcast = requested;
+                options.server.enableLanBroadcast = requested;
+            }
             else
                 return {{}, "Unknown argument: " + std::string(argument)};
         }

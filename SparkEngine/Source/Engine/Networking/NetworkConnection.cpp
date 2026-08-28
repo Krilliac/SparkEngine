@@ -353,6 +353,12 @@ namespace Spark::Net
         // conflict-free choice for parallel tests/tools.
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, maxClients > 0 && maxClients <= 256,
                           "maxClients must be in [1, 256]");
+        if (!IsEndpointLifecycleIdle())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing server startup while another endpoint lifecycle is active");
+            return false;
+        }
         if (!endpointPolicy.IsValid())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing server startup: %s",
@@ -496,6 +502,12 @@ namespace Spark::Net
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, !address.empty(), "address must not be empty");
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, port > 0, "port must be greater than 0");
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, !playerName.empty(), "playerName must not be empty");
+        if (!IsEndpointLifecycleIdle())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing client startup while another endpoint lifecycle is active");
+            return false;
+        }
         if (!endpointPolicy.IsValid())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing client startup: %s",
@@ -555,6 +567,22 @@ namespace Spark::Net
         SendMessage(connectMsg);
 
         return true;
+    }
+
+    bool NetworkManager::IsEndpointLifecycleIdle() const
+    {
+        // All callers hold m_apiMutex. NetworkManager has no background socket
+        // worker: Update owns the pump, so state plus the native handle fully
+        // describe whether an endpoint lifecycle is stopped.
+        std::lock_guard<std::mutex> stateLock(m_stateMutex);
+        if (m_role.load(std::memory_order_acquire) != NetworkRole::None ||
+            m_connectionState != ConnectionState::Disconnected)
+            return false;
+#ifdef ENABLE_NETWORKING
+        return m_socket == INVALID_SOCKET;
+#else
+        return true;
+#endif
     }
 
     void NetworkManager::Disconnect()

@@ -206,6 +206,11 @@ namespace Terrafront
     void TFLanDiscovery::StartBeacon()
     {
 #ifdef ENABLE_NETWORKING
+        if (!m_allowAdvertisement || !m_endpointPolicy.IsValid())
+        {
+            m_beaconFailed = true;
+            return;
+        }
         const TFSockHandle s = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 #ifdef SPARK_PLATFORM_WINDOWS
         const bool created = (s != INVALID_SOCKET);
@@ -354,7 +359,7 @@ namespace Terrafront
     void TFLanDiscovery::BroadcastBeacon()
     {
 #ifdef ENABLE_NETWORKING
-        if (m_beaconSock == kInvalidSock)
+        if (!m_allowAdvertisement || !m_endpointPolicy.IsValid() || m_beaconSock == kInvalidSock)
             return;
 
         TF_LanBeacon beacon{};

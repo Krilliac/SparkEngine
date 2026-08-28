@@ -89,6 +89,48 @@ TEST(SparkServerOptions_ParsesValidatedOverrides)
     EXPECT_FALSE(result.options->server.enableLanBroadcast);
 }
 
+TEST(SparkServerOptions_ParsesExplicitLanBroadcastEnable)
+{
+    const std::array arguments = {std::string_view{"--module"}, std::string_view{"Game.dll"},
+                                  std::string_view{"--lan-broadcast"}};
+    const ParseResult result = ParseServerOptions(arguments);
+    ASSERT_TRUE(result.options.has_value());
+    EXPECT_TRUE(result.options->server.enableLanBroadcast);
+}
+
+TEST(SparkServerOptions_RejectsConflictingLanBroadcastFlags)
+{
+    const std::array arguments = {std::string_view{"--module"}, std::string_view{"Game.dll"},
+                                  std::string_view{"--lan-broadcast"}, std::string_view{"--no-lan-broadcast"}};
+    const ParseResult result = ParseServerOptions(arguments);
+    EXPECT_FALSE(result.options.has_value());
+    EXPECT_TRUE(result.error.find("cannot be combined") != std::string::npos);
+}
+
+TEST(SparkServerOptions_ConfigLanBroadcastCanBeExplicitlyOverridden)
+{
+    const auto configPath = std::filesystem::temp_directory_path() / "spark-net100-broadcast-server.ini";
+    {
+        std::ofstream config(configPath, std::ios::binary | std::ios::trunc);
+        config << "[Network]\nlan_broadcast = true\n[Modules]\nmodule = Game.dll\n";
+    }
+
+    const std::string configPathText = configPath.string();
+    const std::array configuredArguments = {std::string_view{"--config"}, std::string_view{configPathText}};
+    const ParseResult configured = ParseServerOptions(configuredArguments);
+    ASSERT_TRUE(configured.options.has_value());
+    EXPECT_TRUE(configured.options->server.enableLanBroadcast);
+
+    const std::array disabledArguments = {std::string_view{"--config"}, std::string_view{configPathText},
+                                          std::string_view{"--no-lan-broadcast"}};
+    const ParseResult disabled = ParseServerOptions(disabledArguments);
+    ASSERT_TRUE(disabled.options.has_value());
+    EXPECT_FALSE(disabled.options->server.enableLanBroadcast);
+
+    std::error_code error;
+    std::filesystem::remove(configPath, error);
+}
+
 TEST(SparkServerOptions_RejectsAmbiguousModuleSelection)
 {
     const std::array arguments = {std::string_view{"--module"}, std::string_view{"Game.dll"},

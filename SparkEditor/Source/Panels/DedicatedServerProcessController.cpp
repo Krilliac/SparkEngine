@@ -71,8 +71,7 @@ namespace SparkEditor
         if (!request.healthFile.empty())
             arguments.insert(arguments.end(),
                              {"--health-file", request.healthFile.string(), "--status-interval-ms", "250"});
-        if (!request.lanBroadcast)
-            arguments.emplace_back("--no-lan-broadcast");
+        arguments.emplace_back(request.lanBroadcast ? "--lan-broadcast" : "--no-lan-broadcast");
         return arguments;
     }
 

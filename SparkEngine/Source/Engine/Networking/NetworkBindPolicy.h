@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -94,9 +95,11 @@ namespace Spark::Net
                (address & 0xFFFF0000u) == 0xC0A80000u;
     }
 
-    /** @brief Host-order subnet mask for a validated IPv4 prefix. */
-    [[nodiscard]] inline constexpr uint32_t IPv4PrefixMask(uint8_t prefixLength) noexcept
+    /** @brief Host-order subnet mask, or no value when the prefix is outside 0..32. */
+    [[nodiscard]] inline constexpr std::optional<uint32_t> IPv4PrefixMask(uint8_t prefixLength) noexcept
     {
+        if (prefixLength > 32u)
+            return std::nullopt;
         return prefixLength == 0u ? 0u : (0xFFFFFFFFu << (32u - prefixLength));
     }
 
@@ -120,7 +123,10 @@ namespace Spark::Net
         if (minimumPrefix == 0u || prefixLength < minimumPrefix || prefixLength > 30u)
             return false;
 
-        const uint32_t mask = IPv4PrefixMask(prefixLength);
+        const auto maskValue = IPv4PrefixMask(prefixLength);
+        if (!maskValue)
+            return false;
+        const uint32_t mask = *maskValue;
         const uint32_t network = address & mask;
         const uint32_t broadcast = network | ~mask;
         return IsIPv4PrivateAddress(network) && IsIPv4PrivateAddress(broadcast) && address != network &&
@@ -166,11 +172,13 @@ namespace Spark::Net
         [[nodiscard]] constexpr uint8_t SubnetPrefixLength() const noexcept { return m_prefixLength; }
         [[nodiscard]] constexpr uint32_t NetworkAddress() const noexcept
         {
-            return m_bindAddress & IPv4PrefixMask(m_prefixLength);
+            const auto mask = IPv4PrefixMask(m_prefixLength);
+            return mask ? (m_bindAddress & *mask) : 0u;
         }
         [[nodiscard]] constexpr uint32_t BroadcastAddress() const noexcept
         {
-            return NetworkAddress() | ~IPv4PrefixMask(m_prefixLength);
+            const auto mask = IPv4PrefixMask(m_prefixLength);
+            return mask ? (NetworkAddress() | ~*mask) : 0u;
         }
         [[nodiscard]] constexpr NetworkPeerScope PeerScope() const noexcept { return m_peerScope; }
         [[nodiscard]] constexpr NetworkEndpointPolicyError Error() const noexcept { return m_error; }
@@ -182,8 +190,9 @@ namespace Spark::Net
                 return false;
             if (m_peerScope == NetworkPeerScope::LoopbackOnly)
                 return IsConcreteLoopbackUnicastAddress(address);
-            return IsConcretePrivateUnicastAddress(address, m_prefixLength) &&
-                   (address & IPv4PrefixMask(m_prefixLength)) == NetworkAddress();
+            const auto mask = IPv4PrefixMask(m_prefixLength);
+            return mask && IsConcretePrivateUnicastAddress(address, m_prefixLength) &&
+                   (address & *mask) == NetworkAddress();
         }
 
       private:
@@ -232,7 +241,10 @@ namespace Spark::Net
             prefixLength > 30u || prefixLength < MinimumPrivatePrefix(address))
             return NetworkEndpointPolicy::Invalid(NetworkEndpointPolicyError::InvalidPrefix);
 
-        const uint32_t mask = IPv4PrefixMask(static_cast<uint8_t>(prefixLength));
+        const auto maskValue = IPv4PrefixMask(static_cast<uint8_t>(prefixLength));
+        if (!maskValue)
+            return NetworkEndpointPolicy::Invalid(NetworkEndpointPolicyError::InvalidPrefix);
+        const uint32_t mask = *maskValue;
         const uint32_t network = address & mask;
         const uint32_t broadcast = network | ~mask;
         if (!IsIPv4PrivateAddress(network) || !IsIPv4PrivateAddress(broadcast))

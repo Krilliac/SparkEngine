@@ -1150,12 +1150,18 @@ set_tests_properties(SparkPackageModuleSidecarValidatorTests PROPERTIES
     LABELS "package;unit"
     TIMEOUT 30)
 
-find_package(Python3 QUIET COMPONENTS Interpreter)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
     add_test(
         NAME SparkNetworkBoundaryStatic
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/check_network_boundary.py)
     set_tests_properties(SparkNetworkBoundaryStatic PROPERTIES
+        LABELS "network-security;network;security;static;python"
+        TIMEOUT 30)
+    add_test(
+        NAME SparkNetworkBoundaryMutation
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_check_network_boundary.py)
+    set_tests_properties(SparkNetworkBoundaryMutation PROPERTIES
         LABELS "network-security;network;security;static;python"
         TIMEOUT 30)
 

@@ -378,8 +378,16 @@ namespace SparkEditor
         }
 
         // Non-blocking connect with timeout (seconds). Returns true on success.
-        bool ConnectWithTimeout(CollaborativeSocketHandle sock, sockaddr* addr, socklen_t addrLen, int timeoutSec)
+        bool ConnectWithTimeout(CollaborativeSocketHandle sock, sockaddr* addr, socklen_t addrLen, int timeoutSec,
+                                const Spark::Net::NetworkEndpointPolicy& endpointPolicy)
         {
+            if (!endpointPolicy.IsValid() || addr == nullptr || addrLen < static_cast<socklen_t>(sizeof(sockaddr_in)) ||
+                addr->sa_family != AF_INET)
+                return false;
+            const auto* ipv4Address = reinterpret_cast<const sockaddr_in*>(addr);
+            if (!endpointPolicy.AllowsPeerAddress(ntohl(ipv4Address->sin_addr.s_addr)))
+                return false;
+
             const NativeSocket nativeSocket = ToNativeSocket(sock);
 #ifdef _WIN32
             u_long mode = 1;
@@ -674,7 +682,8 @@ namespace SparkEditor
         addr.sin_port = htons(port);
         addr.sin_addr.s_addr = htonl(remoteAddress);
 
-        if (!ConnectWithTimeout(m_clientSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr), 5))
+        if (!ConnectWithTimeout(m_clientSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr), 5,
+                                m_endpointPolicy))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to connect to %s:%u (timeout 5s).", address.c_str(),
                             port);

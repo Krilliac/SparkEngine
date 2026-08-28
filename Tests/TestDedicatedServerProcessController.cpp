@@ -39,6 +39,22 @@ TEST(DedicatedServerProcessController_BuildsManifestLaunchArguments)
     EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "28015") != arguments.end());
 }
 
+TEST(DedicatedServerProcessController_EmitsExplicitLanBroadcastEnable)
+{
+    DedicatedServerLaunchRequest request;
+    request.executable = "SparkServer.exe";
+    request.module = "Game.dll";
+    request.stopFile = "stop";
+    request.bindAddress = "loopback";
+    request.lanBroadcast = true;
+
+    std::string error;
+    const auto arguments = DedicatedServerProcessController::CreateArguments(request, error);
+    EXPECT_TRUE(error.empty());
+    EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "--lan-broadcast") != arguments.end());
+    EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "--no-lan-broadcast") == arguments.end());
+}
+
 TEST(DedicatedServerProcessController_RejectsWildcardBindAddress)
 {
     DedicatedServerLaunchRequest request;

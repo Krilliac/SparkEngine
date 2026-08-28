@@ -280,7 +280,7 @@ TEST(DedicatedServerRuntime_StopClearsHandlersAndShutsDownRuntime)
     EXPECT_TRUE(runtime.handlers.empty());
 }
 
-TEST(DedicatedServerRuntime_LanBroadcastSocketFailureClearsActiveAndAllowsRestart)
+TEST(DedicatedServerRuntime_LanBroadcastPolicyIsAuthoritativeAndEnabledFailureAllowsRestart)
 {
     MockNetworkRuntime runtime;
     std::atomic<int> socketAttempts{0};
@@ -302,6 +302,14 @@ TEST(DedicatedServerRuntime_LanBroadcastSocketFailureClearsActiveAndAllowsRestar
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         return !server.IsLanBroadcastActive();
     };
+
+    server.StartLanBroadcast();
+    EXPECT_TRUE(waitUntilInactive());
+    EXPECT_EQ(socketAttempts.load(std::memory_order_relaxed), 0);
+
+    server.Stop();
+    config.enableLanBroadcast = true;
+    EXPECT_TRUE(server.InitializeOnly(config));
 
     server.StartLanBroadcast();
     EXPECT_TRUE(waitUntilInactive());

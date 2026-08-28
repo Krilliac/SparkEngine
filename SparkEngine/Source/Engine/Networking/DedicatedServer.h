@@ -295,7 +295,7 @@ namespace Spark::Net
 
         // -- LAN Discovery --
 
-        /// @brief Start broadcasting presence on LAN.
+        /// @brief Start broadcasting only when the captured ServerConfig explicitly enables it.
         void StartLanBroadcast();
 
         /// @brief Stop LAN broadcasting.

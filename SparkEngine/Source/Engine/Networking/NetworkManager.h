@@ -655,6 +655,7 @@ namespace Spark::Net
         NetworkManager& operator=(const NetworkManager&) = delete;
 
         friend struct NetworkManagerClientIdTestAccess;
+        friend struct NetworkManagerEndpointLifecycleTestAccess;
 
         // Outermost lock for public API/lifecycle access. Recursive because
         // Update dispatches user handlers which may call SendMessage or query
@@ -676,6 +677,8 @@ namespace Spark::Net
         ClientID PrepareNextClientID();
         ClientID HandleConnect(const NetworkMessage& msg);
         void HandleDisconnect(const NetworkMessage& msg);
+        /// Requires m_apiMutex. There is no hidden network worker; Update owns the socket pump.
+        [[nodiscard]] bool IsEndpointLifecycleIdle() const;
 
 #ifdef ENABLE_NETWORKING
         /// Create, bind, and configure a non-blocking UDP socket

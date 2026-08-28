@@ -48,6 +48,11 @@ namespace Terrafront
 #ifdef ENABLE_NETWORKING
         if (m_scanSock != kInvalidSock || m_scanFailed)
             return;
+        if (!m_endpointPolicy.IsValid())
+        {
+            m_scanFailed = true;
+            return;
+        }
 
         const TFSockHandle s = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 #ifdef SPARK_PLATFORM_WINDOWS
