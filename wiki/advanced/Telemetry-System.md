@@ -1,6 +1,6 @@
 # Telemetry System
 
-The Telemetry System provides opt-in event recording for gameplay analytics, performance metrics, and crash diagnostics. It follows a privacy-first design where all recording is gated on explicit user consent, and revoking consent immediately clears the event queue.
+The Telemetry System provides opt-in event recording for gameplay analytics and performance metrics. Consent is reversible and revocation clears the queue, but a producer/revocation race described below remains open; this page does not claim an absolute concurrent consent guarantee.
 
 **Source:** `SparkEngine/Source/Utils/Telemetry.h`
 
@@ -25,6 +25,7 @@ struct TelemetryEvent
     uint64_t timestamp = 0;                                  // Epoch milliseconds
     std::unordered_map<std::string, std::string> properties; // Key-value metadata
     std::string sessionId;                                   // Session identifier
+    uint64_t sequence = 0;                                   // In-memory flush ordering
 };
 ```
 
@@ -142,7 +143,7 @@ All three conditions must be true for `RecordEvent()` to accept an event:
 2. `m_config.enabled` -- master switch is on
 3. `m_config.consentGiven` -- user has opted in
 
-If any condition is false, events are silently dropped. This triple-gate ensures no accidental data collection.
+If any condition is observed false, events are silently dropped. This is the intended gate, but it does not close the concurrent producer/revocation race described below.
 
 ## Privacy and Consent API
 
@@ -168,12 +169,12 @@ if (telemetry.HasConsent())
 }
 ```
 
-### Privacy guarantees
+### Current privacy behavior and limitation
 
-- `RecordEvent()` and `RecordTimedEvent()` check `CanRecord()` before doing anything
-- `SetConsent(false)` calls `m_eventQueue.clear()` immediately
-- No events are ever written to a backend without consent
-- The queue size limit (`maxQueueSize`) prevents unbounded memory growth even with consent
+- `RecordEvent()` and `RecordTimedEvent()` check `CanRecord()` before constructing an event.
+- `SetConsent(false)` is reversible and clears the queue while holding the queue mutex.
+- A producer can pass `CanRecord()` just before revocation and enqueue after the clear because enqueue does not recheck consent under that mutex. Closing this race remains blocking OPS-100 work.
+- The in-memory queue has an event-count limit, but the current local backend has no durable retry, retention, spool-byte, or complete drop/failure accounting contract.
 
 ## Built-in Backend: LocalFileTelemetryBackend
 
@@ -386,13 +387,9 @@ telemetry.RecordTimedEvent("game_package", elapsed, {
 
 ## Thread Safety
 
-`TelemetrySystem` is **not thread-safe**. All methods (`RecordEvent`, `Update`, `FlushEvents`, `SetConsent`) access the event queue without synchronization. Call from a single thread (typically the main thread).
+`RecordEvent()` supports multiple producers through the queue mutex and atomic sequence counter. Configuration, consent, flush, update, backend registration, and shutdown are not a general concurrently callable API; coordinate lifecycle operations on the owning thread. In particular, the consent check and enqueue are separate critical sections, which creates the revocation race above.
 
-If you need to record events from multiple threads, create a thread-local buffer and merge into the main telemetry system on the main thread, or add external locking around `RecordEvent()` calls.
-
-The singleton access via `GetInstance()` is safe (function-local static under C++11+).
-
-`LocalFileTelemetryBackend::Send()` performs file I/O and should not be called concurrently on the same instance.
+The singleton initialization is safe under C++11. `LocalFileTelemetryBackend::Send()` performs file I/O and should not be called concurrently on the same instance.
 
 ## See Also
 

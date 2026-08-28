@@ -154,6 +154,7 @@
 - [Profiler and Debugging](advanced/Profiler-and-Debugging.md)
 - [Performance Profiling Guide](advanced/Performance-Profiling-Guide.md)
 - [Telemetry System](advanced/Telemetry-System.md)
+- [Crash Reporting](advanced/Crash-Reporting.md)
 - [Golden Image Testing](advanced/Golden-Image-Testing.md)
 - [Utilities](advanced/Utilities.md)
 - [Testing](advanced/Testing.md)
