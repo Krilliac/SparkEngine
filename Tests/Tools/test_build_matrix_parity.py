@@ -1307,10 +1307,12 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 for item in report["findings"]
             )
         )
-        self.assertIn(
-            "codemodel-producer-authority-unavailable",
-            {item["category"] for item in report["findings"]},
+        authority_finding = next(
+            item
+            for item in report["findings"]
+            if item["category"] == "codemodel-producer-authority-unavailable"
         )
+        self.assertEqual(authority_finding["severity"], "error")
         self.assertEqual(report["state"], "blocked")
 
     def test_capture_owns_query_configure_and_new_matching_index(self) -> None:
