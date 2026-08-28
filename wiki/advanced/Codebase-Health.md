@@ -103,7 +103,7 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 | Connection timeout | **DONE** | Heartbeat-based detection |
 | Area server architecture | **DONE** | WorldServer coordination, per-area instances |
 | Entity migration | **DONE** | Cross-area serialization and transfer |
-| Network encryption | **DONE** | AES encryption, key exchange |
+| Network authenticated encryption | **BLOCKED** | NET-100 open; XOR/FNV helpers are isolated prototypes, not cryptography |
 
 ### Scripting
 

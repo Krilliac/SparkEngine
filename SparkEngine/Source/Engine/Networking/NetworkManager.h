@@ -397,7 +397,7 @@ namespace Spark::Net
 
         /// Initialize as server
         bool StartServer(uint16_t port = DEFAULT_PORT, int maxClients = 32);
-        bool StartServer(uint16_t port, int maxClients, NetworkBindScope bindScope);
+        bool StartServer(uint16_t port, int maxClients, const NetworkEndpointPolicy& endpointPolicy);
 
         /// Stop the server and disconnect all clients
         void StopServer();
@@ -405,6 +405,8 @@ namespace Spark::Net
         /// Initialize as client and connect to server
         bool Connect(const std::string& address, uint16_t port = DEFAULT_PORT,
                      const std::string& playerName = "Player");
+        bool Connect(const std::string& address, uint16_t port, const std::string& playerName,
+                     const NetworkEndpointPolicy& endpointPolicy);
 
         /// Disconnect from server (client) or shut down server
         void Disconnect();
@@ -666,7 +668,10 @@ namespace Spark::Net
 
 #ifdef ENABLE_NETWORKING
         /// Create, bind, and configure a non-blocking UDP socket
-        bool CreateSocket(uint16_t port, NetworkBindScope bindScope);
+        bool CreateSocket(uint16_t port, const NetworkEndpointPolicy& endpointPolicy);
+
+        /// Whether an exact IPv4 endpoint is inside the captured lifecycle boundary.
+        [[nodiscard]] bool IsEndpointAllowed(const sockaddr_in& address) const noexcept;
 
         /// Close the socket
         void CloseSocket();
@@ -689,6 +694,8 @@ namespace Spark::Net
         /// Map of client ID to their socket address (server-side)
         std::unordered_map<ClientID, sockaddr_in> m_clientAddresses;
 #endif // ENABLE_NETWORKING
+
+        NetworkEndpointPolicy m_endpointPolicy{}; ///< Captured once and unchanged for the active socket lifecycle.
 
         std::atomic<bool> m_initialized{false};
         std::atomic<NetworkRole> m_role{NetworkRole::None};

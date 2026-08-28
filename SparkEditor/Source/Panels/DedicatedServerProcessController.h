@@ -29,8 +29,8 @@ namespace SparkEditor
         uint16_t port = 27015;
         uint32_t maxClients = 8;
         float tickRate = 60.0f;
-        bool lanOnly = true;
-        bool lanBroadcast = true;
+        std::string bindAddress = "loopback";
+        bool lanBroadcast = false;
     };
 
     enum class DedicatedServerProcessState

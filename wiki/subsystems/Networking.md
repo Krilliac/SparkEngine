@@ -4,9 +4,9 @@ SparkEngine includes an **experimental, unauthenticated** UDP networking system 
 
 **Source:** `SparkEngine/Source/Engine/Networking/`
 
-> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). Raw UDP listeners bind to IPv4 loopback by default. Remote exposure requires an exact `SPARK_NETWORK_BIND_MODE=all`/`any`/`public`/`0.0.0.0` opt-in captured before startup, and clients reject non-127/8 destinations while the safe policy is active. Unknown or misspelled modes remain loopback-only. Gateway-managed area processes override the captured scope to loopback. Concrete ports bind exactly; on Windows the listener also requires `SO_EXCLUSIVEADDRUSE`. This opt-in does not add authentication or encryption. When networking is disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
+> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). Raw UDP listeners bind to IPv4 loopback by default. Isolated LAN development requires one concrete numeric RFC1918 address through `SPARK_NETWORK_BIND_ADDRESS` or `Network.bind_address`; wildcard, public, documentation/test, multicast, broadcast, and CGNAT addresses are rejected before socket creation. The captured policy is threaded through the socket lifecycle and filters peer endpoints before packet parsing and every gameplay send/retry path. Gateway-managed area processes force loopback. This boundary does not add authentication or encryption, so NET-100 and release gates remain blocked pending reviewed AEAD transport. When networking is disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
 
-`NetworkMessage::localOnly` is process-local ownership metadata and is never encoded in the wire format. TERRAFRONT login and registration requests set it together with the sensitive-payload erasure marker. `NetworkManager` rechecks the resolved destination while holding its API lock at queueing, delayed release, and retransmission boundaries; a non-loopback destination rejects and erases the credential-bearing state before transmission.
+`NetworkMessage::localOnly` is process-local ownership metadata and is never encoded in the wire format. TERRAFRONT login and registration requests always set it together with the sensitive-payload erasure marker. `NetworkManager` rechecks the exact destination while holding its API lock at queueing, delayed release, and retransmission boundaries; a non-loopback destination rejects and erases the credential-bearing state before transmission. Selecting a private-LAN bind does not enable remote credential onboarding.
 
 ## Architecture
 
@@ -24,11 +24,11 @@ The networking subsystem is composed of several layered modules that work togeth
 │   (message routing, entity replication, connection management)     │
 ├────────────────────────────────────────────────────────────────────┤
 │  ClientPrediction  │  LagCompensator  │  NetworkSecurity           │
-│  (input buffering, │  (history buffer, │  (XOR encryption, token   │
-│   reconciliation)  │   hitbox rewind)  │   auth, rate limiting)    │
+│  (input buffering, │  (history buffer, │  (toy XOR/token helpers,  │
+│   reconciliation)  │   hitbox rewind)  │   rate limiting)          │
 ├────────────────────┴─────────────────┬┴───────────────────────────┤
 │                     NetworkStack                                   │
-│           (transport + security integration layer)                 │
+│      (transport + optional prototype transform helper)             │
 ├────────────────────────────────────────────────────────────────────┤
 │                     ITransport (abstract)                          │
 │        ┌───────────────────┬───────────────────────┐              │
@@ -47,9 +47,9 @@ The networking subsystem is composed of several layered modules that work togeth
 | `UDPTransport.h` | Concrete UDP socket transport (default) |
 | `SteamTransport.h` | Stub transport for future Steam Networking Sockets |
 | `ClientPrediction.h` | Client-side prediction and server reconciliation |
-| `NetworkSecurity.h` | XOR encryption, connection token generation/validation |
-| `NetworkEncryption.h` | Per-connection session keys, HMAC integrity, replay protection, rate limiting |
-| `NetworkIntegration.h` | `NetworkStack` -- combines transport + security into unified stack |
+| `NetworkSecurity.h` | Isolated repeating-key XOR and token-lifecycle prototypes; not security |
+| `NetworkEncryption.h` | Legacy XOR/FNV packet-format prototype plus rate limiter |
+| `NetworkIntegration.h` | `NetworkStack` -- transport plus optional prototype transform helper |
 | `DedicatedServer.h` | Headless server: tick loop, local admin commands, map rotation, LAN broadcast |
 | `AreaServer.h` | Per-area server process for scalable multiplayer worlds |
 | `WorldServer.h` | Central coordinator for area-based multiplayer architecture |
@@ -414,16 +414,16 @@ The default transport uses platform BSD/Winsock UDP sockets:
 - Creates a **non-blocking** UDP socket
 - Enlarges OS send/receive buffers to **64 KB** each for game traffic
 - Binds exactly to a requested concrete port, or to an OS-assigned ephemeral port when given port 0
-- Uses IPv4 loopback unless the process explicitly opts into all interfaces
+- Uses IPv4 loopback unless one concrete numeric RFC1918 interface is selected
 - Cross-platform: Winsock on Windows, POSIX sockets on Linux/macOS
 
 ### SteamTransport (Stub)
 
 A placeholder for future Steam Networking Sockets integration. Currently all methods return failure. When the Steamworks SDK is linked, this will use `ISteamNetworkingSockets` for relay-based, NAT-traversing packet I/O.
 
-## NetworkStack -- Integrated Transport + Security
+## NetworkStack -- Transport + Prototype Transform
 
-The `NetworkStack` class combines transport selection with the security layer:
+The `NetworkStack` class combines transport selection with an optional legacy XOR transform. It is not the active `NetworkManager` wire path and is not a security layer:
 
 ```cpp
 struct NetworkStackConfig
@@ -433,9 +433,7 @@ struct NetworkStackConfig
     TransportType transport = TransportType::UDP;
     std::string serverAddress = "127.0.0.1";
     uint16_t serverPort = 27015;
-    bool enableEncryption = true;
-    std::string encryptionKey = "SparkEngine_DefaultKey_ChangeMe!";
-    uint32_t tokenLifetimeSeconds = 300;
+    bool enableEncryption = false; // Legacy name: toy XOR obfuscation only
 };
 ```
 
@@ -443,70 +441,64 @@ struct NetworkStackConfig
 NetworkStack stack;
 NetworkStackConfig config;
 config.transport = NetworkStackConfig::TransportType::UDP;
-config.enableEncryption = true;
+config.enableEncryption = false;
 stack.Initialize(config);
 
-// Encrypt outgoing data
-auto encrypted = stack.Encrypt(rawPayload);
-
-// Decrypt incoming data
-auto decrypted = stack.Decrypt(encryptedPayload);
-
-// Generate/validate connection tokens
-auto token = stack.GenerateConnectionToken(clientId);
-bool valid = stack.ValidateToken(token);
+// Legacy Encrypt/Decrypt API names apply/reverse XOR only.
+auto obfuscated = stack.Encrypt(rawPayload);
+auto restored = stack.Decrypt(obfuscated);
 
 // Access underlying layers
 ITransport* transport = stack.GetTransport();
 NetworkSecurity* security = stack.GetSecurity();
 ```
 
-## Security Layer
+## Security-Shaped Prototypes
 
 ### NetworkSecurity
 
 Provides experimental XOR-based obfuscation and token utilities for callers that explicitly integrate them. These helpers do not authenticate or encrypt the active `NetworkManager` UDP path:
 
 ```cpp
-static constexpr size_t SECURITY_KEY_SIZE = 32;       // 256-bit keys
-static constexpr size_t CONNECTION_TOKEN_SIZE = 16;    // 128-bit tokens
+static constexpr size_t SECURITY_KEY_SIZE = 32;          // XOR state bytes
+static constexpr size_t CONNECTION_TOKEN_SIZE = 16;     // prototype token bytes
 static constexpr float CONNECTION_TOKEN_LIFETIME = 30.0f; // 30 second expiry
 ```
 
 | Method | Description |
 |--------|-------------|
-| `PacketEncrypt(data, size, key)` | XOR encrypt in-place |
-| `PacketDecrypt(data, size, key)` | XOR decrypt in-place (symmetric) |
-| `Encrypt(plaintext, key)` | Return encrypted copy |
-| `Decrypt(ciphertext, key)` | Return decrypted copy |
-| `GenerateConnectionToken()` | Generate random 128-bit single-use token |
-| `ValidateConnectionToken(token)` | Validate and consume a token |
-| `GenerateKey(outKey)` | Generate random 256-bit key |
-| `SetEncryptionEnabled(bool)` | Enable/disable encryption path |
+| `PacketEncrypt(data, size, key)` | Apply repeating-key XOR in-place (legacy name) |
+| `PacketDecrypt(data, size, key)` | Reverse repeating-key XOR (legacy name) |
+| `Encrypt(plaintext, key)` | Return an XOR-obfuscated copy |
+| `Decrypt(ciphertext, key)` | Reverse the XOR transform |
+| `GenerateConnectionToken()` | Generate and retain prototype token bytes |
+| `ValidateConnectionToken(token)` | Match and consume bytes in the local pending set |
+| `GenerateKey(outKey)` | Generate non-cryptographic prototype state |
+| `SetEncryptionEnabled(bool)` | Toggle the legacy prototype helper |
 
-> **Warning:** XOR is not encryption suitable for credentials or hostile networks. Keep the current networking path on loopback; a remotely reachable production design requires a separately integrated authenticated-encryption transport.
+> **Warning:** XOR/FNV is not encryption, authentication, or attacker-resistant integrity. A remotely reachable production design requires separately integrated and independently reviewed authenticated encryption. NET-100 remains open and blocking.
 
 ### NetworkEncryption (Advanced)
 
-Adds per-connection session keys with replay protection and rate limiting:
+Preserves a legacy packet-format prototype and an independent rate limiter. The “key,” “nonce,” “HMAC,” and replay-protection names do not make the custom XOR/FNV construction cryptographic:
 
 ```cpp
-constexpr size_t SESSION_KEY_SIZE = 32;        // 256-bit session key
-constexpr size_t NONCE_SIZE = 8;               // 64-bit sequence-based nonce
-constexpr size_t HMAC_SIZE = 4;                // 32-bit truncated integrity tag
-constexpr size_t TOKEN_SIZE = 16;              // 128-bit connection token
-constexpr size_t ENCRYPTION_OVERHEAD = 12;     // NONCE_SIZE + HMAC_SIZE per packet
+constexpr size_t SESSION_KEY_SIZE = 32;        // XOR state bytes
+constexpr size_t NONCE_SIZE = 8;               // serialized sequence bytes
+constexpr size_t HMAC_SIZE = 4;                // legacy name: forgeable keyed FNV tag
+constexpr size_t TOKEN_SIZE = 16;               // prototype token bytes
+constexpr size_t ENCRYPTION_OVERHEAD = 12;     // legacy packet-format overhead
 ```
 
-**Packet layout:** `[nonce (8B)] [encrypted payload] [hmac (4B)]`
+**Prototype layout:** `[sequence (8B)] [XOR-obfuscated payload] [keyed-FNV tag (4B)]`
 
 | Function | Description |
 |----------|-------------|
-| `GenerateSessionKey()` | Create random 256-bit session key |
-| `GenerateConnectionToken()` | Create random 128-bit token |
-| `EncryptPacket(key, sequence, payload)` | Encrypt with nonce + HMAC |
-| `DecryptPacket(key, packet, outPayload, outSeq)` | Decrypt and verify integrity |
-| `ValidateToken(expected, received)` | Constant-time token comparison |
+| `GenerateSessionKey()` | Create pseudo-random prototype state |
+| `GenerateConnectionToken()` | Create pseudo-random prototype bytes |
+| `EncryptPacket(key, sequence, payload)` | Apply the legacy XOR/FNV transform |
+| `DecryptPacket(key, packet, outPayload, outSeq)` | Check the forgeable tag and reverse XOR |
+| `ValidateToken(expected, received)` | Constant-time byte comparison only |
 
 ### RateLimiter
 
@@ -525,19 +517,19 @@ public:
 
 Uses a sliding window approach per source IP:port hash. Rejects packets exceeding the configured rate.
 
-### ReplayProtection
+### Sequence Duplicate Filter (`ReplayProtection` legacy name)
 
 ```cpp
 class ReplayProtection
 {
 public:
     static constexpr size_t WINDOW_SIZE = 256;
-    bool Accept(uint64_t sequence);  // Returns false for replayed sequences
+    bool Accept(uint64_t sequence);  // Returns false for duplicate/too-old values
     void Reset();
 };
 ```
 
-Tracks received sequence numbers in a 256-entry sliding window. Rejects packets with previously seen or too-old sequence numbers.
+Tracks received sequence numbers in a 256-entry sliding window. Without authenticated packets, an attacker can forge sequence values; this helper is not a production replay-defense boundary.
 
 ## Dedicated Server
 
@@ -558,7 +550,7 @@ struct ServerConfig
     float tickRate = 60.0f;                    // Ticks per second
     float clientTimeoutSeconds = 30.0f;
     float heartbeatIntervalSeconds = 1.0f;
-    bool lanOnly = false;
+    NetworkEndpointPolicy endpointPolicy = CaptureNetworkEndpointPolicy();
 
     // Game
     GameModeType gameMode = GameModeType::Deathmatch;
@@ -580,7 +572,7 @@ struct ServerConfig
     std::string logFilePath = "server.log";
 
     // LAN discovery
-    bool enableLanBroadcast = true;
+    bool enableLanBroadcast = false;
     uint16_t lanBroadcastPort = 27016;
 
     // Performance
@@ -667,7 +659,7 @@ Built-in commands are registered automatically: `help`, `status`, `kick`, `ban`,
 
 ```cpp
 // Server side: broadcast presence
-server.StartLanBroadcast();  // Broadcasts every 3 seconds on port 27016
+server.StartLanBroadcast();  // Explicit opt-in; emits discovery metadata only
 
 // Client side: discover servers
 auto servers = DedicatedServer::DiscoverLanServers(27016, 2000);
@@ -868,7 +860,7 @@ This ensures clients see fair hit registration despite network latency.
 net_status           # Show NetworkManager connection state and role
 net_clients          # List connected clients with stats (server only)
 net_stats            # Show bandwidth, ping, jitter, packet loss
-net_stack_status     # Show NetworkStack transport and encryption status
+net_stack_status     # Show transport and prototype-XOR status
 prediction_status    # Show prediction pending count and correction magnitude
 server_status        # Show DedicatedServer uptime, players, map, match state
 ```
@@ -878,12 +870,12 @@ server_status        # Show DedicatedServer uptime, players, map, match state
 | Symptom | Possible Cause | Solution |
 |---------|---------------|----------|
 | `Initialize()` returns false | `ENABLE_NETWORKING=OFF` | Rebuild with `-DENABLE_NETWORKING=ON` |
-| Connection timeout | Firewall blocking UDP 27015 | Open port in firewall; check `lanOnly` flag |
+| Connection timeout | Wrong concrete interface or blocked UDP 27015 | Verify `bind_address` and local firewall rules |
 | High packet loss | Network congestion or buffer overflow | Increase socket buffer size; reduce replication rate |
 | Rubber-banding | Large prediction corrections | Tune `SetSmoothCorrection` speed; reduce server tick interval |
 | Stale entity state | Property not marked dirty | Call `MarkPropertyDirty()` after modifying replicated properties |
-| Token validation fails | Token expired (30s lifetime) | Ensure client connects within token lifetime |
-| HMAC mismatch | Key mismatch between client/server | Verify both sides use the same session key |
+| Prototype token match fails | Token expired (30s lifetime) | Check the local prototype lifecycle; it is not peer authentication |
+| Prototype packet tag mismatch | Different prototype state or changed bytes | Check prototype inputs; do not treat the result as secure |
 | `SendMessage` compile error on Windows | Windows macro conflict | The header `#undef SendMessage` handles this automatically |
 
 ## Stub Behavior (ENABLE_NETWORKING=OFF)

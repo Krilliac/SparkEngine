@@ -177,6 +177,14 @@ TEST(TFOnboardingSessionRules_RejectReauthAndMidWorldProfileMutation)
 static_assert(static_cast<uint8_t>(TFAuthErr::RemoteOnboardingDisabled) == 8,
               "append-only onboarding error wire contract");
 
+TEST(TFOnboarding_CredentialRequestsRemainLoopbackOnly)
+{
+    EXPECT_TRUE(IsTFCredentialOnboardingMessage(TFMsg::LoginRequest));
+    EXPECT_TRUE(IsTFCredentialOnboardingMessage(TFMsg::RegisterRequest));
+    EXPECT_FALSE(IsTFCredentialOnboardingMessage(TFMsg::CharListRequest));
+    EXPECT_FALSE(IsTFCredentialOnboardingMessage(TFMsg::EnterWorldReq));
+}
+
 TEST(TFNetworkLifecycle_DrainsRemoteSessionsAndSupportsImmediateRehost)
 {
     std::unordered_set<PlayerId> knownClients{11, 12};

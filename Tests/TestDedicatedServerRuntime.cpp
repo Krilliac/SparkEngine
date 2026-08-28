@@ -30,12 +30,12 @@ namespace
             return initializeResult;
         }
 
-        bool StartServer(uint16_t port, int maxClients, NetworkBindScope bindScope) override
+        bool StartServer(uint16_t port, int maxClients, const NetworkEndpointPolicy& endpointPolicy) override
         {
             startServerCalled = true;
             startedPort = port;
             startedMaxClients = maxClients;
-            startedBindScope = bindScope;
+            startedEndpointPolicy = endpointPolicy;
             return startServerResult;
         }
 
@@ -101,7 +101,7 @@ namespace
         float lastUpdateDelta = 0.0f;
         uint16_t startedPort = 0;
         int startedMaxClients = 0;
-        NetworkBindScope startedBindScope = NetworkBindScope::AllInterfaces;
+        NetworkEndpointPolicy startedEndpointPolicy{};
 
         NetworkStats stats{};
         std::unordered_map<ClientID, ClientInfo> clients;
@@ -134,7 +134,7 @@ TEST(DedicatedServerRuntime_ConnectDisconnectCallbacks)
     config.enableLanBroadcast = false;
     config.mapRotation = {"arena"};
     config.maxClients = 8;
-    config.bindScope = NetworkBindScope::LoopbackOnly;
+    config.endpointPolicy = NetworkEndpointPolicy::Loopback();
 
     ClientInfo client;
     client.id = 7;
@@ -164,7 +164,9 @@ TEST(DedicatedServerRuntime_ConnectDisconnectCallbacks)
     EXPECT_TRUE(runtime.startServerCalled);
     EXPECT_EQ(runtime.startedPort, config.port);
     EXPECT_EQ(runtime.startedMaxClients, config.maxClients);
-    EXPECT_EQ(static_cast<int>(runtime.startedBindScope), static_cast<int>(config.bindScope));
+    EXPECT_EQ(runtime.startedEndpointPolicy.BindAddress(), config.endpointPolicy.BindAddress());
+    EXPECT_EQ(static_cast<int>(runtime.startedEndpointPolicy.PeerScope()),
+              static_cast<int>(config.endpointPolicy.PeerScope()));
 
     NetworkMessage connect;
     connect.type = MessageType::Connect;
@@ -184,6 +186,20 @@ TEST(DedicatedServerRuntime_ConnectDisconnectCallbacks)
 
     server.Stop();
     EXPECT_TRUE(runtime.clearHandlersCalled);
+}
+
+TEST(DedicatedServerRuntime_InvalidEndpointPolicyFailsBeforeRuntimeInitialization)
+{
+    MockNetworkRuntime runtime;
+    DedicatedServer server(runtime);
+
+    ServerConfig config;
+    config.endpointPolicy = ResolveNetworkEndpointPolicy("0.0.0.0");
+    ASSERT_FALSE(config.endpointPolicy.IsValid());
+
+    EXPECT_FALSE(server.InitializeOnly(config));
+    EXPECT_FALSE(runtime.initializeCalled);
+    EXPECT_FALSE(runtime.startServerCalled);
 }
 
 TEST(DedicatedServerRuntime_ChatCannotInvokeRcon)

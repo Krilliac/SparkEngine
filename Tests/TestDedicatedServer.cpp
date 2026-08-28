@@ -45,7 +45,7 @@ namespace
         float tickRate = 60.0f;
         float clientTimeoutSeconds = 30.0f;
         float heartbeatIntervalSeconds = 1.0f;
-        bool lanOnly = false;
+        std::string bindAddress = "loopback";
         GameModeType gameMode = GameModeType::Deathmatch;
         std::string customGameModeName;
         int scoreLimit = 50;
@@ -59,7 +59,7 @@ namespace
         uint16_t rconPort = 0;
         bool enableLogging = true;
         std::string logFilePath = "server.log";
-        bool enableLanBroadcast = true;
+        bool enableLanBroadcast = false;
         uint16_t lanBroadcastPort = 27016;
         bool enableAntiCheat = false;
         float replicationRate = 20.0f;
@@ -291,7 +291,7 @@ TEST(DedicatedServer_DefaultConfig)
     EXPECT_EQ(config.maxClients, 32);
     EXPECT_NEAR(config.tickRate, 60.0f, 0.01f);
     EXPECT_NEAR(config.clientTimeoutSeconds, 30.0f, 0.01f);
-    EXPECT_EQ(config.lanOnly, false);
+    EXPECT_EQ(config.bindAddress, std::string("loopback"));
     EXPECT_EQ(static_cast<int>(config.gameMode), 0);
     EXPECT_EQ(config.scoreLimit, 50);
     EXPECT_NEAR(config.timeLimitMinutes, 15.0f, 0.01f);
@@ -300,7 +300,7 @@ TEST(DedicatedServer_DefaultConfig)
     EXPECT_EQ(config.autoBalanceTeams, true);
     EXPECT_TRUE(config.mapRotation.empty());
     EXPECT_TRUE(config.rconPassword.empty());
-    EXPECT_EQ(config.enableLanBroadcast, true);
+    EXPECT_EQ(config.enableLanBroadcast, false);
     EXPECT_EQ(config.lanBroadcastPort, static_cast<uint16_t>(27016));
     EXPECT_EQ(config.snapshotHistorySize, 64);
 }
@@ -319,7 +319,7 @@ TEST(DedicatedServer_CustomConfig)
     config.friendlyFire = true;
     config.mapRotation = {"ctf_bridge", "ctf_harbor", "ctf_ruins"};
     config.rconPassword = "secret123";
-    config.lanOnly = true;
+    config.bindAddress = "192.168.1.20";
 
     EXPECT_EQ(config.serverName, std::string("Test Server"));
     EXPECT_EQ(config.port, static_cast<uint16_t>(28000));
@@ -332,7 +332,7 @@ TEST(DedicatedServer_CustomConfig)
     EXPECT_EQ(config.mapRotation.size(), static_cast<size_t>(3));
     EXPECT_EQ(config.mapRotation[0], std::string("ctf_bridge"));
     EXPECT_EQ(config.rconPassword, std::string("secret123"));
-    EXPECT_EQ(config.lanOnly, true);
+    EXPECT_EQ(config.bindAddress, std::string("192.168.1.20"));
 }
 
 // ============================================================================

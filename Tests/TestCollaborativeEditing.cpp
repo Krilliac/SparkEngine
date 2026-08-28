@@ -188,16 +188,17 @@ TEST(CollabEdit_NonEditSerialization_IsCanonical)
     EXPECT_TRUE(SerializeMessage(baseline) == SerializeMessage(withIrrelevantEdit));
 }
 
-TEST(CollabEdit_LegacyP2PBindPolicy_DefaultsSafe)
+TEST(CollabEdit_EndpointPolicyRejectsWildcardExposure)
 {
     using namespace Spark::Net;
-    EXPECT_TRUE(ShouldUseLoopbackForUnauthenticatedTool(""));
-    EXPECT_TRUE(ShouldUseLoopbackForUnauthenticatedTool("loopback"));
-    EXPECT_TRUE(ShouldUseLoopbackForUnauthenticatedTool("typo"));
-    EXPECT_FALSE(ShouldUseLoopbackForUnauthenticatedTool("all"));
-    EXPECT_FALSE(ShouldUseLoopbackForUnauthenticatedTool("any"));
-    EXPECT_FALSE(ShouldUseLoopbackForUnauthenticatedTool("public"));
-    EXPECT_FALSE(ShouldUseLoopbackForUnauthenticatedTool("0.0.0.0"));
+    EXPECT_TRUE(ResolveNetworkEndpointPolicy("loopback").IsValid());
+    EXPECT_TRUE(ResolveNetworkEndpointPolicy("192.168.1.20").IsValid());
+    EXPECT_FALSE(ResolveNetworkEndpointPolicy("").IsValid());
+    EXPECT_FALSE(ResolveNetworkEndpointPolicy("typo").IsValid());
+    EXPECT_FALSE(ResolveNetworkEndpointPolicy("all").IsValid());
+    EXPECT_FALSE(ResolveNetworkEndpointPolicy("any").IsValid());
+    EXPECT_FALSE(ResolveNetworkEndpointPolicy("public").IsValid());
+    EXPECT_FALSE(ResolveNetworkEndpointPolicy("0.0.0.0").IsValid());
 }
 
 TEST(CollabEdit_DeserializeEmpty_ReturnsFalse)

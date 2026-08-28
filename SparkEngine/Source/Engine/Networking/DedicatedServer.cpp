@@ -87,6 +87,14 @@ namespace Spark::Net
         m_currentRound = 1;
         m_matchInProgress = false;
 
+        if (!m_config.endpointPolicy.IsValid())
+        {
+            const std::string reason{NetworkEndpointPolicyErrorText(m_config.endpointPolicy.Error())};
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing dedicated-server startup: %s", reason.c_str());
+            Log("ERROR: Refusing dedicated-server startup: " + reason);
+            return false;
+        }
+
         if (!m_config.rconPassword.empty() || m_config.rconPort != 0)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Network,
@@ -100,7 +108,7 @@ namespace Spark::Net
             return false;
         }
 
-        if (!m_networkRuntime->StartServer(m_config.port, m_config.maxClients, m_config.bindScope))
+        if (!m_networkRuntime->StartServer(m_config.port, m_config.maxClients, m_config.endpointPolicy))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to start server on port %d", m_config.port);
             Log("ERROR: Failed to start server on port " + std::to_string(m_config.port));
@@ -820,11 +828,12 @@ namespace Spark::Net
                     if (broadcastSocket == INVALID_SOCKET)
                         return;
 
-                    // Enable broadcast
-                    int broadcastEnable = 1;
-                    if (setsockopt(broadcastSocket, SOL_SOCKET, SO_BROADCAST,
-                                   reinterpret_cast<const char*>(&broadcastEnable),
-                                   sizeof(broadcastEnable)) == SOCKET_ERROR)
+                    sockaddr_in localAddress{};
+                    localAddress.sin_family = AF_INET;
+                    localAddress.sin_port = 0;
+                    localAddress.sin_addr.s_addr = htonl(m_config.endpointPolicy.BindAddress());
+                    if (::bind(broadcastSocket, reinterpret_cast<const sockaddr*>(&localAddress),
+                               sizeof(localAddress)) == SOCKET_ERROR)
                     {
 #ifdef SPARK_PLATFORM_WINDOWS
                         closesocket(broadcastSocket);
@@ -834,9 +843,31 @@ namespace Spark::Net
                         return;
                     }
 
+                    // A loopback policy uses local unicast discovery. Private-LAN
+                    // discovery uses a broadcast from the one explicitly bound
+                    // interface; the socket is never allowed to choose an interface.
+                    if (m_config.endpointPolicy.PeerScope() == NetworkPeerScope::PrivateLan)
+                    {
+                        int broadcastEnable = 1;
+                        if (setsockopt(broadcastSocket, SOL_SOCKET, SO_BROADCAST,
+                                       reinterpret_cast<const char*>(&broadcastEnable),
+                                       sizeof(broadcastEnable)) == SOCKET_ERROR)
+                        {
+#ifdef SPARK_PLATFORM_WINDOWS
+                            closesocket(broadcastSocket);
+#else
+                            close(broadcastSocket);
+#endif
+                            return;
+                        }
+                    }
+
                     sockaddr_in broadcastAddr{};
                     broadcastAddr.sin_family = AF_INET;
-                    broadcastAddr.sin_addr.s_addr = INADDR_BROADCAST;
+                    broadcastAddr.sin_addr.s_addr =
+                        m_config.endpointPolicy.PeerScope() == NetworkPeerScope::LoopbackOnly
+                            ? htonl(m_config.endpointPolicy.BindAddress())
+                            : INADDR_BROADCAST;
 
                     while (m_lanBroadcastActive.load(std::memory_order_acquire))
                     {
@@ -891,10 +922,12 @@ namespace Spark::Net
             m_lanBroadcastThread.join();
     }
 
-    std::vector<ServerBroadcastInfo> DedicatedServer::DiscoverLanServers(uint16_t broadcastPort, int timeoutMs)
+    std::vector<ServerBroadcastInfo> DedicatedServer::DiscoverLanServers(uint16_t broadcastPort, int timeoutMs,
+                                                                         const NetworkEndpointPolicy& endpointPolicy)
     {
         std::vector<ServerBroadcastInfo> servers;
-        const NetworkBindScope bindScope = CaptureNetworkBindScope();
+        if (!endpointPolicy.IsValid())
+            return servers;
 
         SOCKET listenSocket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (listenSocket == INVALID_SOCKET)
@@ -909,7 +942,7 @@ namespace Spark::Net
         sockaddr_in bindAddr{};
         bindAddr.sin_family = AF_INET;
         bindAddr.sin_port = htons(broadcastPort);
-        bindAddr.sin_addr.s_addr = bindScope == NetworkBindScope::LoopbackOnly ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
+        bindAddr.sin_addr.s_addr = htonl(endpointPolicy.BindAddress());
 
         if (::bind(listenSocket, reinterpret_cast<const sockaddr*>(&bindAddr), sizeof(bindAddr)) == SOCKET_ERROR)
         {
@@ -944,6 +977,10 @@ namespace Spark::Net
 
             if (received > 0)
             {
+                if (senderAddr.sin_family != AF_INET ||
+                    !endpointPolicy.AllowsPeerAddress(ntohl(senderAddr.sin_addr.s_addr)))
+                    continue;
+
                 NetBuffer buf;
                 buf.WriteBytes(recvBuf, static_cast<size_t>(received));
 
@@ -990,6 +1027,7 @@ namespace Spark::Net
         oss << "Name:       " << m_config.serverName << "\n";
         oss << "Running:    " << (m_running.load(std::memory_order_acquire) ? "YES" : "NO") << "\n";
         oss << "Port:       " << m_config.port << "\n";
+        oss << "Bind:       " << FormatIPv4Address(m_config.endpointPolicy.BindAddress()) << "\n";
         oss << "Players:    " << stats.currentPlayers << "/" << m_config.maxClients << " (peak: " << stats.peakPlayers
             << ")\n";
         oss << "Map:        " << m_currentMap << "\n";

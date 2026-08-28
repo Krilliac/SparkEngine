@@ -409,7 +409,7 @@ class EngineSettings
         int sendBufferSize = 65536;
         int receiveBufferSize = 65536;
         bool enableCompression = false;
-        bool enableEncryption = false;
+        bool enableEncryption = false; // Legacy setting: prototype XOR obfuscation only, not encryption
         // Lag simulation (development only)
         float simulatedLatencyMs = 0.0f;
         float simulatedPacketLoss = 0.0f;

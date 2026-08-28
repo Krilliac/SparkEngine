@@ -25,25 +25,49 @@
 
 using namespace Spark::Net;
 
-TEST(NetworkBindPolicy_DefaultsUnknownModesToLoopbackAndRecognizesIPv4LoopbackBlock)
+TEST(NetworkBindPolicy_AllowsOnlyLoopbackOrConcreteRfc1918Unicast)
 {
-    EXPECT_TRUE(UseLoopbackNetworkBind());
-    EXPECT_TRUE(ShouldUseLoopbackNetworkBind(nullptr));
-    EXPECT_TRUE(ShouldUseLoopbackNetworkBind(""));
-    EXPECT_TRUE(ShouldUseLoopbackNetworkBind("typo"));
-    EXPECT_TRUE(ShouldUseLoopbackNetworkBind("ALL"));
-    EXPECT_FALSE(ShouldUseLoopbackNetworkBind("all"));
-    EXPECT_FALSE(ShouldUseLoopbackNetworkBind("any"));
-    EXPECT_FALSE(ShouldUseLoopbackNetworkBind("public"));
-    EXPECT_FALSE(ShouldUseLoopbackNetworkBind("0.0.0.0"));
-    EXPECT_EQ(static_cast<int>(ResolveNetworkBindScope(nullptr)), static_cast<int>(NetworkBindScope::LoopbackOnly));
-    EXPECT_EQ(static_cast<int>(ResolveNetworkBindScope("all")), static_cast<int>(NetworkBindScope::AllInterfaces));
-    EXPECT_TRUE(IsLoopbackBindMode("loopback"));
-    EXPECT_TRUE(IsLoopbackBindMode("localhost"));
-    EXPECT_TRUE(IsLoopbackBindMode("127.0.0.1"));
-    EXPECT_FALSE(IsLoopbackBindMode(""));
-    EXPECT_FALSE(IsLoopbackBindMode("0.0.0.0"));
-    EXPECT_FALSE(IsLoopbackBindMode("LOOPBACK"));
+    const NetworkEndpointPolicy defaultPolicy = ResolveNetworkEndpointPolicy(nullptr);
+    EXPECT_TRUE(defaultPolicy.IsValid());
+    EXPECT_EQ(defaultPolicy.BindAddress(), uint32_t{0x7F000001u});
+    EXPECT_EQ(static_cast<int>(defaultPolicy.PeerScope()), static_cast<int>(NetworkPeerScope::LoopbackOnly));
+    EXPECT_FALSE(NetworkEndpointPolicy::Loopback(0u).IsValid());
+    EXPECT_FALSE(NetworkEndpointPolicy::PrivateLan(0u).IsValid());
+    EXPECT_FALSE(NetworkEndpointPolicy::PrivateLan(0x64400001u).IsValid());
+
+    for (const std::string_view allowed :
+         {"local", "loopback", "localhost", "127.8.9.10", "10.1.2.3", "172.16.4.5", "172.31.254.1", "192.168.7.8"})
+        EXPECT_TRUE(ResolveNetworkEndpointPolicy(allowed).IsValid());
+
+    for (const std::string_view rejected : {"",
+                                            "all",
+                                            "any",
+                                            "public",
+                                            "0.0.0.0",
+                                            "test",
+                                            "multicast",
+                                            "broadcast",
+                                            "cgnat",
+                                            "8.8.8.8",
+                                            "169.254.1.1",
+                                            "192.0.2.1",
+                                            "198.51.100.2",
+                                            "203.0.113.3",
+                                            "100.64.0.1",
+                                            "224.0.0.1",
+                                            "255.255.255.255",
+                                            "10.1.2.0",
+                                            "10.1.2.255",
+                                            "typo"})
+        EXPECT_FALSE(ResolveNetworkEndpointPolicy(rejected).IsValid());
+
+    const NetworkEndpointPolicy privatePolicy = ResolveNetworkEndpointPolicy("192.168.50.10");
+    EXPECT_EQ(static_cast<int>(privatePolicy.PeerScope()), static_cast<int>(NetworkPeerScope::PrivateLan));
+    EXPECT_TRUE(privatePolicy.AllowsPeerAddress(0x0A010203u));
+    EXPECT_TRUE(privatePolicy.AllowsPeerAddress(0xAC100203u));
+    EXPECT_FALSE(privatePolicy.AllowsPeerAddress(0x7F000001u));
+    EXPECT_FALSE(privatePolicy.AllowsPeerAddress(0xC0000201u));
+
     EXPECT_TRUE(IsIPv4LoopbackAddress("127.0.0.1"));
     EXPECT_TRUE(IsIPv4LoopbackAddress("127.255.8.9"));
     EXPECT_FALSE(IsIPv4LoopbackAddress("126.255.255.255"));

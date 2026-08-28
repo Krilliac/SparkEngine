@@ -223,7 +223,7 @@ The test files cover all major engine subsystems:
 | Test File | Cases | Description |
 |-----------|-------|-------------|
 | `TestNetBuffer` | 29 | Network buffer serialization/deserialization |
-| `TestNetworkEncryption` | 17 | AES encryption, key exchange |
+| `TestNetworkEncryption` | 17 | Legacy XOR/FNV prototype behavior; not a cryptographic security gate |
 | `TestClientPrediction` | 5 | Client-side prediction and reconciliation |
 | `TestDedicatedServer` | 27 | Server lifecycle, RCON, map rotation |
 

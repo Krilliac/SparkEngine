@@ -42,6 +42,7 @@ inline int closesocket(SOCKET s)
 #endif // SPARK_PLATFORM_WINDOWS
 
 #include <cstring>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <memory>
@@ -96,7 +97,8 @@ namespace Spark::Net
     class UDPTransport final : public ITransport
     {
       public:
-        UDPTransport() = default;
+        UDPTransport() : m_endpointPolicy(CaptureNetworkEndpointPolicy()) {}
+        explicit UDPTransport(NetworkEndpointPolicy endpointPolicy) : m_endpointPolicy(endpointPolicy) {}
         ~UDPTransport() override { Shutdown(); }
 
         // Non-copyable
@@ -107,6 +109,12 @@ namespace Spark::Net
         {
             if (m_socket != INVALID_SOCKET)
                 return true; // Already initialised
+            if (!m_endpointPolicy.IsValid())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Network, "UDPTransport startup rejected: %s",
+                                NetworkEndpointPolicyErrorText(m_endpointPolicy.Error()).data());
+                return false;
+            }
 
 #ifdef SPARK_PLATFORM_WINDOWS
             // Ensure Winsock is up before we touch any socket API. Standalone
@@ -162,7 +170,7 @@ namespace Spark::Net
             // Bind to the requested port (0 = OS-assigned ephemeral port)
             sockaddr_in localAddr{};
             localAddr.sin_family = AF_INET;
-            localAddr.sin_addr.s_addr = UseLoopbackNetworkBind() ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
+            localAddr.sin_addr.s_addr = htonl(m_endpointPolicy.BindAddress());
             localAddr.sin_port = htons(port);
 
             if (::bind(m_socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) == SOCKET_ERROR)
@@ -202,6 +210,8 @@ namespace Spark::Net
 
             if (inet_pton(AF_INET, address.c_str(), &dest.sin_addr) != 1)
                 return false;
+            if (!m_endpointPolicy.AllowsPeerAddress(ntohl(dest.sin_addr.s_addr)))
+                return false;
 
             int sent = sendto(m_socket, reinterpret_cast<const char*>(data), static_cast<int>(size), 0,
                               reinterpret_cast<const sockaddr*>(&dest), sizeof(dest));
@@ -222,6 +232,12 @@ namespace Spark::Net
 
             if (received <= 0)
                 return received;
+            if (senderAddr.sin_family != AF_INET ||
+                !m_endpointPolicy.AllowsPeerAddress(ntohl(senderAddr.sin_addr.s_addr)))
+            {
+                std::fill_n(buffer, static_cast<size_t>(received), uint8_t{0});
+                return 0;
+            }
 
             // Convert sender address to string
             std::array<char, INET_ADDRSTRLEN> addrBuf{};
@@ -237,6 +253,7 @@ namespace Spark::Net
         std::string GetTransportName() const override { return "UDP"; }
 
       private:
+        const NetworkEndpointPolicy m_endpointPolicy;
         SOCKET m_socket = INVALID_SOCKET;
 #ifdef SPARK_PLATFORM_WINDOWS
         std::unique_ptr<WinsockScope> m_winsock;

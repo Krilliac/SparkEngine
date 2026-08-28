@@ -8,6 +8,8 @@
 
 #include <array>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -23,9 +25,13 @@ namespace
         {
             if (const char* previous = std::getenv("SPARK_NETWORK_BIND_MODE"))
                 m_previous = previous;
+            if (const char* previousAddress = std::getenv("SPARK_NETWORK_BIND_ADDRESS"))
+                m_previousAddress = previousAddress;
 #ifdef SPARK_PLATFORM_WINDOWS
+            _putenv_s("SPARK_NETWORK_BIND_ADDRESS", "");
             _putenv_s("SPARK_NETWORK_BIND_MODE", value);
 #else
+            unsetenv("SPARK_NETWORK_BIND_ADDRESS");
             setenv("SPARK_NETWORK_BIND_MODE", value, 1);
 #endif
         }
@@ -34,16 +40,22 @@ namespace
         {
 #ifdef SPARK_PLATFORM_WINDOWS
             _putenv_s("SPARK_NETWORK_BIND_MODE", m_previous ? m_previous->c_str() : "");
+            _putenv_s("SPARK_NETWORK_BIND_ADDRESS", m_previousAddress ? m_previousAddress->c_str() : "");
 #else
             if (m_previous)
                 setenv("SPARK_NETWORK_BIND_MODE", m_previous->c_str(), 1);
             else
                 unsetenv("SPARK_NETWORK_BIND_MODE");
+            if (m_previousAddress)
+                setenv("SPARK_NETWORK_BIND_ADDRESS", m_previousAddress->c_str(), 1);
+            else
+                unsetenv("SPARK_NETWORK_BIND_ADDRESS");
 #endif
         }
 
       private:
         std::optional<std::string> m_previous;
+        std::optional<std::string> m_previousAddress;
     };
 } // namespace
 
@@ -113,8 +125,9 @@ TEST(SparkServerOptions_GatewayManagedServerForcesLoopbackScopeAtParseTime)
 
     const ParseResult result = ParseServerOptions(arguments);
     ASSERT_TRUE(result.options.has_value());
-    EXPECT_EQ(static_cast<int>(result.options->server.bindScope),
-              static_cast<int>(Spark::Net::NetworkBindScope::LoopbackOnly));
+    EXPECT_EQ(result.options->server.endpointPolicy.BindAddress(), uint32_t{0x7F000001u});
+    EXPECT_EQ(static_cast<int>(result.options->server.endpointPolicy.PeerScope()),
+              static_cast<int>(Spark::Net::NetworkPeerScope::LoopbackOnly));
 }
 
 TEST(SparkServerOptions_CapturedGatewayScopeCannotBeWidenedAfterParse)
@@ -132,20 +145,63 @@ TEST(SparkServerOptions_CapturedGatewayScopeCannotBeWidenedAfterParse)
     }
 
     const ScopedNetworkBindMode widenedEnvironment("all");
-    EXPECT_EQ(static_cast<int>(captured.bindScope), static_cast<int>(Spark::Net::NetworkBindScope::LoopbackOnly));
+    EXPECT_EQ(captured.endpointPolicy.BindAddress(), uint32_t{0x7F000001u});
+    EXPECT_EQ(static_cast<int>(captured.endpointPolicy.PeerScope()),
+              static_cast<int>(Spark::Net::NetworkPeerScope::LoopbackOnly));
 }
 
-TEST(SparkServerOptions_NonGatewayAllInterfaceOptInIsCapturedOnce)
+TEST(SparkServerOptions_NonGatewayLegacyWildcardIsRejected)
 {
-    Spark::Net::ServerConfig captured;
+    const ScopedNetworkBindMode bindMode("all");
+    const std::array arguments = {std::string_view{"--module"}, std::string_view{"Game.dll"}};
+    const ParseResult result = ParseServerOptions(arguments);
+    EXPECT_FALSE(result.options.has_value());
+    EXPECT_TRUE(result.error.find("rejected") != std::string::npos);
+}
+
+TEST(SparkServerOptions_CapturesConcretePrivateBindAddress)
+{
+    const std::array arguments = {std::string_view{"--module"}, std::string_view{"Game.dll"},
+                                  std::string_view{"--bind-address"}, std::string_view{"192.168.42.9"}};
+    const ParseResult result = ParseServerOptions(arguments);
+    ASSERT_TRUE(result.options.has_value());
+    EXPECT_EQ(result.options->server.endpointPolicy.BindAddress(), uint32_t{0xC0A82A09u});
+    EXPECT_EQ(static_cast<int>(result.options->server.endpointPolicy.PeerScope()),
+              static_cast<int>(Spark::Net::NetworkPeerScope::PrivateLan));
+}
+
+TEST(SparkServerOptions_LegacyLanOnlyConfigFailsClosed)
+{
+    const auto configPath = std::filesystem::temp_directory_path() / "spark-net100-legacy-server.ini";
     {
-        const ScopedNetworkBindMode bindMode("all");
-        const std::array arguments = {std::string_view{"--module"}, std::string_view{"Game.dll"}};
-        const ParseResult result = ParseServerOptions(arguments);
-        ASSERT_TRUE(result.options.has_value());
-        captured = result.options->server;
+        std::ofstream config(configPath, std::ios::binary | std::ios::trunc);
+        config << "[Network]\nlan_only = false\n[Modules]\nmodule = Game.dll\n";
     }
 
-    const ScopedNetworkBindMode narrowedEnvironment("loopback");
-    EXPECT_EQ(static_cast<int>(captured.bindScope), static_cast<int>(Spark::Net::NetworkBindScope::AllInterfaces));
+    const std::string configPathText = configPath.string();
+    const std::array arguments = {std::string_view{"--config"}, std::string_view{configPathText}};
+    const ParseResult result = ParseServerOptions(arguments);
+    EXPECT_FALSE(result.options.has_value());
+    EXPECT_TRUE(result.error.find("lan_only=false") != std::string::npos);
+
+    std::error_code error;
+    std::filesystem::remove(configPath, error);
+}
+
+TEST(SparkServerOptions_LegacyLanOnlyTrueMeansLoopback)
+{
+    const auto configPath = std::filesystem::temp_directory_path() / "spark-net100-local-server.ini";
+    {
+        std::ofstream config(configPath, std::ios::binary | std::ios::trunc);
+        config << "[Network]\nlan_only = true\n[Modules]\nmodule = Game.dll\n";
+    }
+
+    const std::string configPathText = configPath.string();
+    const std::array arguments = {std::string_view{"--config"}, std::string_view{configPathText}};
+    const ParseResult result = ParseServerOptions(arguments);
+    ASSERT_TRUE(result.options.has_value());
+    EXPECT_EQ(result.options->server.endpointPolicy.BindAddress(), uint32_t{0x7F000001u});
+
+    std::error_code error;
+    std::filesystem::remove(configPath, error);
 }

@@ -68,11 +68,10 @@ namespace Spark::Net
         // Network
         uint16_t port = DEFAULT_PORT;
         int maxClients = 32;
-        NetworkBindScope bindScope = CaptureNetworkBindScope(); ///< Captured once; never reread during bind.
-        float tickRate = 60.0f;                                 ///< Server simulation ticks per second
-        float clientTimeoutSeconds = 30.0f;                     ///< Kick after this many seconds of silence
+        NetworkEndpointPolicy endpointPolicy = CaptureNetworkEndpointPolicy(); ///< Immutable socket/peer boundary.
+        float tickRate = 60.0f;                                                ///< Server simulation ticks per second
+        float clientTimeoutSeconds = 30.0f; ///< Kick after this many seconds of silence
         float heartbeatIntervalSeconds = 1.0f;
-        bool lanOnly = false; ///< Restrict to LAN connections
 
         // Game
         GameModeType gameMode = GameModeType::Deathmatch;
@@ -97,7 +96,7 @@ namespace Spark::Net
         std::string logFilePath = "server.log";
 
         // LAN discovery
-        bool enableLanBroadcast = true;
+        bool enableLanBroadcast = false;
         uint16_t lanBroadcastPort = 27016; ///< UDP port for LAN discovery
 
         // Performance
@@ -312,8 +311,9 @@ namespace Spark::Net
         /// @param broadcastPort Port to listen for server broadcasts.
         /// @param timeoutMs How long to listen.
         /// @return List of discovered servers.
-        static std::vector<ServerBroadcastInfo> DiscoverLanServers(uint16_t broadcastPort = 27016,
-                                                                   int timeoutMs = 2000);
+        static std::vector<ServerBroadcastInfo> DiscoverLanServers(
+            uint16_t broadcastPort = 27016, int timeoutMs = 2000,
+            const NetworkEndpointPolicy& endpointPolicy = CaptureNetworkEndpointPolicy());
 
         // -- Configuration & Stats --
 

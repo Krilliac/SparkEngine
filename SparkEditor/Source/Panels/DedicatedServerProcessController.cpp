@@ -1,5 +1,7 @@
 #include "DedicatedServerProcessController.h"
 
+#include "Engine/Networking/NetworkBindPolicy.h"
+
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -39,6 +41,8 @@ namespace SparkEditor
             error = "Max clients must be non-zero";
         else if (!std::isfinite(request.tickRate) || request.tickRate < 1.0f || request.tickRate > 1000.0f)
             error = "Tick rate must be between 1 and 1000 Hz";
+        else if (const auto policy = Spark::Net::ResolveNetworkEndpointPolicy(request.bindAddress); !policy.IsValid())
+            error = "Bind address rejected: " + std::string(Spark::Net::NetworkEndpointPolicyErrorText(policy.Error()));
         else if (request.stopFile.empty())
             error = "A stop sentinel path is required for graceful shutdown";
         if (!error.empty())
@@ -58,7 +62,8 @@ namespace SparkEditor
         }
         arguments.insert(arguments.end(),
                          {"--port", std::to_string(request.port), "--max-clients", std::to_string(request.maxClients),
-                          "--tick-rate", Number(request.tickRate), "--stop-file", request.stopFile.string()});
+                          "--tick-rate", Number(request.tickRate), "--stop-file", request.stopFile.string(),
+                          "--bind-address", request.bindAddress});
         if (!request.serverName.empty())
             arguments.insert(arguments.end(), {"--name", request.serverName});
         if (!request.map.empty())
@@ -66,8 +71,6 @@ namespace SparkEditor
         if (!request.healthFile.empty())
             arguments.insert(arguments.end(),
                              {"--health-file", request.healthFile.string(), "--status-interval-ms", "250"});
-        if (request.lanOnly)
-            arguments.emplace_back("--lan-only");
         if (!request.lanBroadcast)
             arguments.emplace_back("--no-lan-broadcast");
         return arguments;

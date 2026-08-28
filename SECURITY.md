@@ -27,6 +27,8 @@ This ensures your report is private and only visible to the maintainers until a 
 
 ## Scope
 
+SparkEngine's first-party gameplay and discovery listeners default to loopback. A development LAN listener must name one concrete numeric RFC1918 interface; wildcard and public exposure requests are rejected. This is a containment boundary, not transport security: the active UDP protocol is unauthenticated and unencrypted, and the legacy XOR/FNV helpers must not protect credentials or hostile-network traffic. NET-100 remains release-blocking until maintained authenticated encryption and an independent security review land.
+
 The following are considered security vulnerabilities:
 
 - Memory safety bugs (buffer overflows, use-after-free, out-of-bounds access)

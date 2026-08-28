@@ -98,10 +98,10 @@ frame-budget limiter, collision avoidance.
 Skeletal animation, blend spaces, state machines, IK solvers (TwoBone, LookAt,
 FABRIK), ragdoll integration, compression, retargeting.
 
-### 8. Networking — Enterprise Grade
+### 8. Networking — Experimental Local Development
 
 UDP transport, reliable messaging, entity replication with delta snapshots, client
-prediction + server reconciliation, lag compensation, AES-256 encryption, instability
+prediction + server reconciliation, lag compensation, legacy XOR/FNV security prototypes, instability
 simulator, AreaServer/WorldServer architecture.
 
 ### 9. Game Module System — Working

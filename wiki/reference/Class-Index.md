@@ -1907,11 +1907,11 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `NetworkMessage` | struct | SparkEngine | [NetworkManager.h:L159](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L159) |  |
 | `NetworkMessage` | struct | SparkEngine | [PacketValidator.h:L27](../../SparkEngine/Source/Engine/Networking/PacketValidator.h#L27) |  |
 | `NetworkPlayerState` | struct | GameModules | [MultiplayerSystem.h:L101](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L101) |  |
-| `NetworkSecurity` | class | SparkEngine | [NetworkSecurity.h:L48](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L48) | Lightweight network security utilities. |
+| `NetworkSecurity` | class | SparkEngine | [NetworkSecurity.h:L47](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L47) | Legacy XOR/token prototypes; not a security boundary. |
 | `NetworkSettings` | struct | SparkEngine | [EngineSettings.h:L400](../../SparkEngine/Source/Core/EngineSettings.h#L400) |  |
 | `NetworkSimulationSettings` | struct | SparkEditor | [NetworkDebugPanel.h:L65](../../SparkEditor/Source/Panels/NetworkDebugPanel.h#L65) | Artificial network condition settings for testing |
 | `NetworkSnapshot` | struct | SparkEditor | [NetworkDebugPanel.h:L43](../../SparkEditor/Source/Panels/NetworkDebugPanel.h#L43) | A single network statistics snapshot |
-| `NetworkStack` | class | SparkEngine | [NetworkIntegration.h:L73](../../SparkEngine/Source/Engine/Networking/NetworkIntegration.h#L73) | Manages the complete network stack with transport and security. |
+| `NetworkStack` | class | SparkEngine | [NetworkIntegration.h:L74](../../SparkEngine/Source/Engine/Networking/NetworkIntegration.h#L74) | Transport plus optional legacy XOR-prototype helper. |
 | `NetworkStackConfig` | struct | SparkEngine | [NetworkIntegration.h:L48](../../SparkEngine/Source/Engine/Networking/NetworkIntegration.h#L48) | Configuration for the integrated network stack. |
 | `NetworkStats` | struct | SparkEngine | [NetworkManager.h:L349](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L349) |  |
 | `NeuralCompressedTexture` | struct | SparkEngine | [NeuralTextureCompressor.h:L58](../../SparkEngine/Source/Graphics/Neural/NeuralTextureCompressor.h#L58) | In-memory neural-compressed texture. |

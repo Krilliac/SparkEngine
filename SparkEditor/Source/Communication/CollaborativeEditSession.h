@@ -55,6 +55,7 @@
 #else
 #include "Core/Platform.h"
 #endif
+#include "Engine/Networking/NetworkBindPolicy.h"
 
 namespace SparkEditor
 {
@@ -411,6 +412,7 @@ namespace SparkEditor
 
         // Networking — TCP sockets and threads
         CollaborativeSocketHandle m_listenSocket = INVALID_COLLAB_SOCKET;
+        Spark::Net::NetworkEndpointPolicy m_endpointPolicy{};
         CollaborativeSocketHandle m_clientSocket = INVALID_COLLAB_SOCKET; ///< Client's connection to host
         std::unordered_map<PeerID, CollaborativeSocketHandle> m_peerSockets;
         mutable std::mutex m_socketMutex;

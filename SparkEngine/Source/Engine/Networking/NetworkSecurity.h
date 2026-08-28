@@ -1,14 +1,14 @@
 /**
  * @file NetworkSecurity.h
- * @brief Network security layer -- packet encryption and connection token auth
+ * @brief Legacy XOR obfuscation and token-lifecycle prototypes
  * @author Spark Engine Team
  * @date 2025
  *
- * Provides experimental security-shaped utilities for isolated prototypes:
- * - XOR-based packet encryption/decryption (placeholder for a future
- *   DTLS or AES-GCM implementation).
- * - Connection token generation and validation for callers that explicitly
- *   integrate it. NetworkManager admission does not currently use these tokens.
+ * The encryption-named API is retained for compatibility, but it only applies
+ * repeating-key XOR obfuscation and provides no confidentiality or integrity.
+ * The randomized token set is not wired into NetworkManager admission and does
+ * not authenticate a peer. Neither prototype may protect credentials or a
+ * remotely exposed production game.
  *
  * All networking code is guarded by ENABLE_NETWORKING.
  */
@@ -30,7 +30,7 @@
 namespace Spark::Net
 {
 
-    /// Size of encryption keys in bytes.
+    /// Size of the legacy XOR key material in bytes.
     static constexpr size_t SECURITY_KEY_SIZE = 32;
 
     /// Size of connection tokens in bytes.
@@ -39,12 +39,11 @@ namespace Spark::Net
     /// How long (in seconds) a connection token stays valid.
     static constexpr float CONNECTION_TOKEN_LIFETIME = 30.0f;
 
-    /// @brief Lightweight network security utilities.
+    /// @brief Isolated obfuscation and token-lifecycle prototypes.
     ///
-    /// Encrypts / decrypts packets with XOR (a simple starting point --
-    /// production games should replace this with DTLS or AES-GCM).
-    /// Also manages short-lived tokens for explicitly integrated prototypes;
-    /// these do not authenticate the active NetworkManager UDP connection.
+    /// Legacy method names say encrypt/decrypt, but the byte transform is XOR
+    /// and is not encryption. Tokens only prove equality with an in-process
+    /// pending value and do not authenticate the active UDP connection.
     class NetworkSecurity
     {
       public:
@@ -60,13 +59,13 @@ namespace Spark::Net
         NetworkSecurity& operator=(const NetworkSecurity&) = delete;
 
         // -----------------------------------------------------------------
-        // Encryption / Decryption
+        // Legacy XOR transformation (API names retained for compatibility)
         // -----------------------------------------------------------------
 
-        /// @brief Encrypt data in-place using XOR with the current key.
-        /// @param data  Pointer to the buffer to encrypt.
+        /// @brief Apply repeating-key XOR obfuscation in-place; not encryption.
+        /// @param data  Pointer to the buffer to transform.
         /// @param size  Number of bytes.
-        /// @param key   Encryption key.
+        /// @param key   Prototype XOR key material.
         static void PacketEncrypt(uint8_t* data, size_t size, const Key& key)
         {
             if (data == nullptr || size == 0)
@@ -77,17 +76,17 @@ namespace Spark::Net
             }
         }
 
-        /// @brief Decrypt data in-place using XOR with the current key.
-        /// @param data  Pointer to the buffer to decrypt.
+        /// @brief Reverse the XOR transform; not authenticated decryption.
+        /// @param data  Pointer to the buffer to transform.
         /// @param size  Number of bytes.
-        /// @param key   Decryption key (same as encryption key for XOR).
+        /// @param key   Prototype XOR key material.
         static void PacketDecrypt(uint8_t* data, size_t size, const Key& key)
         {
-            // XOR encryption is symmetric -- decrypt is the same operation.
+            // XOR is symmetric -- reversing the transform is the same operation.
             PacketEncrypt(data, size, key);
         }
 
-        /// @brief Encrypt a byte vector and return the result.
+        /// @brief Return an XOR-obfuscated copy; legacy encryption-named API.
         static std::vector<uint8_t> Encrypt(const std::vector<uint8_t>& plaintext, const Key& key)
         {
             std::vector<uint8_t> ciphertext = plaintext;
@@ -95,7 +94,7 @@ namespace Spark::Net
             return ciphertext;
         }
 
-        /// @brief Decrypt a byte vector and return the result.
+        /// @brief Reverse XOR obfuscation; legacy decryption-named API.
         static std::vector<uint8_t> Decrypt(const std::vector<uint8_t>& ciphertext, const Key& key)
         {
             std::vector<uint8_t> plaintext = ciphertext;
@@ -104,10 +103,10 @@ namespace Spark::Net
         }
 
         // -----------------------------------------------------------------
-        // Connection Token Authentication
+        // Prototype token lifecycle (not connection authentication)
         // -----------------------------------------------------------------
 
-        /// @brief Generate a new connection token and store it with a timestamp.
+        /// @brief Generate randomized prototype bytes and store them with a timestamp.
         /// @return The generated token.
         Token GenerateConnectionToken()
         {
@@ -126,9 +125,9 @@ namespace Spark::Net
             return token;
         }
 
-        /// @brief Validate a connection token against the pending set.
+        /// @brief Match and consume token bytes from this instance's pending set.
         /// @param token  The token to validate.
-        /// @return true if the token is valid and has not expired.
+        /// @return true if the bytes are present and have not expired.
         ///         The token is consumed (removed) on success.
         bool ValidateConnectionToken(const Token& token)
         {
@@ -157,20 +156,20 @@ namespace Spark::Net
         // Key management helpers
         // -----------------------------------------------------------------
 
-        /// @brief Get the current encryption key.
+        /// @brief Get the current prototype XOR key material.
         const Key& GetEncryptionKey() const { return m_encryptionKey; }
 
-        /// @brief Set the encryption key (e.g. received from server during handshake).
+        /// @brief Set the prototype XOR key material.
         void SetEncryptionKey(const Key& key) { m_encryptionKey = key; }
 
-        /// @brief Generate a cryptographically-random key.
+        /// @brief Generate non-cryptographic prototype key material.
         static void GenerateKey(Key& outKey) { FillRandom(outKey.data(), SECURITY_KEY_SIZE); }
 
-        /// @brief Check whether encryption is enabled.
-        bool IsEncryptionEnabled() const { return m_encryptionEnabled; }
+        /// @brief Read the legacy toggle for prototype XOR obfuscation.
+        bool IsEncryptionEnabled() const { return m_obfuscationEnabled; }
 
-        /// @brief Enable or disable encryption on the send/receive path.
-        void SetEncryptionEnabled(bool enabled) { m_encryptionEnabled = enabled; }
+        /// @brief Enable or disable prototype XOR obfuscation in legacy callers.
+        void SetEncryptionEnabled(bool enabled) { m_obfuscationEnabled = enabled; }
 
       private:
         // -----------------------------------------------------------------
@@ -225,7 +224,7 @@ namespace Spark::Net
         }
 
         Key m_encryptionKey{};
-        bool m_encryptionEnabled = false;
+        bool m_obfuscationEnabled = false;
         std::unordered_map<std::string, TokenEntry> m_pendingTokens;
     };
 

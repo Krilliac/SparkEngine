@@ -10,9 +10,9 @@
  *
  * BEACON (server side): while ctx.role is ListenHost or DedicatedServer (i.e.
  * tf_host / tf_dedicated ran) and the `tf_lan_advertise` cvar is true, a raw
- * non-blocking UDP socket broadcasts one TF_LanBeacon every 2 s to
- * 255.255.255.255 AND to every up, broadcast-capable interface's directed
- * subnet broadcast, from an ephemeral source port to destination port 27025.
+ * non-blocking UDP socket emits one TF_LanBeacon every 2 s. Loopback policy
+ * uses local unicast; an explicit numeric RFC1918 policy binds one interface
+ * and uses only that interface's directed subnet broadcast.
  * The beacon carries ONLY public info: name (`tf_server_name` cvar), player
  * count / max, map name, advertised game port (`tf_lan_port` cvar, default
  * 27020 — set it if the server was hosted on a non-default port).
@@ -37,6 +37,7 @@
 
 #include "Core/TFTypes.h"
 #include "Core/TFEvents.h"
+#include "Engine/Networking/NetworkBindPolicy.h"
 
 #include <cstdint>
 #include <string>
@@ -128,7 +129,8 @@ namespace Terrafront
         TFGameContext* m_ctx{nullptr};
         bool m_initialized{false};
         bool m_wsaStarted{false}; // Windows: WSAStartup succeeded (paired WSACleanup in Shutdown)
-        double m_clock{0.0};      // monotonic feature clock (drives TTL expiry)
+        Spark::Net::NetworkEndpointPolicy m_endpointPolicy{}; // Captured once during Initialize.
+        double m_clock{0.0};                                  // monotonic feature clock (drives TTL expiry)
 
         // Sockets stored type-erased so this header never includes WinSock;
         // -1 == invalid on both platforms (INVALID_SOCKET is ~0 == -1 as intptr).
@@ -139,7 +141,7 @@ namespace Terrafront
         float m_beaconTimer{0.0f};
         float m_targetRefreshTimer{0.0f};
         bool m_beaconFailed{false};           // latched off after one logged failure
-        std::vector<uint32_t> m_bcastTargets; // network-order IPv4 broadcast dests
+        std::vector<uint32_t> m_bcastTargets; // network-order policy-scoped discovery destinations
 
         // scanner state
         bool m_scanFailed{false}; // latched off after one logged failure

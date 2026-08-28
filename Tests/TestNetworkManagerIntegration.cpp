@@ -196,9 +196,13 @@ namespace
         {
             if (const char* previous = std::getenv("SPARK_NETWORK_BIND_MODE"))
                 m_previous = previous;
+            if (const char* previousAddress = std::getenv("SPARK_NETWORK_BIND_ADDRESS"))
+                m_previousAddress = previousAddress;
 #ifdef SPARK_PLATFORM_WINDOWS
+            _putenv_s("SPARK_NETWORK_BIND_ADDRESS", "");
             _putenv_s("SPARK_NETWORK_BIND_MODE", value);
 #else
+            unsetenv("SPARK_NETWORK_BIND_ADDRESS");
             setenv("SPARK_NETWORK_BIND_MODE", value, 1);
 #endif
         }
@@ -207,16 +211,22 @@ namespace
         {
 #ifdef SPARK_PLATFORM_WINDOWS
             _putenv_s("SPARK_NETWORK_BIND_MODE", m_previous ? m_previous->c_str() : "");
+            _putenv_s("SPARK_NETWORK_BIND_ADDRESS", m_previousAddress ? m_previousAddress->c_str() : "");
 #else
             if (m_previous)
                 setenv("SPARK_NETWORK_BIND_MODE", m_previous->c_str(), 1);
             else
                 unsetenv("SPARK_NETWORK_BIND_MODE");
+            if (m_previousAddress)
+                setenv("SPARK_NETWORK_BIND_ADDRESS", m_previousAddress->c_str(), 1);
+            else
+                unsetenv("SPARK_NETWORK_BIND_ADDRESS");
 #endif
         }
 
       private:
         std::optional<std::string> m_previous;
+        std::optional<std::string> m_previousAddress;
     };
 
     bool BindLoopbackEphemeral(SOCKET socket)
@@ -225,15 +235,6 @@ namespace
         localAddr.sin_family = AF_INET;
         localAddr.sin_port = 0;
         localAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        return bind(socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) == 0;
-    }
-
-    bool BindAnyEphemeral(SOCKET socket)
-    {
-        sockaddr_in localAddr{};
-        localAddr.sin_family = AF_INET;
-        localAddr.sin_port = 0;
-        localAddr.sin_addr.s_addr = htonl(INADDR_ANY);
         return bind(socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) == 0;
     }
 
@@ -322,7 +323,7 @@ TEST(NetworkManager_GeneratedClientIdsWrapBeforeReservedSentinels)
     auto& nm = NetworkManager::GetInstance();
     nm.Shutdown();
     ASSERT_TRUE(nm.Initialize());
-    ASSERT_TRUE(nm.StartServer(0, 2, NetworkBindScope::LoopbackOnly));
+    ASSERT_TRUE(nm.StartServer(0, 2, NetworkEndpointPolicy::Loopback()));
     NetworkManagerClientIdTestAccess::SeedNextClientID(nm, LAST_GENERATED_CLIENT_ID);
 
     sockaddr_in serverAddress{};
@@ -932,7 +933,7 @@ TEST(NetworkManager_PolicyKickDropsGameplayQueuedBehindConnectInSameReceivePump)
     auto& nm = NetworkManager::GetInstance();
     nm.Shutdown();
     ASSERT_TRUE(nm.Initialize());
-    ASSERT_TRUE(nm.StartServer(0, 1, NetworkBindScope::LoopbackOnly));
+    ASSERT_TRUE(nm.StartServer(0, 1, NetworkEndpointPolicy::Loopback()));
 
     int connectCallbacks = 0;
     int gameplayCallbacks = 0;
@@ -997,7 +998,7 @@ TEST(NetworkManager_ConcurrentLoopbackQueriesExerciseAdmittedAddressMapDuringSto
     auto& nm = NetworkManager::GetInstance();
     nm.Shutdown();
     ASSERT_TRUE(nm.Initialize());
-    ASSERT_TRUE(nm.StartServer(0, 1, NetworkBindScope::LoopbackOnly));
+    ASSERT_TRUE(nm.StartServer(0, 1, NetworkEndpointPolicy::Loopback()));
 
     SOCKET client = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     ASSERT_TRUE(client != INVALID_SOCKET);
@@ -1054,7 +1055,7 @@ TEST(NetworkManager_BoundPortRejectsReuseAttacker)
     auto& nm = NetworkManager::GetInstance();
     nm.Shutdown();
     ASSERT_TRUE(nm.Initialize());
-    ASSERT_TRUE(nm.StartServer(0, 4, NetworkBindScope::LoopbackOnly));
+    ASSERT_TRUE(nm.StartServer(0, 4, NetworkEndpointPolicy::Loopback()));
     const uint16_t boundPort = nm.GetBoundPort();
     ASSERT_TRUE(boundPort != 0);
 
@@ -1074,34 +1075,20 @@ TEST(NetworkManager_BoundPortRejectsReuseAttacker)
     nm.Shutdown();
 }
 
-TEST(NetworkManager_LocalOnlyReliableMessageNeverReachesRemoteTransport)
+TEST(NetworkManager_RejectsLegacyWildcardAndDisallowedClientDestinationsBeforeStartup)
 {
     const ScopedNetworkBindMode bindMode("all");
     auto& nm = NetworkManager::GetInstance();
     nm.Shutdown();
-    ASSERT_TRUE(nm.Initialize());
+    EXPECT_FALSE(nm.Connect("192.0.2.1", 9, "RejectedWildcard"));
+    EXPECT_FALSE(nm.IsInitialized());
+    EXPECT_EQ(NetworkManagerClientIdTestAccess::PendingOutgoingMessages(nm), static_cast<size_t>(0));
 
-    // TEST-NET-1 is numeric and non-loopback, so this boundary check does not
-    // depend on hostname resolution or a configured external IPv4 interface.
-    ASSERT_TRUE(nm.Connect("192.0.2.1", 9, "LocalOnlyBoundary"));
-    const size_t queuedBefore = NetworkManagerClientIdTestAccess::PendingOutgoingMessages(nm);
-    const auto droppedBefore = nm.GetStats().packetsDropped;
-    ASSERT_EQ(queuedBefore, static_cast<size_t>(1)); // The ordinary Connect is eligible for remote transport.
-
-    NetworkMessage credential;
-    credential.type = MessageType::UserDefined;
-    credential.channel = ChannelType::Reliable;
-    credential.payload = {'s', 'e', 'c', 'r', 'e', 't'};
-    credential.sensitive = true;
-    credential.localOnly = true;
-
-    nm.SendMessage(credential);
-    EXPECT_EQ(NetworkManagerClientIdTestAccess::PendingOutgoingMessages(nm), queuedBefore);
-    EXPECT_EQ(NetworkManagerClientIdTestAccess::PendingClientSensitiveReliableMessages(nm), static_cast<size_t>(0));
-    EXPECT_EQ(nm.GetStats().packetsDropped, droppedBefore + 1);
-
-    credential.ClearSensitivePayload();
-    nm.Disconnect();
+    const NetworkEndpointPolicy privatePolicy = ResolveNetworkEndpointPolicy("192.168.50.10");
+    ASSERT_TRUE(privatePolicy.IsValid());
+    EXPECT_FALSE(nm.Connect("192.0.2.1", 9, "RejectedTestNet", privatePolicy));
+    EXPECT_FALSE(nm.IsInitialized());
+    EXPECT_EQ(NetworkManagerClientIdTestAccess::PendingOutgoingMessages(nm), static_cast<size_t>(0));
     nm.Shutdown();
 }
 

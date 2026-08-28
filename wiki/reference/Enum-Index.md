@@ -412,8 +412,9 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `MSAALevel` | enum | SparkEngine | [GraphicsEngineTypes.h:L72](../../SparkEngine/Source/Graphics/GraphicsEngineTypes.h#L72) | Multi-sampling anti-aliasing settings |
 | `NavLinkTraversalType` | enum | SparkEngine | [NavMeshLink.h:L31](../../SparkEngine/Source/Engine/AI/NavMeshLink.h#L31) | Traversal type for an off-mesh link. |
 | `NetRole` | enum | GameModules | [TFTypes.h:L91](../../GameModules/SparkGameMMOFPS/Source/Core/TFTypes.h#L91) |  |
-| `NetworkBindScope` | enum | SparkEngine | [NetworkBindPolicy.h:L16](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h#L16) | Immutable interface scope selected before a socket is created. |
+| `NetworkEndpointPolicyError` | enum | SparkEngine | [NetworkBindPolicy.h:L26](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h#L26) | Why an endpoint policy request was rejected. |
 | `NetworkHealthState` | enum | SparkEngine | [NetworkHealthMonitor.h:L40](../../SparkEngine/Source/Utils/NetworkHealthMonitor.h#L40) | Network connection health classification |
+| `NetworkPeerScope` | enum | SparkEngine | [NetworkBindPolicy.h:L19](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h#L19) | Loopback-only or concrete RFC1918 peer scope. |
 | `NetworkRole` | enum | SparkEngine | [NetworkManager.h:L100](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L100) |  |
 | `NodeStatus` | enum | SparkEngine | [BehaviorTreeTypes.h:L48](../../SparkEngine/Source/Engine/AI/BehaviorTreeTypes.h#L48) | Result returned by a behavior tree node after each tick. |
 | `NodeType` | enum | SparkEditor | [DialogueEditorPanel.h:L35](../../SparkEditor/Source/Panels/DialogueEditorPanel.h#L35) |  |

@@ -16,11 +16,11 @@
  *   +--- SteamTransport (Steamworks P2P)
  * ```
  *
- * ## Security layer
+ * ## Prototype transform layer (not security)
  * ```
- *   Outgoing: Serialize -> Encrypt (XOR) -> Send
- *   Incoming: Receive -> Decrypt (XOR) -> Deserialize
- *   Connection: Token-based with expiry validation
+ *   Outgoing: Serialize -> optional XOR obfuscation -> Send
+ *   Incoming: Receive -> reverse XOR obfuscation -> Deserialize
+ *   Token: in-process expiry/equality helper, not peer authentication
  * ```
  *
  * @see NetworkManager.h, ITransport.h, NetworkSecurity.h
@@ -60,15 +60,16 @@ namespace Spark::Net
         std::string serverAddress = "127.0.0.1";
         uint16_t serverPort = 27015;
 
-        /// Enable encryption
-        bool enableEncryption = true;
+        /// Legacy name: enable isolated XOR obfuscation prototype (not encryption).
+        bool enableEncryption = false;
     };
 
     /**
-     * @brief Manages the complete network stack with transport and security.
+     * @brief Composes a transport with optional prototype obfuscation helpers.
      *
      * Provides a unified interface for creating transport instances,
-     * applying security layers, and integrating with the NetworkManager.
+     * applying the legacy transform, and integrating with NetworkManager. This
+     * class does not provide confidentiality, integrity, or peer authentication.
      */
     class NetworkStack
     {
@@ -115,7 +116,7 @@ namespace Spark::Net
                 return false;
             }
 
-            // Initialize security layer (NetworkSecurity auto-generates its own key)
+            // Opt into isolated XOR/token prototypes (not a security layer).
             if (config.enableEncryption)
             {
                 m_security = std::make_unique<NetworkSecurity>();
@@ -144,7 +145,7 @@ namespace Spark::Net
         }
 
         /**
-         * @brief Generate a connection token.
+         * @brief Generate prototype token bytes; this does not authenticate a connection.
          */
         NetworkSecurity::Token GenerateConnectionToken()
         {
@@ -156,7 +157,7 @@ namespace Spark::Net
         }
 
         /**
-         * @brief Validate a connection token.
+         * @brief Match prototype token bytes against this instance's pending set.
          */
         bool ValidateToken(const NetworkSecurity::Token& token)
         {
@@ -168,7 +169,7 @@ namespace Spark::Net
         }
 
         /**
-         * @brief Encrypt data before sending.
+         * @brief Apply optional XOR obfuscation; legacy encryption-named API.
          */
         std::vector<uint8_t> Encrypt(const std::vector<uint8_t>& data) const
         {
@@ -180,7 +181,7 @@ namespace Spark::Net
         }
 
         /**
-         * @brief Decrypt received data.
+         * @brief Reverse optional XOR obfuscation; not authenticated decryption.
          */
         std::vector<uint8_t> Decrypt(const std::vector<uint8_t>& data) const
         {
@@ -218,7 +219,7 @@ namespace Spark::Net
             }
             ss << "\n";
             ss << "  Ready:          " << ((m_transport && m_transport->IsReady()) ? "YES" : "NO") << "\n";
-            ss << "  Encryption:     " << (m_security ? "ENABLED" : "DISABLED") << "\n";
+            ss << "  XOR prototype:  " << (m_security ? "ENABLED (NOT SECURE)" : "DISABLED") << "\n";
             ss << "  Server:         " << m_config.serverAddress << ":" << m_config.serverPort << "\n";
             return ss.str();
         }

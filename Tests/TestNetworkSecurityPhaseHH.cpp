@@ -3,9 +3,9 @@
  * @brief Phase HH Theme 3D tests for Spark::Net::NetworkSecurity
  *
  * NetworkSecurity is a per-instance class (not a singleton) that
- * provides XOR packet encryption + connection-token authentication.
- * Phase HH locks down the public contract so any future caller can
- * trust the class's behaviour.
+ * provides an isolated XOR transform plus an in-process token lifecycle.
+ * Neither prototype provides encryption or connection authentication; these
+ * tests only pin their legacy API behavior.
  */
 
 #include "TestFramework.h"
@@ -26,23 +26,22 @@ TEST(NetworkSecurityPhaseHH_DefaultConstructsWithKey)
     EXPECT_TRUE(anyNonZero);
 }
 
-TEST(NetworkSecurityPhaseHH_EncryptDecryptRoundTrip)
+TEST(NetworkSecurityPhaseHH_XorTransformRoundTrip)
 {
     Spark::Net::NetworkSecurity sec;
     const auto& key = sec.GetEncryptionKey();
 
     std::vector<uint8_t> plaintext = {0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04};
-    auto encrypted = Spark::Net::NetworkSecurity::Encrypt(plaintext, key);
-    EXPECT_EQ(encrypted.size(), plaintext.size());
-    // Encryption must change the bytes.
-    EXPECT_TRUE(std::memcmp(encrypted.data(), plaintext.data(), plaintext.size()) != 0);
+    auto obfuscated = Spark::Net::NetworkSecurity::Encrypt(plaintext, key);
+    EXPECT_EQ(obfuscated.size(), plaintext.size());
+    EXPECT_TRUE(std::memcmp(obfuscated.data(), plaintext.data(), plaintext.size()) != 0);
 
-    auto decrypted = Spark::Net::NetworkSecurity::Decrypt(encrypted, key);
-    EXPECT_EQ(decrypted.size(), plaintext.size());
-    EXPECT_EQ(std::memcmp(decrypted.data(), plaintext.data(), plaintext.size()), 0);
+    auto restored = Spark::Net::NetworkSecurity::Decrypt(obfuscated, key);
+    EXPECT_EQ(restored.size(), plaintext.size());
+    EXPECT_EQ(std::memcmp(restored.data(), plaintext.data(), plaintext.size()), 0);
 }
 
-TEST(NetworkSecurityPhaseHH_InPlaceEncryptDecrypt)
+TEST(NetworkSecurityPhaseHH_InPlaceXorTransform)
 {
     Spark::Net::NetworkSecurity::Key key{};
     Spark::Net::NetworkSecurity::GenerateKey(key);
@@ -60,7 +59,7 @@ TEST(NetworkSecurityPhaseHH_InPlaceEncryptDecrypt)
     EXPECT_EQ(std::memcmp(data, original, 16), 0);
 }
 
-TEST(NetworkSecurityPhaseHH_EncryptEmptyDataIsSafe)
+TEST(NetworkSecurityPhaseHH_XorEmptyDataIsSafe)
 {
     Spark::Net::NetworkSecurity::Key key{};
     Spark::Net::NetworkSecurity::GenerateKey(key);

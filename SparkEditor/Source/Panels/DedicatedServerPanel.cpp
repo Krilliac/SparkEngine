@@ -289,10 +289,13 @@ namespace SparkEditor
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Server simulation rate.\n60 Hz = standard\n128 Hz = competitive");
 
-        // LAN only
-        ImGui::Checkbox("LAN Only", &m_pieConfig.lanOnly);
+        char bindAddress[64]{};
+        std::strncpy(bindAddress, m_pieConfig.bindAddress.c_str(), sizeof(bindAddress) - 1);
+        if (ImGui::InputText("Bind Address", bindAddress, sizeof(bindAddress)))
+            m_pieConfig.bindAddress = bindAddress;
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Restrict connections to local network only");
+            ImGui::SetTooltip("Use 'loopback' for this machine, or one concrete numeric RFC1918 interface address.\n"
+                              "Wildcard/public addresses are rejected. Transport is not authenticated or encrypted.");
 
         ImGui::Spacing();
         ImGui::Text(ICON_FA_GAMEPAD " Game Settings");
@@ -959,8 +962,8 @@ namespace SparkEditor
         request.port = m_pieConfig.port;
         request.maxClients = static_cast<uint32_t>(m_pieConfig.maxPlayers);
         request.tickRate = m_pieConfig.tickRate;
-        request.lanOnly = m_pieConfig.lanOnly;
-        request.lanBroadcast = m_pieConfig.lanOnly;
+        request.bindAddress = m_pieConfig.bindAddress;
+        request.lanBroadcast = false;
         m_pieServerRunning = m_serverProcess->Launch(request);
         for (auto& line : m_serverProcess->DrainLogLines())
             m_pieServerLog.push_back(std::move(line));

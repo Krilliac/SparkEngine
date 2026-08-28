@@ -335,10 +335,10 @@ namespace Spark::Net
 
     bool NetworkManager::StartServer(uint16_t port, int maxClients)
     {
-        return StartServer(port, maxClients, CaptureNetworkBindScope());
+        return StartServer(port, maxClients, CaptureNetworkEndpointPolicy());
     }
 
-    bool NetworkManager::StartServer(uint16_t port, int maxClients, NetworkBindScope bindScope)
+    bool NetworkManager::StartServer(uint16_t port, int maxClients, const NetworkEndpointPolicy& endpointPolicy)
     {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
@@ -346,7 +346,14 @@ namespace Spark::Net
         // conflict-free choice for parallel tests/tools.
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, maxClients > 0 && maxClients <= 256,
                           "maxClients must be in [1, 256]");
-        SPARK_LOG_INFO(Spark::LogCategory::Network, "Starting server on port %u (maxClients=%d)", port, maxClients);
+        if (!endpointPolicy.IsValid())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing server startup: %s",
+                            NetworkEndpointPolicyErrorText(endpointPolicy.Error()).data());
+            return false;
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Starting server on %s:%u (maxClients=%d)",
+                       FormatIPv4Address(endpointPolicy.BindAddress()).c_str(), port, maxClients);
         if (!m_initialized)
         {
             if (!Initialize())
@@ -354,7 +361,7 @@ namespace Spark::Net
         }
 
 #ifdef ENABLE_NETWORKING
-        if (!CreateSocket(port, bindScope))
+        if (!CreateSocket(port, endpointPolicy))
             return false;
 #endif // ENABLE_NETWORKING
 
@@ -469,16 +476,27 @@ namespace Spark::Net
 
     bool NetworkManager::Connect(const std::string& address, uint16_t port, const std::string& playerName)
     {
+        return Connect(address, port, playerName, CaptureNetworkEndpointPolicy());
+    }
+
+    bool NetworkManager::Connect(const std::string& address, uint16_t port, const std::string& playerName,
+                                 const NetworkEndpointPolicy& endpointPolicy)
+    {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, !address.empty(), "address must not be empty");
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, port > 0, "port must be greater than 0");
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, !playerName.empty(), "playerName must not be empty");
-        const NetworkBindScope bindScope = CaptureNetworkBindScope();
-        if (bindScope == NetworkBindScope::LoopbackOnly && !IsIPv4LoopbackAddress(address))
+        if (!endpointPolicy.IsValid())
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Network,
-                            "Refusing non-loopback destination %s while SPARK_NETWORK_BIND_MODE is loopback-safe",
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing client startup: %s",
+                            NetworkEndpointPolicyErrorText(endpointPolicy.Error()).data());
+            return false;
+        }
+        uint32_t serverAddress = 0;
+        if (!ParseIPv4Address(address, serverAddress) || !endpointPolicy.AllowsPeerAddress(serverAddress))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing destination %s outside the captured endpoint policy",
                             address.c_str());
             return false;
         }
@@ -497,19 +515,14 @@ namespace Spark::Net
 
 #ifdef ENABLE_NETWORKING
         // Create a client socket on an ephemeral port (0)
-        if (!CreateSocket(0, bindScope))
+        if (!CreateSocket(0, endpointPolicy))
             return false;
 
         // Resolve the server address
         std::memset(&m_serverAddress, 0, sizeof(m_serverAddress));
         m_serverAddress.sin_family = AF_INET;
         m_serverAddress.sin_port = htons(port);
-
-        if (inet_pton(AF_INET, address.c_str(), &m_serverAddress.sin_addr) != 1)
-        {
-            CloseSocket();
-            return false;
-        }
+        m_serverAddress.sin_addr.s_addr = htonl(serverAddress);
 #endif // ENABLE_NETWORKING
 
         {
@@ -607,6 +620,14 @@ namespace Spark::Net
         }
 
 #ifdef ENABLE_NETWORKING
+        if (GetRole() == NetworkRole::Client && !IsEndpointAllowed(m_serverAddress))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Rejecting network message before queueing for a disallowed server endpoint");
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.packetsDropped++;
+            return;
+        }
         if (msg.localOnly && GetRole() == NetworkRole::Client && !IsLoopbackEndpoint(m_serverAddress))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network,
@@ -678,6 +699,13 @@ namespace Spark::Net
         auto addrIt = m_clientAddresses.find(client);
         if (addrIt == m_clientAddresses.end())
             return;
+        if (!IsEndpointAllowed(addrIt->second))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Rejecting network message for a disallowed client endpoint");
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.packetsDropped++;
+            return;
+        }
         if (copy.localOnly && !IsLoopbackEndpoint(addrIt->second))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network,
@@ -1069,6 +1097,14 @@ namespace Spark::Net
             const auto clearRawData = Spark::MakeScopeExit([&rawData] { Spark::SecureClear(rawData); });
 
             const NetworkRole role = GetRole();
+            if (!IsEndpointAllowed(senderAddr))
+            {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Network,
+                                "Dropping packet from an endpoint outside the captured policy before parsing");
+                m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
+                m_stats.packetsDropped++;
+                continue;
+            }
             if (role == NetworkRole::Client && !IsSameEndpoint(senderAddr, m_serverAddress))
             {
                 SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Dropping packet from unexpected server endpoint");
@@ -1097,22 +1133,23 @@ namespace Spark::Net
             // allows malicious packets to reach game logic unvalidated
             SPARK_BRANCH_GUARD_BEGIN("network_packet_gateway")
             {
-                // NEVER derive auth from the wire-supplied senderID: the sender fully
+                // NEVER derive admission from the wire-supplied senderID: the sender fully
                 // controls that field on packets it transmits, so trusting it lets a
                 // client stamp any non-zero value and bypass every requiresAuth schema
                 // server-side. It also collides with SendToClient's senderID=0 stamp
                 // (0 == INVALID_CLIENT) for server-sent messages, which made every
-                // server->client message read as unauthenticated on the client and
-                // silently dropped all requiresAuth replication traffic. Authenticate
-                // from OUR OWN trusted state instead: the address->client table on the
-                // server, live connection state on the client.
-                bool isAuthenticated;
+                // server->client message read as unadmitted on the client and
+                // silently dropped all requiresAuth replication traffic. Derive this
+                // legacy schema-admission flag from OUR OWN connection state instead:
+                // the address->client table on the server, live connection state on the
+                // client. This is not cryptographic peer authentication.
+                bool isAdmitted;
                 if (role == NetworkRole::Server)
-                    isAuthenticated = (trustedSender != INVALID_CLIENT);
+                    isAdmitted = (trustedSender != INVALID_CLIENT);
                 else
-                    isAuthenticated = (GetConnectionState() == ConnectionState::Connected);
+                    isAdmitted = (GetConnectionState() == ConnectionState::Connected);
                 bool isFromClient = (role == NetworkRole::Server);
-                auto validation = m_packetValidator.ValidatePacket(msg, isAuthenticated, isFromClient);
+                auto validation = m_packetValidator.ValidatePacket(msg, isAdmitted, isFromClient);
                 if (!validation.valid)
                 {
                     SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Packet rejected: %s", validation.reason.c_str());
@@ -1433,7 +1470,7 @@ namespace Spark::Net
                     m_stats.packetsDropped++;
                     continue;
                 }
-                if (retransmitMsg.localOnly && !IsLoopbackEndpoint(*destination))
+                if (!IsEndpointAllowed(*destination) || (retransmitMsg.localOnly && !IsLoopbackEndpoint(*destination)))
                 {
                     peer.unacknowledgedMessages.erase(it);
                     peer.reliableOriginalSendTime.erase(seq);

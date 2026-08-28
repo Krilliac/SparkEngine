@@ -1,6 +1,6 @@
 /**
  * @file NetworkEncryption.cpp
- * @brief Network encryption, token validation, rate limiting, and replay protection
+ * @brief Legacy XOR/FNV packet prototype plus independent traffic-control helpers
  */
 
 #include "NetworkEncryption.h"
@@ -31,7 +31,7 @@ namespace Spark::Net
         std::uniform_int_distribution<unsigned int> dist(0, 255);
         for (auto& byte : key)
             byte = static_cast<uint8_t>(dist(rng));
-        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Generated new session key (%zu bytes)", key.size());
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Generated XOR prototype state (%zu bytes)", key.size());
         return key;
     }
 
@@ -42,12 +42,12 @@ namespace Spark::Net
         std::uniform_int_distribution<unsigned int> dist(0, 255);
         for (auto& byte : token)
             byte = static_cast<uint8_t>(dist(rng));
-        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Generated new connection token (%zu bytes)", token.size());
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Generated prototype token bytes (%zu bytes)", token.size());
         return token;
     }
 
     // ============================================================================
-    // Key stream generation (XOR cipher with key + nonce mixing)
+    // Deterministic XOR byte-stream generation (not a cipher)
     // ============================================================================
 
     static void GenerateKeyStream(const SessionKey& key, uint64_t nonce, uint8_t* stream, size_t length)
@@ -76,10 +76,10 @@ namespace Spark::Net
     }
 
     // ============================================================================
-    // Truncated HMAC (integrity tag)
+    // Forgeable keyed FNV tag (legacy code called this HMAC)
     // ============================================================================
 
-    static uint32_t ComputeHMAC(const SessionKey& key, const uint8_t* data, size_t length)
+    static uint32_t ComputePrototypeTag(const SessionKey& key, const uint8_t* data, size_t length)
     {
         // Simple keyed hash: FNV-1a with key mixing
         uint32_t hash = 0x811C9DC5u; // FNV offset basis
@@ -102,13 +102,13 @@ namespace Spark::Net
     }
 
     // ============================================================================
-    // Encrypt / Decrypt
+    // Legacy transform / reverse transform
     // ============================================================================
 
     std::vector<uint8_t> EncryptPacket(const SessionKey& key, uint64_t sequence, const std::vector<uint8_t>& payload)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
-        // Output: [nonce 8B] [encrypted payload] [hmac 4B]
+        // Output: [sequence 8B] [XOR-obfuscated payload] [prototype tag 4B]
         std::vector<uint8_t> packet;
         packet.reserve(NONCE_SIZE + payload.size() + HMAC_SIZE);
 
@@ -116,17 +116,17 @@ namespace Spark::Net
         for (size_t i = 0; i < NONCE_SIZE; ++i)
             packet.push_back(static_cast<uint8_t>((sequence >> (i * 8)) & 0xFF));
 
-        // Generate key stream and XOR encrypt
+        // Generate a deterministic byte stream and apply XOR.
         std::vector<uint8_t> keyStream(payload.size());
         GenerateKeyStream(key, sequence, keyStream.data(), payload.size());
 
         for (size_t i = 0; i < payload.size(); ++i)
             packet.push_back(payload[i] ^ keyStream[i]);
 
-        // Compute HMAC over nonce + ciphertext
-        uint32_t hmac = ComputeHMAC(key, packet.data(), packet.size());
+        // Compute the forgeable prototype tag over sequence + transformed bytes.
+        uint32_t prototypeTag = ComputePrototypeTag(key, packet.data(), packet.size());
         for (size_t i = 0; i < HMAC_SIZE; ++i)
-            packet.push_back(static_cast<uint8_t>((hmac >> (i * 8)) & 0xFF));
+            packet.push_back(static_cast<uint8_t>((prototypeTag >> (i * 8)) & 0xFF));
 
         return packet;
     }
@@ -140,16 +140,16 @@ namespace Spark::Net
 
         size_t payloadSize = packet.size() - ENCRYPTION_OVERHEAD;
 
-        // Extract and verify HMAC
-        size_t hmacOffset = packet.size() - HMAC_SIZE;
-        uint32_t receivedHMAC = 0;
+        // Extract and compare the prototype tag. This is not authentication.
+        size_t tagOffset = packet.size() - HMAC_SIZE;
+        uint32_t receivedTag = 0;
         for (size_t i = 0; i < HMAC_SIZE; ++i)
-            receivedHMAC |= static_cast<uint32_t>(packet[hmacOffset + i]) << (i * 8);
+            receivedTag |= static_cast<uint32_t>(packet[tagOffset + i]) << (i * 8);
 
-        uint32_t computedHMAC = ComputeHMAC(key, packet.data(), hmacOffset);
-        if (receivedHMAC != computedHMAC)
+        uint32_t computedTag = ComputePrototypeTag(key, packet.data(), tagOffset);
+        if (receivedTag != computedTag)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "Packet integrity check failed: HMAC mismatch");
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "XOR prototype packet tag mismatch");
             return false;
         }
 
@@ -158,7 +158,7 @@ namespace Spark::Net
         for (size_t i = 0; i < NONCE_SIZE; ++i)
             outSequence |= static_cast<uint64_t>(packet[i]) << (i * 8);
 
-        // Decrypt payload
+        // Reverse the XOR transform.
         std::vector<uint8_t> keyStream(payloadSize);
         GenerateKeyStream(key, outSequence, keyStream.data(), payloadSize);
 
@@ -181,11 +181,11 @@ namespace Spark::Net
         bool valid = (diff == 0);
         if (!valid)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection token validation failed");
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Prototype token bytes did not match");
         }
         else
         {
-            SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Connection token validated successfully");
+            SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Prototype token bytes matched");
         }
         return valid;
     }
@@ -241,7 +241,7 @@ namespace Spark::Net
     }
 
     // ============================================================================
-    // Replay Protection
+    // Sequence duplicate filter (not authenticated replay protection)
     // ============================================================================
 
     bool ReplayProtection::Accept(uint64_t sequence)
@@ -272,7 +272,7 @@ namespace Spark::Net
         // Check if sequence is within the window
         if (m_maxSequence - sequence >= WINDOW_SIZE)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "Replay protection: sequence %llu too old (max=%llu)",
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Sequence filter: sequence %llu too old (max=%llu)",
                            static_cast<unsigned long long>(sequence), static_cast<unsigned long long>(m_maxSequence));
             return false;
         }
@@ -280,7 +280,7 @@ namespace Spark::Net
         size_t idx = sequence % WINDOW_SIZE;
         if (m_window[idx])
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "Replay protection: duplicate sequence %llu detected",
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Sequence filter: duplicate sequence %llu detected",
                            static_cast<unsigned long long>(sequence));
             return false;
         }

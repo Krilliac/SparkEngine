@@ -355,7 +355,7 @@ net.SetAutoReconnect(reconnect);
 | `net_host [port] [max]` | Start server on port (default 27015) |
 | `net_connect <addr> [port]` | Connect to a server |
 | `net_disconnect` | Disconnect from current server |
-| `net_stack_status` | Show transport and encryption status |
+| `net_stack_status` | Show transport and legacy XOR-prototype status |
 | `prediction_status` | Show pending input count and correction magnitude |
 | `server_status` | Show DedicatedServer uptime, players, map, match state |
 | `net.lag <ms>` | Set simulated latency |

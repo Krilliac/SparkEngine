@@ -90,7 +90,7 @@ namespace SparkEditor
             std::string mapName = "default";
             bool openConsoleWindow = false; ///< Reserved until process-window control is implemented.
             bool autoConnect = false;       ///< Reserved until editor client transport integration is implemented.
-            bool lanOnly = true;
+            std::string bindAddress = "loopback";
             bool enableRcon = false;
             std::string rconPassword = "dev";
         };

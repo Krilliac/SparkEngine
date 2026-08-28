@@ -263,7 +263,7 @@ settings_reset                        # Reset everything to defaults
 | `ConnectionTimeout` | 10.0 | Connection timeout (seconds) |
 | `ReplicationRate` | 20.0 | Network updates per second |
 | `EnableCompression` | false | Compress network packets |
-| `EnableEncryption` | false | Encrypt network packets |
+| `EnableEncryption` | false | Legacy XOR obfuscation prototype (not encryption or authentication) |
 | `SimulatedLatencyMs` | 0.0 | Simulated latency for testing |
 | `SimulatedPacketLoss` | 0.0 | Simulated packet loss (0.0–1.0) |
 

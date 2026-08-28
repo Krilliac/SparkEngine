@@ -536,6 +536,15 @@ namespace SparkEditor
             return false;
         }
 
+        const Spark::Net::NetworkEndpointPolicy endpointPolicy = Spark::Net::CaptureNetworkEndpointPolicy();
+        if (!endpointPolicy.IsValid())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Cannot host: %s.",
+                            Spark::Net::NetworkEndpointPolicyErrorText(endpointPolicy.Error()).data());
+            return false;
+        }
+        m_endpointPolicy = endpointPolicy;
+
         // Create TCP listen socket
         m_listenSocket = ToStoredSocket(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
         if (!IsValidSocket(m_listenSocket))
@@ -552,8 +561,7 @@ namespace SparkEditor
 
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr =
-            Spark::Net::UseLoopbackNetworkBindForUnauthenticatedTool() ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
+        addr.sin_addr.s_addr = htonl(m_endpointPolicy.BindAddress());
         addr.sin_port = htons(port);
 
         if (::bind(ToNativeSocket(m_listenSocket), reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0)
@@ -620,6 +628,17 @@ namespace SparkEditor
             return false;
         }
 
+        const Spark::Net::NetworkEndpointPolicy endpointPolicy = Spark::Net::CaptureNetworkEndpointPolicy();
+        uint32_t remoteAddress = 0;
+        if (!endpointPolicy.IsValid() || !Spark::Net::ParseIPv4Address(address, remoteAddress) ||
+            !endpointPolicy.AllowsPeerAddress(remoteAddress))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Cannot connect: destination is outside the captured endpoint policy.");
+            return false;
+        }
+        m_endpointPolicy = endpointPolicy;
+
         m_clientSocket = ToStoredSocket(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
         if (!IsValidSocket(m_clientSocket))
         {
@@ -627,10 +646,23 @@ namespace SparkEditor
             return false;
         }
 
+        sockaddr_in localAddr{};
+        localAddr.sin_family = AF_INET;
+        localAddr.sin_port = 0;
+        localAddr.sin_addr.s_addr = htonl(m_endpointPolicy.BindAddress());
+        if (::bind(ToNativeSocket(m_clientSocket), reinterpret_cast<sockaddr*>(&localAddr), sizeof(localAddr)) < 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Failed to bind collaboration client to its requested interface.");
+            CloseSocket(m_clientSocket);
+            m_clientSocket = INVALID_COLLAB_SOCKET;
+            return false;
+        }
+
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
-        inet_pton(AF_INET, address.c_str(), &addr.sin_addr);
+        addr.sin_addr.s_addr = htonl(remoteAddress);
 
         if (!ConnectWithTimeout(m_clientSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr), 5))
         {
@@ -824,6 +856,12 @@ namespace SparkEditor
                 ToStoredSocket(::accept(ToNativeSocket(listenFd), reinterpret_cast<sockaddr*>(&clientAddr), &addrLen));
             if (!IsValidSocket(clientSock))
                 continue;
+            if (clientAddr.sin_family != AF_INET ||
+                !m_endpointPolicy.AllowsPeerAddress(ntohl(clientAddr.sin_addr.s_addr)))
+            {
+                CloseSocket(clientSock);
+                continue;
+            }
 
             // Set recv timeout so handler thread can check m_shuttingDown
             ConfigureSigPipeSuppression(clientSock);

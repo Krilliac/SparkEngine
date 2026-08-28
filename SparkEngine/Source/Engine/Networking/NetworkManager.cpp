@@ -210,8 +210,15 @@ namespace Spark::Net
 
 #ifdef ENABLE_NETWORKING
 
-    bool NetworkManager::CreateSocket(uint16_t port, NetworkBindScope bindScope)
+    bool NetworkManager::CreateSocket(uint16_t port, const NetworkEndpointPolicy& endpointPolicy)
     {
+        if (!endpointPolicy.IsValid())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing UDP startup: %s",
+                            NetworkEndpointPolicyErrorText(endpointPolicy.Error()).data());
+            return false;
+        }
+
         // Retry socket creation up to 3 times for transient OS-level failures
         constexpr int kMaxSocketRetries = 3;
         for (int attempt = 0; attempt < kMaxSocketRetries; ++attempt)
@@ -275,17 +282,24 @@ namespace Spark::Net
         // be silently moved to an adjacent endpoint.
         sockaddr_in localAddr{};
         localAddr.sin_family = AF_INET;
-        localAddr.sin_addr.s_addr = bindScope == NetworkBindScope::LoopbackOnly ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
+        localAddr.sin_addr.s_addr = htonl(endpointPolicy.BindAddress());
         localAddr.sin_port = htons(port);
 
         if (::bind(m_socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) == SOCKET_ERROR)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to bind socket to requested port %u", port);
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to bind UDP socket to %s:%u",
+                            FormatIPv4Address(endpointPolicy.BindAddress()).c_str(), port);
             CloseSocket();
             return false;
         }
 
+        m_endpointPolicy = endpointPolicy;
         return true;
+    }
+
+    bool NetworkManager::IsEndpointAllowed(const sockaddr_in& address) const noexcept
+    {
+        return address.sin_family == AF_INET && m_endpointPolicy.AllowsPeerAddress(ntohl(address.sin_addr.s_addr));
     }
 
     void NetworkManager::CloseSocket()
@@ -421,7 +435,15 @@ namespace Spark::Net
         // lock here so local-only policy is checked against the exact resolved
         // destination that sendto will consume, including delayed/retry paths.
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
-        if (localOnly && (addr.sin_family != AF_INET || (ntohl(addr.sin_addr.s_addr) & 0xFF000000u) != 0x7F000000u))
+        if (!IsEndpointAllowed(addr))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing transmission to an endpoint outside the captured bind policy");
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.packetsDropped++;
+            return false;
+        }
+        if (localOnly && !IsIPv4LoopbackAddress(ntohl(addr.sin_addr.s_addr)))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network,
                             "Refusing local-only network message transmission to a non-loopback destination");
@@ -524,7 +546,8 @@ namespace Spark::Net
                                                        : "unlimited",
                        m_lastServerAddress.c_str(), m_lastServerPort, backoff);
 
-        if (Connect(m_lastServerAddress, m_lastServerPort, m_lastPlayerName))
+        const NetworkEndpointPolicy reconnectPolicy = m_endpointPolicy;
+        if (Connect(m_lastServerAddress, m_lastServerPort, m_lastPlayerName, reconnectPolicy))
         {
             SPARK_LOG_INFO(Spark::LogCategory::Network, "AUTO-RECONNECT: Connection attempt initiated successfully");
             // m_reconnectAttempts reset happens when we receive ConnectAccepted
@@ -681,7 +704,7 @@ namespace Spark::Net
                 }
 
                 // Admission can be revoked by an earlier callback after this
-                // datagram was authenticated and queued. Fence before ACK,
+                // datagram passed endpoint/session checks and was queued. Fence before ACK,
                 // reliability, or application handling so a removed client
                 // cannot recreate peer state or produce gameplay effects.
                 if (!isDispatchableSender(msg))

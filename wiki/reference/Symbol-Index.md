@@ -10062,9 +10062,10 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `NetBuffer` | class | SparkEngine | [ReplicationFields.h:L26](../../SparkEngine/Source/Engine/Networking/ReplicationFields.h#L26) | Typed replicated field system with automatic dirty tracking (TrinityCore-inspired) |
 | `NetFixedUpdate` | function | GameModules | [TFVehicleSystem.h:L240](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L240) |  |
 | `NetRole` | enum | GameModules | [TFTypes.h:L91](../../GameModules/SparkGameMMOFPS/Source/Core/TFTypes.h#L91) |  |
-| `NetworkBindScope` | enum | SparkEngine | [NetworkBindPolicy.h:L16](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h#L16) | Immutable interface scope selected before a socket is created. |
 | `NetworkDebugPanel` | class | SparkEditor | [NetworkDebugPanel.h:L91](../../SparkEditor/Source/Panels/NetworkDebugPanel.h#L91) | Editor panel for real-time network debugging |
 | `NetworkDesc` | struct | SparkEngine | [NeuralTypes.h:L51](../../SparkEngine/Source/Graphics/Neural/NeuralTypes.h#L51) | Describes a complete MLP architecture (layers + metadata). |
+| `NetworkEndpointPolicy` | class | SparkEngine | [NetworkBindPolicy.h:L103](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h#L103) | Fail-closed bind address and peer-admission policy captured for one socket lifecycle. |
+| `NetworkEndpointPolicyError` | enum | SparkEngine | [NetworkBindPolicy.h:L26](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h#L26) | Why an endpoint policy request was rejected. |
 | `NetworkEntityID` | alias | SparkEngine | [EntityReplicator.h:L30](../../SparkEngine/Source/Engine/Networking/EntityReplicator.h#L30) |  |
 | `NetworkHandle` | struct | SparkEngine | [NeuralTypes.h:L84](../../SparkEngine/Source/Graphics/Neural/NeuralTypes.h#L84) | Opaque handle to a GPU-resident neural network. |
 | `NetworkHealthConfig` | struct | SparkEngine | [NetworkHealthMonitor.h:L52](../../SparkEngine/Source/Utils/NetworkHealthMonitor.h#L52) | Configuration for network health monitoring |
@@ -10081,13 +10082,14 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `NetworkManagerStub` | class | SparkEngine | [NetworkManager.h:L870](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L870) | Attempt automatic reconnection (called from Update). |
 | `NetworkMessage` | struct | SparkEngine | [NetworkManager.h:L159](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L159) |  |
 | `NetworkMessage` | struct | SparkEngine | [PacketValidator.h:L27](../../SparkEngine/Source/Engine/Networking/PacketValidator.h#L27) |  |
+| `NetworkPeerScope` | enum | SparkEngine | [NetworkBindPolicy.h:L19](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h#L19) | Loopback-only or concrete RFC1918 peer scope. |
 | `NetworkPlayerState` | struct | GameModules | [MultiplayerSystem.h:L101](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L101) |  |
 | `NetworkRole` | enum | SparkEngine | [NetworkManager.h:L100](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L100) |  |
-| `NetworkSecurity` | class | SparkEngine | [NetworkSecurity.h:L48](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L48) | Lightweight network security utilities. |
+| `NetworkSecurity` | class | SparkEngine | [NetworkSecurity.h:L47](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L47) | Legacy XOR/token prototypes; not a security boundary. |
 | `NetworkSettings` | struct | SparkEngine | [EngineSettings.h:L400](../../SparkEngine/Source/Core/EngineSettings.h#L400) |  |
 | `NetworkSimulationSettings` | struct | SparkEditor | [NetworkDebugPanel.h:L65](../../SparkEditor/Source/Panels/NetworkDebugPanel.h#L65) | Artificial network condition settings for testing |
 | `NetworkSnapshot` | struct | SparkEditor | [NetworkDebugPanel.h:L43](../../SparkEditor/Source/Panels/NetworkDebugPanel.h#L43) | A single network statistics snapshot |
-| `NetworkStack` | class | SparkEngine | [NetworkIntegration.h:L73](../../SparkEngine/Source/Engine/Networking/NetworkIntegration.h#L73) | Manages the complete network stack with transport and security. |
+| `NetworkStack` | class | SparkEngine | [NetworkIntegration.h:L74](../../SparkEngine/Source/Engine/Networking/NetworkIntegration.h#L74) | Transport plus optional legacy XOR-prototype helper. |
 | `NetworkStackConfig` | struct | SparkEngine | [NetworkIntegration.h:L48](../../SparkEngine/Source/Engine/Networking/NetworkIntegration.h#L48) | Configuration for the integrated network stack. |
 | `NetworkStats` | struct | SparkEngine | [NetworkManager.h:L349](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L349) |  |
 | `NetworkThread` | function | SparkEditor | [ExternalConsoleIntegration.h:L105](../../SparkEditor/Source/Integration/ExternalConsoleIntegration.h#L105) |  |

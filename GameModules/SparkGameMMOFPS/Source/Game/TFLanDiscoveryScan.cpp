@@ -70,7 +70,7 @@ namespace Terrafront
         sockaddr_in bindAddr{};
         bindAddr.sin_family = AF_INET;
         bindAddr.sin_port = htons(kTFLanBeaconPort);
-        bindAddr.sin_addr.s_addr = Spark::Net::UseLoopbackNetworkBind() ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
+        bindAddr.sin_addr.s_addr = htonl(m_endpointPolicy.BindAddress());
         if (bind(s, reinterpret_cast<const sockaddr*>(&bindAddr), sizeof(bindAddr)) != 0 || !SetNonBlocking(s))
         {
             SPARK_LOG_WARN(Spark::LogCategory::Game,
@@ -126,6 +126,8 @@ namespace Terrafront
                     continue;
                 break;
             }
+            if (from.sin_family != AF_INET || !m_endpointPolicy.AllowsPeerAddress(ntohl(from.sin_addr.s_addr)))
+                continue;
             if (static_cast<size_t>(n) != sizeof(TF_LanBeacon))
                 continue; // not ours (or a future/past size) — ignore silently
 

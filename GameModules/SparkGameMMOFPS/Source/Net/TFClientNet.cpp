@@ -318,7 +318,7 @@ namespace Terrafront
         msg.type = static_cast<Spark::Net::MessageType>(static_cast<uint16_t>(id));
         msg.channel =
             (id == TFMsg::ClientInput) ? Spark::Net::ChannelType::Unreliable : Spark::Net::ChannelType::Reliable;
-        msg.sensitive = (id == TFMsg::LoginRequest || id == TFMsg::RegisterRequest);
+        msg.sensitive = IsTFCredentialOnboardingMessage(id);
         msg.localOnly = msg.sensitive;
         msg.payload.resize(size);
         if (size > 0)

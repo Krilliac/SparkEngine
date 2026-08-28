@@ -8,7 +8,7 @@ For MMO-scale multiplayer with multiple server processes managing different worl
 
 > **Note:** Both approaches require `ENABLE_NETWORKING=ON` during CMake configuration. See [Networking](Networking.md) for full networking documentation.
 
-> **Security status:** The gameplay UDP path is experimental and unauthenticated. Servers bind to IPv4 loopback by default, and a requested concrete port either binds exactly or startup fails. All-interface exposure requires an explicit bind-mode opt-in captured into immutable server configuration. Gateway-managed `SparkServer` processes force that captured scope to loopback during option parsing, so later environment changes cannot widen an area listener.
+> **Security status:** The gameplay UDP path is experimental, unauthenticated, and unencrypted. Servers bind to IPv4 loopback by default. Isolated LAN development requires one concrete numeric RFC1918 interface; wildcard, public, test, multicast, broadcast, and CGNAT requests fail before startup. Gateway-managed `SparkServer` processes force loopback during option parsing. NET-100 remains open and release-blocking pending reviewed authenticated encryption.
 
 ## Architecture Overview
 
@@ -98,7 +98,7 @@ The `Spark::Net::ServerConfig` struct controls all aspects of the dedicated serv
 | `tickRate` | `float` | `60.0` | Server simulation ticks per second |
 | `clientTimeoutSeconds` | `float` | `30.0` | Kick after N seconds of silence |
 | `heartbeatIntervalSeconds` | `float` | `1.0` | Interval between heartbeat packets |
-| `lanOnly` | `bool` | `false` | Restrict to LAN connections only |
+| `endpointPolicy` | `NetworkEndpointPolicy` | captured loopback default | Exact bind address and admitted peer scope |
 
 ### Game Fields
 
@@ -132,7 +132,7 @@ The `Spark::Net::ServerConfig` struct controls all aspects of the dedicated serv
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enableLanBroadcast` | `bool` | `true` | Broadcast server on LAN |
+| `enableLanBroadcast` | `bool` | `false` | Opt into unauthenticated LAN discovery metadata |
 | `lanBroadcastPort` | `uint16_t` | `27016` | UDP port for LAN discovery |
 
 ### Performance Fields
@@ -223,7 +223,8 @@ config.gameMode = Spark::Net::GameModeType::TeamDeathmatch;
 config.scoreLimit = 75;
 config.timeLimitMinutes = 10.0f;
 config.mapRotation = {"dm_arena", "dm_warehouse", "dm_rooftop"};
-config.enableLanBroadcast = true;
+config.endpointPolicy = Spark::Net::NetworkEndpointPolicy::Loopback();
+config.enableLanBroadcast = false;
 
 // Set callbacks
 Spark::Net::ServerCallbacks callbacks;
@@ -414,7 +415,7 @@ server.RegisterRconCommand("restart", "Restart the current match",
 
 ### Server Side
 
-LAN broadcasting is automatic when `enableLanBroadcast = true`. The server periodically sends a `ServerBroadcastInfo` packet on the configured UDP port (default 27016).
+LAN discovery metadata is emitted only when `enableLanBroadcast = true` and the server uses an explicit concrete RFC1918 endpoint policy. It is disabled by default, unauthenticated, and does not make gameplay transport secure. The server periodically sends a `ServerBroadcastInfo` packet on the configured UDP port (default 27016).
 
 ```cpp
 struct ServerBroadcastInfo

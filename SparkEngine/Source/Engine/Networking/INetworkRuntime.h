@@ -24,7 +24,7 @@ namespace Spark::Net
         virtual ~INetworkRuntime() = default;
 
         virtual bool Initialize() = 0;
-        virtual bool StartServer(uint16_t port, int maxClients, NetworkBindScope bindScope) = 0;
+        virtual bool StartServer(uint16_t port, int maxClients, const NetworkEndpointPolicy& endpointPolicy) = 0;
         virtual void StopServer() = 0;
         virtual void Shutdown() = 0;
         virtual void Update(float deltaTime) = 0;

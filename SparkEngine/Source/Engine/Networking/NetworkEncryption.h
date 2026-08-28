@@ -1,6 +1,6 @@
 /**
  * @file NetworkEncryption.h
- * @brief Lightweight symmetric encryption layer for game network traffic
+ * @brief Legacy XOR/FNV packet-format prototype (not cryptography)
  * @author Spark Engine Team
  * @date 2026
  *
@@ -9,12 +9,11 @@
  * is not the active NetworkManager wire path, and must not protect credentials
  * or remotely exposed production game traffic.
  *
- * Features:
- * - Per-connection 256-bit session keys derived from handshake
- * - Sequence-number-based nonce to prevent replay attacks
- * - Connection token validation to prevent spoofing
- * - Rate limiting per client IP
- * - HMAC-style integrity check per packet
+ * The encryption/HMAC/session-key names are legacy compatibility names. The
+ * implementation uses predictable XOR state mixing and a short keyed FNV tag;
+ * attackers can forge or recover it. Sequence and token helpers are local
+ * equality/duplicate filters, not authenticated peer admission or replay
+ * protection. Only the independent rate limiter is suitable as traffic control.
  *
  * Build: Compiled when ENABLE_NETWORKING is defined.
  */
@@ -35,11 +34,11 @@ namespace Spark::Net
     // Constants
     // ============================================================================
 
-    constexpr size_t SESSION_KEY_SIZE = 32;                        ///< 256-bit session key
-    constexpr size_t NONCE_SIZE = 8;                               ///< 64-bit nonce (sequence-based)
-    constexpr size_t HMAC_SIZE = 4;                                ///< 32-bit truncated integrity tag
-    constexpr size_t TOKEN_SIZE = 16;                              ///< 128-bit connection token
-    constexpr size_t ENCRYPTION_OVERHEAD = NONCE_SIZE + HMAC_SIZE; ///< Bytes added per packet
+    constexpr size_t SESSION_KEY_SIZE = 32; ///< Legacy XOR state size; not a cryptographic key guarantee.
+    constexpr size_t NONCE_SIZE = 8;        ///< Serialized sequence bytes; not a secure nonce.
+    constexpr size_t HMAC_SIZE = 4;         ///< Legacy name for a forgeable 32-bit keyed FNV tag.
+    constexpr size_t TOKEN_SIZE = 16;       ///< Prototype random-byte token size.
+    constexpr size_t ENCRYPTION_OVERHEAD = NONCE_SIZE + HMAC_SIZE; ///< Legacy packet-format overhead.
 
     // ============================================================================
     // Session Key
@@ -49,60 +48,59 @@ namespace Spark::Net
     using ConnectionToken = std::array<uint8_t, TOKEN_SIZE>;
 
     /**
-     * @brief Generate a random session key
-     * @return 256-bit random key suitable for packet encryption
+     * @brief Generate pseudo-random state for the XOR prototype
+     * @return Prototype state; not suitable as a production encryption key
      */
     SessionKey GenerateSessionKey();
 
     /**
-     * @brief Generate a random connection token
-     * @return 128-bit random token for connection authentication
+     * @brief Generate pseudo-random bytes for prototype equality checks
+     * @return Prototype token bytes; not peer authentication
      */
     ConnectionToken GenerateConnectionToken();
 
     // ============================================================================
-    // Packet Encryption / Decryption
+    // Legacy packet transformation API
     // ============================================================================
 
     /**
-     * @brief Encrypt a packet payload in-place
+     * @brief Apply the legacy XOR/FNV packet transform
      *
-     * Prepends a nonce derived from the sequence number, XOR-encrypts the
-     * payload with a key stream derived from the session key + nonce, and
-     * appends a truncated HMAC for integrity verification.
+     * Prepends sequence bytes, XOR-obfuscates the payload, and appends a
+     * forgeable keyed FNV tag. This provides no security boundary.
      *
-     * Output layout: [nonce (8B)] [encrypted payload] [hmac (4B)]
+     * Output layout: [sequence (8B)] [obfuscated payload] [prototype tag (4B)]
      *
-     * @param key         Session key for this connection
-     * @param sequence    Packet sequence number (used as nonce base)
-     * @param payload     Plaintext payload data
-     * @return Encrypted packet with nonce and HMAC prepended/appended
+     * @param key         Prototype XOR state
+     * @param sequence    Packet sequence number
+     * @param payload     Input payload data
+     * @return Legacy transformed packet
      */
     std::vector<uint8_t> EncryptPacket(const SessionKey& key, uint64_t sequence, const std::vector<uint8_t>& payload);
 
     /**
-     * @brief Decrypt a packet and verify integrity
+     * @brief Reverse the legacy transform after checking its forgeable tag
      *
-     * Extracts the nonce, verifies the HMAC, and decrypts the payload.
+     * A successful tag comparison is not authentication or integrity against an attacker.
      *
-     * @param key         Session key for this connection
-     * @param packet      Encrypted packet (nonce + ciphertext + hmac)
-     * @param outPayload  Decrypted payload on success
-     * @param outSequence Extracted sequence number from nonce
-     * @return true if decryption and integrity check succeeded
+     * @param key         Prototype XOR state
+     * @param packet      Legacy transformed packet
+     * @param outPayload  Recovered payload on success
+     * @param outSequence Extracted sequence value
+     * @return true if the packet shape and prototype tag matched
      */
     bool DecryptPacket(const SessionKey& key, const std::vector<uint8_t>& packet, std::vector<uint8_t>& outPayload,
                        uint64_t& outSequence);
 
     // ============================================================================
-    // Connection Token Validation
+    // Prototype token equality
     // ============================================================================
 
     /**
-     * @brief Validates that a client's connection token matches the expected value
+     * @brief Constant-time byte equality for two prototype tokens
      *
-     * During the handshake, the server generates a token and sends it to the
-     * client. The client must echo this token in subsequent packets.
+     * This helper does not establish token secrecy, bind a token to an endpoint,
+     * or integrate with NetworkManager admission; it does not authenticate peers.
      *
      * @param expected The token the server generated
      * @param received The token the client sent
@@ -115,10 +113,10 @@ namespace Spark::Net
     // ============================================================================
 
     /**
-     * @brief Per-client rate limiter to prevent packet flooding
+     * @brief Per-address traffic-control limiter
      *
-     * Tracks packet counts per source address and rejects clients that
-     * exceed the configured rate. Uses a sliding window approach.
+     * Tracks packet counts per source address and rejects traffic that exceeds
+     * the configured rate. It does not authenticate the address or packet.
      */
     class RateLimiter
     {
@@ -168,14 +166,15 @@ namespace Spark::Net
     };
 
     // ============================================================================
-    // Replay Protection
+    // Sequence duplicate filter
     // ============================================================================
 
     /**
-     * @brief Sliding-window replay protection using sequence numbers
+     * @brief Sliding-window duplicate sequence filter
      *
-     * Tracks received sequence numbers and rejects packets with previously
-     * seen or too-old sequence numbers.
+     * Tracks received sequence numbers and rejects previously seen or too-old
+     * values. Without authenticated packets an attacker can forge sequences, so
+     * this class is not a production replay-defense boundary.
      */
     class ReplayProtection
     {
@@ -185,14 +184,14 @@ namespace Spark::Net
         ReplayProtection() = default;
 
         /**
-         * @brief Check if a sequence number is acceptable (not replayed)
+         * @brief Check whether a sequence number is new within the local window
          * @param sequence The packet sequence number
          * @return true if this is a new, valid sequence number
          */
         bool Accept(uint64_t sequence);
 
         /**
-         * @brief Reset replay protection state
+         * @brief Reset duplicate-sequence filter state
          */
         void Reset();
 

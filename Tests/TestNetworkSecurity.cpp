@@ -1,4 +1,4 @@
-// TestNetworkSecurity.cpp - Tests for network encryption and token validation
+// TestNetworkSecurity.cpp - Tests for legacy XOR transforms and prototype token lifecycle
 
 #include "TestFramework.h"
 #include "Engine/Networking/NetworkSecurity.h"
@@ -28,24 +28,24 @@ TEST(NetSecurity_GenerateKeyProducesUniqueKeys)
 }
 
 // =============================================================================
-// Encryption / Decryption
+// Legacy XOR transformation
 // =============================================================================
 
-TEST(NetSecurity_EncryptDecryptRoundTrip)
+TEST(NetSecurity_XorTransformRoundTrip)
 {
     NetworkSecurity::Key key{};
     NetworkSecurity::GenerateKey(key);
 
     std::vector<uint8_t> original = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
-    auto encrypted = NetworkSecurity::Encrypt(original, key);
-    EXPECT_FALSE(encrypted.empty());
-    EXPECT_FALSE(encrypted == original); // Should be different after encryption
+    auto obfuscated = NetworkSecurity::Encrypt(original, key);
+    EXPECT_FALSE(obfuscated.empty());
+    EXPECT_FALSE(obfuscated == original);
 
-    auto decrypted = NetworkSecurity::Decrypt(encrypted, key);
-    EXPECT_TRUE(decrypted == original); // Should round-trip correctly
+    auto restored = NetworkSecurity::Decrypt(obfuscated, key);
+    EXPECT_TRUE(restored == original);
 }
 
-TEST(NetSecurity_PacketEncryptDecryptInPlace)
+TEST(NetSecurity_XorTransformInPlace)
 {
     NetworkSecurity::Key key{};
     NetworkSecurity::GenerateKey(key);
@@ -60,17 +60,17 @@ TEST(NetSecurity_PacketEncryptDecryptInPlace)
     EXPECT_TRUE(data == original);
 }
 
-TEST(NetSecurity_EncryptEmptyData)
+TEST(NetSecurity_XorTransformEmptyData)
 {
     NetworkSecurity::Key key{};
     NetworkSecurity::GenerateKey(key);
 
     std::vector<uint8_t> empty;
-    auto encrypted = NetworkSecurity::Encrypt(empty, key);
-    EXPECT_TRUE(encrypted.empty());
+    auto obfuscated = NetworkSecurity::Encrypt(empty, key);
+    EXPECT_TRUE(obfuscated.empty());
 }
 
-TEST(NetSecurity_EncryptLargeData)
+TEST(NetSecurity_XorTransformLargeData)
 {
     NetworkSecurity::Key key{};
     NetworkSecurity::GenerateKey(key);
@@ -79,9 +79,9 @@ TEST(NetSecurity_EncryptLargeData)
     for (size_t i = 0; i < data.size(); ++i)
         data[i] = static_cast<uint8_t>(i & 0xFF);
 
-    auto encrypted = NetworkSecurity::Encrypt(data, key);
-    auto decrypted = NetworkSecurity::Decrypt(encrypted, key);
-    EXPECT_TRUE(decrypted == data);
+    auto obfuscated = NetworkSecurity::Encrypt(data, key);
+    auto restored = NetworkSecurity::Decrypt(obfuscated, key);
+    EXPECT_TRUE(restored == data);
 }
 
 // =============================================================================
@@ -121,10 +121,10 @@ TEST(NetSecurity_InvalidTokenRejected)
 }
 
 // =============================================================================
-// Encryption Enable/Disable
+// Legacy prototype toggle
 // =============================================================================
 
-TEST(NetSecurity_EncryptionToggle)
+TEST(NetSecurity_LegacyPrototypeToggle)
 {
     NetworkSecurity security;
 

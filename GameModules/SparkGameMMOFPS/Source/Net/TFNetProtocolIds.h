@@ -159,4 +159,10 @@ namespace Terrafront
         ContinentHopReply = 0x548D,   // S->C  TF_ContinentHopReply
     };
 
+    /** @brief Credential-bearing onboarding requests that must remain loopback-only. */
+    [[nodiscard]] inline constexpr bool IsTFCredentialOnboardingMessage(TFMsg id) noexcept
+    {
+        return id == TFMsg::LoginRequest || id == TFMsg::RegisterRequest;
+    }
+
 } // namespace Terrafront

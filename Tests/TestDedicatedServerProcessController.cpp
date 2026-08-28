@@ -24,7 +24,7 @@ TEST(DedicatedServerProcessController_BuildsManifestLaunchArguments)
     request.port = 28015;
     request.maxClients = 24;
     request.tickRate = 30.0f;
-    request.lanOnly = true;
+    request.bindAddress = "loopback";
     request.lanBroadcast = false;
 
     std::string error;
@@ -33,9 +33,23 @@ TEST(DedicatedServerProcessController_BuildsManifestLaunchArguments)
     EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "--manifest") != arguments.end());
     EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "--health-file") != arguments.end());
     EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "--stop-file") != arguments.end());
-    EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "--lan-only") != arguments.end());
+    EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "--bind-address") != arguments.end());
+    EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "loopback") != arguments.end());
     EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "--no-lan-broadcast") != arguments.end());
     EXPECT_TRUE(std::find(arguments.begin(), arguments.end(), "28015") != arguments.end());
+}
+
+TEST(DedicatedServerProcessController_RejectsWildcardBindAddress)
+{
+    DedicatedServerLaunchRequest request;
+    request.executable = "SparkServer.exe";
+    request.module = "Game.dll";
+    request.stopFile = "stop";
+    request.bindAddress = "0.0.0.0";
+
+    std::string error;
+    EXPECT_TRUE(DedicatedServerProcessController::CreateArguments(request, error).empty());
+    EXPECT_TRUE(error.find("rejected") != std::string::npos);
 }
 
 TEST(DedicatedServerProcessController_RejectsAmbiguousGameSelection)

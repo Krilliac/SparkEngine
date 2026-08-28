@@ -295,7 +295,7 @@ Active in **all builds** (Debug and Release). Protection must be present in ship
 
 ## See Also
 
-- [Networking](Networking.md) — Network security, packet encryption, connection tokens
+- [Networking](Networking.md) — Endpoint containment and legacy XOR/FNV prototypes
 - [Scripting with AngelScript](Scripting-with-AngelScript.md) — Script sandbox enforcement
 - [Gameplay Systems](../gameplay-tools/Gameplay-Systems.md) — Ability, inventory, and quest systems
 - [Testing](../advanced/Testing.md) — Test framework and running tests

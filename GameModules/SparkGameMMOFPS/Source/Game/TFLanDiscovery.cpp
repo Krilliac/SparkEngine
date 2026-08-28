@@ -91,6 +91,13 @@ namespace Terrafront
         m_beaconFailed = false;
         m_scanFailed = false;
         m_servers.clear();
+        m_endpointPolicy = Spark::Net::CaptureNetworkEndpointPolicy();
+        if (!m_endpointPolicy.IsValid())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] lan: endpoint policy rejected - discovery disabled");
+            m_beaconFailed = true;
+            m_scanFailed = true;
+        }
 
 #ifdef ENABLE_NETWORKING
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -218,9 +225,23 @@ namespace Terrafront
             return;
         }
 
+        sockaddr_in localAddress{};
+        localAddress.sin_family = AF_INET;
+        localAddress.sin_port = 0;
+        localAddress.sin_addr.s_addr = htonl(m_endpointPolicy.BindAddress());
+        if (bind(s, reinterpret_cast<const sockaddr*>(&localAddress), sizeof(localAddress)) != 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] lan: beacon could not bind the configured interface - LAN advertising disabled");
+            CloseSockHandle(s);
+            m_beaconFailed = true;
+            return;
+        }
+
         const int broadcastOn = 1;
-        if (setsockopt(s, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&broadcastOn), sizeof(broadcastOn)) !=
-                0 ||
+        if ((m_endpointPolicy.PeerScope() == Spark::Net::NetworkPeerScope::PrivateLan &&
+             setsockopt(s, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&broadcastOn),
+                        sizeof(broadcastOn)) != 0) ||
             !SetNonBlocking(s))
         {
             SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] lan: beacon socket setup failed - LAN advertising disabled");
@@ -257,13 +278,16 @@ namespace Terrafront
     {
 #ifdef ENABLE_NETWORKING
         m_bcastTargets.clear();
-        m_bcastTargets.push_back(INADDR_BROADCAST); // 255.255.255.255 (limited broadcast)
-
         if (m_beaconSock == kInvalidSock)
             return;
+        if (m_endpointPolicy.PeerScope() == Spark::Net::NetworkPeerScope::LoopbackOnly)
+        {
+            m_bcastTargets.push_back(htonl(m_endpointPolicy.BindAddress()));
+            return;
+        }
 
-            // Directed subnet broadcasts per up, broadcast-capable, non-loopback
-            // interface — some LANs/adapters drop 255.255.255.255 but pass these.
+        // Select only the explicitly bound RFC1918 interface. Never emit on
+        // every interface or fall back to the limited broadcast address.
 #ifdef SPARK_PLATFORM_WINDOWS
         INTERFACE_INFO infos[32]{};
         DWORD bytes = 0;
@@ -278,7 +302,7 @@ namespace Terrafront
                     continue;
                 const uint32_t addr = infos[i].iiAddress.AddressIn.sin_addr.s_addr;
                 const uint32_t mask = infos[i].iiNetmask.AddressIn.sin_addr.s_addr;
-                if (addr == 0)
+                if (addr != htonl(m_endpointPolicy.BindAddress()))
                     continue;
                 const uint32_t bcast = (addr & mask) | ~mask; // network byte order throughout
                 if (std::find(m_bcastTargets.begin(), m_bcastTargets.end(), bcast) == m_bcastTargets.end())
@@ -294,6 +318,9 @@ namespace Terrafront
                 if (!it->ifa_addr || it->ifa_addr->sa_family != AF_INET || !it->ifa_broadaddr)
                     continue;
                 if (!(it->ifa_flags & IFF_UP) || !(it->ifa_flags & IFF_BROADCAST) || (it->ifa_flags & IFF_LOOPBACK))
+                    continue;
+                const uint32_t address = reinterpret_cast<const sockaddr_in*>(it->ifa_addr)->sin_addr.s_addr;
+                if (address != htonl(m_endpointPolicy.BindAddress()))
                     continue;
                 const uint32_t bcast = reinterpret_cast<const sockaddr_in*>(it->ifa_broadaddr)->sin_addr.s_addr;
                 if (std::find(m_bcastTargets.begin(), m_bcastTargets.end(), bcast) == m_bcastTargets.end())

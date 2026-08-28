@@ -1,5 +1,5 @@
-// TestNetworkEncryption.cpp - Tests for network encryption, token validation,
-// rate limiting, and replay protection
+// TestNetworkEncryption.cpp - Tests for the legacy XOR/FNV prototype,
+// token equality, rate limiting, and duplicate-sequence filtering
 
 #include "TestFramework.h"
 #include <array>
@@ -12,7 +12,7 @@
 #include <vector>
 
 // ============================================================================
-// Standalone reimplementation of encryption primitives for testing
+// Standalone reimplementation of legacy prototype primitives for testing
 // (mirrors Spark::Net from NetworkEncryption.h/cpp)
 // ============================================================================
 
@@ -20,9 +20,9 @@ namespace
 {
     constexpr size_t SESSION_KEY_SIZE = 32;
     constexpr size_t NONCE_SIZE = 8;
-    constexpr size_t HMAC_SIZE = 4;
+    constexpr size_t PROTOTYPE_TAG_SIZE = 4;
     constexpr size_t TOKEN_SIZE = 16;
-    constexpr size_t ENCRYPTION_OVERHEAD = NONCE_SIZE + HMAC_SIZE;
+    constexpr size_t PROTOTYPE_OVERHEAD = NONCE_SIZE + PROTOTYPE_TAG_SIZE;
 
     using SessionKey = std::array<uint8_t, SESSION_KEY_SIZE>;
     using ConnectionToken = std::array<uint8_t, TOKEN_SIZE>;
@@ -72,7 +72,7 @@ namespace
         }
     }
 
-    uint32_t ComputeHMAC(const SessionKey& key, const uint8_t* data, size_t length)
+    uint32_t ComputePrototypeTag(const SessionKey& key, const uint8_t* data, size_t length)
     {
         uint32_t hash = 0x811C9DC5u;
         for (size_t i = 0; i < SESSION_KEY_SIZE; ++i)
@@ -91,31 +91,31 @@ namespace
     std::vector<uint8_t> EncryptPacket(const SessionKey& key, uint64_t sequence, const std::vector<uint8_t>& payload)
     {
         std::vector<uint8_t> packet;
-        packet.reserve(NONCE_SIZE + payload.size() + HMAC_SIZE);
+        packet.reserve(NONCE_SIZE + payload.size() + PROTOTYPE_TAG_SIZE);
         for (size_t i = 0; i < NONCE_SIZE; ++i)
             packet.push_back(static_cast<uint8_t>((sequence >> (i * 8)) & 0xFF));
         std::vector<uint8_t> keyStream(payload.size());
         GenerateKeyStream(key, sequence, keyStream.data(), payload.size());
         for (size_t i = 0; i < payload.size(); ++i)
             packet.push_back(payload[i] ^ keyStream[i]);
-        uint32_t hmac = ComputeHMAC(key, packet.data(), packet.size());
-        for (size_t i = 0; i < HMAC_SIZE; ++i)
-            packet.push_back(static_cast<uint8_t>((hmac >> (i * 8)) & 0xFF));
+        uint32_t prototypeTag = ComputePrototypeTag(key, packet.data(), packet.size());
+        for (size_t i = 0; i < PROTOTYPE_TAG_SIZE; ++i)
+            packet.push_back(static_cast<uint8_t>((prototypeTag >> (i * 8)) & 0xFF));
         return packet;
     }
 
     bool DecryptPacket(const SessionKey& key, const std::vector<uint8_t>& packet, std::vector<uint8_t>& outPayload,
                        uint64_t& outSequence)
     {
-        if (packet.size() < ENCRYPTION_OVERHEAD)
+        if (packet.size() < PROTOTYPE_OVERHEAD)
             return false;
-        size_t payloadSize = packet.size() - ENCRYPTION_OVERHEAD;
-        size_t hmacOffset = packet.size() - HMAC_SIZE;
-        uint32_t receivedHMAC = 0;
-        for (size_t i = 0; i < HMAC_SIZE; ++i)
-            receivedHMAC |= static_cast<uint32_t>(packet[hmacOffset + i]) << (i * 8);
-        uint32_t computedHMAC = ComputeHMAC(key, packet.data(), hmacOffset);
-        if (receivedHMAC != computedHMAC)
+        size_t payloadSize = packet.size() - PROTOTYPE_OVERHEAD;
+        size_t tagOffset = packet.size() - PROTOTYPE_TAG_SIZE;
+        uint32_t receivedTag = 0;
+        for (size_t i = 0; i < PROTOTYPE_TAG_SIZE; ++i)
+            receivedTag |= static_cast<uint32_t>(packet[tagOffset + i]) << (i * 8);
+        uint32_t computedTag = ComputePrototypeTag(key, packet.data(), tagOffset);
+        if (receivedTag != computedTag)
             return false;
         outSequence = 0;
         for (size_t i = 0; i < NONCE_SIZE; ++i)
@@ -179,10 +179,10 @@ namespace
 } // namespace
 
 // ============================================================================
-// Encrypt / Decrypt Round-Trip Tests
+// Legacy XOR/FNV round-trip tests (not cryptographic security tests)
 // ============================================================================
 
-TEST(Encryption_RoundTrip)
+TEST(PrototypeTransform_RoundTrip)
 {
     SessionKey key = GenerateSessionKey();
     std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
@@ -200,7 +200,7 @@ TEST(Encryption_RoundTrip)
         EXPECT_EQ(decrypted[i], payload[i]);
 }
 
-TEST(Encryption_DifferentSequences)
+TEST(PrototypeTransform_DifferentSequences)
 {
     SessionKey key = GenerateSessionKey();
     std::vector<uint8_t> payload = {1, 2, 3, 4};
@@ -208,9 +208,9 @@ TEST(Encryption_DifferentSequences)
     auto enc1 = EncryptPacket(key, 1, payload);
     auto enc2 = EncryptPacket(key, 2, payload);
 
-    // Different sequences should produce different ciphertext
+    // Different sequences should produce different obfuscated bytes.
     bool different = false;
-    for (size_t i = NONCE_SIZE; i < enc1.size() - HMAC_SIZE && i < enc2.size() - HMAC_SIZE; ++i)
+    for (size_t i = NONCE_SIZE; i < enc1.size() - PROTOTYPE_TAG_SIZE && i < enc2.size() - PROTOTYPE_TAG_SIZE; ++i)
     {
         if (enc1[i] != enc2[i])
         {
@@ -221,7 +221,7 @@ TEST(Encryption_DifferentSequences)
     EXPECT_TRUE(different);
 }
 
-TEST(Encryption_WrongKeyFails)
+TEST(PrototypeTransform_DifferentStateFailsTagCheck)
 {
     SessionKey key1 = GenerateSessionKey();
     SessionKey key2 = GenerateSessionKey();
@@ -232,17 +232,17 @@ TEST(Encryption_WrongKeyFails)
     std::vector<uint8_t> decrypted;
     uint64_t seq;
     bool ok = DecryptPacket(key2, encrypted, decrypted, seq);
-    EXPECT_FALSE(ok); // HMAC check should fail
+    EXPECT_FALSE(ok); // The forgeable prototype tag still detects this mismatch.
 }
 
-TEST(Encryption_TamperedPacketFails)
+TEST(PrototypeTransform_ChangedPacketFailsTagCheck)
 {
     SessionKey key = GenerateSessionKey();
     std::vector<uint8_t> payload = {1, 2, 3};
 
     auto encrypted = EncryptPacket(key, 1, payload);
 
-    // Tamper with encrypted payload byte
+    // Change an obfuscated payload byte.
     if (encrypted.size() > NONCE_SIZE + 1)
         encrypted[NONCE_SIZE + 1] ^= 0xFF;
 
@@ -252,13 +252,13 @@ TEST(Encryption_TamperedPacketFails)
     EXPECT_FALSE(ok);
 }
 
-TEST(Encryption_EmptyPayload)
+TEST(PrototypeTransform_EmptyPayload)
 {
     SessionKey key = GenerateSessionKey();
     std::vector<uint8_t> payload;
 
     auto encrypted = EncryptPacket(key, 42, payload);
-    EXPECT_EQ(encrypted.size(), ENCRYPTION_OVERHEAD);
+    EXPECT_EQ(encrypted.size(), PROTOTYPE_OVERHEAD);
 
     std::vector<uint8_t> decrypted;
     uint64_t seq;
@@ -268,7 +268,7 @@ TEST(Encryption_EmptyPayload)
     EXPECT_TRUE(decrypted.empty());
 }
 
-TEST(Encryption_TooShortPacket)
+TEST(PrototypeTransform_TooShortPacket)
 {
     SessionKey key = GenerateSessionKey();
     std::vector<uint8_t> shortPacket = {1, 2, 3};
@@ -283,20 +283,20 @@ TEST(Encryption_TooShortPacket)
 // Token Validation Tests
 // ============================================================================
 
-TEST(Token_MatchingTokens)
+TEST(PrototypeToken_MatchingBytes)
 {
     ConnectionToken token = GenerateConnectionToken();
     EXPECT_TRUE(ValidateToken(token, token));
 }
 
-TEST(Token_MismatchedTokens)
+TEST(PrototypeToken_MismatchedBytes)
 {
     ConnectionToken token1 = GenerateConnectionToken();
     ConnectionToken token2 = GenerateConnectionToken();
     EXPECT_FALSE(ValidateToken(token1, token2));
 }
 
-TEST(Token_SingleBitDifference)
+TEST(PrototypeToken_SingleBitDifference)
 {
     ConnectionToken token = GenerateConnectionToken();
     ConnectionToken tampered = token;
@@ -308,7 +308,7 @@ TEST(Token_SingleBitDifference)
 // Replay Protection Tests
 // ============================================================================
 
-TEST(Replay_SequentialAccept)
+TEST(SequenceFilter_SequentialAccept)
 {
     ReplayProtection rp;
     EXPECT_TRUE(rp.Accept(1));
@@ -316,20 +316,20 @@ TEST(Replay_SequentialAccept)
     EXPECT_TRUE(rp.Accept(3));
 }
 
-TEST(Replay_DuplicateRejected)
+TEST(SequenceFilter_DuplicateRejected)
 {
     ReplayProtection rp;
     EXPECT_TRUE(rp.Accept(1));
     EXPECT_FALSE(rp.Accept(1)); // Duplicate
 }
 
-TEST(Replay_ZeroRejected)
+TEST(SequenceFilter_ZeroRejected)
 {
     ReplayProtection rp;
     EXPECT_FALSE(rp.Accept(0));
 }
 
-TEST(Replay_OutOfOrderWithinWindow)
+TEST(SequenceFilter_OutOfOrderWithinWindow)
 {
     ReplayProtection rp;
     EXPECT_TRUE(rp.Accept(5));
@@ -338,14 +338,14 @@ TEST(Replay_OutOfOrderWithinWindow)
     EXPECT_FALSE(rp.Accept(3)); // Already seen
 }
 
-TEST(Replay_TooOldRejected)
+TEST(SequenceFilter_TooOldRejected)
 {
     ReplayProtection rp;
     EXPECT_TRUE(rp.Accept(300));
     EXPECT_FALSE(rp.Accept(1)); // Way outside window (300 - 1 >= 256)
 }
 
-TEST(Replay_WindowBoundary)
+TEST(SequenceFilter_WindowBoundary)
 {
     ReplayProtection rp;
     EXPECT_TRUE(rp.Accept(256));
@@ -353,7 +353,7 @@ TEST(Replay_WindowBoundary)
     EXPECT_FALSE(rp.Accept(1)); // Duplicate
 }
 
-TEST(Replay_LargeJump)
+TEST(SequenceFilter_LargeJump)
 {
     ReplayProtection rp;
     EXPECT_TRUE(rp.Accept(1));
@@ -362,7 +362,7 @@ TEST(Replay_LargeJump)
     EXPECT_TRUE(rp.Accept(999));  // Recent packet accepted
 }
 
-TEST(Replay_Reset)
+TEST(SequenceFilter_Reset)
 {
     ReplayProtection rp;
     EXPECT_TRUE(rp.Accept(1));

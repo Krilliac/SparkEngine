@@ -233,9 +233,9 @@ Transports implement the `ITransport` interface and are selected via `TransportT
 
 ## Security
 
-The active UDP path binds client traffic to the configured server address and port, and binds server-side client identity to the endpoint recorded during `Connect`. Wire-supplied sender IDs are not trusted. Undefined channels, malformed built-in payload sizes, and unauthenticated custom messages are rejected before dispatch.
+The active UDP path binds to loopback or one concrete numeric RFC1918 interface and admits only peers inside the captured endpoint policy. Wildcard/public/test/multicast/broadcast/CGNAT startup requests fail closed. Peer scope is checked before packet deserialization and again on all gameplay send/retry paths. Client traffic is bound to the configured server address and port, and server-side client identity is bound to the endpoint recorded during `Connect`. Wire-supplied sender IDs are not trusted. Undefined channels, malformed built-in payload sizes, and unauthenticated custom messages are rejected before dispatch.
 
-This tuple binding is a spoofing defense, not cryptographic authentication; transparent endpoint migration is unsupported and requires reconnecting. The experimental `NetworkSecurity` helpers are not integrated strongly enough to make confidentiality or authenticated-encryption claims for production traffic.
+This endpoint boundary and tuple binding reduce accidental exposure and spoofing surface; they are not cryptographic authentication. Transparent endpoint migration is unsupported and requires reconnecting. The XOR/FNV `NetworkSecurity` and `NetworkEncryption` helpers are explicitly prototypes and provide no confidentiality, peer authentication, or attacker-resistant integrity. NET-100 and all dependent release gates remain blocked pending maintained, reviewed AEAD transport.
 
 Planned security work includes:
 

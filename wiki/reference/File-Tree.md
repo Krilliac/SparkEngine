@@ -1823,13 +1823,13 @@ graph LR
 - [`LagCompensation.h`](../../SparkEngine/Source/Engine/Networking/LagCompensation.h) — 121 LOC — Server-side hit rewind — ring buffer of entity poses + rewound raycast
 - [`NetQuantize.cpp`](../../SparkEngine/Source/Engine/Networking/NetQuantize.cpp) — 51 LOC — Implementation of quantized transform read/write through NetBuffer.
 - [`NetQuantize.h`](../../SparkEngine/Source/Engine/Networking/NetQuantize.h) — 48 LOC — NetBuffer-aware helpers for quantized transform replication.
-- [`NetworkBindPolicy.h`](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h) — 107 LOC — Process-local policy for confining development and test listeners.
+- [`NetworkBindPolicy.h`](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h) — 218 LOC — Fail-closed exact IPv4 bind and peer-admission policy.
 - [`NetworkBuffer.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkBuffer.cpp) — 189 LOC — NetBuffer serialization/deserialization helpers
 - [`NetworkClientId.h`](../../SparkEngine/Source/Engine/Networking/NetworkClientId.h) — 34 LOC — Shared client identifier types and generated-ID reservation policy.
 - [`NetworkConnection.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkConnection.cpp) — 1594 LOC — Connection lifecycle and message routing for NetworkManager
-- [`NetworkEncryption.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp) — 298 LOC — Network encryption, token validation, rate limiting, and replay protection
-- [`NetworkEncryption.h`](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h) — 204 LOC — Lightweight symmetric encryption layer for game network traffic
-- [`NetworkIntegration.h`](../../SparkEngine/Source/Engine/Networking/NetworkIntegration.h) — 233 LOC — Cross-links ITransport and NetworkSecurity with NetworkManager
+- [`NetworkEncryption.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp) — 298 LOC — Legacy XOR/FNV packet prototype plus traffic-control helpers
+- [`NetworkEncryption.h`](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h) — 203 LOC — Legacy XOR/FNV packet-format prototype; not cryptography
+- [`NetworkIntegration.h`](../../SparkEngine/Source/Engine/Networking/NetworkIntegration.h) — 234 LOC — Transport plus optional prototype transform helper
 - [`NetworkInterpolation.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkInterpolation.cpp) — 116 LOC — Implementation of client-side network entity interpolation
 - [`NetworkInterpolation.h`](../../SparkEngine/Source/Engine/Networking/NetworkInterpolation.h) — 122 LOC — Client-side interpolation buffer for smooth remote entity rendering
 - [`NetworkManager.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkManager.cpp) — 997 LOC — Core NetworkManager — singleton, update loop, socket helpers, lag compensation
@@ -1838,7 +1838,7 @@ graph LR
 - [`NetworkManagerRuntimeAdapter.h`](../../SparkEngine/Source/Engine/Networking/NetworkManagerRuntimeAdapter.h) — 43 LOC — INetworkRuntime adapter backed by NetworkManager.
 - [`NetworkReliable.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkReliable.cpp) — 210 LOC — Reliable channel logic for NetworkManager
 - [`NetworkReplication.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkReplication.cpp) — 609 LOC — Entity replication methods for NetworkManager
-- [`NetworkSecurity.h`](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h) — 234 LOC — Network security layer -- packet encryption and connection token auth
+- [`NetworkSecurity.h`](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h) — 233 LOC — Legacy XOR/FNV prototypes; not encryption or connection authentication
 - [`NetworkWireLimits.h`](../../SparkEngine/Source/Engine/Networking/NetworkWireLimits.h) — 27 LOC — Authoritative size contract for Spark's UDP message wire format.
 - [`PacketValidator.cpp`](../../SparkEngine/Source/Engine/Networking/PacketValidator.cpp) — 371 LOC — Network packet validation and sanitization implementation
 - [`PacketValidator.h`](../../SparkEngine/Source/Engine/Networking/PacketValidator.h) — 164 LOC — Network packet validation and sanitization layer
@@ -3038,7 +3038,7 @@ graph LR
 - [`TestNetworkManagerReal.cpp`](../../Tests/TestNetworkManagerReal.cpp) — 296 LOC — Real-class tests for Spark::Net types (NetBuffer, LagCompensator, enums)
 - [`TestNetworkReplicationIntegration.cpp`](../../Tests/TestNetworkReplicationIntegration.cpp) — 497 LOC — Integration tests for network entity replication
 - [`TestNetworkSecurity.cpp`](../../Tests/TestNetworkSecurity.cpp) — 149 LOC
-- [`TestNetworkSecurityPhaseHH.cpp`](../../Tests/TestNetworkSecurityPhaseHH.cpp) — 115 LOC — Phase HH Theme 3D tests for Spark::Net::NetworkSecurity
+- [`TestNetworkSecurityPhaseHH.cpp`](../../Tests/TestNetworkSecurityPhaseHH.cpp) — 114 LOC — Phase HH Theme 3D tests for Spark::Net::NetworkSecurity
 - [`TestNetworkStack.cpp`](../../Tests/TestNetworkStack.cpp) — 43 LOC
 - [`TestNetworkStress.cpp`](../../Tests/TestNetworkStress.cpp) — 1028 LOC — Stress tests and security-focused pentesting for the networking layer
 - [`TestNeuralInference.cpp`](../../Tests/TestNeuralInference.cpp) — 334 LOC — Tests for neural inference engine (CPU path)

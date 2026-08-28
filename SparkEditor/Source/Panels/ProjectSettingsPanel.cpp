@@ -952,8 +952,10 @@ namespace SparkEditor
                 m_modified = true;
             if (ImGui::Checkbox("Enable Compression", &net.enableCompression))
                 m_modified = true;
-            if (ImGui::Checkbox("Enable Encryption", &net.enableEncryption))
+            if (ImGui::Checkbox("Enable Prototype XOR Obfuscation", &net.enableEncryption))
                 m_modified = true;
+            ImGui::SameLine();
+            ImGui::TextDisabled("(not encryption or authentication)");
         }
 
         if (ImGui::CollapsingHeader("Lag Simulation (Dev Only)"))

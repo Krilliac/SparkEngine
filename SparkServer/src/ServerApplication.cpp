@@ -136,7 +136,34 @@ namespace Spark::Server
             options.server.port = static_cast<uint16_t>(port);
             options.server.maxClients = maxClients;
             options.server.tickRate = tickRate;
-            options.server.lanOnly = config.GetBool("Network", "lan_only", options.server.lanOnly);
+            if (config.HasKey("Network", "lan_only"))
+            {
+                if (config.HasKey("Network", "bind_address"))
+                {
+                    error = "Network.lan_only is legacy and cannot be combined with Network.bind_address; remove "
+                            "lan_only";
+                    return false;
+                }
+                if (!config.GetBool("Network", "lan_only", true))
+                {
+                    error = "Network.lan_only=false is no longer supported; set Network.bind_address to 'loopback' "
+                            "or a concrete numeric RFC1918 interface address";
+                    return false;
+                }
+                options.server.endpointPolicy = Net::NetworkEndpointPolicy::Loopback();
+            }
+            if (config.HasKey("Network", "bind_address"))
+            {
+                const std::string requestedAddress = config.GetString("Network", "bind_address");
+                const Net::NetworkEndpointPolicy requestedPolicy = Net::ResolveNetworkEndpointPolicy(requestedAddress);
+                if (!requestedPolicy.IsValid())
+                {
+                    error = "Network.bind_address '" + requestedAddress +
+                            "' rejected: " + std::string(Net::NetworkEndpointPolicyErrorText(requestedPolicy.Error()));
+                    return false;
+                }
+                options.server.endpointPolicy = requestedPolicy;
+            }
             options.server.enableLanBroadcast =
                 config.GetBool("Network", "lan_broadcast", options.server.enableLanBroadcast);
             options.server.mapRotation = SplitCommaSeparated(config.GetString("Game", "maps", "default"));
@@ -189,7 +216,8 @@ namespace Spark::Server
                "  --tick-rate <hz>             Override the simulation tick rate\n"
                "  --map <name[,name...]>       Override the map rotation\n"
                "  --name <display-name>        Override the server name\n"
-               "  --lan-only                   Restrict the server to LAN clients\n"
+               "  --bind-address <IPv4>        Bind loopback or one concrete RFC1918 interface\n"
+               "  --lan-only                   Legacy alias for --bind-address loopback\n"
                "  --no-lan-broadcast           Disable LAN discovery broadcasts\n"
                "  --health-file <path>         Publish a JSON health snapshot\n"
                "  --stop-file <path>           Stop when this sentinel file appears\n"
@@ -242,7 +270,7 @@ namespace Spark::Server
             else if (argument == "--module" || argument == "--manifest" || argument == "--health-file" ||
                      argument == "--stop-file" || argument == "--control-endpoint" ||
                      argument == "--gateway-key-file" || argument == "--control-state-file" || argument == "--name" ||
-                     argument == "--map")
+                     argument == "--map" || argument == "--bind-address")
             {
                 const auto value = requireValue(index);
                 if (!value)
@@ -263,6 +291,15 @@ namespace Spark::Server
                     options.controlStateFile = *value;
                 else if (argument == "--name")
                     options.server.serverName = *value;
+                else if (argument == "--bind-address")
+                {
+                    const Net::NetworkEndpointPolicy requestedPolicy = Net::ResolveNetworkEndpointPolicy(*value);
+                    if (!requestedPolicy.IsValid())
+                        return {{},
+                                "--bind-address '" + std::string(*value) + "' rejected: " +
+                                    std::string(Net::NetworkEndpointPolicyErrorText(requestedPolicy.Error()))};
+                    options.server.endpointPolicy = requestedPolicy;
+                }
                 else
                     options.server.mapRotation = SplitCommaSeparated(*value);
             }
@@ -304,7 +341,7 @@ namespace Spark::Server
                     options.runFor = std::chrono::milliseconds(parsed);
             }
             else if (argument == "--lan-only")
-                options.server.lanOnly = true;
+                options.server.endpointPolicy = Net::NetworkEndpointPolicy::Loopback();
             else if (argument == "--no-lan-broadcast")
                 options.server.enableLanBroadcast = false;
             else
@@ -321,11 +358,15 @@ namespace Spark::Server
         // trust boundary into ServerConfig now so later environment mutation,
         // module loading, and startup cannot widen the game listener.
         if (!options.controlEndpoint.empty())
-            options.server.bindScope = Net::NetworkBindScope::LoopbackOnly;
+            options.server.endpointPolicy = Net::NetworkEndpointPolicy::Loopback();
         if (!options.controlEndpoint.empty() && options.controlStateFile.empty())
             options.controlStateFile = "Temp/spark-area-control-epochs.txt";
         if (options.server.mapRotation.empty())
             return {{}, "At least one non-empty map is required"};
+        if (!options.showHelp && !options.server.endpointPolicy.IsValid())
+            return {{},
+                    "Network bind request rejected: " +
+                        std::string(Net::NetworkEndpointPolicyErrorText(options.server.endpointPolicy.Error()))};
         return {std::move(options), {}};
     }
 

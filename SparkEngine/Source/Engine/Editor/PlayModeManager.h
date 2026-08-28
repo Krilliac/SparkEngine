@@ -382,8 +382,8 @@ namespace Spark::Editor
             float tickRate = 60.0f;
             std::string mapName = "default";
             int gameMode = 0;
-            bool autoConnectClient = true; ///< Editor viewport auto-joins as client
-            bool lanOnly = true;
+            bool autoConnectClient = true;        ///< Editor viewport auto-joins as client
+            std::string bindAddress = "loopback"; ///< Exact local/private interface; wildcard binds are forbidden.
         };
 
         /// @brief Request a dedicated server to be spawned alongside PIE.
