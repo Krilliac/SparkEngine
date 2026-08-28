@@ -201,6 +201,7 @@ def render_handoff(contract: dict[str, Any]) -> str:
                 "",
                 f"- In profile: {', '.join(f'`{value}`' for value in profile['includedCapabilityIds']) or 'none'}",
                 f"- First-party game: {', '.join(f'`{value}`' for value in profile.get('firstPartyGameCapabilityIds', [])) or 'none declared'}",
+                f"- Supported hosts: {', '.join(f'`{value}`' for value in profile.get('supportedHosts', [])) or 'none declared'}",
                 f"- Experimental: {', '.join(f'`{value}`' for value in boundaries.get('experimentalCapabilityIds', [])) or 'none'}",
                 f"- Unsupported: {', '.join(f'`{value}`' for value in boundaries.get('unsupportedCapabilityIds', [])) or 'none'}",
                 "",

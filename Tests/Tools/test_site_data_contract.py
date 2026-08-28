@@ -218,6 +218,22 @@ class SiteDataContractTests(ContractTestCase):
         self.assertIn("outside every release profile", joined)
         self.assertEqual(gate["blockingWorkItemIds"], ["MOD-290", "MOD-310"])
 
+    def test_supported_host_is_windows_11_x64_only(self) -> None:
+        profile = self.profile_of(self.mutable)
+        self.assertEqual(profile["supportedHosts"], ["Windows 11 x64"])
+        host = next(dimension for dimension in profile["scope"] if dimension["id"] == "host")
+        self.assertIn("Windows 11 x64 only", host["value"])
+
+    def test_windows_10_cannot_be_declared_a_supported_host(self) -> None:
+        self.profile_of(self.mutable)["supportedHosts"].append("Windows 10 x64")
+        self.assert_rejected(self.mutable, "supported host widens the profile")
+
+    def test_headless_scope_is_bound_to_the_supported_host(self) -> None:
+        profile = self.profile_of(self.mutable)
+        headless = next(dimension for dimension in profile["scope"] if dimension["id"] == "headless")
+        self.assertIn("Windows 11 x64", headless["value"])
+        self.assertIn("renders nothing", headless["value"].lower())
+
     def test_limitations_do_not_hardcode_a_gate_count(self) -> None:
         # A limitation that spells out "none of its fifteen required gates" goes
         # stale the moment a gate is added to the profile. Keep the count derived.
@@ -348,6 +364,80 @@ class ReadinessCrossReferenceTests(ContractTestCase):
         other = next(group for group in groups if group["tone"] != "primary")
         other["capabilityIds"].append("rendering.d3d11")
         self.assert_rejected(self.mutable, "demotes capabilities included in")
+
+    def surface_path(self, contract: dict[str, Any], index: int = 0) -> Path:
+        return REPO_ROOT / self.profile_of(contract)["publicClaimSurfaces"][index]
+
+    def test_no_public_surface_marks_a_broader_host_as_in_profile(self) -> None:
+        profile = self.profile_of(self.mutable)
+        marker = f"In `{profile['id']}`"
+        tokens = [value.lower() for value in profile["publicClaimRules"]["breadthTokens"]]
+        for surface in profile["publicClaimSurfaces"]:
+            text = (REPO_ROOT / surface).read_text(encoding="utf-8", errors="replace")
+            for number, line in enumerate(text.splitlines(), start=1):
+                if marker not in line:
+                    continue
+                with self.subTest(surface=surface, line=number):
+                    self.assertEqual(
+                        [token for token in tokens if token in line.lower()],
+                        [],
+                        f"{surface}:{number} widens the profile: {line.strip()}",
+                    )
+
+    def test_public_surface_windows_10_in_profile_row_is_rejected(self) -> None:
+        path = self.surface_path(self.mutable)
+        original = path.read_text(encoding="utf-8")
+        try:
+            path.write_text(
+                original + "\n| Windows 10+ | MSVC v143 | DirectX 11 | In `stable-v1` — primary |\n",
+                encoding="utf-8",
+                newline="",
+            )
+            self.assert_rejected(self.mutable, "inside the profile, which declares hosts")
+        finally:
+            path.write_text(original, encoding="utf-8", newline="")
+
+    def test_public_surface_any_platform_headless_row_is_rejected(self) -> None:
+        path = self.surface_path(self.mutable)
+        original = path.read_text(encoding="utf-8")
+        try:
+            path.write_text(
+                original + "\n| Headless | Any | NullRHI | In `stable-v1` — supported |\n",
+                encoding="utf-8",
+                newline="",
+            )
+            self.assert_rejected(self.mutable, "marks unscoped column")
+        finally:
+            path.write_text(original, encoding="utf-8", newline="")
+
+    def test_public_surface_nullrhi_llvmpipe_conflation_is_rejected(self) -> None:
+        path = self.surface_path(self.mutable)
+        original = path.read_text(encoding="utf-8")
+        try:
+            path.write_text(
+                original + "\n| NullRHI | headless / software rendering via llvmpipe |\n",
+                encoding="utf-8",
+                newline="",
+            )
+            self.assert_rejected(self.mutable, "conflates 'NullRHI'")
+        finally:
+            path.write_text(original, encoding="utf-8", newline="")
+
+    def test_no_public_surface_conflates_nullrhi_with_software_rendering(self) -> None:
+        profile = self.profile_of(self.mutable)
+        for surface in profile["publicClaimSurfaces"]:
+            text = (REPO_ROOT / surface).read_text(encoding="utf-8", errors="replace")
+            for number, line in enumerate(text.splitlines(), start=1):
+                lowered = line.lower()
+                for entry in profile["publicClaimRules"]["conflatedTerms"]:
+                    if entry["term"].lower() not in lowered:
+                        continue
+                    with self.subTest(surface=surface, line=number):
+                        self.assertEqual(
+                            [value for value in entry["conflictsWith"] if value.lower() in lowered],
+                            [],
+                            f"{surface}:{number}: {line.strip()}",
+                        )
 
     def test_generated_handoff_is_current(self) -> None:
         self.assertEqual(

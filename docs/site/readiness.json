@@ -34,7 +34,7 @@
       "support": "primary",
       "release": "candidate",
       "summary": "Windows is the broadest and intended primary host, with MSVC, the editor, D3D11, and packaging projects present.",
-      "limitations": ["No same-commit Shipping certification, signing, install/uninstall, upgrade, or rollback evidence is published."],
+      "limitations": ["No same-commit Shipping certification, signing, install/uninstall, upgrade, or rollback evidence is published.", "The stable-v1 profile supports Windows 11 x64 only; Windows 10 x64 remains a documented build floor and is not a certified profile row."],
       "evidence": [
         {"type": "workflow", "path": ".github/workflows/build.yml", "job": "build-windows-vs2022", "label": "Windows CI job"},
         {"type": "source", "path": "SparkEngine/Source/Core/SparkEngineWindows.cpp", "label": "Windows platform source"}
@@ -165,7 +165,7 @@
       "support": "supported",
       "release": "candidate",
       "summary": "NullRHI is a deliberate no-render device path for headless servers, automation, and GPU-less execution.",
-      "limitations": ["Packaged-server soak, load, shutdown, leak, crash, and operations evidence is not yet a blocking release lane", "Production server observability, load, backup, and incident drills are out of the stable-v1 profile and stay gated by OPS-110 with the service surfaces they serve"],
+      "limitations": ["Packaged-server soak, load, shutdown, leak, crash, and operations evidence is not yet a blocking release lane", "Production server observability, load, backup, and incident drills are out of the stable-v1 profile and stay gated by OPS-110 with the service surfaces they serve", "NullRHI performs no rendering at all. Software rasterization through Mesa llvmpipe is the experimental OpenGL backend, not NullRHI, and is outside the stable-v1 profile.", "NullRHI is in the stable-v1 profile only on Windows 11 x64; headless execution on any other host is uncertified."],
       "evidence": [
         {"type": "source", "path": "SparkEngine/Source/Graphics/RHI/NullRHIDevice.h", "label": "NullRHI device"},
         {"type": "test", "path": "Tests/TestNullRHIDevice.cpp", "label": "NullRHI tests"}
@@ -466,7 +466,7 @@
         {
           "id": "host",
           "label": "Host operating system",
-          "value": "Windows 11 x64 (Windows 10 x64 remains the declared minimum host)",
+          "value": "Windows 11 x64 only. Windows 10 x64 and every non-Windows host remain documented development and build floors; they are outside this profile and are not certified by it.",
           "capabilityIds": ["platform.windows"],
           "evidence": [
             {"type": "workflow", "path": ".github/workflows/build.yml", "job": "build-windows-vs2022", "label": "Pinned x64 Windows build and test lane"},
@@ -496,7 +496,7 @@
         {
           "id": "headless",
           "label": "Headless path",
-          "value": "NullRHI, for GPU-less execution, automation, and dedicated-server processes",
+          "value": "NullRHI on Windows 11 x64: the no-render device path for GPU-less execution and automation. NullRHI renders nothing. It is not software rendering, and the llvmpipe software OpenGL path belongs to the experimental OpenGL backend outside this profile.",
           "capabilityIds": ["runtime.nullrhi"],
           "evidence": [
             {"type": "source", "path": "SparkEngine/Source/Graphics/RHI/NullRHIDevice.h", "label": "NullRHI device"},
@@ -538,6 +538,14 @@
       ],
       "includedCapabilityIds": ["platform.windows", "runtime.cpp", "runtime.nullrhi", "rendering.d3d11", "scope.singleplayer", "editor.authoring", "modules.fps"],
       "firstPartyGameCapabilityIds": ["modules.fps"],
+      "supportedHosts": ["Windows 11 x64"],
+      "publicClaimRules": {
+        "breadthTokens": ["Windows 10", "Windows 8", "Windows 7", "Windows 10+", "any platform", "any compiler"],
+        "forbiddenInProfileCells": ["Any", "All", "Any platform", "Any host", "Windows", "Windows 10", "Windows 10+", "Headless"],
+        "conflatedTerms": [
+          {"term": "NullRHI", "conflictsWith": ["llvmpipe", "software rendering", "software render"], "reason": "NullRHI is a no-render device that rasterizes nothing. Software rasterization through Mesa llvmpipe is the experimental OpenGL path and is outside this profile, so the two must never be described as the same thing."}
+        ]
+      },
       "boundaries": {
         "experimentalCapabilityIds": ["platform.linux", "platform.macos", "rendering.d3d12", "rendering.vulkan", "rendering.opengl", "rendering.metal", "networking.multiplayer", "scripting.angelscript", "scripting.visual", "modules.mmofps", "modules.prototypes"],
         "unsupportedCapabilityIds": ["platform.mobile", "platform.vr", "platform.console", "services.production"]
@@ -557,6 +565,7 @@
         "No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200, CI-120).",
         "The editor-to-cook-to-package-to-install-to-run loop has no same-commit end-to-end certification.",
         "MSVC v145 and Visual Studio 2026 are an advisory continue-on-error lane, not a supported compiler line in this profile.",
+        "Windows 10 x64 and the Linux and macOS build floors stay documented as development minima, but this profile certifies only Windows 11 x64; headless execution is in profile only on that same host.",
         "Breadth is frozen: this profile inherits no work that exists only for out-of-profile capabilities. Linux, macOS, D3D12, Vulkan, OpenGL, Metal, multiplayer transport, production service operations, and the prototype modules keep their own open work outside this gate and stay uncertified."
       ],
       "documentation": ["README.md", "wiki/platform/System-Requirements.md", "wiki/graphics/RHI-Abstraction-Layer.md", "wiki/gameplay-tools/Game-Packaging.md", "GameModules/README.md"],

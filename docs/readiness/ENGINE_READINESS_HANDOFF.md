@@ -72,10 +72,10 @@ The single product shape SparkEngine intends to declare stable first: a Windows 
 
 | Dimension | Declared value | In-profile capabilities | Evidence |
 |---|---|---|---|
-| Host operating system | Windows 11 x64 (Windows 10 x64 remains the declared minimum host) | `platform.windows` | `.github/workflows/build.yml` (build-windows-vs2022), `wiki/platform/System-Requirements.md` |
+| Host operating system | Windows 11 x64 only. Windows 10 x64 and every non-Windows host remain documented development and build floors; they are outside this profile and are not certified by it. | `platform.windows` | `.github/workflows/build.yml` (build-windows-vs2022), `wiki/platform/System-Requirements.md` |
 | Supported compiler line | The MSVC v143 toolset line (Visual Studio 17 2022 generator, architecture x64, toolset v143). The exact MSVC compiler build and Windows SDK version are not pinned yet, so this names the supported line, not a certified toolchain. | `platform.windows`, `runtime.cpp` | `.github/workflows/build.yml` (build-windows-vs2022), `CMakePresets.json` |
 | Rendered path | Direct3D 11 | `rendering.d3d11` | `SparkEngine/Source/Graphics/RHI/D3D11`, `wiki/graphics/RHI-Abstraction-Layer.md` |
-| Headless path | NullRHI, for GPU-less execution, automation, and dedicated-server processes | `runtime.nullrhi` | `SparkEngine/Source/Graphics/RHI/NullRHIDevice.h`, `Tests/TestNullRHIDevice.cpp` |
+| Headless path | NullRHI on Windows 11 x64: the no-render device path for GPU-less execution and automation. NullRHI renders nothing. It is not software rendering, and the llvmpipe software OpenGL path belongs to the experimental OpenGL backend outside this profile. | `runtime.nullrhi` | `SparkEngine/Source/Graphics/RHI/NullRHIDevice.h`, `Tests/TestNullRHIDevice.cpp` |
 | Gameplay authoring language | C++23 game modules built against the SDK module interface | `runtime.cpp` | `SparkSDK/Include/Spark/IModule.h`, `SparkEngine/Source/Core/ModuleManager.cpp` |
 | First-party game | SparkGameFPS, one first-party single-player vertical slice that must build through the public SDK surface alone. Constrained LAN play is optional and is not required by this profile. | `modules.fps`, `scope.singleplayer` | `GameModules/SparkGameFPS`, `GameModules/SparkGameFPS/CMakeLists.txt`, `SparkSDK/Include/Spark/IModule.h` |
 | Delivered product shape | One installed single-player vertical slice authored in SparkEditor, cooked, packaged, installed, and run without external services | `scope.singleplayer`, `editor.authoring` | `wiki/gameplay-tools/Game-Packaging.md`, `SparkInstaller`, `GameModules/SparkGameFPS` |
@@ -86,6 +86,7 @@ Every capability is classified exactly once. Nothing outside the profile may be 
 
 - In profile: `platform.windows`, `runtime.cpp`, `runtime.nullrhi`, `rendering.d3d11`, `scope.singleplayer`, `editor.authoring`, `modules.fps`
 - First-party game: `modules.fps`
+- Supported hosts: `Windows 11 x64`
 - Experimental: `platform.linux`, `platform.macos`, `rendering.d3d12`, `rendering.vulkan`, `rendering.opengl`, `rendering.metal`, `networking.multiplayer`, `scripting.angelscript`, `scripting.visual`, `modules.mmofps`, `modules.prototypes`
 - Unsupported: `platform.mobile`, `platform.vr`, `platform.console`, `services.production`
 
@@ -108,6 +109,7 @@ Every capability is classified exactly once. Nothing outside the profile may be 
 - No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200, CI-120).
 - The editor-to-cook-to-package-to-install-to-run loop has no same-commit end-to-end certification.
 - MSVC v145 and Visual Studio 2026 are an advisory continue-on-error lane, not a supported compiler line in this profile.
+- Windows 10 x64 and the Linux and macOS build floors stay documented as development minima, but this profile certifies only Windows 11 x64; headless execution is in profile only on that same host.
 - Breadth is frozen: this profile inherits no work that exists only for out-of-profile capabilities. Linux, macOS, D3D12, Vulkan, OpenGL, Metal, multiplayer transport, production service operations, and the prototype modules keep their own open work outside this gate and stay uncertified.
 
 - Public surfaces this profile owns: `README.md`, `docs/README.md`, `docs/site/content.json`

@@ -138,9 +138,9 @@ Support words below are the `stable-v1` release-profile classifications from
 | DirectX 11 | In `stable-v1` — primary Windows backend, release candidate |
 | DirectX 12 | Outside `stable-v1` — experimental; mesh shaders, DXR ray tracing, VRS |
 | Vulkan 1.4 | Outside `stable-v1` — experimental; Linux and Windows |
-| OpenGL 4.6 | Outside `stable-v1` — experimental; fallback on older hardware |
+| OpenGL 4.6 | Outside `stable-v1` — experimental; fallback on older hardware, and the home of software rendering via Mesa llvmpipe |
 | Metal | Outside `stable-v1` — experimental; macOS, in progress |
-| NullRHI | In `stable-v1` — supported headless / software rendering via llvmpipe |
+| NullRHI | In `stable-v1` — supported no-render headless device on Windows 11 x64; it rasterizes nothing |
 
 Render features include PBR materials, global illumination (DDGI, Adaptive Probe Volumes, hybrid ray tracing), forward/deferred/clustered render paths, cascaded shadow maps, GPU-driven rendering (compute frustum culling, indirect draw), virtual texturing, mesh shaders, DXR 1.1, FSR upscaling, and a 35-node Shader Graph. Post-processing covers bloom, HDR tone mapping (Reinhard/ACES/Uncharted 2), TAA, FXAA, MSAA, depth of field, motion blur, volumetric fog, lens flares, and light shafts.
 
@@ -259,9 +259,15 @@ cmake -B build -DENABLE_EDITOR=OFF -DENABLE_GRAPHICS=OFF
 
 ## System Requirements
 
+These are **build and development minima** — what it takes to configure, compile,
+and run from source. They are deliberately broader than the supported release
+surface and are not a support claim: the only declared release profile is
+`stable-v1` (Windows 11 x64), described under [Platform support](#system-requirements)
+below. Everything else in this table is experimental or uncertified.
+
 | | Minimum | Recommended |
 |---|---|---|
-| OS | Windows 10 / Ubuntu 24.04 / macOS 12+ | Windows 11 / Ubuntu 24.04 |
+| OS (build floor, not `stable-v1`) | Windows 10 / Ubuntu 24.04 / macOS 12+ | Windows 11 / Ubuntu 24.04 |
 | Compiler | MSVC 19.36, GCC 13, Clang 17 | MSVC 19.36+, GCC 13+, Clang 17+ |
 | C++ | C++23 | C++23 |
 | GPU | Any DirectX 11 capable | RTX 2080+ for ray tracing |
@@ -294,13 +300,19 @@ own open work, but that work does not gate `stable-v1` — and `stable-v1` certi
 none of them. They stay labelled experimental or unsupported until a profile
 declares them.
 
+The supported host is Windows 11 x64 and nothing else. The build minima in the
+table above are development floors, not profile rows: Windows 10 x64, Linux, and
+macOS still build and are still documented, but `stable-v1` certifies none of them.
+
 | Platform | Compiler | Backend | Declared support |
 |---|---|---|---|
-| Windows 10+ | MSVC v143 (VS 2022) | DirectX 11 | In `stable-v1` — primary, release candidate |
-| Windows | MSVC v144 (VS 2026) | DirectX 11/12 | Outside `stable-v1` — advisory CI lane only |
+| Windows 11 x64 | MSVC v143 (VS 2022) | DirectX 11 | In `stable-v1` — primary, release candidate |
+| Windows 11 x64, headless | MSVC v143 (VS 2022) | NullRHI (no-render) | In `stable-v1` — supported, release candidate |
+| Windows 10 x64 | MSVC v143 (VS 2022) | DirectX 11 | Outside `stable-v1` — documented build floor, uncertified |
+| Windows, any version | MSVC v144 (VS 2026) | DirectX 11/12 | Outside `stable-v1` — advisory CI lane only |
 | Linux | GCC 13+ / Clang 17+ | Vulkan/OpenGL | Outside `stable-v1` — experimental, CI tested |
 | macOS | Apple Clang | Metal | Outside `stable-v1` — experimental |
-| Headless | Any | NullRHI | In `stable-v1` — supported, release candidate |
+| Headless on any other host | GCC / Clang / MSVC | NullRHI (no-render) | Outside `stable-v1` — uncertified |
 
 ---
 

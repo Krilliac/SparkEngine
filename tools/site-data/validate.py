@@ -411,7 +411,29 @@ class Validator:
             for index, path in enumerate(profile.get("documentation", [])):
                 self.require_path(path, f"{location}.documentation[{index}]")
 
-            # Public support wording must point back at the profile that owns it.
+            # The supported host set is a declaration, not prose. A host string that
+            # smuggles in a breadth token ("Windows 10", "any platform") widens the
+            # profile without anyone editing its boundaries.
+            rules = profile.get("publicClaimRules") or {}
+            breadth_tokens = [str(value).lower() for value in rules.get("breadthTokens", [])]
+            forbidden_cells = [str(value) for value in rules.get("forbiddenInProfileCells", [])]
+            hosts = profile.get("supportedHosts", [])
+            self.require(bool(hosts), location, "must declare at least one supported host")
+            for index, host in enumerate(hosts):
+                host_location = f"{location}.supportedHosts[{index}]"
+                self.require(isinstance(host, str) and host.strip(), host_location, "host must be a non-empty string")
+                widened = [token for token in breadth_tokens if token in str(host).lower()]
+                self.require(not widened, host_location, f"supported host widens the profile: {widened}")
+            for index, entry in enumerate(rules.get("conflatedTerms", [])):
+                term_location = f"{location}.publicClaimRules.conflatedTerms[{index}]"
+                self.require(bool(entry.get("term")), term_location, "term is required")
+                self.require(bool(entry.get("conflictsWith")), term_location, "conflictsWith must not be empty")
+                self.require(bool(entry.get("reason")), term_location, "reason is required")
+
+            # Public support wording must point back at the profile that owns it, must
+            # not mark a broader host or platform as inside it, and must not conflate
+            # terms the contract declares distinct.
+            marker = f"In `{identifier}`"
             surfaces = profile.get("publicClaimSurfaces", [])
             self.require(bool(surfaces), location, "must declare the public surfaces it owns")
             for index, path in enumerate(surfaces):
@@ -420,11 +442,45 @@ class Validator:
                 resolved = REPO_ROOT / str(path)
                 if not resolved.is_file():
                     continue
+                text = resolved.read_text(encoding="utf-8", errors="replace")
                 self.require(
-                    identifier in resolved.read_text(encoding="utf-8", errors="replace"),
+                    identifier in text,
                     surface_location,
                     f"public surface does not reference release profile {identifier!r}",
                 )
+                for number, line in enumerate(text.splitlines(), start=1):
+                    lowered = line.lower()
+                    if marker in line:
+                        widened = [token for token in breadth_tokens if token in lowered]
+                        self.require(
+                            not widened,
+                            f"{surface_location}:{number}",
+                            f"claims {widened} inside the profile, which declares hosts {hosts}",
+                        )
+                        # Exact cell match, so a bare "Any" column is rejected without
+                        # a substring rule firing on words like "company".
+                        cells = {value.strip().lower() for value in line.split("|") if value.strip()}
+                        vague = sorted(
+                            value for value in forbidden_cells if value.lower() in cells
+                        )
+                        self.require(
+                            not vague,
+                            f"{surface_location}:{number}",
+                            f"marks unscoped column {vague} as inside the profile",
+                        )
+                    for entry in rules.get("conflatedTerms", []):
+                        term = str(entry.get("term", ""))
+                        if not term or term.lower() not in lowered:
+                            continue
+                        clashes = [
+                            value for value in entry.get("conflictsWith", [])
+                            if str(value).lower() in lowered
+                        ]
+                        self.require(
+                            not clashes,
+                            f"{surface_location}:{number}",
+                            f"conflates {term!r} with {clashes}: {entry.get('reason')}",
+                        )
 
         if readiness.get("globalRelease", {}).get("state") == "ready":
             self.require(
