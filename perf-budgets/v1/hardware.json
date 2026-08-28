@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1.0.0",
+  "rows": [
+    {
+      "id": "windows-d3d11-dev-primary",
+      "certified": false,
+      "os": "Windows 11",
+      "cpu": "AMD Ryzen 9 9900X3D",
+      "cpuCores": 12,
+      "gpu": "NVIDIA RTX 5070 Ti",
+      "gpuVramGb": 16,
+      "gpuDriverMinVersion": "576.0",
+      "ramGb": 32,
+      "certifiedAt": null,
+      "certifiedBy": null,
+      "certifiedCommit": null,
+      "notes": "Primary dev hardware — awaits formal benchmark certification"
+    },
+    {
+      "id": "linux-nullrhi-ci",
+      "certified": false,
+      "os": "Ubuntu 24.04",
+      "cpu": "GitHub Actions runner",
+      "cpuCores": 4,
+      "gpu": "none",
+      "gpuVramGb": 0,
+      "gpuDriverMinVersion": null,
+      "ramGb": 16,
+      "certifiedAt": null,
+      "certifiedBy": null,
+      "certifiedCommit": null,
+      "notes": "CI headless row — NullRHI only, no GPU"
+    }
+  ]
+}

@@ -263,7 +263,7 @@ Certify Windows/D3D11, headless, runtime, editor, assets, installer, saves, SDK,
 | [`INST-130`](#inst-130--make-installer-and-updater-verified-transactional-and-recoverable) Make installer and updater verified, transactional, and recoverable | P0 | **open** | `ASSET-220`, `REL-100`, `REL-110` | `PLT-200`, `SDK-240` |
 | [`SAVE-230`](#save-230--version-saves-scenes-assets-editor-data-and-migrations) Version saves, scenes, assets, editor data, and migrations | P0 | **open** | `RDY-000`, `RDY-010`, `LIFE-200` | `EDT-210`, `ASSET-220`, `SDK-240` |
 | [`SDK-240`](#sdk-240--stabilize-sdk-module-abi-package-exports-and-compatibility-diagnostics) Stabilize SDK, module ABI, package exports, and compatibility diagnostics | P0 | **open** | `ASSET-220`, `LIFE-200`, `REL-100` | `SAVE-230`, `EDT-210` |
-| [`PERF-100`](#perf-100--make-performance-memory-startup-package-size-and-visual-regression-release-gates) Make performance, memory, startup, package size, and visual regression release gates | P1 | **open** | `CI-110`, `BLD-100`, `RHI-210` | `EDT-210`, `SAVE-230`, `SDK-240` |
+| [`PERF-100`](#perf-100--make-performance-memory-startup-package-size-and-visual-regression-release-gates) Make performance, memory, startup, package size, and visual regression release gates | P1 | **in-progress** | `CI-110`, `BLD-100`, `RHI-210` | `EDT-210`, `SAVE-230`, `SDK-240` |
 | [`ENG-200`](#eng-200--complete-the-angelscript-and-visual-script-runtime-lifecycle) Complete the AngelScript and visual-script runtime lifecycle | P0 | **open** | `RDY-010`, `LIFE-200`, `SAVE-230` | `EDT-210`, `RHI-210` |
 
 ### Wave 3 — Secure multiplayer reference
@@ -2302,10 +2302,10 @@ ctest --test-dir /tmp/spark-sdk-consumer --output-on-failure --no-tests=error
 
 ### PERF-100 — Make performance, memory, startup, package size, and visual regression release gates
 
-**Priority:** P1 · **Status:** open · **Wave:** 2 · **Area:** performance · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P1 · **Status:** in-progress · **Wave:** 2 · **Area:** performance · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users.
+Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. First slice delivered: versioned budget schema, fail-closed validator, result comparator, baseline approval governance, 78 adversarial tests (155 subtests). Budgets pending actual measurement on certified hardware.
 
 **Dependency contract**
 
@@ -2315,14 +2315,21 @@ Profiler and benchmark scaffolding exists, but no representative regression budg
 **Source context**
 
 - `SparkEngine/Source/Utils/Profiler.h`
+- `SparkEngine/Source/Utils/BenchmarkFramework.h`
 - `Tests/GoldenImages`
 - `Tests/TestWarnings.h`
 - `wiki/advanced/Performance-Profiling-Guide.md`
+- `perf-budgets/v1/budget.json`
+- `perf-budgets/v1/hardware.json`
+- `perf-budgets/v1/baselines.json`
+- `tools/perf-budget/validate_budget.py`
+- `tools/perf-budget/compare_results.py`
 
 **Entry points**
 
 - `Tests/Benchmarks`
 - `Tests/GoldenImages`
+- `Tests/Tools/test_perf_budget.py`
 - `.github/workflows/build.yml`
 
 **Implementation scope**

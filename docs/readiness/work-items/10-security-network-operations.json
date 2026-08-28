@@ -858,12 +858,12 @@
       "id": "PERF-100",
       "title": "Make performance, memory, startup, package size, and visual regression release gates",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "performance",
       "owner": "unassigned",
-      "rationale": "Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users.",
+      "rationale": "Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. First slice delivered: versioned budget schema, fail-closed validator, result comparator, baseline approval governance, 78 adversarial tests (155 subtests). Budgets pending actual measurement on certified hardware.",
       "dependencies": [
         "CI-110",
         "BLD-100",
@@ -876,13 +876,20 @@
       ],
       "sourceContext": [
         "SparkEngine/Source/Utils/Profiler.h",
+        "SparkEngine/Source/Utils/BenchmarkFramework.h",
         "Tests/GoldenImages",
         "Tests/TestWarnings.h",
-        "wiki/advanced/Performance-Profiling-Guide.md"
+        "wiki/advanced/Performance-Profiling-Guide.md",
+        "perf-budgets/v1/budget.json",
+        "perf-budgets/v1/hardware.json",
+        "perf-budgets/v1/baselines.json",
+        "tools/perf-budget/validate_budget.py",
+        "tools/perf-budget/compare_results.py"
       ],
       "entryPoints": [
         "Tests/Benchmarks",
         "Tests/GoldenImages",
+        "Tests/Tools/test_perf_budget.py",
         ".github/workflows/build.yml"
       ],
       "implementationScope": [
