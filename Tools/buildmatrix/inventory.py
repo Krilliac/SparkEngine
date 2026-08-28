@@ -10,12 +10,16 @@ configuration. The two forms of evidence are deliberately never conflated.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -75,6 +79,10 @@ _TARGET_KIND_MAP = {
 
 class InventoryError(RuntimeError):
     """The inventory cannot safely interpret an authoritative input."""
+
+
+class ReplyValidationError(InventoryError):
+    """A supplied CMake File API reply is unsafe, malformed, or unstable."""
 
 
 @dataclass
@@ -1120,6 +1128,19 @@ def load_stable_profile_data(data: dict[str, Any]) -> dict[str, Any]:
             raise InventoryError(f"stable-v1 build configuration {configuration['id']!r} lacks a preset")
         if configuration.get("purpose") == "installed-sdk-consumer" and configuration.get("preset"):
             raise InventoryError("installed-sdk-consumer must not use a source-tree preset")
+        if configuration.get("purpose") == "installed-sdk-consumer":
+            for field_name in ("sourceDirectory", "buildDirectory"):
+                value = configuration.get(field_name)
+                if (
+                    not isinstance(value, str)
+                    or not value
+                    or Path(value).is_absolute()
+                    or "\\" in value
+                    or any(part in {"", ".", ".."} for part in value.split("/"))
+                ):
+                    raise InventoryError(
+                        f"installed-sdk-consumer must declare a safe relative {field_name}"
+                    )
     seen_targets: set[tuple[str, str]] = set()
     target_names: set[str] = set()
     covered: set[str] = set()
@@ -1236,38 +1257,6 @@ def extract_workflow_presets(path: Path | None = None) -> list[str]:
     )
 
 
-def parse_codemodel_targets(
-    profile: str,
-    codemodel: dict[str, Any],
-    target_documents: dict[str, dict[str, Any]],
-) -> dict[str, Any]:
-    """Parse configured target evidence from already loaded File API documents."""
-    targets: dict[tuple[str, str], dict[str, str]] = {}
-    for configuration in codemodel.get("configurations", []):
-        config_name = configuration.get("name", "")
-        for reference in configuration.get("targets", []):
-            target_file = reference.get("jsonFile")
-            if not target_file:
-                raise InventoryError(f"{profile}: codemodel target {reference.get('name')!r} has no jsonFile")
-            target = target_documents.get(target_file)
-            if target is None:
-                raise InventoryError(f"{profile}: codemodel target reply {target_file!r} is missing")
-            cmake_type = target.get("type")
-            kind = _TARGET_KIND_MAP.get(cmake_type)
-            if not kind:
-                raise InventoryError(f"{profile}: unsupported codemodel target type {cmake_type!r}")
-            key = (reference["name"], config_name)
-            value = {"target": reference["name"], "kind": kind, "configuration": config_name}
-            if key in targets:
-                raise InventoryError(f"{profile}: duplicate codemodel target {key}")
-            targets[key] = value
-    return {
-        "profile": profile,
-        "status": "available",
-        "targets": sorted(targets.values(), key=lambda item: (item["target"], item["configuration"])),
-    }
-
-
 # Cache variables worth binding evidence to. Bounded on purpose: the reply's
 # cache is attacker-sized input, and an unbounded copy would bloat the artifact.
 _BOUND_CACHE_PREFIXES = ("SPARK_", "ENABLE_", "BUILD_")
@@ -1281,6 +1270,26 @@ _BOUND_CACHE_NAMES = {
     "CMAKE_SIZEOF_VOID_P",
 }
 _MAX_CACHE_ENTRIES = 4096
+_MAX_REPLY_FILES = 8192
+_MAX_REPLY_INDICES = 32
+_MAX_INDEX_OBJECTS = 512
+_MAX_CONFIGURATIONS = 128
+_MAX_TARGET_REFERENCES = 8192
+_MAX_INDEX_BYTES = 2 * 1024 * 1024
+_MAX_CODEMODEL_BYTES = 16 * 1024 * 1024
+_MAX_CACHE_BYTES = 8 * 1024 * 1024
+_MAX_TARGET_BYTES = 16 * 1024 * 1024
+_MAX_PROVENANCE_BYTES = 1024 * 1024
+_MAX_REPLY_FILE_BYTES = 32 * 1024 * 1024
+_MAX_REPLY_DIRECTORY_BYTES = 256 * 1024 * 1024
+_MAX_CONSUMED_REPLY_BYTES = 128 * 1024 * 1024
+_MAX_JSON_DEPTH = 64
+_MAX_JSON_NODES = 250_000
+_MAX_JSON_STRING_BYTES = 2 * 1024 * 1024
+_PROVENANCE_FILE = "spark-ci120-provenance-v1.json"
+_PROVENANCE_SCHEMA = 1
+_PROVENANCE_PRODUCER = "spark-buildmatrix-capture-v1"
+_REPARSE_POINT_ATTRIBUTE = 0x400
 
 
 def _normalize_directory(value: Any) -> str:
@@ -1289,35 +1298,420 @@ def _normalize_directory(value: Any) -> str:
     return Path(value).as_posix().rstrip("/")
 
 
-def _reply_object(index: dict[str, Any], kind: str, major: int) -> str:
-    reply = index.get("reply", {})
+def _absolute_directory(path: Path) -> Path:
+    """Normalize spelling without following links or reparses."""
+    return Path(os.path.abspath(os.fspath(path)))
+
+
+def _is_reparse(metadata: os.stat_result) -> bool:
+    return bool(int(getattr(metadata, "st_file_attributes", 0)) & _REPARSE_POINT_ATTRIBUTE)
+
+
+def _stat_token(metadata: os.stat_result) -> tuple[int, ...]:
+    """Stable file identity fields shared by Windows path and handle APIs."""
+    return (
+        int(metadata.st_dev),
+        int(metadata.st_ino),
+        int(metadata.st_mode),
+        int(metadata.st_size),
+        int(getattr(metadata, "st_file_attributes", 0)),
+    )
+
+
+def _directory_stat_token(metadata: os.stat_result) -> tuple[int, ...]:
+    """Directory identity plus mutation metadata; directory reads do not alter it."""
+    return (
+        int(metadata.st_dev),
+        int(metadata.st_ino),
+        int(metadata.st_mode),
+        int(getattr(metadata, "st_mtime_ns", int(metadata.st_mtime * 1_000_000_000))),
+        int(getattr(metadata, "st_ctime_ns", int(metadata.st_ctime * 1_000_000_000))),
+        int(getattr(metadata, "st_file_attributes", 0)),
+    )
+
+
+def _validate_directory(metadata: os.stat_result, label: str) -> None:
+    if stat.S_ISLNK(metadata.st_mode) or _is_reparse(metadata):
+        raise ReplyValidationError(f"{label} must not be a symlink or reparse point")
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise ReplyValidationError(f"{label} is not a directory")
+
+
+def _validate_regular_file(metadata: os.stat_result, label: str) -> None:
+    if stat.S_ISLNK(metadata.st_mode) or _is_reparse(metadata):
+        raise ReplyValidationError(f"{label} must not be a symlink or reparse point")
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ReplyValidationError(f"{label} is not a regular file")
+    # Some Windows filesystems report st_nlink=0 through the CRT. The opened
+    # handle is checked with GetFileInformationByHandle below; any other value
+    # here is already decisively unsafe.
+    if metadata.st_nlink not in {0, 1}:
+        raise ReplyValidationError(
+            f"{label} has {metadata.st_nlink} hard links; reply evidence must have exactly one"
+        )
+
+
+def _opened_link_count(descriptor: int, metadata: os.stat_result) -> int:
+    if os.name != "nt":
+        return int(metadata.st_nlink)
+
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    class _FileTime(ctypes.Structure):
+        _fields_ = [("low", wintypes.DWORD), ("high", wintypes.DWORD)]
+
+    class _ByHandleFileInformation(ctypes.Structure):
+        _fields_ = [
+            ("attributes", wintypes.DWORD),
+            ("creationTime", _FileTime),
+            ("lastAccessTime", _FileTime),
+            ("lastWriteTime", _FileTime),
+            ("volumeSerialNumber", wintypes.DWORD),
+            ("fileSizeHigh", wintypes.DWORD),
+            ("fileSizeLow", wintypes.DWORD),
+            ("numberOfLinks", wintypes.DWORD),
+            ("fileIndexHigh", wintypes.DWORD),
+            ("fileIndexLow", wintypes.DWORD),
+        ]
+
+    information = _ByHandleFileInformation()
+    handle = wintypes.HANDLE(msvcrt.get_osfhandle(descriptor))
+    get_information = ctypes.windll.kernel32.GetFileInformationByHandle
+    get_information.argtypes = [wintypes.HANDLE, ctypes.POINTER(_ByHandleFileInformation)]
+    get_information.restype = wintypes.BOOL
+    if not get_information(handle, ctypes.byref(information)):
+        raise ReplyValidationError("cannot determine the opened reply file's hard-link count")
+    return int(information.numberOfLinks)
+
+
+def _directory_token(path: Path, label: str) -> tuple[int, ...]:
+    try:
+        metadata = os.lstat(path)
+    except OSError as error:
+        raise ReplyValidationError(f"cannot inspect {label}: {error}") from error
+    _validate_directory(metadata, label)
+    return _directory_stat_token(metadata)
+
+
+def _validate_directory_chain(path: Path, label: str) -> tuple[Path, tuple[int, ...]] | None:
+    """Validate the caller-selected trust root without following its final entry."""
+    absolute = _absolute_directory(path)
+    try:
+        metadata = os.lstat(absolute)
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise ReplyValidationError(f"cannot inspect {label}: {error}") from error
+    _validate_directory(metadata, label)
+    return absolute, _directory_stat_token(metadata)
+
+
+def _reply_filename(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ReplyValidationError(f"{label} must be a nonempty filename")
+    if len(value) > 255 or value in {".", ".."} or "/" in value or "\\" in value:
+        raise ReplyValidationError(f"{label} must be one plain filename inside the reply directory")
+    if not value.endswith(".json"):
+        raise ReplyValidationError(f"{label} must name a JSON file")
+    return value
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON number {value}")
+
+
+def _decode_bounded_json(payload: bytes, label: str) -> Any:
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate JSON key {key!r}")
+            result[key] = value
+        return result
+
+    try:
+        decoded = json.loads(
+            payload.decode("utf-8"),
+            object_pairs_hook=unique_object,
+            parse_constant=_reject_json_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError, ValueError) as error:
+        raise ReplyValidationError(f"{label} is not strict bounded JSON: {error}") from error
+
+    nodes = 0
+    stack: list[tuple[Any, int]] = [(decoded, 1)]
+    while stack:
+        value, depth = stack.pop()
+        nodes += 1
+        if nodes > _MAX_JSON_NODES:
+            raise ReplyValidationError(f"{label} exceeds the {_MAX_JSON_NODES} JSON-node bound")
+        if depth > _MAX_JSON_DEPTH:
+            raise ReplyValidationError(f"{label} exceeds the {_MAX_JSON_DEPTH} JSON-depth bound")
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if len(key.encode("utf-8")) > _MAX_JSON_STRING_BYTES:
+                    raise ReplyValidationError(f"{label} contains an oversized JSON key")
+                stack.append((child, depth + 1))
+        elif isinstance(value, list):
+            stack.extend((child, depth + 1) for child in value)
+        elif isinstance(value, str) and len(value.encode("utf-8")) > _MAX_JSON_STRING_BYTES:
+            raise ReplyValidationError(f"{label} contains an oversized JSON string")
+    return decoded
+
+
+@dataclass(frozen=True)
+class _ReplyFile:
+    path: Path
+    token: tuple[int, ...]
+    size: int
+
+
+@dataclass
+class _ReplySnapshot:
+    build_directory: Path
+    directory: Path
+    directory_token: tuple[int, ...]
+    files: dict[str, _ReplyFile]
+    payloads: dict[str, bytes] = field(default_factory=dict)
+    records: dict[str, dict[str, Any]] = field(default_factory=dict)
+    consumed_bytes: int = 0
+
+    def assert_stable(self) -> None:
+        if _directory_token(self.directory, "CMake File API reply directory") != self.directory_token:
+            raise ReplyValidationError("CMake File API reply directory changed while it was being read")
+
+    def read_bytes(self, name: str, maximum: int, label: str) -> bytes:
+        name = _reply_filename(name, label)
+        known = self.files.get(name)
+        if known is None:
+            raise ReplyValidationError(f"{label} {name!r} is missing from the captured reply snapshot")
+        if known.size > maximum:
+            raise ReplyValidationError(f"{label} {name!r} is {known.size} bytes, above the {maximum} bound")
+        if name in self.payloads:
+            payload = self.payloads[name]
+            if len(payload) > maximum:
+                raise ReplyValidationError(f"{label} {name!r} exceeds its use-specific size bound")
+            return payload
+
+        try:
+            before = os.lstat(known.path)
+        except OSError as error:
+            raise ReplyValidationError(f"cannot re-check {label} {name!r}: {error}") from error
+        _validate_regular_file(before, f"{label} {name!r}")
+        if _stat_token(before) != known.token:
+            raise ReplyValidationError(f"{label} {name!r} changed after reply enumeration")
+
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        try:
+            descriptor = os.open(known.path, flags)
+        except OSError as error:
+            raise ReplyValidationError(f"cannot open {label} {name!r} without following links: {error}") from error
+        try:
+            opened = os.fstat(descriptor)
+            _validate_regular_file(opened, f"opened {label} {name!r}")
+            link_count = _opened_link_count(descriptor, opened)
+            if link_count != 1:
+                raise ReplyValidationError(
+                    f"opened {label} {name!r} has {link_count} hard links; exactly one is required"
+                )
+            if _stat_token(opened) != known.token:
+                raise ReplyValidationError(f"{label} {name!r} was replaced between inspection and open")
+            try:
+                after_open = os.lstat(known.path)
+            except OSError as error:
+                raise ReplyValidationError(f"cannot verify opened {label} {name!r}: {error}") from error
+            if _stat_token(after_open) != known.token:
+                raise ReplyValidationError(f"{label} {name!r} was replaced while being opened")
+
+            remaining = known.size
+            chunks: list[bytes] = []
+            while remaining:
+                chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+                if not chunk:
+                    raise ReplyValidationError(f"{label} {name!r} was truncated while being read")
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            if os.read(descriptor, 1):
+                raise ReplyValidationError(f"{label} {name!r} grew while being read")
+            payload = b"".join(chunks)
+            if _stat_token(os.fstat(descriptor)) != known.token:
+                raise ReplyValidationError(f"{label} {name!r} changed while being read")
+        finally:
+            os.close(descriptor)
+
+        try:
+            after_read = os.lstat(known.path)
+        except OSError as error:
+            raise ReplyValidationError(f"cannot verify read {label} {name!r}: {error}") from error
+        if _stat_token(after_read) != known.token:
+            raise ReplyValidationError(f"{label} {name!r} changed after it was read")
+        self.assert_stable()
+        self.consumed_bytes += len(payload)
+        if self.consumed_bytes > _MAX_CONSUMED_REPLY_BYTES:
+            raise ReplyValidationError(
+                f"consumed reply data exceeds the {_MAX_CONSUMED_REPLY_BYTES}-byte aggregate bound"
+            )
+        self.payloads[name] = payload
+        self.records[name] = {
+            "name": name,
+            "bytes": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+        }
+        return payload
+
+    def read_json(self, name: str, maximum: int, label: str) -> Any:
+        return _decode_bounded_json(self.read_bytes(name, maximum, label), f"{label} {name!r}")
+
+    def consumed_records(self) -> list[dict[str, Any]]:
+        return [dict(self.records[name]) for name in sorted(self.records) if name != _PROVENANCE_FILE]
+
+
+def _snapshot_reply_directory(build_dir: Path, profile: str) -> _ReplySnapshot | None:
+    build = _validate_directory_chain(build_dir, f"{profile} build directory")
+    if build is None:
+        return None
+    build_directory, _ = build
+    reply_directory = build_directory
+    directory_token: tuple[int, ...] = ()
+    for component in (".cmake", "api", "v1", "reply"):
+        reply_directory /= component
+        try:
+            metadata = os.lstat(reply_directory)
+        except FileNotFoundError:
+            return None
+        except OSError as error:
+            raise ReplyValidationError(
+                f"{profile}: cannot inspect File API directory component {reply_directory}: {error}"
+            ) from error
+        _validate_directory(metadata, f"{profile} File API directory component {reply_directory}")
+        directory_token = _directory_stat_token(metadata)
+
+    try:
+        with os.scandir(reply_directory) as iterator:
+            entries = list(iterator)
+    except OSError as error:
+        raise ReplyValidationError(f"{profile}: cannot enumerate CMake File API reply: {error}") from error
+    if len(entries) > _MAX_REPLY_FILES:
+        raise ReplyValidationError(
+            f"{profile}: reply has {len(entries)} files, above the {_MAX_REPLY_FILES} bound"
+        )
+
+    files: dict[str, _ReplyFile] = {}
+    casefolded: set[str] = set()
+    directory_bytes = 0
+    for entry in entries:
+        name = _reply_filename(entry.name, f"{profile} reply entry")
+        folded = name.casefold()
+        if folded in casefolded:
+            raise ReplyValidationError(f"{profile}: reply contains case-colliding filename {name!r}")
+        casefolded.add(folded)
+        try:
+            # os.DirEntry.stat() can return zeroed file identities on Windows
+            # filter-driver volumes. lstat(path) provides the real file ID that
+            # the open/fstat/post-lstat checks can bind to.
+            metadata = os.lstat(entry.path)
+        except OSError as error:
+            raise ReplyValidationError(f"{profile}: cannot inspect reply entry {name!r}: {error}") from error
+        _validate_regular_file(metadata, f"{profile} reply entry {name!r}")
+        if metadata.st_size > _MAX_REPLY_FILE_BYTES:
+            raise ReplyValidationError(
+                f"{profile}: reply entry {name!r} is above the {_MAX_REPLY_FILE_BYTES}-byte bound"
+            )
+        directory_bytes += metadata.st_size
+        if directory_bytes > _MAX_REPLY_DIRECTORY_BYTES:
+            raise ReplyValidationError(
+                f"{profile}: reply directory is above the {_MAX_REPLY_DIRECTORY_BYTES}-byte aggregate bound"
+            )
+        files[name] = _ReplyFile(Path(entry.path), _stat_token(metadata), metadata.st_size)
+
+    if _directory_token(reply_directory, f"{profile} CMake File API reply directory") != directory_token:
+        raise ReplyValidationError(f"{profile}: reply directory changed during enumeration")
+    return _ReplySnapshot(build_directory, reply_directory, directory_token, files)
+
+
+def _require_mapping(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ReplyValidationError(f"{label} must be a JSON object")
+    return value
+
+
+def _require_list(value: Any, label: str, maximum: int) -> list[Any]:
+    if not isinstance(value, list):
+        raise ReplyValidationError(f"{label} must be a JSON array")
+    if len(value) > maximum:
+        raise ReplyValidationError(f"{label} has {len(value)} entries, above the {maximum} bound")
+    return value
+
+
+def _validate_index(index: Any, profile: str) -> dict[str, Any]:
+    root = _require_mapping(index, f"{profile} File API index")
+    _require_mapping(root.get("reply", {}), f"{profile} File API index reply")
+    objects = _require_list(root.get("objects", []), f"{profile} File API index objects", _MAX_INDEX_OBJECTS)
+    for offset, value in enumerate(objects):
+        entry = _require_mapping(value, f"{profile} File API index object {offset}")
+        if not isinstance(entry.get("kind"), str):
+            raise ReplyValidationError(f"{profile}: File API index object {offset} has no kind")
+        version = _require_mapping(entry.get("version"), f"{profile} File API index object {offset} version")
+        if type(version.get("major")) is not int:
+            raise ReplyValidationError(f"{profile}: File API index object {offset} has no integer major version")
+        _reply_filename(entry.get("jsonFile"), f"{profile} File API index object {offset} jsonFile")
+    return root
+
+
+def _reply_object(index: dict[str, Any], kind: str, major: int, profile: str) -> str:
+    candidates: list[str] = []
+    reply = _require_mapping(index.get("reply", {}), f"{profile} File API index reply")
     entry = reply.get(f"{kind}-v{major}")
-    if isinstance(entry, dict) and entry.get("jsonFile"):
-        return str(entry["jsonFile"])
-    for obj in index.get("objects", []):
-        if obj.get("kind") == kind and obj.get("version", {}).get("major") == major:
-            if obj.get("jsonFile"):
-                return str(obj["jsonFile"])
-    return ""
+    if entry is not None:
+        mapping = _require_mapping(entry, f"{profile} File API reply {kind}-v{major}")
+        candidates.append(
+            _reply_filename(mapping.get("jsonFile"), f"{profile} File API reply {kind}-v{major} jsonFile")
+        )
+    for offset, value in enumerate(index.get("objects", [])):
+        obj = _require_mapping(value, f"{profile} File API index object {offset}")
+        version = _require_mapping(obj.get("version"), f"{profile} File API index object {offset} version")
+        if obj.get("kind") == kind and version.get("major") == major:
+            candidates.append(
+                _reply_filename(obj.get("jsonFile"), f"{profile} File API {kind}-v{major} jsonFile")
+            )
+    unique = sorted(set(candidates))
+    if len(unique) > 1:
+        raise ReplyValidationError(
+            f"{profile}: File API index gives conflicting {kind}-v{major} files {unique}"
+        )
+    return unique[0] if unique else ""
 
 
 def _bound_cache_entries(cache: dict[str, Any], profile: str) -> dict[str, str]:
-    entries = cache.get("entries", [])
-    if not isinstance(entries, list):
-        raise InventoryError(f"{profile}: CMake File API cache reply has no entry list")
-    if len(entries) > _MAX_CACHE_ENTRIES:
-        raise InventoryError(
-            f"{profile}: CMake File API cache reply has {len(entries)} entries, above the {_MAX_CACHE_ENTRIES} bound"
-        )
+    entries = _require_list(
+        cache.get("entries"), f"{profile} CMake File API cache entries", _MAX_CACHE_ENTRIES
+    )
+    material_names = set(_BOUND_CACHE_NAMES)
+    profile_data = load_stable_profile()
+    profile_config = next(
+        (item for item in profile_data["buildConfigurations"] if item["id"] == profile), None
+    )
+    if profile_config and profile_config.get("preset"):
+        preset = resolve_configure_preset(extract_cmake_presets(), profile_config["preset"])
+        material_names.update(preset.get("cacheVariables", {}))
     result: dict[str, str] = {}
-    for entry in entries:
+    all_names: set[str] = set()
+    for offset, value in enumerate(entries):
+        entry = _require_mapping(value, f"{profile} CMake File API cache entry {offset}")
         name = entry.get("name")
-        if not isinstance(name, str):
-            raise InventoryError(f"{profile}: CMake File API cache entry lacks a name")
-        if name in _BOUND_CACHE_NAMES or name.startswith(_BOUND_CACHE_PREFIXES):
-            if name in result:
-                raise InventoryError(f"{profile}: duplicate cache entry {name!r} in File API reply")
-            result[name] = str(entry.get("value", ""))
+        if not isinstance(name, str) or not name or len(name) > 1024:
+            raise ReplyValidationError(f"{profile}: CMake File API cache entry {offset} has an invalid name")
+        if name in all_names:
+            raise ReplyValidationError(f"{profile}: duplicate cache entry {name!r} in File API reply")
+        all_names.add(name)
+        value_text = entry.get("value")
+        if not isinstance(value_text, str):
+            raise ReplyValidationError(f"{profile}: cache entry {name!r} has a non-string value")
+        if name in material_names or name.startswith(_BOUND_CACHE_PREFIXES):
+            result[name] = value_text
     return dict(sorted(result.items()))
 
 
@@ -1327,22 +1721,49 @@ def parse_codemodel_targets(
     target_documents: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     """Parse configured target evidence from already loaded File API documents."""
+    if not isinstance(codemodel, dict):
+        raise InventoryError(f"{profile}: codemodel must be an object")
+    configurations = codemodel.get("configurations")
+    if not isinstance(configurations, list) or len(configurations) > _MAX_CONFIGURATIONS:
+        raise InventoryError(f"{profile}: codemodel configurations are missing or above the bound")
     targets: dict[tuple[str, str], dict[str, str]] = {}
-    for configuration in codemodel.get("configurations", []):
-        config_name = configuration.get("name", "")
-        for reference in configuration.get("targets", []):
+    reference_count = 0
+    for configuration in configurations:
+        if not isinstance(configuration, dict):
+            raise InventoryError(f"{profile}: codemodel configuration must be an object")
+        config_name = configuration.get("name")
+        if not isinstance(config_name, str) or not config_name:
+            raise InventoryError(f"{profile}: codemodel configuration has no nonempty name")
+        references = configuration.get("targets")
+        if not isinstance(references, list):
+            raise InventoryError(f"{profile}: codemodel configuration {config_name!r} has no target list")
+        reference_count += len(references)
+        if reference_count > _MAX_TARGET_REFERENCES:
+            raise InventoryError(f"{profile}: codemodel target reference count is above the bound")
+        for reference in references:
+            if not isinstance(reference, dict):
+                raise InventoryError(f"{profile}: codemodel target reference must be an object")
+            name = reference.get("name")
+            if not isinstance(name, str) or not name:
+                raise InventoryError(f"{profile}: codemodel target reference has no name")
             target_file = reference.get("jsonFile")
             if not target_file:
-                raise InventoryError(f"{profile}: codemodel target {reference.get('name')!r} has no jsonFile")
+                raise InventoryError(f"{profile}: codemodel target {name!r} has no jsonFile")
             target = target_documents.get(target_file)
             if target is None:
                 raise InventoryError(f"{profile}: codemodel target reply {target_file!r} is missing")
+            if not isinstance(target, dict):
+                raise InventoryError(f"{profile}: codemodel target reply {target_file!r} must be an object")
+            if target.get("name") != name:
+                raise InventoryError(
+                    f"{profile}: codemodel reference {name!r} disagrees with target document {target.get('name')!r}"
+                )
             cmake_type = target.get("type")
             kind = _TARGET_KIND_MAP.get(cmake_type)
             if not kind:
                 raise InventoryError(f"{profile}: unsupported codemodel target type {cmake_type!r}")
-            key = (reference["name"], config_name)
-            value = {"target": reference["name"], "kind": kind, "configuration": config_name}
+            key = (name, config_name)
+            value = {"target": name, "kind": kind, "configuration": config_name}
             if key in targets:
                 raise InventoryError(f"{profile}: duplicate codemodel target {key}")
             targets[key] = value
@@ -1353,59 +1774,84 @@ def parse_codemodel_targets(
     }
 
 
-def extract_codemodel_targets(
-    build_dir: Path, profile: str, source_commit: str = ""
-) -> dict[str, Any]:
-    """Read one File API reply and record what it can be bound to.
+def _reply_records_digest(records: list[dict[str, Any]]) -> str:
+    payload = json.dumps(records, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
-    The reply alone proves nothing about *which* tree produced it, so every
-    binding fact the reply does carry -- its own source and build directories,
-    its generator, and its cache -- is recorded here for the parity checker to
-    compare against the profile that is claiming it. The commit is not in the
-    reply at all, so it must be asserted by the caller and is otherwise reported
-    as unverified rather than quietly accepted.
-    """
-    reply_dir = build_dir / ".cmake" / "api" / "v1" / "reply"
-    if not reply_dir.is_dir():
-        return {
-            "profile": profile,
-            "status": "absent",
-            "evidenceDirectory": _normalize_directory(str(build_dir)),
-            "targets": [],
-        }
-    indices = sorted(reply_dir.glob("index-*.json"))
+
+def _extract_reply_core(
+    build_dir: Path, profile: str
+) -> tuple[dict[str, Any], _ReplySnapshot, list[dict[str, Any]]] | None:
+    snapshot = _snapshot_reply_directory(build_dir, profile)
+    if snapshot is None:
+        return None
+    indices = sorted(
+        name for name in snapshot.files if name.startswith("index-") and name.endswith(".json")
+    )
+    if len(indices) > _MAX_REPLY_INDICES:
+        raise ReplyValidationError(
+            f"{profile}: CMake File API reply has {len(indices)} indices, above the {_MAX_REPLY_INDICES} bound"
+        )
     if not indices:
-        raise InventoryError(f"{profile}: CMake File API reply has no index")
-    index = json.loads(indices[-1].read_text(encoding="utf-8"))
-    codemodel_file = _reply_object(index, "codemodel", 2)
+        raise ReplyValidationError(f"{profile}: CMake File API reply has no index")
+    index_name = indices[-1]
+    index = _validate_index(snapshot.read_json(index_name, _MAX_INDEX_BYTES, f"{profile} index"), profile)
+    codemodel_file = _reply_object(index, "codemodel", 2, profile)
     if not codemodel_file:
-        raise InventoryError(f"{profile}: CMake File API index has no codemodel-v2 reply")
-    codemodel = json.loads((reply_dir / codemodel_file).read_text(encoding="utf-8"))
+        raise ReplyValidationError(f"{profile}: CMake File API index has no codemodel-v2 reply")
+    codemodel = _require_mapping(
+        snapshot.read_json(codemodel_file, _MAX_CODEMODEL_BYTES, f"{profile} codemodel"),
+        f"{profile} codemodel-v2",
+    )
+    configurations = _require_list(
+        codemodel.get("configurations"), f"{profile} codemodel configurations", _MAX_CONFIGURATIONS
+    )
+    paths = _require_mapping(codemodel.get("paths", {}), f"{profile} codemodel paths")
+    for field_name in ("source", "build"):
+        if field_name in paths and not isinstance(paths[field_name], str):
+            raise ReplyValidationError(f"{profile}: codemodel path {field_name!r} must be a string")
 
-    cache_file = _reply_object(index, "cache", 2)
+    cache_file = _reply_object(index, "cache", 2, profile)
     if not cache_file:
-        raise InventoryError(
+        raise ReplyValidationError(
             f"{profile}: CMake File API reply has no cache-v2 object; evidence cannot be bound to a configuration"
         )
-    cache = json.loads((reply_dir / cache_file).read_text(encoding="utf-8"))
+    cache = _require_mapping(
+        snapshot.read_json(cache_file, _MAX_CACHE_BYTES, f"{profile} cache"),
+        f"{profile} cache-v2",
+    )
     cache_values = _bound_cache_entries(cache, profile)
 
     target_documents: dict[str, dict[str, Any]] = {}
-    for configuration in codemodel.get("configurations", []):
-        for reference in configuration.get("targets", []):
-            target_file = reference.get("jsonFile")
-            if not target_file:
-                raise InventoryError(f"{profile}: codemodel target {reference.get('name')!r} has no jsonFile")
+    reference_count = 0
+    for offset, value in enumerate(configurations):
+        configuration = _require_mapping(value, f"{profile} codemodel configuration {offset}")
+        references = _require_list(
+            configuration.get("targets"), f"{profile} codemodel configuration {offset} targets", _MAX_TARGET_REFERENCES
+        )
+        reference_count += len(references)
+        if reference_count > _MAX_TARGET_REFERENCES:
+            raise ReplyValidationError(
+                f"{profile}: codemodel has more than {_MAX_TARGET_REFERENCES} target references"
+            )
+        for target_offset, reference_value in enumerate(references):
+            reference = _require_mapping(
+                reference_value, f"{profile} codemodel target reference {offset}:{target_offset}"
+            )
+            target_file = _reply_filename(
+                reference.get("jsonFile"), f"{profile} codemodel target reference jsonFile"
+            )
             if target_file not in target_documents:
-                target_documents[target_file] = json.loads(
-                    (reply_dir / target_file).read_text(encoding="utf-8")
+                target_documents[target_file] = _require_mapping(
+                    snapshot.read_json(target_file, _MAX_TARGET_BYTES, f"{profile} target"),
+                    f"{profile} target {target_file!r}",
                 )
+
     evidence = parse_codemodel_targets(profile, codemodel, target_documents)
-    paths = codemodel.get("paths", {})
     evidence.update(
         {
-            "evidenceDirectory": _normalize_directory(str(build_dir)),
-            "replyIndex": indices[-1].name,
+            "evidenceDirectory": _normalize_directory(str(snapshot.build_directory)),
+            "replyIndex": index_name,
             "sourceDirectory": _normalize_directory(paths.get("source")),
             "buildDirectory": _normalize_directory(paths.get("build")),
             "generator": cache_values.get("CMAKE_GENERATOR", ""),
@@ -1415,13 +1861,272 @@ def extract_codemodel_targets(
             "configurations": sorted(
                 {
                     configuration.get("name", "")
-                    for configuration in codemodel.get("configurations", [])
+                    for configuration in configurations
+                    if isinstance(configuration, dict)
                 }
             ),
-            "assertedSourceCommit": source_commit,
         }
     )
-    return evidence
+    records = snapshot.consumed_records()
+    evidence["replyDigest"] = _reply_records_digest(records)
+    evidence["replyFileCount"] = len(records)
+    snapshot.assert_stable()
+    return evidence, snapshot, records
+
+
+def _load_producer_provenance(
+    snapshot: _ReplySnapshot,
+    profile: str,
+    evidence: dict[str, Any],
+    records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if _PROVENANCE_FILE not in snapshot.files:
+        return {"state": "missing", "recordFile": _PROVENANCE_FILE}
+    record = _require_mapping(
+        snapshot.read_json(_PROVENANCE_FILE, _MAX_PROVENANCE_BYTES, f"{profile} provenance"),
+        f"{profile} provenance record",
+    )
+    required = {"schemaVersion", "producer", "profile", "evidenceDirectory", "repository", "reply"}
+    if set(record) != required:
+        raise ReplyValidationError(
+            f"{profile}: provenance record fields must be exactly {sorted(required)}"
+        )
+    if record.get("schemaVersion") != _PROVENANCE_SCHEMA:
+        raise ReplyValidationError(f"{profile}: unsupported provenance schemaVersion")
+    if record.get("producer") != _PROVENANCE_PRODUCER:
+        raise ReplyValidationError(f"{profile}: provenance record has an unknown producer")
+    if record.get("profile") != profile:
+        raise ReplyValidationError(f"{profile}: provenance record is bound to another profile")
+    if _normalize_directory(record.get("evidenceDirectory")) != evidence["evidenceDirectory"]:
+        raise ReplyValidationError(f"{profile}: provenance record names another build directory")
+
+    repository = _require_mapping(record.get("repository"), f"{profile} provenance repository")
+    if set(repository) != {"root", "commit", "clean"}:
+        raise ReplyValidationError(f"{profile}: provenance repository record has invalid fields")
+    root = _normalize_directory(repository.get("root"))
+    commit = repository.get("commit")
+    clean = repository.get("clean")
+    if not root or not isinstance(commit, str) or not re.fullmatch(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}", commit):
+        raise ReplyValidationError(f"{profile}: provenance repository identity is invalid")
+    if type(clean) is not bool:
+        raise ReplyValidationError(f"{profile}: provenance repository clean flag must be boolean")
+
+    reply = _require_mapping(record.get("reply"), f"{profile} provenance reply")
+    if set(reply) != {"index", "files", "digest"}:
+        raise ReplyValidationError(f"{profile}: provenance reply record has invalid fields")
+    files = _require_list(reply.get("files"), f"{profile} provenance reply files", _MAX_REPLY_FILES)
+    normalized_files: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for offset, value in enumerate(files):
+        file_record = _require_mapping(value, f"{profile} provenance reply file {offset}")
+        if set(file_record) != {"name", "bytes", "sha256"}:
+            raise ReplyValidationError(f"{profile}: provenance reply file {offset} has invalid fields")
+        name = _reply_filename(file_record.get("name"), f"{profile} provenance reply file {offset} name")
+        size = file_record.get("bytes")
+        digest = file_record.get("sha256")
+        if name == _PROVENANCE_FILE or name in seen:
+            raise ReplyValidationError(f"{profile}: provenance reply file list is recursive or duplicated")
+        if type(size) is not int or size < 0 or size > _MAX_REPLY_FILE_BYTES:
+            raise ReplyValidationError(f"{profile}: provenance reply file {name!r} has invalid size")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ReplyValidationError(f"{profile}: provenance reply file {name!r} has invalid digest")
+        seen.add(name)
+        normalized_files.append({"name": name, "bytes": size, "sha256": digest})
+    if normalized_files != records:
+        raise ReplyValidationError(f"{profile}: CMake reply files do not match their producer provenance")
+    digest = _reply_records_digest(records)
+    if reply.get("index") != evidence["replyIndex"] or reply.get("digest") != digest:
+        raise ReplyValidationError(f"{profile}: CMake reply index/digest does not match producer provenance")
+
+    record_digest = snapshot.records[_PROVENANCE_FILE]["sha256"]
+    return {
+        "state": "verified",
+        "recordFile": _PROVENANCE_FILE,
+        "recordSha256": record_digest,
+        "producer": _PROVENANCE_PRODUCER,
+        "profile": profile,
+        "repositoryRoot": root,
+        "sourceCommit": commit.lower(),
+        "sourceClean": clean,
+        "replyDigest": digest,
+    }
+
+
+def extract_codemodel_targets(
+    build_dir: Path, profile: str, ignored_caller_commit: str = ""
+) -> dict[str, Any]:
+    """Read bounded File API evidence and verify its producer record.
+
+    ``ignored_caller_commit`` remains only so older callers fail closed during
+    migration. It is deliberately never recorded or trusted; commit identity
+    comes exclusively from ``capture_provenance.py``'s producer record.
+    """
+    del ignored_caller_commit
+    try:
+        core = _extract_reply_core(build_dir, profile)
+        if core is None:
+            return {
+                "profile": profile,
+                "status": "absent",
+                "evidenceDirectory": _normalize_directory(str(_absolute_directory(build_dir))),
+                "targets": [],
+            }
+        evidence, snapshot, records = core
+        evidence["producerProvenance"] = _load_producer_provenance(
+            snapshot, profile, evidence, records
+        )
+        snapshot.assert_stable()
+        return evidence
+    except ReplyValidationError as error:
+        return {
+            "profile": profile,
+            "status": "invalid",
+            "evidenceDirectory": _normalize_directory(str(_absolute_directory(build_dir))),
+            "targets": [],
+            "rejection": str(error),
+        }
+
+
+def _capture_material_errors(evidence: dict[str, Any], profile: str) -> list[str]:
+    errors = [
+        field_name
+        for field_name in ("sourceDirectory", "buildDirectory", "generator", "architecture", "toolset")
+        if not evidence.get(field_name)
+    ]
+    cache = evidence.get("cacheVariables", {})
+    for name in (
+        "CMAKE_GENERATOR",
+        "CMAKE_GENERATOR_PLATFORM",
+        "CMAKE_GENERATOR_TOOLSET",
+        "CMAKE_HOME_DIRECTORY",
+    ):
+        if not isinstance(cache, dict) or not cache.get(name):
+            errors.append(f"cacheVariables.{name}")
+    if (
+        evidence.get("buildDirectory")
+        and evidence.get("evidenceDirectory")
+        and Path(str(evidence["buildDirectory"])).as_posix().rstrip("/").casefold()
+        != Path(str(evidence["evidenceDirectory"])).as_posix().rstrip("/").casefold()
+    ):
+        errors.append("buildDirectory!=evidenceDirectory")
+    if (
+        isinstance(cache, dict)
+        and cache.get("CMAKE_HOME_DIRECTORY")
+        and evidence.get("sourceDirectory")
+        and Path(str(cache["CMAKE_HOME_DIRECTORY"])).as_posix().rstrip("/").casefold()
+        != Path(str(evidence["sourceDirectory"])).as_posix().rstrip("/").casefold()
+    ):
+        errors.append("cacheVariables.CMAKE_HOME_DIRECTORY!=sourceDirectory")
+    profile_data = load_stable_profile()
+    config = next((item for item in profile_data["buildConfigurations"] if item["id"] == profile), None)
+    if config is None:
+        errors.append("knownProfile")
+    elif not evidence.get("configurations"):
+        errors.append("configurations")
+    if config and config.get("preset"):
+        preset = resolve_configure_preset(extract_cmake_presets(), config["preset"])
+        for name in preset.get("cacheVariables", {}):
+            if not isinstance(cache, dict) or name not in cache:
+                errors.append(f"cacheVariables.{name}")
+    return sorted(set(errors))
+
+
+def _write_provenance_record(snapshot: _ReplySnapshot, payload: bytes) -> Path:
+    snapshot.assert_stable()
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".spark-ci120-provenance-", suffix=".tmp", dir=snapshot.directory
+    )
+    temporary = Path(temporary_name)
+    destination = snapshot.directory / _PROVENANCE_FILE
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, destination)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+    label = "written CI-120 provenance record"
+    try:
+        metadata = os.lstat(destination)
+    except OSError as error:
+        raise InventoryError(f"cannot inspect {label}: {error}") from error
+    _validate_regular_file(metadata, label)
+    if metadata.st_size != len(payload):
+        raise InventoryError(f"{label} has an unexpected size")
+
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(destination, flags)
+    except OSError as error:
+        raise InventoryError(f"cannot open {label} without following links: {error}") from error
+    try:
+        opened = os.fstat(descriptor)
+        _validate_regular_file(opened, f"opened {label}")
+        link_count = _opened_link_count(descriptor, opened)
+        if link_count != 1:
+            raise InventoryError(f"opened {label} has {link_count} hard links; exactly one is required")
+        if _stat_token(opened) != _stat_token(metadata):
+            raise InventoryError(f"{label} was replaced between inspection and open")
+        observed = b""
+        remaining = len(payload)
+        chunks: list[bytes] = []
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+            if not chunk:
+                raise InventoryError(f"{label} was truncated during verification")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise InventoryError(f"{label} grew during verification")
+        observed = b"".join(chunks)
+        if _stat_token(os.fstat(descriptor)) != _stat_token(metadata):
+            raise InventoryError(f"{label} changed during verification")
+    finally:
+        os.close(descriptor)
+
+    try:
+        after = os.lstat(destination)
+    except OSError as error:
+        raise InventoryError(f"cannot re-inspect {label}: {error}") from error
+    if _stat_token(after) != _stat_token(metadata):
+        raise InventoryError(f"{label} was replaced after it was written")
+    if observed != payload:
+        raise InventoryError(f"{label} does not contain the generated payload")
+    return destination
+
+
+def capture_codemodel_provenance(build_dir: Path, profile: str) -> Path:
+    """Capture commit identity and exact reply-file digests after CMake configures."""
+    core = _extract_reply_core(build_dir, profile)
+    if core is None:
+        raise InventoryError(f"{profile}: cannot capture provenance without a File API reply")
+    evidence, snapshot, records = core
+    missing = _capture_material_errors(evidence, profile)
+    if missing:
+        raise InventoryError(
+            f"{profile}: cannot capture provenance; reply lacks material fields: {', '.join(missing)}"
+        )
+    repository = _repository_provenance()
+    record = {
+        "schemaVersion": _PROVENANCE_SCHEMA,
+        "producer": _PROVENANCE_PRODUCER,
+        "profile": profile,
+        "evidenceDirectory": evidence["evidenceDirectory"],
+        "repository": repository,
+        "reply": {
+            "index": evidence["replyIndex"],
+            "files": records,
+            "digest": _reply_records_digest(records),
+        },
+    }
+    payload = (json.dumps(record, indent=2, sort_keys=False) + "\n").encode("utf-8")
+    if len(payload) > _MAX_PROVENANCE_BYTES:
+        raise InventoryError("generated CI-120 provenance record exceeds its size bound")
+    return _write_provenance_record(snapshot, payload)
 
 
 def _repository_provenance() -> dict[str, Any]:
@@ -1449,25 +2154,21 @@ def _repository_provenance() -> dict[str, Any]:
 
 def build_inventory(
     codemodels: dict[str, Path] | None = None,
-    codemodel_commits: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     profile = load_stable_profile()
     option_declarations = extract_cmake_options()
     all_option_declarations = extract_all_cmake_options()
     target_declarations = extract_cmake_targets()
     requested = codemodels or {}
-    commits = codemodel_commits or {}
     known_profiles = {item["id"] for item in profile["buildConfigurations"]}
-    unknown_codemodels = sorted((set(requested) | set(commits)) - known_profiles)
+    unknown_codemodels = sorted(set(requested) - known_profiles)
     if unknown_codemodels:
         raise InventoryError(f"codemodel evidence names unknown profiles: {unknown_codemodels}")
     codemodel_evidence = []
     for configuration in profile["buildConfigurations"]:
         identifier = configuration["id"]
         if identifier in requested:
-            codemodel_evidence.append(
-                extract_codemodel_targets(requested[identifier], identifier, commits.get(identifier, ""))
-            )
+            codemodel_evidence.append(extract_codemodel_targets(requested[identifier], identifier))
         else:
             codemodel_evidence.append(
                 {"profile": identifier, "status": "absent", "evidenceDirectory": "", "targets": []}
@@ -1544,25 +2245,13 @@ def render_internal_error(error: Exception) -> bytes:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--codemodel", action="append", default=[], metavar="PROFILE=BUILD_DIR")
-    parser.add_argument(
-        "--codemodel-commit",
-        action="append",
-        default=[],
-        metavar="PROFILE=COMMIT",
-        help="commit the named profile's codemodel evidence was configured from",
-    )
     parser.add_argument("--output", type=Path)
     parser.add_argument("--check", type=Path, help="fail if generated bytes differ from this file")
     args = parser.parse_args(argv)
     try:
         if args.output and args.check and args.output.resolve() == args.check.resolve():
             raise InventoryError("--output and --check must name distinct paths")
-        payload = render_inventory(
-            build_inventory(
-                _parse_codemodel_args(args.codemodel),
-                _parse_key_value_args(args.codemodel_commit, "--codemodel-commit"),
-            )
-        )
+        payload = render_inventory(build_inventory(_parse_codemodel_args(args.codemodel)))
         if args.output:
             _write_atomic(args.output, payload)
         else:

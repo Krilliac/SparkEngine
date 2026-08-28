@@ -2,7 +2,7 @@
 
 SparkEngine uses CMake 3.16+ as its build system with 30+ toggleable feature modules, cross-platform presets, and CI/CD integration.
 
-**Source:** `CMakeLists.txt`, `cmake/`, `CMakePresets.json`
+**Source:** `CMakeLists.txt`, `cmake/`, `CMakePresets.json`, `Tools/buildmatrix/`
 
 ## CMake Configuration
 
@@ -205,6 +205,25 @@ cmake --list-presets
 cmake --preset windows-release
 cmake --build --preset windows-release
 ```
+
+### CI-120 configured-target evidence
+
+CI-120 uses CMake File API replies to prove which targets a concrete build profile actually configured. After a successful configure, capture producer-owned provenance before generating the inventory:
+
+```bash
+python3 Tools/buildmatrix/capture_provenance.py \
+  --codemodel windows-shipping=build/windows-shipping
+python3 Tools/buildmatrix/inventory.py \
+  --codemodel windows-shipping=build/windows-shipping \
+  --output docs/readiness/ci120-build-matrix-inventory.json
+python3 Tools/buildmatrix/check_parity.py \
+  --inventory docs/readiness/ci120-build-matrix-inventory.json \
+  --baseline docs/readiness/ci120-parity-findings.json
+```
+
+The capture step derives the clean repository commit itself and binds the profile, source/build directories, generator, cache values, and exact index/codemodel/cache/target reply digests. Inventory rejects missing, malformed, oversized, linked, out-of-directory, changed, or unbound reply data. Caller-supplied commit text is not provenance, and missing material fields or expected cache values remain blocking findings.
+
+The local record detects reply substitution but is not a signed remote attestation. Protected CI still owns production of the configured evidence, and release signing/attestation remains separate release work.
 
 ## Cross-Compilation: Windows on Linux (MinGW + Wine)
 

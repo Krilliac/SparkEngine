@@ -19,6 +19,8 @@
         "id": "installed-sdk-consumer",
         "configuration": "Release",
         "purpose": "installed-sdk-consumer",
+        "sourceDirectory": "Tests/PackageSmoke",
+        "buildDirectory": "build/installed-sdk-consumer",
         "description": "A separate configure against an installed SparkEngine package that proves public SDK headers, imports, and module linkage without source-tree include leakage."
       },
       {

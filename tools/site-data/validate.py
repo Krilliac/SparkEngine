@@ -525,6 +525,17 @@ class Validator:
                         config_location,
                         "installed SDK consumer must be configured against the installed package, not a source preset",
                     )
+                    for field_name in ("sourceDirectory", "buildDirectory"):
+                        value = entry.get(field_name)
+                        self.require(
+                            isinstance(value, str)
+                            and bool(value)
+                            and not Path(value).is_absolute()
+                            and "\\" not in value
+                            and all(part not in {"", ".", ".."} for part in value.split("/")),
+                            config_location,
+                            f"installed SDK consumer {field_name} must be a safe relative path",
+                        )
 
             build_products = profile.get("buildProducts", [])
             self.require(bool(build_products), f"{location}.buildProducts", "at least one product is required")

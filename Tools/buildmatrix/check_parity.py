@@ -846,6 +846,16 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
     options, or a hand-written one -- can be relabelled as the canonical profile
     and will read as clean configured evidence.
     """
+    def path_key(value: Any) -> str:
+        if not isinstance(value, str) or not value:
+            return ""
+        return Path(value).as_posix().rstrip("/").casefold()
+
+    def preset_cache_value(value: Any) -> str:
+        if isinstance(value, dict) and "value" in value:
+            value = value["value"]
+        return str(value)
+
     findings: list[Finding] = []
     repository = data.get("repository") or {}
     presets = data.get("cmakePresets", {})
@@ -853,59 +863,122 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
     declared = {
         entry["target"] for entry in data.get("cmakeTargets", []) if entry.get("buildable", True)
     }
+
+    # A presetless installed-package consumer still belongs to the same stable
+    # toolchain row. Derive that row only when every canonical source preset
+    # agrees, rather than silently leaving generator/platform/toolset unchecked.
+    stable_toolchains: set[tuple[str, str, str]] = set()
+    for config in configs.values():
+        preset_name = config.get("preset")
+        if not preset_name:
+            continue
+        try:
+            resolved = inventory_tool.resolve_configure_preset(presets, preset_name)
+        except inventory_tool.InventoryError:
+            continue
+        stable_toolchains.add(
+            tuple(str(resolved.get(name, "")) for name in ("generator", "architecture", "toolset"))
+        )
+    inherited_toolchain = next(iter(stable_toolchains)) if len(stable_toolchains) == 1 else ("", "", "")
+
     for evidence in data.get("configuredTargetEvidence", []):
         if evidence.get("status") != "available":
             continue
         identifier = str(evidence.get("profile"))
         config = configs.get(identifier, {})
+        root = str(repository.get("root", ""))
 
-        if not repository.get("commit"):
+        provenance = evidence.get("producerProvenance")
+        if not isinstance(provenance, dict) or provenance.get("state") != "verified":
             findings.append(
                 Finding(
                     "codemodel-provenance-missing",
                     "error",
-                    f"Profile '{identifier}' presents configured evidence with no repository provenance",
-                    "Evidence that names no commit cannot be shown to describe this tree.",
+                    f"Profile '{identifier}' has no verified producer provenance record",
+                    "Run capture_provenance.py after CMake configure; caller-supplied commit text is not evidence.",
                 )
             )
-        else:
-            asserted = str(evidence.get("assertedSourceCommit", ""))
-            if not asserted:
-                findings.append(
-                    Finding(
-                        "codemodel-commit-unverified",
-                        "error",
-                        f"Profile '{identifier}' evidence asserts no source commit",
-                        "Pass --codemodel-commit PROFILE=<sha>; unverified provenance is a blocking unknown.",
-                    )
+        if not repository.get("commit"):
+            findings.append(
+                Finding(
+                    "codemodel-repository-provenance-missing",
+                    "error",
+                    f"Profile '{identifier}' presents configured evidence with no current repository provenance",
+                    "Evidence cannot be compared to the tree being reported.",
                 )
-            elif asserted != repository["commit"]:
+            )
+        elif isinstance(provenance, dict) and provenance.get("state") == "verified":
+            if provenance.get("sourceCommit") != repository.get("commit"):
                 findings.append(
                     Finding(
                         "codemodel-commit-mismatch",
                         "error",
-                        f"Profile '{identifier}' evidence was configured from {asserted}, not {repository['commit']}",
+                        f"Profile '{identifier}' evidence was configured from {provenance.get('sourceCommit')}, "
+                        f"not {repository.get('commit')}",
                     )
                 )
-            if not repository.get("clean", False):
+            if path_key(provenance.get("repositoryRoot")) != path_key(root):
                 findings.append(
                     Finding(
-                        "codemodel-worktree-dirty",
+                        "codemodel-provenance-root-mismatch",
                         "error",
-                        f"Profile '{identifier}' evidence was produced from a modified worktree",
-                        "A dirty tree means the commit does not describe what was configured.",
+                        f"Profile '{identifier}' producer record names another repository root",
                     )
                 )
-            root = str(repository.get("root", ""))
-            source = str(evidence.get("sourceDirectory", ""))
-            if root and source and source.lower() != root.lower():
+            if provenance.get("replyDigest") != evidence.get("replyDigest"):
                 findings.append(
                     Finding(
-                        "codemodel-source-mismatch",
+                        "codemodel-provenance-digest-mismatch",
                         "error",
-                        f"Profile '{identifier}' evidence was configured from '{source}', not this tree '{root}'",
+                        f"Profile '{identifier}' reply digest disagrees with its producer record",
                     )
                 )
+            if provenance.get("sourceClean") is not True:
+                findings.append(
+                    Finding(
+                        "codemodel-source-worktree-dirty",
+                        "error",
+                        f"Profile '{identifier}' was configured from a modified worktree",
+                    )
+                )
+        if repository.get("clean") is not True:
+            findings.append(
+                Finding(
+                    "codemodel-worktree-dirty",
+                    "error",
+                    f"Profile '{identifier}' is being reported from a modified worktree",
+                    "The current commit does not describe the inventory inputs.",
+                )
+            )
+
+        source = str(evidence.get("sourceDirectory", ""))
+        actual_dir = str(evidence.get("buildDirectory", ""))
+        evidence_dir = str(evidence.get("evidenceDirectory", ""))
+        for field_name, value in (
+            ("source directory", source),
+            ("build directory", actual_dir),
+            ("generator", evidence.get("generator")),
+            ("architecture", evidence.get("architecture")),
+            ("toolset", evidence.get("toolset")),
+        ):
+            if not value:
+                findings.append(
+                    Finding(
+                        "codemodel-material-field-missing",
+                        "error",
+                        f"Profile '{identifier}' evidence omits its {field_name}",
+                        "An absent binding fact is an unknown, not a successful comparison.",
+                    )
+                )
+        if actual_dir and evidence_dir and path_key(actual_dir) != path_key(evidence_dir):
+            findings.append(
+                Finding(
+                    "codemodel-evidence-dir-mismatch",
+                    "error",
+                    f"Profile '{identifier}' reply claims build directory '{actual_dir}' but was read from '{evidence_dir}'",
+                    "A copied or relabelled reply is not evidence for the directory claiming it.",
+                )
+            )
 
         expected_configuration = str(config.get("configuration", ""))
         if expected_configuration and expected_configuration not in evidence.get("configurations", []):
@@ -918,6 +991,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                 )
             )
 
+        preset: dict[str, Any] | None = None
         preset_name = config.get("preset")
         if preset_name:
             try:
@@ -931,50 +1005,90 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                         str(error),
                     )
                 )
-                preset = None
-            if preset is not None:
-                expected_dir = str(preset.get("resolvedBinaryDir", "")).replace(
-                    "${sourceDir}", str(repository.get("root", "${sourceDir}"))
+
+        expected_source = ""
+        if root and config.get("sourceDirectory"):
+            expected_source = str(Path(root) / str(config["sourceDirectory"]))
+        elif preset is not None:
+            expected_source = root
+        if expected_source and source and path_key(source) != path_key(expected_source):
+            findings.append(
+                Finding(
+                    "codemodel-source-mismatch",
+                    "error",
+                    f"Profile '{identifier}' evidence was configured from '{source}', "
+                    f"not its declared source '{expected_source}'",
                 )
-                actual_dir = str(evidence.get("buildDirectory", ""))
-                if expected_dir and actual_dir and expected_dir.lower() != actual_dir.lower():
-                    findings.append(
-                        Finding(
-                            "codemodel-build-dir-mismatch",
-                            "error",
-                            f"Profile '{identifier}' evidence lives in '{actual_dir}', "
-                            f"not the preset's build directory '{expected_dir}'",
-                            "An arbitrary build directory relabelled as a canonical profile is not evidence.",
-                        )
+            )
+
+        expected_dir = ""
+        if root and config.get("buildDirectory"):
+            expected_dir = str(Path(root) / str(config["buildDirectory"]))
+        elif preset is not None:
+            expected_dir = str(preset.get("resolvedBinaryDir", "")).replace(
+                "${sourceDir}", root or "${sourceDir}"
+            )
+        if expected_dir and actual_dir and path_key(expected_dir) != path_key(actual_dir):
+            findings.append(
+                Finding(
+                    "codemodel-build-dir-mismatch",
+                    "error",
+                    f"Profile '{identifier}' evidence lives in '{actual_dir}', "
+                    f"not its declared build directory '{expected_dir}'",
+                    "An arbitrary build directory relabelled as a canonical profile is not evidence.",
+                )
+            )
+
+        expected_toolchain = (
+            tuple(str(preset.get(name, "")) for name in ("generator", "architecture", "toolset"))
+            if preset is not None
+            else inherited_toolchain
+        )
+        for key, expected_value in zip(("generator", "architecture", "toolset"), expected_toolchain):
+            observed = str(evidence.get(key, ""))
+            if expected_value and observed and expected_value != observed:
+                findings.append(
+                    Finding(
+                        "codemodel-generator-mismatch",
+                        "error",
+                        f"Profile '{identifier}' evidence {key} is '{observed}', stable profile requires '{expected_value}'",
                     )
-                for key, observed_key in (
-                    ("generator", "generator"),
-                    ("architecture", "architecture"),
-                    ("toolset", "toolset"),
-                ):
-                    expected_value = str(preset.get(key, ""))
-                    observed = str(evidence.get(observed_key, ""))
-                    if expected_value and observed and expected_value != observed:
-                        findings.append(
-                            Finding(
-                                "codemodel-generator-mismatch",
-                                "error",
-                                f"Profile '{identifier}' evidence {key} is '{observed}', preset requires '{expected_value}'",
-                            )
-                        )
-                observed_cache = evidence.get("cacheVariables", {})
-                for name, expected_value in sorted(preset.get("cacheVariables", {}).items()):
-                    if name not in observed_cache:
-                        continue
-                    if str(observed_cache[name]).upper() != str(expected_value).upper():
-                        findings.append(
-                            Finding(
-                                "codemodel-cache-mismatch",
-                                "error",
-                                f"Profile '{identifier}' evidence has {name}={observed_cache[name]!r}, "
-                                f"preset requires {expected_value!r}",
-                            )
-                        )
+                )
+
+        observed_cache = evidence.get("cacheVariables", {})
+        if not isinstance(observed_cache, dict):
+            observed_cache = {}
+        material_cache = {
+            "CMAKE_GENERATOR": str(evidence.get("generator", "")),
+            "CMAKE_GENERATOR_PLATFORM": str(evidence.get("architecture", "")),
+            "CMAKE_GENERATOR_TOOLSET": str(evidence.get("toolset", "")),
+            "CMAKE_HOME_DIRECTORY": source,
+        }
+        if preset is not None:
+            material_cache.update(
+                {
+                    name: preset_cache_value(expected)
+                    for name, expected in preset.get("cacheVariables", {}).items()
+                }
+            )
+        for name, expected_value in sorted(material_cache.items()):
+            if name not in observed_cache or observed_cache[name] == "":
+                findings.append(
+                    Finding(
+                        "codemodel-cache-missing",
+                        "error",
+                        f"Profile '{identifier}' evidence omits material cache value {name}",
+                    )
+                )
+            elif expected_value and str(observed_cache[name]).upper() != expected_value.upper():
+                findings.append(
+                    Finding(
+                        "codemodel-cache-mismatch",
+                        "error",
+                        f"Profile '{identifier}' evidence has {name}={observed_cache[name]!r}, "
+                        f"requires {expected_value!r}",
+                    )
+                )
 
         for entry in evidence.get("targets", []):
             name = str(entry.get("target"))

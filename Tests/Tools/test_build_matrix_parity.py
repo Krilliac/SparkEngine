@@ -15,6 +15,7 @@ import unittest
 import uuid
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -432,7 +433,7 @@ class PresetAndCodemodelTests(unittest.TestCase):
                     }
                 ]
             },
-            {"target.json": {"type": "EXECUTABLE"}},
+            {"target.json": {"name": "SparkEngine", "type": "EXECUTABLE"}},
         )
         self.assertEqual(evidence["status"], "available")
         self.assertEqual(
@@ -841,11 +842,9 @@ class CodemodelProvenanceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.data = inventory.build_inventory()
+        preset = inventory.resolve_configure_preset(cls.data["cmakePresets"], "windows-shipping")
         cls.shipping_cache = {
-            "SPARK_STRICT_DEPS": "ON",
-            "SPARK_NATIVE_ARCH": "OFF",
-            "ENABLE_EDITOR": "OFF",
-            "BUILD_TESTS": "OFF",
+            name: str(value) for name, value in preset["cacheVariables"].items()
         }
 
     def bound_data(self, evidence: dict[str, Any], *, commit: str = "", clean: bool = True) -> dict[str, Any]:
@@ -855,6 +854,16 @@ class CodemodelProvenanceTests(unittest.TestCase):
             "commit": commit or "0" * 40,
             "clean": clean,
         }
+        config = next(
+            item for item in data["profile"]["buildConfigurations"]
+            if item["id"] == evidence["profile"]
+        )
+        if config.get("preset") and evidence.get("evidenceDirectory"):
+            preset = next(
+                item for item in data["cmakePresets"]["configurePresets"]
+                if item["name"] == config["preset"]
+            )
+            preset["binaryDir"] = evidence["evidenceDirectory"]
         data["configuredTargetEvidence"] = [
             evidence if item["profile"] == evidence["profile"] else item
             for item in data["configuredTargetEvidence"]
@@ -862,13 +871,25 @@ class CodemodelProvenanceTests(unittest.TestCase):
         return data
 
     def shipping_evidence(self, directory: Path, **kwargs: Any) -> dict[str, Any]:
+        capture = bool(kwargs.pop("capture", True))
         defaults: dict[str, Any] = {
             "source_dir": Path(REPO_ROOT).as_posix(),
-            "build_dir": (Path(REPO_ROOT) / "build" / "windows-shipping").as_posix(),
+            "build_dir": directory.as_posix(),
             "cache": self.shipping_cache,
         }
         defaults.update(kwargs)
         write_codemodel_reply(directory, **defaults)
+        if capture:
+            with mock.patch.object(
+                inventory,
+                "_repository_provenance",
+                return_value={
+                    "root": Path(REPO_ROOT).as_posix(),
+                    "commit": "0" * 40,
+                    "clean": True,
+                },
+            ):
+                inventory.capture_codemodel_provenance(directory, "windows-shipping")
         return inventory.extract_codemodel_targets(directory, "windows-shipping", "0" * 40)
 
     def categories(self, data: dict[str, Any]) -> set[str]:
@@ -881,6 +902,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
         self.assertEqual(evidence["generator"], "Visual Studio 17 2022")
         self.assertEqual(evidence["toolset"], "v143")
         self.assertEqual(evidence["configurations"], ["MinSizeRel"])
+        self.assertEqual(evidence["producerProvenance"]["state"], "verified")
         self.assertEqual(evidence["targets"], [
             {"target": "SparkEngine", "kind": "executable", "configuration": "MinSizeRel"}
         ])
@@ -895,8 +917,9 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 reply / "index-0001.json",
                 {"objects": [{"kind": "codemodel", "version": {"major": 2}, "jsonFile": "codemodel-v2.json"}]},
             )
-            with self.assertRaisesRegex(inventory.InventoryError, "cache-v2"):
-                inventory.extract_codemodel_targets(Path(raw), "windows-shipping")
+            evidence = inventory.extract_codemodel_targets(Path(raw), "windows-shipping")
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertIn("cache-v2", evidence["rejection"])
 
     def test_foreign_source_tree_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
@@ -905,12 +928,14 @@ class CodemodelProvenanceTests(unittest.TestCase):
 
     def test_arbitrary_build_directory_relabelled_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
-            evidence = self.shipping_evidence(Path(raw), build_dir="/tmp/some-other-build")
+            evidence = self.shipping_evidence(
+                Path(raw), build_dir="/tmp/some-other-build", capture=False
+            )
         self.assertIn("codemodel-build-dir-mismatch", self.categories(self.bound_data(evidence)))
 
     def test_wrong_generator_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
-            evidence = self.shipping_evidence(Path(raw), generator="Ninja", architecture="", toolset="")
+            evidence = self.shipping_evidence(Path(raw), generator="Ninja")
         self.assertIn("codemodel-generator-mismatch", self.categories(self.bound_data(evidence)))
 
     def test_cache_that_contradicts_the_preset_is_rejected(self) -> None:
@@ -936,16 +961,20 @@ class CodemodelProvenanceTests(unittest.TestCase):
         self.assertIn("TotallyInvented", invented[0].message)
         self.assertEqual(invented[0].severity, "error")
 
-    def test_unasserted_commit_is_blocking(self) -> None:
+    def test_caller_asserted_commit_cannot_replace_producer_provenance(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             write_codemodel_reply(
                 Path(raw),
                 source_dir=Path(REPO_ROOT).as_posix(),
-                build_dir=(Path(REPO_ROOT) / "build" / "windows-shipping").as_posix(),
+                build_dir=Path(raw).as_posix(),
                 cache=self.shipping_cache,
             )
-            evidence = inventory.extract_codemodel_targets(Path(raw), "windows-shipping")
-        self.assertIn("codemodel-commit-unverified", self.categories(self.bound_data(evidence)))
+            evidence = inventory.extract_codemodel_targets(
+                Path(raw), "windows-shipping", "0" * 40
+            )
+        self.assertNotIn("assertedSourceCommit", evidence)
+        self.assertEqual(evidence["producerProvenance"]["state"], "missing")
+        self.assertIn("codemodel-provenance-missing", self.categories(self.bound_data(evidence)))
 
     def test_commit_mismatch_is_blocking(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
@@ -964,6 +993,222 @@ class CodemodelProvenanceTests(unittest.TestCase):
         data.pop("repository")
         with self.assertRaisesRegex(inventory.InventoryError, "repository provenance"):
             check_parity.run_all_checks(data)
+
+
+class CodemodelReplyBoundaryTests(unittest.TestCase):
+    """Hostile reply trees must be bounded, contained, stable, and provenance-bound."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.data = inventory.build_inventory()
+        preset = inventory.resolve_configure_preset(cls.data["cmakePresets"], "windows-shipping")
+        cls.shipping_cache = {
+            name: str(value) for name, value in preset["cacheVariables"].items()
+        }
+
+    def write_complete(self, root: Path) -> Path:
+        return write_codemodel_reply(
+            root,
+            source_dir=Path(REPO_ROOT).as_posix(),
+            build_dir=root.as_posix(),
+            cache=self.shipping_cache,
+        )
+
+    def test_index_jsonfile_cannot_traverse_outside_reply(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            reply = root / ".cmake" / "api" / "v1" / "reply"
+            write_json(
+                reply / "index-0001.json",
+                {
+                    "objects": [
+                        {
+                            "kind": "codemodel",
+                            "version": {"major": 2},
+                            "jsonFile": "../../../../codemodel-v2.json",
+                        },
+                        {"kind": "cache", "version": {"major": 2}, "jsonFile": "cache-v2.json"},
+                    ]
+                },
+            )
+            evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertIn("plain filename", evidence["rejection"])
+
+    def test_target_jsonfile_cannot_traverse_outside_reply(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            reply = root / ".cmake" / "api" / "v1" / "reply"
+            write_json(
+                reply / "codemodel-v2.json",
+                {
+                    "paths": {"source": Path(REPO_ROOT).as_posix(), "build": root.as_posix()},
+                    "configurations": [
+                        {
+                            "name": "MinSizeRel",
+                            "targets": [
+                                {"name": "SparkEngine", "jsonFile": "../../../../target-0.json"}
+                            ],
+                        }
+                    ],
+                },
+            )
+            evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertIn("plain filename", evidence["rejection"])
+
+    def test_handwritten_reply_with_caller_sha_reports_every_missing_material_class(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            reply = root / ".cmake" / "api" / "v1" / "reply"
+            write_json(
+                reply / "codemodel-v2.json",
+                {
+                    "paths": {},
+                    "configurations": [
+                        {
+                            "name": "MinSizeRel",
+                            "targets": [{"name": "SparkEngine", "jsonFile": "target-0.json"}],
+                        }
+                    ],
+                },
+            )
+            write_json(reply / "cache-v2.json", {"entries": []})
+            evidence = inventory.extract_codemodel_targets(
+                root, "windows-shipping", "0" * 40
+            )
+        data = copy.deepcopy(self.data)
+        data["repository"] = {
+            "root": Path(REPO_ROOT).as_posix(),
+            "commit": "0" * 40,
+            "clean": True,
+        }
+        data["configuredTargetEvidence"] = [evidence]
+        categories = finding_categories(check_parity.check_codemodel_provenance(data))
+        self.assertEqual(evidence["status"], "available")
+        self.assertNotIn("assertedSourceCommit", evidence)
+        self.assertTrue(
+            {
+                "codemodel-provenance-missing",
+                "codemodel-material-field-missing",
+                "codemodel-cache-missing",
+            }.issubset(categories)
+        )
+
+    def test_reply_change_after_capture_invalidates_provenance(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            with mock.patch.object(
+                inventory,
+                "_repository_provenance",
+                return_value={
+                    "root": Path(REPO_ROOT).as_posix(), "commit": "0" * 40, "clean": True
+                },
+            ):
+                inventory.capture_codemodel_provenance(root, "windows-shipping")
+            reply = root / ".cmake" / "api" / "v1" / "reply"
+            write_json(reply / "target-0.json", {"name": "SparkEngine", "type": "STATIC_LIBRARY"})
+            evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertIn("producer provenance", evidence["rejection"])
+
+    def test_hardlinked_reply_file_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            reply = root / ".cmake" / "api" / "v1" / "reply"
+            target = reply / "target-0.json"
+            outside = root / "outside-target.json"
+            target.replace(outside)
+            try:
+                os.link(outside, target)
+            except OSError as error:
+                self.skipTest(f"hard links unavailable: {error}")
+            evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertIn("hard links", evidence["rejection"])
+
+    def test_symlink_or_reparse_reply_file_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            reply = root / ".cmake" / "api" / "v1" / "reply"
+            target = reply / "target-0.json"
+            outside = root / "outside-target.json"
+            target.replace(outside)
+            try:
+                target.symlink_to(outside)
+            except OSError as error:
+                self.skipTest(f"symlinks unavailable: {error}")
+            evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertRegex(evidence["rejection"], "symlink|reparse")
+
+    def test_non_regular_reply_entry_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            target = root / ".cmake" / "api" / "v1" / "reply" / "target-0.json"
+            target.unlink()
+            target.mkdir()
+            evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertIn("not a regular file", evidence["rejection"])
+
+    def test_reply_count_and_file_size_bounds_are_enforced(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            with mock.patch.object(inventory, "_MAX_REPLY_FILES", 3):
+                count_evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+            with mock.patch.object(inventory, "_MAX_INDEX_BYTES", 8):
+                size_evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+        self.assertEqual(count_evidence["status"], "invalid")
+        self.assertIn("above", count_evidence["rejection"])
+        self.assertEqual(size_evidence["status"], "invalid")
+        self.assertIn("above", size_evidence["rejection"])
+
+    def test_json_depth_and_shape_bounds_are_enforced(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            reply = root / ".cmake" / "api" / "v1" / "reply"
+            nested: Any = None
+            for _ in range(inventory._MAX_JSON_DEPTH + 2):
+                nested = [nested]
+            write_json(reply / "cache-v2.json", {"entries": [], "nested": nested})
+            depth_evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+            write_json(reply / "index-0001.json", {"objects": {}})
+            shape_evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+        self.assertEqual(depth_evidence["status"], "invalid")
+        self.assertIn("JSON-depth", depth_evidence["rejection"])
+        self.assertEqual(shape_evidence["status"], "invalid")
+        self.assertIn("JSON array", shape_evidence["rejection"])
+
+    def test_reply_directory_is_enumerated_once(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            with mock.patch.object(inventory.os, "scandir", wraps=inventory.os.scandir) as scandir:
+                evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+        self.assertEqual(evidence["status"], "available")
+        self.assertEqual(scandir.call_count, 1)
+
+    def test_file_replacement_between_snapshot_and_open_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            original_open = inventory.os.open
+            replaced = False
+
+            def swapping_open(path: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+                nonlocal replaced
+                candidate = Path(path)
+                if candidate.name == "target-0.json" and not replaced:
+                    replaced = True
+                    candidate.write_text(
+                        json.dumps({"name": "SparkEngine", "type": "STATIC_LIBRARY"}),
+                        encoding="utf-8",
+                    )
+                return original_open(path, flags, *args, **kwargs)
+
+            with mock.patch.object(inventory.os, "open", side_effect=swapping_open):
+                evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertRegex(evidence["rejection"], "replaced|changed")
 
 
 class PresetSemanticsTests(unittest.TestCase):
@@ -1373,7 +1618,8 @@ class OrchestrationTests(unittest.TestCase):
                 "toolset": "",
                 "cacheVariables": {"SPARK_STRICT_DEPS": "OFF"},
                 "configurations": ["Debug"],
-                "assertedSourceCommit": "",
+                "replyDigest": "f" * 64,
+                "producerProvenance": {"state": "missing"},
                 "targets": [{"target": "TotallyInvented", "kind": "executable", "configuration": "Debug"}],
             }
             if item["profile"] == "windows-shipping"
@@ -1387,7 +1633,7 @@ class OrchestrationTests(unittest.TestCase):
             "codemodel-generator-mismatch",
             "codemodel-cache-mismatch",
             "codemodel-configuration-missing",
-            "codemodel-commit-unverified",
+            "codemodel-provenance-missing",
             "configured-target-undeclared",
         ):
             self.assertIn(expected, categories, f"{expected} is defined but never reaches the report")

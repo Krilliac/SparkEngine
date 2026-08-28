@@ -136,6 +136,32 @@ class ReleaseProfileShapeTests(ContractTestCase):
         self.assertIn("not required", first_party["value"].lower())
         self.assertNotIn("networking.multiplayer", profile["includedCapabilityIds"])
 
+    def test_installed_consumer_has_canonical_source_and_build_directories(self) -> None:
+        profile = self.profile_of(self.mutable)
+        consumer = next(
+            item for item in profile["buildConfigurations"]
+            if item["purpose"] == "installed-sdk-consumer"
+        )
+        self.assertEqual(consumer["sourceDirectory"], "Tests/PackageSmoke")
+        self.assertEqual(consumer["buildDirectory"], "build/installed-sdk-consumer")
+
+    def test_installed_consumer_without_safe_directories_is_rejected(self) -> None:
+        missing = copy.deepcopy(self.mutable)
+        missing_consumer = next(
+            item for item in self.profile_of(missing)["buildConfigurations"]
+            if item["purpose"] == "installed-sdk-consumer"
+        )
+        missing_consumer.pop("sourceDirectory")
+        self.assert_rejected(missing, "sourceDirectory must be a safe relative path")
+
+        unsafe = copy.deepcopy(self.mutable)
+        unsafe_consumer = next(
+            item for item in self.profile_of(unsafe)["buildConfigurations"]
+            if item["purpose"] == "installed-sdk-consumer"
+        )
+        unsafe_consumer["buildDirectory"] = "../outside"
+        self.assert_rejected(unsafe, "buildDirectory must be a safe relative path")
+
 
 class ClassificationCoverageTests(ContractTestCase):
     """Frozen case 2: every capability and gate is classified exactly once."""

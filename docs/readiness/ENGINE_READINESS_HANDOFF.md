@@ -867,6 +867,7 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - `docs/site/readiness.json`
 - `docs/readiness/ci120-build-matrix-inventory.json`
 - `docs/readiness/ci120-parity-findings.json`
+- `Tools/buildmatrix/capture_provenance.py`
 
 **Entry points**
 
@@ -874,6 +875,7 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - `CMakePresets.json`
 - `SparkBuild/src/Config.cpp`
 - `Tools/buildmatrix/inventory.py`
+- `Tools/buildmatrix/capture_provenance.py`
 - `Tools/buildmatrix/check_parity.py`
 - `Tools/buildmatrix/workflow.py`
 - `Tests/Tools/test_build_matrix_parity.py`
@@ -890,7 +892,7 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - Align documented and actual Windows preset directories
 - Define warning and CPU baselines for the supported row
 - Bind material CI workflow semantics (triggers and path filters, runner OS, job and step conditions, continue-on-error, matrix combinations, shell, and the builds and tests actually run) so a weakened lane cannot produce the same evidence
-- Bind configured codemodel evidence to the source tree, commit, generator, preset, cache values, and build directory it claims, and report missing provenance as a blocking unknown
+- Bind configured codemodel evidence to a producer-generated record covering the source tree, commit, generator, preset, cache values, build directory, and exact File API reply digests; report missing provenance or material values as blocking unknowns
 
 **Acceptance criteria**
 
@@ -900,13 +902,14 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 4. Missing dependency is fatal
 5. Documented configure/build commands match the Windows presets
 6. Experimental platform Shipping matrices remain owned by their platform work items
-7. Configured codemodel evidence is accepted only when its source tree, commit, generator, preset build directory, and cache values match the profile claiming it
+7. Configured codemodel evidence is accepted only when its source tree, producer-captured commit, generator, preset build directory, cache values, and reply-file digests match the profile claiming it
 
 **Required commands**
 
 ```bash
 python3 Tools/buildmatrix/inventory.py --check docs/readiness/ci120-build-matrix-inventory.json
-python3 Tools/buildmatrix/inventory.py --codemodel windows-shipping=build/windows-shipping --codemodel-commit windows-shipping=$(git rev-parse HEAD) --output docs/readiness/ci120-build-matrix-inventory.json
+python3 Tools/buildmatrix/capture_provenance.py --codemodel windows-shipping=build/windows-shipping
+python3 Tools/buildmatrix/inventory.py --codemodel windows-shipping=build/windows-shipping --output docs/readiness/ci120-build-matrix-inventory.json
 python3 Tools/buildmatrix/check_parity.py --inventory docs/readiness/ci120-build-matrix-inventory.json --baseline docs/readiness/ci120-parity-findings.json
 python3 Tests/Tools/test_build_matrix_parity.py
 cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON
@@ -937,6 +940,7 @@ python3 tools/site-data/validate.py
 - Risks:
   - Strict mode may expose optional-dependency ambiguity
   - Configured evidence cannot be produced without a real Windows MSVC configure, so the profile stays blocked until one runs
+  - The local producer record detects reply substitution but is not a signed remote attestation; protected CI production and signed artifact provenance remain release-pipeline work
 - Out of scope:
   - Certifying Linux, macOS, or any other host as a stable-v1 product
 
