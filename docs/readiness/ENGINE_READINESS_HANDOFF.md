@@ -440,7 +440,7 @@ git diff --exit-code
 **Priority:** P0 · **Status:** in-progress · **Wave:** 0 · **Area:** tests · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. 2026-09-05 progress: 27 Test*Real.cpp files now execute production source (see sourceContext); Tools/test_source_census.py classifies production-source vs mirror tests and .github/test-count-ratchet.json bounds minimumProductionSourceTests=4900 and maximumEmpty=25 (first ceiling, to be re-measured). Status stays in-progress: the installed-template live smoke covers all nine packages for 8 frames each, but the push/PR gate for the installed-sdk CTest and same-SHA CI evidence have not landed.
+In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel and rejects declared-but-unproduced evidence, but no producer in this repository emits runtime ModuleManager lifecycle evidence for an in-profile module, and package smoke is not scoped to a module profile in blocking CI. Those two gaps are enumerated in `tools/module-evidence/evidence-gaps.json` and keep this item release-blocking.
 
 **Dependency contract**
 
@@ -468,15 +468,24 @@ In-profile module tests compile subsets, tautologies, standalone mirrors, or rei
 - `SparkEngine/Source/Core/ModuleManager.cpp`
 - `cmake/RunSparkModuleProfileLifecycle.cmake`
 - `tools/module-evidence/manifest.json`
+- `tools/module-evidence/evidence-gaps.json`
 - `tools/module-evidence/validate_manifest.py`
+- `tools/module-evidence/targets.py`
+- `tools/module-evidence/lifecycle.py`
+- `tools/module-evidence/collect_targets.py`
+- `tools/module-evidence/collect_lifecycle.py`
 - `Tests/Tools/test_module_evidence.py`
+- `.github/workflows/build.yml`
 
 **Implementation scope**
 
-- Build every module included by a declared release profile from its real source and shared library
-- Load, update, fixed-update, render where applicable, unload, and leak-check in-profile modules through ModuleManager
-- Replace mirror-only and tautological assertions
-- Add installed-layout package smoke for in-profile modules
+- Prove CMake target existence from a configure-generated File API codemodel, never from text in CMakeLists.txt (done)
+- Require the exact lexical and canonical non-reparse path GameModules/<module>/Source for every module (done)
+- Bind every evidence declaration to the real output path of a real producer, and reject unproduced artifacts (done)
+- Emit a '[module-lifecycle] <Module> <Phase>' trace from ModuleManager so runtime lifecycle evidence can be produced (not started)
+- Add a CTest case that loads the in-profile module as a shared library and drives load, update, unload and shutdown on Windows and Linux (not started)
+- Add the module-profile-lifecycle CI job that runs collect_lifecycle.py against the built engine (not started)
+- Scope package smoke to the module profile and add the module-profile-package-smoke CI job (tracked under MOD-310)
 - Keep experimental-module lifecycle coverage open under RDY-015 rather than making it a stable-v1 prerequisite
 
 **Acceptance criteria**
@@ -489,6 +498,11 @@ In-profile module tests compile subsets, tautologies, standalone mirrors, or rei
 **Required commands**
 
 ```bash
+python3 -m unittest Tests.Tools.test_module_evidence
+python3 tools/module-evidence/validate_manifest.py --repo-root . --policy-only
+python3 tools/module-evidence/collect_targets.py --build-dir build/module-evidence-configure --out build/module-evidence/module-targets.json --configure-arg -DBUILD_GAME_MODULES=ON
+python3 tools/module-evidence/validate_manifest.py --repo-root . --target-evidence build/module-evidence/module-targets.json --allow-declared-gaps tools/module-evidence/evidence-gaps.json
+tools/check-module-evidence.sh
 cmake --preset windows-shipping -DBUILD_GAME_MODULES=ON -DENABLE_EDITOR=ON -DBUILD_TESTS=ON
 cmake --build --preset windows-shipping --config MinSizeRel --parallel 2
 ctest --test-dir build/windows-shipping -C MinSizeRel -R ^ModuleProfileLifecycle_SparkGameFPS_D3D11$ --output-on-failure --no-tests=error
@@ -498,8 +512,8 @@ tools/check-test-registration.sh
 
 **Automated evidence**
 
-- Test selectors: `ModuleProfileDiscovery_*`, `ModuleProfileLifecycle_*`, `ProfilePackageModule_*`, `ModuleLifecycle_*`, `TemplateRuntime*`, `Templates_*`
-- Required CI jobs: `build-windows-vs2022`, `build-windows-shipping`, `module-profile-package-smoke`
+- Test selectors: `ModuleProfileLifecycle_SparkGameFPS_D3D11`, `ModuleLifecycle_*`, `TemplateRuntime*`, `Templates_*`, `Tests.Tools.test_module_evidence`
+- Required CI jobs: `build-windows-vs2022`, `build-windows-shipping`, `module-evidence`; the missing module-profile package-smoke job remains tracked under `MOD-310`
 - Performance / reliability budgets:
   - Every module lifecycle smoke completes within its declared timeout
   - No unbounded allocation or sanitizer report
@@ -526,10 +540,11 @@ tools/check-test-registration.sh
 
 **Definition of done**
 
-- Production libraries are the tested units
-- Required CI is green
-- Generated module evidence is attached to the exact commit
-- Remaining: register the installed-sdk CTest in build.yml, replace the remaining mirror files listed in Tools/test_source_census.py MIRROR_BASELINE, attach exact-SHA CI JUnit for the Real tests
+- Production shared libraries, proven from a configure-generated codemodel, are the tested units
+- Every in-profile module has recorded ModuleManager lifecycle evidence bound to the exact source tree hash under test
+- tools/module-evidence/evidence-gaps.json is empty
+- The required module-evidence and production-source CI jobs are green for the exact commit
+- The installed-sdk CTest, remaining mirror-test replacements, and profile-scoped package smoke have exact-SHA evidence
 
 ### RDY-020 — Establish asset and package integrity manifests
 
