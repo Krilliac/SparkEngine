@@ -7,10 +7,11 @@ on:
     branches: [ main, develop, Working ]
   workflow_dispatch:
 
-# Cancel in-progress runs on the same branch/PR when a new commit is pushed
+# Supersede stale pull-request runs, but preserve every pushed SHA so the
+# required gate and its evidence can reach a terminal state for Working.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -62,6 +63,9 @@ jobs:
     - name: Test sanitizer pipeline exit propagation
       run: bash .github/scripts/test-run-sanitizer-tests.sh
 
+    - name: Test workflow failure-propagation contract
+      run: python3 .github/scripts/test-workflow-failure-propagation.py
+
     - name: Test Spark CLI
       run: python3 -m unittest discover -s Tools/spark-cli/tests -p "test_*.py" -v
 
@@ -76,11 +80,11 @@ jobs:
 
     - name: Verify all generated documentation and statistics
       id: generated-docs
-      if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
       env:
         LC_ALL: C.UTF-8
         TZ: UTC
       run: |
+        set +e
         set -uo pipefail
         bash docs/update-all-docs.sh check 2>&1 | tee generated-docs-check.log
         status=${PIPESTATUS[0]}
@@ -297,8 +301,8 @@ jobs:
           -DCMAKE_CXX_COMPILER=g++-14 \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-          -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
+          -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
@@ -313,8 +317,8 @@ jobs:
 
     - name: Run Tests under ASan + UBSan + LSan
       env:
-        ASAN_OPTIONS: detect_leaks=1:halt_on_error=0:print_stats=1:check_initialization_order=1:log_path=${{ github.workspace }}/build/asan-runtime
-        UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=0
+        ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:print_stats=1:check_initialization_order=1:log_path=${{ github.workspace }}/build/asan-runtime
+        UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/Tests/lsan_suppressions.txt
       run: |
         bash .github/scripts/run-sanitizer-tests.sh \
@@ -581,7 +585,9 @@ jobs:
       shell: bash
       # Keep restored object files, but regenerate CMake metadata so an older
       # cache cannot retain a different generator platform or toolset.
-      run: cmake --fresh -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log
+      run: |
+        set -o pipefail
+        cmake --fresh -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log
 
     - name: Build
       shell: bash
@@ -798,6 +804,7 @@ jobs:
 
     - name: Configure CMake
       run: |
+        set -o pipefail
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
@@ -933,6 +940,7 @@ jobs:
 
     - name: Configure CMake
       run: |
+        set -o pipefail
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
@@ -1193,6 +1201,7 @@ jobs:
 
     - name: Configure CMake
       run: |
+        set -o pipefail
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         # macOS path: SDL2 + OpenGL + OpenAL. DXR/Vulkan always off here
         # (MoltenVK path has its own preset). ENABLE_METAL is matrix-driven —
@@ -1965,6 +1974,7 @@ jobs:
       - name: Launch staged executable
         shell: bash
         run: |
+          set -o pipefail
           "./staging/${{ matrix.bin_name }}" --version | tee installer-version.txt
           "./staging/${{ matrix.bin_name }}" --help | tee installer-help.txt
           grep -Fq "SparkInstaller" installer-version.txt

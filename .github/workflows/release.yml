@@ -562,6 +562,7 @@ jobs:
       - name: Launch staged executable
         shell: bash
         run: |
+          set -o pipefail
           "./staging/${{ matrix.artifact_name }}" --version | tee installer-version.txt
           "./staging/${{ matrix.artifact_name }}" --help | tee installer-help.txt
           grep -Fq "SparkInstaller" installer-version.txt
