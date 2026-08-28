@@ -753,6 +753,60 @@ jobs:
           echo "TABLEEOF"
         } >> "$GITHUB_OUTPUT"
 
+    - name: Inspect existing release before mutation
+      id: release-inspect
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        GITHUB_SHA: ${{ github.sha }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        if test "$(git rev-parse HEAD)" != "$GITHUB_SHA"; then
+          echo "Release-source checkout is not the exact workflow commit." >&2
+          exit 1
+        fi
+
+        python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" inspect \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt"
+
+    - name: Hide and verify existing nightly release
+      if: needs.prepare.outputs.is_versioned == 'false' && steps.release-inspect.outputs.target_exists == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_ID: ${{ steps.release-inspect.outputs.target_release_id }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$RELEASE_ID" =~ ^[1-9][0-9]*$ ]]; then
+          echo "Existing nightly release ID is invalid." >&2
+          exit 1
+        fi
+        if [[ "$RELEASE_TAG" != "nightly" ]]; then
+          echo "Refusing to hide non-nightly release: $RELEASE_TAG" >&2
+          exit 1
+        fi
+
+        VERIFIED_RELEASE="$(mktemp)"
+        trap 'rm -f "$VERIFIED_RELEASE"' EXIT
+        gh api --method PATCH \
+          "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+          -F draft=true >/dev/null
+        gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$VERIFIED_RELEASE"
+        if ! jq -e \
+            --argjson release_id "$RELEASE_ID" \
+            --arg release_tag "$RELEASE_TAG" \
+            'type == "object" and
+             .id == $release_id and
+             .tag_name == $release_tag and
+             .draft == true' \
+            "$VERIFIED_RELEASE" >/dev/null; then
+          echo "Existing nightly release was not verifiably hidden; refusing all tag and asset mutation." >&2
+          exit 1
+        fi
+
     - name: Prepare durable pending download-counter state
       id: badge-prepare
       env:
@@ -817,9 +871,10 @@ jobs:
 
     - name: Verify compatible existing release assets before publication
       id: release-preflight
-      # The pending ledger commit above makes every currently published asset
-      # recoverable before this read-only guard can stop a rerun. The guard
-      # still precedes every tag, release, and release-asset mutation below.
+      # The inspect/hide sequence above prevents public partial replacement,
+      # while the pending ledger commit makes every old asset count recoverable.
+      # This second guard proves the snapshotted target did not change and that
+      # an existing nightly is still draft before any tag or asset mutation.
       env:
         GH_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
@@ -903,9 +958,26 @@ jobs:
       with:
         subject-path: ${{ steps.assets.outputs.files }}
 
-    - name: Stage new stable versioned release as draft
+    - name: Reverify frozen asset counts immediately before staging
+      id: release-freeze
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        GITHUB_SHA: ${{ github.sha }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" preflight \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+          --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
+
+    - name: Stage new or interrupted stable versioned release as draft
       id: stable-stage
-      if: needs.prepare.outputs.is_versioned == 'true' && steps.release-preflight.outputs.target_exists != 'true'
+      if: needs.prepare.outputs.is_versioned == 'true' && (steps.release-freeze.outputs.target_exists != 'true' || steps.release-freeze.outputs.target_is_draft == 'true')
       uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
       with:
         tag_name: ${{ needs.prepare.outputs.tag }}
@@ -954,8 +1026,8 @@ jobs:
         overwrite_files: true
         files: ${{ steps.assets.outputs.files }}
 
-    - name: Finalize published-release download counters
-      id: badge-finalize
+    - name: Checkpoint staged release download counters
+      id: badge-stage
       env:
         GH_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
@@ -972,27 +1044,25 @@ jobs:
         fi
 
         for attempt in 1 2 3 4 5 6; do
-          if python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" finalize \
+          if python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" stage \
             --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
             --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
-            --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json" \
-            --badge-directory "$GITHUB_WORKSPACE/badge-repository/.github/badges"; then
+            --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"; then
             exit 0
           fi
           if test "$attempt" -eq 6; then
-            echo "Published release did not converge to the exact expected asset set." >&2
+            echo "Staged release did not converge to the exact expected asset set and digests." >&2
             exit 1
           fi
-          echo "Published assets are not yet consistent (attempt ${attempt}/6); retrying."
+          echo "Staged assets are not yet consistent (attempt ${attempt}/6); retrying."
           sleep "$((attempt * 3))"
         done
 
-    - name: Commit finalized download-counter state
-      id: badge-final-commit
+    - name: Commit staged download-counter checkpoint
+      id: badge-staged-commit
       working-directory: badge-repository
       env:
         GH_TOKEN: ${{ github.token }}
-        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
       run: |
         set -euo pipefail
         AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
@@ -1006,45 +1076,53 @@ jobs:
         REMOTE_HEAD="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
           ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
         if test "$REMOTE_HEAD" != "$EXPECTED_PENDING"; then
-          echo "Working advanced after the pending counter commit; refusing to finalize stale state." >&2
+          echo "Working advanced after the pending counter commit; refusing to checkpoint stale state." >&2
           exit 1
         fi
 
-        if [[ "$IS_VERSIONED" == "true" ]]; then
-          TARGET_BADGE=.github/badges/stable-downloads.json
-        else
-          TARGET_BADGE=.github/badges/nightly-downloads.json
-        fi
-        git add -- \
-          .github/badges/downloads-data.json \
-          .github/badges/downloads.json \
-          .github/badges/installer-downloads.json \
-          "$TARGET_BADGE"
+        git add -- .github/badges/downloads-data.json
         if git diff --cached --quiet; then
-          echo "Counter finalization produced no finalized-state diff." >&2
+          echo "Counter staging produced no durable staged-state diff." >&2
           exit 1
         fi
 
-        git commit -s -m "chore: finalize download counters (lifetime: ${{ steps.badge-finalize.outputs.new_total }}, installer: ${{ steps.badge-finalize.outputs.installer_total }}) [skip ci]"
-        FINAL_COMMIT="$(git rev-parse HEAD)"
+        git commit -s -m "chore: checkpoint staged download counters (lifetime: ${{ steps.badge-stage.outputs.new_total }}, installer: ${{ steps.badge-stage.outputs.installer_total }}) [skip ci]"
+        STAGED_COMMIT="$(git rev-parse HEAD)"
         git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
           --force-with-lease="refs/heads/Working:${EXPECTED_PENDING}" origin \
           "HEAD:refs/heads/Working"
 
         PUBLISHED_HEAD="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
           ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
-        if test "$PUBLISHED_HEAD" != "$FINAL_COMMIT"; then
-          echo "Working does not point to the finalized counter commit after push." >&2
+        if test "$PUBLISHED_HEAD" != "$STAGED_COMMIT"; then
+          echo "Working does not point to the staged counter checkpoint after push." >&2
           exit 1
         fi
-        echo "changed=true" >> "$GITHUB_OUTPUT"
-        echo "final_commit=$FINAL_COMMIT" >> "$GITHUB_OUTPUT"
+        echo "staged_commit=$STAGED_COMMIT" >> "$GITHUB_OUTPUT"
 
-    - name: Publish complete stable versioned release
-      if: needs.prepare.outputs.is_versioned == 'true' && (steps.release-preflight.outputs.target_exists != 'true' || steps.release-preflight.outputs.target_is_draft == 'true')
+    - name: Verify release tag immediately before publication
       env:
         GH_TOKEN: ${{ github.token }}
-        RELEASE_ID: ${{ steps.stable-stage.outputs.id || steps.release-preflight.outputs.target_release_id }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        TARGET_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        TARGET_COMMIT="$(git rev-parse "${TARGET_SHA}^{commit}")"
+        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          fetch --force --no-tags origin \
+          "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+        REMOTE_COMMIT="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+        if [[ "$REMOTE_COMMIT" != "$TARGET_COMMIT" ]]; then
+          echo "Release tag ${RELEASE_TAG} drifted to ${REMOTE_COMMIT} before publication; expected ${TARGET_COMMIT}." >&2
+          exit 1
+        fi
+
+    - name: Publish complete stable versioned release
+      if: needs.prepare.outputs.is_versioned == 'true' && (steps.release-freeze.outputs.target_exists != 'true' || steps.release-freeze.outputs.target_is_draft == 'true')
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_ID: ${{ steps.stable-stage.outputs.id || steps.release-freeze.outputs.target_release_id }}
       run: |
         set -euo pipefail
         test -n "$RELEASE_ID"
@@ -1065,6 +1143,105 @@ jobs:
           "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
           -F draft=false \
           -f make_latest=false >/dev/null
+
+    - name: Verify release tag immediately after publication
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        TARGET_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        TARGET_COMMIT="$(git rev-parse "${TARGET_SHA}^{commit}")"
+        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          fetch --force --no-tags origin \
+          "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+        REMOTE_COMMIT="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+        if [[ "$REMOTE_COMMIT" != "$TARGET_COMMIT" ]]; then
+          echo "Release tag ${RELEASE_TAG} drifted to ${REMOTE_COMMIT} after publication; expected ${TARGET_COMMIT}." >&2
+          exit 1
+        fi
+
+    - name: Complete published release and download counters
+      id: badge-complete
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        GITHUB_SHA: ${{ github.sha }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        for attempt in 1 2 3 4 5 6; do
+          if python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" complete \
+            --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+            --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+            --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json" \
+            --badge-directory "$GITHUB_WORKSPACE/badge-repository/.github/badges"; then
+            exit 0
+          fi
+          if test "$attempt" -eq 6; then
+            echo "Published release did not converge to the exact expected state." >&2
+            exit 1
+          fi
+          echo "Published state is not yet consistent (attempt ${attempt}/6); retrying."
+          sleep "$((attempt * 3))"
+        done
+
+    - name: Commit completed download-counter state
+      id: badge-final-commit
+      working-directory: badge-repository
+      env:
+        GH_TOKEN: ${{ github.token }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+      run: |
+        set -euo pipefail
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        EXPECTED_STAGED="${{ steps.badge-staged-commit.outputs.staged_commit }}"
+        LOCAL_STAGED="$(git rev-parse HEAD)"
+        if test "$LOCAL_STAGED" != "$EXPECTED_STAGED"; then
+          echo "Badge checkout no longer points to this run's staged checkpoint." >&2
+          exit 1
+        fi
+
+        REMOTE_HEAD="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
+        if test "$REMOTE_HEAD" != "$EXPECTED_STAGED"; then
+          echo "Working advanced after the staged counter checkpoint; refusing to commit stale completed state." >&2
+          exit 1
+        fi
+
+        if [[ "$IS_VERSIONED" == "true" ]]; then
+          TARGET_BADGE=.github/badges/stable-downloads.json
+        else
+          TARGET_BADGE=.github/badges/nightly-downloads.json
+        fi
+        git add -- \
+          .github/badges/downloads-data.json \
+          .github/badges/downloads.json \
+          .github/badges/installer-downloads.json \
+          "$TARGET_BADGE"
+        if git diff --cached --quiet; then
+          echo "Counter completion produced no completed-state diff." >&2
+          exit 1
+        fi
+
+        git commit -s -m "chore: complete download counters (lifetime: ${{ steps.badge-complete.outputs.new_total }}, installer: ${{ steps.badge-complete.outputs.installer_total }}) [skip ci]"
+        FINAL_COMMIT="$(git rev-parse HEAD)"
+        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+          --force-with-lease="refs/heads/Working:${EXPECTED_STAGED}" origin \
+          "HEAD:refs/heads/Working"
+
+        PUBLISHED_HEAD="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
+        if test "$PUBLISHED_HEAD" != "$FINAL_COMMIT"; then
+          echo "Working does not point to the completed counter commit after push." >&2
+          exit 1
+        fi
+        echo "changed=true" >> "$GITHUB_OUTPUT"
+        echo "final_commit=$FINAL_COMMIT" >> "$GITHUB_OUTPUT"
 
     # GITHUB_TOKEN pushes do not trigger ordinary push workflows, so explicitly
     # prove and publish the generated Working head.

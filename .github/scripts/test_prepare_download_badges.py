@@ -17,6 +17,9 @@ from unittest import mock
 
 SCRIPT = Path(__file__).with_name("download_counter_ledger.py")
 RELEASE_WORKFLOW = Path(__file__).resolve().parents[1] / "workflows" / "release.yml"
+UPDATE_WORKFLOW = (
+    Path(__file__).resolve().parents[1] / "workflows" / "update-downloads.yml"
+)
 README = Path(__file__).resolve().parents[2] / "README.md"
 SPEC = importlib.util.spec_from_file_location("download_counter_ledger", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
@@ -67,15 +70,33 @@ class LedgerFiles:
         self.temporary.cleanup()
 
 
-def ledger_prepare(files, current, *, versioned=False, attempt="1", initialize=False):
+def write_expected(files, names):
+    files.expected.write_text("".join(f"{name}\n" for name in names), encoding="utf-8")
+    files.expected_digests.write_text(
+        "".join(f"{asset_digest(name).removeprefix('sha256:')}  {name}\n" for name in names),
+        encoding="utf-8",
+    )
+
+
+def ledger_prepare(
+    files,
+    current,
+    *,
+    versioned=False,
+    attempt="1",
+    initialize=False,
+    source_sha=SOURCE_SHA,
+    target_tag=None,
+):
+    target_tag = target_tag or ("v1.2.3" if versioned else "nightly")
     with mock.patch.object(LEDGER, "fetch_consistent_inventory", return_value=current):
         return LEDGER.prepare_publication(
             repository=REPOSITORY,
             is_versioned=versioned,
             run_id="700",
             run_attempt=attempt,
-            source_sha=SOURCE_SHA,
-            target_tag="v1.2.3" if versioned else "nightly",
+            source_sha=source_sha,
+            target_tag=target_tag,
             data_file=files.data,
             badge_directory=files.badges,
             api=object(),
@@ -84,20 +105,54 @@ def ledger_prepare(files, current, *, versioned=False, attempt="1", initialize=F
         )
 
 
-def ledger_finalize(files, current, names, *, versioned=False, attempt="1"):
-    files.expected.write_text("".join(f"{name}\n" for name in names), encoding="utf-8")
-    files.expected_digests.write_text(
-        "".join(f"{asset_digest(name).removeprefix('sha256:')}  {name}\n" for name in names),
-        encoding="utf-8",
-    )
+def ledger_stage(
+    files,
+    current,
+    names,
+    *,
+    versioned=False,
+    attempt="1",
+    source_sha=SOURCE_SHA,
+    target_tag=None,
+):
+    write_expected(files, names)
+    target_tag = target_tag or ("v1.2.3" if versioned else "nightly")
     with mock.patch.object(LEDGER, "fetch_consistent_inventory", return_value=current):
-        return LEDGER.finalize_publication(
+        return LEDGER.stage_publication(
             repository=REPOSITORY,
             is_versioned=versioned,
             run_id="700",
             run_attempt=attempt,
-            source_sha=SOURCE_SHA,
-            target_tag="v1.2.3" if versioned else "nightly",
+            source_sha=source_sha,
+            target_tag=target_tag,
+            expected_assets_file=files.expected,
+            expected_digests_file=files.expected_digests,
+            data_file=files.data,
+            api=object(),
+            now=FIXED_NOW,
+        )
+
+
+def ledger_complete(
+    files,
+    current,
+    names,
+    *,
+    versioned=False,
+    attempt="1",
+    source_sha=SOURCE_SHA,
+    target_tag=None,
+):
+    write_expected(files, names)
+    target_tag = target_tag or ("v1.2.3" if versioned else "nightly")
+    with mock.patch.object(LEDGER, "fetch_consistent_inventory", return_value=current):
+        return LEDGER.complete_publication(
+            repository=REPOSITORY,
+            is_versioned=versioned,
+            run_id="700",
+            run_attempt=attempt,
+            source_sha=source_sha,
+            target_tag=target_tag,
             expected_assets_file=files.expected,
             expected_digests_file=files.expected_digests,
             data_file=files.data,
@@ -107,23 +162,68 @@ def ledger_finalize(files, current, names, *, versioned=False, attempt="1"):
         )
 
 
-def ledger_preflight(files, current, names, *, versioned=False, attempt="1"):
-    files.expected.write_text("".join(f"{name}\n" for name in names), encoding="utf-8")
-    files.expected_digests.write_text(
-        "".join(f"{asset_digest(name).removeprefix('sha256:')}  {name}\n" for name in names),
-        encoding="utf-8",
+def inventory_with_target_draft(current, target_tag, draft):
+    return ledger_inventory(
+        *(
+            LEDGER.ReleaseRecord(
+                release.release_id,
+                release.tag_name,
+                release.assets,
+                draft if release.tag_name == target_tag else release.draft,
+            )
+            for release in current.releases
+        )
     )
+
+
+def ledger_finalize(files, current, names, *, versioned=False, attempt="1"):
+    """Exercise the staged checkpoint and published completion as one test helper."""
+    target_tag = "v1.2.3" if versioned else "nightly"
+    staged = inventory_with_target_draft(current, target_tag, True)
+    ledger_stage(files, staged, names, versioned=versioned, attempt=attempt)
+    published = inventory_with_target_draft(current, target_tag, False)
+    return ledger_complete(
+        files, published, names, versioned=versioned, attempt=attempt
+    )
+
+
+def ledger_preflight(
+    files,
+    current,
+    names,
+    *,
+    versioned=False,
+    attempt="1",
+    source_sha=SOURCE_SHA,
+    target_tag=None,
+):
+    write_expected(files, names)
+    target_tag = target_tag or ("v1.2.3" if versioned else "nightly")
     with mock.patch.object(LEDGER, "fetch_consistent_inventory", return_value=current):
         return LEDGER.preflight_publication(
             repository=REPOSITORY,
             is_versioned=versioned,
             run_id="700",
             run_attempt=attempt,
-            source_sha=SOURCE_SHA,
-            target_tag="v1.2.3" if versioned else "nightly",
+            source_sha=source_sha,
+            target_tag=target_tag,
             expected_assets_file=files.expected,
             expected_digests_file=files.expected_digests,
             data_file=files.data,
+            api=object(),
+        )
+
+
+def ledger_inspect(files, current, names, *, versioned=False, target_tag=None):
+    write_expected(files, names)
+    target_tag = target_tag or ("v1.2.3" if versioned else "nightly")
+    with mock.patch.object(LEDGER, "fetch_consistent_inventory", return_value=current):
+        return LEDGER.inspect_publication_target(
+            repository=REPOSITORY,
+            is_versioned=versioned,
+            target_tag=target_tag,
+            expected_assets_file=files.expected,
+            expected_digests_file=files.expected_digests,
             api=object(),
         )
 
@@ -269,6 +369,28 @@ class V2StateAndRecoveryTests(unittest.TestCase):
                     now=FIXED_NOW,
                 )
 
+    def test_refresh_rejects_hidden_nightly_without_pending_state(self):
+        hidden = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(101, 10, "one.zip", 4), draft=True
+            )
+        )
+        with LedgerFiles() as files:
+            files.badges.mkdir()
+            files.data.write_text('{"total": 0}\n', encoding="utf-8")
+            before = files.data.read_bytes()
+            with mock.patch.object(
+                LEDGER, "fetch_consistent_inventory", return_value=hidden
+            ), self.assertRaisesRegex(LEDGER.CounterError, "hidden as a draft"):
+                LEDGER.refresh_counters(
+                    repository=REPOSITORY,
+                    data_file=files.data,
+                    badge_directory=files.badges,
+                    api=object(),
+                    now=FIXED_NOW,
+                )
+            self.assertEqual(files.data.read_bytes(), before)
+
     def test_stable_and_nightly_replacement_keep_old_high_water_once(self):
         for versioned in (False, True):
             with self.subTest(versioned=versioned), LedgerFiles() as files:
@@ -309,9 +431,86 @@ class V2StateAndRecoveryTests(unittest.TestCase):
             self.assertEqual(
                 LEDGER.load_state(files.data).pending.prepared_asset_ids, frozenset()
             )
+            self.assertEqual(LEDGER.load_state(files.data).pending.phase, "prepared")
             self.assertEqual(
                 ledger_finalize(files, new, ("new.zip",), attempt="2").total, 8
             )
+
+    def test_prepare_adopts_exact_same_target_and_source_under_new_attempt(self):
+        current = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(101, 10, "one.zip", 4), draft=True
+            )
+        )
+        with LedgerFiles() as files:
+            ledger_prepare(files, current, initialize=True)
+            recovered = ledger_prepare(files, current, attempt="2")
+            state = LEDGER.load_state(files.data)
+            self.assertTrue(recovered.recovered_pending)
+            self.assertEqual(recovered.operation_id, "700:2")
+            self.assertEqual(state.pending.operation_id, "700:2")
+            self.assertEqual(state.pending.target_tag, "nightly")
+            self.assertFalse(state.pending.is_versioned)
+            self.assertEqual(state.pending.source_sha, SOURCE_SHA)
+            self.assertEqual(state.pending.phase, "prepared")
+
+    def test_prepare_rejects_cross_target_channel_or_source_pending(self):
+        current = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(101, 10, "one.zip", 4), draft=True
+            )
+        )
+        cases = (
+            {
+                "versioned": True,
+                "target_tag": "v1.2.3",
+                "source_sha": SOURCE_SHA,
+                "label": "cross-channel",
+            },
+            {
+                "versioned": False,
+                "target_tag": "nightly",
+                "source_sha": "b" * 40,
+                "label": "same-nightly-new-source",
+            },
+        )
+        for case in cases:
+            with self.subTest(case=case["label"]), LedgerFiles() as files:
+                ledger_prepare(files, current, initialize=True)
+                before = files.data.read_bytes()
+                with self.assertRaisesRegex(
+                    LEDGER.CounterError, "different target, channel, or source SHA"
+                ):
+                    ledger_prepare(
+                        files,
+                        current,
+                        attempt="2",
+                        versioned=case["versioned"],
+                        target_tag=case["target_tag"],
+                        source_sha=case["source_sha"],
+                    )
+                self.assertEqual(files.data.read_bytes(), before)
+
+    def test_prepare_rejects_different_version_tag_pending(self):
+        current = ledger_inventory(
+            ledger_release(
+                10, "v1.2.3", ledger_asset(101, 10, "one.zip", 4), draft=True
+            )
+        )
+        with LedgerFiles() as files:
+            ledger_prepare(files, current, versioned=True, initialize=True)
+            before = files.data.read_bytes()
+            with self.assertRaisesRegex(
+                LEDGER.CounterError, "different target, channel, or source SHA"
+            ):
+                ledger_prepare(
+                    files,
+                    current,
+                    versioned=True,
+                    attempt="2",
+                    target_tag="v1.2.4",
+                )
+            self.assertEqual(files.data.read_bytes(), before)
 
     def test_publish_before_finalize_recovers_without_double_count(self):
         old = ledger_inventory(
@@ -333,6 +532,126 @@ class V2StateAndRecoveryTests(unittest.TestCase):
             self.assertEqual(final.total, 7)
             self.assertEqual(state.assets[101].download_count, 5)
             self.assertEqual(state.assets[202].download_count, 2)
+            self.assertIsNone(state.pending)
+
+    def test_stage_preserves_pending_and_rewrites_staged_asset_ids(self):
+        old = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(101, 10, "one.zip", 5), draft=True
+            )
+        )
+        staged = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(202, 10, "one.zip", 0), draft=True
+            )
+        )
+        with LedgerFiles() as files:
+            ledger_prepare(files, old, initialize=True)
+            ledger_stage(files, staged, ("one.zip",))
+            state = LEDGER.load_state(files.data)
+            self.assertIsNotNone(state.pending)
+            self.assertEqual(state.pending.phase, "staged")
+            self.assertEqual(state.pending.prepared_asset_ids, frozenset({202}))
+            self.assertEqual(state.live_asset_ids, frozenset({202}))
+            self.assertEqual(state.assets[101].download_count, 5)
+            self.assertFalse((files.badges / "nightly-downloads.json").exists())
+
+    def test_complete_requires_published_exact_assets_before_clearing_pending(self):
+        old = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(101, 10, "one.zip", 5), draft=True
+            )
+        )
+        staged = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(202, 10, "one.zip", 0), draft=True
+            )
+        )
+        published = inventory_with_target_draft(staged, "nightly", False)
+        with LedgerFiles() as files:
+            ledger_prepare(files, old, initialize=True)
+            ledger_stage(files, staged, ("one.zip",))
+            before = files.data.read_bytes()
+            with self.assertRaisesRegex(LEDGER.CounterError, "remains a draft"):
+                ledger_complete(files, staged, ("one.zip",))
+            self.assertEqual(files.data.read_bytes(), before)
+
+            wrong_digest = ledger_inventory(
+                ledger_release(
+                    10,
+                    "nightly",
+                    ledger_asset(202, 10, "one.zip", 0, "sha256:" + "f" * 64),
+                )
+            )
+            with self.assertRaisesRegex(LEDGER.CounterError, "digest mismatch"):
+                ledger_complete(files, wrong_digest, ("one.zip",))
+            self.assertEqual(files.data.read_bytes(), before)
+
+            result = ledger_complete(files, published, ("one.zip",))
+            state = LEDGER.load_state(files.data)
+            self.assertEqual(result.total, 5)
+            self.assertIsNone(state.pending)
+            self.assertEqual(
+                json.loads((files.badges / "downloads.json").read_text())["message"],
+                "5",
+            )
+            self.assertEqual(
+                json.loads((files.badges / "nightly-downloads.json").read_text())[
+                    "message"
+                ],
+                "0",
+            )
+
+    def test_complete_rejects_post_stage_asset_set_change_without_writing(self):
+        old = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(101, 10, "one.zip", 5), draft=True
+            )
+        )
+        staged = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(202, 10, "one.zip", 0), draft=True
+            )
+        )
+        changed = ledger_inventory(
+            ledger_release(
+                10,
+                "nightly",
+                ledger_asset(202, 10, "one.zip", 0),
+                ledger_asset(203, 10, "unexpected.zip", 0),
+            )
+        )
+        with LedgerFiles() as files:
+            ledger_prepare(files, old, initialize=True)
+            ledger_stage(files, staged, ("one.zip",))
+            before = files.data.read_bytes()
+            with self.assertRaisesRegex(LEDGER.CounterError, "changed after staging"):
+                ledger_complete(files, changed, ("one.zip",))
+            self.assertEqual(files.data.read_bytes(), before)
+            self.assertEqual(LEDGER.load_state(files.data).pending.phase, "staged")
+
+    def test_complete_reconciles_downloads_recorded_during_publication(self):
+        old = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(101, 10, "one.zip", 5), draft=True
+            )
+        )
+        staged = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(202, 10, "one.zip", 0), draft=True
+            )
+        )
+        published = ledger_inventory(
+            ledger_release(10, "nightly", ledger_asset(202, 10, "one.zip", 3))
+        )
+        with LedgerFiles() as files:
+            ledger_prepare(files, old, initialize=True)
+            ledger_stage(files, staged, ("one.zip",))
+            result = ledger_complete(files, published, ("one.zip",))
+            state = LEDGER.load_state(files.data)
+            self.assertEqual(result.total, 8)
+            self.assertEqual(state.assets[101].download_count, 5)
+            self.assertEqual(state.assets[202].download_count, 3)
             self.assertIsNone(state.pending)
 
     def test_finalize_rejects_missing_and_unexpected_assets_exactly(self):
@@ -369,6 +688,7 @@ class V2StateAndRecoveryTests(unittest.TestCase):
                             tag,
                             ledger_asset(101, 10, "one.zip", 4),
                             ledger_asset(102, 10, "two.zip", 7),
+                            draft=not versioned,
                         )
                     ),
                     True,
@@ -389,7 +709,9 @@ class V2StateAndRecoveryTests(unittest.TestCase):
                     self.assertEqual(files.data.read_bytes(), before)
 
         current = ledger_inventory(
-            ledger_release(10, "nightly", ledger_asset(101, 10, "one.zip", 4))
+            ledger_release(
+                10, "nightly", ledger_asset(101, 10, "one.zip", 4), draft=True
+            )
         )
         with LedgerFiles() as files:
             ledger_prepare(files, current, initialize=True)
@@ -407,6 +729,7 @@ class V2StateAndRecoveryTests(unittest.TestCase):
                         "nightly",
                         ledger_asset(101, 10, "one.zip", 4),
                         ledger_asset(102, 10, "obsolete.zip", 7),
+                        draft=True,
                     )
                 ),
                 ("one.zip",),
@@ -481,7 +804,7 @@ class V2StateAndRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(LEDGER.CounterError, "digest mismatch: one.zip"):
                 ledger_preflight(files, current, ("one.zip",), versioned=True)
 
-    def test_identical_versioned_draft_is_resumable_without_asset_overwrite(self):
+    def test_versioned_draft_digest_subset_is_resumable_without_asset_overwrite(self):
         current = ledger_inventory(
             ledger_release(
                 10,
@@ -491,10 +814,64 @@ class V2StateAndRecoveryTests(unittest.TestCase):
             )
         )
         with LedgerFiles() as files:
+            inspected = ledger_inspect(
+                files, current, ("one.zip", "two.zip"), versioned=True
+            )
+            self.assertEqual(inspected.target_release_id, 10)
+            self.assertTrue(inspected.target_is_draft)
             ledger_prepare(files, current, versioned=True, initialize=True)
-            result = ledger_preflight(files, current, ("one.zip",), versioned=True)
+            result = ledger_preflight(
+                files, current, ("one.zip", "two.zip"), versioned=True
+            )
             self.assertEqual(result.target_release_id, 10)
             self.assertTrue(result.target_is_draft)
+
+    def test_versioned_draft_subset_rejects_a_present_digest_mismatch(self):
+        current = ledger_inventory(
+            ledger_release(
+                10,
+                "v1.2.3",
+                ledger_asset(101, 10, "one.zip", 4, "sha256:" + "f" * 64),
+                draft=True,
+            )
+        )
+        with LedgerFiles() as files:
+            ledger_prepare(files, current, versioned=True, initialize=True)
+            with self.assertRaisesRegex(LEDGER.CounterError, "digest mismatch: one.zip"):
+                ledger_preflight(
+                    files, current, ("one.zip", "two.zip"), versioned=True
+                )
+
+    def test_versioned_draft_subset_rejects_an_unexpected_present_asset(self):
+        current = ledger_inventory(
+            ledger_release(
+                10,
+                "v1.2.3",
+                ledger_asset(101, 10, "obsolete.zip", 4),
+                draft=True,
+            )
+        )
+        with LedgerFiles() as files:
+            with self.assertRaisesRegex(LEDGER.CounterError, "unexpected assets"):
+                ledger_inspect(files, current, ("one.zip",), versioned=True)
+
+    def test_inspect_allows_published_additive_nightly_before_explicit_hide(self):
+        current = ledger_inventory(
+            ledger_release(10, "nightly", ledger_asset(101, 10, "one.zip", 4))
+        )
+        with LedgerFiles() as files:
+            result = ledger_inspect(files, current, ("one.zip", "two.zip"))
+            self.assertEqual(result.target_release_id, 10)
+            self.assertFalse(result.target_is_draft)
+
+    def test_preflight_requires_existing_nightly_to_be_hidden(self):
+        current = ledger_inventory(
+            ledger_release(10, "nightly", ledger_asset(101, 10, "one.zip", 4))
+        )
+        with LedgerFiles() as files:
+            ledger_prepare(files, current, initialize=True)
+            with self.assertRaisesRegex(LEDGER.CounterError, "not draft"):
+                ledger_preflight(files, current, ("one.zip",))
 
     def test_preflight_rejects_inventory_change_after_durable_snapshot(self):
         prepared = ledger_inventory(
@@ -510,6 +887,55 @@ class V2StateAndRecoveryTests(unittest.TestCase):
                 ledger_preflight(files, changed, ("one.zip",))
             self.assertEqual(files.data.read_bytes(), before)
 
+    def test_preflight_rejects_download_count_growth_after_snapshot(self):
+        prepared = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(101, 10, "one.zip", 4), draft=True
+            )
+        )
+        changed = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(101, 10, "one.zip", 5), draft=True
+            )
+        )
+        with LedgerFiles() as files:
+            ledger_prepare(files, prepared, initialize=True)
+            before = files.data.read_bytes()
+            with self.assertRaisesRegex(LEDGER.CounterError, "download counts changed"):
+                ledger_preflight(files, changed, ("one.zip",))
+            self.assertEqual(files.data.read_bytes(), before)
+
+    def test_rerun_after_count_growth_preserves_the_new_high_water(self):
+        prepared = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(101, 10, "one.zip", 4), draft=True
+            )
+        )
+        changed = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(101, 10, "one.zip", 5), draft=True
+            )
+        )
+        staged = ledger_inventory(
+            ledger_release(
+                10, "nightly", ledger_asset(202, 10, "one.zip", 0), draft=True
+            )
+        )
+        published = inventory_with_target_draft(staged, "nightly", False)
+        with LedgerFiles() as files:
+            ledger_prepare(files, prepared, initialize=True)
+            with self.assertRaisesRegex(LEDGER.CounterError, "download counts changed"):
+                ledger_preflight(files, changed, ("one.zip",))
+            recovered = ledger_prepare(files, changed, attempt="2")
+            self.assertTrue(recovered.recovered_pending)
+            ledger_preflight(files, changed, ("one.zip",), attempt="2")
+            ledger_stage(files, staged, ("one.zip",), attempt="2")
+            result = ledger_complete(files, published, ("one.zip",), attempt="2")
+            self.assertEqual(result.total, 5)
+            self.assertEqual(
+                LEDGER.load_state(files.data).assets[101].download_count, 5
+            )
+
     def test_preflight_requires_the_exact_pending_operation(self):
         current = ledger_inventory(
             ledger_release(10, "nightly", ledger_asset(101, 10, "one.zip", 4))
@@ -517,7 +943,7 @@ class V2StateAndRecoveryTests(unittest.TestCase):
         with LedgerFiles() as files:
             ledger_prepare(files, current, initialize=True)
             before = files.data.read_bytes()
-            with self.assertRaisesRegex(LEDGER.CounterError, "does not match"):
+            with self.assertRaisesRegex(LEDGER.CounterError, "requires this operation"):
                 ledger_preflight(files, current, ("one.zip",), attempt="2")
             self.assertEqual(files.data.read_bytes(), before)
 
@@ -529,9 +955,12 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         preflight = text.index(
             "    - name: Verify compatible existing release assets before publication"
         )
-        mutations = (
-            "    - name: Bind release tag to workflow commit",
-            "    - name: Stage new stable versioned release as draft",
+        bind = text.index("    - name: Bind release tag to workflow commit")
+        freeze = text.index(
+            "    - name: Reverify frozen asset counts immediately before staging"
+        )
+        asset_mutations = (
+            "    - name: Stage new or interrupted stable versioned release as draft",
             "    - name: Stage nightly rolling release as draft",
         )
 
@@ -540,8 +969,10 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             text.index("    - name: Verify exact source commit passed Required CI Gate"),
             preflight,
         )
-        for mutation in mutations:
-            self.assertLess(preflight, text.index(mutation))
+        self.assertLess(preflight, bind)
+        self.assertLess(bind, freeze)
+        for mutation in asset_mutations:
+            self.assertLess(freeze, text.index(mutation))
 
         next_step = text.index("\n    - name:", preflight + 1)
         step = text[preflight:next_step]
@@ -553,6 +984,20 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         self.assertNotIn("git push", step)
         self.assertNotIn("gh release", step)
         self.assertIn("GITHUB_SHA: ${{ github.sha }}", step)
+
+        freeze_next = text.index("\n    - name:", freeze + 1)
+        freeze_step = text[freeze:freeze_next]
+        self.assertIn('prepare-download-badges.py" preflight', freeze_step)
+        self.assertIn("--expected-assets-file", freeze_step)
+        self.assertIn("--expected-digests-file", freeze_step)
+        self.assertIn("--data-file", freeze_step)
+        self.assertEqual(
+            freeze_next + 1,
+            text.index(
+                "    - name: Stage new or interrupted stable versioned release as draft"
+            ),
+        )
+        self.assertEqual(text.count('prepare-download-badges.py" preflight'), 2)
         self.assertIn("group: sparkengine-publication-global", text)
         self.assertIn("cancel-in-progress: false", text)
         self.assertIn("ref: ${{ github.sha }}", text)
@@ -601,31 +1046,137 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         )
         self.assertIn("SparkInstaller-Windows-x64.exe", workflow)
 
-    def test_rolling_release_stays_draft_until_digests_and_ledger_are_durable(self):
+    def test_rolling_release_uses_fail_closed_production_order(self):
         text = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        inspect = text.index("    - name: Inspect existing release before mutation")
+        hide = text.index("    - name: Hide and verify existing nightly release")
+        prepare = text.index("    - name: Prepare durable pending download-counter state")
+        pending = text.index("    - name: Commit durable pending download-counter state")
+        preflight = text.index(
+            "    - name: Verify compatible existing release assets before publication"
+        )
+        bind = text.index("    - name: Bind release tag to workflow commit")
+        freeze = text.index(
+            "    - name: Reverify frozen asset counts immediately before staging"
+        )
         stage = text.index("    - name: Stage nightly rolling release as draft")
-        finalize = text.index("    - name: Finalize published-release download counters")
-        commit = text.index("    - name: Commit finalized download-counter state")
+        checkpoint = text.index("    - name: Checkpoint staged release download counters")
+        staged_commit = text.index("    - name: Commit staged download-counter checkpoint")
+        before_tag = text.index(
+            "    - name: Verify release tag immediately before publication"
+        )
         publish = text.index("    - name: Publish complete nightly rolling release")
+        after_tag = text.index(
+            "    - name: Verify release tag immediately after publication"
+        )
+        complete = text.index(
+            "    - name: Complete published release and download counters"
+        )
+        completed_commit = text.index(
+            "    - name: Commit completed download-counter state"
+        )
         dispatch = text.index("    - name: Dispatch exact-head build after Working badge commit")
-        self.assertLess(stage, finalize)
-        self.assertLess(finalize, commit)
-        self.assertLess(commit, publish)
-        self.assertLess(publish, dispatch)
-        stage_step = text[stage:finalize]
+
+        self.assertEqual(
+            [
+                inspect,
+                hide,
+                prepare,
+                pending,
+                preflight,
+                bind,
+                freeze,
+                stage,
+                checkpoint,
+                staged_commit,
+                before_tag,
+                publish,
+                after_tag,
+                complete,
+                completed_commit,
+                dispatch,
+            ],
+            sorted(
+                [
+                    inspect,
+                    hide,
+                    prepare,
+                    pending,
+                    preflight,
+                    bind,
+                    freeze,
+                    stage,
+                    checkpoint,
+                    staged_commit,
+                    before_tag,
+                    publish,
+                    after_tag,
+                    complete,
+                    completed_commit,
+                    dispatch,
+                ]
+            ),
+        )
+
+        inspect_step = text[inspect:hide]
+        self.assertIn('prepare-download-badges.py" inspect', inspect_step)
+        self.assertIn("--expected-assets-file", inspect_step)
+        self.assertIn("--expected-digests-file", inspect_step)
+
+        hide_step = text[hide:prepare]
+        self.assertIn("steps.release-inspect.outputs.target_exists == 'true'", hide_step)
+        self.assertIn("steps.release-inspect.outputs.target_release_id", hide_step)
+        self.assertIn("gh api --method PATCH", hide_step)
+        self.assertIn("-F draft=true", hide_step)
+        self.assertIn(
+            'gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID"', hide_step
+        )
+        self.assertIn(".draft == true", hide_step)
+        self.assertIn(".tag_name == $release_tag", hide_step)
+
+        stage_step = text[stage:checkpoint]
         self.assertIn("draft: true", stage_step)
         self.assertIn("overwrite_files: true", stage_step)
-        finalize_step = text[finalize:commit]
-        self.assertIn("--expected-digests-file", finalize_step)
-        publish_step = text[publish:dispatch]
+        checkpoint_step = text[checkpoint:staged_commit]
+        self.assertIn('prepare-download-badges.py" stage', checkpoint_step)
+        self.assertIn("--expected-assets-file", checkpoint_step)
+        self.assertIn("--expected-digests-file", checkpoint_step)
+        staged_commit_step = text[staged_commit:before_tag]
+        self.assertIn(".github/badges/downloads-data.json", staged_commit_step)
+        self.assertNotIn(".github/badges/downloads.json", staged_commit_step)
+        self.assertNotIn(".github/badges/installer-downloads.json", staged_commit_step)
+        self.assertIn("staged_commit=$STAGED_COMMIT", staged_commit_step)
+        before_tag_step = text[before_tag:publish]
+        self.assertIn("fetch --force --no-tags", before_tag_step)
+        self.assertIn('refs/tags/${RELEASE_TAG}^{commit}', before_tag_step)
+        publish_step = text[publish:after_tag]
         self.assertIn("-F draft=false", publish_step)
+        after_tag_step = text[after_tag:complete]
+        self.assertIn("fetch --force --no-tags", after_tag_step)
+        self.assertIn('refs/tags/${RELEASE_TAG}^{commit}', after_tag_step)
+        complete_step = text[complete:completed_commit]
+        self.assertIn('prepare-download-badges.py" complete', complete_step)
+        self.assertIn("--expected-assets-file", complete_step)
+        self.assertIn("--expected-digests-file", complete_step)
+        completed_commit_step = text[completed_commit:dispatch]
+        self.assertIn(
+            'EXPECTED_STAGED="${{ steps.badge-staged-commit.outputs.staged_commit }}"',
+            completed_commit_step,
+        )
+        self.assertIn(".github/badges/downloads-data.json", completed_commit_step)
+        self.assertIn(".github/badges/downloads.json", completed_commit_step)
+        self.assertIn(".github/badges/installer-downloads.json", completed_commit_step)
+        self.assertNotIn('prepare-download-badges.py" finalize', text)
 
-    def test_existing_versioned_release_is_not_overwritten(self):
+    def test_existing_versioned_release_is_immutable_or_resumed_without_overwrite(self):
         text = RELEASE_WORKFLOW.read_text(encoding="utf-8")
-        stage = text.index("    - name: Stage new stable versioned release as draft")
+        stage = text.index(
+            "    - name: Stage new or interrupted stable versioned release as draft"
+        )
         nightly = text.index("    - name: Stage nightly rolling release as draft")
         step = text[stage:nightly]
-        self.assertIn("steps.release-preflight.outputs.target_exists != 'true'", step)
+        self.assertIn("steps.release-freeze.outputs.target_exists != 'true'", step)
+        self.assertIn("steps.release-freeze.outputs.target_is_draft == 'true'", step)
         self.assertIn("overwrite_files: false", step)
         self.assertIn("draft: true", step)
         publish = text.index("    - name: Publish complete stable versioned release")
@@ -633,6 +1184,19 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         publish_step = text[publish:nightly_publish]
         self.assertIn("target_is_draft == 'true'", publish_step)
         self.assertIn("target_release_id", publish_step)
+
+    def test_six_hour_refresh_persists_durable_ledger_badges(self):
+        text = UPDATE_WORKFLOW.read_text(encoding="utf-8")
+        refresh = text.index("prepare-download-badges.py refresh")
+        add = text.index("        git add --", refresh)
+        commit = text.index("        git commit -m", add)
+        self.assertLess(refresh, add)
+        staged = text[add:commit]
+        self.assertIn(".github/badges/downloads-data.json", staged)
+        self.assertIn(".github/badges/downloads.json", staged)
+        self.assertIn(".github/badges/installer-downloads.json", staged)
+        self.assertIn("group: sparkengine-publication-global", text)
+        self.assertIn("cancel-in-progress: false", text)
 
 
 class V2FakeApi:

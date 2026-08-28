@@ -28,6 +28,7 @@ VERSION_TAG_RE = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 OPERATION_RE = re.compile(r"^[0-9]+:[0-9]+$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-fA-F]{64}$")
+PENDING_PHASES = frozenset({"prepared", "staged"})
 
 
 class CounterError(RuntimeError):
@@ -155,6 +156,7 @@ class PendingPublication:
     target_tag: str
     is_versioned: bool
     source_sha: str
+    phase: str
     target_release_id: int | None
     prepared_asset_ids: frozenset[int]
     prepared_at: str
@@ -245,7 +247,7 @@ def _parse_pending(value: Any, assets: dict[int, AssetRecord]) -> PendingPublica
         raise CounterError("state.pending must be an object or null")
     keys = {
         "operationId", "targetTag", "isVersioned", "sourceSha",
-        "targetReleaseId", "preparedAssetIds", "preparedAt",
+        "phase", "targetReleaseId", "preparedAssetIds", "preparedAt",
     }
     _require_keys(value, allowed=keys, required=keys, label="state.pending")
     operation_id = value["operationId"]
@@ -258,6 +260,11 @@ def _parse_pending(value: Any, assets: dict[int, AssetRecord]) -> PendingPublica
     source_sha = value["sourceSha"]
     if not isinstance(source_sha, str) or not SHA_RE.fullmatch(source_sha):
         raise CounterError("state.pending.sourceSha must be a full commit SHA")
+    phase = value["phase"]
+    if not isinstance(phase, str) or phase not in PENDING_PHASES:
+        raise CounterError(
+            "state.pending.phase must be one of: " + ", ".join(sorted(PENDING_PHASES))
+        )
     release_id_value = value["targetReleaseId"]
     release_id = None if release_id_value is None else _positive_integer(
         release_id_value, "state.pending.targetReleaseId"
@@ -270,8 +277,8 @@ def _parse_pending(value: Any, assets: dict[int, AssetRecord]) -> PendingPublica
     if any(assets[asset_id].release_id != release_id for asset_id in prepared):
         raise CounterError("state.pending contains an asset from another release")
     return PendingPublication(
-        operation_id, target_tag, is_versioned, source_sha.lower(), release_id,
-        prepared, _timestamp(value["preparedAt"], "state.pending.preparedAt"),
+        operation_id, target_tag, is_versioned, source_sha.lower(), phase,
+        release_id, prepared, _timestamp(value["preparedAt"], "state.pending.preparedAt"),
     )
 
 
@@ -383,6 +390,7 @@ def _state_payload(state: CounterState) -> dict[str, Any]:
             "targetTag": state.pending.target_tag,
             "isVersioned": state.pending.is_versioned,
             "sourceSha": state.pending.source_sha,
+            "phase": state.pending.phase,
             "targetReleaseId": state.pending.target_release_id,
             "preparedAssetIds": sorted(state.pending.prepared_asset_ids),
             "preparedAt": state.pending.prepared_at,
@@ -755,18 +763,65 @@ class CounterRefreshResult:
     installer_total: int
 
 
+def _validate_target_inputs(
+    *, repository: str, is_versioned: bool, target_tag: str
+) -> None:
+    if not REPOSITORY_RE.fullmatch(repository):
+        raise CounterError(f"invalid GitHub repository name: {repository!r}")
+    _validate_tag(target_tag, is_versioned, "target tag")
+
+
 def _validate_publication_inputs(
     *, repository: str, is_versioned: bool, run_id: str, run_attempt: str,
     source_sha: str, target_tag: str,
 ) -> str:
-    if not REPOSITORY_RE.fullmatch(repository):
-        raise CounterError(f"invalid GitHub repository name: {repository!r}")
+    _validate_target_inputs(
+        repository=repository, is_versioned=is_versioned, target_tag=target_tag
+    )
     run_id = _decimal_string(run_id, "GITHUB_RUN_ID")
     run_attempt = _decimal_string(run_attempt, "GITHUB_RUN_ATTEMPT")
     if not SHA_RE.fullmatch(source_sha):
         raise CounterError("GITHUB_SHA must be a full commit SHA")
-    _validate_tag(target_tag, is_versioned, "target tag")
     return f"{run_id}:{run_attempt}"
+
+
+def _require_pending_target(
+    pending: PendingPublication,
+    *,
+    is_versioned: bool,
+    source_sha: str,
+    target_tag: str,
+) -> None:
+    if (
+        pending.target_tag != target_tag
+        or pending.is_versioned != is_versioned
+        or pending.source_sha != source_sha.lower()
+    ):
+        raise CounterError(
+            "pending publication belongs to a different target, channel, or source SHA"
+        )
+
+
+def _require_pending_operation(
+    pending: PendingPublication,
+    *,
+    operation_id: str,
+    is_versioned: bool,
+    source_sha: str,
+    target_tag: str,
+    phase: str,
+    label: str,
+) -> None:
+    _require_pending_target(
+        pending,
+        is_versioned=is_versioned,
+        source_sha=source_sha,
+        target_tag=target_tag,
+    )
+    if pending.operation_id != operation_id or pending.phase != phase:
+        raise CounterError(
+            f"{label} requires this operation's durable {phase} publication"
+        )
 
 
 def _badge(label: str, message: str, color: str) -> dict[str, Any]:
@@ -841,6 +896,13 @@ def prepare_publication(
     )
     timestamp = _utc_now(now)
     loaded = load_state(data_file, initialize=initialize)
+    if isinstance(loaded, CounterState) and loaded.pending is not None:
+        _require_pending_target(
+            loaded.pending,
+            is_versioned=is_versioned,
+            source_sha=source_sha,
+            target_tag=target_tag,
+        )
     inventory = fetch_consistent_inventory(api, repository)
     recovered = isinstance(loaded, CounterState) and loaded.pending is not None
     if isinstance(loaded, LegacyState):
@@ -857,7 +919,7 @@ def prepare_publication(
         state,
         pending=PendingPublication(
             operation_id, target_tag, is_versioned, source_sha.lower(),
-            target.release_id if target else None,
+            "prepared", target.release_id if target else None,
             frozenset(asset.asset_id for asset in target_assets), timestamp,
         ),
     )
@@ -882,6 +944,11 @@ def refresh_counters(
     timestamp = _utc_now(now)
     loaded = load_state(data_file)
     inventory = fetch_consistent_inventory(api, repository)
+    nightly = inventory.release_by_tag("nightly")
+    if nightly is not None and nightly.draft:
+        raise CounterError(
+            "cannot refresh counters while the nightly release is hidden as a draft"
+        )
     if isinstance(loaded, LegacyState):
         state = _migrate_legacy(loaded, inventory, updated=timestamp)
     else:
@@ -966,16 +1033,16 @@ def _require_exact_asset_set(
         raise CounterError(f"{label} asset set differs (" + "; ".join(details) + ")")
 
 
-def _require_existing_nightly_subset(
-    expected: frozenset[str], assets: tuple[AssetRecord, ...]
+def _require_asset_name_subset(
+    expected: frozenset[str], assets: tuple[AssetRecord, ...], *, label: str
 ) -> None:
     actual_names = [asset.name for asset in assets]
     if len(actual_names) != len(set(actual_names)):
-        raise CounterError("existing nightly release contains duplicate asset names")
+        raise CounterError(f"{label} contains duplicate asset names")
     unexpected = set(actual_names) - expected
     if unexpected:
         raise CounterError(
-            "existing nightly release contains unexpected assets: "
+            f"{label} contains unexpected assets: "
             + ", ".join(sorted(unexpected))
         )
 
@@ -997,6 +1064,74 @@ def _require_exact_asset_digests(
         if mismatched:
             details.append("digest mismatch: " + ", ".join(mismatched))
         raise CounterError(f"{label} asset digests differ (" + "; ".join(details) + ")")
+
+
+def _validate_existing_target(
+    *,
+    expected_assets: frozenset[str],
+    expected_digests: dict[str, str],
+    target: ReleaseRecord,
+    is_versioned: bool,
+) -> None:
+    if not is_versioned:
+        # Rolling nightlies may add newly introduced aliases/metadata, but an
+        # asset removed from the desired contract is stale and must be handled
+        # by an explicit migration rather than silently surviving forever.
+        _require_asset_name_subset(
+            expected_assets, target.assets, label="existing nightly release"
+        )
+        return
+
+    if target.draft:
+        # An interrupted stable publication may resume only missing uploads.
+        # Every asset already present must be one of the desired names and
+        # must already have the exact digest generated by this source commit.
+        _require_asset_name_subset(
+            expected_assets, target.assets, label="existing draft release"
+        )
+        _require_exact_asset_digests(
+            expected_digests, target.assets, label="existing draft release"
+        )
+        return
+
+    # Published versioned releases are immutable. A rerun is a no-op only when
+    # both the complete name set and all GitHub-computed digests are identical.
+    _require_exact_asset_set(
+        expected_assets, target.assets, label="existing release"
+    )
+    _require_exact_asset_digests(
+        expected_digests, target.assets, label="existing release"
+    )
+
+
+def inspect_publication_target(
+    *,
+    repository: str,
+    is_versioned: bool,
+    target_tag: str,
+    expected_assets_file: Path,
+    expected_digests_file: Path,
+    api: GitHubApi,
+) -> PublicationPreflightResult:
+    """Validate the target before any release, tag, or asset mutation."""
+    _validate_target_inputs(
+        repository=repository, is_versioned=is_versioned, target_tag=target_tag
+    )
+    expected = _read_expected_assets(expected_assets_file)
+    expected_digests = _read_expected_digests(expected_digests_file, expected)
+    inventory = fetch_consistent_inventory(api, repository)
+    target = inventory.release_by_tag(target_tag)
+    if target is None:
+        return PublicationPreflightResult(False, 0, None, False)
+    _validate_existing_target(
+        expected_assets=expected,
+        expected_digests=expected_digests,
+        target=target,
+        is_versioned=is_versioned,
+    )
+    return PublicationPreflightResult(
+        True, len(target.assets), target.release_id, target.draft
+    )
 
 
 def preflight_publication(
@@ -1021,12 +1156,15 @@ def preflight_publication(
     if not isinstance(loaded, CounterState) or loaded.pending is None:
         raise CounterError("preflight requires a durable pending publication")
     pending = loaded.pending
-    if (
-        pending.operation_id != operation_id or pending.target_tag != target_tag
-        or pending.is_versioned != is_versioned
-        or pending.source_sha != source_sha.lower()
-    ):
-        raise CounterError("preflight does not match the durable pending publication")
+    _require_pending_operation(
+        pending,
+        operation_id=operation_id,
+        is_versioned=is_versioned,
+        source_sha=source_sha,
+        target_tag=target_tag,
+        phase="prepared",
+        label="preflight",
+    )
 
     expected = _read_expected_assets(expected_assets_file)
     expected_digests = _read_expected_digests(expected_digests_file, expected)
@@ -1043,23 +1181,104 @@ def preflight_publication(
         or pending.prepared_asset_ids != actual_asset_ids
     ):
         raise CounterError("target release assets changed after the durable counter snapshot")
-
-    if is_versioned:
-        _require_exact_asset_set(expected, target.assets, label="existing release")
-        _require_exact_asset_digests(
-            expected_digests, target.assets, label="existing release"
+    changed_counts = sorted(
+        asset.name
+        for asset in target.assets
+        if loaded.assets[asset.asset_id].download_count != asset.download_count
+    )
+    if changed_counts:
+        raise CounterError(
+            "target release download counts changed after the durable counter snapshot: "
+            + ", ".join(changed_counts)
         )
-    else:
-        # Rolling nightlies may add newly introduced aliases/metadata, but an
-        # asset removed from the desired contract is stale and must be handled
-        # by an explicit migration rather than silently surviving forever.
-        _require_existing_nightly_subset(expected, target.assets)
+
+    _validate_existing_target(
+        expected_assets=expected,
+        expected_digests=expected_digests,
+        target=target,
+        is_versioned=is_versioned,
+    )
+    if not is_versioned and not target.draft:
+        raise CounterError(
+            "existing nightly release is not draft after the pre-publication hide"
+        )
     return PublicationPreflightResult(
         True, len(target.assets), target.release_id, target.draft
     )
 
 
-def finalize_publication(
+def stage_publication(
+    *,
+    repository: str,
+    is_versioned: bool,
+    run_id: str,
+    run_attempt: str,
+    source_sha: str,
+    target_tag: str,
+    expected_assets_file: Path,
+    expected_digests_file: Path,
+    data_file: Path,
+    api: GitHubApi,
+    now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+) -> PublicationResult:
+    operation_id = _validate_publication_inputs(
+        repository=repository, is_versioned=is_versioned, run_id=run_id,
+        run_attempt=run_attempt, source_sha=source_sha, target_tag=target_tag,
+    )
+    loaded = load_state(data_file)
+    if not isinstance(loaded, CounterState):
+        raise CounterError("stage requires schema-v2 state")
+    pending = loaded.pending
+    if pending is None:
+        raise CounterError("stage requires a durable pending publication")
+    _require_pending_operation(
+        pending,
+        operation_id=operation_id,
+        is_versioned=is_versioned,
+        source_sha=source_sha,
+        target_tag=target_tag,
+        phase="prepared",
+        label="stage",
+    )
+    expected = _read_expected_assets(expected_assets_file)
+    expected_digests = _read_expected_digests(expected_digests_file, expected)
+    timestamp = _utc_now(now)
+    inventory = fetch_consistent_inventory(api, repository)
+    state = reconcile_inventory(
+        loaded, inventory,
+        allowed_missing_asset_ids=pending.prepared_asset_ids,
+        updated=timestamp,
+    )
+    target = inventory.release_by_tag(target_tag)
+    if target is None:
+        raise CounterError(f"staged release {target_tag} is absent")
+    if not is_versioned and not target.draft:
+        raise CounterError("staged nightly release must remain a draft")
+    _require_exact_asset_set(expected, target.assets, label="staged release")
+    _require_exact_asset_digests(
+        expected_digests, target.assets, label="staged release"
+    )
+    state = replace(
+        state,
+        pending=PendingPublication(
+            operation_id,
+            target_tag,
+            is_versioned,
+            source_sha.lower(),
+            "staged",
+            target.release_id,
+            frozenset(asset.asset_id for asset in target.assets),
+            pending.prepared_at,
+        ),
+    )
+    _write_files({data_file: _serialize_json(_state_payload(state))})
+    target_downloads = sum(asset.download_count for asset in target.assets)
+    return PublicationResult(
+        state.total, state.installer_total, target_downloads, operation_id, False
+    )
+
+
+def complete_publication(
     *,
     repository: str,
     is_versioned: bool,
@@ -1080,28 +1299,35 @@ def finalize_publication(
     )
     loaded = load_state(data_file)
     if not isinstance(loaded, CounterState):
-        raise CounterError("finalize requires schema-v2 state")
+        raise CounterError("complete requires schema-v2 state")
     pending = loaded.pending
     if pending is None:
-        raise CounterError("finalize requires a durable pending publication")
-    if (
-        pending.operation_id != operation_id or pending.target_tag != target_tag
-        or pending.is_versioned != is_versioned
-        or pending.source_sha != source_sha.lower()
-    ):
-        raise CounterError("finalize does not match the durable pending publication")
+        raise CounterError("complete requires a durable pending publication")
+    _require_pending_operation(
+        pending,
+        operation_id=operation_id,
+        is_versioned=is_versioned,
+        source_sha=source_sha,
+        target_tag=target_tag,
+        phase="staged",
+        label="complete",
+    )
     expected = _read_expected_assets(expected_assets_file)
     expected_digests = _read_expected_digests(expected_digests_file, expected)
     timestamp = _utc_now(now)
     inventory = fetch_consistent_inventory(api, repository)
-    state = reconcile_inventory(
-        loaded, inventory,
-        allowed_missing_asset_ids=pending.prepared_asset_ids,
-        updated=timestamp,
-    )
+    state = reconcile_inventory(loaded, inventory, updated=timestamp)
     target = inventory.release_by_tag(target_tag)
     if target is None:
         raise CounterError(f"published release {target_tag} is absent")
+    actual_asset_ids = frozenset(asset.asset_id for asset in target.assets)
+    if (
+        pending.target_release_id != target.release_id
+        or pending.prepared_asset_ids != actual_asset_ids
+    ):
+        raise CounterError("published release assets changed after staging")
+    if target.draft:
+        raise CounterError("published release remains a draft")
     _require_exact_asset_set(expected, target.assets, label="published release")
     _require_exact_asset_digests(
         expected_digests, target.assets, label="published release"
@@ -1123,10 +1349,32 @@ def finalize_publication(
     )
 
 
+def _report_publication_target(result: PublicationPreflightResult) -> None:
+    print(
+        "Existing target release: "
+        + ("present" if result.target_exists else "absent (first publication)")
+    )
+    print(f"Existing target assets: {result.target_asset_count}")
+    output_path = os.environ.get("GITHUB_OUTPUT")
+    if not output_path:
+        return
+    with open(output_path, "a", encoding="utf-8", newline="\n") as output:
+        output.write(f"target_exists={'true' if result.target_exists else 'false'}\n")
+        output.write(f"target_asset_count={result.target_asset_count}\n")
+        output.write(
+            "target_release_id="
+            + (str(result.target_release_id) if result.target_release_id else "")
+            + "\n"
+        )
+        output.write(
+            f"target_is_draft={'true' if result.target_is_draft else 'false'}\n"
+        )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "phase", choices=("preflight", "prepare", "finalize", "refresh")
+        "phase", choices=("inspect", "preflight", "prepare", "stage", "complete", "refresh")
     )
     parser.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY"))
     parser.add_argument(
@@ -1178,6 +1426,32 @@ def main() -> int:
                     output.write(f"installer_total={refreshed.installer_total}\n")
             return 0
 
+        if args.phase == "inspect":
+            required = {
+                "repository": args.repository,
+                "is-versioned": args.is_versioned,
+                "target-tag": args.target_tag,
+            }
+            missing = [name for name, value in required.items() if value is None]
+            if missing:
+                raise CounterError("missing required arguments: " + ", ".join(missing))
+            if args.initialize:
+                raise CounterError("--initialize is valid only during prepare")
+            if args.expected_assets_file is None:
+                raise CounterError("--expected-assets-file is required during inspect")
+            if args.expected_digests_file is None:
+                raise CounterError("--expected-digests-file is required during inspect")
+            result = inspect_publication_target(
+                repository=args.repository,
+                is_versioned=args.is_versioned == "true",
+                target_tag=args.target_tag,
+                expected_assets_file=args.expected_assets_file,
+                expected_digests_file=args.expected_digests_file,
+                api=api,
+            )
+            _report_publication_target(result)
+            return 0
+
         required = {
             "repository": args.repository, "is-versioned": args.is_versioned,
             "run-id": args.run_id, "run-attempt": args.run_attempt,
@@ -1208,52 +1482,41 @@ def main() -> int:
                 data_file=args.data_file,
                 api=api,
             )
-            print(
-                "Existing target release: "
-                + ("present" if result.target_exists else "absent (first publication)")
-            )
-            print(f"Existing target assets: {result.target_asset_count}")
-            output_path = os.environ.get("GITHUB_OUTPUT")
-            if output_path:
-                with open(output_path, "a", encoding="utf-8", newline="\n") as output:
-                    output.write(
-                        f"target_exists={'true' if result.target_exists else 'false'}\n"
-                    )
-                    output.write(f"target_asset_count={result.target_asset_count}\n")
-                    output.write(
-                        "target_release_id="
-                        + (
-                            str(result.target_release_id)
-                            if result.target_release_id
-                            else ""
-                        )
-                        + "\n"
-                    )
-                    output.write(
-                        f"target_is_draft={'true' if result.target_is_draft else 'false'}\n"
-                    )
+            _report_publication_target(result)
             return 0
 
-        common = dict(
-            **identity,
-            data_file=args.data_file,
-            badge_directory=args.badge_directory,
-            api=api,
-        )
         if args.phase == "prepare":
-            result = prepare_publication(**common, initialize=args.initialize)
+            result = prepare_publication(
+                **identity,
+                data_file=args.data_file,
+                badge_directory=args.badge_directory,
+                api=api,
+                initialize=args.initialize,
+            )
         else:
             if args.initialize:
                 raise CounterError("--initialize is valid only during prepare")
             if args.expected_assets_file is None:
-                raise CounterError("--expected-assets-file is required during finalize")
+                raise CounterError(
+                    f"--expected-assets-file is required during {args.phase}"
+                )
             if args.expected_digests_file is None:
-                raise CounterError("--expected-digests-file is required during finalize")
-            result = finalize_publication(
-                **common,
+                raise CounterError(
+                    f"--expected-digests-file is required during {args.phase}"
+                )
+            phase_common = dict(
+                **identity,
                 expected_assets_file=args.expected_assets_file,
                 expected_digests_file=args.expected_digests_file,
+                data_file=args.data_file,
+                api=api,
             )
+            if args.phase == "stage":
+                result = stage_publication(**phase_common)
+            else:
+                result = complete_publication(
+                    **phase_common, badge_directory=args.badge_directory
+                )
         print(f"Lifetime downloads: {result.total}")
         print(f"Installer downloads: {result.installer_total}")
         print(f"Target release downloads: {result.target_downloads}")

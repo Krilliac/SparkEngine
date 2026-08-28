@@ -129,6 +129,14 @@ jobs:
           exit 1
         fi
 
+        # Reconcile the durable per-asset ledger before computing channel
+        # badges. This keeps lifetime and installer totals current between
+        # releases and fails closed while an interrupted publication is pending.
+        python3 .github/scripts/prepare-download-badges.py refresh \
+          --repository "$REPO" \
+          --data-file .github/badges/downloads-data.json \
+          --badge-directory .github/badges
+
         # Fetch the total count for a release endpoint. Only a verified 404
         # means the release does not exist and may legitimately publish zero.
         # Every transport, auth, rate-limit, server, or schema error fails the
@@ -222,7 +230,12 @@ jobs:
         # Commit if changed.
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add .github/badges/nightly-downloads.json .github/badges/stable-downloads.json
+        git add -- \
+          .github/badges/downloads-data.json \
+          .github/badges/downloads.json \
+          .github/badges/installer-downloads.json \
+          .github/badges/nightly-downloads.json \
+          .github/badges/stable-downloads.json
         git diff --cached --quiet && echo "No changes" && exit 0
         git commit -m "chore: refresh download badges (nightly: $NIGHTLY_DL, stable: $STABLE_DL) [skip ci]"
         git push origin "HEAD:refs/heads/Working"
