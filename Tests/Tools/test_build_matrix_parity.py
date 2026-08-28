@@ -1295,6 +1295,24 @@ class CodemodelProvenanceTests(unittest.TestCase):
             self.categories(self.bound_data(evidence)),
         )
 
+    def test_structural_shipping_evidence_replaces_absence_without_authority(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+        report = check_parity.build_report(self.bound_data(evidence))
+        self.assertEqual(evidence["status"], "available")
+        self.assertFalse(
+            any(
+                item["category"] == "configured-evidence-absent"
+                and "windows-shipping" in item["message"]
+                for item in report["findings"]
+            )
+        )
+        self.assertIn(
+            "codemodel-producer-authority-unavailable",
+            {item["category"] for item in report["findings"]},
+        )
+        self.assertEqual(report["state"], "blocked")
+
     def test_capture_owns_query_configure_and_new_matching_index(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             trust_root = Path(raw)
