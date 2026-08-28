@@ -142,6 +142,82 @@ class SiteDataContractTests(ContractTestCase):
             )
             self.assertIn(anchor, profile["blockingWorkItemIds"])
 
+    def capability_owners(self, contract: dict[str, Any]) -> dict[str, set[str]]:
+        owners: dict[str, set[str]] = {}
+        for capability in contract["readiness"]["capabilities"]:
+            for work_id in capability["blockingWorkItemIds"]:
+                owners.setdefault(work_id, set()).add(capability["id"])
+        return owners
+
+    def test_profile_inherits_no_work_owned_solely_by_excluded_capabilities(self) -> None:
+        profile = self.profile_of(self.mutable)
+        included = set(profile["includedCapabilityIds"])
+        owners = self.capability_owners(self.mutable)
+        leaked = sorted(
+            work_id
+            for work_id in profile["blockingWorkItemIds"]
+            if owners.get(work_id) and not owners[work_id] & included
+        )
+        self.assertEqual(leaked, [], "stable-v1 must not be blocked by out-of-profile-only work")
+
+    def test_experimental_only_work_cannot_be_added_to_the_profile(self) -> None:
+        # RHI-230 exists only for platform.linux and rendering.vulkan.
+        self.profile_of(self.mutable)["blockingWorkItemIds"].append("RHI-230")
+        self.assert_rejected(self.mutable, "blocking work exists only for out-of-profile capabilities")
+
+    def test_regating_experimental_work_cannot_smuggle_it_back_in(self) -> None:
+        # Putting RHI-230 back on a required gate forces it into the profile via the
+        # coverage rule, and the freeze rule then rejects it. Both directions fail,
+        # so the only way out is to re-scope the gate or include the capability.
+        gate = next(gate for gate in self.mutable["readiness"]["gates"] if gate["id"] == "G09")
+        gate["blockingWorkItemIds"].append("RHI-230")
+        self.assert_rejected(self.mutable, "blocking work items omit required work")
+
+        self.profile_of(self.mutable)["blockingWorkItemIds"].append("RHI-230")
+        self.assert_rejected(self.mutable, "blocking work exists only for out-of-profile capabilities")
+
+    def test_profile_still_covers_every_included_capability_and_gate_blocker(self) -> None:
+        profile = self.profile_of(self.mutable)
+        declared = set(profile["blockingWorkItemIds"])
+        capabilities = {item["id"]: item for item in self.mutable["readiness"]["capabilities"]}
+        gates = {item["id"]: item for item in self.mutable["readiness"]["gates"]}
+        for capability_id in profile["includedCapabilityIds"]:
+            with self.subTest(capability=capability_id):
+                self.assertLessEqual(set(capabilities[capability_id]["blockingWorkItemIds"]), declared)
+        for gate_id in profile["requiredGateIds"]:
+            with self.subTest(gate=gate_id):
+                self.assertLessEqual(set(gates[gate_id]["blockingWorkItemIds"]), declared)
+
+    def test_rescoped_work_stays_open_and_anchored_outside_the_profile(self) -> None:
+        # Every item the breadth freeze removed from stable-v1. None may be closed,
+        # and each must still block the capability or gate that actually needs it.
+        rescoped = [
+            "MOD-300", "MOD-320", "MOD-330", "MOD-340", "MOD-350", "MOD-360",
+            "MOD-370", "MOD-380", "MOD-390", "NET-100", "OPS-110", "PLT-210",
+            "PLT-220", "RHI-220", "RHI-225", "RHI-230", "RHI-240",
+        ]
+        profile = self.profile_of(self.mutable)
+        owners = self.capability_owners(self.mutable)
+        by_id = {item["id"]: item for item in self.mutable["workItems"]}
+        gates = self.mutable["readiness"]["gates"]
+        for work_id in rescoped:
+            with self.subTest(work_item=work_id):
+                self.assertNotIn(work_id, profile["blockingWorkItemIds"])
+                self.assertNotEqual(by_id[work_id]["status"], "done", "re-scoping must not close work")
+                gate_anchor = [gate["id"] for gate in gates if work_id in gate["blockingWorkItemIds"]]
+                self.assertTrue(
+                    owners.get(work_id) or gate_anchor,
+                    f"{work_id} lost every anchor and is now unreachable",
+                )
+
+    def test_module_gate_keeps_every_module_declared(self) -> None:
+        gate = next(item for item in self.mutable["readiness"]["gates"] if item["id"] == "G13")
+        joined = " ".join(gate["acceptanceCriteria"]).lower()
+        self.assertIn("every discovered module has a validated manifest", joined)
+        self.assertIn("inside a release profile", joined)
+        self.assertIn("outside every release profile", joined)
+        self.assertEqual(gate["blockingWorkItemIds"], ["MOD-290", "MOD-310"])
+
     def test_limitations_do_not_hardcode_a_gate_count(self) -> None:
         # A limitation that spells out "none of its fifteen required gates" goes
         # stale the moment a gate is added to the profile. Keep the count derived.

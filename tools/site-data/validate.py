@@ -372,6 +372,26 @@ class Validator:
             missing_items = sorted(expected_items.difference(declared_items))
             self.require(not missing_items, location, f"blocking work items omit required work: {missing_items}")
 
+            # Breadth freeze. A profile must not inherit work that exists only to
+            # finish capabilities it excludes, or its blocked state stops meaning
+            # anything about the product shape it claims. The fix is to re-scope the
+            # gate, never to drop the work item: an item owned by no capability at
+            # all is shared infrastructure and stays eligible.
+            owners_by_item: dict[str, set[str]] = {}
+            for capability in readiness.get("capabilities", []):
+                for work_id in capability.get("blockingWorkItemIds", []):
+                    owners_by_item.setdefault(work_id, set()).add(capability.get("id"))
+            leaked = sorted(
+                work_id
+                for work_id in declared_items
+                if owners_by_item.get(work_id) and not owners_by_item[work_id].intersection(included)
+            )
+            self.require(
+                not leaked,
+                location,
+                f"blocking work exists only for out-of-profile capabilities: {leaked}",
+            )
+
             state = profile.get("state")
             weakest = min(
                 (RELEASE_RANK.get(capability_by_id[value].get("release"), 0) for value in included if value in capability_by_id),

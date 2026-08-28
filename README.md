@@ -288,6 +288,12 @@ a pinned one — no exact MSVC compiler build or Windows SDK version is pinned, 
 the hosted image floats, so the toolchain is neither reproducible nor certified
 (`BLD-100`, `PLT-200`, `CI-120`).
 
+Breadth is frozen around that shape. Linux, macOS, D3D12, Vulkan, OpenGL, Metal,
+multiplayer, production services, and the prototype game modules all keep their
+own open work, but that work does not gate `stable-v1` — and `stable-v1` certifies
+none of them. They stay labelled experimental or unsupported until a profile
+declares them.
+
 | Platform | Compiler | Backend | Declared support |
 |---|---|---|---|
 | Windows 10+ | MSVC v143 (VS 2022) | DirectX 11 | In `stable-v1` — primary, release candidate |
