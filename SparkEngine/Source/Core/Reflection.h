@@ -297,6 +297,7 @@ namespace Spark
         using GetRawFn = void* (*)(void* world, uint32_t entity);
         using PrepareStorageFn = void (*)(void* world);
         using SwapStorageContentsFn = void (*)(void* destinationWorld, void* sourceWorld) noexcept;
+        using NotifyReboundFn = void (*)(void* world, uint32_t entity);
 
         AddFn add = nullptr;                                 ///< Add a default-constructed component.
         HasFn has = nullptr;                                 ///< Check if entity has the component.
@@ -304,6 +305,7 @@ namespace Spark
         GetRawFn getRaw = nullptr;                           ///< Get a raw pointer to the component data.
         PrepareStorageFn prepareStorage = nullptr;           ///< Materialize the component pool before a transaction.
         SwapStorageContentsFn swapStorageContents = nullptr; ///< Exchange pool payloads without moving EnTT signals.
+        NotifyReboundFn notifyRebound = nullptr;             ///< Notify live reactive consumers after payload exchange.
     };
 
     /**

@@ -121,7 +121,8 @@ namespace Spark
  * All Spark Engine built-in components are registered by `RegisterBuiltins()`,
  * which is called automatically during SaveSystem::Initialize(). Game code must
  * pair `Register()` for a custom loadable component with ComponentFactory
- * operations that include `prepareStorage` and `swapStorageContents`.
+ * operations that include `prepareStorage`, `swapStorageContents`, and
+ * `notifyRebound`.
  *
  * ### Thread safety
  * Register() should be called during single-threaded initialization. Subsequent
@@ -312,11 +313,18 @@ namespace Spark
  *   is overwritten when all slots are used.
  *
  * ### Error handling
- * All public save/load methods return `bool` indicating success. On failure an error
- * message is logged. Load() builds a fresh candidate World and commits it only after
- * every component has restored successfully, so validation/deserialization failures
- * leave the caller's World and custom-state output unchanged. The commit preserves the
- * live registry's signal objects while retiring old entity lifecycle state.
+ * All public save/load methods return `bool` for ordinary validation, I/O, migration,
+ * and candidate-deserialization failures. Load() builds a fresh candidate World and
+ * commits it only after every component has restored successfully, so those pre-commit
+ * failures leave the caller's entities, components, event subscriptions, and custom-state
+ * output unchanged. The commit preserves the live registry's signal objects while
+ * retiring old entity lifecycle state and explicitly rebinding live reactive consumers.
+ *
+ * EnTT lifecycle observers are application callbacks and are not constrained to be
+ * non-throwing by the current World API. If one throws after retirement begins, the
+ * exception propagates rather than being converted to a misleading `false`; the World
+ * may be partially retired and the application must treat this as a fatal lifecycle
+ * programming error. Full rollback of observer-owned state remains outside this slice.
  *
  * ### Thread safety
  * SaveSystem is **not thread-safe**. Call all methods from the main game thread.
@@ -412,12 +420,16 @@ namespace Spark
      *
      * @warning A successful load replaces the provided `world`. Ensure no raw pointers
      *          to world entities are held by callers before invoking this method.
-     *          A failed load leaves the world unchanged.
+     *          Ordinary pre-commit failures leave the world unchanged. An exception
+     *          from a lifecycle observer during retirement propagates and may leave a
+     *          partially retired world; treat it as fatal rather than continuing.
      *
      * @param slotName  Save slot to load (must match a slot previously written by Save()).
      * @param world     The ECS World to restore into. Existing state is cleared.
-     * @return          `true` if the world was fully restored; `false` on any error
-     *                  (file not found, corrupt/truncated data, version mismatch, etc.).
+     * @return          `true` if the world was fully restored; `false` on ordinary
+     *                  pre-commit errors (file not found, corrupt/truncated data,
+     *                  version mismatch, candidate deserialization, etc.).
+     * @throws           Any exception emitted by a lifecycle observer after commit begins.
      */
         bool Load(const std::string& slotName, World& world);
 
@@ -558,14 +570,19 @@ namespace Spark
      * @brief Restore world state from a SaveData without reading from disk.
      *
      * Reconstructs all entities and components in a fresh candidate World, then retires
-     * old entities and swaps validated storage payloads into the existing live registry.
-     * Unknown component types, unsupported versions, and deserializer exceptions fail
-     * without changing world.
+     * old entities, swaps validated storage payloads into the existing live registry,
+     * and emits explicit reactive rebind notifications for incoming components.
+     * Unknown/duplicate component types, unsupported versions, and candidate-deserializer
+     * exceptions fail without changing entity/component or EventBus state.
      * Pair with SerializeWorld() for in-memory snapshot/restore patterns.
      *
      * @param data   SaveData snapshot (e.g. from a previous SerializeWorld() call).
      * @param world  The ECS World to replace after a successful restore.
-     * @return       `true` if all entities were restored successfully; `false` on error.
+     * @return       `true` if all entities were restored successfully; `false` on a
+     *               pre-commit validation/deserialization error.
+     * @throws       Lifecycle-observer exceptions after retirement begins. Such an
+     *               exception is not recoverable through this API and may leave the
+     *               caller's World partially retired.
      */
         bool DeserializeWorld(const SaveData& data, World& world) const;
 

@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -149,6 +150,133 @@ namespace
         return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
     }
 
+    template <typename Integer> bool ReadIntegerAt(const std::vector<char>& bytes, size_t& offset, Integer& value)
+    {
+        if (offset > bytes.size() || sizeof(Integer) > bytes.size() - offset)
+            return false;
+        std::memcpy(&value, bytes.data() + offset, sizeof(Integer));
+        offset += sizeof(Integer);
+        return true;
+    }
+
+    bool SkipWireString(const std::vector<char>& bytes, size_t& offset)
+    {
+        uint16_t length = 0;
+        if (!ReadIntegerAt(bytes, offset, length) || offset > bytes.size() || length > bytes.size() - offset)
+            return false;
+        offset += length;
+        return true;
+    }
+
+    struct SaveWireOffsets
+    {
+        size_t componentCount = 0;
+        size_t firstComponentBegin = 0;
+        size_t firstComponentEnd = 0;
+        size_t propertyCount = 0;
+        size_t firstPropertyBegin = 0;
+        size_t firstPropertyEnd = 0;
+        size_t customStateCount = 0;
+        size_t firstCustomStateBegin = 0;
+        size_t firstCustomStateEnd = 0;
+    };
+
+    bool LocateFirstSaveRecords(const std::vector<char>& bytes, SaveWireOffsets& locations)
+    {
+        if (bytes.size() < 12 || std::string(bytes.data(), 4) != "SPRK")
+            return false;
+
+        size_t offset = 8;
+        uint32_t metadataSize = 0;
+        if (!ReadIntegerAt(bytes, offset, metadataSize) || offset > bytes.size() ||
+            metadataSize > bytes.size() - offset)
+            return false;
+        offset += metadataSize;
+
+        uint32_t entityCount = 0;
+        if (!ReadIntegerAt(bytes, offset, entityCount) || entityCount == 0)
+            return false;
+
+        for (uint32_t entityIndex = 0; entityIndex < entityCount; ++entityIndex)
+        {
+            if (!SkipWireString(bytes, offset))
+                return false;
+
+            const size_t componentCountOffset = offset;
+            uint16_t componentCount = 0;
+            if (!ReadIntegerAt(bytes, offset, componentCount))
+                return false;
+            if (entityIndex == 0)
+            {
+                if (componentCount == 0)
+                    return false;
+                locations.componentCount = componentCountOffset;
+            }
+
+            for (uint16_t componentIndex = 0; componentIndex < componentCount; ++componentIndex)
+            {
+                const size_t componentBegin = offset;
+                if (!SkipWireString(bytes, offset))
+                    return false;
+
+                const size_t propertyCountOffset = offset;
+                uint16_t propertyCount = 0;
+                if (!ReadIntegerAt(bytes, offset, propertyCount))
+                    return false;
+                if (entityIndex == 0 && componentIndex == 0)
+                {
+                    if (propertyCount == 0)
+                        return false;
+                    locations.firstComponentBegin = componentBegin;
+                    locations.propertyCount = propertyCountOffset;
+                }
+
+                for (uint16_t propertyIndex = 0; propertyIndex < propertyCount; ++propertyIndex)
+                {
+                    const size_t propertyBegin = offset;
+                    if (!SkipWireString(bytes, offset) || !SkipWireString(bytes, offset))
+                        return false;
+                    if (entityIndex == 0 && componentIndex == 0 && propertyIndex == 0)
+                    {
+                        locations.firstPropertyBegin = propertyBegin;
+                        locations.firstPropertyEnd = offset;
+                    }
+                }
+
+                if (entityIndex == 0 && componentIndex == 0)
+                    locations.firstComponentEnd = offset;
+            }
+        }
+
+        locations.customStateCount = offset;
+        uint32_t customStateCount = 0;
+        if (!ReadIntegerAt(bytes, offset, customStateCount) || customStateCount == 0)
+            return false;
+        locations.firstCustomStateBegin = offset;
+        if (!SkipWireString(bytes, offset) || !SkipWireString(bytes, offset))
+            return false;
+        locations.firstCustomStateEnd = offset;
+        return true;
+    }
+
+    template <typename Count>
+    bool DuplicateWireRecord(std::vector<char>& bytes, size_t countOffset, size_t begin, size_t end)
+    {
+        if (begin >= end || end > bytes.size() || countOffset > bytes.size() ||
+            sizeof(Count) > bytes.size() - countOffset)
+            return false;
+        Count count = 0;
+        std::memcpy(&count, bytes.data() + countOffset, sizeof(count));
+        if (count == std::numeric_limits<Count>::max())
+            return false;
+        ++count;
+        std::memcpy(bytes.data() + countOffset, &count, sizeof(count));
+        const std::vector<char> copy(bytes.begin() + static_cast<std::ptrdiff_t>(begin),
+                                     bytes.begin() + static_cast<std::ptrdiff_t>(end));
+        bytes.insert(bytes.begin() + static_cast<std::ptrdiff_t>(end), copy.begin(), copy.end());
+        return true;
+    }
+
     uint32_t ReadHeaderVersion(const std::filesystem::path& path)
     {
         std::ifstream input(path, std::ios::binary);
@@ -183,6 +311,11 @@ namespace
     struct SaveLoadLifecycleProbeEvent
     {
         int value = 0;
+    };
+
+    struct ThrowingSaveDestroyObserver
+    {
+        void OnDestroy(entt::registry&, entt::entity) { throw std::runtime_error("intentional destroy observer"); }
     };
 } // namespace
 
@@ -526,17 +659,25 @@ TEST(SaveMigration_SuccessfulLoadPreservesObserversAndRetiresEntitySubscriptions
     sourceRenderer.meshPath = "Meshes/loaded.mesh";
     sourceRenderer.materialPath = "Materials/loaded.mat";
     sourceRenderer.emissive = 0.375f;
+    auto& sourceLight = source.AddComponent<LightComponent>(sourceEntity);
+    sourceLight.intensity = 2.5f;
     SaveMetadata metadata;
     metadata.saveName = "Lifecycle-aware restore";
     EXPECT_TRUE(saveSystem.Save("lifecycle", source, metadata, {{"loaded", "state"}}));
 
     World liveWorld;
     Spark::ECS::MaterialChangeReactiveSystem reactiveSystem;
+    Spark::ECS::LightChangeReactiveSystem lightReactiveSystem;
     reactiveSystem.Connect(liveWorld.GetRegistry());
+    lightReactiveSystem.Connect(liveWorld.GetRegistry());
     const EntityID retiredEntity = liveWorld.CreateEntity("retired-renderable");
     liveWorld.AddComponent<MeshRenderer>(retiredEntity);
+    liveWorld.AddComponent<LightComponent>(retiredEntity);
     reactiveSystem.Update(liveWorld, 0.0f);
+    lightReactiveSystem.Update(liveWorld, 0.0f);
+    lightReactiveSystem.ResetDirtyCount();
     EXPECT_EQ(reactiveSystem.GetPendingChangeCount(), 0u);
+    EXPECT_EQ(lightReactiveSystem.GetPendingChangeCount(), 0u);
 
     int staleDeliveries = 0;
     auto staleHandle = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
@@ -562,14 +703,161 @@ TEST(SaveMigration_SuccessfulLoadPreservesObserversAndRetiresEntitySubscriptions
         static_cast<Spark::EventEntityID>(loadedEntity), {1});
     EXPECT_EQ(staleDeliveries, 0);
 
-    // The old MeshRenderer destruction reached the pre-existing observer, and
-    // the same observer remains connected to the live pool after replacement.
-    EXPECT_EQ(reactiveSystem.GetPendingChangeCount(), 1u);
+    // The old-component destruction and explicit incoming-component rebind both
+    // reach the pre-existing live observers. The loaded component must not depend
+    // on a later manual patch to become visible to reactive consumers.
+    EXPECT_EQ(reactiveSystem.GetPendingChangeCount(), 2u);
+    EXPECT_EQ(lightReactiveSystem.GetPendingChangeCount(), 2u);
     reactiveSystem.Update(liveWorld, 0.0f);
+    lightReactiveSystem.Update(liveWorld, 0.0f);
+    EXPECT_EQ(lightReactiveSystem.GetDirtyLightCount(), 1u);
+    const LightComponent* loadedLight = liveWorld.GetComponent<LightComponent>(loadedEntity);
+    ASSERT_TRUE(loadedLight != nullptr);
+    EXPECT_NEAR(loadedLight->intensity, 2.5f, 0.0001f);
+
+    // Observers remain connected for ordinary post-load updates as well.
     liveWorld.GetRegistry().patch<MeshRenderer>(loadedEntity, [](MeshRenderer& renderer) { renderer.visible = false; });
     EXPECT_EQ(reactiveSystem.GetPendingChangeCount(), 1u);
     reactiveSystem.Update(liveWorld, 0.0f);
     EXPECT_EQ(reactiveSystem.GetPendingChangeCount(), 0u);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_OnDiskRejectsDuplicateRecordsWithoutMutation)
+{
+    const std::string dir = MakeTempSaveDir("duplicate_records");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("duplicate-source");
+    source.AddComponent<Transform>(sourceEntity).position.x = 12.0f;
+    SaveMetadata metadata;
+    metadata.saveName = "Duplicate structure source";
+    EXPECT_TRUE(saveSystem.Save("duplicate-records", source, metadata, {{"state.key", "value"}}));
+
+    const auto path = std::filesystem::path(dir) / "duplicate-records.spark_save";
+    const std::vector<char> original = ReadBytes(path);
+    SaveWireOffsets locations;
+    ASSERT_TRUE(LocateFirstSaveRecords(original, locations));
+
+    std::vector<std::vector<char>> malformedCases;
+    {
+        auto bytes = original;
+        ASSERT_TRUE(DuplicateWireRecord<uint16_t>(bytes, locations.componentCount, locations.firstComponentBegin,
+                                                  locations.firstComponentEnd));
+        malformedCases.push_back(std::move(bytes));
+    }
+    {
+        auto bytes = original;
+        ASSERT_TRUE(DuplicateWireRecord<uint16_t>(bytes, locations.propertyCount, locations.firstPropertyBegin,
+                                                  locations.firstPropertyEnd));
+        malformedCases.push_back(std::move(bytes));
+    }
+    {
+        auto bytes = original;
+        ASSERT_TRUE(DuplicateWireRecord<uint32_t>(bytes, locations.customStateCount, locations.firstCustomStateBegin,
+                                                  locations.firstCustomStateEnd));
+        malformedCases.push_back(std::move(bytes));
+    }
+    {
+        auto bytes = original;
+        ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "NameComponent"));
+        malformedCases.push_back(std::move(bytes));
+    }
+
+    for (const auto& malformed : malformedCases)
+    {
+        ASSERT_TRUE(WriteBytes(path, malformed));
+        World liveWorld;
+        const EntityID sentinel = liveWorld.CreateEntity("duplicate-live-sentinel");
+        liveWorld.AddComponent<Transform>(sentinel).position.x = 808.0f;
+        int deliveries = 0;
+        auto subscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+            static_cast<Spark::EventEntityID>(sentinel), [&](const SaveLoadLifecycleProbeEvent&) { ++deliveries; });
+        std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+
+        EXPECT_FALSE(saveSystem.Load("duplicate-records", liveWorld, customState));
+        EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+        EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "duplicate-live-sentinel"));
+        EXPECT_NEAR(liveWorld.GetComponent<Transform>(sentinel)->position.x, 808.0f, 0.0001f);
+        EXPECT_EQ(customState.size(), 1u);
+        EXPECT_EQ(customState.at("live"), std::string("sentinel"));
+        EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                      static_cast<Spark::EventEntityID>(sentinel)),
+                  1u);
+        Spark::EntityEventBus::Global().Publish<SaveLoadLifecycleProbeEvent>(
+            static_cast<Spark::EventEntityID>(sentinel), {1});
+        EXPECT_EQ(deliveries, 1);
+    }
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_InMemoryRejectsDuplicateAndExplicitNameComponentsBeforeLifecycle)
+{
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("memory-duplicate-source");
+    source.AddComponent<Transform>(sourceEntity).position.x = 33.0f;
+    SaveMetadata metadata;
+    metadata.saveName = "In-memory duplicate";
+    const SaveData original = saveSystem.SerializeWorld(source, metadata);
+    ASSERT_EQ(original.entities.size(), 1u);
+    ASSERT_EQ(original.entities.front().components.size(), 1u);
+
+    SaveData duplicateComponent = original;
+    duplicateComponent.entities.front().components.push_back(duplicateComponent.entities.front().components.front());
+    SaveData explicitName = original;
+    explicitName.entities.front().components.push_back(SerializedComponent{"NameComponent", {{"name", "shadow-name"}}});
+
+    for (const SaveData* malformed : {&duplicateComponent, &explicitName})
+    {
+        World liveWorld;
+        const EntityID sentinel = liveWorld.CreateEntity("memory-live-sentinel");
+        liveWorld.AddComponent<Transform>(sentinel).position.x = 909.0f;
+        int deliveries = 0;
+        auto subscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+            static_cast<Spark::EventEntityID>(sentinel), [&](const SaveLoadLifecycleProbeEvent&) { ++deliveries; });
+
+        EXPECT_FALSE(saveSystem.DeserializeWorld(*malformed, liveWorld));
+        EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+        EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "memory-live-sentinel"));
+        EXPECT_NEAR(liveWorld.GetComponent<Transform>(sentinel)->position.x, 909.0f, 0.0001f);
+        EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                      static_cast<Spark::EventEntityID>(sentinel)),
+                  1u);
+        Spark::EntityEventBus::Global().Publish<SaveLoadLifecycleProbeEvent>(
+            static_cast<Spark::EventEntityID>(sentinel), {1});
+        EXPECT_EQ(deliveries, 1);
+    }
+}
+
+TEST(SaveMigration_LifecycleObserverExceptionPropagatesInsteadOfReturningFalse)
+{
+    const std::string dir = MakeTempSaveDir("throwing_destroy_observer");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("incoming-after-observer");
+    source.AddComponent<Transform>(sourceEntity);
+    SaveMetadata metadata;
+    metadata.saveName = "Throwing observer";
+    EXPECT_TRUE(saveSystem.Save("throwing-observer", source, metadata, {{"candidate", "state"}}));
+
+    World liveWorld;
+    const EntityID retiredEntity = liveWorld.CreateEntity("observer-live-sentinel");
+    liveWorld.AddComponent<Transform>(retiredEntity);
+    ThrowingSaveDestroyObserver observer;
+    liveWorld.GetRegistry().on_destroy<Transform>().connect<&ThrowingSaveDestroyObserver::OnDestroy>(observer);
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+
+    EXPECT_THROW(saveSystem.Load("throwing-observer", liveWorld, customState), std::runtime_error);
+    liveWorld.GetRegistry().on_destroy<Transform>().disconnect<&ThrowingSaveDestroyObserver::OnDestroy>(observer);
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("live"), std::string("sentinel"));
 
     std::filesystem::remove_all(dir);
 }

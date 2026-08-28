@@ -199,6 +199,38 @@ namespace Spark
             outMetadata = std::move(parsedMetadata);
             return true;
         }
+
+        bool ValidateSerializedWorldStructure(const SaveData& data, const char* operation)
+        {
+            for (size_t entityIndex = 0; entityIndex < data.entities.size(); ++entityIndex)
+            {
+                const auto& serializedEntity = data.entities[entityIndex];
+                std::unordered_set<std::string> componentTypes;
+                componentTypes.reserve(serializedEntity.components.size());
+                for (const auto& component : serializedEntity.components)
+                {
+                    // NameComponent has one canonical representation on the wire:
+                    // SerializedEntity::name. Accepting an explicit component would
+                    // add it twice when CreateEntity(name) materializes the candidate.
+                    if (component.typeName == "NameComponent")
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                       "%s: entity %zu contains an explicit NameComponent record; names must use "
+                                       "SerializedEntity::name",
+                                       operation, entityIndex);
+                        return false;
+                    }
+                    if (!componentTypes.insert(component.typeName).second)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                       "%s: entity %zu contains duplicate component type '%s'", operation, entityIndex,
+                                       component.typeName.c_str());
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
     } // namespace
 
     // ============================================================================
@@ -791,33 +823,42 @@ namespace Spark
             EventBus::Global().Publish<LoadCompleteEvent>({slotName, false});
             return false;
         }
-        bool ok = false;
+        std::unordered_map<std::string, std::string> stagedCustomState;
         try
         {
-            // Copy caller-visible side data before the World commit. The final
-            // map exchange is noexcept for std::allocator-backed unordered_map.
-            auto stagedCustomState = data.customState;
-            ok = DeserializeWorld(data, world);
-            if (ok)
-            {
-                static_assert(noexcept(outCustomState.swap(stagedCustomState)));
-                outCustomState.swap(stagedCustomState);
-            }
+            // Complete every potentially-throwing caller-state allocation before
+            // DeserializeWorld can enter its irreversible lifecycle commit.
+            stagedCustomState = data.customState;
         }
         catch (const std::exception& error)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Save,
                            "Load: failed while staging transactional state: %s; caller custom state was not changed",
                            error.what());
+            EventBus::Global().Publish<LoadCompleteEvent>({slotName, false});
+            return false;
         }
         catch (...)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Save,
                            "Load: unknown failure while staging transactional state; caller custom state was not "
                            "changed");
+            EventBus::Global().Publish<LoadCompleteEvent>({slotName, false});
+            return false;
         }
-        EventBus::Global().Publish<LoadCompleteEvent>({slotName, ok});
-        return ok;
+
+        // Validation/deserialization failures are converted to false internally.
+        // Lifecycle-observer exceptions deliberately propagate: once retirement
+        // begins, reporting an ordinary false would invite callers to continue with
+        // a potentially partially-retired World.
+        const bool restored = DeserializeWorld(data, world);
+        if (restored)
+        {
+            static_assert(noexcept(outCustomState.swap(stagedCustomState)));
+            outCustomState.swap(stagedCustomState);
+        }
+        EventBus::Global().Publish<LoadCompleteEvent>({slotName, restored});
+        return restored;
     }
 
     bool SaveSystem::QuickSave(World& world, const SaveMetadata& metadata)
@@ -1005,18 +1046,28 @@ namespace Spark
                            data.metadata.version, kOldestSupportedSaveVersion, kCurrentSaveVersion);
             return false;
         }
+        if (!ValidateSerializedWorldStructure(migratedData, "DeserializeWorld"))
+            return false;
 
         const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
         const auto& componentFactory = Spark::ComponentFactory::Get();
         World candidateWorld;
         std::vector<Spark::ComponentOps::SwapStorageContentsFn> stagedStorageSwaps;
+        struct ReboundNotification
+        {
+            Spark::ComponentOps::NotifyReboundFn notify = nullptr;
+            EntityID entity = entt::null;
+        };
+        std::vector<ReboundNotification> reboundNotifications;
         std::vector<EntityID> liveEntities;
         std::vector<EntityID> incomingEntities;
         try
         {
+            incomingEntities.reserve(migratedData.entities.size());
             for (const auto& serializedEntity : migratedData.entities)
             {
                 const EntityID entity = candidateWorld.CreateEntity(serializedEntity.name);
+                incomingEntities.push_back(entity);
 
                 for (const auto& component : serializedEntity.components)
                 {
@@ -1043,7 +1094,8 @@ namespace Spark
                     return;
 
                 const Spark::ComponentOps* operations = componentFactory.GetOperations(typeName);
-                if (!operations || !operations->prepareStorage || !operations->swapStorageContents)
+                if (!operations || !operations->prepareStorage || !operations->swapStorageContents ||
+                    !operations->notifyRebound)
                     throw std::runtime_error("component '" + typeName +
                                              "' has no transactional storage operations registered");
 
@@ -1059,15 +1111,39 @@ namespace Spark
                     stageComponentType(component.typeName);
             }
 
+            size_t notificationCount = 0;
+            for (const auto& serializedEntity : migratedData.entities)
+                notificationCount += serializedEntity.components.size() + (serializedEntity.name.empty() ? 0u : 1u);
+            reboundNotifications.reserve(notificationCount);
+
             auto&& currentStorage = world.GetRegistry().storage<entt::entity>();
             liveEntities.reserve(world.GetEntityCount());
             for (auto&& [entity] : currentStorage.each())
                 liveEntities.push_back(entity);
 
-            auto&& incomingStorage = candidateWorld.GetRegistry().storage<entt::entity>();
-            incomingEntities.reserve(candidateWorld.GetEntityCount());
-            for (auto&& [entity] : incomingStorage.each())
-                incomingEntities.push_back(entity);
+            if (incomingEntities.size() != migratedData.entities.size())
+                throw std::runtime_error("candidate entity count changed during transactional restore");
+
+            for (size_t entityIndex = 0; entityIndex < migratedData.entities.size(); ++entityIndex)
+            {
+                const auto& serializedEntity = migratedData.entities[entityIndex];
+                const EntityID entity = incomingEntities[entityIndex];
+                auto stageNotification = [&](const std::string& typeName)
+                {
+                    const Spark::ComponentOps* operations = componentFactory.GetOperations(typeName);
+                    if (!operations || !operations->has || !operations->notifyRebound)
+                        throw std::runtime_error("component '" + typeName + "' has no reactive rebind operation");
+                    if (!operations->has(&candidateWorld, static_cast<uint32_t>(entity)))
+                        throw std::runtime_error("component '" + typeName +
+                                                 "' was not materialized by its deserializer");
+                    reboundNotifications.push_back({operations->notifyRebound, entity});
+                };
+
+                if (!serializedEntity.name.empty())
+                    stageNotification("NameComponent");
+                for (const auto& component : serializedEntity.components)
+                    stageNotification(component.typeName);
+            }
         }
         catch (const std::exception& error)
         {
@@ -1084,38 +1160,34 @@ namespace Spark
             return false;
         }
 
-        try
-        {
-            // Use the World's lifecycle path so hierarchy links, EnTT destroy
-            // observers, and per-entity event subscriptions are retired before
-            // incoming identifiers can be reused.
-            for (const EntityID entity : liveEntities)
-                world.DestroyEntity(entity);
-            for (const EntityID entity : incomingEntities)
-                Spark::EntityEventBus::Global().RemoveEntity(static_cast<Spark::EventEntityID>(entity));
+        // Use the World's lifecycle path so hierarchy links, EnTT destroy
+        // observers, and per-entity event subscriptions are retired before
+        // incoming identifiers can be reused. Observer exceptions are programmer
+        // faults and deliberately propagate; catching here cannot roll back their
+        // side effects and must not masquerade as an ordinary unchanged-world false.
+        for (const EntityID entity : liveEntities)
+            world.DestroyEntity(entity);
+        for (const EntityID entity : incomingEntities)
+            Spark::EntityEventBus::Global().RemoveEntity(static_cast<Spark::EventEntityID>(entity));
 
-            // All allocations and type lookups are complete. These exchanges
-            // are noexcept and intentionally avoid registry move-assignment,
-            // which would transplant signal objects away from live observers.
-            for (const auto swapStorageContents : stagedStorageSwaps)
-                swapStorageContents(&world, &candidateWorld);
+        // All allocations and type lookups are complete. These exchanges are
+        // noexcept and intentionally avoid registry move-assignment, which would
+        // transplant signal objects away from live observers.
+        for (const auto swapStorageContents : stagedStorageSwaps)
+            swapStorageContents(&world, &candidateWorld);
 
-            using EntityPayloadStorage = entt::basic_storage<entt::entity>;
-            auto& destinationEntities = world.GetRegistry().storage<entt::entity>();
-            auto& sourceEntities = candidateWorld.GetRegistry().storage<entt::entity>();
-            static_cast<EntityPayloadStorage&>(destinationEntities)
-                .swap(static_cast<EntityPayloadStorage&>(sourceEntities));
-        }
-        catch (const std::exception& error)
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Save, "DeserializeWorld: lifecycle commit failed: %s", error.what());
-            return false;
-        }
-        catch (...)
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Save, "DeserializeWorld: lifecycle commit failed unexpectedly");
-            return false;
-        }
+        using EntityPayloadStorage = entt::basic_storage<entt::entity>;
+        auto& destinationEntities = world.GetRegistry().storage<entt::entity>();
+        auto& sourceEntities = candidateWorld.GetRegistry().storage<entt::entity>();
+        static_cast<EntityPayloadStorage&>(destinationEntities)
+            .swap(static_cast<EntityPayloadStorage&>(sourceEntities));
+
+        // Payload exchange bypasses live on_construct signals. Every production
+        // EnTT lifecycle subscriber is ReactiveSystem, which consumes on_update
+        // with the same rebuild path as construction. Re-publish that explicit
+        // rebind signal for every incoming component, including canonical names.
+        for (const ReboundNotification& notification : reboundNotifications)
+            notification.notify(&world, static_cast<uint32_t>(notification.entity));
         return true;
     }
 
@@ -1527,6 +1599,9 @@ namespace Spark
                 if (!readBytes(&compCount, sizeof(compCount)))
                     return false;
 
+                std::unordered_set<std::string> componentTypes;
+                componentTypes.reserve(compCount);
+
                 for (uint16_t c = 0; c < compCount; ++c)
                 {
                     SerializedComponent comp;
@@ -1537,6 +1612,19 @@ namespace Spark
                     comp.typeName.resize(typeLen);
                     if (!readBytes(comp.typeName.data(), typeLen))
                         return false;
+                    if (comp.typeName == "NameComponent")
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                       "ReadFromFile: entity %u contains an explicit NameComponent record", i);
+                        return false;
+                    }
+                    if (!componentTypes.insert(comp.typeName).second)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                       "ReadFromFile: entity %u contains duplicate component type '%s'", i,
+                                       comp.typeName.c_str());
+                        return false;
+                    }
 
                     uint16_t propCount;
                     if (!readBytes(&propCount, sizeof(propCount)))
@@ -1558,10 +1646,16 @@ namespace Spark
                         if (!readBytes(val.data(), valLen))
                             return false;
 
-                        comp.properties[key] = val;
+                        if (!comp.properties.emplace(std::move(key), std::move(val)).second)
+                        {
+                            SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                           "ReadFromFile: entity %u component %u contains a duplicate property key", i,
+                                           static_cast<unsigned>(c));
+                            return false;
+                        }
                     }
 
-                    entity.components.push_back(comp);
+                    entity.components.push_back(std::move(comp));
                 }
 
                 parsedData.entities.push_back(entity);
@@ -1591,7 +1685,12 @@ namespace Spark
                 if (!readBytes(val.data(), valLen))
                     return false;
 
-                parsedData.customState[key] = val;
+                if (!parsedData.customState.emplace(std::move(key), std::move(val)).second)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                   "ReadFromFile: save '%s' contains a duplicate custom-state key", filepath.c_str());
+                    return false;
+                }
             }
 
             if (offset != fileData.size())

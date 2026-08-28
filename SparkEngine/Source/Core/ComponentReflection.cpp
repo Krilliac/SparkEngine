@@ -306,6 +306,14 @@ namespace
         auto& source = static_cast<World*>(sourceWorld)->GetRegistry().storage<Type>();
         static_cast<PayloadStorage&>(destination).swap(static_cast<PayloadStorage&>(source));
     }
+
+    template <typename Type> void NotifyComponentRebound(void* world, uint32_t entity)
+    {
+        auto& registry = static_cast<World*>(world)->GetRegistry();
+        const auto entityID = static_cast<EntityID>(entity);
+        if (registry.valid(entityID) && registry.all_of<Type>(entityID))
+            registry.patch<Type>(entityID, [](Type&) noexcept {});
+    }
 } // namespace
 
 #define SPARK_REGISTER_COMPONENT(Type)                                                                                 \
@@ -320,6 +328,7 @@ namespace
         { return static_cast<World*>(w)->GetComponent<Type>(static_cast<EntityID>(e)); };                              \
         ops.prepareStorage = &PrepareComponentStorage<Type>;                                                           \
         ops.swapStorageContents = &SwapComponentStorageContents<Type>;                                                 \
+        ops.notifyRebound = &NotifyComponentRebound<Type>;                                                             \
         Spark::ComponentFactory::Get().Register(#Type, ops);                                                           \
     }
 

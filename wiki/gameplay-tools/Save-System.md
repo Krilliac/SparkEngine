@@ -164,13 +164,26 @@ after the replacement succeeds.
 6. stage a copy of `customState` and all required live/candidate component pools;
 7. retire live entities through `World::DestroyEntity`, which removes hierarchy
    links, fires destroy observers, and clears per-entity event subscriptions;
-8. exchange only the validated component/entity storage payloads and then the
-   staged custom-state map with non-throwing swaps.
+8. exchange only the validated component/entity storage payloads;
+9. emit an explicit live `on_update` rebind for every incoming component (the
+   same rebuild path consumed by all production `ReactiveSystem` subscribers);
+10. exchange the staged custom-state map with a non-throwing swap.
 
-An unknown component type, a missing/malformed/oversized required built-in value,
-a failed reflected-field conversion, or any standard/unknown exception from a
-registered deserializer fails the candidate restore. The live world and
-custom-state output remain unchanged.
+An unknown or duplicate component type, an explicit `NameComponent` record,
+duplicate property/custom-state keys, a missing/malformed/oversized required
+built-in value, a failed reflected-field conversion, or any standard/unknown
+exception from a registered deserializer fails the candidate restore. These
+failures occur before retirement, so the live entities, components, per-entity
+subscriptions, and custom-state output remain unchanged.
+
+The current `World` API exposes EnTT lifecycle sinks whose callbacks are not
+required to be non-throwing. An exception from `on_destroy` after retirement
+begins cannot be rolled back together with observer-owned state and EventBus
+side effects. Such an exception therefore propagates instead of being reported
+as an ordinary `false`; the caller must treat it as a fatal lifecycle programming
+error and must not continue using the potentially partially retired `World`.
+SAVE-230 remains blocked on a larger ownership/rebind design if recoverable
+rollback across arbitrary lifecycle observers is required.
 
 A successful load preserves the live EnTT registry and its registry-bound signal
 observers. Incoming entity identifiers are installed only after subscriptions
@@ -197,7 +210,8 @@ registry.Register(
 ```
 
 Custom component types must also register matching `ComponentFactory` operations,
-including the transactional `prepareStorage` and `swapStorageContents` callbacks;
+including the transactional `prepareStorage`, `swapStorageContents`, and
+`notifyRebound` callbacks;
 the engine's `SPARK_REGISTER_COMPONENT` registrations are the reference pattern.
 Without those operations, loading the custom component fails closed before the
 live world is retired. Deserializers must validate all required properties and
@@ -228,10 +242,14 @@ The compatibility-labeled coverage proves:
 - immutable v1 read compatibility without source or slot rewrite;
 - future/retired version rejection;
 - successful lifecycle commit with registry-observer retention and stale
-  entity-subscription removal;
+  entity-subscription removal, plus explicit incoming reactive rebinds;
 - fail-closed missing, malformed, oversized, and reflected component values;
+- fail-closed duplicate component/property/custom-state records and explicit
+  `NameComponent` records, without entering entity lifecycle;
 - unknown-component rollback;
-- throwing-deserializer rollback for both World and custom state.
+- throwing-deserializer rollback for both World and custom state;
+- propagation of throwing lifecycle observers instead of a false unchanged-world
+  result after commit has begun.
 
 The same production-linked SaveSystem test file also retains the malformed-tail,
 oversize-file, custom-state, and atomic slot-replacement regressions.
