@@ -426,6 +426,10 @@ class EngineContext : public Spark::IEngineContext
     void RegisterSubsystem(T* system, DependsOn<Deps...> /*deps*/, std::function<bool()> initFn = nullptr,
                            std::function<void()> shutdownFn = nullptr)
     {
+        SPARK_EXPECTS(system != nullptr);
+        if (system == nullptr)
+            return;
+
         // Store in the generic registry
         RegisterSystem<T>(system);
 

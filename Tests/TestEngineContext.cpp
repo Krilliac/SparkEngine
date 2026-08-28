@@ -297,10 +297,6 @@ TEST(ServiceLocator_TypeSafety)
 TEST(ServiceLocator_RegisterNullptr)
 {
     ServiceLocator loc;
-    TestSystemA sysA;
-    loc.RegisterSystem<TestSystemA>(&sysA);
-    ASSERT_TRUE(loc.GetSystem<TestSystemA>() == &sysA);
-
     loc.RegisterSystem<TestSystemA>(nullptr);
 
     auto* result = loc.GetSystem<TestSystemA>();

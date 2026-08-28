@@ -32,6 +32,18 @@ namespace
     };
 } // namespace
 
+TEST(EngineContextReal_RegisterSystemNullptrUnregisters)
+{
+    EngineContext ctx;
+    SysA a;
+
+    ctx.RegisterSystem<SysA>(&a);
+    ASSERT_TRUE(ctx.GetSystem<SysA>() == &a);
+
+    ctx.RegisterSystem<SysA>(nullptr);
+    EXPECT_TRUE(ctx.GetSystem<SysA>() == nullptr);
+}
+
 TEST(EngineContextReal_DeterministicInitAndReverseShutdown)
 {
     EngineContext ctx;
