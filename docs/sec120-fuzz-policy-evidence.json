@@ -1,0 +1,85 @@
+{
+  "work_item": "SEC-120",
+  "title": "Fuzz-Policy Enforcement Infrastructure",
+  "status": "open/blocking",
+  "lane": "fuzz-policy",
+  "base_commit": "360c05e883d4d5d1c0d050455a5cbb226cce3ffc",
+  "date": "2026-08-28",
+  "deliverables": {
+    "parser_inventory": {
+      "path": "tools/fuzz-policy/parser_inventory.py",
+      "description": "Authoritative registry of 48 parser surfaces with trust boundary classification, source file mapping, and fuzz status tracking",
+      "parser_count": 48,
+      "untrusted_file_parsers": 41,
+      "untrusted_network_parsers": 3,
+      "trusted_internal_parsers": 4,
+      "fuzzed_count": 0,
+      "blocked_count": 48
+    },
+    "corpus_manifest": {
+      "path": "tools/fuzz-policy/corpus_manifest.py",
+      "description": "Corpus/seed metadata schema with bounded resource budgets (4 tiers: small/medium/large/network), staleness enforcement (90-day threshold)",
+      "budget_tiers": ["small", "medium", "large", "network"]
+    },
+    "ci_gate": {
+      "path": "tools/fuzz-policy/check_fuzz_policy.py",
+      "description": "Fail-closed CI validation: duplicate IDs, path traversal, missing tickets, source existence, trust boundary warnings, unclassified parser detection",
+      "ci_mode_behavior": "unclassified sources become hard errors"
+    },
+    "mutation_tests": {
+      "path": "tests/fuzz-policy/test_fuzz_policy.py",
+      "description": "54 tests covering omissions, path traversal, duplicate IDs, stale corpora, missing blockers, resource budget violations, trust boundary warnings, manifest consistency",
+      "test_count": 54,
+      "test_classes": 12,
+      "all_passing": true
+    },
+    "wiki_doc": {
+      "path": "wiki/advanced/Fuzz-Policy-and-Parser-Security.md",
+      "description": "Security documentation: parser trust model, fuzz policy rules, risk-priority matrix, onboarding guide for new parsers"
+    },
+    "evidence_artifacts": [
+      "docs/sec120-fuzz-policy-evidence.json",
+      "docs/sec120-parser-inventory.json",
+      "docs/sec120-fuzz-policy-check.json"
+    ]
+  },
+  "acceptance_criteria": {
+    "authoritative_parser_inventory": {
+      "status": "done",
+      "evidence": "48 parsers classified across 3 trust boundaries with source file references"
+    },
+    "corpus_seed_metadata_and_budgets": {
+      "status": "done",
+      "evidence": "Schema defined with 4 resource tiers, staleness enforcement, per-target budget validation"
+    },
+    "fail_closed_ci_gate": {
+      "status": "done",
+      "evidence": "check_fuzz_policy.py validates classification completeness, source existence, path traversal, duplicate IDs; --ci mode treats unclassified as hard failures"
+    },
+    "mutation_tests": {
+      "status": "done",
+      "evidence": "54 tests across 12 classes, all passing, covering omissions/traversal/duplicates/staleness/budget violations"
+    },
+    "security_docs": {
+      "status": "done",
+      "evidence": "wiki/advanced/Fuzz-Policy-and-Parser-Security.md with trust model, priority matrix, onboarding checklist"
+    },
+    "actual_fuzz_executions": {
+      "status": "NOT_DONE",
+      "reason": "Requires C++ libFuzzer harnesses — outside this non-C++ lane. 0 of 44 parsers have active fuzz targets."
+    },
+    "fuzz_targets_wired": {
+      "status": "NOT_DONE",
+      "reason": "All 44 parsers are in 'blocked' status pending harness implementation. The CI gate will catch any new parser added without classification."
+    }
+  },
+  "residual_risks": {
+    "false_green_risk_1": "Source-tree scanner uses regex heuristics — a parser using unconventional patterns (e.g., memory-mapped I/O without fopen/ifstream) could evade detection. Mitigation: manual review of unclassified list.",
+    "false_green_risk_2": "All 44 parsers are currently blocked — the fuzz gate passes vacuously because no parser claims fuzzed status. The gate only proves classification, not actual coverage. Real fuzz execution is required before SEC-120 can close.",
+    "false_green_risk_3": "Unclassified sources (119 files) are warnings, not errors, in default mode. CI --ci mode must be enabled to enforce classification completeness.",
+    "coverage_gap_1": "SparkEditor/Source parsers are scanned but not yet in the KNOWN_PARSERS registry — editor-specific parsers (panel state, project files) need classification.",
+    "coverage_gap_2": "GameModules/ parsers are not scanned — game module parsers could introduce untrusted-file surfaces."
+  },
+  "sec120_remains_blocking": true,
+  "reason_still_blocking": "Zero fuzz targets implemented. This slice delivers the policy infrastructure — the CI gate, inventory, tests, and docs — but no actual fuzzing has occurred. SEC-120 cannot close until at least the highest-priority untrusted-file and untrusted-network parsers have running fuzz harnesses with verified coverage. All 48 parsers are blocked pending C++ harness implementation."
+}
