@@ -29,6 +29,8 @@ const MAX_TOTAL_RESULTS = 10000;
 const MAX_RUNS_PER_FILE = 10;
 const MAX_INVOCATIONS_PER_RUN = 20;
 const MAX_NOTIFICATIONS_PER_RUN = 10000;
+const MAX_TOOL_EXTENSIONS_PER_RUN = 100;
+const MAX_NOTIFICATION_DESCRIPTORS_PER_RUN = 10000;
 const MAX_ARTIFACTS = 100;
 const MAX_SAME_COMMIT_RUNS = 1000;
 const MAX_PULL_REQUEST_CANDIDATES = 100;
@@ -36,6 +38,33 @@ const MAX_COMMENT_PAGES = 5;
 const MAX_RETAINED_FINDINGS = 300;
 const MAX_SUMMARY_MESSAGES = 100;
 const MAX_COMMENT_BYTES = 65000;
+
+// The workflow pins CodeQL Action v4.37.9, whose defaults pin CodeQL bundle
+// v2.26.4. These are the public @kind diagnostic queries selected by that
+// bundle's default code-scanning suites. Extra descriptors remain allowed so
+// patch releases can add diagnostics without making otherwise valid evidence
+// unreadable; a pinned Action upgrade must deliberately update this minimum.
+// Source: github/codeql@codeql-cli/v2.26.4, the Actions/C++/Python Diagnostics
+// directories and misc/suite-helpers/code-scanning-selectors.yml.
+const REQUIRED_DIAGNOSTIC_DESCRIPTORS = Object.freeze({
+    actions: Object.freeze([
+        'actions/diagnostics/successfully-extracted-files'
+    ]),
+    'c-cpp': Object.freeze([
+        'cpp/diagnostics/successfully-extracted-files',
+        'cpp/diagnostics/extraction-warnings',
+        'cpp/diagnostics/failed-extractor-invocations'
+    ]),
+    python: Object.freeze([
+        'py/diagnostics/successfully-extracted-files',
+        'py/diagnostics/extraction-warnings'
+    ])
+});
+const EXTRACTION_FAILURE_DESCRIPTORS = Object.freeze([
+    'cpp/diagnostics/extraction-warnings',
+    'cpp/diagnostics/failed-extractor-invocations',
+    'py/diagnostics/extraction-warnings'
+]);
 
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const normalizedSha = value => SHA_PATTERN.test(value || '') ? value.toLowerCase() : null;
@@ -425,6 +454,126 @@ function deduplicateFindings(findings) {
             left.rule.localeCompare(right.rule) || left.message.localeCompare(right.message));
 }
 
+function notificationComponents(tool, runIndex, language) {
+    const extensions = tool.extensions === undefined ? [] : tool.extensions;
+    if (!Array.isArray(extensions)) throw new Error(`run ${runIndex} has malformed tool extensions`);
+    if (extensions.length > MAX_TOOL_EXTENSIONS_PER_RUN) {
+        throw new Error(`run ${runIndex} exceeds the tool extension limit`);
+    }
+
+    const components = [{ label: 'tool.driver', component: tool.driver }];
+    extensions.forEach((component, extensionIndex) => {
+        if (!isObject(component)) {
+            throw new Error(`run ${runIndex} tool extension ${extensionIndex} is not an object`);
+        }
+        components.push({ label: `tool.extensions[${extensionIndex}]`, component });
+    });
+
+    const descriptorIds = new Set();
+    let descriptorCount = 0;
+    for (const entry of components) {
+        const notifications = entry.component.notifications === undefined ? [] : entry.component.notifications;
+        if (!Array.isArray(notifications)) {
+            throw new Error(`run ${runIndex} has malformed ${entry.label}.notifications`);
+        }
+        descriptorCount += notifications.length;
+        if (descriptorCount > MAX_NOTIFICATION_DESCRIPTORS_PER_RUN) {
+            throw new Error(`run ${runIndex} exceeds the notification descriptor limit`);
+        }
+        notifications.forEach((descriptor, descriptorIndex) => {
+            if (!isObject(descriptor) || typeof descriptor.id !== 'string' ||
+                descriptor.id.length === 0 || descriptor.id.length > 200) {
+                throw new Error(
+                    `run ${runIndex} ${entry.label}.notifications[${descriptorIndex}] has an invalid ID`
+                );
+            }
+            descriptorIds.add(descriptor.id);
+        });
+        entry.notifications = notifications;
+    }
+
+    const required = REQUIRED_DIAGNOSTIC_DESCRIPTORS[language];
+    if (!required) throw new Error(`run ${runIndex} has no diagnostic descriptor policy for '${language}'`);
+    const missing = required.filter(id => !descriptorIds.has(id));
+    if (missing.length) {
+        throw new Error(
+            `run ${runIndex} is missing mandatory CodeQL diagnostic descriptors: ${missing.join(', ')}`
+        );
+    }
+    return components;
+}
+
+function referencedNotificationDescriptorId(reference, components, context) {
+    if (reference === undefined) return null;
+    if (!isObject(reference)) throw new Error(`${context} has a malformed descriptor reference`);
+
+    const directId = reference.id;
+    if (directId !== undefined &&
+        (typeof directId !== 'string' || directId.length === 0 || directId.length > 200)) {
+        throw new Error(`${context} has an invalid descriptor ID`);
+    }
+
+    let componentIndex = 0;
+    if (reference.toolComponent !== undefined) {
+        if (!isObject(reference.toolComponent)) {
+            throw new Error(`${context} has a malformed tool component reference`);
+        }
+        const componentReference = reference.toolComponent;
+        if (componentReference.index !== undefined) {
+            if (!Number.isInteger(componentReference.index) || componentReference.index < 0 ||
+                componentReference.index >= components.length - 1) {
+                throw new Error(`${context} references an invalid tool extension`);
+            }
+            componentIndex = componentReference.index + 1;
+        } else if (componentReference.guid !== undefined) {
+            if (typeof componentReference.guid !== 'string') {
+                throw new Error(`${context} has an invalid tool component GUID`);
+            }
+            componentIndex = components.findIndex(entry => entry.component.guid === componentReference.guid);
+            if (componentIndex < 0) throw new Error(`${context} references an unknown tool component`);
+        }
+    }
+
+    const component = components[componentIndex];
+    const componentReference = reference.toolComponent;
+    if (componentReference?.guid !== undefined &&
+        componentReference.guid !== component.component.guid) {
+        throw new Error(`${context} has inconsistent tool component metadata`);
+    }
+    if (componentReference?.name !== undefined &&
+        (typeof componentReference.name !== 'string' ||
+            componentReference.name !== component.component.name)) {
+        throw new Error(`${context} has inconsistent tool component metadata`);
+    }
+    let descriptor = null;
+    if (reference.index !== undefined) {
+        if (!Number.isInteger(reference.index) || reference.index < 0 ||
+            reference.index >= component.notifications.length) {
+            throw new Error(`${context} references an invalid notification descriptor index`);
+        }
+        descriptor = component.notifications[reference.index];
+    } else if (reference.guid !== undefined) {
+        if (typeof reference.guid !== 'string') throw new Error(`${context} has an invalid descriptor GUID`);
+        descriptor = component.notifications.find(candidate => candidate.guid === reference.guid) || null;
+        if (!descriptor) throw new Error(`${context} references an unknown notification descriptor`);
+    }
+
+    if (descriptor && reference.guid !== undefined && reference.guid !== descriptor.guid) {
+        throw new Error(`${context} has inconsistent notification descriptor metadata`);
+    }
+    if (descriptor && directId !== undefined &&
+        directId !== descriptor.id && !directId.startsWith(`${descriptor.id}/`)) {
+        throw new Error(`${context} has inconsistent notification descriptor metadata`);
+    }
+    return descriptor?.id || directId || null;
+}
+
+function isExtractionFailureDescriptor(id) {
+    return typeof id === 'string' && EXTRACTION_FAILURE_DESCRIPTORS.some(
+        descriptor => id === descriptor || id.startsWith(`${descriptor}/`)
+    );
+}
+
 function parseSarif(filePath, language) {
     const stat = fs.statSync(filePath);
     if (!stat.isFile() || stat.size > MAX_SARIF_BYTES) throw new Error('SARIF file has an invalid or excessive size');
@@ -462,6 +611,7 @@ function parseSarif(filePath, language) {
         if (invocations.length > MAX_INVOCATIONS_PER_RUN) {
             throw new Error(`run ${runIndex} exceeds the invocation limit`);
         }
+        const components = notificationComponents(run.tool, runIndex, language);
 
         let notificationCount = 0;
         for (const [invocationIndex, invocation] of invocations.entries()) {
@@ -492,13 +642,21 @@ function parseSarif(filePath, language) {
                             `run ${runIndex} invocation ${invocationIndex} ${field}[${notificationIndex}] has an invalid level`
                         );
                     }
-                    if (notification.level === 'error') {
-                        const identifier = typeof notification.descriptor?.id === 'string'
-                            ? notification.descriptor.id.slice(0, 200) : 'unknown';
-                        const message = typeof notification.message?.text === 'string'
-                            ? notification.message.text.slice(0, 300) : 'CodeQL reported an execution error';
+                    const context =
+                        `run ${runIndex} invocation ${invocationIndex} ${field}[${notificationIndex}]`;
+                    const identifier = referencedNotificationDescriptorId(
+                        notification.descriptor, components, context
+                    );
+                    const message = typeof notification.message?.text === 'string'
+                        ? notification.message.text.slice(0, 300) : 'CodeQL reported an execution error';
+                    if (isExtractionFailureDescriptor(identifier)) {
                         throw new Error(
-                            `run ${runIndex} reports CodeQL error notification '${identifier}': ${message}`
+                            `run ${runIndex} reports CodeQL extraction-failure diagnostic '${identifier}': ${message}`
+                        );
+                    }
+                    if (notification.level === 'error') {
+                        throw new Error(
+                            `run ${runIndex} reports CodeQL error notification '${identifier || 'unknown'}': ${message}`
                         );
                     }
                 }

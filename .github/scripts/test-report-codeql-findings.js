@@ -12,6 +12,18 @@ const ENV_KEYS = [
 ];
 const EXPECTED_LANGUAGES = ['actions', 'c-cpp', 'python'];
 const ARTIFACT_FILES = { actions: 'actions.sarif', 'c-cpp': 'cpp.sarif', python: 'python.sarif' };
+const DIAGNOSTIC_DESCRIPTORS = {
+    actions: ['actions/diagnostics/successfully-extracted-files'],
+    'c-cpp': [
+        'cpp/diagnostics/successfully-extracted-files',
+        'cpp/diagnostics/extraction-warnings',
+        'cpp/diagnostics/failed-extractor-invocations'
+    ],
+    python: [
+        'py/diagnostics/successfully-extracted-files',
+        'py/diagnostics/extraction-warnings'
+    ]
+};
 const REPOSITORY_ID = 1001;
 const HEAD_REPOSITORY_ID = 2002;
 const RUN_ID = 3003;
@@ -229,6 +241,7 @@ function sarif(language, results = [], automationLanguage = language, runOverrid
             tool: {
                 driver: {
                     name: 'CodeQL',
+                    notifications: DIAGNOSTIC_DESCRIPTORS[language].map(id => ({ id })),
                     rules: [{
                         id: 'cpp/test-finding',
                         name: 'TestFinding',
@@ -586,6 +599,90 @@ async function main() {
         );
         assert.strictEqual(warningNotification.summary.status, 'complete');
 
+        const extractionWarningData = fixture();
+        const extractionWarning = await preflightAndReport(
+            root,
+            extractionWarningData,
+            extractionWarningData,
+            writeArtifacts(root, {
+                'c-cpp': sarif('c-cpp', [], 'c-cpp', {
+                    invocations: [{
+                        executionSuccessful: true,
+                        toolExecutionNotifications: [{
+                            level: 'warning',
+                            descriptor: { id: 'cpp/diagnostics/extraction-warnings', index: 1 },
+                            message: {
+                                text: 'Extraction failed in SparkEngine/Source/Broken.cpp with warning compiler exited early.'
+                            }
+                        }]
+                    }]
+                })
+            })
+        );
+        assert.strictEqual(extractionWarning.summary.status, 'incomplete');
+        assert.deepStrictEqual(extractionWarning.summary.invalidLanguages, ['c-cpp']);
+        assert(extractionWarning.summary.evidenceErrors.some(error =>
+            error.includes("extraction-failure diagnostic 'cpp/diagnostics/extraction-warnings'")));
+        assert(extractionWarning.runtime.observed.failed.length >= 1);
+
+        const missingDiagnosticsData = fixture();
+        const missingDiagnosticsSarif = sarif('c-cpp');
+        missingDiagnosticsSarif.runs[0].tool.driver.notifications = [{
+            id: 'cpp/diagnostics/successfully-extracted-files'
+        }];
+        const missingDiagnostics = await preflightAndReport(
+            root,
+            missingDiagnosticsData,
+            missingDiagnosticsData,
+            writeArtifacts(root, { 'c-cpp': missingDiagnosticsSarif })
+        );
+        assert.strictEqual(missingDiagnostics.summary.status, 'incomplete');
+        assert.deepStrictEqual(missingDiagnostics.summary.invalidLanguages, ['c-cpp']);
+        assert(missingDiagnostics.summary.evidenceErrors.some(error =>
+            error.includes('missing mandatory CodeQL diagnostic descriptors') &&
+            error.includes('cpp/diagnostics/extraction-warnings') &&
+            error.includes('cpp/diagnostics/failed-extractor-invocations')));
+
+        const extensionDiagnosticsData = fixture();
+        const extensionDiagnosticsSarif = sarif('c-cpp');
+        const cppDiagnostics = extensionDiagnosticsSarif.runs[0].tool.driver.notifications;
+        extensionDiagnosticsSarif.runs[0].tool.driver.notifications = cppDiagnostics.slice(0, 1);
+        extensionDiagnosticsSarif.runs[0].tool.extensions = [{
+            name: 'codeql/cpp-queries',
+            notifications: cppDiagnostics.slice(1)
+        }];
+        const extensionDiagnostics = await preflightAndReport(
+            root,
+            extensionDiagnosticsData,
+            extensionDiagnosticsData,
+            writeArtifacts(root, { 'c-cpp': extensionDiagnosticsSarif })
+        );
+        assert.strictEqual(extensionDiagnostics.summary.status, 'complete',
+            'mandatory diagnostic descriptors may be split across driver and extension components');
+
+        const indexedExtensionFailureData = fixture();
+        const indexedExtensionFailureSarif = clone(extensionDiagnosticsSarif);
+        indexedExtensionFailureSarif.runs[0].invocations = [{
+            executionSuccessful: true,
+            toolExecutionNotifications: [{
+                level: 'warning',
+                descriptor: { index: 0, toolComponent: { index: 0 } },
+                message: {
+                    text: 'Extraction failed in SparkEngine/Source/Broken.cpp with warning compiler exited early.'
+                }
+            }]
+        }];
+        const indexedExtensionFailure = await preflightAndReport(
+            root,
+            indexedExtensionFailureData,
+            indexedExtensionFailureData,
+            writeArtifacts(root, { 'c-cpp': indexedExtensionFailureSarif })
+        );
+        assert.strictEqual(indexedExtensionFailure.summary.status, 'incomplete');
+        assert(indexedExtensionFailure.summary.evidenceErrors.some(error =>
+            error.includes("extraction-failure diagnostic 'cpp/diagnostics/extraction-warnings'")),
+        'index-only SARIF references into extension notification descriptors must resolve and fail closed');
+
         const failedInvocationData = fixture();
         const failedInvocation = await preflightAndReport(
             root,
@@ -654,6 +751,21 @@ async function main() {
         );
         assert.strictEqual(rejectedNotifications.summary.status, 'incomplete');
         assert(rejectedNotifications.summary.evidenceErrors.some(error => error.includes('notification limit')));
+
+        const excessiveDescriptorsData = fixture();
+        const excessiveDescriptorsSarif = sarif('c-cpp');
+        excessiveDescriptorsSarif.runs[0].tool.driver.notifications.push(
+            ...Array.from({ length: 10000 }, (_, index) => ({ id: `codeql/test-diagnostic-${index}` }))
+        );
+        const rejectedDescriptors = await preflightAndReport(
+            root,
+            excessiveDescriptorsData,
+            excessiveDescriptorsData,
+            writeArtifacts(root, { 'c-cpp': excessiveDescriptorsSarif })
+        );
+        assert.strictEqual(rejectedDescriptors.summary.status, 'incomplete');
+        assert(rejectedDescriptors.summary.evidenceErrors.some(error =>
+            error.includes('notification descriptor limit')));
 
         const hostile = finding({
             ruleId: 'cpp/evil|@reviewers[rule]',
