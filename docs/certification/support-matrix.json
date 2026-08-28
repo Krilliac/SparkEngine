@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "profile": "stable-v1",
+  "commitSha": "360c05e883d4d5d1c0d050455a5cbb226cce3ffc",
+  "generatedAt": "2026-08-28T06:50:00Z",
+  "rows": [
+    {
+      "id": "win11-x64-msvc143-d3d11",
+      "tier": "primary",
+      "os": {
+        "family": "windows",
+        "version": "11",
+        "build": "10.0.22631"
+      },
+      "arch": "x86_64",
+      "compiler": {
+        "id": "msvc",
+        "version": "19.42.34435",
+        "toolset": "v143",
+        "windowsSdkVersion": "10.0.22621.0"
+      },
+      "gpu": {
+        "api": "d3d11",
+        "device": "NVIDIA GeForce RTX 5070 Ti",
+        "vendor": "nvidia",
+        "driverVersion": "576.40",
+        "featureLevel": "11.1"
+      },
+      "audio": {
+        "api": "xaudio2",
+        "version": "2.9"
+      },
+      "cpuFeatures": ["SSE4.2", "AVX2"],
+      "evidenceRequired": [
+        "build",
+        "install",
+        "launch",
+        "renderer",
+        "content",
+        "input",
+        "audio",
+        "save",
+        "crash",
+        "upgrade",
+        "rollback",
+        "uninstall",
+        "dependency_closure"
+      ],
+      "notes": "Primary certified row for stable-v1. All 13 evidence categories required."
+    },
+    {
+      "id": "win11-x64-msvc143-nullrhi",
+      "tier": "supported",
+      "os": {
+        "family": "windows",
+        "version": "11",
+        "build": "10.0.22631"
+      },
+      "arch": "x86_64",
+      "compiler": {
+        "id": "msvc",
+        "version": "19.42.34435",
+        "toolset": "v143",
+        "windowsSdkVersion": "10.0.22621.0"
+      },
+      "gpu": {
+        "api": "nullrhi",
+        "device": "NullRHIDevice",
+        "vendor": "none",
+        "driverVersion": "none",
+        "featureLevel": "null"
+      },
+      "audio": {
+        "api": "none"
+      },
+      "cpuFeatures": ["SSE4.2", "AVX2"],
+      "evidenceRequired": [
+        "build",
+        "install",
+        "launch",
+        "save",
+        "crash",
+        "upgrade",
+        "rollback",
+        "uninstall",
+        "dependency_closure"
+      ],
+      "notes": "Headless NullRHI row. Renderer/content/input/audio probes not required — NullRHI renders nothing."
+    }
+  ]
+}

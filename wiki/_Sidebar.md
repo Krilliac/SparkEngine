@@ -110,6 +110,7 @@
 - [Mobile Platform](platform/Mobile-Platform.md)
 - [Accessibility](platform/Accessibility.md)
 - [Platform Input](platform/Platform-Input.md)
+- [Platform Certification](platform/Platform-Certification.md)
 - [Cross-Compilation: Wine Testing](platform/Cross-Compilation-Wine-Testing.md)
 
 ### Graphics

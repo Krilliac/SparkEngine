@@ -81,6 +81,47 @@
         "Artifacts/installers verify",
         "Evidence publishes"
       ],
+      "evidence": [
+        {
+          "type": "infrastructure",
+          "description": "Support-matrix schema, evidence schema, and fail-closed validator",
+          "paths": [
+            "tools/platform-cert/support_matrix_schema.json",
+            "tools/platform-cert/evidence_schema.json",
+            "tools/platform-cert/validate_certification.py"
+          ],
+          "commit": "pending"
+        },
+        {
+          "type": "seed-matrix",
+          "description": "Seed support matrix for stable-v1 with primary D3D11 and supported NullRHI rows",
+          "paths": [
+            "docs/certification/support-matrix.json"
+          ],
+          "commit": "pending"
+        },
+        {
+          "type": "tests",
+          "description": "77 adversarial tests covering schema, cross-validation, tampering, and staleness",
+          "paths": [
+            "Tests/Tools/test_platform_certification.py"
+          ],
+          "commit": "pending"
+        },
+        {
+          "type": "docs",
+          "description": "Operating documentation for platform certification workflow",
+          "paths": [
+            "wiki/platform/Platform-Certification.md"
+          ],
+          "commit": "pending"
+        }
+      ],
+      "remainingBlockers": [
+        "Physical-host evidence collection for win11-x64-msvc143-d3d11 (all 13 probes)",
+        "Physical-host evidence collection for win11-x64-msvc143-nullrhi (9 probes)",
+        "Evidence files placed in docs/certification/evidence/ and validator run to confirm pass"
+      ],
       "profileApplicability": {
         "stable-v1": "required"
       },

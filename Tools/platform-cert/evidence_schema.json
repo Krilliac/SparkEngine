@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sparkengine.dev/schemas/certification-evidence-v1.json",
+  "title": "SparkEngine Certification Evidence Record",
+  "description": "Machine-readable proof that a support-matrix row was exercised on a physical or CI host. Every field is required for the row to certify — missing or mismatched fields fail closed. Evidence records are immutable: a new commit requires a new record.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "rowId",
+    "commitSha",
+    "collectedAt",
+    "collector",
+    "host",
+    "probes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "rowId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "description": "Must match a row.id in the support matrix."
+    },
+    "commitSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "Exact git commit SHA of the tested source. Must match the matrix commitSha."
+    },
+    "collectedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of evidence collection."
+    },
+    "collector": {
+      "type": "object",
+      "required": ["type", "identity"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": ["ci", "manual", "automated"],
+          "description": "How evidence was collected."
+        },
+        "identity": {
+          "type": "string",
+          "description": "CI run URL, operator name, or automation script path."
+        },
+        "runId": {
+          "type": "string",
+          "description": "CI run ID if applicable."
+        }
+      }
+    },
+    "host": {
+      "type": "object",
+      "required": ["os", "arch", "cpu", "ram", "gpu", "audio"],
+      "additionalProperties": false,
+      "properties": {
+        "os": {
+          "type": "object",
+          "required": ["family", "version", "build", "locale"],
+          "additionalProperties": false,
+          "properties": {
+            "family": { "enum": ["windows", "linux", "macos"] },
+            "version": { "type": "string" },
+            "build": { "type": "string" },
+            "locale": { "type": "string" }
+          }
+        },
+        "arch": { "enum": ["x86_64", "aarch64"] },
+        "cpu": {
+          "type": "object",
+          "required": ["model", "features"],
+          "additionalProperties": false,
+          "properties": {
+            "model": { "type": "string" },
+            "features": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "ram": {
+          "type": "object",
+          "required": ["totalMb"],
+          "additionalProperties": false,
+          "properties": {
+            "totalMb": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "gpu": {
+          "type": "object",
+          "required": ["api", "device", "vendor", "driverVersion", "featureLevel"],
+          "additionalProperties": false,
+          "properties": {
+            "api": { "enum": ["d3d11", "d3d12", "vulkan", "opengl", "metal", "nullrhi"] },
+            "device": { "type": "string" },
+            "vendor": { "enum": ["nvidia", "amd", "intel", "apple", "microsoft", "mesa", "none"] },
+            "driverVersion": { "type": "string" },
+            "featureLevel": { "type": "string" },
+            "vramMb": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "audio": {
+          "type": "object",
+          "required": ["api"],
+          "additionalProperties": false,
+          "properties": {
+            "api": { "enum": ["xaudio2", "openal", "none"] },
+            "version": { "type": "string" },
+            "deviceName": { "type": "string" }
+          }
+        },
+        "compiler": {
+          "type": "object",
+          "required": ["id", "version", "toolset"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "enum": ["msvc", "gcc", "clang", "apple-clang", "mingw"] },
+            "version": { "type": "string" },
+            "toolset": { "type": "string" },
+            "windowsSdkVersion": { "type": "string" }
+          }
+        }
+      }
+    },
+    "probes": {
+      "type": "object",
+      "description": "One entry per evidence category. Each probe is pass/fail with structured detail.",
+      "additionalProperties": false,
+      "properties": {
+        "build":              { "$ref": "#/$defs/Probe" },
+        "install":            { "$ref": "#/$defs/Probe" },
+        "launch":             { "$ref": "#/$defs/Probe" },
+        "renderer":           { "$ref": "#/$defs/Probe" },
+        "content":            { "$ref": "#/$defs/Probe" },
+        "input":              { "$ref": "#/$defs/Probe" },
+        "audio":              { "$ref": "#/$defs/Probe" },
+        "save":               { "$ref": "#/$defs/Probe" },
+        "crash":              { "$ref": "#/$defs/Probe" },
+        "upgrade":            { "$ref": "#/$defs/Probe" },
+        "rollback":           { "$ref": "#/$defs/Probe" },
+        "uninstall":          { "$ref": "#/$defs/Probe" },
+        "dependency_closure": { "$ref": "#/$defs/Probe" }
+      }
+    },
+    "dependencyClosure": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/RuntimeDependency" },
+      "description": "Every runtime dependency the installed product requires."
+    },
+    "staleBefore": {
+      "type": "string",
+      "format": "date-time",
+      "description": "If set, evidence older than this timestamp is rejected even if commit matches."
+    }
+  },
+  "$defs": {
+    "Probe": {
+      "type": "object",
+      "required": ["status", "durationMs"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": ["pass", "fail", "skip", "error"],
+          "description": "pass=verified, fail=tested and failed, skip=intentionally skipped with reason, error=could not run."
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Wall-clock milliseconds the probe took."
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Human-readable detail or error message."
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "sha256"],
+            "additionalProperties": false,
+            "properties": {
+              "path": { "type": "string" },
+              "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "sizeBytes": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "description": "Artifacts produced by this probe (logs, screenshots, crash dumps)."
+        },
+        "exitCode": {
+          "type": "integer",
+          "description": "Process exit code if applicable."
+        },
+        "skipReason": {
+          "type": "string",
+          "description": "Required when status is 'skip'."
+        }
+      }
+    },
+    "RuntimeDependency": {
+      "type": "object",
+      "required": ["name", "version", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "source": {
+          "enum": ["system", "bundled", "vcredist", "directx", "sdk"],
+          "description": "Where this dependency comes from."
+        },
+        "path": { "type": "string" }
+      }
+    }
+  }
+}
