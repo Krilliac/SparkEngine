@@ -21,6 +21,7 @@
 #include <thread>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -620,7 +621,9 @@ namespace SparkCrashReporter
             if (size)
                 *size = (static_cast<std::uint64_t>(info.nFileSizeHigh) << 32) | info.nFileSizeLow;
 #else
-            struct stat info{};
+            struct stat info
+            {
+            };
             if (fstat(handle, &info) != 0)
                 return false;
             if (requireRegularFile && (!S_ISREG(info.st_mode) || info.st_nlink != 1))
@@ -729,7 +732,9 @@ namespace SparkCrashReporter
             return SetFileInformationByHandle(handle, FileDispositionInfo, &disposition, sizeof(disposition)) != FALSE;
 #else
             (void)handle;
-            struct stat namedInfo{};
+            struct stat namedInfo
+            {
+            };
             if (fstatat(root.handle.Get(), name.c_str(), &namedInfo, AT_SYMLINK_NOFOLLOW) != 0)
                 return false;
             ArtifactIdentity namedIdentity;
@@ -951,13 +956,23 @@ namespace SparkCrashReporter
                 FindClose(search);
             }
 #else
-            const int duplicate = dup(root.handle.Get());
-            if (duplicate < 0)
+            int flags = O_RDONLY;
+#ifdef O_DIRECTORY
+            flags |= O_DIRECTORY;
+#endif
+#ifdef O_NOFOLLOW
+            flags |= O_NOFOLLOW;
+#endif
+#ifdef O_CLOEXEC
+            flags |= O_CLOEXEC;
+#endif
+            const int directoryHandle = openat(root.handle.Get(), ".", flags);
+            if (directoryHandle < 0)
                 return manifests;
-            DIR* directory = fdopendir(duplicate);
+            DIR* directory = fdopendir(directoryHandle);
             if (!directory)
             {
-                close(duplicate);
+                close(directoryHandle);
                 return manifests;
             }
             while (const dirent* entry = readdir(directory))

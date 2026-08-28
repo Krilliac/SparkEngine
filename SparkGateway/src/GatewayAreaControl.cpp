@@ -281,7 +281,9 @@ namespace Spark::Gateway
                 errno = EINVAL;
                 return -1;
             }
-            struct stat existing{};
+            struct stat existing
+            {
+            };
             if (::lstat(endpoint.c_str(), &existing) == 0)
             {
                 if (!S_ISSOCK(existing.st_mode) || existing.st_uid != ::geteuid())
@@ -324,8 +326,12 @@ namespace Spark::Gateway
 
         void UnlinkOwnedEndpoint(const std::string& endpoint, int listener)
         {
-            struct stat pathStatus{};
-            struct stat listenerStatus{};
+            struct stat pathStatus
+            {
+            };
+            struct stat listenerStatus
+            {
+            };
             if (::lstat(endpoint.c_str(), &pathStatus) == 0 && ::fstat(listener, &listenerStatus) == 0 &&
                 pathStatus.st_dev == listenerStatus.st_dev && pathStatus.st_ino == listenerStatus.st_ino)
                 (void)::unlink(endpoint.c_str());

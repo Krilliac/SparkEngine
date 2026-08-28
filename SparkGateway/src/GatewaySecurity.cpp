@@ -258,7 +258,9 @@ namespace Spark::Gateway
             }
             const auto closeFile = Spark::MakeScopeExit([file] { ::close(file); });
 
-            struct stat info{};
+            struct stat info
+            {
+            };
             if (::fstat(file, &info) != 0 || !S_ISREG(info.st_mode) || info.st_nlink != 1)
             {
                 error = "Gateway key must be a regular, single-link file";

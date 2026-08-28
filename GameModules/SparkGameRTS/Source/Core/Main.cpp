@@ -368,12 +368,14 @@ void SparkGameRTSModule::RegisterConsoleCommands()
                                 }
                             });
 
-    console.RegisterCommand(
-        "rts_hold", [this](const std::vector<std::string>&) -> std::string
-        { return m_demoPresentation->HoldSelection() ? "Hold order issued" : "No units selected"; });
-    console.RegisterCommand(
-        "rts_stop", [this](const std::vector<std::string>&) -> std::string
-        { return m_demoPresentation->StopSelection() ? "Stop order issued" : "No units selected"; });
+    console.RegisterCommand("rts_hold",
+                            [this](const std::vector<std::string>&) -> std::string {
+                                return m_demoPresentation->HoldSelection() ? "Hold order issued" : "No units selected";
+                            });
+    console.RegisterCommand("rts_stop",
+                            [this](const std::vector<std::string>&) -> std::string {
+                                return m_demoPresentation->StopSelection() ? "Stop order issued" : "No units selected";
+                            });
     console.RegisterCommand("rts_train_marine", [this](const std::vector<std::string>&) -> std::string
                             { return m_demoPresentation->TrainMarine() ? "Marine queued" : "Marine queue rejected"; });
 

@@ -257,7 +257,9 @@ namespace Spark::CrashHandlerDetail
         flags |= O_CLOEXEC;
 #endif
         const int fd = open(candidate.c_str(), flags);
-        struct stat info{};
+        struct stat info
+        {
+        };
         const bool valid = fd >= 0 && fstat(fd, &info) == 0 && S_ISDIR(info.st_mode) && info.st_uid == geteuid() &&
                            (info.st_mode & (S_IRWXG | S_IRWXO)) == 0;
         if (fd >= 0)
