@@ -158,13 +158,15 @@ function harness(data) {
                 async listWorkflowRunArtifacts(request) {
                     observed.artifactListCalls += 1;
                     return {
-                        data: { total_count: state.artifacts.length, artifacts: clone(state.artifacts) },
+                        data: state.directArtifactRootArray ? clone(state.artifacts) :
+                            { total_count: state.artifacts.length, artifacts: clone(state.artifacts) },
                         headers: {}
                     };
                 },
                 async listWorkflowRuns() {
                     return {
-                        data: { total_count: state.workflowRuns.length, workflow_runs: clone(state.workflowRuns) },
+                        data: state.directWorkflowRunsRootArray ? clone(state.workflowRuns) :
+                            { total_count: state.workflowRuns.length, workflow_runs: clone(state.workflowRuns) },
                         headers: {}
                     };
                 }
@@ -212,7 +214,11 @@ function harness(data) {
                 const field = Object.keys(response.data || {})
                     .find(key => Array.isArray(response.data[key]));
                 if (field) observed.normalizedPaginateFields.push(field);
-                yield field ? { ...response, data: clone(response.data[field]) } : response;
+                const override = field && state.normalizedPaginatePageOverrides &&
+                    Object.hasOwn(state.normalizedPaginatePageOverrides, field)
+                    ? state.normalizedPaginatePageOverrides[field]
+                    : field ? response.data[field] : undefined;
+                yield field ? { ...response, data: clone(override) } : response;
             }
         };
     }
@@ -529,6 +535,24 @@ async function main() {
         const rejectedExcessiveInventory = await runPreflight(root, excessiveInventory);
         assert.strictEqual(rejectedExcessiveInventory.observed.outputs.authorized, 'false');
         assert(rejectedExcessiveInventory.observed.failed.some(message => message.includes('100-item limit')));
+
+        const directArtifactRootArray = fixture();
+        directArtifactRootArray.directArtifactRootArray = true;
+        const rejectedDirectArtifactRootArray = await runPreflight(root, directArtifactRootArray);
+        assert.strictEqual(rejectedDirectArtifactRootArray.observed.outputs.authorized, 'false');
+        assert.strictEqual(rejectedDirectArtifactRootArray.observed.outputs['artifact-ids'], '');
+        assert.strictEqual(rejectedDirectArtifactRootArray.observed.outputs['artifact-manifest'], '[]');
+        assert(rejectedDirectArtifactRootArray.observed.failed.some(message =>
+            message.includes("API response field 'artifacts' is not an array")));
+
+        const malformedNormalizedArtifactPage = fixture();
+        malformedNormalizedArtifactPage.useNormalizedPaginateIterator = true;
+        malformedNormalizedArtifactPage.normalizedPaginatePageOverrides = { artifacts: { unexpected: [] } };
+        const rejectedMalformedNormalizedArtifactPage = await runPreflight(root, malformedNormalizedArtifactPage);
+        assert.strictEqual(rejectedMalformedNormalizedArtifactPage.observed.outputs.authorized, 'false');
+        assert.strictEqual(rejectedMalformedNormalizedArtifactPage.observed.outputs['artifact-ids'], '');
+        assert(rejectedMalformedNormalizedArtifactPage.observed.failed.some(message =>
+            message.includes("API response field 'artifacts' is not an array")));
 
         const normalizedPaginationData = fixture();
         normalizedPaginationData.useNormalizedPaginateIterator = true;
@@ -1093,14 +1117,32 @@ async function main() {
         assertNoMutation(staleHead);
 
         const newerRunData = fixture();
+        newerRunData.useNormalizedPaginateIterator = true;
         const newerRun = clone(newerRunData.run);
         newerRun.id += 1;
         newerRun.run_number += 1;
         newerRunData.workflowRuns = [newerRun, newerRunData.run];
-        const staleRun = await preflightAndReport(root, fixture(), newerRunData, writeArtifacts(root));
+        const staleRun = await preflightAndReport(root, newerRunData, newerRunData, writeArtifacts(root));
         assert.strictEqual(staleRun.summary.status, 'stale');
         assert(staleRun.summary.staleReasons.some(reason => reason.includes('newer source workflow run')));
+        assert.deepStrictEqual(staleRun.runtime.observed.normalizedPaginateFields, ['artifacts', 'workflow_runs']);
         assertNoMutation(staleRun);
+
+        const directWorkflowRunsRootArray = fixture();
+        directWorkflowRunsRootArray.directWorkflowRunsRootArray = true;
+        const directWorkflowRunsPreflight = await runPreflight(root, directWorkflowRunsRootArray);
+        assert.strictEqual(directWorkflowRunsPreflight.observed.outputs.authorized, 'true');
+        const rejectedDirectWorkflowRunsRootArray = await runTrustedReport(
+            root,
+            directWorkflowRunsRootArray,
+            directWorkflowRunsPreflight.observed.outputs['artifact-manifest'],
+            writeArtifacts(root)
+        );
+        assert.strictEqual(rejectedDirectWorkflowRunsRootArray.summary.status, 'incomplete');
+        assert.strictEqual(rejectedDirectWorkflowRunsRootArray.summary.mutation.reason, 'api-error');
+        assert(rejectedDirectWorkflowRunsRootArray.summary.evidenceErrors.some(error =>
+            error.includes("API response field 'workflow_runs' is not an array")));
+        assertNoMutation(rejectedDirectWorkflowRunsRootArray);
 
         const spoofData = fixture();
         spoofData.comments = [{

@@ -101,11 +101,12 @@ function parseExpectedLanguages() {
     return parsed;
 }
 
-function responseItems(response, field) {
+function responseItems(response, field, allowNormalizedRootArray = false) {
     // Octokit's paginate iterator normalizes wrapped list responses such as
     // { total_count, artifacts } to a root response.data array. Direct REST
-    // calls retain the named wrapper, so accept only those two exact shapes.
-    const value = Array.isArray(response?.data) ? response.data :
+    // calls retain the named wrapper. Only the iterator branch may accept the
+    // normalized root array; direct calls remain strict about their wrapper.
+    const value = allowNormalizedRootArray && Array.isArray(response?.data) ? response.data :
         field ? response?.data?.[field] : response?.data;
     if (!Array.isArray(value)) throw new Error(`API response field '${field || '<root>'}' is not an array`);
     return value;
@@ -117,7 +118,7 @@ async function paginateBounded(github, method, request, field, maxItems, label) 
 
     if (typeof github.paginate?.iterator === 'function') {
         for await (const response of github.paginate.iterator(method, { ...request, per_page: perPage })) {
-            const page = responseItems(response, field);
+            const page = responseItems(response, field, true);
             if (items.length + page.length > maxItems) throw new Error(`${label} exceeds the ${maxItems}-item limit`);
             items.push(...page);
         }
