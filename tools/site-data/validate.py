@@ -317,6 +317,19 @@ class Validator:
         self.require((REPO_ROOT / "Assets").is_dir(), "Assets", "asset root does not exist")
         self.require((REPO_ROOT / "Shaders").is_dir(), "Shaders", "shader root does not exist")
         self.require((REPO_ROOT / "SparkEngine" / "Source" / "Graphics" / "AssetPipeline.cpp").is_file(), "asset pipeline", "primary asset-pipeline source is absent")
+        integrity_manifest = REPO_ROOT / "Assets" / "assets.integrity.json"
+        self.require(integrity_manifest.is_file(), "Assets/assets.integrity.json", "asset integrity manifest is missing")
+        if integrity_manifest.is_file():
+            import importlib.util
+            tool_path = REPO_ROOT / "tools" / "asset-integrity" / "verify_asset_integrity.py"
+            if tool_path.is_file():
+                spec = importlib.util.spec_from_file_location("verify_asset_integrity", tool_path)
+                if spec and spec.loader:
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    errors = mod.verify_manifest(integrity_manifest)
+                    for err in errors:
+                        self.require(False, f"asset-integrity:{err.path}", err.message)
 
     def validate_docs_surface(self) -> None:
         catalog = self.contract["docsCatalog"]

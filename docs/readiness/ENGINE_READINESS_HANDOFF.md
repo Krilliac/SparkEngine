@@ -423,20 +423,26 @@ Several modules reference missing music/models/scenes, depend on path case that 
 **Source context**
 
 - `Assets`
+- `Assets/assets.integrity.json`
 - `GameModules`
 - `SparkEngine/Source/Graphics`
 - `SparkEngine/Source/Core/GamePackager.cpp`
+- `tools/asset-integrity/verify_asset_integrity.py`
 
 **Entry points**
 
-- `Assets`
-- `GameModules/*/module.json`
+- `Assets/assets.integrity.json`
+- `tools/asset-integrity/verify_asset_integrity.py`
 - `tools/site-data/validate.py`
 
 **Implementation scope**
 
-- Generate per-module content manifests
-- Validate existence, exact case, safe path, ownership, license, and package inclusion
+- Generate deterministic SHA-256 integrity manifests for first-party Assets tree (866 entries)
+- Verify existence, exact hash, exact size, case-collision safety, and completeness
+- Reject symlinks, junctions, reparse points, and traversal paths before manifest generation and verification
+- Detect duplicate manifest entries and paths with Windows reserved device names
+- Cross-validate template manifests against lock file and disk
+- Integrate asset integrity verification into site-data validate.py --assets
 - Detect procedural fallbacks and require an explicit manifest policy
 - Smoke-launch every module from unpacked release layout
 
@@ -446,18 +452,22 @@ Several modules reference missing music/models/scenes, depend on path case that 
 2. Every packaged module resolves assets without the repository
 3. Every asset has provenance/license metadata where required
 4. Tampered or traversal paths fail before package assembly
+5. Experimental modules keep their package-smoke debt outside stable-v1
 
 **Required commands**
 
 ```bash
+python3 tools/asset-integrity/verify_asset_integrity.py check-all
+python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.integrity.json
 python3 tools/site-data/validate.py --assets
-ctest --test-dir build/linux-shipping -L package --output-on-failure
+python3 -m pytest Tests/Tools/test_asset_integrity.py -v
+ctest --test-dir build/windows-shipping -L profile-package --output-on-failure
 ```
 
 **Automated evidence**
 
-- Test selectors: `AssetManifest_*`, `PackageAssets_*`, `PathCase_*`
-- Required CI jobs: `asset-integrity`, `module-package-smoke`
+- Test selectors: `AssetManifest_*`, `PackageAssets_*`, `PathCase_*`, `test_asset_integrity`
+- Required CI jobs: `asset-integrity`, `profile-module-package-smoke`
 - Performance / reliability budgets:
   - Manifest validation completes before compilation cache restore is material
 
@@ -478,6 +488,7 @@ ctest --test-dir build/linux-shipping -L package --output-on-failure
   - Case-insensitive local filesystems hiding release failures
 - Out of scope:
   - Creating missing production art for every prototype
+  - ThirdParty/submodule provenance
 
 **Definition of done**
 
