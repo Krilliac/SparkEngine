@@ -193,6 +193,13 @@ namespace Spark::SecureRandom
                 SetError(error, WindowsError("InitializeSecurityDescriptor", code));
                 return false;
             }
+            if (!SetSecurityDescriptorOwner(&descriptor, tokenUser->User.Sid, FALSE))
+            {
+                const DWORD code = GetLastError();
+                LocalFree(acl);
+                SetError(error, WindowsError("SetSecurityDescriptorOwner", code));
+                return false;
+            }
             if (!SetSecurityDescriptorDacl(&descriptor, TRUE, acl, FALSE))
             {
                 const DWORD code = GetLastError();

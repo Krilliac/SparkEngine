@@ -70,6 +70,33 @@ namespace
         return false;
     }
 
+    bool IsOwnedByCurrentProcessUser(PSID owner)
+    {
+        if (!owner || !IsValidSid(owner))
+            return false;
+
+        HANDLE token = nullptr;
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token))
+            return false;
+
+        DWORD userSize = 0;
+        const BOOL sizeResult = GetTokenInformation(token, TokenUser, nullptr, 0, &userSize);
+        if (sizeResult != FALSE || GetLastError() != ERROR_INSUFFICIENT_BUFFER || userSize == 0)
+        {
+            CloseHandle(token);
+            return false;
+        }
+
+        std::vector<uint8_t> userBuffer(userSize);
+        const BOOL userResult = GetTokenInformation(token, TokenUser, userBuffer.data(), userSize, &userSize);
+        CloseHandle(token);
+        if (userResult == FALSE)
+            return false;
+
+        const auto* tokenUser = reinterpret_cast<const TOKEN_USER*>(userBuffer.data());
+        return tokenUser->User.Sid && IsValidSid(tokenUser->User.Sid) && EqualSid(owner, tokenUser->User.Sid);
+    }
+
     AclFixtureResult AddInheritableWorldReadAce(const std::filesystem::path& directory, std::string& error)
     {
         PACL existingDacl = nullptr;
@@ -371,7 +398,9 @@ TEST(GatewaySecurity_GeneratedKeyRemainsPrivateUnderInheritableParentAcl)
     if (created)
     {
         PSECURITY_DESCRIPTOR descriptor = nullptr;
-        const DWORD status = GetNamedSecurityInfoW(keyFile.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr,
+        PSID owner = nullptr;
+        const DWORD status = GetNamedSecurityInfoW(keyFile.c_str(), SE_FILE_OBJECT,
+                                                   OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION, &owner,
                                                    nullptr, nullptr, nullptr, &descriptor);
         SECURITY_DESCRIPTOR_CONTROL control{};
         DWORD revision = 0;
@@ -379,6 +408,7 @@ TEST(GatewaySecurity_GeneratedKeyRemainsPrivateUnderInheritableParentAcl)
                                    GetSecurityDescriptorControl(descriptor, &control, &revision) &&
                                    (control & SE_DACL_PROTECTED) != 0;
         EXPECT_TRUE(protectedDacl);
+        EXPECT_TRUE(status == ERROR_SUCCESS && IsOwnedByCurrentProcessUser(owner));
         if (descriptor)
             LocalFree(descriptor);
 
