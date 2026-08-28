@@ -22,6 +22,8 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "site-data"))
 
 import docs_contract
 import docs_currentness
+import common as site_common
+import generate as site_generate
 import validate_docs_links as links
 
 
@@ -110,6 +112,187 @@ class FooBar {
 
 
 class DocsGenerationHostileTests(unittest.TestCase):
+    def test_duplicate_json_members_are_rejected_by_both_contract_readers(self) -> None:
+        with MiniContract() as fixture:
+            source = json.loads(fixture.contract.read_text(encoding="utf-8"))
+            write(
+                fixture.contract,
+                "{" +
+                '"schemaVersion":1,"schemaVersion":1,' +
+                f'"sourceContract":{json.dumps(source["sourceContract"])},' +
+                f'"generators":{json.dumps(source["generators"])}' +
+                "}",
+            )
+            with self.assertRaises(docs_contract.ContractError):
+                docs_contract.load_contract()
+            with self.assertRaises(site_common.SiteDataError):
+                site_common.load_json(fixture.contract)
+
+    def test_json_parser_rejects_nonfinite_and_excessive_nesting(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-json-hostile-") as directory:
+            root = Path(directory)
+            path = root / "input.json"
+            write(path, '{"value":NaN}')
+            with self.assertRaises(docs_contract.ContractError):
+                docs_contract.load_bounded_json(path, label="hostile JSON")
+
+            write(
+                path,
+                "[" * (docs_contract.MAX_JSON_DEPTH + 1)
+                + "0"
+                + "]" * (docs_contract.MAX_JSON_DEPTH + 1),
+            )
+            with self.assertRaises(docs_contract.ContractError):
+                docs_contract.load_bounded_json(path, label="hostile JSON")
+
+    def test_hardlinked_source_is_rejected_before_scan(self) -> None:
+        with MiniContract() as fixture:
+            external = fixture.root / "external.h"
+            write(external, "class External {}\n")
+            fixture.header.unlink()
+            try:
+                os.link(external, fixture.header)
+            except OSError as error:
+                self.skipTest(f"hardlinks unavailable: {error}")
+            with self.assertRaises(docs_contract.ContractError):
+                docs_contract.source_inventory_snapshot()
+
+    def test_reparse_source_directory_is_rejected_before_scan(self) -> None:
+        with MiniContract() as fixture:
+            external = fixture.root / "external"
+            write(external / "Escaped.h", "class Escaped {}\n")
+            junction = fixture.root / "SparkEngine" / "Junction"
+            try:
+                os.symlink(external, junction, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"directory symlinks unavailable: {error}")
+            fixture.tracked.write_bytes(b"SparkEngine/Junction/Escaped.h\0")
+            with self.assertRaises(docs_contract.ContractError):
+                docs_contract.source_inventory_snapshot()
+
+    def test_source_replacement_between_identity_and_open_is_rejected(self) -> None:
+        with MiniContract() as fixture:
+            rel = PurePosixPath("SparkEngine/Fixture.h")
+            expected = docs_contract.source_inventory_snapshot()[rel]
+            replacement = fixture.root / "replacement.h"
+            write(replacement, "class RacedExternal {}\n")
+            original_open = os.open
+            swapped = False
+
+            def race_open(path: str | bytes | os.PathLike[str] | os.PathLike[bytes], flags: int, *args: object) -> int:
+                nonlocal swapped
+                if not swapped and Path(path) == fixture.header:
+                    swapped = True
+                    os.replace(replacement, fixture.header)
+                return original_open(path, flags, *args)
+
+            with mock.patch.object(docs_contract.os, "open", side_effect=race_open):
+                with self.assertRaises(docs_contract.ContractError):
+                    docs_contract.read_source(rel, expected)
+
+    def test_currentness_snapshot_rejects_source_replacement_race(self) -> None:
+        with MiniContract() as fixture:
+            rel = PurePosixPath("SparkEngine/Fixture.h")
+            replacement = fixture.root / "replacement.h"
+            write(replacement, "class RacedExternal {}\n")
+            original_open = os.open
+            swapped = False
+
+            def race_open(path: str | bytes | os.PathLike[str] | os.PathLike[bytes], flags: int, *args: object) -> int:
+                nonlocal swapped
+                if not swapped and Path(path) == fixture.header:
+                    swapped = True
+                    os.replace(replacement, fixture.header)
+                return original_open(path, flags, *args)
+
+            with mock.patch.object(docs_currentness, "REPO_ROOT", fixture.root):
+                with mock.patch.object(docs_contract.os, "open", side_effect=race_open):
+                    with self.assertRaises(docs_currentness.CurrentnessError):
+                        docs_currentness.copy_snapshot(
+                            fixture.root / "snapshot",
+                            [rel.as_posix()],
+                            {rel.as_posix(): "100644"},
+                        )
+
+    def test_generated_tree_hardlink_and_over_cap_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-generated-hostile-") as directory:
+            root = Path(directory)
+            api = root / "api"
+            external = root / "external.md"
+            write(external, "external\n")
+            api.mkdir()
+            try:
+                os.link(external, api / "README.md")
+            except OSError as error:
+                self.skipTest(f"hardlinks unavailable: {error}")
+            with self.assertRaises(docs_contract.ContractError):
+                docs_contract.generated_tree_snapshot(api)
+
+            (api / "README.md").unlink()
+            write(api / "README.md", "one\n")
+            write(api / "second.md", "two\n")
+            write(api / "third.md", "three\n")
+            with mock.patch.object(docs_contract, "MAX_GENERATED_FILES", 2):
+                errors = docs_contract.validate_api_manifest(api)
+            self.assertTrue(any("resource bounds" in error for error in errors), errors)
+
+    def test_api_generation_environment_cannot_inherit_output_overrides(self) -> None:
+        api_root = Path(tempfile.gettempdir()) / "fixed-api-root"
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SPARK_DOC_API_OUTPUT_DIR": "attacker-api",
+                "SPARK_FILE_TREE_OUTPUT": "attacker-tree",
+                "SPARK_WIKI_DIR": "attacker-wiki",
+            },
+            clear=False,
+        ):
+            environment = site_generate.api_generation_environment(EXACT_SHA, COMMITTED_AT, api_root)
+        self.assertEqual(environment["SPARK_DOC_API_OUTPUT_DIR"], str(api_root))
+        self.assertNotIn("SPARK_FILE_TREE_OUTPUT", environment)
+        self.assertNotIn("SPARK_WIKI_DIR", environment)
+
+    def test_bounded_process_timeout_terminates_descendants_promptly(self) -> None:
+        child = (
+            "import subprocess,sys,time; "
+            "subprocess.Popen([sys.executable,'-c','import time; time.sleep(10)']); "
+            "time.sleep(10)"
+        )
+        started = time.monotonic()
+        with self.assertRaises(site_generate.SiteDataError):
+            site_generate.run_bounded_process(
+                [sys.executable, "-c", child],
+                cwd=REPO_ROOT,
+                environment=os.environ.copy(),
+                timeout=1,
+                label="hostile timeout fixture",
+            )
+        self.assertLess(time.monotonic() - started, 5.0)
+
+    def test_bounded_process_timeout_prevents_descendant_post_timeout_write(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-timeout-tree-") as directory:
+            marker = Path(directory) / "escaped.txt"
+            grandchild = (
+                "import pathlib,time; "
+                "time.sleep(2); "
+                f"pathlib.Path({str(marker)!r}).write_text('escaped', encoding='utf-8')"
+            )
+            parent = (
+                "import subprocess,sys,time; "
+                f"subprocess.Popen([sys.executable, '-c', {grandchild!r}]); "
+                "time.sleep(10)"
+            )
+            with self.assertRaises(site_generate.SiteDataError):
+                site_generate.run_bounded_process(
+                    [sys.executable, "-c", parent],
+                    cwd=REPO_ROOT,
+                    environment=os.environ.copy(),
+                    timeout=0.5,
+                    label="hostile descendant timeout fixture",
+                )
+            time.sleep(2.5)
+            self.assertFalse(marker.exists(), "timed-out descendant wrote after the process boundary")
+
     def test_newer_readme_cannot_hide_stale_source_or_missing_page(self) -> None:
         with MiniContract() as fixture:
             api = fixture.root / "docs" / "api"

@@ -10,12 +10,18 @@ import os
 import re
 import stat
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+TOOLS_ROOT = REPO_ROOT / "tools"
+if str(TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TOOLS_ROOT))
+import docs_contract  # noqa: E402
+
 SITE_CONTRACT_ROOT = REPO_ROOT / "docs" / "site"
 WORK_ITEM_ROOT = REPO_ROOT / "docs" / "readiness" / "work-items"
 REPOSITORY = "Krilliac/SparkEngine"
@@ -48,6 +54,9 @@ METRIC_IDS = {
 
 class SiteDataError(RuntimeError):
     """A contract or generation error suitable for a concise CI message."""
+
+
+MAX_CONTRACT_JSON_BYTES = 8 * 1024 * 1024
 
 
 def run_git(*arguments: str) -> str:

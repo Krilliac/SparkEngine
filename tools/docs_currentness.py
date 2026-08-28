@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Sequence
 
+import docs_contract
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = REPO_ROOT / "docs" / "generated-docs-manifest.json"
 SHA_RE = __import__("re").compile(r"^[0-9a-f]{40}$")
@@ -40,6 +42,18 @@ MAX_COPY_BYTES = 384 * 1024 * 1024
 MAX_COPY_FILE_BYTES = 16 * 1024 * 1024
 MAX_OUTPUT_FILES = 5000
 MAX_OUTPUT_BYTES = 256 * 1024 * 1024
+MAX_JSON_BYTES = 8 * 1024 * 1024
+OUTPUT_OVERRIDE_ENVIRONMENT = (
+    "SPARK_DOC_API_OUTPUT_DIR",
+    "SPARK_DOC_API_DIR",
+    "SPARK_SYMBOL_INDEX_OUTPUT_DIR",
+    "SPARK_FILE_TREE_OUTPUT",
+    "SPARK_CLASS_HIERARCHY_OUTPUT",
+    "SPARK_WIKI_DIR",
+    "SPARK_DOC_HEALTH_OUTPUT",
+    "SPARK_DOC_HEALTH_INNER",
+    "SPARK_DOC_BASH",
+)
 
 
 class CurrentnessError(RuntimeError):
@@ -56,28 +70,23 @@ def safe_relative(raw: str) -> PurePosixPath:
 
 
 def atomic_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
-            json.dump(payload, stream, indent=2, sort_keys=True)
-            stream.write("\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temp_name, path)
-    except BaseException:
-        try:
-            os.unlink(temp_name)
-        except OSError:
-            pass
-        raise
+        docs_contract.atomic_write_bytes(
+            path, (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        )
+    except docs_contract.ContractError as exc:
+        raise CurrentnessError(f"cannot safely write documentation evidence: {exc}") from exc
 
 
 def load_contract() -> dict:
     try:
-        contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        contract = docs_contract.load_bounded_json(
+            CONTRACT_PATH, label="generated-docs manifest", maximum=MAX_JSON_BYTES
+        )
+    except docs_contract.ContractError as exc:
         raise CurrentnessError(f"cannot load generated-docs manifest: {exc}") from exc
+    if not isinstance(contract, dict):
+        raise CurrentnessError("generated-docs manifest must be a JSON object")
     if contract.get("schemaVersion") != 1:
         raise CurrentnessError("generated-docs manifest schemaVersion must be 1")
     generators = contract.get("generators")
@@ -128,6 +137,12 @@ def git_output(arguments: list[str], *, text: bool = True) -> str | bytes:
 
 
 def exact_identity(source_sha: str | None, committed_at: str | None) -> tuple[str, str]:
+    dirty = str(git_output(["status", "--porcelain=v1", "--untracked-files=no"])).strip()
+    if dirty:
+        preview = dirty.splitlines()[0]
+        raise CurrentnessError(
+            f"exact-currentness evidence refuses a dirty tracked worktree ({preview})"
+        )
     head = str(git_output(["rev-parse", "HEAD"])).strip()
     sha = source_sha or head
     if not SHA_RE.fullmatch(sha) or sha != head:
@@ -186,26 +201,37 @@ def copy_snapshot(destination: Path, tracked: list[str], modes: dict[str, str]) 
             target.mkdir(parents=True, exist_ok=True)
             continue
         source = REPO_ROOT.joinpath(*rel.parts)
-        if source.is_symlink() or not source.is_file():
-            raise CurrentnessError(f"tracked documentation input is missing or unsafe: {raw}")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if not should_copy(rel):
-            target.touch()
-            continue
-        size = source.stat().st_size
-        if size > MAX_COPY_FILE_BYTES:
-            raise CurrentnessError(f"isolated input exceeds per-file bound: {raw}")
-        total += size
+        try:
+            docs_contract.assert_contained(source, REPO_ROOT, label="tracked documentation input")
+            payload = docs_contract.read_regular_bytes(
+                source,
+                label=f"tracked documentation input {raw}",
+                maximum=MAX_COPY_FILE_BYTES,
+            )
+        except docs_contract.ContractError as exc:
+            raise CurrentnessError(str(exc)) from exc
+        if should_copy(rel):
+            total += len(payload)
+        else:
+            payload = b""
         if total > MAX_COPY_BYTES:
             raise CurrentnessError("isolated documentation input exceeds resource bounds")
-        shutil.copyfile(source, target)
+        try:
+            docs_contract.atomic_write_bytes(target, payload)
+        except docs_contract.ContractError as exc:
+            raise CurrentnessError(f"cannot safely write isolated input {raw}: {exc}") from exc
     tracked_manifest = destination / ".docs-tracked-files"
-    tracked_manifest.write_bytes(b"\0".join(path.encode("utf-8") for path in tracked) + b"\0")
+    try:
+        docs_contract.atomic_write_bytes(
+            tracked_manifest, b"\0".join(path.encode("utf-8") for path in tracked) + b"\0"
+        )
+    except docs_contract.ContractError as exc:
+        raise CurrentnessError(f"cannot safely write tracked inventory: {exc}") from exc
     return tracked_manifest
 
 
-def find_bash() -> str:
-    explicit = os.environ.get("SPARK_DOC_BASH")
+def find_bash(*, allow_override: bool = True) -> str:
+    explicit = os.environ.get("SPARK_DOC_BASH") if allow_override else None
     if explicit and Path(explicit).is_file():
         return explicit
     found = shutil.which("bash")
@@ -217,8 +243,27 @@ def find_bash() -> str:
     raise CurrentnessError("bash is required for isolated documentation generation")
 
 
+def run_bounded_process(
+    command: list[str], *, cwd: Path, environment: dict[str, str], timeout: float, label: str
+) -> subprocess.CompletedProcess[str]:
+    """Run an isolated generator without allowing descendants to outlive its wall bound."""
+
+    try:
+        return docs_contract.run_bounded_process(
+            command,
+            cwd=cwd,
+            environment=environment,
+            timeout=timeout,
+            label=label,
+        )
+    except docs_contract.ContractError as exc:
+        raise CurrentnessError(str(exc)) from exc
+
+
 def run_snapshot(root: Path, tracked_manifest: Path, sha: str, committed_at: str) -> None:
     env = os.environ.copy()
+    for key in OUTPUT_OVERRIDE_ENVIRONMENT:
+        env.pop(key, None)
     env.update({
         "SPARK_DOC_TRACKED_PATHS": str(tracked_manifest),
         "SPARKENGINE_DOC_SOURCE_SHA": sha,
@@ -226,19 +271,16 @@ def run_snapshot(root: Path, tracked_manifest: Path, sha: str, committed_at: str
         "SPARK_DOC_HEALTH_OUTPUT": str(root / "docs" / ".health.json"),
         "SPARK_DOC_HEALTH_INNER": "1",
     })
-    process = subprocess.run(
-        [find_bash(), str(root / "docs" / "update-all-docs.sh"), "update"],
+    process = run_bounded_process(
+        [find_bash(allow_override=False), str(root / "docs" / "update-all-docs.sh"), "update"],
         cwd=root,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        environment=env,
         timeout=600,
+        label="isolated documentation generation",
     )
-    if process.stdout:
-        print(process.stdout, end="")
+    output = process.stdout + process.stderr
+    if output:
+        print(output, end="")
     if process.returncode != 0:
         raise CurrentnessError(f"isolated documentation generation exited {process.returncode}")
     validations = (
@@ -261,19 +303,16 @@ def run_snapshot(root: Path, tracked_manifest: Path, sha: str, committed_at: str
         ],
     )
     for command in validations:
-        validation = subprocess.run(
+        validation = run_bounded_process(
             command,
             cwd=root,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+            environment=env,
             timeout=180,
+            label="isolated documentation validator",
         )
-        if validation.stdout:
-            print(validation.stdout, end="")
+        output = validation.stdout + validation.stderr
+        if output:
+            print(output, end="")
         if validation.returncode != 0:
             raise CurrentnessError(f"isolated validator exited {validation.returncode}")
 
@@ -292,9 +331,13 @@ def parse_timestamp(value: object, field: str) -> datetime:
 
 def validate_health(path: Path, sha: str, committed_at: str) -> None:
     try:
-        health = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        health = docs_contract.load_bounded_json(
+            path, label="documentation health evidence", maximum=MAX_JSON_BYTES
+        )
+    except docs_contract.ContractError as exc:
         raise CurrentnessError(f"cannot read documentation health evidence: {exc}") from exc
+    if not isinstance(health, dict):
+        raise CurrentnessError("documentation health evidence must be a JSON object")
     if health.get("schemaVersion") != 1 or health.get("sourceCommit") != sha:
         raise CurrentnessError("documentation health is not schema-v1 exact-SHA evidence")
     if health.get("sourceCommittedAt") != committed_at:
@@ -325,29 +368,29 @@ def validate_health(path: Path, sha: str, committed_at: str) -> None:
 
 
 def file_digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
+    try:
+        payload = docs_contract.read_regular_bytes(
+            path, label="documentation evidence file", maximum=MAX_COPY_FILE_BYTES
+        )
+    except docs_contract.ContractError as exc:
+        raise CurrentnessError(str(exc)) from exc
+    return hashlib.sha256(payload).hexdigest()
 
 
 def tree_projection(root: Path) -> dict[str, tuple[int, str]]:
-    if root.is_symlink() or not root.is_dir():
-        raise CurrentnessError(f"generated tree missing or unsafe: {root}")
     result: dict[str, tuple[int, str]] = {}
-    total = 0
-    for path in sorted(root.rglob("*")):
-        if path.is_symlink():
-            raise CurrentnessError(f"generated tree contains symlink: {path}")
-        if not path.is_file():
-            continue
-        relative = path.relative_to(root).as_posix()
-        size = path.stat().st_size
-        total += size
-        if len(result) >= MAX_OUTPUT_FILES or total > MAX_OUTPUT_BYTES:
-            raise CurrentnessError("generated output tree exceeds resource bounds")
-        result[relative] = (size, file_digest(path))
+    try:
+        snapshot = docs_contract.generated_tree_snapshot(
+            root,
+            label="generated documentation tree",
+            max_files=MAX_OUTPUT_FILES,
+            max_bytes=MAX_OUTPUT_BYTES,
+        )
+    except docs_contract.ContractError as exc:
+        raise CurrentnessError(str(exc)) from exc
+    for relative, identity in snapshot.items():
+        path = root.joinpath(*PurePosixPath(relative).parts)
+        result[relative] = (identity.size, file_digest(path))
     return result
 
 
@@ -399,8 +442,12 @@ def working_tree_projection(paths: list[str]) -> dict[str, str]:
     for raw in paths:
         rel = safe_relative(raw)
         full = REPO_ROOT.joinpath(*rel.parts)
-        if full.is_file() and not full.is_symlink():
+        if not os.path.lexists(full):
+            continue
+        try:
             result[raw] = file_digest(full)
+        except CurrentnessError as exc:
+            raise CurrentnessError(f"working-tree projection rejected {raw}: {exc}") from exc
     return result
 
 
@@ -441,8 +488,13 @@ def write_health(args: argparse.Namespace) -> bool:
         raise CurrentnessError("health exit code is outside 0..255")
     rows: dict[str, dict[str, str]] = {}
     try:
-        lines = args.results.read_text(encoding="utf-8").splitlines()
-    except OSError:
+        payload = docs_contract.read_regular_bytes(
+            args.results,
+            label="documentation health results",
+            maximum=MAX_JSON_BYTES,
+        )
+        lines = payload.decode("utf-8").splitlines()
+    except (docs_contract.ContractError, UnicodeDecodeError):
         lines = []
     for line in lines:
         fields = line.split("\t", 2)

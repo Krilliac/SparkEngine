@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 from collections import Counter
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 from urllib.parse import unquote
 
@@ -45,11 +45,75 @@ from render_handoff import render_handoff
 from validate import validate_contract
 
 
+TOOLS_ROOT = Path(__file__).resolve().parents[1]
+if str(TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TOOLS_ROOT))
+import docs_contract  # noqa: E402
+
+
 SOURCE_EXTENSIONS = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".m", ".mm"}
 LARGE_DOCUMENT_BYTES = 240_000
+API_GENERATION_TIMEOUT_SECONDS = 240
+MAX_OUTPUT_FILES = 5000
+MAX_OUTPUT_BYTES = 256 * 1024 * 1024
+DOC_OUTPUT_ENVIRONMENT = (
+    "SPARK_DOC_API_OUTPUT_DIR",
+    "SPARK_DOC_API_DIR",
+    "SPARK_SYMBOL_INDEX_OUTPUT_DIR",
+    "SPARK_FILE_TREE_OUTPUT",
+    "SPARK_CLASS_HIERARCHY_OUTPUT",
+    "SPARK_WIKI_DIR",
+    "SPARK_DOC_HEALTH_OUTPUT",
+    "SPARK_DOC_HEALTH_INNER",
+)
 
 
-def regenerate_api_docs(committed_at: str) -> None:
+def run_bounded_process(
+    command: list[str], *, cwd: Path, environment: dict[str, str], timeout: int, label: str
+) -> subprocess.CompletedProcess[str]:
+    """Translate shared process-bound failures into site-data diagnostics."""
+
+    try:
+        return docs_contract.run_bounded_process(
+            command,
+            cwd=cwd,
+            environment=environment,
+            timeout=timeout,
+            label=label,
+        )
+    except docs_contract.ContractError as error:
+        raise SiteDataError(str(error)) from error
+
+
+def api_generation_environment(source_commit: str, committed_at: str, api_root: Path) -> dict[str, str]:
+    """Build a closed environment for the API producer's sole authorized output."""
+
+    environment = os.environ.copy()
+    for key in DOC_OUTPUT_ENVIRONMENT:
+        environment.pop(key, None)
+    environment.update(
+        {
+            "SPARK_DOC_API_OUTPUT_DIR": str(api_root),
+            "SPARKENGINE_DOC_SOURCE_SHA": source_commit,
+            "SPARKENGINE_DOC_SOURCE_COMMITTED_AT": committed_at,
+        }
+    )
+    return environment
+
+
+def trusted_bash() -> str:
+    """Locate the host shell without inheriting an attacker-controlled override."""
+
+    candidate = shutil.which("bash")
+    if candidate and Path(candidate).is_file():
+        return candidate
+    bundled = Path(r"C:\\Program Files\\Git\\bin\\bash.exe")
+    if bundled.is_file():
+        return str(bundled)
+    raise SiteDataError("bash is required for API documentation generation")
+
+
+def regenerate_api_docs(source_commit: str, committed_at: str) -> None:
     """Rebuild ignored API reference pages from the checked-out source tree.
 
     ``docs/api`` is intentionally not tracked, so a clean CI checkout cannot
@@ -58,73 +122,63 @@ def regenerate_api_docs(committed_at: str) -> None:
     """
 
     script = REPO_ROOT / "docs" / "generate-api-docs.sh"
-    if not script.is_file():
+    try:
+        docs_contract.assert_contained(script, REPO_ROOT, label="API documentation generator")
+        docs_contract.regular_identity(script, label="API documentation generator")
+    except docs_contract.ContractError as error:
+        raise SiteDataError("missing or unsafe API documentation generator: docs/generate-api-docs.sh") from error
+    if not script.is_file() or script.is_symlink():
         raise SiteDataError("missing API documentation generator: docs/generate-api-docs.sh")
 
-    environment = os.environ.copy()
-    environment["SPARKENGINE_DOC_SOURCE_COMMITTED_AT"] = committed_at
-    try:
-        result = subprocess.run(
-            ["bash", str(script), "generate"],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=240,
-            check=False,
-            env=environment,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise SiteDataError("API documentation generation exceeded 240 seconds") from error
+    api_root = REPO_ROOT / "docs" / "api"
+    environment = api_generation_environment(source_commit, committed_at, api_root)
+    result = run_bounded_process(
+        [trusted_bash(), str(script), "generate"],
+        cwd=REPO_ROOT,
+        environment=environment,
+        timeout=API_GENERATION_TIMEOUT_SECONDS,
+        label="API documentation generation",
+    )
     if result.returncode:
         detail = (result.stderr.strip() or result.stdout.strip())[-4000:]
         raise SiteDataError(f"API documentation generation failed: {detail}")
 
-    api_root = REPO_ROOT / "docs" / "api"
-    pages = list(api_root.rglob("*.md")) if api_root.is_dir() else []
-    if not (api_root / "README.md").is_file() or len(pages) < 3:
-        raise SiteDataError(
-            "API documentation generator did not produce its index and reference pages"
+    try:
+        tree = docs_contract.generated_tree_snapshot(api_root, label="site-data API output")
+        manifest = docs_contract.load_bounded_json(
+            api_root / ".generation.json", label="API generation metadata"
         )
-    manifest_path = api_root / ".generation.json"
-    symbols_path = api_root / ".symbols.tsv"
+        manifest_errors = docs_contract.validate_api_manifest(api_root, source_commit)
+    except docs_contract.ContractError as error:
+        raise SiteDataError(f"API documentation output is unsafe or invalid: {error}") from error
+    if manifest_errors:
+        raise SiteDataError("API documentation manifest validation failed: " + "; ".join(manifest_errors[:3]))
+    pages = [name for name in tree if PurePosixPath(name).suffix.lower() == ".md"]
+    if "README.md" not in tree or len(pages) < 3:
+        raise SiteDataError("API documentation generator did not produce its index and reference pages")
+    if not isinstance(manifest, dict):
+        raise SiteDataError("API documentation generation metadata must be a JSON object")
     try:
-        manifest = load_json(manifest_path, maximum=64 * 1024)
-    except SiteDataError as error:
-        raise SiteDataError("API documentation generation manifest is missing or invalid") from error
-
-    source_roots = [
-        REPO_ROOT / "SparkEngine" / "Source",
-        REPO_ROOT / "SparkEditor" / "Source",
-        REPO_ROOT / "SparkConsole" / "src",
-        REPO_ROOT / "SparkShaderCompiler" / "src",
-        REPO_ROOT / "SparkSDK",
-        REPO_ROOT / "Tests",
-        *sorted((REPO_ROOT / "GameModules").glob("*/Source")),
-    ]
-    expected_headers = sum(
-        1
-        for root in source_roots
-        if root.is_dir()
-        for path in root.rglob("*")
-        if path.is_file() and path.suffix.lower() in {".h", ".hpp"}
-    )
-    expected_cpp = sum(
-        1
-        for root in source_roots
-        if root.is_dir()
-        for path in root.rglob("*.cpp")
-        if path.is_file()
-    )
-    try:
-        symbol_records = sum(1 for _ in symbols_path.open(encoding="utf-8", errors="replace"))
-    except OSError as error:
-        raise SiteDataError("API documentation symbol index is missing") from error
+        paths, symbols, _ = docs_contract.scan_sources()
+        header_extensions = {
+            value.lower()
+            for value in docs_contract.load_contract()["sourceContract"]["headerExtensions"]
+        }
+    except docs_contract.ContractError as error:
+        raise SiteDataError(f"cannot bind API metadata to the active source contract: {error}") from error
+    headers = [path for path in paths if path.suffix.lower() in header_extensions]
     expected_manifest = {
+        "schemaVersion": 1,
+        "sourceCommit": source_commit,
         "sourceCommittedAt": committed_at,
-        "headersScanned": expected_headers,
-        "cppFilesScanned": expected_cpp,
+        "sourcesScanned": len(paths),
+        "headersScanned": len(headers),
+        "cppFilesScanned": sum(
+            path.suffix.lower() in {".c", ".cc", ".cpp", ".cxx", ".mm"}
+            for path in paths
+        ),
         "markdownPages": len(pages),
-        "symbolRecords": symbol_records,
+        "symbolRecords": len(symbols),
     }
     if manifest != expected_manifest:
         raise SiteDataError(
@@ -496,16 +550,18 @@ def documentation_health() -> dict[str, Any]:
             detail = add.stderr.strip() or add.stdout.strip()
             return {"status": "unknown", "checks": [{"name": "Documentation generators", "status": "refresh-pending", "detail": f"Isolated check unavailable: {detail}"}]}
         try:
+            environment = os.environ.copy()
+            for key in DOC_OUTPUT_ENVIRONMENT:
+                environment.pop(key, None)
             try:
-                result = subprocess.run(
+                result = run_bounded_process(
                     ["bash", str(checkout / script_relative), "check"],
                     cwd=checkout,
-                    capture_output=True,
-                    text=True,
+                    environment=environment,
                     timeout=90,
-                    check=False,
+                    label="isolated documentation health check",
                 )
-            except subprocess.TimeoutExpired:
+            except SiteDataError:
                 return {"status": "unknown", "checks": [{"name": "Documentation generators", "status": "refresh-pending", "detail": "Health check exceeded 90 seconds"}]}
         finally:
             subprocess.run(
@@ -654,18 +710,54 @@ def metadata_for(document: dict[str, Any]) -> dict[str, Any]:
 
 
 def ensure_safe_output(output: Path, *, preserve_existing: bool) -> Path:
-    resolved = output.resolve()
-    forbidden = {Path("/").resolve(), Path.home().resolve(), REPO_ROOT.resolve(), REPO_ROOT.parent.resolve()}
+    resolved = docs_contract.absolute_path(output)
+    forbidden = {
+        docs_contract.absolute_path(Path("/")),
+        docs_contract.absolute_path(Path.home()),
+        docs_contract.absolute_path(REPO_ROOT),
+        docs_contract.absolute_path(REPO_ROOT.parent),
+    }
     if resolved in forbidden:
         raise SiteDataError(f"refusing unsafe output directory: {resolved}")
-    if not preserve_existing and resolved.exists():
+    try:
+        docs_contract.assert_no_reparse_ancestors(resolved.parent, label="site-data output")
+    except docs_contract.ContractError as error:
+        raise SiteDataError(str(error)) from error
+    if os.path.lexists(resolved):
+        try:
+            docs_contract.generated_tree_snapshot(
+                resolved,
+                label="site-data output",
+                max_files=MAX_OUTPUT_FILES,
+                max_bytes=MAX_OUTPUT_BYTES,
+            )
+        except docs_contract.ContractError as error:
+            raise SiteDataError(str(error)) from error
+    if not preserve_existing and os.path.lexists(resolved):
         sentinel = resolved / ".sparkengine-site-data-output"
         narrow_name = re.fullmatch(r"\.site-data(?:[-._][a-zA-Z0-9_-]+)?", resolved.name)
-        if not sentinel.is_file() and not narrow_name:
+        try:
+            sentinel_is_safe = (
+                docs_contract.read_regular_bytes(
+                    sentinel, label="site-data output sentinel", maximum=1024
+                )
+                == b"SparkEngine repository site-data output\n"
+            )
+        except docs_contract.ContractError:
+            sentinel_is_safe = False
+        if not sentinel_is_safe and not narrow_name:
             raise SiteDataError(
                 f"refusing to replace non-site-data directory without generator sentinel: {resolved}"
             )
-        shutil.rmtree(resolved)
+        try:
+            docs_contract.remove_generated_tree(
+                resolved,
+                label="site-data output",
+                max_files=MAX_OUTPUT_FILES,
+                max_bytes=MAX_OUTPUT_BYTES,
+            )
+        except docs_contract.ContractError as error:
+            raise SiteDataError(str(error)) from error
     resolved.mkdir(parents=True, exist_ok=True)
     write_text(resolved / ".sparkengine-site-data-output", "SparkEngine repository site-data output\n")
     return resolved
@@ -677,17 +769,30 @@ def pointer(output: Path, path: Path, info: dict[str, Any]) -> dict[str, Any]:
 
 def prune_snapshots(output: Path, current_commit: str, retain: int) -> None:
     snapshots = output / "snapshots"
-    if not snapshots.is_dir():
+    if not snapshots.exists():
         return
+    try:
+        docs_contract.generated_tree_snapshot(
+            snapshots,
+            label="site-data snapshots",
+            max_files=MAX_OUTPUT_FILES,
+            max_bytes=MAX_OUTPUT_BYTES,
+        )
+    except docs_contract.ContractError as error:
+        raise SiteDataError(str(error)) from error
     records: list[tuple[str, str, Path]] = []
     for directory in snapshots.iterdir():
         bundle = directory / "bundle.json"
-        if not directory.is_dir() or not bundle.is_file():
-            continue
+        if not directory.is_dir() or directory.is_symlink():
+            raise SiteDataError(f"site-data snapshot entry is unsafe: {directory}")
+        if not bundle.is_file() or bundle.is_symlink():
+            raise SiteDataError(f"site-data snapshot is missing its bundle: {directory}")
         try:
             data = load_json(bundle, maximum=5 * 1024 * 1024)
+            if not isinstance(data, dict):
+                raise SiteDataError("site-data snapshot bundle must be an object")
             records.append((data.get("generatedAt", ""), directory.name, directory))
-        except SiteDataError:
+        except (OSError, SiteDataError):
             records.append(("", directory.name, directory))
     records.sort(reverse=True)
     keep = {current_commit}
@@ -699,7 +804,15 @@ def prune_snapshots(output: Path, current_commit: str, retain: int) -> None:
             break
     for _, name, directory in records:
         if name not in keep:
-            shutil.rmtree(directory)
+            try:
+                docs_contract.remove_generated_tree(
+                    directory,
+                    label="obsolete site-data snapshot",
+                    max_files=MAX_OUTPUT_FILES,
+                    max_bytes=MAX_OUTPUT_BYTES,
+                )
+            except docs_contract.ContractError as error:
+                raise SiteDataError(str(error)) from error
 
 
 def enforce_publication_budgets(output: Path, bundle_path: Path, page_root: Path) -> None:
@@ -708,13 +821,20 @@ def enforce_publication_budgets(output: Path, bundle_path: Path, page_root: Path
         "bundle metadata": (bundle_path, 5 * 1024 * 1024),
     }
     for label, (path, maximum) in budgets.items():
-        size = path.stat().st_size
+        try:
+            size = docs_contract.regular_identity(path, label=label).size
+        except docs_contract.ContractError as error:
+            raise SiteDataError(str(error)) from error
         if size > maximum:
             raise SiteDataError(f"{label} is {size} bytes; publication budget is {maximum} bytes")
+    try:
+        pages = docs_contract.generated_tree_snapshot(page_root, label="site-data page output")
+    except docs_contract.ContractError as error:
+        raise SiteDataError(str(error)) from error
     oversize = sorted(
-        (path.stat().st_size, path)
-        for path in page_root.glob("*.json")
-        if path.stat().st_size > 2 * 1024 * 1024
+        (identity.size, page_root.joinpath(*PurePosixPath(raw).parts))
+        for raw, identity in pages.items()
+        if PurePosixPath(raw).suffix == ".json" and identity.size > 2 * 1024 * 1024
     )
     if oversize:
         size, path = oversize[-1]
@@ -744,12 +864,20 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
             f"evidence commit {args.evidence_commit} does not match checked-out commit {source['commit']}"
         )
 
-    regenerate_api_docs(source["committedAt"])
+    regenerate_api_docs(source["commit"], source["committedAt"])
 
     output = ensure_safe_output(args.output, preserve_existing=args.preserve_existing)
     snapshot_root = output / "snapshots" / source["commit"]
-    if snapshot_root.exists():
-        shutil.rmtree(snapshot_root)
+    if os.path.lexists(snapshot_root):
+        try:
+            docs_contract.remove_generated_tree(
+                snapshot_root,
+                label="existing site-data snapshot",
+                max_files=MAX_OUTPUT_FILES,
+                max_bytes=MAX_OUTPUT_BYTES,
+            )
+        except docs_contract.ContractError as error:
+            raise SiteDataError(str(error)) from error
     docs_root = snapshot_root / "docs"
     page_root = docs_root / "pages"
     page_root.mkdir(parents=True, exist_ok=True)
@@ -923,6 +1051,15 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
     )
     enforce_publication_budgets(output, bundle_path, page_root)
     prune_snapshots(output, source["commit"], max(1, args.retain))
+    try:
+        docs_contract.generated_tree_snapshot(
+            output,
+            label="published site-data output",
+            max_files=MAX_OUTPUT_FILES,
+            max_bytes=MAX_OUTPUT_BYTES,
+        )
+    except docs_contract.ContractError as error:
+        raise SiteDataError(str(error)) from error
     return {"latest": latest, "documents": len(metadata), "output": output}
 
 
