@@ -20,7 +20,6 @@ echo "Validating module evidence manifest..."
 
 echo "Running adversarial tests..."
 
-"$PYTHON" -m pytest "$PROJECT_ROOT/Tests/Tools/test_module_evidence.py" \
-    -v --tb=short -q 2>&1
+"$PYTHON" -m unittest Tests.Tools.test_module_evidence -v 2>&1
 
 echo "Module evidence validation complete."

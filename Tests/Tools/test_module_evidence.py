@@ -410,6 +410,30 @@ class TestEvidenceBindingsReject(unittest.TestCase):
         errors = _validate(m)
         self.assertTrue(any("must be relative" in e for e in errors))
 
+    def test_dotdot_traversal_artifact(self) -> None:
+        m = _make_minimal_valid()
+        m["modules"][0]["evidenceBindings"] = [
+            {"type": "junit-xml", "artifactPattern": "../../etc/shadow"}
+        ]
+        errors = _validate(m)
+        self.assertTrue(any("traversal" in e for e in errors))
+
+    def test_dotdot_nested_traversal_artifact(self) -> None:
+        m = _make_minimal_valid()
+        m["modules"][0]["evidenceBindings"] = [
+            {"type": "junit-xml", "artifactPattern": "build/../../.git/config"}
+        ]
+        errors = _validate(m)
+        self.assertTrue(any("traversal" in e for e in errors))
+
+    def test_backslash_absolute_artifact(self) -> None:
+        m = _make_minimal_valid()
+        m["modules"][0]["evidenceBindings"] = [
+            {"type": "junit-xml", "artifactPattern": "\\\\server\\share\\results.xml"}
+        ]
+        errors = _validate(m)
+        self.assertTrue(any("must be relative" in e for e in errors))
+
     def test_missing_artifact_pattern(self) -> None:
         m = _make_minimal_valid()
         m["modules"][0]["evidenceBindings"] = [{"type": "junit-xml"}]
@@ -437,6 +461,34 @@ class TestCrossReferenceReject(unittest.TestCase):
         m["profiles"][0]["excludedModules"].append("SparkGameFPS")
         errors = _validate(m)
         self.assertTrue(any("both included and excluded" in e for e in errors))
+
+
+class TestSourceDirectoryTraversalReject(unittest.TestCase):
+    """Dotdot traversal and non-GameModules source trees must be caught."""
+
+    def test_dotdot_traversal(self) -> None:
+        m = _make_minimal_valid()
+        m["modules"][0]["sourceDirectory"] = "GameModules/../SparkEngine/Source"
+        errors = _validate(m)
+        self.assertTrue(any("traversal" in e for e in errors))
+
+    def test_dotdot_backslash(self) -> None:
+        m = _make_minimal_valid()
+        m["modules"][0]["sourceDirectory"] = "GameModules\\..\\SparkEngine\\Source"
+        errors = _validate(m)
+        self.assertTrue(any("traversal" in e for e in errors))
+
+    def test_non_gamemodules_source(self) -> None:
+        m = _make_minimal_valid()
+        m["modules"][0]["sourceDirectory"] = "SparkEngine/Source"
+        errors = _validate(m)
+        self.assertTrue(any("GameModules/" in e for e in errors))
+
+    def test_non_gamemodules_editor(self) -> None:
+        m = _make_minimal_valid()
+        m["modules"][0]["sourceDirectory"] = "SparkEditor/Source"
+        errors = _validate(m)
+        self.assertTrue(any("GameModules/" in e for e in errors))
 
 
 class TestCopiedMirrorModelReject(unittest.TestCase):

@@ -169,7 +169,7 @@ jobs:
       run: python3 tools/module-evidence/validate_manifest.py --manifest tools/module-evidence/manifest.json --repo-root .
 
     - name: Run module evidence adversarial tests
-      run: python3 -m pytest Tests/Tools/test_module_evidence.py -v
+      run: python3 -m unittest Tests.Tools.test_module_evidence -v
 
     - name: Validate model and template asset contracts
       run: python3 Tools/model_pipeline/validate_models.py --repo-root .

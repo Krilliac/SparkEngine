@@ -232,10 +232,23 @@ class ManifestValidator:
                 f"repository-only paths required"
             )
             return
+        normalized = src.replace("\\", "/")
+        if ".." in normalized.split("/"):
+            self._err(
+                f"{prefix}: sourceDirectory {src!r} contains '..' traversal — "
+                f"canonical paths only"
+            )
+            return
         if re.search(r"[/\\][Tt]est[s]?[/\\]", src) or src.lower().startswith("tests"):
             self._err(
                 f"{prefix}: sourceDirectory {src!r} appears to be a test path — "
                 f"production source required"
+            )
+            return
+        if not normalized.startswith("GameModules/"):
+            self._err(
+                f"{prefix}: sourceDirectory {src!r} must be under GameModules/ — "
+                f"non-module source trees are not valid module evidence"
             )
             return
         full_path = self.repo_root / src
@@ -244,19 +257,15 @@ class ManifestValidator:
                 f"{prefix}: sourceDirectory {src!r} does not exist in the repository"
             )
         name = mod.get("name", "")
-        if name and "GameModules/" in src:
-            parts = src.replace("\\", "/").split("/")
-            try:
-                gm_idx = parts.index("GameModules")
-                dir_module_name = parts[gm_idx + 1] if gm_idx + 1 < len(parts) else ""
-                if dir_module_name and dir_module_name != name:
-                    self._err(
-                        f"{prefix}: sourceDirectory {src!r} belongs to module "
-                        f"{dir_module_name!r} but declared name is {name!r} — "
-                        f"copied mirror model detected"
-                    )
-            except (ValueError, IndexError):
-                pass
+        parts = normalized.split("/")
+        if len(parts) >= 2:
+            dir_module_name = parts[1]
+            if dir_module_name and dir_module_name != name:
+                self._err(
+                    f"{prefix}: sourceDirectory {src!r} belongs to module "
+                    f"{dir_module_name!r} but declared name is {name!r} — "
+                    f"copied mirror model detected"
+                )
 
     def _check_module_kind(self, prefix: str, mod: dict[str, Any]) -> None:
         kind = mod.get("moduleKind", "")
@@ -318,9 +327,14 @@ class ManifestValidator:
             path = binding.get("artifactPattern", "")
             if not isinstance(path, str) or not path:
                 self._err(f"{bprefix}: artifactPattern must be a non-empty string")
-            if path and (path.startswith("/") or ":" in path):
+            if path and (path.startswith("/") or path.startswith("\\") or ":" in path):
                 self._err(
                     f"{bprefix}: artifactPattern {path!r} must be relative"
+                )
+            if path and ".." in path.replace("\\", "/").split("/"):
+                self._err(
+                    f"{bprefix}: artifactPattern {path!r} contains '..' traversal — "
+                    f"canonical paths only"
                 )
 
     def _check_package_smoke_owner(self, prefix: str, mod: dict[str, Any]) -> None:
