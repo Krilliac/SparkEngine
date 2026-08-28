@@ -197,7 +197,7 @@ Nine in-tree templates and prototypes load as `.dll`/`.so` modules at runtime. T
 
 ## Quality Assurance
 
-**Tests:** 6,944 test definitions across 575 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 6,951 test definitions across 575 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
 
 ```bash
 cd build && ctest --output-on-failure
@@ -355,7 +355,7 @@ SparkEngine/
 ├── SparkEditor/Source/    59 dockable panels, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 prebuilt game modules
-├── Tests/                 6,944 test definitions, 575 files
+├── Tests/                 6,951 test definitions, 575 files
 ├── wiki/                  144+ wiki pages
 └── docs/                  API reference, guides
 ```
