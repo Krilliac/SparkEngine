@@ -344,15 +344,22 @@ class EngineContext : public Spark::IEngineContext
     /**
      * @brief Register an arbitrary subsystem by type
      *
-     * Stores a non-owning pointer in the generic registry. The caller manages
-     * lifetime. This is the single source of truth for all subsystem pointers.
-     * Works with incomplete (forward-declared) types.
+     * Stores a non-owning pointer in the generic registry. Passing nullptr
+     * unregisters the type, which lets named setters clear subsystem pointers
+     * during teardown. The caller manages lifetime. This is the single source
+     * of truth for all subsystem pointers. Works with incomplete
+     * (forward-declared) types.
      */
     template <typename T> void RegisterSystem(T* system)
     {
-        SPARK_EXPECTS(system != nullptr);
         std::unique_lock<std::shared_mutex> lock(m_systemsMutex);
-        m_systems[GetTypeId<T>()] = static_cast<void*>(system);
+        const TypeId typeId = GetTypeId<T>();
+        if (system == nullptr)
+        {
+            m_systems.erase(typeId);
+            return;
+        }
+        m_systems[typeId] = static_cast<void*>(system);
     }
 
     /**
