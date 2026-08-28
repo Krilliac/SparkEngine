@@ -718,12 +718,14 @@
         "tooling": [
           "tools/ops/validate_crash_package.py validates strict bounded manifests and referenced artifacts through a pinned authoritative root without modifying them",
           "tools/ops/validate_telemetry_spool.py validates all spool entries, strict event JSON, timestamps, names, retention observations, and offline resource bounds",
-          "tools/ops/redact_secrets.py applies the shared bounded text, structured JSON, dump, and ZIP secret policy and only redacts to stdout"
+          "tools/ops/redact_secrets.py applies the shared bounded text, structured JSON, dump, and ZIP secret policy and only redacts to stdout",
+          "tools/ops/secret_policy.py redact_text uses phased PEM-block, PEM-body, and multi-word structured-credential redaction to prevent any reusable credential leaking through stdout"
         ],
         "tests": [
           "Tests/Tools/test_ops100_crash_security.py covers cross-platform path spellings, junction/hardlink rejection, referenced artifacts, strict JSON, opaque binaries, and archive policy",
           "Tests/Tools/test_ops100_telemetry_spool.py covers unmatched-file accounting, hardlinks/junctions, dual retention clocks, strict schema/types, and reusable secrets",
-          "Tests/Tools/test_ops100_redaction.py covers credential families, binary/ZIP handling, missing and unreadable inputs, stdout-only redaction, and a regex performance regression"
+          "Tests/Tools/test_ops100_redaction.py covers credential families, binary/ZIP handling, missing and unreadable inputs, stdout-only redaction, and a regex performance regression",
+          "Tests/Tools/test_ops100_adversarial.py covers multi-word passphrase redaction, full PEM block/body/footer redaction, encrypted ZIP members, strict JSON edge cases, filesystem path adversarial inputs, CI registration, and docs/evidence accuracy"
         ],
         "remainingBlockers": [
           "Crash reporter has no controlled relay, upload state machine, scoped authorization, private-symbol publication, or release symbolication canary",
