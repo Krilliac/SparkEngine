@@ -288,8 +288,33 @@ class Validator:
                         f"{value} support {capability.get('support')!r} contradicts its profile classification",
                     )
 
+            # A release profile that ships no first-party game proves nothing about
+            # the product shape it claims, so the declaration is mandatory and must
+            # resolve to an in-profile capability that a scope dimension names.
+            first_party = list(profile.get("firstPartyGameCapabilityIds", []))
+            self.require(
+                bool(first_party),
+                location,
+                "must declare at least one first-party game capability",
+            )
+            for value in first_party:
+                self.require(
+                    value in included,
+                    location,
+                    f"first-party game {value} must be an included capability",
+                )
+
             scope = profile.get("scope", [])
             self.unique_ids(scope, f"{location}.scope")
+            scoped_capabilities = {
+                value for dimension in scope for value in dimension.get("capabilityIds", [])
+            }
+            for value in first_party:
+                self.require(
+                    value in scoped_capabilities,
+                    location,
+                    f"first-party game {value} is not named by any scope dimension",
+                )
             self.require(bool(scope), f"{location}.scope", "must declare at least one scope dimension")
             for index, dimension in enumerate(scope):
                 scope_location = f"{location}.scope[{index}]"
@@ -327,6 +352,18 @@ class Validator:
                 expected_items.update(capability.get("blockingWorkItemIds", []))
             missing_gates = sorted(expected_gates.difference(required_gates))
             self.require(not missing_gates, location, f"included capabilities need excluded gates: {missing_gates}")
+
+            # Called out separately from the general rule above: dropping the module
+            # gate is the specific way a profile stops proving its own first-party game.
+            for value in first_party:
+                dropped = sorted(
+                    set(capability_by_id.get(value, {}).get("requiredGateIds", [])).difference(required_gates)
+                )
+                self.require(
+                    not dropped,
+                    location,
+                    f"first-party game {value} requires gates the profile does not: {dropped}",
+                )
             for gate_id in required_gates:
                 expected_items.update(gate_by_id.get(gate_id, {}).get("blockingWorkItemIds", []))
             declared_items = list(profile.get("blockingWorkItemIds", []))

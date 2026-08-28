@@ -17,6 +17,7 @@ validator rejects it, so removing a guard turns the corresponding test red.
 from __future__ import annotations
 
 import copy
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -76,6 +77,86 @@ class SiteDataContractTests(ContractTestCase):
         self.assertIn("C++", values["gameplay"])
         self.assertIn("single-player", values["product"])
         self.assertIn("installed", values["product"].lower())
+
+    def test_profile_declares_a_first_party_game_that_is_in_profile(self) -> None:
+        profile = self.profile_of(self.mutable)
+        self.assertTrue(profile["firstPartyGameCapabilityIds"])
+        for capability_id in profile["firstPartyGameCapabilityIds"]:
+            self.assertIn(capability_id, profile["includedCapabilityIds"])
+
+    def test_profile_cannot_omit_its_first_party_game(self) -> None:
+        self.profile_of(self.mutable)["firstPartyGameCapabilityIds"] = []
+        self.assert_rejected(self.mutable, "must declare at least one first-party game capability")
+
+    def test_first_party_game_must_be_an_included_capability(self) -> None:
+        profile = self.profile_of(self.mutable)
+        profile["includedCapabilityIds"].remove("modules.fps")
+        profile["boundaries"]["experimentalCapabilityIds"].append("modules.fps")
+        self.assert_rejected(self.mutable, "first-party game modules.fps must be an included capability")
+
+    def test_first_party_game_must_be_named_by_a_scope_dimension(self) -> None:
+        profile = self.profile_of(self.mutable)
+        for dimension in profile["scope"]:
+            dimension["capabilityIds"] = [
+                value for value in dimension["capabilityIds"] if value != "modules.fps"
+            ] or ["platform.windows"]
+        self.assert_rejected(self.mutable, "is not named by any scope dimension")
+
+    def test_profile_cannot_exclude_the_first_party_game_module_gate(self) -> None:
+        profile = self.profile_of(self.mutable)
+        profile["requiredGateIds"].remove("G13")
+        profile["excludedGates"].append({"gateId": "G13", "reason": "pretend the profile ships no module"})
+        self.assert_rejected(self.mutable, "first-party game modules.fps requires gates the profile does not")
+
+    def test_profile_requires_the_module_gate_and_its_blockers(self) -> None:
+        profile = self.profile_of(self.mutable)
+        self.assertIn("G13", profile["requiredGateIds"])
+        self.assertNotIn("G13", [entry["gateId"] for entry in profile["excludedGates"]])
+        gate = next(gate for gate in self.mutable["readiness"]["gates"] if gate["id"] == "G13")
+        for work_id in gate["blockingWorkItemIds"]:
+            self.assertIn(work_id, profile["blockingWorkItemIds"])
+
+    def test_first_party_game_is_supported_scope_but_not_certified(self) -> None:
+        profile = self.profile_of(self.mutable)
+        capability = next(
+            item for item in self.mutable["readiness"]["capabilities"] if item["id"] == "modules.fps"
+        )
+        # In scope and intended to be supported, but release stays blocked and the
+        # profile can never outrank it.
+        self.assertEqual(capability["support"], "supported")
+        self.assertEqual(capability["release"], "blocked")
+        self.assertEqual(profile["state"], "blocked")
+
+    def test_toolchain_scope_does_not_claim_a_pinned_or_certified_toolchain(self) -> None:
+        profile = self.profile_of(self.mutable)
+        toolchain = next(dimension for dimension in profile["scope"] if dimension["id"] == "toolchain")
+        self.assertIn("not pinned", toolchain["value"])
+        self.assertTrue(
+            any("no exact msvc compiler build" in value.lower() for value in profile["limitations"]),
+            "the missing exact toolchain pin must be recorded as a profile limitation",
+        )
+        for anchor in ("BLD-100", "PLT-200"):
+            self.assertTrue(
+                any(anchor in value for value in profile["limitations"]),
+                f"the toolchain-pin limitation must name ledger item {anchor}",
+            )
+            self.assertIn(anchor, profile["blockingWorkItemIds"])
+
+    def test_limitations_do_not_hardcode_a_gate_count(self) -> None:
+        # A limitation that spells out "none of its fifteen required gates" goes
+        # stale the moment a gate is added to the profile. Keep the count derived.
+        counts = re.compile(
+            r"\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+            r"thirteen|fourteen|fifteen|sixteen|seventeen|eighteen)\b",
+            re.IGNORECASE,
+        )
+        for limitation in self.profile_of(self.mutable)["limitations"]:
+            if "required gate" in limitation.lower():
+                with self.subTest(limitation=limitation):
+                    self.assertIsNone(
+                        counts.search(limitation),
+                        "gate counts must be derived from requiredGateIds, not written into prose",
+                    )
 
     def test_every_capability_is_classified_exactly_once(self) -> None:
         profile = self.profile_of(self.mutable)

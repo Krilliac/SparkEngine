@@ -68,41 +68,44 @@ Before ending the session, update the item status/evidence and regenerate this f
 
 **Stable v1 — `blocked`.** Owner: unassigned.
 
-The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as an installed single-player vertical slice. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface.
+The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as one installed first-party single-player vertical slice, SparkGameFPS, that must build through the public SDK surface alone. Constrained LAN play is optional and is not required. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface. Nothing in this profile is certified while its state is blocked.
 
 | Dimension | Declared value | In-profile capabilities | Evidence |
 |---|---|---|---|
 | Host operating system | Windows 11 x64 (Windows 10 x64 remains the declared minimum host) | `platform.windows` | `.github/workflows/build.yml` (build-windows-vs2022), `wiki/platform/System-Requirements.md` |
-| Supported compiler line | MSVC v143 (Visual Studio 17 2022 generator, architecture x64, toolset v143) | `platform.windows`, `runtime.cpp` | `.github/workflows/build.yml` (build-windows-vs2022), `CMakePresets.json` |
+| Supported compiler line | The MSVC v143 toolset line (Visual Studio 17 2022 generator, architecture x64, toolset v143). The exact MSVC compiler build and Windows SDK version are not pinned yet, so this names the supported line, not a certified toolchain. | `platform.windows`, `runtime.cpp` | `.github/workflows/build.yml` (build-windows-vs2022), `CMakePresets.json` |
 | Rendered path | Direct3D 11 | `rendering.d3d11` | `SparkEngine/Source/Graphics/RHI/D3D11`, `wiki/graphics/RHI-Abstraction-Layer.md` |
 | Headless path | NullRHI, for GPU-less execution, automation, and dedicated-server processes | `runtime.nullrhi` | `SparkEngine/Source/Graphics/RHI/NullRHIDevice.h`, `Tests/TestNullRHIDevice.cpp` |
 | Gameplay authoring language | C++23 game modules built against the SDK module interface | `runtime.cpp` | `SparkSDK/Include/Spark/IModule.h`, `SparkEngine/Source/Core/ModuleManager.cpp` |
+| First-party game | SparkGameFPS, one first-party single-player vertical slice that must build through the public SDK surface alone. Constrained LAN play is optional and is not required by this profile. | `modules.fps`, `scope.singleplayer` | `GameModules/SparkGameFPS`, `GameModules/SparkGameFPS/CMakeLists.txt`, `SparkSDK/Include/Spark/IModule.h` |
 | Delivered product shape | One installed single-player vertical slice authored in SparkEditor, cooked, packaged, installed, and run without external services | `scope.singleplayer`, `editor.authoring` | `wiki/gameplay-tools/Game-Packaging.md`, `SparkInstaller`, `GameModules/SparkGameFPS` |
 
 ### Profile boundaries
 
 Every capability is classified exactly once. Nothing outside the profile may be presented as supported.
 
-- In profile: `platform.windows`, `runtime.cpp`, `runtime.nullrhi`, `rendering.d3d11`, `scope.singleplayer`, `editor.authoring`
-- Experimental: `platform.linux`, `platform.macos`, `rendering.d3d12`, `rendering.vulkan`, `rendering.opengl`, `rendering.metal`, `networking.multiplayer`, `scripting.angelscript`, `scripting.visual`, `modules.mmofps`, `modules.fps`, `modules.prototypes`
+- In profile: `platform.windows`, `runtime.cpp`, `runtime.nullrhi`, `rendering.d3d11`, `scope.singleplayer`, `editor.authoring`, `modules.fps`
+- First-party game: `modules.fps`
+- Experimental: `platform.linux`, `platform.macos`, `rendering.d3d12`, `rendering.vulkan`, `rendering.opengl`, `rendering.metal`, `networking.multiplayer`, `scripting.angelscript`, `scripting.visual`, `modules.mmofps`, `modules.prototypes`
 - Unsupported: `platform.mobile`, `platform.vr`, `platform.console`, `services.production`
 
 ### Profile gates
 
-- Required: `G00`, `G01`, `G02`, `G03`, `G04`, `G05`, `G06`, `G07`, `G08`, `G09`, `G10`, `G14`, `G15`, `G16`, `G17`
+- Required: `G00`, `G01`, `G02`, `G03`, `G04`, `G05`, `G06`, `G07`, `G08`, `G09`, `G10`, `G13`, `G14`, `G15`, `G16`, `G17`
 - Explicitly excluded:
   - `G11` — Scripting is outside the profile: AngelScript and visual scripting are declared experimental and no profile claim depends on them.
   - `G12` — The profile is single-player and service-free, so production multiplayer transport and online services are out of scope and declared experimental or unsupported.
-  - `G13` — The profile ships no first-party game module; every reference module stays declared experimental and labeled a prototype, template, or reference slice.
 
-- Blocking work: `ASSET-220`, `BLD-100`, `CI-100`, `CI-110`, `CI-120`, `DOC-400`, `DOC-410`, `EDT-210`, `ENG-220`, `GOV-400`, `HEAD-220`, `INST-130`, `LIFE-200`, `MOD-290`, `NET-100`, `OPS-100`, `OPS-110`, `PERF-100`, `PLT-200`, `PLT-210`, `PLT-220`, `RDY-000`, `RDY-010`, `RDY-020`, `REL-100`, `REL-110`, `REL-200`, `RHI-210`, `RHI-220`, `RHI-225`, `RHI-230`, `RHI-240`, `SAVE-230`, `SDK-240`, `SEC-100`, `SEC-110`, `SEC-120`
+- Blocking work: `ASSET-220`, `BLD-100`, `CI-100`, `CI-110`, `CI-120`, `DOC-400`, `DOC-410`, `EDT-210`, `ENG-220`, `GOV-400`, `HEAD-220`, `INST-130`, `LIFE-200`, `MOD-290`, `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390`, `NET-100`, `OPS-100`, `OPS-110`, `PERF-100`, `PLT-200`, `PLT-210`, `PLT-220`, `RDY-000`, `RDY-010`, `RDY-020`, `REL-100`, `REL-110`, `REL-200`, `RHI-210`, `RHI-220`, `RHI-225`, `RHI-230`, `RHI-240`, `SAVE-230`, `SDK-240`, `SEC-100`, `SEC-110`, `SEC-120`
 
 ### Profile limitations
 
-- The profile state is blocked: none of its fifteen required gates is passing at this commit.
-- Windows 11 client-host certification does not exist; the pinned build-windows-vs2022 lane runs on the hosted windows-2022 image, so host certification remains PLT-200 work rather than published evidence.
+- The profile state is blocked: no required gate is passing at this commit.
+- Windows 11 client-host certification does not exist; the build-windows-vs2022 lane runs on the hosted windows-2022 image, so host certification remains PLT-200 work rather than published evidence.
 - No Shipping-configuration artifact is signed, checksummed, attested, installed, upgraded, or rollback-tested at a single commit.
-- No first-party game is inside the profile; GameModules/SparkGameFPS is a reference single-player slice and stays experimental.
+- The first-party slice SparkGameFPS is in the profile but uncertified: its release state is blocked and it holds this profile at blocked (MOD-310).
+- SparkGameFPS builds against SparkEngineLib with the engine source tree on its include path, so the public-API-only requirement is unmet (SDK-240, MOD-310).
+- No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200, CI-120).
 - The editor-to-cook-to-package-to-install-to-run loop has no same-commit end-to-end certification.
 - MSVC v145 and Visual Studio 2026 are an advisory continue-on-error lane, not a supported compiler line in this profile.
 
@@ -157,7 +160,7 @@ Implementation, verification, support, and release are intentionally separate. T
 | `scripting.visual` Visual scripting | unassigned | partial | unit-tested | experimental | **blocked** | `G10`, `G11`, `G13` | `ENG-200`, `MOD-390` |
 | `editor.authoring` SparkEditor authoring workflow | unassigned | functional | integration-tested | supported | **candidate** | `G03`, `G04`, `G10`, `G16` | `EDT-210`, `ASSET-220` |
 | `modules.mmofps` MMOFPS / TERRAFRONT | unassigned | complete | integration-tested | experimental | **blocked** | `G04`, `G07`, `G12`, `G13`, `G14`, `G16` | `NET-100`, `TF-110`, `TF-120` |
-| `modules.fps` FPS reference module | unassigned | functional | unit-tested | experimental | **blocked** | `G03`, `G04`, `G13` | `MOD-310` |
+| `modules.fps` FPS first-party vertical slice | unassigned | functional | unit-tested | supported | **blocked** | `G03`, `G04`, `G13` | `MOD-310`, `SDK-240` |
 | `modules.prototypes` Genre prototype modules | unassigned | partial | unit-tested | experimental | **blocked** | `G03`, `G04`, `G11`, `G13` | `MOD-290`, `MOD-300`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 
 ## Dependency-ordered execution

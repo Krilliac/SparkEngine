@@ -399,20 +399,20 @@
     },
     {
       "id": "modules.fps",
-      "name": "FPS reference module",
+      "name": "FPS first-party vertical slice",
       "area": "modules",
       "owner": "unassigned",
       "implementation": "functional",
       "verification": "unit-tested",
-      "support": "experimental",
+      "support": "supported",
       "release": "blocked",
-      "summary": "FPS is a playable single-player reference slice; its multiplayer path is disconnected or fake and is not release evidence.",
-      "limitations": ["Fake/in-memory multiplayer state", "No production two-client authoritative loop", "Content and persistence gaps remain"],
-      "evidence": [{"type": "source", "path": "GameModules/SparkGameFPS", "label": "FPS source"}],
+      "summary": "SparkGameFPS is the declared first-party single-player vertical slice of the stable-v1 release profile. It is in scope and intended to be supported; it is not certified. Its release state is blocked and it holds the whole profile at blocked until its gates pass. Multiplayer is outside the profile and its existing multiplayer path is fake, so it is not release evidence for anything.",
+      "limitations": ["Not certified: no same-commit author-cook-package-install-run evidence for the slice", "Builds against SparkEngineLib with the engine source tree on its include path rather than the public SDK surface alone, so the public-API-only requirement is unmet", "Fake/in-memory multiplayer state", "No production two-client authoritative loop", "Content and persistence gaps remain"],
+      "evidence": [{"type": "source", "path": "GameModules/SparkGameFPS", "label": "FPS source"}, {"type": "source", "path": "GameModules/SparkGameFPS/CMakeLists.txt", "label": "Links SparkEngineLib and the engine source include path, not the public SDK alone"}],
       "requiredGateIds": ["G03", "G04", "G13"],
-      "blockingWorkItemIds": ["MOD-310"],
+      "blockingWorkItemIds": ["MOD-310", "SDK-240"],
       "documentation": ["GameModules/README.md"],
-      "website": {"icon": "gamepad", "eyebrow": "Reference game", "title": "Playable locally; multiplayer under integration", "bullets": ["Arena, input, combat, rendering, and AI form a local slice", "Authoritative remote players, real-source tests, assets, and persistence need closure"], "proofMetricIds": ["module.fps.lines", "module.fps.files"]}
+      "website": {"icon": "gamepad", "eyebrow": "First-party slice", "title": "In the stable-v1 profile, single-player only, not certified", "bullets": ["Arena, input, combat, rendering, and AI form the declared single-player slice", "Release is blocked: packaging, install-run proof, public-API-only build, and real-source tests are open", "Multiplayer is outside the profile and its current path is fake"], "proofMetricIds": ["module.fps.lines", "module.fps.files"]}
     },
     {
       "id": "modules.prototypes",
@@ -461,7 +461,7 @@
       "name": "Stable v1",
       "state": "blocked",
       "owner": "unassigned",
-      "summary": "The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as an installed single-player vertical slice. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface.",
+      "summary": "The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as one installed first-party single-player vertical slice, SparkGameFPS, that must build through the public SDK surface alone. Constrained LAN play is optional and is not required. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface. Nothing in this profile is certified while its state is blocked.",
       "scope": [
         {
           "id": "host",
@@ -476,7 +476,7 @@
         {
           "id": "toolchain",
           "label": "Supported compiler line",
-          "value": "MSVC v143 (Visual Studio 17 2022 generator, architecture x64, toolset v143)",
+          "value": "The MSVC v143 toolset line (Visual Studio 17 2022 generator, architecture x64, toolset v143). The exact MSVC compiler build and Windows SDK version are not pinned yet, so this names the supported line, not a certified toolchain.",
           "capabilityIds": ["platform.windows", "runtime.cpp"],
           "evidence": [
             {"type": "workflow", "path": ".github/workflows/build.yml", "job": "build-windows-vs2022", "label": "Configure step pins the Visual Studio 17 2022 generator with -A x64 -T v143"},
@@ -514,6 +514,17 @@
           ]
         },
         {
+          "id": "firstPartyGame",
+          "label": "First-party game",
+          "value": "SparkGameFPS, one first-party single-player vertical slice that must build through the public SDK surface alone. Constrained LAN play is optional and is not required by this profile.",
+          "capabilityIds": ["modules.fps", "scope.singleplayer"],
+          "evidence": [
+            {"type": "source", "path": "GameModules/SparkGameFPS", "label": "First-party slice source"},
+            {"type": "source", "path": "GameModules/SparkGameFPS/CMakeLists.txt", "label": "Current build reaches into SparkEngineLib and the engine source tree; the public-API-only requirement is unmet"},
+            {"type": "source", "path": "SparkSDK/Include/Spark/IModule.h", "label": "Public SDK surface the slice must build against"}
+          ]
+        },
+        {
           "id": "product",
           "label": "Delivered product shape",
           "value": "One installed single-player vertical slice authored in SparkEditor, cooked, packaged, installed, and run without external services",
@@ -521,31 +532,33 @@
           "evidence": [
             {"type": "document", "path": "wiki/gameplay-tools/Game-Packaging.md", "label": "Cook and package workflow"},
             {"type": "source", "path": "SparkInstaller", "label": "Installer project"},
-            {"type": "source", "path": "GameModules/SparkGameFPS", "label": "Reference single-player slice, itself experimental and outside the profile"}
+            {"type": "source", "path": "GameModules/SparkGameFPS", "label": "The in-profile first-party single-player slice"}
           ]
         }
       ],
-      "includedCapabilityIds": ["platform.windows", "runtime.cpp", "runtime.nullrhi", "rendering.d3d11", "scope.singleplayer", "editor.authoring"],
+      "includedCapabilityIds": ["platform.windows", "runtime.cpp", "runtime.nullrhi", "rendering.d3d11", "scope.singleplayer", "editor.authoring", "modules.fps"],
+      "firstPartyGameCapabilityIds": ["modules.fps"],
       "boundaries": {
-        "experimentalCapabilityIds": ["platform.linux", "platform.macos", "rendering.d3d12", "rendering.vulkan", "rendering.opengl", "rendering.metal", "networking.multiplayer", "scripting.angelscript", "scripting.visual", "modules.mmofps", "modules.fps", "modules.prototypes"],
+        "experimentalCapabilityIds": ["platform.linux", "platform.macos", "rendering.d3d12", "rendering.vulkan", "rendering.opengl", "rendering.metal", "networking.multiplayer", "scripting.angelscript", "scripting.visual", "modules.mmofps", "modules.prototypes"],
         "unsupportedCapabilityIds": ["platform.mobile", "platform.vr", "platform.console", "services.production"]
       },
-      "requiredGateIds": ["G00", "G01", "G02", "G03", "G04", "G05", "G06", "G07", "G08", "G09", "G10", "G14", "G15", "G16", "G17"],
+      "requiredGateIds": ["G00", "G01", "G02", "G03", "G04", "G05", "G06", "G07", "G08", "G09", "G10", "G13", "G14", "G15", "G16", "G17"],
       "excludedGates": [
         {"gateId": "G11", "reason": "Scripting is outside the profile: AngelScript and visual scripting are declared experimental and no profile claim depends on them."},
-        {"gateId": "G12", "reason": "The profile is single-player and service-free, so production multiplayer transport and online services are out of scope and declared experimental or unsupported."},
-        {"gateId": "G13", "reason": "The profile ships no first-party game module; every reference module stays declared experimental and labeled a prototype, template, or reference slice."}
+        {"gateId": "G12", "reason": "The profile is single-player and service-free, so production multiplayer transport and online services are out of scope and declared experimental or unsupported."}
       ],
-      "blockingWorkItemIds": ["ASSET-220", "BLD-100", "CI-100", "CI-110", "CI-120", "DOC-400", "DOC-410", "EDT-210", "ENG-220", "GOV-400", "HEAD-220", "INST-130", "LIFE-200", "MOD-290", "NET-100", "OPS-100", "OPS-110", "PERF-100", "PLT-200", "PLT-210", "PLT-220", "RDY-000", "RDY-010", "RDY-020", "REL-100", "REL-110", "REL-200", "RHI-210", "RHI-220", "RHI-225", "RHI-230", "RHI-240", "SAVE-230", "SDK-240", "SEC-100", "SEC-110", "SEC-120"],
+      "blockingWorkItemIds": ["ASSET-220", "BLD-100", "CI-100", "CI-110", "CI-120", "DOC-400", "DOC-410", "EDT-210", "ENG-220", "GOV-400", "HEAD-220", "INST-130", "LIFE-200", "MOD-290", "MOD-300", "MOD-310", "MOD-320", "MOD-330", "MOD-340", "MOD-350", "MOD-360", "MOD-370", "MOD-380", "MOD-390", "NET-100", "OPS-100", "OPS-110", "PERF-100", "PLT-200", "PLT-210", "PLT-220", "RDY-000", "RDY-010", "RDY-020", "REL-100", "REL-110", "REL-200", "RHI-210", "RHI-220", "RHI-225", "RHI-230", "RHI-240", "SAVE-230", "SDK-240", "SEC-100", "SEC-110", "SEC-120"],
       "limitations": [
-        "The profile state is blocked: none of its fifteen required gates is passing at this commit.",
-        "Windows 11 client-host certification does not exist; the pinned build-windows-vs2022 lane runs on the hosted windows-2022 image, so host certification remains PLT-200 work rather than published evidence.",
+        "The profile state is blocked: no required gate is passing at this commit.",
+        "Windows 11 client-host certification does not exist; the build-windows-vs2022 lane runs on the hosted windows-2022 image, so host certification remains PLT-200 work rather than published evidence.",
         "No Shipping-configuration artifact is signed, checksummed, attested, installed, upgraded, or rollback-tested at a single commit.",
-        "No first-party game is inside the profile; GameModules/SparkGameFPS is a reference single-player slice and stays experimental.",
+        "The first-party slice SparkGameFPS is in the profile but uncertified: its release state is blocked and it holds this profile at blocked (MOD-310).",
+        "SparkGameFPS builds against SparkEngineLib with the engine source tree on its include path, so the public-API-only requirement is unmet (SDK-240, MOD-310).",
+        "No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200, CI-120).",
         "The editor-to-cook-to-package-to-install-to-run loop has no same-commit end-to-end certification.",
         "MSVC v145 and Visual Studio 2026 are an advisory continue-on-error lane, not a supported compiler line in this profile."
       ],
-      "documentation": ["README.md", "wiki/platform/System-Requirements.md", "wiki/graphics/RHI-Abstraction-Layer.md", "wiki/gameplay-tools/Game-Packaging.md"],
+      "documentation": ["README.md", "wiki/platform/System-Requirements.md", "wiki/graphics/RHI-Abstraction-Layer.md", "wiki/gameplay-tools/Game-Packaging.md", "GameModules/README.md"],
       "publicClaimSurfaces": ["README.md", "docs/README.md", "docs/site/content.json"]
     }
   ],

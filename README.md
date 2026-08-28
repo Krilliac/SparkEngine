@@ -273,12 +273,20 @@ Headless/server deployments use `NullRHIDevice` — no GPU required.
 
 **Platform support.** SparkEngine declares exactly one release profile, `stable-v1`:
 Windows 11 x64, the MSVC v143 toolset line, Direct3D 11, NullRHI for headless
-execution, C++ gameplay modules, and an installed single-player vertical slice.
-The profile, its boundaries, its required gates, and its evidence are owned by
+execution, C++ gameplay modules, and one installed first-party single-player
+vertical slice — `GameModules/SparkGameFPS`. The profile, its boundaries, its
+required gates, and its evidence are owned by
 [`docs/site/readiness.json`](docs/site/readiness.json) and rendered into the
 [engine-readiness handoff](docs/readiness/ENGINE_READINESS_HANDOFF.md). Every
 support word below is that contract's classification, not a separate claim.
-`stable-v1` is currently **blocked**: none of its required release gates passes yet.
+
+`stable-v1` is currently **blocked** and nothing in it is certified. In particular:
+the first-party slice is in scope but its release state is blocked, and it still
+builds against the engine library and source tree rather than the public SDK alone
+(`SDK-240`, `MOD-310`); and the v143 line names a *supported toolchain family*, not
+a pinned one — no exact MSVC compiler build or Windows SDK version is pinned, and
+the hosted image floats, so the toolchain is neither reproducible nor certified
+(`BLD-100`, `PLT-200`, `CI-120`).
 
 | Platform | Compiler | Backend | Declared support |
 |---|---|---|---|

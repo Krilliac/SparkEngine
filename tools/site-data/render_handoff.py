@@ -200,6 +200,7 @@ def render_handoff(contract: dict[str, Any]) -> str:
                 "Every capability is classified exactly once. Nothing outside the profile may be presented as supported.",
                 "",
                 f"- In profile: {', '.join(f'`{value}`' for value in profile['includedCapabilityIds']) or 'none'}",
+                f"- First-party game: {', '.join(f'`{value}`' for value in profile.get('firstPartyGameCapabilityIds', [])) or 'none declared'}",
                 f"- Experimental: {', '.join(f'`{value}`' for value in boundaries.get('experimentalCapabilityIds', [])) or 'none'}",
                 f"- Unsupported: {', '.join(f'`{value}`' for value in boundaries.get('unsupportedCapabilityIds', [])) or 'none'}",
                 "",
