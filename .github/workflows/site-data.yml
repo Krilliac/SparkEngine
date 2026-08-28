@@ -15,6 +15,46 @@ permissions:
   contents: read
 
 jobs:
+  docs-health:
+    name: Documentation exact-currentness
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Generate and validate exact-commit API documentation
+        env:
+          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          timeout 5m bash docs/generate-api-docs.sh generate
+          timeout 2m python3 tools/docs_contract.py validate \
+            --api-dir docs/api --wiki-root wiki
+          timeout 3m python3 tools/site-data/validate_docs_links.py \
+            --generated-root docs/api --source-sha "$GITHUB_SHA"
+
+      - name: Run hostile documentation contract tests
+        run: |
+          set -euo pipefail
+          timeout 3m python3 Tests/Tools/test_docs_health.py -v
+          timeout 3m python3 Tests/Tools/test_site_data_contract.py -v
+          timeout 3m python3 tools/site-data/validate.py --docs
+
+      - name: Prove isolated deterministic currentness and clean checkout
+        env:
+          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          before="$(git status --porcelain=v1 --untracked-files=no)"
+          timeout 10m bash docs/update-all-docs.sh check
+          after="$(git status --porcelain=v1 --untracked-files=no)"
+          test "$before" = "$after"
+
   site-data-validate:
     name: Validate repository site data
     runs-on: ubuntu-24.04
@@ -32,9 +72,19 @@ jobs:
           set -euo pipefail
           python3 tools/site-data/validate.py
           python3 tools/site-data/validate.py --assets
-          python3 tools/site-data/validate.py --docs
           python3 tools/site-data/validate.py --legal
           python3 tools/site-data/render_handoff.py --check
+
+      - name: Generate API docs and validate documentation links
+        env:
+          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          timeout 5m bash docs/generate-api-docs.sh generate
+          timeout 3m python3 tools/site-data/validate_docs_links.py \
+            --generated-root docs/api --source-sha "$GITHUB_SHA"
+          timeout 3m python3 tools/site-data/validate.py --docs
 
       - name: Run readiness contract tests
         run: |

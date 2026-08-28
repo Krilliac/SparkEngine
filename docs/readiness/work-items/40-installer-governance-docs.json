@@ -193,7 +193,7 @@
       "wave": 0,
       "area": "documentation",
       "owner": "unassigned",
-      "rationale": "Wiki Sync, Flowchart, and Codebase Stats are stale; update-all has an API-doc control-flow bug; docs-only changes bypass engine CI; counts and indexes disagree across files.",
+      "rationale": "A hostile audit found timestamp-only false greens, incomplete first-party source coverage, contradictory health evidence, fabricated mixed-case macro rows, and link-validation bypasses. The repair remains open until the exact final commit completes the blocking docs-health and site-data CI jobs.",
       "dependencies": [
         "RDY-000"
       ],
@@ -204,36 +204,44 @@
       ],
       "sourceContext": [
         "docs/update-all-docs.sh",
-        "docs/update-all-docs.sh",
+        "docs/generated-docs-manifest.json",
         "docs/README.md",
         "wiki",
-        ".github/workflows/build.yml"
+        "tools/docs_contract.py",
+        "tools/docs_currentness.py",
+        "tools/site-data/validate_docs_links.py",
+        ".github/workflows/site-data.yml"
       ],
       "entryPoints": [
         "docs/update-all-docs.sh",
-        "tools/site-data",
+        "tools/docs_contract.py",
+        "tools/docs_currentness.py",
+        "tools/site-data/validate_docs_links.py",
         "docs/site/docs-catalog.json"
       ],
       "implementationScope": [
-        "Fix API-doc check/regeneration control flow",
-        "Emit structured health JSON instead of parsing colored output",
-        "Make docs catalog own include/exclude/section/route overrides",
-        "Generate API pages during publication",
-        "Repair relative source links rather than website-only aliases",
-        "Validate every route/heading/source/image link",
-        "Remove docs path-ignore from readiness validation"
+        "Generate every declared output twice in isolated roots and compare exact bytes without mutating the tracked tree",
+        "Emit atomic schema-versioned health JSON bound to the exact source SHA and all required generators",
+        "Cover every tracked first-party native source root with exact path, line, symbol, and LOC validation",
+        "Generate API pages and validate their exact manifest on clean CI checkouts",
+        "Validate Markdown, reference, autolink, HTML, anchor, route, casing, confinement, and generated-API targets",
+        "Block docs-only drift in the dedicated docs-health CI job"
       ],
       "acceptanceCriteria": [
-        "docs/update-all-docs.sh check is green",
-        "Clean regeneration has no diff",
-        "Every doc route/source/heading/image resolves",
-        "Counts are generated once",
-        "A stale generator or broken link blocks CI"
+        "docs/update-all-docs.sh check generates twice in isolation and is green at the exact commit",
+        "Clean regeneration has no tracked diff and the check leaves the tracked tree byte-identical",
+        "Every catalogued doc route, source, heading, image, and generated-API target resolves",
+        "Health contains every expected generator exactly once with exit and failure counts consistent",
+        "Hostile stale-doc, symbol, macro, health, link, anchor, route, and confinement fixtures pass",
+        "A stale generator, missing result, or broken link blocks CI"
       ],
       "commands": [
-        "bash docs/update-all-docs.sh",
+        "bash docs/update-all-docs.sh update",
         "bash docs/update-all-docs.sh check",
+        "python3 Tests/Tools/test_docs_health.py -v",
+        "python3 Tests/Tools/test_site_data_contract.py -v",
         "python3 tools/site-data/validate.py --docs",
+        "python3 tools/site-data/render_handoff.py --check",
         "git diff --exit-code"
       ],
       "testSelectors": [
@@ -245,11 +253,13 @@
         "site-data-validate"
       ],
       "performanceBudgets": [
-        "Full documentation generation completes within publication timeout"
+        "Each generator is bounded to five minutes and the blocking exact-currentness job to fifteen minutes"
       ],
       "documentationUpdates": [
         "docs/README.md",
-        "docs/site/docs-catalog.json"
+        "docs/generated-docs-manifest.json",
+        "docs/site/docs-catalog.json",
+        "docs/readiness/ENGINE_READINESS_HANDOFF.md"
       ],
       "readinessChanges": [
         "G00",
@@ -259,15 +269,16 @@
         "Docs routes and search come from the live site-data bundle; stale state is explicit"
       ],
       "risks": [
-        "Generated docs hiding real source-link defects"
+        "Generated docs hiding real source-link defects",
+        "Treating local success as final before exact-commit CI reaches a terminal state"
       ],
       "outOfScope": [
         "Rewriting every authored guide"
       ],
       "definitionOfDone": [
-        "Health is green",
-        "Bundle parity passes",
-        "Docs-only changes publish/validate"
+        "Exact-commit health is green and internally consistent",
+        "Bundle, handoff, structural, and link parity pass",
+        "Docs-only changes publish and validate in terminal CI without tracked-tree mutation"
       ],
       "profileApplicability": {
         "stable-v1": "shared"

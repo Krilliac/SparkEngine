@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "sourceContract": {
+    "includeRoots": [
+      "SparkEngine",
+      "SparkEditor",
+      "SparkConsole",
+      "SparkShaderCompiler",
+      "SparkSDK",
+      "SparkDaemon",
+      "SparkGateway",
+      "SparkServer",
+      "SparkCrashReporter",
+      "SparkAssetPipelineCore",
+      "SparkBuild",
+      "SparkInstaller",
+      "SparkLauncher",
+      "SparkWorker",
+      "SparkCooker",
+      "SparkAutomation",
+      "GameModules",
+      "Templates",
+      "Tests",
+      "tools",
+      "cmake"
+    ],
+    "extensions": [".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm"],
+    "headerExtensions": [".h", ".hh", ".hpp", ".hxx", ".inl"],
+    "excludePrefixes": ["ThirdParty/", "build/", "out/", "dist/", ".claude/"]
+  },
+  "generators": [
+    {
+      "id": "wiki-sync",
+      "name": "Wiki Sync",
+      "script": "sync-wiki.sh",
+      "mode": "sync",
+      "outputs": [
+        {"path": "wiki/Home.md", "tracked": true},
+        {"path": "wiki/advanced/Testing.md", "tracked": true},
+        {"path": "wiki/gameplay-tools/SparkEditor.md", "tracked": true},
+        {"path": "wiki/subsystems/Entity-Component-System.md", "tracked": true}
+      ]
+    },
+    {
+      "id": "api-docs",
+      "name": "API Docs",
+      "script": "generate-api-docs.sh",
+      "mode": "generate",
+      "outputs": [{"path": "docs/api", "tracked": false, "tree": true}]
+    },
+    {
+      "id": "symbol-indexes",
+      "name": "Symbol Indexes",
+      "script": "generate-symbol-index.sh",
+      "mode": "generate",
+      "outputs": [
+        {"path": "wiki/reference/Symbol-Index.md", "tracked": true},
+        {"path": "wiki/reference/Function-Index.md", "tracked": true},
+        {"path": "wiki/reference/Class-Index.md", "tracked": true},
+        {"path": "wiki/reference/Enum-Index.md", "tracked": true},
+        {"path": "wiki/reference/Macro-Index.md", "tracked": true}
+      ]
+    },
+    {
+      "id": "file-tree",
+      "name": "File Tree",
+      "script": "generate-file-tree.sh",
+      "mode": "generate",
+      "outputs": [{"path": "wiki/reference/File-Tree.md", "tracked": true}]
+    },
+    {
+      "id": "class-hierarchy",
+      "name": "Class Hierarchy",
+      "script": "generate-class-hierarchy.sh",
+      "mode": "generate",
+      "outputs": [{"path": "wiki/reference/Class-Hierarchy.md", "tracked": true}]
+    },
+    {
+      "id": "architecture-flowchart",
+      "name": "Architecture Flowchart",
+      "script": "generate-flowchart.sh",
+      "mode": "generate",
+      "outputs": [{"path": "wiki/getting-started/Engine-Architecture-Flowchart.md", "tracked": true}]
+    },
+    {
+      "id": "codebase-statistics",
+      "name": "Codebase Statistics",
+      "script": "update-codebase-stats.sh",
+      "mode": "generate",
+      "outputs": [{"path": "wiki/advanced/Codebase-Statistics.md", "tracked": true}]
+    },
+    {
+      "id": "readme-badges",
+      "name": "README Badges",
+      "script": "update-readme-badges.sh",
+      "mode": "update",
+      "outputs": [
+        {"path": "README.md", "tracked": true},
+        {"path": ".github/copilot-instructions.md", "tracked": true},
+        {"path": ".github/prompts/copilot-instructions.md", "tracked": true},
+        {"path": ".github/prompts/build-test.prompt.md", "tracked": true},
+        {"path": ".github/badges/tests.json", "tracked": true},
+        {"path": ".github/badges/loc.json", "tracked": true},
+        {"path": ".github/badges/files.json", "tracked": true},
+        {"path": ".github/badges/loc-breakdown.json", "tracked": true}
+      ]
+    },
+    {
+      "id": "ai-context",
+      "name": "AI Context",
+      "script": "update-context.sh",
+      "mode": "update",
+      "outputs": [{"path": "CLAUDE.md", "tracked": true}]
+    }
+  ]
+}

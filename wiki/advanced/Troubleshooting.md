@@ -114,7 +114,7 @@ cmake --install <build-dir> --prefix <install-prefix>
 cmake -B build -DCMAKE_PREFIX_PATH=<install-prefix>
 ```
 
-**Tip:** Include `SparkEnginePreflight.cmake` in your project (before `find_package`) for automatic detection. See [Build System and CMake Modules](Build-System-and-CMake-Modules.md#sparkenginepreflight-cmake).
+**Tip:** Include `SparkEnginePreflight.cmake` in your project (before `find_package`) for automatic detection. See [Build System and CMake Modules](Build-System-and-CMake-Modules.md#sparkenginepreflightcmake).
 
 ### Clang-Format Failures in CI
 

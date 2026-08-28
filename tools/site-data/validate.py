@@ -1085,6 +1085,18 @@ class Validator:
             if root.is_dir():
                 count += sum(1 for path in root.rglob("*.md") if path.is_file())
         self.require(count > 0, "docsCatalog", "catalog resolves no Markdown documents")
+        from validate_docs_links import validate_docs_links, validate_docs_routes
+
+        for entry in validate_docs_routes(catalog):
+            self.error(
+                f"docsCatalog.routeOverrides.{entry['target']}",
+                entry["error"],
+            )
+        for entry in validate_docs_links(catalog):
+            self.error(
+                f"{entry['source']}:{entry['line']}",
+                f"{entry['target']}: {entry['error']}",
+            )
 
     def validate_docs_catalog(self) -> None:
         catalog = self.contract["docsCatalog"]

@@ -11,13 +11,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 from pathlib import Path, PurePosixPath
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SOURCE_SUFFIXES = {".cpp", ".h", ".hpp", ".mm", ".inl"}
+SOURCE_CONTRACT_PATH = REPO_ROOT / "docs" / "generated-docs-manifest.json"
+
+
+def source_suffix_contract() -> tuple[set[str], set[str], set[str]]:
+    try:
+        contract = json.loads(SOURCE_CONTRACT_PATH.read_text(encoding="utf-8"))
+        source = contract["sourceContract"]
+        suffixes = {value.lower() for value in source["extensions"]}
+        headers = {value.lower() for value in source["headerExtensions"]}
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise ValueError(f"cannot load native source suffix contract: {exc}") from exc
+    if not suffixes or not headers or not headers < suffixes:
+        raise ValueError("native source suffix contract is incomplete")
+    return suffixes, headers, suffixes - headers
+
+
+SOURCE_SUFFIXES, HEADER_SUFFIXES, IMPLEMENTATION_SUFFIXES = source_suffix_contract()
 
 # Keep the established output schema used by badges and CI. Newly covered
 # first-party roots are assigned to the closest existing reporting category so
@@ -42,6 +59,7 @@ CATEGORIES = {
         "SparkLauncher",
         "SparkCrashReporter",
         "cmake/mingw-shims",
+        "tools",
     ),
 }
 OUTPUT_CATEGORY_NAMES = {"tests": "test", "tools": "tool"}
@@ -87,18 +105,26 @@ def native_source_paths(paths: list[PurePosixPath]) -> list[PurePosixPath]:
 
 
 def tracked_native_sources(repo_root: Path = REPO_ROOT) -> list[PurePosixPath]:
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(repo_root), "ls-files", "-z", "--cached"],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-    except (OSError, subprocess.CalledProcessError) as exc:
-        raise ValueError(f"cannot enumerate tracked repository files: {exc}") from exc
+    external_manifest = os.environ.get("SPARK_DOC_TRACKED_PATHS")
+    if external_manifest:
+        try:
+            raw_inventory = Path(external_manifest).read_bytes()
+        except OSError as exc:
+            raise ValueError(f"cannot read tracked-path manifest: {exc}") from exc
+    else:
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(repo_root), "ls-files", "-z", "--cached"],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise ValueError(f"cannot enumerate tracked repository files: {exc}") from exc
+        raw_inventory = result.stdout
 
     tracked: list[PurePosixPath] = []
-    for raw in result.stdout.split(b"\0"):
+    for raw in raw_inventory.split(b"\0"):
         if not raw:
             continue
         try:
@@ -157,7 +183,7 @@ def collect(
     test_definitions = 0
     test_files = 0
     for path in all_files:
-        if path.suffix.lower() not in {".cpp", ".mm"}:
+        if path.suffix.lower() not in IMPLEMENTATION_SUFFIXES:
             continue
         matches = len(TEST_RE.findall(path.read_bytes()))
         test_definitions += matches
@@ -166,6 +192,10 @@ def collect(
     return {
         "total_lines": sum(lines_by_category.values()),
         "file_count": len(all_files),
+        "header_count": sum(path.suffix.lower() in HEADER_SUFFIXES for path in all_files),
+        "implementation_count": sum(
+            path.suffix.lower() in IMPLEMENTATION_SUFFIXES for path in all_files
+        ),
         **{
             f"{OUTPUT_CATEGORY_NAMES.get(name, name)}_lines": count
             for name, count in lines_by_category.items()

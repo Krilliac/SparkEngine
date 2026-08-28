@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable
 
-from common import REPO_ROOT, SiteDataError, load_contract, write_text
+from common import REPO_ROOT, SiteDataError, github_heading_slug, load_contract, write_text
 
 
 OUTPUT_PATH = REPO_ROOT / "docs" / "readiness" / "ENGINE_READINESS_HANDOFF.md"
@@ -337,8 +337,9 @@ def render_handoff(contract: dict[str, Any]) -> str:
         for item in wave_items:
             dependencies = ", ".join(f"`{value}`" for value in item["dependencies"]) or "—"
             parallel = ", ".join(f"`{value}`" for value in item["parallelWith"]) or "—"
+            anchor = github_heading_slug(f"{item['id']} — {item['title']}")
             lines.append(
-                f"| [`{item['id']}`](#{item['id'].lower()}--{item['title'].lower().replace(' ', '-').replace(',', '')}) "
+                f"| [`{item['id']}`](#{anchor}) "
                 f"{inline(item['title'])} | {item['priority']} | **{item['status']}** | {dependencies} | {parallel} |"
             )
         lines.append("")

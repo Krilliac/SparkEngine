@@ -1,225 +1,145 @@
 #!/bin/bash
-
-# SparkEngine Documentation Master Updater
-# Runs all documentation generation and sync scripts in the correct order.
-# Single command to bring all docs, wikis, badges, and context up to date.
-#
-# Scripts orchestrated (in order):
-#   1. sync-wiki.sh               — Update AUTO: sections in wiki pages
-#   2. generate-api-docs.sh       — Regenerate API reference + symbol TSV
-#   3. generate-symbol-index.sh   — Symbol/Function/Class/Enum/Macro indexes
-#   4. generate-file-tree.sh      — Full file tree with LOC + dependency graph
-#   5. generate-class-hierarchy.sh — Inheritance Mermaid diagrams
-#   6. generate-flowchart.sh      — Regenerate architecture flowchart
-#   7. update-codebase-stats.sh   — Regenerate Codebase-Statistics.md
-#   8. update-readme-badges.sh    — Update README.md counts & badge JSON
-#   9. update-context.sh          — Update CLAUDE.md counts
-#
-# Usage:
-#   ./update-all-docs.sh              # Run all updates (default)
-#   ./update-all-docs.sh update       # Same as above
-#   ./update-all-docs.sh check        # Dry-run: report what's out of date (exit 1 if any stale)
-#   ./update-all-docs.sh quick        # Skip slow steps (API docs, flowchart)
-
-set -e
+# SparkEngine documentation master updater and exact-currentness gate.
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NC='\033[0m'
-
-log_info()    { echo -e "${BLUE}[ALL-DOCS]${NC} $1"; }
-log_success() { echo -e "${GREEN}[ALL-DOCS]${NC} $1"; }
-log_warning() { echo -e "${YELLOW}[ALL-DOCS]${NC} $1"; }
-log_header()  { echo -e "\n${BOLD}${BLUE}═══ $1 ═══${NC}"; }
-
-FAILURES=0
-UPDATES=0
-
-# ============================================================================
-# Run a doc script, tracking success/failure
-# ============================================================================
-run_script() {
-    local name="$1"
-    local script="$2"
-    local mode="$3"
-
-    if [ ! -x "$script" ]; then
-        chmod +x "$script" 2>/dev/null || true
-    fi
-
-    if [ ! -f "$script" ]; then
-        log_warning "Script not found: $script — skipping"
-        return
-    fi
-
-    log_header "$name"
-
-    if bash "$script" "$mode"; then
-        UPDATES=$((UPDATES + 1))
-    else
-        if [ "$mode" = "check" ]; then
-            FAILURES=$((FAILURES + 1))
-        else
-            log_warning "$name failed"
-            FAILURES=$((FAILURES + 1))
-        fi
-    fi
-}
-
-# ============================================================================
-# Full update mode
-# ============================================================================
-update_all() {
-    local skip_slow="${1:-false}"
-
-    log_info "Running all documentation updates..."
-    echo ""
-
-    # 1. Wiki sync (updates AUTO: sections — must run first so other scripts see fresh data)
-    run_script "Wiki Sync" "$SCRIPT_DIR/sync-wiki.sh" "sync"
-
-    # 2. API docs. docs/api is intentionally ignored, so a clean checkout must
-    # generate it before the tracked symbol and hierarchy indexes can refresh.
-    if [ "$skip_slow" = "false" ]; then
-        run_script "API Docs" "$SCRIPT_DIR/generate-api-docs.sh" "generate"
-
-        # 2a. Symbol indexes (fast — pure TSV consumer)
-        run_script "Symbol Indexes" "$SCRIPT_DIR/generate-symbol-index.sh" "generate"
-
-        # 2b. File tree (walks all sources once)
-        run_script "File Tree" "$SCRIPT_DIR/generate-file-tree.sh" "generate"
-
-        # 2c. Class hierarchy (Mermaid diagrams)
-        run_script "Class Hierarchy" "$SCRIPT_DIR/generate-class-hierarchy.sh" "generate"
-    else
-        log_info "Skipping API docs, symbol indexes, file tree, class hierarchy (quick mode)"
-    fi
-
-    # 3. Architecture flowchart
-    if [ "$skip_slow" = "false" ]; then
-        run_script "Architecture Flowchart" "$SCRIPT_DIR/generate-flowchart.sh" "generate"
-    else
-        log_info "Skipping flowchart (quick mode)"
-    fi
-
-    # 4. Codebase Statistics page
-    run_script "Codebase Statistics" "$SCRIPT_DIR/update-codebase-stats.sh" "generate"
-
-    # 5. README badges & counts
-    run_script "README Badges" "$SCRIPT_DIR/update-readme-badges.sh" "update"
-
-    # 6. AI context (CLAUDE.md)
-    run_script "AI Context" "$SCRIPT_DIR/update-context.sh" "update"
-
-    # Summary
-    echo ""
-    log_header "Summary"
-    if [ "$FAILURES" -eq 0 ]; then
-        log_success "All documentation is up to date ($UPDATES scripts ran successfully)"
-        return 0
-    else
-        log_warning "$FAILURES script(s) had issues, $UPDATES succeeded"
-        return 1
-    fi
-}
-
-# ============================================================================
-# Check mode — report what's stale without modifying anything
-# ============================================================================
-check_all() {
-    log_info "Checking all documentation for staleness..."
-    echo ""
-
-    local stale=0
-
-    # Check each script in check/dry-run mode
-    for pair in \
-        "Wiki Sync:sync-wiki.sh:check" \
-        "API Docs:generate-api-docs.sh:check" \
-        "Symbol Indexes:generate-symbol-index.sh:check" \
-        "File Tree:generate-file-tree.sh:check" \
-        "Class Hierarchy:generate-class-hierarchy.sh:check" \
-        "Flowchart:generate-flowchart.sh:check" \
-        "Codebase Stats:update-codebase-stats.sh:check" \
-        "README Badges:update-readme-badges.sh:check" \
-        "AI Context:update-context.sh:check"
-    do
-        local name="${pair%%:*}"
-        local rest="${pair#*:}"
-        local script="${rest%%:*}"
-        local mode="${rest#*:}"
-        local full_path="$SCRIPT_DIR/$script"
-
-        if [ ! -f "$full_path" ]; then
-            log_warning "$name: script not found ($script)"
-            stale=$((stale + 1))
-            continue
-        fi
-
-        echo -ne "${BLUE}[CHECK]${NC} $name... "
-        local check_output
-        if check_output=$(bash "$full_path" "$mode" 2>&1); then
-            echo -e "${GREEN}✓ up to date${NC}"
-        else
-            echo -e "${YELLOW}✗ out of date${NC}"
-            printf '%s\n' "$check_output" | sed 's/^/    /'
-            stale=$((stale + 1))
+find_python() {
+    local candidate
+    for candidate in "${PYTHON:-}" python3 python py; do
+        [ -n "$candidate" ] || continue
+        if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "import sys" >/dev/null 2>&1; then
+            printf '%s\n' "$candidate"
+            return 0
         fi
     done
+    return 1
+}
 
-    echo ""
-    if [ "$stale" -eq 0 ]; then
-        log_success "All documentation is up to date."
-        exit 0
-    else
-        log_warning "$stale doc source(s) out of date. Run: docs/update-all-docs.sh"
-        exit 1
+PYTHON_BIN="$(find_python)" || { echo "Python 3 is required" >&2; exit 1; }
+export PYTHON="$PYTHON_BIN"
+MODE="${1:-update}"
+
+resolve_identity() {
+    SOURCE_SHA="${SPARKENGINE_DOC_SOURCE_SHA:-}"
+    SOURCE_COMMITTED_AT="${SPARKENGINE_DOC_SOURCE_COMMITTED_AT:-}"
+    if [ -z "$SOURCE_SHA" ]; then
+        SOURCE_SHA="$(git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null)" || return 1
+    fi
+    if [ -z "$SOURCE_COMMITTED_AT" ]; then
+        SOURCE_COMMITTED_AT="$(git -C "$PROJECT_ROOT" show -s --format=%cI "$SOURCE_SHA" 2>/dev/null)" || return 1
     fi
 }
 
-# ============================================================================
-# Entry point
-# ============================================================================
-case "${1:-update}" in
-    update|full)
-        update_all false
-        ;;
-    quick)
-        update_all true
-        ;;
+if ! resolve_identity; then
+    echo "Exact source SHA and committed-at timestamp are required" >&2
+    exit 1
+fi
+
+case "$MODE" in
     check)
-        check_all
+        exec "$PYTHON_BIN" "$PROJECT_ROOT/tools/docs_currentness.py" check             --source-sha "$SOURCE_SHA"             --source-committed-at "$SOURCE_COMMITTED_AT"
         ;;
-    help|--help|-h)
-        echo "SparkEngine Documentation Master Updater"
-        echo ""
-        echo "Usage: $0 [command]"
-        echo ""
-        echo "Commands:"
-        echo "  update    Run all doc updates (default)"
-        echo "  quick     Skip slow steps (API docs, flowchart)"
-        echo "  check     Dry-run: report what's out of date"
-        echo "  help      Show this help"
-        echo ""
-        echo "Individual scripts:"
-        echo "  docs/sync-wiki.sh               Wiki AUTO: sections"
-        echo "  docs/generate-api-docs.sh       API reference + symbol TSV"
-        echo "  docs/generate-symbol-index.sh   Symbol/Function/Class/Enum/Macro indexes"
-        echo "  docs/generate-file-tree.sh      Full file tree (docs/api/FileTree.md)"
-        echo "  docs/generate-class-hierarchy.sh Inheritance Mermaid diagrams"
-        echo "  docs/generate-flowchart.sh      Architecture flowchart"
-        echo "  docs/update-codebase-stats.sh   Codebase-Statistics.md"
-        echo "  docs/update-readme-badges.sh    README badges & counts"
-        echo "  docs/update-context.sh          CLAUDE.md counts"
+    help|-h|--help)
+        echo "Usage: $0 [update|full|quick|check]"
+        echo "  update/full  regenerate every declared output and emit health evidence"
+        echo "  quick        non-release partial generation; health remains failed"
+        echo "  check        generate twice in isolated roots and compare exact bytes"
+        exit 0
         ;;
-    *)
-        echo "Usage: $0 [update|quick|check|help]"
-        exit 1
-        ;;
+    update|full|quick) ;;
+    *) echo "Unknown command: $MODE" >&2; exit 1 ;;
 esac
+
+RESULTS_FILE="$(mktemp)"
+HEALTH_OUTPUT="${SPARK_DOC_HEALTH_OUTPUT:-$SCRIPT_DIR/.health.json}"
+STARTED_AT="$("$PYTHON_BIN" -c "from datetime import datetime,timezone; print(datetime.now(timezone.utc).isoformat().replace('+00:00','Z'))")"
+FINAL_EXIT=1
+
+write_health() {
+    local code="$1"
+    "$PYTHON_BIN" "$PROJECT_ROOT/tools/docs_currentness.py" write-health         --mode "$MODE"         --results "$RESULTS_FILE"         --output "$HEALTH_OUTPUT"         --source-sha "$SOURCE_SHA"         --source-committed-at "$SOURCE_COMMITTED_AT"         --started-at "$STARTED_AT"         --exit-code "$code"
+}
+
+finish() {
+    local observed="$?"
+    trap - EXIT INT TERM
+    local code="$FINAL_EXIT"
+    if [ "$observed" -ne 0 ]; then
+        code="$observed"
+    fi
+    if ! write_health "$code"; then
+        code=1
+    fi
+    rm -f "$RESULTS_FILE"
+    exit "$code"
+}
+trap finish EXIT
+trap 'FINAL_EXIT=130; exit 130' INT TERM
+
+record() {
+    local id="$1"
+    local status="$2"
+    local message="$3"
+    message="${message//$'\t'/ }"
+    message="${message//$'\r'/ }"
+    message="${message//$'\n'/ }"
+    printf '%s\t%s\t%s\n' "$id" "$status" "$message" >> "$RESULTS_FILE"
+}
+
+run_generator() {
+    local id="$1"
+    local name="$2"
+    local script="$3"
+    local generator_mode="$4"
+    local full_path="$SCRIPT_DIR/$script"
+    echo "[DOCS] $name"
+    if [ ! -f "$full_path" ]; then
+        record "$id" "missing" "required generator script is missing: $script"
+        return 1
+    fi
+    local code=0
+    if command -v timeout >/dev/null 2>&1; then
+        timeout --signal=TERM 300s bash "$full_path" "$generator_mode" || code=$?
+    else
+        bash "$full_path" "$generator_mode" || code=$?
+    fi
+    if [ "$code" -eq 0 ]; then
+        record "$id" "current" "generator completed successfully"
+        return 0
+    fi
+    record "$id" "failed" "generator exited $code"
+    return 1
+}
+
+failures=0
+run_generator "wiki-sync" "Wiki Sync" "sync-wiki.sh" "sync" || failures=$((failures + 1))
+
+if [ "$MODE" = "quick" ]; then
+    record "api-docs" "skipped" "quick mode is not release evidence"
+    record "symbol-indexes" "skipped" "quick mode is not release evidence"
+    record "file-tree" "skipped" "quick mode is not release evidence"
+    record "class-hierarchy" "skipped" "quick mode is not release evidence"
+    record "architecture-flowchart" "skipped" "quick mode is not release evidence"
+    failures=$((failures + 5))
+else
+    run_generator "api-docs" "API Docs" "generate-api-docs.sh" "generate" || failures=$((failures + 1))
+    run_generator "symbol-indexes" "Symbol Indexes" "generate-symbol-index.sh" "generate" || failures=$((failures + 1))
+    run_generator "file-tree" "File Tree" "generate-file-tree.sh" "generate" || failures=$((failures + 1))
+    run_generator "class-hierarchy" "Class Hierarchy" "generate-class-hierarchy.sh" "generate" || failures=$((failures + 1))
+    run_generator "architecture-flowchart" "Architecture Flowchart" "generate-flowchart.sh" "generate" || failures=$((failures + 1))
+fi
+
+run_generator "codebase-statistics" "Codebase Statistics" "update-codebase-stats.sh" "generate" || failures=$((failures + 1))
+run_generator "readme-badges" "README Badges" "update-readme-badges.sh" "update" || failures=$((failures + 1))
+run_generator "ai-context" "AI Context" "update-context.sh" "update" || failures=$((failures + 1))
+
+if [ "$failures" -eq 0 ]; then
+    FINAL_EXIT=0
+    echo "[DOCS] all declared generators completed"
+else
+    FINAL_EXIT=1
+    echo "[DOCS] $failures declared generator(s) failed or were skipped" >&2
+fi
+exit "$FINAL_EXIT"

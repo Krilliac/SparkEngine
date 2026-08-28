@@ -1,0 +1,524 @@
+#!/usr/bin/env python3
+"""Isolated, exact-commit documentation currentness and health evidence."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
+from typing import Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CONTRACT_PATH = REPO_ROOT / "docs" / "generated-docs-manifest.json"
+SHA_RE = __import__("re").compile(r"^[0-9a-f]{40}$")
+REQUIRED_GENERATORS = (
+    "wiki-sync",
+    "api-docs",
+    "symbol-indexes",
+    "file-tree",
+    "class-hierarchy",
+    "architecture-flowchart",
+    "codebase-statistics",
+    "readme-badges",
+    "ai-context",
+)
+COPY_SUFFIXES = {
+    ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm",
+    ".py", ".sh", ".md", ".json", ".txt", ".cmake", ".yml", ".yaml",
+    ".hlsl", ".glsl", ".vert", ".frag", ".comp", ".as",
+}
+COPY_NAMES = {"CMakeLists.txt", "LICENSE", "NOTICE"}
+MAX_COPY_FILES = 10000
+MAX_COPY_BYTES = 384 * 1024 * 1024
+MAX_COPY_FILE_BYTES = 16 * 1024 * 1024
+MAX_OUTPUT_FILES = 5000
+MAX_OUTPUT_BYTES = 256 * 1024 * 1024
+
+
+class CurrentnessError(RuntimeError):
+    pass
+
+
+def safe_relative(raw: str) -> PurePosixPath:
+    path = PurePosixPath(raw)
+    if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+        raise CurrentnessError(f"unsafe repository path: {raw!r}")
+    if "\\" in raw or "\x00" in raw:
+        raise CurrentnessError(f"non-canonical repository path: {raw!r}")
+    return path
+
+
+def atomic_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            json.dump(payload, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_name, path)
+    except BaseException:
+        try:
+            os.unlink(temp_name)
+        except OSError:
+            pass
+        raise
+
+
+def load_contract() -> dict:
+    try:
+        contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CurrentnessError(f"cannot load generated-docs manifest: {exc}") from exc
+    if contract.get("schemaVersion") != 1:
+        raise CurrentnessError("generated-docs manifest schemaVersion must be 1")
+    generators = contract.get("generators")
+    if not isinstance(generators, list):
+        raise CurrentnessError("generated-docs generators must be an array")
+    ids = tuple(row.get("id") for row in generators if isinstance(row, dict))
+    if ids != REQUIRED_GENERATORS:
+        raise CurrentnessError(
+            "generated-docs manifest must declare every required generator exactly once and in canonical order"
+        )
+    scripts: set[str] = set()
+    outputs: set[str] = set()
+    for row in generators:
+        script = row.get("script")
+        mode = row.get("mode")
+        declared = row.get("outputs")
+        if not isinstance(script, str) or script in scripts:
+            raise CurrentnessError("generator scripts must be unique strings")
+        scripts.add(script)
+        if not isinstance(mode, str) or not mode:
+            raise CurrentnessError(f"generator {row['id']} has invalid mode")
+        if not isinstance(declared, list) or not declared:
+            raise CurrentnessError(f"generator {row['id']} declares no outputs")
+        for output in declared:
+            if not isinstance(output, dict) or not isinstance(output.get("path"), str):
+                raise CurrentnessError(f"generator {row['id']} has malformed output")
+            canonical = safe_relative(output["path"]).as_posix()
+            if canonical in outputs:
+                raise CurrentnessError(f"generated output is owned twice: {canonical}")
+            outputs.add(canonical)
+            if not isinstance(output.get("tracked"), bool):
+                raise CurrentnessError(f"generated output lacks tracked boolean: {canonical}")
+            if output.get("tree", False) not in {True, False}:
+                raise CurrentnessError(f"generated output tree flag is invalid: {canonical}")
+    return contract
+
+
+def git_output(arguments: list[str], *, text: bool = True) -> str | bytes:
+    process = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), *arguments],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=text,
+        timeout=60,
+    )
+    return process.stdout
+
+
+def exact_identity(source_sha: str | None, committed_at: str | None) -> tuple[str, str]:
+    head = str(git_output(["rev-parse", "HEAD"])).strip()
+    sha = source_sha or head
+    if not SHA_RE.fullmatch(sha) or sha != head:
+        raise CurrentnessError(f"source SHA must exactly match checked-out HEAD {head}")
+    actual_timestamp = str(git_output(["show", "-s", "--format=%cI", head])).strip()
+    timestamp = committed_at or actual_timestamp
+    try:
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise CurrentnessError("source committed-at timestamp must be RFC 3339") from exc
+    if parsed.tzinfo is None:
+        raise CurrentnessError("source committed-at timestamp must include an offset")
+    if timestamp != actual_timestamp:
+        raise CurrentnessError("source committed-at timestamp does not match checked-out HEAD")
+    return sha, timestamp
+
+
+def tracked_inventory() -> tuple[list[str], dict[str, str]]:
+    raw = git_output(["ls-files", "-s", "-z", "--cached"], text=False)
+    assert isinstance(raw, bytes)
+    paths: list[str] = []
+    modes: dict[str, str] = {}
+    for entry in raw.split(b"\0"):
+        if not entry:
+            continue
+        try:
+            metadata, raw_path = entry.split(b"\t", 1)
+            mode = metadata.split(b" ", 1)[0].decode("ascii")
+            path = raw_path.decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise CurrentnessError("Git tracked inventory is malformed") from exc
+        canonical = safe_relative(path).as_posix()
+        if mode == "120000":
+            raise CurrentnessError(f"tracked symlink is not allowed in isolated documentation inputs: {canonical}")
+        paths.append(canonical)
+        modes[canonical] = mode
+    if len(paths) != len(set(paths)):
+        raise CurrentnessError("Git tracked inventory contains duplicate paths")
+    return sorted(paths), modes
+
+
+def should_copy(path: PurePosixPath) -> bool:
+    return path.name in COPY_NAMES or path.suffix.lower() in COPY_SUFFIXES
+
+
+def copy_snapshot(destination: Path, tracked: list[str], modes: dict[str, str]) -> Path:
+    copied = 0
+    total = 0
+    for raw in tracked:
+        rel = safe_relative(raw)
+        target = destination.joinpath(*rel.parts)
+        copied += 1
+        if copied > MAX_COPY_FILES:
+            raise CurrentnessError("isolated documentation input exceeds file-count bound")
+        if modes.get(raw) == "160000":
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        source = REPO_ROOT.joinpath(*rel.parts)
+        if source.is_symlink() or not source.is_file():
+            raise CurrentnessError(f"tracked documentation input is missing or unsafe: {raw}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not should_copy(rel):
+            target.touch()
+            continue
+        size = source.stat().st_size
+        if size > MAX_COPY_FILE_BYTES:
+            raise CurrentnessError(f"isolated input exceeds per-file bound: {raw}")
+        total += size
+        if total > MAX_COPY_BYTES:
+            raise CurrentnessError("isolated documentation input exceeds resource bounds")
+        shutil.copyfile(source, target)
+    tracked_manifest = destination / ".docs-tracked-files"
+    tracked_manifest.write_bytes(b"\0".join(path.encode("utf-8") for path in tracked) + b"\0")
+    return tracked_manifest
+
+
+def find_bash() -> str:
+    explicit = os.environ.get("SPARK_DOC_BASH")
+    if explicit and Path(explicit).is_file():
+        return explicit
+    found = shutil.which("bash")
+    if found:
+        return found
+    common = Path(r"C:\Program Files\Git\bin\bash.exe")
+    if common.is_file():
+        return str(common)
+    raise CurrentnessError("bash is required for isolated documentation generation")
+
+
+def run_snapshot(root: Path, tracked_manifest: Path, sha: str, committed_at: str) -> None:
+    env = os.environ.copy()
+    env.update({
+        "SPARK_DOC_TRACKED_PATHS": str(tracked_manifest),
+        "SPARKENGINE_DOC_SOURCE_SHA": sha,
+        "SPARKENGINE_DOC_SOURCE_COMMITTED_AT": committed_at,
+        "SPARK_DOC_HEALTH_OUTPUT": str(root / "docs" / ".health.json"),
+        "SPARK_DOC_HEALTH_INNER": "1",
+    })
+    process = subprocess.run(
+        [find_bash(), str(root / "docs" / "update-all-docs.sh"), "update"],
+        cwd=root,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=600,
+    )
+    if process.stdout:
+        print(process.stdout, end="")
+    if process.returncode != 0:
+        raise CurrentnessError(f"isolated documentation generation exited {process.returncode}")
+    validations = (
+        [
+            sys.executable,
+            str(root / "tools" / "docs_contract.py"),
+            "validate",
+            "--api-dir",
+            str(root / "docs" / "api"),
+            "--wiki-root",
+            str(root / "wiki"),
+        ],
+        [
+            sys.executable,
+            str(root / "tools" / "site-data" / "validate_docs_links.py"),
+            "--generated-root",
+            str(root / "docs" / "api"),
+            "--source-sha",
+            sha,
+        ],
+    )
+    for command in validations:
+        validation = subprocess.run(
+            command,
+            cwd=root,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+        if validation.stdout:
+            print(validation.stdout, end="")
+        if validation.returncode != 0:
+            raise CurrentnessError(f"isolated validator exited {validation.returncode}")
+
+
+def parse_timestamp(value: object, field: str) -> datetime:
+    if not isinstance(value, str):
+        raise CurrentnessError(f"health {field} must be a string")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise CurrentnessError(f"health {field} must be RFC 3339") from exc
+    if parsed.tzinfo is None:
+        raise CurrentnessError(f"health {field} must have timezone")
+    return parsed
+
+
+def validate_health(path: Path, sha: str, committed_at: str) -> None:
+    try:
+        health = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CurrentnessError(f"cannot read documentation health evidence: {exc}") from exc
+    if health.get("schemaVersion") != 1 or health.get("sourceCommit") != sha:
+        raise CurrentnessError("documentation health is not schema-v1 exact-SHA evidence")
+    if health.get("sourceCommittedAt") != committed_at:
+        raise CurrentnessError("documentation health committed-at value is not exact")
+    if health.get("overall") != "pass" or health.get("failures") != 0:
+        raise CurrentnessError("documentation health contradicts successful generation")
+    if health.get("exitCode") != 0:
+        raise CurrentnessError("documentation health pass has a nonzero exit code")
+    if health.get("successes") != len(REQUIRED_GENERATORS):
+        raise CurrentnessError("documentation health success count is incomplete")
+    started = parse_timestamp(health.get("startedAt"), "startedAt")
+    completed = parse_timestamp(health.get("completedAt"), "completedAt")
+    parse_timestamp(health.get("sourceCommittedAt"), "sourceCommittedAt")
+    if completed < started:
+        raise CurrentnessError("documentation health completion precedes start")
+    results = health.get("results")
+    if not isinstance(results, list):
+        raise CurrentnessError("documentation health results must be an array")
+    ids = [row.get("id") for row in results if isinstance(row, dict)]
+    if tuple(ids) != REQUIRED_GENERATORS:
+        raise CurrentnessError("documentation health does not contain every generator exactly once")
+    if any(row.get("status") != "current" for row in results):
+        raise CurrentnessError("documentation health reports a non-current generator")
+    if any(not isinstance(row.get("message"), str) or not row["message"] for row in results):
+        raise CurrentnessError("documentation health has an invalid generator message")
+    if health.get("successes") + health.get("failures") != len(results):
+        raise CurrentnessError("documentation health aggregate counts are inconsistent")
+
+
+def file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def tree_projection(root: Path) -> dict[str, tuple[int, str]]:
+    if root.is_symlink() or not root.is_dir():
+        raise CurrentnessError(f"generated tree missing or unsafe: {root}")
+    result: dict[str, tuple[int, str]] = {}
+    total = 0
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            raise CurrentnessError(f"generated tree contains symlink: {path}")
+        if not path.is_file():
+            continue
+        relative = path.relative_to(root).as_posix()
+        size = path.stat().st_size
+        total += size
+        if len(result) >= MAX_OUTPUT_FILES or total > MAX_OUTPUT_BYTES:
+            raise CurrentnessError("generated output tree exceeds resource bounds")
+        result[relative] = (size, file_digest(path))
+    return result
+
+
+def compare_outputs(contract: dict, first: Path, second: Path, tracked: list[str]) -> None:
+    tracked_set = set(tracked)
+    declared_tracked: set[str] = set()
+    for generator in contract["generators"]:
+        for row in generator["outputs"]:
+            relative = safe_relative(row["path"])
+            canonical = relative.as_posix()
+            left = first.joinpath(*relative.parts)
+            right = second.joinpath(*relative.parts)
+            if row.get("tree", False):
+                if tree_projection(left) != tree_projection(right):
+                    raise CurrentnessError(f"generated tree is nondeterministic: {canonical}")
+                continue
+            if not left.is_file() or not right.is_file():
+                raise CurrentnessError(f"declared generated file is missing: {canonical}")
+            if file_digest(left) != file_digest(right):
+                raise CurrentnessError(f"generated file is nondeterministic: {canonical}")
+            if row["tracked"]:
+                declared_tracked.add(canonical)
+                if canonical not in tracked_set:
+                    raise CurrentnessError(f"manifest says output is tracked but Git does not: {canonical}")
+                actual = REPO_ROOT.joinpath(*relative.parts)
+                if not actual.is_file() or file_digest(actual) != file_digest(left):
+                    raise CurrentnessError(f"tracked generated output is stale: {canonical}")
+
+    changed: set[str] = set()
+    for raw in tracked:
+        rel = safe_relative(raw)
+        if not should_copy(rel):
+            continue
+        generated = first.joinpath(*rel.parts)
+        actual = REPO_ROOT.joinpath(*rel.parts)
+        generated_file = generated.is_file() and not generated.is_symlink()
+        actual_file = actual.is_file() and not actual.is_symlink()
+        if generated_file != actual_file:
+            changed.add(raw)
+        elif generated_file and file_digest(generated) != file_digest(actual):
+            changed.add(raw)
+    undeclared = sorted(changed - declared_tracked)
+    if undeclared:
+        raise CurrentnessError(f"generator changed undeclared tracked output: {undeclared[0]}")
+
+
+def working_tree_projection(paths: list[str]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for raw in paths:
+        rel = safe_relative(raw)
+        full = REPO_ROOT.joinpath(*rel.parts)
+        if full.is_file() and not full.is_symlink():
+            result[raw] = file_digest(full)
+    return result
+
+
+def check_currentness(source_sha: str | None, committed_at: str | None) -> None:
+    contract = load_contract()
+    sha, timestamp = exact_identity(source_sha, committed_at)
+    tracked, modes = tracked_inventory()
+    before = working_tree_projection(tracked)
+    with tempfile.TemporaryDirectory(prefix="spark-doc-check-") as parent:
+        parent_path = Path(parent)
+        first = parent_path / "first"
+        second = parent_path / "second"
+        first.mkdir()
+        second.mkdir()
+        first_manifest = copy_snapshot(first, tracked, modes)
+        second_manifest = copy_snapshot(second, tracked, modes)
+        run_snapshot(first, first_manifest, sha, timestamp)
+        run_snapshot(second, second_manifest, sha, timestamp)
+        validate_health(first / "docs" / ".health.json", sha, timestamp)
+        validate_health(second / "docs" / ".health.json", sha, timestamp)
+        compare_outputs(contract, first, second, tracked)
+    after = working_tree_projection(tracked)
+    if before != after:
+        raise CurrentnessError("documentation check mutated the tracked working tree")
+    print(f"Documentation is deterministic, exact-current, and bound to {sha}.")
+
+
+def write_health(args: argparse.Namespace) -> bool:
+    contract = load_contract()
+    sha = args.source_sha
+    if not SHA_RE.fullmatch(sha):
+        raise CurrentnessError("health source SHA must be exact")
+    if args.mode not in {"update", "full", "quick"}:
+        raise CurrentnessError("health mode is invalid")
+    parse_timestamp(args.source_committed_at, "sourceCommittedAt")
+    started = parse_timestamp(args.started_at, "startedAt")
+    if not 0 <= args.exit_code <= 255:
+        raise CurrentnessError("health exit code is outside 0..255")
+    rows: dict[str, dict[str, str]] = {}
+    try:
+        lines = args.results.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        fields = line.split("\t", 2)
+        if len(fields) != 3:
+            raise CurrentnessError("health result row is malformed")
+        generator_id, status, message = fields
+        if generator_id not in REQUIRED_GENERATORS or generator_id in rows:
+            raise CurrentnessError("health result generator is unknown or duplicated")
+        if status not in {"current", "failed", "missing", "stale", "skipped"}:
+            raise CurrentnessError("health result status is invalid")
+        rows[generator_id] = {"id": generator_id, "status": status, "message": message[:500]}
+    results = [
+        rows.get(generator_id, {
+            "id": generator_id,
+            "status": "missing",
+            "message": "generator did not reach a terminal result",
+        })
+        for generator_id in REQUIRED_GENERATORS
+    ]
+    failures = sum(row["status"] != "current" for row in results)
+    if args.exit_code != 0 and failures == 0:
+        results[-1] = {
+            "id": results[-1]["id"],
+            "status": "failed",
+            "message": f"master documentation update exited {args.exit_code}",
+        }
+        failures = 1
+    successes = len(results) - failures
+    effective_exit_code = args.exit_code if args.exit_code != 0 else (1 if failures else 0)
+    overall = "pass" if failures == 0 and effective_exit_code == 0 else "fail"
+    completed = datetime.now(timezone.utc)
+    if completed < started:
+        raise CurrentnessError("health completion precedes start")
+    payload = {
+        "schemaVersion": 1,
+        "mode": args.mode,
+        "sourceCommit": sha,
+        "sourceCommittedAt": args.source_committed_at,
+        "startedAt": args.started_at,
+        "completedAt": completed.isoformat().replace("+00:00", "Z"),
+        "overall": overall,
+        "successes": successes,
+        "failures": failures,
+        "exitCode": effective_exit_code,
+        "results": results,
+    }
+    atomic_json(args.output, payload)
+    return overall == "pass"
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    check = subparsers.add_parser("check")
+    check.add_argument("--source-sha")
+    check.add_argument("--source-committed-at")
+    health = subparsers.add_parser("write-health")
+    health.add_argument("--mode", required=True)
+    health.add_argument("--results", type=Path, required=True)
+    health.add_argument("--output", type=Path, required=True)
+    health.add_argument("--source-sha", required=True)
+    health.add_argument("--source-committed-at", required=True)
+    health.add_argument("--started-at", required=True)
+    health.add_argument("--exit-code", type=int, required=True)
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "check":
+            check_currentness(args.source_sha, args.source_committed_at)
+        else:
+            if not write_health(args):
+                return 1
+    except (CurrentnessError, OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -116,8 +116,8 @@ collect_metrics() {
     LINES_TOTAL="$TOTAL_LINES"
 
     # File counts
-    TOTAL_H=$(find "$SRC" "$EDITOR_SRC" "$CONSOLE_SRC" "$GAME_SRC" "$SHADER_SRC" "$SDK_SRC" "$TEST_DIR" -name '*.h' -o -name '*.hpp' 2>/dev/null | wc -l | tr -d " ")
-    TOTAL_CPP=$(find "$SRC" "$EDITOR_SRC" "$CONSOLE_SRC" "$GAME_SRC" "$SHADER_SRC" "$TEST_DIR" -name '*.cpp' 2>/dev/null | wc -l | tr -d " ")
+    TOTAL_H="$HEADER_COUNT"
+    TOTAL_CPP="$IMPLEMENTATION_COUNT"
     HLSL_COUNT=$(find "$SHADER_DIR" -name '*.hlsl' 2>/dev/null | wc -l | tr -d " ")
     GLSL_COUNT=$(find "$SHADER_DIR" -name '*.glsl' 2>/dev/null | wc -l | tr -d " ")
     TEST_FILE_COUNT="$TEST_FILES"
@@ -178,7 +178,7 @@ collect_metrics() {
     # SDK headers
     SDK_HEADER_COUNT=$(find "$SDK_SRC" -name '*.h' 2>/dev/null | wc -l | tr -d " ")
 
-    log_info "Collected: ${LINES_TOTAL} LOC, ${TOTAL_H} headers, ${TOTAL_CPP} .cpp, ${TEST_CASE_COUNT} tests"
+    log_info "Collected: ${LINES_TOTAL} LOC, ${TOTAL_H} headers, ${TOTAL_CPP} implementation files, ${TEST_CASE_COUNT} tests"
 }
 
 # ============================================================================
@@ -213,8 +213,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated ${today}
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | ${TOTAL_H} |
-| Implementation files (.cpp) | ${TOTAL_CPP} |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | ${TOTAL_H} |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | ${TOTAL_CPP} |
 | HLSL shader files | ${HLSL_COUNT} |
 | GLSL shader files | ${GLSL_COUNT} |
 | AngelScript files (.as) | ${AS_COUNT} |

@@ -428,5 +428,5 @@ Check frame timing in the output log. Compare across changes to catch regression
 - [Profiler and Debugging](Profiler-and-Debugging.md) — Detailed profiling guide
 - [Performance Profiling Guide](Performance-Profiling-Guide.md) — Frame profiling workflows
 - [Rendering and Graphics](../subsystems/Rendering-and-Graphics.md) — Graphics pipeline details
-- [Dynamic Quality Scaler](../subsystems/Rendering-and-Graphics.md#dynamic-quality) — Auto quality adjustment
+- [Dynamic Quality Scaler](../subsystems/Rendering-and-Graphics.md#quality-presets) — Auto quality adjustment
 - [Troubleshooting](Troubleshooting.md) — Performance-related issues

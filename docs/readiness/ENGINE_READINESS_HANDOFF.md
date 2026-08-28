@@ -292,7 +292,7 @@ Build the shared manifest/public-SDK kit, finish the stable-v1 FPS slice, and ke
 | [`MOD-330`](#mod-330--finish-arpg-as-a-playable-dungeon-slice) Finish ARPG as a playable dungeon slice | P1 | **open** | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-340`](#mod-340--finish-platformer-as-a-complete-level-slice) Finish Platformer as a complete level slice | P1 | **open** | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-350`](#mod-350--finish-rpg-as-a-quest-party-combat-and-persistence-slice) Finish RPG as a quest, party, combat, and persistence slice | P1 | **open** | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
-| [`MOD-360`](#mod-360--finish-openworld-as-a-streamed-survival/exploration-slice) Finish OpenWorld as a streamed survival/exploration slice | P1 | **open** | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-360`](#mod-360--finish-openworld-as-a-streamed-survivalexploration-slice) Finish OpenWorld as a streamed survival/exploration slice | P1 | **open** | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-370`](#mod-370--finish-rts-as-a-deterministic-playable-skirmish) Finish RTS as a deterministic playable skirmish | P1 | **open** | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-380`, `MOD-390` |
 | [`MOD-380`](#mod-380--finish-racing-as-a-physics-backed-complete-race) Finish Racing as a physics-backed complete race | P1 | **open** | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-390` |
 | [`MOD-390`](#mod-390--finish-visualscript-as-a-real-packaged-gameplay-loop) Finish VisualScript as a real packaged gameplay loop | P1 | **blocked** | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380` |
@@ -680,7 +680,7 @@ gh api repos/Krilliac/SparkEngine/branches/Working/protection
 **Priority:** P0 · **Status:** open · **Wave:** 0 · **Area:** documentation · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Wiki Sync, Flowchart, and Codebase Stats are stale; update-all has an API-doc control-flow bug; docs-only changes bypass engine CI; counts and indexes disagree across files.
+A hostile audit found timestamp-only false greens, incomplete first-party source coverage, contradictory health evidence, fabricated mixed-case macro rows, and link-validation bypasses. The repair remains open until the exact final commit completes the blocking docs-health and site-data CI jobs.
 
 **Dependency contract**
 
@@ -690,41 +690,49 @@ Wiki Sync, Flowchart, and Codebase Stats are stale; update-all has an API-doc co
 **Source context**
 
 - `docs/update-all-docs.sh`
-- `docs/update-all-docs.sh`
+- `docs/generated-docs-manifest.json`
 - `docs/README.md`
 - `wiki`
-- `.github/workflows/build.yml`
+- `tools/docs_contract.py`
+- `tools/docs_currentness.py`
+- `tools/site-data/validate_docs_links.py`
+- `.github/workflows/site-data.yml`
 
 **Entry points**
 
 - `docs/update-all-docs.sh`
-- `tools/site-data`
+- `tools/docs_contract.py`
+- `tools/docs_currentness.py`
+- `tools/site-data/validate_docs_links.py`
 - `docs/site/docs-catalog.json`
 
 **Implementation scope**
 
-- Fix API-doc check/regeneration control flow
-- Emit structured health JSON instead of parsing colored output
-- Make docs catalog own include/exclude/section/route overrides
-- Generate API pages during publication
-- Repair relative source links rather than website-only aliases
-- Validate every route/heading/source/image link
-- Remove docs path-ignore from readiness validation
+- Generate every declared output twice in isolated roots and compare exact bytes without mutating the tracked tree
+- Emit atomic schema-versioned health JSON bound to the exact source SHA and all required generators
+- Cover every tracked first-party native source root with exact path, line, symbol, and LOC validation
+- Generate API pages and validate their exact manifest on clean CI checkouts
+- Validate Markdown, reference, autolink, HTML, anchor, route, casing, confinement, and generated-API targets
+- Block docs-only drift in the dedicated docs-health CI job
 
 **Acceptance criteria**
 
-1. docs/update-all-docs.sh check is green
-2. Clean regeneration has no diff
-3. Every doc route/source/heading/image resolves
-4. Counts are generated once
-5. A stale generator or broken link blocks CI
+1. docs/update-all-docs.sh check generates twice in isolation and is green at the exact commit
+2. Clean regeneration has no tracked diff and the check leaves the tracked tree byte-identical
+3. Every catalogued doc route, source, heading, image, and generated-API target resolves
+4. Health contains every expected generator exactly once with exit and failure counts consistent
+5. Hostile stale-doc, symbol, macro, health, link, anchor, route, and confinement fixtures pass
+6. A stale generator, missing result, or broken link blocks CI
 
 **Required commands**
 
 ```bash
-bash docs/update-all-docs.sh
+bash docs/update-all-docs.sh update
 bash docs/update-all-docs.sh check
+python3 Tests/Tools/test_docs_health.py -v
+python3 Tests/Tools/test_site_data_contract.py -v
 python3 tools/site-data/validate.py --docs
+python3 tools/site-data/render_handoff.py --check
 git diff --exit-code
 ```
 
@@ -733,13 +741,15 @@ git diff --exit-code
 - Test selectors: `DocsGeneration_*`, `DocsLinks_*`
 - Required CI jobs: `docs-health`, `site-data-validate`
 - Performance / reliability budgets:
-  - Full documentation generation completes within publication timeout
+  - Each generator is bounded to five minutes and the blocking exact-currentness job to fifteen minutes
 
 **Same-change updates**
 
 - Documentation:
   - `docs/README.md`
+  - `docs/generated-docs-manifest.json`
   - `docs/site/docs-catalog.json`
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
 - Readiness contract:
   - G00
   - G15
@@ -750,14 +760,15 @@ git diff --exit-code
 
 - Risks:
   - Generated docs hiding real source-link defects
+  - Treating local success as final before exact-commit CI reaches a terminal state
 - Out of scope:
   - Rewriting every authored guide
 
 **Definition of done**
 
-- Health is green
-- Bundle parity passes
-- Docs-only changes publish/validate
+- Exact-commit health is green and internally consistent
+- Bundle, handoff, structural, and link parity pass
+- Docs-only changes publish and validate in terminal CI without tracked-tree mutation
 
 ## Wave 1 briefs
 

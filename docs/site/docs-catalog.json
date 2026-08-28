@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "include": {
     "rootDocuments": ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md", "TROUBLESHOOTING.md", "CODE_OF_CONDUCT.md", "ASSET_DESIGN_BRIEF.md"],
-    "recursiveMarkdownRoots": ["wiki", "docs", "Assets", "cmake", "GameModules", "Templates", "SparkBuild", "SparkConsole", "SparkCrashReporter", "SparkDaemon", "SparkInstaller", "SparkLauncher", "SparkSDK", "SparkShaderCompiler", "Tests", "Tools", "tools"]
+    "recursiveMarkdownRoots": ["wiki", "docs", "Assets", "cmake", "GameModules", "Templates", "SparkBuild", "SparkConsole", "SparkCrashReporter", "SparkDaemon", "SparkInstaller", "SparkLauncher", "SparkSDK", "SparkShaderCompiler", "Tests", "Tools"]
   },
   "excludePrefixes": ["docs/superpowers/", ".claude/", ".github/prompts/", "ThirdParty/"],
-  "excludePaths": ["wiki/_Sidebar.md", "wiki/_Template.md", "CLAUDE.md", "AGENTS.md"],
+    "excludePaths": ["wiki/_Sidebar.md", "wiki/_Template.md", "wiki/Changelog.md", "CLAUDE.md", "AGENTS.md"],
   "sections": [
     {"id": "getting-started", "label": "Getting started", "description": "Build, run, and orient yourself in SparkEngine."},
     {"id": "engine-systems", "label": "Engine systems", "description": "Runtime systems, gameplay foundations, and lifecycle behavior."},
@@ -69,7 +69,6 @@
     "wiki/Examples.md": "examples",
     "wiki/Build-Guide.md": "build-guide",
     "wiki/Dependencies.md": "dependencies",
-    "wiki/Changelog.md": "changelog",
     "wiki/Roadmap.md": "roadmap",
     "wiki/Code-of-Conduct.md": "code-of-conduct",
     "wiki/API.md": "api",

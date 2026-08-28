@@ -20,7 +20,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-WIKI_DIR="$PROJECT_ROOT/wiki"
+WIKI_DIR="${SPARK_WIKI_DIR:-$PROJECT_ROOT/wiki}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -385,52 +385,23 @@ main() {
         check)
             log_info "Dry-run: checking wiki freshness..."
             echo ""
-            CHECK_MODE=true
-
-            collect_inventory
-            check_stale_references
-            sync_sidebar
-
-            # Check if any auto-sections would change. Snapshot the whole wiki
-            # tree (including category subfolders) into a temp dir so we can
-            # compare after sync_* functions run, then restore.
             local tmpdir
             tmpdir=$(mktemp -d)
+            trap 'rm -rf "$tmpdir"' RETURN
             (cd "$WIKI_DIR" && find . -name '*.md' -print0 | \
                 while IFS= read -r -d '' rel; do
                     mkdir -p "$tmpdir/$(dirname "$rel")"
                     cp "$rel" "$tmpdir/$rel"
                 done)
-
-            sync_ecs_page
-            sync_testing_page
-            sync_editor_page
-            sync_home_page
-
-            local stale=0
-            while IFS= read -r -d '' mdfile; do
-                local rel="${mdfile#$WIKI_DIR/}"
-                if [ -f "$tmpdir/$rel" ] && ! diff -q "$mdfile" "$tmpdir/$rel" > /dev/null 2>&1; then
-                    log_warning "  $rel is out of date"
-                    stale=$((stale + 1))
-                fi
-            done < <(find "$WIKI_DIR" -name '*.md' -print0)
-
-            # Restore originals
-            (cd "$tmpdir" && find . -name '*.md' -print0 | \
-                while IFS= read -r -d '' rel; do
-                    cp "$rel" "$WIKI_DIR/$rel"
-                done)
-            rm -rf "$tmpdir"
-
-            echo ""
-            if [ "$stale" -gt 0 ]; then
-                log_warning "$stale page(s) need updating. Run: docs/sync-wiki.sh sync"
-                exit 1
-            else
-                log_success "Wiki is up to date"
+            if ! SPARK_WIKI_DIR="$tmpdir" bash "$0" sync >/dev/null; then
+                log_warning "isolated wiki generation failed"
+                return 1
             fi
-            if [ "$WARNINGS" -gt 0 ]; then log_warning "$WARNINGS warning(s) — review above"; fi
+            if ! diff --recursive --brief --no-dereference "$WIKI_DIR" "$tmpdir"; then
+                log_warning "wiki generated content is stale"
+                return 1
+            fi
+            log_success "Wiki is byte-current; the tracked tree was not mutated"
             ;;
 
         status)
