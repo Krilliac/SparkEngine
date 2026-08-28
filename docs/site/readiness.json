@@ -455,6 +455,100 @@
     {"id": "G16", "name": "Compatibility and migration", "area": "compatibility", "state": "blocked", "blocking": true, "summary": "SDK ABI, module, save, asset, protocol, and editor-data compatibility policies and migration tests are incomplete.", "acceptanceCriteria": ["Version contracts exist for SDK, modules, assets, saves, scenes, protocols, and scripts", "N-1 upgrade and rollback fixtures pass", "Breaking changes fail with actionable diagnostics", "Release notes enumerate migrations"], "evidence": [{"type": "source", "path": "SparkSDK", "label": "Public SDK"}, {"type": "source", "path": "SparkEngine/Source/Engine/SaveSystem/SaveSystem.h", "label": "Serialization surface"}], "blockingWorkItemIds": ["SDK-240", "SAVE-230", "NET-100", "REL-200"]},
     {"id": "G17", "name": "Release rehearsal and sign-off", "area": "release", "state": "blocked", "blocking": true, "summary": "No tagged release has rehearsed every blocking gate, artifact, install, migration, rollback, documentation, and support step at one commit.", "acceptanceCriteria": ["A release candidate tag passes all blocking gates", "Artifacts are installed and upgraded on clean supported hosts", "Rollback and recovery drills pass", "Owners sign the evidence ledger before the final tag"], "evidence": [{"type": "workflow", "path": ".github/workflows/release.yml", "label": "Release workflow"}], "blockingWorkItemIds": ["REL-200"]}
   ],
+  "releaseProfiles": [
+    {
+      "id": "stable-v1",
+      "name": "Stable v1",
+      "state": "blocked",
+      "owner": "unassigned",
+      "summary": "The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as an installed single-player vertical slice. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface.",
+      "scope": [
+        {
+          "id": "host",
+          "label": "Host operating system",
+          "value": "Windows 11 x64 (Windows 10 x64 remains the declared minimum host)",
+          "capabilityIds": ["platform.windows"],
+          "evidence": [
+            {"type": "workflow", "path": ".github/workflows/build.yml", "job": "build-windows-vs2022", "label": "Pinned x64 Windows build and test lane"},
+            {"type": "document", "path": "wiki/platform/System-Requirements.md", "label": "Declared Windows minimum and recommended host"}
+          ]
+        },
+        {
+          "id": "toolchain",
+          "label": "Supported compiler line",
+          "value": "MSVC v143 (Visual Studio 17 2022 generator, architecture x64, toolset v143)",
+          "capabilityIds": ["platform.windows", "runtime.cpp"],
+          "evidence": [
+            {"type": "workflow", "path": ".github/workflows/build.yml", "job": "build-windows-vs2022", "label": "Configure step pins the Visual Studio 17 2022 generator with -A x64 -T v143"},
+            {"type": "source", "path": "CMakePresets.json", "label": "windows-debug, windows-release, windows-shipping, and windows-development presets pin toolset v143"}
+          ]
+        },
+        {
+          "id": "renderer",
+          "label": "Rendered path",
+          "value": "Direct3D 11",
+          "capabilityIds": ["rendering.d3d11"],
+          "evidence": [
+            {"type": "source", "path": "SparkEngine/Source/Graphics/RHI/D3D11", "label": "D3D11 backend"},
+            {"type": "document", "path": "wiki/graphics/RHI-Abstraction-Layer.md", "label": "RHI backend surface"}
+          ]
+        },
+        {
+          "id": "headless",
+          "label": "Headless path",
+          "value": "NullRHI, for GPU-less execution, automation, and dedicated-server processes",
+          "capabilityIds": ["runtime.nullrhi"],
+          "evidence": [
+            {"type": "source", "path": "SparkEngine/Source/Graphics/RHI/NullRHIDevice.h", "label": "NullRHI device"},
+            {"type": "test", "path": "Tests/TestNullRHIDevice.cpp", "label": "NullRHI tests"}
+          ]
+        },
+        {
+          "id": "gameplay",
+          "label": "Gameplay authoring language",
+          "value": "C++23 game modules built against the SDK module interface",
+          "capabilityIds": ["runtime.cpp"],
+          "evidence": [
+            {"type": "source", "path": "SparkSDK/Include/Spark/IModule.h", "label": "SDK module interface"},
+            {"type": "source", "path": "SparkEngine/Source/Core/ModuleManager.cpp", "label": "Runtime module manager"}
+          ]
+        },
+        {
+          "id": "product",
+          "label": "Delivered product shape",
+          "value": "One installed single-player vertical slice authored in SparkEditor, cooked, packaged, installed, and run without external services",
+          "capabilityIds": ["scope.singleplayer", "editor.authoring"],
+          "evidence": [
+            {"type": "document", "path": "wiki/gameplay-tools/Game-Packaging.md", "label": "Cook and package workflow"},
+            {"type": "source", "path": "SparkInstaller", "label": "Installer project"},
+            {"type": "source", "path": "GameModules/SparkGameFPS", "label": "Reference single-player slice, itself experimental and outside the profile"}
+          ]
+        }
+      ],
+      "includedCapabilityIds": ["platform.windows", "runtime.cpp", "runtime.nullrhi", "rendering.d3d11", "scope.singleplayer", "editor.authoring"],
+      "boundaries": {
+        "experimentalCapabilityIds": ["platform.linux", "platform.macos", "rendering.d3d12", "rendering.vulkan", "rendering.opengl", "rendering.metal", "networking.multiplayer", "scripting.angelscript", "scripting.visual", "modules.mmofps", "modules.fps", "modules.prototypes"],
+        "unsupportedCapabilityIds": ["platform.mobile", "platform.vr", "platform.console", "services.production"]
+      },
+      "requiredGateIds": ["G00", "G01", "G02", "G03", "G04", "G05", "G06", "G07", "G08", "G09", "G10", "G14", "G15", "G16", "G17"],
+      "excludedGates": [
+        {"gateId": "G11", "reason": "Scripting is outside the profile: AngelScript and visual scripting are declared experimental and no profile claim depends on them."},
+        {"gateId": "G12", "reason": "The profile is single-player and service-free, so production multiplayer transport and online services are out of scope and declared experimental or unsupported."},
+        {"gateId": "G13", "reason": "The profile ships no first-party game module; every reference module stays declared experimental and labeled a prototype, template, or reference slice."}
+      ],
+      "blockingWorkItemIds": ["ASSET-220", "BLD-100", "CI-100", "CI-110", "CI-120", "DOC-400", "DOC-410", "EDT-210", "ENG-220", "GOV-400", "HEAD-220", "INST-130", "LIFE-200", "MOD-290", "NET-100", "OPS-100", "OPS-110", "PERF-100", "PLT-200", "PLT-210", "PLT-220", "RDY-000", "RDY-010", "RDY-020", "REL-100", "REL-110", "REL-200", "RHI-210", "RHI-220", "RHI-225", "RHI-230", "RHI-240", "SAVE-230", "SDK-240", "SEC-100", "SEC-110", "SEC-120"],
+      "limitations": [
+        "The profile state is blocked: none of its fifteen required gates is passing at this commit.",
+        "Windows 11 client-host certification does not exist; the pinned build-windows-vs2022 lane runs on the hosted windows-2022 image, so host certification remains PLT-200 work rather than published evidence.",
+        "No Shipping-configuration artifact is signed, checksummed, attested, installed, upgraded, or rollback-tested at a single commit.",
+        "No first-party game is inside the profile; GameModules/SparkGameFPS is a reference single-player slice and stays experimental.",
+        "The editor-to-cook-to-package-to-install-to-run loop has no same-commit end-to-end certification.",
+        "MSVC v145 and Visual Studio 2026 are an advisory continue-on-error lane, not a supported compiler line in this profile."
+      ],
+      "documentation": ["README.md", "wiki/platform/System-Requirements.md", "wiki/graphics/RHI-Abstraction-Layer.md", "wiki/gameplay-tools/Game-Packaging.md"],
+      "publicClaimSurfaces": ["README.md", "docs/README.md", "docs/site/content.json"]
+    }
+  ],
   "execution": {
     "rules": [
       "Start only work items whose dependencies are done; parallelize every independent item in the same wave.",

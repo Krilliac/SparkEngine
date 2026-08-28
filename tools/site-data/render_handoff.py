@@ -168,6 +168,62 @@ def render_handoff(contract: dict[str, Any]) -> str:
             ]
         )
 
+    for profile in readiness.get("releaseProfiles", []):
+        boundaries = profile.get("boundaries") or {}
+        lines.extend(
+            [
+                "## Declared release profile — `" + profile["id"] + "`",
+                "",
+                f"**{profile['name']} — `{profile['state']}`.** Owner: {profile['owner']}.",
+                "",
+                profile["summary"],
+                "",
+                "| Dimension | Declared value | In-profile capabilities | Evidence |",
+                "|---|---|---|---|",
+            ]
+        )
+        for dimension in profile.get("scope", []):
+            capabilities_cell = ", ".join(f"`{value}`" for value in dimension["capabilityIds"]) or "—"
+            evidence_cell = ", ".join(
+                f"`{entry['path']}`" + (f" ({entry['job']})" if entry.get("job") else "")
+                for entry in dimension.get("evidence", [])
+            ) or "—"
+            lines.append(
+                f"| {inline(dimension['label'])} | {inline(dimension['value'])} | "
+                f"{capabilities_cell} | {inline(evidence_cell)} |"
+            )
+        lines.extend(
+            [
+                "",
+                "### Profile boundaries",
+                "",
+                "Every capability is classified exactly once. Nothing outside the profile may be presented as supported.",
+                "",
+                f"- In profile: {', '.join(f'`{value}`' for value in profile['includedCapabilityIds']) or 'none'}",
+                f"- Experimental: {', '.join(f'`{value}`' for value in boundaries.get('experimentalCapabilityIds', [])) or 'none'}",
+                f"- Unsupported: {', '.join(f'`{value}`' for value in boundaries.get('unsupportedCapabilityIds', [])) or 'none'}",
+                "",
+                "### Profile gates",
+                "",
+                f"- Required: {', '.join(f'`{value}`' for value in profile['requiredGateIds']) or 'none'}",
+                "- Explicitly excluded:",
+                *[
+                    f"  - `{entry['gateId']}` — {entry['reason']}"
+                    for entry in profile.get("excludedGates", [])
+                ],
+                "",
+                f"- Blocking work: {', '.join(f'`{value}`' for value in profile['blockingWorkItemIds']) or 'none'}",
+                "",
+                "### Profile limitations",
+                "",
+                *bullets(profile.get("limitations", [])),
+                "",
+                f"- Public surfaces this profile owns: "
+                f"{', '.join(f'`{value}`' for value in profile.get('publicClaimSurfaces', [])) or 'none declared'}",
+                "",
+            ]
+        )
+
     lines.extend(
         [
             "## Release-gate ledger",

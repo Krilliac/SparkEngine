@@ -137,6 +137,7 @@
       "eyebrow": "Release readiness without the fog",
       "title": "Know what the evidence proves.",
       "copy": "Implementation breadth, test coverage, supported use, and release readiness are separate dimensions. SparkEngine is source-usable today and remains blocked from a fully ready release until every global gate has current evidence.",
+      "releaseProfileId": "stable-v1",
       "groups": [
         {
           "tone": "primary",

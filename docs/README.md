@@ -14,7 +14,7 @@ The repository is the canonical documentation source. [GitHub Wiki](https://gith
 The website does not maintain a second copy of engine status, counts, learning paths, legal framing, or documentation. The controlling inputs are:
 
 - [`site/content.json`](site/content.json) — repository-owned public wording and navigation data.
-- [`site/readiness.json`](site/readiness.json) — capability dimensions, release gates, promotion rules, and execution waves.
+- [`site/readiness.json`](site/readiness.json) — capability dimensions, release gates, promotion rules, execution waves, and the declared release profiles. The only declared profile is `stable-v1` (Windows 11 x64, MSVC v143, D3D11, NullRHI, C++ gameplay modules, installed single-player vertical slice); every capability outside it is explicitly classified experimental or unsupported, and every public surface the profile owns must name it.
 - [`site/docs-catalog.json`](site/docs-catalog.json) — recursive documentation inclusion, classification, and routes.
 - [`readiness/work-items/`](readiness/work-items/) — dependency-ordered, code-session-ready implementation briefs.
 - [`readiness/ENGINE_READINESS_HANDOFF.md`](readiness/ENGINE_READINESS_HANDOFF.md) — generated complete handoff; do not edit it directly.

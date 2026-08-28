@@ -19,6 +19,7 @@ IMPLEMENTATION_STATES = {"absent", "stub", "partial", "functional", "complete"}
 VERIFICATION_STATES = {"none", "unit-tested", "integration-tested", "system-tested"}
 SUPPORT_STATES = {"unsupported", "experimental", "supported", "primary"}
 RELEASE_STATES = {"blocked", "candidate", "ready"}
+RELEASE_RANK = {"blocked": 0, "candidate": 1, "ready": 2}
 GATE_STATES = {"blocked", "at-risk", "passing", "not-evaluated"}
 WORK_STATES = {"open", "in-progress", "blocked", "done"}
 PRIORITIES = {"P0", "P1", "P2", "P3"}
@@ -241,6 +242,141 @@ class Validator:
             )
         return capability_ids, gate_ids
 
+    def validate_release_profiles(
+        self, item_ids: set[str], capability_ids: set[str], gate_ids: set[str]
+    ) -> set[str]:
+        readiness = self.contract["readiness"]
+        profiles = readiness.get("releaseProfiles", [])
+        self.require(bool(profiles), "releaseProfiles", "at least one release profile must be declared")
+        profile_ids = self.unique_ids(profiles, "releaseProfiles")
+        capability_by_id = {capability.get("id"): capability for capability in readiness.get("capabilities", [])}
+        gate_by_id = {gate.get("id"): gate for gate in readiness.get("gates", [])}
+        item_by_id = {item.get("id"): item for item in self.contract["workItems"]}
+
+        for profile in profiles:
+            identifier = profile.get("id", "?")
+            location = f"releaseProfiles.{identifier}"
+            self.require(profile.get("state") in RELEASE_STATES, location, "invalid release state")
+            self.require(bool(profile.get("owner")), location, "owner is required")
+            self.require(bool(profile.get("summary")), location, "summary is required")
+
+            # Every capability must be explicitly inside the profile, explicitly
+            # experimental, or explicitly unsupported. Silence is not a boundary.
+            included = list(profile.get("includedCapabilityIds", []))
+            boundaries = profile.get("boundaries") or {}
+            experimental = list(boundaries.get("experimentalCapabilityIds", []))
+            unsupported = list(boundaries.get("unsupportedCapabilityIds", []))
+            classified = [*included, *experimental, *unsupported]
+            for capability_id in classified:
+                self.require(capability_id in capability_ids, location, f"unknown capability {capability_id}")
+            self.require(len(classified) == len(set(classified)), location, "a capability is classified more than once")
+            unclassified = sorted(capability_ids.difference(classified))
+            self.require(not unclassified, location, f"unclassified capabilities: {unclassified}")
+
+            for capability_id, allowed in (
+                (included, {"primary", "supported"}),
+                (experimental, {"experimental"}),
+                (unsupported, {"unsupported"}),
+            ):
+                for value in capability_id:
+                    capability = capability_by_id.get(value)
+                    if capability is None:
+                        continue
+                    self.require(
+                        capability.get("support") in allowed,
+                        location,
+                        f"{value} support {capability.get('support')!r} contradicts its profile classification",
+                    )
+
+            scope = profile.get("scope", [])
+            self.unique_ids(scope, f"{location}.scope")
+            self.require(bool(scope), f"{location}.scope", "must declare at least one scope dimension")
+            for index, dimension in enumerate(scope):
+                scope_location = f"{location}.scope[{index}]"
+                self.require(bool(dimension.get("label")), scope_location, "label is required")
+                self.require(bool(dimension.get("value")), scope_location, "value is required")
+                references = dimension.get("capabilityIds", [])
+                self.require(bool(references), scope_location, "must name at least one capability")
+                for value in references:
+                    self.require(value in included, scope_location, f"{value} is not included in this profile")
+                evidence = dimension.get("evidence", [])
+                self.require(bool(evidence), scope_location, "must carry at least one evidence entry")
+                for evidence_index, entry in enumerate(evidence):
+                    self.require_path(entry.get("path"), f"{scope_location}.evidence[{evidence_index}]")
+
+            # A gate is either required by the profile or excluded with a reason.
+            # Dropping one silently is how a release profile gets weakened.
+            required_gates = list(profile.get("requiredGateIds", []))
+            excluded_gates = profile.get("excludedGates", [])
+            for gate_id in required_gates:
+                self.require(gate_id in gate_ids, location, f"unknown required gate {gate_id}")
+            for index, entry in enumerate(excluded_gates):
+                exclusion_location = f"{location}.excludedGates[{index}]"
+                self.require(entry.get("gateId") in gate_ids, exclusion_location, "unknown gate")
+                self.require(bool(entry.get("reason")), exclusion_location, "reason is required")
+            covered = [*required_gates, *(entry.get("gateId") for entry in excluded_gates)]
+            self.require(len(covered) == len(set(covered)), location, "a gate is both required and excluded")
+            uncovered = sorted(gate_ids.difference(covered))
+            self.require(not uncovered, location, f"gates neither required nor explicitly excluded: {uncovered}")
+
+            expected_gates: set[str] = set()
+            expected_items: set[str] = set()
+            for capability_id in included:
+                capability = capability_by_id.get(capability_id, {})
+                expected_gates.update(capability.get("requiredGateIds", []))
+                expected_items.update(capability.get("blockingWorkItemIds", []))
+            missing_gates = sorted(expected_gates.difference(required_gates))
+            self.require(not missing_gates, location, f"included capabilities need excluded gates: {missing_gates}")
+            for gate_id in required_gates:
+                expected_items.update(gate_by_id.get(gate_id, {}).get("blockingWorkItemIds", []))
+            declared_items = list(profile.get("blockingWorkItemIds", []))
+            for work_id in declared_items:
+                self.require(work_id in item_ids, location, f"unknown blocking work item {work_id}")
+            missing_items = sorted(expected_items.difference(declared_items))
+            self.require(not missing_items, location, f"blocking work items omit required work: {missing_items}")
+
+            state = profile.get("state")
+            weakest = min(
+                (RELEASE_RANK.get(capability_by_id[value].get("release"), 0) for value in included if value in capability_by_id),
+                default=0,
+            )
+            self.require(
+                RELEASE_RANK.get(state, 0) <= weakest,
+                location,
+                "profile state cannot exceed the weakest included capability release state",
+            )
+            if state == "ready":
+                nonpassing = [value for value in required_gates if gate_by_id.get(value, {}).get("state") != "passing"]
+                unfinished = [value for value in declared_items if item_by_id.get(value, {}).get("status") != "done"]
+                self.require(not nonpassing, location, f"ready profile has non-passing gates: {nonpassing}")
+                self.require(not unfinished, location, f"ready profile has unfinished blockers: {unfinished}")
+
+            for index, path in enumerate(profile.get("documentation", [])):
+                self.require_path(path, f"{location}.documentation[{index}]")
+
+            # Public support wording must point back at the profile that owns it.
+            surfaces = profile.get("publicClaimSurfaces", [])
+            self.require(bool(surfaces), location, "must declare the public surfaces it owns")
+            for index, path in enumerate(surfaces):
+                surface_location = f"{location}.publicClaimSurfaces[{index}]"
+                self.require_path(path, surface_location)
+                resolved = REPO_ROOT / str(path)
+                if not resolved.is_file():
+                    continue
+                self.require(
+                    identifier in resolved.read_text(encoding="utf-8", errors="replace"),
+                    surface_location,
+                    f"public surface does not reference release profile {identifier!r}",
+                )
+
+        if readiness.get("globalRelease", {}).get("state") == "ready":
+            self.require(
+                all(profile.get("state") == "ready" for profile in profiles),
+                "globalRelease.state",
+                "global ready requires every declared release profile to be ready",
+            )
+        return profile_ids
+
     def validate_execution(self, item_ids: set[str]) -> None:
         execution = self.contract["readiness"].get("execution", {})
         by_id = {item.get("id"): item for item in self.contract["workItems"]}
@@ -268,7 +404,7 @@ class Validator:
             self.require(not unfinished, "execution.firstUnblockedWorkItemId", f"has unfinished dependencies: {unfinished}")
             self.require(by_id[first].get("status") != "done", "execution.firstUnblockedWorkItemId", "item is already done")
 
-    def validate_content(self, capability_ids: set[str]) -> None:
+    def validate_content(self, capability_ids: set[str], profile_ids: set[str]) -> None:
         content = self.contract["content"]
         for key, value in content.get("links", {}).items():
             if key.endswith("Path"):
@@ -281,9 +417,42 @@ class Validator:
         )
         for metric_id in (value for group in metric_groups for value in group):
             self.require(metric_id in METRIC_IDS, "content.home metricIds", f"unknown metric {metric_id}")
-        for group in home.get("status", {}).get("groups", []):
-            for capability_id in group.get("capabilityIds", []):
+        status = home.get("status", {})
+        profile_id = status.get("releaseProfileId")
+        self.require(
+            profile_id in profile_ids,
+            "content.home.status.releaseProfileId",
+            f"unknown release profile {profile_id!r}",
+        )
+        profile = next(
+            (
+                candidate
+                for candidate in self.contract["readiness"].get("releaseProfiles", [])
+                if candidate.get("id") == profile_id
+            ),
+            {},
+        )
+        included = set(profile.get("includedCapabilityIds", []))
+        for group in status.get("groups", []):
+            group_ids = group.get("capabilityIds", [])
+            for capability_id in group_ids:
                 self.require(capability_id in capability_ids, "content.home.status.groups", f"unknown capability {capability_id}")
+            # The public "primary" lane is exactly the declared profile; anything
+            # else must not present an in-profile capability as second class.
+            if group.get("tone") == "primary":
+                outside = [value for value in group_ids if value not in included]
+                self.require(
+                    not outside,
+                    "content.home.status.groups",
+                    f"primary group claims capabilities outside {profile_id!r}: {outside}",
+                )
+            else:
+                inside = [value for value in group_ids if value in included]
+                self.require(
+                    not inside,
+                    "content.home.status.groups",
+                    f"group {group.get('tone')!r} demotes capabilities included in {profile_id!r}: {inside}",
+                )
         for capability_id in home.get("status", {}).get("platformCapabilityIds", []):
             self.require(capability_id in capability_ids, "content.home.status.platformCapabilityIds", f"unknown capability {capability_id}")
         for question in content.get("readiness", {}).get("questions", []):
@@ -370,9 +539,10 @@ class Validator:
         self.validate_schema_versions()
         self.validate_modules()
         item_ids = self.validate_work_items()
-        capability_ids, _ = self.validate_readiness(item_ids)
+        capability_ids, gate_ids = self.validate_readiness(item_ids)
+        profile_ids = self.validate_release_profiles(item_ids, capability_ids, gate_ids)
         self.validate_execution(item_ids)
-        self.validate_content(capability_ids)
+        self.validate_content(capability_ids, profile_ids)
         self.validate_docs_catalog()
         self.validate_legal()
         if assets:
@@ -545,7 +715,9 @@ def main() -> int:
         return 1
     print(
         f"Validated {len(contract['readiness']['capabilities'])} capabilities, "
-        f"{len(contract['readiness']['gates'])} gates, and {len(contract['workItems'])} work items."
+        f"{len(contract['readiness']['gates'])} gates, "
+        f"{len(contract['readiness'].get('releaseProfiles', []))} release profiles, "
+        f"and {len(contract['workItems'])} work items."
     )
     if args.published:
         print(f"Validated published bundle: {args.published.resolve()}")

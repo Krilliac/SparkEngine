@@ -129,14 +129,18 @@ These are direct 1904×1041 captures from the current SparkEngine runtime. Each 
 
 Six backends via a shared RHI abstraction:
 
-| Backend | Status |
+Support words below are the `stable-v1` release-profile classifications from
+[`docs/site/readiness.json`](docs/site/readiness.json); see
+[Platform support](#system-requirements).
+
+| Backend | Declared support |
 |---|---|
-| DirectX 11 | Stable — primary Windows backend |
-| DirectX 12 | Experimental — mesh shaders, DXR ray tracing, VRS |
-| Vulkan 1.4 | Experimental — Linux and Windows |
-| OpenGL 4.6 | Experimental — fallback on older hardware |
-| Metal | Experimental — macOS, in progress |
-| NullRHI | Stable — headless / software rendering via llvmpipe |
+| DirectX 11 | In `stable-v1` — primary Windows backend, release candidate |
+| DirectX 12 | Outside `stable-v1` — experimental; mesh shaders, DXR ray tracing, VRS |
+| Vulkan 1.4 | Outside `stable-v1` — experimental; Linux and Windows |
+| OpenGL 4.6 | Outside `stable-v1` — experimental; fallback on older hardware |
+| Metal | Outside `stable-v1` — experimental; macOS, in progress |
+| NullRHI | In `stable-v1` — supported headless / software rendering via llvmpipe |
 
 Render features include PBR materials, global illumination (DDGI, Adaptive Probe Volumes, hybrid ray tracing), forward/deferred/clustered render paths, cascaded shadow maps, GPU-driven rendering (compute frustum culling, indirect draw), virtual texturing, mesh shaders, DXR 1.1, FSR upscaling, and a 35-node Shader Graph. Post-processing covers bloom, HDR tone mapping (Reinhard/ACES/Uncharted 2), TAA, FXAA, MSAA, depth of field, motion blur, volumetric fog, lens flares, and light shafts.
 
@@ -267,15 +271,22 @@ cmake -B build -DENABLE_EDITOR=OFF -DENABLE_GRAPHICS=OFF
 
 Headless/server deployments use `NullRHIDevice` — no GPU required.
 
-**Platform support:**
+**Platform support.** SparkEngine declares exactly one release profile, `stable-v1`:
+Windows 11 x64, the MSVC v143 toolset line, Direct3D 11, NullRHI for headless
+execution, C++ gameplay modules, and an installed single-player vertical slice.
+The profile, its boundaries, its required gates, and its evidence are owned by
+[`docs/site/readiness.json`](docs/site/readiness.json) and rendered into the
+[engine-readiness handoff](docs/readiness/ENGINE_READINESS_HANDOFF.md). Every
+support word below is that contract's classification, not a separate claim.
+`stable-v1` is currently **blocked**: none of its required release gates passes yet.
 
-| Platform | Compiler | Backend | Status |
+| Platform | Compiler | Backend | Declared support |
 |---|---|---|---|
-| Windows 10+ | MSVC v143 (VS 2022) | DirectX 11 | Stable |
-| Windows | MSVC v144 (VS 2026) | DirectX 11/12 | Experimental |
-| Linux | GCC 13+ / Clang 17+ | Vulkan/OpenGL | Experimental, CI tested |
-| macOS | Apple Clang | Metal | Experimental |
-| Headless | Any | NullRHI | Stable |
+| Windows 10+ | MSVC v143 (VS 2022) | DirectX 11 | In `stable-v1` — primary, release candidate |
+| Windows | MSVC v144 (VS 2026) | DirectX 11/12 | Outside `stable-v1` — advisory CI lane only |
+| Linux | GCC 13+ / Clang 17+ | Vulkan/OpenGL | Outside `stable-v1` — experimental, CI tested |
+| macOS | Apple Clang | Metal | Outside `stable-v1` — experimental |
+| Headless | Any | NullRHI | In `stable-v1` — supported, release candidate |
 
 ---
 
