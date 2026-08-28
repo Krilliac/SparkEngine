@@ -2305,7 +2305,7 @@ ctest --test-dir /tmp/spark-sdk-consumer --output-on-failure --no-tests=error
 **Priority:** P1 · **Status:** in-progress · **Wave:** 2 · **Area:** performance · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. First slice delivered: versioned budget schema, fail-closed validator, result comparator, baseline approval governance, 78 adversarial tests (155 subtests). Budgets pending actual measurement on certified hardware.
+Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. Control-plane slices delivered: bounded duplicate-aware JSON ingestion, exact nested schemas, external exact-SHA binding, baseline approval governance on the comparator path, hardware-scoped completeness, explicit non-active semantics, a required CI governance job, and 137 Python test methods including all 21 reproduced second-audit defects. Budgets, certified baselines, representative scenes, golden images, soaks, and release jobs remain pending.
 
 **Dependency contract**
 
@@ -2324,12 +2324,14 @@ Profiler and benchmark scaffolding exists, but no representative regression budg
 - `perf-budgets/v1/baselines.json`
 - `tools/perf-budget/validate_budget.py`
 - `tools/perf-budget/compare_results.py`
+- `Tests/Tools/test_perf_budget_hardening.py`
 
 **Entry points**
 
 - `Tests/Benchmarks`
 - `Tests/GoldenImages`
 - `Tests/Tools/test_perf_budget.py`
+- `Tests/Tools/test_perf_budget_hardening.py`
 - `.github/workflows/build.yml`
 
 **Implementation scope**
@@ -2351,6 +2353,8 @@ Profiler and benchmark scaffolding exists, but no representative regression budg
 **Required commands**
 
 ```bash
+python3 -m unittest Tests.Tools.test_perf_budget Tests.Tools.test_perf_budget_adversarial Tests.Tools.test_perf_budget_hardening -v
+python3 tools/perf-budget/validate_budget.py perf-budgets/v1
 ctest --test-dir build/windows-shipping -L benchmark --output-on-failure --no-tests=error
 ctest --test-dir build/windows-shipping -L golden --output-on-failure --no-tests=error
 ctest --test-dir build/windows-shipping -L nullrhi-soak --output-on-failure --no-tests=error
@@ -2359,7 +2363,7 @@ ctest --test-dir build/windows-shipping -L nullrhi-soak --output-on-failure --no
 **Automated evidence**
 
 - Test selectors: `Benchmark_*`, `GoldenImage_*`, `Soak_*`
-- Required CI jobs: `performance-regression`, `golden-d3d11`, `soak-scheduled`
+- Required CI jobs: `performance-budget-governance`, `performance-regression`, `golden-d3d11`, `soak-scheduled`
 - Performance / reliability budgets:
   - The versioned budgets produced by this work item are themselves the acceptance surface
 

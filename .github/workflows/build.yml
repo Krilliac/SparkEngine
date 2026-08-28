@@ -2809,6 +2809,31 @@ jobs:
           exit "$failed"
 
   # ===========================================================================
+  # PERF-100 budget governance — direct, blocking, exact-schema coverage.
+  # This workflow has no path filter, so budget definitions, validator code,
+  # comparator code, and their tests all reach this required job.
+  # ===========================================================================
+  performance-budget-governance:
+    name: "Performance budget governance"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run performance budget governance tests
+        run: >-
+          python3 -m unittest
+          Tests.Tools.test_perf_budget
+          Tests.Tools.test_perf_budget_adversarial
+          Tests.Tools.test_perf_budget_hardening
+          -v
+
+      - name: Validate committed performance budget suite
+        run: python3 tools/perf-budget/validate_budget.py perf-budgets/v1
+
+  # ===========================================================================
   # Coverage PR Comment — privileged, data-only reporter
   # Downloads one bounded artifact from this workflow run. It never checks out
   # or executes pull-request-controlled repository content.
@@ -3112,6 +3137,7 @@ jobs:
     needs:
       - fuzz-policy
       - validate-ci-tools
+      - performance-budget-governance
       - check-format
       - validate-prompts
       - validate-ops100
@@ -3365,6 +3391,7 @@ jobs:
     needs:
       - fuzz-policy
       - validate-ci-tools
+      - performance-budget-governance
       - check-format
       - validate-prompts
       - validate-ops100

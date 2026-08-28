@@ -41,10 +41,18 @@ from validate_budget import (  # noqa: E402
     BASELINE_ENTRY_REQUIRED,
     RESULT_MEASUREMENT_REQUIRED,
 )
-from compare_results import compare, ComparisonReport  # noqa: E402
+from compare_results import compare as compare_results, ComparisonReport  # noqa: E402
 
 
 BUDGET_DIR = REPO_ROOT / "perf-budgets" / "v1"
+EXPECTED_RESULT_SHA = "c" * 40
+
+
+def compare(budget_dir: Path, result_data: Any) -> ComparisonReport:
+    """Exercise the comparator with an independently supplied workflow SHA."""
+    return compare_results(
+        budget_dir, result_data, expected_sha=EXPECTED_RESULT_SHA,
+    )
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────
@@ -146,7 +154,7 @@ def _make_baselines(metric_id: str = "test.frame_time.p50",
 
 def _make_result(hw_id: str = "test-row-1") -> dict[str, Any]:
     return {
-        "commitSha": "ccccccc",
+        "commitSha": EXPECTED_RESULT_SHA,
         "timestamp": "2026-08-28T02:00:00Z",
         "hardwareRowId": hw_id,
         "measurements": [
@@ -644,7 +652,7 @@ class TestComparator(unittest.TestCase):
             "baselineVersion": "v1",
             "approvalPolicy": {
                 "description": "test",
-                "requiredFields": [],
+                "requiredFields": ["approvedBy", "approvedAt", "approvalCommit"],
                 "selfApprovalAllowed": False,
             },
             "baselines": [],
@@ -729,7 +737,9 @@ class TestComparator(unittest.TestCase):
             self._write_suite(d, hw, _make_budget())
             result = _make_result()
             report = compare(d, result)
-            self.assertTrue(any("not certified" in e for e in report.errors))
+            self.assertTrue(report.passed)
+            self.assertFalse(report.authoritative)
+            self.assertTrue(any("not certified" in e for e in report.advisories))
 
     def test_higher_is_better_direction(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -778,9 +788,9 @@ class TestComparator(unittest.TestCase):
             self._write_suite(d, _make_hardware(), _make_budget())
             result = _make_result()
             report = compare(d, result)
-            self.assertEqual(report.commit_sha, "ccccccc")
+            self.assertEqual(report.commit_sha, EXPECTED_RESULT_SHA)
             for v in report.verdicts:
-                self.assertEqual(v.commit_sha, "ccccccc")
+                self.assertEqual(v.commit_sha, EXPECTED_RESULT_SHA)
 
     def test_hardware_row_in_verdict(self) -> None:
         with tempfile.TemporaryDirectory() as td:

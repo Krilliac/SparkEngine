@@ -863,7 +863,7 @@
       "wave": 2,
       "area": "performance",
       "owner": "unassigned",
-      "rationale": "Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. First slice delivered: versioned budget schema, fail-closed validator, result comparator, baseline approval governance, 78 adversarial tests (155 subtests). Budgets pending actual measurement on certified hardware.",
+      "rationale": "Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. Control-plane slices delivered: bounded duplicate-aware JSON ingestion, exact nested schemas, external exact-SHA binding, baseline approval governance on the comparator path, hardware-scoped completeness, explicit non-active semantics, a required CI governance job, and 137 Python test methods including all 21 reproduced second-audit defects. Budgets, certified baselines, representative scenes, golden images, soaks, and release jobs remain pending.",
       "dependencies": [
         "CI-110",
         "BLD-100",
@@ -884,12 +884,14 @@
         "perf-budgets/v1/hardware.json",
         "perf-budgets/v1/baselines.json",
         "tools/perf-budget/validate_budget.py",
-        "tools/perf-budget/compare_results.py"
+        "tools/perf-budget/compare_results.py",
+        "Tests/Tools/test_perf_budget_hardening.py"
       ],
       "entryPoints": [
         "Tests/Benchmarks",
         "Tests/GoldenImages",
         "Tests/Tools/test_perf_budget.py",
+        "Tests/Tools/test_perf_budget_hardening.py",
         ".github/workflows/build.yml"
       ],
       "implementationScope": [
@@ -907,6 +909,8 @@
         "Results attach to exact commit and certified hardware row"
       ],
       "commands": [
+        "python3 -m unittest Tests.Tools.test_perf_budget Tests.Tools.test_perf_budget_adversarial Tests.Tools.test_perf_budget_hardening -v",
+        "python3 tools/perf-budget/validate_budget.py perf-budgets/v1",
         "ctest --test-dir build/windows-shipping -L benchmark --output-on-failure --no-tests=error",
         "ctest --test-dir build/windows-shipping -L golden --output-on-failure --no-tests=error",
         "ctest --test-dir build/windows-shipping -L nullrhi-soak --output-on-failure --no-tests=error"
@@ -917,6 +921,7 @@
         "Soak_*"
       ],
       "requiredCiJobs": [
+        "performance-budget-governance",
         "performance-regression",
         "golden-d3d11",
         "soak-scheduled"

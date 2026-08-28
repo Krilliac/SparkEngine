@@ -29,7 +29,21 @@ from validate_budget import (
     validate_result,
     VALID_UNITS,
 )
-from compare_results import compare, report_to_dict, ComparisonReport
+from compare_results import (
+    compare as compare_results,
+    report_to_dict,
+    ComparisonReport,
+)
+
+
+EXPECTED_RESULT_SHA = "c" * 40
+
+
+def compare(budget_dir: Path, result_data: Any) -> ComparisonReport:
+    """Exercise the comparator with an independently supplied workflow SHA."""
+    return compare_results(
+        budget_dir, result_data, expected_sha=EXPECTED_RESULT_SHA,
+    )
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────
@@ -127,7 +141,7 @@ def _make_baselines(metric_id: str = "test.frame_time.p50",
 
 def _make_result(hw_id: str = "test-row-1") -> dict[str, Any]:
     return {
-        "commitSha": "ccccccc",
+        "commitSha": EXPECTED_RESULT_SHA,
         "timestamp": "2026-08-28T02:00:00Z",
         "hardwareRowId": hw_id,
         "measurements": [
@@ -163,7 +177,7 @@ def _write_suite(tmpdir: Path, hw: dict, budget: dict) -> Path:
         "baselineVersion": "v1",
         "approvalPolicy": {
             "description": "test",
-            "requiredFields": [],
+            "requiredFields": ["approvedBy", "approvedAt", "approvalCommit"],
             "selfApprovalAllowed": False,
         },
         "baselines": [],
