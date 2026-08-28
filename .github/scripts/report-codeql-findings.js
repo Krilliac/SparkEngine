@@ -69,7 +69,11 @@ function parseExpectedLanguages() {
 }
 
 function responseItems(response, field) {
-    const value = field ? response?.data?.[field] : response?.data;
+    // Octokit's paginate iterator normalizes wrapped list responses such as
+    // { total_count, artifacts } to a root response.data array. Direct REST
+    // calls retain the named wrapper, so accept only those two exact shapes.
+    const value = Array.isArray(response?.data) ? response.data :
+        field ? response?.data?.[field] : response?.data;
     if (!Array.isArray(value)) throw new Error(`API response field '${field || '<root>'}' is not an array`);
     return value;
 }

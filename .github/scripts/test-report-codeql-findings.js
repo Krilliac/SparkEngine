@@ -121,7 +121,8 @@ function harness(data) {
         failed: [], info: [], warnings: [], outputs: {}, jobSummary: '',
         createdComments: [], updatedComments: [], listCommentsCalls: 0,
         workflowRunCalls: 0, artifactListCalls: 0,
-        getContentCalls: [], pullGetCalls: [], pullListCalls: [], commentRequests: []
+        getContentCalls: [], pullGetCalls: [], pullListCalls: [], commentRequests: [],
+        normalizedPaginateFields: []
     };
     const github = {
         rest: {
@@ -144,10 +145,16 @@ function harness(data) {
                 },
                 async listWorkflowRunArtifacts(request) {
                     observed.artifactListCalls += 1;
-                    return { data: { artifacts: clone(state.artifacts) }, headers: {} };
+                    return {
+                        data: { total_count: state.artifacts.length, artifacts: clone(state.artifacts) },
+                        headers: {}
+                    };
                 },
                 async listWorkflowRuns() {
-                    return { data: { workflow_runs: clone(state.workflowRuns) }, headers: {} };
+                    return {
+                        data: { total_count: state.workflowRuns.length, workflow_runs: clone(state.workflowRuns) },
+                        headers: {}
+                    };
                 }
             },
             pulls: {
@@ -182,6 +189,21 @@ function harness(data) {
             }
         }
     };
+    if (state.useNormalizedPaginateIterator) {
+        github.paginate = {
+            async *iterator(method, request) {
+                const response = await method(request);
+                if (Array.isArray(response.data)) {
+                    yield response;
+                    return;
+                }
+                const field = Object.keys(response.data || {})
+                    .find(key => Array.isArray(response.data[key]));
+                if (field) observed.normalizedPaginateFields.push(field);
+                yield field ? { ...response, data: clone(response.data[field]) } : response;
+            }
+        };
+    }
     const summary = {
         addRaw(body) { observed.jobSummary = body; return this; },
         async write() {}
@@ -486,6 +508,16 @@ async function main() {
         const rejectedExcessiveInventory = await runPreflight(root, excessiveInventory);
         assert.strictEqual(rejectedExcessiveInventory.observed.outputs.authorized, 'false');
         assert(rejectedExcessiveInventory.observed.failed.some(message => message.includes('100-item limit')));
+
+        const normalizedPaginationData = fixture();
+        normalizedPaginationData.useNormalizedPaginateIterator = true;
+        const normalizedPagination = await preflightAndReport(
+            root, normalizedPaginationData, normalizedPaginationData, writeArtifacts(root));
+        assert.strictEqual(normalizedPagination.summary.status, 'complete',
+            'Octokit-normalized root arrays must be accepted for wrapped paginated lists');
+        assert.deepStrictEqual(normalizedPagination.runtime.observed.normalizedPaginateFields,
+            ['artifacts', 'workflow_runs'],
+            'the live iterator shape must cover artifact and same-commit run pagination');
 
         const missingPullReferences = fixture();
         missingPullReferences.event.workflow_run.pull_requests = [];
