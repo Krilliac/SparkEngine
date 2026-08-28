@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import json
 import re
 import sys
 import unittest
@@ -18,6 +19,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "site-data"))
 
+import common as site_data_common  # noqa: E402
 from common import SiteDataError, load_contract  # noqa: E402
 import render_handoff  # noqa: E402
 import validate as site_data_validate  # noqa: E402
@@ -615,6 +617,169 @@ class GenerationAndCiTests(ContractTestCase):
         selectors = set(self.items_of(self.mutable)["RDY-000"]["testSelectors"])
         self.assertEqual(selectors, implemented)
 
+
+
+class BuildMatrixEvidenceTests(ContractTestCase):
+    """The CI-120 evidence pair must fail closed on absence and fabrication.
+
+    Every rejection below used to pass: site-data validation never opened these
+    two files, so deleted, truncated, and hand-written evidence all validated
+    exactly as well as real evidence.
+    """
+
+    INVENTORY = {
+        "schemaVersion": 3,
+        "stableV1Products": [],
+        "configuredTargetEvidence": [],
+    }
+    REPORT = {
+        "schemaVersion": 3,
+        "state": "blocked",
+        "errorCount": 1,
+        "warningCount": 0,
+        "findings": [{"category": "c", "severity": "error", "message": "m"}],
+    }
+
+    def errors(self, inventory=None, report=None, profile=None):
+        return site_data_validate.build_matrix_evidence_errors(
+            copy.deepcopy(self.INVENTORY if inventory is None else inventory),
+            copy.deepcopy(self.REPORT if report is None else report),
+            copy.deepcopy(profile),
+        )
+
+    def assert_error(self, fragment: str, **kwargs) -> None:
+        messages = " ".join(self.errors(**kwargs))
+        self.assertIn(fragment, messages)
+
+    def test_real_repository_evidence_passes(self) -> None:
+        # The committed evidence pair must satisfy every rejection above.
+        profile = self.profile_of(copy.deepcopy(self.contract))
+        inventory = site_data_common.load_json(
+            REPO_ROOT / "docs" / "readiness" / "ci120-build-matrix-inventory.json"
+        )
+        report = site_data_common.load_json(
+            REPO_ROOT / "docs" / "readiness" / "ci120-parity-findings.json"
+        )
+        self.assertEqual(
+            site_data_validate.build_matrix_evidence_errors(inventory, report, profile), []
+        )
+
+    def test_stale_schema_version_is_rejected(self) -> None:
+        self.assert_error("inventory schemaVersion must be 3", inventory={**self.INVENTORY, "schemaVersion": 2})
+        self.assert_error("findings schemaVersion must be 3", report={**self.REPORT, "schemaVersion": 2})
+
+    def test_non_object_evidence_is_rejected(self) -> None:
+        self.assert_error("must contain objects", inventory=[])
+
+    def test_internal_error_state_is_not_an_accepted_report(self) -> None:
+        self.assert_error(
+            "state must be blocked or clean",
+            report={**self.REPORT, "state": "internal-error"},
+        )
+
+    def test_declared_counts_must_match_the_findings_list(self) -> None:
+        self.assert_error(
+            "do not match the findings list",
+            report={**self.REPORT, "errorCount": 0, "warningCount": 0},
+        )
+
+    def test_blocked_state_cannot_be_relabelled_clean(self) -> None:
+        self.assert_error(
+            "state must be blocked exactly when a blocking finding is present",
+            report={**self.REPORT, "state": "clean", "errorCount": 0},
+        )
+
+    def test_truncated_findings_list_is_rejected(self) -> None:
+        self.assert_error("findings must be a list", report={**self.REPORT, "findings": None})
+
+    def test_malformed_finding_entry_is_rejected(self) -> None:
+        self.assert_error(
+            "needs a category, severity, and message",
+            report={**self.REPORT, "findings": ["oops"], "errorCount": 0},
+        )
+
+    def test_product_drift_from_the_profile_is_rejected(self) -> None:
+        profile = self.profile_of(copy.deepcopy(self.contract))
+        self.assert_error("have drifted from the canonical stable-v1 profile", profile=profile)
+
+    def test_missing_configuration_evidence_record_is_rejected(self) -> None:
+        profile = self.profile_of(copy.deepcopy(self.contract))
+        inventory = {
+            "schemaVersion": 3,
+            "stableV1Products": profile["buildProducts"],
+            "configuredTargetEvidence": [{"profile": "windows-shipping", "status": "absent"}],
+        }
+        self.assert_error(
+            "must name every canonical build configuration exactly once",
+            inventory=inventory,
+            profile=profile,
+        )
+
+    def test_clean_report_may_not_omit_a_supported_product(self) -> None:
+        profile = self.profile_of(copy.deepcopy(self.contract))
+        # Flip one product to `shared`: it stays supported surface, so a clean
+        # report that never evidenced its profile must still be refused.
+        profile["buildProducts"][0]["applicability"] = "shared"
+        inventory = {
+            "schemaVersion": 3,
+            "stableV1Products": profile["buildProducts"],
+            "configuredTargetEvidence": [
+                {"profile": entry["id"], "status": "absent"} for entry in profile["buildConfigurations"]
+            ],
+        }
+        clean = {
+            "schemaVersion": 3, "state": "clean", "errorCount": 0, "warningCount": 0, "findings": [],
+        }
+        messages = " ".join(self.errors(inventory=inventory, report=clean, profile=profile))
+        self.assertIn("clean CI-120 report omits configured evidence for supported product", messages)
+        self.assertIn("(shared)", messages)
+
+    def test_clean_report_with_full_evidence_is_accepted(self) -> None:
+        profile = self.profile_of(copy.deepcopy(self.contract))
+        inventory = {
+            "schemaVersion": 3,
+            "stableV1Products": profile["buildProducts"],
+            "configuredTargetEvidence": [
+                {"profile": entry["id"], "status": "available"} for entry in profile["buildConfigurations"]
+            ],
+        }
+        clean = {
+            "schemaVersion": 3, "state": "clean", "errorCount": 0, "warningCount": 0, "findings": [],
+        }
+        self.assertEqual(self.errors(inventory=inventory, report=clean, profile=profile), [])
+
+
+class DuplicateJsonKeyTests(unittest.TestCase):
+    """A repeated JSON key silently keeps the last value; refuse it.
+
+    Exercised through the decoder hook rather than a temporary file, so this
+    suite keeps its no-file-mutation guarantee.
+    """
+
+    @staticmethod
+    def parse(text: str) -> Any:
+        return json.loads(text, object_pairs_hook=site_data_common._reject_duplicate_keys)
+
+    def test_duplicate_key_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "duplicate JSON key 'a'"):
+            self.parse('{"a": 1, "a": 2}')
+
+    def test_duplicate_key_nested_in_a_list_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "duplicate JSON key 'severity'"):
+            self.parse('{"findings": [{"severity": "warning", "severity": "error"}]}')
+
+    def test_distinct_keys_still_load(self) -> None:
+        self.assertEqual(self.parse('{"a": 1, "b": 2}'), {"a": 1, "b": 2})
+        self.assertEqual(self.parse('{"a": {"b": 1}, "c": [1, 2]}'), {"a": {"b": 1}, "c": [1, 2]})
+
+    def test_contract_files_contain_no_duplicate_keys(self) -> None:
+        for name in (
+            "docs/site/readiness.json",
+            "docs/readiness/ci120-build-matrix-inventory.json",
+            "docs/readiness/ci120-parity-findings.json",
+        ):
+            with self.subTest(name=name):
+                self.parse((REPO_ROOT / name).read_text(encoding="utf-8"))
 
 if __name__ == "__main__":
     unittest.main()

@@ -59,15 +59,31 @@ def run_git(*arguments: str) -> str:
     return result.stdout.strip()
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """A repeated JSON key silently keeps the last value.
+
+    A reviewer reading the diff sees the first one, so a duplicate is a way to
+    make a contract say one thing and validate another. Refuse it outright.
+    """
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key {key!r}")
+        result[key] = value
+    return result
+
+
 def load_json(path: Path) -> Any:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_reject_duplicate_keys)
     except FileNotFoundError as error:
         raise SiteDataError(f"Required contract file does not exist: {relative_path(path)}") from error
     except json.JSONDecodeError as error:
         raise SiteDataError(
             f"Invalid JSON in {relative_path(path)}:{error.lineno}:{error.colno}: {error.msg}"
         ) from error
+    except ValueError as error:
+        raise SiteDataError(f"Invalid JSON in {relative_path(path)}: {error}") from error
 
 
 def load_contract() -> dict[str, Any]:

@@ -50,6 +50,45 @@ def _exception_map(entries: Iterable[dict[str, Any]]) -> dict[str, dict[str, Any
     return {str(entry.get("name")): entry for entry in entries}
 
 
+def _active_options(options: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Options that are part of *this* context's configuration surface.
+
+    An option whose only declaration sits in a branch the Windows/MSVC context
+    never takes is not a Windows configuration knob at all, so comparing it
+    against SparkBuild manufactures a blocker out of a option that does not exist
+    here. Options the evaluator could not decide are handled separately and
+    loudly by ``check_option_resolution``.
+    """
+    return [entry for entry in options if entry.get("status", "active") == "active"]
+
+
+def check_option_resolution(options: Iterable[dict[str, Any]]) -> list[Finding]:
+    """Undecidable or doubly-active option declarations must be raised, not guessed."""
+    findings: list[Finding] = []
+    for entry in options:
+        status = entry.get("status", "active")
+        if status == "indeterminate":
+            findings.append(
+                Finding(
+                    "option-condition-indeterminate",
+                    "error",
+                    f"CMake option '{entry['name']}' sits behind a condition this inventory cannot decide",
+                    f"Declared in {', '.join(entry.get('declaredIn', []))}. "
+                    "An undecidable guard is reported rather than assumed active or inactive.",
+                )
+            )
+        elif status == "ambiguous":
+            findings.append(
+                Finding(
+                    "option-ambiguous-declaration",
+                    "error",
+                    f"CMake option '{entry['name']}' has {entry.get('activeDeclarationCount')} simultaneously active declarations",
+                    f"Declared in {', '.join(entry.get('declaredIn', []))}.",
+                )
+            )
+    return findings
+
+
 def _option_severity(name: str, entries: Iterable[dict[str, Any]]) -> tuple[str, str]:
     exception = _exception_map(entries).get(name)
     if exception and exception.get("applicability") in {"outside", "shared"}:
@@ -60,7 +99,16 @@ def _option_severity(name: str, entries: Iterable[dict[str, Any]]) -> tuple[str,
 
 
 def _product_severity(product: dict[str, Any]) -> str:
-    return "error" if product.get("applicability") == "required" else "warning"
+    """Canonical products block whether they are required or shared.
+
+    The readiness support contract sets a profile's blocker set to its
+    required *and* shared work; a shared build product is supported surface, not
+    an optional extra. Downgrading a missing shared product to a warning would
+    let a report say "clean" while omitting a product the profile ships.
+    ``outside`` is the only non-blocking classification, and no product may
+    declare it.
+    """
+    return "warning" if product.get("applicability") == "outside" else "error"
 
 
 def _as_bool(value: Any) -> bool | None:
@@ -192,16 +240,108 @@ def check_preset_workflow_parity(
 
 
 def check_preset_binary_dirs(presets: dict[str, Any]) -> list[Finding]:
-    build_profiles = {entry["configurePreset"] for entry in presets.get("buildPresets", [])}
-    return [
-        Finding(
-            "orphan-configure-preset",
-            "warning",
-            f"Configure preset '{entry['name']}' has no corresponding build preset",
-        )
-        for entry in presets.get("configurePresets", [])
-        if not entry.get("hidden") and entry["name"] not in build_profiles
-    ]
+    """Every non-hidden configure preset needs a build preset, a resolvable
+    binaryDir, and a build directory it does not share with another preset."""
+    findings: list[Finding] = []
+    build_profiles = {
+        entry["configurePreset"] for entry in presets.get("buildPresets", []) if entry.get("configurePreset")
+    }
+    for entry in presets.get("configurePresets", []):
+        if entry.get("hidden"):
+            continue
+        if entry["name"] not in build_profiles:
+            findings.append(
+                Finding(
+                    "orphan-configure-preset",
+                    "warning",
+                    f"Configure preset '{entry['name']}' has no corresponding build preset",
+                )
+            )
+
+    directories: dict[str, list[str]] = defaultdict(list)
+    for entry in presets.get("configurePresets", []):
+        if entry.get("hidden"):
+            continue
+        try:
+            resolved = inventory_tool.resolve_configure_preset(presets, entry["name"])
+        except inventory_tool.InventoryError as error:
+            findings.append(
+                Finding(
+                    "preset-unresolvable",
+                    "error",
+                    f"Configure preset '{entry['name']}' cannot be resolved",
+                    str(error),
+                )
+            )
+            continue
+        binary_dir = resolved.get("resolvedBinaryDir")
+        if not binary_dir:
+            findings.append(
+                Finding(
+                    "preset-missing-binary-dir",
+                    "error",
+                    f"Configure preset '{entry['name']}' resolves to no binaryDir",
+                    "Codemodel evidence is addressed by build directory; without one it cannot be bound.",
+                )
+            )
+            continue
+        directories[binary_dir].append(entry["name"])
+    for directory, owners in sorted(directories.items()):
+        if len(owners) > 1:
+            findings.append(
+                Finding(
+                    "preset-binary-dir-collision",
+                    "error",
+                    f"Configure presets {sorted(owners)} all resolve to build directory '{directory}'",
+                    "Two configurations sharing one build directory make codemodel evidence ambiguous.",
+                )
+            )
+    return findings
+
+
+def check_dependent_preset_linkage(presets: dict[str, Any]) -> list[Finding]:
+    """Build and test presets must bind to a real, usable configure preset.
+
+    Name existence is not linkage: a build preset pointing at a missing preset,
+    or at a hidden one that need not carry a binaryDir, cannot actually build.
+    """
+    findings: list[Finding] = []
+    configure_by_name = {entry["name"]: entry for entry in presets.get("configurePresets", [])}
+    for kind in ("buildPresets", "testPresets", "packagePresets"):
+        for entry in presets.get(kind, []):
+            try:
+                resolved = inventory_tool.resolve_dependent_preset(presets, kind, entry["name"])
+            except inventory_tool.InventoryError as error:
+                findings.append(
+                    Finding(
+                        "dependent-preset-unresolvable",
+                        "error",
+                        f"{kind[:-7]} preset '{entry['name']}' cannot be resolved",
+                        str(error),
+                    )
+                )
+                continue
+            target = resolved["configurePreset"]
+            configure = configure_by_name.get(target)
+            if configure is None:
+                findings.append(
+                    Finding(
+                        "dependent-preset-phantom-configure",
+                        "error",
+                        f"{kind[:-7]} preset '{entry['name']}' names configure preset '{target}', which does not exist",
+                    )
+                )
+                continue
+            if configure.get("hidden"):
+                findings.append(
+                    Finding(
+                        "dependent-preset-hidden-configure",
+                        "error",
+                        f"{kind[:-7]} preset '{entry['name']}' binds to hidden configure preset '{target}'",
+                        "A hidden preset need not define a binaryDir, so the build directory is not guaranteed.",
+                    )
+                )
+    return findings
 
 
 def check_shipping_preset_options(
@@ -256,7 +396,11 @@ def check_profile_presets(data: dict[str, Any]) -> list[Finding]:
 
 
 def _effective_option_map(data: dict[str, Any]) -> dict[str, Any]:
-    return {entry["name"]: entry.get("default") for entry in data.get("cmakeOptions", [])}
+    return {
+        entry["name"]: entry.get("default")
+        for entry in data.get("cmakeOptions", [])
+        if entry.get("status", "active") == "active"
+    }
 
 
 def _profile_config_map(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -316,7 +460,7 @@ def check_stable_v1_targets(
     targets: list[dict[str, Any]], products: list[dict[str, Any]]
 ) -> list[Finding]:
     findings: list[Finding] = []
-    known = {entry["target"]: entry for entry in targets}
+    known = {entry["target"]: entry for entry in targets if entry.get("buildable", True)}
     for product in products:
         target = product["target"]
         severity = _product_severity(product)
@@ -340,6 +484,32 @@ def check_stable_v1_targets(
                     f"Build profile: {product['buildProfile']}.",
                 )
             )
+    return findings
+
+
+def check_target_declaration_resolution(declarations: list[dict[str, Any]]) -> list[Finding]:
+    """A target name this scanner cannot resolve must be raised, never dropped.
+
+    Silently skipping ``add_library(${TARGET_NAME} ...)`` makes an unresolvable
+    declaration indistinguishable from no declaration at all.
+    """
+    findings: list[Finding] = []
+    unresolved = sorted(
+        {
+            (entry["target"], entry["file"], entry["line"])
+            for entry in declarations
+            if not entry.get("resolved", True) and entry.get("origin") != "non-build"
+        }
+    )
+    for target, file, line in unresolved:
+        findings.append(
+            Finding(
+                "target-name-unresolved",
+                "warning" if "${" in target else "error",
+                f"Target name '{target}' at {file}:{line} cannot be resolved statically",
+                "Recorded as an explicit unknown so it is not mistaken for an absent declaration.",
+            )
+        )
     return findings
 
 
@@ -415,7 +585,7 @@ def check_configured_targets(data: dict[str, Any]) -> list[Finding]:
             continue
         evidence = evidence_group[0]
         products = products_by_profile.get(identifier, [])
-        severity = "error" if any(item.get("applicability") == "required" for item in products) else "warning"
+        severity = "warning" if all(item.get("applicability") == "outside" for item in products) else "error"
         if evidence.get("status") == "absent":
             findings.append(
                 Finding(
@@ -522,17 +692,328 @@ def check_workflow_adoption(data: dict[str, Any]) -> list[Finding]:
     return findings
 
 
+def _canonical_configs(data: dict[str, Any]) -> list[dict[str, Any]]:
+    return data["profile"].get("buildConfigurations", [])
+
+
+def _required_runner_os(profile: dict[str, Any]) -> set[str]:
+    """Runner OS classes the profile's own supportedHosts admit.
+
+    stable-v1 supports Windows only, so a Linux lane building the same
+    configuration name is not evidence for it however green it is.
+    """
+    classes: set[str] = set()
+    for host in profile.get("supportedHosts", []):
+        lowered = str(host).lower()
+        if "windows" in lowered:
+            classes.add("windows")
+        elif "macos" in lowered or "darwin" in lowered:
+            classes.add("macos")
+        elif "linux" in lowered or "ubuntu" in lowered:
+            classes.add("linux")
+    return classes
+
+
+def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
+    """Bind the workflow facts that decide whether CI actually proves anything.
+
+    A configure command line is identical whether it runs on Windows or Ubuntu,
+    for one configuration or two, in a required job or one that is
+    ``if: false``, ``continue-on-error``, or filtered out by ``paths-ignore``.
+    These checks make each of those a finding rather than a silence.
+    """
+    findings: list[Finding] = []
+    workflow = data.get("workflow") or {}
+
+    for event in workflow.get("events", []):
+        if event.get("pathFiltered") and event.get("event") in {"push", "pull_request"}:
+            filters = {
+                key: value
+                for key, value in (event.get("filters") or {}).items()
+                if key in {"paths", "paths-ignore"}
+            }
+            findings.append(
+                Finding(
+                    "workflow-path-filter",
+                    "error",
+                    f"Build workflow '{event['event']}' trigger is path-filtered",
+                    f"{filters}. A path filter can skip the entire build for a change set, "
+                    "so a green required check would prove nothing about it.",
+                )
+            )
+
+    for entry in workflow.get("unresolvedInvocations", []):
+        findings.append(
+            Finding(
+                "workflow-unresolved-invocation",
+                "error",
+                f"{entry.get('job')}/{entry.get('step')}: {entry.get('reason')}",
+                f"command: {entry.get('command') or entry.get('commandWord')}",
+            )
+        )
+
+    configures = workflow.get("configureInvocations", [])
+    builds = workflow.get("buildInvocations", [])
+    products_by_profile: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for product in data["profile"].get("buildProducts", []):
+        products_by_profile[product["buildProfile"]].append(product)
+
+    for config in _canonical_configs(data):
+        identifier = config["id"]
+        preset = config.get("preset")
+        configuration = str(config.get("configuration", ""))
+        severity = max(
+            (_product_severity(product) for product in products_by_profile.get(identifier, [])),
+            key=lambda value: 0 if value == "warning" else 1,
+            default="error",
+        )
+        matching = [entry for entry in configures if preset and entry.get("preset") == preset]
+        blocking = [
+            entry
+            for entry in matching
+            if entry.get("gating") == "blocking"
+            and entry.get("stepIf") == "absent"
+            and entry.get("stepContinueOnError") == "absent"
+        ]
+        if preset and matching and not blocking:
+            findings.append(
+                Finding(
+                    "workflow-lane-not-blocking",
+                    severity,
+                    f"Every CI configure of canonical preset '{preset}' is advisory or conditionally skipped",
+                    "A lane that cannot fail the run does not evidence the profile.",
+                )
+            )
+        supported = _required_runner_os(data["profile"])
+        supported_builds = [
+            entry
+            for entry in builds
+            if entry.get("configuration") == configuration
+            and entry.get("gating") == "blocking"
+            and (not supported or entry.get("runnerOs") in supported)
+        ]
+        if configuration and not supported_builds:
+            findings.append(
+                Finding(
+                    "workflow-configuration-not-built",
+                    severity,
+                    f"No blocking CI build on {sorted(supported) or 'any host'} produces configuration "
+                    f"'{configuration}' for profile '{identifier}'",
+                    "Configuring a profile does not build it, and a lane on an unsupported host cannot stand in.",
+                )
+            )
+            continue
+        expected = {product["target"] for product in products_by_profile.get(identifier, [])}
+        covered = any(
+            entry.get("buildsAllTargets") or expected.issubset(set(entry.get("targets", [])))
+            for entry in supported_builds
+        )
+        if expected and not covered:
+            findings.append(
+                Finding(
+                    "workflow-products-not-built",
+                    severity,
+                    f"No blocking CI build covers every stable-v1 product of profile '{identifier}'",
+                    f"Expected all of {sorted(expected)} or an all-targets build in configuration "
+                    f"'{configuration}'.",
+                )
+            )
+
+    shipping = next((item for item in _canonical_configs(data) if item.get("purpose") == "shipping"), None)
+    if shipping:
+        lanes = [
+            entry
+            for entry in configures
+            if entry.get("preset") == shipping.get("preset") and entry.get("runnerOs") == "windows"
+        ]
+        if not lanes:
+            findings.append(
+                Finding(
+                    "workflow-shipping-runner-os",
+                    "error",
+                    "No Windows-hosted CI job configures the canonical Windows Shipping profile",
+                    "The shipping profile is Windows-only; a Linux lane cannot stand in for it.",
+                )
+            )
+    return findings
+
+
+def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
+    """Bind configured evidence to the tree, commit, preset and cache it claims.
+
+    A CMake File API reply is just a directory. Without these checks, any build
+    tree -- a different source tree, a different generator, a different set of
+    options, or a hand-written one -- can be relabelled as the canonical profile
+    and will read as clean configured evidence.
+    """
+    findings: list[Finding] = []
+    repository = data.get("repository") or {}
+    presets = data.get("cmakePresets", {})
+    configs = _profile_config_map(data["profile"])
+    declared = {
+        entry["target"] for entry in data.get("cmakeTargets", []) if entry.get("buildable", True)
+    }
+    for evidence in data.get("configuredTargetEvidence", []):
+        if evidence.get("status") != "available":
+            continue
+        identifier = str(evidence.get("profile"))
+        config = configs.get(identifier, {})
+
+        if not repository.get("commit"):
+            findings.append(
+                Finding(
+                    "codemodel-provenance-missing",
+                    "error",
+                    f"Profile '{identifier}' presents configured evidence with no repository provenance",
+                    "Evidence that names no commit cannot be shown to describe this tree.",
+                )
+            )
+        else:
+            asserted = str(evidence.get("assertedSourceCommit", ""))
+            if not asserted:
+                findings.append(
+                    Finding(
+                        "codemodel-commit-unverified",
+                        "error",
+                        f"Profile '{identifier}' evidence asserts no source commit",
+                        "Pass --codemodel-commit PROFILE=<sha>; unverified provenance is a blocking unknown.",
+                    )
+                )
+            elif asserted != repository["commit"]:
+                findings.append(
+                    Finding(
+                        "codemodel-commit-mismatch",
+                        "error",
+                        f"Profile '{identifier}' evidence was configured from {asserted}, not {repository['commit']}",
+                    )
+                )
+            if not repository.get("clean", False):
+                findings.append(
+                    Finding(
+                        "codemodel-worktree-dirty",
+                        "error",
+                        f"Profile '{identifier}' evidence was produced from a modified worktree",
+                        "A dirty tree means the commit does not describe what was configured.",
+                    )
+                )
+            root = str(repository.get("root", ""))
+            source = str(evidence.get("sourceDirectory", ""))
+            if root and source and source.lower() != root.lower():
+                findings.append(
+                    Finding(
+                        "codemodel-source-mismatch",
+                        "error",
+                        f"Profile '{identifier}' evidence was configured from '{source}', not this tree '{root}'",
+                    )
+                )
+
+        expected_configuration = str(config.get("configuration", ""))
+        if expected_configuration and expected_configuration not in evidence.get("configurations", []):
+            findings.append(
+                Finding(
+                    "codemodel-configuration-missing",
+                    "error",
+                    f"Profile '{identifier}' evidence has no '{expected_configuration}' configuration",
+                    f"Configurations present: {evidence.get('configurations')}.",
+                )
+            )
+
+        preset_name = config.get("preset")
+        if preset_name:
+            try:
+                preset = inventory_tool.resolve_configure_preset(presets, preset_name)
+            except inventory_tool.InventoryError as error:
+                findings.append(
+                    Finding(
+                        "codemodel-preset-unresolvable",
+                        "error",
+                        f"Profile '{identifier}' names preset '{preset_name}' which cannot be resolved",
+                        str(error),
+                    )
+                )
+                preset = None
+            if preset is not None:
+                expected_dir = str(preset.get("resolvedBinaryDir", "")).replace(
+                    "${sourceDir}", str(repository.get("root", "${sourceDir}"))
+                )
+                actual_dir = str(evidence.get("buildDirectory", ""))
+                if expected_dir and actual_dir and expected_dir.lower() != actual_dir.lower():
+                    findings.append(
+                        Finding(
+                            "codemodel-build-dir-mismatch",
+                            "error",
+                            f"Profile '{identifier}' evidence lives in '{actual_dir}', "
+                            f"not the preset's build directory '{expected_dir}'",
+                            "An arbitrary build directory relabelled as a canonical profile is not evidence.",
+                        )
+                    )
+                for key, observed_key in (
+                    ("generator", "generator"),
+                    ("architecture", "architecture"),
+                    ("toolset", "toolset"),
+                ):
+                    expected_value = str(preset.get(key, ""))
+                    observed = str(evidence.get(observed_key, ""))
+                    if expected_value and observed and expected_value != observed:
+                        findings.append(
+                            Finding(
+                                "codemodel-generator-mismatch",
+                                "error",
+                                f"Profile '{identifier}' evidence {key} is '{observed}', preset requires '{expected_value}'",
+                            )
+                        )
+                observed_cache = evidence.get("cacheVariables", {})
+                for name, expected_value in sorted(preset.get("cacheVariables", {}).items()):
+                    if name not in observed_cache:
+                        continue
+                    if str(observed_cache[name]).upper() != str(expected_value).upper():
+                        findings.append(
+                            Finding(
+                                "codemodel-cache-mismatch",
+                                "error",
+                                f"Profile '{identifier}' evidence has {name}={observed_cache[name]!r}, "
+                                f"preset requires {expected_value!r}",
+                            )
+                        )
+
+        for entry in evidence.get("targets", []):
+            name = str(entry.get("target"))
+            if declared and name not in declared:
+                findings.append(
+                    Finding(
+                        "configured-target-undeclared",
+                        "error",
+                        f"Profile '{identifier}' evidence contains target '{name}' that no CMake input declares",
+                        "A configured target with no source declaration is fabricated evidence.",
+                    )
+                )
+    return findings
+
+
 def _validate_inventory_shape(data: dict[str, Any]) -> None:
-    if data.get("schemaVersion") != 2:
-        raise inventory_tool.InventoryError("inventory schemaVersion must be 2")
+    if data.get("schemaVersion") != 3:
+        raise inventory_tool.InventoryError("inventory schemaVersion must be 3")
     required = {
-        "profile", "cmakeOptionDeclarations", "cmakeOptions", "cmakePresets",
-        "cmakeTargetDeclarations", "cmakeTargets", "configuredTargetEvidence",
-        "sparkBuildOptions", "workflowCmakeConfigs", "stableV1Products",
+        "profile", "cmakeOptionDeclarations", "cmakeOptions", "allCmakeOptionDeclarations",
+        "cmakePresets", "cmakeTargetDeclarations", "cmakeTargets", "configuredTargetEvidence",
+        "sparkBuildOptions", "workflow", "workflowCmakeConfigs", "stableV1Products",
     }
     missing = sorted(required - data.keys())
     if missing:
         raise inventory_tool.InventoryError(f"inventory lacks required fields: {missing}")
+    workflow = data["workflow"]
+    workflow_required = {
+        "events", "jobs", "summary", "cmakeInvocations", "unresolvedInvocations",
+        "configureInvocations", "buildInvocations", "testInvocations", "pathFilteredEvents",
+    }
+    workflow_missing = sorted(workflow_required - set(workflow))
+    if workflow_missing:
+        raise inventory_tool.InventoryError(f"inventory workflow record lacks fields: {workflow_missing}")
+    if any(entry.get("status") == "available" for entry in data["configuredTargetEvidence"]):
+        if not isinstance(data.get("repository"), dict) or not data["repository"].get("commit"):
+            raise inventory_tool.InventoryError(
+                "configured evidence is present but the inventory carries no repository provenance"
+            )
 
 
 def run_all_checks(data: dict[str, Any] | None = None) -> list[Finding]:
@@ -540,26 +1021,28 @@ def run_all_checks(data: dict[str, Any] | None = None) -> list[Finding]:
     _validate_inventory_shape(current)
     profile = current["profile"]
     option_applicability = profile.get("optionApplicability", [])
+    active_options = _active_options(current["cmakeOptions"])
     findings: list[Finding] = []
     findings.extend(check_profile_contract(current))
+    findings.extend(check_option_resolution(current["cmakeOptions"]))
     findings.extend(
-        check_sparkbuild_vs_cmake(
-            current["cmakeOptions"], current["sparkBuildOptions"], option_applicability
-        )
+        check_sparkbuild_vs_cmake(active_options, current["sparkBuildOptions"], option_applicability)
     )
     findings.extend(
-        check_sparkbuild_defaults(
-            current["cmakeOptions"], current["sparkBuildOptions"], option_applicability
-        )
+        check_sparkbuild_defaults(active_options, current["sparkBuildOptions"], option_applicability)
     )
     findings.extend(check_duplicate_options(current["cmakeOptionDeclarations"]))
     findings.extend(check_preset_binary_dirs(current["cmakePresets"]))
+    findings.extend(check_dependent_preset_linkage(current["cmakePresets"]))
     findings.extend(check_profile_presets(current))
     findings.extend(check_shipping_preset_options(current["cmakePresets"]))
     findings.extend(check_stable_v1_targets(current["cmakeTargets"], profile["buildProducts"]))
+    findings.extend(check_target_declaration_resolution(current["cmakeTargetDeclarations"]))
     findings.extend(check_product_preset_activation(current))
     findings.extend(check_configured_targets(current))
+    findings.extend(check_codemodel_provenance(current))
     findings.extend(check_workflow_adoption(current))
+    findings.extend(check_workflow_semantics(current))
     return findings
 
 
@@ -568,7 +1051,7 @@ def build_report(data: dict[str, Any] | None = None) -> dict[str, Any]:
     errors = [finding for finding in findings if finding.severity == "error"]
     warnings = [finding for finding in findings if finding.severity == "warning"]
     return {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "profile": "stable-v1",
         "state": "blocked" if errors else "clean",
         "errorCount": len(errors),
@@ -584,7 +1067,7 @@ def render_report(report: dict[str, Any]) -> bytes:
 def render_internal_error(error: Exception) -> bytes:
     return render_report(
         {
-            "schemaVersion": 2,
+            "schemaVersion": 3,
             "profile": "stable-v1",
             "state": "internal-error",
             "errorCount": 0,

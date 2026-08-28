@@ -13,7 +13,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
 
-from common import METRIC_IDS, REPO_ROOT, SCHEMA_VERSION, SiteDataError, load_contract
+from common import METRIC_IDS, REPO_ROOT, SCHEMA_VERSION, SiteDataError, load_contract, load_json
 
 
 IMPLEMENTATION_STATES = {"absent", "stub", "partial", "functional", "complete"}
@@ -25,6 +25,8 @@ GATE_STATES = {"blocked", "at-risk", "passing", "not-evaluated"}
 WORK_STATES = {"open", "in-progress", "blocked", "done"}
 PRIORITIES = {"P0", "P1", "P2", "P3"}
 PROFILE_APPLICABILITY_STATES = {"required", "shared", "outside"}
+# Schema version of the CI-120 build-matrix inventory and findings artifacts.
+BUILD_MATRIX_SCHEMA_VERSION = 3
 BUILD_PRODUCT_KINDS = {
     "executable", "static_library", "shared_library", "module_library",
     "object_library", "interface_library", "unknown_library",
@@ -97,6 +99,90 @@ WORK_ITEM_LIST_KEYS = {
     "performanceBudgets", "documentationUpdates", "readinessChanges", "websiteImpact",
     "risks", "outOfScope", "definitionOfDone",
 }
+
+
+def build_matrix_evidence_errors(
+    inventory: Any, report: Any, profile: dict[str, Any] | None
+) -> list[str]:
+    """Every way the CI-120 evidence pair can fail to mean what it claims.
+
+    Kept free of file access so each rejection has a direct test; the caller
+    supplies the parsed documents.
+    """
+    errors: list[str] = []
+    if not isinstance(inventory, dict) or not isinstance(report, dict):
+        return ["CI-120 evidence files must contain objects"]
+
+    if inventory.get("schemaVersion") != BUILD_MATRIX_SCHEMA_VERSION:
+        errors.append(f"inventory schemaVersion must be {BUILD_MATRIX_SCHEMA_VERSION}")
+    if report.get("schemaVersion") != BUILD_MATRIX_SCHEMA_VERSION:
+        errors.append(f"findings schemaVersion must be {BUILD_MATRIX_SCHEMA_VERSION}")
+    if report.get("state") not in {"blocked", "clean"}:
+        errors.append(f"findings state must be blocked or clean, got {report.get('state')!r}")
+
+    findings = report.get("findings")
+    if not isinstance(findings, list):
+        return errors + ["findings must be a list"]
+
+    counted = {"error": 0, "warning": 0}
+    for index, item in enumerate(findings):
+        if not isinstance(item, dict) or item.get("severity") not in counted:
+            errors.append(f"findings[{index}] needs a category, severity, and message")
+            continue
+        counted[item["severity"]] += 1
+        for key in ("category", "message"):
+            if not item.get(key):
+                errors.append(f"findings[{index}] lacks {key}")
+    if counted["error"] + counted["warning"] != len(findings):
+        errors.append(
+            f"finding severities do not reconcile: {counted['error']} error + "
+            f"{counted['warning']} warning != {len(findings)}"
+        )
+    if report.get("errorCount") != counted["error"] or report.get("warningCount") != counted["warning"]:
+        errors.append(
+            f"declared counts {report.get('errorCount')}/{report.get('warningCount')} do not match "
+            f"the findings list {counted['error']}/{counted['warning']}"
+        )
+    if report.get("state") != ("blocked" if counted["error"] else "clean"):
+        errors.append("state must be blocked exactly when a blocking finding is present")
+
+    if profile is None:
+        return errors
+
+    def by_profile_and_target(products: Any) -> list[Any]:
+        if not isinstance(products, list):
+            return []
+        return sorted(
+            products, key=lambda item: (str(item.get("buildProfile")), str(item.get("target")))
+        )
+
+    if by_profile_and_target(inventory.get("stableV1Products")) != by_profile_and_target(
+        profile.get("buildProducts")
+    ):
+        errors.append("inventory build products have drifted from the canonical stable-v1 profile")
+
+    evidence = inventory.get("configuredTargetEvidence")
+    if not isinstance(evidence, list):
+        return errors + ["configuredTargetEvidence must be a list"]
+    declared = sorted(str(entry.get("id")) for entry in profile.get("buildConfigurations", []))
+    if sorted(str(entry.get("profile")) for entry in evidence) != declared:
+        errors.append("configured evidence must name every canonical build configuration exactly once")
+
+    # A clean report is a claim that every supported product is evidenced, and
+    # required and shared products are both supported surface.
+    if report.get("state") == "clean":
+        available = {
+            str(entry.get("profile")) for entry in evidence if entry.get("status") == "available"
+        }
+        for product in profile.get("buildProducts", []):
+            if product.get("applicability") == "outside":
+                continue
+            if product.get("buildProfile") not in available:
+                errors.append(
+                    f"clean CI-120 report omits configured evidence for supported product "
+                    f"{product.get('target')!r} ({product.get('applicability')})"
+                )
+    return errors
 
 
 def validate_public_claim_text(
@@ -812,6 +898,33 @@ class Validator:
             )
         return profile_ids
 
+    def validate_build_matrix_evidence(self) -> None:
+        """The CI-120 configuration evidence is part of the contract, not beside it.
+
+        These two artifacts decide whether the build matrix is believed, yet
+        nothing here used to open them: absent, truncated, or hand-written
+        evidence validated exactly as well as real evidence did.
+        """
+        location = "docs/readiness/ci120"
+        inventory_path = REPO_ROOT / "docs" / "readiness" / "ci120-build-matrix-inventory.json"
+        report_path = REPO_ROOT / "docs" / "readiness" / "ci120-parity-findings.json"
+        for path in (inventory_path, report_path):
+            if not path.is_file():
+                self.error(location, f"required CI-120 evidence is missing: {path.name}")
+                return
+        profile = next(
+            (
+                entry
+                for entry in self.contract["readiness"].get("releaseProfiles", [])
+                if entry.get("id") == "stable-v1"
+            ),
+            None,
+        )
+        for message in build_matrix_evidence_errors(
+            load_json(inventory_path), load_json(report_path), profile
+        ):
+            self.error(location, message)
+
     def validate_execution(self, item_ids: set[str]) -> None:
         execution = self.contract["readiness"].get("execution", {})
         by_id = {item.get("id"): item for item in self.contract["workItems"]}
@@ -1002,6 +1115,7 @@ class Validator:
         self.validate_execution(item_ids)
         self.validate_content(capability_ids, profile_ids)
         self.validate_docs_catalog()
+        self.validate_build_matrix_evidence()
         self.validate_legal()
         if assets:
             self.validate_asset_surface()

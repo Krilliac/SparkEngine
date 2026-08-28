@@ -1,9 +1,9 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "profile": "stable-v1",
   "state": "blocked",
-  "errorCount": 40,
-  "warningCount": 16,
+  "errorCount": 41,
+  "warningCount": 18,
   "findings": [
     {
       "category": "sparkbuild-orphan",
@@ -193,12 +193,6 @@
     },
     {
       "category": "cmake-only",
-      "severity": "error",
-      "message": "CMake option 'ENABLE_LTO' is not representable in SparkBuild",
-      "detail": "The supported configurator cannot reproduce the root configuration surface. No outside/shared exception exists in the stable-v1 profile."
-    },
-    {
-      "category": "cmake-only",
       "severity": "warning",
       "message": "CMake option 'ENABLE_METAL' is not representable in SparkBuild",
       "detail": "The supported configurator cannot reproduce the root configuration surface. Explicitly classified outside: Metal and macOS are experimental capabilities outside the Windows D3D11 profile."
@@ -291,6 +285,18 @@
       "message": "Configure preset 'minimal' has no corresponding build preset"
     },
     {
+      "category": "target-name-unresolved",
+      "severity": "warning",
+      "message": "Target name '${TARGET_NAME}' at cmake/SparkGameModule.cmake:183 cannot be resolved statically",
+      "detail": "Recorded as an explicit unknown so it is not mistaken for an absent declaration."
+    },
+    {
+      "category": "target-name-unresolved",
+      "severity": "warning",
+      "message": "Target name '${TARGET_NAME}' at cmake/SparkPlugin.cmake:62 cannot be resolved statically",
+      "detail": "Recorded as an explicit unknown so it is not mistaken for an absent declaration."
+    },
+    {
       "category": "profile-product-option",
       "severity": "error",
       "message": "Preset 'windows-shipping' disables or cannot prove target 'SparkEditor': requires ENABLE_EDITOR=ON, resolved 'OFF'",
@@ -334,8 +340,20 @@
     {
       "category": "workflow-no-presets",
       "severity": "error",
-      "message": "CI contains 12 configure invocations but none uses a CMake preset",
+      "message": "CI contains 20 configure invocations but none uses a CMake preset",
       "detail": "Every configure invocation is retained with its owning job and step in the inventory."
+    },
+    {
+      "category": "workflow-configuration-not-built",
+      "severity": "error",
+      "message": "No blocking CI build on ['windows'] produces configuration 'MinSizeRel' for profile 'windows-shipping'",
+      "detail": "Configuring a profile does not build it, and a lane on an unsupported host cannot stand in."
+    },
+    {
+      "category": "workflow-shipping-runner-os",
+      "severity": "error",
+      "message": "No Windows-hosted CI job configures the canonical Windows Shipping profile",
+      "detail": "The shipping profile is Windows-only; a Linux lane cannot stand in for it."
     }
   ]
 }

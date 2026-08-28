@@ -87,33 +87,64 @@ class RepositoryInventoryTests(unittest.TestCase):
             },
         )
 
-    def test_all_twelve_live_configures_and_owners_are_extracted(self) -> None:
+    def test_live_configures_are_expanded_per_matrix_leg_with_owners(self) -> None:
         configs = self.data["workflowCmakeConfigs"]
-        self.assertEqual(len(configs), 12)
+        self.assertEqual(len(configs), 20)
         self.assertEqual(
-            [entry["job"] for entry in configs],
+            sorted({entry["job"] for entry in configs}),
             [
+                "build-installer",
                 "build-linux-asan",
-                "build-linux-tsan",
+                "build-linux-clang",
+                "build-linux-gcc",
+                "build-linux-mingw-wine",
                 "build-linux-msan",
+                "build-linux-tsan",
+                "build-macos",
                 "build-windows-vs2022",
                 "build-windows-vs2026",
-                "build-linux-gcc",
-                "build-linux-clang",
-                "build-linux-mingw-wine",
-                "build-macos",
-                "coverage",
                 "clang-tidy",
-                "build-installer",
+                "coverage",
             ],
         )
-        self.assertEqual(configs[-1]["sourceDir"], "build-installer")
-        self.assertEqual(configs[-1]["buildDir"], "build-installer/build")
-        windows = next(entry for entry in configs if entry["job"] == "build-windows-vs2022")
-        self.assertTrue(windows["fresh"])
-        self.assertEqual(windows["generator"], "Visual Studio 17 2022")
-        self.assertEqual(windows["architecture"], "x64")
-        self.assertEqual(windows["toolset"], "v143")
+        # A matrix lane contributes one record per combination, so narrowing
+        # `config: [Debug, Release]` to `[Debug]` removes a record outright.
+        windows = [entry for entry in configs if entry["job"] == "build-windows-vs2022"]
+        self.assertEqual(len(windows), 2)
+        self.assertEqual(
+            sorted(entry["matrix"]["config"] for entry in windows), ["Debug", "Release"]
+        )
+        self.assertTrue(all(entry["runnerOs"] == "windows" for entry in windows))
+        self.assertTrue(windows[0]["fresh"])
+        self.assertEqual(windows[0]["generator"], "Visual Studio 17 2022")
+        self.assertEqual(windows[0]["architecture"], "x64")
+        self.assertEqual(windows[0]["toolset"], "v143")
+        # Step names are read structurally, not by a fixed-indentation regex.
+        installer = next(entry for entry in configs if entry["job"] == "build-installer")
+        self.assertEqual(
+            installer["step"], "Configure SparkBuild + SparkInstaller (standalone, no engine)"
+        )
+        self.assertEqual(installer["sourceDir"], "build-installer")
+        self.assertEqual(installer["buildDir"], "build-installer/build")
+        self.assertEqual(
+            next(entry for entry in configs if entry["job"] == "coverage")["step"], "Configure"
+        )
+
+    def test_live_workflow_binds_builds_tests_and_gating(self) -> None:
+        workflow = self.data["workflow"]
+        self.assertEqual(workflow["pathFilteredEvents"], [])
+        self.assertEqual(workflow["unresolvedInvocations"], [])
+        summary = workflow["summary"]
+        self.assertEqual(summary["jobCount"], 21)
+        self.assertEqual(summary["matrixLegCount"], 29)
+        self.assertGreater(summary["buildCount"], 0)
+        self.assertGreater(summary["testCount"], 0)
+        self.assertIn("windows:Release", summary["builtOsConfigurationPairs"])
+        self.assertIn("windows:Debug", summary["builtOsConfigurationPairs"])
+        gating = {job["id"]: job["gating"] for job in workflow["jobs"]}
+        self.assertEqual(gating["build-windows-vs2022"], "blocking")
+        self.assertEqual(gating["build-linux-msan"], "advisory")
+        self.assertEqual(gating["build-linux-mingw-wine"], "conditional")
 
     def test_current_debt_is_blocking_not_baseline_masked(self) -> None:
         report = check_parity.build_report(copy.deepcopy(self.data))
@@ -134,7 +165,7 @@ class RepositoryInventoryTests(unittest.TestCase):
         checked_report = json.loads(report_path.read_text(encoding="utf-8"))
         self.assertEqual(inventory_path.read_bytes(), inventory.render_inventory(self.data))
         self.assertEqual(report_path.read_bytes(), check_parity.render_report(check_parity.build_report(self.data)))
-        self.assertEqual(checked_inventory["schemaVersion"], 2)
+        self.assertEqual(checked_inventory["schemaVersion"], 3)
         self.assertEqual(checked_report["state"], "blocked")
 
     def test_analysis_does_not_mutate_tracked_files(self) -> None:
@@ -241,16 +272,39 @@ class CMakeParserTests(unittest.TestCase):
         self.assertIn(":2", findings[0].detail)
 
 
+WORKFLOW_ENVELOPE = """name: synthetic
+on:
+  push:
+    branches: [ Working ]
+jobs:
+"""
+
+
+def workflow_document(jobs_body: str, runner: str = "ubuntu-24.04") -> str:
+    """Wrap synthetic job bodies in a complete, valid workflow document.
+
+    The analyzer refuses a document with no trigger block and cannot resolve a
+    run block's shell without a runner, because both are exactly the shapes a
+    weakened workflow would present.
+    """
+    lines: list[str] = []
+    for line in textwrap.dedent(jobs_body).splitlines():
+        if not line.strip():
+            continue
+        lines.append("  " + line)
+        if line and not line[0].isspace() and line.rstrip().endswith(":"):
+            lines.append(f"    runs-on: {runner}")
+    return WORKFLOW_ENVELOPE + "\n".join(lines) + "\n"
+
+
 class WorkflowParserTests(unittest.TestCase):
-    def parse(self, text: str) -> list[dict[str, Any]]:
-        return inventory.extract_workflow_cmake_configs_text(text)
+    def parse(self, text: str, runner: str = "ubuntu-24.04") -> list[dict[str, Any]]:
+        return inventory.extract_workflow_cmake_configs_text(workflow_document(text, runner))
 
     def test_multiline_fresh_source_binary_preset_and_folded_forms(self) -> None:
         data = self.parse(
             textwrap.dedent(
                 """\
-                name: parser-test
-                jobs:
                   multiline:
                     steps:
                     - name: Backslash
@@ -287,7 +341,6 @@ class WorkflowParserTests(unittest.TestCase):
         data = self.parse(
             textwrap.dedent(
                 """\
-                jobs:
                   quoted:
                     steps:
                     - name: Quoted
@@ -302,7 +355,6 @@ class WorkflowParserTests(unittest.TestCase):
         data = self.parse(
             textwrap.dedent(
                 """\
-                jobs:
                   duplicate:
                     steps:
                     - name: Both
@@ -321,7 +373,6 @@ class WorkflowParserTests(unittest.TestCase):
             self.parse(
                 textwrap.dedent(
                     """\
-                    jobs:
                       bad:
                         steps:
                         - name: Hidden
@@ -392,7 +443,10 @@ class PresetAndCodemodelTests(unittest.TestCase):
     def test_absent_codemodel_is_explicit_and_blocking(self) -> None:
         missing = TEST_TEMP_ROOT / f".ci120-nonexistent-{uuid.uuid4().hex}"
         evidence = inventory.extract_codemodel_targets(missing, "windows-shipping")
-        self.assertEqual(evidence, {"profile": "windows-shipping", "status": "absent", "targets": []})
+        self.assertEqual(evidence["profile"], "windows-shipping")
+        self.assertEqual(evidence["status"], "absent")
+        self.assertEqual(evidence["targets"], [])
+        self.assertIn("evidenceDirectory", evidence)
         data = inventory.build_inventory()
         findings = check_parity.check_configured_targets(data)
         self.assertIn("configured-evidence-absent", finding_categories(findings))
@@ -517,6 +571,840 @@ class WorkflowEnforcementTests(unittest.TestCase):
         self.assertEqual(item["status"], "in-progress")
         self.assertTrue(item["blocking"])
 
+
+
+# ===========================================================================
+# Adversarial regressions: one test per confirmed false green.
+#
+# Each of these failed to be detected before the CI-120 repair. They exist to
+# make the specific weakening visible, so re-introducing it turns a test red
+# rather than producing identical "clean" evidence.
+# ===========================================================================
+
+
+BS = chr(92)
+BACKTICK = chr(96)
+
+
+def workflow_record(text: str) -> dict[str, Any]:
+    return inventory.extract_workflow_record_text(text, "synthetic/build.yml")
+
+
+LIVE_WORKFLOW = (REPO_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+
+
+def workflow_fingerprint(text: str) -> str:
+    return json.dumps(workflow_record(text), sort_keys=True)
+
+
+class WorkflowWeakeningTests(unittest.TestCase):
+    """A weakened workflow must not produce the evidence of a strong one."""
+
+    def assert_weakening_is_visible(self, mutated: str, label: str) -> dict[str, Any]:
+        self.assertNotEqual(mutated, LIVE_WORKFLOW, f"{label}: mutation did not apply")
+        self.assertNotEqual(
+            workflow_fingerprint(mutated),
+            workflow_fingerprint(LIVE_WORKFLOW),
+            f"{label}: weakened workflow produced identical evidence",
+        )
+        return workflow_record(mutated)
+
+    def test_ubuntu_only_runner_is_visible(self) -> None:
+        mutated = LIVE_WORKFLOW.replace("    runs-on: windows-2022", "    runs-on: ubuntu-24.04", 1)
+        record = self.assert_weakening_is_visible(mutated, "windows -> ubuntu")
+        job = next(item for item in record["jobs"] if item["id"] == "build-windows-vs2022")
+        self.assertEqual(job["runnerOsClasses"], ["linux"])
+
+    def test_debug_only_matrix_loses_a_leg(self) -> None:
+        mutated = LIVE_WORKFLOW.replace("        config: [Debug, Release]", "        config: [Debug]", 1)
+        record = self.assert_weakening_is_visible(mutated, "Debug+Release -> Debug")
+        self.assertLess(record["summary"]["matrixLegCount"], 29)
+        narrowed = next(item for item in record["jobs"] if item["id"] == "build-windows-vs2022")
+        self.assertEqual([entry["config"] for entry in narrowed["matrixCombinations"]], ["Debug"])
+        self.assertEqual(
+            len([item for item in record["buildInvocations"] if item["job"] == "build-windows-vs2022"]), 1
+        )
+
+    def test_if_false_job_stops_being_blocking(self) -> None:
+        mutated = LIVE_WORKFLOW.replace(
+            "  build-windows-vs2022:\n", "  build-windows-vs2022:\n    if: false\n", 1
+        )
+        record = self.assert_weakening_is_visible(mutated, "if: false")
+        job = next(item for item in record["jobs"] if item["id"] == "build-windows-vs2022")
+        self.assertIs(job["if"], False)
+        self.assertEqual(job["gating"], "conditional")
+
+    def test_continue_on_error_job_becomes_advisory(self) -> None:
+        mutated = LIVE_WORKFLOW.replace(
+            "  build-windows-vs2022:\n", "  build-windows-vs2022:\n    continue-on-error: true\n", 1
+        )
+        record = self.assert_weakening_is_visible(mutated, "continue-on-error")
+        job = next(item for item in record["jobs"] if item["id"] == "build-windows-vs2022")
+        self.assertEqual(job["gating"], "advisory")
+
+    def test_added_path_filter_is_visible_and_blocking(self) -> None:
+        mutated = LIVE_WORKFLOW.replace(
+            "  push:\n    branches:", "  push:\n    paths-ignore: [ '**' ]\n    branches:", 1
+        )
+        record = self.assert_weakening_is_visible(mutated, "paths-ignore")
+        self.assertEqual(record["pathFilteredEvents"], ["push"])
+        data = copy.deepcopy(inventory.build_inventory())
+        data["workflow"] = record
+        findings = check_parity.check_workflow_semantics(data)
+        filtered = [item for item in findings if item.category == "workflow-path-filter"]
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0].severity, "error")
+
+    def test_live_workflow_has_no_path_filter(self) -> None:
+        # The blocking coverage above is only meaningful while the real
+        # workflow is genuinely unfiltered.
+        self.assertEqual(workflow_record(LIVE_WORKFLOW)["pathFilteredEvents"], [])
+
+    def test_building_one_target_differs_from_building_all(self) -> None:
+        mutated = LIVE_WORKFLOW.replace(
+            "cmake --build build --config ${{ matrix.config }} --parallel",
+            "cmake --build build --config ${{ matrix.config }} --target SparkTests --parallel",
+            1,
+        )
+        record = self.assert_weakening_is_visible(mutated, "build one target")
+        self.assertLess(
+            record["summary"]["buildAllTargetCount"],
+            workflow_record(LIVE_WORKFLOW)["summary"]["buildAllTargetCount"],
+        )
+
+    def test_default_build_records_all_targets_explicitly(self) -> None:
+        record = workflow_record(
+            workflow_document(
+                """
+                lane:
+                  steps:
+                  - name: Build
+                    run: cmake --build build --config Release --parallel
+                """
+            )
+        )
+        build = record["buildInvocations"][0]
+        self.assertEqual(build["targets"], ["all"])
+        self.assertTrue(build["buildsAllTargets"])
+
+
+class ShellFormTests(unittest.TestCase):
+    """Supported shell forms must be parsed, and confused forms must not pass."""
+
+    def test_powershell_backtick_continuation_is_joined(self) -> None:
+        script = (
+            "cmake -B build " + BACKTICK + "\n  -S . " + BACKTICK + "\n  -DENABLE_EDITOR=OFF -DBUILD_TESTS=OFF"
+        )
+        joined = inventory.workflow_tool.logical_shell_lines(script, "pwsh")
+        self.assertEqual(len(joined), 1)
+        commands, unresolved = inventory.workflow_tool.parse_commands(
+            script, "pwsh", {}, {}, {"job": "win", "step": "Configure"}
+        )
+        self.assertEqual(unresolved, [])
+        self.assertEqual(commands[0]["options"], {"ENABLE_EDITOR": "OFF", "BUILD_TESTS": "OFF"})
+
+    def test_bash_continuation_is_joined(self) -> None:
+        script = "cmake -B build " + BS + "\n  -S . " + BS + "\n  -DENABLE_EDITOR=ON"
+        commands, _ = inventory.workflow_tool.parse_commands(
+            script, "bash", {}, {}, {"job": "nix", "step": "Configure"}
+        )
+        self.assertEqual(commands[0]["options"], {"ENABLE_EDITOR": "ON"})
+
+    def test_powershell_block_parsed_as_bash_loses_arguments(self) -> None:
+        # Guards the reason shell resolution matters: reading a pwsh block with
+        # bash rules silently truncates the command at its first line.
+        script = "cmake -B build " + BACKTICK + "\n  -S . " + BACKTICK + "\n  -DENABLE_EDITOR=OFF"
+        as_pwsh = inventory.workflow_tool.logical_shell_lines(script, "pwsh")
+        as_bash = inventory.workflow_tool.logical_shell_lines(script, "bash")
+        self.assertEqual(len(as_pwsh), 1)
+        self.assertEqual(len(as_bash), 3)
+
+    def test_windows_runner_defaults_to_powershell(self) -> None:
+        self.assertEqual(inventory.workflow_tool.effective_shell("", "", ["windows"]), "pwsh")
+        self.assertEqual(inventory.workflow_tool.effective_shell("", "", ["linux"]), "bash")
+        self.assertEqual(inventory.workflow_tool.effective_shell("bash", "", ["windows"]), "bash")
+
+    def test_dangling_continuation_fails_closed(self) -> None:
+        with self.assertRaises(inventory.workflow_tool.WorkflowError):
+            inventory.workflow_tool.logical_shell_lines("cmake -B build " + BS, "bash")
+
+
+class EnvIndirectionTests(unittest.TestCase):
+    """Safe env indirection resolves; anything else is an explicit unknown."""
+
+    def parse(self, command: str, env: dict[str, Any], shell: str = "bash"):
+        return inventory.workflow_tool.parse_commands(
+            command, shell, env, {}, {"job": "j", "step": "s"}
+        )
+
+    def test_workflow_env_command_word_is_resolved(self) -> None:
+        commands, unresolved = self.parse("$CMAKE_CMD -B build -S . -DBUILD_TESTS=ON", {"CMAKE_CMD": "cmake"})
+        self.assertEqual(unresolved, [])
+        self.assertEqual(commands[0]["kind"], "configure")
+        self.assertEqual(commands[0]["commandProvenance"], "env")
+
+    def test_powershell_env_command_word_is_resolved(self) -> None:
+        commands, unresolved = self.parse(
+            "& $env:CMAKE -B build -S . -DBUILD_TESTS=ON", {"CMAKE": "cmake"}, "pwsh"
+        )
+        self.assertEqual(unresolved, [])
+        self.assertEqual(commands[0]["kind"], "configure")
+
+    def test_github_env_expression_argument_is_resolved(self) -> None:
+        commands, unresolved = self.parse('cmake -S . -B "${{ env.build }}" -G Ninja', {"build": "out/dir"})
+        self.assertEqual(unresolved, [])
+        self.assertEqual(commands[0]["buildDir"], "out/dir")
+
+    def test_unresolvable_command_word_is_reported_not_dropped(self) -> None:
+        commands, unresolved = self.parse("$CMAKE_CMD -B build -S . -DBUILD_TESTS=ON", {})
+        self.assertEqual(commands, [])
+        self.assertEqual(len(unresolved), 1)
+        self.assertIn("cannot resolve", unresolved[0]["reason"])
+
+    def test_unresolvable_invocation_is_blocking(self) -> None:
+        data = copy.deepcopy(inventory.build_inventory())
+        data["workflow"]["unresolvedInvocations"] = [
+            {"job": "j", "step": "s", "reason": "command word is a variable", "command": "$X -B b -S ."}
+        ]
+        findings = check_parity.check_workflow_semantics(data)
+        matching = [item for item in findings if item.category == "workflow-unresolved-invocation"]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0].severity, "error")
+
+    def test_disguised_cmake_invocation_still_fails_closed(self) -> None:
+        with self.assertRaisesRegex(inventory.InventoryError, "unparsed"):
+            inventory.extract_workflow_cmake_configs_text(
+                workflow_document(
+                    """
+                    bad:
+                      steps:
+                      - name: Hidden
+                        run: echo cmake -B build -S .
+                    """
+                )
+            )
+
+
+def write_codemodel_reply(
+    root: Path,
+    *,
+    source_dir: str,
+    build_dir: str,
+    generator: str = "Visual Studio 17 2022",
+    architecture: str = "x64",
+    toolset: str = "v143",
+    configuration: str = "MinSizeRel",
+    targets: tuple[tuple[str, str], ...] = (("SparkEngine", "EXECUTABLE"),),
+    cache: dict[str, str] | None = None,
+) -> Path:
+    """Write a real CMake File API reply tree, not a hand-built dict."""
+    reply = root / ".cmake" / "api" / "v1" / "reply"
+    reply.mkdir(parents=True, exist_ok=True)
+    target_refs = []
+    for index, (name, kind) in enumerate(targets):
+        target_file = f"target-{index}.json"
+        write_json(reply / target_file, {"name": name, "type": kind})
+        target_refs.append({"name": name, "jsonFile": target_file})
+    write_json(
+        reply / "codemodel-v2.json",
+        {
+            "paths": {"source": source_dir, "build": build_dir},
+            "configurations": [{"name": configuration, "targets": target_refs}],
+        },
+    )
+    entries = {
+        "CMAKE_GENERATOR": generator,
+        "CMAKE_GENERATOR_PLATFORM": architecture,
+        "CMAKE_GENERATOR_TOOLSET": toolset,
+        "CMAKE_HOME_DIRECTORY": source_dir,
+    }
+    entries.update(cache or {})
+    write_json(
+        reply / "cache-v2.json",
+        {"entries": [{"name": name, "value": value} for name, value in sorted(entries.items())]},
+    )
+    write_json(
+        reply / "index-0001.json",
+        {
+            "objects": [
+                {"kind": "codemodel", "version": {"major": 2}, "jsonFile": "codemodel-v2.json"},
+                {"kind": "cache", "version": {"major": 2}, "jsonFile": "cache-v2.json"},
+            ]
+        },
+    )
+    return root
+
+
+class CodemodelProvenanceTests(unittest.TestCase):
+    """Configured evidence must be bound to the tree and configuration it claims."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.data = inventory.build_inventory()
+        cls.shipping_cache = {
+            "SPARK_STRICT_DEPS": "ON",
+            "SPARK_NATIVE_ARCH": "OFF",
+            "ENABLE_EDITOR": "OFF",
+            "BUILD_TESTS": "OFF",
+        }
+
+    def bound_data(self, evidence: dict[str, Any], *, commit: str = "", clean: bool = True) -> dict[str, Any]:
+        data = copy.deepcopy(self.data)
+        data["repository"] = {
+            "root": Path(REPO_ROOT).as_posix(),
+            "commit": commit or "0" * 40,
+            "clean": clean,
+        }
+        data["configuredTargetEvidence"] = [
+            evidence if item["profile"] == evidence["profile"] else item
+            for item in data["configuredTargetEvidence"]
+        ]
+        return data
+
+    def shipping_evidence(self, directory: Path, **kwargs: Any) -> dict[str, Any]:
+        defaults: dict[str, Any] = {
+            "source_dir": Path(REPO_ROOT).as_posix(),
+            "build_dir": (Path(REPO_ROOT) / "build" / "windows-shipping").as_posix(),
+            "cache": self.shipping_cache,
+        }
+        defaults.update(kwargs)
+        write_codemodel_reply(directory, **defaults)
+        return inventory.extract_codemodel_targets(directory, "windows-shipping", "0" * 40)
+
+    def categories(self, data: dict[str, Any]) -> set[str]:
+        return {item.category for item in check_parity.check_codemodel_provenance(data)}
+
+    def test_real_reply_tree_is_parsed_end_to_end(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+        self.assertEqual(evidence["status"], "available")
+        self.assertEqual(evidence["generator"], "Visual Studio 17 2022")
+        self.assertEqual(evidence["toolset"], "v143")
+        self.assertEqual(evidence["configurations"], ["MinSizeRel"])
+        self.assertEqual(evidence["targets"], [
+            {"target": "SparkEngine", "kind": "executable", "configuration": "MinSizeRel"}
+        ])
+        self.assertNotIn("codemodel-source-mismatch", self.categories(self.bound_data(evidence)))
+
+    def test_reply_without_cache_object_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            reply = Path(raw) / ".cmake" / "api" / "v1" / "reply"
+            reply.mkdir(parents=True)
+            write_json(reply / "codemodel-v2.json", {"paths": {}, "configurations": []})
+            write_json(
+                reply / "index-0001.json",
+                {"objects": [{"kind": "codemodel", "version": {"major": 2}, "jsonFile": "codemodel-v2.json"}]},
+            )
+            with self.assertRaisesRegex(inventory.InventoryError, "cache-v2"):
+                inventory.extract_codemodel_targets(Path(raw), "windows-shipping")
+
+    def test_foreign_source_tree_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw), source_dir="/some/other/checkout")
+        self.assertIn("codemodel-source-mismatch", self.categories(self.bound_data(evidence)))
+
+    def test_arbitrary_build_directory_relabelled_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw), build_dir="/tmp/some-other-build")
+        self.assertIn("codemodel-build-dir-mismatch", self.categories(self.bound_data(evidence)))
+
+    def test_wrong_generator_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw), generator="Ninja", architecture="", toolset="")
+        self.assertIn("codemodel-generator-mismatch", self.categories(self.bound_data(evidence)))
+
+    def test_cache_that_contradicts_the_preset_is_rejected(self) -> None:
+        cache = dict(self.shipping_cache)
+        cache["SPARK_STRICT_DEPS"] = "OFF"
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw), cache=cache)
+        self.assertIn("codemodel-cache-mismatch", self.categories(self.bound_data(evidence)))
+
+    def test_wrong_configuration_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw), configuration="Debug")
+        self.assertIn("codemodel-configuration-missing", self.categories(self.bound_data(evidence)))
+
+    def test_fabricated_target_with_no_declaration_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(
+                Path(raw), targets=(("SparkEngine", "EXECUTABLE"), ("TotallyInvented", "EXECUTABLE"))
+            )
+        findings = check_parity.check_codemodel_provenance(self.bound_data(evidence))
+        invented = [item for item in findings if item.category == "configured-target-undeclared"]
+        self.assertEqual(len(invented), 1)
+        self.assertIn("TotallyInvented", invented[0].message)
+        self.assertEqual(invented[0].severity, "error")
+
+    def test_unasserted_commit_is_blocking(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            write_codemodel_reply(
+                Path(raw),
+                source_dir=Path(REPO_ROOT).as_posix(),
+                build_dir=(Path(REPO_ROOT) / "build" / "windows-shipping").as_posix(),
+                cache=self.shipping_cache,
+            )
+            evidence = inventory.extract_codemodel_targets(Path(raw), "windows-shipping")
+        self.assertIn("codemodel-commit-unverified", self.categories(self.bound_data(evidence)))
+
+    def test_commit_mismatch_is_blocking(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+        self.assertIn("codemodel-commit-mismatch", self.categories(self.bound_data(evidence, commit="a" * 40)))
+
+    def test_dirty_worktree_evidence_is_blocking(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+        self.assertIn("codemodel-worktree-dirty", self.categories(self.bound_data(evidence, clean=False)))
+
+    def test_evidence_without_repository_provenance_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+        data = self.bound_data(evidence)
+        data.pop("repository")
+        with self.assertRaisesRegex(inventory.InventoryError, "repository provenance"):
+            check_parity.run_all_checks(data)
+
+
+class PresetSemanticsTests(unittest.TestCase):
+    """CMake's own inheritance and linkage rules, not a convenient approximation."""
+
+    def presets(self, **overrides: Any) -> dict[str, Any]:
+        base = {
+            "presetsVersion": 6,
+            "configurePresets": [
+                {"name": "hidden-base", "hidden": True, "binaryDir": "${sourceDir}/build/${presetName}",
+                 "cacheVariables": {"BUILD_TESTS": "ON"}},
+                {"name": "first", "hidden": True, "generator": "Ninja",
+                 "cacheVariables": {"SHARED": "FROM_FIRST", "ONLY_FIRST": "1"}},
+                {"name": "second", "hidden": True, "generator": "Visual Studio 17 2022",
+                 "cacheVariables": {"SHARED": "FROM_SECOND", "ONLY_SECOND": "1"}},
+                {"name": "child", "inherits": ["first", "second", "hidden-base"],
+                 "binaryDir": "${sourceDir}/build/${presetName}"},
+            ],
+            "buildPresets": [{"name": "child", "configurePreset": "child", "hidden": False}],
+            "testPresets": [],
+            "packagePresets": [],
+        }
+        base.update(overrides)
+        return base
+
+    def test_earlier_parent_wins_per_cmake_semantics(self) -> None:
+        resolved = inventory.resolve_configure_preset(self.presets(), "child")
+        # cmake-presets(7): "the earlier preset in the inherits array will be preferred".
+        self.assertEqual(resolved["cacheVariables"]["SHARED"], "FROM_FIRST")
+        self.assertEqual(resolved["generator"], "Ninja")
+        self.assertEqual(resolved["cacheVariables"]["ONLY_SECOND"], "1")
+        self.assertEqual(resolved["cacheVariables"]["BUILD_TESTS"], "ON")
+
+    def test_non_inherited_fields_are_not_inherited(self) -> None:
+        resolved = inventory.resolve_configure_preset(self.presets(), "child")
+        self.assertFalse(resolved["hidden"])
+        self.assertEqual(resolved["name"], "child")
+
+    def test_string_inherits_is_one_element_list(self) -> None:
+        presets = self.presets(
+            configurePresets=[
+                {"name": "base", "hidden": True, "binaryDir": "b", "cacheVariables": {"A": "1"}},
+                {"name": "leaf", "inherits": "base", "binaryDir": "b2"},
+            ]
+        )
+        resolved = inventory.resolve_configure_preset(presets, "leaf")
+        self.assertEqual(resolved["cacheVariables"]["A"], "1")
+
+    def test_null_cache_variable_unsets_an_inherited_value(self) -> None:
+        presets = self.presets(
+            configurePresets=[
+                {"name": "base", "hidden": True, "binaryDir": "b", "cacheVariables": {"A": "1"}},
+                {"name": "leaf", "inherits": "base", "binaryDir": "b2", "cacheVariables": {"A": None}},
+            ]
+        )
+        self.assertNotIn("A", inventory.resolve_configure_preset(presets, "leaf")["cacheVariables"])
+
+    def test_inheritance_cycle_fails_closed(self) -> None:
+        presets = self.presets(
+            configurePresets=[
+                {"name": "a", "inherits": "b", "binaryDir": "x"},
+                {"name": "b", "inherits": "a", "binaryDir": "y"},
+            ]
+        )
+        with self.assertRaisesRegex(inventory.InventoryError, "cycle"):
+            inventory.resolve_configure_preset(presets, "a")
+
+    def test_binary_dir_is_inventoried_and_preset_scoped(self) -> None:
+        presets = inventory.extract_cmake_presets()
+        base = next(item for item in presets["configurePresets"] if item["name"] == "default")
+        self.assertEqual(base["binaryDir"], "${sourceDir}/build/${presetName}")
+        shipping = inventory.resolve_configure_preset(presets, "windows-shipping")
+        # ${presetName} expands in the inheriting preset's context, so twenty
+        # presets sharing one inherited string are twenty distinct directories.
+        self.assertEqual(shipping["resolvedBinaryDir"], "${sourceDir}/build/windows-shipping")
+        release = inventory.resolve_configure_preset(presets, "windows-release")
+        self.assertNotEqual(shipping["resolvedBinaryDir"], release["resolvedBinaryDir"])
+
+    def test_live_presets_have_no_binary_dir_collision(self) -> None:
+        findings = check_parity.check_preset_binary_dirs(inventory.extract_cmake_presets())
+        self.assertEqual(
+            [item for item in findings if item.category == "preset-binary-dir-collision"], []
+        )
+
+    def test_colliding_binary_dirs_are_blocking(self) -> None:
+        presets = self.presets(
+            configurePresets=[
+                {"name": "one", "binaryDir": "${sourceDir}/build/shared"},
+                {"name": "two", "binaryDir": "${sourceDir}/build/shared"},
+            ],
+            buildPresets=[
+                {"name": "one", "configurePreset": "one"},
+                {"name": "two", "configurePreset": "two"},
+            ],
+        )
+        findings = check_parity.check_preset_binary_dirs(presets)
+        collisions = [item for item in findings if item.category == "preset-binary-dir-collision"]
+        self.assertEqual(len(collisions), 1)
+        self.assertEqual(collisions[0].severity, "error")
+
+    def test_preset_without_binary_dir_is_blocking(self) -> None:
+        presets = self.presets(
+            configurePresets=[{"name": "one", "generator": "Ninja"}],
+            buildPresets=[{"name": "one", "configurePreset": "one"}],
+        )
+        findings = check_parity.check_preset_binary_dirs(presets)
+        self.assertIn("preset-missing-binary-dir", {item.category for item in findings})
+
+    def test_build_preset_naming_a_phantom_configure_is_blocking(self) -> None:
+        presets = self.presets(
+            buildPresets=[{"name": "ghost", "configurePreset": "does-not-exist", "hidden": False}]
+        )
+        findings = check_parity.check_dependent_preset_linkage(presets)
+        self.assertIn("dependent-preset-phantom-configure", {item.category for item in findings})
+        self.assertTrue(all(item.severity == "error" for item in findings))
+
+    def test_build_preset_naming_a_hidden_configure_is_blocking(self) -> None:
+        presets = self.presets(
+            buildPresets=[{"name": "hid", "configurePreset": "hidden-base", "hidden": False}]
+        )
+        findings = check_parity.check_dependent_preset_linkage(presets)
+        self.assertIn("dependent-preset-hidden-configure", {item.category for item in findings})
+
+    def test_live_dependent_presets_all_link(self) -> None:
+        self.assertEqual(
+            check_parity.check_dependent_preset_linkage(inventory.extract_cmake_presets()), []
+        )
+
+
+class OptionActivationTests(unittest.TestCase):
+    """A branch the context never takes is not this context's configuration surface."""
+
+    def effective(self, text: str) -> list[dict[str, Any]]:
+        declarations = inventory.extract_cmake_options_text(text, "synthetic/CMakeLists.txt")
+        return inventory.effective_cmake_options(declarations)
+
+    def test_lone_option_in_inactive_branch_is_not_a_windows_blocker(self) -> None:
+        effective = self.effective(
+            textwrap.dedent(
+                """\
+                if(MSVC)
+                  add_compile_options(/W4)
+                elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+                  option(ENABLE_LTO "Link-time optimization" ON)
+                endif()
+                """
+            )
+        )
+        self.assertEqual(len(effective), 1)
+        self.assertEqual(effective[0]["name"], "ENABLE_LTO")
+        self.assertEqual(effective[0]["status"], "platform-inactive")
+        self.assertEqual(effective[0]["activeDeclarationCount"], 0)
+        # It must not reach the SparkBuild comparison at all.
+        findings = check_parity.check_sparkbuild_vs_cmake(check_parity._active_options(effective), [], [])
+        self.assertEqual(findings, [])
+
+    def test_live_enable_lto_is_platform_inactive(self) -> None:
+        options = {item["name"]: item for item in inventory.build_inventory()["cmakeOptions"]}
+        self.assertEqual(options["ENABLE_LTO"]["status"], "platform-inactive")
+        self.assertEqual(options["ENABLE_LTO"]["declarationCount"], 1)
+
+    def test_active_branch_option_is_still_compared(self) -> None:
+        effective = self.effective(
+            textwrap.dedent(
+                """\
+                if(WIN32)
+                  option(ENABLE_D3D11 "Direct3D 11" ON)
+                endif()
+                """
+            )
+        )
+        self.assertEqual(effective[0]["status"], "active")
+        findings = check_parity.check_sparkbuild_vs_cmake(check_parity._active_options(effective), [], [])
+        self.assertEqual([item.category for item in findings], ["cmake-only"])
+
+    def test_undecidable_condition_is_blocking_not_assumed(self) -> None:
+        effective = self.effective(
+            textwrap.dedent(
+                """\
+                if(SOME_PROBED_FEATURE_WE_CANNOT_KNOW)
+                  option(ENABLE_MYSTERY "Mystery" ON)
+                endif()
+                """
+            )
+        )
+        self.assertEqual(effective[0]["status"], "indeterminate")
+        findings = check_parity.check_option_resolution(effective)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].category, "option-condition-indeterminate")
+        self.assertEqual(findings[0].severity, "error")
+
+    def test_kleene_logic_does_not_collapse_unknowns(self) -> None:
+        self.assertIs(inventory._evaluate_condition("UNKNOWN_VAR AND UNIX"), False)
+        self.assertIsNone(inventory._evaluate_condition("UNKNOWN_VAR AND WIN32"))
+        self.assertIs(inventory._evaluate_condition("UNKNOWN_VAR OR WIN32"), True)
+        self.assertIsNone(inventory._evaluate_condition("UNKNOWN_VAR OR UNIX"))
+        self.assertIs(inventory._evaluate_condition('CMAKE_CXX_COMPILER_ID STREQUAL "MSVC"'), True)
+        self.assertIs(inventory._evaluate_condition("NOT (UNIX OR APPLE)"), True)
+
+    def test_unparseable_condition_raises_rather_than_guessing(self) -> None:
+        for expression in ("(WIN32", "NOT", "", "WIN32 STREQUAL"):
+            with self.subTest(expression=expression):
+                with self.assertRaises(inventory.InventoryError):
+                    inventory._evaluate_condition(expression)
+
+
+class TargetInventoryTests(unittest.TestCase):
+    """Module targets are inventoried; templates and unknowns are not invented."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.declarations = inventory.extract_cmake_targets()
+        cls.targets = {item["target"]: item for item in inventory.aggregate_cmake_targets(cls.declarations)}
+
+    def test_cmake_module_target_is_inventoried(self) -> None:
+        # imgui is declared only in cmake/BuildImGui.cmake and is linked by four
+        # executables; a CMakeLists-only scan cannot see it at all.
+        self.assertIn("imgui", self.targets)
+        entry = self.targets["imgui"]
+        self.assertTrue(entry["buildable"])
+        self.assertEqual(entry["kind"], "static_library")
+        self.assertTrue(all("BuildImGui.cmake" in item["file"] for item in entry["declarations"]))
+
+    def test_component_library_targets_are_inventoried_but_not_claimed_buildable(self) -> None:
+        for name in ("SparkCore", "SparkUtils", "SparkECS", "SparkGraphics", "SparkPhysics",
+                     "SparkAudio", "SparkAI", "SparkAnimation", "SparkNetworking"):
+            self.assertIn(name, self.targets, f"{name} missing from the target inventory")
+            entry = self.targets[name]
+            self.assertEqual(entry["origins"], ["function-template"])
+            self.assertFalse(
+                entry["buildable"],
+                f"{name} is declared inside an uninvoked function and must not read as a build product",
+            )
+
+    def test_wrapper_created_targets_are_resolved(self) -> None:
+        for name in ("SparkValidPluginFixture", "SparkForwardMinorPluginFixture"):
+            self.assertIn(name, self.targets)
+            self.assertTrue(self.targets[name]["buildable"])
+            self.assertIn("wrapper-call", self.targets[name]["origins"])
+
+    def test_imported_target_is_not_a_build_product(self) -> None:
+        self.assertIn("OpenGL::GL", self.targets)
+        self.assertFalse(self.targets["OpenGL::GL"]["buildable"])
+        self.assertEqual(self.targets["OpenGL::GL"]["kind"], "imported")
+
+    def test_unresolvable_target_name_is_reported_not_dropped(self) -> None:
+        unresolved = [item for item in self.declarations if not item.get("resolved", True)]
+        self.assertTrue(unresolved, "an unresolvable target name must be recorded, not skipped")
+        findings = check_parity.check_target_declaration_resolution(self.declarations)
+        self.assertIn("target-name-unresolved", {item.category for item in findings})
+
+    def test_a_module_only_product_would_be_found(self) -> None:
+        # Proves the widened scan is load-bearing: the same declaration seen
+        # only through a .cmake module still satisfies a stable-v1 product.
+        products = [{"target": "imgui", "kind": "static_library", "buildProfile": "windows-shipping",
+                     "applicability": "required"}]
+        aggregated = list(self.targets.values())
+        self.assertEqual(check_parity.check_stable_v1_targets(aggregated, products), [])
+
+
+class SharedProductBlockingTests(unittest.TestCase):
+    """A shared product is supported surface: missing it may never read clean."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.data = inventory.build_inventory()
+
+    def test_shared_product_severity_is_error(self) -> None:
+        self.assertEqual(check_parity._product_severity({"applicability": "shared"}), "error")
+        self.assertEqual(check_parity._product_severity({"applicability": "required"}), "error")
+
+    def test_missing_shared_product_blocks_and_report_is_not_clean(self) -> None:
+        products = [
+            {"target": "AbsentSharedProduct", "kind": "executable",
+             "buildProfile": "windows-shipping", "applicability": "shared"}
+        ]
+        findings = check_parity.check_stable_v1_targets([], products)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].category, "missing-target")
+        self.assertEqual(findings[0].severity, "error")
+        report = {
+            "errorCount": sum(1 for item in findings if item.severity == "error"),
+            "warningCount": sum(1 for item in findings if item.severity == "warning"),
+        }
+        self.assertGreater(report["errorCount"], 0, "a missing shared product must not read as clean")
+
+    def test_shared_only_profile_missing_evidence_still_blocks(self) -> None:
+        data = copy.deepcopy(self.data)
+        for product in data["profile"]["buildProducts"]:
+            product["applicability"] = "shared"
+        data["stableV1Products"] = data["profile"]["buildProducts"]
+        findings = check_parity.check_configured_targets(data)
+        absent = [item for item in findings if item.category == "configured-evidence-absent"]
+        self.assertTrue(absent)
+        self.assertTrue(
+            all(item.severity == "error" for item in absent),
+            "absent evidence for an all-shared profile must stay blocking",
+        )
+
+    def test_contract_states_the_shared_product_rule(self) -> None:
+        readiness = json.loads((REPO_ROOT / "docs" / "site" / "readiness.json").read_text(encoding="utf-8"))
+        rules = " ".join(readiness["statusPromotionRules"]).lower()
+        self.assertIn("required and shared products are both blocking", rules)
+
+
+class SchemaContractTests(unittest.TestCase):
+    """The inventory shape the checker depends on is itself checked."""
+
+    def test_schema_version_two_is_rejected(self) -> None:
+        data = copy.deepcopy(inventory.build_inventory())
+        data["schemaVersion"] = 2
+        with self.assertRaisesRegex(inventory.InventoryError, "schemaVersion must be 3"):
+            check_parity.run_all_checks(data)
+
+    def test_missing_workflow_record_is_rejected(self) -> None:
+        data = copy.deepcopy(inventory.build_inventory())
+        data.pop("workflow")
+        with self.assertRaisesRegex(inventory.InventoryError, "required fields"):
+            check_parity.run_all_checks(data)
+
+    def test_truncated_workflow_record_is_rejected(self) -> None:
+        data = copy.deepcopy(inventory.build_inventory())
+        data["workflow"].pop("buildInvocations")
+        with self.assertRaisesRegex(inventory.InventoryError, "workflow record lacks fields"):
+            check_parity.run_all_checks(data)
+
+    def test_duplicate_yaml_key_is_rejected(self) -> None:
+        with self.assertRaisesRegex(inventory.InventoryError, "duplicate YAML key"):
+            workflow_record(
+                workflow_document(
+                    """
+                    lane:
+                      steps:
+                      - name: One
+                        run: cmake -B a -S .
+                      steps:
+                      - name: Two
+                        run: cmake -B b -S .
+                    """
+                )
+            )
+
+    def test_yaml_anchor_is_refused(self) -> None:
+        with self.assertRaises(inventory.InventoryError):
+            workflow_record(
+                "name: x\non:\n  push:\n    branches: [ Working ]\njobs:\n  a:\n    runs-on: &anchor ubuntu-24.04\n"
+            )
+
+    def test_oversized_workflow_document_is_refused(self) -> None:
+        oversized = "a: 1\n" + "# pad\n" * 900000
+        with self.assertRaisesRegex(inventory.workflow_tool.WorkflowError, "byte bound"):
+            inventory.workflow_tool.parse_workflow_yaml(oversized)
+
+    def test_deeply_nested_flow_collection_is_refused(self) -> None:
+        document = "name: x\non: [push]\njobs:\n  a:\n    runs-on: " + "[" * 40 + "]" * 40 + "\n"
+        with self.assertRaisesRegex(inventory.workflow_tool.WorkflowError, "nested deeper"):
+            inventory.workflow_tool.parse_workflow_yaml(document)
+
+    def test_duplicate_key_in_a_flow_mapping_is_refused(self) -> None:
+        document = "name: x\non: [push]\njobs:\n  a:\n    runs-on: { os: a, os: b }\n"
+        with self.assertRaisesRegex(inventory.workflow_tool.WorkflowError, "duplicate YAML key"):
+            inventory.workflow_tool.parse_workflow_yaml(document)
+
+    def test_tab_indentation_is_refused(self) -> None:
+        with self.assertRaisesRegex(inventory.workflow_tool.WorkflowError, "tab in YAML indentation"):
+            inventory.workflow_tool.parse_workflow_yaml("jobs:\n\ta: 1\n")
+
+    def test_cache_reply_entry_bound_is_enforced(self) -> None:
+        oversized = {"entries": [{"name": f"SPARK_{index}", "value": "1"} for index in range(5000)]}
+        with self.assertRaisesRegex(inventory.InventoryError, "above the"):
+            inventory._bound_cache_entries(oversized, "windows-shipping")
+
+
+class OrchestrationTests(unittest.TestCase):
+    """run_all_checks must actually run every check, not merely define it.
+
+    A check that exists but is never called from the orchestrator is the same
+    as no check at all, and unit-testing the function directly cannot see that.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.data = inventory.build_inventory()
+
+    def categories_for(self, data: dict[str, Any]) -> set[str]:
+        return {item.category for item in check_parity.run_all_checks(data)}
+
+    def test_dependent_preset_linkage_runs_in_the_report(self) -> None:
+        data = copy.deepcopy(self.data)
+        data["cmakePresets"]["buildPresets"].append(
+            {"name": "ghost", "configurePreset": "does-not-exist", "hidden": False}
+        )
+        self.assertIn("dependent-preset-phantom-configure", self.categories_for(data))
+
+    def test_codemodel_provenance_runs_in_the_report(self) -> None:
+        data = copy.deepcopy(self.data)
+        data["repository"] = {"root": Path(REPO_ROOT).as_posix(), "commit": "b" * 40, "clean": True}
+        data["configuredTargetEvidence"] = [
+            {
+                "profile": "windows-shipping",
+                "status": "available",
+                "evidenceDirectory": "/somewhere/else",
+                "sourceDirectory": "/some/other/checkout",
+                "buildDirectory": "/somewhere/else",
+                "generator": "Ninja",
+                "architecture": "",
+                "toolset": "",
+                "cacheVariables": {"SPARK_STRICT_DEPS": "OFF"},
+                "configurations": ["Debug"],
+                "assertedSourceCommit": "",
+                "targets": [{"target": "TotallyInvented", "kind": "executable", "configuration": "Debug"}],
+            }
+            if item["profile"] == "windows-shipping"
+            else item
+            for item in data["configuredTargetEvidence"]
+        ]
+        categories = self.categories_for(data)
+        for expected in (
+            "codemodel-source-mismatch",
+            "codemodel-build-dir-mismatch",
+            "codemodel-generator-mismatch",
+            "codemodel-cache-mismatch",
+            "codemodel-configuration-missing",
+            "codemodel-commit-unverified",
+            "configured-target-undeclared",
+        ):
+            self.assertIn(expected, categories, f"{expected} is defined but never reaches the report")
+
+    def test_workflow_semantics_run_in_the_report(self) -> None:
+        categories = self.categories_for(copy.deepcopy(self.data))
+        self.assertIn("workflow-configuration-not-built", categories)
+        self.assertIn("workflow-shipping-runner-os", categories)
+
+    def test_option_resolution_and_target_resolution_run_in_the_report(self) -> None:
+        categories = self.categories_for(copy.deepcopy(self.data))
+        self.assertIn("target-name-unresolved", categories)
+
+    def test_report_state_is_derived_from_error_severity_only(self) -> None:
+        report = check_parity.build_report(copy.deepcopy(self.data))
+        self.assertEqual(report["errorCount"] + report["warningCount"], len(report["findings"]))
+        self.assertEqual(report["state"], "blocked" if report["errorCount"] else "clean")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

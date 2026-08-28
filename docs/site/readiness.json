@@ -19,6 +19,7 @@
     "A capability cannot be release-ready while a required gate is not passing or a blocking work item is open.",
     "Global release readiness is derived from every declared release profile; gates explicitly excluded by every profile may remain blocked and must stay labeled unsupported or experimental.",
     "Every work item explicitly classifies its applicability to every release profile as required, shared, or outside, and no profile may depend transitively on outside work.",
+    "A release profile's declared build products are its supported surface: required and shared products are both blocking, so a configuration report may not be clean while any of them is missing, mis-kinded, or unevidenced; only build options may be classified outside.",
     "A passing test must execute production source or a packaged binary; mirror-only, tautological, or mock-only tests cannot promote readiness.",
     "Every public numeric claim resolves through a generated metric with an evidence path.",
     "Every readiness promotion includes source, tests, CI evidence, documentation, limitations, and website impact in the same change.",

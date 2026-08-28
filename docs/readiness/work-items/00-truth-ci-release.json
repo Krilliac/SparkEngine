@@ -478,8 +478,10 @@
         "SparkBuild/src/Config.cpp",
         "Tools/buildmatrix/inventory.py",
         "Tools/buildmatrix/check_parity.py",
+        "Tools/buildmatrix/workflow.py",
         "Tests/Tools/test_build_matrix_parity.py",
-        "docs/site/readiness.json"
+        "docs/site/readiness.json",
+        ".github/workflows/build.yml"
       ],
       "implementationScope": [
         "Enable strict dependencies in stable-v1 CI and release",
@@ -488,7 +490,9 @@
         "Require configured CMake File API codemodel evidence for every canonical build profile",
         "Build every Windows stable-v1 executable, tool, SDK, and in-profile module",
         "Align documented and actual Windows preset directories",
-        "Define warning and CPU baselines for the supported row"
+        "Define warning and CPU baselines for the supported row",
+        "Bind material CI workflow semantics (triggers and path filters, runner OS, job and step conditions, continue-on-error, matrix combinations, shell, and the builds and tests actually run) so a weakened lane cannot produce the same evidence",
+        "Bind configured codemodel evidence to the source tree, commit, generator, preset, cache values, and build directory it claims, and report missing provenance as a blocking unknown"
       ],
       "acceptanceCriteria": [
         "Every stable-v1 target appears with its declared kind in configured codemodel evidence for its canonical build profile",
@@ -496,15 +500,18 @@
         "Unknown or unused options fail",
         "Missing dependency is fatal",
         "Documented configure/build commands match the Windows presets",
-        "Experimental platform Shipping matrices remain owned by their platform work items"
+        "Experimental platform Shipping matrices remain owned by their platform work items",
+        "Configured codemodel evidence is accepted only when its source tree, commit, generator, preset build directory, and cache values match the profile claiming it"
       ],
       "commands": [
         "python3 Tools/buildmatrix/inventory.py --check docs/readiness/ci120-build-matrix-inventory.json",
+        "python3 Tools/buildmatrix/inventory.py --codemodel windows-shipping=build/windows-shipping --codemodel-commit windows-shipping=$(git rev-parse HEAD) --output docs/readiness/ci120-build-matrix-inventory.json",
         "python3 Tools/buildmatrix/check_parity.py --inventory docs/readiness/ci120-build-matrix-inventory.json --baseline docs/readiness/ci120-parity-findings.json",
         "python3 Tests/Tools/test_build_matrix_parity.py",
         "cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON",
         "cmake --build build/windows-shipping --config MinSizeRel --clean-first",
-        "cmake -LAH -N build/windows-shipping"
+        "cmake -LAH -N build/windows-shipping",
+        "python3 tools/site-data/validate.py"
       ],
       "testSelectors": [
         "BuildOptions_*",
@@ -528,7 +535,8 @@
         "Build quick starts are generated from validated presets"
       ],
       "risks": [
-        "Strict mode may expose optional-dependency ambiguity"
+        "Strict mode may expose optional-dependency ambiguity",
+        "Configured evidence cannot be produced without a real Windows MSVC configure, so the profile stays blocked until one runs"
       ],
       "outOfScope": [
         "Certifying Linux, macOS, or any other host as a stable-v1 product"

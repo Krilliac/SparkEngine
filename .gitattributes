@@ -13,6 +13,11 @@ Assets/**/*.obj text eol=lf
 Assets/**/*.mtl text eol=lf
 Templates/*/Assets/**/*.obj text eol=lf
 Templates/*/Assets/**/*.mtl text eol=lf
+# Readiness evidence is compared byte-for-byte against freshly generated output
+# (inventory.py --check, check_parity.py --baseline). Windows autocrlf would
+# rewrite these on checkout and make the comparison fail for no real reason.
+docs/readiness/*.json text eol=lf
+docs/site/readiness.json text eol=lf
 
 ###############################################################################
 # Set default behavior for command prompt diff.
