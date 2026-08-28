@@ -1195,7 +1195,8 @@ namespace Spark
         const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
         const auto& componentFactory = Spark::ComponentFactory::Get();
         SaveData migratedData;
-        World candidateWorld;
+        World candidateWorld{World::EntityEventCleanupMode::Suppressed};
+        World canonicalEntityWorld;
         struct StagedStorage
         {
             std::string typeName;
@@ -1212,6 +1213,7 @@ namespace Spark
         std::vector<ReboundNotification> reboundNotifications;
         std::vector<World::EntityRetirementPlan> liveRetirementPlans;
         std::vector<EntityID> incomingEntities;
+        std::vector<EntityID> canonicalEntities;
         try
         {
             std::string metadataBlock;
@@ -1226,12 +1228,24 @@ namespace Spark
             if (!MigrateToCurrentVersion(migratedData))
                 return false;
 
+            // Freeze every incoming entity identifier before invoking extension
+            // deserializers. A callback must not be able to create/destroy an
+            // entity and influence the identifier assigned to a later record.
             incomingEntities.reserve(migratedData.entities.size());
+            canonicalEntities.reserve(migratedData.entities.size());
             for (const auto& serializedEntity : migratedData.entities)
             {
-                const EntityID entity = candidateWorld.CreateEntity(serializedEntity.name);
-                incomingEntities.push_back(entity);
+                incomingEntities.push_back(candidateWorld.CreateEntity(serializedEntity.name));
+                canonicalEntities.push_back(canonicalEntityWorld.CreateEntity());
+            }
 
+            if (incomingEntities != canonicalEntities)
+                throw std::runtime_error("candidate entity identifiers do not match the pristine allocation plan");
+
+            for (size_t entityIndex = 0; entityIndex < migratedData.entities.size(); ++entityIndex)
+            {
+                const auto& serializedEntity = migratedData.entities[entityIndex];
+                const EntityID entity = incomingEntities[entityIndex];
                 for (const auto& component : serializedEntity.components)
                 {
                     if (!serializerRegistry.HasSerializer(component.typeName))
@@ -1284,12 +1298,17 @@ namespace Spark
                 }
             }
 
+            auto&& candidateEntityStorage = candidateWorld.GetRegistry().storage<entt::entity>();
+            if (candidateEntityStorage.size() != incomingEntities.size() ||
+                candidateEntityStorage.free_list() != incomingEntities.size())
+            {
+                throw std::runtime_error("candidate entity storage contains transient allocation residue");
+            }
             if (candidateWorld.GetEntityCount() != incomingEntities.size())
                 throw std::runtime_error("candidate entity count does not match the serialized snapshot");
 
             std::vector<EntityID> candidateEntities;
             candidateEntities.reserve(candidateWorld.GetEntityCount());
-            auto&& candidateEntityStorage = candidateWorld.GetRegistry().storage<entt::entity>();
             for (auto&& [entity] : candidateEntityStorage.each())
                 candidateEntities.push_back(entity);
 
@@ -1406,7 +1425,10 @@ namespace Spark
 
         using EntityPayloadStorage = entt::basic_storage<entt::entity>;
         auto& destinationEntities = world.GetRegistry().storage<entt::entity>();
-        auto& sourceEntities = candidateWorld.GetRegistry().storage<entt::entity>();
+        // The candidate is intentionally not the source of allocator metadata:
+        // even a callback that mutates start_from() without changing active IDs
+        // must not influence future live-world entity allocation.
+        auto& sourceEntities = canonicalEntityWorld.GetRegistry().storage<entt::entity>();
         static_cast<EntityPayloadStorage&>(destinationEntities)
             .swap(static_cast<EntityPayloadStorage&>(sourceEntities));
 

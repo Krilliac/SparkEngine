@@ -344,11 +344,24 @@ namespace
         uint8_t marker = 0;
     };
 
+    struct TransientCandidateProbe
+    {
+        uint8_t marker = 0;
+    };
+
+    struct AllocatorCursorProbe
+    {
+        uint8_t marker = 0;
+    };
+
     int g_missingRestorePrepareCalls = 0;
     int g_prepareFailureCalls = 0;
     int g_candidateTopologyPrepareCalls = 0;
     int g_retirementPrepareCalls = 0;
     int g_retirementSnapshotCalls = 0;
+    int g_transientCandidatePrepareCalls = 0;
+    int g_allocatorCursorPrepareCalls = 0;
+    EntityID g_transientCandidateGhost = entt::null;
     bool g_throwRetirementSnapshot = false;
     bool g_liveStorageBoundaryCrossed = false;
     bool g_snapshotObservedAfterBoundary = false;
@@ -399,6 +412,18 @@ namespace
         ++g_retirementPrepareCalls;
         g_liveStorageBoundaryCrossed = true;
         (void)static_cast<World*>(world)->GetRegistry().storage<RetirementPlanProbe>();
+    }
+
+    void CountTransientCandidatePrepare(void* world)
+    {
+        ++g_transientCandidatePrepareCalls;
+        (void)static_cast<World*>(world)->GetRegistry().storage<TransientCandidateProbe>();
+    }
+
+    void CountAllocatorCursorPrepare(void* world)
+    {
+        ++g_allocatorCursorPrepareCalls;
+        (void)static_cast<World*>(world)->GetRegistry().storage<AllocatorCursorProbe>();
     }
 
     void ObserveRetirementSnapshot(EntityID)
@@ -1239,6 +1264,243 @@ TEST(SaveMigration_ExtraCandidateEntityFailsBeforeLiveStoragePreparation)
                                                                          {1});
     EXPECT_EQ(deliveries, 1);
 
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_OneEntityTransientCandidateAllocationFailsBeforeLiveStoragePreparation)
+{
+    const std::string dir = MakeTempSaveDir("one_entity_transient_candidate");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("one-transient-source");
+    source.AddComponent<Transform>(sourceEntity).position.x = 61.0f;
+    SaveMetadata metadata;
+    metadata.saveName = "One transient candidate entity";
+    EXPECT_TRUE(saveSystem.Save("one-transient-candidate", source, metadata, {{"candidate", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "one-transient-candidate.spark_save";
+    std::vector<char> bytes = ReadBytes(path);
+    ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "TransientOneTx"));
+    ASSERT_TRUE(WriteBytes(path, bytes));
+
+    auto& serializers = ComponentSerializerRegistry::GetInstance();
+    serializers.Unregister("TransientOneTx");
+    serializers.Register(
+        "TransientOneTx", [](const void*) { return SerializedComponent{"TransientOneTx", {}}; },
+        [](World& world, EntityID entity, const SerializedComponent&)
+        {
+            world.AddComponent<TransientCandidateProbe>(entity);
+            const EntityID ghost = world.CreateEntity();
+            g_transientCandidateGhost = ghost;
+            world.DestroyEntity(ghost);
+        });
+    ComponentFactory::Get().Register(
+        "TransientOneTx", MakeProbeComponentOps<TransientCandidateProbe>(&CountTransientCandidatePrepare));
+    g_transientCandidatePrepareCalls = 0;
+    g_transientCandidateGhost = entt::null;
+
+    World liveWorld;
+    const EntityID parent = liveWorld.CreateEntity("one-transient-live-parent");
+    const EntityID child = liveWorld.CreateEntity("one-transient-live-child");
+    liveWorld.AddComponent<Transform>(parent).position.x = 303.0f;
+    liveWorld.AddComponent<Transform>(child).position.x = 404.0f;
+    ASSERT_TRUE(liveWorld.SetParent(child, parent));
+    int deliveries = 0;
+    auto subscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(child), [&](const SaveLoadLifecycleProbeEvent&) { ++deliveries; });
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+    const auto topologyBefore = RegistryStorageIds(liveWorld);
+    const auto& liveEntityStorageBefore = liveWorld.GetRegistry().storage<entt::entity>();
+    const size_t entityStorageSizeBefore = liveEntityStorageBefore.size();
+    const size_t entityFreeListBefore = liveEntityStorageBefore.free_list();
+
+    const bool loaded = saveSystem.Load("one-transient-candidate", liveWorld, customState);
+    serializers.Unregister("TransientOneTx");
+
+    EXPECT_FALSE(loaded);
+    EXPECT_EQ(g_transientCandidatePrepareCalls, 0);
+    EXPECT_TRUE(g_transientCandidateGhost == child);
+    EXPECT_TRUE(RegistryStorageIds(liveWorld) == topologyBefore);
+    EXPECT_EQ(liveWorld.GetRegistry().storage<entt::entity>().size(), entityStorageSizeBefore);
+    EXPECT_EQ(liveWorld.GetRegistry().storage<entt::entity>().free_list(), entityFreeListBefore);
+    EXPECT_EQ(liveWorld.GetEntityCount(), 2u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "one-transient-live-parent"));
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "one-transient-live-child"));
+    const Transform* parentTransform = liveWorld.GetComponent<Transform>(parent);
+    const Transform* childTransform = liveWorld.GetComponent<Transform>(child);
+    ASSERT_TRUE(parentTransform != nullptr);
+    ASSERT_TRUE(childTransform != nullptr);
+    EXPECT_TRUE(std::find(parentTransform->children.begin(), parentTransform->children.end(), child) !=
+                parentTransform->children.end());
+    EXPECT_TRUE(childTransform->parent == parent);
+    EXPECT_NEAR(parentTransform->position.x, 303.0f, 0.0001f);
+    EXPECT_NEAR(childTransform->position.x, 404.0f, 0.0001f);
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("live"), std::string("sentinel"));
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(child)),
+              1u);
+    Spark::EntityEventBus::Global().Publish<SaveLoadLifecycleProbeEvent>(static_cast<Spark::EventEntityID>(child), {1});
+    EXPECT_EQ(deliveries, 1);
+
+    const EntityID next = liveWorld.CreateEntity();
+    EXPECT_EQ(static_cast<uint32_t>(next), 2u);
+    liveWorld.DestroyEntity(next);
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_TwoEntityTransientCandidateAllocationFailsBeforeLiveStoragePreparation)
+{
+    const std::string dir = MakeTempSaveDir("two_entity_transient_candidate");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID first = source.CreateEntity("two-transient-first");
+    source.AddComponent<Transform>(first).position.x = 71.0f;
+    const EntityID second = source.CreateEntity("two-transient-second");
+    source.AddComponent<Transform>(second).position.x = 72.0f;
+    SaveMetadata metadata;
+    metadata.saveName = "Two transient candidate entities";
+    EXPECT_TRUE(saveSystem.Save("two-transient-candidate", source, metadata, {{"candidate", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "two-transient-candidate.spark_save";
+    std::vector<char> bytes = ReadBytes(path);
+    ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "TransientTwoTx"));
+    ASSERT_TRUE(WriteBytes(path, bytes));
+
+    auto& serializers = ComponentSerializerRegistry::GetInstance();
+    serializers.Unregister("TransientTwoTx");
+    serializers.Register(
+        "TransientTwoTx", [](const void*) { return SerializedComponent{"TransientTwoTx", {}}; },
+        [](World& world, EntityID entity, const SerializedComponent&)
+        {
+            world.AddComponent<TransientCandidateProbe>(entity);
+            const EntityID ghost = world.CreateEntity();
+            g_transientCandidateGhost = ghost;
+            world.DestroyEntity(ghost);
+        });
+    ComponentFactory::Get().Register(
+        "TransientTwoTx", MakeProbeComponentOps<TransientCandidateProbe>(&CountTransientCandidatePrepare));
+    g_transientCandidatePrepareCalls = 0;
+    g_transientCandidateGhost = entt::null;
+
+    World liveWorld;
+    const EntityID parent = liveWorld.CreateEntity("two-transient-live-parent");
+    const EntityID child = liveWorld.CreateEntity("two-transient-live-child");
+    liveWorld.AddComponent<Transform>(parent).position.x = 505.0f;
+    liveWorld.AddComponent<Transform>(child).position.x = 606.0f;
+    ASSERT_TRUE(liveWorld.SetParent(child, parent));
+    int deliveries = 0;
+    auto subscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(child), [&](const SaveLoadLifecycleProbeEvent&) { ++deliveries; });
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+    const auto topologyBefore = RegistryStorageIds(liveWorld);
+    const auto& liveEntityStorageBefore = liveWorld.GetRegistry().storage<entt::entity>();
+    const size_t entityStorageSizeBefore = liveEntityStorageBefore.size();
+    const size_t entityFreeListBefore = liveEntityStorageBefore.free_list();
+
+    const bool loaded = saveSystem.Load("two-transient-candidate", liveWorld, customState);
+    serializers.Unregister("TransientTwoTx");
+
+    EXPECT_FALSE(loaded);
+    EXPECT_EQ(g_transientCandidatePrepareCalls, 0);
+    EXPECT_TRUE(RegistryStorageIds(liveWorld) == topologyBefore);
+    EXPECT_EQ(liveWorld.GetRegistry().storage<entt::entity>().size(), entityStorageSizeBefore);
+    EXPECT_EQ(liveWorld.GetRegistry().storage<entt::entity>().free_list(), entityFreeListBefore);
+    EXPECT_EQ(liveWorld.GetEntityCount(), 2u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "two-transient-live-parent"));
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "two-transient-live-child"));
+    const Transform* parentTransform = liveWorld.GetComponent<Transform>(parent);
+    const Transform* childTransform = liveWorld.GetComponent<Transform>(child);
+    ASSERT_TRUE(parentTransform != nullptr);
+    ASSERT_TRUE(childTransform != nullptr);
+    EXPECT_TRUE(std::find(parentTransform->children.begin(), parentTransform->children.end(), child) !=
+                parentTransform->children.end());
+    EXPECT_TRUE(childTransform->parent == parent);
+    EXPECT_NEAR(parentTransform->position.x, 505.0f, 0.0001f);
+    EXPECT_NEAR(childTransform->position.x, 606.0f, 0.0001f);
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("live"), std::string("sentinel"));
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(child)),
+              1u);
+    Spark::EntityEventBus::Global().Publish<SaveLoadLifecycleProbeEvent>(static_cast<Spark::EventEntityID>(child), {1});
+    EXPECT_EQ(deliveries, 1);
+
+    const EntityID next = liveWorld.CreateEntity();
+    EXPECT_EQ(static_cast<uint32_t>(next), 2u);
+    liveWorld.DestroyEntity(next);
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_CandidateAllocatorCursorMutationDoesNotReachLiveWorld)
+{
+    const std::string dir = MakeTempSaveDir("candidate_allocator_cursor");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("allocator-cursor-source");
+    source.AddComponent<Transform>(sourceEntity).position.x = 81.0f;
+    SaveMetadata metadata;
+    metadata.saveName = "Candidate allocator cursor";
+    EXPECT_TRUE(saveSystem.Save("candidate-allocator-cursor", source, metadata, {{"loaded", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "candidate-allocator-cursor.spark_save";
+    std::vector<char> bytes = ReadBytes(path);
+    ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "CursorTx"));
+    ASSERT_TRUE(WriteBytes(path, bytes));
+
+    auto& serializers = ComponentSerializerRegistry::GetInstance();
+    serializers.Unregister("CursorTx");
+    serializers.Register(
+        "CursorTx", [](const void*) { return SerializedComponent{"CursorTx", {}}; },
+        [](World& world, EntityID entity, const SerializedComponent&)
+        {
+            world.AddComponent<AllocatorCursorProbe>(entity);
+            world.GetRegistry().storage<entt::entity>().start_from(static_cast<EntityID>(777u));
+        });
+    ComponentFactory::Get().Register("CursorTx",
+                                     MakeProbeComponentOps<AllocatorCursorProbe>(&CountAllocatorCursorPrepare));
+    g_allocatorCursorPrepareCalls = 0;
+
+    World liveWorld;
+    const EntityID parent = liveWorld.CreateEntity("allocator-cursor-live-parent");
+    const EntityID child = liveWorld.CreateEntity("allocator-cursor-live-child");
+    liveWorld.AddComponent<Transform>(parent);
+    liveWorld.AddComponent<Transform>(child);
+    ASSERT_TRUE(liveWorld.SetParent(child, parent));
+    auto parentSubscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(parent), [](const SaveLoadLifecycleProbeEvent&) {});
+    auto childSubscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(child), [](const SaveLoadLifecycleProbeEvent&) {});
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+
+    const bool loaded = saveSystem.Load("candidate-allocator-cursor", liveWorld, customState);
+    serializers.Unregister("CursorTx");
+
+    EXPECT_TRUE(loaded);
+    EXPECT_EQ(g_allocatorCursorPrepareCalls, 1);
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    const EntityID incoming = FindNamedEntity(liveWorld, "allocator-cursor-source");
+    ASSERT_TRUE(incoming != entt::null);
+    EXPECT_EQ(static_cast<uint32_t>(incoming), 0u);
+    EXPECT_TRUE(liveWorld.HasComponent<AllocatorCursorProbe>(incoming));
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("loaded"), std::string("state"));
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(parent)),
+              0u);
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(child)),
+              0u);
+
+    const EntityID next = liveWorld.CreateEntity();
+    EXPECT_EQ(static_cast<uint32_t>(next), 1u);
+    liveWorld.DestroyEntity(next);
     std::filesystem::remove_all(dir);
 }
 

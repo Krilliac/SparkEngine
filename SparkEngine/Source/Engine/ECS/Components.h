@@ -101,6 +101,17 @@
 class World
 {
   public:
+    enum class EntityEventCleanupMode
+    {
+        Enabled,
+        Suppressed
+    };
+
+    explicit World(EntityEventCleanupMode entityEventCleanupMode = EntityEventCleanupMode::Enabled) noexcept
+        : m_entityEventCleanupMode(entityEventCleanupMode)
+    {
+    }
+
     /**
      * @brief Immutable hierarchy snapshot used to retire an entity without allocating.
      *
@@ -249,8 +260,10 @@ class World
             }
         }
 
-        // Clean up any per-entity event subscriptions before destroying
-        Spark::EntityEventBus::Global().RemoveEntity(static_cast<Spark::EventEntityID>(entity));
+        // Candidate worlds used by transactional restore must not erase global
+        // subscriptions that belong to a live entity with the same identifier.
+        if (m_entityEventCleanupMode == EntityEventCleanupMode::Enabled)
+            Spark::EntityEventBus::Global().RemoveEntity(static_cast<Spark::EventEntityID>(entity));
 
         m_registry.destroy(entity);
     }
@@ -306,4 +319,5 @@ class World
   private:
     entt::registry m_registry;
     RetirementSnapshotProbe m_retirementSnapshotProbe = nullptr;
+    EntityEventCleanupMode m_entityEventCleanupMode = EntityEventCleanupMode::Enabled;
 };

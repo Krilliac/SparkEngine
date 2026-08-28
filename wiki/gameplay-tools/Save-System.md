@@ -164,8 +164,8 @@ after the replacement succeeds.
 3. migrate the parsed `SaveData` in memory;
 4. run the optional custom-state validator;
 5. copy `customState`, restore every entity into a fresh candidate `World`, and
-   prove its exact entity identifiers, component pools, and per-entity component
-   presence match the serialized declaration;
+   prove its exact entity identifiers, entity-storage occupancy, component pools,
+   and per-entity component presence match the serialized declaration;
 6. resolve and validate every type-erased add/presence/remove/raw/storage-swap/
    rebind operation without touching the live registry;
 7. allocate a complete immutable hierarchy-retirement plan for the live world;
@@ -173,7 +173,9 @@ after the replacement succeeds.
 9. retire live entities through the prebuilt `World::EntityRetirementPlan`, which
    removes hierarchy links without allocating, fires destroy observers, and clears
    per-entity event subscriptions;
-10. exchange only the validated component/entity storage payloads;
+10. exchange the validated component payloads and a separately constructed,
+    pristine entity-storage payload so callback-mutated allocator state cannot
+    affect the live world's future entity identifiers;
 11. emit an explicit live `on_update` rebind for every incoming component (the
    same rebuild path consumed by all production `ReactiveSystem` subscribers);
 12. exchange the staged custom-state map with a non-throwing swap.
@@ -183,11 +185,14 @@ duplicate property/custom-state keys, a missing/malformed/oversized required
 built-in value, a failed reflected-field conversion, or any standard/unknown
 exception from a registered deserializer, a deserializer that returns without
 materializing its declared component, a deserializer-created entity or undeclared
-staged component, incomplete type-erased operations, hierarchy-plan allocation,
-or any representation-limit violation fails the candidate restore. These failures
-occur before live storage preparation, so exact registry topology, hierarchy,
-live entities, components, per-entity subscriptions, and custom-state output remain
-unchanged.
+staged component, transient create/destroy residue in candidate entity storage,
+incomplete type-erased operations, hierarchy-plan allocation, or any
+representation-limit violation fails the candidate restore. Candidate identifiers
+are allocated before extension callbacks run, and the live world receives entity
+allocator metadata from a separate pristine storage; a callback-only allocator
+cursor change therefore cannot escape the candidate. These failures occur before
+live storage preparation, so exact registry topology, hierarchy, live entities,
+components, per-entity subscriptions, and custom-state output remain unchanged.
 
 Live-pool preparation is intentionally outside the ordinary-failure catch. The
 engine-owned hierarchy plan is complete before this point. If a pool allocation
@@ -273,6 +278,9 @@ The compatibility-labeled coverage includes:
   registry topology, entity/component, EventBus, and custom-state preservation;
 - custom deserializers that create ghost entities or extra staged components,
   rejected before live storage preparation with exact live-state preservation;
+- transient create/destroy candidate entities rejected even when the surviving
+  active IDs and component topology match, plus allocator-cursor mutation isolated
+  by the pristine committed entity storage;
 - hierarchy-plan failpoint rollback and a boundary guard proving every live
   `Transform::children` copy occurs before storage preparation;
 - propagation of live-storage-preparation failure after an empty pool appears,
