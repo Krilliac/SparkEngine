@@ -421,6 +421,31 @@ TEST(GatewaySecurity_GeneratedKeyRemainsPrivateUnderInheritableParentAcl)
     std::filesystem::remove_all(root, filesystemError);
 }
 
+TEST(GatewaySecurity_AllowsConcurrentOwnerReadHandle)
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / Spark::SecureRandom::HexToken(12);
+    const std::filesystem::path keyFile = root / "gateway.key";
+    const std::string token = Spark::SecureRandom::HexToken(32);
+    std::string error;
+    ASSERT_TRUE(Spark::SecureRandom::CreatePrivateFile(keyFile, token + "\n", &error));
+
+    const HANDLE existingReader =
+        CreateFileW(keyFile.c_str(), GENERIC_READ | READ_CONTROL, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    EXPECT_TRUE(existingReader != INVALID_HANDLE_VALUE);
+    if (existingReader != INVALID_HANDLE_VALUE)
+    {
+        std::vector<uint8_t> key;
+        error.clear();
+        EXPECT_TRUE(LoadPrivateGatewayKey(keyFile, key, error));
+        EXPECT_EQ(key.size(), token.size() / 2);
+        CloseHandle(existingReader);
+    }
+
+    std::error_code ignored;
+    std::filesystem::remove_all(root, ignored);
+}
+
 TEST(GatewaySecurity_RejectsOwnerOnlyAclWhenOwnerIsNotCurrentProcessUser)
 {
     const std::filesystem::path root = std::filesystem::temp_directory_path() / Spark::SecureRandom::HexToken(12);

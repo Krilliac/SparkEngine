@@ -184,7 +184,11 @@ namespace Spark::Gateway
         {
             contentsSize = 0;
             const HANDLE file =
-                CreateFileW(path.c_str(), GENERIC_READ | READ_CONTROL, 0, nullptr, OPEN_EXISTING,
+                // One owner-only key is intentionally shared by the gateway and
+                // every local area server.  Permit concurrent readers while
+                // continuing to deny writers and deleters for the lifetime of
+                // each validated handle.
+                CreateFileW(path.c_str(), GENERIC_READ | READ_CONTROL, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
             if (file == INVALID_HANDLE_VALUE)
             {
