@@ -165,4 +165,17 @@ namespace Terrafront
         return id == TFMsg::LoginRequest || id == TFMsg::RegisterRequest;
     }
 
+    struct TFMessageSecurityMetadata
+    {
+        bool sensitive = false;
+        bool localOnly = false;
+    };
+
+    /** @brief Sender-owned security metadata applied by TFClientNet before payload allocation. */
+    [[nodiscard]] inline constexpr TFMessageSecurityMetadata GetTFMessageSecurityMetadata(TFMsg id) noexcept
+    {
+        const bool credentialRequest = IsTFCredentialOnboardingMessage(id);
+        return TFMessageSecurityMetadata{credentialRequest, credentialRequest};
+    }
+
 } // namespace Terrafront

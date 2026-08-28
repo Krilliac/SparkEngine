@@ -294,8 +294,9 @@ namespace SparkEditor
         if (ImGui::InputText("Bind Address", bindAddress, sizeof(bindAddress)))
             m_pieConfig.bindAddress = bindAddress;
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Use 'loopback' for this machine, or one concrete numeric RFC1918 interface address.\n"
-                              "Wildcard/public addresses are rejected. Transport is not authenticated or encrypted.");
+            ImGui::SetTooltip("Use 'loopback' for this machine, or canonical RFC1918 CIDR such as "
+                              "192.168.1.20/24.\nMissing/invalid prefixes and wildcard/public addresses are rejected. "
+                              "Transport is not authenticated or encrypted.");
 
         ImGui::Spacing();
         ImGui::Text(ICON_FA_GAMEPAD " Game Settings");

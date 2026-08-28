@@ -28,7 +28,11 @@ namespace Spark::Net
         None,
         EmptyValue,
         NonNumericAddress,
-        DisallowedAddress
+        MissingPrefix,
+        InvalidPrefix,
+        DisallowedAddress,
+        NetworkAddress,
+        BroadcastAddress
     };
 
     /** @brief Parse a strict dotted-decimal IPv4 address into host byte order. */
@@ -45,6 +49,10 @@ namespace Spark::Net
             const size_t end = separator == std::string_view::npos ? address.size() : separator;
             if (end == begin || (index < 3 && separator == std::string_view::npos) ||
                 (index == 3 && separator != std::string_view::npos))
+                return false;
+
+            // Canonical dotted decimal has no alternate octal-looking form.
+            if (end - begin > 1 && address[begin] == '0')
                 return false;
 
             unsigned int octet = 0;
@@ -73,6 +81,12 @@ namespace Spark::Net
         return ParseIPv4Address(address, parsed) && IsIPv4LoopbackAddress(parsed);
     }
 
+    /** @brief Whether an address is a concrete host in the fixed 127/8 loopback block. */
+    [[nodiscard]] inline constexpr bool IsConcreteLoopbackUnicastAddress(uint32_t address) noexcept
+    {
+        return IsIPv4LoopbackAddress(address) && address != 0x7F000000u && address != 0x7FFFFFFFu;
+    }
+
     /** @brief Whether a host-order IPv4 address is in RFC1918 private-use space. */
     [[nodiscard]] inline constexpr bool IsIPv4PrivateAddress(uint32_t address) noexcept
     {
@@ -80,18 +94,37 @@ namespace Spark::Net
                (address & 0xFFFF0000u) == 0xC0A80000u;
     }
 
-    /**
-     * @brief Conservative unicast check for explicit RFC1918 endpoint values.
-     *
-     * Without an interface prefix length the exact subnet network/broadcast
-     * addresses cannot be derived. Rejecting final octets 0 and 255 prevents
-     * the common accidental network/broadcast requests and fails closed for
-     * ambiguous addresses.
-     */
-    [[nodiscard]] inline constexpr bool IsConcretePrivateUnicastAddress(uint32_t address) noexcept
+    /** @brief Host-order subnet mask for a validated IPv4 prefix. */
+    [[nodiscard]] inline constexpr uint32_t IPv4PrefixMask(uint8_t prefixLength) noexcept
     {
-        const uint32_t finalOctet = address & 0xFFu;
-        return IsIPv4PrivateAddress(address) && finalOctet != 0u && finalOctet != 255u;
+        return prefixLength == 0u ? 0u : (0xFFFFFFFFu << (32u - prefixLength));
+    }
+
+    /** @brief Minimum prefix that keeps a subnet wholly inside its RFC1918 allocation. */
+    [[nodiscard]] inline constexpr uint8_t MinimumPrivatePrefix(uint32_t address) noexcept
+    {
+        if ((address & 0xFF000000u) == 0x0A000000u)
+            return 8u;
+        if ((address & 0xFFF00000u) == 0xAC100000u)
+            return 12u;
+        if ((address & 0xFFFF0000u) == 0xC0A80000u)
+            return 16u;
+        return 0u;
+    }
+
+    /** @brief Whether an RFC1918 address/prefix denotes a concrete broadcast-capable LAN host. */
+    [[nodiscard]] inline constexpr bool IsConcretePrivateUnicastAddress(uint32_t address,
+                                                                         uint8_t prefixLength) noexcept
+    {
+        const uint8_t minimumPrefix = MinimumPrivatePrefix(address);
+        if (minimumPrefix == 0u || prefixLength < minimumPrefix || prefixLength > 30u)
+            return false;
+
+        const uint32_t mask = IPv4PrefixMask(prefixLength);
+        const uint32_t network = address & mask;
+        const uint32_t broadcast = network | ~mask;
+        return IsIPv4PrivateAddress(network) && IsIPv4PrivateAddress(broadcast) && address != network &&
+               address != broadcast;
     }
 
     /**
@@ -108,26 +141,37 @@ namespace Spark::Net
 
         [[nodiscard]] static constexpr NetworkEndpointPolicy Loopback(uint32_t address = 0x7F000001u) noexcept
         {
-            return IsIPv4LoopbackAddress(address) ? NetworkEndpointPolicy(address, NetworkPeerScope::LoopbackOnly,
-                                                                          NetworkEndpointPolicyError::None)
-                                                  : Invalid(NetworkEndpointPolicyError::DisallowedAddress);
+            return IsConcreteLoopbackUnicastAddress(address)
+                       ? NetworkEndpointPolicy(address, 8u, NetworkPeerScope::LoopbackOnly,
+                                               NetworkEndpointPolicyError::None)
+                       : Invalid(NetworkEndpointPolicyError::DisallowedAddress);
         }
 
-        [[nodiscard]] static constexpr NetworkEndpointPolicy PrivateLan(uint32_t address) noexcept
+        [[nodiscard]] static constexpr NetworkEndpointPolicy PrivateLan(uint32_t address, uint8_t prefixLength) noexcept
         {
-            return IsConcretePrivateUnicastAddress(address)
-                       ? NetworkEndpointPolicy(address, NetworkPeerScope::PrivateLan, NetworkEndpointPolicyError::None)
+            return IsConcretePrivateUnicastAddress(address, prefixLength)
+                       ? NetworkEndpointPolicy(address, prefixLength, NetworkPeerScope::PrivateLan,
+                                               NetworkEndpointPolicyError::None)
                        : Invalid(NetworkEndpointPolicyError::DisallowedAddress);
         }
 
         [[nodiscard]] static constexpr NetworkEndpointPolicy Invalid(NetworkEndpointPolicyError error) noexcept
         {
-            return NetworkEndpointPolicy(0x7F000001u, NetworkPeerScope::LoopbackOnly, error);
+            return NetworkEndpointPolicy(0x7F000001u, 8u, NetworkPeerScope::LoopbackOnly, error);
         }
 
         [[nodiscard]] constexpr bool IsValid() const noexcept { return m_error == NetworkEndpointPolicyError::None; }
 
         [[nodiscard]] constexpr uint32_t BindAddress() const noexcept { return m_bindAddress; }
+        [[nodiscard]] constexpr uint8_t SubnetPrefixLength() const noexcept { return m_prefixLength; }
+        [[nodiscard]] constexpr uint32_t NetworkAddress() const noexcept
+        {
+            return m_bindAddress & IPv4PrefixMask(m_prefixLength);
+        }
+        [[nodiscard]] constexpr uint32_t BroadcastAddress() const noexcept
+        {
+            return NetworkAddress() | ~IPv4PrefixMask(m_prefixLength);
+        }
         [[nodiscard]] constexpr NetworkPeerScope PeerScope() const noexcept { return m_peerScope; }
         [[nodiscard]] constexpr NetworkEndpointPolicyError Error() const noexcept { return m_error; }
 
@@ -136,18 +180,21 @@ namespace Spark::Net
         {
             if (!IsValid())
                 return false;
-            return m_peerScope == NetworkPeerScope::LoopbackOnly ? IsIPv4LoopbackAddress(address)
-                                                                 : IsConcretePrivateUnicastAddress(address);
+            if (m_peerScope == NetworkPeerScope::LoopbackOnly)
+                return IsConcreteLoopbackUnicastAddress(address);
+            return IsConcretePrivateUnicastAddress(address, m_prefixLength) &&
+                   (address & IPv4PrefixMask(m_prefixLength)) == NetworkAddress();
         }
 
       private:
-        constexpr NetworkEndpointPolicy(uint32_t bindAddress, NetworkPeerScope peerScope,
+        constexpr NetworkEndpointPolicy(uint32_t bindAddress, uint8_t prefixLength, NetworkPeerScope peerScope,
                                         NetworkEndpointPolicyError error) noexcept
-            : m_bindAddress(bindAddress), m_peerScope(peerScope), m_error(error)
+            : m_bindAddress(bindAddress), m_prefixLength(prefixLength), m_peerScope(peerScope), m_error(error)
         {
         }
 
         uint32_t m_bindAddress = 0x7F000001u;
+        uint8_t m_prefixLength = 8u;
         NetworkPeerScope m_peerScope = NetworkPeerScope::LoopbackOnly;
         NetworkEndpointPolicyError m_error = NetworkEndpointPolicyError::None;
     };
@@ -160,13 +207,42 @@ namespace Spark::Net
         if (configuredAddress == "local" || configuredAddress == "loopback" || configuredAddress == "localhost")
             return NetworkEndpointPolicy::Loopback();
 
+        const size_t slash = configuredAddress.find('/');
+        const std::string_view addressText = configuredAddress.substr(0, slash);
         uint32_t address = 0;
-        if (!ParseIPv4Address(configuredAddress, address))
+        if (!ParseIPv4Address(addressText, address))
             return NetworkEndpointPolicy::Invalid(NetworkEndpointPolicyError::NonNumericAddress);
         if (IsIPv4LoopbackAddress(address))
-            return NetworkEndpointPolicy::Loopback(address);
-        if (IsConcretePrivateUnicastAddress(address))
-            return NetworkEndpointPolicy::PrivateLan(address);
+            return slash == std::string_view::npos
+                       ? NetworkEndpointPolicy::Loopback(address)
+                       : NetworkEndpointPolicy::Invalid(NetworkEndpointPolicyError::InvalidPrefix);
+        if (!IsIPv4PrivateAddress(address))
+            return NetworkEndpointPolicy::Invalid(NetworkEndpointPolicyError::DisallowedAddress);
+        if (slash == std::string_view::npos)
+            return NetworkEndpointPolicy::Invalid(NetworkEndpointPolicyError::MissingPrefix);
+
+        const std::string_view prefixText = configuredAddress.substr(slash + 1u);
+        if (prefixText.empty() || prefixText.find('/') != std::string_view::npos ||
+            (prefixText.size() > 1u && prefixText.front() == '0'))
+            return NetworkEndpointPolicy::Invalid(NetworkEndpointPolicyError::InvalidPrefix);
+        unsigned int prefixLength = 0;
+        const auto prefixResult =
+            std::from_chars(prefixText.data(), prefixText.data() + prefixText.size(), prefixLength);
+        if (prefixResult.ec != std::errc{} || prefixResult.ptr != prefixText.data() + prefixText.size() ||
+            prefixLength > 30u || prefixLength < MinimumPrivatePrefix(address))
+            return NetworkEndpointPolicy::Invalid(NetworkEndpointPolicyError::InvalidPrefix);
+
+        const uint32_t mask = IPv4PrefixMask(static_cast<uint8_t>(prefixLength));
+        const uint32_t network = address & mask;
+        const uint32_t broadcast = network | ~mask;
+        if (!IsIPv4PrivateAddress(network) || !IsIPv4PrivateAddress(broadcast))
+            return NetworkEndpointPolicy::Invalid(NetworkEndpointPolicyError::InvalidPrefix);
+        if (address == network)
+            return NetworkEndpointPolicy::Invalid(NetworkEndpointPolicyError::NetworkAddress);
+        if (address == broadcast)
+            return NetworkEndpointPolicy::Invalid(NetworkEndpointPolicyError::BroadcastAddress);
+        if (IsConcretePrivateUnicastAddress(address, static_cast<uint8_t>(prefixLength)))
+            return NetworkEndpointPolicy::PrivateLan(address, static_cast<uint8_t>(prefixLength));
         return NetworkEndpointPolicy::Invalid(NetworkEndpointPolicyError::DisallowedAddress);
     }
 
@@ -201,10 +277,19 @@ namespace Spark::Net
         case NetworkEndpointPolicyError::EmptyValue:
             return "bind address is empty";
         case NetworkEndpointPolicyError::NonNumericAddress:
-            return "bind address must be 'loopback' or a numeric IPv4 address";
+            return "bind address must be 'loopback', a canonical loopback IPv4 address, or canonical IPv4 CIDR";
+        case NetworkEndpointPolicyError::MissingPrefix:
+            return "an RFC1918 LAN bind requires an explicit subnet prefix (for example 192.168.1.20/24)";
+        case NetworkEndpointPolicyError::InvalidPrefix:
+            return "LAN prefix must be canonical, keep the subnet inside RFC1918 space, and leave host space "
+                   "(/30 or shorter)";
         case NetworkEndpointPolicyError::DisallowedAddress:
-            return "bind address must be loopback or a concrete RFC1918 unicast address; wildcard, public, test, "
-                   "multicast, broadcast, and CGNAT addresses are forbidden";
+            return "bind address must be loopback or a concrete RFC1918 unicast CIDR; wildcard, public, test, "
+                   "multicast, and CGNAT addresses are forbidden";
+        case NetworkEndpointPolicyError::NetworkAddress:
+            return "bind address is the configured subnet network address";
+        case NetworkEndpointPolicyError::BroadcastAddress:
+            return "bind address is the configured subnet broadcast address";
         }
         return "bind address policy is invalid";
     }

@@ -325,6 +325,7 @@ namespace Spark::Net
         m_rttVariance = 0.0f;
         m_rttInitialized = false;
         m_stats = {};
+        m_allowLanAdvertisement = false;
         m_initialized = false;
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Network", 0.0);
     }
@@ -335,10 +336,16 @@ namespace Spark::Net
 
     bool NetworkManager::StartServer(uint16_t port, int maxClients)
     {
-        return StartServer(port, maxClients, CaptureNetworkEndpointPolicy());
+        return StartServer(port, maxClients, CaptureNetworkEndpointPolicy(), false);
     }
 
     bool NetworkManager::StartServer(uint16_t port, int maxClients, const NetworkEndpointPolicy& endpointPolicy)
+    {
+        return StartServer(port, maxClients, endpointPolicy, false);
+    }
+
+    bool NetworkManager::StartServer(uint16_t port, int maxClients, const NetworkEndpointPolicy& endpointPolicy,
+                                     bool allowLanAdvertisement)
     {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
@@ -375,6 +382,7 @@ namespace Spark::Net
         m_serverTime = 0.0f;
         m_heartbeatTimer = 0.0f;
         m_replicationTimer = 0.0f;
+        m_allowLanAdvertisement = allowLanAdvertisement;
         ++m_lifecycleEpoch;
         return true;
     }
@@ -438,6 +446,7 @@ namespace Spark::Net
             m_pendingInputs.clear();
         }
         m_peers.clear();
+        m_allowLanAdvertisement = false;
 
         {
             std::lock_guard<std::mutex> stateLock(m_stateMutex);
@@ -531,6 +540,7 @@ namespace Spark::Net
             m_connectionState = ConnectionState::Connecting;
             m_lastConnectionError.clear();
         }
+        m_allowLanAdvertisement = false;
         ++m_lifecycleEpoch;
 
         // Send connect request
@@ -600,6 +610,15 @@ namespace Spark::Net
             m_inputHistory.clear();
         }
         m_peers.clear();
+        m_allowLanAdvertisement = false;
+    }
+
+    NetworkDiscoveryConfiguration NetworkManager::GetDiscoveryConfiguration() const
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        const NetworkRole role = GetRole();
+        return NetworkDiscoveryConfiguration{m_endpointPolicy, role != NetworkRole::None,
+                                             role == NetworkRole::Server && m_allowLanAdvertisement};
     }
 
     // --------------------------------------------------------------------------

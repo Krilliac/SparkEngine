@@ -27,7 +27,7 @@ This ensures your report is private and only visible to the maintainers until a 
 
 ## Scope
 
-SparkEngine's first-party gameplay and discovery listeners default to loopback. A development LAN listener must name one concrete numeric RFC1918 interface; wildcard and public exposure requests are rejected. This is a containment boundary, not transport security: the active UDP protocol is unauthenticated and unencrypted, and the legacy XOR/FNV helpers must not protect credentials or hostile-network traffic. NET-100 remains release-blocking until maintained authenticated encryption and an independent security review land.
+SparkEngine's first-party gameplay, discovery, collaboration, and live-editor endpoints default to loopback. A development LAN endpoint must name one canonical RFC1918 interface and prefix (for example `192.168.1.20/24`); the entire subnet must remain inside RFC1918 space, and its exact network and directed-broadcast addresses are rejected. Peers are limited to that same subnet. Wildcard, public, documentation, multicast, limited-broadcast, CGNAT, IPv4-mapped IPv6, and alternate textual forms are rejected before socket creation. This is a containment boundary, not transport security: the active UDP protocol is unauthenticated and unencrypted, and the legacy XOR/FNV helpers must not protect credentials or hostile-network traffic. NET-100 remains release-blocking until maintained authenticated encryption and an independent security review land.
 
 The following are considered security vulnerabilities:
 

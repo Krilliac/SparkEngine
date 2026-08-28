@@ -9,10 +9,11 @@
  * can drive both halves of this feature.
  *
  * BEACON (server side): while ctx.role is ListenHost or DedicatedServer (i.e.
- * tf_host / tf_dedicated ran) and the `tf_lan_advertise` cvar is true, a raw
- * non-blocking UDP socket emits one TF_LanBeacon every 2 s. Loopback policy
- * uses local unicast; an explicit numeric RFC1918 policy binds one interface
- * and uses only that interface's directed subnet broadcast.
+ * tf_host / tf_dedicated ran), the authoritative NetworkManager server option
+ * permits LAN advertisement, and the `tf_lan_advertise` preference is true, a
+ * raw non-blocking UDP socket emits one TF_LanBeacon every 2 s. Loopback policy
+ * uses local unicast; an explicit RFC1918 CIDR policy binds one interface and
+ * derives the one directed subnet broadcast from that captured prefix.
  * The beacon carries ONLY public info: name (`tf_server_name` cvar), player
  * count / max, map name, advertised game port (`tf_lan_port` cvar, default
  * 27020 — set it if the server was hosted on a non-default port).
@@ -26,7 +27,8 @@
  * SAFETY:
  *  - All bind/socket failures are NON-FATAL: one SPARK_LOG_WARN, then the
  *    feature turns itself off for the session (no retry spam).
- *  - Self-contained WinSock/BSD sockets — NetworkManager is never touched.
+ *  - Self-contained WinSock/BSD sockets consume NetworkManager's immutable
+ *    discovery configuration; they never recapture server configuration.
  *  - Firewall stance: UDP 27025 needs the same LAN-only inbound allowance as
  *    the game port (27020). Do NOT forward either beyond the LAN.
  *  - Headless/test runs: the beacon only starts after tf_host/tf_dedicated
@@ -124,12 +126,14 @@ namespace Terrafront
         void BroadcastBeacon();
         void FillBeacon(TF_LanBeacon& out) const;
         void RefreshBroadcastTargets();
+        void RefreshEndpointConfiguration();
         void HandleDatagram(const TF_LanBeacon& b, const char* srcIp);
 
         TFGameContext* m_ctx{nullptr};
         bool m_initialized{false};
         bool m_wsaStarted{false}; // Windows: WSAStartup succeeded (paired WSACleanup in Shutdown)
-        Spark::Net::NetworkEndpointPolicy m_endpointPolicy{}; // Captured once during Initialize.
+        Spark::Net::NetworkEndpointPolicy m_endpointPolicy{}; // Same snapshot as the active game socket lifecycle.
+        bool m_allowAdvertisement{false};                      // Authoritative Network.lan_broadcast gate.
         double m_clock{0.0};                                  // monotonic feature clock (drives TTL expiry)
 
         // Sockets stored type-erased so this header never includes WinSock;

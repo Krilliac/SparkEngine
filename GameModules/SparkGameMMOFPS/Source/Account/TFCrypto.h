@@ -9,8 +9,8 @@
  *
  * NOT reused from SparkEngine/Source/Engine/Networking/NetworkEncryption.h:
  * that header's cipher/HMAC are explicitly documented as "NOT cryptographically
- * secure" (an XOR stream cipher + FNV-1a keyed hash for casual packet-sniffing
- * resistance only) -- unsuitable for password-at-rest hashing.
+ * secure" (a trivially reversible XOR transform + forgeable FNV-1a tag with
+ * no confidentiality or attacker resistance) -- unsuitable for any security use.
  *
  * All functions are pure/stateless from the caller's perspective. Correctness
  * is pinned by known-answer tests in Tests/TestTFOnboarding.cpp (FIPS 180-2

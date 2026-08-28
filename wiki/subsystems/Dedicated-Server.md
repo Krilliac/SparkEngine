@@ -8,7 +8,7 @@ For MMO-scale multiplayer with multiple server processes managing different worl
 
 > **Note:** Both approaches require `ENABLE_NETWORKING=ON` during CMake configuration. See [Networking](Networking.md) for full networking documentation.
 
-> **Security status:** The gameplay UDP path is experimental, unauthenticated, and unencrypted. Servers bind to IPv4 loopback by default. Isolated LAN development requires one concrete numeric RFC1918 interface; wildcard, public, test, multicast, broadcast, and CGNAT requests fail before startup. Gateway-managed `SparkServer` processes force loopback during option parsing. NET-100 remains open and release-blocking pending reviewed authenticated encryption.
+> **Security status:** The gameplay UDP path is experimental, unauthenticated, and unencrypted. Servers bind to IPv4 loopback by default. Isolated LAN development requires one canonical RFC1918 interface/prefix such as `192.168.1.20/24`; the full subnet must remain private, exact network/broadcast addresses fail, and admitted peers must be concrete hosts in that subnet. Gateway-managed `SparkServer` processes require loopback and reject conflicting LAN configuration. NET-100 remains open and release-blocking pending reviewed authenticated encryption.
 
 ## Architecture Overview
 
@@ -415,7 +415,7 @@ server.RegisterRconCommand("restart", "Restart the current match",
 
 ### Server Side
 
-LAN discovery metadata is emitted only when `enableLanBroadcast = true` and the server uses an explicit concrete RFC1918 endpoint policy. It is disabled by default, unauthenticated, and does not make gameplay transport secure. The server periodically sends a `ServerBroadcastInfo` packet on the configured UDP port (default 27016).
+LAN discovery metadata is emitted only when the authoritative `enableLanBroadcast` option is true. Loopback mode uses local unicast; explicit LAN mode derives one directed broadcast from the validated CIDR prefix and never uses `255.255.255.255`. Terrafront discovery consumes the same active `NetworkManager` policy and advertisement flag rather than rereading environment configuration. Discovery is disabled by default, unauthenticated, and does not make gameplay transport secure.
 
 ```cpp
 struct ServerBroadcastInfo

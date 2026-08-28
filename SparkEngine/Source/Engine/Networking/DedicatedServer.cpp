@@ -108,7 +108,8 @@ namespace Spark::Net
             return false;
         }
 
-        if (!m_networkRuntime->StartServer(m_config.port, m_config.maxClients, m_config.endpointPolicy))
+        if (!m_networkRuntime->StartServer(m_config.port, m_config.maxClients, m_config.endpointPolicy,
+                                           m_config.enableLanBroadcast))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to start server on port %d", m_config.port);
             Log("ERROR: Failed to start server on port " + std::to_string(m_config.port));
@@ -867,7 +868,7 @@ namespace Spark::Net
                     broadcastAddr.sin_addr.s_addr =
                         m_config.endpointPolicy.PeerScope() == NetworkPeerScope::LoopbackOnly
                             ? htonl(m_config.endpointPolicy.BindAddress())
-                            : INADDR_BROADCAST;
+                            : htonl(m_config.endpointPolicy.BroadcastAddress());
 
                     while (m_lanBroadcastActive.load(std::memory_order_acquire))
                     {

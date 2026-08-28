@@ -1075,6 +1075,26 @@ TEST(NetworkManager_BoundPortRejectsReuseAttacker)
     nm.Shutdown();
 }
 
+TEST(NetworkManager_DiscoveryConfigurationMatchesActiveServerLifecycle)
+{
+    auto& nm = NetworkManager::GetInstance();
+    nm.Shutdown();
+
+    const NetworkEndpointPolicy policy = NetworkEndpointPolicy::Loopback();
+    ASSERT_TRUE(nm.StartServer(0, 1, policy, true));
+    const NetworkDiscoveryConfiguration active = nm.GetDiscoveryConfiguration();
+    EXPECT_TRUE(active.active);
+    EXPECT_TRUE(active.allowAdvertisement);
+    EXPECT_EQ(active.endpointPolicy.BindAddress(), policy.BindAddress());
+    EXPECT_EQ(active.endpointPolicy.SubnetPrefixLength(), policy.SubnetPrefixLength());
+
+    nm.StopServer();
+    const NetworkDiscoveryConfiguration stopped = nm.GetDiscoveryConfiguration();
+    EXPECT_FALSE(stopped.active);
+    EXPECT_FALSE(stopped.allowAdvertisement);
+    nm.Shutdown();
+}
+
 TEST(NetworkManager_RejectsLegacyWildcardAndDisallowedClientDestinationsBeforeStartup)
 {
     const ScopedNetworkBindMode bindMode("all");
@@ -1084,7 +1104,7 @@ TEST(NetworkManager_RejectsLegacyWildcardAndDisallowedClientDestinationsBeforeSt
     EXPECT_FALSE(nm.IsInitialized());
     EXPECT_EQ(NetworkManagerClientIdTestAccess::PendingOutgoingMessages(nm), static_cast<size_t>(0));
 
-    const NetworkEndpointPolicy privatePolicy = ResolveNetworkEndpointPolicy("192.168.50.10");
+    const NetworkEndpointPolicy privatePolicy = ResolveNetworkEndpointPolicy("192.168.50.10/24");
     ASSERT_TRUE(privatePolicy.IsValid());
     EXPECT_FALSE(nm.Connect("192.0.2.1", 9, "RejectedTestNet", privatePolicy));
     EXPECT_FALSE(nm.IsInitialized());

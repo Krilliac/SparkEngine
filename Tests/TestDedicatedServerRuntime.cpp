@@ -30,12 +30,14 @@ namespace
             return initializeResult;
         }
 
-        bool StartServer(uint16_t port, int maxClients, const NetworkEndpointPolicy& endpointPolicy) override
+        bool StartServer(uint16_t port, int maxClients, const NetworkEndpointPolicy& endpointPolicy,
+                         bool allowLanAdvertisement) override
         {
             startServerCalled = true;
             startedPort = port;
             startedMaxClients = maxClients;
             startedEndpointPolicy = endpointPolicy;
+            startedAllowLanAdvertisement = allowLanAdvertisement;
             return startServerResult;
         }
 
@@ -102,6 +104,7 @@ namespace
         uint16_t startedPort = 0;
         int startedMaxClients = 0;
         NetworkEndpointPolicy startedEndpointPolicy{};
+        bool startedAllowLanAdvertisement = false;
 
         NetworkStats stats{};
         std::unordered_map<ClientID, ClientInfo> clients;
@@ -167,6 +170,7 @@ TEST(DedicatedServerRuntime_ConnectDisconnectCallbacks)
     EXPECT_EQ(runtime.startedEndpointPolicy.BindAddress(), config.endpointPolicy.BindAddress());
     EXPECT_EQ(static_cast<int>(runtime.startedEndpointPolicy.PeerScope()),
               static_cast<int>(config.endpointPolicy.PeerScope()));
+    EXPECT_FALSE(runtime.startedAllowLanAdvertisement);
 
     NetworkMessage connect;
     connect.type = MessageType::Connect;
@@ -186,6 +190,22 @@ TEST(DedicatedServerRuntime_ConnectDisconnectCallbacks)
 
     server.Stop();
     EXPECT_TRUE(runtime.clearHandlersCalled);
+}
+
+TEST(DedicatedServerRuntime_ThreadsAuthoritativeLanAdvertisementIntoNetworkRuntime)
+{
+    MockNetworkRuntime runtime;
+    DedicatedServer server(runtime, []() { return INVALID_SOCKET; });
+
+    ServerConfig config;
+    config.enableLanBroadcast = true;
+    config.mapRotation = {"arena"};
+    config.endpointPolicy = NetworkEndpointPolicy::Loopback();
+
+    ASSERT_TRUE(server.InitializeOnly(config));
+    EXPECT_TRUE(runtime.startedAllowLanAdvertisement);
+    EXPECT_EQ(runtime.startedEndpointPolicy.BindAddress(), config.endpointPolicy.BindAddress());
+    server.Stop();
 }
 
 TEST(DedicatedServerRuntime_InvalidEndpointPolicyFailsBeforeRuntimeInitialization)

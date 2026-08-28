@@ -21,9 +21,10 @@ namespace Spark::Net
     }
 
     bool NetworkManagerRuntimeAdapter::StartServer(uint16_t port, int maxClients,
-                                                   const NetworkEndpointPolicy& endpointPolicy)
+                                                   const NetworkEndpointPolicy& endpointPolicy,
+                                                   bool allowLanAdvertisement)
     {
-        return m_networkManager.StartServer(port, maxClients, endpointPolicy);
+        return m_networkManager.StartServer(port, maxClients, endpointPolicy, allowLanAdvertisement);
     }
 
     void NetworkManagerRuntimeAdapter::StopServer()

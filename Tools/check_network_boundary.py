@@ -19,6 +19,7 @@ SOURCE_ROOTS = (
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
 FORBIDDEN_SOURCE = (
     (re.compile(r"\bINADDR_ANY\b"), "wildcard IPv4 bind"),
+    (re.compile(r"\bINADDR_BROADCAST\b"), "limited IPv4 broadcast destination"),
     (re.compile(r"\bNetworkBindScope\s*::\s*AllInterfaces\b"), "retired all-interface bind scope"),
     (re.compile(r"\bUseLoopbackNetworkBind\b"), "retired mutable bind helper"),
     (re.compile(r"\bShouldUseLoopbackForUnauthenticatedTool\b"), "retired boolean tool-bind helper"),
@@ -70,6 +71,24 @@ def check_admission_order() -> int:
             "std::memcpy(&beacon",
             "discovery peer admission must precede beacon deserialization",
         ),
+        (
+            ROOT / "SparkEditor" / "Source" / "Communication" / "CollaborativeEditSession.cpp",
+            "!endpointPolicy.AllowsPeerAddress(remoteAddress)",
+            "m_clientSocket = ToStoredSocket",
+            "collaboration destination admission must precede client socket creation",
+        ),
+        (
+            ROOT / "SparkEditor" / "Source" / "Communication" / "LiveEditBridge.cpp",
+            "!endpointPolicy.AllowsPeerAddress(serverAddress)",
+            "m_socket = m_socketFactory",
+            "live-edit destination admission must precede socket creation",
+        ),
+        (
+            ROOT / "GameModules" / "SparkGameMMOFPS" / "Source" / "Net" / "TFClientNet.cpp",
+            "GetTFMessageSecurityMetadata(id)",
+            "msg.payload.resize(size)",
+            "Terrafront credential metadata must be applied before payload allocation",
+        ),
     )
     for path, guard, boundary, message in checks:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -81,19 +100,64 @@ def check_admission_order() -> int:
     return failures
 
 
+def check_required_wiring() -> int:
+    failures = 0
+    checks = (
+        (
+            ROOT / "SparkEditor" / "Source" / "Communication" / "LiveEditBridge.cpp",
+            (
+                "m_endpointPolicy.AllowsPeerAddress(m_serverAddressNumeric)",
+                "::bind(ToNativeSocket(m_socket)",
+                "SO_ERROR",
+            ),
+            "live-edit endpoint policy/bind/connect-result wiring is incomplete",
+        ),
+        (
+            ROOT / "GameModules" / "SparkGameMMOFPS" / "Source" / "Game" / "TFLanDiscovery.cpp",
+            (
+                "GetDiscoveryConfiguration()",
+                "configuration.allowAdvertisement",
+                "m_endpointPolicy.BroadcastAddress()",
+            ),
+            "Terrafront discovery must consume the authoritative active policy and broadcast option",
+        ),
+    )
+    for path, fragments, message in checks:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if any(fragment not in text for fragment in fragments):
+            report(path, 1, message)
+            failures += 1
+    return failures
+
+
 def is_allowed_bind(value: str) -> bool:
-    if value.lower() in {"local", "localhost", "loopback"}:
+    if value in {"local", "localhost", "loopback"}:
         return True
+    if "/" not in value:
+        try:
+            address = ipaddress.ip_address(value)
+        except ValueError:
+            return False
+        return (
+            isinstance(address, ipaddress.IPv4Address)
+            and str(address) == value
+            and address.is_loopback
+            and address not in {ipaddress.IPv4Address("127.0.0.0"), ipaddress.IPv4Address("127.255.255.255")}
+        )
     try:
-        address = ipaddress.ip_address(value)
+        address_text, prefix_text = value.split("/", 1)
+        interface = ipaddress.ip_interface(value)
     except ValueError:
         return False
-    if not isinstance(address, ipaddress.IPv4Address):
+    if not isinstance(interface, ipaddress.IPv4Interface):
         return False
-    if address.is_loopback:
-        return True
-    octets = address.packed
-    return octets[-1] not in {0, 255} and any(address in network for network in RFC1918)
+    if str(interface.ip) != address_text or str(interface.network.prefixlen) != prefix_text:
+        return False
+    if interface.network.prefixlen > 30:
+        return False
+    if not any(interface.network.subnet_of(network) for network in RFC1918):
+        return False
+    return interface.ip not in {interface.network.network_address, interface.network.broadcast_address}
 
 
 def check_config(path: Path) -> int:
@@ -138,7 +202,7 @@ def shipped_configs() -> list[Path]:
 
 
 def main() -> int:
-    failures = check_sources() + check_admission_order()
+    failures = check_sources() + check_admission_order() + check_required_wiring()
     configs = shipped_configs()
     if not configs:
         print("No shipped server configurations found", file=sys.stderr)

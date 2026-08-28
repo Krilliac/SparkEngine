@@ -21,7 +21,8 @@
  * @code
  *   CollaborativeEditSession session;
  *   session.Host(27030, "Alice");
- *   // or: session.Connect("192.168.1.100", 27030, "Bob");
+ *   // With SPARK_NETWORK_BIND_ADDRESS=192.168.1.20/24:
+ *   // session.Connect("192.168.1.100", 27030, "Bob");
  *
  *   if (session.RequestLock("Entity_42"))
  *   {
@@ -234,6 +235,8 @@ namespace SparkEditor
          * @return true if hosting started (listener thread spawned)
          */
         bool Host(uint16_t port, const std::string& userName);
+        bool Host(uint16_t port, const std::string& userName,
+                  const Spark::Net::NetworkEndpointPolicy& endpointPolicy);
 
         /**
          * @brief Connect to an existing collaborative session via TCP
@@ -243,6 +246,8 @@ namespace SparkEditor
          * @return true if TCP connection succeeded and handshake completed
          */
         bool Connect(const std::string& address, uint16_t port, const std::string& userName);
+        bool Connect(const std::string& address, uint16_t port, const std::string& userName,
+                     const Spark::Net::NetworkEndpointPolicy& endpointPolicy);
 
         /**
          * @brief Create and join a session hosted by SparkCollabServer.

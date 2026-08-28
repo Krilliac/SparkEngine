@@ -2455,7 +2455,7 @@ Click any **Source** link to jump to the exact line in the source tree.
 | `ReplayFileInfo` | struct | SparkEditor | [ReplayPanel.h:L33](../../SparkEditor/Source/Panels/ReplayPanel.h#L33) |  |
 | `ReplayFrame` | struct | SparkEngine | [ReplaySystem.h:L76](../../SparkEngine/Source/Engine/Replay/ReplaySystem.h#L76) |  |
 | `ReplayPanel` | class | SparkEditor | [ReplayPanel.h:L21](../../SparkEditor/Source/Panels/ReplayPanel.h#L21) | Panel for managing replay recording, playback, and export |
-| `ReplayProtection` | class | SparkEngine | [NetworkEncryption.h:L180](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h#L180) | Sliding-window replay protection using sequence numbers |
+| `ReplayProtection` | class | SparkEngine | [NetworkEncryption.h:L180](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h#L180) | Legacy-named duplicate-sequence filter; not authenticated replay protection |
 | `ReplaySettings` | struct | SparkEngine | [EngineSettings.h:L736](../../SparkEngine/Source/Core/EngineSettings.h#L736) |  |
 | `ReplaySystem` | class | SparkEngine | [ReplaySystem.h:L119](../../SparkEngine/Source/Engine/Replay/ReplaySystem.h#L119) |  |
 | `ReplaySystem` | class | SparkSDK | [IEngineContext.h:L91](../../SparkSDK/Include/Spark/IEngineContext.h#L91) |  |

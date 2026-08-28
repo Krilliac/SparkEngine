@@ -177,12 +177,16 @@ TEST(TFOnboardingSessionRules_RejectReauthAndMidWorldProfileMutation)
 static_assert(static_cast<uint8_t>(TFAuthErr::RemoteOnboardingDisabled) == 8,
               "append-only onboarding error wire contract");
 
-TEST(TFOnboarding_CredentialRequestsRemainLoopbackOnly)
+TEST(TFOnboarding_ProductionSenderMetadataKeepsCredentialsLoopbackOnly)
 {
-    EXPECT_TRUE(IsTFCredentialOnboardingMessage(TFMsg::LoginRequest));
-    EXPECT_TRUE(IsTFCredentialOnboardingMessage(TFMsg::RegisterRequest));
-    EXPECT_FALSE(IsTFCredentialOnboardingMessage(TFMsg::CharListRequest));
-    EXPECT_FALSE(IsTFCredentialOnboardingMessage(TFMsg::EnterWorldReq));
+    const TFMessageSecurityMetadata login = GetTFMessageSecurityMetadata(TFMsg::LoginRequest);
+    const TFMessageSecurityMetadata registration = GetTFMessageSecurityMetadata(TFMsg::RegisterRequest);
+    const TFMessageSecurityMetadata characterList = GetTFMessageSecurityMetadata(TFMsg::CharListRequest);
+    const TFMessageSecurityMetadata enterWorld = GetTFMessageSecurityMetadata(TFMsg::EnterWorldReq);
+    EXPECT_TRUE(login.sensitive && login.localOnly);
+    EXPECT_TRUE(registration.sensitive && registration.localOnly);
+    EXPECT_FALSE(characterList.sensitive || characterList.localOnly);
+    EXPECT_FALSE(enterWorld.sensitive || enterWorld.localOnly);
 }
 
 TEST(TFNetworkLifecycle_DrainsRemoteSessionsAndSupportsImmediateRehost)

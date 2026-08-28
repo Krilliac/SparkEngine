@@ -104,6 +104,14 @@ namespace Spark::Net
         Client
     };
 
+    /** @brief Immutable snapshot consumed by first-party discovery endpoints. */
+    struct NetworkDiscoveryConfiguration
+    {
+        NetworkEndpointPolicy endpointPolicy{};
+        bool active = false;
+        bool allowAdvertisement = false;
+    };
+
     enum class ConnectionState
     {
         Disconnected,
@@ -398,6 +406,8 @@ namespace Spark::Net
         /// Initialize as server
         bool StartServer(uint16_t port = DEFAULT_PORT, int maxClients = 32);
         bool StartServer(uint16_t port, int maxClients, const NetworkEndpointPolicy& endpointPolicy);
+        bool StartServer(uint16_t port, int maxClients, const NetworkEndpointPolicy& endpointPolicy,
+                         bool allowLanAdvertisement);
 
         /// Stop the server and disconnect all clients
         void StopServer();
@@ -463,6 +473,7 @@ namespace Spark::Net
 
         // State queries (thread-safe)
         NetworkRole GetRole() const { return m_role.load(std::memory_order_acquire); }
+        [[nodiscard]] NetworkDiscoveryConfiguration GetDiscoveryConfiguration() const;
         ConnectionState GetConnectionState() const
         {
             std::lock_guard<std::mutex> lock(m_stateMutex);
@@ -696,6 +707,7 @@ namespace Spark::Net
 #endif // ENABLE_NETWORKING
 
         NetworkEndpointPolicy m_endpointPolicy{}; ///< Captured once and unchanged for the active socket lifecycle.
+        bool m_allowLanAdvertisement = false;      ///< Authoritative server option for discovery publishers.
 
         std::atomic<bool> m_initialized{false};
         std::atomic<NetworkRole> m_role{NetworkRole::None};

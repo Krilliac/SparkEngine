@@ -524,6 +524,12 @@ namespace SparkEditor
 
     bool CollaborativeEditSession::Host(uint16_t port, const std::string& userName)
     {
+        return Host(port, userName, Spark::Net::CaptureNetworkEndpointPolicy());
+    }
+
+    bool CollaborativeEditSession::Host(uint16_t port, const std::string& userName,
+                                        const Spark::Net::NetworkEndpointPolicy& endpointPolicy)
+    {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (userName.empty())
         {
@@ -536,7 +542,6 @@ namespace SparkEditor
             return false;
         }
 
-        const Spark::Net::NetworkEndpointPolicy endpointPolicy = Spark::Net::CaptureNetworkEndpointPolicy();
         if (!endpointPolicy.IsValid())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Cannot host: %s.",
@@ -611,6 +616,12 @@ namespace SparkEditor
 
     bool CollaborativeEditSession::Connect(const std::string& address, uint16_t port, const std::string& userName)
     {
+        return Connect(address, port, userName, Spark::Net::CaptureNetworkEndpointPolicy());
+    }
+
+    bool CollaborativeEditSession::Connect(const std::string& address, uint16_t port, const std::string& userName,
+                                           const Spark::Net::NetworkEndpointPolicy& endpointPolicy)
+    {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (address.empty())
         {
@@ -628,7 +639,6 @@ namespace SparkEditor
             return false;
         }
 
-        const Spark::Net::NetworkEndpointPolicy endpointPolicy = Spark::Net::CaptureNetworkEndpointPolicy();
         uint32_t remoteAddress = 0;
         if (!endpointPolicy.IsValid() || !Spark::Net::ParseIPv4Address(address, remoteAddress) ||
             !endpointPolicy.AllowsPeerAddress(remoteAddress))

@@ -79,6 +79,8 @@ namespace
             return port != 0;
         }
 
+        bool Listen() const { return ::listen(socket, 1) == 0; }
+
         TestSocketHandle socket = INVALID_TEST_SOCKET;
         uint16_t port = 0;
     };
@@ -192,7 +194,8 @@ TEST(CollabEdit_EndpointPolicyRejectsWildcardExposure)
 {
     using namespace Spark::Net;
     EXPECT_TRUE(ResolveNetworkEndpointPolicy("loopback").IsValid());
-    EXPECT_TRUE(ResolveNetworkEndpointPolicy("192.168.1.20").IsValid());
+    EXPECT_TRUE(ResolveNetworkEndpointPolicy("192.168.1.20/24").IsValid());
+    EXPECT_FALSE(ResolveNetworkEndpointPolicy("192.168.1.20").IsValid());
     EXPECT_FALSE(ResolveNetworkEndpointPolicy("").IsValid());
     EXPECT_FALSE(ResolveNetworkEndpointPolicy("typo").IsValid());
     EXPECT_FALSE(ResolveNetworkEndpointPolicy("all").IsValid());
@@ -524,6 +527,46 @@ TEST(LiveEditBridge_ConnectToRefusedPort)
     bool connected = bridge.Connect("127.0.0.1", 59999, "TestEditor");
     EXPECT_TRUE(!connected);
     EXPECT_TRUE(!bridge.IsConnected());
+}
+
+TEST(CollabEdit_ProductionHostAndConnectRejectInvalidPolicyBeforeSocketUse)
+{
+    const auto invalidPolicy = Spark::Net::ResolveNetworkEndpointPolicy("0.0.0.0");
+    ASSERT_FALSE(invalidPolicy.IsValid());
+
+    CollaborativeEditSession host;
+    EXPECT_FALSE(host.Host(0, "RejectedHost", invalidPolicy));
+    EXPECT_FALSE(host.IsConnected());
+
+    RefusedPortReservation listener;
+    ASSERT_TRUE(listener.Reserve());
+    ASSERT_TRUE(listener.Listen());
+    CollaborativeEditSession client;
+    EXPECT_FALSE(client.Connect("127.0.0.1", listener.port, "RejectedClient", invalidPolicy));
+    EXPECT_FALSE(client.IsConnected());
+}
+
+TEST(LiveEditBridge_RejectsOutOfPolicyDestinationsBeforeSocketCreation)
+{
+    size_t socketFactoryCalls = 0;
+    LiveEditBridge bridge(
+        [&socketFactoryCalls]()
+        {
+            ++socketFactoryCalls;
+            return INVALID_COLLAB_SOCKET;
+        });
+    const auto loopbackPolicy = Spark::Net::NetworkEndpointPolicy::Loopback();
+
+    EXPECT_FALSE(bridge.Connect("203.0.113.9", 27015, "PolicyProbe", loopbackPolicy));
+    EXPECT_FALSE(bridge.Connect("0.0.0.0", 27015, "PolicyProbe", loopbackPolicy));
+    EXPECT_FALSE(bridge.Connect("::ffff:127.0.0.1", 27015, "PolicyProbe", loopbackPolicy));
+    EXPECT_FALSE(bridge.Connect("127.000.0.1", 27015, "PolicyProbe", loopbackPolicy));
+    EXPECT_EQ(socketFactoryCalls, static_cast<size_t>(0));
+
+    // An admitted destination reaches the production socket boundary, proving
+    // the preceding assertions did not merely fail for an unrelated argument.
+    EXPECT_FALSE(bridge.Connect("127.0.0.1", 27015, "PolicyProbe", loopbackPolicy));
+    EXPECT_EQ(socketFactoryCalls, static_cast<size_t>(1));
 }
 
 TEST(LiveEditBridge_PushWithoutConnect)

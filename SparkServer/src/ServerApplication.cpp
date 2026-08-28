@@ -147,7 +147,7 @@ namespace Spark::Server
                 if (!config.GetBool("Network", "lan_only", true))
                 {
                     error = "Network.lan_only=false is no longer supported; set Network.bind_address to 'loopback' "
-                            "or a concrete numeric RFC1918 interface address";
+                            "or a concrete RFC1918 interface CIDR such as 192.168.1.20/24";
                     return false;
                 }
                 options.server.endpointPolicy = Net::NetworkEndpointPolicy::Loopback();
@@ -216,7 +216,7 @@ namespace Spark::Server
                "  --tick-rate <hz>             Override the simulation tick rate\n"
                "  --map <name[,name...]>       Override the map rotation\n"
                "  --name <display-name>        Override the server name\n"
-               "  --bind-address <IPv4>        Bind loopback or one concrete RFC1918 interface\n"
+               "  --bind-address <IPv4/CIDR>   Bind loopback or one concrete RFC1918 interface and prefix\n"
                "  --lan-only                   Legacy alias for --bind-address loopback\n"
                "  --no-lan-broadcast           Disable LAN discovery broadcasts\n"
                "  --health-file <path>         Publish a JSON health snapshot\n"
@@ -358,7 +358,14 @@ namespace Spark::Server
         // trust boundary into ServerConfig now so later environment mutation,
         // module loading, and startup cannot widen the game listener.
         if (!options.controlEndpoint.empty())
+        {
+            if (options.server.endpointPolicy.IsValid() &&
+                options.server.endpointPolicy.PeerScope() == Net::NetworkPeerScope::PrivateLan)
+                return {{}, "Gateway-managed servers cannot combine local control with an RFC1918 game bind; use "
+                            "Network.bind_address=loopback and disable LAN broadcast"};
             options.server.endpointPolicy = Net::NetworkEndpointPolicy::Loopback();
+            options.server.enableLanBroadcast = false;
+        }
         if (!options.controlEndpoint.empty() && options.controlStateFile.empty())
             options.controlStateFile = "Temp/spark-area-control-epochs.txt";
         if (options.server.mapRotation.empty())

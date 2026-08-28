@@ -162,12 +162,34 @@ TEST(SparkServerOptions_NonGatewayLegacyWildcardIsRejected)
 TEST(SparkServerOptions_CapturesConcretePrivateBindAddress)
 {
     const std::array arguments = {std::string_view{"--module"}, std::string_view{"Game.dll"},
-                                  std::string_view{"--bind-address"}, std::string_view{"192.168.42.9"}};
+                                  std::string_view{"--bind-address"}, std::string_view{"192.168.42.9/24"}};
     const ParseResult result = ParseServerOptions(arguments);
     ASSERT_TRUE(result.options.has_value());
     EXPECT_EQ(result.options->server.endpointPolicy.BindAddress(), uint32_t{0xC0A82A09u});
+    EXPECT_EQ(result.options->server.endpointPolicy.SubnetPrefixLength(), static_cast<uint8_t>(24));
     EXPECT_EQ(static_cast<int>(result.options->server.endpointPolicy.PeerScope()),
               static_cast<int>(Spark::Net::NetworkPeerScope::PrivateLan));
+}
+
+TEST(SparkServerOptions_PrivateBindRequiresCanonicalPrefix)
+{
+    const std::array arguments = {std::string_view{"--module"}, std::string_view{"Game.dll"},
+                                  std::string_view{"--bind-address"}, std::string_view{"192.168.42.9"}};
+    const ParseResult result = ParseServerOptions(arguments);
+    EXPECT_FALSE(result.options.has_value());
+    EXPECT_TRUE(result.error.find("explicit subnet prefix") != std::string::npos);
+}
+
+TEST(SparkServerOptions_GatewayControlRejectsConflictingPrivateBind)
+{
+    const std::array arguments = {
+        std::string_view{"--module"},           std::string_view{"Game.dll"},
+        std::string_view{"--bind-address"},     std::string_view{"192.168.42.9/24"},
+        std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+        std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"}};
+    const ParseResult result = ParseServerOptions(arguments);
+    EXPECT_FALSE(result.options.has_value());
+    EXPECT_TRUE(result.error.find("cannot combine") != std::string::npos);
 }
 
 TEST(SparkServerOptions_LegacyLanOnlyConfigFailsClosed)

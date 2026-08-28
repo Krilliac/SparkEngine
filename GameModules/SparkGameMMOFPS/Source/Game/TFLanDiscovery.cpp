@@ -4,9 +4,9 @@
  *        (see header). The scanner half lives in TFLanDiscoveryScan.cpp; the
  *        shared WinSock/BSD socket shim lives in TFLanDiscoveryInternal.h.
  *
- * Raw, self-contained UDP sockets (WinSock on Windows, BSD sockets elsewhere);
- * NetworkManager is only READ (GetClients() size for the advertised player
- * count) and never modified or routed through.
+ * Raw UDP sockets (WinSock on Windows, BSD sockets elsewhere) consume the
+ * active NetworkManager endpoint/advertisement snapshot and read GetClients()
+ * for the advertised player count. They never mutate NetworkManager.
  */
 #include "Game/TFLanDiscovery.h"
 
@@ -23,13 +23,10 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include <ws2ipdef.h> // INTERFACE_INFO / SIO_GET_INTERFACE_LIST
 #else
 #include <arpa/inet.h>
 #include <cerrno>
 #include <fcntl.h>
-#include <ifaddrs.h>
-#include <net/if.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -67,7 +64,7 @@ namespace Terrafront
 
 #ifdef ENABLE_NETWORKING
 
-        constexpr float kTargetRefreshSec = 30.0f; // re-enumerate interface broadcasts
+        constexpr float kTargetRefreshSec = 30.0f; // refresh the derived directed-broadcast target
 
 #endif // ENABLE_NETWORKING
 
@@ -91,13 +88,8 @@ namespace Terrafront
         m_beaconFailed = false;
         m_scanFailed = false;
         m_servers.clear();
-        m_endpointPolicy = Spark::Net::CaptureNetworkEndpointPolicy();
-        if (!m_endpointPolicy.IsValid())
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] lan: endpoint policy rejected - discovery disabled");
-            m_beaconFailed = true;
-            m_scanFailed = true;
-        }
+        m_endpointPolicy = Spark::Net::NetworkEndpointPolicy{};
+        m_allowAdvertisement = false;
 
 #ifdef ENABLE_NETWORKING
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -118,6 +110,7 @@ namespace Terrafront
 #endif
 
         m_initialized = true;
+        RefreshEndpointConfiguration();
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFLanDiscovery initialized (beacon port %u)",
                        static_cast<unsigned>(kTFLanBeaconPort));
         return true;
@@ -145,6 +138,7 @@ namespace Terrafront
         if (!m_initialized)
             return;
 
+        RefreshEndpointConfiguration();
         m_clock += static_cast<double>(deltaTime);
         UpdateBeacon(deltaTime);
         UpdateScanner();
@@ -181,7 +175,7 @@ namespace Terrafront
 #ifdef ENABLE_NETWORKING
         const NetRole role = m_ctx ? m_ctx->role : NetRole::Standalone;
         const bool hosting = (role == NetRole::ListenHost || role == NetRole::DedicatedServer);
-        const bool want = hosting && cv_tfLanAdvertise.Get() && !m_beaconFailed;
+        const bool want = hosting && m_allowAdvertisement && cv_tfLanAdvertise.Get() && !m_beaconFailed;
 
         if (want && m_beaconSock == kInvalidSock)
             StartBeacon();
@@ -286,50 +280,44 @@ namespace Terrafront
             return;
         }
 
-        // Select only the explicitly bound RFC1918 interface. Never emit on
-        // every interface or fall back to the limited broadcast address.
+        // The prefix was validated with the bind address and is the sole source
+        // of truth. Never enumerate another interface or use 255.255.255.255.
+        m_bcastTargets.push_back(htonl(m_endpointPolicy.BroadcastAddress()));
+#endif // ENABLE_NETWORKING
+    }
+
+    void TFLanDiscovery::RefreshEndpointConfiguration()
+    {
+#ifdef ENABLE_NETWORKING
+        const auto configuration = Spark::Net::NetworkManager::GetInstance().GetDiscoveryConfiguration();
+        const Spark::Net::NetworkEndpointPolicy nextPolicy =
+            configuration.active ? configuration.endpointPolicy : Spark::Net::CaptureNetworkEndpointPolicy();
+        const bool nextAllowAdvertisement = configuration.active && configuration.allowAdvertisement;
+        const bool unchanged = nextPolicy.BindAddress() == m_endpointPolicy.BindAddress() &&
+                               nextPolicy.SubnetPrefixLength() == m_endpointPolicy.SubnetPrefixLength() &&
+                               nextPolicy.PeerScope() == m_endpointPolicy.PeerScope() &&
+                               nextPolicy.Error() == m_endpointPolicy.Error() &&
+                               nextAllowAdvertisement == m_allowAdvertisement;
+        if (unchanged)
+            return;
+
+        StopBeacon();
+        StopScanning();
+        m_endpointPolicy = nextPolicy;
+        m_allowAdvertisement = nextAllowAdvertisement;
+
 #ifdef SPARK_PLATFORM_WINDOWS
-        INTERFACE_INFO infos[32]{};
-        DWORD bytes = 0;
-        if (WSAIoctl(ToSock(m_beaconSock), SIO_GET_INTERFACE_LIST, nullptr, 0, infos, static_cast<DWORD>(sizeof(infos)),
-                     &bytes, nullptr, nullptr) == 0)
-        {
-            const size_t count = static_cast<size_t>(bytes) / sizeof(INTERFACE_INFO);
-            for (size_t i = 0; i < count; ++i)
-            {
-                const u_long flags = infos[i].iiFlags;
-                if (!(flags & IFF_UP) || !(flags & IFF_BROADCAST) || (flags & IFF_LOOPBACK))
-                    continue;
-                const uint32_t addr = infos[i].iiAddress.AddressIn.sin_addr.s_addr;
-                const uint32_t mask = infos[i].iiNetmask.AddressIn.sin_addr.s_addr;
-                if (addr != htonl(m_endpointPolicy.BindAddress()))
-                    continue;
-                const uint32_t bcast = (addr & mask) | ~mask; // network byte order throughout
-                if (std::find(m_bcastTargets.begin(), m_bcastTargets.end(), bcast) == m_bcastTargets.end())
-                    m_bcastTargets.push_back(bcast);
-            }
-        }
+        const bool platformReady = m_wsaStarted;
 #else
-        ifaddrs* list = nullptr;
-        if (getifaddrs(&list) == 0)
+        constexpr bool platformReady = true;
+#endif
+        m_beaconFailed = !platformReady || !m_endpointPolicy.IsValid();
+        m_scanFailed = !platformReady || !m_endpointPolicy.IsValid();
+        if (!m_endpointPolicy.IsValid())
         {
-            for (const ifaddrs* it = list; it; it = it->ifa_next)
-            {
-                if (!it->ifa_addr || it->ifa_addr->sa_family != AF_INET || !it->ifa_broadaddr)
-                    continue;
-                if (!(it->ifa_flags & IFF_UP) || !(it->ifa_flags & IFF_BROADCAST) || (it->ifa_flags & IFF_LOOPBACK))
-                    continue;
-                const uint32_t address = reinterpret_cast<const sockaddr_in*>(it->ifa_addr)->sin_addr.s_addr;
-                if (address != htonl(m_endpointPolicy.BindAddress()))
-                    continue;
-                const uint32_t bcast = reinterpret_cast<const sockaddr_in*>(it->ifa_broadaddr)->sin_addr.s_addr;
-                if (std::find(m_bcastTargets.begin(), m_bcastTargets.end(), bcast) == m_bcastTargets.end())
-                    m_bcastTargets.push_back(bcast);
-            }
-            freeifaddrs(list);
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] lan: endpoint policy rejected - discovery disabled");
         }
 #endif
-#endif // ENABLE_NETWORKING
     }
 
     void TFLanDiscovery::FillBeacon(TF_LanBeacon& out) const

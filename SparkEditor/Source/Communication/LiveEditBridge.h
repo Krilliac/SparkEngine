@@ -15,6 +15,7 @@
 #pragma once
 
 #include "CollaborativeEditSession.h"
+#include "Engine/Networking/NetworkBindPolicy.h"
 #include <cstdint>
 #include <atomic>
 #include <functional>
@@ -54,7 +55,10 @@ namespace SparkEditor
     class LiveEditBridge
     {
       public:
+        using SocketFactory = std::function<CollaborativeSocketHandle()>;
+
         LiveEditBridge();
+        explicit LiveEditBridge(SocketFactory socketFactory);
         ~LiveEditBridge();
 
         LiveEditBridge(const LiveEditBridge&) = delete;
@@ -68,6 +72,8 @@ namespace SparkEditor
          * @return true if TCP connection succeeded
          */
         bool Connect(const std::string& address, uint16_t port, const std::string& editorName);
+        bool Connect(const std::string& address, uint16_t port, const std::string& editorName,
+                     const Spark::Net::NetworkEndpointPolicy& endpointPolicy);
 
         /**
          * @brief Disconnect from the AreaServer
@@ -106,19 +112,21 @@ namespace SparkEditor
         uint32_t GetEditsPushed() const { return m_editsPushed; }
 
       private:
-        void SendThread();
+        [[nodiscard]] bool DestinationAllowed() const noexcept;
+        void CloseConnectionSocket() noexcept;
 
         std::atomic<bool> m_connected{false};
         std::atomic<bool> m_shuttingDown{false};
         std::string m_serverAddress;
         uint16_t m_serverPort = 0;
         std::string m_editorName;
-        int m_socket = -1;
+        CollaborativeSocketHandle m_socket = INVALID_COLLAB_SOCKET;
+        uint32_t m_serverAddressNumeric = 0;
+        Spark::Net::NetworkEndpointPolicy m_endpointPolicy{};
+        SocketFactory m_socketFactory;
 
         std::queue<EditMessage> m_pendingEdits;
         std::mutex m_editMutex;
-        std::thread m_sendThread;
-
         uint32_t m_editsPushed = 0;
     };
 

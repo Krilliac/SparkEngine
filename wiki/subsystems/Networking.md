@@ -4,7 +4,7 @@ SparkEngine includes an **experimental, unauthenticated** UDP networking system 
 
 **Source:** `SparkEngine/Source/Engine/Networking/`
 
-> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). Raw UDP listeners bind to IPv4 loopback by default. Isolated LAN development requires one concrete numeric RFC1918 address through `SPARK_NETWORK_BIND_ADDRESS` or `Network.bind_address`; wildcard, public, documentation/test, multicast, broadcast, and CGNAT addresses are rejected before socket creation. The captured policy is threaded through the socket lifecycle and filters peer endpoints before packet parsing and every gameplay send/retry path. Gateway-managed area processes force loopback. This boundary does not add authentication or encryption, so NET-100 and release gates remain blocked pending reviewed AEAD transport. When networking is disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
+> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). First-party endpoints bind to IPv4 loopback by default. Isolated LAN development requires canonical CIDR through `SPARK_NETWORK_BIND_ADDRESS` or `Network.bind_address` (for example `192.168.1.20/24`). The prefix must keep the complete subnet inside RFC1918 space; the exact network and directed-broadcast addresses are rejected, and peers are restricted to concrete hosts in that same subnet. Wildcard, public, documentation/test, multicast, limited-broadcast, CGNAT, IPv4-mapped IPv6, missing-prefix, and alternate textual forms are rejected before socket creation. The captured policy is threaded through gameplay, discovery, collaboration, and live-editor socket lifecycles and filters peer endpoints before packet parsing and every send/retry boundary. Gateway-managed area processes require loopback and reject a conflicting LAN bind. This boundary does not add authentication or encryption, so NET-100 and release gates remain blocked pending reviewed AEAD transport. When networking is disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
 
 `NetworkMessage::localOnly` is process-local ownership metadata and is never encoded in the wire format. TERRAFRONT login and registration requests always set it together with the sensitive-payload erasure marker. `NetworkManager` rechecks the exact destination while holding its API lock at queueing, delayed release, and retransmission boundaries; a non-loopback destination rejects and erases the credential-bearing state before transmission. Selecting a private-LAN bind does not enable remote credential onboarding.
 
@@ -414,7 +414,7 @@ The default transport uses platform BSD/Winsock UDP sockets:
 - Creates a **non-blocking** UDP socket
 - Enlarges OS send/receive buffers to **64 KB** each for game traffic
 - Binds exactly to a requested concrete port, or to an OS-assigned ephemeral port when given port 0
-- Uses IPv4 loopback unless one concrete numeric RFC1918 interface is selected
+- Uses IPv4 loopback unless one canonical RFC1918 interface/prefix is selected
 - Cross-platform: Winsock on Windows, POSIX sockets on Linux/macOS
 
 ### SteamTransport (Stub)

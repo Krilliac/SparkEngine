@@ -8,12 +8,12 @@
 #include "Utils/Validate.h"
 
 #include <cstring>
+#include <utility>
 
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
-#define CLOSE_SOCKET closesocket
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -22,7 +22,6 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <cerrno>
-#define CLOSE_SOCKET ::close
 #endif
 
 namespace SparkEditor
@@ -30,14 +29,56 @@ namespace SparkEditor
 
     namespace
     {
+        using BridgeSocketHandle = CollaborativeSocketHandle;
+
+#ifdef _WIN32
+        SOCKET ToNativeSocket(BridgeSocketHandle socket)
+        {
+            return static_cast<SOCKET>(socket);
+        }
+#else
+        int ToNativeSocket(BridgeSocketHandle socket)
+        {
+            return socket;
+        }
+#endif
+
+        BridgeSocketHandle ToStoredSocket(decltype(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) socket)
+        {
+            return static_cast<BridgeSocketHandle>(socket);
+        }
+
+        bool IsValidSocket(BridgeSocketHandle socket)
+        {
+            return socket != INVALID_COLLAB_SOCKET;
+        }
+
+        void CloseBridgeSocket(BridgeSocketHandle socket)
+        {
+            if (!IsValidSocket(socket))
+                return;
+#ifdef _WIN32
+            ::closesocket(ToNativeSocket(socket));
+#else
+            ::close(ToNativeSocket(socket));
+#endif
+        }
+
         // Reuse the wire protocol helpers from CollaborativeEditSession
-        bool SendAll(int sock, const void* buf, size_t len)
+        bool SendAll(BridgeSocketHandle sock, const void* buf, size_t len)
         {
             const auto* ptr = static_cast<const char*>(buf);
             size_t sent = 0;
             while (sent < len)
             {
-                auto n = ::send(sock, ptr + sent, static_cast<int>(len - sent), 0);
+#ifdef _WIN32
+                constexpr int flags = 0;
+#elif defined(MSG_NOSIGNAL)
+                constexpr int flags = MSG_NOSIGNAL;
+#else
+                constexpr int flags = 0;
+#endif
+                auto n = ::send(ToNativeSocket(sock), ptr + sent, static_cast<int>(len - sent), flags);
                 if (n <= 0)
                     return false;
                 sent += static_cast<size_t>(n);
@@ -45,9 +86,9 @@ namespace SparkEditor
             return true;
         }
 
-        bool SendFramedBridge(int sock, const std::vector<uint8_t>& data)
+        bool SendFramedBridge(BridgeSocketHandle sock, const std::vector<uint8_t>& data)
         {
-            if (sock < 0)
+            if (!IsValidSocket(sock))
                 return false;
 
             uint32_t len = static_cast<uint32_t>(data.size());
@@ -121,7 +162,12 @@ namespace SparkEditor
         }
     } // namespace
 
-    LiveEditBridge::LiveEditBridge() = default;
+    LiveEditBridge::LiveEditBridge()
+        : LiveEditBridge([]() { return ToStoredSocket(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)); })
+    {
+    }
+
+    LiveEditBridge::LiveEditBridge(SocketFactory socketFactory) : m_socketFactory(std::move(socketFactory)) {}
 
     LiveEditBridge::~LiveEditBridge()
     {
@@ -130,8 +176,16 @@ namespace SparkEditor
 
     bool LiveEditBridge::Connect(const std::string& address, uint16_t port, const std::string& editorName)
     {
+        return Connect(address, port, editorName, Spark::Net::CaptureNetworkEndpointPolicy());
+    }
+
+    bool LiveEditBridge::Connect(const std::string& address, uint16_t port, const std::string& editorName,
+                                 const Spark::Net::NetworkEndpointPolicy& endpointPolicy)
+    {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !address.empty(), false);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, port > 0, false);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !editorName.empty(), false);
 
         if (m_connected.load(std::memory_order_acquire))
         {
@@ -139,66 +193,126 @@ namespace SparkEditor
             return false;
         }
 
-        m_socket = static_cast<int>(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
-        if (m_socket < 0)
+        if (!endpointPolicy.IsValid())
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "LiveEditBridge: Failed to create socket.");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "LiveEditBridge: Invalid endpoint policy: %s",
+                            Spark::Net::NetworkEndpointPolicyErrorText(endpointPolicy.Error()).data());
+            return false;
+        }
+
+        uint32_t serverAddress = 0;
+        if (!Spark::Net::ParseIPv4Address(address, serverAddress) || !endpointPolicy.AllowsPeerAddress(serverAddress))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "LiveEditBridge: Refusing destination %s outside the captured endpoint policy",
+                            address.c_str());
             return false;
         }
 
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
-        inet_pton(AF_INET, address.c_str(), &addr.sin_addr);
+        if (::inet_pton(AF_INET, address.c_str(), &addr.sin_addr) != 1 || ntohl(addr.sin_addr.s_addr) != serverAddress)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "LiveEditBridge: Invalid canonical IPv4 destination %s",
+                            address.c_str());
+            return false;
+        }
 
-        // Non-blocking connect with 5-second timeout
+        m_socket = m_socketFactory ? m_socketFactory() : INVALID_COLLAB_SOCKET;
+        if (!IsValidSocket(m_socket))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "LiveEditBridge: Failed to create socket.");
+            return false;
+        }
+
+        sockaddr_in localAddress{};
+        localAddress.sin_family = AF_INET;
+        localAddress.sin_port = 0;
+        localAddress.sin_addr.s_addr = htonl(endpointPolicy.BindAddress());
+        if (::bind(ToNativeSocket(m_socket), reinterpret_cast<const sockaddr*>(&localAddress), sizeof(localAddress)) != 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "LiveEditBridge: Failed to bind the configured local interface");
+            CloseConnectionSocket();
+            return false;
+        }
+
+        // Non-blocking connect with a five-second timeout. A writable socket can
+        // still represent a failed connect, so both platforms verify SO_ERROR.
         bool connectOk = false;
 #ifdef _WIN32
         u_long nbMode = 1;
-        ioctlsocket(static_cast<SOCKET>(m_socket), FIONBIO, &nbMode);
-        ::connect(m_socket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        if (::ioctlsocket(ToNativeSocket(m_socket), FIONBIO, &nbMode) != 0)
+        {
+            CloseConnectionSocket();
+            return false;
+        }
+        const int connectResult =
+            ::connect(ToNativeSocket(m_socket), reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        const bool connectPending = connectResult == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK;
         fd_set writeSet;
         FD_ZERO(&writeSet);
-        FD_SET(static_cast<SOCKET>(m_socket), &writeSet);
+        FD_SET(ToNativeSocket(m_socket), &writeSet);
         timeval tv{5, 0};
-        connectOk = (::select(0, nullptr, &writeSet, nullptr, &tv) > 0);
-        nbMode = 0;
-        ioctlsocket(static_cast<SOCKET>(m_socket), FIONBIO, &nbMode);
-#else
-        int flags = fcntl(m_socket, F_GETFL, 0);
-        fcntl(m_socket, F_SETFL, flags | O_NONBLOCK);
-        ::connect(m_socket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-        pollfd pfd{};
-        pfd.fd = m_socket;
-        pfd.events = POLLOUT;
-        if (::poll(&pfd, 1, 5000) > 0)
+        if (connectResult == 0 || (connectPending && ::select(0, nullptr, &writeSet, nullptr, &tv) > 0))
         {
-            int err = 0;
-            socklen_t errLen = sizeof(err);
-            getsockopt(m_socket, SOL_SOCKET, SO_ERROR, &err, &errLen);
-            connectOk = (err == 0);
+            int socketError = 0;
+            int socketErrorLength = sizeof(socketError);
+            connectOk = ::getsockopt(ToNativeSocket(m_socket), SOL_SOCKET, SO_ERROR,
+                                     reinterpret_cast<char*>(&socketError), &socketErrorLength) == 0 &&
+                        socketError == 0;
         }
-        fcntl(m_socket, F_SETFL, flags);
+        nbMode = 0;
+        if (::ioctlsocket(ToNativeSocket(m_socket), FIONBIO, &nbMode) != 0)
+            connectOk = false;
+#else
+        const int flags = fcntl(ToNativeSocket(m_socket), F_GETFL, 0);
+        if (flags < 0 || fcntl(ToNativeSocket(m_socket), F_SETFL, flags | O_NONBLOCK) != 0)
+        {
+            CloseConnectionSocket();
+            return false;
+        }
+        const int connectResult =
+            ::connect(ToNativeSocket(m_socket), reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        pollfd pfd{};
+        pfd.fd = ToNativeSocket(m_socket);
+        pfd.events = POLLOUT;
+        if (connectResult == 0 || (connectResult < 0 && errno == EINPROGRESS && ::poll(&pfd, 1, 5000) > 0))
+        {
+            int socketError = 0;
+            socklen_t socketErrorLength = sizeof(socketError);
+            connectOk = ::getsockopt(ToNativeSocket(m_socket), SOL_SOCKET, SO_ERROR, &socketError,
+                                     &socketErrorLength) == 0 &&
+                        socketError == 0;
+        }
+        if (fcntl(ToNativeSocket(m_socket), F_SETFL, flags) != 0)
+            connectOk = false;
 #endif
 
         if (!connectOk)
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "LiveEditBridge: Failed to connect to %s:%u (timeout 5s).",
                             address.c_str(), port);
-            CLOSE_SOCKET(m_socket);
-            m_socket = -1;
+            CloseConnectionSocket();
             return false;
         }
 
         m_serverAddress = address;
+        m_serverAddressNumeric = serverAddress;
         m_serverPort = port;
         m_editorName = editorName;
+        m_endpointPolicy = endpointPolicy;
         m_shuttingDown.store(false, std::memory_order_release);
-        m_connected.store(true, std::memory_order_release);
 
-        // Send join handshake
-        auto joinMsg = SerializeEditorJoin(editorName);
-        SendFramedBridge(m_socket, joinMsg);
+        const auto joinMsg = SerializeEditorJoin(editorName);
+        if (!DestinationAllowed() || !SendFramedBridge(m_socket, joinMsg))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "LiveEditBridge: Failed to send editor join handshake");
+            CloseConnectionSocket();
+            return false;
+        }
+        m_connected.store(true, std::memory_order_release);
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "LiveEditBridge: Connected to AreaServer at %s:%u as '%s'.",
                        address.c_str(), port, editorName.c_str());
@@ -208,28 +322,22 @@ namespace SparkEditor
     void LiveEditBridge::Disconnect()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        if (!m_connected.load(std::memory_order_acquire))
-            return;
-
         m_shuttingDown.store(true, std::memory_order_release);
-        m_connected.store(false, std::memory_order_release);
+        const bool wasConnected = m_connected.exchange(false, std::memory_order_acq_rel);
 
-        if (m_socket >= 0)
+        if (wasConnected && IsValidSocket(m_socket))
         {
             // Send leave notification before closing
             std::vector<uint8_t> leaveMsg;
             WriteU16(leaveMsg, static_cast<uint16_t>(EditorNetMessageType::EditorLeave));
             WriteString(leaveMsg, m_editorName);
-            SendFramedBridge(m_socket, leaveMsg);
-
-            CLOSE_SOCKET(m_socket);
-            m_socket = -1;
+            if (DestinationAllowed())
+                (void)SendFramedBridge(m_socket, leaveMsg);
         }
+        CloseConnectionSocket();
 
-        if (m_sendThread.joinable())
-            m_sendThread.join();
-
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "LiveEditBridge: Disconnected from AreaServer.");
+        if (wasConnected)
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "LiveEditBridge: Disconnected from AreaServer.");
     }
 
     void LiveEditBridge::PushEdit(const EditMessage& edit)
@@ -256,15 +364,29 @@ namespace SparkEditor
         while (!editsToSend.empty())
         {
             auto data = SerializeEditForServer(editsToSend.front());
-            if (!SendFramedBridge(m_socket, data))
+            if (!DestinationAllowed() || !SendFramedBridge(m_socket, data))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Editor, "LiveEditBridge: Send failed, disconnecting.");
                 m_connected.store(false, std::memory_order_release);
+                CloseConnectionSocket();
                 break;
             }
             m_editsPushed++;
             editsToSend.pop();
         }
+    }
+
+    bool LiveEditBridge::DestinationAllowed() const noexcept
+    {
+        return IsValidSocket(m_socket) && m_endpointPolicy.IsValid() &&
+               m_endpointPolicy.AllowsPeerAddress(m_serverAddressNumeric);
+    }
+
+    void LiveEditBridge::CloseConnectionSocket() noexcept
+    {
+        if (IsValidSocket(m_socket))
+            CloseBridgeSocket(m_socket);
+        m_socket = INVALID_COLLAB_SOCKET;
     }
 
 } // namespace SparkEditor

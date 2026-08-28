@@ -25,18 +25,20 @@
 
 using namespace Spark::Net;
 
-TEST(NetworkBindPolicy_AllowsOnlyLoopbackOrConcreteRfc1918Unicast)
+TEST(NetworkBindPolicy_RequiresCanonicalLoopbackOrExactRfc1918SubnetHost)
 {
     const NetworkEndpointPolicy defaultPolicy = ResolveNetworkEndpointPolicy(nullptr);
     EXPECT_TRUE(defaultPolicy.IsValid());
     EXPECT_EQ(defaultPolicy.BindAddress(), uint32_t{0x7F000001u});
     EXPECT_EQ(static_cast<int>(defaultPolicy.PeerScope()), static_cast<int>(NetworkPeerScope::LoopbackOnly));
     EXPECT_FALSE(NetworkEndpointPolicy::Loopback(0u).IsValid());
-    EXPECT_FALSE(NetworkEndpointPolicy::PrivateLan(0u).IsValid());
-    EXPECT_FALSE(NetworkEndpointPolicy::PrivateLan(0x64400001u).IsValid());
+    EXPECT_FALSE(NetworkEndpointPolicy::PrivateLan(0u, 24u).IsValid());
+    EXPECT_FALSE(NetworkEndpointPolicy::PrivateLan(0x64400001u, 24u).IsValid());
 
     for (const std::string_view allowed :
-         {"local", "loopback", "localhost", "127.8.9.10", "10.1.2.3", "172.16.4.5", "172.31.254.1", "192.168.7.8"})
+         {"local", "loopback", "localhost", "127.8.9.10", "10.1.2.3/8", "172.16.4.5/12",
+          "172.31.254.1/12", "192.168.7.8/24", "192.168.7.9/30", "192.168.1.0/23",
+          "192.168.0.255/23"})
         EXPECT_TRUE(ResolveNetworkEndpointPolicy(allowed).IsValid());
 
     for (const std::string_view rejected : {"",
@@ -55,16 +57,47 @@ TEST(NetworkBindPolicy_AllowsOnlyLoopbackOrConcreteRfc1918Unicast)
                                             "203.0.113.3",
                                             "100.64.0.1",
                                             "224.0.0.1",
-                                            "255.255.255.255",
-                                            "10.1.2.0",
-                                            "10.1.2.255",
-                                            "typo"})
+                                             "255.255.255.255",
+                                             "::ffff:127.0.0.1",
+                                             "0x7f.0.0.1",
+                                             "127.1",
+                                             "0127.0.0.1",
+                                             "127.000.0.1",
+                                             "010.1.2.3/8",
+                                             "192.168.001.9/24",
+                                             "127.0.0.0",
+                                             "127.255.255.255",
+                                             "10.1.2.3",
+                                             "10.1.2.3/7",
+                                             "10.1.2.3/031",
+                                             "10.1.2.3/31",
+                                             "10.1.2.3/32",
+                                             "172.16.4.5/11",
+                                             "192.168.7.8/15",
+                                             "192.168.1.0/24",
+                                             "192.168.1.255/24",
+                                             "192.168.1.127/25",
+                                             "192.168.1.128/25",
+                                             "typo"})
         EXPECT_FALSE(ResolveNetworkEndpointPolicy(rejected).IsValid());
 
-    const NetworkEndpointPolicy privatePolicy = ResolveNetworkEndpointPolicy("192.168.50.10");
+    EXPECT_EQ(static_cast<int>(ResolveNetworkEndpointPolicy("192.168.1.20").Error()),
+              static_cast<int>(NetworkEndpointPolicyError::MissingPrefix));
+    EXPECT_EQ(static_cast<int>(ResolveNetworkEndpointPolicy("192.168.1.0/24").Error()),
+              static_cast<int>(NetworkEndpointPolicyError::NetworkAddress));
+    EXPECT_EQ(static_cast<int>(ResolveNetworkEndpointPolicy("192.168.1.255/24").Error()),
+              static_cast<int>(NetworkEndpointPolicyError::BroadcastAddress));
+
+    const NetworkEndpointPolicy privatePolicy = ResolveNetworkEndpointPolicy("192.168.50.10/24");
     EXPECT_EQ(static_cast<int>(privatePolicy.PeerScope()), static_cast<int>(NetworkPeerScope::PrivateLan));
-    EXPECT_TRUE(privatePolicy.AllowsPeerAddress(0x0A010203u));
-    EXPECT_TRUE(privatePolicy.AllowsPeerAddress(0xAC100203u));
+    EXPECT_EQ(privatePolicy.SubnetPrefixLength(), static_cast<uint8_t>(24));
+    EXPECT_EQ(privatePolicy.NetworkAddress(), uint32_t{0xC0A83200u});
+    EXPECT_EQ(privatePolicy.BroadcastAddress(), uint32_t{0xC0A832FFu});
+    EXPECT_TRUE(privatePolicy.AllowsPeerAddress(0xC0A83214u));
+    EXPECT_FALSE(privatePolicy.AllowsPeerAddress(0xC0A83200u));
+    EXPECT_FALSE(privatePolicy.AllowsPeerAddress(0xC0A832FFu));
+    EXPECT_FALSE(privatePolicy.AllowsPeerAddress(0xC0A83314u));
+    EXPECT_FALSE(privatePolicy.AllowsPeerAddress(0x0A010203u));
     EXPECT_FALSE(privatePolicy.AllowsPeerAddress(0x7F000001u));
     EXPECT_FALSE(privatePolicy.AllowsPeerAddress(0xC0000201u));
 
@@ -75,6 +108,7 @@ TEST(NetworkBindPolicy_AllowsOnlyLoopbackOrConcreteRfc1918Unicast)
     EXPECT_FALSE(IsIPv4LoopbackAddress("127.0.0"));
     EXPECT_FALSE(IsIPv4LoopbackAddress("127.0.0.256"));
     EXPECT_FALSE(IsIPv4LoopbackAddress("127.invalid.0.1"));
+    EXPECT_FALSE(IsIPv4LoopbackAddress("127.000.0.1"));
 }
 
 static void ResetNM()
