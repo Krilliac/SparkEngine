@@ -77,7 +77,39 @@ RESULT_MEASUREMENT_REQUIRED = frozenset({
 })
 
 
+# ── Required keys per top-level schema ───────────────────────────────
+
+HARDWARE_TOP_LEVEL_REQUIRED = frozenset({"schemaVersion", "rows"})
+BUDGET_TOP_LEVEL_REQUIRED = frozenset({
+    "schemaVersion", "budgetVersion", "metadata", "metrics",
+})
+BASELINES_TOP_LEVEL_REQUIRED = frozenset({
+    "schemaVersion", "baselineVersion", "approvalPolicy", "baselines",
+})
+RESULT_TOP_LEVEL_REQUIRED = frozenset({
+    "commitSha", "timestamp", "hardwareRowId", "measurements",
+})
+
+
 # ── Validation helpers ────────────────────────────────────────────────
+
+def _is_strict_int(value: Any) -> bool:
+    """True for int values that are not bool (Python bool is a subclass of int)."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _is_strict_number(value: Any) -> bool:
+    """True for int/float values that are not bool."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _is_finite_number(value: Any) -> bool:
+    """True for finite int/float values that are not bool, NaN, or infinity."""
+    if not _is_strict_number(value):
+        return False
+    import math
+    return math.isfinite(value)
+
 
 def _check_keys(obj: dict, required: frozenset[str], context: str) -> list[str]:
     """Return error strings for missing or unknown keys."""
@@ -129,6 +161,8 @@ def validate_hardware(data: dict[str, Any]) -> list[str]:
     """Validate a hardware.json file. Returns list of error strings."""
     errors: list[str] = []
 
+    errors.extend(_check_keys(data, HARDWARE_TOP_LEVEL_REQUIRED, "hardware"))
+
     if "schemaVersion" not in data:
         errors.append("hardware: missing 'schemaVersion'")
     if "rows" not in data:
@@ -168,12 +202,20 @@ def validate_hardware(data: dict[str, Any]) -> list[str]:
             errors.append(f"{ctx}: 'certified' must be true or false")
 
         cores = row.get("cpuCores")
-        if cores is not None and (not isinstance(cores, int) or cores < 1):
+        if cores is not None and (not _is_strict_int(cores) or cores < 1):
             errors.append(f"{ctx}: cpuCores must be a positive integer")
 
         ram = row.get("ramGb")
-        if ram is not None and (not isinstance(ram, (int, float)) or ram <= 0):
-            errors.append(f"{ctx}: ramGb must be a positive number")
+        if ram is not None and not _is_finite_number(ram):
+            errors.append(f"{ctx}: ramGb must be a finite positive number")
+        elif ram is not None and ram <= 0:
+            errors.append(f"{ctx}: ramGb must be a finite positive number")
+
+        vram = row.get("gpuVramGb")
+        if vram is not None and not _is_finite_number(vram):
+            errors.append(f"{ctx}: gpuVramGb must be a finite non-negative number")
+        elif vram is not None and vram < 0:
+            errors.append(f"{ctx}: gpuVramGb must be a finite non-negative number")
 
     return errors
 
@@ -185,10 +227,12 @@ def validate_budget(data: dict[str, Any],
     """Validate a budget.json file. Returns list of error strings."""
     errors: list[str] = []
 
+    errors.extend(_check_keys(data, BUDGET_TOP_LEVEL_REQUIRED, "budget"))
+
     for key in ("schemaVersion", "budgetVersion", "metadata", "metrics"):
         if key not in data:
             errors.append(f"budget: missing required key '{key}'")
-    if errors:
+    if any("missing required key" in e for e in errors):
         return errors
 
     meta = data["metadata"]
@@ -246,8 +290,8 @@ def validate_budget(data: dict[str, Any],
         if status == "active" and budget_val is None:
             errors.append(f"{ctx}: status='active' but budget is null")
         if budget_val is not None:
-            if not isinstance(budget_val, (int, float)):
-                errors.append(f"{ctx}: budget must be a number or null")
+            if not _is_finite_number(budget_val):
+                errors.append(f"{ctx}: budget must be a finite number or null")
             elif budget_val < 0:
                 errors.append(f"{ctx}: budget must be non-negative")
 
@@ -262,10 +306,12 @@ def validate_baselines(data: dict[str, Any],
     """Validate a baselines.json file. Returns list of error strings."""
     errors: list[str] = []
 
+    errors.extend(_check_keys(data, BASELINES_TOP_LEVEL_REQUIRED, "baselines"))
+
     for key in ("schemaVersion", "baselineVersion", "approvalPolicy", "baselines"):
         if key not in data:
             errors.append(f"baselines: missing required key '{key}'")
-    if errors:
+    if any("missing required key" in e for e in errors):
         return errors
 
     policy = data["approvalPolicy"]
@@ -304,14 +350,14 @@ def validate_baselines(data: dict[str, Any],
             )
 
         val = b.get("value")
-        if val is not None and not isinstance(val, (int, float)):
-            errors.append(f"{ctx}: value must be a number")
+        if val is not None and not _is_finite_number(val):
+            errors.append(f"{ctx}: value must be a finite number")
 
         errors.extend(_check_sha(b.get("commitSha"), "commitSha", ctx))
         errors.extend(_check_iso8601(b.get("measuredAt"), "measuredAt", ctx))
 
         sc = b.get("sampleCount")
-        if sc is not None and (not isinstance(sc, int) or sc < 1):
+        if sc is not None and (not _is_strict_int(sc) or sc < 1):
             errors.append(f"{ctx}: sampleCount must be a positive integer")
 
         errors.extend(_check_sha(b.get("approvalCommit"), "approvalCommit", ctx))
@@ -321,8 +367,11 @@ def validate_baselines(data: dict[str, Any],
         if not approved_by or not isinstance(approved_by, str):
             errors.append(f"{ctx}: approvedBy must be a non-empty string")
 
-        if (b.get("commitSha") and b.get("approvalCommit") and
-                b.get("commitSha") == b.get("approvalCommit")):
+        commit_sha = b.get("commitSha")
+        approval_commit = b.get("approvalCommit")
+        if (commit_sha and approval_commit and
+                isinstance(commit_sha, str) and isinstance(approval_commit, str) and
+                commit_sha.lower() == approval_commit.lower()):
             self_allowed = policy.get("selfApprovalAllowed", False)
             if not self_allowed:
                 errors.append(
@@ -340,10 +389,12 @@ def validate_result(data: dict[str, Any],
     """Validate a benchmark result file for structural completeness."""
     errors: list[str] = []
 
+    errors.extend(_check_keys(data, RESULT_TOP_LEVEL_REQUIRED, "result"))
+
     for key in ("commitSha", "timestamp", "hardwareRowId", "measurements"):
         if key not in data:
             errors.append(f"result: missing required key '{key}'")
-    if errors:
+    if any("missing required key" in e for e in errors):
         return errors
 
     errors.extend(_check_sha(data["commitSha"], "commitSha", "result"))
@@ -377,13 +428,13 @@ def validate_result(data: dict[str, Any],
                 seen_ids.add(mid)
 
         val = m.get("value")
-        if val is not None and not isinstance(val, (int, float)):
-            errors.append(f"{ctx}: value must be a number")
+        if val is not None and not _is_finite_number(val):
+            errors.append(f"{ctx}: value must be a finite number")
 
         errors.extend(_check_enum(m.get("unit"), VALID_UNITS, "unit", ctx))
 
         sc = m.get("sampleCount")
-        if sc is not None and (not isinstance(sc, int) or sc < 1):
+        if sc is not None and (not _is_strict_int(sc) or sc < 1):
             errors.append(f"{ctx}: sampleCount must be a positive integer")
 
     return errors

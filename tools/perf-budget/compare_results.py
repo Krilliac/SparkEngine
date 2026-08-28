@@ -65,7 +65,7 @@ def _passes_budget(measured: float, budget: float, direction: str) -> bool:
 
 def _margin_percent(measured: float, budget: float, direction: str) -> float:
     if budget == 0:
-        return 0.0 if measured == 0 else float("inf")
+        return 0.0 if measured == 0 else 9999.99
     if direction == "lower_is_better":
         return ((budget - measured) / budget) * 100.0
     else:
@@ -162,8 +162,10 @@ def compare(budget_dir: Path, result_data: dict[str, Any]) -> ComparisonReport:
     skipped = 0
     overall_pass = True
 
+    measured_metric_ids: set[str] = set()
     for measurement in result_data["measurements"]:
         mid = measurement["metricId"]
+        measured_metric_ids.add(mid)
         if mid not in metrics_by_id:
             errors.append(f"measurement {mid!r} has no matching budget metric")
             overall_pass = False
@@ -178,6 +180,14 @@ def compare(budget_dir: Path, result_data: dict[str, Any]) -> ComparisonReport:
         if metric["budget"] is None:
             skipped += 1
             continue
+
+        metric_hw = metric.get("hardwareRowId")
+        if metric_hw is not None and metric_hw != result_hw:
+            errors.append(
+                f"hardware mismatch for {mid}: metric requires "
+                f"{metric_hw!r} but result measured on {result_hw!r}"
+            )
+            overall_pass = False
 
         if measurement["unit"] != metric["unit"]:
             errors.append(
@@ -208,6 +218,19 @@ def compare(budget_dir: Path, result_data: dict[str, Any]) -> ComparisonReport:
 
         if not passed:
             overall_pass = False
+
+    active_ids = {
+        m["id"] for m in budget_data["metrics"]
+        if isinstance(m, dict) and m.get("status") == "active"
+        and m.get("budget") is not None
+    }
+    unmeasured = active_ids - measured_metric_ids
+    if unmeasured:
+        for um in sorted(unmeasured):
+            errors.append(
+                f"unmeasured active metric {um!r} — missing coverage"
+            )
+        overall_pass = False
 
     if errors:
         overall_pass = False
