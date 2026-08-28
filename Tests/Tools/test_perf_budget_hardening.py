@@ -5,19 +5,23 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_DIR = REPO_ROOT / "tools" / "perf-budget"
 sys.path.insert(0, str(TOOL_DIR))
 
-from compare_results import compare  # noqa: E402
+from compare_results import compare, report_to_dict  # noqa: E402
 from validate_budget import (  # noqa: E402
     MAX_JSON_BYTES,
+    budget_definition_digest,
     load_bounded_json,
     validate_baselines,
     validate_budget,
@@ -89,7 +93,9 @@ def _budget(metrics: list[dict[str, Any]] | None = None) -> dict[str, Any]:
 
 
 def _baseline(metric_id: str = "test.frame_time.p50", *,
-              hardware_id: str = "test-row-1") -> dict[str, Any]:
+              hardware_id: str = "test-row-1",
+              metric_definition: dict[str, Any] | None = None) -> dict[str, Any]:
+    metric = metric_definition or _metric(metric_id, hardware_id=hardware_id)
     return {
         "metricId": metric_id,
         "value": 12.0,
@@ -101,6 +107,7 @@ def _baseline(metric_id: str = "test.frame_time.p50", *,
         "approvedBy": "reviewer",
         "approvedAt": "2026-08-28T01:00:00Z",
         "approvalCommit": APPROVAL_SHA,
+        "budgetDefinitionDigest": budget_definition_digest(metric),
     }
 
 
@@ -110,11 +117,37 @@ def _baselines(entries: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         "baselineVersion": "v1",
         "approvalPolicy": {
             "description": "independent review is required",
-            "requiredFields": ["approvedBy", "approvedAt", "approvalCommit"],
+            "requiredFields": [
+                "approvedBy", "approvedAt", "approvalCommit",
+                "budgetDefinitionDigest",
+            ],
             "selfApprovalAllowed": False,
         },
         "baselines": entries if entries is not None else [],
     }
+
+
+def _baselines_for_budget(
+        budget: dict[str, Any], hardware: dict[str, Any]) -> dict[str, Any]:
+    entries: list[dict[str, Any]] = []
+    hardware_ids = [row["id"] for row in hardware["rows"]]
+    for metric in budget["metrics"]:
+        if metric["status"] != "active":
+            continue
+        applicable = (
+            hardware_ids if metric["hardwareRowId"] is None
+            else [metric["hardwareRowId"]]
+        )
+        for hardware_id in applicable:
+            entry = _baseline(
+                metric["id"],
+                hardware_id=hardware_id,
+                metric_definition=metric,
+            )
+            entry["unit"] = metric["unit"]
+            entry["value"] = metric["budget"]
+            entries.append(entry)
+    return _baselines(entries)
 
 
 def _result(measurements: list[dict[str, Any]] | None = None, *,
@@ -135,18 +168,23 @@ def _result(measurements: list[dict[str, Any]] | None = None, *,
 
 
 def _write_suite(root: Path, *, hardware: dict[str, Any] | None = None,
-                 budget: dict[str, Any] | None = None,
-                 baselines: dict[str, Any] | None = None) -> None:
+                  budget: dict[str, Any] | None = None,
+                  baselines: dict[str, Any] | None = None) -> None:
+    hardware_data = hardware if hardware is not None else _hardware()
+    budget_data = budget if budget is not None else _budget()
     (root / "hardware.json").write_text(
-        json.dumps(hardware if hardware is not None else _hardware()),
+        json.dumps(hardware_data),
         encoding="utf-8",
     )
     (root / "budget.json").write_text(
-        json.dumps(budget if budget is not None else _budget()),
+        json.dumps(budget_data),
         encoding="utf-8",
     )
     (root / "baselines.json").write_text(
-        json.dumps(baselines if baselines is not None else _baselines()),
+        json.dumps(
+            baselines if baselines is not None
+            else _baselines_for_budget(budget_data, hardware_data)
+        ),
         encoding="utf-8",
     )
 
@@ -228,6 +266,9 @@ class TestSecondAuditReproductions(unittest.TestCase):
         result = _result()
         result["timestamp"] = "2026-08-28T02:00:00"
         self.assertTrue(any("RFC3339" in error
+                            for error in validate_result(result, HARDWARE_IDS)))
+        result["timestamp"] = "2026-08-28T02:00:00-00:00"
+        self.assertTrue(any("unknown local offset" in error
                             for error in validate_result(result, HARDWARE_IDS)))
 
     def test_08_extremely_long_sha_is_rejected_with_bounded_error(self) -> None:
@@ -430,6 +471,297 @@ class TestAdditionalGovernanceClosure(unittest.TestCase):
         budget["budgetVersion"] = "v2"
         self.assertTrue(any("budgetVersion" in error
                             for error in validate_budget(budget, HARDWARE_IDS)))
+
+
+class TestFinalAuditClosure(unittest.TestCase):
+    """Hostile cases from the final independent PERF-100 audit."""
+
+    def test_active_metric_requires_reviewed_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, baselines=_baselines([]))
+            report = compare(root, _result(), expected_sha=RESULT_SHA)
+        self.assertFalse(report.passed)
+        self.assertTrue(any("requires a reviewed baseline" in error
+                            for error in report.errors))
+
+    def test_threshold_weakening_invalidates_approval_digest(self) -> None:
+        original = _budget([_metric(budget=10.0)])
+        baselines = _baselines_for_budget(original, _hardware())
+        weakened = copy.deepcopy(original)
+        weakened["metrics"][0]["budget"] = 1000.0
+        result = _result()
+        result["measurements"][0]["value"] = 999.0
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=weakened, baselines=baselines)
+            report = compare(root, result, expected_sha=RESULT_SHA)
+        self.assertFalse(report.passed)
+        self.assertTrue(any("budgetDefinitionDigest" in error
+                            for error in report.errors))
+
+    def test_in_band_self_approval_is_rejected_by_blocking_path(self) -> None:
+        budget = _budget()
+        baselines = _baselines_for_budget(budget, _hardware())
+        baselines["approvalPolicy"]["selfApprovalAllowed"] = True
+        baselines["baselines"][0]["approvalCommit"] = \
+            baselines["baselines"][0]["commitSha"]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=budget, baselines=baselines)
+            report = compare(root, _result(), expected_sha=RESULT_SHA)
+        self.assertFalse(report.passed)
+        self.assertTrue(any("selfApprovalAllowed=true is forbidden" in error
+                            for error in report.errors))
+
+    def test_seven_and_eight_character_prefix_aliases_are_rejected(self) -> None:
+        metric = _metric()
+        baseline = _baseline(metric_definition=metric)
+        baseline["commitSha"] = "abcdef1"
+        baseline["approvalCommit"] = "abcdef12"
+        errors = validate_baselines(
+            _baselines([baseline]), {metric["id"]: metric}, HARDWARE_IDS,
+        )
+        self.assertGreaterEqual(
+            sum("full 40- or 64-character" in error for error in errors), 2,
+        )
+        result = _result()
+        result["commitSha"] = "abcdef1"
+        result_errors = validate_result(
+            result, HARDWARE_IDS, expected_sha="abcdef12",
+        )
+        self.assertGreaterEqual(
+            sum("full 40- or 64-character" in error for error in result_errors), 2,
+        )
+
+    def test_full_64_character_provenance_is_supported(self) -> None:
+        metric = _metric()
+        baseline = _baseline(metric_definition=metric)
+        baseline["commitSha"] = "a" * 64
+        baseline["approvalCommit"] = "b" * 64
+        errors = validate_baselines(
+            _baselines([baseline]), {metric["id"]: metric}, HARDWARE_IDS,
+        )
+        self.assertEqual(errors, [])
+
+        hardware = _hardware()
+        hardware["rows"][0]["certifiedCommit"] = "a" * 64
+        self.assertEqual(validate_hardware(hardware), [])
+
+        budget = _budget()
+        budget["metadata"]["commitSha"] = "b" * 64
+        self.assertEqual(validate_budget(budget, HARDWARE_IDS), [])
+
+        result = _result()
+        result["commitSha"] = "c" * 64
+        self.assertEqual(validate_result(
+            result, HARDWARE_IDS, expected_sha="c" * 64,
+        ), [])
+
+    def test_huge_json_integers_fail_closed_without_exception(self) -> None:
+        huge = 10 ** 400
+        hardware = _hardware()
+        hardware["rows"][0]["ramGb"] = huge
+        self.assertTrue(validate_hardware(hardware))
+
+        budget = _budget()
+        budget["metrics"][0]["budget"] = huge
+        self.assertTrue(validate_budget(budget, HARDWARE_IDS))
+
+        metric = _metric()
+        baseline = _baseline(metric_definition=metric)
+        baseline["value"] = huge
+        self.assertTrue(validate_baselines(
+            _baselines([baseline]), {metric["id"]: metric}, HARDWARE_IDS,
+        ))
+
+        result = _result()
+        result["measurements"][0]["value"] = huge
+        self.assertTrue(validate_result(result, HARDWARE_IDS))
+
+    def test_subnormal_denominator_emits_json_safe_null_margin(self) -> None:
+        budget = _budget([_metric(budget=5e-324)])
+        result = _result()
+        result["measurements"][0]["value"] = 1.0
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=budget)
+            report = compare(root, result, expected_sha=RESULT_SHA)
+        self.assertEqual(report.verdicts[0].margin_percent, None)
+        self.assertIn("subnormal", report.verdicts[0].margin_reason)
+        json.dumps(report_to_dict(report), allow_nan=False)
+
+    def test_zero_derived_ratio_emits_json_safe_null_margin(self) -> None:
+        budget = _budget([_metric(budget=16.0)])
+        result = _result()
+        result["measurements"][0]["value"] = 16.0
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=budget)
+            report = compare(root, result, expected_sha=RESULT_SHA)
+        self.assertTrue(report.passed)
+        self.assertEqual(report.verdicts[0].margin_percent, None)
+        self.assertIn("ratio is zero", report.verdicts[0].margin_reason)
+        json.dumps(report_to_dict(report), allow_nan=False)
+
+        rounded_budget = _budget([_metric(budget=1.0e18)])
+        rounded_result = _result()
+        rounded_result["measurements"][0]["value"] = 1.0e18 - 128.0
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=rounded_budget)
+            rounded_report = compare(
+                root, rounded_result, expected_sha=RESULT_SHA,
+            )
+        self.assertTrue(rounded_report.passed)
+        self.assertEqual(rounded_report.verdicts[0].margin_percent, None)
+        self.assertIn("rounds to zero",
+                      rounded_report.verdicts[0].margin_reason)
+        json.dumps(report_to_dict(rounded_report), allow_nan=False)
+
+    def test_wrong_case_required_filename_is_rejected(self) -> None:
+        hardware = _hardware()
+        budget = _budget()
+        baselines = _baselines_for_budget(budget, hardware)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "hardware.json").write_text(json.dumps(hardware), encoding="utf-8")
+            (root / "Budget.JSON").write_text(json.dumps(budget), encoding="utf-8")
+            (root / "baselines.json").write_text(json.dumps(baselines), encoding="utf-8")
+            errors = validate_suite(root)
+        self.assertTrue(any("filename case" in error for error in errors))
+
+        if os.path.normcase("Budget.JSON") != os.path.normcase("budget.json"):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                _write_suite(root)
+                (root / "Budget.JSON").write_text(
+                    json.dumps(budget), encoding="utf-8",
+                )
+                errors = validate_suite(root)
+            self.assertTrue(any("ambiguous case alias" in error
+                                for error in errors))
+
+    def test_hard_linked_governance_file_is_rejected(self) -> None:
+        hardware = _hardware()
+        budget = _budget()
+        baselines = _baselines_for_budget(budget, hardware)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            suite = root / "suite"
+            suite.mkdir()
+            external = root / "external-budget.json"
+            external.write_text(json.dumps(budget), encoding="utf-8")
+            (suite / "hardware.json").write_text(json.dumps(hardware), encoding="utf-8")
+            (suite / "baselines.json").write_text(json.dumps(baselines), encoding="utf-8")
+            os.link(external, suite / "budget.json")
+            errors = validate_suite(suite)
+        self.assertTrue(any("hard-linked" in error for error in errors))
+
+    def test_directory_junction_or_symlink_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "external-suite"
+            target.mkdir()
+            _write_suite(target)
+            alias = root / "governance-suite"
+            if os.name == "nt":
+                created = subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(alias), str(target)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(created.returncode, 0, created.stderr)
+            else:
+                os.symlink(target, alias, target_is_directory=True)
+            try:
+                errors = validate_suite(alias)
+            finally:
+                os.rmdir(alias)
+        self.assertTrue(any("junction" in error or "reparse" in error
+                            for error in errors))
+
+    def test_file_swap_between_inspection_and_open_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root)
+            target = root / "budget.json"
+            replacement = root / "replacement.json"
+            replacement.write_text(target.read_text(encoding="utf-8"),
+                                   encoding="utf-8")
+            real_open = os.open
+            swapped = False
+
+            def swapping_open(path: Any, flags: int, *args: Any,
+                              **kwargs: Any) -> int:
+                nonlocal swapped
+                if not swapped and Path(path) == target:
+                    swapped = True
+                    os.replace(replacement, target)
+                return real_open(path, flags, *args, **kwargs)
+
+            with mock.patch.object(os, "open", side_effect=swapping_open):
+                _, errors = load_bounded_json(
+                    target, "budget.json", trusted_root=root,
+                )
+        self.assertTrue(swapped)
+        self.assertTrue(any("identity changed" in error for error in errors))
+
+    def test_deep_nesting_and_wide_key_diagnostics_are_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            nested = root / "nested.json"
+            nested.write_text("[" * 5000 + "0" + "]" * 5000,
+                              encoding="utf-8")
+            _, nesting_errors = load_bounded_json(
+                nested, "nested.json", trusted_root=root,
+            )
+        self.assertTrue(any("nesting/value is invalid" in error
+                            for error in nesting_errors))
+
+        wide = {
+            "schemaVersion": "1.0.0",
+            "rows": [],
+            **{f"unknown{i:05d}": True for i in range(5000)},
+        }
+        wide_errors = validate_hardware(wide)
+        self.assertTrue(any("showing 16 of 5000" in error
+                            for error in wide_errors))
+        self.assertLess(sum(len(error) for error in wide_errors), 2000)
+
+    def test_case_aliased_identifiers_are_rejected(self) -> None:
+        hardware = _hardware(two_rows=True)
+        hardware["rows"][1]["id"] = "TEST-ROW-1"
+        hardware_errors = validate_hardware(hardware)
+        self.assertTrue(any("lowercase identifier" in error
+                            for error in hardware_errors))
+        self.assertTrue(any("duplicate hardware row" in error
+                            for error in hardware_errors))
+
+        metrics = [_metric(), _metric("TEST.FRAME_TIME.P50")]
+        budget_errors = validate_budget(_budget(metrics), HARDWARE_IDS)
+        self.assertTrue(any("lowercase identifier" in error
+                            for error in budget_errors))
+        self.assertTrue(any("duplicate metric" in error
+                            for error in budget_errors))
+
+    def test_hardware_independent_active_metric_requires_each_row(self) -> None:
+        hardware = _hardware(two_rows=True)
+        metric = _metric(hardware_id=None)
+        budget = _budget([metric])
+        baselines = _baselines([
+            _baseline(
+                metric["id"], hardware_id="test-row-1",
+                metric_definition=metric,
+            ),
+        ])
+        errors = validate_baselines(
+            baselines, {metric["id"]: metric},
+            {row["id"] for row in hardware["rows"]},
+        )
+        self.assertTrue(any("test-row-2" in error and "requires" in error
+                            for error in errors))
 
 
 if __name__ == "__main__":

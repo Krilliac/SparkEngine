@@ -24,6 +24,7 @@ TOOL_DIR = REPO_ROOT / "tools" / "perf-budget"
 sys.path.insert(0, str(TOOL_DIR))
 
 from validate_budget import (  # noqa: E402
+    budget_definition_digest,
     validate_hardware,
     validate_budget,
     validate_baselines,
@@ -77,7 +78,7 @@ def _make_hardware() -> dict[str, Any]:
                 "ramGb": 16,
                 "certifiedAt": "2026-08-28T00:00:00Z",
                 "certifiedBy": "test-reviewer",
-                "certifiedCommit": "abcdef1234567",
+                "certifiedCommit": "a" * 40,
                 "notes": "test hardware row",
             }
         ],
@@ -127,12 +128,17 @@ def _make_budget(hw_id: str = "test-row-1") -> dict[str, Any]:
 
 def _make_baselines(metric_id: str = "test.frame_time.p50",
                     hw_id: str = "test-row-1") -> dict[str, Any]:
+    metrics = _make_budget(hw_id)["metrics"]
+    metric = next((item for item in metrics if item["id"] == metric_id), metrics[0])
     return {
         "schemaVersion": "1.0.0",
         "baselineVersion": "v1",
         "approvalPolicy": {
             "description": "test policy",
-            "requiredFields": ["approvedBy", "approvedAt", "approvalCommit"],
+            "requiredFields": [
+                "approvedBy", "approvedAt", "approvalCommit",
+                "budgetDefinitionDigest",
+            ],
             "selfApprovalAllowed": False,
         },
         "baselines": [
@@ -140,16 +146,46 @@ def _make_baselines(metric_id: str = "test.frame_time.p50",
                 "metricId": metric_id,
                 "value": 12.5,
                 "unit": "ms",
-                "commitSha": "aaaaaaa",
+                "commitSha": "a" * 40,
                 "hardwareRowId": hw_id,
                 "measuredAt": "2026-08-28T00:00:00Z",
                 "sampleCount": 1000,
                 "approvedBy": "reviewer-name",
                 "approvedAt": "2026-08-28T01:00:00Z",
-                "approvalCommit": "bbbbbbb",
+                "approvalCommit": "b" * 40,
+                "budgetDefinitionDigest": budget_definition_digest(metric),
             },
         ],
     }
+
+
+def _make_baselines_for_budget(
+        budget: dict[str, Any], hardware_ids: list[str]) -> dict[str, Any]:
+    entries: list[dict[str, Any]] = []
+    for metric in budget["metrics"]:
+        if metric["status"] != "active":
+            continue
+        applicable = (
+            hardware_ids if metric["hardwareRowId"] is None
+            else [metric["hardwareRowId"]]
+        )
+        for hardware_id in applicable:
+            entries.append({
+                "metricId": metric["id"],
+                "value": metric["budget"],
+                "unit": metric["unit"],
+                "commitSha": "a" * 40,
+                "hardwareRowId": hardware_id,
+                "measuredAt": "2026-08-28T00:00:00Z",
+                "sampleCount": 1000,
+                "approvedBy": "reviewer-name",
+                "approvedAt": "2026-08-28T01:00:00Z",
+                "approvalCommit": "b" * 40,
+                "budgetDefinitionDigest": budget_definition_digest(metric),
+            })
+    baselines = _make_baselines()
+    baselines["baselines"] = entries
+    return baselines
 
 
 def _make_result(hw_id: str = "test-row-1") -> dict[str, Any]:
@@ -497,18 +533,23 @@ class TestBaselineValidation(unittest.TestCase):
 
     def test_self_approval_rejected(self) -> None:
         bl = _make_baselines()
-        bl["baselines"][0]["commitSha"] = "samehash"
-        bl["baselines"][0]["approvalCommit"] = "samehash"
+        bl["baselines"][0]["commitSha"] = "d" * 40
+        bl["baselines"][0]["approvalCommit"] = "d" * 40
         bl["approvalPolicy"]["selfApprovalAllowed"] = False
         errors = validate_baselines(bl, self.metric_ids, self.hw_ids)
         self.assertTrue(any("self-approval" in e for e in errors))
 
     def test_self_approval_allowed_when_policy_permits(self) -> None:
         bl = _make_baselines()
-        bl["baselines"][0]["commitSha"] = "samehash"
-        bl["baselines"][0]["approvalCommit"] = "samehash"
+        bl["baselines"][0]["commitSha"] = "d" * 40
+        bl["baselines"][0]["approvalCommit"] = "d" * 40
         bl["approvalPolicy"]["selfApprovalAllowed"] = True
-        errors = validate_baselines(bl, self.metric_ids, self.hw_ids)
+        blocking_errors = validate_baselines(bl, self.metric_ids, self.hw_ids)
+        self.assertTrue(any("forbidden" in error for error in blocking_errors))
+        errors = validate_baselines(
+            bl, self.metric_ids, self.hw_ids,
+            allow_bootstrap_self_approval=True,
+        )
         self.assertFalse(any("self-approval" in e for e in errors))
 
     def test_metric_ref_to_nonexistent(self) -> None:
@@ -647,16 +688,8 @@ class TestComparator(unittest.TestCase):
         (tmpdir / "budget.json").write_text(
             json.dumps(budget), encoding="utf-8"
         )
-        baselines = {
-            "schemaVersion": "1.0.0",
-            "baselineVersion": "v1",
-            "approvalPolicy": {
-                "description": "test",
-                "requiredFields": ["approvedBy", "approvedAt", "approvalCommit"],
-                "selfApprovalAllowed": False,
-            },
-            "baselines": [],
-        }
+        hardware_ids = [row["id"] for row in hw["rows"]]
+        baselines = _make_baselines_for_budget(budget, hardware_ids)
         (tmpdir / "baselines.json").write_text(
             json.dumps(baselines), encoding="utf-8"
         )
@@ -817,7 +850,9 @@ class TestFullSuiteValidation(unittest.TestCase):
                 json.dumps(_make_budget()), encoding="utf-8"
             )
             (d / "baselines.json").write_text(
-                json.dumps(_make_baselines()), encoding="utf-8"
+                json.dumps(_make_baselines_for_budget(
+                    _make_budget(), ["test-row-1"],
+                )), encoding="utf-8"
             )
             errors = validate_suite(d)
             self.assertEqual(errors, [])

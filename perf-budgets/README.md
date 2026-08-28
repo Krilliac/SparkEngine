@@ -19,8 +19,11 @@ perf-budgets/
 
 All files carry the exact supported `schemaVersion` (`1.0.0`). The validator
 rejects unknown keys at every level, wrong value types, duplicate JSON object
-keys, unsupported schema versions, non-finite numbers, oversized documents,
-and excessive row/metric/result counts. Adding a field or version requires a
+keys, unsupported schema versions, non-finite or out-of-range numbers,
+oversized documents, and excessive row/metric/result counts. Governance files
+must be exact-case, single-link regular files in a non-reparse directory; case
+aliases, symlinks, junctions, hard links, containment escapes, and files that
+change during a bounded read fail closed. Adding a field or version requires a
 corresponding validator and regression-test update.
 
 `budget.metadata.commitSha` is nullable by design: a tracked file cannot
@@ -73,17 +76,34 @@ edits.  Every baseline requires:
 - `approvedBy` — the reviewer who approved the baseline value
 - `approvedAt` — ISO-8601 timestamp of approval
 - `approvalCommit` — the commit SHA where approval was recorded
+- `budgetDefinitionDigest` — the lowercase SHA-256 digest of the complete,
+  canonical metric definition, including status, threshold, unit, hardware,
+  scene, backend, percentile, and direction
 
-Self-approval (where `approvalCommit == commitSha`) is rejected by
-default.  The `approvalPolicy.selfApprovalAllowed` flag can override
-this for development/bootstrap, but production releases must use
-independent review.
+Every active metric requires one reviewed baseline for each applicable
+hardware row. Changing a threshold or any other definition field invalidates
+the digest and requires a new reviewed baseline. Hardware-independent active
+metrics require a baseline for every declared row.
+
+This is a fail-closed pre-release contract replacement: the committed baseline
+set was empty when `budgetDefinitionDigest` became required, so there are no
+accepted legacy entries to migrate. Entries without the digest are rejected
+rather than silently upgraded or accepted through a compatibility window.
+
+Blocking validation rejects `approvalPolicy.selfApprovalAllowed: true` even
+when it is well typed. The Python library exposes an explicit
+`allow_bootstrap_self_approval=True` override solely for non-release bootstrap
+tools; neither the validator CLI nor the comparator enables it. Self-approval
+where `approvalCommit == commitSha` therefore cannot pass the blocking path.
 
 The policy object is exact and `selfApprovalAllowed` must be a JSON boolean;
-strings such as `"false"` are rejected. Baseline timestamps must be real,
-timezone-aware RFC3339 values, and approval cannot precede measurement.
-Baseline metric, unit, and hardware references are checked against the active
-budget and hardware schemas both in standalone validation and in comparison.
+strings such as `"false"` are rejected. Every non-null provenance SHA is a full
+40- or explicitly supported 64-character hexadecimal identifier, so
+abbreviated prefix aliases cannot establish independent approval. Baseline timestamps must
+be real, timezone-aware RFC3339 values, and approval cannot precede
+measurement. Baseline metric, unit, hardware, and definition-digest references
+are checked against the active budget and hardware schemas both in standalone
+validation and in comparison.
 
 ## Validation
 
@@ -124,10 +144,13 @@ The comparator:
   workflow and rejects a result whose self-asserted SHA does not match
 - Loads and validates `baselines.json`; a missing or invalid approval policy
   fails the comparison before any budget can pass
+- Requires a reviewed, digest-matching baseline for every active metric and
+  applicable hardware row, so weakening a threshold invalidates its approval
 - Requires complete measurements only for active metrics applicable to the
   result's current hardware row
-- Emits `margin_percent: null` plus `margin_reason` when a zero budget makes a
-  percentage denominator undefined
+- Emits `margin_percent: null` plus `margin_reason` whenever the percentage
+  denominator, derived ratio, or derived result is zero, subnormal, or
+  non-finite; strict JSON output never emits `NaN` or infinity
 - Reports every pending, suspended, or retired measurement with an explicit
   status and reason
 
@@ -211,7 +234,8 @@ python3 -m unittest \
   Tests.Tools.test_perf_budget_hardening -v
 ```
 
-As of the PERF-100 hardening slice, this command runs 137 test methods. The
+As of the PERF-100 hardening slice, this command runs 152 test methods. The
 count includes one named regression for each of the 21 independently
-reproduced second-audit defects; it does not treat subtests as separate test
+reproduced second-audit defects plus 15 final-audit path, provenance, numeric,
+and approval-governance cases; it does not treat subtests as separate test
 methods.

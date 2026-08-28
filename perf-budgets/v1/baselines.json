@@ -3,7 +3,7 @@
   "baselineVersion": "v1",
   "approvalPolicy": {
     "description": "Every baseline entry requires explicit reviewed approval. The approvedBy field must name the reviewer, approvedAt must be an ISO-8601 timestamp, and approvalCommit must be the commit SHA where the approval was recorded. Ordinary metric edits do NOT satisfy these fields — only a deliberate baseline-promotion review does.",
-    "requiredFields": ["approvedBy", "approvedAt", "approvalCommit"],
+    "requiredFields": ["approvedBy", "approvedAt", "approvalCommit", "budgetDefinitionDigest"],
     "selfApprovalAllowed": false
   },
   "baselines": []

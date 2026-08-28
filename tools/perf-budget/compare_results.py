@@ -9,6 +9,7 @@ self-asserted identifier cannot be reported as exact-commit evidence.
 from __future__ import annotations
 
 import json
+import math
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -98,24 +99,54 @@ def _passes_budget(measured: float, budget: float, direction: str) -> bool:
 
 def _margin_percent(measured: float, budget: float,
                     direction: str) -> tuple[float | None, str | None]:
+    try:
+        inputs_are_finite = math.isfinite(measured) and math.isfinite(budget)
+    except (TypeError, OverflowError):
+        inputs_are_finite = False
+    if not inputs_are_finite:
+        return None, "undefined because an input is non-finite"
     if budget == 0:
         return None, "undefined because the budget denominator is zero"
+    if abs(budget) < sys.float_info.min:
+        return None, "undefined because the budget denominator is subnormal"
     if direction == "lower_is_better":
-        return ((budget - measured) / budget) * 100.0, None
-    return ((measured - budget) / budget) * 100.0, None
+        ratio = (budget - measured) / budget
+    else:
+        ratio = (measured - budget) / budget
+    if ratio == 0:
+        return None, "undefined because the derived ratio is zero"
+    if not math.isfinite(ratio):
+        return None, "undefined because the derived ratio is non-finite"
+    if abs(ratio) < sys.float_info.min:
+        return None, "undefined because the derived ratio is subnormal"
+    margin = ratio * 100.0
+    if margin == 0:
+        return None, "undefined because the derived margin is zero"
+    if not math.isfinite(margin):
+        return None, "undefined because the derived margin is non-finite"
+    if abs(margin) < sys.float_info.min:
+        return None, "undefined because the derived margin is subnormal"
+    reported_margin = round(margin, 2)
+    if reported_margin == 0:
+        return None, "undefined because the reported margin rounds to zero"
+    if not math.isfinite(reported_margin):
+        return None, "undefined because the reported margin is non-finite"
+    if abs(reported_margin) < sys.float_info.min:
+        return None, "undefined because the reported margin is subnormal"
+    return reported_margin, None
 
 
 def compare(budget_dir: Path, result_data: Any, *,
             expected_sha: str | None = None) -> ComparisonReport:
     """Compare a result set against a fully validated budget suite."""
     hardware_data, hardware_load_errors = load_bounded_json(
-        budget_dir / "hardware.json", "hardware.json",
+        budget_dir / "hardware.json", "hardware.json", trusted_root=budget_dir,
     )
     budget_data, budget_load_errors = load_bounded_json(
-        budget_dir / "budget.json", "budget.json",
+        budget_dir / "budget.json", "budget.json", trusted_root=budget_dir,
     )
     baselines_data, baseline_load_errors = load_bounded_json(
-        budget_dir / "baselines.json", "baselines.json",
+        budget_dir / "baselines.json", "baselines.json", trusted_root=budget_dir,
     )
     errors = hardware_load_errors + budget_load_errors + baseline_load_errors
     if errors:
@@ -224,7 +255,7 @@ def compare(budget_dir: Path, result_data: Any, *,
             unit=metric["unit"],
             direction=direction,
             passed=passed,
-            margin_percent=None if margin is None else round(margin, 2),
+            margin_percent=margin,
             margin_reason=margin_reason,
             hardware_row_id=result_hardware,
             commit_sha=result_data["commitSha"],
@@ -319,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     result_data, result_load_errors = load_bounded_json(
-        result_path, "results.json",
+        result_path, "results.json", trusted_root=result_path.parent,
     )
     if result_load_errors:
         for error in result_load_errors:
@@ -328,7 +359,17 @@ def main(argv: list[str] | None = None) -> int:
 
     report = compare(budget_dir, result_data, expected_sha=expected_sha)
     if use_json:
-        print(json.dumps(report_to_dict(report), indent=2, allow_nan=False))
+        try:
+            rendered = json.dumps(
+                report_to_dict(report), indent=2, allow_nan=False,
+            )
+        except (TypeError, ValueError, OverflowError):
+            print(
+                "Error: comparison report is not strict-JSON serializable",
+                file=sys.stderr,
+            )
+            return 2
+        print(rendered)
     else:
         qualifier = "" if report.authoritative else " (ADVISORY)"
         status = "PASS" if report.passed else "FAIL"

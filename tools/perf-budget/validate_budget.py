@@ -8,9 +8,13 @@ error strings instead of raising for malformed Python values.
 
 from __future__ import annotations
 
+import hashlib
+import heapq
 import json
 import math
+import os
 import re
+import stat as stat_module
 import sys
 from collections.abc import Mapping
 from datetime import datetime
@@ -39,6 +43,9 @@ MAX_SAMPLE_COUNT = 100_000_000
 MAX_SHORT_STRING = 256
 MAX_DESCRIPTION = 4096
 MAX_NUMERIC_VALUE = 1.0e18
+MAX_DIRECTORY_ENTRIES = 4096
+MAX_DIAGNOSTIC_KEYS = 16
+MAX_PATH_COMPONENTS = 128
 
 VALID_UNITS = frozenset({
     "ms", "us", "ns", "s",
@@ -83,12 +90,12 @@ APPROVAL_POLICY_REQUIRED = frozenset({
     "description", "requiredFields", "selfApprovalAllowed",
 })
 REQUIRED_APPROVAL_FIELDS = frozenset({
-    "approvedBy", "approvedAt", "approvalCommit",
+    "approvedBy", "approvedAt", "approvalCommit", "budgetDefinitionDigest",
 })
 BASELINE_ENTRY_REQUIRED = frozenset({
     "metricId", "value", "unit", "commitSha", "hardwareRowId",
     "measuredAt", "sampleCount",
-    "approvedBy", "approvedAt", "approvalCommit",
+    "approvedBy", "approvedAt", "approvalCommit", "budgetDefinitionDigest",
 })
 RESULT_TOP_LEVEL_REQUIRED = frozenset({
     "commitSha", "timestamp", "hardwareRowId", "measurements",
@@ -101,7 +108,9 @@ _RFC3339_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
     r"(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$"
 )
-_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
+_METRIC_DIGEST_DOMAIN = "sparkengine.perf-budget.metric/v1"
 
 
 def _display(value: Any, limit: int = 96) -> str:
@@ -115,8 +124,17 @@ def _display(value: Any, limit: int = 96) -> str:
     return rendered
 
 
-def _sorted_key_displays(values: set[Any]) -> list[str]:
-    return sorted((_display(value) for value in values), key=str)
+def _sorted_key_displays(values: set[Any]) -> str:
+    shown = heapq.nsmallest(
+        MAX_DIAGNOSTIC_KEYS,
+        (_display(value) for value in values),
+        key=str,
+    )
+    suffix = (
+        f" (showing {len(shown)} of {len(values)})"
+        if len(values) > len(shown) else ""
+    )
+    return f"{shown}{suffix}"
 
 
 def _is_strict_int(value: Any) -> bool:
@@ -124,11 +142,13 @@ def _is_strict_int(value: Any) -> bool:
 
 
 def _is_finite_number(value: Any) -> bool:
-    return (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-    )
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        # Do not pass arbitrary-precision integers through math.isfinite():
+        # conversion to a C double raises OverflowError for otherwise valid JSON.
+        return True
+    return isinstance(value, float) and math.isfinite(value)
 
 
 def _check_keys(obj: Any, required: frozenset[str], context: str) -> list[str]:
@@ -174,7 +194,10 @@ def _check_string(value: Any, field: str, context: str, *,
     if any(ord(char) < 32 and char not in "\t\r\n" for char in value):
         return [f"{context}: {field} contains a disallowed control character"]
     if identifier and value and not _IDENTIFIER_RE.fullmatch(value):
-        return [f"{context}: {field} must use only letters, digits, '.', '_', or '-'"]
+        return [
+            f"{context}: {field} must be a lowercase identifier using only "
+            "letters, digits, '.', '_', or '-'"
+        ]
     return []
 
 
@@ -190,16 +213,17 @@ def _check_enum(value: Any, valid: frozenset[str], field: str,
 
 
 def _check_sha(value: Any, field: str, context: str, *,
-               allow_null: bool = False, full: bool = False) -> list[str]:
+               allow_null: bool = False) -> list[str]:
     if value is None and allow_null:
         return []
     if not isinstance(value, str):
         return [f"{context}: {field} must be a hexadecimal commit SHA"]
-    allowed_lengths = {40, 64} if full else set(range(7, 65))
+    # All provenance is exact. Abbreviated SHAs can be prefix aliases for the
+    # same object and therefore cannot prove independent review.
+    allowed_lengths = {40, 64}
     if len(value) not in allowed_lengths:
-        qualifier = "full 40- or 64-character" if full else "7-64 character"
         return [
-            f"{context}: {field} must be a {qualifier} hexadecimal commit SHA "
+            f"{context}: {field} must be a full 40- or 64-character hexadecimal commit SHA "
             f"(got length {len(value)})"
         ]
     if not all(char in "0123456789abcdefABCDEF" for char in value):
@@ -218,6 +242,11 @@ def _parse_rfc3339(value: Any, field: str,
     if not _RFC3339_RE.fullmatch(value):
         return None, [
             f"{context}: {field} must be a timezone-aware RFC3339 timestamp"
+        ]
+    if value.endswith("-00:00"):
+        return None, [
+            f"{context}: {field} must use a known RFC3339 timezone offset; "
+            "-00:00 denotes an unknown local offset"
         ]
     normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
     try:
@@ -269,29 +298,204 @@ def _reject_json_constant(value: str) -> Any:
     raise BudgetValidationError(f"non-finite JSON number {value!r} is not allowed")
 
 
-def load_bounded_json(path: Path, label: str, *,
-                      max_bytes: int = MAX_JSON_BYTES) -> tuple[Any | None, list[str]]:
-    """Load one bounded UTF-8 JSON file, rejecting duplicate object keys."""
+def budget_definition_digest(metric: Any) -> str | None:
+    """Return the canonical approval digest for one exact metric definition."""
+    if not isinstance(metric, dict) or set(metric) != set(METRIC_REQUIRED):
+        return None
+    projection = {key: metric[key] for key in sorted(METRIC_REQUIRED)}
     try:
-        stat = path.stat()
+        encoded = json.dumps(
+            {"domain": _METRIC_DIGEST_DOMAIN, "metric": projection},
+            ensure_ascii=True,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _is_reparse_stat(file_stat: os.stat_result) -> bool:
+    attributes = getattr(file_stat, "st_file_attributes", 0)
+    reparse_flag = getattr(stat_module, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return stat_module.S_ISLNK(file_stat.st_mode) or bool(attributes & reparse_flag)
+
+
+def _identity(file_stat: os.stat_result) -> tuple[int, int]:
+    return file_stat.st_dev, file_stat.st_ino
+
+
+def validate_trusted_directory(path: Path, label: str) -> list[str]:
+    """Reject aliases or reparse points anywhere in a governance-root path."""
+    absolute = Path(os.path.abspath(path))
+    components = list(reversed(absolute.parents)) + [absolute]
+    if len(components) > MAX_PATH_COMPONENTS:
+        return [
+            f"{label}: path exceeds maximum component count {MAX_PATH_COMPONENTS}"
+        ]
+    for component in components:
+        try:
+            component_stat = component.lstat()
+        except FileNotFoundError:
+            return [f"{label}: missing required directory"]
+        except OSError as exc:
+            return [
+                f"{label}: cannot inspect directory path: "
+                f"{exc.strerror or type(exc).__name__}"
+            ]
+        if _is_reparse_stat(component_stat):
+            return [
+                f"{label}: directory path must not contain a symlink, junction, "
+                "or reparse point"
+            ]
+        if component == absolute and not stat_module.S_ISDIR(component_stat.st_mode):
+            return [f"{label}: required path is not a directory"]
+    try:
+        canonical = absolute.resolve(strict=True)
+    except OSError as exc:
+        return [
+            f"{label}: cannot resolve directory path: "
+            f"{exc.strerror or type(exc).__name__}"
+        ]
+    # Ignore drive/UNC anchor spelling, which is not a directory entry. On
+    # Windows resolve() returns the stored long-name case for every component.
+    if absolute.parts[1:] != canonical.parts[1:]:
+        return [f"{label}: directory path contains a wrong-case or short-name alias"]
+    return []
+
+
+def _check_exact_entry(path: Path, label: str) -> list[str]:
+    """Require the exact directory-entry spelling and cap enumeration work."""
+    exact = False
+    aliases: list[str] = []
+    try:
+        with os.scandir(path.parent) as entries:
+            for count, entry in enumerate(entries, start=1):
+                if count > MAX_DIRECTORY_ENTRIES:
+                    return [
+                        f"{label}: parent directory exceeds maximum entry count "
+                        f"{MAX_DIRECTORY_ENTRIES}"
+                    ]
+                if entry.name == path.name:
+                    exact = True
+                elif entry.name.casefold() == path.name.casefold():
+                    aliases.append(entry.name)
+    except FileNotFoundError:
+        return [f"{label}: parent directory is missing"]
+    except OSError as exc:
+        return [f"{label}: cannot enumerate parent directory: {exc.strerror or type(exc).__name__}"]
+    if aliases:
+        qualifier = "ambiguous case alias" if exact else "case alias"
+        return [
+            f"{label}: required filename case is {path.name!r}; found {qualifier} "
+            f"{aliases[0]!r}"
+        ]
+    if exact:
+        return []
+    return [f"{label}: missing required file"]
+
+
+def load_bounded_json(path: Path, label: str, *,
+                      max_bytes: int = MAX_JSON_BYTES,
+                      trusted_root: Path | None = None) -> tuple[Any | None, list[str]]:
+    """Load one snapshot-stable, bounded UTF-8 JSON file without aliases.
+
+    The loader rejects case aliases, symlinks/junctions/reparse points, hard
+    links, containment escapes, and identity/content changes across the read.
+    """
+    root = trusted_root if trusted_root is not None else path.parent
+    root_errors = validate_trusted_directory(root, f"{label} root")
+    if root_errors:
+        return None, root_errors
+    try:
+        root_before = root.lstat()
+    except OSError as exc:
+        return None, [
+            f"{label}: cannot bind trusted root identity: "
+            f"{exc.strerror or type(exc).__name__}"
+        ]
+    exact_errors = _check_exact_entry(path, label)
+    if exact_errors:
+        return None, exact_errors
+    try:
+        root_resolved = root.resolve(strict=True)
+        resolved = path.resolve(strict=True)
+        expected = root_resolved / path.name
+        if resolved != expected:
+            return None, [f"{label}: resolved path escapes its trusted root"]
+        before = path.lstat()
     except FileNotFoundError:
         return None, [f"{label}: missing required file"]
     except OSError as exc:
-        return None, [f"{label}: cannot stat file: {exc.strerror or type(exc).__name__}"]
-    if not path.is_file():
+        return None, [f"{label}: cannot inspect file: {exc.strerror or type(exc).__name__}"]
+    if _is_reparse_stat(before):
+        return None, [f"{label}: file must not be a symlink, junction, or reparse point"]
+    if not stat_module.S_ISREG(before.st_mode):
         return None, [f"{label}: required path is not a regular file"]
-    if stat.st_size > max_bytes:
+    if before.st_nlink != 1:
+        return None, [f"{label}: hard-linked files are not accepted"]
+    if before.st_size > max_bytes:
         return None, [
             f"{label}: file exceeds maximum size {max_bytes} bytes "
-            f"(got {stat.st_size})"
+            f"(got {before.st_size})"
         ]
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor: int | None = None
     try:
-        with path.open("rb") as stream:
-            payload = stream.read(max_bytes + 1)
+        descriptor = os.open(path, flags)
+        opened_before = os.fstat(descriptor)
+        if _identity(opened_before) != _identity(before):
+            return None, [f"{label}: file identity changed before open"]
+        if (_is_reparse_stat(opened_before)
+                or not stat_module.S_ISREG(opened_before.st_mode)):
+            return None, [f"{label}: opened path is not a regular non-reparse file"]
+        if opened_before.st_nlink != 1:
+            return None, [f"{label}: hard-linked files are not accepted"]
+        chunks: list[bytes] = []
+        remaining = max_bytes + 1
+        while remaining:
+            chunk = os.read(descriptor, min(64 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        payload = b"".join(chunks)
+        opened_after = os.fstat(descriptor)
     except OSError as exc:
         return None, [f"{label}: cannot read file: {exc.strerror or type(exc).__name__}"]
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
     if len(payload) > max_bytes:
         return None, [f"{label}: file grew beyond maximum size {max_bytes} bytes"]
+    if (_identity(opened_before) != _identity(opened_after)
+            or opened_before.st_size != opened_after.st_size
+            or opened_before.st_mtime_ns != opened_after.st_mtime_ns
+            or opened_before.st_ctime_ns != opened_after.st_ctime_ns):
+        return None, [f"{label}: file changed while it was being read"]
+    try:
+        after = path.lstat()
+        root_after = root.lstat()
+    except OSError as exc:
+        return None, [f"{label}: cannot re-inspect file: {exc.strerror or type(exc).__name__}"]
+    final_root_errors = validate_trusted_directory(root, f"{label} root")
+    if final_root_errors:
+        return None, final_root_errors
+    final_exact_errors = _check_exact_entry(path, label)
+    if final_exact_errors:
+        return None, final_exact_errors
+    # Windows reports a different creation/change-time view for path and open
+    # handle stats. Compare each view across time, while binding both by inode.
+    if (_is_reparse_stat(after) or _identity(after) != _identity(opened_after)
+            or after.st_size != before.st_size
+            or after.st_mtime_ns != before.st_mtime_ns
+            or after.st_ctime_ns != before.st_ctime_ns):
+        return None, [f"{label}: path identity changed while it was being read"]
+    if (_is_reparse_stat(root_after)
+            or _identity(root_after) != _identity(root_before)):
+        return None, [f"{label}: trusted root identity changed while it was being read"]
     try:
         text = payload.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -342,10 +546,11 @@ def validate_hardware(data: Any) -> list[str]:
             row_id, "id", context, max_length=128, identifier=True,
         ))
         if isinstance(row_id, str) and row_id:
-            if row_id in seen_ids:
+            identity = row_id.casefold()
+            if identity in seen_ids:
                 errors.append(f"{context}: duplicate hardware row id {row_id!r}")
             else:
-                seen_ids.add(row_id)
+                seen_ids.add(identity)
 
         for field in ("os", "cpu", "gpu"):
             errors.extend(_check_string(row.get(field), field, context))
@@ -445,10 +650,11 @@ def validate_budget(data: Any, hardware_ids: Any) -> list[str]:
             metric_id, "id", context, max_length=128, identifier=True,
         ))
         if isinstance(metric_id, str) and metric_id:
-            if metric_id in seen_ids:
+            identity = metric_id.casefold()
+            if identity in seen_ids:
                 errors.append(f"{context}: duplicate metric id {metric_id!r}")
             else:
-                seen_ids.add(metric_id)
+                seen_ids.add(identity)
 
         errors.extend(_check_enum(
             metric.get("category"), VALID_CATEGORIES, "category", context,
@@ -521,7 +727,8 @@ def _metric_lookup(metric_definitions: Any) -> tuple[frozenset[str], dict[str, d
 
 
 def validate_baselines(data: Any, metric_definitions: Any,
-                       hardware_ids: Any) -> list[str]:
+                       hardware_ids: Any, *,
+                       allow_bootstrap_self_approval: bool = False) -> list[str]:
     errors = _check_keys(data, BASELINES_TOP_LEVEL_REQUIRED, "baselines")
     if not isinstance(data, dict):
         return errors
@@ -569,7 +776,12 @@ def validate_baselines(data: Any, metric_definitions: Any,
                 "baselines.approvalPolicy: selfApprovalAllowed must be a boolean"
             )
         else:
-            self_approval_allowed = self_value
+            if self_value and not allow_bootstrap_self_approval:
+                errors.append(
+                    "baselines.approvalPolicy: selfApprovalAllowed=true is forbidden "
+                    "by blocking/release validation"
+                )
+            self_approval_allowed = self_value and allow_bootstrap_self_approval
 
     baselines = data.get("baselines")
     errors.extend(_check_list(
@@ -607,7 +819,7 @@ def validate_baselines(data: Any, metric_definitions: Any,
             )
 
         if isinstance(metric_id, str) and isinstance(hardware_id, str):
-            duplicate_key = (metric_id, hardware_id)
+            duplicate_key = (metric_id.casefold(), hardware_id.casefold())
             if duplicate_key in seen_keys:
                 errors.append(
                     f"{context}: duplicate baseline for metric {metric_id!r} "
@@ -625,6 +837,23 @@ def validate_baselines(data: Any, metric_definitions: Any,
                 errors.append(
                     f"{context}: unit={unit!r} does not match budget unit={metric_unit!r}"
                 )
+
+        definition_digest = baseline.get("budgetDefinitionDigest")
+        if not isinstance(definition_digest, str) or not _DIGEST_RE.fullmatch(
+                definition_digest):
+            errors.append(
+                f"{context}: budgetDefinitionDigest must be exactly 64 lowercase "
+                "hexadecimal characters"
+            )
+        elif metric is not None:
+            expected_digest = budget_definition_digest(metric)
+            if expected_digest is None or definition_digest != expected_digest:
+                errors.append(
+                    f"{context}: budgetDefinitionDigest does not match the exact "
+                    "approved budget definition"
+                )
+
+        if metric is not None:
             metric_hardware = metric.get("hardwareRowId")
             if metric_hardware is not None and hardware_id != metric_hardware:
                 errors.append(
@@ -675,6 +904,23 @@ def validate_baselines(data: Any, metric_definitions: Any,
             errors.append(
                 f"{context}: approvalCommit equals commitSha; self-approval is not allowed"
             )
+    if metric_lookup:
+        for metric_id, metric in metric_lookup.items():
+            if metric.get("status") != "active":
+                continue
+            metric_hardware = metric.get("hardwareRowId")
+            applicable_hardware = (
+                known_hardware if metric_hardware is None
+                else frozenset({metric_hardware})
+            )
+            for hardware_id in sorted(
+                    value for value in applicable_hardware if isinstance(value, str)):
+                key = (metric_id.casefold(), hardware_id.casefold())
+                if key not in seen_keys:
+                    errors.append(
+                        f"baselines: active metric {metric_id!r} requires a reviewed "
+                        f"baseline for hardware {hardware_id!r}"
+                    )
     return errors
 
 
@@ -686,11 +932,8 @@ def validate_result(data: Any, hardware_ids: Any, *,
     result_sha = data.get("commitSha")
     errors.extend(_check_sha(result_sha, "commitSha", "result"))
     if expected_sha is not None:
-        expected_errors = _check_sha(
-            expected_sha, "expectedSha", "result", full=True,
-        )
+        expected_errors = _check_sha(expected_sha, "expectedSha", "result")
         errors.extend(expected_errors)
-        errors.extend(_check_sha(result_sha, "commitSha", "result", full=True))
         if (not expected_errors and isinstance(result_sha, str)
                 and result_sha.lower() != expected_sha.lower()):
             errors.append(
@@ -729,10 +972,11 @@ def validate_result(data: Any, hardware_ids: Any, *,
             metric_id, "metricId", context, max_length=128, identifier=True,
         ))
         if isinstance(metric_id, str) and metric_id:
-            if metric_id in seen_ids:
+            identity = metric_id.casefold()
+            if identity in seen_ids:
                 errors.append(f"{context}: duplicate measurement for {metric_id!r}")
             else:
-                seen_ids.add(metric_id)
+                seen_ids.add(identity)
         value = measurement.get("value")
         if (not _is_finite_number(value)
                 or not 0 <= value <= MAX_NUMERIC_VALUE):
@@ -755,14 +999,17 @@ def validate_result(data: Any, hardware_ids: Any, *,
 
 def validate_suite(budget_dir: Path) -> list[str]:
     """Validate all three files in a versioned budget directory."""
+    directory_errors = validate_trusted_directory(budget_dir, "budget directory")
+    if directory_errors:
+        return directory_errors
     hardware_data, hardware_load_errors = load_bounded_json(
-        budget_dir / "hardware.json", "hardware.json",
+        budget_dir / "hardware.json", "hardware.json", trusted_root=budget_dir,
     )
     budget_data, budget_load_errors = load_bounded_json(
-        budget_dir / "budget.json", "budget.json",
+        budget_dir / "budget.json", "budget.json", trusted_root=budget_dir,
     )
     baselines_data, baseline_load_errors = load_bounded_json(
-        budget_dir / "baselines.json", "baselines.json",
+        budget_dir / "baselines.json", "baselines.json", trusted_root=budget_dir,
     )
     errors = hardware_load_errors + budget_load_errors + baseline_load_errors
     if errors:
@@ -799,9 +1046,6 @@ def main(argv: list[str] | None = None) -> int:
         print("  e.g. validate_budget.py perf-budgets/v1", file=sys.stderr)
         return 2
     budget_dir = Path(args[0])
-    if not budget_dir.is_dir():
-        print(f"Error: {budget_dir} is not a directory", file=sys.stderr)
-        return 2
     errors = validate_suite(budget_dir)
     if errors:
         print(f"FAIL: {len(errors)} validation error(s):", file=sys.stderr)
