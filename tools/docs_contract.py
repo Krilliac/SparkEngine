@@ -453,19 +453,25 @@ def regular_identity(path: Path, *, label: str) -> FileIdentity:
 
 
 def opened_identity_matches(expected: FileIdentity, observed: FileIdentity) -> bool:
-    """Compare handle identity without Windows' handle-local ctime projection."""
+    """Compare handle identity without Windows' handle-local metadata projection.
+
+    Windows ``fstat`` on an open descriptor reports a non-executable permission
+    projection for a file whose path ``lstat`` reports executable bits.  The
+    file type remains stable, while access-mode bits and ``ctime`` do not carry
+    usable identity information across the two APIs.
+    """
 
     return (
         expected.device,
         expected.inode,
-        expected.mode,
+        stat.S_IFMT(expected.mode),
         expected.size,
         expected.nlink,
         expected.attributes,
     ) == (
         observed.device,
         observed.inode,
-        observed.mode,
+        stat.S_IFMT(observed.mode),
         observed.size,
         observed.nlink,
         observed.attributes,

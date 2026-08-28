@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -292,6 +293,26 @@ class DocsGenerationHostileTests(unittest.TestCase):
                 )
             time.sleep(2.5)
             self.assertFalse(marker.exists(), "timed-out descendant wrote after the process boundary")
+
+    def test_opened_identity_accepts_windows_handle_permission_projection_only(self) -> None:
+        path_identity = docs_contract.FileIdentity(
+            device=1, inode=2, mode=stat.S_IFREG | 0o777, size=3,
+            mtime_ns=4, ctime_ns=5, nlink=1, attributes=32,
+        )
+        handle_identity = docs_contract.FileIdentity(
+            device=1, inode=2, mode=stat.S_IFREG | 0o666, size=3,
+            mtime_ns=4, ctime_ns=999, nlink=1, attributes=32,
+        )
+        self.assertTrue(docs_contract.opened_identity_matches(path_identity, handle_identity))
+        self.assertFalse(
+            docs_contract.opened_identity_matches(
+                path_identity,
+                docs_contract.FileIdentity(
+                    device=1, inode=99, mode=stat.S_IFREG | 0o666, size=3,
+                    mtime_ns=4, ctime_ns=999, nlink=1, attributes=32,
+                ),
+            )
+        )
 
     def test_newer_readme_cannot_hide_stale_source_or_missing_page(self) -> None:
         with MiniContract() as fixture:
