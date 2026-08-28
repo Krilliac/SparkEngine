@@ -52,7 +52,7 @@
     },
     "host": {
       "type": "object",
-      "required": ["os", "arch", "cpu", "ram", "gpu", "audio"],
+      "required": ["os", "arch", "cpu", "ram", "gpu", "audio", "compiler"],
       "additionalProperties": false,
       "properties": {
         "os": {
@@ -178,7 +178,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["path", "sha256"],
+            "required": ["path", "sha256", "sizeBytes"],
             "additionalProperties": false,
             "properties": {
               "path": { "type": "string" },

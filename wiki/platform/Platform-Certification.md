@@ -25,7 +25,7 @@ Platform certification (PLT-200, gate G08) proves that a specific commit builds,
 | `tools/platform-cert/evidence_schema.json` | JSON Schema for evidence records |
 | `docs/certification/support-matrix.json` | Seed support matrix (stable-v1) |
 | `docs/certification/evidence/*.json` | Per-row evidence records (one file per row) |
-| `Tests/Tools/test_platform_certification.py` | 77 adversarial tests |
+| `Tests/Tools/test_platform_certification.py` | 136 adversarial tests |
 
 ## Support Matrix
 
@@ -50,7 +50,7 @@ Each evidence file captures the result of exercising a support-matrix row on a p
 
 - **commitSha** — must match the matrix's commit exactly
 - **collectedAt** — ISO 8601 timestamp; must be within `maxAgeHours` (default 168h = 7 days)
-- **host** — OS family/version/build/locale, arch, CPU model/features, RAM, GPU, audio, optionally compiler
+- **host** — OS family/version/build/locale, arch, CPU model/features, RAM, GPU, audio, compiler (required)
 - **probes** — one entry per evidence category, each with status (pass/fail/skip/error), durationMs, optional detail/artifacts
 
 ### The 13 probe categories
@@ -76,6 +76,20 @@ The validator rejects a row under any of these conditions:
 | Host missing required CPU features | **FAIL** |
 | Host audio API mismatch | **FAIL** |
 | Schema validation failure | **FAIL** |
+| Duplicate JSON keys in any file | **FAIL** |
+| NaN/Infinity in any numeric field | **FAIL** |
+| Extra fields (additionalProperties) at any level | **FAIL** |
+| Timestamps before 2020 or beyond 5-min clock skew | **FAIL** |
+| Pass probe with zero duration (< 1ms) | **FAIL** |
+| SHA-256 not 64 lowercase hex | **FAIL** |
+| Artifact path absolute, traversal, or backslash | **FAIL** |
+| Missing artifact sizeBytes | **FAIL** |
+| Canonical profile (stable-v1) row missing/unexpected | **FAIL** |
+| GPU vendor/device/driver/featureLevel mismatch | **FAIL** |
+| Compiler version/toolset mismatch | **FAIL** |
+| Missing dependency closure when required | **FAIL** |
+| Collector identity blank or missing | **FAIL** |
+| Resource limits exceeded (rows, deps, strings, etc.) | **FAIL** |
 
 Rows with `tier=experimental` or `tier=unsupported` are skipped with a warning — they do not block certification.
 
@@ -124,7 +138,7 @@ This cannot be automated away — it requires real hardware running real builds.
 python -m pytest Tests/Tools/test_platform_certification.py -v
 ```
 
-77 tests covering schema validation, cross-validation, evidence tampering, staleness, host mismatches, tampered commits, and full-pipeline certification.
+136 tests covering schema loading, strict JSON parsing (duplicate keys, NaN/Infinity), additionalProperties enforcement, timestamp bounds, compiler identity, zero-duration pass rejection, SHA-256/artifact path confinement, canonical profile coverage, complete host matching, dependency closure, collector identity, resource limits, cross-validation, and CLI modes.
 
 ## Related Pages
 

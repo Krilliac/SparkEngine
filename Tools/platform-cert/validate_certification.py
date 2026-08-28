@@ -1,53 +1,192 @@
 #!/usr/bin/env python3
-"""Fail-closed validator for SparkEngine platform certification evidence.
+"""Fail-closed validator for SparkEngine platform certification evidence (PLT-200).
 
-This validator enforces that every support-matrix row has complete, current,
-matching evidence before it can be marked certified.  It is designed to be
-the sole gate for PLT-200 (G08) — if it passes, the row is certifiable;
+Loads the committed JSON schemas, derives all validation constraints from them,
+and enforces strict fail-closed rules.  If it passes, the row is certifiable;
 if it fails or errors, the row is not.
 
-Fail-closed rules:
-  - Missing evidence file → row fails
-  - Missing required probe → row fails
-  - Probe status != "pass" → row fails
-  - Commit SHA mismatch between matrix and evidence → row fails
-  - Host fields that don't match the matrix row → row fails
-  - Evidence older than staleBefore threshold → row fails
-  - Evidence older than maxAgeHours → row fails
-  - Schema validation failure → entire run fails
-  - Any uncaught exception → exit 1
+Defenses:
+  - Strict JSON: duplicate keys and NaN/Infinity rejected at parse time
+  - Document size capped at MAX_DOCUMENT_BYTES
+  - additionalProperties enforced for every object type
+  - Timestamps bounded: no pre-2020, no future beyond 5-minute clock skew
+  - Pass probes require positive duration (>= 1 ms)
+  - SHA-256: 64 lowercase hex; artifact paths confined (no .., no absolute)
+  - Artifact sizeBytes required
+  - Complete host matching: OS build, compiler version, GPU vendor/device/driver
+  - Canonical profile coverage: no omitted or unexpected certifiable rows
+  - Dependency closure required when evidenceRequired includes dependency_closure
+  - Resource limits on rows, dependencies, artifacts, and string lengths
 """
 
 from __future__ import annotations
 
 import json
+import math
+import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
 TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parents[1]
+SCHEMA_VERSION = 1
 
-ALL_PROBE_CATEGORIES = frozenset([
-    "build", "install", "launch", "renderer", "content", "input",
-    "audio", "save", "crash", "upgrade", "rollback", "uninstall",
-    "dependency_closure",
-])
+# ── Resource limits ────────────────────────────────────────────────────────
+MAX_DOCUMENT_BYTES = 2 * 1024 * 1024
+MAX_MATRIX_ROWS = 200
+MAX_DEPENDENCIES = 1000
+MAX_ARTIFACTS_PER_PROBE = 100
+MAX_STRING_LENGTH = 4000
+MAX_COLLECTIONS = 500
+MIN_TIMESTAMP = datetime(2020, 1, 1, tzinfo=timezone.utc)
+CLOCK_SKEW_SECONDS = 300
+MIN_PASS_DURATION_MS = 1
 
-VALID_TIERS = frozenset(["primary", "supported", "experimental", "unsupported"])
+# ── Patterns ───────────────────────────────────────────────────────────────
+_SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_ROW_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_PROFILE_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+
+# ── Schema loading (eager, fail-closed) ────────────────────────────────────
+
+
+def _load_schema_file(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise RuntimeError(f"Required schema file missing: {path}")
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _keys_of(schema_obj: dict[str, Any]) -> frozenset[str]:
+    return frozenset(schema_obj.get("properties", {}).keys())
+
+
+_EV_SCHEMA = _load_schema_file(TOOLS_DIR / "evidence_schema.json")
+_MX_SCHEMA = _load_schema_file(TOOLS_DIR / "support_matrix_schema.json")
+
+_ev_host = _EV_SCHEMA["properties"]["host"]["properties"]
+_ev_defs = _EV_SCHEMA["$defs"]
+_mx_defs = _MX_SCHEMA["$defs"]
+
+# Constants derived from schemas
+ALL_PROBE_CATEGORIES = frozenset(
+    _EV_SCHEMA["properties"]["probes"]["properties"].keys()
+)
+VALID_OS_FAMILIES = frozenset(
+    _ev_host["os"]["properties"]["family"]["enum"]
+)
+VALID_ARCHES = frozenset(_ev_host["arch"]["enum"])
+VALID_GPU_APIS = frozenset(
+    _ev_host["gpu"]["properties"]["api"]["enum"]
+)
+VALID_GPU_VENDORS = frozenset(
+    _ev_host["gpu"]["properties"]["vendor"]["enum"]
+)
+VALID_AUDIO_APIS = frozenset(
+    _ev_host["audio"]["properties"]["api"]["enum"]
+)
+VALID_COMPILER_IDS = frozenset(
+    _ev_host["compiler"]["properties"]["id"]["enum"]
+)
+VALID_COLLECTOR_TYPES = frozenset(
+    _EV_SCHEMA["properties"]["collector"]["properties"]["type"]["enum"]
+)
+VALID_PROBE_STATUSES = frozenset(
+    _ev_defs["Probe"]["properties"]["status"]["enum"]
+)
+VALID_DEP_SOURCES = frozenset(
+    _ev_defs["RuntimeDependency"]["properties"]["source"]["enum"]
+)
+VALID_TIERS = frozenset(
+    _mx_defs["SupportRow"]["properties"]["tier"]["enum"]
+)
 CERTIFIABLE_TIERS = frozenset(["primary", "supported"])
-VALID_OS_FAMILIES = frozenset(["windows", "linux", "macos"])
-VALID_ARCHES = frozenset(["x86_64", "aarch64"])
-VALID_COMPILER_IDS = frozenset(["msvc", "gcc", "clang", "apple-clang", "mingw"])
-VALID_GPU_APIS = frozenset(["d3d11", "d3d12", "vulkan", "opengl", "metal", "nullrhi"])
-VALID_GPU_VENDORS = frozenset(["nvidia", "amd", "intel", "apple", "microsoft", "mesa", "none"])
-VALID_AUDIO_APIS = frozenset(["xaudio2", "openal", "none"])
-VALID_PROBE_STATUSES = frozenset(["pass", "fail", "skip", "error"])
-VALID_COLLECTOR_TYPES = frozenset(["ci", "manual", "automated"])
-VALID_DEP_SOURCES = frozenset(["system", "bundled", "vcredist", "directx", "sdk"])
-SHA_PATTERN_LEN = 40
+
+# Allowed key sets (additionalProperties enforcement)
+_MX_KEYS = _keys_of(_MX_SCHEMA)
+_MX_ROW_KEYS = _keys_of(_mx_defs["SupportRow"])
+_MX_OS_KEYS = _keys_of(_mx_defs["OsSpec"])
+_MX_COMPILER_KEYS = _keys_of(_mx_defs["CompilerSpec"])
+_MX_GPU_KEYS = _keys_of(_mx_defs["GpuSpec"])
+_MX_AUDIO_KEYS = _keys_of(_mx_defs["AudioSpec"])
+
+_EV_KEYS = _keys_of(_EV_SCHEMA)
+_EV_COLLECTOR_KEYS = _keys_of(_EV_SCHEMA["properties"]["collector"])
+_EV_HOST_KEYS = _keys_of(_EV_SCHEMA["properties"]["host"])
+_EV_HOST_OS_KEYS = _keys_of(_ev_host["os"])
+_EV_HOST_CPU_KEYS = _keys_of(_ev_host["cpu"])
+_EV_HOST_RAM_KEYS = _keys_of(_ev_host["ram"])
+_EV_HOST_GPU_KEYS = _keys_of(_ev_host["gpu"])
+_EV_HOST_AUDIO_KEYS = _keys_of(_ev_host["audio"])
+_EV_HOST_COMPILER_KEYS = _keys_of(_ev_host["compiler"])
+_EV_PROBE_KEYS = _keys_of(_ev_defs["Probe"])
+_EV_ARTIFACT_KEYS = frozenset(
+    _ev_defs["Probe"]["properties"]["artifacts"]["items"]["properties"].keys()
+)
+_EV_DEP_KEYS = _keys_of(_ev_defs["RuntimeDependency"])
+
+# Cross-check: schemas must agree on shared enums
+for _cname, _ev_val, _mx_val in [
+    (
+        "os_families",
+        VALID_OS_FAMILIES,
+        frozenset(_mx_defs["OsSpec"]["properties"]["family"]["enum"]),
+    ),
+    (
+        "arches",
+        VALID_ARCHES,
+        frozenset(_mx_defs["SupportRow"]["properties"]["arch"]["enum"]),
+    ),
+    (
+        "gpu_apis",
+        VALID_GPU_APIS,
+        frozenset(_mx_defs["GpuSpec"]["properties"]["api"]["enum"]),
+    ),
+    (
+        "gpu_vendors",
+        VALID_GPU_VENDORS,
+        frozenset(_mx_defs["GpuSpec"]["properties"]["vendor"]["enum"]),
+    ),
+    (
+        "audio_apis",
+        VALID_AUDIO_APIS,
+        frozenset(_mx_defs["AudioSpec"]["properties"]["api"]["enum"]),
+    ),
+    (
+        "compiler_ids",
+        VALID_COMPILER_IDS,
+        frozenset(_mx_defs["CompilerSpec"]["properties"]["id"]["enum"]),
+    ),
+    (
+        "probe_categories",
+        ALL_PROBE_CATEGORIES,
+        frozenset(
+            _mx_defs["SupportRow"]["properties"]["evidenceRequired"]["items"]["enum"]
+        ),
+    ),
+]:
+    if _ev_val != _mx_val:
+        raise RuntimeError(f"Schema enum mismatch: {_cname}")
+
+# ── Canonical profiles ─────────────────────────────────────────────────────
+CANONICAL_PROFILES: dict[str, dict[str, Any]] = {
+    "stable-v1": {
+        "required_rows": {
+            "win11-x64-msvc143-d3d11": {
+                "tier": "primary",
+                "evidence_required": ALL_PROBE_CATEGORIES,
+            },
+            "win11-x64-msvc143-nullrhi": {
+                "tier": "supported",
+                "evidence_required": ALL_PROBE_CATEGORIES
+                - {"renderer", "content", "input", "audio"},
+            },
+        },
+    },
+}
 
 
 class CertificationError(Exception):
@@ -75,7 +214,7 @@ class ValidationResult:
         return len(self.errors) == 0
 
     def summary(self) -> str:
-        lines = []
+        lines: list[str] = []
         if self.errors:
             lines.append(f"FAIL: {len(self.errors)} error(s)")
             for e in self.errors:
@@ -94,68 +233,184 @@ class ValidationResult:
         return "\n".join(lines)
 
 
-def _load_json(path: Path) -> Any:
-    if not path.exists():
-        raise CertificationError(f"Required file does not exist: {path}")
+# ── Strict JSON parsing ───────────────────────────────────────────────────
+
+
+def parse_strict_json(text: str, source: str = "<input>") -> Any:
+    """Parse JSON text rejecting duplicate keys and non-finite constants."""
+
+    def _reject_dups(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        obj: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in obj:
+                raise ValueError(f"Duplicate JSON key: {key!r}")
+            obj[key] = value
+        return obj
+
+    def _reject_const(c: str) -> None:
+        raise ValueError(f"Non-finite JSON constant: {c!r}")
+
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(
+            text, object_pairs_hook=_reject_dups, parse_constant=_reject_const
+        )
     except json.JSONDecodeError as e:
         raise CertificationError(
-            f"Invalid JSON in {path}: line {e.lineno} col {e.colno}: {e.msg}"
+            f"Invalid JSON in {source}: line {e.lineno} col {e.colno}: {e.msg}"
         ) from e
+    except ValueError as e:
+        raise CertificationError(f"Invalid JSON in {source}: {e}") from e
 
 
-def _is_sha(value: str) -> bool:
-    return (
-        isinstance(value, str)
-        and len(value) == SHA_PATTERN_LEN
-        and all(c in "0123456789abcdef" for c in value)
-    )
+def _load_strict_json(path: Path) -> Any:
+    """Load JSON file with strict parsing and size limit."""
+    if not path.exists():
+        raise CertificationError(f"Required file does not exist: {path}")
+    raw = path.read_bytes()
+    if len(raw) > MAX_DOCUMENT_BYTES:
+        raise CertificationError(
+            f"Document too large: {len(raw)} bytes (max {MAX_DOCUMENT_BYTES})"
+        )
+    return parse_strict_json(raw.decode("utf-8"), path.name)
 
 
-def _parse_iso(value: str) -> datetime:
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+
+def _check_no_nonfinite(obj: Any, path: str, errors: list[str]) -> None:
+    if isinstance(obj, float) and not math.isfinite(obj):
+        errors.append(f"{path}: non-finite numeric value")
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            _check_no_nonfinite(v, f"{path}.{k}", errors)
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            _check_no_nonfinite(v, f"{path}[{i}]", errors)
+
+
+def _check_string_lengths(obj: Any, path: str, errors: list[str]) -> None:
+    if isinstance(obj, str) and len(obj) > MAX_STRING_LENGTH:
+        errors.append(
+            f"{path}: string too long ({len(obj)} > {MAX_STRING_LENGTH})"
+        )
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            _check_string_lengths(v, f"{path}.{k}", errors)
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            _check_string_lengths(v, f"{path}[{i}]", errors)
+
+
+def _check_extra_keys(
+    obj: dict[str, Any],
+    allowed: frozenset[str],
+    context: str,
+    errors: list[str],
+) -> None:
+    extra = set(obj.keys()) - allowed
+    if extra:
+        errors.append(f"{context}: unknown fields {sorted(extra)}")
+
+
+def _parse_bounded_ts(
+    value: Any,
+    *,
+    now: datetime,
+    context: str,
+    errors: list[str],
+) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        errors.append(f"{context}: missing or invalid timestamp")
+        return None
     try:
         dt = datetime.fromisoformat(value)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt
-    except (ValueError, TypeError) as e:
-        raise CertificationError(f"Invalid ISO 8601 timestamp: {value!r}") from e
+    except (ValueError, TypeError):
+        errors.append(f"{context}: invalid ISO 8601 timestamp: {value!r}")
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    if dt < MIN_TIMESTAMP:
+        errors.append(f"{context}: timestamp too old: {value!r}")
+        return None
+    max_future = now + timedelta(seconds=CLOCK_SKEW_SECONDS)
+    if dt > max_future:
+        errors.append(f"{context}: timestamp in the future: {value!r}")
+        return None
+    return dt
 
 
-def _check_enum(value: Any, allowed: frozenset[str], field: str, context: str) -> None:
-    if value not in allowed:
-        raise CertificationError(
-            f"{context}: {field}={value!r} not in {sorted(allowed)}"
-        )
+def _check_sha1(value: Any, field: str, errors: list[str]) -> None:
+    if not isinstance(value, str) or not _SHA1_RE.match(value):
+        errors.append(f"{field}: must be 40 lowercase hex chars, got {value!r}")
 
 
-def validate_matrix(matrix: dict[str, Any]) -> list[str]:
-    """Validate the support matrix structure. Returns list of errors."""
+def _check_artifact(art: Any, context: str, errors: list[str]) -> None:
+    if not isinstance(art, dict):
+        errors.append(f"{context}: must be an object")
+        return
+    _check_extra_keys(art, _EV_ARTIFACT_KEYS, context, errors)
+    path_val = art.get("path", "")
+    if not isinstance(path_val, str) or not path_val:
+        errors.append(f"{context}.path: required non-empty string")
+    else:
+        if path_val.startswith("/") or (
+            len(path_val) >= 2 and path_val[1] == ":"
+        ):
+            errors.append(
+                f"{context}.path: must be relative, got {path_val!r}"
+            )
+        elif ".." in path_val.replace("\\", "/").split("/"):
+            errors.append(
+                f"{context}.path: directory traversal not allowed"
+            )
+        elif "\\" in path_val:
+            errors.append(f"{context}.path: must use forward slashes")
+    sha = art.get("sha256", "")
+    if not isinstance(sha, str) or not _SHA256_RE.match(sha):
+        errors.append(f"{context}.sha256: must be 64 lowercase hex chars")
+    size = art.get("sizeBytes")
+    if not isinstance(size, int) or size < 0:
+        errors.append(f"{context}.sizeBytes: required non-negative integer")
+
+
+# ── Matrix validation ─────────────────────────────────────────────────────
+
+
+def validate_matrix(
+    matrix: dict[str, Any], *, now: datetime | None = None
+) -> list[str]:
+    """Validate support matrix structure. Returns list of errors."""
     errors: list[str] = []
+    if not isinstance(matrix, dict):
+        return ["Matrix must be a JSON object"]
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    _check_no_nonfinite(matrix, "$", errors)
+    _check_string_lengths(matrix, "$", errors)
+    if errors:
+        return errors
+
+    _check_extra_keys(matrix, _MX_KEYS, "matrix", errors)
 
     if matrix.get("schemaVersion") != SCHEMA_VERSION:
         errors.append(f"Matrix schemaVersion must be {SCHEMA_VERSION}")
 
-    if not isinstance(matrix.get("profile"), str) or not matrix["profile"]:
-        errors.append("Matrix must have a non-empty 'profile' string")
+    profile = matrix.get("profile", "")
+    if not isinstance(profile, str) or not _PROFILE_RE.match(profile):
+        errors.append("Matrix profile must match ^[a-z][a-z0-9-]*$")
 
-    commit = matrix.get("commitSha", "")
-    if not _is_sha(commit):
-        errors.append(f"Matrix commitSha must be a 40-char hex string, got {commit!r}")
-
-    if not isinstance(matrix.get("generatedAt"), str):
-        errors.append("Matrix must have a 'generatedAt' ISO 8601 timestamp")
-    else:
-        try:
-            _parse_iso(matrix["generatedAt"])
-        except CertificationError as e:
-            errors.append(str(e))
+    _check_sha1(matrix.get("commitSha"), "matrix.commitSha", errors)
+    _parse_bounded_ts(
+        matrix.get("generatedAt"), now=now, context="matrix.generatedAt", errors=errors
+    )
 
     rows = matrix.get("rows")
     if not isinstance(rows, list) or len(rows) == 0:
         errors.append("Matrix must have at least one row")
         return errors
+    if len(rows) > MAX_MATRIX_ROWS:
+        errors.append(f"Matrix has {len(rows)} rows (max {MAX_MATRIX_ROWS})")
 
     seen_ids: set[str] = set()
     for i, row in enumerate(rows):
@@ -164,9 +419,11 @@ def validate_matrix(matrix: dict[str, Any]) -> list[str]:
             errors.append(f"{ctx}: must be an object")
             continue
 
+        _check_extra_keys(row, _MX_ROW_KEYS, ctx, errors)
+
         row_id = row.get("id", "")
-        if not isinstance(row_id, str) or not row_id:
-            errors.append(f"{ctx}: missing or empty 'id'")
+        if not isinstance(row_id, str) or not _ROW_ID_RE.match(row_id):
+            errors.append(f"{ctx}: id must match {_ROW_ID_RE.pattern}")
         elif row_id in seen_ids:
             errors.append(f"{ctx}: duplicate row id {row_id!r}")
         else:
@@ -179,8 +436,9 @@ def validate_matrix(matrix: dict[str, Any]) -> list[str]:
 
         os_spec = row.get("os")
         if not isinstance(os_spec, dict):
-            errors.append(f"{ctx}: 'os' must be an object")
+            errors.append(f"{ctx}: os must be an object")
         else:
+            _check_extra_keys(os_spec, _MX_OS_KEYS, f"{ctx}.os", errors)
             for f in ("family", "version", "build"):
                 if not isinstance(os_spec.get(f), str) or not os_spec[f]:
                     errors.append(f"{ctx}: os.{f} is required")
@@ -192,8 +450,9 @@ def validate_matrix(matrix: dict[str, Any]) -> list[str]:
 
         compiler = row.get("compiler")
         if not isinstance(compiler, dict):
-            errors.append(f"{ctx}: 'compiler' must be an object")
+            errors.append(f"{ctx}: compiler must be an object")
         else:
+            _check_extra_keys(compiler, _MX_COMPILER_KEYS, f"{ctx}.compiler", errors)
             for f in ("id", "version", "toolset"):
                 if not isinstance(compiler.get(f), str) or not compiler[f]:
                     errors.append(f"{ctx}: compiler.{f} is required")
@@ -202,8 +461,9 @@ def validate_matrix(matrix: dict[str, Any]) -> list[str]:
 
         gpu = row.get("gpu")
         if not isinstance(gpu, dict):
-            errors.append(f"{ctx}: 'gpu' must be an object")
+            errors.append(f"{ctx}: gpu must be an object")
         else:
+            _check_extra_keys(gpu, _MX_GPU_KEYS, f"{ctx}.gpu", errors)
             for f in ("api", "device", "vendor", "driverVersion", "featureLevel"):
                 if not isinstance(gpu.get(f), str) or not gpu[f]:
                     errors.append(f"{ctx}: gpu.{f} is required")
@@ -214,54 +474,108 @@ def validate_matrix(matrix: dict[str, Any]) -> list[str]:
 
         audio = row.get("audio")
         if not isinstance(audio, dict):
-            errors.append(f"{ctx}: 'audio' must be an object")
+            errors.append(f"{ctx}: audio must be an object")
         else:
-            if not isinstance(audio.get("api"), str) or audio["api"] not in VALID_AUDIO_APIS:
+            _check_extra_keys(audio, _MX_AUDIO_KEYS, f"{ctx}.audio", errors)
+            if (
+                not isinstance(audio.get("api"), str)
+                or audio["api"] not in VALID_AUDIO_APIS
+            ):
                 errors.append(f"{ctx}: audio.api invalid")
 
         ev_req = row.get("evidenceRequired")
         if not isinstance(ev_req, list) or len(ev_req) == 0:
             errors.append(f"{ctx}: evidenceRequired must be a non-empty list")
-        elif not all(e in ALL_PROBE_CATEGORIES for e in ev_req):
+        else:
             bad = [e for e in ev_req if e not in ALL_PROBE_CATEGORIES]
-            errors.append(f"{ctx}: unknown evidence categories: {bad}")
-        elif len(set(ev_req)) != len(ev_req):
-            errors.append(f"{ctx}: evidenceRequired has duplicates")
+            if bad:
+                errors.append(f"{ctx}: unknown evidence categories: {bad}")
+            if len(set(ev_req)) != len(ev_req):
+                errors.append(f"{ctx}: evidenceRequired has duplicates")
+
+    # Canonical profile coverage
+    if isinstance(profile, str) and profile in CANONICAL_PROFILES:
+        canonical = CANONICAL_PROFILES[profile]
+        req_rows = canonical["required_rows"]
+        for req_id, req_spec in req_rows.items():
+            if req_id not in seen_ids:
+                errors.append(
+                    f"Profile {profile!r}: missing required row {req_id!r}"
+                )
+            else:
+                actual = next(r for r in rows if r.get("id") == req_id)
+                if actual.get("tier") != req_spec["tier"]:
+                    errors.append(
+                        f"Profile {profile!r}: row {req_id!r} tier must be "
+                        f"{req_spec['tier']!r}, got {actual.get('tier')!r}"
+                    )
+                actual_ev = set(actual.get("evidenceRequired", []))
+                if actual_ev != req_spec["evidence_required"]:
+                    errors.append(
+                        f"Profile {profile!r}: row {req_id!r} evidenceRequired "
+                        f"does not match canonical profile"
+                    )
+        for row in rows:
+            rid = row.get("id", "")
+            if row.get("tier") in CERTIFIABLE_TIERS and rid not in req_rows:
+                errors.append(
+                    f"Profile {profile!r}: unexpected certifiable row {rid!r}"
+                )
 
     return errors
 
 
-def validate_evidence(evidence: dict[str, Any]) -> list[str]:
-    """Validate a single evidence record structure. Returns list of errors."""
+# ── Evidence validation ───────────────────────────────────────────────────
+
+
+def validate_evidence(
+    evidence: dict[str, Any], *, now: datetime | None = None
+) -> list[str]:
+    """Validate a single evidence record. Returns list of errors."""
     errors: list[str] = []
+    if not isinstance(evidence, dict):
+        return ["Evidence must be a JSON object"]
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    _check_no_nonfinite(evidence, "$", errors)
+    _check_string_lengths(evidence, "$", errors)
+    if errors:
+        return errors
+
+    _check_extra_keys(evidence, _EV_KEYS, "evidence", errors)
 
     if evidence.get("schemaVersion") != SCHEMA_VERSION:
         errors.append(f"Evidence schemaVersion must be {SCHEMA_VERSION}")
 
     row_id = evidence.get("rowId", "")
-    if not isinstance(row_id, str) or not row_id:
-        errors.append("Evidence must have a non-empty 'rowId'")
+    if not isinstance(row_id, str) or not _ROW_ID_RE.match(row_id):
+        errors.append("Evidence rowId must match ^[a-z0-9][a-z0-9._-]*$")
 
-    commit = evidence.get("commitSha", "")
-    if not _is_sha(commit):
-        errors.append(f"Evidence commitSha must be 40-char hex, got {commit!r}")
+    _check_sha1(evidence.get("commitSha"), "evidence.commitSha", errors)
+    _parse_bounded_ts(
+        evidence.get("collectedAt"),
+        now=now,
+        context="evidence.collectedAt",
+        errors=errors,
+    )
 
-    if not isinstance(evidence.get("collectedAt"), str):
-        errors.append("Evidence must have 'collectedAt' timestamp")
-    else:
-        try:
-            _parse_iso(evidence["collectedAt"])
-        except CertificationError as e:
-            errors.append(str(e))
+    stale = evidence.get("staleBefore")
+    if stale is not None:
+        _parse_bounded_ts(
+            stale, now=now, context="evidence.staleBefore", errors=errors
+        )
 
     collector = evidence.get("collector")
     if not isinstance(collector, dict):
         errors.append("Evidence must have a 'collector' object")
     else:
+        _check_extra_keys(collector, _EV_COLLECTOR_KEYS, "collector", errors)
         if collector.get("type") not in VALID_COLLECTOR_TYPES:
             errors.append(f"collector.type={collector.get('type')!r} invalid")
-        if not isinstance(collector.get("identity"), str) or not collector["identity"]:
-            errors.append("collector.identity is required")
+        identity = collector.get("identity", "")
+        if not isinstance(identity, str) or not identity.strip():
+            errors.append("collector.identity is required (non-blank)")
 
     host = evidence.get("host")
     if not isinstance(host, dict):
@@ -273,9 +587,9 @@ def validate_evidence(evidence: dict[str, Any]) -> list[str]:
     if not isinstance(probes, dict):
         errors.append("Evidence must have a 'probes' object")
     else:
+        _check_extra_keys(probes, ALL_PROBE_CATEGORIES, "probes", errors)
         for name, probe in probes.items():
             if name not in ALL_PROBE_CATEGORIES:
-                errors.append(f"Unknown probe category: {name!r}")
                 continue
             _validate_probe(name, probe, errors)
 
@@ -284,13 +598,23 @@ def validate_evidence(evidence: dict[str, Any]) -> list[str]:
         if not isinstance(deps, list):
             errors.append("dependencyClosure must be a list")
         else:
+            if len(deps) > MAX_DEPENDENCIES:
+                errors.append(
+                    f"dependencyClosure has {len(deps)} entries "
+                    f"(max {MAX_DEPENDENCIES})"
+                )
             for i, dep in enumerate(deps):
                 if not isinstance(dep, dict):
                     errors.append(f"dependencyClosure[{i}] must be an object")
                     continue
+                _check_extra_keys(
+                    dep, _EV_DEP_KEYS, f"dependencyClosure[{i}]", errors
+                )
                 for f in ("name", "version", "source"):
                     if not isinstance(dep.get(f), str) or not dep[f]:
-                        errors.append(f"dependencyClosure[{i}].{f} is required")
+                        errors.append(
+                            f"dependencyClosure[{i}].{f} is required"
+                        )
                 if dep.get("source") and dep["source"] not in VALID_DEP_SOURCES:
                     errors.append(
                         f"dependencyClosure[{i}].source={dep['source']!r} invalid"
@@ -300,11 +624,16 @@ def validate_evidence(evidence: dict[str, Any]) -> list[str]:
 
 
 def _validate_host(host: dict[str, Any], errors: list[str]) -> None:
+    _check_extra_keys(host, _EV_HOST_KEYS, "host", errors)
+
     os_info = host.get("os")
     if isinstance(os_info, dict):
+        _check_extra_keys(os_info, _EV_HOST_OS_KEYS, "host.os", errors)
         for f in ("family", "version", "build", "locale"):
             if not isinstance(os_info.get(f), str) or not os_info[f]:
                 errors.append(f"host.os.{f} is required")
+        if os_info.get("family") and os_info["family"] not in VALID_OS_FAMILIES:
+            errors.append(f"host.os.family={os_info['family']!r} invalid")
     else:
         errors.append("host.os must be an object")
 
@@ -313,6 +642,7 @@ def _validate_host(host: dict[str, Any], errors: list[str]) -> None:
 
     cpu = host.get("cpu")
     if isinstance(cpu, dict):
+        _check_extra_keys(cpu, _EV_HOST_CPU_KEYS, "host.cpu", errors)
         if not isinstance(cpu.get("model"), str) or not cpu["model"]:
             errors.append("host.cpu.model is required")
         if not isinstance(cpu.get("features"), list):
@@ -322,6 +652,7 @@ def _validate_host(host: dict[str, Any], errors: list[str]) -> None:
 
     ram = host.get("ram")
     if isinstance(ram, dict):
+        _check_extra_keys(ram, _EV_HOST_RAM_KEYS, "host.ram", errors)
         if not isinstance(ram.get("totalMb"), int) or ram["totalMb"] < 1:
             errors.append("host.ram.totalMb must be a positive integer")
     else:
@@ -329,29 +660,60 @@ def _validate_host(host: dict[str, Any], errors: list[str]) -> None:
 
     gpu = host.get("gpu")
     if isinstance(gpu, dict):
+        _check_extra_keys(gpu, _EV_HOST_GPU_KEYS, "host.gpu", errors)
         for f in ("api", "device", "vendor", "driverVersion", "featureLevel"):
             if not isinstance(gpu.get(f), str) or not gpu[f]:
                 errors.append(f"host.gpu.{f} is required")
+        if gpu.get("api") and gpu["api"] not in VALID_GPU_APIS:
+            errors.append(f"host.gpu.api={gpu['api']!r} invalid")
+        if gpu.get("vendor") and gpu["vendor"] not in VALID_GPU_VENDORS:
+            errors.append(f"host.gpu.vendor={gpu['vendor']!r} invalid")
     else:
         errors.append("host.gpu must be an object")
 
     audio = host.get("audio")
     if isinstance(audio, dict):
-        if not isinstance(audio.get("api"), str) or audio["api"] not in VALID_AUDIO_APIS:
+        _check_extra_keys(audio, _EV_HOST_AUDIO_KEYS, "host.audio", errors)
+        if (
+            not isinstance(audio.get("api"), str)
+            or audio["api"] not in VALID_AUDIO_APIS
+        ):
             errors.append("host.audio.api invalid")
     else:
         errors.append("host.audio must be an object")
 
+    compiler = host.get("compiler")
+    if isinstance(compiler, dict):
+        _check_extra_keys(
+            compiler, _EV_HOST_COMPILER_KEYS, "host.compiler", errors
+        )
+        for f in ("id", "version", "toolset"):
+            if not isinstance(compiler.get(f), str) or not compiler[f]:
+                errors.append(f"host.compiler.{f} is required")
+        if compiler.get("id") and compiler["id"] not in VALID_COMPILER_IDS:
+            errors.append(f"host.compiler.id={compiler['id']!r} invalid")
+    else:
+        errors.append("host.compiler is required")
 
-def _validate_probe(name: str, probe: dict[str, Any], errors: list[str]) -> None:
+
+def _validate_probe(name: str, probe: Any, errors: list[str]) -> None:
     if not isinstance(probe, dict):
         errors.append(f"probes.{name} must be an object")
         return
+    _check_extra_keys(probe, _EV_PROBE_KEYS, f"probes.{name}", errors)
     status = probe.get("status")
     if status not in VALID_PROBE_STATUSES:
         errors.append(f"probes.{name}.status={status!r} invalid")
-    if not isinstance(probe.get("durationMs"), int) or probe["durationMs"] < 0:
-        errors.append(f"probes.{name}.durationMs must be a non-negative integer")
+    dur = probe.get("durationMs")
+    if not isinstance(dur, int) or dur < 0:
+        errors.append(
+            f"probes.{name}.durationMs must be a non-negative integer"
+        )
+    elif status == "pass" and dur < MIN_PASS_DURATION_MS:
+        errors.append(
+            f"probes.{name}.durationMs={dur} too low for pass "
+            f"(minimum {MIN_PASS_DURATION_MS}ms)"
+        )
     if status == "skip" and not probe.get("skipReason"):
         errors.append(f"probes.{name}: status=skip requires skipReason")
     artifacts = probe.get("artifacts")
@@ -359,15 +721,18 @@ def _validate_probe(name: str, probe: dict[str, Any], errors: list[str]) -> None
         if not isinstance(artifacts, list):
             errors.append(f"probes.{name}.artifacts must be a list")
         else:
+            if len(artifacts) > MAX_ARTIFACTS_PER_PROBE:
+                errors.append(
+                    f"probes.{name}.artifacts has {len(artifacts)} "
+                    f"(max {MAX_ARTIFACTS_PER_PROBE})"
+                )
             for j, art in enumerate(artifacts):
-                if not isinstance(art, dict):
-                    errors.append(f"probes.{name}.artifacts[{j}] must be an object")
-                    continue
-                if not isinstance(art.get("path"), str) or not art["path"]:
-                    errors.append(f"probes.{name}.artifacts[{j}].path is required")
-                sha = art.get("sha256", "")
-                if not isinstance(sha, str) or len(sha) != 64:
-                    errors.append(f"probes.{name}.artifacts[{j}].sha256 invalid")
+                _check_artifact(
+                    art, f"probes.{name}.artifacts[{j}]", errors
+                )
+
+
+# ── Cross-validation ──────────────────────────────────────────────────────
 
 
 def cross_validate(
@@ -377,15 +742,7 @@ def cross_validate(
     max_age_hours: float = 168,
     now: datetime | None = None,
 ) -> ValidationResult:
-    """Cross-validate matrix rows against their evidence records.
-
-    This is the core certification gate. It checks:
-    1. Every certifiable row has an evidence record
-    2. Commit SHAs match between matrix and evidence
-    3. Host environment matches the declared row
-    4. All required probes are present and passing
-    5. Evidence is not stale
-    """
+    """Cross-validate matrix rows against evidence records."""
     result = ValidationResult()
     if now is None:
         now = datetime.now(timezone.utc)
@@ -398,12 +755,16 @@ def cross_validate(
         result.rows_checked += 1
 
         if tier not in CERTIFIABLE_TIERS:
-            result.warn(f"[{row_id}] tier={tier!r} is not certifiable, skipping")
+            result.warn(
+                f"[{row_id}] tier={tier!r} is not certifiable, skipping"
+            )
             continue
 
         evidence = evidence_records.get(row_id)
         if evidence is None:
-            result.error(f"[{row_id}] No evidence record found -- row cannot certify")
+            result.error(
+                f"[{row_id}] No evidence record found -- row cannot certify"
+            )
             result.rows_failed += 1
             continue
 
@@ -412,32 +773,42 @@ def cross_validate(
         ev_commit = evidence.get("commitSha", "")
         if ev_commit != matrix_commit:
             row_errors.append(
-                f"Commit mismatch: matrix={matrix_commit[:8]} evidence={ev_commit[:8]}"
+                f"Commit mismatch: matrix={matrix_commit[:8]} "
+                f"evidence={ev_commit[:8]}"
             )
 
         collected_at_str = evidence.get("collectedAt", "")
         try:
-            collected_at = _parse_iso(collected_at_str)
-        except CertificationError:
+            collected_at = datetime.fromisoformat(collected_at_str)
+            if collected_at.tzinfo is None:
+                collected_at = collected_at.replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
             row_errors.append(f"Invalid collectedAt: {collected_at_str!r}")
             collected_at = None
 
         if collected_at is not None:
+            if collected_at > now + timedelta(seconds=CLOCK_SKEW_SECONDS):
+                row_errors.append("Evidence timestamp is in the future")
             age_hours = (now - collected_at).total_seconds() / 3600
             if age_hours > max_age_hours:
                 row_errors.append(
-                    f"Evidence is {age_hours:.0f}h old (max {max_age_hours:.0f}h)"
+                    f"Evidence is {age_hours:.0f}h old "
+                    f"(max {max_age_hours:.0f}h)"
                 )
             stale_before = evidence.get("staleBefore")
             if stale_before:
                 try:
-                    stale_dt = _parse_iso(stale_before)
+                    stale_dt = datetime.fromisoformat(stale_before)
+                    if stale_dt.tzinfo is None:
+                        stale_dt = stale_dt.replace(tzinfo=timezone.utc)
                     if collected_at < stale_dt:
                         row_errors.append(
-                            f"Evidence collected before staleBefore threshold"
+                            "Evidence collected before staleBefore threshold"
                         )
-                except CertificationError:
-                    row_errors.append(f"Invalid staleBefore: {stale_before!r}")
+                except (ValueError, TypeError):
+                    row_errors.append(
+                        f"Invalid staleBefore: {stale_before!r}"
+                    )
 
         _cross_validate_host(row, evidence, row_errors)
 
@@ -454,6 +825,14 @@ def cross_validate(
                 if detail:
                     msg += f": {detail[:100]}"
                 row_errors.append(msg)
+
+        if "dependency_closure" in required:
+            deps = evidence.get("dependencyClosure")
+            if not isinstance(deps, list) or len(deps) == 0:
+                row_errors.append(
+                    "dependency_closure is in evidenceRequired but "
+                    "dependencyClosure is missing or empty"
+                )
 
         if row_errors:
             for e in row_errors:
@@ -475,49 +854,54 @@ def _cross_validate_host(
 
     row_os = row.get("os", {})
     host_os = host.get("os", {})
-    if row_os.get("family") and host_os.get("family") != row_os["family"]:
-        errors.append(
-            f"OS family mismatch: row={row_os['family']} host={host_os.get('family')}"
-        )
-    if row_os.get("version") and host_os.get("version") != row_os["version"]:
-        errors.append(
-            f"OS version mismatch: row={row_os['version']} host={host_os.get('version')}"
-        )
+    for field in ("family", "version", "build"):
+        rv = row_os.get(field)
+        hv = host_os.get(field)
+        if rv and hv != rv:
+            errors.append(f"OS {field} mismatch: row={rv!r} host={hv!r}")
 
     if row.get("arch") and host.get("arch") != row["arch"]:
-        errors.append(f"Arch mismatch: row={row['arch']} host={host.get('arch')}")
-
-    row_gpu = row.get("gpu", {})
-    host_gpu = host.get("gpu", {})
-    if row_gpu.get("api") and host_gpu.get("api") != row_gpu["api"]:
         errors.append(
-            f"GPU API mismatch: row={row_gpu['api']} host={host_gpu.get('api')}"
+            f"Arch mismatch: row={row['arch']!r} host={host.get('arch')!r}"
         )
 
     row_compiler = row.get("compiler", {})
-    host_compiler = host.get("compiler", {})
-    if host_compiler:
-        if row_compiler.get("id") and host_compiler.get("id") != row_compiler["id"]:
-            errors.append(
-                f"Compiler mismatch: row={row_compiler['id']} host={host_compiler.get('id')}"
-            )
-        if row_compiler.get("toolset") and host_compiler.get("toolset") != row_compiler["toolset"]:
-            errors.append(
-                f"Toolset mismatch: row={row_compiler['toolset']} host={host_compiler.get('toolset')}"
-            )
+    host_compiler = host.get("compiler")
+    if not isinstance(host_compiler, dict):
+        errors.append("Evidence host missing required compiler section")
+    else:
+        for field in ("id", "version", "toolset"):
+            rv = row_compiler.get(field)
+            hv = host_compiler.get(field)
+            if rv and hv != rv:
+                errors.append(
+                    f"Compiler {field} mismatch: row={rv!r} host={hv!r}"
+                )
 
-    row_cpu_features = set(row.get("cpuFeatures", []))
-    host_cpu_features = set(host.get("cpu", {}).get("features", []))
-    missing = row_cpu_features - host_cpu_features
-    if missing:
-        errors.append(f"Host missing required CPU features: {sorted(missing)}")
+    row_gpu = row.get("gpu", {})
+    host_gpu = host.get("gpu", {})
+    for field in ("api", "device", "vendor", "driverVersion", "featureLevel"):
+        rv = row_gpu.get(field)
+        hv = host_gpu.get(field)
+        if rv and hv != rv:
+            errors.append(f"GPU {field} mismatch: row={rv!r} host={hv!r}")
 
     row_audio = row.get("audio", {})
     host_audio = host.get("audio", {})
     if row_audio.get("api") and host_audio.get("api") != row_audio["api"]:
         errors.append(
-            f"Audio API mismatch: row={row_audio['api']} host={host_audio.get('api')}"
+            f"Audio API mismatch: row={row_audio['api']!r} "
+            f"host={host_audio.get('api')!r}"
         )
+
+    row_features = set(row.get("cpuFeatures", []))
+    host_features = set(host.get("cpu", {}).get("features", []))
+    missing = row_features - host_features
+    if missing:
+        errors.append(f"Host missing required CPU features: {sorted(missing)}")
+
+
+# ── File-based pipeline ───────────────────────────────────────────────────
 
 
 def load_and_validate(
@@ -529,7 +913,7 @@ def load_and_validate(
     """Load matrix + evidence files and run full validation."""
     result = ValidationResult()
 
-    matrix = _load_json(matrix_path)
+    matrix = _load_strict_json(matrix_path)
     matrix_errors = validate_matrix(matrix)
     if matrix_errors:
         for e in matrix_errors:
@@ -538,8 +922,15 @@ def load_and_validate(
 
     evidence_records: dict[str, dict[str, Any]] = {}
     if evidence_dir.is_dir():
-        for path in sorted(evidence_dir.glob("*.json")):
-            ev = _load_json(path)
+        ev_files = sorted(evidence_dir.glob("*.json"))
+        if len(ev_files) > MAX_COLLECTIONS:
+            result.error(
+                f"Too many evidence files: {len(ev_files)} "
+                f"(max {MAX_COLLECTIONS})"
+            )
+            return result
+        for path in ev_files:
+            ev = _load_strict_json(path)
             ev_errors = validate_evidence(ev)
             if ev_errors:
                 for e in ev_errors:
@@ -565,46 +956,40 @@ def load_and_validate(
     return result
 
 
+# ── CLI ───────────────────────────────────────────────────────────────────
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Validate platform certification evidence"
+        description="Validate platform certification evidence (PLT-200)"
     )
     parser.add_argument(
         "--matrix",
         type=Path,
         default=REPO_ROOT / "docs" / "certification" / "support-matrix.json",
-        help="Path to the support matrix JSON",
     )
     parser.add_argument(
         "--evidence-dir",
         type=Path,
         default=REPO_ROOT / "docs" / "certification" / "evidence",
-        help="Directory containing evidence JSON files",
     )
-    parser.add_argument(
-        "--max-age-hours",
-        type=float,
-        default=168,
-        help="Maximum evidence age in hours (default: 168 = 7 days)",
-    )
-    parser.add_argument(
-        "--matrix-only",
-        action="store_true",
-        help="Only validate the matrix schema, skip evidence",
-    )
+    parser.add_argument("--max-age-hours", type=float, default=168)
+    parser.add_argument("--matrix-only", action="store_true")
 
     args = parser.parse_args(argv)
 
     try:
         if args.matrix_only:
-            matrix = _load_json(args.matrix)
+            matrix = _load_strict_json(args.matrix)
             errors = validate_matrix(matrix)
             if errors:
                 for e in errors:
                     print(f"  X {e}", file=sys.stderr)
-                print(f"FAIL: {len(errors)} matrix error(s)", file=sys.stderr)
+                print(
+                    f"FAIL: {len(errors)} matrix error(s)", file=sys.stderr
+                )
                 return 1
             print("PASS: Matrix schema is valid")
             return 0
