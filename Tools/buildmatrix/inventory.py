@@ -20,6 +20,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -1313,6 +1314,8 @@ _PROVENANCE_SCHEMA = 4
 _PROVENANCE_PRODUCER = "spark-buildmatrix-configure-build-transaction-v4"
 _CAPTURE_CLIENT_PREFIX = "client-spark-ci120-"
 _MAX_CAPTURE_RESTARTS = 3
+_QUERY_CLEANUP_ATTEMPTS = 4
+_QUERY_CLEANUP_RETRY_DELAY_SECONDS = 0.05
 _REPARSE_POINT_ATTRIBUTE = 0x400
 _CI120_WORKFLOW_PATH = ".github/workflows/build.yml"
 _CI120_PRODUCER_JOB = "build-windows-shipping"
@@ -3035,6 +3038,57 @@ def _capture_query(profile: str, run_id: str) -> dict[str, Any]:
     }
 
 
+def _cleanup_owned_query_client(
+    query_path: Path, client_directory: Path, profile: str
+) -> InventoryError | None:
+    """Remove an invocation-owned File API client without hiding retained state."""
+    last_denial: PermissionError | None = None
+    for attempt in range(_QUERY_CLEANUP_ATTEMPTS):
+        query_absent_or_removed = False
+        try:
+            query_path.unlink(missing_ok=True)
+        except FileNotFoundError:
+            query_absent_or_removed = True
+        except PermissionError as error:
+            last_denial = error
+        except OSError as error:
+            return InventoryError(
+                f"{profile}: cannot remove owned File API query file {query_path}: {error}"
+            )
+        else:
+            query_absent_or_removed = True
+
+        if query_absent_or_removed:
+            try:
+                client_directory.rmdir()
+            except FileNotFoundError:
+                return None
+            except PermissionError as error:
+                last_denial = error
+            except OSError as error:
+                return InventoryError(
+                    f"{profile}: cannot remove owned File API client directory "
+                    f"{client_directory}: {error}"
+                )
+            else:
+                return None
+
+        if attempt + 1 < _QUERY_CLEANUP_ATTEMPTS:
+            time.sleep(_QUERY_CLEANUP_RETRY_DELAY_SECONDS)
+
+    try:
+        retained = [str(path) for path in (query_path, client_directory) if path.exists()]
+    except OSError as error:
+        return InventoryError(f"{profile}: cannot verify owned File API query cleanup: {error}")
+    if not retained:
+        return None
+    detail = f": {last_denial}" if last_denial is not None else ""
+    return InventoryError(
+        f"{profile}: cannot remove owned File API query client after "
+        f"{_QUERY_CLEANUP_ATTEMPTS} attempts; retained {', '.join(retained)}{detail}"
+    )
+
+
 def _resolve_cmake_executable(value: str | Path) -> Path:
     text = os.fspath(value)
     located = shutil.which(text) if not Path(text).is_absolute() else text
@@ -3439,11 +3493,9 @@ def capture_codemodel_transaction(
         if reply_snapshot is not None:
             reply_snapshot.close()
         # This exact random client directory is owned by this invocation.
-        try:
-            query_path.unlink(missing_ok=True)
-            client_directory.rmdir()
-        except OSError:
-            pass
+        cleanup_failure = _cleanup_owned_query_client(query_path, client_directory, profile)
+        if cleanup_failure is not None and sys.exc_info()[0] is None:
+            raise cleanup_failure
 
 
 def capture_codemodel_provenance(build_dir: Path, profile: str) -> Path:

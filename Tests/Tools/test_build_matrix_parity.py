@@ -1416,8 +1416,363 @@ class CodemodelProvenanceTests(unittest.TestCase):
             )
             self.assertEqual(evidence["targets"][0]["artifactState"], "locally-observed-post-build")
             self.assertFalse(
-                any((build / ".cmake" / "api" / "v1" / "query").glob("client-*/query.json"))
+                any((build / ".cmake" / "api" / "v1" / "query").glob("client-*"))
             )
+
+    def test_owned_query_cleanup_retries_one_transient_deletion_denial(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory.mkdir()
+            query_path = client_directory / "query.json"
+            query_path.write_text("{}\n", encoding="utf-8")
+            original_unlink = Path.unlink
+            denials = 0
+
+            def transient_unlink(path: Path, *args: Any, **kwargs: Any) -> None:
+                nonlocal denials
+                if path == query_path and denials == 0:
+                    denials += 1
+                    raise PermissionError("simulated transient deletion denial")
+                original_unlink(path, *args, **kwargs)
+
+            with (
+                mock.patch.object(
+                    Path, "unlink", autospec=True, side_effect=transient_unlink
+                ),
+                mock.patch.object(inventory.time, "sleep") as sleep,
+            ):
+                failure = inventory._cleanup_owned_query_client(
+                    query_path, client_directory, "windows-shipping"
+                )
+
+            self.assertIsNone(failure)
+            self.assertEqual(denials, 1)
+            sleep.assert_called_once_with(inventory._QUERY_CLEANUP_RETRY_DELAY_SECONDS)
+            self.assertFalse(query_path.exists())
+            self.assertFalse(client_directory.exists())
+
+    def test_owned_query_cleanup_accepts_final_denial_when_owned_paths_are_gone(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory.mkdir()
+            query_path = client_directory / "query.json"
+            query_path.write_text("{}\n", encoding="utf-8")
+            original_unlink = Path.unlink
+            denials = 0
+
+            def final_denial_after_removal(path: Path, *args: Any, **kwargs: Any) -> None:
+                nonlocal denials
+                if path == query_path:
+                    denials += 1
+                    if denials == inventory._QUERY_CLEANUP_ATTEMPTS:
+                        original_unlink(path, *args, **kwargs)
+                        client_directory.rmdir()
+                    raise PermissionError("simulated final deletion denial")
+                original_unlink(path, *args, **kwargs)
+
+            with (
+                mock.patch.object(
+                    Path, "unlink", autospec=True, side_effect=final_denial_after_removal
+                ),
+                mock.patch.object(inventory.time, "sleep") as sleep,
+            ):
+                failure = inventory._cleanup_owned_query_client(
+                    query_path, client_directory, "windows-shipping"
+                )
+
+            self.assertIsNone(failure)
+            self.assertEqual(denials, inventory._QUERY_CLEANUP_ATTEMPTS)
+            self.assertEqual(sleep.call_count, inventory._QUERY_CLEANUP_ATTEMPTS - 1)
+            self.assertFalse(query_path.exists())
+            self.assertFalse(client_directory.exists())
+
+    def test_owned_query_cleanup_removes_empty_client_when_query_is_already_absent(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory.mkdir()
+            query_path = client_directory / "query.json"
+
+            failure = inventory._cleanup_owned_query_client(
+                query_path, client_directory, "windows-shipping"
+            )
+
+            self.assertIsNone(failure)
+            self.assertFalse(client_directory.exists())
+
+    def test_owned_query_cleanup_does_not_retry_non_access_error(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory.mkdir()
+            query_path = client_directory / "query.json"
+            query_path.write_text("{}\n", encoding="utf-8")
+            original_unlink = Path.unlink
+            calls = 0
+
+            def failing_unlink(path: Path, *args: Any, **kwargs: Any) -> None:
+                nonlocal calls
+                if path == query_path:
+                    calls += 1
+                    raise OSError("simulated non-access deletion failure")
+                original_unlink(path, *args, **kwargs)
+
+            try:
+                with (
+                    mock.patch.object(Path, "unlink", autospec=True, side_effect=failing_unlink),
+                    mock.patch.object(inventory.time, "sleep") as sleep,
+                ):
+                    failure = inventory._cleanup_owned_query_client(
+                        query_path, client_directory, "windows-shipping"
+                    )
+                self.assertIsInstance(failure, inventory.InventoryError)
+                self.assertIn("cannot remove owned File API query file", str(failure))
+                self.assertEqual(calls, 1)
+                sleep.assert_not_called()
+            finally:
+                query_path.unlink(missing_ok=True)
+                client_directory.rmdir()
+
+    def test_owned_query_cleanup_rejects_persistent_deletion_denial(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory.mkdir()
+            query_path = client_directory / "query.json"
+            query_path.write_text("{}\n", encoding="utf-8")
+            original_unlink = Path.unlink
+            denials = 0
+
+            def persistent_unlink(path: Path, *args: Any, **kwargs: Any) -> None:
+                nonlocal denials
+                if path == query_path:
+                    denials += 1
+                    raise PermissionError("simulated persistent deletion denial")
+                original_unlink(path, *args, **kwargs)
+
+            try:
+                with (
+                    mock.patch.object(
+                        Path, "unlink", autospec=True, side_effect=persistent_unlink
+                    ),
+                    mock.patch.object(inventory.time, "sleep") as sleep,
+                ):
+                    failure = inventory._cleanup_owned_query_client(
+                        query_path, client_directory, "windows-shipping"
+                    )
+                self.assertIsInstance(failure, inventory.InventoryError)
+                self.assertRegex(
+                    str(failure),
+                    r"cannot remove owned File API query client after .* retained .*query\.json",
+                )
+                self.assertEqual(denials, inventory._QUERY_CLEANUP_ATTEMPTS)
+                self.assertEqual(sleep.call_count, inventory._QUERY_CLEANUP_ATTEMPTS - 1)
+                self.assertTrue(query_path.is_file())
+                self.assertTrue(client_directory.is_dir())
+            finally:
+                query_path.unlink(missing_ok=True)
+                client_directory.rmdir()
+
+    def test_owned_query_cleanup_retries_one_transient_directory_deletion_denial(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory.mkdir()
+            query_path = client_directory / "query.json"
+            query_path.write_text("{}\n", encoding="utf-8")
+            original_rmdir = Path.rmdir
+            denials = 0
+
+            def transient_rmdir(path: Path, *args: Any, **kwargs: Any) -> None:
+                nonlocal denials
+                if path == client_directory and denials == 0:
+                    denials += 1
+                    raise PermissionError("simulated transient directory deletion denial")
+                original_rmdir(path, *args, **kwargs)
+
+            with (
+                mock.patch.object(Path, "rmdir", autospec=True, side_effect=transient_rmdir),
+                mock.patch.object(inventory.time, "sleep") as sleep,
+            ):
+                failure = inventory._cleanup_owned_query_client(
+                    query_path, client_directory, "windows-shipping"
+                )
+
+            self.assertIsNone(failure)
+            self.assertEqual(denials, 1)
+            sleep.assert_called_once_with(inventory._QUERY_CLEANUP_RETRY_DELAY_SECONDS)
+            self.assertFalse(query_path.exists())
+            self.assertFalse(client_directory.exists())
+
+    def test_owned_query_cleanup_rejects_persistent_directory_deletion_denial(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory.mkdir()
+            query_path = client_directory / "query.json"
+            query_path.write_text("{}\n", encoding="utf-8")
+            original_rmdir = Path.rmdir
+            denials = 0
+
+            def persistent_rmdir(path: Path, *args: Any, **kwargs: Any) -> None:
+                nonlocal denials
+                if path == client_directory:
+                    denials += 1
+                    raise PermissionError("simulated persistent directory deletion denial")
+                original_rmdir(path, *args, **kwargs)
+
+            try:
+                with (
+                    mock.patch.object(Path, "rmdir", autospec=True, side_effect=persistent_rmdir),
+                    mock.patch.object(inventory.time, "sleep") as sleep,
+                ):
+                    failure = inventory._cleanup_owned_query_client(
+                        query_path, client_directory, "windows-shipping"
+                    )
+                self.assertIsInstance(failure, inventory.InventoryError)
+                self.assertRegex(
+                    str(failure),
+                    r"cannot remove owned File API query client after .* retained .*client-spark-ci120-test",
+                )
+                self.assertIn("persistent directory deletion denial", str(failure))
+                self.assertEqual(denials, inventory._QUERY_CLEANUP_ATTEMPTS)
+                self.assertEqual(sleep.call_count, inventory._QUERY_CLEANUP_ATTEMPTS - 1)
+                self.assertFalse(query_path.exists())
+                self.assertTrue(client_directory.is_dir())
+            finally:
+                original_rmdir(client_directory)
+
+    def test_capture_preserves_primary_failure_when_query_cleanup_also_fails(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            trust_root = Path(raw)
+            source = trust_root / "source"
+            build = source / "build" / "windows-shipping"
+            source.mkdir()
+            build.mkdir(parents=True)
+            executable = trust_root / "cmake.exe"
+            repository = {
+                "root": source.as_posix(),
+                "commit": "0" * 40,
+                "clean": True,
+                "untrackedPolicy": "all-nonignored",
+                "statusSha256": hashlib.sha256(b"").hexdigest(),
+            }
+            config = {
+                "id": "windows-shipping",
+                "preset": "windows-shipping",
+                "configuration": "MinSizeRel",
+            }
+            cleanup_failure = inventory.InventoryError("simulated cleanup failure")
+            with (
+                mock.patch.object(inventory, "REPO_ROOT", source),
+                mock.patch.object(inventory, "_resolve_cmake_executable", return_value=executable),
+                mock.patch.object(
+                    inventory,
+                    "_capture_plan",
+                    return_value=(
+                        config,
+                        source,
+                        build,
+                        [executable.as_posix(), "--preset", "windows-shipping"],
+                    ),
+                ),
+                mock.patch.object(inventory, "_repository_provenance", return_value=repository),
+                mock.patch.object(inventory, "_github_actions_context", return_value=synthetic_ci_context()),
+                mock.patch.object(
+                    inventory,
+                    "_write_atomic",
+                    side_effect=inventory.InventoryError("primary capture failure"),
+                ),
+                mock.patch.object(
+                    inventory, "_cleanup_owned_query_client", return_value=cleanup_failure
+                ) as cleanup,
+            ):
+                with self.assertRaisesRegex(inventory.InventoryError, "primary capture failure"):
+                    inventory.capture_codemodel_transaction(
+                        build, "windows-shipping", cmake_executable=executable
+                    )
+            cleanup.assert_called_once()
+
+    def test_capture_rejects_persistent_query_cleanup_after_success(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            trust_root = Path(raw)
+            source = trust_root / "source"
+            build = source / "build" / "windows-shipping"
+            source.mkdir()
+            build.mkdir(parents=True)
+            executable = trust_root / "cmake.exe"
+            repository = {
+                "root": source.as_posix(),
+                "commit": "0" * 40,
+                "clean": True,
+                "untrackedPolicy": "all-nonignored",
+                "statusSha256": hashlib.sha256(b"").hexdigest(),
+            }
+            config = {
+                "id": "windows-shipping",
+                "preset": "windows-shipping",
+                "configuration": "MinSizeRel",
+            }
+            evidence = {
+                "replyIndex": "index-0001.json",
+                "cmakeProducer": {"executable": executable.as_posix(), "version": "9.9.9"},
+                "sourceDirectory": source.as_posix(),
+                "buildDirectory": build.as_posix(),
+                "generator": "Ninja",
+                "architecture": "",
+                "toolset": "",
+                "cacheVariables": {},
+                "evidenceDirectory": build.as_posix(),
+            }
+            snapshot = mock.Mock(spec_set=("assert_stable", "close"))
+            cleanup_failure = inventory.InventoryError(
+                "windows-shipping: cannot remove owned File API query client after retries"
+            )
+            with (
+                mock.patch.object(inventory, "REPO_ROOT", source),
+                mock.patch.object(inventory, "_resolve_cmake_executable", return_value=executable),
+                mock.patch.object(
+                    inventory,
+                    "_capture_plan",
+                    return_value=(
+                        config,
+                        source,
+                        build,
+                        [executable.as_posix(), "--preset", "windows-shipping"],
+                    ),
+                ),
+                mock.patch.object(inventory, "_repository_provenance", return_value=repository),
+                mock.patch.object(inventory, "_github_actions_context", return_value=synthetic_ci_context()),
+                mock.patch.object(inventory, "_executable_identity", return_value={"sha256": "a" * 64}),
+                mock.patch.object(inventory, "_existing_index_identities", return_value=set()),
+                mock.patch.object(inventory, "_capture_material_errors", return_value=[]),
+                mock.patch.object(
+                    inventory,
+                    "_extract_reply_core",
+                    return_value=(evidence, snapshot, {"index-0001.json": "a" * 64}),
+                ),
+                mock.patch.object(inventory, "_load_provenance_document"),
+                mock.patch.object(
+                    inventory.subprocess,
+                    "run",
+                    side_effect=[
+                        subprocess.CompletedProcess(
+                            [executable.as_posix(), "--version"],
+                            0,
+                            "cmake version 9.9.9\n",
+                            "",
+                        ),
+                        subprocess.CompletedProcess(
+                            [executable.as_posix(), "--preset", "windows-shipping"], 0, "", ""
+                        ),
+                    ],
+                ),
+                mock.patch.object(
+                    inventory, "_cleanup_owned_query_client", return_value=cleanup_failure
+                ) as cleanup,
+            ):
+                with self.assertRaisesRegex(
+                    inventory.InventoryError, "cannot remove owned File API query client"
+                ):
+                    inventory.capture_codemodel_transaction(
+                        build, "windows-shipping", cmake_executable=executable
+                    )
+            cleanup.assert_called_once()
 
     def test_capture_rejects_cmake_replacement_during_version_query(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
