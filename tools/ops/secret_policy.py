@@ -251,10 +251,52 @@ def scan_payload(
     return ScanResult(tuple(unique.values()), ())
 
 
+_REDACT_PEM_BLOCK = re.compile(
+    r"-----BEGIN[ \t]+(?:RSA[ \t]+|EC[ \t]+|OPENSSH[ \t]+|ENCRYPTED[ \t]+)?PRIVATE[ \t]+KEY-----"
+    r"[\s\S]*?"
+    r"-----END[ \t]+(?:RSA[ \t]+|EC[ \t]+|OPENSSH[ \t]+|ENCRYPTED[ \t]+)?PRIVATE[ \t]+KEY-----",
+    re.IGNORECASE,
+)
+
+_REDACT_PEM_BODY = re.compile(
+    r"-----BEGIN[ \t]+(?:RSA[ \t]+|EC[ \t]+|OPENSSH[ \t]+|ENCRYPTED[ \t]+)?PRIVATE[ \t]+KEY-----"
+    r"(?:[ \t\r\n]*[A-Za-z0-9+/=]{4,})*",
+    re.IGNORECASE,
+)
+
+_REDACT_STRUCTURED = re.compile(
+    r"(\b[A-Za-z0-9_.-]{0,48}"
+    r"(?:password|passwd|pwd|secret|api[_-]?key|auth[_-]?token|access[_-]?token|"
+    r"refresh[_-]?token|client[_-]?secret|smtp[_-]?pass|connection[_-]?string)"
+    r"[A-Za-z0-9_.-]{0,48}[\"']?[ \t]*[:=][ \t]*)"
+    r"(?:"
+    r"\"[^\"]{0,4096}\""
+    r"|'[^']{0,4096}'"
+    r"|[^\n,;\"'}{]{1,4096}"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _structured_replacement(match: re.Match[str]) -> str:
+    prefix = match.group(1)
+    value_part = match.group(0)[len(prefix):]
+    if value_part.startswith('"') and value_part.endswith('"'):
+        return prefix + '"<redacted>"'
+    if value_part.startswith("'") and value_part.endswith("'"):
+        return prefix + "'<redacted>'"
+    return prefix + "<redacted>"
+
+
 def redact_text(text: str) -> tuple[str, list[SecretFinding]]:
     findings = scan_text(text, location="input")
     redacted = text
+    redacted = _REDACT_PEM_BLOCK.sub("<redacted:private-key>", redacted)
+    redacted = _REDACT_PEM_BODY.sub("<redacted:private-key>", redacted)
+    redacted = _REDACT_STRUCTURED.sub(_structured_replacement, redacted)
     for rule in _RULES:
+        if rule.name == "structured-credential":
+            continue
         if rule.value_group:
             redacted = rule.expression.sub(lambda match: match.group("prefix") + "<redacted>", redacted)
         else:
