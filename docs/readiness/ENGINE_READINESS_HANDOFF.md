@@ -197,7 +197,7 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 | Work item | Priority | Status | Depends on | Safe parallel work |
 |---|---|---|---|---|
 | [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **open** | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
-| [`CI-120`](#ci-120--build-every-stable-v1-product-and-reconcile-configuration-surfaces) Build every stable-v1 product and reconcile configuration surfaces | P0 | **open** | `CI-100` | `CI-110`, `BLD-100`, `SEC-110` |
+| [`CI-120`](#ci-120--build-every-stable-v1-product-and-reconcile-configuration-surfaces) Build every stable-v1 product and reconcile configuration surfaces | P0 | **in-progress** | `CI-100` | `CI-110`, `BLD-100`, `SEC-110` |
 | [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **open** | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
 | [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **open** | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
 | [`REL-110`](#rel-110--sign-checksum-attest-scan-and-approve-release-artifacts) Sign, checksum, attest, scan, and approve release artifacts | P0 | **open** | `BLD-100`, `SEC-110`, `GOV-400` | `REL-100` |
@@ -806,7 +806,7 @@ SparkTests --warn-is-error --shuffle 123 --junit-xml test-results.xml
 
 ### CI-120 — Build every stable-v1 product and reconcile configuration surfaces
 
-**Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** build · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** build · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
 SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product.
@@ -828,6 +828,8 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - `CMakeLists.txt`
 - `CMakePresets.json`
 - `SparkBuild/src/Config.cpp`
+- `Tools/buildmatrix/inventory.py`
+- `Tools/buildmatrix/check_parity.py`
 
 **Implementation scope**
 
@@ -848,6 +850,9 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 **Required commands**
 
 ```bash
+python3 Tools/buildmatrix/inventory.py
+python3 Tools/buildmatrix/check_parity.py
+python3 -m pytest Tests/Tools/test_build_matrix_parity.py -v
 cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON
 cmake --build build/windows-shipping --config MinSizeRel --clean-first
 cmake -LAH -N build/windows-shipping
@@ -855,7 +860,7 @@ cmake -LAH -N build/windows-shipping
 
 **Automated evidence**
 
-- Test selectors: `BuildOptions_*`, `StrictDependencies_*`
+- Test selectors: `BuildOptions_*`, `StrictDependencies_*`, `test_build_matrix_parity`
 - Required CI jobs: `build-windows-shipping`
 - Performance / reliability budgets:
   - Clean build time and artifact size are recorded as release metrics

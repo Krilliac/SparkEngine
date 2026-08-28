@@ -1,0 +1,1168 @@
+{
+  "cmakeOptions": [
+    {
+      "name": "BUILD_GAME_MODULES",
+      "description": "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)",
+      "default": "ON"
+    },
+    {
+      "name": "BUILD_TESTS",
+      "description": "Build test suite",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_ANGELSCRIPT",
+      "description": "Enable the AngelScript gameplay scripting runtime",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_ASSET_PIPELINE_TOOLS",
+      "description": "Build deterministic cooker and worker processes",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_AUTOMATION_HOST",
+      "description": "Build the standalone automation host",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_CONSOLE_IN_SHIPPING",
+      "description": "Include SparkConsole in Shipping builds",
+      "default": "OFF"
+    },
+    {
+      "name": "ENABLE_DEVCOMMANDS_IN_SHIPPING",
+      "description": "Include developer commands (god, noclip, etc.) in Shipping builds",
+      "default": "OFF"
+    },
+    {
+      "name": "ENABLE_DXR",
+      "description": "Enable DirectX Raytracing support (requires D3D12, runtime fallback to SDFGI)",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_EDITOR",
+      "description": "Enable editor features",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_GRAPHICS",
+      "description": "Enable graphics engine",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_HYBRID_RT",
+      "description": "Enable hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT)",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_INSTALLER",
+      "description": "Build SparkInstaller (bootstrap installer/updater)",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_LAUNCHER",
+      "description": "Build SparkLauncher (Unity-Hub-style project picker)",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_LTO",
+      "description": "Enable link-time optimization in Release/MinSizeRel builds",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_METAL",
+      "description": "Enable Metal graphics backend (macOS, experimental)",
+      "default": "${APPLE}"
+    },
+    {
+      "name": "ENABLE_MOBILE",
+      "description": "Enable mobile platform support (touch, gestures, battery-aware scaling)",
+      "default": "OFF"
+    },
+    {
+      "name": "ENABLE_NETWORKING",
+      "description": "Enable networking features (UDP sockets)",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_NEURAL_RENDERING",
+      "description": "Enable neural rendering features (NTC, radiance cache, neural post-processing)",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_OPENGL",
+      "description": "Enable OpenGL graphics backend (experimental)",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_PROFILING",
+      "description": "Enable profiling tools",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_RECAST",
+      "description": "Enable Recast/Detour navmesh generation (improved voxel-based builder)",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_SDL2",
+      "description": "Enable SDL2 cross-platform input and windowing",
+      "default": "platform-conditional"
+    },
+    {
+      "name": "ENABLE_SERVER_PROCESSES",
+      "description": "Build dedicated server, gateway, and orchestration processes",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_SPARKBUILD",
+      "description": "Build SparkBuild (terminal-UI CMake configurator)",
+      "default": "ON"
+    },
+    {
+      "name": "ENABLE_VR",
+      "description": "Enable VR/AR framework (OpenXR-ready stub)",
+      "default": "OFF"
+    },
+    {
+      "name": "ENABLE_VULKAN",
+      "description": "Enable Vulkan graphics backend (experimental)",
+      "default": "ON"
+    },
+    {
+      "name": "SPARK_DOUBLE_PRECISION_PHYSICS",
+      "description": "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds",
+      "default": "OFF"
+    },
+    {
+      "name": "SPARK_HEADLESS_SUPPORT",
+      "description": "Enable headless/dedicated server mode support",
+      "default": "ON"
+    },
+    {
+      "name": "SPARK_NATIVE_ARCH",
+      "description": "Tune for the build machine's CPU (SSE4.2/AVX2/etc). Disable for distributed binaries.",
+      "default": "OFF"
+    },
+    {
+      "name": "SPARK_STRICT_DEPS",
+      "description": "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)",
+      "default": "OFF"
+    },
+    {
+      "name": "SPARK_SUPPRESS_THIRDPARTY_WARNINGS",
+      "description": "Suppress compiler warnings from third-party libraries (Jolt, etc.)",
+      "default": "ON"
+    },
+    {
+      "name": "STRIP_DEBUG_SYMBOLS",
+      "description": "Strip debug symbols from the final binary",
+      "default": "OFF"
+    }
+  ],
+  "cmakePresets": {
+    "configurePresets": [
+      {
+        "name": "default",
+        "hidden": true,
+        "cacheVariables": {
+          "BUILD_TESTS": "ON"
+        }
+      },
+      {
+        "name": "windows-debug",
+        "hidden": false,
+        "displayName": "Windows Debug (VS 2022)",
+        "inherits": "default",
+        "platform": "Windows",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Debug"
+        }
+      },
+      {
+        "name": "windows-release",
+        "hidden": false,
+        "displayName": "Windows Release (VS 2022)",
+        "inherits": "default",
+        "platform": "Windows",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Release"
+        }
+      },
+      {
+        "name": "linux-gcc-debug",
+        "hidden": false,
+        "displayName": "Linux GCC Debug",
+        "inherits": "default",
+        "platform": "Linux",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Debug",
+          "CMAKE_CXX_COMPILER": "g++",
+          "CMAKE_C_COMPILER": "gcc"
+        }
+      },
+      {
+        "name": "linux-gcc-release",
+        "hidden": false,
+        "displayName": "Linux GCC Release",
+        "inherits": "default",
+        "platform": "Linux",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "CMAKE_CXX_COMPILER": "g++",
+          "CMAKE_C_COMPILER": "gcc"
+        }
+      },
+      {
+        "name": "linux-clang-debug",
+        "hidden": false,
+        "displayName": "Linux Clang Debug",
+        "inherits": "default",
+        "platform": "Linux",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Debug",
+          "CMAKE_CXX_COMPILER": "clang++",
+          "CMAKE_C_COMPILER": "clang"
+        }
+      },
+      {
+        "name": "linux-clang-release",
+        "hidden": false,
+        "displayName": "Linux Clang Release",
+        "inherits": "default",
+        "platform": "Linux",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "CMAKE_CXX_COMPILER": "clang++",
+          "CMAKE_C_COMPILER": "clang"
+        }
+      },
+      {
+        "name": "ci-linux-asan",
+        "hidden": false,
+        "displayName": "Linux GCC with AddressSanitizer",
+        "inherits": "linux-gcc-debug",
+        "cacheVariables": {
+          "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+          "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+          "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+        }
+      },
+      {
+        "name": "ci-linux-tsan",
+        "hidden": false,
+        "displayName": "Linux GCC with ThreadSanitizer",
+        "inherits": "linux-gcc-debug",
+        "cacheVariables": {
+          "CMAKE_CXX_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer",
+          "CMAKE_C_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer",
+          "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread"
+        }
+      },
+      {
+        "name": "windows-shipping",
+        "hidden": false,
+        "displayName": "Windows Shipping (max speed, no dev tools)",
+        "inherits": "default",
+        "platform": "Windows",
+        "cacheVariables": {
+          "BUILD_TESTS": "OFF",
+          "CMAKE_BUILD_TYPE": "MinSizeRel",
+          "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
+          "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
+          "ENABLE_EDITOR": "OFF",
+          "ENABLE_HOT_RELOAD": "OFF",
+          "ENABLE_PROFILING": "OFF",
+          "SPARK_NATIVE_ARCH": "OFF",
+          "SPARK_STRICT_DEPS": "ON",
+          "STRIP_DEBUG_SYMBOLS": "ON"
+        }
+      },
+      {
+        "name": "windows-development",
+        "hidden": false,
+        "displayName": "Windows Development (symbols + console + native tuning)",
+        "inherits": "default",
+        "platform": "Windows",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+          "ENABLE_CONSOLE_IN_SHIPPING": "ON",
+          "ENABLE_DEVCOMMANDS_IN_SHIPPING": "ON",
+          "SPARK_NATIVE_ARCH": "ON"
+        }
+      },
+      {
+        "name": "linux-shipping",
+        "hidden": false,
+        "displayName": "Linux Shipping (max speed, no dev tools)",
+        "inherits": "default",
+        "platform": "Linux",
+        "cacheVariables": {
+          "BUILD_TESTS": "OFF",
+          "CMAKE_BUILD_TYPE": "MinSizeRel",
+          "CMAKE_CXX_COMPILER": "g++",
+          "CMAKE_C_COMPILER": "gcc",
+          "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
+          "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
+          "ENABLE_EDITOR": "OFF",
+          "ENABLE_HOT_RELOAD": "OFF",
+          "ENABLE_PROFILING": "OFF",
+          "SPARK_NATIVE_ARCH": "OFF",
+          "SPARK_STRICT_DEPS": "ON",
+          "STRIP_DEBUG_SYMBOLS": "ON"
+        }
+      },
+      {
+        "name": "linux-development",
+        "hidden": false,
+        "displayName": "Linux Development (symbols + console + native tuning)",
+        "inherits": "default",
+        "platform": "Linux",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+          "CMAKE_CXX_COMPILER": "g++",
+          "CMAKE_C_COMPILER": "gcc",
+          "ENABLE_CONSOLE_IN_SHIPPING": "ON",
+          "ENABLE_DEVCOMMANDS_IN_SHIPPING": "ON",
+          "SPARK_NATIVE_ARCH": "ON"
+        }
+      },
+      {
+        "name": "linux-mingw-release",
+        "hidden": false,
+        "displayName": "Linux MinGW Cross-Compile (Windows .exe, run under Wine)",
+        "inherits": "default",
+        "platform": "Linux",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/mingw-w64-x86_64.cmake",
+          "ENABLE_OPENGL": "OFF",
+          "ENABLE_SDL2": "OFF",
+          "ENABLE_VULKAN": "OFF"
+        }
+      },
+      {
+        "name": "linux-mingw-debug",
+        "hidden": false,
+        "displayName": "Linux MinGW Cross-Compile Debug",
+        "inherits": "linux-mingw-release",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Debug"
+        }
+      },
+      {
+        "name": "macos-debug",
+        "hidden": false,
+        "displayName": "macOS Debug (Apple Clang, SDL2 + Metal + OpenGL + OpenAL)",
+        "inherits": "default",
+        "platform": "Darwin",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Debug",
+          "ENABLE_DXR": "OFF",
+          "ENABLE_METAL": "ON",
+          "ENABLE_OPENGL": "ON",
+          "ENABLE_SDL2": "ON",
+          "ENABLE_VULKAN": "OFF"
+        }
+      },
+      {
+        "name": "macos-release",
+        "hidden": false,
+        "displayName": "macOS Release (Apple Clang, SDL2 + Metal + OpenGL + OpenAL)",
+        "inherits": "default",
+        "platform": "Darwin",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "ENABLE_DXR": "OFF",
+          "ENABLE_METAL": "ON",
+          "ENABLE_OPENGL": "ON",
+          "ENABLE_SDL2": "ON",
+          "ENABLE_VULKAN": "OFF"
+        }
+      },
+      {
+        "name": "macos-metal",
+        "hidden": false,
+        "displayName": "macOS Release with Metal (Apple Clang, experimental)",
+        "inherits": "default",
+        "platform": "Darwin",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "ENABLE_DXR": "OFF",
+          "ENABLE_METAL": "ON",
+          "ENABLE_OPENGL": "ON",
+          "ENABLE_SDL2": "ON",
+          "ENABLE_VULKAN": "OFF"
+        }
+      },
+      {
+        "name": "macos-moltenvk",
+        "hidden": false,
+        "displayName": "macOS Release with MoltenVK (Vulkan via MoltenVK)",
+        "inherits": "default",
+        "platform": "Darwin",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "ENABLE_DXR": "OFF",
+          "ENABLE_METAL": "OFF",
+          "ENABLE_OPENGL": "ON",
+          "ENABLE_SDL2": "ON",
+          "ENABLE_VULKAN": "ON"
+        }
+      },
+      {
+        "name": "minimal",
+        "hidden": false,
+        "displayName": "Minimal Build (core only)",
+        "inherits": "default",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "ENABLE_AI": "OFF",
+          "ENABLE_ANIMATION": "OFF",
+          "ENABLE_CINEMATIC": "OFF",
+          "ENABLE_DECALS": "OFF",
+          "ENABLE_DXR": "OFF",
+          "ENABLE_MESH_LOD": "OFF",
+          "ENABLE_NETWORKING": "OFF",
+          "ENABLE_PROCEDURAL": "OFF",
+          "ENABLE_SAVE_SYSTEM": "OFF"
+        }
+      }
+    ],
+    "buildPresets": [
+      {
+        "name": "windows-debug",
+        "configurePreset": "windows-debug",
+        "configuration": "Debug"
+      },
+      {
+        "name": "windows-release",
+        "configurePreset": "windows-release",
+        "configuration": "Release"
+      },
+      {
+        "name": "linux-gcc-debug",
+        "configurePreset": "linux-gcc-debug"
+      },
+      {
+        "name": "linux-gcc-release",
+        "configurePreset": "linux-gcc-release"
+      },
+      {
+        "name": "linux-clang-debug",
+        "configurePreset": "linux-clang-debug"
+      },
+      {
+        "name": "linux-clang-release",
+        "configurePreset": "linux-clang-release"
+      },
+      {
+        "name": "windows-shipping",
+        "configurePreset": "windows-shipping",
+        "configuration": "MinSizeRel"
+      },
+      {
+        "name": "windows-development",
+        "configurePreset": "windows-development",
+        "configuration": "RelWithDebInfo"
+      },
+      {
+        "name": "linux-shipping",
+        "configurePreset": "linux-shipping"
+      },
+      {
+        "name": "linux-development",
+        "configurePreset": "linux-development"
+      },
+      {
+        "name": "macos-debug",
+        "configurePreset": "macos-debug"
+      },
+      {
+        "name": "macos-release",
+        "configurePreset": "macos-release"
+      },
+      {
+        "name": "macos-metal",
+        "configurePreset": "macos-metal"
+      },
+      {
+        "name": "macos-moltenvk",
+        "configurePreset": "macos-moltenvk"
+      },
+      {
+        "name": "linux-mingw-release",
+        "configurePreset": "linux-mingw-release"
+      },
+      {
+        "name": "linux-mingw-debug",
+        "configurePreset": "linux-mingw-debug"
+      }
+    ],
+    "testPresets": [
+      {
+        "name": "default",
+        "configurePreset": "linux-gcc-release"
+      }
+    ]
+  },
+  "cmakeTargets": [
+    {
+      "target": "Detour",
+      "kind": "static_library",
+      "file": "CMakeLists.txt"
+    },
+    {
+      "target": "Recast",
+      "kind": "static_library",
+      "file": "CMakeLists.txt"
+    },
+    {
+      "target": "SparkAssetPipelineCore",
+      "kind": "static_library",
+      "file": "SparkAssetPipelineCore/CMakeLists.txt"
+    },
+    {
+      "target": "SparkAssetPipelineCoreTests",
+      "kind": "executable",
+      "file": "SparkAssetPipelineCore/CMakeLists.txt"
+    },
+    {
+      "target": "SparkAutomation",
+      "kind": "executable",
+      "file": "SparkAutomation/CMakeLists.txt"
+    },
+    {
+      "target": "SparkBuild",
+      "kind": "executable",
+      "file": "SparkBuild/CMakeLists.txt"
+    },
+    {
+      "target": "SparkBuildCore",
+      "kind": "static_library",
+      "file": "SparkBuild/CMakeLists.txt"
+    },
+    {
+      "target": "SparkBuildDownloaderTests",
+      "kind": "executable",
+      "file": "SparkBuild/CMakeLists.txt"
+    },
+    {
+      "target": "SparkBuildProcessRunnerTests",
+      "kind": "executable",
+      "file": "SparkBuild/CMakeLists.txt"
+    },
+    {
+      "target": "SparkCollabProcessSmoke",
+      "kind": "executable",
+      "file": "Tests/CMakeLists.txt"
+    },
+    {
+      "target": "SparkCollabServer",
+      "kind": "executable",
+      "file": "SparkDaemon/CMakeLists.txt"
+    },
+    {
+      "target": "SparkCompatibleModuleFixture",
+      "kind": "shared_library",
+      "file": "Tests/CMakeLists.txt"
+    },
+    {
+      "target": "SparkConsole",
+      "kind": "executable",
+      "file": "SparkConsole/CMakeLists.txt"
+    },
+    {
+      "target": "SparkCooker",
+      "kind": "executable",
+      "file": "SparkCooker/CMakeLists.txt"
+    },
+    {
+      "target": "SparkCrashReporter",
+      "kind": "executable",
+      "file": "SparkCrashReporter/CMakeLists.txt"
+    },
+    {
+      "target": "SparkCrashReporterManifestTests",
+      "kind": "executable",
+      "file": "SparkCrashReporter/CMakeLists.txt"
+    },
+    {
+      "target": "SparkDaemon",
+      "kind": "executable",
+      "file": "SparkDaemon/CMakeLists.txt"
+    },
+    {
+      "target": "SparkDaemonServiceTests",
+      "kind": "executable",
+      "file": "SparkDaemon/CMakeLists.txt"
+    },
+    {
+      "target": "SparkDebugHookTeardownProbe",
+      "kind": "executable",
+      "file": "Tests/CMakeLists.txt"
+    },
+    {
+      "target": "SparkEditor",
+      "kind": "executable",
+      "file": "SparkEditor/CMakeLists.txt"
+    },
+    {
+      "target": "SparkEngine",
+      "kind": "executable",
+      "file": "CMakeLists.txt"
+    },
+    {
+      "target": "SparkEngineLib",
+      "kind": "static_library",
+      "file": "CMakeLists.txt"
+    },
+    {
+      "target": "SparkGame",
+      "kind": "shared_library",
+      "file": "GameModules/SparkGame/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGameARPG",
+      "kind": "shared_library",
+      "file": "GameModules/SparkGameARPG/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGameFPS",
+      "kind": "shared_library",
+      "file": "GameModules/SparkGameFPS/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGameMMO",
+      "kind": "shared_library",
+      "file": "GameModules/SparkGameMMO/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGameMMOFPS",
+      "kind": "shared_library",
+      "file": "GameModules/SparkGameMMOFPS/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGameOpenWorld",
+      "kind": "shared_library",
+      "file": "GameModules/SparkGameOpenWorld/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGamePlatformer",
+      "kind": "shared_library",
+      "file": "GameModules/SparkGamePlatformer/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGameRPG",
+      "kind": "shared_library",
+      "file": "GameModules/SparkGameRPG/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGameRTS",
+      "kind": "shared_library",
+      "file": "GameModules/SparkGameRTS/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGameRacing",
+      "kind": "shared_library",
+      "file": "GameModules/SparkGameRacing/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGameVisualScript",
+      "kind": "shared_library",
+      "file": "GameModules/SparkGameVisualScript/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGateway",
+      "kind": "executable",
+      "file": "SparkGateway/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGatewayCore",
+      "kind": "static_library",
+      "file": "SparkGateway/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGatewaySecurity",
+      "kind": "static_library",
+      "file": "SparkGateway/CMakeLists.txt"
+    },
+    {
+      "target": "SparkGatewayTopologyProbe",
+      "kind": "executable",
+      "file": "Tests/CMakeLists.txt"
+    },
+    {
+      "target": "SparkInstaller",
+      "kind": "executable",
+      "file": "SparkInstaller/CMakeLists.txt"
+    },
+    {
+      "target": "SparkInstallerGitTests",
+      "kind": "executable",
+      "file": "SparkInstaller/CMakeLists.txt"
+    },
+    {
+      "target": "SparkLauncher",
+      "kind": "executable",
+      "file": "SparkLauncher/CMakeLists.txt"
+    },
+    {
+      "target": "SparkMismatchedModuleFixture",
+      "kind": "shared_library",
+      "file": "Tests/CMakeLists.txt"
+    },
+    {
+      "target": "SparkModuleSiblingDependency",
+      "kind": "shared_library",
+      "file": "Tests/CMakeLists.txt"
+    },
+    {
+      "target": "SparkOrchestrator",
+      "kind": "executable",
+      "file": "SparkDaemon/CMakeLists.txt"
+    },
+    {
+      "target": "SparkServer",
+      "kind": "executable",
+      "file": "SparkServer/CMakeLists.txt"
+    },
+    {
+      "target": "SparkServerCore",
+      "kind": "static_library",
+      "file": "SparkServer/CMakeLists.txt"
+    },
+    {
+      "target": "SparkShaderCompiler",
+      "kind": "executable",
+      "file": "SparkShaderCompiler/CMakeLists.txt"
+    },
+    {
+      "target": "SparkSiblingDependentModuleFixture",
+      "kind": "shared_library",
+      "file": "Tests/CMakeLists.txt"
+    },
+    {
+      "target": "SparkTests",
+      "kind": "executable",
+      "file": "Tests/CMakeLists.txt"
+    },
+    {
+      "target": "SparkWorker",
+      "kind": "executable",
+      "file": "SparkWorker/CMakeLists.txt"
+    },
+    {
+      "target": "cgltf",
+      "kind": "static_library",
+      "file": "CMakeLists.txt"
+    },
+    {
+      "target": "glad",
+      "kind": "static_library",
+      "file": "CMakeLists.txt"
+    },
+    {
+      "target": "miniaudio",
+      "kind": "static_library",
+      "file": "CMakeLists.txt"
+    },
+    {
+      "target": "miniz",
+      "kind": "static_library",
+      "file": "CMakeLists.txt"
+    },
+    {
+      "target": "spark_package_smoke",
+      "kind": "executable",
+      "file": "Tests/PackageSmoke/CMakeLists.txt"
+    },
+    {
+      "target": "stb_image",
+      "kind": "static_library",
+      "file": "CMakeLists.txt"
+    },
+    {
+      "target": "tinyexr",
+      "kind": "static_library",
+      "file": "CMakeLists.txt"
+    },
+    {
+      "target": "tinyobjloader",
+      "kind": "static_library",
+      "file": "CMakeLists.txt"
+    },
+    {
+      "target": "zstd",
+      "kind": "static_library",
+      "file": "CMakeLists.txt"
+    }
+  ],
+  "sparkBuildOptions": [
+    {
+      "name": "BUILD_TESTS",
+      "displayName": "Unit Tests",
+      "description": "Build CTest unit test suite",
+      "default": true,
+      "category": "EditorTools"
+    },
+    {
+      "name": "ENABLE_ADVANCED_INPUT",
+      "displayName": "Advanced Input",
+      "description": "Extended input: keyboard, mouse, gamepad",
+      "default": true,
+      "category": "Core"
+    },
+    {
+      "name": "ENABLE_AI",
+      "displayName": "AI & Navigation",
+      "description": "Behavior trees, NavMesh pathfinding, perception system",
+      "default": true,
+      "category": "Core"
+    },
+    {
+      "name": "ENABLE_ANIMATION",
+      "displayName": "Skeletal Animation",
+      "description": "Skeletal animation, IK, state machines, blending",
+      "default": true,
+      "category": "Core"
+    },
+    {
+      "name": "ENABLE_ASSET_STREAMING",
+      "displayName": "Asset Streaming",
+      "description": "Runtime asset streaming and loading",
+      "default": true,
+      "category": "Core"
+    },
+    {
+      "name": "ENABLE_CINEMATIC",
+      "displayName": "Cinematic Sequencer",
+      "description": "Cinematic sequence and cutscene system",
+      "default": true,
+      "category": "Gameplay"
+    },
+    {
+      "name": "ENABLE_COLLABORATIVE",
+      "displayName": "Collaborative Editing",
+      "description": "Collaborative editing features",
+      "default": true,
+      "category": "Experimental"
+    },
+    {
+      "name": "ENABLE_CONSOLE_IN_SHIPPING",
+      "displayName": "Console in Shipping",
+      "description": "Include SparkConsole in Shipping builds",
+      "default": false,
+      "category": "Shipping"
+    },
+    {
+      "name": "ENABLE_DAY_NIGHT",
+      "displayName": "Day/Night Cycle",
+      "description": "Dynamic day/night cycle system",
+      "default": true,
+      "category": "Gameplay"
+    },
+    {
+      "name": "ENABLE_DECALS",
+      "displayName": "Decal System",
+      "description": "Projected decals for impacts and effects",
+      "default": true,
+      "category": "Rendering"
+    },
+    {
+      "name": "ENABLE_DEVCOMMANDS_IN_SHIPPING",
+      "displayName": "Dev Commands in Shipping",
+      "description": "Include dev commands in Shipping builds",
+      "default": false,
+      "category": "Shipping"
+    },
+    {
+      "name": "ENABLE_DXR",
+      "displayName": "DirectX Raytracing",
+      "description": "DXR support (requires D3D12, Windows only)",
+      "default": false,
+      "category": "Graphics"
+    },
+    {
+      "name": "ENABLE_EDITOR",
+      "displayName": "Editor",
+      "description": "ImGui visual editor (Windows/Linux)",
+      "default": true,
+      "category": "EditorTools"
+    },
+    {
+      "name": "ENABLE_EVENT_SYSTEM",
+      "displayName": "Event System",
+      "description": "Publish/subscribe event bus",
+      "default": true,
+      "category": "Gameplay"
+    },
+    {
+      "name": "ENABLE_FOG_SYSTEM",
+      "displayName": "Fog System",
+      "description": "Fog rendering system",
+      "default": true,
+      "category": "Rendering"
+    },
+    {
+      "name": "ENABLE_GRAPHICS",
+      "displayName": "Graphics Engine",
+      "description": "DirectX 11 renderer (Windows) / OpenGL (Linux/macOS)",
+      "default": true,
+      "category": "Core"
+    },
+    {
+      "name": "ENABLE_HOT_RELOAD",
+      "displayName": "Hot Reload",
+      "description": "Game module hot-reload during development",
+      "default": true,
+      "category": "Scripting"
+    },
+    {
+      "name": "ENABLE_INVENTORY",
+      "displayName": "Inventory System",
+      "description": "Item inventory management system",
+      "default": true,
+      "category": "Gameplay"
+    },
+    {
+      "name": "ENABLE_LIGHTING_SYSTEM",
+      "displayName": "Advanced Lighting",
+      "description": "PBR lighting, IBL, shadow mapping",
+      "default": true,
+      "category": "Rendering"
+    },
+    {
+      "name": "ENABLE_LUA",
+      "displayName": "Lua Scripting",
+      "description": "Lua scripting support (Sol2 bindings)",
+      "default": true,
+      "category": "Scripting"
+    },
+    {
+      "name": "ENABLE_MESH_LOD",
+      "displayName": "Mesh LOD",
+      "description": "Mesh level-of-detail system",
+      "default": true,
+      "category": "Rendering"
+    },
+    {
+      "name": "ENABLE_NETWORKING",
+      "displayName": "Networking",
+      "description": "UDP multiplayer, lag compensation (requires curl)",
+      "default": false,
+      "category": "Experimental"
+    },
+    {
+      "name": "ENABLE_OPENGL",
+      "displayName": "OpenGL Backend",
+      "description": "OpenGL 4.5 backend (experimental, cross-platform)",
+      "default": true,
+      "category": "Graphics"
+    },
+    {
+      "name": "ENABLE_PERF_STATS",
+      "displayName": "Performance Stats",
+      "description": "Performance statistics overlay",
+      "default": true,
+      "category": "EditorTools"
+    },
+    {
+      "name": "ENABLE_PHYSX",
+      "displayName": "Physics (Bullet)",
+      "description": "Bullet Physics 3D physics engine",
+      "default": true,
+      "category": "Core"
+    },
+    {
+      "name": "ENABLE_POST_PROCESSING",
+      "displayName": "Post-Processing",
+      "description": "Bloom, tone mapping, FXAA effects",
+      "default": true,
+      "category": "Rendering"
+    },
+    {
+      "name": "ENABLE_PROCEDURAL",
+      "displayName": "Procedural Generation",
+      "description": "Noise, erosion, mesh gen, WFC algorithms",
+      "default": true,
+      "category": "Gameplay"
+    },
+    {
+      "name": "ENABLE_PROFILING",
+      "displayName": "Profiling Tools",
+      "description": "Performance profiling, timers, memory tracking",
+      "default": true,
+      "category": "EditorTools"
+    },
+    {
+      "name": "ENABLE_QUEST_SYSTEM",
+      "displayName": "Quest System",
+      "description": "Quest and objective tracking system",
+      "default": true,
+      "category": "Gameplay"
+    },
+    {
+      "name": "ENABLE_SAVE_SYSTEM",
+      "displayName": "Save/Load System",
+      "description": "JSON serialization with compression (miniz)",
+      "default": true,
+      "category": "Core"
+    },
+    {
+      "name": "ENABLE_SCREEN_SPACE",
+      "displayName": "Screen-Space Effects",
+      "description": "Screen-space effects (SSAO, SSR)",
+      "default": true,
+      "category": "Rendering"
+    },
+    {
+      "name": "ENABLE_SDL2",
+      "displayName": "SDL2 Windowing",
+      "description": "SDL2 cross-platform windowing and input",
+      "default": false,
+      "category": "Experimental"
+    },
+    {
+      "name": "ENABLE_TERRAIN_SYSTEM",
+      "displayName": "Terrain System",
+      "description": "Heightmap terrain with LOD and erosion",
+      "default": true,
+      "category": "Gameplay"
+    },
+    {
+      "name": "ENABLE_VULKAN",
+      "displayName": "Vulkan Backend",
+      "description": "Vulkan graphics backend (experimental, cross-platform)",
+      "default": true,
+      "category": "Graphics"
+    },
+    {
+      "name": "ENABLE_WEATHER",
+      "displayName": "Weather System",
+      "description": "Dynamic weather system",
+      "default": true,
+      "category": "Gameplay"
+    },
+    {
+      "name": "SPARK_HEADLESS_SUPPORT",
+      "displayName": "Headless Mode",
+      "description": "Headless/dedicated server mode support",
+      "default": true,
+      "category": "Shipping"
+    },
+    {
+      "name": "STRIP_DEBUG_SYMBOLS",
+      "displayName": "Strip Debug Symbols",
+      "description": "Strip debug symbols from binaries",
+      "default": false,
+      "category": "Shipping"
+    }
+  ],
+  "workflowPresets": [],
+  "workflowCmakeConfigs": [
+    {
+      "buildDir": "build",
+      "options": {}
+    },
+    {
+      "buildDir": "build",
+      "options": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ],
+  "stableV1Products": [
+    {
+      "target": "SparkEngine",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkEditor",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkConsole",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkDaemon",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkCollabServer",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkOrchestrator",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkBuild",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkCrashReporter",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkAutomation",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkCooker",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkWorker",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkShaderCompiler",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkLauncher",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkServer",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkGateway",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkInstaller",
+      "kind": "executable",
+      "profile": "required"
+    },
+    {
+      "target": "SparkTests",
+      "kind": "executable",
+      "profile": "test"
+    },
+    {
+      "target": "SparkEngineLib",
+      "kind": "static_library",
+      "profile": "required"
+    }
+  ]
+}

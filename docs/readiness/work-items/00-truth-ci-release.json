@@ -448,7 +448,7 @@
       "id": "CI-120",
       "title": "Build every stable-v1 product and reconcile configuration surfaces",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 1,
       "area": "build",
@@ -471,7 +471,9 @@
       "entryPoints": [
         "CMakeLists.txt",
         "CMakePresets.json",
-        "SparkBuild/src/Config.cpp"
+        "SparkBuild/src/Config.cpp",
+        "Tools/buildmatrix/inventory.py",
+        "Tools/buildmatrix/check_parity.py"
       ],
       "implementationScope": [
         "Enable strict dependencies in stable-v1 CI and release",
@@ -488,13 +490,17 @@
         "Experimental platform Shipping matrices remain owned by their platform work items"
       ],
       "commands": [
+        "python3 Tools/buildmatrix/inventory.py",
+        "python3 Tools/buildmatrix/check_parity.py",
+        "python3 -m pytest Tests/Tools/test_build_matrix_parity.py -v",
         "cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON",
         "cmake --build build/windows-shipping --config MinSizeRel --clean-first",
         "cmake -LAH -N build/windows-shipping"
       ],
       "testSelectors": [
         "BuildOptions_*",
-        "StrictDependencies_*"
+        "StrictDependencies_*",
+        "test_build_matrix_parity"
       ],
       "requiredCiJobs": [
         "build-windows-shipping"

@@ -75,6 +75,15 @@ jobs:
     - name: Validate model and template asset contracts
       run: python3 Tools/model_pipeline/validate_models.py --repo-root .
 
+    - name: Test build-matrix inventory and parity (CI-120)
+      run: python3 -m pytest Tests/Tools/test_build_matrix_parity.py -v
+
+    - name: Run build-matrix parity check (CI-120 evidence)
+      run: python3 Tools/buildmatrix/check_parity.py || echo "::warning::Build-matrix parity findings exist — see CI-120"
+
+    - name: Generate deterministic build-matrix inventory (CI-120)
+      run: python3 Tools/buildmatrix/inventory.py > build-matrix-inventory.json
+
     - name: Validate publishable wiki output
       run: python3 tools/publish-wiki.py --check
 

@@ -1,0 +1,299 @@
+{
+  "errorCount": 26,
+  "warningCount": 23,
+  "findings": [
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_ADVANCED_INPUT' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_AI' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_ANIMATION' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_ASSET_STREAMING' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_CINEMATIC' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_COLLABORATIVE' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_DAY_NIGHT' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_DECALS' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_EVENT_SYSTEM' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_FOG_SYSTEM' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_HOT_RELOAD' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_INVENTORY' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_LIGHTING_SYSTEM' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_LUA' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_MESH_LOD' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_PERF_STATS' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_PHYSX' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_POST_PROCESSING' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_PROCEDURAL' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_QUEST_SYSTEM' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_SAVE_SYSTEM' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_SCREEN_SPACE' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_TERRAIN_SYSTEM' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "sparkbuild-orphan",
+      "severity": "error",
+      "message": "SparkBuild exposes 'ENABLE_WEATHER' which has no corresponding CMake option()",
+      "detail": "SparkBuild will generate -D flags that root CMake ignores silently."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'BUILD_GAME_MODULES' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_ANGELSCRIPT' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_ASSET_PIPELINE_TOOLS' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_AUTOMATION_HOST' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_HYBRID_RT' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_INSTALLER' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_LAUNCHER' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_LTO' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_METAL' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_MOBILE' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_NEURAL_RENDERING' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_RECAST' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_SERVER_PROCESSES' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_SPARKBUILD' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'ENABLE_VR' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'SPARK_DOUBLE_PRECISION_PHYSICS' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'SPARK_NATIVE_ARCH' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'SPARK_STRICT_DEPS' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'SPARK_SUPPRESS_THIRDPARTY_WARNINGS' is not representable in SparkBuild",
+      "detail": "Users of SparkBuild cannot configure this option."
+    },
+    {
+      "category": "default-mismatch",
+      "severity": "error",
+      "message": "Default mismatch for 'ENABLE_DXR': CMake=ON, SparkBuild=False",
+      "detail": "A user will get different behavior depending on which tool they configure with."
+    },
+    {
+      "category": "default-mismatch",
+      "severity": "error",
+      "message": "Default mismatch for 'ENABLE_NETWORKING': CMake=ON, SparkBuild=False",
+      "detail": "A user will get different behavior depending on which tool they configure with."
+    },
+    {
+      "category": "orphan-configure-preset",
+      "severity": "warning",
+      "message": "Configure preset 'ci-linux-asan' has no corresponding build preset"
+    },
+    {
+      "category": "orphan-configure-preset",
+      "severity": "warning",
+      "message": "Configure preset 'ci-linux-tsan' has no corresponding build preset"
+    },
+    {
+      "category": "orphan-configure-preset",
+      "severity": "warning",
+      "message": "Configure preset 'minimal' has no corresponding build preset"
+    },
+    {
+      "category": "workflow-no-presets",
+      "severity": "warning",
+      "message": "CI workflow uses 2 inline cmake -B configurations instead of CMakePresets.json --preset references",
+      "detail": "Preset adoption aligns documented and actual Windows configure commands."
+    }
+  ]
+}
+FAILED: 26 error(s), 23 warning(s)
+
