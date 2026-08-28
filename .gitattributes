@@ -3,12 +3,18 @@
 ###############################################################################
 * text=auto
 *.sh text eol=lf
+# Asset integrity hashes the bytes that are packaged. Treat the first-party
+# asset tree as opaque bytes so Git never rewrites line endings at checkout.
+# Exception: .obj/.mtl are text-normalized to LF (see below), so their
+# manifest hashes describe LF-normalized bytes, not raw committed blobs.
+Assets/** -text
 # Runtime-sheet descriptors are content-addressed in Templates/assets.lock.json.
 # Keep their on-disk bytes stable across Windows, Linux, and macOS checkouts.
 Templates/*/Assets/runtime_sheet.json text eol=lf
-# Generated Wavefront assets are also content-addressed by both the starter
-# model manifest and Templates/assets.lock.json. Preserve their exact bytes on
-# every checkout so Windows autocrlf cannot invalidate the locks.
+# Wavefront .obj/.mtl are text-normalized to LF. This OVERRIDES the -text
+# rule above for these extensions. Their integrity hashes describe the
+# LF-normalized checkout bytes, not opaque blobs. This ensures stable
+# cross-platform hashes regardless of autocrlf settings.
 Assets/**/*.obj text eol=lf
 Assets/**/*.mtl text eol=lf
 Templates/*/Assets/**/*.obj text eol=lf

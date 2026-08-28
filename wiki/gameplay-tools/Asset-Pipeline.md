@@ -138,6 +138,25 @@ SparkEngine's asset pipeline handles loading, streaming, caching, and management
 
 ## Directory Conventions
 
+### Repository integrity baseline
+
+`Assets/assets.integrity.json` records SHA-256 hashes for the first-party
+`Assets/` tree. Git treats `Assets/**` as opaque bytes (`-text`), except
+`.obj` and `.mtl` files which are text-normalized to LF (`text eol=lf`).
+The manifest hashes describe the checkout bytes after normalization. Verify
+the repository baseline and template lock completeness with:
+
+```bash
+python3 tools/asset-integrity/verify_asset_integrity.py check-all --repo-root .
+python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.integrity.json --root Assets
+```
+
+The explicit `--root` is authoritative; manifest metadata cannot redirect the
+scan. Verification rejects traversal and Windows path aliases, reparses,
+non-regular files, incomplete declarations, resource-limit violations, and a
+file that changes while it is read. This is a repository-content gate, not yet
+proof that the same verified snapshot was consumed by package assembly.
+
 ```
 Assets/
 ├── Models/          # 3D model files (.obj, .fbx, .gltf)
