@@ -1301,7 +1301,14 @@ if(Python3_Interpreter_FOUND)
         add_dependencies(SparkTests ${_spark_cli_companion_targets})
         add_test(
             NAME SparkCliToolInventory
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/spark-cli/spark_cli.py
+            # Preset builds place companion tools under the active binary tree
+            # (for example build/windows-release/bin/Release), while spark-cli's
+            # source-tree fallback intentionally searches only legacy layouts.
+            # Bind this inventory check to the exact directory CMake produced so
+            # it validates the freshly built targets rather than stale siblings.
+            COMMAND ${CMAKE_COMMAND} -E env
+                "SPARKENGINE_TOOL_DIR=$<TARGET_FILE_DIR:SparkServer>"
+                ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/spark-cli/spark_cli.py
                 tools --config $<CONFIG> --format json)
         set_tests_properties(SparkCliToolInventory PROPERTIES LABELS "cli;integration;process" TIMEOUT 30)
 
