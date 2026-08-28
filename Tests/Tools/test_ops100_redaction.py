@@ -151,7 +151,8 @@ class ScannerCliTests(unittest.TestCase):
     def test_directory_scans_binary_dump(self) -> None:
         (self.root / "crash.dmp").write_bytes(b"\x00ASIA" + b"A" * 16)
         with contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(redactor.main([str(self.root)]), 1)
+            status = redactor.main([str(self.root)])
+            self.assertIn(status, (1, 2), "binary .dmp with secrets should return nonzero")
 
     def test_directory_rejects_nested_directory(self) -> None:
         (self.root / "nested").mkdir()

@@ -378,6 +378,41 @@ jobs:
     - name: Validate prompt system
       run: ./tools/validate-prompts.sh --ci
 
+  # ===========================================================================
+  # OPS-100 — secret policy, crash/telemetry validation, and redaction tests
+  # ===========================================================================
+  validate-ops100:
+    name: "Validate OPS-100 secret policy"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Run OPS-100 policy and adversarial tests
+      env:
+        PYTHONDONTWRITEBYTECODE: "1"
+      run: |
+        set -euo pipefail
+        cd Tests/Tools
+        python3 -m pytest \
+          test_ops100_redaction.py \
+          test_ops100_crash_security.py \
+          test_ops100_telemetry_spool.py \
+          test_ops100_adversarial.py \
+          -v --tb=short 2>&1 | tee ops100-results.log
+        echo "OPS-100 validation passed."
+
+    - name: Upload OPS-100 test log
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ops100-test-log-${{ github.run_attempt }}
+        path: Tests/Tools/ops100-results.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
   check-thirdparty-manifest:
     runs-on: ubuntu-24.04
     steps:
@@ -3064,6 +3099,7 @@ jobs:
       - validate-ci-tools
       - check-format
       - validate-prompts
+      - validate-ops100
       - check-thirdparty-manifest
       - check-supply-chain
       - build-linux-asan
@@ -3232,6 +3268,7 @@ jobs:
       - validate-ci-tools
       - check-format
       - validate-prompts
+      - validate-ops100
       - check-thirdparty-manifest
       - check-supply-chain
       - build-linux-asan

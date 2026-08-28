@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from fs_security import FilesystemPolicyError, SecureRoot, validate_portable_filename
+from fs_security import FileMetadata, FilesystemPolicyError, SecureRoot, validate_portable_filename
 from secret_policy import SecretFinding, redact_text, scan_json_values, scan_payload
 from strict_json import StrictJsonError, loads_strict
 
@@ -79,9 +79,9 @@ class ArtifactScanner:
         if time.monotonic() > self._deadline:
             self._error(source, "content inspection exceeded the scan deadline")
 
-    def _scan_named_file(self, root: SecureRoot, name: str, display: str) -> bytes | None:
+    def _scan_named_file(self, root: SecureRoot, name: str, display: str) -> tuple[bytes | None, FileMetadata | None]:
         try:
-            data, _ = root.read_file(name, max_bytes=MAX_SCAN_FILE_BYTES, deadline=self._deadline)
+            data, metadata = root.read_file(name, max_bytes=MAX_SCAN_FILE_BYTES, deadline=self._deadline)
         except FilesystemPolicyError as exc:
             self.file_count += 1
             if exc.size is not None:
@@ -89,16 +89,17 @@ class ArtifactScanner:
                 if self.total_bytes > MAX_SCAN_TOTAL_BYTES:
                     self._error(display, f"aggregate content exceeds {MAX_SCAN_TOTAL_BYTES} bytes")
             self._error(display, str(exc))
-            return None
+            return None, None
         self._consume(data, source=display, suffix=Path(name).suffix.lower())
-        return data
+        return data, metadata
 
     def scan_file(self, path: Path) -> bytes | None:
         self._deadline = time.monotonic() + SCAN_SECONDS
         try:
             name = validate_portable_filename(path.name)
             with SecureRoot(path.parent or Path(".")) as root:
-                return self._scan_named_file(root, name, str(path))
+                data, _ = self._scan_named_file(root, name, str(path))
+                return data
         except (FilesystemPolicyError, OSError) as exc:
             self._error(str(path), str(exc))
             return None
@@ -107,9 +108,53 @@ class ArtifactScanner:
         self._deadline = time.monotonic() + SCAN_SECONDS
         try:
             with SecureRoot(path) as root:
-                names = list(root.iter_names(max_entries=MAX_SCAN_FILES, deadline=self._deadline))
-                for name in sorted(names):
-                    self._scan_named_file(root, name, f"{path}{os.sep}{name}")
+                names_before = sorted(root.iter_names(max_entries=MAX_SCAN_FILES, deadline=self._deadline))
+                file_identities: dict[str, FileMetadata] = {}
+                for name in names_before:
+                    _, metadata = self._scan_named_file(root, name, f"{path}{os.sep}{name}")
+                    if metadata is not None:
+                        file_identities[name] = metadata
+
+                if time.monotonic() > self._deadline:
+                    self._error(str(path), "scan deadline elapsed before re-enumeration")
+                    return
+
+                try:
+                    names_after = sorted(root.iter_names(max_entries=MAX_SCAN_FILES, deadline=self._deadline))
+                except FilesystemPolicyError as exc:
+                    self._error(str(path), f"post-scan re-enumeration failed: {exc}")
+                    return
+
+                added = set(names_after) - set(names_before)
+                removed = set(names_before) - set(names_after)
+                if added:
+                    self._error(str(path), f"concurrent addition detected: {sorted(added)[:5]}")
+                if removed:
+                    self._error(str(path), f"concurrent removal detected: {sorted(removed)[:5]}")
+
+                for name in names_after:
+                    if name in file_identities:
+                        try:
+                            _, current_meta = root.read_file(
+                                name, max_bytes=MAX_SCAN_FILE_BYTES, deadline=self._deadline
+                            )
+                        except FilesystemPolicyError:
+                            self._error(
+                                f"{path}{os.sep}{name}",
+                                "file became unreadable after scan (possible replacement)",
+                            )
+                            continue
+                        before = file_identities[name]
+                        if (
+                            current_meta.device != before.device
+                            or current_meta.file_id != before.file_id
+                            or current_meta.mtime_ns != before.mtime_ns
+                            or current_meta.size != before.size
+                        ):
+                            self._error(
+                                f"{path}{os.sep}{name}",
+                                "file identity/metadata changed after scan (concurrent replacement)",
+                            )
         except (FilesystemPolicyError, OSError) as exc:
             self._error(str(path), str(exc))
 
@@ -162,17 +207,20 @@ def main(argv: list[str] | None = None) -> int:
         else:
             scanner._error(str(path), "input is not a regular file or directory")
 
-    if args.redact and redact_data is not None and redact_path is not None:
-        if redact_path.suffix.lower() in {".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz"}:
-            scanner._error(str(redact_path), "archives cannot be emitted through text redaction")
-        else:
-            try:
-                text = redact_data.decode("utf-8", errors="strict")
-            except UnicodeDecodeError:
-                scanner._error(str(redact_path), "--redact requires strict UTF-8 text")
+    if args.redact:
+        if scanner.errors:
+            pass
+        elif redact_data is not None and redact_path is not None:
+            if redact_path.suffix.lower() in {".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz"}:
+                scanner._error(str(redact_path), "archives cannot be emitted through text redaction")
             else:
-                redacted, _ = redact_text(text)
-                sys.stdout.write(redacted)
+                try:
+                    text = redact_data.decode("utf-8", errors="strict")
+                except UnicodeDecodeError:
+                    scanner._error(str(redact_path), "--redact requires strict UTF-8 text")
+                else:
+                    redacted, _ = redact_text(text)
+                    sys.stdout.write(redacted)
 
     if args.json:
         unique = sorted({(item.rule, item.location) for item in scanner.findings})
