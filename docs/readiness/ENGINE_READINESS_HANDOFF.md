@@ -150,6 +150,7 @@ Configuration-surface exceptions (every omitted option remains required):
 - The first-party slice SparkGameFPS is in the profile but uncertified: its release state is blocked and it holds this profile at blocked (MOD-310).
 - SparkGameFPS builds against SparkEngineLib with the engine source tree on its include path, so the public-API-only requirement is unmet (SDK-240, MOD-310).
 - No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200, CI-120).
+- CI-120 structurally validates its local File API capture but intentionally reports producer authority unavailable: a same-job GitHub OIDC audience proves only the mutable job identity, not CMake execution. An independently verified protected external attestation is not deployed (CI-120).
 - The editor-to-cook-to-package-to-install-to-run loop has no same-commit end-to-end certification.
 - MSVC v145 and Visual Studio 2026 are an advisory continue-on-error lane, not a supported compiler line in this profile.
 - Windows 10 x64 and the Linux and macOS build floors stay documented as development minima, but this profile certifies only Windows 11 x64; headless execution is in profile only on that same host.
@@ -164,7 +165,7 @@ Configuration-surface exceptions (every omitted option remains required):
 |---|---|---|:---:|---|---|
 | `G00` Source-of-truth integrity | governance | **blocked** | yes | One validated readiness contract owns public status; All numeric claims are generated; Documentation health is current; Regeneration is deterministic and clean | `RDY-000`, `DOC-410` |
 | `G01` Fail-closed CI evidence | ci | **blocked** | yes | Required commands propagate failure; Every Working commit receives normalized evidence; Advisory lanes are not represented as support gates; JUnit and gate summaries attach to the exact SHA | `CI-100`, `CI-110` |
-| `G02` Supported build matrix | build | **blocked** | yes | Declared host/compiler configurations configure and build from clean checkout; Every shipped target and real module library is built; Shipping configuration exists and is distinct from Debug/Release; Submodule/toolchain inputs are pinned | `CI-120`, `BLD-100` |
+| `G02` Supported build matrix | build | **blocked** | yes | Declared host/compiler configurations configure and build from clean checkout; Every shipped target and real module library is built; Shipping configuration exists and is distinct from Debug/Release; Submodule/toolchain inputs are pinned; Configured CI-120 evidence is producer-verified only by an independently verified protected external attestation; a same-job OIDC token, mutable workflow, checkout, receipt, artifact path, or hash cannot satisfy this gate | `CI-120`, `BLD-100` |
 | `G03` Production-source test coverage | tests | **blocked** | yes | Every in-profile real module library loads and executes in tests; No mirror-only or tautological test satisfies release; Coverage thresholds are explicit and enforced; Sanitizer and concurrency lanes fail closed; Experimental module lifecycle evidence remains owned by RDY-015 outside stable-v1 | `RDY-010`, `CI-110` |
 | `G04` Asset, cook, and package integrity | content | **blocked** | yes | Every discovered module has a validated content manifest; Zero missing or case-mismatched references in declared manifests; In-profile cooked packages launch without repository-relative dependencies; Stable package smoke covers clean Windows 11 machines; Experimental module package debt remains outside stable-v1 | `RDY-020`, `ASSET-220` |
 | `G05` Versioned Shipping artifacts | release | **blocked** | yes | Version is derived from the tag and embedded everywhere; Shipping artifacts are deterministic; Installer/uninstaller/upgrade/rollback smoke tests pass; Release notes and compatibility policy are published | `BLD-100`, `REL-100`, `INST-130`, `REL-200` |
@@ -892,7 +893,8 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - Align documented and actual Windows preset directories
 - Define warning and CPU baselines for the supported row
 - Bind material CI workflow semantics (triggers and path filters, runner OS, job and step conditions, continue-on-error, matrix combinations, shell, and the builds and tests actually run) so a weakened lane cannot produce the same evidence
-- Bind configured codemodel evidence to a producer-generated record covering the source tree, commit, generator, preset, cache values, build directory, and exact File API reply digests; report missing provenance or material values as blocking unknowns
+- Bind configured codemodel evidence to a producer-generated structural record covering the source tree, commit, generator, preset, cache values, build directory, and exact File API reply digests; report missing provenance, material values, or independent external authority as blocking unknowns
+- Treat a producer job's checkout, environment, provenance JSON, artifact paths and hashes, and same-job OIDC audience as untrusted inputs; require a protected external attestation verifier before any configured evidence can be producer-verified
 
 **Acceptance criteria**
 
@@ -903,6 +905,7 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 5. Documented configure/build commands match the Windows presets
 6. Experimental platform Shipping matrices remain owned by their platform work items
 7. Configured codemodel evidence is accepted only when its source tree, producer-captured commit, generator, preset build directory, cache values, and reply-file digests match the profile claiming it
+8. No same-job OIDC token, mutable workflow or checkout, provenance JSON, artifact path, or artifact hash can self-author producer-verified evidence; a protected external attestation verifier is independently evidenced
 
 **Required commands**
 
@@ -940,7 +943,7 @@ python3 tools/site-data/validate.py
 - Risks:
   - Strict mode may expose optional-dependency ambiguity
   - Configured evidence cannot be produced without a real Windows MSVC configure, so the profile stays blocked until one runs
-  - The local producer record detects reply substitution but is not a signed remote attestation; protected CI production and signed artifact provenance remain release-pipeline work
+  - The local producer record detects reply substitution and post-build mutation but is intentionally unavailable as release authority: GitHub can sign a same-job OIDC audience chosen by the mutable producer, which proves job identity rather than CMake execution. CI-120 remains blocked until a protected external attestation verifier independently validates the captured artifact.
 - Out of scope:
   - Certifying Linux, macOS, or any other host as a stable-v1 product
 

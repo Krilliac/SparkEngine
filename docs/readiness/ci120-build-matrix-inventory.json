@@ -6326,7 +6326,7 @@
       },
       {
         "id": "build-windows-shipping",
-        "name": "Windows Shipping configured-evidence producer",
+        "name": "Windows Shipping structural configured-evidence producer",
         "runsOn": "windows-2022",
         "runnerLabels": [
           "windows-2022"
@@ -6345,8 +6345,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {
-          "contents": "read",
-          "id-token": "write"
+          "contents": "read"
         },
         "stepCount": 7,
         "steps": [
@@ -6376,7 +6375,7 @@
           },
           {
             "index": 2,
-            "name": "Produce Windows Shipping CMake provenance and build artifacts (CI-120)",
+            "name": "Produce Windows Shipping structural provenance and build artifacts (CI-120)",
             "id": "",
             "uses": "",
             "shell": "bash",
@@ -6388,7 +6387,7 @@
           },
           {
             "index": 3,
-            "name": "Generate configured build-matrix inventory from the owned producer (CI-120)",
+            "name": "Generate configured build-matrix inventory from the structural producer (CI-120)",
             "id": "",
             "uses": "",
             "shell": "bash",
@@ -6412,7 +6411,7 @@
           },
           {
             "index": 5,
-            "name": "Upload trusted CI-120 producer evidence",
+            "name": "Upload untrusted CI-120 structural evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
             "shell": "",
@@ -6432,7 +6431,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "8cc046808f7e7c7c"
+            "runDigest": "572bc1d72992fef1"
           }
         ],
         "envNames": [],
@@ -11493,7 +11492,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Produce Windows Shipping CMake provenance and build artifacts (CI-120)",
+        "step": "Produce Windows Shipping structural provenance and build artifacts (CI-120)",
         "stepIndex": 2,
         "matrix": {},
         "matrixResolved": true,
@@ -11518,7 +11517,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Generate configured build-matrix inventory from the owned producer (CI-120)",
+        "step": "Generate configured build-matrix inventory from the structural producer (CI-120)",
         "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,

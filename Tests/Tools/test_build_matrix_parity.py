@@ -852,13 +852,22 @@ jobs:
         categories = finding_categories(check_parity.check_workflow_semantics(data))
         self.assertIn("workflow-configuration-not-built", categories)
 
-    def test_ci120_producer_without_oidc_permission_is_blocking(self) -> None:
-        mutated = LIVE_WORKFLOW.replace("      id-token: write\n", "", 1)
-        record = self.assert_weakening_is_visible(mutated, "CI-120 OIDC permission removed")
+    def test_ci120_producer_same_job_oidc_permission_is_blocking(self) -> None:
+        needle = (
+            "  build-windows-shipping:\n"
+            "    name: \"Windows Shipping structural configured-evidence producer\"\n"
+            "    runs-on: windows-2022\n"
+            "    permissions:\n"
+            "      contents: read\n"
+        )
+        replacement = needle + "      id-token: write\n"
+        self.assertIn(needle, LIVE_WORKFLOW)
+        mutated = LIVE_WORKFLOW.replace(needle, replacement, 1)
+        record = self.assert_weakening_is_visible(mutated, "CI-120 same-job OIDC permission added")
         data = copy.deepcopy(inventory.build_inventory())
         data["workflow"] = record
         categories = finding_categories(check_parity.check_ci120_producer_chain(data))
-        self.assertIn("ci120-producer-oidc-permission-missing", categories)
+        self.assertIn("ci120-producer-same-job-oidc-forbidden", categories)
 
     def test_unresolved_matrix_cannot_satisfy_a_profile(self) -> None:
         data = copy.deepcopy(inventory.build_inventory())
@@ -1118,7 +1127,7 @@ def write_synthetic_transaction_provenance(
     repository_root: str,
     commit: str = "0" * 40,
 ) -> None:
-    """Complete a synthetic fixture with the v3 client mirror and transaction record."""
+    """Complete a synthetic fixture with the v4 client mirror and transaction record."""
     run_id = "1" * 32
     client_name = inventory._CAPTURE_CLIENT_PREFIX + run_id
     query = inventory._capture_query(profile, run_id)
@@ -1196,7 +1205,6 @@ def write_synthetic_transaction_provenance(
             "digest": inventory._reply_records_digest(records),
         },
     }
-    record["identity"] = inventory._ci120_oidc_identity(record)
     provenance_path = inventory._provenance_path(root, profile)
     provenance_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(provenance_path, record)
@@ -1251,10 +1259,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 "windows-shipping",
                 repository_root=Path(REPO_ROOT).as_posix(),
             )
-        with (
-            mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False),
-            mock.patch.object(inventory, "_verify_ci120_oidc_identity"),
-        ):
+        with mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False):
             return inventory.extract_codemodel_targets(directory, "windows-shipping", "0" * 40)
 
     def categories(self, data: dict[str, Any]) -> set[str]:
@@ -1267,7 +1272,12 @@ class CodemodelProvenanceTests(unittest.TestCase):
         self.assertEqual(evidence["generator"], "Visual Studio 17 2022")
         self.assertEqual(evidence["toolset"], "v143")
         self.assertEqual(evidence["configurations"], ["MinSizeRel"])
-        self.assertEqual(evidence["producerProvenance"]["state"], "verified")
+        self.assertEqual(evidence["producerProvenance"]["state"], "unavailable")
+        self.assertEqual(
+            evidence["producerProvenance"]["authority"],
+            inventory._CI120_EXTERNAL_AUTHORITY,
+        )
+        self.assertEqual(evidence["producerProvenance"]["structuralState"], "validated")
         self.assertEqual(evidence["targets"], [
             {
                 "target": "SparkEngine",
@@ -1280,6 +1290,10 @@ class CodemodelProvenanceTests(unittest.TestCase):
             }
         ])
         self.assertNotIn("codemodel-source-mismatch", self.categories(self.bound_data(evidence)))
+        self.assertIn(
+            "codemodel-producer-authority-unavailable",
+            self.categories(self.bound_data(evidence)),
+        )
 
     def test_capture_owns_query_configure_and_new_matching_index(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
@@ -1357,7 +1371,6 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 mock.patch.object(inventory, "_capture_material_errors", return_value=[]),
                 mock.patch.object(inventory.subprocess, "run", side_effect=fake_run),
                 mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False),
-                mock.patch.object(inventory, "_verify_ci120_oidc_identity"),
             ):
                 record_path = inventory.capture_codemodel_transaction(
                     build, "windows-shipping", cmake_executable=executable, build=True
@@ -1376,9 +1389,12 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 ]],
             )
             self.assertEqual(evidence["status"], "available")
-            self.assertEqual(evidence["producerProvenance"]["state"], "verified")
-            self.assertEqual(evidence["producerProvenance"]["artifactState"], "verified-post-build")
-            self.assertEqual(evidence["targets"][0]["artifactState"], "verified-post-build")
+            self.assertEqual(evidence["producerProvenance"]["state"], "unavailable")
+            self.assertEqual(
+                evidence["producerProvenance"]["artifactState"],
+                "locally-observed-post-build",
+            )
+            self.assertEqual(evidence["targets"][0]["artifactState"], "locally-observed-post-build")
             self.assertFalse(
                 any((build / ".cmake" / "api" / "v1" / "query").glob("client-*/query.json"))
             )
@@ -1509,7 +1525,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
             evidence = self.shipping_evidence(Path(raw))
         self.assertIn("codemodel-commit-mismatch", self.categories(self.bound_data(evidence, commit="a" * 40)))
 
-    def test_oidc_binding_rejects_post_capture_record_change(self) -> None:
+    def test_structural_record_rejects_post_capture_change(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             root = Path(raw)
             write_codemodel_reply(
@@ -1525,16 +1541,12 @@ class CodemodelProvenanceTests(unittest.TestCase):
             record = json.loads(provenance.read_text(encoding="utf-8"))
             record["observed"]["toolset"] = "forged-v143"
             write_json(provenance, record)
-            with (
-                mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False),
-                mock.patch.object(inventory, "_request_ci120_oidc_token", return_value="synthetic"),
-                mock.patch.object(inventory, "_verify_rs256_oidc_token"),
-            ):
+            with mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False):
                 evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
         self.assertEqual(evidence["status"], "invalid")
-        self.assertIn("does not bind", evidence["rejection"])
+        self.assertIn("observed toolset differs", evidence["rejection"])
 
-    def test_spoofed_github_environment_without_oidc_capability_is_refused(self) -> None:
+    def test_same_job_oidc_cannot_self_attest_producer_record(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             root = Path(raw)
             write_codemodel_reply(
@@ -1546,10 +1558,34 @@ class CodemodelProvenanceTests(unittest.TestCase):
             write_synthetic_transaction_provenance(
                 root, "windows-shipping", repository_root=Path(REPO_ROOT).as_posix()
             )
-            with mock.patch.dict(os.environ, synthetic_ci_environment(), clear=True):
+            environment = synthetic_ci_environment()
+            environment.update({
+                "ACTIONS_ID_TOKEN_REQUEST_URL": "https://actions.githubusercontent.com/oidc?audience=forged",
+                "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "same-job-github-oidc-token",
+            })
+            with mock.patch.dict(os.environ, environment, clear=True):
                 evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
-        self.assertEqual(evidence["status"], "invalid")
-        self.assertIn("OIDC request capability", evidence["rejection"])
+        self.assertEqual(evidence["status"], "available")
+        self.assertEqual(evidence["producerProvenance"]["state"], "unavailable")
+        self.assertEqual(
+            evidence["producerProvenance"]["authority"],
+            inventory._CI120_EXTERNAL_AUTHORITY,
+        )
+        categories = self.categories(self.bound_data(evidence))
+        self.assertIn("codemodel-producer-authority-unavailable", categories)
+        self.assertNotIn("codemodel-producer-authority-unverifiable", categories)
+
+    def test_mutable_inventory_cannot_self_author_verified_producer_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+        forged = copy.deepcopy(evidence)
+        provenance = forged["producerProvenance"]
+        provenance["state"] = "verified"
+        provenance["authority"] = "externally-attested"
+        provenance["artifactState"] = "externally-attested-post-build"
+        categories = self.categories(self.bound_data(forged))
+        self.assertIn("codemodel-producer-authority-unverifiable", categories)
+        self.assertNotIn("codemodel-producer-authority-unavailable", categories)
 
     def test_dirty_worktree_evidence_is_blocking(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:

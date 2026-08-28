@@ -824,14 +824,17 @@ jobs:
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
-  # CI-120 trusted producer: canonical Windows Shipping configured evidence
+  # CI-120 structural producer: canonical Windows Shipping configured evidence.
+  # This job intentionally has no id-token permission.  A token minted for the
+  # same mutable checkout can identify this job, but cannot prove that it ran
+  # CMake or capture_provenance.py.  Until a protected external verifier is
+  # deployed, the resulting receipt remains explicitly unavailable/blocked.
   # ===========================================================================
   build-windows-shipping:
-    name: "Windows Shipping configured-evidence producer"
+    name: "Windows Shipping structural configured-evidence producer"
     runs-on: windows-2022
     permissions:
       contents: read
-      id-token: write
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -841,7 +844,7 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
-    - name: Produce Windows Shipping CMake provenance and build artifacts (CI-120)
+    - name: Produce Windows Shipping structural provenance and build artifacts (CI-120)
       shell: bash
       run: |
         set -o pipefail
@@ -850,7 +853,7 @@ jobs:
           --build-dir build/windows-shipping \
           --build 2>&1 | tee ci120-producer.log
 
-    - name: Generate configured build-matrix inventory from the owned producer (CI-120)
+    - name: Generate configured build-matrix inventory from the structural producer (CI-120)
       shell: bash
       run: |
         python Tools/buildmatrix/inventory.py \
@@ -882,11 +885,11 @@ jobs:
         fi
         echo "status=$status" >> "$GITHUB_OUTPUT"
 
-    - name: Upload trusted CI-120 producer evidence
+    - name: Upload untrusted CI-120 structural evidence
       if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: ci120-windows-shipping-${{ github.sha }}-${{ github.run_attempt }}
+        name: ci120-untrusted-windows-shipping-${{ github.sha }}-${{ github.run_attempt }}
         path: |
           ci120-producer.log
           build/windows-shipping/.cmake/api/v1/reply
@@ -903,7 +906,7 @@ jobs:
       run: |
         status="${{ steps.ci120-parity.outputs.status }}"
         if test "$status" -ne 0; then
-          echo "::error::CI-120 remains blocked by the reviewed configuration findings artifact."
+          echo "::error::CI-120 remains blocked: structurally checked local evidence lacks an independently verified protected external attestation."
           exit 1
         fi
 

@@ -10,10 +10,7 @@ configuration. The two forms of evidence are deliberately never conflated.
 from __future__ import annotations
 
 import argparse
-import base64
-import binascii
 import hashlib
-import hmac
 import json
 import math
 import os
@@ -23,10 +20,6 @@ import stat
 import subprocess
 import sys
 import tempfile
-import time
-import urllib.error
-import urllib.parse
-import urllib.request
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -1315,20 +1308,15 @@ _MAX_PRESETS_BYTES = 4 * 1024 * 1024
 _MAX_READINESS_BYTES = 16 * 1024 * 1024
 _MAX_INVENTORY_BYTES = 128 * 1024 * 1024
 _MAX_REPORT_BYTES = 64 * 1024 * 1024
-_PROVENANCE_FILE = "spark-ci120-provenance-v3.json"
-_PROVENANCE_SCHEMA = 3
-_PROVENANCE_PRODUCER = "spark-buildmatrix-configure-build-transaction-v3"
+_PROVENANCE_FILE = "spark-ci120-provenance-v4.json"
+_PROVENANCE_SCHEMA = 4
+_PROVENANCE_PRODUCER = "spark-buildmatrix-configure-build-transaction-v4"
 _CAPTURE_CLIENT_PREFIX = "client-spark-ci120-"
 _MAX_CAPTURE_RESTARTS = 3
 _REPARSE_POINT_ATTRIBUTE = 0x400
 _CI120_WORKFLOW_PATH = ".github/workflows/build.yml"
 _CI120_PRODUCER_JOB = "build-windows-shipping"
-_CI120_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
-_CI120_OIDC_JWKS_URL = _CI120_OIDC_ISSUER + "/.well-known/jwks"
-_CI120_OIDC_AUDIENCE_PREFIX = "sparkengine-ci120-provenance/"
-_MAX_OIDC_TOKEN_BYTES = 32 * 1024
-_MAX_OIDC_RESPONSE_BYTES = 1024 * 1024
-_MAX_OIDC_JWKS_KEYS = 64
+_CI120_EXTERNAL_AUTHORITY = "external-attestation-required"
 
 
 def _normalize_directory(value: Any) -> str:
@@ -1338,11 +1326,11 @@ def _normalize_directory(value: Any) -> str:
 
 
 def _github_actions_context() -> dict[str, str] | None:
-    """Return the runner facts that must agree with the signed OIDC identity.
+    """Return the producer's claimed runner context for structural checks only.
 
-    Environment variables alone are untrusted input: a local process can set
-    every one of them.  They only select the expected claims for the signed
-    GitHub OIDC proof checked by ``_verify_ci120_oidc_identity`` below.
+    Environment variables are producer-controlled text.  They help detect a
+    record replayed in a different job, but they are deliberately not an
+    authority boundary and must never promote a receipt to ``verified``.
     """
     if os.environ.get("GITHUB_ACTIONS") != "true":
         return None
@@ -1371,203 +1359,6 @@ def _github_actions_context() -> dict[str, str] | None:
             "CI-120 producer must run in the blocking Windows build-windows-shipping job"
         )
     return {"provider": "github-actions", **raw}
-
-
-def _provenance_binding_sha256(record: dict[str, Any]) -> str:
-    """Hash every persisted provenance field except the live OIDC proof itself."""
-    payload = (json.dumps(record, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
-    return hashlib.sha256(payload).hexdigest()
-
-
-def _ci120_oidc_identity(record: dict[str, Any]) -> dict[str, str]:
-    """Describe the live signed proof needed for this exact provenance receipt.
-
-    The token itself is deliberately never written to the build tree or an
-    artifact.  It is a short-lived bearer credential, not release evidence.
-    Instead both capture and validation independently request a fresh token
-    whose audience is the canonical digest of this record.
-    """
-    binding = _provenance_binding_sha256(record)
-    return {
-        "provider": "github-actions-oidc",
-        "issuer": _CI120_OIDC_ISSUER,
-        "audience": _CI120_OIDC_AUDIENCE_PREFIX + binding,
-        "bindingSha256": binding,
-    }
-
-
-def _b64url_decode(value: Any, label: str, maximum: int) -> bytes:
-    if not isinstance(value, str) or not value or len(value) > maximum * 2:
-        raise ReplyValidationError(f"{label} has an invalid length")
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", value):
-        raise ReplyValidationError(f"{label} is not base64url")
-    try:
-        decoded = base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_", validate=True)
-    except (ValueError, binascii.Error) as error:
-        raise ReplyValidationError(f"{label} is not base64url") from error
-    if not decoded or len(decoded) > maximum:
-        raise ReplyValidationError(f"{label} exceeds its size bound")
-    return decoded
-
-
-def _oidc_json_response(request: urllib.request.Request, label: str) -> dict[str, Any]:
-    """Read a bounded JSON response without exposing credential-bearing bodies."""
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:  # nosec B310: fixed HTTPS endpoints
-            payload = response.read(_MAX_OIDC_RESPONSE_BYTES + 1)
-    except (OSError, urllib.error.URLError) as error:
-        raise InventoryError(f"CI-120 cannot obtain {label}: {type(error).__name__}") from error
-    if len(payload) > _MAX_OIDC_RESPONSE_BYTES:
-        raise InventoryError(f"CI-120 {label} exceeds its size bound")
-    try:
-        decoded = _decode_bounded_json(payload, f"CI-120 {label}")
-    except ReplyValidationError as error:
-        raise InventoryError(f"CI-120 {label} is not valid bounded JSON") from error
-    if not isinstance(decoded, dict):
-        raise InventoryError(f"CI-120 {label} must be a JSON object")
-    return decoded
-
-
-def _request_ci120_oidc_token(audience: str) -> str:
-    """Request one ephemeral GitHub-signed JWT for a record-bound audience."""
-    request_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL", "")
-    request_token = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
-    parsed = urllib.parse.urlsplit(request_url)
-    host = (parsed.hostname or "").casefold()
-    if (
-        parsed.scheme != "https"
-        or not host
-        or not (host == "actions.githubusercontent.com" or host.endswith(".actions.githubusercontent.com"))
-        or not request_token
-    ):
-        raise InventoryError(
-            "CI-120 requires the GitHub Actions OIDC request capability; environment text alone is not authority"
-        )
-    query = [(key, value) for key, value in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
-             if key != "audience"]
-    query.append(("audience", audience))
-    endpoint = urllib.parse.urlunsplit((
-        parsed.scheme, parsed.netloc, parsed.path, urllib.parse.urlencode(query), ""
-    ))
-    response = _oidc_json_response(
-        urllib.request.Request(
-            endpoint,
-            headers={"Authorization": f"Bearer {request_token}", "Accept": "application/json"},
-        ),
-        "OIDC token",
-    )
-    token = response.get("value")
-    if not isinstance(token, str) or not token or len(token.encode("utf-8")) > _MAX_OIDC_TOKEN_BYTES:
-        raise InventoryError("CI-120 OIDC token response is invalid")
-    return token
-
-
-def _oidc_jwks() -> list[dict[str, Any]]:
-    response = _oidc_json_response(
-        urllib.request.Request(_CI120_OIDC_JWKS_URL, headers={"Accept": "application/json"}),
-        "OIDC signing keys",
-    )
-    keys = response.get("keys")
-    if not isinstance(keys, list) or not keys or len(keys) > _MAX_OIDC_JWKS_KEYS:
-        raise InventoryError("CI-120 OIDC signing keys are invalid")
-    return [key for key in keys if isinstance(key, dict)]
-
-
-def _verify_rs256_oidc_token(token: str, audience: str, ci: dict[str, str]) -> None:
-    """Verify GitHub's RS256 JWT without a third-party crypto dependency."""
-    parts = token.split(".")
-    if len(parts) != 3:
-        raise InventoryError("CI-120 OIDC token is not a compact JWT")
-    try:
-        header = _decode_bounded_json(_b64url_decode(parts[0], "OIDC JWT header", 4096), "OIDC JWT header")
-        claims = _decode_bounded_json(_b64url_decode(parts[1], "OIDC JWT claims", 16 * 1024), "OIDC JWT claims")
-        signature = _b64url_decode(parts[2], "OIDC JWT signature", 1024)
-    except ReplyValidationError as error:
-        raise InventoryError(str(error)) from error
-    if not isinstance(header, dict) or not isinstance(claims, dict):
-        raise InventoryError("CI-120 OIDC JWT header and claims must be objects")
-    kid = header.get("kid")
-    if header.get("alg") != "RS256" or not isinstance(kid, str) or not kid:
-        raise InventoryError("CI-120 OIDC JWT must use a keyed RS256 signature")
-    key = next(
-        (entry for entry in _oidc_jwks()
-         if entry.get("kid") == kid and entry.get("kty") == "RSA" and entry.get("alg") in {None, "RS256"}),
-        None,
-    )
-    if key is None:
-        raise InventoryError("CI-120 OIDC JWT signing key is unavailable")
-    try:
-        modulus = int.from_bytes(_b64url_decode(key.get("n"), "OIDC RSA modulus", 1024), "big")
-        exponent = int.from_bytes(_b64url_decode(key.get("e"), "OIDC RSA exponent", 16), "big")
-    except ReplyValidationError as error:
-        raise InventoryError(str(error)) from error
-    modulus_bytes = (modulus.bit_length() + 7) // 8
-    if modulus_bytes < 256 or modulus_bytes > 1024 or exponent < 3 or exponent % 2 == 0:
-        raise InventoryError("CI-120 OIDC JWT has an unsafe RSA signing key")
-    if len(signature) != modulus_bytes:
-        raise InventoryError("CI-120 OIDC JWT signature length is invalid")
-    encoded = pow(int.from_bytes(signature, "big"), exponent, modulus).to_bytes(modulus_bytes, "big")
-    digest_info = bytes.fromhex("3031300d060960864801650304020105000420") + hashlib.sha256(
-        (parts[0] + "." + parts[1]).encode("ascii")
-    ).digest()
-    if not encoded.startswith(b"\x00\x01"):
-        raise InventoryError("CI-120 OIDC JWT signature is invalid")
-    delimiter = encoded.find(b"\x00", 2)
-    if delimiter < 10 or any(byte != 0xFF for byte in encoded[2:delimiter]):
-        raise InventoryError("CI-120 OIDC JWT signature padding is invalid")
-    if not hmac.compare_digest(encoded[delimiter + 1 :], digest_info):
-        raise InventoryError("CI-120 OIDC JWT signature is invalid")
-
-    token_audience = claims.get("aud")
-    audiences = [token_audience] if isinstance(token_audience, str) else token_audience
-    if not isinstance(audiences, list) or audience not in audiences:
-        raise InventoryError("CI-120 OIDC JWT audience does not bind this provenance receipt")
-    expected_claims = {
-        "iss": _CI120_OIDC_ISSUER,
-        "repository": ci["repository"],
-        "sha": ci["sourceCommit"],
-        "run_id": ci["runId"],
-        "run_attempt": ci["runAttempt"],
-        "workflow_ref": ci["workflowRef"],
-    }
-    if any(claims.get(name) != value for name, value in expected_claims.items()):
-        raise InventoryError("CI-120 OIDC JWT claims do not match the producer run")
-    now = int(time.time())
-    exp = claims.get("exp")
-    nbf = claims.get("nbf")
-    iat = claims.get("iat")
-    if (
-        type(exp) is not int
-        or exp < now - 60
-        or (nbf is not None and (type(nbf) is not int or nbf > now + 60))
-        or (iat is not None and (type(iat) is not int or iat > now + 60))
-    ):
-        raise InventoryError("CI-120 OIDC JWT is not currently valid")
-
-
-def _verify_ci120_oidc_identity(record: dict[str, Any], ci: dict[str, str]) -> None:
-    """Require GitHub to freshly sign the exact persisted provenance binding."""
-    identity = _require_mapping(record.get("identity"), "CI-120 OIDC identity")
-    fields = {"provider", "issuer", "audience", "bindingSha256"}
-    if set(identity) != fields:
-        raise ReplyValidationError("CI-120 OIDC identity fields are incomplete")
-    binding = identity.get("bindingSha256")
-    audience = identity.get("audience")
-    if (
-        identity.get("provider") != "github-actions-oidc"
-        or identity.get("issuer") != _CI120_OIDC_ISSUER
-        or not isinstance(binding, str)
-        or not re.fullmatch(r"[0-9a-f]{64}", binding)
-        or audience != _CI120_OIDC_AUDIENCE_PREFIX + binding
-    ):
-        raise ReplyValidationError("CI-120 OIDC identity is malformed")
-    unsigned_record = {key: value for key, value in record.items() if key != "identity"}
-    if not hmac.compare_digest(binding, _provenance_binding_sha256(unsigned_record)):
-        raise ReplyValidationError("CI-120 OIDC identity does not bind the provenance receipt")
-    try:
-        _verify_rs256_oidc_token(_request_ci120_oidc_token(audience), audience, ci)
-    except InventoryError as error:
-        raise ReplyValidationError(str(error)) from error
 
 
 def _absolute_directory(path: Path) -> Path:
@@ -2853,7 +2644,7 @@ def _load_producer_provenance(
     if record is None:
         return {"state": "missing", "recordFile": _PROVENANCE_FILE}
     required = {
-        "schemaVersion", "producer", "profile", "evidenceDirectory", "ci", "identity",
+        "schemaVersion", "producer", "profile", "evidenceDirectory", "ci",
         "transaction", "observed", "artifacts", "reply",
     }
     if set(record) != required:
@@ -2882,7 +2673,10 @@ def _load_producer_provenance(
         raise ReplyValidationError(
             f"{profile}: producer record was not created by this GitHub Actions run/job"
         )
-    _verify_ci120_oidc_identity(record, ci)
+    # This equality is a containment/replay check, not evidence that this job
+    # actually invoked CMake.  The job owns its environment, checkout, File API
+    # reply, record, artifacts, and every former same-job OIDC audience.  Do
+    # not let their agreement manufacture a producer authority claim.
 
     transaction = _require_mapping(record.get("transaction"), f"{profile} transaction")
     transaction_required = {
@@ -3031,7 +2825,7 @@ def _load_producer_provenance(
     if set(artifacts) != {"state", "build", "targets"}:
         raise ReplyValidationError(f"{profile}: artifact provenance fields are invalid")
     artifact_state = artifacts.get("state")
-    if artifact_state not in {"declared-not-built", "verified-post-build"}:
+    if artifact_state not in {"declared-not-built", "locally-observed-post-build"}:
         raise ReplyValidationError(f"{profile}: artifact provenance has an invalid state")
     expected_build_argv = [
         configure.get("executable"), "--build", evidence["buildDirectory"],
@@ -3063,11 +2857,24 @@ def _load_producer_provenance(
         }
         for target in evidence.get("targets", []):
             key = (target["id"], target["configuration"], target["target"])
-            target["artifactState"] = "verified-post-build"
+            target["artifactState"] = "locally-observed-post-build"
             target["artifactIdentities"] = identities_by_target[key]
 
     return {
-        "state": "verified",
+        # A local receipt may be internally consistent, but nothing in this
+        # producer job is independent of the source it is evaluating.  In
+        # particular, GitHub will sign an OIDC token for an audience selected
+        # by that same job.  Keep the structural record for diagnosis while
+        # making the missing protected external verifier machine-readable.
+        "state": "unavailable",
+        "authority": _CI120_EXTERNAL_AUTHORITY,
+        "authorityReason": (
+            "A same-job GitHub Actions token, environment, checkout, provenance record, "
+            "artifact path, and hash are producer-controlled inputs. A protected external "
+            "attestation verifier must independently validate the captured artifact before "
+            "CI-120 can report producer-verified evidence."
+        ),
+        "structuralState": "validated",
         "recordFile": _provenance_path(Path(evidence["evidenceDirectory"]), profile).name,
         "recordSha256": hashlib.sha256(
             (json.dumps(record, indent=2, sort_keys=False) + "\n").encode("utf-8")
@@ -3441,7 +3248,7 @@ def capture_codemodel_transaction(
     ci = _github_actions_context()
     if ci is None:
         raise InventoryError(
-            "CI-120 provenance capture is only trusted in its GitHub Actions producer job"
+            "CI-120 structural capture is only supported in its GitHub Actions producer job"
         )
     if repository_before["commit"].lower() != ci["sourceCommit"]:
         raise InventoryError(
@@ -3555,7 +3362,7 @@ def capture_codemodel_transaction(
                 raise InventoryError(f"{profile}: File API producer changed across build")
             producer = refreshed_producer
             artifact_record: dict[str, Any] = {
-                "state": "verified-post-build",
+                "state": "locally-observed-post-build",
                 "build": {"argv": build_argv, "exitCode": 0},
                 "targets": _capture_artifact_manifest(evidence, build_directory),
             }
@@ -3611,10 +3418,6 @@ def capture_codemodel_transaction(
                 "digest": _reply_records_digest(records),
             },
         }
-        record["identity"] = _ci120_oidc_identity(record)
-        # Environment variables merely name the claimed job.  Require GitHub to
-        # sign this exact record digest before it can become CI evidence.
-        _verify_ci120_oidc_identity(record, ci)
         payload = (json.dumps(record, indent=2, sort_keys=False) + "\n").encode("utf-8")
         if len(payload) > _MAX_PROVENANCE_BYTES:
             raise InventoryError("generated CI-120 provenance record exceeds its size bound")

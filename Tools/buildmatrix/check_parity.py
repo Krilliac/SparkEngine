@@ -678,7 +678,11 @@ def check_configured_targets(data: dict[str, Any]) -> list[Finding]:
                 else:
                     artifact_state = entry.get("artifactState")
                     artifact_problem = ""
-                    if artifact_state not in {"declared-not-built", "verified-post-build"}:
+                    if artifact_state not in {
+                        "declared-not-built",
+                        "locally-observed-post-build",
+                        "externally-attested-post-build",
+                    }:
                         artifact_problem = f"unsupported artifactState {artifact_state!r}"
                     expected_suffix = windows_suffixes.get(str(product.get("kind")))
                     if (
@@ -709,10 +713,13 @@ def check_configured_targets(data: dict[str, Any]) -> list[Finding]:
                         if os.path.normcase(common) != os.path.normcase(build_directory):
                             artifact_problem = "artifact escapes its build tree"
                             break
-                    if artifact_state == "verified-post-build":
+                    if artifact_state in {
+                        "locally-observed-post-build",
+                        "externally-attested-post-build",
+                    }:
                         identities = entry.get("artifactIdentities")
                         if not isinstance(identities, list) or len(identities) != len(artifacts):
-                            artifact_problem = "verified artifact claim lacks one identity per artifact"
+                            artifact_problem = "post-build artifact claim lacks one identity per artifact"
                         elif any(
                             not isinstance(identity, dict)
                             or set(identity) != {"path", "bytes", "sha256"}
@@ -722,7 +729,7 @@ def check_configured_targets(data: dict[str, Any]) -> list[Finding]:
                             or not re.fullmatch(r"[0-9a-f]{64}", str(identity.get("sha256", "")))
                             for identity in identities
                         ):
-                            artifact_problem = "verified artifact identity is malformed"
+                            artifact_problem = "post-build artifact identity is malformed"
                     if artifact_problem:
                         findings.append(
                             Finding(
@@ -1140,7 +1147,8 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
         root = str(repository.get("root", ""))
 
         provenance = evidence.get("producerProvenance")
-        if not isinstance(provenance, dict) or provenance.get("state") != "verified":
+        provenance_state = provenance.get("state") if isinstance(provenance, dict) else ""
+        if not isinstance(provenance, dict):
             findings.append(
                 Finding(
                     "codemodel-provenance-missing",
@@ -1150,7 +1158,44 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                     "caller-supplied commit text is not evidence.",
                 )
             )
-        elif not (
+        elif provenance_state == "unavailable":
+            if (
+                provenance.get("authority") != inventory_tool._CI120_EXTERNAL_AUTHORITY
+                or provenance.get("structuralState") != "validated"
+                or not isinstance(provenance.get("authorityReason"), str)
+                or not provenance.get("authorityReason")
+            ):
+                findings.append(
+                    Finding(
+                        "codemodel-provenance-incomplete",
+                        "error",
+                        f"Profile '{identifier}' unavailable producer summary is malformed",
+                        "An unavailable state is only useful when it explicitly identifies the missing "
+                        "independent external authority boundary.",
+                    )
+                )
+            else:
+                findings.append(
+                    Finding(
+                        "codemodel-producer-authority-unavailable",
+                        "error",
+                        f"Profile '{identifier}' has structurally validated but untrusted CI-120 evidence",
+                        "The producer job's checkout, environment, provenance JSON, artifacts, hashes, and "
+                        "same-job OIDC audience are self-authored. A protected external attestation verifier "
+                        "must independently validate the artifact before producer evidence can be accepted.",
+                    )
+                )
+        elif provenance_state == "verified":
+            findings.append(
+                Finding(
+                    "codemodel-producer-authority-unverifiable",
+                    "error",
+                    f"Profile '{identifier}' declares producer-verified evidence without an independent verifier",
+                    "CI-120 intentionally has no parser path that accepts a job-local receipt, OIDC token, "
+                    "environment, artifact path, or hash as protected external authority.",
+                )
+            )
+            if not (
             provenance.get("producer") == inventory_tool._PROVENANCE_PRODUCER
             and provenance.get("profile") == identifier
             and provenance.get("sourceClean") is True
@@ -1172,7 +1217,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
             == path_key(provenance.get("cmakeExecutable"))
             and isinstance(provenance.get("cmakeVersion"), str)
             and bool(provenance.get("cmakeVersion"))
-            and provenance.get("artifactState") == "verified-post-build"
+            and provenance.get("artifactState") == "externally-attested-post-build"
             and provenance.get("ciProvider") == "github-actions"
             and isinstance(provenance.get("ciRepository"), str)
             and bool(provenance.get("ciRepository"))
@@ -1184,14 +1229,25 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
             and bool(provenance.get("ciWorkflowRef"))
             and provenance.get("ciJob") == inventory_tool._CI120_PRODUCER_JOB
             and provenance.get("ciRunnerOs") == "Windows"
-        ):
+            ):
+                findings.append(
+                    Finding(
+                        "codemodel-provenance-incomplete",
+                        "error",
+                        f"Profile '{identifier}' verified producer summary is incomplete or malformed",
+                        "A verified label is not sufficient without independently validated external "
+                        "attestation, query, executable, argv, repository-cleanliness, post-build artifacts, "
+                        "and reply-digest bindings.",
+                    )
+                )
+        else:
             findings.append(
                 Finding(
-                    "codemodel-provenance-incomplete",
+                    "codemodel-provenance-missing",
                     "error",
-                    f"Profile '{identifier}' verified producer summary is incomplete or malformed",
-                    "A verified label is not sufficient without the owned GitHub Actions run, query, "
-                    "executable, argv, repository-cleanliness, post-build artifacts, and reply-digest bindings.",
+                    f"Profile '{identifier}' has no verified producer provenance record",
+                    "Run capture_provenance.py for structural evidence, then supply a protected external "
+                    "attestation verifier; caller-supplied status text is not authority.",
                 )
             )
         if not repository.get("commit"):
@@ -1203,7 +1259,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                     "Evidence cannot be compared to the tree being reported.",
                 )
             )
-        elif isinstance(provenance, dict) and provenance.get("state") == "verified":
+        elif isinstance(provenance, dict) and provenance_state in {"unavailable", "verified"}:
             if provenance.get("sourceCommit") != repository.get("commit"):
                 findings.append(
                     Finding(
@@ -1413,13 +1469,13 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
 
 
 def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
-    """Require the real Windows producer to run before its local validator.
+    """Require the real Windows producer to run before its structural validator.
 
-    A checked-in JSON receipt is not an authority.  The producer, inventory,
-    and parity validator must be mandatory steps in one Windows job, with that
-    job itself feeding the branch-protection aggregate.  This records the
-    workflow reachability boundary that a standalone parser cannot infer from
-    a File API directory alone.
+    A checked-in JSON receipt is not authority.  This checks local workflow
+    reachability only: capture, inventory, and parity must run in one blocking
+    Windows job and feed the aggregate.  It intentionally does *not* treat
+    that job's OIDC capability as a proof that the job really produced its own
+    reply or artifacts; external authority is checked fail-closed elsewhere.
     """
     findings: list[Finding] = []
     workflow = data.get("workflow") or {}
@@ -1479,13 +1535,15 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
                 "CI-120 provenance producer job is not a blocking job",
             )
         )
-    if not isinstance(producer_job, dict) or producer_job.get("permissions", {}).get("id-token") != "write":
+    if isinstance(producer_job, dict) and producer_job.get("permissions", {}).get("id-token") == "write":
         findings.append(
             Finding(
-                "ci120-producer-oidc-permission-missing",
+                "ci120-producer-same-job-oidc-forbidden",
                 "error",
-                "CI-120 provenance producer cannot obtain a GitHub-signed identity proof",
-                "The blocking build-windows-shipping job must declare permissions.id-token: write.",
+                "CI-120 structural producer must not mint a same-job OIDC proof",
+                "GitHub signs audiences requested by the mutable producer job; that identity proves the job, "
+                "not that CMake or capture_provenance.py produced the receipt. Use a protected external "
+                "attestation verifier instead.",
             )
         )
 
@@ -1535,7 +1593,7 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
             Finding(
                 "ci120-producer-not-required",
                 "error",
-                "Required CI Gate does not depend on the CI-120 trusted producer job",
+                "Required CI Gate does not depend on the CI-120 structural producer job",
                 "A green aggregate could otherwise bypass missing or skipped configured evidence.",
             )
         )
