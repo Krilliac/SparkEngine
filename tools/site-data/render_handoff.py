@@ -43,6 +43,11 @@ def render_work_item(item: dict[str, Any]) -> list[str]:
         f"**Priority:** {item['priority']} · **Status:** {item['status']} · "
         f"**Wave:** {item['wave']} · **Area:** {item['area']} · "
         f"**Owner:** {item['owner']} · **Release-blocking:** {'yes' if item['blocking'] else 'no'}",
+        f"**Profile applicability:** "
+        + ", ".join(
+            f"`{profile_id}`={state}"
+            for profile_id, state in sorted(item["profileApplicability"].items())
+        ),
         "",
         item["rationale"],
         "",
@@ -129,9 +134,11 @@ def render_handoff(contract: dict[str, Any]) -> str:
         f"**{global_release['label']} — `{global_release['state']}`.** {global_release['summary']}",
         "",
         f"- Capabilities tracked: **{len(capabilities)}**",
-        f"- Blocking release gates: **{sum(1 for gate in gates if gate['blocking'])}**",
+        f"- Ledger gates marked blocking: **{sum(1 for gate in gates if gate['blocking'])}** "
+        "(profile applicability determines release impact)",
         f"- Gate states: **{gate_counts['passing']} passing**, **{gate_counts['at-risk']} at risk**, **{gate_counts['blocked']} blocked**, **{gate_counts['not-evaluated']} not evaluated**",
-        f"- Work items: **{len(work_items)} total**, **{len(open_blockers)} unfinished release blockers**",
+        f"- Work items: **{len(work_items)} total**, **{len(open_blockers)} unfinished ledger items "
+        "marked blocking** (profile applicability determines release impact)",
         f"- First unblocked item: **`{first_id}` — {first['title'] if first else 'none'}**",
         "",
         "### Release means all of the following",
@@ -170,6 +177,17 @@ def render_handoff(contract: dict[str, Any]) -> str:
 
     for profile in readiness.get("releaseProfiles", []):
         boundaries = profile.get("boundaries") or {}
+        required_gate_states = {
+            state: sum(
+                1
+                for gate in gates
+                if gate["id"] in profile["requiredGateIds"] and gate["state"] == state
+            )
+            for state in ("passing", "at-risk", "blocked", "not-evaluated")
+        }
+        sign_off_cell = ", ".join(
+            f"`{entry.get('path')}`" for entry in profile.get("signOffEvidence", [])
+        )
         lines.extend(
             [
                 "## Declared release profile — `" + profile["id"] + "`",
@@ -208,6 +226,10 @@ def render_handoff(contract: dict[str, Any]) -> str:
                 "### Profile gates",
                 "",
                 f"- Required: {', '.join(f'`{value}`' for value in profile['requiredGateIds']) or 'none'}",
+                f"- Required gate states: {required_gate_states['passing']} passing, "
+                f"{required_gate_states['at-risk']} at risk, "
+                f"{required_gate_states['blocked']} blocked, "
+                f"{required_gate_states['not-evaluated']} not evaluated",
                 "- Explicitly excluded:",
                 *[
                     f"  - `{entry['gateId']}` — {entry['reason']}"
@@ -222,6 +244,7 @@ def render_handoff(contract: dict[str, Any]) -> str:
                 "",
                 f"- Public surfaces this profile owns: "
                 f"{', '.join(f'`{value}`' for value in profile.get('publicClaimSurfaces', [])) or 'none declared'}",
+                f"- Sign-off evidence: {sign_off_cell or 'none recorded'}",
                 "",
             ]
         )

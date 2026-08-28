@@ -4,75 +4,376 @@
     {
       "id": "INST-130",
       "title": "Make installer and updater verified, transactional, and recoverable",
-      "priority": "P0", "status": "open", "blocking": true, "wave": 2, "area": "installer", "owner": "unassigned",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 2,
+      "area": "installer",
+      "owner": "unassigned",
       "rationale": "The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback.",
-      "dependencies": ["ASSET-220", "REL-100", "REL-110"], "parallelWith": ["PLT-200", "SDK-240"],
-      "sourceContext": ["SparkInstaller/README.md", "SparkInstaller/src/Installer.cpp", "SparkInstaller/src/GitBootstrap.cpp", "SparkBuild/src/Downloader.cpp", ".github/workflows/release.yml"],
-      "entryPoints": ["SparkInstaller/src/Installer.cpp", "SparkInstaller/src/GitBootstrap.cpp", "SparkBuild/src/Downloader.cpp"],
-      "implementationScope": ["Align GUI/CLI/TUI claims with shipped configuration", "Implement or remove prerequisite detection/download claims", "Use secure unique staging paths and content-aware extraction", "Verify hashes/signatures before extraction", "Propagate fetch/pull/configure/build errors", "Stage, verify, atomically activate, rollback and recover interruptions", "Generate install manifest and remove nonexistent refs"],
-      "acceptanceCriteria": ["Tampered download, failed pull/build, wrong archive, or interruption never replaces working install", "Fresh install, upgrade, downgrade policy, rollback, repair, and uninstall pass on clean supported hosts", "Capabilities match documentation exactly", "Only signed artifacts can enter stable channel"],
-      "commands": ["ctest --test-dir build/windows-shipping -L installer --output-on-failure", "ctest --test-dir build/linux-shipping -L installer --output-on-failure"],
-      "testSelectors": ["Installer_Tamper", "Installer_AtomicUpdate", "Installer_Rollback", "Installer_Interrupted", "Installer_Uninstall"], "requiredCiJobs": ["installer-windows", "installer-linux"],
-      "performanceBudgets": ["Install/update time and disk overhead budgets are recorded"],
-      "documentationUpdates": ["SparkInstaller/README.md", "README.md"], "readinessChanges": ["G05", "G06", "G08", "G17"],
-      "websiteImpact": ["Installer/download CTA remains hidden or source-only until clean-host evidence passes"],
-      "risks": ["Updater bricking a working install", "Archive path traversal"], "outOfScope": ["Platform app stores"],
-      "definitionOfDone": ["Tamper/interruption/rollback tests pass", "Clean-host install matrix passes", "Claims match"]
+      "dependencies": [
+        "ASSET-220",
+        "REL-100",
+        "REL-110"
+      ],
+      "parallelWith": [
+        "PLT-200",
+        "SDK-240"
+      ],
+      "sourceContext": [
+        "SparkInstaller/README.md",
+        "SparkInstaller/src/Installer.cpp",
+        "SparkInstaller/src/GitBootstrap.cpp",
+        "SparkBuild/src/Downloader.cpp",
+        ".github/workflows/release.yml"
+      ],
+      "entryPoints": [
+        "SparkInstaller/src/Installer.cpp",
+        "SparkInstaller/src/GitBootstrap.cpp",
+        "SparkBuild/src/Downloader.cpp"
+      ],
+      "implementationScope": [
+        "Align Windows GUI, CLI, and TUI claims with the shipped stable-v1 configuration",
+        "Implement or remove prerequisite detection and download claims",
+        "Use secure unique staging paths and content-aware extraction",
+        "Verify hashes and signatures before extraction",
+        "Propagate fetch, configure, build, and install errors",
+        "Stage, verify, atomically activate, rollback, repair, and recover interruptions",
+        "Generate a Windows install manifest and remove nonexistent refs"
+      ],
+      "acceptanceCriteria": [
+        "Tampered download, failed fetch/build, wrong archive, or interruption never replaces a working install",
+        "Fresh install, upgrade, downgrade policy, rollback, repair, and uninstall pass on Windows 11 x64",
+        "Capabilities match documentation exactly",
+        "Only signed artifacts can enter the stable channel",
+        "Experimental platform installers remain owned by their platform work"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -L installer --output-on-failure"
+      ],
+      "testSelectors": [
+        "Installer_Tamper",
+        "Installer_AtomicUpdate",
+        "Installer_Rollback",
+        "Installer_Interrupted",
+        "Installer_Uninstall"
+      ],
+      "requiredCiJobs": [
+        "installer-windows"
+      ],
+      "performanceBudgets": [
+        "Install/update time and disk overhead budgets are recorded"
+      ],
+      "documentationUpdates": [
+        "SparkInstaller/README.md",
+        "README.md"
+      ],
+      "readinessChanges": [
+        "G05",
+        "G06",
+        "G08",
+        "G17"
+      ],
+      "websiteImpact": [
+        "Installer/download CTA remains hidden or source-only until clean-host evidence passes"
+      ],
+      "risks": [
+        "Updater bricking a working install",
+        "Archive path traversal"
+      ],
+      "outOfScope": [
+        "Certifying Linux or macOS installers for stable-v1"
+      ],
+      "definitionOfDone": [
+        "Tamper/interruption/rollback tests pass",
+        "Clean-host install matrix passes",
+        "Claims match"
+      ],
+      "profileApplicability": {
+        "stable-v1": "required"
+      }
     },
     {
       "id": "GOV-400",
       "title": "Resolve licensing, third-party notices, trademark, contribution, security, and support policy",
-      "priority": "P0", "status": "open", "blocking": true, "wave": 6, "area": "governance", "owner": "unassigned",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 6,
+      "area": "governance",
+      "owner": "unassigned",
       "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag.",
-      "dependencies": ["RDY-000", "SEC-110", "REL-100"], "parallelWith": ["DOC-400"],
-      "sourceContext": ["LICENSE", "README.md", "SparkBuild/README.md", "Templates/README.md", "SECURITY.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md", "ThirdParty/dependencies.lock"],
-      "entryPoints": ["LICENSE", "SECURITY.md", "CONTRIBUTING.md"],
-      "implementationScope": ["Obtain legal review and decide open-source versus source-available positioning", "Use one accurate license claim everywhere", "Add SPDX identifiers/headers where appropriate", "Generate THIRD_PARTY_NOTICES and ship required license texts", "Document trademark/naming and DCO/CLA decision", "Align supported-version/security-response/support policy with actual releases", "Add license-compliance CI"],
-      "acceptanceCriteria": ["Every distributed dependency/file has an identified license and fulfilled notice obligation", "Website terminology matches reviewed classification", "Packages include root license, notices, and required third-party texts", "Security/support policy names actually published versions/channels", "Legal/maintainer sign-off is release evidence"],
-      "commands": ["python3 tools/site-data/validate.py --legal", "python3 tools/site-data/generate.py --output .site-data"],
-      "testSelectors": ["LicenseInventory_*", "PublicWording_*"], "requiredCiJobs": ["license-compliance", "site-data-validate"],
+      "dependencies": [
+        "RDY-000",
+        "SEC-110",
+        "REL-100"
+      ],
+      "parallelWith": [
+        "DOC-400"
+      ],
+      "sourceContext": [
+        "LICENSE",
+        "README.md",
+        "SparkBuild/README.md",
+        "Templates/README.md",
+        "SECURITY.md",
+        "CONTRIBUTING.md",
+        "CODE_OF_CONDUCT.md",
+        "ThirdParty/dependencies.lock"
+      ],
+      "entryPoints": [
+        "LICENSE",
+        "SECURITY.md",
+        "CONTRIBUTING.md"
+      ],
+      "implementationScope": [
+        "Obtain legal review and decide open-source versus source-available positioning",
+        "Use one accurate license claim everywhere",
+        "Add SPDX identifiers/headers where appropriate",
+        "Generate THIRD_PARTY_NOTICES and ship required license texts",
+        "Document trademark/naming and DCO/CLA decision",
+        "Align supported-version/security-response/support policy with actual releases",
+        "Add license-compliance CI"
+      ],
+      "acceptanceCriteria": [
+        "Every distributed dependency/file has an identified license and fulfilled notice obligation",
+        "Website terminology matches reviewed classification",
+        "Packages include root license, notices, and required third-party texts",
+        "Security/support policy names actually published versions/channels",
+        "Legal/maintainer sign-off is release evidence"
+      ],
+      "commands": [
+        "python3 tools/site-data/validate.py --legal",
+        "python3 tools/site-data/generate.py --output .site-data"
+      ],
+      "testSelectors": [
+        "LicenseInventory_*",
+        "PublicWording_*"
+      ],
+      "requiredCiJobs": [
+        "license-compliance",
+        "site-data-validate"
+      ],
       "performanceBudgets": [],
-      "documentationUpdates": ["LICENSE", "THIRD_PARTY_NOTICES", "SECURITY.md", "CONTRIBUTING.md", "README.md"], "readinessChanges": ["G06", "G15"],
-      "websiteImpact": ["Replace open-source/MIT language with reviewed classification; legal page links exact commit"],
-      "risks": ["Attempting to infer legal classification without counsel"], "outOfScope": ["Providing user-specific legal advice"],
-      "definitionOfDone": ["Legal classification/sign-off recorded", "Notices ship", "Policy and generated wording align"]
+      "documentationUpdates": [
+        "LICENSE",
+        "THIRD_PARTY_NOTICES",
+        "SECURITY.md",
+        "CONTRIBUTING.md",
+        "README.md"
+      ],
+      "readinessChanges": [
+        "G06",
+        "G15"
+      ],
+      "websiteImpact": [
+        "Replace open-source/MIT language with reviewed classification; legal page links exact commit"
+      ],
+      "risks": [
+        "Attempting to infer legal classification without counsel"
+      ],
+      "outOfScope": [
+        "Providing user-specific legal advice"
+      ],
+      "definitionOfDone": [
+        "Legal classification/sign-off recorded",
+        "Notices ship",
+        "Policy and generated wording align"
+      ],
+      "profileApplicability": {
+        "stable-v1": "shared"
+      }
     },
     {
       "id": "DOC-410",
       "title": "Repair and enforce deterministic repository documentation generation",
-      "priority": "P0", "status": "open", "blocking": true, "wave": 0, "area": "documentation", "owner": "unassigned",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 0,
+      "area": "documentation",
+      "owner": "unassigned",
       "rationale": "Wiki Sync, Flowchart, and Codebase Stats are stale; update-all has an API-doc control-flow bug; docs-only changes bypass engine CI; counts and indexes disagree across files.",
-      "dependencies": ["RDY-000"], "parallelWith": ["CI-100", "RDY-010", "RDY-020"],
-      "sourceContext": ["docs/update-all-docs.sh", "docs/update-all-docs.sh", "docs/README.md", "wiki", ".github/workflows/build.yml"],
-      "entryPoints": ["docs/update-all-docs.sh", "tools/site-data", "docs/site/docs-catalog.json"],
-      "implementationScope": ["Fix API-doc check/regeneration control flow", "Emit structured health JSON instead of parsing colored output", "Make docs catalog own include/exclude/section/route overrides", "Generate API pages during publication", "Repair relative source links rather than website-only aliases", "Validate every route/heading/source/image link", "Remove docs path-ignore from readiness validation"],
-      "acceptanceCriteria": ["docs/update-all-docs.sh check is green", "Clean regeneration has no diff", "Every doc route/source/heading/image resolves", "Counts are generated once", "A stale generator or broken link blocks CI"],
-      "commands": ["bash docs/update-all-docs.sh", "bash docs/update-all-docs.sh check", "python3 tools/site-data/validate.py --docs", "git diff --exit-code"],
-      "testSelectors": ["DocsGeneration_*", "DocsLinks_*"], "requiredCiJobs": ["docs-health", "site-data-validate"],
-      "performanceBudgets": ["Full documentation generation completes within publication timeout"],
-      "documentationUpdates": ["docs/README.md", "docs/site/docs-catalog.json"], "readinessChanges": ["G00", "G15"],
-      "websiteImpact": ["Docs routes and search come from the live site-data bundle; stale state is explicit"],
-      "risks": ["Generated docs hiding real source-link defects"], "outOfScope": ["Rewriting every authored guide"],
-      "definitionOfDone": ["Health is green", "Bundle parity passes", "Docs-only changes publish/validate"]
+      "dependencies": [
+        "RDY-000"
+      ],
+      "parallelWith": [
+        "CI-100",
+        "RDY-010",
+        "RDY-020"
+      ],
+      "sourceContext": [
+        "docs/update-all-docs.sh",
+        "docs/update-all-docs.sh",
+        "docs/README.md",
+        "wiki",
+        ".github/workflows/build.yml"
+      ],
+      "entryPoints": [
+        "docs/update-all-docs.sh",
+        "tools/site-data",
+        "docs/site/docs-catalog.json"
+      ],
+      "implementationScope": [
+        "Fix API-doc check/regeneration control flow",
+        "Emit structured health JSON instead of parsing colored output",
+        "Make docs catalog own include/exclude/section/route overrides",
+        "Generate API pages during publication",
+        "Repair relative source links rather than website-only aliases",
+        "Validate every route/heading/source/image link",
+        "Remove docs path-ignore from readiness validation"
+      ],
+      "acceptanceCriteria": [
+        "docs/update-all-docs.sh check is green",
+        "Clean regeneration has no diff",
+        "Every doc route/source/heading/image resolves",
+        "Counts are generated once",
+        "A stale generator or broken link blocks CI"
+      ],
+      "commands": [
+        "bash docs/update-all-docs.sh",
+        "bash docs/update-all-docs.sh check",
+        "python3 tools/site-data/validate.py --docs",
+        "git diff --exit-code"
+      ],
+      "testSelectors": [
+        "DocsGeneration_*",
+        "DocsLinks_*"
+      ],
+      "requiredCiJobs": [
+        "docs-health",
+        "site-data-validate"
+      ],
+      "performanceBudgets": [
+        "Full documentation generation completes within publication timeout"
+      ],
+      "documentationUpdates": [
+        "docs/README.md",
+        "docs/site/docs-catalog.json"
+      ],
+      "readinessChanges": [
+        "G00",
+        "G15"
+      ],
+      "websiteImpact": [
+        "Docs routes and search come from the live site-data bundle; stale state is explicit"
+      ],
+      "risks": [
+        "Generated docs hiding real source-link defects"
+      ],
+      "outOfScope": [
+        "Rewriting every authored guide"
+      ],
+      "definitionOfDone": [
+        "Health is green",
+        "Bundle parity passes",
+        "Docs-only changes publish/validate"
+      ],
+      "profileApplicability": {
+        "stable-v1": "shared"
+      }
     },
     {
       "id": "DOC-400",
       "title": "Publish the repository-synchronized site-data bundle and complete public framing",
-      "priority": "P0", "status": "in-progress", "blocking": true, "wave": 6, "area": "website", "owner": "unassigned",
+      "priority": "P0",
+      "status": "in-progress",
+      "blocking": true,
+      "wave": 6,
+      "area": "website",
+      "owner": "unassigned",
       "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves.",
-      "dependencies": ["RDY-000"], "parallelWith": ["DOC-410", "CI-100", "GOV-400"],
-      "sourceContext": ["docs/site", "docs/readiness", "tools/site-data", ".github/workflows/site-data.yml"],
-      "entryPoints": ["tools/site-data/generate.py", ".github/workflows/site-data.yml", "docs/site/content.json"],
-      "implementationScope": ["Generate exact-SHA content/readiness/metrics/handoff/docs/search/page bundle", "Publish to dedicated site-data branch after exact tested Working SHA", "Publish blocked state after failed CI instead of leaving previous commit current", "Use hash-addressed snapshots and switch latest last", "Retain current plus two previous snapshots", "Validate schema/hash/size at site runtime", "Cache five minutes with stale-while-revalidate and label current/syncing/blocked/stale/unavailable", "Move all mutable site wording and claims into repository data", "Remove checked-in generated corpus after live parity"],
-      "acceptanceCriteria": ["Repository-only wording/status/doc change appears on existing site without Sites checkpoint", "Displayed SHA equals the bundle/evidence SHA", "Failed same-commit CI changes site to blocked", "Every mutable metric/capability/quick-start/learning/readiness/roadmap claim comes from bundle", "Malformed/oversize/hash-invalid bundles are rejected", "Fallback is visibly stale/unavailable", "All docs routes/search/source links resolve"],
-      "commands": ["python3 tools/site-data/validate.py", "python3 tools/site-data/generate.py --output .site-data", "python3 tools/site-data/render_handoff.py --check", "npm test"],
-      "testSelectors": ["site-data-contract", "runtime-bundle-validation", "live-docs-parity", "no-hardcoded-claims"], "requiredCiJobs": ["site-data-validate", "site-data-publish", "site-runtime-contract"],
-      "performanceBudgets": ["latest.json under 32 KiB", "Bundle metadata under 5 MiB", "Single doc page under 2 MiB", "Five-minute maximum normal freshness target"],
-      "documentationUpdates": ["docs/readiness/ENGINE_READINESS_HANDOFF.md", "docs/site/content.json", "docs/README.md"], "readinessChanges": ["G00", "G15"],
-      "websiteImpact": ["This is the website synchronization implementation"],
-      "risks": ["Claiming GitHub Actions can deploy Sites; it cannot", "Serving an old fallback as current", "Unauthenticated upstream rate limits"],
-      "outOfScope": ["Automatic Sites application-code deployment; layout/forum changes still use checkpointing"],
-      "definitionOfDone": ["Live bundle publishes", "Runtime consumes and verifies it", "Parity/no-drift tests pass", "Owner-only site is redeployed once with the runtime"]
+      "dependencies": [
+        "RDY-000"
+      ],
+      "parallelWith": [
+        "DOC-410",
+        "CI-100",
+        "GOV-400"
+      ],
+      "sourceContext": [
+        "docs/site",
+        "docs/readiness",
+        "tools/site-data",
+        ".github/workflows/site-data.yml"
+      ],
+      "entryPoints": [
+        "tools/site-data/generate.py",
+        ".github/workflows/site-data.yml",
+        "docs/site/content.json"
+      ],
+      "implementationScope": [
+        "Generate exact-SHA content/readiness/metrics/handoff/docs/search/page bundle",
+        "Publish to dedicated site-data branch after exact tested Working SHA",
+        "Publish blocked state after failed CI instead of leaving previous commit current",
+        "Use hash-addressed snapshots and switch latest last",
+        "Retain current plus two previous snapshots",
+        "Validate schema/hash/size at site runtime",
+        "Cache five minutes with stale-while-revalidate and label current/syncing/blocked/stale/unavailable",
+        "Move all mutable site wording and claims into repository data",
+        "Remove checked-in generated corpus after live parity"
+      ],
+      "acceptanceCriteria": [
+        "Repository-only wording/status/doc change appears on existing site without Sites checkpoint",
+        "Displayed SHA equals the bundle/evidence SHA",
+        "Failed same-commit CI changes site to blocked",
+        "Every mutable metric/capability/quick-start/learning/readiness/roadmap claim comes from bundle",
+        "Malformed/oversize/hash-invalid bundles are rejected",
+        "Fallback is visibly stale/unavailable",
+        "All docs routes/search/source links resolve"
+      ],
+      "commands": [
+        "python3 tools/site-data/validate.py",
+        "python3 tools/site-data/generate.py --output .site-data",
+        "python3 tools/site-data/render_handoff.py --check",
+        "npm test"
+      ],
+      "testSelectors": [
+        "site-data-contract",
+        "runtime-bundle-validation",
+        "live-docs-parity",
+        "no-hardcoded-claims"
+      ],
+      "requiredCiJobs": [
+        "site-data-validate",
+        "site-data-publish",
+        "site-runtime-contract"
+      ],
+      "performanceBudgets": [
+        "latest.json under 32 KiB",
+        "Bundle metadata under 5 MiB",
+        "Single doc page under 2 MiB",
+        "Five-minute maximum normal freshness target"
+      ],
+      "documentationUpdates": [
+        "docs/readiness/ENGINE_READINESS_HANDOFF.md",
+        "docs/site/content.json",
+        "docs/README.md"
+      ],
+      "readinessChanges": [
+        "G00",
+        "G15"
+      ],
+      "websiteImpact": [
+        "This is the website synchronization implementation"
+      ],
+      "risks": [
+        "Claiming GitHub Actions can deploy Sites; it cannot",
+        "Serving an old fallback as current",
+        "Unauthenticated upstream rate limits"
+      ],
+      "outOfScope": [
+        "Automatic Sites application-code deployment; layout/forum changes still use checkpointing"
+      ],
+      "definitionOfDone": [
+        "Live bundle publishes",
+        "Runtime consumes and verifies it",
+        "Parity/no-drift tests pass",
+        "Owner-only site is redeployed once with the runtime"
+      ],
+      "profileApplicability": {
+        "stable-v1": "shared"
+      }
     }
   ]
 }

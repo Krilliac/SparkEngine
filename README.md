@@ -179,7 +179,7 @@ Scene hierarchy, Inspector, Asset browser, Game viewport, Gizmos (ImGuizmo), Nod
 
 ### Game Module Templates
 
-Nine complete project templates load as `.dll`/`.so` modules at runtime and build independently against the installed SDK:
+Nine in-tree templates and prototypes load as `.dll`/`.so` modules at runtime. Their maturity differs; none is stable-v1 evidence except the blocked SparkGameFPS slice, which does not yet build independently against the installed SDK:
 
 | Template | Highlights |
 |---|---|
@@ -275,7 +275,7 @@ below. Everything else in this table is experimental or uncertified.
 | Storage | 5 GB | 10 GB with all game modules |
 | Build tools | CMake 3.25+ | CMake 3.25+, Ninja |
 
-Headless/server deployments use `NullRHIDevice` — no GPU required.
+The stable-v1 headless row uses `NullRHIDevice` on Windows 11 x64 — no GPU is required and no pixels are rasterized. NullRHI on every other host remains uncertified.
 
 **Platform support.** SparkEngine declares exactly one release profile, `stable-v1`:
 Windows 11 x64, the MSVC v143 toolset line, Direct3D 11, NullRHI for headless

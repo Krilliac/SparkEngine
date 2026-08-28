@@ -7,6 +7,7 @@ import argparse
 import fnmatch
 import hashlib
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -23,6 +24,20 @@ RELEASE_RANK = {"blocked": 0, "candidate": 1, "ready": 2}
 GATE_STATES = {"blocked", "at-risk", "passing", "not-evaluated"}
 WORK_STATES = {"open", "in-progress", "blocked", "done"}
 PRIORITIES = {"P0", "P1", "P2", "P3"}
+PROFILE_APPLICABILITY_STATES = {"required", "shared", "outside"}
+UNASSIGNED_OWNERS = {"", "unassigned", "none", "tbd", "todo"}
+REQUIRED_PUBLIC_CLAIM_SURFACES = {
+    "README.md",
+    "docs/README.md",
+    "docs/site/content.json",
+}
+REQUIRED_BREADTH_TOKENS = {
+    "windows 10", "windows 10+", "any platform", "any host", "any compiler"
+}
+REQUIRED_FORBIDDEN_PROFILE_CELLS = {
+    "Any", "Any platform", "Any host", "Windows", "Windows 10", "Windows 10+", "Headless"
+}
+REQUIRED_NULLRHI_CONFLICTS = {"llvmpipe", "software rendering", "software render"}
 
 # Deliberate outputs of unfinished work items. A missing path not listed here is
 # a contract error, not a soft warning.
@@ -64,6 +79,7 @@ GENERATED_PATHS = {"docs/readiness/ENGINE_READINESS_HANDOFF.md"}
 
 WORK_ITEM_REQUIRED_KEYS = {
     "id", "title", "priority", "status", "blocking", "wave", "area", "owner",
+    "profileApplicability",
     "rationale", "dependencies", "parallelWith", "sourceContext", "entryPoints",
     "implementationScope", "acceptanceCriteria", "commands", "testSelectors",
     "requiredCiJobs", "performanceBudgets", "documentationUpdates", "readinessChanges",
@@ -75,6 +91,49 @@ WORK_ITEM_LIST_KEYS = {
     "performanceBudgets", "documentationUpdates", "readinessChanges", "websiteImpact",
     "risks", "outOfScope", "definitionOfDone",
 }
+
+
+def validate_public_claim_text(
+    profile: dict[str, Any],
+    surface_location: str,
+    text: str,
+) -> list[str]:
+    """Return deterministic public-claim violations without touching the filesystem."""
+    violations: list[str] = []
+    identifier = str(profile.get("id", ""))
+    rules = profile.get("publicClaimRules") or {}
+    breadth_tokens = [str(value).lower() for value in rules.get("breadthTokens", [])]
+    forbidden_cells = [str(value) for value in rules.get("forbiddenInProfileCells", [])]
+    marker = re.compile(rf"\bin\s+`{re.escape(identifier)}`", re.IGNORECASE)
+    for number, line in enumerate(text.splitlines(), start=1):
+        lowered = line.lower()
+        if marker.search(line):
+            widened = [token for token in breadth_tokens if token in lowered]
+            if widened:
+                violations.append(
+                    f"{surface_location}:{number}: claims {widened} inside the profile"
+                )
+            cells = {value.strip().lower() for value in line.split("|") if value.strip()}
+            vague = sorted(value for value in forbidden_cells if value.lower() in cells)
+            if vague:
+                violations.append(
+                    f"{surface_location}:{number}: marks unscoped column {vague} as inside the profile"
+                )
+        for entry in rules.get("conflatedTerms", []):
+            term = str(entry.get("term", ""))
+            if not term or term.lower() not in lowered:
+                continue
+            clashes = [
+                str(value)
+                for value in entry.get("conflictsWith", [])
+                if str(value).lower() in lowered
+            ]
+            if clashes:
+                violations.append(
+                    f"{surface_location}:{number}: conflates {term!r} with {clashes}: "
+                    f"{entry.get('reason')}"
+                )
+    return violations
 
 
 class Validator:
@@ -141,6 +200,24 @@ class Validator:
             self.require(isinstance(item.get("blocking"), bool), location, "blocking must be boolean")
             self.require(isinstance(item.get("wave"), int), location, "wave must be an integer")
             self.require(bool(item.get("owner")), location, "owner is required")
+            applicability = item.get("profileApplicability")
+            self.require(
+                isinstance(applicability, dict),
+                location,
+                "profileApplicability must be an object keyed by release profile",
+            )
+            if isinstance(applicability, dict):
+                for profile_id, value in applicability.items():
+                    self.require(
+                        isinstance(profile_id, str) and bool(profile_id),
+                        location,
+                        "profileApplicability keys must be non-empty profile IDs",
+                    )
+                    self.require(
+                        value in PROFILE_APPLICABILITY_STATES,
+                        location,
+                        f"invalid profile applicability {value!r}",
+                    )
             for key in WORK_ITEM_LIST_KEYS:
                 self.require(isinstance(item.get(key), list), location, f"{key} must be an array")
             for dependency in item.get("dependencies", []):
@@ -234,12 +311,6 @@ class Validator:
 
         release = readiness.get("globalRelease", {})
         self.require(release.get("state") in RELEASE_STATES, "globalRelease.state", "invalid release state")
-        if release.get("state") == "ready":
-            self.require(
-                all(not gate.get("blocking") or gate.get("state") == "passing" for gate in gates),
-                "globalRelease.state",
-                "global ready requires every blocking gate to pass",
-            )
         return capability_ids, gate_ids
 
     def validate_release_profiles(
@@ -252,6 +323,16 @@ class Validator:
         capability_by_id = {capability.get("id"): capability for capability in readiness.get("capabilities", [])}
         gate_by_id = {gate.get("id"): gate for gate in readiness.get("gates", [])}
         item_by_id = {item.get("id"): item for item in self.contract["workItems"]}
+        for work_id, item in item_by_id.items():
+            applicability = item.get("profileApplicability")
+            if not isinstance(applicability, dict):
+                continue
+            keys = set(applicability)
+            self.require(
+                keys == profile_ids,
+                f"workItems.{work_id}.profileApplicability",
+                f"must classify every release profile exactly once; expected={sorted(profile_ids)} actual={sorted(keys)}",
+            )
 
         for profile in profiles:
             identifier = profile.get("id", "?")
@@ -372,25 +453,63 @@ class Validator:
             missing_items = sorted(expected_items.difference(declared_items))
             self.require(not missing_items, location, f"blocking work items omit required work: {missing_items}")
 
-            # Breadth freeze. A profile must not inherit work that exists only to
-            # finish capabilities it excludes, or its blocked state stops meaning
-            # anything about the product shape it claims. The fix is to re-scope the
-            # gate, never to drop the work item: an item owned by no capability at
-            # all is shared infrastructure and stays eligible.
-            owners_by_item: dict[str, set[str]] = {}
-            for capability in readiness.get("capabilities", []):
-                for work_id in capability.get("blockingWorkItemIds", []):
-                    owners_by_item.setdefault(work_id, set()).add(capability.get("id"))
-            leaked = sorted(
+            # Applicability is explicit on every work item. A profile's requirement
+            # set must be exactly the work classified required/shared for it; names,
+            # gate placement, and capability ownership are never used as a proxy.
+            applicable_items = {
+                work_id
+                for work_id, item in item_by_id.items()
+                if (item.get("profileApplicability") or {}).get(identifier)
+                in {"required", "shared"}
+            }
+            outside_declared = sorted(
                 work_id
                 for work_id in declared_items
-                if owners_by_item.get(work_id) and not owners_by_item[work_id].intersection(included)
+                if (item_by_id.get(work_id, {}).get("profileApplicability") or {}).get(identifier)
+                == "outside"
             )
             self.require(
-                not leaked,
+                not outside_declared,
                 location,
-                f"blocking work exists only for out-of-profile capabilities: {leaked}",
+                f"blocking work is explicitly outside this profile: {outside_declared}",
             )
+            missing_applicable = sorted(applicable_items.difference(declared_items))
+            unexpected_declared = sorted(set(declared_items).difference(applicable_items))
+            self.require(
+                not missing_applicable,
+                location,
+                f"blocking work omits explicitly applicable items: {missing_applicable}",
+            )
+            self.require(
+                not unexpected_declared,
+                location,
+                f"blocking work contains non-applicable items: {unexpected_declared}",
+            )
+
+            # Close the full dependency graph, not just the direct list. Diagnostics
+            # retain the exact path so scope mistakes are actionable.
+            dependency_paths: list[list[str]] = []
+
+            def walk_dependencies(current: str, path: list[str]) -> None:
+                for dependency in item_by_id.get(current, {}).get("dependencies", []):
+                    next_path = [*path, dependency]
+                    dependency_paths.append(next_path)
+                    if dependency not in path:
+                        walk_dependencies(dependency, next_path)
+
+            for work_id in declared_items:
+                walk_dependencies(work_id, [work_id])
+            outside_paths = [
+                path
+                for path in dependency_paths
+                if (item_by_id.get(path[-1], {}).get("profileApplicability") or {}).get(identifier)
+                == "outside"
+            ]
+            for path in outside_paths:
+                self.error(
+                    location,
+                    f"dependency path {' -> '.join(path)} enters work explicitly outside this profile",
+                )
 
             state = profile.get("state")
             weakest = min(
@@ -405,8 +524,36 @@ class Validator:
             if state == "ready":
                 nonpassing = [value for value in required_gates if gate_by_id.get(value, {}).get("state") != "passing"]
                 unfinished = [value for value in declared_items if item_by_id.get(value, {}).get("status") != "done"]
+                unfinished_dependencies = sorted(
+                    {
+                        path[-1]
+                        for path in dependency_paths
+                        if item_by_id.get(path[-1], {}).get("status") != "done"
+                    }
+                )
                 self.require(not nonpassing, location, f"ready profile has non-passing gates: {nonpassing}")
                 self.require(not unfinished, location, f"ready profile has unfinished blockers: {unfinished}")
+                self.require(
+                    not unfinished_dependencies,
+                    location,
+                    f"ready profile has unfinished transitive dependencies: {unfinished_dependencies}",
+                )
+                self.require(
+                    str(profile.get("owner", "")).strip().lower() not in UNASSIGNED_OWNERS,
+                    location,
+                    "ready profile requires an assigned owner",
+                )
+                sign_off = profile.get("signOffEvidence", [])
+                self.require(bool(sign_off), location, "ready profile requires sign-off evidence")
+            sign_off = profile.get("signOffEvidence", [])
+            self.require(isinstance(sign_off, list), location, "signOffEvidence must be an array")
+            if isinstance(sign_off, list):
+                for index, evidence in enumerate(sign_off):
+                    evidence_location = f"{location}.signOffEvidence[{index}]"
+                    self.require(isinstance(evidence, dict), evidence_location, "evidence must be an object")
+                    if isinstance(evidence, dict):
+                        self.require(bool(evidence.get("label")), evidence_location, "label is required")
+                        self.require_path(evidence.get("path"), evidence_location)
 
             for index, path in enumerate(profile.get("documentation", [])):
                 self.require_path(path, f"{location}.documentation[{index}]")
@@ -417,6 +564,16 @@ class Validator:
             rules = profile.get("publicClaimRules") or {}
             breadth_tokens = [str(value).lower() for value in rules.get("breadthTokens", [])]
             forbidden_cells = [str(value) for value in rules.get("forbiddenInProfileCells", [])]
+            self.require(
+                REQUIRED_BREADTH_TOKENS.issubset(set(breadth_tokens)),
+                f"{location}.publicClaimRules.breadthTokens",
+                f"mandatory invariants are missing: {sorted(REQUIRED_BREADTH_TOKENS.difference(breadth_tokens))}",
+            )
+            self.require(
+                REQUIRED_FORBIDDEN_PROFILE_CELLS.issubset(set(forbidden_cells)),
+                f"{location}.publicClaimRules.forbiddenInProfileCells",
+                "mandatory ambiguous profile cells are missing",
+            )
             hosts = profile.get("supportedHosts", [])
             self.require(bool(hosts), location, "must declare at least one supported host")
             for index, host in enumerate(hosts):
@@ -429,13 +586,38 @@ class Validator:
                 self.require(bool(entry.get("term")), term_location, "term is required")
                 self.require(bool(entry.get("conflictsWith")), term_location, "conflictsWith must not be empty")
                 self.require(bool(entry.get("reason")), term_location, "reason is required")
+            nullrhi_rule = next(
+                (
+                    entry
+                    for entry in rules.get("conflatedTerms", [])
+                    if str(entry.get("term", "")).lower() == "nullrhi"
+                ),
+                None,
+            )
+            self.require(
+                nullrhi_rule is not None,
+                f"{location}.publicClaimRules.conflatedTerms",
+                "mandatory NullRHI distinction is missing",
+            )
+            if nullrhi_rule is not None:
+                conflicts = {
+                    str(value).lower() for value in nullrhi_rule.get("conflictsWith", [])
+                }
+                self.require(
+                    REQUIRED_NULLRHI_CONFLICTS.issubset(conflicts),
+                    f"{location}.publicClaimRules.conflatedTerms",
+                    "NullRHI must remain distinct from llvmpipe and software rendering",
+                )
 
             # Public support wording must point back at the profile that owns it, must
             # not mark a broader host or platform as inside it, and must not conflate
             # terms the contract declares distinct.
-            marker = f"In `{identifier}`"
             surfaces = profile.get("publicClaimSurfaces", [])
-            self.require(bool(surfaces), location, "must declare the public surfaces it owns")
+            self.require(
+                set(surfaces) == REQUIRED_PUBLIC_CLAIM_SURFACES,
+                location,
+                "publicClaimSurfaces must exactly match the independently required support surfaces",
+            )
             for index, path in enumerate(surfaces):
                 surface_location = f"{location}.publicClaimSurfaces[{index}]"
                 self.require_path(path, surface_location)
@@ -448,45 +630,23 @@ class Validator:
                     surface_location,
                     f"public surface does not reference release profile {identifier!r}",
                 )
-                for number, line in enumerate(text.splitlines(), start=1):
-                    lowered = line.lower()
-                    if marker in line:
-                        widened = [token for token in breadth_tokens if token in lowered]
-                        self.require(
-                            not widened,
-                            f"{surface_location}:{number}",
-                            f"claims {widened} inside the profile, which declares hosts {hosts}",
-                        )
-                        # Exact cell match, so a bare "Any" column is rejected without
-                        # a substring rule firing on words like "company".
-                        cells = {value.strip().lower() for value in line.split("|") if value.strip()}
-                        vague = sorted(
-                            value for value in forbidden_cells if value.lower() in cells
-                        )
-                        self.require(
-                            not vague,
-                            f"{surface_location}:{number}",
-                            f"marks unscoped column {vague} as inside the profile",
-                        )
-                    for entry in rules.get("conflatedTerms", []):
-                        term = str(entry.get("term", ""))
-                        if not term or term.lower() not in lowered:
-                            continue
-                        clashes = [
-                            value for value in entry.get("conflictsWith", [])
-                            if str(value).lower() in lowered
-                        ]
-                        self.require(
-                            not clashes,
-                            f"{surface_location}:{number}",
-                            f"conflates {term!r} with {clashes}: {entry.get('reason')}",
-                        )
+                for violation in validate_public_claim_text(profile, surface_location, text):
+                    self.errors.append(violation)
 
+        all_profiles_ready = bool(profiles) and all(
+            profile.get("state") == "ready" for profile in profiles
+        )
         if readiness.get("globalRelease", {}).get("state") == "ready":
             self.require(
-                all(profile.get("state") == "ready" for profile in profiles),
+                all_profiles_ready,
                 "globalRelease.state",
                 "global ready requires every declared release profile to be ready",
+            )
+        if all_profiles_ready:
+            self.require(
+                readiness.get("globalRelease", {}).get("state") == "ready",
+                "globalRelease.state",
+                "global release must be ready when every declared release profile is ready",
             )
         return profile_ids
 
@@ -546,18 +706,30 @@ class Validator:
             {},
         )
         included = set(profile.get("includedCapabilityIds", []))
-        for group in status.get("groups", []):
+        groups = status.get("groups", [])
+        primary_groups = [group for group in groups if group.get("tone") == "primary"]
+        self.require(
+            len(primary_groups) == 1,
+            "content.home.status.groups",
+            f"exactly one primary group is required for {profile_id!r}",
+        )
+        seen_group_capabilities: list[str] = []
+        for group in groups:
             group_ids = group.get("capabilityIds", [])
+            self.require(
+                len(group_ids) == len(set(group_ids)),
+                "content.home.status.groups",
+                f"group {group.get('tone')!r} contains duplicate capabilities",
+            )
             for capability_id in group_ids:
                 self.require(capability_id in capability_ids, "content.home.status.groups", f"unknown capability {capability_id}")
-            # The public "primary" lane is exactly the declared profile; anything
-            # else must not present an in-profile capability as second class.
             if group.get("tone") == "primary":
-                outside = [value for value in group_ids if value not in included]
                 self.require(
-                    not outside,
+                    set(group_ids) == included,
                     "content.home.status.groups",
-                    f"primary group claims capabilities outside {profile_id!r}: {outside}",
+                    f"primary group must exactly equal {profile_id!r}; "
+                    f"missing={sorted(included.difference(group_ids))} "
+                    f"outside={sorted(set(group_ids).difference(included))}",
                 )
             else:
                 inside = [value for value in group_ids if value in included]
@@ -566,6 +738,17 @@ class Validator:
                     "content.home.status.groups",
                     f"group {group.get('tone')!r} demotes capabilities included in {profile_id!r}: {inside}",
                 )
+            seen_group_capabilities.extend(group_ids)
+        duplicates = sorted(
+            capability_id
+            for capability_id, count in Counter(seen_group_capabilities).items()
+            if count > 1
+        )
+        self.require(
+            not duplicates,
+            "content.home.status.groups",
+            f"capabilities appear in more than one public group: {duplicates}",
+        )
         for capability_id in home.get("status", {}).get("platformCapabilityIds", []):
             self.require(capability_id in capability_ids, "content.home.status.platformCapabilityIds", f"unknown capability {capability_id}")
         for question in content.get("readiness", {}).get("questions", []):

@@ -42,7 +42,7 @@
       "eyebrow": "Engine overview",
       "title": "A broad engine. Every boundary visible.",
       "copy": "SparkEngine began around FPS needs and expanded into editor workflows, runtime modules, dedicated servers, asset tooling, large-world foundations, and reference games. The repository now records what is implemented, how it is verified, what is supported, and what still blocks a release.",
-      "grounding": "The current strongest route remains Windows, C++, and D3D11. That is a candidate path, not a production-readiness certificate; the global release gates remain authoritative.",
+      "grounding": "The current strongest route remains Windows, C++, and D3D11. That is a candidate path, not a production-readiness certificate; each declared profile's required gates and applicable work remain authoritative.",
       "pillars": [
         {
           "icon": "layers",
@@ -136,7 +136,7 @@
     "status": {
       "eyebrow": "Release readiness without the fog",
       "title": "Know what the evidence proves.",
-      "copy": "Implementation breadth, test coverage, supported use, and release readiness are separate dimensions. SparkEngine is source-usable today and remains blocked from a fully ready release until every global gate has current evidence.",
+      "copy": "Implementation breadth, test coverage, supported use, and release readiness are separate dimensions. SparkEngine is source-usable today and remains blocked from a fully ready release until every declared profile's required gates and applicable work have current evidence.",
       "releaseProfileId": "stable-v1",
       "groups": [
         {
@@ -146,9 +146,12 @@
           "title": "The strongest routes to harden first",
           "capabilityIds": [
             "platform.windows",
-            "rendering.d3d11",
             "runtime.cpp",
-            "runtime.nullrhi"
+            "runtime.nullrhi",
+            "rendering.d3d11",
+            "scope.singleplayer",
+            "editor.authoring",
+            "modules.fps"
           ]
         },
         {
@@ -263,7 +266,7 @@
         "tone": "planning",
         "eyebrow": "Release readiness",
         "title": "Turn every blocker into verifiable work.",
-        "copy": "Global gates, dependency-ordered work items, source entry points, commands, tests, documentation changes, and promotion rules form a complete code-session handoff.",
+        "copy": "Profile-required gates, dependency-ordered work items, source entry points, commands, tests, documentation changes, and promotion rules form a complete code-session handoff.",
         "meta": "Gates · work queue · evidence"
       }
     ],
@@ -283,8 +286,8 @@
     "description": "A repository-owned release-gate program and dependency-resolved implementation handoff for taking SparkEngine from source-usable to fully ready.",
     "heroEyebrow": "Release readiness / live repository contract",
     "heroTitle": "Finish the engine.",
-    "heroAccent": "Prove every gate.",
-    "heroCopy": "This is the engine completion program: current evidence, blocking release gates, and the exact work a code session can pick up next. Project-fit guidance remains available, but it now follows the same capability contract.",
+    "heroAccent": "Prove every required gate.",
+    "heroCopy": "This is the engine completion program: current evidence, profile-required release gates, explicitly excluded gates, and the exact applicable work a code session can pick up next. Project-fit guidance remains available, but it now follows the same capability contract.",
     "methodLabel": "No blended maturity score",
     "methodTitle": "Implementation. Verification. Support. Release.",
     "methodCopy": "A feature can be substantially implemented and still be unverified, unsupported, or release-blocked. The site names all four dimensions and links every promotion to evidence.",
@@ -302,10 +305,16 @@
             "note": "The primary host candidate; release gates still apply.",
             "tag": "Primary candidate",
             "level": 0,
-            "strengths": ["Windows has the broadest engine, editor, and D3D11 coverage."],
-            "boundaries": ["A current Shipping build, installer, signing, and release evidence are still required."],
+            "strengths": [
+              "Windows has the broadest engine, editor, and D3D11 coverage."
+            ],
+            "boundaries": [
+              "A current Shipping build, installer, signing, and release evidence are still required."
+            ],
             "nextMove": "Run the required Windows build-and-test gate at the target commit.",
-            "capabilityIds": ["platform.windows"]
+            "capabilityIds": [
+              "platform.windows"
+            ]
           },
           {
             "value": "linux",
@@ -313,10 +322,16 @@
             "note": "Build and headless foundations exist with renderer and packaging validation debt.",
             "tag": "Experimental",
             "level": 2,
-            "strengths": ["GCC, Clang, sanitizers, NullRHI, OpenGL, and Vulkan have repository surfaces."],
-            "boundaries": ["End-to-end rendering, packaging, driver coverage, and support commitments are incomplete."],
+            "strengths": [
+              "GCC, Clang, sanitizers, NullRHI, OpenGL, and Vulkan have repository surfaces."
+            ],
+            "boundaries": [
+              "End-to-end rendering, packaging, driver coverage, and support commitments are incomplete."
+            ],
             "nextMove": "Prove one packaged golden scene on the declared Linux support matrix.",
-            "capabilityIds": ["platform.linux"]
+            "capabilityIds": [
+              "platform.linux"
+            ]
           },
           {
             "value": "macos",
@@ -324,10 +339,17 @@
             "note": "Build work exists; Metal is not a complete production renderer.",
             "tag": "Experimental",
             "level": 2,
-            "strengths": ["The repository contains macOS build and platform entry points."],
-            "boundaries": ["Metal implementation, notarized packaging, renderer parity, and system tests remain open."],
+            "strengths": [
+              "The repository contains macOS build and platform entry points."
+            ],
+            "boundaries": [
+              "Metal implementation, notarized packaging, renderer parity, and system tests remain open."
+            ],
             "nextMove": "Complete the Metal backend and prove a notarized packaged golden scene.",
-            "capabilityIds": ["platform.macos", "rendering.metal"]
+            "capabilityIds": [
+              "platform.macos",
+              "rendering.metal"
+            ]
           }
         ]
       },
@@ -344,10 +366,16 @@
             "note": "The primary rendered candidate on Windows.",
             "tag": "Primary candidate",
             "level": 0,
-            "strengths": ["D3D11 carries the deepest production-renderer implementation."],
-            "boundaries": ["Golden-scene coverage, performance budgets, packaging, and current release evidence still gate readiness."],
+            "strengths": [
+              "D3D11 carries the deepest production-renderer implementation."
+            ],
+            "boundaries": [
+              "Golden-scene coverage, performance budgets, packaging, and current release evidence still gate readiness."
+            ],
             "nextMove": "Run the Windows D3D11 golden-scene and performance certification lane.",
-            "capabilityIds": ["rendering.d3d11"]
+            "capabilityIds": [
+              "rendering.d3d11"
+            ]
           },
           {
             "value": "nullrhi",
@@ -355,10 +383,16 @@
             "note": "Purpose-built for no-render servers and automation.",
             "tag": "Supported candidate",
             "level": 1,
-            "strengths": ["NullRHI provides a real no-GPU device path."],
-            "boundaries": ["Soak, load, shutdown, crash, and packaged-server gates remain required."],
+            "strengths": [
+              "NullRHI provides a real no-GPU device path."
+            ],
+            "boundaries": [
+              "Soak, load, shutdown, crash, and packaged-server gates remain required."
+            ],
             "nextMove": "Run the packaged dedicated-server soak and load suite.",
-            "capabilityIds": ["runtime.nullrhi"]
+            "capabilityIds": [
+              "runtime.nullrhi"
+            ]
           },
           {
             "value": "modern-rhi",
@@ -366,10 +400,19 @@
             "note": "Implementation depth varies and parity is not yet certified.",
             "tag": "Experimental",
             "level": 2,
-            "strengths": ["Modern and portable backend implementations provide real R&D entry points."],
-            "boundaries": ["Feature parity, shader toolchains, golden scenes, drivers, synchronization, and packaging need backend-specific proof."],
+            "strengths": [
+              "Modern and portable backend implementations provide real R&D entry points."
+            ],
+            "boundaries": [
+              "Feature parity, shader toolchains, golden scenes, drivers, synchronization, and packaging need backend-specific proof."
+            ],
             "nextMove": "Choose one backend and close its explicit parity gate before combining targets.",
-            "capabilityIds": ["rendering.d3d12", "rendering.vulkan", "rendering.opengl", "rendering.metal"]
+            "capabilityIds": [
+              "rendering.d3d12",
+              "rendering.vulkan",
+              "rendering.opengl",
+              "rendering.metal"
+            ]
           }
         ]
       },
@@ -386,10 +429,16 @@
             "note": "Avoids the public-service layer while exercising the core runtime and tools.",
             "tag": "Core path",
             "level": 0,
-            "strengths": ["The runtime, editor, save, asset, input, audio, physics, and gameplay systems can be proven locally."],
-            "boundaries": ["Cooked asset loading, save migration, installer, crash, performance, and end-to-end authoring gates still apply."],
+            "strengths": [
+              "The runtime, editor, save, asset, input, audio, physics, and gameplay systems can be proven locally."
+            ],
+            "boundaries": [
+              "Cooked asset loading, save migration, installer, crash, performance, and end-to-end authoring gates still apply."
+            ],
             "nextMove": "Ship one packaged vertical slice through the full editor-to-runtime loop.",
-            "capabilityIds": ["scope.singleplayer"]
+            "capabilityIds": [
+              "scope.singleplayer"
+            ]
           },
           {
             "value": "controlled-multiplayer",
@@ -397,10 +446,16 @@
             "note": "Exercises authority and replication on known hosts.",
             "tag": "Integration",
             "level": 1,
-            "strengths": ["Transport, replication, prediction, reconciliation, and dedicated-server foundations exist."],
-            "boundaries": ["Protocol compatibility, hostile-client testing, observability, persistence, and operations require explicit proof."],
+            "strengths": [
+              "Transport, replication, prediction, reconciliation, and dedicated-server foundations exist."
+            ],
+            "boundaries": [
+              "Protocol compatibility, hostile-client testing, observability, persistence, and operations require explicit proof."
+            ],
             "nextMove": "Run a versioned client/server compatibility and soak test under loss and latency.",
-            "capabilityIds": ["networking.multiplayer"]
+            "capabilityIds": [
+              "networking.multiplayer"
+            ]
           },
           {
             "value": "public-service",
@@ -408,10 +463,17 @@
             "note": "Adds security, identity, fleet, abuse, persistence, and operational requirements.",
             "tag": "Product infrastructure",
             "level": 2,
-            "strengths": ["TERRAFRONT and the network stack offer implementation references."],
-            "boundaries": ["Secure transport, accounts, secrets, matchmaking, fleet control, backups, moderation, telemetry, incident response, and load proof are not turnkey."],
+            "strengths": [
+              "TERRAFRONT and the network stack offer implementation references."
+            ],
+            "boundaries": [
+              "Secure transport, accounts, secrets, matchmaking, fleet control, backups, moderation, telemetry, incident response, and load proof are not turnkey."
+            ],
             "nextMove": "Treat the service layer as its own product program and close the production-network gate.",
-            "capabilityIds": ["services.production", "networking.multiplayer"]
+            "capabilityIds": [
+              "services.production",
+              "networking.multiplayer"
+            ]
           }
         ]
       },
@@ -428,10 +490,16 @@
             "note": "The primary extension and game-module path.",
             "tag": "Primary candidate",
             "level": 0,
-            "strengths": ["C++ owns the complete runtime and module boundary."],
-            "boundaries": ["ABI/versioning, hot reload, packaged modules, and SDK compatibility need release gates."],
+            "strengths": [
+              "C++ owns the complete runtime and module boundary."
+            ],
+            "boundaries": [
+              "ABI/versioning, hot reload, packaged modules, and SDK compatibility need release gates."
+            ],
             "nextMove": "Prove a packaged module against the declared SDK compatibility contract.",
-            "capabilityIds": ["runtime.cpp"]
+            "capabilityIds": [
+              "runtime.cpp"
+            ]
           },
           {
             "value": "angelscript",
@@ -439,10 +507,16 @@
             "note": "A functional integration with runtime and workflow completion work remaining.",
             "tag": "Experimental",
             "level": 2,
-            "strengths": ["VM, bindings, module isolation, and entity-facing APIs exist."],
-            "boundaries": ["Per-frame dispatch, reload state, debugging, packaging, migration, and authoring acceptance remain open."],
+            "strengths": [
+              "VM, bindings, module isolation, and entity-facing APIs exist."
+            ],
+            "boundaries": [
+              "Per-frame dispatch, reload state, debugging, packaging, migration, and authoring acceptance remain open."
+            ],
             "nextMove": "Close the script lifecycle and hot-reload work item with packaged tests.",
-            "capabilityIds": ["scripting.angelscript"]
+            "capabilityIds": [
+              "scripting.angelscript"
+            ]
           },
           {
             "value": "visual",
@@ -450,10 +524,16 @@
             "note": "The graph/compiler surface is not yet a complete production authoring loop.",
             "tag": "Experimental",
             "level": 2,
-            "strengths": ["A node palette and AngelScript generation path exist."],
-            "boundaries": ["Validation, debugging, source mapping, migration, reload, packaging, and editor acceptance remain open."],
+            "strengths": [
+              "A node palette and AngelScript generation path exist."
+            ],
+            "boundaries": [
+              "Validation, debugging, source mapping, migration, reload, packaging, and editor acceptance remain open."
+            ],
             "nextMove": "Prove graph-to-packaged-runtime execution with diagnostics and migration coverage.",
-            "capabilityIds": ["scripting.visual"]
+            "capabilityIds": [
+              "scripting.visual"
+            ]
           }
         ]
       }
@@ -560,20 +640,76 @@
     "heroAccent": "The project is people.",
     "heroCopy": "Questions become searchable answers. Ideas become proposals. Reproductions become issues. Focused changes become reviewed code. Each surface has a clear job and an auditable path back to the repository.",
     "channels": [
-      {"id": "forums", "icon": "messages", "label": "Forums", "copy": "Durable questions, proposals, module discussion, and show and tell.", "href": "/forums", "status": "First-party forum", "external": false},
-      {"id": "discord", "icon": "message", "label": "Discord", "copy": "Fast coordination when an answer does not need to be permanent.", "linkKey": "discord", "status": "External / Discord", "external": true},
-      {"id": "issues", "icon": "bug", "label": "Issues", "copy": "Reproducible defects and accepted, scoped implementation work.", "linkKey": "issues", "status": "External / GitHub", "external": true},
-      {"id": "pull-requests", "icon": "git", "label": "Pull requests", "copy": "Reviewed code, tests, documentation, and auditable contribution history.", "linkKey": "pullRequests", "status": "External / GitHub", "external": true}
+      {
+        "id": "forums",
+        "icon": "messages",
+        "label": "Forums",
+        "copy": "Durable questions, proposals, module discussion, and show and tell.",
+        "href": "/forums",
+        "status": "First-party forum",
+        "external": false
+      },
+      {
+        "id": "discord",
+        "icon": "message",
+        "label": "Discord",
+        "copy": "Fast coordination when an answer does not need to be permanent.",
+        "linkKey": "discord",
+        "status": "External / Discord",
+        "external": true
+      },
+      {
+        "id": "issues",
+        "icon": "bug",
+        "label": "Issues",
+        "copy": "Reproducible defects and accepted, scoped implementation work.",
+        "linkKey": "issues",
+        "status": "External / GitHub",
+        "external": true
+      },
+      {
+        "id": "pull-requests",
+        "icon": "git",
+        "label": "Pull requests",
+        "copy": "Reviewed code, tests, documentation, and auditable contribution history.",
+        "linkKey": "pullRequests",
+        "status": "External / GitHub",
+        "external": true
+      }
     ],
     "support": {
       "eyebrow": "Support router",
       "title": "Send the problem to the right system.",
       "copy": "There is no paid support desk or guaranteed service level today. Use the project surfaces that exist and keep reusable technical knowledge searchable.",
       "routes": [
-        {"id": "docs", "question": "How does it work?", "label": "Documentation", "copy": "Search the repository guides, specifications, and API reference.", "href": "/docs"},
-        {"id": "forums", "question": "Why is this happening?", "label": "Forums / Q&A", "copy": "Ask with context and leave a searchable answer.", "href": "/forums"},
-        {"id": "issues", "question": "I can reproduce a defect.", "label": "Issue tracker", "copy": "Include platform, compiler, flags, steps, and logs.", "linkKey": "issues"},
-        {"id": "security", "question": "This may be a vulnerability.", "label": "Private security report", "copy": "Keep exploit details out of public issues, forums, and chat.", "linkKey": "securityReport"}
+        {
+          "id": "docs",
+          "question": "How does it work?",
+          "label": "Documentation",
+          "copy": "Search the repository guides, specifications, and API reference.",
+          "href": "/docs"
+        },
+        {
+          "id": "forums",
+          "question": "Why is this happening?",
+          "label": "Forums / Q&A",
+          "copy": "Ask with context and leave a searchable answer.",
+          "href": "/forums"
+        },
+        {
+          "id": "issues",
+          "question": "I can reproduce a defect.",
+          "label": "Issue tracker",
+          "copy": "Include platform, compiler, flags, steps, and logs.",
+          "linkKey": "issues"
+        },
+        {
+          "id": "security",
+          "question": "This may be a vulnerability.",
+          "label": "Private security report",
+          "copy": "Keep exploit details out of public issues, forums, and chat.",
+          "linkKey": "securityReport"
+        }
       ]
     },
     "contribution": {
@@ -581,10 +717,26 @@
       "title": "From curious to reviewable.",
       "copy": "Contribution begins with a bounded observation and enough evidence for another person to review it.",
       "steps": [
-        {"icon": "book", "title": "Improve an explanation", "copy": "Correct or clarify a repository document and link the code that proves it."},
-        {"icon": "wrench", "title": "Reproduce a rough edge", "copy": "Turn a vague complaint into a minimal build, editor, or runtime reproduction."},
-        {"icon": "code", "title": "Implement one bounded change", "copy": "Follow the C++23 style, wire the lifecycle, add production-source tests, and update readiness evidence."},
-        {"icon": "users", "title": "Review and teach", "copy": "Help another contributor connect a change to architecture, evidence, and user impact."}
+        {
+          "icon": "book",
+          "title": "Improve an explanation",
+          "copy": "Correct or clarify a repository document and link the code that proves it."
+        },
+        {
+          "icon": "wrench",
+          "title": "Reproduce a rough edge",
+          "copy": "Turn a vague complaint into a minimal build, editor, or runtime reproduction."
+        },
+        {
+          "icon": "code",
+          "title": "Implement one bounded change",
+          "copy": "Follow the C++23 style, wire the lifecycle, add production-source tests, and update readiness evidence."
+        },
+        {
+          "icon": "users",
+          "title": "Review and teach",
+          "copy": "Help another contributor connect a change to architecture, evidence, and user impact."
+        }
       ]
     },
     "ecosystem": {
@@ -592,9 +744,39 @@
       "title": "Table stakes now. Infrastructure after proof.",
       "copy": "Website polish and operating infrastructure are different deliverables. SparkEngine labels the boundary and only promotes repository-backed services.",
       "stages": [
-        {"status": "Live now", "title": "Use what exists", "items": ["First-party forum with search, profiles, saves, and moderation", "Discord community", "Repository documentation and API index", "Issue and pull-request workflows", "Security and conduct source documents"]},
-        {"status": "Next layer", "title": "Curate the ecosystem", "items": ["Project showcase submissions", "Module compatibility catalog", "Reference-module learning missions", "Public governance and decision log", "Build logs and community events"]},
-        {"status": "Requires infrastructure", "title": "Do not fake it", "items": ["Signed package and template registry", "Jobs and collaborator board", "Release provenance and SBOM portal", "Program calendar and speaker system", "Maintainer and mentor program"]}
+        {
+          "status": "Live now",
+          "title": "Use what exists",
+          "items": [
+            "First-party forum with search, profiles, saves, and moderation",
+            "Discord community",
+            "Repository documentation and API index",
+            "Issue and pull-request workflows",
+            "Security and conduct source documents"
+          ]
+        },
+        {
+          "status": "Next layer",
+          "title": "Curate the ecosystem",
+          "items": [
+            "Project showcase submissions",
+            "Module compatibility catalog",
+            "Reference-module learning missions",
+            "Public governance and decision log",
+            "Build logs and community events"
+          ]
+        },
+        {
+          "status": "Requires infrastructure",
+          "title": "Do not fake it",
+          "items": [
+            "Signed package and template registry",
+            "Jobs and collaborator board",
+            "Release provenance and SBOM portal",
+            "Program calendar and speaker system",
+            "Maintainer and mentor program"
+          ]
+        }
       ],
       "promotionRule": "Every future surface must publish its owner, maturity, evidence, data footprint, and known limitations before it earns a live label."
     },
@@ -615,9 +797,18 @@
       "summary": "The license grants broad commercial and non-commercial use, modification, publication, distribution, sublicensing, and sale, subject to notice, naming, anti-plagiarism, and attribution conditions.",
       "disclaimer": "Plain-language overview—not legal advice. If this site differs from the checked-in license text, the license text controls.",
       "permissions": [
-        {"title": "Use and copy", "copy": "Run the software and make copies."},
-        {"title": "Modify and merge", "copy": "Change the source and combine it with other work."},
-        {"title": "Publish and distribute", "copy": "Share, sublicense, or sell covered copies."}
+        {
+          "title": "Use and copy",
+          "copy": "Run the software and make copies."
+        },
+        {
+          "title": "Modify and merge",
+          "copy": "Change the source and combine it with other work."
+        },
+        {
+          "title": "Publish and distribute",
+          "copy": "Share, sublicense, or sell covered copies."
+        }
       ],
       "conditions": [
         "Retain the copyright and license notice in covered copies or substantial portions.",
@@ -629,10 +820,30 @@
       "attributionTemplate": "This software is derived from SparkEngine by Krilliac (https://github.com/Krilliac/SparkEngine)."
     },
     "documents": [
-      {"id": "license", "label": "License", "sourcePath": "LICENSE", "status": "effective-source"},
-      {"id": "conduct", "label": "Code of Conduct", "sourcePath": "CODE_OF_CONDUCT.md", "status": "effective-source"},
-      {"id": "contributing", "label": "Contributing guide", "sourcePath": "CONTRIBUTING.md", "status": "effective-source"},
-      {"id": "security", "label": "Security guidance", "sourcePath": "SECURITY.md", "status": "review-required"}
+      {
+        "id": "license",
+        "label": "License",
+        "sourcePath": "LICENSE",
+        "status": "effective-source"
+      },
+      {
+        "id": "conduct",
+        "label": "Code of Conduct",
+        "sourcePath": "CODE_OF_CONDUCT.md",
+        "status": "effective-source"
+      },
+      {
+        "id": "contributing",
+        "label": "Contributing guide",
+        "sourcePath": "CONTRIBUTING.md",
+        "status": "effective-source"
+      },
+      {
+        "id": "security",
+        "label": "Security guidance",
+        "sourcePath": "SECURITY.md",
+        "status": "review-required"
+      }
     ],
     "securityCaution": "Use the repository's private advisory route when available. Do not post exploit details in a public issue, forum, or chat. Version-support and response commitments remain release-governance work until the legal/support gate passes.",
     "policyGaps": [

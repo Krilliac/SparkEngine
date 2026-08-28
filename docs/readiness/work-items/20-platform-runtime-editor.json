@@ -4,268 +4,1550 @@
     {
       "id": "PLT-200",
       "title": "Certify the primary Windows support row",
-      "priority": "P0", "status": "open", "blocking": true, "wave": 2, "area": "platform", "owner": "unassigned",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 2,
+      "area": "platform",
+      "owner": "unassigned",
       "rationale": "Windows is the intended primary host but lacks one blocking clean-machine Shipping, GPU, editor, package, installer, upgrade, rollback, and crash certification.",
-      "dependencies": ["BLD-100", "REL-100", "RDY-020", "RHI-210", "EDT-210", "OPS-100"], "parallelWith": ["HEAD-220", "SAVE-230", "SDK-240"],
-      "sourceContext": [".github/workflows/build.yml", "CMakePresets.json", "wiki/platform/System-Requirements.md"], "entryPoints": ["CMakePresets.json", ".github/workflows/build.yml"],
-      "implementationScope": ["Declare supported Windows/CPU/MSVC/GPU/driver matrix", "Build strict Shipping artifacts", "Install on clean x64 host", "Launch editor and packaged D3D11 scene", "Exercise input/audio/assets/modules/save/crash", "Upgrade, rollback, uninstall, and verify residue"],
-      "acceptanceCriteria": ["Every declared row has exact-SHA build, install, launch, renderer, content, save, crash, upgrade, rollback, and uninstall evidence", "Unsupported combinations stay experimental", "Runtime dependency closure is recorded"],
-      "commands": ["cmake --preset windows-shipping", "cmake --build build/windows-shipping --config MinSizeRel", "ctest --test-dir build/windows-shipping -L certification --output-on-failure"],
-      "testSelectors": ["WindowsCertification_*"], "requiredCiJobs": ["windows-certification"], "performanceBudgets": ["Primary Windows budgets from PERF-100"],
-      "documentationUpdates": ["wiki/platform/System-Requirements.md"], "readinessChanges": ["G08", "platform.windows"], "websiteImpact": ["Windows promotes from primary candidate to ready only from this evidence"],
-      "risks": ["Runner label does not prove GPU/driver/architecture"], "outOfScope": ["Every historical Windows version"], "definitionOfDone": ["Certified matrix passes", "Artifacts/installers verify", "Evidence publishes"]
+      "dependencies": [
+        "BLD-100",
+        "REL-100",
+        "RDY-020",
+        "RHI-210",
+        "EDT-210",
+        "OPS-100"
+      ],
+      "parallelWith": [
+        "HEAD-220",
+        "SAVE-230",
+        "SDK-240"
+      ],
+      "sourceContext": [
+        ".github/workflows/build.yml",
+        "CMakePresets.json",
+        "wiki/platform/System-Requirements.md"
+      ],
+      "entryPoints": [
+        "CMakePresets.json",
+        ".github/workflows/build.yml"
+      ],
+      "implementationScope": [
+        "Declare supported Windows/CPU/MSVC/GPU/driver matrix",
+        "Build strict Shipping artifacts",
+        "Install on clean x64 host",
+        "Launch editor and packaged D3D11 scene",
+        "Exercise input/audio/assets/modules/save/crash",
+        "Upgrade, rollback, uninstall, and verify residue"
+      ],
+      "acceptanceCriteria": [
+        "Every declared row has exact-SHA build, install, launch, renderer, content, save, crash, upgrade, rollback, and uninstall evidence",
+        "Unsupported combinations stay experimental",
+        "Runtime dependency closure is recorded"
+      ],
+      "commands": [
+        "cmake --preset windows-shipping",
+        "cmake --build build/windows-shipping --config MinSizeRel",
+        "ctest --test-dir build/windows-shipping -L certification --output-on-failure"
+      ],
+      "testSelectors": [
+        "WindowsCertification_*"
+      ],
+      "requiredCiJobs": [
+        "windows-certification"
+      ],
+      "performanceBudgets": [
+        "Primary Windows budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "wiki/platform/System-Requirements.md"
+      ],
+      "readinessChanges": [
+        "G08",
+        "platform.windows"
+      ],
+      "websiteImpact": [
+        "Windows promotes from primary candidate to ready only from this evidence"
+      ],
+      "risks": [
+        "Runner label does not prove GPU/driver/architecture"
+      ],
+      "outOfScope": [
+        "Every historical Windows version"
+      ],
+      "definitionOfDone": [
+        "Certified matrix passes",
+        "Artifacts/installers verify",
+        "Evidence publishes"
+      ],
+      "profileApplicability": {
+        "stable-v1": "required"
+      }
     },
     {
       "id": "PLT-210",
       "title": "Certify or explicitly bound Linux support",
-      "priority": "P1", "status": "open", "blocking": false, "wave": 5, "area": "platform", "owner": "unassigned",
+      "priority": "P1",
+      "status": "open",
+      "blocking": false,
+      "wave": 5,
+      "area": "platform",
+      "owner": "unassigned",
       "rationale": "Linux compilers, sanitizers, Vulkan/OpenGL, and headless paths exist without a clean-machine package, driver, desktop/audio/input, and uninstall certification.",
-      "dependencies": ["BLD-100", "RDY-020", "HEAD-220", "RHI-230", "RHI-240"], "parallelWith": ["PLT-220", "RHI-225"],
-      "sourceContext": [".github/workflows/build.yml", "CMakePresets.json", "wiki/platform/System-Requirements.md"], "entryPoints": ["CMakePresets.json", ".github/workflows/build.yml"],
-      "implementationScope": ["Declare distributions, architectures, compilers, window/audio/input stacks, GPUs and drivers", "Package and install on clean hosts", "Run headless and rendered golden scenes", "Validate RPATH, permissions, desktop integration, upgrade, and uninstall"],
-      "acceptanceCriteria": ["Every supported Linux row passes the complete certification suite", "Experimental rows are never summarized as supported", "Package has no repository/toolchain dependency at runtime"],
-      "commands": ["cmake --preset linux-shipping", "cmake --build build/linux-shipping", "ctest --test-dir build/linux-shipping -L certification --output-on-failure"],
-      "testSelectors": ["LinuxCertification_*"], "requiredCiJobs": ["linux-certification"], "performanceBudgets": ["Linux renderer/headless budgets from PERF-100"],
-      "documentationUpdates": ["wiki/platform/System-Requirements.md"], "readinessChanges": ["G08", "platform.linux"], "websiteImpact": ["Linux wording is generated per certified row"],
-      "risks": ["Distribution and driver fragmentation"], "outOfScope": ["Unsupported distributions"], "definitionOfDone": ["Matrix is explicit", "Chosen rows pass", "Others remain experimental"]
+      "dependencies": [
+        "BLD-100",
+        "RDY-020",
+        "HEAD-220",
+        "RHI-230",
+        "RHI-240"
+      ],
+      "parallelWith": [
+        "PLT-220",
+        "RHI-225"
+      ],
+      "sourceContext": [
+        ".github/workflows/build.yml",
+        "CMakePresets.json",
+        "wiki/platform/System-Requirements.md"
+      ],
+      "entryPoints": [
+        "CMakePresets.json",
+        ".github/workflows/build.yml"
+      ],
+      "implementationScope": [
+        "Declare distributions, architectures, compilers, window/audio/input stacks, GPUs and drivers",
+        "Package and install on clean hosts",
+        "Run headless and rendered golden scenes",
+        "Validate RPATH, permissions, desktop integration, upgrade, and uninstall",
+        "Own Linux Shipping, package, installer, and support-row certification removed from stable-v1 work"
+      ],
+      "acceptanceCriteria": [
+        "Every supported Linux row passes the complete certification suite",
+        "Experimental rows are never summarized as supported",
+        "Package has no repository/toolchain dependency at runtime"
+      ],
+      "commands": [
+        "cmake --preset linux-shipping",
+        "cmake --build build/linux-shipping",
+        "ctest --test-dir build/linux-shipping -L certification --output-on-failure"
+      ],
+      "testSelectors": [
+        "LinuxCertification_*"
+      ],
+      "requiredCiJobs": [
+        "linux-certification"
+      ],
+      "performanceBudgets": [
+        "Linux renderer/headless budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "wiki/platform/System-Requirements.md"
+      ],
+      "readinessChanges": [
+        "G08",
+        "platform.linux"
+      ],
+      "websiteImpact": [
+        "Linux wording is generated per certified row"
+      ],
+      "risks": [
+        "Distribution and driver fragmentation"
+      ],
+      "outOfScope": [
+        "Unsupported distributions"
+      ],
+      "definitionOfDone": [
+        "Matrix is explicit",
+        "Chosen rows pass",
+        "Others remain experimental"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
       "id": "PLT-220",
       "title": "Complete and certify the macOS product path",
-      "priority": "P1", "status": "open", "blocking": false, "wave": 5, "area": "platform", "owner": "unassigned",
+      "priority": "P1",
+      "status": "open",
+      "blocking": false,
+      "wave": 5,
+      "area": "platform",
+      "owner": "unassigned",
       "rationale": "macOS CI is nonblocking, platform-version claims conflict, no complete Metal path is certified, and no signed/notarized engine package exists.",
-      "dependencies": ["BLD-100", "RHI-220", "RDY-020", "REL-110"], "parallelWith": ["PLT-210", "RHI-225"],
-      "sourceContext": [".github/workflows/build.yml", "wiki/research/Mac-Compatibility-Analysis.md", "SparkEngine/Source/Graphics/RHI/Metal"], "entryPoints": ["SparkEngine/Source/Graphics/RHI/Metal", ".github/workflows/build.yml"],
-      "implementationScope": ["Set supported macOS/hardware/toolchain baseline", "Make native jobs blocking for supported rows", "Package app/runtime/editor", "Code-sign and notarize", "Run Metal golden/content/input/audio/save/crash/install/update/uninstall certification"],
-      "acceptanceCriteria": ["A notarized package passes on clean supported Macs", "Metal/render/content/runtime evidence is blocking", "Minimum-version documentation matches binaries and CI"],
-      "commands": ["cmake --preset macos-shipping", "cmake --build build/macos-shipping", "codesign --verify --deep --strict SparkEngine.app", "spctl --assess SparkEngine.app"],
-      "testSelectors": ["MacCertification_*"], "requiredCiJobs": ["macos-certification", "macos-notarization"], "performanceBudgets": ["macOS/Metal budgets from PERF-100"],
-      "documentationUpdates": ["wiki/research/Mac-Compatibility-Analysis.md", "wiki/platform/System-Requirements.md"], "readinessChanges": ["G08", "platform.macos"], "websiteImpact": ["macOS remains experimental until notarized certification passes"],
-      "risks": ["Intel versus Apple Silicon scope", "Signing/notarization credentials"], "outOfScope": ["Older macOS outside declared baseline"], "definitionOfDone": ["Native package is notarized", "Certification passes", "Support policy matches"]
+      "dependencies": [
+        "BLD-100",
+        "RHI-220",
+        "RDY-020",
+        "REL-110"
+      ],
+      "parallelWith": [
+        "PLT-210",
+        "RHI-225"
+      ],
+      "sourceContext": [
+        ".github/workflows/build.yml",
+        "wiki/research/Mac-Compatibility-Analysis.md",
+        "SparkEngine/Source/Graphics/RHI/Metal"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Graphics/RHI/Metal",
+        ".github/workflows/build.yml"
+      ],
+      "implementationScope": [
+        "Set supported macOS/hardware/toolchain baseline",
+        "Make native jobs blocking for supported rows",
+        "Package app/runtime/editor",
+        "Code-sign and notarize",
+        "Run Metal golden/content/input/audio/save/crash/install/update/uninstall certification"
+      ],
+      "acceptanceCriteria": [
+        "A notarized package passes on clean supported Macs",
+        "Metal/render/content/runtime evidence is blocking",
+        "Minimum-version documentation matches binaries and CI"
+      ],
+      "commands": [
+        "cmake --preset macos-shipping",
+        "cmake --build build/macos-shipping",
+        "codesign --verify --deep --strict SparkEngine.app",
+        "spctl --assess SparkEngine.app"
+      ],
+      "testSelectors": [
+        "MacCertification_*"
+      ],
+      "requiredCiJobs": [
+        "macos-certification",
+        "macos-notarization"
+      ],
+      "performanceBudgets": [
+        "macOS/Metal budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "wiki/research/Mac-Compatibility-Analysis.md",
+        "wiki/platform/System-Requirements.md"
+      ],
+      "readinessChanges": [
+        "G08",
+        "platform.macos"
+      ],
+      "websiteImpact": [
+        "macOS remains experimental until notarized certification passes"
+      ],
+      "risks": [
+        "Intel versus Apple Silicon scope",
+        "Signing/notarization credentials"
+      ],
+      "outOfScope": [
+        "Older macOS outside declared baseline"
+      ],
+      "definitionOfDone": [
+        "Native package is notarized",
+        "Certification passes",
+        "Support policy matches"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
       "id": "PLT-230",
       "title": "Decide and implement the mobile release profile",
-      "priority": "P2", "status": "open", "blocking": false, "wave": 5, "area": "platform", "owner": "unassigned",
+      "priority": "P2",
+      "status": "open",
+      "blocking": false,
+      "wave": 5,
+      "area": "platform",
+      "owner": "unassigned",
       "rationale": "Touch input and quality scaling are framework pieces, not an iOS/Android platform layer or deployment pipeline.",
-      "dependencies": ["RDY-000", "ENG-220"], "parallelWith": ["PLT-240", "PLT-250"],
-      "sourceContext": ["docs/plans/FEATURE_ROADMAP.md", "wiki/platform/Mobile-Platform.md"], "entryPoints": ["SparkEngine/Source/Platform", "CMakeLists.txt"],
-      "implementationScope": ["Decide supported mobile targets or keep unsupported", "Implement native lifecycle/window/input/audio/filesystem/graphics", "Add device resource/thermal/background behavior", "Build signed store packages", "Certify device matrix"],
-      "acceptanceCriteria": ["If supported, packaged sample installs, resumes, renders, saves, handles input/audio, and meets budgets on declared devices", "If deferred, all public wording remains planned/unsupported"],
-      "commands": ["python3 tools/site-data/validate.py --capability platform.mobile"],
-      "testSelectors": ["MobileLifecycle_*"], "requiredCiJobs": ["mobile-certification"], "performanceBudgets": ["Thermal, memory, battery, frame-time budgets per device class"],
-      "documentationUpdates": ["wiki/platform/Mobile-Platform.md"], "readinessChanges": ["G08", "platform.mobile"], "websiteImpact": ["No mobile support wording without device evidence"],
-      "risks": ["Large platform-specific scope"], "outOfScope": ["Every mobile GPU/OS version"], "definitionOfDone": ["Decision is explicit", "Supported rows pass or target remains unsupported"]
+      "dependencies": [
+        "RDY-000",
+        "ENG-220"
+      ],
+      "parallelWith": [
+        "PLT-240",
+        "PLT-250"
+      ],
+      "sourceContext": [
+        "docs/plans/FEATURE_ROADMAP.md",
+        "wiki/platform/Mobile-Platform.md"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Platform",
+        "CMakeLists.txt"
+      ],
+      "implementationScope": [
+        "Decide supported mobile targets or keep unsupported",
+        "Implement native lifecycle/window/input/audio/filesystem/graphics",
+        "Add device resource/thermal/background behavior",
+        "Build signed store packages",
+        "Certify device matrix"
+      ],
+      "acceptanceCriteria": [
+        "If supported, packaged sample installs, resumes, renders, saves, handles input/audio, and meets budgets on declared devices",
+        "If deferred, all public wording remains planned/unsupported"
+      ],
+      "commands": [
+        "python3 tools/site-data/validate.py --capability platform.mobile"
+      ],
+      "testSelectors": [
+        "MobileLifecycle_*"
+      ],
+      "requiredCiJobs": [
+        "mobile-certification"
+      ],
+      "performanceBudgets": [
+        "Thermal, memory, battery, frame-time budgets per device class"
+      ],
+      "documentationUpdates": [
+        "wiki/platform/Mobile-Platform.md"
+      ],
+      "readinessChanges": [
+        "G08",
+        "platform.mobile"
+      ],
+      "websiteImpact": [
+        "No mobile support wording without device evidence"
+      ],
+      "risks": [
+        "Large platform-specific scope"
+      ],
+      "outOfScope": [
+        "Every mobile GPU/OS version"
+      ],
+      "definitionOfDone": [
+        "Decision is explicit",
+        "Supported rows pass or target remains unsupported"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
       "id": "PLT-240",
       "title": "Decide and implement the OpenXR release profile",
-      "priority": "P2", "status": "open", "blocking": false, "wave": 5, "area": "platform", "owner": "unassigned",
+      "priority": "P2",
+      "status": "open",
+      "blocking": false,
+      "wave": 5,
+      "area": "platform",
+      "owner": "unassigned",
       "rationale": "VR/OpenXR is a framework stub without runtime initialization, interaction, stereo, performance, or packaged headset proof.",
-      "dependencies": ["RDY-000", "ENG-220"], "parallelWith": ["PLT-230", "PLT-250"],
-      "sourceContext": ["docs/plans/FEATURE_ROADMAP.md", "wiki/platform/VR-Support.md"], "entryPoints": ["SparkEngine/Source/Engine/VR", "SparkEngine/Source/Graphics/RHI"],
-      "implementationScope": ["Decide target headsets/runtimes", "Implement OpenXR lifecycle, views, swapchains, tracking, actions, composition and recenter", "Integrate stereo renderer/UI/audio", "Set latency/frame budgets", "Package and certify declared devices"],
-      "acceptanceCriteria": ["If supported, a packaged sample initializes, tracks, interacts, renders both eyes, recovers focus, and meets budgets", "Otherwise wording remains framework/planned"],
-      "commands": ["python3 tools/site-data/validate.py --capability platform.vr"],
-      "testSelectors": ["OpenXR_Lifecycle", "OpenXR_Render", "OpenXR_Input"], "requiredCiJobs": ["openxr-certification"], "performanceBudgets": ["Headset-specific latency/frame budgets"],
-      "documentationUpdates": ["wiki/platform/VR-Support.md"], "readinessChanges": ["G08", "G09", "platform.vr"], "websiteImpact": ["VR remains a framework stub until device certification"],
-      "risks": ["Hardware lab and runtime fragmentation"], "outOfScope": ["Native vendor runtimes beyond declared OpenXR profiles"], "definitionOfDone": ["Decision and device matrix exist", "Required profiles pass or remain unsupported"]
+      "dependencies": [
+        "RDY-000",
+        "ENG-220"
+      ],
+      "parallelWith": [
+        "PLT-230",
+        "PLT-250"
+      ],
+      "sourceContext": [
+        "docs/plans/FEATURE_ROADMAP.md",
+        "wiki/platform/VR-Support.md"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Engine/VR",
+        "SparkEngine/Source/Graphics/RHI"
+      ],
+      "implementationScope": [
+        "Decide target headsets/runtimes",
+        "Implement OpenXR lifecycle, views, swapchains, tracking, actions, composition and recenter",
+        "Integrate stereo renderer/UI/audio",
+        "Set latency/frame budgets",
+        "Package and certify declared devices"
+      ],
+      "acceptanceCriteria": [
+        "If supported, a packaged sample initializes, tracks, interacts, renders both eyes, recovers focus, and meets budgets",
+        "Otherwise wording remains framework/planned"
+      ],
+      "commands": [
+        "python3 tools/site-data/validate.py --capability platform.vr"
+      ],
+      "testSelectors": [
+        "OpenXR_Lifecycle",
+        "OpenXR_Render",
+        "OpenXR_Input"
+      ],
+      "requiredCiJobs": [
+        "openxr-certification"
+      ],
+      "performanceBudgets": [
+        "Headset-specific latency/frame budgets"
+      ],
+      "documentationUpdates": [
+        "wiki/platform/VR-Support.md"
+      ],
+      "readinessChanges": [
+        "G08",
+        "G09",
+        "platform.vr"
+      ],
+      "websiteImpact": [
+        "VR remains a framework stub until device certification"
+      ],
+      "risks": [
+        "Hardware lab and runtime fragmentation"
+      ],
+      "outOfScope": [
+        "Native vendor runtimes beyond declared OpenXR profiles"
+      ],
+      "definitionOfDone": [
+        "Decision and device matrix exist",
+        "Required profiles pass or remain unsupported"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
       "id": "PLT-250",
       "title": "Keep console support gated behind platform authority and certification",
-      "priority": "P3", "status": "blocked", "blocking": false, "wave": 5, "area": "platform", "owner": "unassigned",
+      "priority": "P3",
+      "status": "blocked",
+      "blocking": false,
+      "wave": 5,
+      "area": "platform",
+      "owner": "unassigned",
       "rationale": "Console support is planned and cannot be implemented or claimed without agreements, SDK access, dev kits, platform owners, and certification programs.",
-      "dependencies": ["RDY-000"], "parallelWith": ["PLT-230", "PLT-240"],
-      "sourceContext": ["docs/plans/FEATURE_ROADMAP.md"], "entryPoints": ["docs/site/readiness.json"],
-      "implementationScope": ["Document external prerequisites and decision owner", "Prevent unsupported marketing claims", "When authorized, create platform-private implementation and certification workstream"],
-      "acceptanceCriteria": ["Console remains planned/unsupported without authority", "No public source or CI implies certification", "Authorized work has separate confidential controls"],
-      "commands": ["python3 tools/site-data/validate.py --capability platform.console"],
-      "testSelectors": [], "requiredCiJobs": [], "performanceBudgets": [],
-      "documentationUpdates": ["docs/plans/FEATURE_ROADMAP.md"], "readinessChanges": ["platform.console"], "websiteImpact": ["Console always renders planned until external prerequisites and evidence exist"],
-      "risks": ["Disclosing confidential platform material"], "outOfScope": ["Unauthorized implementation"], "definitionOfDone": ["Claims are gated", "Prerequisites and owner are explicit"]
+      "dependencies": [
+        "RDY-000"
+      ],
+      "parallelWith": [
+        "PLT-230",
+        "PLT-240"
+      ],
+      "sourceContext": [
+        "docs/plans/FEATURE_ROADMAP.md"
+      ],
+      "entryPoints": [
+        "docs/site/readiness.json"
+      ],
+      "implementationScope": [
+        "Document external prerequisites and decision owner",
+        "Prevent unsupported marketing claims",
+        "When authorized, create platform-private implementation and certification workstream"
+      ],
+      "acceptanceCriteria": [
+        "Console remains planned/unsupported without authority",
+        "No public source or CI implies certification",
+        "Authorized work has separate confidential controls"
+      ],
+      "commands": [
+        "python3 tools/site-data/validate.py --capability platform.console"
+      ],
+      "testSelectors": [],
+      "requiredCiJobs": [],
+      "performanceBudgets": [],
+      "documentationUpdates": [
+        "docs/plans/FEATURE_ROADMAP.md"
+      ],
+      "readinessChanges": [
+        "platform.console"
+      ],
+      "websiteImpact": [
+        "Console always renders planned until external prerequisites and evidence exist"
+      ],
+      "risks": [
+        "Disclosing confidential platform material"
+      ],
+      "outOfScope": [
+        "Unauthorized implementation"
+      ],
+      "definitionOfDone": [
+        "Claims are gated",
+        "Prerequisites and owner are explicit"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
       "id": "RHI-210",
       "title": "Certify D3D11 as the primary renderer",
-      "priority": "P0", "status": "open", "blocking": true, "wave": 2, "area": "rendering", "owner": "unassigned",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 2,
+      "area": "rendering",
+      "owner": "unassigned",
       "rationale": "D3D11 is the deepest renderer but lacks a same-commit packaged golden-scene/pass/shader/resource/driver/performance release gate.",
-      "dependencies": ["CI-110", "BLD-100", "RDY-020"], "parallelWith": ["HEAD-220", "EDT-210", "ENG-200"],
-      "sourceContext": ["SparkEngine/Source/Graphics/RHI/D3D11", "SparkEngine/Source/Graphics", "Shaders", "Tests/GoldenImages"], "entryPoints": ["SparkEngine/Source/Graphics/RHI/D3D11", "Tests/GoldenImages"],
-      "implementationScope": ["Define representative golden scenes/pass set", "Validate shader compilation/reflection", "Test resource lifetime/device loss/resize", "Capture GPU diagnostics", "Certify declared GPUs/drivers", "Enforce frame/memory/startup budgets from packaged runtime"],
-      "acceptanceCriteria": ["All primary passes and representative content render within reviewed thresholds", "Device loss/resize/resource stress recover", "GPU validation is clean", "Packaged scene passes on every supported Windows row"],
-      "commands": ["ctest --test-dir build/windows-shipping -L d3d11-golden --output-on-failure", "ctest --test-dir build/windows-shipping -L d3d11-stress --output-on-failure"],
-      "testSelectors": ["D3D11_Golden_*", "D3D11_Resource_*", "D3D11_DeviceLoss_*"], "requiredCiJobs": ["golden-d3d11", "d3d11-stress"], "performanceBudgets": ["D3D11 budgets from PERF-100"],
-      "documentationUpdates": ["wiki/graphics/RHI-Abstraction-Layer.md", "wiki/subsystems/Rendering-and-Graphics.md"], "readinessChanges": ["G09", "rendering.d3d11"], "websiteImpact": ["Primary renderer wording promotes only from current certification"],
-      "risks": ["Golden coverage that skips advanced passes"], "outOfScope": ["Parity of experimental backends"], "definitionOfDone": ["Golden/stress/perf matrix passes", "Evidence is exact-SHA and packaged"]
+      "dependencies": [
+        "CI-110",
+        "BLD-100",
+        "RDY-020"
+      ],
+      "parallelWith": [
+        "HEAD-220",
+        "EDT-210",
+        "ENG-200"
+      ],
+      "sourceContext": [
+        "SparkEngine/Source/Graphics/RHI/D3D11",
+        "SparkEngine/Source/Graphics",
+        "Shaders",
+        "Tests/GoldenImages"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Graphics/RHI/D3D11",
+        "Tests/GoldenImages"
+      ],
+      "implementationScope": [
+        "Define representative golden scenes/pass set",
+        "Validate shader compilation/reflection",
+        "Test resource lifetime/device loss/resize",
+        "Capture GPU diagnostics",
+        "Certify declared GPUs/drivers",
+        "Enforce frame/memory/startup budgets from packaged runtime"
+      ],
+      "acceptanceCriteria": [
+        "All primary passes and representative content render within reviewed thresholds",
+        "Device loss/resize/resource stress recover",
+        "GPU validation is clean",
+        "Packaged scene passes on every supported Windows row"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -L d3d11-golden --output-on-failure",
+        "ctest --test-dir build/windows-shipping -L d3d11-stress --output-on-failure"
+      ],
+      "testSelectors": [
+        "D3D11_Golden_*",
+        "D3D11_Resource_*",
+        "D3D11_DeviceLoss_*"
+      ],
+      "requiredCiJobs": [
+        "golden-d3d11",
+        "d3d11-stress"
+      ],
+      "performanceBudgets": [
+        "D3D11 budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "wiki/graphics/RHI-Abstraction-Layer.md",
+        "wiki/subsystems/Rendering-and-Graphics.md"
+      ],
+      "readinessChanges": [
+        "G09",
+        "rendering.d3d11"
+      ],
+      "websiteImpact": [
+        "Primary renderer wording promotes only from current certification"
+      ],
+      "risks": [
+        "Golden coverage that skips advanced passes"
+      ],
+      "outOfScope": [
+        "Parity of experimental backends"
+      ],
+      "definitionOfDone": [
+        "Golden/stress/perf matrix passes",
+        "Evidence is exact-SHA and packaged"
+      ],
+      "profileApplicability": {
+        "stable-v1": "required"
+      }
     },
     {
       "id": "RHI-220",
       "title": "Complete Metal backend implementation and parity",
-      "priority": "P1", "status": "open", "blocking": false, "wave": 5, "area": "rendering", "owner": "unassigned",
+      "priority": "P1",
+      "status": "open",
+      "blocking": false,
+      "wave": 5,
+      "area": "rendering",
+      "owner": "unassigned",
       "rationale": "Metal is incomplete and cannot support current broad backend framing.",
-      "dependencies": ["RHI-210", "ENG-220", "BLD-100"], "parallelWith": ["RHI-225", "RHI-230", "RHI-240"],
-      "sourceContext": ["SparkEngine/Source/Graphics/RHI/Metal", "SparkEngine/Source/Graphics/RHI", "Shaders"], "entryPoints": ["SparkEngine/Source/Graphics/RHI/Metal"],
-      "implementationScope": ["Complete device/queue/command/swapchain/resource/pipeline/synchronization/query paths", "Implement shader compilation/reflection", "Wire render graph passes", "Add validation, golden, stress, performance, and capture tooling"],
-      "acceptanceCriteria": ["Declared pass set executes with visual parity", "Resource lifetime and synchronization tests are clean", "Packaged Metal scene passes on certified Macs", "Unsupported features fail explicitly"],
-      "commands": ["ctest --test-dir build/macos-shipping -L metal --output-on-failure"],
-      "testSelectors": ["Metal_*"], "requiredCiJobs": ["metal-golden", "metal-stress"], "performanceBudgets": ["Metal budgets from PERF-100"],
-      "documentationUpdates": ["wiki/graphics/RHI-Abstraction-Layer.md"], "readinessChanges": ["G09", "rendering.metal"], "websiteImpact": ["Metal stays experimental until parity and platform gates pass"],
-      "risks": ["API semantic differences hidden behind D3D-shaped abstraction"], "outOfScope": ["Unsupported macOS versions"], "definitionOfDone": ["Backend is complete for declared profile", "Golden/stress/perf/package evidence passes"]
+      "dependencies": [
+        "RHI-210",
+        "ENG-220",
+        "BLD-100"
+      ],
+      "parallelWith": [
+        "RHI-225",
+        "RHI-230",
+        "RHI-240"
+      ],
+      "sourceContext": [
+        "SparkEngine/Source/Graphics/RHI/Metal",
+        "SparkEngine/Source/Graphics/RHI",
+        "Shaders"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Graphics/RHI/Metal"
+      ],
+      "implementationScope": [
+        "Complete device/queue/command/swapchain/resource/pipeline/synchronization/query paths",
+        "Implement shader compilation/reflection",
+        "Wire render graph passes",
+        "Add validation, golden, stress, performance, and capture tooling"
+      ],
+      "acceptanceCriteria": [
+        "Declared pass set executes with visual parity",
+        "Resource lifetime and synchronization tests are clean",
+        "Packaged Metal scene passes on certified Macs",
+        "Unsupported features fail explicitly"
+      ],
+      "commands": [
+        "ctest --test-dir build/macos-shipping -L metal --output-on-failure"
+      ],
+      "testSelectors": [
+        "Metal_*"
+      ],
+      "requiredCiJobs": [
+        "metal-golden",
+        "metal-stress"
+      ],
+      "performanceBudgets": [
+        "Metal budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "wiki/graphics/RHI-Abstraction-Layer.md"
+      ],
+      "readinessChanges": [
+        "G09",
+        "rendering.metal"
+      ],
+      "websiteImpact": [
+        "Metal stays experimental until parity and platform gates pass"
+      ],
+      "risks": [
+        "API semantic differences hidden behind D3D-shaped abstraction"
+      ],
+      "outOfScope": [
+        "Unsupported macOS versions"
+      ],
+      "definitionOfDone": [
+        "Backend is complete for declared profile",
+        "Golden/stress/perf/package evidence passes"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
       "id": "RHI-225",
       "title": "Close D3D12 synchronization, pass, shader, and driver parity",
-      "priority": "P1", "status": "open", "blocking": false, "wave": 5, "area": "rendering", "owner": "unassigned",
+      "priority": "P1",
+      "status": "open",
+      "blocking": false,
+      "wave": 5,
+      "area": "rendering",
+      "owner": "unassigned",
       "rationale": "D3D12 has modern feature depth without certification against the primary rendered pass and content set.",
-      "dependencies": ["RHI-210", "ENG-220", "CI-110"], "parallelWith": ["RHI-220", "RHI-230", "RHI-240"],
-      "sourceContext": ["SparkEngine/Source/Graphics/RHI/D3D12", "SparkEngine/Source/Graphics", "Shaders"], "entryPoints": ["SparkEngine/Source/Graphics/RHI/D3D12"],
-      "implementationScope": ["Audit barriers/fences/descriptors/lifetimes", "Complete shader toolchain and reflection", "Execute declared render-graph pass set", "Add golden/stress/device-loss/performance/driver matrix", "Explicitly gate advanced features"],
-      "acceptanceCriteria": ["Declared parity matrix passes", "Validation layer/debug device is clean", "Advanced feature fallbacks are deterministic", "Packaged scene passes supported GPUs/drivers"],
-      "commands": ["ctest --test-dir build/windows-shipping -L d3d12 --output-on-failure"],
-      "testSelectors": ["D3D12_*"], "requiredCiJobs": ["d3d12-golden", "d3d12-stress"], "performanceBudgets": ["D3D12 budgets from PERF-100"],
-      "documentationUpdates": ["wiki/graphics/D3D12-Backend.md"], "readinessChanges": ["G09", "rendering.d3d12"], "websiteImpact": ["D3D12 wording names the verified feature tier"],
-      "risks": ["Feature presence mistaken for stable integration"], "outOfScope": ["Hardware features outside declared tier"], "definitionOfDone": ["Parity matrix passes", "Packages and drivers are certified"]
+      "dependencies": [
+        "RHI-210",
+        "ENG-220",
+        "CI-110"
+      ],
+      "parallelWith": [
+        "RHI-220",
+        "RHI-230",
+        "RHI-240"
+      ],
+      "sourceContext": [
+        "SparkEngine/Source/Graphics/RHI/D3D12",
+        "SparkEngine/Source/Graphics",
+        "Shaders"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Graphics/RHI/D3D12"
+      ],
+      "implementationScope": [
+        "Audit barriers/fences/descriptors/lifetimes",
+        "Complete shader toolchain and reflection",
+        "Execute declared render-graph pass set",
+        "Add golden/stress/device-loss/performance/driver matrix",
+        "Explicitly gate advanced features"
+      ],
+      "acceptanceCriteria": [
+        "Declared parity matrix passes",
+        "Validation layer/debug device is clean",
+        "Advanced feature fallbacks are deterministic",
+        "Packaged scene passes supported GPUs/drivers"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -L d3d12 --output-on-failure"
+      ],
+      "testSelectors": [
+        "D3D12_*"
+      ],
+      "requiredCiJobs": [
+        "d3d12-golden",
+        "d3d12-stress"
+      ],
+      "performanceBudgets": [
+        "D3D12 budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "wiki/graphics/D3D12-Backend.md"
+      ],
+      "readinessChanges": [
+        "G09",
+        "rendering.d3d12"
+      ],
+      "websiteImpact": [
+        "D3D12 wording names the verified feature tier"
+      ],
+      "risks": [
+        "Feature presence mistaken for stable integration"
+      ],
+      "outOfScope": [
+        "Hardware features outside declared tier"
+      ],
+      "definitionOfDone": [
+        "Parity matrix passes",
+        "Packages and drivers are certified"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
       "id": "RHI-230",
       "title": "Close Vulkan GPU-backed parity and shader-toolchain gates",
-      "priority": "P1", "status": "open", "blocking": false, "wave": 5, "area": "rendering", "owner": "unassigned",
+      "priority": "P1",
+      "status": "open",
+      "blocking": false,
+      "wave": 5,
+      "area": "rendering",
+      "owner": "unassigned",
       "rationale": "Vulkan's deterministic reference route and parity milestones do not yet prove full GPU readback or every production pass variant.",
-      "dependencies": ["RHI-210", "ENG-220", "CI-110"], "parallelWith": ["RHI-220", "RHI-225", "RHI-240"],
-      "sourceContext": ["SparkEngine/Source/Graphics/RHI/Vulkan", "Tests/TestVulkanLavapipe.cpp", "wiki/graphics/RHI-Abstraction-Layer.md"], "entryPoints": ["SparkEngine/Source/Graphics/RHI/Vulkan", "Tests/TestVulkanLavapipe.cpp"],
-      "implementationScope": ["Render/read back the real production scene", "Execute every declared shadow/deferred/post path", "Make DXC/glslang/SPIR-V tooling hard dependencies for supported builds", "Validate synchronization/descriptors/lifetimes", "Certify hardware and lavapipe rows"],
-      "acceptanceCriteria": ["GPU-backed goldens match thresholds", "Production pass matrix executes", "Validation is clean", "Shader toolchain failures are fatal", "Packaged supported rows pass"],
-      "commands": ["ctest --test-dir build/linux-shipping -L vulkan --output-on-failure"],
-      "testSelectors": ["VulkanParity_*", "VulkanGolden_*", "VulkanValidation_*"], "requiredCiJobs": ["vulkan-lavapipe", "vulkan-hardware"], "performanceBudgets": ["Vulkan budgets from PERF-100"],
-      "documentationUpdates": ["wiki/graphics/RHI-Abstraction-Layer.md"], "readinessChanges": ["G09", "rendering.vulkan"], "websiteImpact": ["Vulkan remains parity-in-progress until GPU/pass gates close"],
-      "risks": ["Software driver passing while hardware diverges"], "outOfScope": ["All Vulkan-capable devices"], "definitionOfDone": ["GPU/pass/toolchain/validation/package evidence passes"]
+      "dependencies": [
+        "RHI-210",
+        "ENG-220",
+        "CI-110"
+      ],
+      "parallelWith": [
+        "RHI-220",
+        "RHI-225",
+        "RHI-240"
+      ],
+      "sourceContext": [
+        "SparkEngine/Source/Graphics/RHI/Vulkan",
+        "Tests/TestVulkanLavapipe.cpp",
+        "wiki/graphics/RHI-Abstraction-Layer.md"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Graphics/RHI/Vulkan",
+        "Tests/TestVulkanLavapipe.cpp"
+      ],
+      "implementationScope": [
+        "Render/read back the real production scene",
+        "Execute every declared shadow/deferred/post path",
+        "Make DXC/glslang/SPIR-V tooling hard dependencies for supported builds",
+        "Validate synchronization/descriptors/lifetimes",
+        "Certify hardware and lavapipe rows"
+      ],
+      "acceptanceCriteria": [
+        "GPU-backed goldens match thresholds",
+        "Production pass matrix executes",
+        "Validation is clean",
+        "Shader toolchain failures are fatal",
+        "Packaged supported rows pass"
+      ],
+      "commands": [
+        "ctest --test-dir build/linux-shipping -L vulkan --output-on-failure"
+      ],
+      "testSelectors": [
+        "VulkanParity_*",
+        "VulkanGolden_*",
+        "VulkanValidation_*"
+      ],
+      "requiredCiJobs": [
+        "vulkan-lavapipe",
+        "vulkan-hardware"
+      ],
+      "performanceBudgets": [
+        "Vulkan budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "wiki/graphics/RHI-Abstraction-Layer.md"
+      ],
+      "readinessChanges": [
+        "G09",
+        "rendering.vulkan"
+      ],
+      "websiteImpact": [
+        "Vulkan remains parity-in-progress until GPU/pass gates close"
+      ],
+      "risks": [
+        "Software driver passing while hardware diverges"
+      ],
+      "outOfScope": [
+        "All Vulkan-capable devices"
+      ],
+      "definitionOfDone": [
+        "GPU/pass/toolchain/validation/package evidence passes"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
       "id": "RHI-240",
       "title": "Certify OpenGL translation, visual, driver, and software-render paths",
-      "priority": "P1", "status": "open", "blocking": false, "wave": 5, "area": "rendering", "owner": "unassigned",
+      "priority": "P1",
+      "status": "open",
+      "blocking": false,
+      "wave": 5,
+      "area": "rendering",
+      "owner": "unassigned",
       "rationale": "OpenGL provides useful portability and llvmpipe execution without production visual parity or a declared driver/toolchain envelope.",
-      "dependencies": ["RHI-210", "ENG-220", "CI-110"], "parallelWith": ["RHI-220", "RHI-225", "RHI-230"],
-      "sourceContext": ["SparkEngine/Source/Graphics/RHI/OpenGL", "Shaders", "wiki/graphics/RHI-Abstraction-Layer.md"], "entryPoints": ["SparkEngine/Source/Graphics/RHI/OpenGL"],
-      "implementationScope": ["Define HLSL/GLSL translation support and rejection", "Run real pass goldens on hardware and llvmpipe", "Validate contexts/resources/state/lifetimes", "Certify declared drivers", "Package software and hardware paths"],
-      "acceptanceCriteria": ["Supported shaders/passes render within thresholds", "Unsupported translation fails explicitly", "Hardware and software rows are separately labeled", "Packaged scenes pass"],
-      "commands": ["ctest --test-dir build/linux-shipping -L opengl --output-on-failure"],
-      "testSelectors": ["OpenGL_*", "ShaderTranslation_*"], "requiredCiJobs": ["opengl-hardware", "opengl-llvmpipe"], "performanceBudgets": ["OpenGL hardware/software budgets are separate"],
-      "documentationUpdates": ["wiki/graphics/RHI-Abstraction-Layer.md", "wiki/gameplay-tools/Shader-Pipeline.md"], "readinessChanges": ["G09", "rendering.opengl"], "websiteImpact": ["OpenGL support names hardware/software and translation limits"],
-      "risks": ["Driver-specific state leakage"], "outOfScope": ["Legacy profiles outside declared core version"], "definitionOfDone": ["Translation/golden/driver/package matrix passes"]
+      "dependencies": [
+        "RHI-210",
+        "ENG-220",
+        "CI-110"
+      ],
+      "parallelWith": [
+        "RHI-220",
+        "RHI-225",
+        "RHI-230"
+      ],
+      "sourceContext": [
+        "SparkEngine/Source/Graphics/RHI/OpenGL",
+        "Shaders",
+        "wiki/graphics/RHI-Abstraction-Layer.md"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Graphics/RHI/OpenGL"
+      ],
+      "implementationScope": [
+        "Define HLSL/GLSL translation support and rejection",
+        "Run real pass goldens on hardware and llvmpipe",
+        "Validate contexts/resources/state/lifetimes",
+        "Certify declared drivers",
+        "Package software and hardware paths"
+      ],
+      "acceptanceCriteria": [
+        "Supported shaders/passes render within thresholds",
+        "Unsupported translation fails explicitly",
+        "Hardware and software rows are separately labeled",
+        "Packaged scenes pass"
+      ],
+      "commands": [
+        "ctest --test-dir build/linux-shipping -L opengl --output-on-failure"
+      ],
+      "testSelectors": [
+        "OpenGL_*",
+        "ShaderTranslation_*"
+      ],
+      "requiredCiJobs": [
+        "opengl-hardware",
+        "opengl-llvmpipe"
+      ],
+      "performanceBudgets": [
+        "OpenGL hardware/software budgets are separate"
+      ],
+      "documentationUpdates": [
+        "wiki/graphics/RHI-Abstraction-Layer.md",
+        "wiki/gameplay-tools/Shader-Pipeline.md"
+      ],
+      "readinessChanges": [
+        "G09",
+        "rendering.opengl"
+      ],
+      "websiteImpact": [
+        "OpenGL support names hardware/software and translation limits"
+      ],
+      "risks": [
+        "Driver-specific state leakage"
+      ],
+      "outOfScope": [
+        "Legacy profiles outside declared core version"
+      ],
+      "definitionOfDone": [
+        "Translation/golden/driver/package matrix passes"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
       "id": "ENG-220",
-      "title": "Close model import and cross-backend rendering interoperability",
-      "priority": "P1", "status": "open", "blocking": true, "wave": 5, "area": "rendering", "owner": "unassigned",
-      "rationale": "The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting animated interoperability, and backends lack one representative content parity contract.",
-      "dependencies": ["RDY-020", "RHI-210"], "parallelWith": ["RHI-220", "RHI-225", "RHI-230", "RHI-240"],
-      "sourceContext": ["Assets", "SparkEngine/Source/Graphics", "SparkEngine/Source/Engine/Animation"], "entryPoints": ["SparkEngine/Source/Graphics/AssetPipelineWindows.cpp", "Tests/TestAssetDatabase.cpp"],
-      "implementationScope": ["Import skin/joint/weight data and animations", "Validate tangent/material/coordinate/color semantics", "Create canonical static/skinned/morph/material scenes", "Use identical content across renderer parity gates", "Round-trip package/import diagnostics"],
-      "acceptanceCriteria": ["Skinned glTF animates correctly", "Canonical content renders equivalently on every declared backend", "Malformed/unsupported content fails actionably", "Package retains all dependencies"],
-      "commands": ["ctest --test-dir build/windows-shipping -L gltf --output-on-failure", "ctest --test-dir build/linux-shipping -L gltf --output-on-failure"],
-      "testSelectors": ["GLTF_Skinning_*", "GLTF_Animation_*", "CanonicalScene_*"], "requiredCiJobs": ["asset-interoperability", "renderer-parity"], "performanceBudgets": ["Import/load/skin budgets from PERF-100"],
-      "documentationUpdates": ["wiki/gameplay-tools/Asset-Pipeline.md", "wiki/subsystems/Animation.md"], "readinessChanges": ["G04", "G09"], "websiteImpact": ["Asset/render parity claims link to canonical-scene evidence"],
-      "risks": ["Coordinate and skinning semantics differing by importer/backend"], "outOfScope": ["Every vendor extension"], "definitionOfDone": ["Skinned content works", "Canonical parity scene is the shared gate"]
+      "title": "Close D3D11 model import and canonical-content interoperability",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 5,
+      "area": "rendering",
+      "owner": "unassigned",
+      "rationale": "The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable-v1 first-party slice, and D3D11 lacks one canonical packaged-content contract.",
+      "dependencies": [
+        "RDY-020",
+        "RHI-210"
+      ],
+      "parallelWith": [
+        "RHI-220",
+        "RHI-225",
+        "RHI-230",
+        "RHI-240"
+      ],
+      "sourceContext": [
+        "Assets",
+        "SparkEngine/Source/Graphics",
+        "SparkEngine/Source/Engine/Animation"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Graphics/AssetPipelineWindows.cpp",
+        "Tests/TestAssetDatabase.cpp"
+      ],
+      "implementationScope": [
+        "Import skin, joint, weight, and animation data",
+        "Validate tangent, material, coordinate, and color semantics",
+        "Create canonical static, skinned, morph, and material scenes for D3D11",
+        "Use the same fixtures as optional input to experimental backend parity work without gating stable-v1 on those backends",
+        "Round-trip Windows package/import diagnostics"
+      ],
+      "acceptanceCriteria": [
+        "Skinned glTF animates correctly on D3D11",
+        "Canonical content renders correctly through the packaged primary renderer",
+        "Malformed or unsupported content fails actionably",
+        "The Windows package retains all dependencies",
+        "Experimental backend parity remains owned by RHI-220, RHI-225, RHI-230, and RHI-240"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -L gltf-d3d11 --output-on-failure"
+      ],
+      "testSelectors": [
+        "GLTF_Skinning_*",
+        "GLTF_Animation_*",
+        "CanonicalScene_*"
+      ],
+      "requiredCiJobs": [
+        "asset-interoperability-windows",
+        "golden-d3d11"
+      ],
+      "performanceBudgets": [
+        "Import/load/skin budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "wiki/gameplay-tools/Asset-Pipeline.md",
+        "wiki/subsystems/Animation.md"
+      ],
+      "readinessChanges": [
+        "G04",
+        "G09"
+      ],
+      "websiteImpact": [
+        "Asset/render parity claims link to canonical-scene evidence"
+      ],
+      "risks": [
+        "Coordinate and skinning semantics differing by importer/backend"
+      ],
+      "outOfScope": [
+        "Certifying D3D12, Vulkan, OpenGL, or Metal parity"
+      ],
+      "definitionOfDone": [
+        "Skinned content works",
+        "Canonical parity scene is the shared gate"
+      ],
+      "profileApplicability": {
+        "stable-v1": "required"
+      }
     },
     {
       "id": "HEAD-220",
-      "title": "Certify packaged NullRHI and dedicated-server execution",
-      "priority": "P0", "status": "open", "blocking": true, "wave": 2, "area": "runtime", "owner": "unassigned",
-      "rationale": "NullRHI is functional but release readiness needs packaged boot/module/load/save/network/shutdown, leak, soak, and no-GPU evidence.",
-      "dependencies": ["BLD-100", "RDY-010", "RDY-020"], "parallelWith": ["RHI-210", "EDT-210", "LIFE-200"],
-      "sourceContext": ["SparkEngine/Source/Graphics/RHI/NullRHIDevice.h", "SparkEngine/Source/Engine/Networking/DedicatedServer.cpp", "SparkDaemon"], "entryPoints": ["SparkEngine/Source/Graphics/RHI/NullRHIDevice.h", "SparkDaemon"],
-      "implementationScope": ["Package a server-only artifact", "Boot with no display/GPU", "Load real modules/assets/config/save", "Exercise fixed/update/network/admin/telemetry lifecycle", "Run graceful/forced shutdown, restart, leak, load, and soak tests"],
-      "acceptanceCriteria": ["Server runs from clean package with no GPU/display", "No renderer path is accidentally required", "Lifecycle and recovery are bounded and sanitizer-clean", "Operational health/version/build identity is exposed"],
-      "commands": ["ctest --test-dir build/linux-shipping -L headless --output-on-failure"],
-      "testSelectors": ["NullRHI_*", "DedicatedServer_Package_*", "DedicatedServer_Shutdown_*"], "requiredCiJobs": ["headless-package", "headless-soak"], "performanceBudgets": ["Server tick/memory/startup budgets from PERF-100"],
-      "documentationUpdates": ["wiki/subsystems/Dedicated-Server.md"], "readinessChanges": ["G10", "G14", "runtime.nullrhi"], "websiteImpact": ["Headless support promotes from candidate only on packaged evidence"],
-      "risks": ["Tests accidentally using repository assets/config"], "outOfScope": ["Public service control plane"], "definitionOfDone": ["No-GPU package passes", "Soak/recovery evidence publishes"]
+      "title": "Certify packaged Windows 11 NullRHI execution",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 2,
+      "area": "runtime",
+      "owner": "unassigned",
+      "rationale": "NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS module/assets/save, shutdown, leak, soak, and no-GPU evidence without inheriting production-service operations.",
+      "dependencies": [
+        "BLD-100",
+        "RDY-010",
+        "RDY-020"
+      ],
+      "parallelWith": [
+        "RHI-210",
+        "EDT-210",
+        "LIFE-200"
+      ],
+      "sourceContext": [
+        "SparkEngine/Source/Graphics/RHI/NullRHIDevice.h",
+        "GameModules/SparkGameFPS",
+        "SparkEngine/Source/Engine/SaveSystem"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Graphics/RHI/NullRHIDevice.h",
+        "GameModules/SparkGameFPS"
+      ],
+      "implementationScope": [
+        "Package a Windows x64 no-render artifact",
+        "Boot on Windows 11 with no display or GPU requirement",
+        "Load the real SparkGameFPS module, assets, configuration, and save",
+        "Exercise fixed/update and deterministic automation without any renderer path",
+        "Run graceful and forced shutdown, restart, leak, and soak tests"
+      ],
+      "acceptanceCriteria": [
+        "The Windows package runs from a clean layout with no GPU or display dependency",
+        "No rendered backend or repository content is accidentally required",
+        "FPS lifecycle, save/reload, shutdown, and recovery are bounded and sanitizer-clean",
+        "Production network administration, fleet telemetry, backups, and incident drills remain owned by G12 and OPS-110"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -L nullrhi-headless --output-on-failure"
+      ],
+      "testSelectors": [
+        "NullRHI_Windows_*",
+        "FPSHeadlessPackage_*",
+        "HeadlessShutdown_*"
+      ],
+      "requiredCiJobs": [
+        "headless-windows-package",
+        "headless-windows-soak"
+      ],
+      "performanceBudgets": [
+        "Server tick/memory/startup budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "wiki/subsystems/Dedicated-Server.md"
+      ],
+      "readinessChanges": [
+        "G10",
+        "G14",
+        "runtime.nullrhi"
+      ],
+      "websiteImpact": [
+        "Headless support promotes from candidate only on packaged evidence"
+      ],
+      "risks": [
+        "Tests accidentally using repository assets/config"
+      ],
+      "outOfScope": [
+        "Public service control plane",
+        "Linux or macOS headless certification"
+      ],
+      "definitionOfDone": [
+        "No-GPU package passes",
+        "Soak/recovery evidence publishes"
+      ],
+      "profileApplicability": {
+        "stable-v1": "required"
+      }
     },
     {
       "id": "LIFE-200",
       "title": "Close runtime ownership, shutdown, reload, and failure semantics",
-      "priority": "P0", "status": "open", "blocking": true, "wave": 2, "area": "runtime", "owner": "unassigned",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 2,
+      "area": "runtime",
+      "owner": "unassigned",
       "rationale": "A fully ready engine needs deterministic initialization/teardown and safe partial-failure behavior across context services, modules, jobs, assets, render, audio, physics, scripts, editor, daemon, and tools.",
-      "dependencies": ["RDY-010", "BLD-100"], "parallelWith": ["HEAD-220", "EDT-210", "ENG-200"],
-      "sourceContext": ["SparkEngine/Source/Core", "SparkEngine/Source/Engine", "SparkEngine/Source/Core/ModuleManager.cpp"], "entryPoints": ["SparkEngine/Source/Core/EngineContext.h", "SparkEngine/Source/Core/ModuleManager.cpp"],
-      "implementationScope": ["Document ownership graph and phase contracts", "Make partial initialization rollback deterministic", "Order threads/jobs/GPU/audio/physics/module teardown", "Harden hot reload and state handoff", "Add repeated boot/shutdown/reload and injected-failure tests"],
-      "acceptanceCriteria": ["Repeated lifecycle loops are leak/sanitizer/deadlock clean", "Every injected phase failure unwinds without stale singleton/thread/resource", "Hot reload rejects incompatible state safely", "Shutdown completes within budget"],
-      "commands": ["ctest --test-dir build/linux-asan -L lifecycle --output-on-failure", "ctest --test-dir build/linux-tsan -L lifecycle --output-on-failure"],
-      "testSelectors": ["EngineLifecycle_*", "ModuleReload_*", "PartialInit_*"], "requiredCiJobs": ["lifecycle-asan", "lifecycle-tsan"], "performanceBudgets": ["Startup/shutdown/reload budgets from PERF-100"],
-      "documentationUpdates": ["wiki/getting-started/Architecture-Overview.md", "docs/architecture"], "readinessChanges": ["G10"], "websiteImpact": ["Runtime lifecycle wording links to failure-injection evidence"],
-      "risks": ["Hidden global/singleton ownership"], "outOfScope": ["Removing every singleton"], "definitionOfDone": ["Ownership is documented", "Failure/lifecycle tests pass under sanitizers"]
+      "dependencies": [
+        "RDY-010",
+        "BLD-100"
+      ],
+      "parallelWith": [
+        "HEAD-220",
+        "EDT-210",
+        "ENG-200"
+      ],
+      "sourceContext": [
+        "SparkEngine/Source/Core",
+        "SparkEngine/Source/Engine",
+        "SparkEngine/Source/Core/ModuleManager.cpp"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Core/EngineContext.h",
+        "SparkEngine/Source/Core/ModuleManager.cpp"
+      ],
+      "implementationScope": [
+        "Document ownership graph and phase contracts",
+        "Make partial initialization rollback deterministic",
+        "Order threads/jobs/GPU/audio/physics/module teardown",
+        "Harden hot reload and state handoff",
+        "Add repeated boot/shutdown/reload and injected-failure tests"
+      ],
+      "acceptanceCriteria": [
+        "Repeated lifecycle loops are leak/sanitizer/deadlock clean",
+        "Every injected phase failure unwinds without stale singleton/thread/resource",
+        "Hot reload rejects incompatible state safely",
+        "Shutdown completes within budget"
+      ],
+      "commands": [
+        "ctest --test-dir build/linux-asan -L lifecycle --output-on-failure",
+        "ctest --test-dir build/linux-tsan -L lifecycle --output-on-failure"
+      ],
+      "testSelectors": [
+        "EngineLifecycle_*",
+        "ModuleReload_*",
+        "PartialInit_*"
+      ],
+      "requiredCiJobs": [
+        "lifecycle-asan",
+        "lifecycle-tsan"
+      ],
+      "performanceBudgets": [
+        "Startup/shutdown/reload budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "wiki/getting-started/Architecture-Overview.md",
+        "docs/architecture"
+      ],
+      "readinessChanges": [
+        "G10"
+      ],
+      "websiteImpact": [
+        "Runtime lifecycle wording links to failure-injection evidence"
+      ],
+      "risks": [
+        "Hidden global/singleton ownership"
+      ],
+      "outOfScope": [
+        "Removing every singleton"
+      ],
+      "definitionOfDone": [
+        "Ownership is documented",
+        "Failure/lifecycle tests pass under sanitizers"
+      ],
+      "profileApplicability": {
+        "stable-v1": "shared"
+      }
     },
     {
       "id": "EDT-210",
       "title": "Finish the editor authoring and undo-safe package round trip",
-      "priority": "P1", "status": "open", "blocking": true, "wave": 2, "area": "editor", "owner": "unassigned",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 2,
+      "area": "editor",
+      "owner": "unassigned",
       "rationale": "Hierarchy and inspector can mutate World outside the command stack; rotate/scale gizmos and real asset thumbnail/drag paths are incomplete; author-to-package is not one gate.",
-      "dependencies": ["RDY-010", "RDY-020", "LIFE-200"], "parallelWith": ["RHI-210", "ENG-200", "SAVE-230"],
-      "sourceContext": ["SparkEditor/Source/Panels/HierarchyPanel.cpp", "SparkEditor/Source/Panels/InspectorPanel.cpp", "SparkEditor/Source/Panels/AssetBrowserPanel.cpp", "SparkEditor/Source"], "entryPoints": ["SparkEditor/Source/Panels", "SparkEditor/Source/Commands"],
-      "implementationScope": ["Route all create/delete/rename/component/transform operations through commands", "Complete translate/rotate/scale gizmos", "Load real thumbnails and typed drag/drop/pickers", "Close prefab/module/assets/cook/package workflows", "Automate dirty state/save/reload/undo/redo/crash recovery"],
-      "acceptanceCriteria": ["All world mutations round-trip through undo/redo without divergence", "Assets can be browsed, dragged, assigned, saved, cooked, and run", "A clean automated author-to-installed-runtime scenario passes", "Failed operations remain atomic and recoverable"],
-      "commands": ["ctest --test-dir build/windows-shipping -L editor-integration --output-on-failure"],
-      "testSelectors": ["EditorUndo_*", "EditorGizmo_*", "EditorAssetDrag_*", "EditorCookPackage_*"], "requiredCiJobs": ["editor-integration", "editor-package-roundtrip"], "performanceBudgets": ["Representative project load/save/cook/editor-interaction budgets from PERF-100"],
-      "documentationUpdates": ["wiki/gameplay-tools/SparkEditor.md", "wiki/gameplay-tools/Asset-Pipeline.md", "wiki/gameplay-tools/Game-Packaging.md"], "readinessChanges": ["G10", "editor.authoring"], "websiteImpact": ["Editor wording describes proven workflows, not panel count alone"],
-      "risks": ["Direct World mutations hidden outside audited panels"], "outOfScope": ["Polishing every specialized panel"], "definitionOfDone": ["Command discipline passes", "Gizmos/assets work", "Package round trip passes"]
+      "dependencies": [
+        "RDY-010",
+        "RDY-020",
+        "LIFE-200"
+      ],
+      "parallelWith": [
+        "RHI-210",
+        "ENG-200",
+        "SAVE-230"
+      ],
+      "sourceContext": [
+        "SparkEditor/Source/Panels/HierarchyPanel.cpp",
+        "SparkEditor/Source/Panels/InspectorPanel.cpp",
+        "SparkEditor/Source/Panels/AssetBrowserPanel.cpp",
+        "SparkEditor/Source"
+      ],
+      "entryPoints": [
+        "SparkEditor/Source/Panels",
+        "SparkEditor/Source/Commands"
+      ],
+      "implementationScope": [
+        "Route all create/delete/rename/component/transform operations through commands",
+        "Complete translate/rotate/scale gizmos",
+        "Load real thumbnails and typed drag/drop/pickers",
+        "Close prefab/module/assets/cook/package workflows",
+        "Automate dirty state/save/reload/undo/redo/crash recovery"
+      ],
+      "acceptanceCriteria": [
+        "All world mutations round-trip through undo/redo without divergence",
+        "Assets can be browsed, dragged, assigned, saved, cooked, and run",
+        "A clean automated author-to-installed-runtime scenario passes",
+        "Failed operations remain atomic and recoverable"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -L editor-integration --output-on-failure"
+      ],
+      "testSelectors": [
+        "EditorUndo_*",
+        "EditorGizmo_*",
+        "EditorAssetDrag_*",
+        "EditorCookPackage_*"
+      ],
+      "requiredCiJobs": [
+        "editor-integration",
+        "editor-package-roundtrip"
+      ],
+      "performanceBudgets": [
+        "Representative project load/save/cook/editor-interaction budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "wiki/gameplay-tools/SparkEditor.md",
+        "wiki/gameplay-tools/Asset-Pipeline.md",
+        "wiki/gameplay-tools/Game-Packaging.md"
+      ],
+      "readinessChanges": [
+        "G10",
+        "editor.authoring"
+      ],
+      "websiteImpact": [
+        "Editor wording describes proven workflows, not panel count alone"
+      ],
+      "risks": [
+        "Direct World mutations hidden outside audited panels"
+      ],
+      "outOfScope": [
+        "Polishing every specialized panel"
+      ],
+      "definitionOfDone": [
+        "Command discipline passes",
+        "Gizmos/assets work",
+        "Package round trip passes"
+      ],
+      "profileApplicability": {
+        "stable-v1": "required"
+      }
     },
     {
       "id": "ASSET-220",
       "title": "Consolidate cooking, packaging, CLI, and installed consumer behavior",
-      "priority": "P0", "status": "open", "blocking": true, "wave": 2, "area": "packaging", "owner": "unassigned",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 2,
+      "area": "packaging",
+      "owner": "unassigned",
       "rationale": "CPack omits products/modules, package smoke does not call Spark symbols, installed linkage can contradict host architecture, CLI behaviors are placeholders, and two GamePackager implementations diverge.",
-      "dependencies": ["RDY-020", "BLD-100", "LIFE-200"], "parallelWith": ["EDT-210", "SAVE-230", "SDK-240"],
-      "sourceContext": ["CMakeLists.txt", "cmake/SparkGameModule.cmake", "Tests/PackageSmoke/main.cpp", "Tools/spark-cli/spark_cli.py", "SparkEngine/Source/Core/GamePackager.cpp", "SparkEngine/Source/Engine/Build/GamePackager.h"], "entryPoints": ["CMakeLists.txt", "Tests/PackageSmoke", "SparkEngine/Source/Core/GamePackager.cpp"],
-      "implementationScope": ["Define explicit package components for runtime/editor/SDK/tools/modules", "Fix exported/static dependency interfaces and non-Windows module linkage", "Build a real installed SDK consumer and module", "Consolidate packagers", "Implement or remove placeholder CLI commands", "Validate RPATH/DLL closure, permissions, clean launch, uninstall"],
-      "acceptanceCriteria": ["Generated game builds solely against installed SDK", "Installed runtime loads supported modules/assets without source paths", "CLI and packager claims match behavior", "Install/uninstall is repeatable and leaves only declared user data"],
-      "commands": ["cmake --install build/linux-shipping --prefix /tmp/spark-install", "cmake -S Tests/PackageSmoke -B /tmp/spark-consumer -DCMAKE_PREFIX_PATH=/tmp/spark-install", "cmake --build /tmp/spark-consumer", "ctest --test-dir /tmp/spark-consumer --output-on-failure"],
-      "testSelectors": ["PackageConsumer_*", "GamePackager_*", "CLI_*"], "requiredCiJobs": ["package-consumer-linux", "package-consumer-windows"], "performanceBudgets": ["Cook/package size/time budgets from PERF-100"],
-      "documentationUpdates": ["wiki/gameplay-tools/Game-Packaging.md", "Tools/spark-cli/README.md"], "readinessChanges": ["G04", "G05", "G10"], "websiteImpact": ["Packaging and SDK claims require installed-consumer proof"],
-      "risks": ["Static linking duplicate singleton architecture"], "outOfScope": ["Store-specific packaging"], "definitionOfDone": ["Installed consumer passes", "Packager is canonical", "CLI behavior is real or removed"]
+      "dependencies": [
+        "RDY-020",
+        "BLD-100",
+        "LIFE-200"
+      ],
+      "parallelWith": [
+        "EDT-210",
+        "SAVE-230",
+        "SDK-240"
+      ],
+      "sourceContext": [
+        "CMakeLists.txt",
+        "cmake/SparkGameModule.cmake",
+        "Tests/PackageSmoke/main.cpp",
+        "Tools/spark-cli/spark_cli.py",
+        "SparkEngine/Source/Core/GamePackager.cpp",
+        "SparkEngine/Source/Engine/Build/GamePackager.h"
+      ],
+      "entryPoints": [
+        "CMakeLists.txt",
+        "Tests/PackageSmoke",
+        "SparkEngine/Source/Core/GamePackager.cpp"
+      ],
+      "implementationScope": [
+        "Define explicit package components for runtime/editor/SDK/tools/modules",
+        "Fix exported/static dependency interfaces and non-Windows module linkage",
+        "Build a real installed SDK consumer and module",
+        "Consolidate packagers",
+        "Implement or remove placeholder CLI commands",
+        "Validate RPATH/DLL closure, permissions, clean launch, uninstall"
+      ],
+      "acceptanceCriteria": [
+        "Generated game builds solely against installed SDK",
+        "Installed runtime loads supported modules/assets without source paths",
+        "CLI and packager claims match behavior",
+        "Install/uninstall is repeatable and leaves only declared user data"
+      ],
+      "commands": [
+        "cmake --install build/linux-shipping --prefix /tmp/spark-install",
+        "cmake -S Tests/PackageSmoke -B /tmp/spark-consumer -DCMAKE_PREFIX_PATH=/tmp/spark-install",
+        "cmake --build /tmp/spark-consumer",
+        "ctest --test-dir /tmp/spark-consumer --output-on-failure"
+      ],
+      "testSelectors": [
+        "PackageConsumer_*",
+        "GamePackager_*",
+        "CLI_*"
+      ],
+      "requiredCiJobs": [
+        "package-consumer-linux",
+        "package-consumer-windows"
+      ],
+      "performanceBudgets": [
+        "Cook/package size/time budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "wiki/gameplay-tools/Game-Packaging.md",
+        "Tools/spark-cli/README.md"
+      ],
+      "readinessChanges": [
+        "G04",
+        "G05",
+        "G10"
+      ],
+      "websiteImpact": [
+        "Packaging and SDK claims require installed-consumer proof"
+      ],
+      "risks": [
+        "Static linking duplicate singleton architecture"
+      ],
+      "outOfScope": [
+        "Store-specific packaging"
+      ],
+      "definitionOfDone": [
+        "Installed consumer passes",
+        "Packager is canonical",
+        "CLI behavior is real or removed"
+      ],
+      "profileApplicability": {
+        "stable-v1": "required"
+      }
     },
     {
       "id": "SAVE-230",
       "title": "Version saves, scenes, assets, editor data, and migrations",
-      "priority": "P0", "status": "open", "blocking": true, "wave": 2, "area": "compatibility", "owner": "unassigned",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 2,
+      "area": "compatibility",
+      "owner": "unassigned",
       "rationale": "A release engine must preserve or explicitly migrate user projects and game state across versions; several modules still contain placeholder serialization.",
-      "dependencies": ["RDY-000", "RDY-010", "LIFE-200"], "parallelWith": ["EDT-210", "ASSET-220", "SDK-240"],
-      "sourceContext": ["SparkEngine/Source/Utils/Serializer.h", "SparkEngine/Source/SceneManager", "SparkEngine/Source/Engine/Persistence", "GameModules"], "entryPoints": ["SparkEngine/Source/Utils/Serializer.h", "Tests/Fixtures/Compatibility"],
-      "implementationScope": ["Define version headers and compatibility policy", "Create N-1 fixtures for saves/scenes/prefabs/assets/editor state", "Implement migrations and rollback/backup", "Reject future/corrupt data actionably", "Test atomic writes and interruption", "Give each module exact persistence schema"],
-      "acceptanceCriteria": ["N-1 fixtures migrate and retain declared state", "Rollback restores previous usable data", "Interrupted/corrupt writes do not destroy the last good state", "Breaking changes emit actionable diagnostics"],
-      "commands": ["ctest --test-dir build/linux-shipping -L compatibility --output-on-failure"],
-      "testSelectors": ["SaveMigration_*", "SceneMigration_*", "AssetMigration_*", "AtomicWrite_*"], "requiredCiJobs": ["compatibility-fixtures"], "performanceBudgets": ["Migration time/memory budgets for representative projects"],
-      "documentationUpdates": ["wiki/gameplay-tools/Save-System.md", "wiki/gameplay-tools/Asset-Migration.md", "CHANGELOG.md"], "readinessChanges": ["G16", "G10", "G13"], "websiteImpact": ["Compatibility/support claims name version windows and migration evidence"],
-      "risks": ["Silent data loss from partial migrations"], "outOfScope": ["Unlimited backwards compatibility"], "definitionOfDone": ["Policy and fixtures exist", "Migrations/rollback pass", "Modules declare schemas"]
+      "dependencies": [
+        "RDY-000",
+        "RDY-010",
+        "LIFE-200"
+      ],
+      "parallelWith": [
+        "EDT-210",
+        "ASSET-220",
+        "SDK-240"
+      ],
+      "sourceContext": [
+        "SparkEngine/Source/Utils/Serializer.h",
+        "SparkEngine/Source/SceneManager",
+        "SparkEngine/Source/Engine/Persistence",
+        "GameModules"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Utils/Serializer.h",
+        "Tests/Fixtures/Compatibility"
+      ],
+      "implementationScope": [
+        "Define version headers and compatibility policy",
+        "Create N-1 fixtures for saves/scenes/prefabs/assets/editor state",
+        "Implement migrations and rollback/backup",
+        "Reject future/corrupt data actionably",
+        "Test atomic writes and interruption",
+        "Give each module exact persistence schema"
+      ],
+      "acceptanceCriteria": [
+        "N-1 fixtures migrate and retain declared state",
+        "Rollback restores previous usable data",
+        "Interrupted/corrupt writes do not destroy the last good state",
+        "Breaking changes emit actionable diagnostics"
+      ],
+      "commands": [
+        "ctest --test-dir build/linux-shipping -L compatibility --output-on-failure"
+      ],
+      "testSelectors": [
+        "SaveMigration_*",
+        "SceneMigration_*",
+        "AssetMigration_*",
+        "AtomicWrite_*"
+      ],
+      "requiredCiJobs": [
+        "compatibility-fixtures"
+      ],
+      "performanceBudgets": [
+        "Migration time/memory budgets for representative projects"
+      ],
+      "documentationUpdates": [
+        "wiki/gameplay-tools/Save-System.md",
+        "wiki/gameplay-tools/Asset-Migration.md",
+        "CHANGELOG.md"
+      ],
+      "readinessChanges": [
+        "G16",
+        "G10",
+        "G13"
+      ],
+      "websiteImpact": [
+        "Compatibility/support claims name version windows and migration evidence"
+      ],
+      "risks": [
+        "Silent data loss from partial migrations"
+      ],
+      "outOfScope": [
+        "Unlimited backwards compatibility"
+      ],
+      "definitionOfDone": [
+        "Policy and fixtures exist",
+        "Migrations/rollback pass",
+        "Modules declare schemas"
+      ],
+      "profileApplicability": {
+        "stable-v1": "required"
+      }
     },
     {
       "id": "SDK-240",
       "title": "Stabilize SDK, module ABI, package exports, and compatibility diagnostics",
-      "priority": "P0", "status": "open", "blocking": true, "wave": 2, "area": "sdk", "owner": "unassigned",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 2,
+      "area": "sdk",
+      "owner": "unassigned",
       "rationale": "Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior.",
-      "dependencies": ["ASSET-220", "LIFE-200", "REL-100"], "parallelWith": ["SAVE-230", "EDT-210"],
-      "sourceContext": ["SparkSDK", "cmake/SparkGameModule.cmake", "SparkEngine/Source/Core/ModuleManager.cpp", "Tests/PackageSmoke"], "entryPoints": ["SparkSDK/Include/Spark/Version.h", "SparkSDK/Include/Spark/IModule.h", "cmake/SparkGameModule.cmake"],
-      "implementationScope": ["Define semantic/API/ABI/module manifest versioning", "Export correct CMake targets and transitive dependencies", "Build/package external consumer and module", "Validate compatibility at load with actionable errors", "Test N-1 supported and incompatible fixtures", "Publish API/reference and migration notes"],
-      "acceptanceCriteria": ["External consumer needs no source-tree include/lib", "Supported N-1 module loads or migrates", "Incompatible module fails before executing code", "SDK package contains headers, targets, license, notices, docs, and examples"],
-      "commands": ["cmake -S Tests/PackageSmoke -B /tmp/spark-sdk-consumer -DCMAKE_PREFIX_PATH=/tmp/spark-install", "cmake --build /tmp/spark-sdk-consumer", "ctest --test-dir /tmp/spark-sdk-consumer --output-on-failure"],
-      "testSelectors": ["SDKConsumer_*", "ModuleABI_*", "ModuleVersion_*"], "requiredCiJobs": ["sdk-consumer-linux", "sdk-consumer-windows", "module-compatibility"], "performanceBudgets": ["Module load/reload budgets from PERF-100"],
-      "documentationUpdates": ["SparkSDK/README.md", "wiki/getting-started/Creating-a-Game-Module.md", "CHANGELOG.md"], "readinessChanges": ["G05", "G16", "runtime.cpp"], "websiteImpact": ["SDK readiness and version are generated from package evidence"],
-      "risks": ["ABI promises exceeding compiler/platform reality"], "outOfScope": ["Permanent ABI stability across every major version"], "definitionOfDone": ["Installed SDK consumer passes", "Version/load policy enforced", "Migration docs publish"]
+      "dependencies": [
+        "ASSET-220",
+        "LIFE-200",
+        "REL-100"
+      ],
+      "parallelWith": [
+        "SAVE-230",
+        "EDT-210"
+      ],
+      "sourceContext": [
+        "SparkSDK",
+        "cmake/SparkGameModule.cmake",
+        "SparkEngine/Source/Core/ModuleManager.cpp",
+        "Tests/PackageSmoke"
+      ],
+      "entryPoints": [
+        "SparkSDK/Include/Spark/Version.h",
+        "SparkSDK/Include/Spark/IModule.h",
+        "cmake/SparkGameModule.cmake"
+      ],
+      "implementationScope": [
+        "Define semantic/API/ABI/module manifest versioning",
+        "Export correct CMake targets and transitive dependencies",
+        "Build/package external consumer and module",
+        "Validate compatibility at load with actionable errors",
+        "Test N-1 supported and incompatible fixtures",
+        "Publish API/reference and migration notes"
+      ],
+      "acceptanceCriteria": [
+        "External consumer needs no source-tree include/lib",
+        "Supported N-1 module loads or migrates",
+        "Incompatible module fails before executing code",
+        "SDK package contains headers, targets, license, notices, docs, and examples"
+      ],
+      "commands": [
+        "cmake -S Tests/PackageSmoke -B /tmp/spark-sdk-consumer -DCMAKE_PREFIX_PATH=/tmp/spark-install",
+        "cmake --build /tmp/spark-sdk-consumer",
+        "ctest --test-dir /tmp/spark-sdk-consumer --output-on-failure"
+      ],
+      "testSelectors": [
+        "SDKConsumer_*",
+        "ModuleABI_*",
+        "ModuleVersion_*"
+      ],
+      "requiredCiJobs": [
+        "sdk-consumer-linux",
+        "sdk-consumer-windows",
+        "module-compatibility"
+      ],
+      "performanceBudgets": [
+        "Module load/reload budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "SparkSDK/README.md",
+        "wiki/getting-started/Creating-a-Game-Module.md",
+        "CHANGELOG.md"
+      ],
+      "readinessChanges": [
+        "G05",
+        "G16",
+        "runtime.cpp"
+      ],
+      "websiteImpact": [
+        "SDK readiness and version are generated from package evidence"
+      ],
+      "risks": [
+        "ABI promises exceeding compiler/platform reality"
+      ],
+      "outOfScope": [
+        "Permanent ABI stability across every major version"
+      ],
+      "definitionOfDone": [
+        "Installed SDK consumer passes",
+        "Version/load policy enforced",
+        "Migration docs publish"
+      ],
+      "profileApplicability": {
+        "stable-v1": "required"
+      }
     },
     {
       "id": "ENG-200",
       "title": "Complete the AngelScript and visual-script runtime lifecycle",
-      "priority": "P0", "status": "open", "blocking": true, "wave": 2, "area": "scripting", "owner": "unassigned",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 2,
+      "area": "scripting",
+      "owner": "unassigned",
       "rationale": "Script objects/methods are cached, but entity identity and production start/update/collision dispatch are disconnected; multiple gameplay bindings are no-op or log-only, blocking VisualScript too.",
-      "dependencies": ["RDY-010", "LIFE-200", "SAVE-230"], "parallelWith": ["EDT-210", "RHI-210"],
-      "sourceContext": ["SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp", "GameModules/SparkGameVisualScript", "SparkEditor/Source/Panels/VisualScriptPanel.cpp"], "entryPoints": ["SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp", "SparkEngine/Source/Engine/Scripting"],
-      "implementationScope": ["Create ECS script runtime system", "Bind entity identity and safe component handles", "Dispatch start/update/fixed/destroy/collision/trigger/typed events", "Connect physics/audio/animation/input/EventBus APIs", "Implement state-safe hot reload and schema migration", "Add diagnostics, debugger/source mapping, budgets, sandboxing, and packaged tests"],
-      "acceptanceCriteria": ["Actual script moves an entity, receives collision/event, and drives audio/animation", "Compile/runtime failure disables safely with actionable diagnostics", "Hot reload follows documented state rules", "Graph-to-packaged-runtime gameplay loop passes"],
-      "commands": ["ctest --test-dir build/windows-shipping -L scripting-integration --output-on-failure"],
-      "testSelectors": ["ScriptLifecycle_*", "ScriptBindings_*", "ScriptHotReload_*", "VisualScriptRuntime_*"], "requiredCiJobs": ["scripting-integration", "visual-script-package"], "performanceBudgets": ["Per-frame script time/allocation budgets and runaway execution limits"],
-      "documentationUpdates": ["wiki/subsystems/Scripting.md", "wiki/gameplay-tools/Visual-Scripting.md"], "readinessChanges": ["G11", "scripting.angelscript", "scripting.visual"], "websiteImpact": ["Scripting promotes only from actual runtime/package evidence"],
-      "risks": ["Unsafe handles across reload", "Unbounded scripts on simulation thread"], "outOfScope": ["Lua support unless separately contracted"], "definitionOfDone": ["Lifecycle and bindings are real", "Hot reload/diagnostics/package tests pass"]
+      "dependencies": [
+        "RDY-010",
+        "LIFE-200",
+        "SAVE-230"
+      ],
+      "parallelWith": [
+        "EDT-210",
+        "RHI-210"
+      ],
+      "sourceContext": [
+        "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp",
+        "GameModules/SparkGameVisualScript",
+        "SparkEditor/Source/Panels/VisualScriptPanel.cpp"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp",
+        "SparkEngine/Source/Engine/Scripting"
+      ],
+      "implementationScope": [
+        "Create ECS script runtime system",
+        "Bind entity identity and safe component handles",
+        "Dispatch start/update/fixed/destroy/collision/trigger/typed events",
+        "Connect physics/audio/animation/input/EventBus APIs",
+        "Implement state-safe hot reload and schema migration",
+        "Add diagnostics, debugger/source mapping, budgets, sandboxing, and packaged tests",
+        "Fuzz script source, bytecode, graph input, and reload state through production parsers"
+      ],
+      "acceptanceCriteria": [
+        "Actual script moves an entity, receives collision/event, and drives audio/animation",
+        "Compile/runtime failure disables safely with actionable diagnostics",
+        "Hot reload follows documented state rules",
+        "Graph-to-packaged-runtime gameplay loop passes"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -L scripting-integration --output-on-failure"
+      ],
+      "testSelectors": [
+        "ScriptLifecycle_*",
+        "ScriptBindings_*",
+        "ScriptHotReload_*",
+        "VisualScriptRuntime_*"
+      ],
+      "requiredCiJobs": [
+        "scripting-integration",
+        "visual-script-package"
+      ],
+      "performanceBudgets": [
+        "Per-frame script time/allocation budgets and runaway execution limits"
+      ],
+      "documentationUpdates": [
+        "wiki/subsystems/Scripting.md",
+        "wiki/gameplay-tools/Visual-Scripting.md"
+      ],
+      "readinessChanges": [
+        "G11",
+        "scripting.angelscript",
+        "scripting.visual"
+      ],
+      "websiteImpact": [
+        "Scripting promotes only from actual runtime/package evidence"
+      ],
+      "risks": [
+        "Unsafe handles across reload",
+        "Unbounded scripts on simulation thread"
+      ],
+      "outOfScope": [
+        "Lua support unless separately contracted"
+      ],
+      "definitionOfDone": [
+        "Lifecycle and bindings are real",
+        "Hot reload/diagnostics/package tests pass"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     }
   ]
 }

@@ -1,178 +1,1441 @@
 {
   "schemaVersion": 1,
   "parityDimensions": {
-    "scale": {"0": "absent or dead", "1": "data model, mock, debug UI, or in-memory prototype", "2": "genuinely integrated/playable but not release-gated", "3": "validated shipping candidate", "N/A": "intentionally excluded and documented"},
-    "dimensions": ["lifecycle", "gameplayLoop", "networking", "persistence", "ai", "assets", "editorDebug", "testsDocs"],
+    "scale": {
+      "0": "absent or dead",
+      "1": "data model, mock, debug UI, or in-memory prototype",
+      "2": "genuinely integrated/playable but not release-gated",
+      "3": "validated shipping candidate",
+      "N/A": "intentionally excluded and documented"
+    },
+    "dimensions": [
+      "lifecycle",
+      "gameplayLoop",
+      "networking",
+      "persistence",
+      "ai",
+      "assets",
+      "editorDebug",
+      "testsDocs"
+    ],
     "currentScores": {
-      "SparkGameMMOFPS": [3, 3, 2, 2, 3, 3, 2, 2],
-      "SparkGameFPS": [2, 2, 1, 1, 2, 2, 1, 1],
-      "SparkGameMMO": [2, 1, 1, 1, 1, 1, 1, 1],
-      "SparkGame": [2, 1, "N/A", 2, 0, 0, 1, 1],
-      "SparkGameARPG": [2, 1, "N/A", 0, 1, 0, 1, 1],
-      "SparkGamePlatformer": [2, 1, "N/A", 1, 0, 0, 1, 1],
-      "SparkGameRPG": [2, 1, "N/A", 1, 1, 0, 1, 1],
-      "SparkGameOpenWorld": [2, 1, "N/A", 1, 1, 0, 1, 1],
-      "SparkGameRTS": [2, 1, "N/A", 0, 1, 0, 1, 1],
-      "SparkGameRacing": [2, 1, "N/A", 0, 1, 0, 1, 1],
-      "SparkGameVisualScript": [1, 0, "N/A", 0, 0, 0, 1, 0]
+      "SparkGameMMOFPS": [
+        3,
+        3,
+        2,
+        2,
+        3,
+        3,
+        2,
+        2
+      ],
+      "SparkGameFPS": [
+        2,
+        2,
+        1,
+        1,
+        2,
+        2,
+        1,
+        1
+      ],
+      "SparkGameMMO": [
+        2,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "SparkGame": [
+        2,
+        1,
+        "N/A",
+        2,
+        0,
+        0,
+        1,
+        1
+      ],
+      "SparkGameARPG": [
+        2,
+        1,
+        "N/A",
+        0,
+        1,
+        0,
+        1,
+        1
+      ],
+      "SparkGamePlatformer": [
+        2,
+        1,
+        "N/A",
+        1,
+        0,
+        0,
+        1,
+        1
+      ],
+      "SparkGameRPG": [
+        2,
+        1,
+        "N/A",
+        1,
+        1,
+        0,
+        1,
+        1
+      ],
+      "SparkGameOpenWorld": [
+        2,
+        1,
+        "N/A",
+        1,
+        1,
+        0,
+        1,
+        1
+      ],
+      "SparkGameRTS": [
+        2,
+        1,
+        "N/A",
+        0,
+        1,
+        0,
+        1,
+        1
+      ],
+      "SparkGameRacing": [
+        2,
+        1,
+        "N/A",
+        0,
+        1,
+        0,
+        1,
+        1
+      ],
+      "SparkGameVisualScript": [
+        1,
+        0,
+        "N/A",
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
     }
   },
   "workItems": [
     {
-      "id": "MOD-290", "title": "Build the shared module completion kit and manifest contract", "priority": "P1", "status": "open", "blocking": true, "wave": 4, "area": "modules", "owner": "unassigned",
-      "rationale": "Seven prototype modules need the same controller, ECS bootstrap, camera/render, save, assets, smoke assertions, runtime HUD, AI/nav, package, and test infrastructure; copying MMOFPS private code would create drift.",
-      "dependencies": ["RDY-010", "RDY-020", "LIFE-200", "ASSET-220", "SAVE-230", "SDK-240"], "parallelWith": [],
-      "sourceContext": ["GameModules", "SparkSDK", "cmake/SparkGameModule.cmake", "Tests/CMakeLists.txt"], "entryPoints": ["SparkSDK/Include", "GameModules", "Tests/ModuleKit"],
-      "implementationScope": ["Require module.json for every discovered module", "Provide controller/input, ECS bootstrap, camera/render registration, save/migration, asset registry, runtime HUD/debug, AI/nav, smoke assertion, and packaged-content helpers", "Generate CMake/test/package registration", "Support explicit N/A dimensions", "Publish parity scores from evidence"],
-      "acceptanceCriteria": ["A new module creates a rendered controlled saved entity and completes headless/graphical package smoke without private copies", "Every module manifest references existing source/assets/tests/docs", "Discovery and manifest counts match", "All applicable dimensions have owners, gates, and acceptance"],
-      "commands": ["python3 tools/site-data/validate.py --modules", "ctest --test-dir build/linux-shipping -L module-kit --output-on-failure"],
-      "testSelectors": ["ModuleKit_*", "ModuleManifest_*"], "requiredCiJobs": ["module-contract", "module-package-smoke"], "performanceBudgets": ["Module bootstrap/load budgets from PERF-100"],
-      "documentationUpdates": ["GameModules/README.md", "wiki/getting-started/Creating-a-Game-Module.md"], "readinessChanges": ["G13", "modules.prototypes"], "websiteImpact": ["Module list, score, label, features, limitations, and next work are generated"],
-      "risks": ["A common kit becoming a second engine layer"], "outOfScope": ["Forcing networking into single-player modules"], "definitionOfDone": ["All eleven manifests validate", "Kit package smoke passes", "Parity is generated"]
+      "id": "RDY-015",
+      "title": "Build real-source lifecycle evidence for experimental modules",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "tests",
+      "owner": "unassigned",
+      "rationale": "Modules outside every declared release profile still need honest real-source lifecycle evidence, but that evidence must not become a stable-v1 prerequisite.",
+      "dependencies": [
+        "RDY-000",
+        "CI-100"
+      ],
+      "parallelWith": [
+        "MOD-295"
+      ],
+      "sourceContext": [
+        "Tests/CMakeLists.txt",
+        "GameModules"
+      ],
+      "entryPoints": [
+        "Tests/CMakeLists.txt",
+        "GameModules"
+      ],
+      "implementationScope": [
+        "Build every experimental module from production source",
+        "Run lifecycle and package-layout smoke with explicit prototype labels",
+        "Publish evidence independently from stable-v1"
+      ],
+      "acceptanceCriteria": [
+        "Every experimental module has real-source lifecycle evidence",
+        "Failures remain visible without changing stable-v1 support",
+        "No experimental test promotes a stable profile"
+      ],
+      "commands": [
+        "ctest --test-dir build/linux-shipping -L experimental-modules --output-on-failure"
+      ],
+      "testSelectors": [
+        "ExperimentalModuleLifecycle_*"
+      ],
+      "requiredCiJobs": [
+        "experimental-module-lifecycle"
+      ],
+      "performanceBudgets": [
+        "Each smoke has an owned timeout"
+      ],
+      "documentationUpdates": [
+        "GameModules/README.md"
+      ],
+      "readinessChanges": [
+        "modules.prototypes"
+      ],
+      "websiteImpact": [
+        "Experimental verification labels link to separate evidence"
+      ],
+      "risks": [
+        "Accidentally treating prototype evidence as stable certification"
+      ],
+      "outOfScope": [
+        "Promoting any experimental module"
+      ],
+      "definitionOfDone": [
+        "Real-source experimental lifecycle evidence publishes",
+        "Stable-v1 dependency closure remains unchanged"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
-      "id": "MOD-300", "title": "Complete and correctly position the base SparkGame showcase", "priority": "P1", "status": "open", "blocking": true, "wave": 4, "area": "modules", "owner": "unassigned",
+      "id": "MOD-290",
+      "title": "Build the shared manifest and installed-SDK module kit",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "modules",
+      "owner": "unassigned",
+      "rationale": "Every discovered module needs a truthful manifest, while stable-v1 needs a small public-SDK-only module kit for SparkGameFPS; prototype gameplay helpers are owned separately by MOD-295.",
+      "dependencies": [
+        "RDY-010",
+        "RDY-020",
+        "LIFE-200",
+        "ASSET-220",
+        "SAVE-230",
+        "SDK-240"
+      ],
+      "parallelWith": [],
+      "sourceContext": [
+        "GameModules",
+        "SparkSDK",
+        "cmake/SparkGameModule.cmake",
+        "Tests/CMakeLists.txt"
+      ],
+      "entryPoints": [
+        "SparkSDK/Include",
+        "GameModules",
+        "Tests/ModuleKit"
+      ],
+      "implementationScope": [
+        "Require module.json for every discovered module",
+        "Provide public-SDK-only registration, lifecycle, asset-manifest, save/migration, smoke assertion, and packaged-content helpers needed by in-profile modules",
+        "Generate CMake, test, and package registration from manifests",
+        "Support explicit N/A dimensions",
+        "Publish parity scores from evidence without requiring prototypes to reach release scores"
+      ],
+      "acceptanceCriteria": [
+        "SparkGameFPS builds and completes headless and D3D11 package smoke without private engine copies",
+        "Every module manifest references existing source, assets, tests, and docs",
+        "Discovery and manifest counts match",
+        "Prototype completion helpers remain open under MOD-295"
+      ],
+      "commands": [
+        "python3 tools/site-data/validate.py --modules",
+        "ctest --test-dir build/windows-shipping -L module-kit --output-on-failure"
+      ],
+      "testSelectors": [
+        "ModuleKit_*",
+        "ModuleManifest_*"
+      ],
+      "requiredCiJobs": [
+        "module-contract",
+        "module-package-smoke"
+      ],
+      "performanceBudgets": [
+        "Module bootstrap/load budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "GameModules/README.md",
+        "wiki/getting-started/Creating-a-Game-Module.md"
+      ],
+      "readinessChanges": [
+        "G13",
+        "modules.prototypes"
+      ],
+      "websiteImpact": [
+        "Module list, score, label, features, limitations, and next work are generated"
+      ],
+      "risks": [
+        "A common kit becoming a second engine layer"
+      ],
+      "outOfScope": [
+        "Completing prototype gameplay, AI, HUD, or renderer loops",
+        "Forcing networking into single-player modules"
+      ],
+      "definitionOfDone": [
+        "All eleven manifests validate",
+        "Kit package smoke passes",
+        "Parity is generated"
+      ],
+      "profileApplicability": {
+        "stable-v1": "shared"
+      }
+    },
+    {
+      "id": "MOD-295",
+      "title": "Build reusable completion helpers for prototype modules",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "modules",
+      "owner": "unassigned",
+      "rationale": "Prototype modules need reusable controller, ECS, camera, render, save, HUD, AI, and package helpers without making that breadth a stable-v1 prerequisite.",
+      "dependencies": [
+        "MOD-290",
+        "RDY-015",
+        "LIFE-200",
+        "ASSET-220",
+        "SAVE-230",
+        "SDK-240"
+      ],
+      "parallelWith": [],
+      "sourceContext": [
+        "GameModules",
+        "SparkSDK",
+        "Tests/CMakeLists.txt"
+      ],
+      "entryPoints": [
+        "SparkSDK/Include",
+        "Tests/ModuleKit"
+      ],
+      "implementationScope": [
+        "Provide prototype controller, ECS bootstrap, camera/render, save, HUD/debug, AI/nav, and package helpers",
+        "Keep helpers on public SDK surfaces",
+        "Adopt helpers in experimental modules without changing their support classification"
+      ],
+      "acceptanceCriteria": [
+        "Prototype modules no longer copy private infrastructure",
+        "Helpers exercise production SDK surfaces",
+        "Prototype completion remains outside stable-v1"
+      ],
+      "commands": [
+        "ctest --test-dir build/linux-shipping -L prototype-module-kit --output-on-failure"
+      ],
+      "testSelectors": [
+        "PrototypeModuleKit_*"
+      ],
+      "requiredCiJobs": [
+        "prototype-module-kit"
+      ],
+      "performanceBudgets": [
+        "Prototype helper smoke respects declared timeouts"
+      ],
+      "documentationUpdates": [
+        "GameModules/README.md"
+      ],
+      "readinessChanges": [
+        "modules.prototypes"
+      ],
+      "websiteImpact": [
+        "Prototype next-work and helper adoption remain generated"
+      ],
+      "risks": [
+        "Creating a second engine layer"
+      ],
+      "outOfScope": [
+        "Blocking stable-v1 on prototype gameplay completion"
+      ],
+      "definitionOfDone": [
+        "Prototype helpers are reusable",
+        "Experimental module adoption evidence publishes"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
+    },
+    {
+      "id": "MOD-300",
+      "title": "Complete and correctly position the base SparkGame showcase",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "modules",
+      "owner": "unassigned",
       "rationale": "SparkGame has real lifecycle, ECS spawn, EventBus, weather, time of day, and quicksave, but coroutine/localization/render behavior is incomplete and it is not a finished game.",
-      "dependencies": ["MOD-290"], "parallelWith": ["MOD-310", "MOD-320", "MOD-330", "MOD-340", "MOD-350", "MOD-360", "MOD-370", "MOD-380", "MOD-390"],
-      "sourceContext": ["GameModules/SparkGame"], "entryPoints": ["GameModules/SparkGame/Source/Core", "GameModules/SparkGame/Source"],
-      "implementationScope": ["Declare engine-systems showcase/template profile", "Make every showcased subsystem visibly or assertably work", "Replace log-only coroutine with real scheduling", "Add localization resources", "Provide camera/render/debug and package lifecycle smoke"],
-      "acceptanceCriteria": ["Lifecycle score 3", "Showcase outcome is deterministic and visible/assertable", "Quicksave reloads exact state", "Packaged smoke passes", "Public label never calls it a finished game"],
-      "commands": ["ctest --test-dir build/windows-shipping -R SparkGameShowcase --output-on-failure"],
-      "testSelectors": ["SparkGameShowcase_*"], "requiredCiJobs": ["module-SparkGame"], "performanceBudgets": [],
-      "documentationUpdates": ["GameModules/SparkGame/README.md", "GameModules/README.md"], "readinessChanges": ["G13"], "websiteImpact": ["Label as engine systems showcase/template"],
-      "risks": ["Expanding into another full game"], "outOfScope": ["Networking unless declared"], "definitionOfDone": ["Applicable scores are 3", "Package/test/docs/evidence pass"]
+      "dependencies": [
+        "MOD-290"
+      ],
+      "parallelWith": [
+        "MOD-310",
+        "MOD-320",
+        "MOD-330",
+        "MOD-340",
+        "MOD-350",
+        "MOD-360",
+        "MOD-370",
+        "MOD-380",
+        "MOD-390"
+      ],
+      "sourceContext": [
+        "GameModules/SparkGame"
+      ],
+      "entryPoints": [
+        "GameModules/SparkGame/Source/Core",
+        "GameModules/SparkGame/Source"
+      ],
+      "implementationScope": [
+        "Declare engine-systems showcase/template profile",
+        "Make every showcased subsystem visibly or assertably work",
+        "Replace log-only coroutine with real scheduling",
+        "Add localization resources",
+        "Provide camera/render/debug and package lifecycle smoke"
+      ],
+      "acceptanceCriteria": [
+        "Lifecycle score 3",
+        "Showcase outcome is deterministic and visible/assertable",
+        "Quicksave reloads exact state",
+        "Packaged smoke passes",
+        "Public label never calls it a finished game"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -R SparkGameShowcase --output-on-failure"
+      ],
+      "testSelectors": [
+        "SparkGameShowcase_*"
+      ],
+      "requiredCiJobs": [
+        "module-SparkGame"
+      ],
+      "performanceBudgets": [],
+      "documentationUpdates": [
+        "GameModules/SparkGame/README.md",
+        "GameModules/README.md"
+      ],
+      "readinessChanges": [
+        "G13"
+      ],
+      "websiteImpact": [
+        "Label as engine systems showcase/template"
+      ],
+      "risks": [
+        "Expanding into another full game"
+      ],
+      "outOfScope": [
+        "Networking unless declared"
+      ],
+      "definitionOfDone": [
+        "Applicable scores are 3",
+        "Package/test/docs/evidence pass"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
-      "id": "MOD-310", "title": "Finish FPS as an authoritative playable vertical slice", "priority": "P1", "status": "open", "blocking": true, "wave": 4, "area": "modules", "owner": "unassigned",
-      "rationale": "FPS has a local arena/input/render loop, but MultiplayerSystem ignores address/port and fabricates flags/IDs; tests reimplement state instead of exercising production networking.",
-      "dependencies": ["MOD-290", "NET-100"], "parallelWith": ["MOD-300", "MOD-320", "MOD-330", "MOD-340", "MOD-350", "MOD-360", "MOD-370", "MOD-380", "MOD-390"],
-      "sourceContext": ["GameModules/SparkGameFPS", "Tests/TestFPSMultiplayer.cpp"], "entryPoints": ["GameModules/SparkGameFPS/Source/Multiplayer", "GameModules/SparkGameFPS/Source/Core"],
-      "implementationScope": ["Choose one production networking path", "Implement authoritative remote spawn/input/movement/combat/death/respawn/scoreboard", "Remove fake state", "Resolve primitive assets and Linux terrain LOD", "Add runtime HUD/console or remove claims", "Add optional profile/save and real-source tests"],
-      "acceptanceCriteria": ["Dedicated server plus two FPS clients complete spawn-move-kill-respawn-score", "No fake network state remains", "Local single-player still passes", "Package resolves all content", "Applicable parity scores reach 3"],
-      "commands": ["ctest --test-dir build/linux-shipping -R FPSAuthoritative --output-on-failure"],
-      "testSelectors": ["FPSAuthoritative_*", "FPSPackage_*"], "requiredCiJobs": ["module-FPS-multiplayer"], "performanceBudgets": ["Two-client tick/frame/network budgets"],
-      "documentationUpdates": ["GameModules/SparkGameFPS/README.md"], "readinessChanges": ["G13", "modules.fps"], "websiteImpact": ["Until done: playable single-player reference; multiplayer under integration"],
-      "risks": ["Duplicating MMOFPS networking instead of sharing engine primitives"], "outOfScope": ["MMO service infrastructure"], "definitionOfDone": ["Authoritative acceptance passes", "Package/assets/docs/evidence pass"]
+      "id": "MOD-310",
+      "title": "Finish FPS as the installed single-player stable-v1 slice",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "modules",
+      "owner": "unassigned",
+      "rationale": "FPS has a local arena, input, combat, rendering, and AI foundation, but it is not yet an installed public-SDK-only single-player product with real-source lifecycle and package evidence.",
+      "dependencies": [
+        "MOD-290",
+        "SDK-240",
+        "RDY-020"
+      ],
+      "parallelWith": [
+        "MOD-300",
+        "MOD-320",
+        "MOD-330",
+        "MOD-340",
+        "MOD-350",
+        "MOD-360",
+        "MOD-370",
+        "MOD-380",
+        "MOD-390"
+      ],
+      "sourceContext": [
+        "GameModules/SparkGameFPS",
+        "GameModules/SparkGameFPS/CMakeLists.txt",
+        "Tests/CMakeLists.txt"
+      ],
+      "entryPoints": [
+        "GameModules/SparkGameFPS/Source/Core",
+        "GameModules/SparkGameFPS/CMakeLists.txt"
+      ],
+      "implementationScope": [
+        "Build only through the installed public SDK and exported package targets",
+        "Complete local arena spawn, input, movement, combat, death, respawn, AI, score, and runtime HUD",
+        "Resolve all Windows package assets and remove repository-relative dependencies",
+        "Round-trip a local profile/save and exercise production source through editor, D3D11, and NullRHI package tests",
+        "Keep LAN and multiplayer work optional under MOD-315"
+      ],
+      "acceptanceCriteria": [
+        "A clean Windows install launches SparkGameFPS and completes spawn-move-kill-respawn-score in single-player",
+        "The module builds without SparkEngineLib or engine-source include paths",
+        "D3D11 and Windows NullRHI package smokes use the real module and assets",
+        "Save/reload preserves the declared local profile state",
+        "No multiplayer result is required for stable-v1"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -R FPSSinglePlayerSlice --output-on-failure",
+        "ctest --test-dir build/windows-shipping -R FPSPackage --output-on-failure"
+      ],
+      "testSelectors": [
+        "FPSSinglePlayerSlice_*",
+        "FPSPackage_*",
+        "FPSPublicSDK_*"
+      ],
+      "requiredCiJobs": [
+        "module-FPS-singleplayer",
+        "module-FPS-package-windows"
+      ],
+      "performanceBudgets": [
+        "Single-player D3D11 frame and Windows NullRHI tick budgets from PERF-100"
+      ],
+      "documentationUpdates": [
+        "GameModules/SparkGameFPS/README.md"
+      ],
+      "readinessChanges": [
+        "G13",
+        "modules.fps"
+      ],
+      "websiteImpact": [
+        "Until done: in-profile first-party single-player slice, blocked and uncertified; LAN remains experimental"
+      ],
+      "risks": [
+        "Tests linking private engine targets instead of the installed SDK"
+      ],
+      "outOfScope": [
+        "LAN or public multiplayer",
+        "MMO service infrastructure"
+      ],
+      "definitionOfDone": [
+        "Installed single-player and public-SDK acceptance pass",
+        "Package, assets, save, docs, and evidence pass"
+      ],
+      "profileApplicability": {
+        "stable-v1": "required"
+      }
     },
     {
-      "id": "MOD-320", "title": "Finish MMO as a secure persistent integrated world", "priority": "P1", "status": "open", "blocking": true, "wave": 4, "area": "modules", "owner": "unassigned",
+      "id": "MOD-315",
+      "title": "Finish optional FPS LAN and multiplayer gameplay",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "networking",
+      "owner": "unassigned",
+      "rationale": "SparkGameFPS multiplayer currently ignores address and port and fabricates connection state; optional LAN work must remain experimental and independent of the stable single-player slice.",
+      "dependencies": [
+        "MOD-310",
+        "NET-100"
+      ],
+      "parallelWith": [
+        "TF-110"
+      ],
+      "sourceContext": [
+        "GameModules/SparkGameFPS",
+        "Tests/TestFPSMultiplayer.cpp"
+      ],
+      "entryPoints": [
+        "GameModules/SparkGameFPS/Source/Multiplayer"
+      ],
+      "implementationScope": [
+        "Use the production encrypted transport",
+        "Implement authoritative remote spawn, input, movement, combat, death, respawn, and scoreboard",
+        "Remove fabricated state",
+        "Run one server and two independent clients under constrained LAN conditions"
+      ],
+      "acceptanceCriteria": [
+        "Two clients converge on authoritative spawn-move-kill-respawn-score",
+        "No fake connection state remains",
+        "Transport hostile-input tests pass",
+        "Failure cannot affect stable-v1 single-player readiness"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -R FPSLAN --output-on-failure"
+      ],
+      "testSelectors": [
+        "FPSLAN_*",
+        "FPSMultiplayerProduction_*"
+      ],
+      "requiredCiJobs": [
+        "module-FPS-multiplayer"
+      ],
+      "performanceBudgets": [
+        "Two-client LAN tick, frame, and network budgets"
+      ],
+      "documentationUpdates": [
+        "GameModules/SparkGameFPS/README.md"
+      ],
+      "readinessChanges": [
+        "G12",
+        "networking.multiplayer"
+      ],
+      "websiteImpact": [
+        "FPS LAN remains experimental until this evidence passes"
+      ],
+      "risks": [
+        "Duplicating MMOFPS networking instead of shared primitives"
+      ],
+      "outOfScope": [
+        "Public service hosting",
+        "Stable-v1 release gating"
+      ],
+      "definitionOfDone": [
+        "Independent LAN acceptance passes",
+        "Experimental evidence and limitations publish"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
+    },
+    {
+      "id": "MOD-320",
+      "title": "Finish MMO as a secure persistent integrated world",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "modules",
+      "owner": "unassigned",
       "rationale": "MMO account storage is in-memory with demo hashing, scene paths mismatch the tree, prediction/migration/render/autosave paths are no-op/commentary, and persistence loads do not reconstruct state.",
-      "dependencies": ["MOD-290", "NET-100", "DATA-120", "ENG-200"], "parallelWith": ["MOD-300", "MOD-310", "MOD-330", "MOD-340", "MOD-350", "MOD-360", "MOD-370", "MOD-380", "MOD-390"],
-      "sourceContext": ["GameModules/SparkGameMMO", "Assets/Scenes/MMO"], "entryPoints": ["GameModules/SparkGameMMO/Source/Account", "GameModules/SparkGameMMO/Source/World", "GameModules/SparkGameMMO/Source/Player"],
-      "implementationScope": ["Secure account/session and correct ownership IDs", "Load exact-case rendered/collidable world", "Implement authoritative movement/prediction/interpolation/migration", "Populate inventory/reputation/world persistence correctly", "Connect animations/UI/AI", "Restart/recover exact state"],
-      "acceptanceCriteria": ["Two real clients authenticate, create owned characters, enter world, move/interact authoritatively", "Inventory/reputation/world state persists through cold restart", "No demo hash/timestamp identity/no-op load remains", "Applicable parity scores reach 3"],
-      "commands": ["ctest --test-dir build/linux-shipping -R MMOIntegratedWorld --output-on-failure"],
-      "testSelectors": ["MMOAccount_*", "MMOWorld_*", "MMOPersistence_*"], "requiredCiJobs": ["module-MMO-integration"], "performanceBudgets": ["Two-client world/persistence budgets"],
-      "documentationUpdates": ["GameModules/SparkGameMMO/README.md"], "readinessChanges": ["G12", "G13"], "websiteImpact": ["Until done: broad prototype/reference module"],
-      "risks": ["Duplicating service/persistence infrastructure"], "outOfScope": ["Public production MMO operations beyond shared gates"], "definitionOfDone": ["Secure two-client restart acceptance passes", "All applicable scores are 3"]
+      "dependencies": [
+        "MOD-290",
+        "NET-100",
+        "DATA-120",
+        "ENG-200"
+      ],
+      "parallelWith": [
+        "MOD-300",
+        "MOD-310",
+        "MOD-330",
+        "MOD-340",
+        "MOD-350",
+        "MOD-360",
+        "MOD-370",
+        "MOD-380",
+        "MOD-390"
+      ],
+      "sourceContext": [
+        "GameModules/SparkGameMMO",
+        "Assets/Scenes/MMO"
+      ],
+      "entryPoints": [
+        "GameModules/SparkGameMMO/Source/Account",
+        "GameModules/SparkGameMMO/Source/World",
+        "GameModules/SparkGameMMO/Source/Player"
+      ],
+      "implementationScope": [
+        "Secure account/session and correct ownership IDs",
+        "Load exact-case rendered/collidable world",
+        "Implement authoritative movement/prediction/interpolation/migration",
+        "Populate inventory/reputation/world persistence correctly",
+        "Connect animations/UI/AI",
+        "Restart/recover exact state"
+      ],
+      "acceptanceCriteria": [
+        "Two real clients authenticate, create owned characters, enter world, move/interact authoritatively",
+        "Inventory/reputation/world state persists through cold restart",
+        "No demo hash/timestamp identity/no-op load remains",
+        "Applicable parity scores reach 3"
+      ],
+      "commands": [
+        "ctest --test-dir build/linux-shipping -R MMOIntegratedWorld --output-on-failure"
+      ],
+      "testSelectors": [
+        "MMOAccount_*",
+        "MMOWorld_*",
+        "MMOPersistence_*"
+      ],
+      "requiredCiJobs": [
+        "module-MMO-integration"
+      ],
+      "performanceBudgets": [
+        "Two-client world/persistence budgets"
+      ],
+      "documentationUpdates": [
+        "GameModules/SparkGameMMO/README.md"
+      ],
+      "readinessChanges": [
+        "G12",
+        "G13"
+      ],
+      "websiteImpact": [
+        "Until done: broad prototype/reference module"
+      ],
+      "risks": [
+        "Duplicating service/persistence infrastructure"
+      ],
+      "outOfScope": [
+        "Public production MMO operations beyond shared gates"
+      ],
+      "definitionOfDone": [
+        "Secure two-client restart acceptance passes",
+        "All applicable scores are 3"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
-      "id": "MOD-330", "title": "Finish ARPG as a playable dungeon slice", "priority": "P1", "status": "open", "blocking": true, "wave": 4, "area": "modules", "owner": "unassigned",
+      "id": "MOD-330",
+      "title": "Finish ARPG as a playable dungeon slice",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "modules",
+      "owner": "unassigned",
       "rationale": "ARPG is mostly in-memory/debug state without integrated input, ECS world, assets, rendering, serialization, animation/coroutines, or abilities; SpawnBoss mutates a copy instead of authoritative state.",
-      "dependencies": ["MOD-290", "ENG-200"], "parallelWith": ["MOD-300", "MOD-310", "MOD-320", "MOD-340", "MOD-350", "MOD-360", "MOD-370", "MOD-380", "MOD-390"],
-      "sourceContext": ["GameModules/SparkGameARPG"], "entryPoints": ["GameModules/SparkGameARPG/Source/Hero", "GameModules/SparkGameARPG/Source/Combat", "GameModules/SparkGameARPG/Source/Dungeon", "GameModules/SparkGameARPG/Source/Monster"],
-      "implementationScope": ["Isometric input/camera and ECS hero", "Rendered/collidable dungeon", "AI monsters, skills, combat, loot, boss and completion", "Runtime UI and audio/animation", "Save/reload and package assets", "Fix authoritative boss state"],
-      "acceptanceCriteria": ["Automated player clears a packaged dungeon and authoritative boss identity/state is correct", "Hero/skills/combat/loot/UI/save all round-trip", "Applicable scores reach 3"],
-      "commands": ["ctest --test-dir build/windows-shipping -R ARPGDungeon --output-on-failure"],
-      "testSelectors": ["ARPGDungeon_*", "ARPGBoss_*"], "requiredCiJobs": ["module-ARPG"], "performanceBudgets": ["Dungeon actor/frame budgets"],
-      "documentationUpdates": ["GameModules/SparkGameARPG/README.md"], "readinessChanges": ["G13"], "websiteImpact": ["Until done: ARPG prototype/reference module"],
-      "risks": ["Tests driving debug structs instead of ECS/runtime"], "outOfScope": ["Online services"], "definitionOfDone": ["Dungeon acceptance and package pass", "All applicable scores are 3"]
+      "dependencies": [
+        "MOD-290",
+        "ENG-200"
+      ],
+      "parallelWith": [
+        "MOD-300",
+        "MOD-310",
+        "MOD-320",
+        "MOD-340",
+        "MOD-350",
+        "MOD-360",
+        "MOD-370",
+        "MOD-380",
+        "MOD-390"
+      ],
+      "sourceContext": [
+        "GameModules/SparkGameARPG"
+      ],
+      "entryPoints": [
+        "GameModules/SparkGameARPG/Source/Hero",
+        "GameModules/SparkGameARPG/Source/Combat",
+        "GameModules/SparkGameARPG/Source/Dungeon",
+        "GameModules/SparkGameARPG/Source/Monster"
+      ],
+      "implementationScope": [
+        "Isometric input/camera and ECS hero",
+        "Rendered/collidable dungeon",
+        "AI monsters, skills, combat, loot, boss and completion",
+        "Runtime UI and audio/animation",
+        "Save/reload and package assets",
+        "Fix authoritative boss state"
+      ],
+      "acceptanceCriteria": [
+        "Automated player clears a packaged dungeon and authoritative boss identity/state is correct",
+        "Hero/skills/combat/loot/UI/save all round-trip",
+        "Applicable scores reach 3"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -R ARPGDungeon --output-on-failure"
+      ],
+      "testSelectors": [
+        "ARPGDungeon_*",
+        "ARPGBoss_*"
+      ],
+      "requiredCiJobs": [
+        "module-ARPG"
+      ],
+      "performanceBudgets": [
+        "Dungeon actor/frame budgets"
+      ],
+      "documentationUpdates": [
+        "GameModules/SparkGameARPG/README.md"
+      ],
+      "readinessChanges": [
+        "G13"
+      ],
+      "websiteImpact": [
+        "Until done: ARPG prototype/reference module"
+      ],
+      "risks": [
+        "Tests driving debug structs instead of ECS/runtime"
+      ],
+      "outOfScope": [
+        "Online services"
+      ],
+      "definitionOfDone": [
+        "Dungeon acceptance and package pass",
+        "All applicable scores are 3"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
-      "id": "MOD-340", "title": "Finish Platformer as a complete level slice", "priority": "P1", "status": "open", "blocking": true, "wave": 4, "area": "modules", "owner": "unassigned",
+      "id": "MOD-340",
+      "title": "Finish Platformer as a complete level slice",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "modules",
+      "owner": "unassigned",
       "rationale": "Player input is documentation-only, collision assumes y=0, render/animation paths are no-op, and level data does not instantiate ECS/physics content.",
-      "dependencies": ["MOD-290"], "parallelWith": ["MOD-300", "MOD-310", "MOD-320", "MOD-330", "MOD-350", "MOD-360", "MOD-370", "MOD-380", "MOD-390"],
-      "sourceContext": ["GameModules/SparkGamePlatformer"], "entryPoints": ["GameModules/SparkGamePlatformer/Source/Player", "GameModules/SparkGamePlatformer/Source/Level", "GameModules/SparkGamePlatformer/Source/Hazard", "GameModules/SparkGamePlatformer/Source/Checkpoint"],
-      "implementationScope": ["Controller to ECS/Jolt or declared 2D body", "Rendered/collidable platforms", "Hazards, collectibles, checkpoints, death/restart", "Animation/audio/camera/runtime HUD", "Save/reload and packaged assets"],
-      "acceptanceCriteria": ["Automated three-minute packaged level completion passes", "Death restarts at checkpoint", "Collectible/progress state persists", "Applicable scores reach 3"],
-      "commands": ["ctest --test-dir build/windows-shipping -R PlatformerCompletion --output-on-failure"],
-      "testSelectors": ["PlatformerCompletion_*"], "requiredCiJobs": ["module-Platformer"], "performanceBudgets": ["Level frame/physics budgets"],
-      "documentationUpdates": ["GameModules/SparkGamePlatformer/README.md"], "readinessChanges": ["G13"], "websiteImpact": ["Until done: Platformer prototype/reference module"],
-      "risks": ["Hardcoded plane collision remaining beside real physics"], "outOfScope": ["Multiplayer"], "definitionOfDone": ["Level completion/save/package pass", "All applicable scores are 3"]
+      "dependencies": [
+        "MOD-290"
+      ],
+      "parallelWith": [
+        "MOD-300",
+        "MOD-310",
+        "MOD-320",
+        "MOD-330",
+        "MOD-350",
+        "MOD-360",
+        "MOD-370",
+        "MOD-380",
+        "MOD-390"
+      ],
+      "sourceContext": [
+        "GameModules/SparkGamePlatformer"
+      ],
+      "entryPoints": [
+        "GameModules/SparkGamePlatformer/Source/Player",
+        "GameModules/SparkGamePlatformer/Source/Level",
+        "GameModules/SparkGamePlatformer/Source/Hazard",
+        "GameModules/SparkGamePlatformer/Source/Checkpoint"
+      ],
+      "implementationScope": [
+        "Controller to ECS/Jolt or declared 2D body",
+        "Rendered/collidable platforms",
+        "Hazards, collectibles, checkpoints, death/restart",
+        "Animation/audio/camera/runtime HUD",
+        "Save/reload and packaged assets"
+      ],
+      "acceptanceCriteria": [
+        "Automated three-minute packaged level completion passes",
+        "Death restarts at checkpoint",
+        "Collectible/progress state persists",
+        "Applicable scores reach 3"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -R PlatformerCompletion --output-on-failure"
+      ],
+      "testSelectors": [
+        "PlatformerCompletion_*"
+      ],
+      "requiredCiJobs": [
+        "module-Platformer"
+      ],
+      "performanceBudgets": [
+        "Level frame/physics budgets"
+      ],
+      "documentationUpdates": [
+        "GameModules/SparkGamePlatformer/README.md"
+      ],
+      "readinessChanges": [
+        "G13"
+      ],
+      "websiteImpact": [
+        "Until done: Platformer prototype/reference module"
+      ],
+      "risks": [
+        "Hardcoded plane collision remaining beside real physics"
+      ],
+      "outOfScope": [
+        "Multiplayer"
+      ],
+      "definitionOfDone": [
+        "Level completion/save/package pass",
+        "All applicable scores are 3"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
-      "id": "MOD-350", "title": "Finish RPG as a quest, party, combat, and persistence slice", "priority": "P1", "status": "open", "blocking": true, "wave": 4, "area": "modules", "owner": "unassigned",
+      "id": "MOD-350",
+      "title": "Finish RPG as a quest, party, combat, and persistence slice",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "modules",
+      "owner": "unassigned",
       "rationale": "RPG has broad in-memory models but no integrated input, entities, rendered scenes/content, real NPC navigation, or complete serializers; animation/coroutine work is log-only.",
-      "dependencies": ["MOD-290", "ENG-200"], "parallelWith": ["MOD-300", "MOD-310", "MOD-320", "MOD-330", "MOD-340", "MOD-360", "MOD-370", "MOD-380", "MOD-390"],
-      "sourceContext": ["GameModules/SparkGameRPG"], "entryPoints": ["GameModules/SparkGameRPG/Source/Character", "GameModules/SparkGameRPG/Source/Quest", "GameModules/SparkGameRPG/Source/NPC", "GameModules/SparkGameRPG/Source/Dialogue"],
-      "implementationScope": ["Rendered player/party and controller", "Dialogue to quest to navigation/combat to loot/reward loop", "Real NPC AI/pathfinding", "Runtime UI/audio/animation", "Exact party/quest/inventory/world save and package assets"],
-      "acceptanceCriteria": ["Automated packaged quest flow completes and reward/state persist after restart", "NPCs navigate/interact through runtime systems", "Applicable scores reach 3"],
-      "commands": ["ctest --test-dir build/windows-shipping -R RPGQuestSlice --output-on-failure"],
-      "testSelectors": ["RPGQuestSlice_*", "RPGPersistence_*"], "requiredCiJobs": ["module-RPG"], "performanceBudgets": ["Party/NPC/frame budgets"],
-      "documentationUpdates": ["GameModules/SparkGameRPG/README.md"], "readinessChanges": ["G13"], "websiteImpact": ["Until done: RPG prototype/reference module"],
-      "risks": ["Serializing only UI models rather than authoritative world state"], "outOfScope": ["Online services"], "definitionOfDone": ["Quest slice and restart pass", "All applicable scores are 3"]
+      "dependencies": [
+        "MOD-290",
+        "ENG-200"
+      ],
+      "parallelWith": [
+        "MOD-300",
+        "MOD-310",
+        "MOD-320",
+        "MOD-330",
+        "MOD-340",
+        "MOD-360",
+        "MOD-370",
+        "MOD-380",
+        "MOD-390"
+      ],
+      "sourceContext": [
+        "GameModules/SparkGameRPG"
+      ],
+      "entryPoints": [
+        "GameModules/SparkGameRPG/Source/Character",
+        "GameModules/SparkGameRPG/Source/Quest",
+        "GameModules/SparkGameRPG/Source/NPC",
+        "GameModules/SparkGameRPG/Source/Dialogue"
+      ],
+      "implementationScope": [
+        "Rendered player/party and controller",
+        "Dialogue to quest to navigation/combat to loot/reward loop",
+        "Real NPC AI/pathfinding",
+        "Runtime UI/audio/animation",
+        "Exact party/quest/inventory/world save and package assets"
+      ],
+      "acceptanceCriteria": [
+        "Automated packaged quest flow completes and reward/state persist after restart",
+        "NPCs navigate/interact through runtime systems",
+        "Applicable scores reach 3"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -R RPGQuestSlice --output-on-failure"
+      ],
+      "testSelectors": [
+        "RPGQuestSlice_*",
+        "RPGPersistence_*"
+      ],
+      "requiredCiJobs": [
+        "module-RPG"
+      ],
+      "performanceBudgets": [
+        "Party/NPC/frame budgets"
+      ],
+      "documentationUpdates": [
+        "GameModules/SparkGameRPG/README.md"
+      ],
+      "readinessChanges": [
+        "G13"
+      ],
+      "websiteImpact": [
+        "Until done: RPG prototype/reference module"
+      ],
+      "risks": [
+        "Serializing only UI models rather than authoritative world state"
+      ],
+      "outOfScope": [
+        "Online services"
+      ],
+      "definitionOfDone": [
+        "Quest slice and restart pass",
+        "All applicable scores are 3"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
-      "id": "MOD-360", "title": "Finish OpenWorld as a streamed survival/exploration slice", "priority": "P1", "status": "open", "blocking": true, "wave": 4, "area": "modules", "owner": "unassigned",
+      "id": "MOD-360",
+      "title": "Finish OpenWorld as a streamed survival/exploration slice",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "modules",
+      "owner": "unassigned",
       "rationale": "Player, wildlife, events, and settlements are internal/prototype structures; scenes/content and music are missing; persistence is placeholder-only.",
-      "dependencies": ["MOD-290"], "parallelWith": ["MOD-300", "MOD-310", "MOD-320", "MOD-330", "MOD-340", "MOD-350", "MOD-370", "MOD-380", "MOD-390"],
-      "sourceContext": ["GameModules/SparkGameOpenWorld"], "entryPoints": ["GameModules/SparkGameOpenWorld/Source/World", "GameModules/SparkGameOpenWorld/Source/Player", "GameModules/SparkGameOpenWorld/Source/Wildlife", "GameModules/SparkGameOpenWorld/Source/Events"],
-      "implementationScope": ["Controlled rendered/collidable player", "At least two streamed terrain regions and origin behavior", "Gather/craft/survival loop", "Wildlife navigation, dynamic event, settlement interaction", "Runtime UI/audio/weather", "Exact persistence and packaged assets"],
-      "acceptanceCriteria": ["Automated traversal crosses two regions and completes gather/event/settlement interactions", "Restart restores player/world/event/settlement state", "No missing asset/music reference", "Applicable scores reach 3"],
-      "commands": ["ctest --test-dir build/windows-shipping -R OpenWorldTraversal --output-on-failure"],
-      "testSelectors": ["OpenWorldTraversal_*", "OpenWorldPersistence_*"], "requiredCiJobs": ["module-OpenWorld"], "performanceBudgets": ["Streaming/frame/memory budgets"],
-      "documentationUpdates": ["GameModules/SparkGameOpenWorld/README.md"], "readinessChanges": ["G13", "G14"], "websiteImpact": ["Until done: OpenWorld prototype/reference module"],
-      "risks": ["Test map too small to exercise streaming"], "outOfScope": ["Planet-scale world"], "definitionOfDone": ["Two-region slice/restart/package pass", "All applicable scores are 3"]
+      "dependencies": [
+        "MOD-290"
+      ],
+      "parallelWith": [
+        "MOD-300",
+        "MOD-310",
+        "MOD-320",
+        "MOD-330",
+        "MOD-340",
+        "MOD-350",
+        "MOD-370",
+        "MOD-380",
+        "MOD-390"
+      ],
+      "sourceContext": [
+        "GameModules/SparkGameOpenWorld"
+      ],
+      "entryPoints": [
+        "GameModules/SparkGameOpenWorld/Source/World",
+        "GameModules/SparkGameOpenWorld/Source/Player",
+        "GameModules/SparkGameOpenWorld/Source/Wildlife",
+        "GameModules/SparkGameOpenWorld/Source/Events"
+      ],
+      "implementationScope": [
+        "Controlled rendered/collidable player",
+        "At least two streamed terrain regions and origin behavior",
+        "Gather/craft/survival loop",
+        "Wildlife navigation, dynamic event, settlement interaction",
+        "Runtime UI/audio/weather",
+        "Exact persistence and packaged assets"
+      ],
+      "acceptanceCriteria": [
+        "Automated traversal crosses two regions and completes gather/event/settlement interactions",
+        "Restart restores player/world/event/settlement state",
+        "No missing asset/music reference",
+        "Applicable scores reach 3"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -R OpenWorldTraversal --output-on-failure"
+      ],
+      "testSelectors": [
+        "OpenWorldTraversal_*",
+        "OpenWorldPersistence_*"
+      ],
+      "requiredCiJobs": [
+        "module-OpenWorld"
+      ],
+      "performanceBudgets": [
+        "Streaming/frame/memory budgets"
+      ],
+      "documentationUpdates": [
+        "GameModules/SparkGameOpenWorld/README.md"
+      ],
+      "readinessChanges": [
+        "G13",
+        "G14"
+      ],
+      "websiteImpact": [
+        "Until done: OpenWorld prototype/reference module"
+      ],
+      "risks": [
+        "Test map too small to exercise streaming"
+      ],
+      "outOfScope": [
+        "Planet-scale world"
+      ],
+      "definitionOfDone": [
+        "Two-region slice/restart/package pass",
+        "All applicable scores are 3"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
-      "id": "MOD-370", "title": "Finish RTS as a deterministic playable skirmish", "priority": "P1", "status": "open", "blocking": true, "wave": 4, "area": "modules", "owner": "unassigned",
+      "id": "MOD-370",
+      "title": "Finish RTS as a deterministic playable skirmish",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "modules",
+      "owner": "unassigned",
       "rationale": "Selection/commands, movement/pathfinding, fog updates, fixed update, persistence, and AI attachment are placeholder or disconnected.",
-      "dependencies": ["MOD-290"], "parallelWith": ["MOD-300", "MOD-310", "MOD-320", "MOD-330", "MOD-340", "MOD-350", "MOD-360", "MOD-380", "MOD-390"],
-      "sourceContext": ["GameModules/SparkGameRTS"], "entryPoints": ["GameModules/SparkGameRTS/Source/Command", "GameModules/SparkGameRTS/Source/Unit", "GameModules/SparkGameRTS/Source/Fog", "GameModules/SparkGameRTS/Source/AI"],
-      "implementationScope": ["Camera/selection/raycast", "Rendered ECS units/buildings", "Move/attack/build commands and nav/formations", "Combat/economy/build queues/fog", "Attached AI opponent and win/loss", "Save/load and package assets"],
-      "acceptanceCriteria": ["Deterministic packaged skirmish reaches a win state", "Fog, AI, commands, economy and save operate through production systems", "Applicable scores reach 3"],
-      "commands": ["ctest --test-dir build/windows-shipping -R RTSSkirmish --output-on-failure"],
-      "testSelectors": ["RTSSkirmish_*", "RTSSave_*"], "requiredCiJobs": ["module-RTS"], "performanceBudgets": ["Unit/path/fog/frame budgets"],
-      "documentationUpdates": ["GameModules/SparkGameRTS/README.md"], "readinessChanges": ["G13"], "websiteImpact": ["Until done: RTS prototype/reference module"],
-      "risks": ["AI tree registered but not attached to world entities"], "outOfScope": ["Online multiplayer unless explicitly declared"], "definitionOfDone": ["Skirmish/save/package pass", "All applicable scores are 3"]
+      "dependencies": [
+        "MOD-290"
+      ],
+      "parallelWith": [
+        "MOD-300",
+        "MOD-310",
+        "MOD-320",
+        "MOD-330",
+        "MOD-340",
+        "MOD-350",
+        "MOD-360",
+        "MOD-380",
+        "MOD-390"
+      ],
+      "sourceContext": [
+        "GameModules/SparkGameRTS"
+      ],
+      "entryPoints": [
+        "GameModules/SparkGameRTS/Source/Command",
+        "GameModules/SparkGameRTS/Source/Unit",
+        "GameModules/SparkGameRTS/Source/Fog",
+        "GameModules/SparkGameRTS/Source/AI"
+      ],
+      "implementationScope": [
+        "Camera/selection/raycast",
+        "Rendered ECS units/buildings",
+        "Move/attack/build commands and nav/formations",
+        "Combat/economy/build queues/fog",
+        "Attached AI opponent and win/loss",
+        "Save/load and package assets"
+      ],
+      "acceptanceCriteria": [
+        "Deterministic packaged skirmish reaches a win state",
+        "Fog, AI, commands, economy and save operate through production systems",
+        "Applicable scores reach 3"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -R RTSSkirmish --output-on-failure"
+      ],
+      "testSelectors": [
+        "RTSSkirmish_*",
+        "RTSSave_*"
+      ],
+      "requiredCiJobs": [
+        "module-RTS"
+      ],
+      "performanceBudgets": [
+        "Unit/path/fog/frame budgets"
+      ],
+      "documentationUpdates": [
+        "GameModules/SparkGameRTS/README.md"
+      ],
+      "readinessChanges": [
+        "G13"
+      ],
+      "websiteImpact": [
+        "Until done: RTS prototype/reference module"
+      ],
+      "risks": [
+        "AI tree registered but not attached to world entities"
+      ],
+      "outOfScope": [
+        "Online multiplayer unless explicitly declared"
+      ],
+      "definitionOfDone": [
+        "Skirmish/save/package pass",
+        "All applicable scores are 3"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
-      "id": "MOD-380", "title": "Finish Racing as a physics-backed complete race", "priority": "P1", "status": "open", "blocking": true, "wave": 4, "area": "modules", "owner": "unassigned",
+      "id": "MOD-380",
+      "title": "Finish Racing as a physics-backed complete race",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 4,
+      "area": "modules",
+      "owner": "unassigned",
       "rationale": "No real player input path exists; vehicles use custom fixed-step kinematic math, tracks/checkpoints lack authored colliders, camera is internal state, HUD is editor ImGui, and music is missing.",
-      "dependencies": ["MOD-290"], "parallelWith": ["MOD-300", "MOD-310", "MOD-320", "MOD-330", "MOD-340", "MOD-350", "MOD-360", "MOD-370", "MOD-390"],
-      "sourceContext": ["GameModules/SparkGameRacing"], "entryPoints": ["GameModules/SparkGameRacing/Source/Vehicle", "GameModules/SparkGameRacing/Source/Track", "GameModules/SparkGameRacing/Source/AI", "GameModules/SparkGameRacing/Source/HUD"],
-      "implementationScope": ["Player input to integrated Jolt vehicle", "Renderer camera and runtime HUD", "Packaged track/checkpoint colliders", "AI racers, laps/results/restart", "Ghost/replay persistence if declared", "Resolve music/assets"],
-      "acceptanceCriteria": ["Automated packaged race has player and AI finish valid laps", "Physics uses the shared runtime and timestep", "Results/restart and declared ghost state persist", "Applicable scores reach 3"],
-      "commands": ["ctest --test-dir build/windows-shipping -R RacingCompleteRace --output-on-failure"],
-      "testSelectors": ["RacingCompleteRace_*"], "requiredCiJobs": ["module-Racing"], "performanceBudgets": ["Vehicle physics/frame budgets"],
-      "documentationUpdates": ["GameModules/SparkGameRacing/README.md"], "readinessChanges": ["G13"], "websiteImpact": ["Until done: Racing prototype/reference module"],
-      "risks": ["Custom kinematic path diverging from engine physics"], "outOfScope": ["Online racing unless declared"], "definitionOfDone": ["Complete race/package/restart pass", "All applicable scores are 3"]
+      "dependencies": [
+        "MOD-290"
+      ],
+      "parallelWith": [
+        "MOD-300",
+        "MOD-310",
+        "MOD-320",
+        "MOD-330",
+        "MOD-340",
+        "MOD-350",
+        "MOD-360",
+        "MOD-370",
+        "MOD-390"
+      ],
+      "sourceContext": [
+        "GameModules/SparkGameRacing"
+      ],
+      "entryPoints": [
+        "GameModules/SparkGameRacing/Source/Vehicle",
+        "GameModules/SparkGameRacing/Source/Track",
+        "GameModules/SparkGameRacing/Source/AI",
+        "GameModules/SparkGameRacing/Source/HUD"
+      ],
+      "implementationScope": [
+        "Player input to integrated Jolt vehicle",
+        "Renderer camera and runtime HUD",
+        "Packaged track/checkpoint colliders",
+        "AI racers, laps/results/restart",
+        "Ghost/replay persistence if declared",
+        "Resolve music/assets"
+      ],
+      "acceptanceCriteria": [
+        "Automated packaged race has player and AI finish valid laps",
+        "Physics uses the shared runtime and timestep",
+        "Results/restart and declared ghost state persist",
+        "Applicable scores reach 3"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -R RacingCompleteRace --output-on-failure"
+      ],
+      "testSelectors": [
+        "RacingCompleteRace_*"
+      ],
+      "requiredCiJobs": [
+        "module-Racing"
+      ],
+      "performanceBudgets": [
+        "Vehicle physics/frame budgets"
+      ],
+      "documentationUpdates": [
+        "GameModules/SparkGameRacing/README.md"
+      ],
+      "readinessChanges": [
+        "G13"
+      ],
+      "websiteImpact": [
+        "Until done: Racing prototype/reference module"
+      ],
+      "risks": [
+        "Custom kinematic path diverging from engine physics"
+      ],
+      "outOfScope": [
+        "Online racing unless declared"
+      ],
+      "definitionOfDone": [
+        "Complete race/package/restart pass",
+        "All applicable scores are 3"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
-      "id": "MOD-390", "title": "Finish VisualScript as a real packaged gameplay loop", "priority": "P1", "status": "blocked", "blocking": true, "wave": 4, "area": "modules", "owner": "unassigned",
+      "id": "MOD-390",
+      "title": "Finish VisualScript as a real packaged gameplay loop",
+      "priority": "P1",
+      "status": "blocked",
+      "blocking": true,
+      "wave": 4,
+      "area": "modules",
+      "owner": "unassigned",
       "rationale": "The module compiles/spawns surfaces but runtime lifecycle is disconnected, AttachScript failure is ignored, and load can succeed with zero compiled scripts.",
-      "dependencies": ["MOD-290", "ENG-200"], "parallelWith": ["MOD-300", "MOD-310", "MOD-320", "MOD-330", "MOD-340", "MOD-350", "MOD-360", "MOD-370", "MOD-380"],
-      "sourceContext": ["GameModules/SparkGameVisualScript", "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp", "SparkEditor/Source/Panels/VisualScriptPanel.cpp"], "entryPoints": ["GameModules/SparkGameVisualScript/Source/Core", "SparkEditor/Source/Panels/VisualScriptPanel.cpp"],
-      "implementationScope": ["Fail module load on required compile/attach failure with diagnostics", "Bind entity/start/update/collision/events", "Exercise physics/audio/animation", "Support hot reload/migration/debug/source mapping", "Build a complete graph-authored packaged loop"],
-      "acceptanceCriteria": ["Compile failure blocks readiness", "Graph-authored player completes a real runtime objective", "Subsystem bindings and hot reload pass", "Applicable scores reach 3"],
-      "commands": ["ctest --test-dir build/windows-shipping -R VisualScriptGameplay --output-on-failure"],
-      "testSelectors": ["VisualScriptGameplay_*", "VisualScriptDiagnostics_*"], "requiredCiJobs": ["module-VisualScript"], "performanceBudgets": ["Script budgets from ENG-200"],
-      "documentationUpdates": ["GameModules/SparkGameVisualScript/README.md", "wiki/gameplay-tools/Visual-Scripting.md"], "readinessChanges": ["G11", "G13", "scripting.visual"], "websiteImpact": ["Until done: VisualScript compiler/authoring prototype"],
-      "risks": ["Compiler tests standing in for runtime execution"], "outOfScope": ["New scripting language"], "definitionOfDone": ["Packaged gameplay loop and diagnostics pass", "All applicable scores are 3"]
+      "dependencies": [
+        "MOD-290",
+        "ENG-200"
+      ],
+      "parallelWith": [
+        "MOD-300",
+        "MOD-310",
+        "MOD-320",
+        "MOD-330",
+        "MOD-340",
+        "MOD-350",
+        "MOD-360",
+        "MOD-370",
+        "MOD-380"
+      ],
+      "sourceContext": [
+        "GameModules/SparkGameVisualScript",
+        "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp",
+        "SparkEditor/Source/Panels/VisualScriptPanel.cpp"
+      ],
+      "entryPoints": [
+        "GameModules/SparkGameVisualScript/Source/Core",
+        "SparkEditor/Source/Panels/VisualScriptPanel.cpp"
+      ],
+      "implementationScope": [
+        "Fail module load on required compile/attach failure with diagnostics",
+        "Bind entity/start/update/collision/events",
+        "Exercise physics/audio/animation",
+        "Support hot reload/migration/debug/source mapping",
+        "Build a complete graph-authored packaged loop"
+      ],
+      "acceptanceCriteria": [
+        "Compile failure blocks readiness",
+        "Graph-authored player completes a real runtime objective",
+        "Subsystem bindings and hot reload pass",
+        "Applicable scores reach 3"
+      ],
+      "commands": [
+        "ctest --test-dir build/windows-shipping -R VisualScriptGameplay --output-on-failure"
+      ],
+      "testSelectors": [
+        "VisualScriptGameplay_*",
+        "VisualScriptDiagnostics_*"
+      ],
+      "requiredCiJobs": [
+        "module-VisualScript"
+      ],
+      "performanceBudgets": [
+        "Script budgets from ENG-200"
+      ],
+      "documentationUpdates": [
+        "GameModules/SparkGameVisualScript/README.md",
+        "wiki/gameplay-tools/Visual-Scripting.md"
+      ],
+      "readinessChanges": [
+        "G11",
+        "G13",
+        "scripting.visual"
+      ],
+      "websiteImpact": [
+        "Until done: VisualScript compiler/authoring prototype"
+      ],
+      "risks": [
+        "Compiler tests standing in for runtime execution"
+      ],
+      "outOfScope": [
+        "New scripting language"
+      ],
+      "definitionOfDone": [
+        "Packaged gameplay loop and diagnostics pass",
+        "All applicable scores are 3"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
-      "id": "TF-110", "title": "Prove MMOFPS with a true independent multi-client release gate", "priority": "P0", "status": "open", "blocking": true, "wave": 3, "area": "modules", "owner": "unassigned",
+      "id": "TF-110",
+      "title": "Prove MMOFPS with a true independent multi-client release gate",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 3,
+      "area": "modules",
+      "owner": "unassigned",
       "rationale": "Current chaos/listen-host/screenshot paths do not prove two independent client processes observing the same authoritative production server state.",
-      "dependencies": ["NET-100", "RDY-020", "HEAD-220", "RDY-010"], "parallelWith": ["TF-120", "OPS-110"],
-      "sourceContext": ["GameModules/SparkGameMMOFPS/Smoke", "Tools/Launch-Terrafront.ps1", "GameModules/SparkGameMMOFPS/Source"], "entryPoints": ["GameModules/SparkGameMMOFPS/Smoke", "Tools/Launch-Terrafront.ps1"],
-      "implementationScope": ["Deterministic harness: one dedicated server and two independent clients", "Register/login/enter world", "Remote spawn/move/damage/kill/respawn", "Reject forged inventory/equipment/ability state", "Replicate territory and vehicle purchase/entry/motion/exit/destruction", "Reconnect", "Loss/latency/jitter/duplication/reorder", "30-minute 100-actor soak"],
-      "acceptanceCriteria": ["Both clients converge on authoritative outcomes for every listed scenario", "Forged state is rejected and audited", "Reconnect restores allowed state", "Network/tick/memory budgets pass with no crash or unbounded growth"],
-      "commands": ["ctest --test-dir build/linux-shipping -R TerrafrontMultiClient --output-on-failure"],
-      "testSelectors": ["TerrafrontMultiClient_*"], "requiredCiJobs": ["terrafront-multiclient", "terrafront-soak"], "performanceBudgets": ["60 Hz simulation, 20 Hz replication, declared p95 tick/network/memory budgets"],
-      "documentationUpdates": ["GameModules/SparkGameMMOFPS/README.md", "GameModules/SparkGameMMOFPS/DESIGN.md"], "readinessChanges": ["G12", "G13", "modules.mmofps"], "websiteImpact": ["MMOFPS remains advanced pre-release reference until this passes"],
-      "risks": ["Bots or loopback shortcuts substituting for clients"], "outOfScope": ["Public fleet control plane"], "definitionOfDone": ["Independent-client matrix and soak pass", "Evidence publishes"]
+      "dependencies": [
+        "NET-100",
+        "RDY-020",
+        "HEAD-220",
+        "RDY-010"
+      ],
+      "parallelWith": [
+        "TF-120",
+        "OPS-110"
+      ],
+      "sourceContext": [
+        "GameModules/SparkGameMMOFPS/Smoke",
+        "Tools/Launch-Terrafront.ps1",
+        "GameModules/SparkGameMMOFPS/Source"
+      ],
+      "entryPoints": [
+        "GameModules/SparkGameMMOFPS/Smoke",
+        "Tools/Launch-Terrafront.ps1"
+      ],
+      "implementationScope": [
+        "Deterministic harness: one dedicated server and two independent clients",
+        "Register/login/enter world",
+        "Remote spawn/move/damage/kill/respawn",
+        "Reject forged inventory/equipment/ability state",
+        "Replicate territory and vehicle purchase/entry/motion/exit/destruction",
+        "Reconnect",
+        "Loss/latency/jitter/duplication/reorder",
+        "30-minute 100-actor soak"
+      ],
+      "acceptanceCriteria": [
+        "Both clients converge on authoritative outcomes for every listed scenario",
+        "Forged state is rejected and audited",
+        "Reconnect restores allowed state",
+        "Network/tick/memory budgets pass with no crash or unbounded growth"
+      ],
+      "commands": [
+        "ctest --test-dir build/linux-shipping -R TerrafrontMultiClient --output-on-failure"
+      ],
+      "testSelectors": [
+        "TerrafrontMultiClient_*"
+      ],
+      "requiredCiJobs": [
+        "terrafront-multiclient",
+        "terrafront-soak"
+      ],
+      "performanceBudgets": [
+        "60 Hz simulation, 20 Hz replication, declared p95 tick/network/memory budgets"
+      ],
+      "documentationUpdates": [
+        "GameModules/SparkGameMMOFPS/README.md",
+        "GameModules/SparkGameMMOFPS/DESIGN.md"
+      ],
+      "readinessChanges": [
+        "G12",
+        "G13",
+        "modules.mmofps"
+      ],
+      "websiteImpact": [
+        "MMOFPS remains advanced pre-release reference until this passes"
+      ],
+      "risks": [
+        "Bots or loopback shortcuts substituting for clients"
+      ],
+      "outOfScope": [
+        "Public fleet control plane"
+      ],
+      "definitionOfDone": [
+        "Independent-client matrix and soak pass",
+        "Evidence publishes"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     },
     {
-      "id": "TF-120", "title": "Close MMOFPS restart, multimap migration, topology, and performance", "priority": "P1", "status": "open", "blocking": true, "wave": 3, "area": "modules", "owner": "unassigned",
+      "id": "TF-120",
+      "title": "Close MMOFPS restart, multimap migration, topology, and performance",
+      "priority": "P1",
+      "status": "open",
+      "blocking": true,
+      "wave": 3,
+      "area": "modules",
+      "owner": "unassigned",
       "rationale": "Shared save storage, client scene/collision reload, topology-driven migration, transactional handoff, restart recovery, and process-per-continent behavior remain incomplete or placeholder.",
-      "dependencies": ["TF-110", "DATA-120", "OPS-110"], "parallelWith": [],
-      "sourceContext": ["docs/TERRAFRONT_MULTIMAP.md", "SparkEngine/Source/Engine/Networking/AreaServer.h", "SparkEngine/Source/Engine/Networking/AreaServer.cpp"], "entryPoints": ["SparkEngine/Source/Engine/Networking", "docs/TERRAFRONT_MULTIMAP.md"],
-      "implementationScope": ["Data-driven topology/region ownership", "Transactional idempotent migration with rollback", "Client scene/physics/collision/presentation reload", "Restart recovery for territory/accounts/characters/vehicles/economy", "Forced source/destination crash tests", "Long soak and capacity evidence"],
-      "acceptanceCriteria": ["Cross-continent travel is visually/physically correct", "Duplicate/lost migration messages do not duplicate/lose entities", "Forced source/destination crashes recover", "Cold restart restores authoritative state", "Budgets pass"],
-      "commands": ["ctest --test-dir build/linux-shipping -R TerrafrontMigration --output-on-failure", "ctest --test-dir build/linux-shipping -R TerrafrontRestart --output-on-failure"],
-      "testSelectors": ["TerrafrontMigration_*", "TerrafrontRestart_*"], "requiredCiJobs": ["terrafront-migration", "terrafront-recovery", "terrafront-soak"], "performanceBudgets": ["Migration latency/loss and multi-continent capacity budgets"],
-      "documentationUpdates": ["docs/TERRAFRONT_MULTIMAP.md", "GameModules/SparkGameMMOFPS/DESIGN.md"], "readinessChanges": ["G12", "G13", "G14", "modules.mmofps"], "websiteImpact": ["Distributed-world wording names process-per-continent and tested limits"],
-      "risks": ["Migration split-brain and duplication"], "outOfScope": ["Unlimited global scale"], "definitionOfDone": ["Migration/restart/crash/soak evidence passes"]
+      "dependencies": [
+        "TF-110",
+        "DATA-120",
+        "OPS-110"
+      ],
+      "parallelWith": [],
+      "sourceContext": [
+        "docs/TERRAFRONT_MULTIMAP.md",
+        "SparkEngine/Source/Engine/Networking/AreaServer.h",
+        "SparkEngine/Source/Engine/Networking/AreaServer.cpp"
+      ],
+      "entryPoints": [
+        "SparkEngine/Source/Engine/Networking",
+        "docs/TERRAFRONT_MULTIMAP.md"
+      ],
+      "implementationScope": [
+        "Data-driven topology/region ownership",
+        "Transactional idempotent migration with rollback",
+        "Client scene/physics/collision/presentation reload",
+        "Restart recovery for territory/accounts/characters/vehicles/economy",
+        "Forced source/destination crash tests",
+        "Long soak and capacity evidence"
+      ],
+      "acceptanceCriteria": [
+        "Cross-continent travel is visually/physically correct",
+        "Duplicate/lost migration messages do not duplicate/lose entities",
+        "Forced source/destination crashes recover",
+        "Cold restart restores authoritative state",
+        "Budgets pass"
+      ],
+      "commands": [
+        "ctest --test-dir build/linux-shipping -R TerrafrontMigration --output-on-failure",
+        "ctest --test-dir build/linux-shipping -R TerrafrontRestart --output-on-failure"
+      ],
+      "testSelectors": [
+        "TerrafrontMigration_*",
+        "TerrafrontRestart_*"
+      ],
+      "requiredCiJobs": [
+        "terrafront-migration",
+        "terrafront-recovery",
+        "terrafront-soak"
+      ],
+      "performanceBudgets": [
+        "Migration latency/loss and multi-continent capacity budgets"
+      ],
+      "documentationUpdates": [
+        "docs/TERRAFRONT_MULTIMAP.md",
+        "GameModules/SparkGameMMOFPS/DESIGN.md"
+      ],
+      "readinessChanges": [
+        "G12",
+        "G13",
+        "G14",
+        "modules.mmofps"
+      ],
+      "websiteImpact": [
+        "Distributed-world wording names process-per-continent and tested limits"
+      ],
+      "risks": [
+        "Migration split-brain and duplication"
+      ],
+      "outOfScope": [
+        "Unlimited global scale"
+      ],
+      "definitionOfDone": [
+        "Migration/restart/crash/soak evidence passes"
+      ],
+      "profileApplicability": {
+        "stable-v1": "outside"
+      }
     }
   ]
 }

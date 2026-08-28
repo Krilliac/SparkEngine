@@ -3,9 +3,9 @@
   "globalRelease": {
     "state": "blocked",
     "label": "Pre-release hardening",
-    "summary": "SparkEngine is source-usable and feature-rich, but it is not yet a fully ready engine release. Required CI can mask failures, no versioned release exists, shipping artifacts are not signed or attested, platform and renderer support is not certified, most genre modules remain prototypes, and production networking and operations are incomplete.",
+    "summary": "SparkEngine is source-usable and feature-rich, but it is not yet a fully ready engine release. Required CI can mask failures, no versioned release exists, shipping artifacts are not signed or attested, and the stable-v1 Windows, D3D11, editor, NullRHI, installed-package, public-SDK, and SparkGameFPS evidence is not certified.",
     "definition": [
-      "Every blocking release gate is passing at the same source commit.",
+      "Every declared release profile is ready at the same source commit; each profile's required gates are passing and its applicable work is complete.",
       "Required builds and tests fail closed and attach machine-readable evidence.",
       "Primary platform, renderer, editor, packaged runtime, and SDK workflows pass end to end.",
       "Every advertised game module meets its declared release profile or is explicitly labeled as a prototype/template.",
@@ -17,6 +17,8 @@
   "statusPromotionRules": [
     "Implementation, verification, support, and release are independent dimensions; never infer one from another.",
     "A capability cannot be release-ready while a required gate is not passing or a blocking work item is open.",
+    "Global release readiness is derived from every declared release profile; gates explicitly excluded by every profile may remain blocked and must stay labeled unsupported or experimental.",
+    "Every work item explicitly classifies its applicability to every release profile as required, shared, or outside, and no profile may depend transitively on outside work.",
     "A passing test must execute production source or a packaged binary; mirror-only, tautological, or mock-only tests cannot promote readiness.",
     "Every public numeric claim resolves through a generated metric with an evidence path.",
     "Every readiness promotion includes source, tests, CI evidence, documentation, limitations, and website impact in the same change.",
@@ -34,15 +36,50 @@
       "support": "primary",
       "release": "candidate",
       "summary": "Windows is the broadest and intended primary host, with MSVC, the editor, D3D11, and packaging projects present.",
-      "limitations": ["No same-commit Shipping certification, signing, install/uninstall, upgrade, or rollback evidence is published.", "The stable-v1 profile supports Windows 11 x64 only; Windows 10 x64 remains a documented build floor and is not a certified profile row."],
-      "evidence": [
-        {"type": "workflow", "path": ".github/workflows/build.yml", "job": "build-windows-vs2022", "label": "Windows CI job"},
-        {"type": "source", "path": "SparkEngine/Source/Core/SparkEngineWindows.cpp", "label": "Windows platform source"}
+      "limitations": [
+        "No same-commit Shipping certification, signing, install/uninstall, upgrade, or rollback evidence is published.",
+        "The stable-v1 profile supports Windows 11 x64 only; Windows 10 x64 remains a documented build floor and is not a certified profile row."
       ],
-      "requiredGateIds": ["G02", "G03", "G05", "G08", "G17"],
-      "blockingWorkItemIds": ["CI-100", "REL-100", "REL-110", "PLT-200"],
-      "documentation": ["wiki/platform/System-Requirements.md"],
-      "website": {"icon": "monitor", "eyebrow": "Platform", "title": "The primary host candidate", "bullets": ["MSVC and Windows platform paths exist", "D3D11 and editor depth are strongest here", "Shipping, signing, installer, upgrade, and rollback gates remain open"], "proofMetricIds": []}
+      "evidence": [
+        {
+          "type": "workflow",
+          "path": ".github/workflows/build.yml",
+          "job": "build-windows-vs2022",
+          "label": "Windows CI job"
+        },
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Core/SparkEngineWindows.cpp",
+          "label": "Windows platform source"
+        }
+      ],
+      "requiredGateIds": [
+        "G02",
+        "G03",
+        "G05",
+        "G08",
+        "G17"
+      ],
+      "blockingWorkItemIds": [
+        "CI-100",
+        "REL-100",
+        "REL-110",
+        "PLT-200"
+      ],
+      "documentation": [
+        "wiki/platform/System-Requirements.md"
+      ],
+      "website": {
+        "icon": "monitor",
+        "eyebrow": "Platform",
+        "title": "The primary host candidate",
+        "bullets": [
+          "MSVC and Windows platform paths exist",
+          "D3D11 and editor depth are strongest here",
+          "Shipping, signing, installer, upgrade, and rollback gates remain open"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "platform.linux",
@@ -54,15 +91,50 @@
       "support": "experimental",
       "release": "blocked",
       "summary": "Linux build, sanitizer, headless, OpenGL, and Vulkan paths exist, but the supported driver/package/runtime matrix is not release-certified.",
-      "limitations": ["No installable release package or declared driver matrix", "Renderer and packaged content parity remain incomplete"],
-      "evidence": [
-        {"type": "workflow", "path": ".github/workflows/build.yml", "job": "build-linux-asan", "label": "Linux sanitizer lane"},
-        {"type": "document", "path": "wiki/platform/System-Requirements.md", "label": "Platform status"}
+      "limitations": [
+        "No installable release package or declared driver matrix",
+        "Renderer and packaged content parity remain incomplete"
       ],
-      "requiredGateIds": ["G02", "G03", "G04", "G08", "G09"],
-      "blockingWorkItemIds": ["CI-100", "PLT-210", "RHI-230", "RHI-240"],
-      "documentation": ["wiki/platform/Cross-Compilation-Wine-Testing.md"],
-      "website": {"icon": "terminal", "eyebrow": "Platform", "title": "Portable foundations under certification", "bullets": ["GCC and Clang paths exist", "Sanitizers and headless execution provide useful evidence", "Drivers, rendering parity, packaging, and support policy remain open"], "proofMetricIds": []}
+      "evidence": [
+        {
+          "type": "workflow",
+          "path": ".github/workflows/build.yml",
+          "job": "build-linux-asan",
+          "label": "Linux sanitizer lane"
+        },
+        {
+          "type": "document",
+          "path": "wiki/platform/System-Requirements.md",
+          "label": "Platform status"
+        }
+      ],
+      "requiredGateIds": [
+        "G02",
+        "G03",
+        "G04",
+        "G08",
+        "G09"
+      ],
+      "blockingWorkItemIds": [
+        "CI-100",
+        "PLT-210",
+        "RHI-230",
+        "RHI-240"
+      ],
+      "documentation": [
+        "wiki/platform/Cross-Compilation-Wine-Testing.md"
+      ],
+      "website": {
+        "icon": "terminal",
+        "eyebrow": "Platform",
+        "title": "Portable foundations under certification",
+        "bullets": [
+          "GCC and Clang paths exist",
+          "Sanitizers and headless execution provide useful evidence",
+          "Drivers, rendering parity, packaging, and support policy remain open"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "platform.macos",
@@ -74,15 +146,49 @@
       "support": "experimental",
       "release": "blocked",
       "summary": "macOS build work exists, while Metal, packaging, signing, notarization, and end-to-end runtime evidence remain incomplete.",
-      "limitations": ["Metal is not a complete certified renderer", "No notarized release package or packaged golden-scene evidence"],
-      "evidence": [
-        {"type": "workflow", "path": ".github/workflows/build.yml", "job": "build-macos", "label": "macOS build lane"},
-        {"type": "source", "path": "SparkEngine/Source/Graphics/RHI/Metal", "label": "Metal source surface"}
+      "limitations": [
+        "Metal is not a complete certified renderer",
+        "No notarized release package or packaged golden-scene evidence"
       ],
-      "requiredGateIds": ["G02", "G04", "G05", "G08", "G09"],
-      "blockingWorkItemIds": ["PLT-220", "RHI-220", "REL-110"],
-      "documentation": ["wiki/research/Mac-Compatibility-Analysis.md"],
-      "website": {"icon": "monitor", "eyebrow": "Platform", "title": "An experimental host path", "bullets": ["Build and platform entry points exist", "Metal parity and packaged runtime proof are incomplete", "Signing and notarization remain release blockers"], "proofMetricIds": []}
+      "evidence": [
+        {
+          "type": "workflow",
+          "path": ".github/workflows/build.yml",
+          "job": "build-macos",
+          "label": "macOS build lane"
+        },
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Graphics/RHI/Metal",
+          "label": "Metal source surface"
+        }
+      ],
+      "requiredGateIds": [
+        "G02",
+        "G04",
+        "G05",
+        "G08",
+        "G09"
+      ],
+      "blockingWorkItemIds": [
+        "PLT-220",
+        "RHI-220",
+        "REL-110"
+      ],
+      "documentation": [
+        "wiki/research/Mac-Compatibility-Analysis.md"
+      ],
+      "website": {
+        "icon": "monitor",
+        "eyebrow": "Platform",
+        "title": "An experimental host path",
+        "bullets": [
+          "Build and platform entry points exist",
+          "Metal parity and packaged runtime proof are incomplete",
+          "Signing and notarization remain release blockers"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "platform.mobile",
@@ -94,12 +200,35 @@
       "support": "unsupported",
       "release": "blocked",
       "summary": "Touch and quality-scaling foundations do not constitute an iOS or Android deployment backend.",
-      "limitations": ["No complete platform layer, build pipeline, store package, device matrix, or lifecycle validation"],
-      "evidence": [{"type": "document", "path": "docs/plans/FEATURE_ROADMAP.md", "label": "Mobile roadmap entry"}],
-      "requiredGateIds": ["G08"],
-      "blockingWorkItemIds": ["PLT-230"],
-      "documentation": ["wiki/platform/Mobile-Platform.md"],
-      "website": {"icon": "monitor", "eyebrow": "Platform", "title": "Framework work, not a shipping target", "bullets": ["Input foundations exist", "Native lifecycle, graphics, packaging, devices, and stores remain unproven"], "proofMetricIds": []}
+      "limitations": [
+        "No complete platform layer, build pipeline, store package, device matrix, or lifecycle validation"
+      ],
+      "evidence": [
+        {
+          "type": "document",
+          "path": "docs/plans/FEATURE_ROADMAP.md",
+          "label": "Mobile roadmap entry"
+        }
+      ],
+      "requiredGateIds": [
+        "G08"
+      ],
+      "blockingWorkItemIds": [
+        "PLT-230"
+      ],
+      "documentation": [
+        "wiki/platform/Mobile-Platform.md"
+      ],
+      "website": {
+        "icon": "monitor",
+        "eyebrow": "Platform",
+        "title": "Framework work, not a shipping target",
+        "bullets": [
+          "Input foundations exist",
+          "Native lifecycle, graphics, packaging, devices, and stores remain unproven"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "platform.vr",
@@ -111,12 +240,36 @@
       "support": "unsupported",
       "release": "blocked",
       "summary": "VR is an interface/framework surface without a completed OpenXR runtime path.",
-      "limitations": ["No runtime initialization, device validation, interaction profile, stereo renderer certification, or packaged headset test"],
-      "evidence": [{"type": "document", "path": "docs/plans/FEATURE_ROADMAP.md", "label": "VR roadmap entry"}],
-      "requiredGateIds": ["G08", "G09"],
-      "blockingWorkItemIds": ["PLT-240"],
-      "documentation": ["wiki/platform/VR-Support.md"],
-      "website": {"icon": "monitor", "eyebrow": "Platform", "title": "A framework stub", "bullets": ["Interface concepts exist", "OpenXR runtime, stereo rendering, input, performance, and device proof do not"], "proofMetricIds": []}
+      "limitations": [
+        "No runtime initialization, device validation, interaction profile, stereo renderer certification, or packaged headset test"
+      ],
+      "evidence": [
+        {
+          "type": "document",
+          "path": "docs/plans/FEATURE_ROADMAP.md",
+          "label": "VR roadmap entry"
+        }
+      ],
+      "requiredGateIds": [
+        "G08",
+        "G09"
+      ],
+      "blockingWorkItemIds": [
+        "PLT-240"
+      ],
+      "documentation": [
+        "wiki/platform/VR-Support.md"
+      ],
+      "website": {
+        "icon": "monitor",
+        "eyebrow": "Platform",
+        "title": "A framework stub",
+        "bullets": [
+          "Interface concepts exist",
+          "OpenXR runtime, stereo rendering, input, performance, and device proof do not"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "platform.console",
@@ -128,12 +281,35 @@
       "support": "unsupported",
       "release": "blocked",
       "summary": "PlayStation and Xbox support is planned and requires platform agreements, SDKs, hardware, and dedicated work.",
-      "limitations": ["No platform implementation or certification evidence"],
-      "evidence": [{"type": "document", "path": "docs/plans/FEATURE_ROADMAP.md", "label": "Console roadmap entry"}],
-      "requiredGateIds": ["G08"],
-      "blockingWorkItemIds": ["PLT-250"],
-      "documentation": ["docs/plans/FEATURE_ROADMAP.md"],
-      "website": {"icon": "gamepad", "eyebrow": "Platform", "title": "Planned, not implemented", "bullets": ["Requires NDA SDKs and dev kits", "No public support claim is valid today"], "proofMetricIds": []}
+      "limitations": [
+        "No platform implementation or certification evidence"
+      ],
+      "evidence": [
+        {
+          "type": "document",
+          "path": "docs/plans/FEATURE_ROADMAP.md",
+          "label": "Console roadmap entry"
+        }
+      ],
+      "requiredGateIds": [
+        "G08"
+      ],
+      "blockingWorkItemIds": [
+        "PLT-250"
+      ],
+      "documentation": [
+        "docs/plans/FEATURE_ROADMAP.md"
+      ],
+      "website": {
+        "icon": "gamepad",
+        "eyebrow": "Platform",
+        "title": "Planned, not implemented",
+        "bullets": [
+          "Requires NDA SDKs and dev kits",
+          "No public support claim is valid today"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "runtime.cpp",
@@ -145,15 +321,49 @@
       "support": "primary",
       "release": "candidate",
       "summary": "C++23 and the dynamic module lifecycle are the primary engine and gameplay extension path.",
-      "limitations": ["Real shared-library lifecycle, ABI compatibility, packaged loading, and hot reload need stronger release gates across every module"],
-      "evidence": [
-        {"type": "source", "path": "SparkSDK/Include/Spark/IModule.h", "label": "SDK module interface"},
-        {"type": "source", "path": "SparkEngine/Source/Core/ModuleManager.cpp", "label": "Runtime module manager"}
+      "limitations": [
+        "Real shared-library lifecycle, ABI compatibility, packaged loading, and hot reload need stronger release gates across every module"
       ],
-      "requiredGateIds": ["G01", "G02", "G03", "G10", "G16"],
-      "blockingWorkItemIds": ["RDY-010", "MOD-290", "SDK-240"],
-      "documentation": ["GameModules/README.md"],
-      "website": {"icon": "code", "eyebrow": "Runtime", "title": "The primary implementation path", "bullets": ["C++ owns the full runtime surface", "Dynamic modules expose a shared lifecycle", "Packaged loading, ABI/versioning, and hot-reload proof remain release work"], "proofMetricIds": ["modules.discovered"]}
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkSDK/Include/Spark/IModule.h",
+          "label": "SDK module interface"
+        },
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Core/ModuleManager.cpp",
+          "label": "Runtime module manager"
+        }
+      ],
+      "requiredGateIds": [
+        "G01",
+        "G02",
+        "G03",
+        "G10",
+        "G16"
+      ],
+      "blockingWorkItemIds": [
+        "RDY-010",
+        "MOD-290",
+        "SDK-240"
+      ],
+      "documentation": [
+        "GameModules/README.md"
+      ],
+      "website": {
+        "icon": "code",
+        "eyebrow": "Runtime",
+        "title": "The primary implementation path",
+        "bullets": [
+          "C++ owns the full runtime surface",
+          "Dynamic modules expose a shared lifecycle",
+          "Packaged loading, ABI/versioning, and hot-reload proof remain release work"
+        ],
+        "proofMetricIds": [
+          "modules.discovered"
+        ]
+      }
     },
     {
       "id": "runtime.nullrhi",
@@ -165,15 +375,47 @@
       "support": "supported",
       "release": "candidate",
       "summary": "NullRHI is a deliberate no-render device path for headless servers, automation, and GPU-less execution.",
-      "limitations": ["Packaged-server soak, load, shutdown, leak, crash, and operations evidence is not yet a blocking release lane", "Production server observability, load, backup, and incident drills are out of the stable-v1 profile and stay gated by OPS-110 with the service surfaces they serve", "NullRHI performs no rendering at all. Software rasterization through Mesa llvmpipe is the experimental OpenGL backend, not NullRHI, and is outside the stable-v1 profile.", "NullRHI is in the stable-v1 profile only on Windows 11 x64; headless execution on any other host is uncertified."],
-      "evidence": [
-        {"type": "source", "path": "SparkEngine/Source/Graphics/RHI/NullRHIDevice.h", "label": "NullRHI device"},
-        {"type": "test", "path": "Tests/TestNullRHIDevice.cpp", "label": "NullRHI tests"}
+      "limitations": [
+        "Packaged-server soak, load, shutdown, leak, crash, and operations evidence is not yet a blocking release lane",
+        "Production server observability, load, backup, and incident drills are out of the stable-v1 profile and stay gated by OPS-110 with the service surfaces they serve",
+        "NullRHI performs no rendering at all. Software rasterization through Mesa llvmpipe is the experimental OpenGL backend, not NullRHI, and is outside the stable-v1 profile.",
+        "NullRHI is in the stable-v1 profile only on Windows 11 x64; headless execution on any other host is uncertified."
       ],
-      "requiredGateIds": ["G02", "G03", "G10", "G14"],
-      "blockingWorkItemIds": ["HEAD-220"],
-      "documentation": ["wiki/graphics/RHI-Abstraction-Layer.md"],
-      "website": {"icon": "server", "eyebrow": "Runtime", "title": "A real no-render path", "bullets": ["No GPU device is required", "Useful for tests and dedicated servers", "Package, soak, load, and recovery gates still apply"], "proofMetricIds": []}
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Graphics/RHI/NullRHIDevice.h",
+          "label": "NullRHI device"
+        },
+        {
+          "type": "test",
+          "path": "Tests/TestNullRHIDevice.cpp",
+          "label": "NullRHI tests"
+        }
+      ],
+      "requiredGateIds": [
+        "G02",
+        "G03",
+        "G10",
+        "G14"
+      ],
+      "blockingWorkItemIds": [
+        "HEAD-220"
+      ],
+      "documentation": [
+        "wiki/graphics/RHI-Abstraction-Layer.md"
+      ],
+      "website": {
+        "icon": "server",
+        "eyebrow": "Runtime",
+        "title": "A real no-render path",
+        "bullets": [
+          "No GPU device is required",
+          "Useful for tests and dedicated servers",
+          "Package, soak, load, and recovery gates still apply"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "rendering.d3d11",
@@ -185,15 +427,49 @@
       "support": "primary",
       "release": "candidate",
       "summary": "D3D11 is the deepest and intended primary rendered path on Windows.",
-      "limitations": ["Same-commit packaged golden scenes, performance budgets, driver coverage, and release evidence remain open"],
-      "evidence": [
-        {"type": "source", "path": "SparkEngine/Source/Graphics/RHI/D3D11", "label": "D3D11 backend"},
-        {"type": "workflow", "path": ".github/workflows/build.yml", "job": "build-windows-vs2022", "label": "Windows build lane"}
+      "limitations": [
+        "Same-commit packaged golden scenes, performance budgets, driver coverage, and release evidence remain open"
       ],
-      "requiredGateIds": ["G02", "G03", "G04", "G09", "G14"],
-      "blockingWorkItemIds": ["RHI-210", "PERF-100"],
-      "documentation": ["wiki/graphics/RHI-Abstraction-Layer.md"],
-      "website": {"icon": "layers", "eyebrow": "Rendering", "title": "The primary renderer candidate", "bullets": ["Carries the broadest renderer integration", "Windows is the intended host", "Golden-scene, performance, driver, and packaging evidence still gate release"], "proofMetricIds": ["shaders.hlsl"]}
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Graphics/RHI/D3D11",
+          "label": "D3D11 backend"
+        },
+        {
+          "type": "workflow",
+          "path": ".github/workflows/build.yml",
+          "job": "build-windows-vs2022",
+          "label": "Windows build lane"
+        }
+      ],
+      "requiredGateIds": [
+        "G02",
+        "G03",
+        "G04",
+        "G09",
+        "G14"
+      ],
+      "blockingWorkItemIds": [
+        "RHI-210",
+        "PERF-100"
+      ],
+      "documentation": [
+        "wiki/graphics/RHI-Abstraction-Layer.md"
+      ],
+      "website": {
+        "icon": "layers",
+        "eyebrow": "Rendering",
+        "title": "The primary renderer candidate",
+        "bullets": [
+          "Carries the broadest renderer integration",
+          "Windows is the intended host",
+          "Golden-scene, performance, driver, and packaging evidence still gate release"
+        ],
+        "proofMetricIds": [
+          "shaders.hlsl"
+        ]
+      }
     },
     {
       "id": "rendering.d3d12",
@@ -205,12 +481,36 @@
       "support": "experimental",
       "release": "blocked",
       "summary": "D3D12 contains substantial modern-feature work but is not certified feature-for-feature against the primary renderer.",
-      "limitations": ["Pass parity, synchronization, shader tooling, golden scenes, performance, and driver coverage remain incomplete"],
-      "evidence": [{"type": "source", "path": "SparkEngine/Source/Graphics/RHI/D3D12", "label": "D3D12 backend"}],
-      "requiredGateIds": ["G09", "G14"],
-      "blockingWorkItemIds": ["RHI-225"],
-      "documentation": ["wiki/graphics/D3D12-Backend.md"],
-      "website": {"icon": "layers", "eyebrow": "Rendering", "title": "Modern features, parity unproven", "bullets": ["Mesh shader, ray tracing, and VRS surfaces exist", "Pass parity, synchronization, shader tooling, drivers, and performance need certification"], "proofMetricIds": []}
+      "limitations": [
+        "Pass parity, synchronization, shader tooling, golden scenes, performance, and driver coverage remain incomplete"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Graphics/RHI/D3D12",
+          "label": "D3D12 backend"
+        }
+      ],
+      "requiredGateIds": [
+        "G09",
+        "G14"
+      ],
+      "blockingWorkItemIds": [
+        "RHI-225"
+      ],
+      "documentation": [
+        "wiki/graphics/D3D12-Backend.md"
+      ],
+      "website": {
+        "icon": "layers",
+        "eyebrow": "Rendering",
+        "title": "Modern features, parity unproven",
+        "bullets": [
+          "Mesh shader, ray tracing, and VRS surfaces exist",
+          "Pass parity, synchronization, shader tooling, drivers, and performance need certification"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "rendering.vulkan",
@@ -222,15 +522,43 @@
       "support": "experimental",
       "release": "blocked",
       "summary": "Vulkan has a substantive backend and deterministic parity hooks, while full production pass execution and GPU readback parity remain incomplete.",
-      "limitations": ["Full GPU golden-scene readback, every production pass variant, and hard shader-toolchain dependencies are not closed"],
-      "evidence": [
-        {"type": "source", "path": "SparkEngine/Source/Graphics/RHI/Vulkan", "label": "Vulkan backend"},
-        {"type": "test", "path": "Tests/TestVulkanLavapipe.cpp", "label": "Vulkan parity tests"}
+      "limitations": [
+        "Full GPU golden-scene readback, every production pass variant, and hard shader-toolchain dependencies are not closed"
       ],
-      "requiredGateIds": ["G02", "G03", "G09", "G14"],
-      "blockingWorkItemIds": ["RHI-230"],
-      "documentation": ["wiki/graphics/RHI-Abstraction-Layer.md"],
-      "website": {"icon": "layers", "eyebrow": "Rendering", "title": "A substantial experimental backend", "bullets": ["Dynamic rendering and parity milestones exist", "Full pass execution, GPU readback, shader tools, drivers, and performance remain open"], "proofMetricIds": []}
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Graphics/RHI/Vulkan",
+          "label": "Vulkan backend"
+        },
+        {
+          "type": "test",
+          "path": "Tests/TestVulkanLavapipe.cpp",
+          "label": "Vulkan parity tests"
+        }
+      ],
+      "requiredGateIds": [
+        "G02",
+        "G03",
+        "G09",
+        "G14"
+      ],
+      "blockingWorkItemIds": [
+        "RHI-230"
+      ],
+      "documentation": [
+        "wiki/graphics/RHI-Abstraction-Layer.md"
+      ],
+      "website": {
+        "icon": "layers",
+        "eyebrow": "Rendering",
+        "title": "A substantial experimental backend",
+        "bullets": [
+          "Dynamic rendering and parity milestones exist",
+          "Full pass execution, GPU readback, shader tools, drivers, and performance remain open"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "rendering.opengl",
@@ -242,12 +570,39 @@
       "support": "experimental",
       "release": "blocked",
       "summary": "OpenGL provides a portable and software-renderable backend, but production visual parity and supported driver coverage are not certified.",
-      "limitations": ["HLSL translation limitations, driver matrix, golden scenes, performance, and packaged runtime proof remain open"],
-      "evidence": [{"type": "source", "path": "SparkEngine/Source/Graphics/RHI/OpenGL", "label": "OpenGL backend"}],
-      "requiredGateIds": ["G02", "G09", "G14"],
-      "blockingWorkItemIds": ["RHI-240"],
-      "documentation": ["wiki/graphics/RHI-Abstraction-Layer.md"],
-      "website": {"icon": "layers", "eyebrow": "Rendering", "title": "Portable and experimental", "bullets": ["Hardware and llvmpipe paths are useful for portability", "Translation, driver, visual parity, performance, and package gates remain open"], "proofMetricIds": ["shaders.glsl"]}
+      "limitations": [
+        "HLSL translation limitations, driver matrix, golden scenes, performance, and packaged runtime proof remain open"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Graphics/RHI/OpenGL",
+          "label": "OpenGL backend"
+        }
+      ],
+      "requiredGateIds": [
+        "G02",
+        "G09",
+        "G14"
+      ],
+      "blockingWorkItemIds": [
+        "RHI-240"
+      ],
+      "documentation": [
+        "wiki/graphics/RHI-Abstraction-Layer.md"
+      ],
+      "website": {
+        "icon": "layers",
+        "eyebrow": "Rendering",
+        "title": "Portable and experimental",
+        "bullets": [
+          "Hardware and llvmpipe paths are useful for portability",
+          "Translation, driver, visual parity, performance, and package gates remain open"
+        ],
+        "proofMetricIds": [
+          "shaders.glsl"
+        ]
+      }
     },
     {
       "id": "rendering.metal",
@@ -259,12 +614,38 @@
       "support": "experimental",
       "release": "blocked",
       "summary": "Metal is an incomplete backend surface and must not be presented as feature-complete or supported.",
-      "limitations": ["Backend implementation, shader path, pass parity, resource lifetime, golden scenes, performance, and packaged macOS proof remain open"],
-      "evidence": [{"type": "source", "path": "SparkEngine/Source/Graphics/RHI/Metal", "label": "Metal source surface"}],
-      "requiredGateIds": ["G08", "G09", "G14"],
-      "blockingWorkItemIds": ["RHI-220", "PLT-220"],
-      "documentation": ["wiki/graphics/RHI-Abstraction-Layer.md"],
-      "website": {"icon": "layers", "eyebrow": "Rendering", "title": "Parity work, not a release backend", "bullets": ["An API surface exists", "Complete command, resource, shader, pass, test, performance, and packaging work remains"], "proofMetricIds": []}
+      "limitations": [
+        "Backend implementation, shader path, pass parity, resource lifetime, golden scenes, performance, and packaged macOS proof remain open"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Graphics/RHI/Metal",
+          "label": "Metal source surface"
+        }
+      ],
+      "requiredGateIds": [
+        "G08",
+        "G09",
+        "G14"
+      ],
+      "blockingWorkItemIds": [
+        "RHI-220",
+        "PLT-220"
+      ],
+      "documentation": [
+        "wiki/graphics/RHI-Abstraction-Layer.md"
+      ],
+      "website": {
+        "icon": "layers",
+        "eyebrow": "Rendering",
+        "title": "Parity work, not a release backend",
+        "bullets": [
+          "An API surface exists",
+          "Complete command, resource, shader, pass, test, performance, and packaging work remains"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "networking.multiplayer",
@@ -276,15 +657,51 @@
       "support": "experimental",
       "release": "blocked",
       "summary": "Transport, replication, prediction, reconciliation, lag rewind, and dedicated-server systems form a serious toolkit, but real hostile multi-client and compatibility gates are missing.",
-      "limitations": ["Credentials can cross the protocol in plaintext", "Transport security is placeholder-grade", "Existing tests often mirror logic instead of running independent production clients"],
-      "evidence": [
-        {"type": "source", "path": "SparkEngine/Source/Engine/Networking", "label": "Engine networking source"},
-        {"type": "source", "path": "GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocol.h", "label": "MMOFPS protocol"}
+      "limitations": [
+        "Credentials can cross the protocol in plaintext",
+        "Transport security is placeholder-grade",
+        "Existing tests often mirror logic instead of running independent production clients"
       ],
-      "requiredGateIds": ["G03", "G07", "G12", "G14", "G16"],
-      "blockingWorkItemIds": ["NET-100", "TF-110", "OPS-110"],
-      "documentation": ["wiki/subsystems/Networking.md"],
-      "website": {"icon": "network", "eyebrow": "Networking", "title": "A real toolkit with production boundaries", "bullets": ["Authority, replication, prediction, reconciliation, and lag rewind exist", "Secure transport, independent clients, compatibility, load, persistence, and operations remain blocking"], "proofMetricIds": ["networking.lines"]}
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Engine/Networking",
+          "label": "Engine networking source"
+        },
+        {
+          "type": "source",
+          "path": "GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocol.h",
+          "label": "MMOFPS protocol"
+        }
+      ],
+      "requiredGateIds": [
+        "G03",
+        "G07",
+        "G12",
+        "G14",
+        "G16"
+      ],
+      "blockingWorkItemIds": [
+        "NET-100",
+        "TF-110",
+        "OPS-110",
+        "MOD-315"
+      ],
+      "documentation": [
+        "wiki/subsystems/Networking.md"
+      ],
+      "website": {
+        "icon": "network",
+        "eyebrow": "Networking",
+        "title": "A real toolkit with production boundaries",
+        "bullets": [
+          "Authority, replication, prediction, reconciliation, and lag rewind exist",
+          "Secure transport, independent clients, compatibility, load, persistence, and operations remain blocking"
+        ],
+        "proofMetricIds": [
+          "networking.lines"
+        ]
+      }
     },
     {
       "id": "services.production",
@@ -296,12 +713,38 @@
       "support": "unsupported",
       "release": "blocked",
       "summary": "SparkEngine does not provide a turnkey production identity, matchmaking, fleet, transactional persistence, abuse, billing, or incident-operations service layer.",
-      "limitations": ["Local and reference implementations are not a production control plane"],
-      "evidence": [{"type": "document", "path": "wiki/gameplay-tools/Online-Services.md", "label": "Online-services documentation"}],
-      "requiredGateIds": ["G07", "G12", "G14"],
-      "blockingWorkItemIds": ["NET-110", "DATA-120", "OPS-110"],
-      "documentation": ["wiki/gameplay-tools/Online-Services.md"],
-      "website": {"icon": "server", "eyebrow": "Services", "title": "Product infrastructure remains product work", "bullets": ["Identity, matchmaking, fleet, persistence, abuse, telemetry, backups, and incident response need an explicit service program"], "proofMetricIds": []}
+      "limitations": [
+        "Local and reference implementations are not a production control plane"
+      ],
+      "evidence": [
+        {
+          "type": "document",
+          "path": "wiki/gameplay-tools/Online-Services.md",
+          "label": "Online-services documentation"
+        }
+      ],
+      "requiredGateIds": [
+        "G07",
+        "G12",
+        "G14"
+      ],
+      "blockingWorkItemIds": [
+        "NET-110",
+        "DATA-120",
+        "OPS-110"
+      ],
+      "documentation": [
+        "wiki/gameplay-tools/Online-Services.md"
+      ],
+      "website": {
+        "icon": "server",
+        "eyebrow": "Services",
+        "title": "Product infrastructure remains product work",
+        "bullets": [
+          "Identity, matchmaking, fleet, persistence, abuse, telemetry, backups, and incident response need an explicit service program"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "scope.singleplayer",
@@ -313,12 +756,42 @@
       "support": "supported",
       "release": "candidate",
       "summary": "The core runtime can support bounded local games, while packaged content, save compatibility, crash, performance, and installer gates still determine release readiness.",
-      "limitations": ["No complete end-to-end editor-to-cooked-package release certification"],
-      "evidence": [{"type": "source", "path": "GameModules/SparkGameFPS", "label": "Playable FPS reference module"}],
-      "requiredGateIds": ["G04", "G05", "G10", "G14", "G16"],
-      "blockingWorkItemIds": ["RDY-020", "EDT-210", "SAVE-230", "PERF-100"],
-      "documentation": ["wiki/gameplay-tools/Game-Packaging.md"],
-      "website": {"icon": "gamepad", "eyebrow": "Project shape", "title": "The narrowest release path", "bullets": ["Avoids external service requirements", "Still requires a complete author-cook-package-install-run-save-upgrade loop"], "proofMetricIds": []}
+      "limitations": [
+        "No complete end-to-end editor-to-cooked-package release certification"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "GameModules/SparkGameFPS",
+          "label": "Playable FPS reference module"
+        }
+      ],
+      "requiredGateIds": [
+        "G04",
+        "G05",
+        "G10",
+        "G14",
+        "G16"
+      ],
+      "blockingWorkItemIds": [
+        "RDY-020",
+        "EDT-210",
+        "SAVE-230",
+        "PERF-100"
+      ],
+      "documentation": [
+        "wiki/gameplay-tools/Game-Packaging.md"
+      ],
+      "website": {
+        "icon": "gamepad",
+        "eyebrow": "Project shape",
+        "title": "The narrowest release path",
+        "bullets": [
+          "Avoids external service requirements",
+          "Still requires a complete author-cook-package-install-run-save-upgrade loop"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "scripting.angelscript",
@@ -330,12 +803,39 @@
       "support": "experimental",
       "release": "blocked",
       "summary": "The VM, bindings, modules, and entity APIs exist, but a complete entity lifecycle and integrated physics/audio/animation/event path is not wired into the runtime.",
-      "limitations": ["No production caller for the full start/update/collision lifecycle", "Entity injection and several gameplay bindings are incomplete or log-only"],
-      "evidence": [{"type": "source", "path": "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp", "label": "AngelScript engine"}],
-      "requiredGateIds": ["G03", "G10", "G11", "G16"],
-      "blockingWorkItemIds": ["ENG-200"],
-      "documentation": ["wiki/subsystems/Scripting-with-AngelScript.md"],
-      "website": {"icon": "code", "eyebrow": "Scripting", "title": "Functional integration with lifecycle debt", "bullets": ["VM, bindings, isolation, and compile paths exist", "Entity identity, dispatch, subsystem APIs, hot reload, diagnostics, and packaging need end-to-end proof"], "proofMetricIds": []}
+      "limitations": [
+        "No production caller for the full start/update/collision lifecycle",
+        "Entity injection and several gameplay bindings are incomplete or log-only"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp",
+          "label": "AngelScript engine"
+        }
+      ],
+      "requiredGateIds": [
+        "G03",
+        "G10",
+        "G11",
+        "G16"
+      ],
+      "blockingWorkItemIds": [
+        "ENG-200"
+      ],
+      "documentation": [
+        "wiki/subsystems/Scripting-with-AngelScript.md"
+      ],
+      "website": {
+        "icon": "code",
+        "eyebrow": "Scripting",
+        "title": "Functional integration with lifecycle debt",
+        "bullets": [
+          "VM, bindings, isolation, and compile paths exist",
+          "Entity identity, dispatch, subsystem APIs, hot reload, diagnostics, and packaging need end-to-end proof"
+        ],
+        "proofMetricIds": []
+      }
     },
     {
       "id": "scripting.visual",
@@ -347,15 +847,46 @@
       "support": "experimental",
       "release": "blocked",
       "summary": "The graph and AngelScript generation surfaces exist, while runtime execution, diagnostics, migration, source mapping, and packaged authoring are incomplete.",
-      "limitations": ["Depends on the unfinished AngelScript runtime lifecycle", "The VisualScript module can appear loaded without a compiled gameplay loop"],
-      "evidence": [
-        {"type": "source", "path": "GameModules/SparkGameVisualScript", "label": "VisualScript module"},
-        {"type": "source", "path": "SparkEditor/Source/Panels/VisualScriptPanel.cpp", "label": "Visual script editor"}
+      "limitations": [
+        "Depends on the unfinished AngelScript runtime lifecycle",
+        "The VisualScript module can appear loaded without a compiled gameplay loop"
       ],
-      "requiredGateIds": ["G10", "G11", "G13"],
-      "blockingWorkItemIds": ["ENG-200", "MOD-390"],
-      "documentation": ["wiki/subsystems/Visual-Scripting.md"],
-      "website": {"icon": "code", "eyebrow": "Scripting", "title": "An authoring surface awaiting runtime closure", "bullets": ["Graph and code-generation work exist", "Execution, diagnostics, migration, hot reload, packaging, and gameplay acceptance remain open"], "proofMetricIds": ["visualScript.nodes"]}
+      "evidence": [
+        {
+          "type": "source",
+          "path": "GameModules/SparkGameVisualScript",
+          "label": "VisualScript module"
+        },
+        {
+          "type": "source",
+          "path": "SparkEditor/Source/Panels/VisualScriptPanel.cpp",
+          "label": "Visual script editor"
+        }
+      ],
+      "requiredGateIds": [
+        "G10",
+        "G11",
+        "G13"
+      ],
+      "blockingWorkItemIds": [
+        "ENG-200",
+        "MOD-390"
+      ],
+      "documentation": [
+        "wiki/subsystems/Visual-Scripting.md"
+      ],
+      "website": {
+        "icon": "code",
+        "eyebrow": "Scripting",
+        "title": "An authoring surface awaiting runtime closure",
+        "bullets": [
+          "Graph and code-generation work exist",
+          "Execution, diagnostics, migration, hot reload, packaging, and gameplay acceptance remain open"
+        ],
+        "proofMetricIds": [
+          "visualScript.nodes"
+        ]
+      }
     },
     {
       "id": "editor.authoring",
@@ -367,15 +898,47 @@
       "support": "supported",
       "release": "candidate",
       "summary": "SparkEditor contains a broad real tool surface, while command-backed editing, full gizmos, typed asset workflows, cooking, and packaged round trips need closure.",
-      "limitations": ["Some hierarchy/inspector changes bypass undo", "Rotate/scale gizmo and real asset-thumbnail/drag paths are incomplete"],
-      "evidence": [
-        {"type": "source", "path": "SparkEditor/Source", "label": "Editor source"},
-        {"type": "test", "path": "Tests/TestEditorAutomation.cpp", "label": "Editor tests"}
+      "limitations": [
+        "Some hierarchy/inspector changes bypass undo",
+        "Rotate/scale gizmo and real asset-thumbnail/drag paths are incomplete"
       ],
-      "requiredGateIds": ["G03", "G04", "G10", "G16"],
-      "blockingWorkItemIds": ["EDT-210", "ASSET-220"],
-      "documentation": ["wiki/gameplay-tools/SparkEditor.md"],
-      "website": {"icon": "wrench", "eyebrow": "Editor", "title": "A substantial workbench with workflow gaps", "bullets": ["Scene, content, graph, profiler, and specialized panels exist", "Undo discipline, gizmos, asset UX, cook/package, migration, and integration tests need closure"], "proofMetricIds": ["editor.panels"]}
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkEditor/Source",
+          "label": "Editor source"
+        },
+        {
+          "type": "test",
+          "path": "Tests/TestEditorAutomation.cpp",
+          "label": "Editor tests"
+        }
+      ],
+      "requiredGateIds": [
+        "G03",
+        "G04",
+        "G10",
+        "G16"
+      ],
+      "blockingWorkItemIds": [
+        "EDT-210",
+        "ASSET-220"
+      ],
+      "documentation": [
+        "wiki/gameplay-tools/SparkEditor.md"
+      ],
+      "website": {
+        "icon": "wrench",
+        "eyebrow": "Editor",
+        "title": "A substantial workbench with workflow gaps",
+        "bullets": [
+          "Scene, content, graph, profiler, and specialized panels exist",
+          "Undo discipline, gizmos, asset UX, cook/package, migration, and integration tests need closure"
+        ],
+        "proofMetricIds": [
+          "editor.panels"
+        ]
+      }
     },
     {
       "id": "modules.mmofps",
@@ -387,15 +950,53 @@
       "support": "experimental",
       "release": "blocked",
       "summary": "The deepest reference module is an advanced pre-release vertical slice, not a production MMO service or release-certified game.",
-      "limitations": ["No encrypted production transport", "No true two-independent-client acceptance gate", "Restart, migration, transactional persistence, scale, and operations proof remain incomplete"],
-      "evidence": [
-        {"type": "source", "path": "GameModules/SparkGameMMOFPS", "label": "MMOFPS source"},
-        {"type": "document", "path": "GameModules/SparkGameMMOFPS/DESIGN.md", "label": "MMOFPS design"}
+      "limitations": [
+        "No encrypted production transport",
+        "No true two-independent-client acceptance gate",
+        "Restart, migration, transactional persistence, scale, and operations proof remain incomplete"
       ],
-      "requiredGateIds": ["G04", "G07", "G12", "G13", "G14", "G16"],
-      "blockingWorkItemIds": ["NET-100", "TF-110", "TF-120"],
-      "documentation": ["GameModules/SparkGameMMOFPS/README.md", "GameModules/SparkGameMMOFPS/DESIGN.md"],
-      "website": {"icon": "gamepad", "eyebrow": "Reference game", "title": "Advanced vertical integration before production closure", "bullets": ["Gameplay, vehicles, territory, bots, UI, persistence, and authority meet in one module", "Transport, independent clients, restart, migration, scale, service operations, and release evidence remain blocking"], "proofMetricIds": ["module.mmofps.lines", "module.mmofps.files"]}
+      "evidence": [
+        {
+          "type": "source",
+          "path": "GameModules/SparkGameMMOFPS",
+          "label": "MMOFPS source"
+        },
+        {
+          "type": "document",
+          "path": "GameModules/SparkGameMMOFPS/DESIGN.md",
+          "label": "MMOFPS design"
+        }
+      ],
+      "requiredGateIds": [
+        "G04",
+        "G07",
+        "G12",
+        "G13",
+        "G14",
+        "G16"
+      ],
+      "blockingWorkItemIds": [
+        "NET-100",
+        "TF-110",
+        "TF-120"
+      ],
+      "documentation": [
+        "GameModules/SparkGameMMOFPS/README.md",
+        "GameModules/SparkGameMMOFPS/DESIGN.md"
+      ],
+      "website": {
+        "icon": "gamepad",
+        "eyebrow": "Reference game",
+        "title": "Advanced vertical integration before production closure",
+        "bullets": [
+          "Gameplay, vehicles, territory, bots, UI, persistence, and authority meet in one module",
+          "Transport, independent clients, restart, migration, scale, service operations, and release evidence remain blocking"
+        ],
+        "proofMetricIds": [
+          "module.mmofps.lines",
+          "module.mmofps.files"
+        ]
+      }
     },
     {
       "id": "modules.fps",
@@ -407,12 +1008,51 @@
       "support": "supported",
       "release": "blocked",
       "summary": "SparkGameFPS is the declared first-party single-player vertical slice of the stable-v1 release profile. It is in scope and intended to be supported; it is not certified. Its release state is blocked and it holds the whole profile at blocked until its gates pass. Multiplayer is outside the profile and its existing multiplayer path is fake, so it is not release evidence for anything.",
-      "limitations": ["Not certified: no same-commit author-cook-package-install-run evidence for the slice", "Builds against SparkEngineLib with the engine source tree on its include path rather than the public SDK surface alone, so the public-API-only requirement is unmet", "Fake/in-memory multiplayer state", "No production two-client authoritative loop", "Content and persistence gaps remain"],
-      "evidence": [{"type": "source", "path": "GameModules/SparkGameFPS", "label": "FPS source"}, {"type": "source", "path": "GameModules/SparkGameFPS/CMakeLists.txt", "label": "Links SparkEngineLib and the engine source include path, not the public SDK alone"}],
-      "requiredGateIds": ["G03", "G04", "G13"],
-      "blockingWorkItemIds": ["MOD-310", "SDK-240"],
-      "documentation": ["GameModules/README.md"],
-      "website": {"icon": "gamepad", "eyebrow": "First-party slice", "title": "In the stable-v1 profile, single-player only, not certified", "bullets": ["Arena, input, combat, rendering, and AI form the declared single-player slice", "Release is blocked: packaging, install-run proof, public-API-only build, and real-source tests are open", "Multiplayer is outside the profile and its current path is fake"], "proofMetricIds": ["module.fps.lines", "module.fps.files"]}
+      "limitations": [
+        "Not certified: no same-commit author-cook-package-install-run evidence for the slice",
+        "Builds against SparkEngineLib with the engine source tree on its include path rather than the public SDK surface alone, so the public-API-only requirement is unmet",
+        "Fake/in-memory multiplayer state",
+        "No production two-client authoritative loop",
+        "Content and persistence gaps remain"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "GameModules/SparkGameFPS",
+          "label": "FPS source"
+        },
+        {
+          "type": "source",
+          "path": "GameModules/SparkGameFPS/CMakeLists.txt",
+          "label": "Links SparkEngineLib and the engine source include path, not the public SDK alone"
+        }
+      ],
+      "requiredGateIds": [
+        "G03",
+        "G04",
+        "G13"
+      ],
+      "blockingWorkItemIds": [
+        "MOD-310",
+        "SDK-240"
+      ],
+      "documentation": [
+        "GameModules/README.md"
+      ],
+      "website": {
+        "icon": "gamepad",
+        "eyebrow": "First-party slice",
+        "title": "In the stable-v1 profile, single-player only, not certified",
+        "bullets": [
+          "Arena, input, combat, rendering, and AI form the declared single-player slice",
+          "Release is blocked: packaging, install-run proof, public-API-only build, and real-source tests are open",
+          "Multiplayer is outside the profile and its current path is fake"
+        ],
+        "proofMetricIds": [
+          "module.fps.lines",
+          "module.fps.files"
+        ]
+      }
     },
     {
       "id": "modules.prototypes",
@@ -424,36 +1064,583 @@
       "support": "experimental",
       "release": "blocked",
       "summary": "MMO, ARPG, RPG, RTS, Racing, Platformer, OpenWorld, VisualScript, and the base SparkGame are currently templates, showcases, or prototypes rather than MMOFPS-equivalent finished modules.",
-      "limitations": ["Most depend on in-memory/debug models", "Several lack real assets, input, ECS/physics/render integration, persistence, or production-source tests"],
-      "evidence": [
-        {"type": "source", "path": "GameModules", "label": "Module source tree"},
-        {"type": "document", "path": "wiki/advanced/SparkGame-Module-Status.md", "label": "Module status audit"}
+      "limitations": [
+        "Most depend on in-memory/debug models",
+        "Several lack real assets, input, ECS/physics/render integration, persistence, or production-source tests"
       ],
-      "requiredGateIds": ["G03", "G04", "G11", "G13"],
-      "blockingWorkItemIds": ["MOD-290", "MOD-300", "MOD-320", "MOD-330", "MOD-340", "MOD-350", "MOD-360", "MOD-370", "MOD-380", "MOD-390"],
-      "documentation": ["wiki/advanced/SparkGame-Module-Status.md"],
-      "website": {"icon": "box", "eyebrow": "Game modules", "title": "A template and prototype portfolio to finish", "bullets": ["Each genre has a concrete source foothold", "Lifecycle, gameplay, assets, persistence, tests, and declared N/A dimensions must reach its release profile"], "proofMetricIds": ["modules.discovered"]}
+      "evidence": [
+        {
+          "type": "source",
+          "path": "GameModules",
+          "label": "Module source tree"
+        },
+        {
+          "type": "document",
+          "path": "wiki/advanced/SparkGame-Module-Status.md",
+          "label": "Module status audit"
+        }
+      ],
+      "requiredGateIds": [
+        "G03",
+        "G04",
+        "G11",
+        "G13"
+      ],
+      "blockingWorkItemIds": [
+        "MOD-290",
+        "MOD-300",
+        "MOD-320",
+        "MOD-330",
+        "MOD-340",
+        "MOD-350",
+        "MOD-360",
+        "MOD-370",
+        "MOD-380",
+        "MOD-390",
+        "RDY-015",
+        "MOD-295"
+      ],
+      "documentation": [
+        "wiki/advanced/SparkGame-Module-Status.md"
+      ],
+      "website": {
+        "icon": "box",
+        "eyebrow": "Game modules",
+        "title": "A template and prototype portfolio to finish",
+        "bullets": [
+          "Each genre has a concrete source foothold",
+          "Lifecycle, gameplay, assets, persistence, tests, and declared N/A dimensions must reach its release profile"
+        ],
+        "proofMetricIds": [
+          "modules.discovered"
+        ]
+      }
     }
   ],
   "gates": [
-    {"id": "G00", "name": "Source-of-truth integrity", "area": "governance", "state": "blocked", "blocking": true, "summary": "Status, roadmap, module counts, test counts, and generated documentation contradict or trail the repository.", "acceptanceCriteria": ["One validated readiness contract owns public status", "All numeric claims are generated", "Documentation health is current", "Regeneration is deterministic and clean"], "evidence": [{"type": "document", "path": "docs/status/PROJECT_STATUS.md", "label": "Stale status snapshot"}, {"type": "document", "path": "docs/plans/FEATURE_ROADMAP.md", "label": "Roadmap snapshot"}], "blockingWorkItemIds": ["RDY-000", "DOC-410"]},
-    {"id": "G01", "name": "Fail-closed CI evidence", "area": "ci", "state": "blocked", "blocking": true, "summary": "Required jobs can mask failures or remain advisory; docs-only changes can bypass the engine evidence path.", "acceptanceCriteria": ["Required commands propagate failure", "Every Working commit receives normalized evidence", "Advisory lanes are not represented as support gates", "JUnit and gate summaries attach to the exact SHA"], "evidence": [{"type": "workflow", "path": ".github/workflows/build.yml", "label": "Build workflow"}], "blockingWorkItemIds": ["CI-100", "CI-110"]},
-    {"id": "G02", "name": "Supported build matrix", "area": "build", "state": "blocked", "blocking": true, "summary": "The intended configurations and module/tool targets are not all built as required, reproducible gates.", "acceptanceCriteria": ["Declared host/compiler configurations configure and build from clean checkout", "Every shipped target and real module library is built", "Shipping configuration exists and is distinct from Debug/Release", "Submodule/toolchain inputs are pinned"], "evidence": [{"type": "workflow", "path": ".github/workflows/build.yml", "label": "Build matrix"}, {"type": "source", "path": "CMakePresets.json", "label": "CMake presets"}], "blockingWorkItemIds": ["CI-120", "BLD-100"]},
-    {"id": "G03", "name": "Production-source test coverage", "area": "tests", "state": "blocked", "blocking": true, "summary": "Many module tests compile subsets or mirrored logic rather than packaged production implementations; coverage thresholds are nonblocking.", "acceptanceCriteria": ["Every real module library loads and executes in tests", "No mirror-only or tautological test satisfies release", "Coverage thresholds are explicit and enforced", "Sanitizer and concurrency lanes fail closed"], "evidence": [{"type": "source", "path": "Tests/CMakeLists.txt", "label": "Test target composition"}, {"type": "workflow", "path": ".github/workflows/build.yml", "label": "Test lanes"}], "blockingWorkItemIds": ["RDY-010", "CI-110"]},
-    {"id": "G04", "name": "Asset, cook, and package integrity", "area": "content", "state": "blocked", "blocking": true, "summary": "Missing and case-mismatched assets, repository-relative paths, and unvalidated package content prevent release confidence.", "acceptanceCriteria": ["Every module has a validated content manifest", "Zero missing or case-mismatched references", "Cooked packages launch without repository-relative dependencies", "Package smoke tests cover clean machines"], "evidence": [{"type": "source", "path": "Assets", "label": "Asset tree"}, {"type": "document", "path": "wiki/gameplay-tools/Game-Packaging.md", "label": "Packaging guide"}], "blockingWorkItemIds": ["RDY-020", "ASSET-220"]},
-    {"id": "G05", "name": "Versioned Shipping artifacts", "area": "release", "state": "blocked", "blocking": true, "summary": "No tag or release is published; the workflow emits Debug/Release rather than a version-injected hardened Shipping configuration.", "acceptanceCriteria": ["Version is derived from the tag and embedded everywhere", "Shipping artifacts are deterministic", "Installer/uninstaller/upgrade/rollback smoke tests pass", "Release notes and compatibility policy are published"], "evidence": [{"type": "workflow", "path": ".github/workflows/release.yml", "label": "Release workflow"}], "blockingWorkItemIds": ["BLD-100", "REL-100", "INST-130", "REL-200"]},
-    {"id": "G06", "name": "Supply-chain integrity", "area": "security", "state": "blocked", "blocking": true, "summary": "Release artifacts lack signing, checksums, SBOM, provenance, and enforced dependency/license policy.", "acceptanceCriteria": ["Every artifact is signed and checksummed", "SBOM and provenance are attached", "Third-party license/manifest validation is blocking", "Dependency and CodeQL findings follow an owned severity policy"], "evidence": [{"type": "workflow", "path": ".github/workflows/release.yml", "label": "Artifact publisher"}, {"type": "workflow", "path": ".github/workflows/codeql.yml", "label": "CodeQL"}], "blockingWorkItemIds": ["REL-110", "SEC-110"]},
-    {"id": "G07", "name": "Security and hostile-input safety", "area": "security", "state": "blocked", "blocking": true, "summary": "Remote-administration and runtime security paths are unclosed and the asset, save, script, and package parsers lack fuzz budgets. Network transport security is not certified here: networking is declared experimental and is gated by NET-100 behind G12.", "acceptanceCriteria": ["Threat model and security ownership are current", "Remote administration paths authenticate, bound their input, and never expose credentials in captures, logs, or dumps", "Asset, save, script, and package parsers meet fuzz and bounds budgets", "Transport security for experimental networking surfaces stays gated by NET-100 behind G12 and is not claimed here"], "evidence": [{"type": "source", "path": "GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocol.h", "label": "Authentication protocol"}, {"type": "source", "path": "SparkEngine/Source/Engine/Networking/NetworkSecurity.h", "label": "Network security placeholder"}], "blockingWorkItemIds": ["SEC-100", "SEC-120"]},
-    {"id": "G08", "name": "Platform support certification", "area": "platform", "state": "blocked", "blocking": true, "summary": "Supported platform labels are not backed by installable packages, system tests, and an owned matrix at the same commit. The supported set is exactly the platforms inside a declared release profile; every other target must stay labeled rather than certified.", "acceptanceCriteria": ["Every platform inside a release profile has a declared compiler/OS/device matrix", "Build, install, launch, content, input, audio, crash, save, upgrade, and uninstall pass on it", "Experimental and unsupported targets remain labeled and keep their own certification work outside this gate"], "evidence": [{"type": "document", "path": "wiki/platform/System-Requirements.md", "label": "Platform matrix"}], "blockingWorkItemIds": ["PLT-200"]},
-    {"id": "G09", "name": "Renderer parity and visual correctness", "area": "rendering", "state": "blocked", "blocking": true, "summary": "The primary renderer lacks a packaged golden-scene, pass, shader, driver, and performance certification matrix. Experimental backends are not certified here and keep their own parity work.", "acceptanceCriteria": ["D3D11 primary scene suite passes", "Skinned glTF import works and canonical content renders correctly on the primary renderer", "GPU captures and budgets attach to the tested SHA", "Experimental backends keep their own parity work outside this gate and stay labeled experimental"], "evidence": [{"type": "document", "path": "wiki/graphics/RHI-Abstraction-Layer.md", "label": "RHI status"}], "blockingWorkItemIds": ["RHI-210", "ENG-220"]},
-    {"id": "G10", "name": "Runtime and editor workflow closure", "area": "runtime", "state": "blocked", "blocking": true, "summary": "Core pieces exist, but full lifecycle, undo-safe authoring, cook/package, hot reload, crash, and clean shutdown are not one enforced workflow.", "acceptanceCriteria": ["Create-edit-save-reload-cook-package-install-run round trip passes", "All editor world changes are command-backed", "Module and resource lifetimes shut down cleanly", "Packaged runtime emits actionable crash evidence"], "evidence": [{"type": "source", "path": "SparkEditor/Source", "label": "Editor implementation"}, {"type": "source", "path": "SparkEngine/Source", "label": "Runtime implementation"}], "blockingWorkItemIds": ["EDT-210", "LIFE-200", "OPS-100"]},
-    {"id": "G11", "name": "Gameplay scripting closure", "area": "scripting", "state": "blocked", "blocking": true, "summary": "AngelScript and visual scripting do not yet provide a complete, safe, debuggable, migratable packaged gameplay lifecycle.", "acceptanceCriteria": ["Start/update/fixed/destroy/collision/trigger/event dispatch is real", "Physics/audio/animation/input/EventBus bindings work", "Hot reload follows documented state rules", "Graph diagnostics and source mapping reach packaged runtime"], "evidence": [{"type": "source", "path": "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp", "label": "AngelScript runtime"}], "blockingWorkItemIds": ["ENG-200", "MOD-390"]},
-    {"id": "G12", "name": "Production multiplayer and services", "area": "networking", "state": "blocked", "blocking": true, "summary": "True independent-client, secure transport, compatibility, persistence, scale, recovery, and operations gates are missing.", "acceptanceCriteria": ["Dedicated server plus two independent clients pass authoritative gameplay", "Protocol compatibility and hostile-client suites pass", "Transactional persistence and restart/migration recovery pass", "Load, telemetry, alerts, backups, and incident drills meet budgets"], "evidence": [{"type": "source", "path": "GameModules/SparkGameMMOFPS", "label": "MMOFPS vertical slice"}], "blockingWorkItemIds": ["NET-100", "NET-110", "DATA-120", "TF-110", "TF-120", "OPS-110"]},
-    {"id": "G13", "name": "Game-module release profiles", "area": "modules", "state": "blocked", "blocking": true, "summary": "Every discovered module must be declared and truthfully labeled, and every module inside a release profile must reach its release scores and package smoke. Modules outside every profile stay prototypes or templates and are not certified here.", "acceptanceCriteria": ["Every discovered module has a validated manifest and declared N/A dimensions", "Every module inside a release profile reaches its applicable lifecycle/gameplay/assets/persistence/AI/editor/test scores and passes package smoke", "Modules outside every release profile are not required to reach release scores and keep their own completion work", "Prototype and template labels are generated from the contract, never hand-written"], "evidence": [{"type": "source", "path": "GameModules", "label": "Eleven module directories"}, {"type": "document", "path": "wiki/advanced/SparkGame-Module-Status.md", "label": "Module audit"}], "blockingWorkItemIds": ["MOD-290", "MOD-310"]},
-    {"id": "G14", "name": "Performance, reliability, and operations", "area": "operations", "state": "blocked", "blocking": true, "summary": "Profilers exist, while representative budgets, long soaks, leak limits, and crash symbolization are not release gates. Production server observability, load, backup, and incident drills belong to the service surfaces they serve, not to this gate.", "acceptanceCriteria": ["Representative CPU/GPU/memory budgets are versioned", "Long soaks show bounded memory and tick/frame percentiles", "Crashes produce symbolized actionable reports with retained symbols", "Production server observability, load, backup, and incident drills stay gated by OPS-110 behind G12 with the service surfaces they serve"], "evidence": [{"type": "document", "path": "wiki/advanced/Performance-Profiling-Guide.md", "label": "Profiling guide"}, {"type": "source", "path": "SparkCrashReporter", "label": "Crash reporter"}], "blockingWorkItemIds": ["PERF-100", "OPS-100"]},
-    {"id": "G15", "name": "Documentation, legal, and support truth", "area": "governance", "state": "blocked", "blocking": true, "summary": "Documentation generators are stale, release/security wording assumes a version line with no tag, and support/trademark/attribution decisions need a release review.", "acceptanceCriteria": ["Docs health is current and every link resolves", "License, attribution, trademark, privacy, security, support, and contribution text is reviewed for the release", "Quick starts run from clean machines", "Website wording is generated from the tested contract"], "evidence": [{"type": "document", "path": "LICENSE", "label": "License"}, {"type": "document", "path": "SECURITY.md", "label": "Security policy"}, {"type": "document", "path": "docs/README.md", "label": "Docs tooling"}], "blockingWorkItemIds": ["DOC-410", "GOV-400", "DOC-400"]},
-    {"id": "G16", "name": "Compatibility and migration", "area": "compatibility", "state": "blocked", "blocking": true, "summary": "SDK ABI, module, save, asset, and editor-data compatibility policies and migration tests are incomplete. Network protocol compatibility is gated with the networking surfaces it serves rather than here.", "acceptanceCriteria": ["Version contracts exist for SDK, modules, assets, saves, scenes, and scripts", "N-1 upgrade and rollback fixtures pass", "Breaking changes fail with actionable diagnostics", "Release notes enumerate migrations", "Network protocol version contracts stay gated by NET-100 behind G12"], "evidence": [{"type": "source", "path": "SparkSDK", "label": "Public SDK"}, {"type": "source", "path": "SparkEngine/Source/Engine/SaveSystem/SaveSystem.h", "label": "Serialization surface"}], "blockingWorkItemIds": ["SDK-240", "SAVE-230", "REL-200"]},
-    {"id": "G17", "name": "Release rehearsal and sign-off", "area": "release", "state": "blocked", "blocking": true, "summary": "No tagged release has rehearsed every blocking gate, artifact, install, migration, rollback, documentation, and support step at one commit.", "acceptanceCriteria": ["A release candidate tag passes all blocking gates", "Artifacts are installed and upgraded on clean supported hosts", "Rollback and recovery drills pass", "Owners sign the evidence ledger before the final tag"], "evidence": [{"type": "workflow", "path": ".github/workflows/release.yml", "label": "Release workflow"}], "blockingWorkItemIds": ["REL-200"]}
+    {
+      "id": "G00",
+      "name": "Source-of-truth integrity",
+      "area": "governance",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "Status, roadmap, module counts, test counts, and generated documentation contradict or trail the repository.",
+      "acceptanceCriteria": [
+        "One validated readiness contract owns public status",
+        "All numeric claims are generated",
+        "Documentation health is current",
+        "Regeneration is deterministic and clean"
+      ],
+      "evidence": [
+        {
+          "type": "document",
+          "path": "docs/status/PROJECT_STATUS.md",
+          "label": "Stale status snapshot"
+        },
+        {
+          "type": "document",
+          "path": "docs/plans/FEATURE_ROADMAP.md",
+          "label": "Roadmap snapshot"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "RDY-000",
+        "DOC-410"
+      ]
+    },
+    {
+      "id": "G01",
+      "name": "Fail-closed CI evidence",
+      "area": "ci",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "Required jobs can mask failures or remain advisory; docs-only changes can bypass the engine evidence path.",
+      "acceptanceCriteria": [
+        "Required commands propagate failure",
+        "Every Working commit receives normalized evidence",
+        "Advisory lanes are not represented as support gates",
+        "JUnit and gate summaries attach to the exact SHA"
+      ],
+      "evidence": [
+        {
+          "type": "workflow",
+          "path": ".github/workflows/build.yml",
+          "label": "Build workflow"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "CI-100",
+        "CI-110"
+      ]
+    },
+    {
+      "id": "G02",
+      "name": "Supported build matrix",
+      "area": "build",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "The intended configurations and module/tool targets are not all built as required, reproducible gates.",
+      "acceptanceCriteria": [
+        "Declared host/compiler configurations configure and build from clean checkout",
+        "Every shipped target and real module library is built",
+        "Shipping configuration exists and is distinct from Debug/Release",
+        "Submodule/toolchain inputs are pinned"
+      ],
+      "evidence": [
+        {
+          "type": "workflow",
+          "path": ".github/workflows/build.yml",
+          "label": "Build matrix"
+        },
+        {
+          "type": "source",
+          "path": "CMakePresets.json",
+          "label": "CMake presets"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "CI-120",
+        "BLD-100"
+      ]
+    },
+    {
+      "id": "G03",
+      "name": "Production-source test coverage",
+      "area": "tests",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "Release-profile tests must execute packaged production implementations; experimental modules keep independent real-source evidence outside stable-v1.",
+      "acceptanceCriteria": [
+        "Every in-profile real module library loads and executes in tests",
+        "No mirror-only or tautological test satisfies release",
+        "Coverage thresholds are explicit and enforced",
+        "Sanitizer and concurrency lanes fail closed",
+        "Experimental module lifecycle evidence remains owned by RDY-015 outside stable-v1"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "Tests/CMakeLists.txt",
+          "label": "Test target composition"
+        },
+        {
+          "type": "workflow",
+          "path": ".github/workflows/build.yml",
+          "label": "Test lanes"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "RDY-010",
+        "CI-110"
+      ]
+    },
+    {
+      "id": "G04",
+      "name": "Asset, cook, and package integrity",
+      "area": "content",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "All modules need truthful content manifests, while only in-profile modules must pass clean installed package smoke for stable-v1.",
+      "acceptanceCriteria": [
+        "Every discovered module has a validated content manifest",
+        "Zero missing or case-mismatched references in declared manifests",
+        "In-profile cooked packages launch without repository-relative dependencies",
+        "Stable package smoke covers clean Windows 11 machines",
+        "Experimental module package debt remains outside stable-v1"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "Assets",
+          "label": "Asset tree"
+        },
+        {
+          "type": "document",
+          "path": "wiki/gameplay-tools/Game-Packaging.md",
+          "label": "Packaging guide"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "RDY-020",
+        "ASSET-220"
+      ]
+    },
+    {
+      "id": "G05",
+      "name": "Versioned Shipping artifacts",
+      "area": "release",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "No tag or release is published; the workflow emits Debug/Release rather than a version-injected hardened Shipping configuration.",
+      "acceptanceCriteria": [
+        "Version is derived from the tag and embedded everywhere",
+        "Shipping artifacts are deterministic",
+        "Installer/uninstaller/upgrade/rollback smoke tests pass",
+        "Release notes and compatibility policy are published"
+      ],
+      "evidence": [
+        {
+          "type": "workflow",
+          "path": ".github/workflows/release.yml",
+          "label": "Release workflow"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "BLD-100",
+        "REL-100",
+        "INST-130",
+        "REL-200"
+      ]
+    },
+    {
+      "id": "G06",
+      "name": "Supply-chain integrity",
+      "area": "security",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "Release artifacts lack signing, checksums, SBOM, provenance, and enforced dependency/license policy.",
+      "acceptanceCriteria": [
+        "Every artifact is signed and checksummed",
+        "SBOM and provenance are attached",
+        "Third-party license/manifest validation is blocking",
+        "Dependency and CodeQL findings follow an owned severity policy"
+      ],
+      "evidence": [
+        {
+          "type": "workflow",
+          "path": ".github/workflows/release.yml",
+          "label": "Artifact publisher"
+        },
+        {
+          "type": "workflow",
+          "path": ".github/workflows/codeql.yml",
+          "label": "CodeQL"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "REL-110",
+        "SEC-110"
+      ]
+    },
+    {
+      "id": "G07",
+      "name": "Security and hostile-input safety",
+      "area": "security",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "Stable-v1 remote-administration and file/package parser paths are unclosed. Packet transport and script-language campaigns remain with the excluded networking and scripting surfaces.",
+      "acceptanceCriteria": [
+        "Threat model and security ownership are current",
+        "Shipped remote administration is disabled by default and cannot expose credentials",
+        "Save, scene, asset, shader, archive, manifest, package, and crash parsers meet fuzz and bounds budgets",
+        "Packet/protocol fuzzing stays with NET-100 behind G12",
+        "Script fuzzing stays with ENG-200 behind G11"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocol.h",
+          "label": "Authentication protocol"
+        },
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Engine/Networking/NetworkSecurity.h",
+          "label": "Network security placeholder"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "SEC-100",
+        "SEC-120"
+      ]
+    },
+    {
+      "id": "G08",
+      "name": "Platform support certification",
+      "area": "platform",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "Supported platform labels are not backed by installable packages, system tests, and an owned matrix at the same commit. The supported set is exactly the platforms inside a declared release profile; every other target must stay labeled rather than certified.",
+      "acceptanceCriteria": [
+        "Every platform inside a release profile has a declared compiler/OS/device matrix",
+        "Build, install, launch, content, input, audio, crash, save, upgrade, and uninstall pass on it",
+        "Experimental and unsupported targets remain labeled and keep their own certification work outside this gate"
+      ],
+      "evidence": [
+        {
+          "type": "document",
+          "path": "wiki/platform/System-Requirements.md",
+          "label": "Platform matrix"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "PLT-200"
+      ]
+    },
+    {
+      "id": "G09",
+      "name": "Renderer parity and visual correctness",
+      "area": "rendering",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "The primary renderer lacks a packaged golden-scene, pass, shader, driver, and performance certification matrix. Experimental backends are not certified here and keep their own parity work.",
+      "acceptanceCriteria": [
+        "D3D11 primary scene suite passes",
+        "Skinned glTF import works and canonical content renders correctly on the primary renderer",
+        "GPU captures and budgets attach to the tested SHA",
+        "Experimental backends keep their own parity work outside this gate and stay labeled experimental"
+      ],
+      "evidence": [
+        {
+          "type": "document",
+          "path": "wiki/graphics/RHI-Abstraction-Layer.md",
+          "label": "RHI status"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "RHI-210",
+        "ENG-220"
+      ]
+    },
+    {
+      "id": "G10",
+      "name": "Runtime and editor workflow closure",
+      "area": "runtime",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "Core pieces exist, but full lifecycle, undo-safe authoring, cook/package, hot reload, crash, and clean shutdown are not one enforced workflow.",
+      "acceptanceCriteria": [
+        "Create-edit-save-reload-cook-package-install-run round trip passes",
+        "All editor world changes are command-backed",
+        "Module and resource lifetimes shut down cleanly",
+        "Packaged runtime emits actionable crash evidence"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkEditor/Source",
+          "label": "Editor implementation"
+        },
+        {
+          "type": "source",
+          "path": "SparkEngine/Source",
+          "label": "Runtime implementation"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "EDT-210",
+        "LIFE-200",
+        "OPS-100"
+      ]
+    },
+    {
+      "id": "G11",
+      "name": "Gameplay scripting closure",
+      "area": "scripting",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "AngelScript and visual scripting do not yet provide a complete, safe, debuggable, migratable packaged gameplay lifecycle.",
+      "acceptanceCriteria": [
+        "Start/update/fixed/destroy/collision/trigger/event dispatch is real",
+        "Physics/audio/animation/input/EventBus bindings work",
+        "Hot reload follows documented state rules",
+        "Graph diagnostics and source mapping reach packaged runtime"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp",
+          "label": "AngelScript runtime"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "ENG-200",
+        "MOD-390"
+      ]
+    },
+    {
+      "id": "G12",
+      "name": "Production multiplayer and services",
+      "area": "networking",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "True independent-client, secure transport, compatibility, persistence, scale, recovery, and operations gates are missing.",
+      "acceptanceCriteria": [
+        "Dedicated server plus two independent clients pass authoritative gameplay",
+        "Protocol compatibility and hostile-client suites pass",
+        "Transactional persistence and restart/migration recovery pass",
+        "Load, telemetry, alerts, backups, and incident drills meet budgets"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "GameModules/SparkGameMMOFPS",
+          "label": "MMOFPS vertical slice"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "NET-100",
+        "NET-110",
+        "DATA-120",
+        "TF-110",
+        "TF-120",
+        "OPS-110",
+        "MOD-315"
+      ]
+    },
+    {
+      "id": "G13",
+      "name": "Game-module release profiles",
+      "area": "modules",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "Every discovered module must have a truthful manifest and label; only modules inside a release profile must reach release scores and package smoke.",
+      "acceptanceCriteria": [
+        "Every discovered module has a validated manifest and declared N/A dimensions",
+        "The shared public-SDK module kit supports in-profile modules",
+        "Every module inside a release profile reaches applicable scores and package smoke",
+        "Prototype completion helpers and scores remain owned outside stable-v1",
+        "Labels are generated from the contract"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "GameModules",
+          "label": "Eleven module directories"
+        },
+        {
+          "type": "document",
+          "path": "wiki/advanced/SparkGame-Module-Status.md",
+          "label": "Module audit"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "MOD-290",
+        "MOD-310"
+      ]
+    },
+    {
+      "id": "G14",
+      "name": "Performance, reliability, and operations",
+      "area": "operations",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "Profilers exist, while representative budgets, long soaks, leak limits, and crash symbolization are not release gates. Production server observability, load, backup, and incident drills belong to the service surfaces they serve, not to this gate.",
+      "acceptanceCriteria": [
+        "Representative CPU/GPU/memory budgets are versioned",
+        "Long soaks show bounded memory and tick/frame percentiles",
+        "Crashes produce symbolized actionable reports with retained symbols",
+        "Production server observability, load, backup, and incident drills stay gated by OPS-110 behind G12 with the service surfaces they serve"
+      ],
+      "evidence": [
+        {
+          "type": "document",
+          "path": "wiki/advanced/Performance-Profiling-Guide.md",
+          "label": "Profiling guide"
+        },
+        {
+          "type": "source",
+          "path": "SparkCrashReporter",
+          "label": "Crash reporter"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "PERF-100",
+        "OPS-100"
+      ]
+    },
+    {
+      "id": "G15",
+      "name": "Documentation, legal, and support truth",
+      "area": "governance",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "Documentation generators are stale, release/security wording assumes a version line with no tag, and support/trademark/attribution decisions need a release review.",
+      "acceptanceCriteria": [
+        "Docs health is current and every link resolves",
+        "License, attribution, trademark, privacy, security, support, and contribution text is reviewed for the release",
+        "Quick starts run from clean machines",
+        "Website wording is generated from the tested contract"
+      ],
+      "evidence": [
+        {
+          "type": "document",
+          "path": "LICENSE",
+          "label": "License"
+        },
+        {
+          "type": "document",
+          "path": "SECURITY.md",
+          "label": "Security policy"
+        },
+        {
+          "type": "document",
+          "path": "docs/README.md",
+          "label": "Docs tooling"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "DOC-410",
+        "GOV-400",
+        "DOC-400"
+      ]
+    },
+    {
+      "id": "G16",
+      "name": "Compatibility and migration",
+      "area": "compatibility",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "SDK ABI, module, save, asset, and editor-data compatibility policies and migration tests are incomplete. Network protocol compatibility is gated with the networking surfaces it serves rather than here.",
+      "acceptanceCriteria": [
+        "Version contracts exist for SDK, modules, assets, saves, scenes, and scripts",
+        "N-1 upgrade and rollback fixtures pass",
+        "Breaking changes fail with actionable diagnostics",
+        "Release notes enumerate migrations",
+        "Network protocol version contracts stay gated by NET-100 behind G12"
+      ],
+      "evidence": [
+        {
+          "type": "source",
+          "path": "SparkSDK",
+          "label": "Public SDK"
+        },
+        {
+          "type": "source",
+          "path": "SparkEngine/Source/Engine/SaveSystem/SaveSystem.h",
+          "label": "Serialization surface"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "SDK-240",
+        "SAVE-230",
+        "REL-200"
+      ]
+    },
+    {
+      "id": "G17",
+      "name": "Release rehearsal and sign-off",
+      "area": "release",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "No target release profile has rehearsed every one of its required gates, artifacts, install, migration, rollback, documentation, and support steps at one commit.",
+      "acceptanceCriteria": [
+        "A release candidate tag passes every gate required by each target profile",
+        "Excluded gates may remain blocked and stay explicitly unsupported",
+        "Artifacts are installed and upgraded on clean supported hosts",
+        "Rollback and recovery drills pass",
+        "Named owners sign repository evidence before the final tag"
+      ],
+      "evidence": [
+        {
+          "type": "workflow",
+          "path": ".github/workflows/release.yml",
+          "label": "Release workflow"
+        }
+      ],
+      "blockingWorkItemIds": [
+        "REL-200"
+      ]
+    }
   ],
   "releaseProfiles": [
     {
@@ -467,97 +1654,287 @@
           "id": "host",
           "label": "Host operating system",
           "value": "Windows 11 x64 only. Windows 10 x64 and every non-Windows host remain documented development and build floors; they are outside this profile and are not certified by it.",
-          "capabilityIds": ["platform.windows"],
+          "capabilityIds": [
+            "platform.windows"
+          ],
           "evidence": [
-            {"type": "workflow", "path": ".github/workflows/build.yml", "job": "build-windows-vs2022", "label": "Pinned x64 Windows build and test lane"},
-            {"type": "document", "path": "wiki/platform/System-Requirements.md", "label": "Declared Windows minimum and recommended host"}
+            {
+              "type": "workflow",
+              "path": ".github/workflows/build.yml",
+              "job": "build-windows-vs2022",
+              "label": "Pinned x64 Windows build and test lane"
+            },
+            {
+              "type": "document",
+              "path": "wiki/platform/System-Requirements.md",
+              "label": "Declared Windows minimum and recommended host"
+            }
           ]
         },
         {
           "id": "toolchain",
           "label": "Supported compiler line",
           "value": "The MSVC v143 toolset line (Visual Studio 17 2022 generator, architecture x64, toolset v143). The exact MSVC compiler build and Windows SDK version are not pinned yet, so this names the supported line, not a certified toolchain.",
-          "capabilityIds": ["platform.windows", "runtime.cpp"],
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp"
+          ],
           "evidence": [
-            {"type": "workflow", "path": ".github/workflows/build.yml", "job": "build-windows-vs2022", "label": "Configure step pins the Visual Studio 17 2022 generator with -A x64 -T v143"},
-            {"type": "source", "path": "CMakePresets.json", "label": "windows-debug, windows-release, windows-shipping, and windows-development presets pin toolset v143"}
+            {
+              "type": "workflow",
+              "path": ".github/workflows/build.yml",
+              "job": "build-windows-vs2022",
+              "label": "Configure step pins the Visual Studio 17 2022 generator with -A x64 -T v143"
+            },
+            {
+              "type": "source",
+              "path": "CMakePresets.json",
+              "label": "windows-debug, windows-release, windows-shipping, and windows-development presets pin toolset v143"
+            }
           ]
         },
         {
           "id": "renderer",
           "label": "Rendered path",
           "value": "Direct3D 11",
-          "capabilityIds": ["rendering.d3d11"],
+          "capabilityIds": [
+            "rendering.d3d11"
+          ],
           "evidence": [
-            {"type": "source", "path": "SparkEngine/Source/Graphics/RHI/D3D11", "label": "D3D11 backend"},
-            {"type": "document", "path": "wiki/graphics/RHI-Abstraction-Layer.md", "label": "RHI backend surface"}
+            {
+              "type": "source",
+              "path": "SparkEngine/Source/Graphics/RHI/D3D11",
+              "label": "D3D11 backend"
+            },
+            {
+              "type": "document",
+              "path": "wiki/graphics/RHI-Abstraction-Layer.md",
+              "label": "RHI backend surface"
+            }
           ]
         },
         {
           "id": "headless",
           "label": "Headless path",
           "value": "NullRHI on Windows 11 x64: the no-render device path for GPU-less execution and automation. NullRHI renders nothing. It is not software rendering, and the llvmpipe software OpenGL path belongs to the experimental OpenGL backend outside this profile.",
-          "capabilityIds": ["runtime.nullrhi"],
+          "capabilityIds": [
+            "runtime.nullrhi"
+          ],
           "evidence": [
-            {"type": "source", "path": "SparkEngine/Source/Graphics/RHI/NullRHIDevice.h", "label": "NullRHI device"},
-            {"type": "test", "path": "Tests/TestNullRHIDevice.cpp", "label": "NullRHI tests"}
+            {
+              "type": "source",
+              "path": "SparkEngine/Source/Graphics/RHI/NullRHIDevice.h",
+              "label": "NullRHI device"
+            },
+            {
+              "type": "test",
+              "path": "Tests/TestNullRHIDevice.cpp",
+              "label": "NullRHI tests"
+            }
           ]
         },
         {
           "id": "gameplay",
           "label": "Gameplay authoring language",
           "value": "C++23 game modules built against the SDK module interface",
-          "capabilityIds": ["runtime.cpp"],
+          "capabilityIds": [
+            "runtime.cpp"
+          ],
           "evidence": [
-            {"type": "source", "path": "SparkSDK/Include/Spark/IModule.h", "label": "SDK module interface"},
-            {"type": "source", "path": "SparkEngine/Source/Core/ModuleManager.cpp", "label": "Runtime module manager"}
+            {
+              "type": "source",
+              "path": "SparkSDK/Include/Spark/IModule.h",
+              "label": "SDK module interface"
+            },
+            {
+              "type": "source",
+              "path": "SparkEngine/Source/Core/ModuleManager.cpp",
+              "label": "Runtime module manager"
+            }
           ]
         },
         {
           "id": "firstPartyGame",
           "label": "First-party game",
           "value": "SparkGameFPS, one first-party single-player vertical slice that must build through the public SDK surface alone. Constrained LAN play is optional and is not required by this profile.",
-          "capabilityIds": ["modules.fps", "scope.singleplayer"],
+          "capabilityIds": [
+            "modules.fps",
+            "scope.singleplayer"
+          ],
           "evidence": [
-            {"type": "source", "path": "GameModules/SparkGameFPS", "label": "First-party slice source"},
-            {"type": "source", "path": "GameModules/SparkGameFPS/CMakeLists.txt", "label": "Current build reaches into SparkEngineLib and the engine source tree; the public-API-only requirement is unmet"},
-            {"type": "source", "path": "SparkSDK/Include/Spark/IModule.h", "label": "Public SDK surface the slice must build against"}
+            {
+              "type": "source",
+              "path": "GameModules/SparkGameFPS",
+              "label": "First-party slice source"
+            },
+            {
+              "type": "source",
+              "path": "GameModules/SparkGameFPS/CMakeLists.txt",
+              "label": "Current build reaches into SparkEngineLib and the engine source tree; the public-API-only requirement is unmet"
+            },
+            {
+              "type": "source",
+              "path": "SparkSDK/Include/Spark/IModule.h",
+              "label": "Public SDK surface the slice must build against"
+            }
           ]
         },
         {
           "id": "product",
           "label": "Delivered product shape",
           "value": "One installed single-player vertical slice authored in SparkEditor, cooked, packaged, installed, and run without external services",
-          "capabilityIds": ["scope.singleplayer", "editor.authoring"],
+          "capabilityIds": [
+            "scope.singleplayer",
+            "editor.authoring"
+          ],
           "evidence": [
-            {"type": "document", "path": "wiki/gameplay-tools/Game-Packaging.md", "label": "Cook and package workflow"},
-            {"type": "source", "path": "SparkInstaller", "label": "Installer project"},
-            {"type": "source", "path": "GameModules/SparkGameFPS", "label": "The in-profile first-party single-player slice"}
+            {
+              "type": "document",
+              "path": "wiki/gameplay-tools/Game-Packaging.md",
+              "label": "Cook and package workflow"
+            },
+            {
+              "type": "source",
+              "path": "SparkInstaller",
+              "label": "Installer project"
+            },
+            {
+              "type": "source",
+              "path": "GameModules/SparkGameFPS",
+              "label": "The in-profile first-party single-player slice"
+            }
           ]
         }
       ],
-      "includedCapabilityIds": ["platform.windows", "runtime.cpp", "runtime.nullrhi", "rendering.d3d11", "scope.singleplayer", "editor.authoring", "modules.fps"],
-      "firstPartyGameCapabilityIds": ["modules.fps"],
-      "supportedHosts": ["Windows 11 x64"],
+      "includedCapabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "runtime.nullrhi",
+        "rendering.d3d11",
+        "scope.singleplayer",
+        "editor.authoring",
+        "modules.fps"
+      ],
+      "firstPartyGameCapabilityIds": [
+        "modules.fps"
+      ],
+      "supportedHosts": [
+        "Windows 11 x64"
+      ],
       "publicClaimRules": {
-        "breadthTokens": ["Windows 10", "Windows 8", "Windows 7", "Windows 10+", "any platform", "any compiler"],
-        "forbiddenInProfileCells": ["Any", "All", "Any platform", "Any host", "Windows", "Windows 10", "Windows 10+", "Headless"],
+        "breadthTokens": [
+          "Windows 10",
+          "Windows 8",
+          "Windows 7",
+        "Windows 10+",
+        "any platform",
+        "any host",
+        "any compiler"
+        ],
+        "forbiddenInProfileCells": [
+          "Any",
+          "All",
+          "Any platform",
+          "Any host",
+          "Windows",
+          "Windows 10",
+          "Windows 10+",
+          "Headless"
+        ],
         "conflatedTerms": [
-          {"term": "NullRHI", "conflictsWith": ["llvmpipe", "software rendering", "software render"], "reason": "NullRHI is a no-render device that rasterizes nothing. Software rasterization through Mesa llvmpipe is the experimental OpenGL path and is outside this profile, so the two must never be described as the same thing."}
+          {
+            "term": "NullRHI",
+            "conflictsWith": [
+              "llvmpipe",
+              "software rendering",
+              "software render"
+            ],
+            "reason": "NullRHI is a no-render device that rasterizes nothing. Software rasterization through Mesa llvmpipe is the experimental OpenGL path and is outside this profile, so the two must never be described as the same thing."
+          }
         ]
       },
       "boundaries": {
-        "experimentalCapabilityIds": ["platform.linux", "platform.macos", "rendering.d3d12", "rendering.vulkan", "rendering.opengl", "rendering.metal", "networking.multiplayer", "scripting.angelscript", "scripting.visual", "modules.mmofps", "modules.prototypes"],
-        "unsupportedCapabilityIds": ["platform.mobile", "platform.vr", "platform.console", "services.production"]
+        "experimentalCapabilityIds": [
+          "platform.linux",
+          "platform.macos",
+          "rendering.d3d12",
+          "rendering.vulkan",
+          "rendering.opengl",
+          "rendering.metal",
+          "networking.multiplayer",
+          "scripting.angelscript",
+          "scripting.visual",
+          "modules.mmofps",
+          "modules.prototypes"
+        ],
+        "unsupportedCapabilityIds": [
+          "platform.mobile",
+          "platform.vr",
+          "platform.console",
+          "services.production"
+        ]
       },
-      "requiredGateIds": ["G00", "G01", "G02", "G03", "G04", "G05", "G06", "G07", "G08", "G09", "G10", "G13", "G14", "G15", "G16", "G17"],
-      "excludedGates": [
-        {"gateId": "G11", "reason": "Scripting is outside the profile: AngelScript and visual scripting are declared experimental and no profile claim depends on them."},
-        {"gateId": "G12", "reason": "The profile is single-player and service-free, so production multiplayer transport and online services are out of scope and declared experimental or unsupported."}
+      "requiredGateIds": [
+        "G00",
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "G09",
+        "G10",
+        "G13",
+        "G14",
+        "G15",
+        "G16",
+        "G17"
       ],
-      "blockingWorkItemIds": ["ASSET-220", "BLD-100", "CI-100", "CI-110", "CI-120", "DOC-400", "DOC-410", "EDT-210", "ENG-220", "GOV-400", "HEAD-220", "INST-130", "LIFE-200", "MOD-290", "MOD-310", "OPS-100", "PERF-100", "PLT-200", "RDY-000", "RDY-010", "RDY-020", "REL-100", "REL-110", "REL-200", "RHI-210", "SAVE-230", "SDK-240", "SEC-100", "SEC-110", "SEC-120"],
+      "excludedGates": [
+        {
+          "gateId": "G11",
+          "reason": "Scripting is outside the profile: AngelScript and visual scripting are declared experimental and no profile claim depends on them."
+        },
+        {
+          "gateId": "G12",
+          "reason": "The profile is single-player and service-free, so production multiplayer transport and online services are out of scope and declared experimental or unsupported."
+        }
+      ],
+      "blockingWorkItemIds": [
+        "ASSET-220",
+        "BLD-100",
+        "CI-100",
+        "CI-110",
+        "CI-120",
+        "DOC-400",
+        "DOC-410",
+        "EDT-210",
+        "ENG-220",
+        "GOV-400",
+        "HEAD-220",
+        "INST-130",
+        "LIFE-200",
+        "MOD-290",
+        "MOD-310",
+        "OPS-100",
+        "PERF-100",
+        "PLT-200",
+        "RDY-000",
+        "RDY-010",
+        "RDY-020",
+        "REL-100",
+        "REL-110",
+        "REL-200",
+        "RHI-210",
+        "SAVE-230",
+        "SDK-240",
+        "SEC-100",
+        "SEC-110",
+        "SEC-120"
+      ],
       "limitations": [
-        "The profile state is blocked: no required gate is passing at this commit.",
         "Windows 11 client-host certification does not exist; the build-windows-vs2022 lane runs on the hosted windows-2022 image, so host certification remains PLT-200 work rather than published evidence.",
         "No Shipping-configuration artifact is signed, checksummed, attested, installed, upgraded, or rollback-tested at a single commit.",
         "The first-party slice SparkGameFPS is in the profile but uncertified: its release state is blocked and it holds this profile at blocked (MOD-310).",
@@ -568,8 +1945,19 @@
         "Windows 10 x64 and the Linux and macOS build floors stay documented as development minima, but this profile certifies only Windows 11 x64; headless execution is in profile only on that same host.",
         "Breadth is frozen: this profile inherits no work that exists only for out-of-profile capabilities. Linux, macOS, D3D12, Vulkan, OpenGL, Metal, multiplayer transport, production service operations, and the prototype modules keep their own open work outside this gate and stay uncertified."
       ],
-      "documentation": ["README.md", "wiki/platform/System-Requirements.md", "wiki/graphics/RHI-Abstraction-Layer.md", "wiki/gameplay-tools/Game-Packaging.md", "GameModules/README.md"],
-      "publicClaimSurfaces": ["README.md", "docs/README.md", "docs/site/content.json"]
+      "documentation": [
+        "README.md",
+        "wiki/platform/System-Requirements.md",
+        "wiki/graphics/RHI-Abstraction-Layer.md",
+        "wiki/gameplay-tools/Game-Packaging.md",
+        "GameModules/README.md"
+      ],
+      "publicClaimSurfaces": [
+        "README.md",
+        "docs/README.md",
+        "docs/site/content.json"
+      ],
+      "signOffEvidence": []
     }
   ],
   "execution": {
@@ -582,13 +1970,113 @@
       "At the end of each session, regenerate the handoff and leave the first unblocked item explicit."
     ],
     "waves": [
-      {"id": 0, "name": "Truth and fail-closed evidence", "objective": "Establish the only source of readiness truth and make CI report reality.", "workItemIds": ["RDY-000", "RDY-010", "RDY-020", "CI-100", "DOC-410"]},
-      {"id": 1, "name": "Build, security, and release substrate", "objective": "Create a hardened Shipping path, enforce quality, and secure the supply chain.", "workItemIds": ["CI-110", "CI-120", "BLD-100", "REL-100", "REL-110", "SEC-100", "SEC-110", "SEC-120", "OPS-100"]},
-      {"id": 2, "name": "Primary engine workflow", "objective": "Certify Windows/D3D11, headless, runtime, editor, assets, installer, saves, SDK, and performance end to end.", "workItemIds": ["PLT-200", "RHI-210", "HEAD-220", "LIFE-200", "EDT-210", "ASSET-220", "INST-130", "SAVE-230", "SDK-240", "PERF-100", "ENG-200"]},
-      {"id": 3, "name": "Secure multiplayer reference", "objective": "Close transport, true multi-client, persistence, migration, load, and operations around MMOFPS.", "workItemIds": ["NET-100", "NET-110", "DATA-120", "TF-110", "TF-120", "OPS-110"]},
-      {"id": 4, "name": "Module completion factory", "objective": "Build the shared kit, then finish every genre module against its declared release profile.", "workItemIds": ["MOD-290", "MOD-300", "MOD-310", "MOD-320", "MOD-330", "MOD-340", "MOD-350", "MOD-360", "MOD-370", "MOD-380", "MOD-390"]},
-      {"id": 5, "name": "Portable and modern backends", "objective": "Certify or explicitly bound Linux, macOS, D3D12, Vulkan, OpenGL, Metal, mobile, VR, and console work.", "workItemIds": ["PLT-210", "PLT-220", "PLT-230", "PLT-240", "PLT-250", "RHI-220", "RHI-225", "RHI-230", "RHI-240", "ENG-220"]},
-      {"id": 6, "name": "Public truth and release", "objective": "Finish governance, publish the live bundle, rehearse every gate, and cut the first evidence-backed release.", "workItemIds": ["GOV-400", "DOC-400", "REL-200"]}
+      {
+        "id": 0,
+        "name": "Truth and fail-closed evidence",
+        "objective": "Establish the only source of readiness truth and make CI report reality.",
+        "workItemIds": [
+          "RDY-000",
+          "RDY-010",
+          "RDY-020",
+          "CI-100",
+          "DOC-410"
+        ]
+      },
+      {
+        "id": 1,
+        "name": "Build, security, and release substrate",
+        "objective": "Create a hardened Shipping path, enforce quality, and secure the supply chain.",
+        "workItemIds": [
+          "CI-110",
+          "CI-120",
+          "BLD-100",
+          "REL-100",
+          "REL-110",
+          "SEC-100",
+          "SEC-110",
+          "SEC-120",
+          "OPS-100"
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Primary engine workflow",
+        "objective": "Certify Windows/D3D11, headless, runtime, editor, assets, installer, saves, SDK, and performance end to end.",
+        "workItemIds": [
+          "PLT-200",
+          "RHI-210",
+          "HEAD-220",
+          "LIFE-200",
+          "EDT-210",
+          "ASSET-220",
+          "INST-130",
+          "SAVE-230",
+          "SDK-240",
+          "PERF-100",
+          "ENG-200"
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Secure multiplayer reference",
+        "objective": "Close transport, true multi-client, persistence, migration, load, and operations around MMOFPS.",
+        "workItemIds": [
+          "NET-100",
+          "NET-110",
+          "DATA-120",
+          "TF-110",
+          "TF-120",
+          "OPS-110"
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Module completion factory",
+        "objective": "Build the shared manifest/public-SDK kit, finish the stable-v1 FPS slice, and keep experimental module and LAN work open against their declared classifications and evidence targets.",
+        "workItemIds": [
+          "MOD-290",
+          "MOD-300",
+          "MOD-310",
+          "MOD-320",
+          "MOD-330",
+          "MOD-340",
+          "MOD-350",
+          "MOD-360",
+          "MOD-370",
+          "MOD-380",
+          "MOD-390",
+          "RDY-015",
+          "MOD-295",
+          "MOD-315"
+        ]
+      },
+      {
+        "id": 5,
+        "name": "Portable and modern backends",
+        "objective": "Certify or explicitly bound Linux, macOS, D3D12, Vulkan, OpenGL, Metal, mobile, VR, and console work.",
+        "workItemIds": [
+          "PLT-210",
+          "PLT-220",
+          "PLT-230",
+          "PLT-240",
+          "PLT-250",
+          "RHI-220",
+          "RHI-225",
+          "RHI-230",
+          "RHI-240",
+          "ENG-220"
+        ]
+      },
+      {
+        "id": 6,
+        "name": "Public truth and release",
+        "objective": "Finish governance, publish the live bundle, rehearse every gate required by each target profile, and cut the first evidence-backed release.",
+        "workItemIds": [
+          "GOV-400",
+          "DOC-400",
+          "REL-200"
+        ]
+      }
     ],
     "firstUnblockedWorkItemId": "RDY-000"
   }
