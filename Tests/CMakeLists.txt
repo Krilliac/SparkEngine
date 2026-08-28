@@ -1111,6 +1111,11 @@ add_test(
         -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
 )
 set_tests_properties(SparkEngineTests PROPERTIES TIMEOUT 210)
+add_test(NAME SparkSaveCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --quiet)
+set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=SaveMigration_"
+    LABELS "compatibility;save;unit"
+    TIMEOUT 30)
 add_test(
     NAME SparkTemplateAssets
     COMMAND ${CMAKE_COMMAND}

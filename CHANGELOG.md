@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stable rolling Debug/Release installer and ZIP download aliases, lifetime download badges, SPDX release SBOMs, and build-provenance attestations
 
 ### Changed
+- World saves now write format v2, persist `screenshotPath`, and retain an explicit v1/v2 reader window with an idempotent in-memory v1-to-v2 migration
 - Project scaffolding now rewrites `.sparkproject` identity before renaming the descriptor
 - Public README, wiki, and badge metrics are generated from the current source and test inventory
 - Server, asset-pipeline, automation, SDK, plugin-helper, and public-header targets now install and export with the cross-platform runtime and tools packages
@@ -30,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runtime packages now include complete deterministic third-party license notices rather than dependency metadata alone
 
 ### Fixed
+- Failed world restores now leave the live ECS world and caller-owned custom state unchanged when a component is unknown or a deserializer throws
 - Editor module discovery, project paths, UTF-8 handling, long-path launches, and fail-closed module loading
 - Transactional CLI packaging and validated packaged-project launches
 - Template module manifests no longer advertise an ignored `loadOrder` field

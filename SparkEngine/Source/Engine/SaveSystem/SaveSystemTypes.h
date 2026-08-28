@@ -25,6 +25,12 @@
 namespace Spark
 {
 
+    /** @brief Oldest save format that this build can migrate and load. */
+    inline constexpr uint32_t kOldestSupportedSaveVersion = 1;
+
+    /** @brief Save format emitted by every writer in this build. */
+    inline constexpr uint32_t kCurrentSaveVersion = 2;
+
     // ============================================================================
     // Save Data Types
     // ============================================================================
@@ -32,9 +38,8 @@ namespace Spark
     /**
  * @brief Lightweight metadata header attached to every save file.
  *
- * SaveMetadata is written both inside the compressed save file and as part of
- * any slot-enumeration API (GetSaveSlots()) so the UI can display useful
- * information without decompressing the full save.
+ * SaveMetadata is written in the versioned binary save header and returned by
+ * slot-enumeration APIs such as GetSaveSlots(), which read only that header.
  *
  * ### Fields for slot-selection UI
  * The fields `saveName`, `screenshotPath`, `playerHealth`, `playerKills`, and
@@ -44,8 +49,8 @@ namespace Spark
  * ### Versioning
  * The `version` field is incremented whenever the save format changes. The load
  * path checks this value and may run migration routines before deserializing
- * components. Always leave `version` at its default (1) unless you are writing a
- * migration pass.
+ * components. Writers always replace this value with kCurrentSaveVersion. Older
+ * values are only valid on parsed or manually constructed migration inputs.
  *
  * @code
  *   SaveMetadata meta;
@@ -85,11 +90,11 @@ namespace Spark
         /**
      * @brief Save format version number.
      *
-     * Defaults to 1. Increment this when the JSON schema changes so that the
-     * loader can distinguish old saves and apply migrations. Do not modify this
-     * field in game code unless you are implementing a migration.
+     * Defaults to kCurrentSaveVersion. The loader accepts the inclusive range
+     * kOldestSupportedSaveVersion..kCurrentSaveVersion and migrates older data in
+     * memory before restoring a world. Do not modify this field in game code.
      */
-        uint32_t version = 1;
+        uint32_t version = kCurrentSaveVersion;
 
         /**
      * @brief Unix timestamp (seconds since epoch) when the save was created.
@@ -146,10 +151,10 @@ namespace Spark
  *
  * SerializedComponent is an intermediate, type-erased container that bridges
  * the strongly-typed component structs (e.g. `Transform`, `HealthComponent`)
- * and the JSON representation on disk.
+ * and the type-erased binary representation on disk.
  *
  * All field values are stored as **strings** so they can be written directly to
- * JSON without type-specific serialization code in the core system. Each
+ * the common binary property map without type-specific code in the core system. Each
  * component's registered serializer is responsible for encoding and decoding its
  * fields (e.g. converting `XMFLOAT3{1, 2, 3}` to the string `"1.0 2.0 3.0"`).
  *

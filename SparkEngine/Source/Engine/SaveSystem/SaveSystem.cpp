@@ -1,6 +1,6 @@
 /**
  * @file SaveSystem.cpp
- * @brief Save/load system implementation with JSON serialization
+ * @brief Transactional, versioned binary save/load system implementation
  */
 
 #include "SaveSystem.h"
@@ -57,12 +57,6 @@ namespace Spark
         std::string slotName;
         bool success = false;
     };
-
-    /// @brief Current on-disk save format version. Written into every save header and
-    /// checked on load: files with a higher version are rejected (their field semantics
-    /// may differ), files with a lower version go through the migration hook in
-    /// ReadFromFile. Bump this whenever the binary layout changes.
-    static constexpr uint32_t kCurrentSaveVersion = 1;
 
     namespace
     {
@@ -143,6 +137,63 @@ namespace Spark
             }
             return true;
 #endif
+        }
+
+        bool IsSupportedSaveVersion(uint32_t version)
+        {
+            return version >= kOldestSupportedSaveVersion && version <= kCurrentSaveVersion;
+        }
+
+        void LogUnsupportedSaveVersion(const std::string& filepath, uint32_t version, const char* operation)
+        {
+            if (version > kCurrentSaveVersion)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save,
+                               "%s: save '%s' uses version %u, but this build supports versions %u..%u; "
+                               "load it with a newer SparkEngine build",
+                               operation, filepath.c_str(), version, kOldestSupportedSaveVersion, kCurrentSaveVersion);
+            }
+            else
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save,
+                               "%s: save '%s' uses version %u, but this build supports versions %u..%u; "
+                               "restore or convert the save with a compatible older build",
+                               operation, filepath.c_str(), version, kOldestSupportedSaveVersion, kCurrentSaveVersion);
+            }
+        }
+
+        bool ParseMetadataBlock(uint32_t sourceVersion, const std::string& metadataBlock, SaveMetadata& outMetadata)
+        {
+            SaveMetadata parsedMetadata;
+            parsedMetadata.version = sourceVersion;
+
+            std::istringstream stream(metadataBlock);
+            if (!std::getline(stream, parsedMetadata.saveName) || !std::getline(stream, parsedMetadata.sceneName) ||
+                !std::getline(stream, parsedMetadata.playerClass))
+            {
+                return false;
+            }
+
+            if (sourceVersion >= 2 && !std::getline(stream, parsedMetadata.screenshotPath))
+                return false;
+
+            stream >> parsedMetadata.timestamp;
+            stream >> parsedMetadata.playTime;
+            stream >> parsedMetadata.playerHealth;
+            stream >> parsedMetadata.playerArmor;
+            stream >> parsedMetadata.playerPosition.x >> parsedMetadata.playerPosition.y >>
+                parsedMetadata.playerPosition.z;
+            stream >> parsedMetadata.playerKills;
+            stream >> parsedMetadata.playerDeaths;
+            if (!stream)
+                return false;
+
+            stream >> std::ws;
+            if (!stream.eof())
+                return false;
+
+            outMetadata = std::move(parsedMetadata);
+            return true;
         }
     } // namespace
 
@@ -858,6 +909,7 @@ namespace Spark
     {
         SaveData data;
         data.metadata = metadata;
+        data.metadata.version = kCurrentSaveVersion;
         data.metadata.timestamp = static_cast<uint64_t>(
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
                 .count());
@@ -898,34 +950,85 @@ namespace Spark
         return data;
     }
 
-    bool SaveSystem::DeserializeWorld(const SaveData& data, World& world) const
+    bool SaveSystem::MigrateToCurrentVersion(SaveData& data)
     {
-        // Clear all existing entities before restoring saved state
-        auto& registry = world.GetRegistry();
+        if (!IsSupportedSaveVersion(data.metadata.version))
+            return false;
+
+        // Work on a copy so future multi-step migrations can retain the same
+        // fail-without-mutation contract if any individual step rejects data.
+        SaveData migrated = data;
+        while (migrated.metadata.version < kCurrentSaveVersion)
         {
-            auto&& entityStorage = registry.storage<entt::entity>();
-            std::vector<entt::entity> toDestroy;
-            for (auto&& [entity] : entityStorage.each())
-                toDestroy.push_back(entity);
-            for (auto e : toDestroy)
-                registry.destroy(e);
-        }
-
-        const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
-
-        for (const auto& se : data.entities)
-        {
-            EntityID entity = world.CreateEntity(se.name);
-
-            for (const auto& comp : se.components)
+            switch (migrated.metadata.version)
             {
-                if (serializerRegistry.HasSerializer(comp.typeName))
-                {
-                    serializerRegistry.Deserialize(comp.typeName, world, entity, comp);
-                }
+            case 1:
+                // v1 did not carry screenshotPath on disk. Its exact v2 value is
+                // therefore empty, even if a caller manually populated a v1 struct.
+                migrated.metadata.screenshotPath.clear();
+                migrated.metadata.version = 2;
+                break;
+            default:
+                return false;
             }
         }
 
+        data = std::move(migrated);
+        return true;
+    }
+
+    bool SaveSystem::DeserializeWorld(const SaveData& data, World& world) const
+    {
+        SaveData migratedData = data;
+        if (!MigrateToCurrentVersion(migratedData))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Save,
+                           "DeserializeWorld: save version %u is unsupported; supported versions are %u..%u",
+                           data.metadata.version, kOldestSupportedSaveVersion, kCurrentSaveVersion);
+            return false;
+        }
+
+        const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
+        World candidateWorld;
+        try
+        {
+            for (const auto& serializedEntity : migratedData.entities)
+            {
+                const EntityID entity = candidateWorld.CreateEntity(serializedEntity.name);
+
+                for (const auto& component : serializedEntity.components)
+                {
+                    if (!serializerRegistry.HasSerializer(component.typeName))
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                       "DeserializeWorld: no deserializer is registered for component '%s'; "
+                                       "the live world was not changed",
+                                       component.typeName.c_str());
+                        return false;
+                    }
+
+                    serializerRegistry.Deserialize(component.typeName, candidateWorld, entity, component);
+                }
+            }
+        }
+        catch (const std::exception& error)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Save,
+                           "DeserializeWorld: component deserializer failed: %s; the live world was not changed",
+                           error.what());
+            return false;
+        }
+        catch (...)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Save,
+                           "DeserializeWorld: component deserializer threw an unknown exception; "
+                           "the live world was not changed");
+            return false;
+        }
+
+        // The only mutation of the caller's World is the final move after the
+        // complete candidate has passed every version and component check.
+        world = std::move(candidateWorld);
         return true;
     }
 
@@ -933,6 +1036,14 @@ namespace Spark
     {
         try
         {
+            if (data.metadata.version != kCurrentSaveVersion)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save,
+                               "WriteToFile: refusing to emit version %u; this build writes version %u only",
+                               data.metadata.version, kCurrentSaveVersion);
+                return false;
+            }
+
             // Reject any string that would silently truncate to uint16_t on the wire.
             // Silent truncation corrupts saves: the length prefix disagrees with the payload.
             constexpr size_t kMaxStr16 = std::numeric_limits<uint16_t>::max();
@@ -964,7 +1075,8 @@ namespace Spark
             };
             if (rejectIfHasNewline(data.metadata.saveName, "metadata.saveName") ||
                 rejectIfHasNewline(data.metadata.sceneName, "metadata.sceneName") ||
-                rejectIfHasNewline(data.metadata.playerClass, "metadata.playerClass"))
+                rejectIfHasNewline(data.metadata.playerClass, "metadata.playerClass") ||
+                rejectIfHasNewline(data.metadata.screenshotPath, "metadata.screenshotPath"))
             {
                 return false;
             }
@@ -1015,7 +1127,7 @@ namespace Spark
             // Write header
             const char magic[] = "SPRK";
             file.write(magic, 4);
-            uint32_t version = data.metadata.version;
+            const uint32_t version = kCurrentSaveVersion;
             file.write(reinterpret_cast<const char*>(&version), sizeof(version));
 
             // Write metadata as text block
@@ -1023,6 +1135,7 @@ namespace Spark
             metaStream << data.metadata.saveName << "\n";
             metaStream << data.metadata.sceneName << "\n";
             metaStream << data.metadata.playerClass << "\n";
+            metaStream << data.metadata.screenshotPath << "\n";
             metaStream << data.metadata.timestamp << "\n";
             metaStream << data.metadata.playTime << "\n";
             metaStream << data.metadata.playerHealth << "\n";
@@ -1273,23 +1386,10 @@ namespace Spark
                 return false;
             parsedData.metadata.version = version;
 
-            // Reject saves written by a newer, incompatible engine build: their field
-            // semantics may differ and deserializing them would silently corrupt the world.
-            if (version == 0 || version > kCurrentSaveVersion)
+            if (!IsSupportedSaveVersion(version))
             {
-                SPARK_LOG_WARN(
-                    Spark::LogCategory::Save,
-                    "ReadFromFile: save '%s' version %u is unsupported (current version %u) — refusing to load",
-                    filepath.c_str(), version, kCurrentSaveVersion);
+                LogUnsupportedSaveVersion(filepath, version, "ReadFromFile");
                 return false;
-            }
-            // Migration hook for older formats. Each future layout bump adds a branch here
-            // that upgrades the parsed fields to the current version. Version 1 is the
-            // baseline, so there is nothing to migrate below it yet.
-            if (version < kCurrentSaveVersion)
-            {
-                SPARK_LOG_INFO(Spark::LogCategory::Save, "ReadFromFile: migrating save '%s' from version %u to %u",
-                               filepath.c_str(), version, kCurrentSaveVersion);
             }
 
             // Read metadata
@@ -1301,18 +1401,12 @@ namespace Spark
             std::string metaStr(reinterpret_cast<const char*>(fileData.data() + offset), metaSize);
             offset += metaSize;
 
-            std::istringstream metaStream(metaStr);
-            std::getline(metaStream, parsedData.metadata.saveName);
-            std::getline(metaStream, parsedData.metadata.sceneName);
-            std::getline(metaStream, parsedData.metadata.playerClass);
-            metaStream >> parsedData.metadata.timestamp;
-            metaStream >> parsedData.metadata.playTime;
-            metaStream >> parsedData.metadata.playerHealth;
-            metaStream >> parsedData.metadata.playerArmor;
-            metaStream >> parsedData.metadata.playerPosition.x >> parsedData.metadata.playerPosition.y >>
-                parsedData.metadata.playerPosition.z;
-            metaStream >> parsedData.metadata.playerKills;
-            metaStream >> parsedData.metadata.playerDeaths;
+            if (!ParseMetadataBlock(version, metaStr, parsedData.metadata))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save, "ReadFromFile: save '%s' has malformed version %u metadata",
+                               filepath.c_str(), version);
+                return false;
+            }
 
             // Read entities
             uint32_t entityCount;
@@ -1416,6 +1510,14 @@ namespace Spark
             if (offset != fileData.size())
                 return false;
 
+            if (version < kCurrentSaveVersion)
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Save, "ReadFromFile: migrating save '%s' from version %u to %u",
+                               filepath.c_str(), version, kCurrentSaveVersion);
+            }
+            if (!MigrateToCurrentVersion(parsedData))
+                return false;
+
             outData = std::move(parsedData);
             return true;
         }
@@ -1449,13 +1551,13 @@ namespace Spark
             file.read(reinterpret_cast<char*>(&version), sizeof(version));
             if (!file)
                 return false;
-            // Same version gate as ReadFromFile: never surface an invalid or
-            // unsupported-format save in slot listings.
-            if (version == 0 || version > kCurrentSaveVersion)
+            if (!IsSupportedSaveVersion(version))
+            {
+                LogUnsupportedSaveVersion(filepath, version, "ReadMetadataOnly");
                 return false;
+            }
 
             SaveMetadata parsedMetadata;
-            parsedMetadata.version = version;
 
             // Metadata is a length-prefixed text block immediately after the header.
             uint32_t metaSize = 0;
@@ -1475,22 +1577,15 @@ namespace Spark
                     return false;
             }
 
-            std::istringstream metaStream(metaStr);
-            std::getline(metaStream, parsedMetadata.saveName);
-            std::getline(metaStream, parsedMetadata.sceneName);
-            std::getline(metaStream, parsedMetadata.playerClass);
-            metaStream >> parsedMetadata.timestamp;
-            metaStream >> parsedMetadata.playTime;
-            metaStream >> parsedMetadata.playerHealth;
-            metaStream >> parsedMetadata.playerArmor;
-            metaStream >> parsedMetadata.playerPosition.x >> parsedMetadata.playerPosition.y >>
-                parsedMetadata.playerPosition.z;
-            metaStream >> parsedMetadata.playerKills;
-            metaStream >> parsedMetadata.playerDeaths;
-            if (!metaStream)
+            if (!ParseMetadataBlock(version, metaStr, parsedMetadata))
                 return false;
 
-            outMetadata = std::move(parsedMetadata);
+            SaveData metadataOnly;
+            metadataOnly.metadata = std::move(parsedMetadata);
+            if (!MigrateToCurrentVersion(metadataOnly))
+                return false;
+
+            outMetadata = std::move(metadataOnly.metadata);
             return true;
         }
         catch (const std::exception& e)

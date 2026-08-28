@@ -25,7 +25,8 @@
  *
  * Save files use a custom, uncompressed binary layout (extension `.spark_save`):
  * - A 4-byte `"SPRK"` magic followed by a `uint32` format version.
- * - A length-prefixed newline-delimited **metadata** text block (SaveMetadata fields).
+ * - A length-prefixed newline-delimited **metadata** text block (SaveMetadata fields;
+ *   v2 adds `screenshotPath` after `playerClass`).
  * - A `uint32` entity count, then each **entity** as a length-prefixed name plus its
  *   components (each a length-prefixed type name and a set of length-prefixed
  *   key/value property strings).
@@ -308,8 +309,9 @@ namespace Spark
  *
  * ### Error handling
  * All public save/load methods return `bool` indicating success. On failure an error
- * message is logged via spdlog. The world is left in an indeterminate state if Load()
- * fails partway through; callers should handle this (e.g. reload the level).
+ * message is logged. Load() builds a fresh candidate World and commits it only after
+ * every component has restored successfully, so failed loads leave the caller's World
+ * and custom-state output unchanged.
  *
  * ### Thread safety
  * SaveSystem is **not thread-safe**. Call all methods from the main game thread.
@@ -403,9 +405,9 @@ namespace Spark
      * older than the current engine version. Saves written by a newer format version
      * are rejected (the load fails) rather than misinterpreted.
      *
-     * @warning The provided `world` is **cleared** (all existing entities destroyed)
-     *          before the saved entities are restored. Ensure no raw pointers to
-     *          world entities are held by callers before invoking this method.
+     * @warning A successful load replaces the provided `world`. Ensure no raw pointers
+     *          to world entities are held by callers before invoking this method.
+     *          A failed load leaves the world unchanged.
      *
      * @param slotName  Save slot to load (must match a slot previously written by Save()).
      * @param world     The ECS World to restore into. Existing state is cleared.
@@ -533,15 +535,30 @@ namespace Spark
         SaveData SerializeWorld(World& world, const SaveMetadata& metadata) const;
 
         /**
+         * @brief Migrate an in-memory save snapshot to kCurrentSaveVersion.
+         *
+         * The supported compatibility window is exactly
+         * kOldestSupportedSaveVersion..kCurrentSaveVersion. The v1-to-v2 step adds
+         * the previously unpersisted screenshot field with its defined empty value.
+         * Calling this function again after success is a no-op. Unsupported versions
+         * return false without changing @p data.
+         *
+         * @param data Parsed or manually constructed save data to migrate in place.
+         * @return true when data is current after the call; false when its source
+         *         version is outside the supported compatibility window.
+         */
+        static bool MigrateToCurrentVersion(SaveData& data);
+
+        /**
      * @brief Restore world state from a SaveData without reading from disk.
      *
-     * Clears `world` and reconstructs all entities and components from `data`.
+     * Reconstructs all entities and components in a fresh candidate World, then
+     * replaces `world` only after the candidate is complete. Unknown component types,
+     * unsupported versions, and deserializer exceptions fail without changing world.
      * Pair with SerializeWorld() for in-memory snapshot/restore patterns.
      *
-     * @warning Clears all existing entities in `world` before restoring.
-     *
      * @param data   SaveData snapshot (e.g. from a previous SerializeWorld() call).
-     * @param world  The ECS World to restore into. Existing state is cleared.
+     * @param world  The ECS World to replace after a successful restore.
      * @return       `true` if all entities were restored successfully; `false` on error.
      */
         bool DeserializeWorld(const SaveData& data, World& world) const;

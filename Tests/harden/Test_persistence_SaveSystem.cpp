@@ -13,10 +13,13 @@
 #include "Utils/LocalFileCache.h"
 
 #include <cstdint>
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -48,6 +51,98 @@ namespace
     // Metadata layout: three getline fields, then whitespace-separated
     // timestamp playTime health armor posX posY posZ kills deaths.
     const std::string kValidMeta = "My Save\nLevel1\nSoldier\n1234 56.5 100 50 1 2 3 4 5\n";
+
+    std::string ReadTextFile(const std::filesystem::path& path)
+    {
+        std::ifstream input(path, std::ios::binary);
+        return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    }
+
+    std::vector<char> DecodeHexFixture(const std::string& encoded)
+    {
+        auto nibble = [](char value) -> int
+        {
+            if (value >= '0' && value <= '9')
+                return value - '0';
+            if (value >= 'a' && value <= 'f')
+                return value - 'a' + 10;
+            if (value >= 'A' && value <= 'F')
+                return value - 'A' + 10;
+            return -1;
+        };
+
+        std::string compact;
+        compact.reserve(encoded.size());
+        for (char value : encoded)
+        {
+            if (!std::isspace(static_cast<unsigned char>(value)))
+                compact.push_back(value);
+        }
+        if (compact.size() % 2 != 0)
+            return {};
+
+        std::vector<char> decoded;
+        decoded.reserve(compact.size() / 2);
+        for (size_t index = 0; index < compact.size(); index += 2)
+        {
+            const int high = nibble(compact[index]);
+            const int low = nibble(compact[index + 1]);
+            if (high < 0 || low < 0)
+                return {};
+            decoded.push_back(static_cast<char>((high << 4) | low));
+        }
+        return decoded;
+    }
+
+    bool ReplaceFirstAscii(std::vector<char>& bytes, const std::string& from, const std::string& to)
+    {
+        if (from.size() != to.size())
+            return false;
+        const auto match = std::search(bytes.begin(), bytes.end(), from.begin(), from.end());
+        if (match == bytes.end())
+            return false;
+        std::copy(to.begin(), to.end(), match);
+        return true;
+    }
+
+    bool WriteBytes(const std::filesystem::path& path, const std::vector<char>& bytes)
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        return output.good();
+    }
+
+    std::vector<char> ReadBytes(const std::filesystem::path& path)
+    {
+        std::ifstream input(path, std::ios::binary);
+        return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    }
+
+    uint32_t ReadHeaderVersion(const std::filesystem::path& path)
+    {
+        std::ifstream input(path, std::ios::binary);
+        char magic[4]{};
+        uint32_t version = 0;
+        input.read(magic, sizeof(magic));
+        input.read(reinterpret_cast<char*>(&version), sizeof(version));
+        if (!input || std::string(magic, sizeof(magic)) != "SPRK")
+            return 0;
+        return version;
+    }
+
+    bool WorldContainsNamedEntity(World& world, const std::string& name)
+    {
+        auto&& entities = world.GetRegistry().storage<entt::entity>();
+        for (auto&& [entity] : entities.each())
+        {
+            if (const NameComponent* component = world.GetComponent<NameComponent>(entity);
+                component && component->name == name)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 } // namespace
 
 TEST(ComponentSerializerRegistry_UnregisterDestroysOwnedCallbacks)
@@ -92,7 +187,7 @@ TEST(SaveSystem_GetSaveMetadata_ParsesHeader)
     EXPECT_EQ(meta.sceneName, std::string("Level1"));
     EXPECT_EQ(meta.playerClass, std::string("Soldier"));
     EXPECT_EQ(meta.timestamp, static_cast<uint64_t>(1234));
-    EXPECT_EQ(meta.version, 1u);
+    EXPECT_EQ(meta.version, kCurrentSaveVersion);
 
     std::filesystem::remove_all(dir);
 }
@@ -343,6 +438,182 @@ TEST(SaveSystem_CustomState_RoundTripsWithWorldAndDoesNotMutateOutputOnFailure)
     EXPECT_FALSE(ss.Load("custom-roundtrip", loaded, loadedCustomState));
     EXPECT_EQ(loadedCustomState.size(), 1u);
     EXPECT_EQ(loadedCustomState.at("sentinel"), std::string("unchanged-on-failure"));
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_CurrentWriterPersistsScreenshotPathAsVersion2)
+{
+    const std::string dir = MakeTempSaveDir("v2_writer");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID entity = source.CreateEntity("writer-source");
+    source.AddComponent<Transform>(entity);
+
+    SaveMetadata metadata;
+    metadata.version = kOldestSupportedSaveVersion;
+    metadata.saveName = "Version 2 writer";
+    metadata.screenshotPath = "Screenshots/version-2.png";
+    EXPECT_TRUE(saveSystem.Save("v2-writer", source, metadata));
+
+    const auto savePath = std::filesystem::path(dir) / "v2-writer.spark_save";
+    EXPECT_EQ(ReadHeaderVersion(savePath), kCurrentSaveVersion);
+
+    SaveMetadata loadedMetadata;
+    EXPECT_TRUE(saveSystem.GetSaveMetadata("v2-writer", loadedMetadata));
+    EXPECT_EQ(loadedMetadata.version, kCurrentSaveVersion);
+    EXPECT_EQ(loadedMetadata.screenshotPath, std::string("Screenshots/version-2.png"));
+
+    World loadedWorld;
+    EXPECT_TRUE(saveSystem.Load("v2-writer", loadedWorld));
+    EXPECT_TRUE(WorldContainsNamedEntity(loadedWorld, "writer-source"));
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_V1ToV2InMemoryStepIsExactIdempotentAndTransactional)
+{
+    SaveData legacy;
+    legacy.metadata.version = kOldestSupportedSaveVersion;
+    legacy.metadata.saveName = "Legacy memory snapshot";
+    legacy.metadata.screenshotPath = "not-representable-in-v1.png";
+    legacy.customState["declared"] = "preserved";
+
+    EXPECT_TRUE(SaveSystem::MigrateToCurrentVersion(legacy));
+    EXPECT_EQ(legacy.metadata.version, kCurrentSaveVersion);
+    EXPECT_EQ(legacy.metadata.screenshotPath, std::string());
+    EXPECT_EQ(legacy.metadata.saveName, std::string("Legacy memory snapshot"));
+    EXPECT_EQ(legacy.customState.at("declared"), std::string("preserved"));
+
+    const SaveData onceMigrated = legacy;
+    EXPECT_TRUE(SaveSystem::MigrateToCurrentVersion(legacy));
+    EXPECT_EQ(legacy.metadata.version, onceMigrated.metadata.version);
+    EXPECT_EQ(legacy.metadata.screenshotPath, onceMigrated.metadata.screenshotPath);
+    EXPECT_EQ(legacy.metadata.saveName, onceMigrated.metadata.saveName);
+    EXPECT_EQ(legacy.customState.size(), onceMigrated.customState.size());
+    EXPECT_EQ(legacy.customState.at("declared"), onceMigrated.customState.at("declared"));
+
+    SaveData unsupported = onceMigrated;
+    unsupported.metadata.version = kCurrentSaveVersion + 1;
+    unsupported.metadata.saveName = "future-sentinel";
+    EXPECT_FALSE(SaveSystem::MigrateToCurrentVersion(unsupported));
+    EXPECT_EQ(unsupported.metadata.version, kCurrentSaveVersion + 1);
+    EXPECT_EQ(unsupported.metadata.saveName, std::string("future-sentinel"));
+}
+
+TEST(SaveMigration_ImmutableV1FixtureLoadsWithoutRewritingSourceOrSlot)
+{
+    const auto fixturePath = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Tests" / "Fixtures" / "Compatibility" /
+                             "SaveSystem" / "v1-screenshotless.spark_save.hex";
+    const std::string fixtureBefore = ReadTextFile(fixturePath);
+    const std::vector<char> legacyBytes = DecodeHexFixture(fixtureBefore);
+    ASSERT_EQ(legacyBytes.size(), static_cast<size_t>(154));
+
+    const std::string dir = MakeTempSaveDir("v1_fixture");
+    const auto slotPath = std::filesystem::path(dir) / "legacy-v1.spark_save";
+    ASSERT_TRUE(WriteBytes(slotPath, legacyBytes));
+
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+    EXPECT_EQ(ReadHeaderVersion(slotPath), kOldestSupportedSaveVersion);
+
+    SaveMetadata metadata;
+    EXPECT_TRUE(saveSystem.GetSaveMetadata("legacy-v1", metadata));
+    EXPECT_EQ(metadata.version, kCurrentSaveVersion);
+    EXPECT_EQ(metadata.saveName, std::string("Legacy screenshotless save"));
+    EXPECT_EQ(metadata.sceneName, std::string("LegacyScene"));
+    EXPECT_EQ(metadata.screenshotPath, std::string());
+
+    World loadedWorld;
+    loadedWorld.CreateEntity("must-be-replaced-only-on-success");
+    std::unordered_map<std::string, std::string> customState = {{"sentinel", "replace-on-success"}};
+    EXPECT_TRUE(saveSystem.Load("legacy-v1", loadedWorld, customState));
+    EXPECT_EQ(loadedWorld.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(loadedWorld, "legacy-player"));
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("legacy.key"), std::string("legacy-value"));
+
+    // Migration is in memory only: neither the checked-in fixture nor the copied
+    // N-1 slot is rewritten as a side effect of reading it.
+    EXPECT_EQ(ReadHeaderVersion(slotPath), kOldestSupportedSaveVersion);
+    EXPECT_EQ(ReadTextFile(fixturePath), fixtureBefore);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_UnknownComponentFailsWithoutMutatingWorldOrCustomState)
+{
+    const std::string dir = MakeTempSaveDir("unknown_component");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("candidate-only");
+    source.AddComponent<Transform>(sourceEntity);
+    SaveMetadata metadata;
+    metadata.saveName = "Unknown component transaction";
+    EXPECT_TRUE(saveSystem.Save("unknown-component", source, metadata, {{"candidate", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "unknown-component.spark_save";
+    std::vector<char> bytes = ReadBytes(path);
+    ASSERT_TRUE(ReplaceFirstAscii(bytes, "Transform", "NoSuchCmp"));
+    ASSERT_TRUE(WriteBytes(path, bytes));
+
+    World liveWorld;
+    liveWorld.CreateEntity("live-sentinel");
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+    EXPECT_FALSE(saveSystem.Load("unknown-component", liveWorld, customState));
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "live-sentinel"));
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("live"), std::string("sentinel"));
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_ThrowingDeserializerFailsWithoutMutatingWorldOrCustomState)
+{
+    const std::string dir = MakeTempSaveDir("throwing_deserializer");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("candidate-only");
+    source.AddComponent<Transform>(sourceEntity);
+    SaveMetadata metadata;
+    metadata.saveName = "Throwing component transaction";
+    EXPECT_TRUE(saveSystem.Save("throwing-component", source, metadata, {{"candidate", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "throwing-component.spark_save";
+    std::vector<char> bytes = ReadBytes(path);
+    ASSERT_TRUE(ReplaceFirstAscii(bytes, "Transform", "ThrowTest"));
+    ASSERT_TRUE(WriteBytes(path, bytes));
+
+    auto& registry = ComponentSerializerRegistry::GetInstance();
+    registry.Unregister("ThrowTest");
+    bool deserializerCalled = false;
+    registry.Register(
+        "ThrowTest", [](const void*) { return SerializedComponent{"ThrowTest", {}}; },
+        [&](World&, EntityID, const SerializedComponent&)
+        {
+            deserializerCalled = true;
+            throw std::runtime_error("intentional compatibility fixture failure");
+        });
+
+    World liveWorld;
+    liveWorld.CreateEntity("live-sentinel");
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+    const bool loaded = saveSystem.Load("throwing-component", liveWorld, customState);
+    registry.Unregister("ThrowTest");
+
+    EXPECT_FALSE(loaded);
+    EXPECT_TRUE(deserializerCalled);
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "live-sentinel"));
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("live"), std::string("sentinel"));
 
     std::filesystem::remove_all(dir);
 }
