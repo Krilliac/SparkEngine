@@ -92,6 +92,46 @@ Every capability is classified exactly once. Nothing outside the profile may be 
 - Experimental: `platform.linux`, `platform.macos`, `rendering.d3d12`, `rendering.vulkan`, `rendering.opengl`, `rendering.metal`, `networking.multiplayer`, `scripting.angelscript`, `scripting.visual`, `modules.mmofps`, `modules.prototypes`
 - Unsupported: `platform.mobile`, `platform.vr`, `platform.console`, `services.production`
 
+### Build product contract
+
+Configurations:
+- `windows-shipping` — shipping via preset `windows-shipping`
+- `windows-validation` — validation via preset `windows-release`
+- `installed-sdk-consumer` — installed-sdk-consumer (separate installed-package configure)
+
+| Target | Kind | Build profile | Applicability | Capabilities | Required options |
+|---|---|---|---|---|---|
+| `SparkEngineLib` | `static_library` | `windows-shipping` | `required` | `platform.windows`, `runtime.cpp`, `runtime.nullrhi`, `rendering.d3d11` | — |
+| `SparkEngine` | `executable` | `windows-shipping` | `required` | `platform.windows`, `runtime.cpp`, `runtime.nullrhi`, `rendering.d3d11`, `scope.singleplayer` | — |
+| `SparkGameFPS` | `shared_library` | `windows-shipping` | `required` | `runtime.cpp`, `scope.singleplayer`, `modules.fps` | `BUILD_GAME_MODULES=ON` |
+| `SparkEditor` | `executable` | `windows-shipping` | `required` | `platform.windows`, `runtime.cpp`, `rendering.d3d11`, `editor.authoring` | `ENABLE_EDITOR=ON` |
+| `SparkConsole` | `executable` | `windows-shipping` | `required` | `platform.windows`, `runtime.cpp`, `scope.singleplayer` | — |
+| `SparkShaderCompiler` | `executable` | `windows-shipping` | `required` | `platform.windows`, `runtime.cpp`, `rendering.d3d11`, `editor.authoring` | — |
+| `SparkCrashReporter` | `executable` | `windows-shipping` | `required` | `platform.windows`, `runtime.cpp` | — |
+| `SparkCooker` | `executable` | `windows-shipping` | `required` | `platform.windows`, `runtime.cpp`, `editor.authoring` | `ENABLE_ASSET_PIPELINE_TOOLS=ON` |
+| `SparkAutomation` | `executable` | `windows-shipping` | `required` | `platform.windows`, `runtime.cpp`, `runtime.nullrhi` | `ENABLE_AUTOMATION_HOST=ON` |
+| `SparkLauncher` | `executable` | `windows-shipping` | `required` | `platform.windows`, `runtime.cpp`, `editor.authoring` | `ENABLE_LAUNCHER=ON` |
+| `SparkBuild` | `executable` | `windows-shipping` | `required` | `platform.windows`, `runtime.cpp`, `editor.authoring` | `ENABLE_SPARKBUILD=ON` |
+| `SparkInstaller` | `executable` | `windows-shipping` | `required` | `platform.windows`, `runtime.cpp`, `editor.authoring` | `ENABLE_INSTALLER=ON`, `ENABLE_SPARKBUILD=ON` |
+| `SparkTests` | `executable` | `windows-validation` | `required` | `platform.windows`, `runtime.cpp`, `runtime.nullrhi`, `rendering.d3d11`, `scope.singleplayer`, `editor.authoring`, `modules.fps` | `BUILD_TESTS=ON` |
+| `spark_package_smoke` | `executable` | `installed-sdk-consumer` | `required` | `platform.windows`, `runtime.cpp` | — |
+| `spark_package_module_header_smoke` | `module_library` | `installed-sdk-consumer` | `required` | `platform.windows`, `runtime.cpp`, `scope.singleplayer`, `modules.fps` | — |
+
+Configuration-surface exceptions (every omitted option remains required):
+- `ENABLE_ANGELSCRIPT` — **outside**: AngelScript is experimental and excluded from stable-v1 with G11.
+- `ENABLE_COLLABORATIVE` — **outside**: Collaborative service behavior is outside the service-free single-player profile.
+- `ENABLE_DXR` — **outside**: DXR belongs to the experimental D3D12 breadth; stable-v1 renders through D3D11.
+- `ENABLE_HYBRID_RT` — **outside**: Hybrid ray-tracing breadth is not part of the D3D11 stable-v1 rendering contract.
+- `ENABLE_LUA` — **outside**: No scripting runtime is included in stable-v1; scripting work remains outside G11.
+- `ENABLE_METAL` — **outside**: Metal and macOS are experimental capabilities outside the Windows D3D11 profile.
+- `ENABLE_MOBILE` — **outside**: Mobile hosts are explicitly unsupported by stable-v1.
+- `ENABLE_NETWORKING` — **outside**: Constrained LAN is optional, multiplayer is experimental, and neither is required by the single-player profile.
+- `ENABLE_NEURAL_RENDERING` — **shared**: Neural rendering is engine-wide experimental breadth and is not required by the D3D11 first-party slice.
+- `ENABLE_PHYSX` — **outside**: The alternative PhysX surface is not part of the stable-v1 runtime contract.
+- `ENABLE_SERVER_PROCESSES` — **outside**: Dedicated services and production multiplayer are outside the service-free single-player profile.
+- `ENABLE_VR` — **outside**: VR hosts are explicitly unsupported by stable-v1.
+- `SPARK_DOUBLE_PRECISION_PHYSICS` — **shared**: Large-world double-precision physics is shared engine breadth, not a requirement of the first stable FPS slice.
+
 ### Profile gates
 
 - Required: `G00`, `G01`, `G02`, `G03`, `G04`, `G05`, `G06`, `G07`, `G08`, `G09`, `G10`, `G13`, `G14`, `G15`, `G16`, `G17`
@@ -822,6 +862,10 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - `CMakePresets.json`
 - `SparkBuild/src/Config.cpp`
 - `ThirdParty/dependencies.lock`
+- `.github/workflows/build.yml`
+- `docs/site/readiness.json`
+- `docs/readiness/ci120-build-matrix-inventory.json`
+- `docs/readiness/ci120-parity-findings.json`
 
 **Entry points**
 
@@ -830,29 +874,34 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - `SparkBuild/src/Config.cpp`
 - `Tools/buildmatrix/inventory.py`
 - `Tools/buildmatrix/check_parity.py`
+- `Tests/Tools/test_build_matrix_parity.py`
+- `docs/site/readiness.json`
 
 **Implementation scope**
 
 - Enable strict dependencies in stable-v1 CI and release
 - Reconcile root and SparkBuild options and reject unknown values
+- Derive the exact target, kind, configuration, and applicability contract from stable-v1 rather than a second product list
+- Require configured CMake File API codemodel evidence for every canonical build profile
 - Build every Windows stable-v1 executable, tool, SDK, and in-profile module
 - Align documented and actual Windows preset directories
 - Define warning and CPU baselines for the supported row
 
 **Acceptance criteria**
 
-1. Every stable-v1 target builds in the strict Windows Shipping profile
-2. Unknown or unused options fail
-3. Missing dependency is fatal
-4. Documented configure/build commands match the Windows presets
-5. Experimental platform Shipping matrices remain owned by their platform work items
+1. Every stable-v1 target appears with its declared kind in configured codemodel evidence for its canonical build profile
+2. The strict Windows Shipping profile, Windows validation profile, and installed public-SDK consumer are all independently evidenced
+3. Unknown or unused options fail
+4. Missing dependency is fatal
+5. Documented configure/build commands match the Windows presets
+6. Experimental platform Shipping matrices remain owned by their platform work items
 
 **Required commands**
 
 ```bash
-python3 Tools/buildmatrix/inventory.py
-python3 Tools/buildmatrix/check_parity.py
-python3 -m pytest Tests/Tools/test_build_matrix_parity.py -v
+python3 Tools/buildmatrix/inventory.py --check docs/readiness/ci120-build-matrix-inventory.json
+python3 Tools/buildmatrix/check_parity.py --inventory docs/readiness/ci120-build-matrix-inventory.json --baseline docs/readiness/ci120-parity-findings.json
+python3 Tests/Tools/test_build_matrix_parity.py
 cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON
 cmake --build build/windows-shipping --config MinSizeRel --clean-first
 cmake -LAH -N build/windows-shipping

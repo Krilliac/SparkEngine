@@ -223,6 +223,43 @@ def render_handoff(contract: dict[str, Any]) -> str:
                 f"- Experimental: {', '.join(f'`{value}`' for value in boundaries.get('experimentalCapabilityIds', [])) or 'none'}",
                 f"- Unsupported: {', '.join(f'`{value}`' for value in boundaries.get('unsupportedCapabilityIds', [])) or 'none'}",
                 "",
+                "### Build product contract",
+                "",
+                "Configurations:",
+                *[
+                    f"- `{entry['id']}` — {entry['purpose']}"
+                    + (f" via preset `{entry['preset']}`" if entry.get("preset") else " (separate installed-package configure)")
+                    for entry in profile.get("buildConfigurations", [])
+                ],
+                "",
+                "| Target | Kind | Build profile | Applicability | Capabilities | Required options |",
+                "|---|---|---|---|---|---|",
+                *[
+                    "| "
+                    + " | ".join(
+                        [
+                            f"`{product['target']}`",
+                            f"`{product['kind']}`",
+                            f"`{product['buildProfile']}`",
+                            f"`{product['applicability']}`",
+                            ", ".join(f"`{value}`" for value in product.get("capabilityIds", [])) or "—",
+                            ", ".join(
+                                f"`{name}={value}`"
+                                for name, value in sorted(product.get("requiredOptions", {}).items())
+                            ) or "—",
+                        ]
+                    )
+                    + " |"
+                    for product in profile.get("buildProducts", [])
+                ],
+                "",
+                "Configuration-surface exceptions (every omitted option remains required):",
+                *[
+                    f"- `{entry['name']}` — **{entry['applicability']}**: {entry['reason']}"
+                    for entry in profile.get("buildOptionApplicability", [])
+                ],
+                *(["- none"] if not profile.get("buildOptionApplicability") else []),
+                "",
                 "### Profile gates",
                 "",
                 f"- Required: {', '.join(f'`{value}`' for value in profile['requiredGateIds']) or 'none'}",

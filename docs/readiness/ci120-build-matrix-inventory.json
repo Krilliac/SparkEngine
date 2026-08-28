@@ -1,164 +1,829 @@
 {
-  "cmakeOptions": [
+  "schemaVersion": 2,
+  "profile": {
+    "id": "stable-v1",
+    "includedCapabilityIds": [
+      "editor.authoring",
+      "modules.fps",
+      "platform.windows",
+      "rendering.d3d11",
+      "runtime.cpp",
+      "runtime.nullrhi",
+      "scope.singleplayer"
+    ],
+    "buildConfigurations": [
+      {
+        "id": "installed-sdk-consumer",
+        "configuration": "Release",
+        "purpose": "installed-sdk-consumer",
+        "description": "A separate configure against an installed SparkEngine package that proves public SDK headers, imports, and module linkage without source-tree include leakage."
+      },
+      {
+        "id": "windows-shipping",
+        "preset": "windows-shipping",
+        "configuration": "MinSizeRel",
+        "purpose": "shipping",
+        "description": "Authoritative strict Windows 11 x64 Shipping configuration for runtime, editor, first-party game, and delivery tools."
+      },
+      {
+        "id": "windows-validation",
+        "preset": "windows-release",
+        "configuration": "Release",
+        "purpose": "validation",
+        "description": "Windows 11 x64 Release configuration used to compile and run the repository test target."
+      }
+    ],
+    "buildProducts": [
+      {
+        "target": "spark_package_module_header_smoke",
+        "kind": "module_library",
+        "buildProfile": "installed-sdk-consumer",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp",
+          "scope.singleplayer",
+          "modules.fps"
+        ],
+        "requiredOptions": {}
+      },
+      {
+        "target": "spark_package_smoke",
+        "kind": "executable",
+        "buildProfile": "installed-sdk-consumer",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp"
+        ],
+        "requiredOptions": {}
+      },
+      {
+        "target": "SparkAutomation",
+        "kind": "executable",
+        "buildProfile": "windows-shipping",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp",
+          "runtime.nullrhi"
+        ],
+        "requiredOptions": {
+          "ENABLE_AUTOMATION_HOST": "ON"
+        }
+      },
+      {
+        "target": "SparkBuild",
+        "kind": "executable",
+        "buildProfile": "windows-shipping",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp",
+          "editor.authoring"
+        ],
+        "requiredOptions": {
+          "ENABLE_SPARKBUILD": "ON"
+        }
+      },
+      {
+        "target": "SparkConsole",
+        "kind": "executable",
+        "buildProfile": "windows-shipping",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp",
+          "scope.singleplayer"
+        ],
+        "requiredOptions": {}
+      },
+      {
+        "target": "SparkCooker",
+        "kind": "executable",
+        "buildProfile": "windows-shipping",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp",
+          "editor.authoring"
+        ],
+        "requiredOptions": {
+          "ENABLE_ASSET_PIPELINE_TOOLS": "ON"
+        }
+      },
+      {
+        "target": "SparkCrashReporter",
+        "kind": "executable",
+        "buildProfile": "windows-shipping",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp"
+        ],
+        "requiredOptions": {}
+      },
+      {
+        "target": "SparkEditor",
+        "kind": "executable",
+        "buildProfile": "windows-shipping",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp",
+          "rendering.d3d11",
+          "editor.authoring"
+        ],
+        "requiredOptions": {
+          "ENABLE_EDITOR": "ON"
+        }
+      },
+      {
+        "target": "SparkEngine",
+        "kind": "executable",
+        "buildProfile": "windows-shipping",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp",
+          "runtime.nullrhi",
+          "rendering.d3d11",
+          "scope.singleplayer"
+        ],
+        "requiredOptions": {}
+      },
+      {
+        "target": "SparkEngineLib",
+        "kind": "static_library",
+        "buildProfile": "windows-shipping",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp",
+          "runtime.nullrhi",
+          "rendering.d3d11"
+        ],
+        "requiredOptions": {}
+      },
+      {
+        "target": "SparkGameFPS",
+        "kind": "shared_library",
+        "buildProfile": "windows-shipping",
+        "applicability": "required",
+        "capabilityIds": [
+          "runtime.cpp",
+          "scope.singleplayer",
+          "modules.fps"
+        ],
+        "requiredOptions": {
+          "BUILD_GAME_MODULES": "ON"
+        }
+      },
+      {
+        "target": "SparkInstaller",
+        "kind": "executable",
+        "buildProfile": "windows-shipping",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp",
+          "editor.authoring"
+        ],
+        "requiredOptions": {
+          "ENABLE_INSTALLER": "ON",
+          "ENABLE_SPARKBUILD": "ON"
+        }
+      },
+      {
+        "target": "SparkLauncher",
+        "kind": "executable",
+        "buildProfile": "windows-shipping",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp",
+          "editor.authoring"
+        ],
+        "requiredOptions": {
+          "ENABLE_LAUNCHER": "ON"
+        }
+      },
+      {
+        "target": "SparkShaderCompiler",
+        "kind": "executable",
+        "buildProfile": "windows-shipping",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp",
+          "rendering.d3d11",
+          "editor.authoring"
+        ],
+        "requiredOptions": {}
+      },
+      {
+        "target": "SparkTests",
+        "kind": "executable",
+        "buildProfile": "windows-validation",
+        "applicability": "required",
+        "capabilityIds": [
+          "platform.windows",
+          "runtime.cpp",
+          "runtime.nullrhi",
+          "rendering.d3d11",
+          "scope.singleplayer",
+          "editor.authoring",
+          "modules.fps"
+        ],
+        "requiredOptions": {
+          "BUILD_TESTS": "ON"
+        }
+      }
+    ],
+    "optionApplicability": [
+      {
+        "name": "ENABLE_ANGELSCRIPT",
+        "applicability": "outside",
+        "reason": "AngelScript is experimental and excluded from stable-v1 with G11."
+      },
+      {
+        "name": "ENABLE_COLLABORATIVE",
+        "applicability": "outside",
+        "reason": "Collaborative service behavior is outside the service-free single-player profile."
+      },
+      {
+        "name": "ENABLE_DXR",
+        "applicability": "outside",
+        "reason": "DXR belongs to the experimental D3D12 breadth; stable-v1 renders through D3D11."
+      },
+      {
+        "name": "ENABLE_HYBRID_RT",
+        "applicability": "outside",
+        "reason": "Hybrid ray-tracing breadth is not part of the D3D11 stable-v1 rendering contract."
+      },
+      {
+        "name": "ENABLE_LUA",
+        "applicability": "outside",
+        "reason": "No scripting runtime is included in stable-v1; scripting work remains outside G11."
+      },
+      {
+        "name": "ENABLE_METAL",
+        "applicability": "outside",
+        "reason": "Metal and macOS are experimental capabilities outside the Windows D3D11 profile."
+      },
+      {
+        "name": "ENABLE_MOBILE",
+        "applicability": "outside",
+        "reason": "Mobile hosts are explicitly unsupported by stable-v1."
+      },
+      {
+        "name": "ENABLE_NETWORKING",
+        "applicability": "outside",
+        "reason": "Constrained LAN is optional, multiplayer is experimental, and neither is required by the single-player profile."
+      },
+      {
+        "name": "ENABLE_NEURAL_RENDERING",
+        "applicability": "shared",
+        "reason": "Neural rendering is engine-wide experimental breadth and is not required by the D3D11 first-party slice."
+      },
+      {
+        "name": "ENABLE_PHYSX",
+        "applicability": "outside",
+        "reason": "The alternative PhysX surface is not part of the stable-v1 runtime contract."
+      },
+      {
+        "name": "ENABLE_SERVER_PROCESSES",
+        "applicability": "outside",
+        "reason": "Dedicated services and production multiplayer are outside the service-free single-player profile."
+      },
+      {
+        "name": "ENABLE_VR",
+        "applicability": "outside",
+        "reason": "VR hosts are explicitly unsupported by stable-v1."
+      },
+      {
+        "name": "SPARK_DOUBLE_PRECISION_PHYSICS",
+        "applicability": "shared",
+        "reason": "Large-world double-precision physics is shared engine breadth, not a requirement of the first stable FPS slice."
+      }
+    ]
+  },
+  "cmakeOptionDeclarations": [
     {
       "name": "BUILD_GAME_MODULES",
       "description": "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 156,
+      "conditionFrames": []
     },
     {
       "name": "BUILD_TESTS",
       "description": "Build test suite",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 155,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_ANGELSCRIPT",
       "description": "Enable the AngelScript gameplay scripting runtime",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 150,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_ASSET_PIPELINE_TOOLS",
       "description": "Build deterministic cooker and worker processes",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 167,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_AUTOMATION_HOST",
       "description": "Build the standalone automation host",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 168,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_CONSOLE_IN_SHIPPING",
       "description": "Include SparkConsole in Shipping builds",
-      "default": "OFF"
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 171,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_DEVCOMMANDS_IN_SHIPPING",
       "description": "Include developer commands (god, noclip, etc.) in Shipping builds",
-      "default": "OFF"
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 172,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_DXR",
       "description": "Enable DirectX Raytracing support (requires D3D12, runtime fallback to SDFGI)",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 141,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_EDITOR",
       "description": "Enable editor features",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 162,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_GRAPHICS",
       "description": "Enable graphics engine",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 135,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_HYBRID_RT",
       "description": "Enable hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT)",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 142,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_INSTALLER",
       "description": "Build SparkInstaller (bootstrap installer/updater)",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 165,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_LAUNCHER",
       "description": "Build SparkLauncher (Unity-Hub-style project picker)",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 163,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_LTO",
       "description": "Enable link-time optimization in Release/MinSizeRel builds",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 386,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:328",
+          "branch": 1,
+          "branches": [
+            "MSVC",
+            "CMAKE_CXX_COMPILER_ID MATCHES \"GNU|Clang|AppleClang|IntelLLVM\""
+          ]
+        }
+      ]
     },
     {
       "name": "ENABLE_METAL",
       "description": "Enable Metal graphics backend (macOS, experimental)",
-      "default": "${APPLE}"
+      "default": "${APPLE}",
+      "file": "CMakeLists.txt",
+      "line": 140,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_MOBILE",
       "description": "Enable mobile platform support (touch, gestures, battery-aware scaling)",
-      "default": "OFF"
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 154,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_NETWORKING",
       "description": "Enable networking features (UDP sockets)",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 137,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_NEURAL_RENDERING",
       "description": "Enable neural rendering features (NTC, radiance cache, neural post-processing)",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 152,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_OPENGL",
       "description": "Enable OpenGL graphics backend (experimental)",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 139,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_PROFILING",
       "description": "Enable profiling tools",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 136,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_RECAST",
       "description": "Enable Recast/Detour navmesh generation (improved voxel-based builder)",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 151,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_SDL2",
       "description": "Enable SDL2 cross-platform input and windowing",
-      "default": "platform-conditional"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 145,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:144",
+          "branch": 0,
+          "branches": [
+            "NOT WIN32"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ENABLE_SDL2",
+      "description": "Enable SDL2 cross-platform input and windowing",
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 147,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:144",
+          "branch": 1,
+          "branches": [
+            "NOT WIN32",
+            null
+          ]
+        }
+      ]
     },
     {
       "name": "ENABLE_SERVER_PROCESSES",
       "description": "Build dedicated server, gateway, and orchestration processes",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 166,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_SPARKBUILD",
       "description": "Build SparkBuild (terminal-UI CMake configurator)",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 164,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_VR",
       "description": "Enable VR/AR framework (OpenXR-ready stub)",
-      "default": "OFF"
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 153,
+      "conditionFrames": []
     },
     {
       "name": "ENABLE_VULKAN",
       "description": "Enable Vulkan graphics backend (experimental)",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 138,
+      "conditionFrames": []
     },
     {
       "name": "SPARK_DOUBLE_PRECISION_PHYSICS",
       "description": "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds",
-      "default": "OFF"
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 159,
+      "conditionFrames": []
     },
     {
       "name": "SPARK_HEADLESS_SUPPORT",
       "description": "Enable headless/dedicated server mode support",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 149,
+      "conditionFrames": []
     },
     {
       "name": "SPARK_NATIVE_ARCH",
       "description": "Tune for the build machine's CPU (SSE4.2/AVX2/etc). Disable for distributed binaries.",
-      "default": "OFF"
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 326,
+      "conditionFrames": []
     },
     {
       "name": "SPARK_STRICT_DEPS",
       "description": "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)",
-      "default": "OFF"
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 157,
+      "conditionFrames": []
     },
     {
       "name": "SPARK_SUPPRESS_THIRDPARTY_WARNINGS",
       "description": "Suppress compiler warnings from third-party libraries (Jolt, etc.)",
-      "default": "ON"
+      "default": "ON",
+      "file": "CMakeLists.txt",
+      "line": 158,
+      "conditionFrames": []
     },
     {
       "name": "STRIP_DEBUG_SYMBOLS",
       "description": "Strip debug symbols from the final binary",
-      "default": "OFF"
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 173,
+      "conditionFrames": []
+    }
+  ],
+  "cmakeOptions": [
+    {
+      "name": "BUILD_GAME_MODULES",
+      "description": "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "BUILD_TESTS",
+      "description": "Build test suite",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_ANGELSCRIPT",
+      "description": "Enable the AngelScript gameplay scripting runtime",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_ASSET_PIPELINE_TOOLS",
+      "description": "Build deterministic cooker and worker processes",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_AUTOMATION_HOST",
+      "description": "Build the standalone automation host",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_CONSOLE_IN_SHIPPING",
+      "description": "Include SparkConsole in Shipping builds",
+      "default": false,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_DEVCOMMANDS_IN_SHIPPING",
+      "description": "Include developer commands (god, noclip, etc.) in Shipping builds",
+      "default": false,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_DXR",
+      "description": "Enable DirectX Raytracing support (requires D3D12, runtime fallback to SDFGI)",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_EDITOR",
+      "description": "Enable editor features",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_GRAPHICS",
+      "description": "Enable graphics engine",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_HYBRID_RT",
+      "description": "Enable hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT)",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_INSTALLER",
+      "description": "Build SparkInstaller (bootstrap installer/updater)",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_LAUNCHER",
+      "description": "Build SparkLauncher (Unity-Hub-style project picker)",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_LTO",
+      "description": "Enable link-time optimization in Release/MinSizeRel builds",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_METAL",
+      "description": "Enable Metal graphics backend (macOS, experimental)",
+      "default": false,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_MOBILE",
+      "description": "Enable mobile platform support (touch, gestures, battery-aware scaling)",
+      "default": false,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_NETWORKING",
+      "description": "Enable networking features (UDP sockets)",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_NEURAL_RENDERING",
+      "description": "Enable neural rendering features (NTC, radiance cache, neural post-processing)",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_OPENGL",
+      "description": "Enable OpenGL graphics backend (experimental)",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_PROFILING",
+      "description": "Enable profiling tools",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_RECAST",
+      "description": "Enable Recast/Detour navmesh generation (improved voxel-based builder)",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_SDL2",
+      "description": "Enable SDL2 cross-platform input and windowing",
+      "default": false,
+      "declarationCount": 2,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_SERVER_PROCESSES",
+      "description": "Build dedicated server, gateway, and orchestration processes",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_SPARKBUILD",
+      "description": "Build SparkBuild (terminal-UI CMake configurator)",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_VR",
+      "description": "Enable VR/AR framework (OpenXR-ready stub)",
+      "default": false,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "ENABLE_VULKAN",
+      "description": "Enable Vulkan graphics backend (experimental)",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "SPARK_DOUBLE_PRECISION_PHYSICS",
+      "description": "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds",
+      "default": false,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "SPARK_HEADLESS_SUPPORT",
+      "description": "Enable headless/dedicated server mode support",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "SPARK_NATIVE_ARCH",
+      "description": "Tune for the build machine's CPU (SSE4.2/AVX2/etc). Disable for distributed binaries.",
+      "default": false,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "SPARK_STRICT_DEPS",
+      "description": "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)",
+      "default": false,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "SPARK_SUPPRESS_THIRDPARTY_WARNINGS",
+      "description": "Suppress compiler warnings from third-party libraries (Jolt, etc.)",
+      "default": true,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
+    },
+    {
+      "name": "STRIP_DEBUG_SYMBOLS",
+      "description": "Strip debug symbols from the final binary",
+      "default": false,
+      "declarationCount": 1,
+      "activeDeclarationCount": 1
     }
   ],
   "cmakePresets": {
@@ -175,7 +840,14 @@
         "hidden": false,
         "displayName": "Windows Debug (VS 2022)",
         "inherits": "default",
-        "platform": "Windows",
+        "generator": "Visual Studio 17 2022",
+        "architecture": "x64",
+        "toolset": "v143",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Windows"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "Debug"
         }
@@ -185,7 +857,14 @@
         "hidden": false,
         "displayName": "Windows Release (VS 2022)",
         "inherits": "default",
-        "platform": "Windows",
+        "generator": "Visual Studio 17 2022",
+        "architecture": "x64",
+        "toolset": "v143",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Windows"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "Release"
         }
@@ -195,7 +874,11 @@
         "hidden": false,
         "displayName": "Linux GCC Debug",
         "inherits": "default",
-        "platform": "Linux",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Linux"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "Debug",
           "CMAKE_CXX_COMPILER": "g++",
@@ -207,7 +890,11 @@
         "hidden": false,
         "displayName": "Linux GCC Release",
         "inherits": "default",
-        "platform": "Linux",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Linux"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "Release",
           "CMAKE_CXX_COMPILER": "g++",
@@ -219,7 +906,11 @@
         "hidden": false,
         "displayName": "Linux Clang Debug",
         "inherits": "default",
-        "platform": "Linux",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Linux"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "Debug",
           "CMAKE_CXX_COMPILER": "clang++",
@@ -231,7 +922,11 @@
         "hidden": false,
         "displayName": "Linux Clang Release",
         "inherits": "default",
-        "platform": "Linux",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Linux"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "Release",
           "CMAKE_CXX_COMPILER": "clang++",
@@ -265,7 +960,14 @@
         "hidden": false,
         "displayName": "Windows Shipping (max speed, no dev tools)",
         "inherits": "default",
-        "platform": "Windows",
+        "generator": "Visual Studio 17 2022",
+        "architecture": "x64",
+        "toolset": "v143",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Windows"
+        },
         "cacheVariables": {
           "BUILD_TESTS": "OFF",
           "CMAKE_BUILD_TYPE": "MinSizeRel",
@@ -284,7 +986,14 @@
         "hidden": false,
         "displayName": "Windows Development (symbols + console + native tuning)",
         "inherits": "default",
-        "platform": "Windows",
+        "generator": "Visual Studio 17 2022",
+        "architecture": "x64",
+        "toolset": "v143",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Windows"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "RelWithDebInfo",
           "ENABLE_CONSOLE_IN_SHIPPING": "ON",
@@ -297,7 +1006,11 @@
         "hidden": false,
         "displayName": "Linux Shipping (max speed, no dev tools)",
         "inherits": "default",
-        "platform": "Linux",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Linux"
+        },
         "cacheVariables": {
           "BUILD_TESTS": "OFF",
           "CMAKE_BUILD_TYPE": "MinSizeRel",
@@ -318,7 +1031,11 @@
         "hidden": false,
         "displayName": "Linux Development (symbols + console + native tuning)",
         "inherits": "default",
-        "platform": "Linux",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Linux"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "RelWithDebInfo",
           "CMAKE_CXX_COMPILER": "g++",
@@ -333,7 +1050,11 @@
         "hidden": false,
         "displayName": "Linux MinGW Cross-Compile (Windows .exe, run under Wine)",
         "inherits": "default",
-        "platform": "Linux",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Linux"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "Release",
           "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/mingw-w64-x86_64.cmake",
@@ -356,7 +1077,11 @@
         "hidden": false,
         "displayName": "macOS Debug (Apple Clang, SDL2 + Metal + OpenGL + OpenAL)",
         "inherits": "default",
-        "platform": "Darwin",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Darwin"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "Debug",
           "ENABLE_DXR": "OFF",
@@ -371,7 +1096,11 @@
         "hidden": false,
         "displayName": "macOS Release (Apple Clang, SDL2 + Metal + OpenGL + OpenAL)",
         "inherits": "default",
-        "platform": "Darwin",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Darwin"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "Release",
           "ENABLE_DXR": "OFF",
@@ -386,7 +1115,11 @@
         "hidden": false,
         "displayName": "macOS Release with Metal (Apple Clang, experimental)",
         "inherits": "default",
-        "platform": "Darwin",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Darwin"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "Release",
           "ENABLE_DXR": "OFF",
@@ -401,7 +1134,11 @@
         "hidden": false,
         "displayName": "macOS Release with MoltenVK (Vulkan via MoltenVK)",
         "inherits": "default",
-        "platform": "Darwin",
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Darwin"
+        },
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "Release",
           "ENABLE_DXR": "OFF",
@@ -507,296 +1244,1473 @@
       }
     ]
   },
-  "cmakeTargets": [
+  "cmakeTargetDeclarations": [
     {
       "target": "Detour",
       "kind": "static_library",
-      "file": "CMakeLists.txt"
+      "file": "CMakeLists.txt",
+      "line": 1586,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:1572",
+          "branch": 0,
+          "branches": [
+            "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
+          ]
+        }
+      ]
+    },
+    {
+      "target": "OpenGL::GL",
+      "kind": "unknown_library",
+      "file": "CMakeLists.txt",
+      "line": 548,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:483",
+          "branch": 0,
+          "branches": [
+            "NOT WIN32 AND ENABLE_SDL2 AND EXISTS \"${SDL2_SUBMODULE_DIR}/CMakeLists.txt\""
+          ]
+        },
+        {
+          "id": "CMakeLists.txt:487",
+          "branch": 0,
+          "branches": [
+            "NOT OpenGL_FOUND"
+          ]
+        },
+        {
+          "id": "CMakeLists.txt:502",
+          "branch": 0,
+          "branches": [
+            "_LIBGL_RUNTIME AND EXISTS \"${_FALLBACK_GL_HEADERS}/GL/gl.h\""
+          ]
+        },
+        {
+          "id": "CMakeLists.txt:547",
+          "branch": 0,
+          "branches": [
+            "NOT TARGET OpenGL::GL"
+          ]
+        }
+      ]
     },
     {
       "target": "Recast",
       "kind": "static_library",
-      "file": "CMakeLists.txt"
+      "file": "CMakeLists.txt",
+      "line": 1574,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:1572",
+          "branch": 0,
+          "branches": [
+            "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
+          ]
+        }
+      ]
     },
     {
       "target": "SparkAssetPipelineCore",
       "kind": "static_library",
-      "file": "SparkAssetPipelineCore/CMakeLists.txt"
+      "file": "SparkAssetPipelineCore/CMakeLists.txt",
+      "line": 3,
+      "conditionFrames": []
     },
     {
       "target": "SparkAssetPipelineCoreTests",
       "kind": "executable",
-      "file": "SparkAssetPipelineCore/CMakeLists.txt"
+      "file": "SparkAssetPipelineCore/CMakeLists.txt",
+      "line": 18,
+      "conditionFrames": [
+        {
+          "id": "SparkAssetPipelineCore/CMakeLists.txt:16",
+          "branch": 0,
+          "branches": [
+            "BUILD_TESTS"
+          ]
+        }
+      ]
     },
     {
       "target": "SparkAutomation",
       "kind": "executable",
-      "file": "SparkAutomation/CMakeLists.txt"
+      "file": "SparkAutomation/CMakeLists.txt",
+      "line": 3,
+      "conditionFrames": []
     },
     {
       "target": "SparkBuild",
       "kind": "executable",
-      "file": "SparkBuild/CMakeLists.txt"
+      "file": "SparkBuild/CMakeLists.txt",
+      "line": 78,
+      "conditionFrames": []
     },
     {
       "target": "SparkBuildCore",
       "kind": "static_library",
-      "file": "SparkBuild/CMakeLists.txt"
+      "file": "SparkBuild/CMakeLists.txt",
+      "line": 36,
+      "conditionFrames": []
     },
     {
       "target": "SparkBuildDownloaderTests",
       "kind": "executable",
-      "file": "SparkBuild/CMakeLists.txt"
+      "file": "SparkBuild/CMakeLists.txt",
+      "line": 103,
+      "conditionFrames": [
+        {
+          "id": "SparkBuild/CMakeLists.txt:91",
+          "branch": 0,
+          "branches": [
+            "SPARKBUILD_BUILD_TESTS"
+          ]
+        }
+      ]
     },
     {
       "target": "SparkBuildProcessRunnerTests",
       "kind": "executable",
-      "file": "SparkBuild/CMakeLists.txt"
+      "file": "SparkBuild/CMakeLists.txt",
+      "line": 93,
+      "conditionFrames": [
+        {
+          "id": "SparkBuild/CMakeLists.txt:91",
+          "branch": 0,
+          "branches": [
+            "SPARKBUILD_BUILD_TESTS"
+          ]
+        }
+      ]
     },
     {
       "target": "SparkCollabProcessSmoke",
       "kind": "executable",
-      "file": "Tests/CMakeLists.txt"
+      "file": "Tests/CMakeLists.txt",
+      "line": 10,
+      "conditionFrames": [
+        {
+          "id": "Tests/CMakeLists.txt:9",
+          "branch": 0,
+          "branches": [
+            "TARGET SparkCollabServer AND TARGET SparkEngineLib"
+          ]
+        }
+      ]
     },
     {
       "target": "SparkCollabServer",
       "kind": "executable",
-      "file": "SparkDaemon/CMakeLists.txt"
+      "file": "SparkDaemon/CMakeLists.txt",
+      "line": 77,
+      "conditionFrames": []
     },
     {
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
-      "file": "Tests/CMakeLists.txt"
+      "file": "Tests/CMakeLists.txt",
+      "line": 664,
+      "conditionFrames": []
     },
     {
       "target": "SparkConsole",
       "kind": "executable",
-      "file": "SparkConsole/CMakeLists.txt"
+      "file": "SparkConsole/CMakeLists.txt",
+      "line": 33,
+      "conditionFrames": [
+        {
+          "id": "SparkConsole/CMakeLists.txt:31",
+          "branch": 0,
+          "branches": [
+            "CONSOLE_SOURCES"
+          ]
+        }
+      ]
     },
     {
       "target": "SparkCooker",
       "kind": "executable",
-      "file": "SparkCooker/CMakeLists.txt"
+      "file": "SparkCooker/CMakeLists.txt",
+      "line": 9,
+      "conditionFrames": []
     },
     {
       "target": "SparkCrashReporter",
       "kind": "executable",
-      "file": "SparkCrashReporter/CMakeLists.txt"
+      "file": "SparkCrashReporter/CMakeLists.txt",
+      "line": 26,
+      "conditionFrames": [
+        {
+          "id": "SparkCrashReporter/CMakeLists.txt:25",
+          "branch": 0,
+          "branches": [
+            "REPORTER_SOURCES"
+          ]
+        }
+      ]
     },
     {
       "target": "SparkCrashReporterManifestTests",
       "kind": "executable",
-      "file": "SparkCrashReporter/CMakeLists.txt"
+      "file": "SparkCrashReporter/CMakeLists.txt",
+      "line": 60,
+      "conditionFrames": [
+        {
+          "id": "SparkCrashReporter/CMakeLists.txt:25",
+          "branch": 0,
+          "branches": [
+            "REPORTER_SOURCES"
+          ]
+        },
+        {
+          "id": "SparkCrashReporter/CMakeLists.txt:57",
+          "branch": 0,
+          "branches": [
+            "BUILD_TESTS"
+          ]
+        }
+      ]
     },
     {
       "target": "SparkDaemon",
       "kind": "executable",
-      "file": "SparkDaemon/CMakeLists.txt"
+      "file": "SparkDaemon/CMakeLists.txt",
+      "line": 38,
+      "conditionFrames": []
     },
     {
       "target": "SparkDaemonServiceTests",
       "kind": "executable",
-      "file": "SparkDaemon/CMakeLists.txt"
+      "file": "SparkDaemon/CMakeLists.txt",
+      "line": 143,
+      "conditionFrames": [
+        {
+          "id": "SparkDaemon/CMakeLists.txt:141",
+          "branch": 0,
+          "branches": [
+            "BUILD_TESTS"
+          ]
+        }
+      ]
     },
     {
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
-      "file": "Tests/CMakeLists.txt"
+      "file": "Tests/CMakeLists.txt",
+      "line": 642,
+      "conditionFrames": []
     },
     {
       "target": "SparkEditor",
       "kind": "executable",
-      "file": "SparkEditor/CMakeLists.txt"
+      "file": "SparkEditor/CMakeLists.txt",
+      "line": 40,
+      "conditionFrames": [
+        {
+          "id": "SparkEditor/CMakeLists.txt:39",
+          "branch": 0,
+          "branches": [
+            "WIN32"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SparkEditor",
+      "kind": "executable",
+      "file": "SparkEditor/CMakeLists.txt",
+      "line": 42,
+      "conditionFrames": [
+        {
+          "id": "SparkEditor/CMakeLists.txt:39",
+          "branch": 1,
+          "branches": [
+            "WIN32",
+            null
+          ]
+        }
+      ]
     },
     {
       "target": "SparkEngine",
       "kind": "executable",
-      "file": "CMakeLists.txt"
+      "file": "CMakeLists.txt",
+      "line": 1329,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:1328",
+          "branch": 0,
+          "branches": [
+            "WIN32"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SparkEngine",
+      "kind": "executable",
+      "file": "CMakeLists.txt",
+      "line": 1331,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:1328",
+          "branch": 1,
+          "branches": [
+            "WIN32",
+            null
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SparkEngineInterface",
+      "kind": "interface_library",
+      "file": "CMakeLists.txt",
+      "line": 1312,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:1311",
+          "branch": 0,
+          "branches": [
+            "NOT WIN32"
+          ]
+        }
+      ]
     },
     {
       "target": "SparkEngineLib",
       "kind": "static_library",
-      "file": "CMakeLists.txt"
+      "file": "CMakeLists.txt",
+      "line": 1285,
+      "conditionFrames": []
     },
     {
       "target": "SparkGame",
       "kind": "shared_library",
-      "file": "GameModules/SparkGame/CMakeLists.txt"
+      "file": "GameModules/SparkGame/CMakeLists.txt",
+      "line": 82,
+      "conditionFrames": []
     },
     {
       "target": "SparkGameARPG",
       "kind": "shared_library",
-      "file": "GameModules/SparkGameARPG/CMakeLists.txt"
+      "file": "GameModules/SparkGameARPG/CMakeLists.txt",
+      "line": 87,
+      "conditionFrames": []
     },
     {
       "target": "SparkGameFPS",
       "kind": "shared_library",
-      "file": "GameModules/SparkGameFPS/CMakeLists.txt"
+      "file": "GameModules/SparkGameFPS/CMakeLists.txt",
+      "line": 93,
+      "conditionFrames": []
     },
     {
       "target": "SparkGameMMO",
       "kind": "shared_library",
-      "file": "GameModules/SparkGameMMO/CMakeLists.txt"
+      "file": "GameModules/SparkGameMMO/CMakeLists.txt",
+      "line": 87,
+      "conditionFrames": []
     },
     {
       "target": "SparkGameMMOFPS",
       "kind": "shared_library",
-      "file": "GameModules/SparkGameMMOFPS/CMakeLists.txt"
+      "file": "GameModules/SparkGameMMOFPS/CMakeLists.txt",
+      "line": 87,
+      "conditionFrames": []
     },
     {
       "target": "SparkGameOpenWorld",
       "kind": "shared_library",
-      "file": "GameModules/SparkGameOpenWorld/CMakeLists.txt"
+      "file": "GameModules/SparkGameOpenWorld/CMakeLists.txt",
+      "line": 88,
+      "conditionFrames": []
     },
     {
       "target": "SparkGamePlatformer",
       "kind": "shared_library",
-      "file": "GameModules/SparkGamePlatformer/CMakeLists.txt"
+      "file": "GameModules/SparkGamePlatformer/CMakeLists.txt",
+      "line": 88,
+      "conditionFrames": []
     },
     {
       "target": "SparkGameRPG",
       "kind": "shared_library",
-      "file": "GameModules/SparkGameRPG/CMakeLists.txt"
+      "file": "GameModules/SparkGameRPG/CMakeLists.txt",
+      "line": 88,
+      "conditionFrames": []
     },
     {
       "target": "SparkGameRTS",
       "kind": "shared_library",
-      "file": "GameModules/SparkGameRTS/CMakeLists.txt"
+      "file": "GameModules/SparkGameRTS/CMakeLists.txt",
+      "line": 87,
+      "conditionFrames": []
     },
     {
       "target": "SparkGameRacing",
       "kind": "shared_library",
-      "file": "GameModules/SparkGameRacing/CMakeLists.txt"
+      "file": "GameModules/SparkGameRacing/CMakeLists.txt",
+      "line": 87,
+      "conditionFrames": []
     },
     {
       "target": "SparkGameVisualScript",
       "kind": "shared_library",
-      "file": "GameModules/SparkGameVisualScript/CMakeLists.txt"
+      "file": "GameModules/SparkGameVisualScript/CMakeLists.txt",
+      "line": 66,
+      "conditionFrames": []
     },
     {
       "target": "SparkGateway",
       "kind": "executable",
-      "file": "SparkGateway/CMakeLists.txt"
+      "file": "SparkGateway/CMakeLists.txt",
+      "line": 35,
+      "conditionFrames": []
     },
     {
       "target": "SparkGatewayCore",
       "kind": "static_library",
-      "file": "SparkGateway/CMakeLists.txt"
+      "file": "SparkGateway/CMakeLists.txt",
+      "line": 23,
+      "conditionFrames": []
     },
     {
       "target": "SparkGatewaySecurity",
       "kind": "static_library",
-      "file": "SparkGateway/CMakeLists.txt"
+      "file": "SparkGateway/CMakeLists.txt",
+      "line": 12,
+      "conditionFrames": []
     },
     {
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
-      "file": "Tests/CMakeLists.txt"
+      "file": "Tests/CMakeLists.txt",
+      "line": 651,
+      "conditionFrames": [
+        {
+          "id": "Tests/CMakeLists.txt:650",
+          "branch": 0,
+          "branches": [
+            "TARGET SparkGatewayCore"
+          ]
+        }
+      ]
     },
     {
       "target": "SparkInstaller",
       "kind": "executable",
-      "file": "SparkInstaller/CMakeLists.txt"
+      "file": "SparkInstaller/CMakeLists.txt",
+      "line": 67,
+      "conditionFrames": []
     },
     {
       "target": "SparkInstallerGitTests",
       "kind": "executable",
-      "file": "SparkInstaller/CMakeLists.txt"
+      "file": "SparkInstaller/CMakeLists.txt",
+      "line": 127,
+      "conditionFrames": [
+        {
+          "id": "SparkInstaller/CMakeLists.txt:125",
+          "branch": 0,
+          "branches": [
+            "SPARKINSTALLER_BUILD_TESTS"
+          ]
+        }
+      ]
     },
     {
       "target": "SparkLauncher",
       "kind": "executable",
-      "file": "SparkLauncher/CMakeLists.txt"
+      "file": "SparkLauncher/CMakeLists.txt",
+      "line": 32,
+      "conditionFrames": [
+        {
+          "id": "SparkLauncher/CMakeLists.txt:30",
+          "branch": 0,
+          "branches": [
+            "WIN32"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "SparkLauncher",
+      "kind": "executable",
+      "file": "SparkLauncher/CMakeLists.txt",
+      "line": 36,
+      "conditionFrames": [
+        {
+          "id": "SparkLauncher/CMakeLists.txt:30",
+          "branch": 1,
+          "branches": [
+            "WIN32",
+            null
+          ]
+        }
+      ]
     },
     {
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
-      "file": "Tests/CMakeLists.txt"
+      "file": "Tests/CMakeLists.txt",
+      "line": 662,
+      "conditionFrames": []
     },
     {
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
-      "file": "Tests/CMakeLists.txt"
+      "file": "Tests/CMakeLists.txt",
+      "line": 666,
+      "conditionFrames": []
     },
     {
       "target": "SparkOrchestrator",
       "kind": "executable",
-      "file": "SparkDaemon/CMakeLists.txt"
+      "file": "SparkDaemon/CMakeLists.txt",
+      "line": 117,
+      "conditionFrames": []
     },
     {
       "target": "SparkServer",
       "kind": "executable",
-      "file": "SparkServer/CMakeLists.txt"
+      "file": "SparkServer/CMakeLists.txt",
+      "line": 35,
+      "conditionFrames": []
     },
     {
       "target": "SparkServerCore",
       "kind": "static_library",
-      "file": "SparkServer/CMakeLists.txt"
+      "file": "SparkServer/CMakeLists.txt",
+      "line": 12,
+      "conditionFrames": []
     },
     {
       "target": "SparkShaderCompiler",
       "kind": "executable",
-      "file": "SparkShaderCompiler/CMakeLists.txt"
+      "file": "SparkShaderCompiler/CMakeLists.txt",
+      "line": 57,
+      "conditionFrames": []
     },
     {
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
-      "file": "Tests/CMakeLists.txt"
+      "file": "Tests/CMakeLists.txt",
+      "line": 668,
+      "conditionFrames": []
     },
     {
       "target": "SparkTests",
       "kind": "executable",
-      "file": "Tests/CMakeLists.txt"
+      "file": "Tests/CMakeLists.txt",
+      "line": 34,
+      "conditionFrames": []
     },
     {
       "target": "SparkWorker",
       "kind": "executable",
-      "file": "SparkWorker/CMakeLists.txt"
+      "file": "SparkWorker/CMakeLists.txt",
+      "line": 6,
+      "conditionFrames": []
+    },
+    {
+      "target": "VulkanMemoryAllocator",
+      "kind": "interface_library",
+      "file": "CMakeLists.txt",
+      "line": 689,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:688",
+          "branch": 0,
+          "branches": [
+            "NOT TARGET VulkanMemoryAllocator AND EXISTS \"${VMA_ROOT}/vk_mem_alloc.h\""
+          ]
+        }
+      ]
     },
     {
       "target": "cgltf",
       "kind": "static_library",
-      "file": "CMakeLists.txt"
+      "file": "CMakeLists.txt",
+      "line": 758,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:757",
+          "branch": 0,
+          "branches": [
+            "NOT TARGET cgltf AND EXISTS \"${CGLTF_DIR}/cgltf.h\""
+          ]
+        }
+      ]
     },
     {
       "target": "glad",
       "kind": "static_library",
-      "file": "CMakeLists.txt"
+      "file": "CMakeLists.txt",
+      "line": 2106,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:2101",
+          "branch": 0,
+          "branches": [
+            "SPARK_OPENGL_AVAILABLE"
+          ]
+        },
+        {
+          "id": "CMakeLists.txt:2105",
+          "branch": 0,
+          "branches": [
+            "GLAD_FOUND"
+          ]
+        }
+      ]
     },
     {
       "target": "miniaudio",
       "kind": "static_library",
-      "file": "CMakeLists.txt"
+      "file": "CMakeLists.txt",
+      "line": 777,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:776",
+          "branch": 0,
+          "branches": [
+            "NOT TARGET miniaudio AND EXISTS \"${MINIAUDIO_DIR}/miniaudio.h\""
+          ]
+        }
+      ]
     },
     {
       "target": "miniz",
       "kind": "static_library",
-      "file": "CMakeLists.txt"
+      "file": "CMakeLists.txt",
+      "line": 640,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:638",
+          "branch": 0,
+          "branches": [
+            "MINIZ_SOURCES"
+          ]
+        }
+      ]
+    },
+    {
+      "target": "nlohmann_json",
+      "kind": "interface_library",
+      "file": "CMakeLists.txt",
+      "line": 803,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:802",
+          "branch": 0,
+          "branches": [
+            "NOT TARGET nlohmann_json AND EXISTS \"${NLOHMANN_JSON_DIR}/nlohmann_json.h\""
+          ]
+        }
+      ]
+    },
+    {
+      "target": "spark_package_module_header_smoke",
+      "kind": "module_library",
+      "file": "Tests/PackageSmoke/CMakeLists.txt",
+      "line": 22,
+      "conditionFrames": []
     },
     {
       "target": "spark_package_smoke",
       "kind": "executable",
-      "file": "Tests/PackageSmoke/CMakeLists.txt"
+      "file": "Tests/PackageSmoke/CMakeLists.txt",
+      "line": 13,
+      "conditionFrames": []
     },
     {
       "target": "stb_image",
       "kind": "static_library",
-      "file": "CMakeLists.txt"
+      "file": "CMakeLists.txt",
+      "line": 739,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:738",
+          "branch": 0,
+          "branches": [
+            "NOT TARGET stb_image AND EXISTS \"${STB_DIR}/stb_image.h\""
+          ]
+        }
+      ]
     },
     {
       "target": "tinyexr",
       "kind": "static_library",
-      "file": "CMakeLists.txt"
+      "file": "CMakeLists.txt",
+      "line": 816,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:815",
+          "branch": 0,
+          "branches": [
+            "NOT TARGET tinyexr AND EXISTS \"${TINYEXR_DIR}/tinyexr.h\""
+          ]
+        }
+      ]
     },
     {
       "target": "tinyobjloader",
       "kind": "static_library",
-      "file": "CMakeLists.txt"
+      "file": "CMakeLists.txt",
+      "line": 712,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:709",
+          "branch": 0,
+          "branches": [
+            "TINYOBJLOADER_INCLUDE_DIR"
+          ]
+        }
+      ]
     },
     {
       "target": "zstd",
       "kind": "static_library",
-      "file": "CMakeLists.txt"
+      "file": "CMakeLists.txt",
+      "line": 668,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:667",
+          "branch": 0,
+          "branches": [
+            "NOT TARGET zstd AND EXISTS \"${ZSTD_ROOT}/zstd.h\""
+          ]
+        }
+      ]
+    }
+  ],
+  "cmakeTargets": [
+    {
+      "target": "Detour",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 1586,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "OpenGL::GL",
+      "kind": "unknown_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 548,
+          "kind": "unknown_library"
+        }
+      ]
+    },
+    {
+      "target": "Recast",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 1574,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkAssetPipelineCore",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "SparkAssetPipelineCore/CMakeLists.txt",
+          "line": 3,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkAssetPipelineCoreTests",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkAssetPipelineCore/CMakeLists.txt",
+          "line": 18,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkAutomation",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkAutomation/CMakeLists.txt",
+          "line": 3,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkBuild",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkBuild/CMakeLists.txt",
+          "line": 78,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkBuildCore",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "SparkBuild/CMakeLists.txt",
+          "line": 36,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkBuildDownloaderTests",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkBuild/CMakeLists.txt",
+          "line": 103,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkBuildProcessRunnerTests",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkBuild/CMakeLists.txt",
+          "line": 93,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkCollabProcessSmoke",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 10,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkCollabServer",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkDaemon/CMakeLists.txt",
+          "line": 77,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkCompatibleModuleFixture",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 664,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkConsole",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkConsole/CMakeLists.txt",
+          "line": 33,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkCooker",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkCooker/CMakeLists.txt",
+          "line": 9,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkCrashReporter",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkCrashReporter/CMakeLists.txt",
+          "line": 26,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkCrashReporterManifestTests",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkCrashReporter/CMakeLists.txt",
+          "line": 60,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkDaemon",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkDaemon/CMakeLists.txt",
+          "line": 38,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkDaemonServiceTests",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkDaemon/CMakeLists.txt",
+          "line": 143,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkDebugHookTeardownProbe",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 642,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkEditor",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkEditor/CMakeLists.txt",
+          "line": 40,
+          "kind": "executable"
+        },
+        {
+          "file": "SparkEditor/CMakeLists.txt",
+          "line": 42,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkEngine",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 1329,
+          "kind": "executable"
+        },
+        {
+          "file": "CMakeLists.txt",
+          "line": 1331,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkEngineInterface",
+      "kind": "interface_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 1312,
+          "kind": "interface_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkEngineLib",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 1285,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGame",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "GameModules/SparkGame/CMakeLists.txt",
+          "line": 82,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGameARPG",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "GameModules/SparkGameARPG/CMakeLists.txt",
+          "line": 87,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGameFPS",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "GameModules/SparkGameFPS/CMakeLists.txt",
+          "line": 93,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGameMMO",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "GameModules/SparkGameMMO/CMakeLists.txt",
+          "line": 87,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGameMMOFPS",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "GameModules/SparkGameMMOFPS/CMakeLists.txt",
+          "line": 87,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGameOpenWorld",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "GameModules/SparkGameOpenWorld/CMakeLists.txt",
+          "line": 88,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGamePlatformer",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "GameModules/SparkGamePlatformer/CMakeLists.txt",
+          "line": 88,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGameRPG",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "GameModules/SparkGameRPG/CMakeLists.txt",
+          "line": 88,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGameRTS",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "GameModules/SparkGameRTS/CMakeLists.txt",
+          "line": 87,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGameRacing",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "GameModules/SparkGameRacing/CMakeLists.txt",
+          "line": 87,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGameVisualScript",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "GameModules/SparkGameVisualScript/CMakeLists.txt",
+          "line": 66,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGateway",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkGateway/CMakeLists.txt",
+          "line": 35,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkGatewayCore",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "SparkGateway/CMakeLists.txt",
+          "line": 23,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGatewaySecurity",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "SparkGateway/CMakeLists.txt",
+          "line": 12,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkGatewayTopologyProbe",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 651,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkInstaller",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkInstaller/CMakeLists.txt",
+          "line": 67,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkInstallerGitTests",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkInstaller/CMakeLists.txt",
+          "line": 127,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkLauncher",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkLauncher/CMakeLists.txt",
+          "line": 32,
+          "kind": "executable"
+        },
+        {
+          "file": "SparkLauncher/CMakeLists.txt",
+          "line": 36,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkMismatchedModuleFixture",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 662,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkModuleSiblingDependency",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 666,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkOrchestrator",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkDaemon/CMakeLists.txt",
+          "line": 117,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkServer",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkServer/CMakeLists.txt",
+          "line": 35,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkServerCore",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "SparkServer/CMakeLists.txt",
+          "line": 12,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkShaderCompiler",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkShaderCompiler/CMakeLists.txt",
+          "line": 57,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkSiblingDependentModuleFixture",
+      "kind": "shared_library",
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 668,
+          "kind": "shared_library"
+        }
+      ]
+    },
+    {
+      "target": "SparkTests",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 34,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "SparkWorker",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "SparkWorker/CMakeLists.txt",
+          "line": 6,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "VulkanMemoryAllocator",
+      "kind": "interface_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 689,
+          "kind": "interface_library"
+        }
+      ]
+    },
+    {
+      "target": "cgltf",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 758,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "glad",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 2106,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "miniaudio",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 777,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "miniz",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 640,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "nlohmann_json",
+      "kind": "interface_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 803,
+          "kind": "interface_library"
+        }
+      ]
+    },
+    {
+      "target": "spark_package_module_header_smoke",
+      "kind": "module_library",
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/CMakeLists.txt",
+          "line": 22,
+          "kind": "module_library"
+        }
+      ]
+    },
+    {
+      "target": "spark_package_smoke",
+      "kind": "executable",
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/CMakeLists.txt",
+          "line": 13,
+          "kind": "executable"
+        }
+      ]
+    },
+    {
+      "target": "stb_image",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 739,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "tinyexr",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 816,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "tinyobjloader",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 712,
+          "kind": "static_library"
+        }
+      ]
+    },
+    {
+      "target": "zstd",
+      "kind": "static_library",
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 668,
+          "kind": "static_library"
+        }
+      ]
+    }
+  ],
+  "configuredTargetEvidence": [
+    {
+      "profile": "installed-sdk-consumer",
+      "status": "absent",
+      "targets": []
+    },
+    {
+      "profile": "windows-shipping",
+      "status": "absent",
+      "targets": []
+    },
+    {
+      "profile": "windows-validation",
+      "status": "absent",
+      "targets": []
     }
   ],
   "sparkBuildOptions": [
@@ -805,364 +2719,738 @@
       "displayName": "Unit Tests",
       "description": "Build CTest unit test suite",
       "default": true,
-      "category": "EditorTools"
+      "category": "EditorTools",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 235
     },
     {
       "name": "ENABLE_ADVANCED_INPUT",
       "displayName": "Advanced Input",
       "description": "Extended input: keyboard, mouse, gamepad",
       "default": true,
-      "category": "Core"
+      "category": "Core",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 197
     },
     {
       "name": "ENABLE_AI",
       "displayName": "AI & Navigation",
       "description": "Behavior trees, NavMesh pathfinding, perception system",
       "default": true,
-      "category": "Core"
+      "category": "Core",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 189
     },
     {
       "name": "ENABLE_ANIMATION",
       "displayName": "Skeletal Animation",
       "description": "Skeletal animation, IK, state machines, blending",
       "default": true,
-      "category": "Core"
+      "category": "Core",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 192
     },
     {
       "name": "ENABLE_ASSET_STREAMING",
       "displayName": "Asset Streaming",
       "description": "Runtime asset streaming and loading",
       "default": true,
-      "category": "Core"
+      "category": "Core",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 199
     },
     {
       "name": "ENABLE_CINEMATIC",
       "displayName": "Cinematic Sequencer",
       "description": "Cinematic sequence and cutscene system",
       "default": true,
-      "category": "Gameplay"
+      "category": "Gameplay",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 248
     },
     {
       "name": "ENABLE_COLLABORATIVE",
       "displayName": "Collaborative Editing",
       "description": "Collaborative editing features",
       "default": true,
-      "category": "Experimental"
+      "category": "Experimental",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 277
     },
     {
       "name": "ENABLE_CONSOLE_IN_SHIPPING",
       "displayName": "Console in Shipping",
       "description": "Include SparkConsole in Shipping builds",
       "default": false,
-      "category": "Shipping"
+      "category": "Shipping",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 264
     },
     {
       "name": "ENABLE_DAY_NIGHT",
       "displayName": "Day/Night Cycle",
       "description": "Dynamic day/night cycle system",
       "default": true,
-      "category": "Gameplay"
+      "category": "Gameplay",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 258
     },
     {
       "name": "ENABLE_DECALS",
       "displayName": "Decal System",
       "description": "Projected decals for impacts and effects",
       "default": true,
-      "category": "Rendering"
+      "category": "Rendering",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 217
     },
     {
       "name": "ENABLE_DEVCOMMANDS_IN_SHIPPING",
       "displayName": "Dev Commands in Shipping",
       "description": "Include dev commands in Shipping builds",
       "default": false,
-      "category": "Shipping"
+      "category": "Shipping",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 266
     },
     {
       "name": "ENABLE_DXR",
       "displayName": "DirectX Raytracing",
       "description": "DXR support (requires D3D12, Windows only)",
       "default": false,
-      "category": "Graphics"
+      "category": "Graphics",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 209
     },
     {
       "name": "ENABLE_EDITOR",
       "displayName": "Editor",
       "description": "ImGui visual editor (Windows/Linux)",
       "default": true,
-      "category": "EditorTools"
+      "category": "EditorTools",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 227
     },
     {
       "name": "ENABLE_EVENT_SYSTEM",
       "displayName": "Event System",
       "description": "Publish/subscribe event bus",
       "default": true,
-      "category": "Gameplay"
+      "category": "Gameplay",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 256
     },
     {
       "name": "ENABLE_FOG_SYSTEM",
       "displayName": "Fog System",
       "description": "Fog rendering system",
       "default": true,
-      "category": "Rendering"
+      "category": "Rendering",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 222
     },
     {
       "name": "ENABLE_GRAPHICS",
       "displayName": "Graphics Engine",
       "description": "DirectX 11 renderer (Windows) / OpenGL (Linux/macOS)",
       "default": true,
-      "category": "Core"
+      "category": "Core",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 184
     },
     {
       "name": "ENABLE_HOT_RELOAD",
       "displayName": "Hot Reload",
       "description": "Game module hot-reload during development",
       "default": true,
-      "category": "Scripting"
+      "category": "Scripting",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 240
     },
     {
       "name": "ENABLE_INVENTORY",
       "displayName": "Inventory System",
       "description": "Item inventory management system",
       "default": true,
-      "category": "Gameplay"
+      "category": "Gameplay",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 252
     },
     {
       "name": "ENABLE_LIGHTING_SYSTEM",
       "displayName": "Advanced Lighting",
       "description": "PBR lighting, IBL, shadow mapping",
       "default": true,
-      "category": "Rendering"
+      "category": "Rendering",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 215
     },
     {
       "name": "ENABLE_LUA",
       "displayName": "Lua Scripting",
       "description": "Lua scripting support (Sol2 bindings)",
       "default": true,
-      "category": "Scripting"
+      "category": "Scripting",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 238
     },
     {
       "name": "ENABLE_MESH_LOD",
       "displayName": "Mesh LOD",
       "description": "Mesh level-of-detail system",
       "default": true,
-      "category": "Rendering"
+      "category": "Rendering",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 220
     },
     {
       "name": "ENABLE_NETWORKING",
       "displayName": "Networking",
       "description": "UDP multiplayer, lag compensation (requires curl)",
       "default": false,
-      "category": "Experimental"
+      "category": "Experimental",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 272
     },
     {
       "name": "ENABLE_OPENGL",
       "displayName": "OpenGL Backend",
       "description": "OpenGL 4.5 backend (experimental, cross-platform)",
       "default": true,
-      "category": "Graphics"
+      "category": "Graphics",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 206
     },
     {
       "name": "ENABLE_PERF_STATS",
       "displayName": "Performance Stats",
       "description": "Performance statistics overlay",
       "default": true,
-      "category": "EditorTools"
+      "category": "EditorTools",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 232
     },
     {
       "name": "ENABLE_PHYSX",
       "displayName": "Physics (Bullet)",
       "description": "Bullet Physics 3D physics engine",
       "default": true,
-      "category": "Core"
+      "category": "Core",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 188
     },
     {
       "name": "ENABLE_POST_PROCESSING",
       "displayName": "Post-Processing",
       "description": "Bloom, tone mapping, FXAA effects",
       "default": true,
-      "category": "Rendering"
+      "category": "Rendering",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 213
     },
     {
       "name": "ENABLE_PROCEDURAL",
       "displayName": "Procedural Generation",
       "description": "Noise, erosion, mesh gen, WFC algorithms",
       "default": true,
-      "category": "Gameplay"
+      "category": "Gameplay",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 246
     },
     {
       "name": "ENABLE_PROFILING",
       "displayName": "Profiling Tools",
       "description": "Performance profiling, timers, memory tracking",
       "default": true,
-      "category": "EditorTools"
+      "category": "EditorTools",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 229
     },
     {
       "name": "ENABLE_QUEST_SYSTEM",
       "displayName": "Quest System",
       "description": "Quest and objective tracking system",
       "default": true,
-      "category": "Gameplay"
+      "category": "Gameplay",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 254
     },
     {
       "name": "ENABLE_SAVE_SYSTEM",
       "displayName": "Save/Load System",
       "description": "JSON serialization with compression (miniz)",
       "default": true,
-      "category": "Core"
+      "category": "Core",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 195
     },
     {
       "name": "ENABLE_SCREEN_SPACE",
       "displayName": "Screen-Space Effects",
       "description": "Screen-space effects (SSAO, SSR)",
       "default": true,
-      "category": "Rendering"
+      "category": "Rendering",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 223
     },
     {
       "name": "ENABLE_SDL2",
       "displayName": "SDL2 Windowing",
       "description": "SDL2 cross-platform windowing and input",
       "default": false,
-      "category": "Experimental"
+      "category": "Experimental",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 275
     },
     {
       "name": "ENABLE_TERRAIN_SYSTEM",
       "displayName": "Terrain System",
       "description": "Heightmap terrain with LOD and erosion",
       "default": true,
-      "category": "Gameplay"
+      "category": "Gameplay",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 244
     },
     {
       "name": "ENABLE_VULKAN",
       "displayName": "Vulkan Backend",
       "description": "Vulkan graphics backend (experimental, cross-platform)",
       "default": true,
-      "category": "Graphics"
+      "category": "Graphics",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 203
     },
     {
       "name": "ENABLE_WEATHER",
       "displayName": "Weather System",
       "description": "Dynamic weather system",
       "default": true,
-      "category": "Gameplay"
+      "category": "Gameplay",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 251
     },
     {
       "name": "SPARK_HEADLESS_SUPPORT",
       "displayName": "Headless Mode",
       "description": "Headless/dedicated server mode support",
       "default": true,
-      "category": "Shipping"
+      "category": "Shipping",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 262
     },
     {
       "name": "STRIP_DEBUG_SYMBOLS",
       "displayName": "Strip Debug Symbols",
       "description": "Strip debug symbols from binaries",
       "default": false,
-      "category": "Shipping"
+      "category": "Shipping",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 268
     }
   ],
   "workflowPresets": [],
   "workflowCmakeConfigs": [
     {
-      "buildDir": "build",
-      "options": {}
+      "job": "build-linux-asan",
+      "step": "Configure CMake (ASan + UBSan + LSan)",
+      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+      "options": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTS": "ON",
+        "CMAKE_C_COMPILER": "gcc-14",
+        "CMAKE_CXX_COMPILER": "g++-14",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
+        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
+      },
+      "buildDir": "build"
     },
     {
-      "buildDir": "build",
+      "job": "build-linux-tsan",
+      "step": "Configure CMake (TSan)",
+      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=thread\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=thread\"",
       "options": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTS": "ON",
+        "CMAKE_C_COMPILER": "gcc-14",
+        "CMAKE_CXX_COMPILER": "g++-14",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer",
+        "CMAKE_C_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread"
+      },
+      "buildDir": "build"
+    },
+    {
+      "job": "build-linux-msan",
+      "step": "Configure CMake (MSan)",
+      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++\"",
+      "options": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTS": "ON",
+        "ENABLE_SDL2": "OFF",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
+        "CMAKE_C_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -lc++abi",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++"
+      },
+      "buildDir": "build"
+    },
+    {
+      "job": "build-windows-vs2022",
+      "step": "Configure CMake (VS 2022 / v143)",
+      "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
+      "options": {
+        "BUILD_TESTS": "ON"
+      },
+      "fresh": true,
+      "buildDir": "build",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "toolset": "v143"
+    },
+    {
+      "job": "build-windows-vs2026",
+      "step": "Configure CMake (VS 2026 / v145)",
+      "command": "cmake --fresh -B build -G \"Visual Studio 18 2026\" -A x64 -DBUILD_TESTS=ON",
+      "options": {
+        "BUILD_TESTS": "ON"
+      },
+      "fresh": true,
+      "buildDir": "build",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64"
+    },
+    {
+      "job": "build-linux-gcc",
+      "step": "Configure CMake",
+      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=${{ matrix.config }}  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "options": {
+        "CMAKE_BUILD_TYPE": "${{ matrix.config }}",
+        "BUILD_TESTS": "ON",
+        "CMAKE_C_COMPILER": "gcc-14",
+        "CMAKE_CXX_COMPILER": "g++-14",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+      },
+      "buildDir": "build"
+    },
+    {
+      "job": "build-linux-clang",
+      "step": "Configure CMake",
+      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=${{ matrix.config }}  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
+      "options": {
+        "CMAKE_BUILD_TYPE": "${{ matrix.config }}",
+        "BUILD_TESTS": "ON",
+        "ENABLE_LTO": "OFF",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+        "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
+        "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++"
+      },
+      "buildDir": "build"
+    },
+    {
+      "job": "build-linux-mingw-wine",
+      "step": "Configure CMake (MinGW cross-compilation)",
+      "command": "cmake -B build  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "options": {
+        "CMAKE_TOOLCHAIN_FILE": "cmake/toolchains/mingw-w64-x86_64.cmake",
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTS": "ON",
+        "ENABLE_VULKAN": "OFF",
+        "ENABLE_OPENGL": "OFF",
+        "ENABLE_SDL2": "OFF",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+      },
+      "buildDir": "build"
+    },
+    {
+      "job": "build-macos",
+      "step": "Configure CMake",
+      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=${{ matrix.config }}  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=${{ matrix.enable_metal }}  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "options": {
+        "CMAKE_BUILD_TYPE": "${{ matrix.config }}",
+        "BUILD_TESTS": "ON",
+        "ENABLE_LTO": "OFF",
+        "ENABLE_SDL2": "ON",
+        "ENABLE_VULKAN": "OFF",
+        "ENABLE_OPENGL": "ON",
+        "ENABLE_METAL": "${{ matrix.enable_metal }}",
+        "ENABLE_DXR": "OFF",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.3",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+      },
+      "buildDir": "build"
+    },
+    {
+      "job": "coverage",
+      "step": "unnamed",
+      "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -fprofile-update=atomic\" -DCMAKE_C_FLAGS=\"--coverage -fprofile-update=atomic\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
+      "options": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "gcc-14",
+        "CMAKE_CXX_COMPILER": "g++-14",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_FLAGS": "--coverage -fprofile-update=atomic",
+        "CMAKE_C_FLAGS": "--coverage -fprofile-update=atomic",
+        "CMAKE_EXE_LINKER_FLAGS": "--coverage",
+        "BUILD_TESTS": "ON",
+        "BUILD_GAME_MODULES": "ON"
+      },
+      "buildDir": "build"
+    },
+    {
+      "job": "clang-tidy",
+      "step": "unnamed",
+      "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\"  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "options": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+        "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
+        "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++",
+        "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "buildDir": "build"
+    },
+    {
+      "job": "build-installer",
+      "step": "unnamed",
+      "command": "cmake -S build-installer -B build-installer/build  -DCMAKE_BUILD_TYPE=Release  -DSPARKINSTALLER_ENABLE_GUI=OFF  -DSPARKINSTALLER_BUILD_TESTS=ON",
+      "options": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "SPARKINSTALLER_ENABLE_GUI": "OFF",
+        "SPARKINSTALLER_BUILD_TESTS": "ON"
+      },
+      "sourceDir": "build-installer",
+      "buildDir": "build-installer/build"
     }
   ],
   "stableV1Products": [
     {
-      "target": "SparkEngine",
-      "kind": "executable",
-      "profile": "required"
+      "target": "spark_package_module_header_smoke",
+      "kind": "module_library",
+      "buildProfile": "installed-sdk-consumer",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "scope.singleplayer",
+        "modules.fps"
+      ],
+      "requiredOptions": {}
     },
     {
-      "target": "SparkEditor",
+      "target": "spark_package_smoke",
       "kind": "executable",
-      "profile": "required"
-    },
-    {
-      "target": "SparkConsole",
-      "kind": "executable",
-      "profile": "required"
-    },
-    {
-      "target": "SparkDaemon",
-      "kind": "executable",
-      "profile": "required"
-    },
-    {
-      "target": "SparkCollabServer",
-      "kind": "executable",
-      "profile": "required"
-    },
-    {
-      "target": "SparkOrchestrator",
-      "kind": "executable",
-      "profile": "required"
-    },
-    {
-      "target": "SparkBuild",
-      "kind": "executable",
-      "profile": "required"
-    },
-    {
-      "target": "SparkCrashReporter",
-      "kind": "executable",
-      "profile": "required"
+      "buildProfile": "installed-sdk-consumer",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp"
+      ],
+      "requiredOptions": {}
     },
     {
       "target": "SparkAutomation",
       "kind": "executable",
-      "profile": "required"
+      "buildProfile": "windows-shipping",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "runtime.nullrhi"
+      ],
+      "requiredOptions": {
+        "ENABLE_AUTOMATION_HOST": "ON"
+      }
+    },
+    {
+      "target": "SparkBuild",
+      "kind": "executable",
+      "buildProfile": "windows-shipping",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "editor.authoring"
+      ],
+      "requiredOptions": {
+        "ENABLE_SPARKBUILD": "ON"
+      }
+    },
+    {
+      "target": "SparkConsole",
+      "kind": "executable",
+      "buildProfile": "windows-shipping",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "scope.singleplayer"
+      ],
+      "requiredOptions": {}
     },
     {
       "target": "SparkCooker",
       "kind": "executable",
-      "profile": "required"
+      "buildProfile": "windows-shipping",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "editor.authoring"
+      ],
+      "requiredOptions": {
+        "ENABLE_ASSET_PIPELINE_TOOLS": "ON"
+      }
     },
     {
-      "target": "SparkWorker",
+      "target": "SparkCrashReporter",
       "kind": "executable",
-      "profile": "required"
+      "buildProfile": "windows-shipping",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp"
+      ],
+      "requiredOptions": {}
     },
     {
-      "target": "SparkShaderCompiler",
+      "target": "SparkEditor",
       "kind": "executable",
-      "profile": "required"
+      "buildProfile": "windows-shipping",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "rendering.d3d11",
+        "editor.authoring"
+      ],
+      "requiredOptions": {
+        "ENABLE_EDITOR": "ON"
+      }
     },
     {
-      "target": "SparkLauncher",
+      "target": "SparkEngine",
       "kind": "executable",
-      "profile": "required"
-    },
-    {
-      "target": "SparkServer",
-      "kind": "executable",
-      "profile": "required"
-    },
-    {
-      "target": "SparkGateway",
-      "kind": "executable",
-      "profile": "required"
-    },
-    {
-      "target": "SparkInstaller",
-      "kind": "executable",
-      "profile": "required"
-    },
-    {
-      "target": "SparkTests",
-      "kind": "executable",
-      "profile": "test"
+      "buildProfile": "windows-shipping",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "runtime.nullrhi",
+        "rendering.d3d11",
+        "scope.singleplayer"
+      ],
+      "requiredOptions": {}
     },
     {
       "target": "SparkEngineLib",
       "kind": "static_library",
-      "profile": "required"
+      "buildProfile": "windows-shipping",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "runtime.nullrhi",
+        "rendering.d3d11"
+      ],
+      "requiredOptions": {}
+    },
+    {
+      "target": "SparkGameFPS",
+      "kind": "shared_library",
+      "buildProfile": "windows-shipping",
+      "applicability": "required",
+      "capabilityIds": [
+        "runtime.cpp",
+        "scope.singleplayer",
+        "modules.fps"
+      ],
+      "requiredOptions": {
+        "BUILD_GAME_MODULES": "ON"
+      }
+    },
+    {
+      "target": "SparkInstaller",
+      "kind": "executable",
+      "buildProfile": "windows-shipping",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "editor.authoring"
+      ],
+      "requiredOptions": {
+        "ENABLE_INSTALLER": "ON",
+        "ENABLE_SPARKBUILD": "ON"
+      }
+    },
+    {
+      "target": "SparkLauncher",
+      "kind": "executable",
+      "buildProfile": "windows-shipping",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "editor.authoring"
+      ],
+      "requiredOptions": {
+        "ENABLE_LAUNCHER": "ON"
+      }
+    },
+    {
+      "target": "SparkShaderCompiler",
+      "kind": "executable",
+      "buildProfile": "windows-shipping",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "rendering.d3d11",
+        "editor.authoring"
+      ],
+      "requiredOptions": {}
+    },
+    {
+      "target": "SparkTests",
+      "kind": "executable",
+      "buildProfile": "windows-validation",
+      "applicability": "required",
+      "capabilityIds": [
+        "platform.windows",
+        "runtime.cpp",
+        "runtime.nullrhi",
+        "rendering.d3d11",
+        "scope.singleplayer",
+        "editor.authoring",
+        "modules.fps"
+      ],
+      "requiredOptions": {
+        "BUILD_TESTS": "ON"
+      }
     }
   ]
 }

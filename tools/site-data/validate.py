@@ -25,6 +25,12 @@ GATE_STATES = {"blocked", "at-risk", "passing", "not-evaluated"}
 WORK_STATES = {"open", "in-progress", "blocked", "done"}
 PRIORITIES = {"P0", "P1", "P2", "P3"}
 PROFILE_APPLICABILITY_STATES = {"required", "shared", "outside"}
+BUILD_PRODUCT_KINDS = {
+    "executable", "static_library", "shared_library", "module_library",
+    "object_library", "interface_library", "unknown_library",
+}
+BUILD_PRODUCT_APPLICABILITY = {"required", "shared"}
+BUILD_CONFIGURATION_PURPOSES = {"shipping", "validation", "installed-sdk-consumer"}
 UNASSIGNED_OWNERS = {"", "unassigned", "none", "tbd", "todo"}
 REQUIRED_PUBLIC_CLAIM_SURFACES = {
     "README.md",
@@ -395,6 +401,162 @@ class Validator:
                     value in scoped_capabilities,
                     location,
                     f"first-party game {value} is not named by any scope dimension",
+                )
+
+            # CI-120 consumes this profile declaration directly.  The product
+            # inventory is not permitted to reconstruct stable scope from
+            # target names, directory names, or a second hard-coded list.
+            build_configurations = profile.get("buildConfigurations", [])
+            build_configuration_ids = self.unique_ids(
+                build_configurations, f"{location}.buildConfigurations"
+            )
+            purposes = [entry.get("purpose") for entry in build_configurations]
+            self.require(
+                set(purposes) == BUILD_CONFIGURATION_PURPOSES
+                and len(purposes) == len(BUILD_CONFIGURATION_PURPOSES),
+                f"{location}.buildConfigurations",
+                "must declare shipping, validation, and installed-sdk-consumer exactly once",
+            )
+            for index, entry in enumerate(build_configurations):
+                config_location = f"{location}.buildConfigurations[{index}]"
+                purpose = entry.get("purpose")
+                self.require(
+                    purpose in BUILD_CONFIGURATION_PURPOSES,
+                    config_location,
+                    "invalid build configuration purpose",
+                )
+                self.require(bool(entry.get("description")), config_location, "description is required")
+                self.require(
+                    isinstance(entry.get("configuration"), str) and bool(entry.get("configuration")),
+                    config_location,
+                    "configured codemodel configuration name is required",
+                )
+                if purpose in {"shipping", "validation"}:
+                    self.require(bool(entry.get("preset")), config_location, "preset is required")
+                else:
+                    self.require(
+                        not entry.get("preset"),
+                        config_location,
+                        "installed SDK consumer must be configured against the installed package, not a source preset",
+                    )
+
+            build_products = profile.get("buildProducts", [])
+            self.require(bool(build_products), f"{location}.buildProducts", "at least one product is required")
+            product_keys: list[tuple[Any, Any]] = []
+            product_targets: list[Any] = []
+            product_capabilities: set[str] = set()
+            first_party_products: list[str] = []
+            installed_consumers: list[str] = []
+            for index, product in enumerate(build_products):
+                product_location = f"{location}.buildProducts[{index}]"
+                target = product.get("target")
+                build_profile = product.get("buildProfile")
+                self.require(isinstance(target, str) and bool(target), product_location, "target is required")
+                product_keys.append((build_profile, target))
+                product_targets.append(target)
+                self.require(
+                    build_profile in build_configuration_ids,
+                    product_location,
+                    f"unknown build profile {build_profile!r}",
+                )
+                self.require(
+                    product.get("kind") in BUILD_PRODUCT_KINDS,
+                    product_location,
+                    "invalid target kind",
+                )
+                self.require(
+                    product.get("applicability") in BUILD_PRODUCT_APPLICABILITY,
+                    product_location,
+                    "applicability must be required or shared",
+                )
+                product_caps = product.get("capabilityIds", [])
+                self.require(bool(product_caps), product_location, "capabilityIds must not be empty")
+                self.require(
+                    len(product_caps) == len(set(product_caps)),
+                    product_location,
+                    "capabilityIds contains duplicates",
+                )
+                for value in product_caps:
+                    self.require(value in included, product_location, f"{value} is outside this profile")
+                    if value in included:
+                        product_capabilities.add(value)
+                if set(product_caps).intersection(first_party):
+                    first_party_products.append(str(target))
+                configuration = next(
+                    (entry for entry in build_configurations if entry.get("id") == build_profile), {}
+                )
+                if configuration.get("purpose") == "installed-sdk-consumer":
+                    installed_consumers.append(str(target))
+                required_options = product.get("requiredOptions")
+                self.require(
+                    isinstance(required_options, dict),
+                    product_location,
+                    "requiredOptions must be an object (empty when no option gates the target)",
+                )
+                if isinstance(required_options, dict):
+                    for option_name, option_value in required_options.items():
+                        self.require(
+                            bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(option_name))),
+                            product_location,
+                            f"invalid required option name {option_name!r}",
+                        )
+                        self.require(
+                            str(option_value).upper() in {"ON", "OFF"},
+                            product_location,
+                            f"required option {option_name!r} must be ON or OFF",
+                        )
+            self.require(
+                len(product_keys) == len(set(product_keys)),
+                f"{location}.buildProducts",
+                "duplicate target/build-profile mapping",
+            )
+            self.require(
+                len(product_targets) == len(set(product_targets)),
+                f"{location}.buildProducts",
+                "a target may belong to only one build profile",
+            )
+            self.require(
+                product_capabilities == set(included),
+                f"{location}.buildProducts",
+                f"product capabilities must equal included capabilities; missing={sorted(set(included) - product_capabilities)}",
+            )
+            self.require(
+                bool(first_party_products),
+                f"{location}.buildProducts",
+                "must include a product carrying the first-party game capability",
+            )
+            self.require(
+                bool(installed_consumers),
+                f"{location}.buildProducts",
+                "must include at least one installed public-SDK consumer target",
+            )
+
+            option_applicability = profile.get("buildOptionApplicability")
+            self.require(
+                isinstance(option_applicability, list),
+                f"{location}.buildOptionApplicability",
+                "must be an explicit list (empty means every mismatch is profile-required)",
+            )
+            option_names: list[Any] = []
+            if isinstance(option_applicability, list):
+                for index, entry in enumerate(option_applicability):
+                    option_location = f"{location}.buildOptionApplicability[{index}]"
+                    option_names.append(entry.get("name"))
+                    self.require(
+                        bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(entry.get("name", "")))),
+                        option_location,
+                        "name must be a CMake option identifier",
+                    )
+                    self.require(
+                        entry.get("applicability") in {"outside", "shared"},
+                        option_location,
+                        "only outside/shared exceptions are allowed; omitted options are required",
+                    )
+                    self.require(bool(entry.get("reason")), option_location, "reason is required")
+                self.require(
+                    len(option_names) == len(set(option_names)),
+                    f"{location}.buildOptionApplicability",
+                    "duplicate option applicability declaration",
                 )
             self.require(bool(scope), f"{location}.scope", "must declare at least one scope dimension")
             for index, dimension in enumerate(scope):

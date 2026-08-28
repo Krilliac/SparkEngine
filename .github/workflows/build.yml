@@ -76,13 +76,49 @@ jobs:
       run: python3 Tools/model_pipeline/validate_models.py --repo-root .
 
     - name: Test build-matrix inventory and parity (CI-120)
-      run: python3 -m pytest Tests/Tools/test_build_matrix_parity.py -v
+      run: python3 Tests/Tools/test_build_matrix_parity.py
 
-    - name: Run build-matrix parity check (CI-120 evidence)
-      run: python3 Tools/buildmatrix/check_parity.py || echo "::warning::Build-matrix parity findings exist — see CI-120"
+    - name: Generate and compare deterministic build-matrix inventory (CI-120)
+      run: |
+        python3 Tools/buildmatrix/inventory.py \
+          --output build-matrix-inventory.json \
+          --check docs/readiness/ci120-build-matrix-inventory.json
+        python3 -c "import json; json.load(open('build-matrix-inventory.json', encoding='utf-8'))"
 
-    - name: Generate deterministic build-matrix inventory (CI-120)
-      run: python3 Tools/buildmatrix/inventory.py > build-matrix-inventory.json
+    - name: Compare reviewed build-matrix findings (CI-120)
+      id: ci120-parity
+      run: |
+        set +e
+        python3 Tools/buildmatrix/check_parity.py \
+          --inventory build-matrix-inventory.json \
+          --baseline docs/readiness/ci120-parity-findings.json \
+          --output build-matrix-parity-findings.json \
+          > build-matrix-parity-stdout.json
+        status=$?
+        set -e
+        python3 -c "import json; json.load(open('build-matrix-parity-findings.json', encoding='utf-8')); json.load(open('build-matrix-parity-stdout.json', encoding='utf-8'))"
+        cmp build-matrix-parity-findings.json build-matrix-parity-stdout.json
+        if test "$status" -ge 2; then
+          echo "::error::CI-120 baseline drift or analyzer failure (exit $status)"
+          exit "$status"
+        fi
+        if test "$status" -ne 0 && test "$status" -ne 1; then
+          echo "::error::Unexpected CI-120 analyzer exit $status"
+          exit 3
+        fi
+        echo "status=$status" >> "$GITHUB_OUTPUT"
+
+    - name: Upload deterministic CI-120 evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ci120-build-matrix-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          build-matrix-inventory.json
+          build-matrix-parity-findings.json
+          build-matrix-parity-stdout.json
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
 
     - name: Validate publishable wiki output
       run: python3 tools/publish-wiki.py --check
@@ -125,6 +161,15 @@ jobs:
         path: generated-docs-check.log
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: error
+
+    - name: Enforce reviewed CI-120 findings
+      if: always() && steps.ci120-parity.outputs.status != ''
+      run: |
+        status="${{ steps.ci120-parity.outputs.status }}"
+        if test "$status" -ne 0; then
+          echo "::error::CI-120 remains blocked by the reviewed configuration findings artifact."
+          exit 1
+        fi
 
   # ===========================================================================
   # Code Quality — clang-format enforcement

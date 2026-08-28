@@ -466,33 +466,42 @@
         "CMakeLists.txt",
         "CMakePresets.json",
         "SparkBuild/src/Config.cpp",
-        "ThirdParty/dependencies.lock"
+        "ThirdParty/dependencies.lock",
+        ".github/workflows/build.yml",
+        "docs/site/readiness.json",
+        "docs/readiness/ci120-build-matrix-inventory.json",
+        "docs/readiness/ci120-parity-findings.json"
       ],
       "entryPoints": [
         "CMakeLists.txt",
         "CMakePresets.json",
         "SparkBuild/src/Config.cpp",
         "Tools/buildmatrix/inventory.py",
-        "Tools/buildmatrix/check_parity.py"
+        "Tools/buildmatrix/check_parity.py",
+        "Tests/Tools/test_build_matrix_parity.py",
+        "docs/site/readiness.json"
       ],
       "implementationScope": [
         "Enable strict dependencies in stable-v1 CI and release",
         "Reconcile root and SparkBuild options and reject unknown values",
+        "Derive the exact target, kind, configuration, and applicability contract from stable-v1 rather than a second product list",
+        "Require configured CMake File API codemodel evidence for every canonical build profile",
         "Build every Windows stable-v1 executable, tool, SDK, and in-profile module",
         "Align documented and actual Windows preset directories",
         "Define warning and CPU baselines for the supported row"
       ],
       "acceptanceCriteria": [
-        "Every stable-v1 target builds in the strict Windows Shipping profile",
+        "Every stable-v1 target appears with its declared kind in configured codemodel evidence for its canonical build profile",
+        "The strict Windows Shipping profile, Windows validation profile, and installed public-SDK consumer are all independently evidenced",
         "Unknown or unused options fail",
         "Missing dependency is fatal",
         "Documented configure/build commands match the Windows presets",
         "Experimental platform Shipping matrices remain owned by their platform work items"
       ],
       "commands": [
-        "python3 Tools/buildmatrix/inventory.py",
-        "python3 Tools/buildmatrix/check_parity.py",
-        "python3 -m pytest Tests/Tools/test_build_matrix_parity.py -v",
+        "python3 Tools/buildmatrix/inventory.py --check docs/readiness/ci120-build-matrix-inventory.json",
+        "python3 Tools/buildmatrix/check_parity.py --inventory docs/readiness/ci120-build-matrix-inventory.json --baseline docs/readiness/ci120-parity-findings.json",
+        "python3 Tests/Tools/test_build_matrix_parity.py",
         "cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON",
         "cmake --build build/windows-shipping --config MinSizeRel --clean-first",
         "cmake -LAH -N build/windows-shipping"

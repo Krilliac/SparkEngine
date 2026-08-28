@@ -1818,6 +1818,302 @@
       "firstPartyGameCapabilityIds": [
         "modules.fps"
       ],
+      "buildConfigurations": [
+        {
+          "id": "windows-shipping",
+          "preset": "windows-shipping",
+          "configuration": "MinSizeRel",
+          "purpose": "shipping",
+          "description": "Authoritative strict Windows 11 x64 Shipping configuration for runtime, editor, first-party game, and delivery tools."
+        },
+        {
+          "id": "windows-validation",
+          "preset": "windows-release",
+          "configuration": "Release",
+          "purpose": "validation",
+          "description": "Windows 11 x64 Release configuration used to compile and run the repository test target."
+        },
+        {
+          "id": "installed-sdk-consumer",
+          "configuration": "Release",
+          "purpose": "installed-sdk-consumer",
+          "description": "A separate configure against an installed SparkEngine package that proves public SDK headers, imports, and module linkage without source-tree include leakage."
+        }
+      ],
+      "buildProducts": [
+        {
+          "target": "SparkEngineLib",
+          "kind": "static_library",
+          "buildProfile": "windows-shipping",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp",
+            "runtime.nullrhi",
+            "rendering.d3d11"
+          ],
+          "requiredOptions": {}
+        },
+        {
+          "target": "SparkEngine",
+          "kind": "executable",
+          "buildProfile": "windows-shipping",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp",
+            "runtime.nullrhi",
+            "rendering.d3d11",
+            "scope.singleplayer"
+          ],
+          "requiredOptions": {}
+        },
+        {
+          "target": "SparkGameFPS",
+          "kind": "shared_library",
+          "buildProfile": "windows-shipping",
+          "applicability": "required",
+          "capabilityIds": [
+            "runtime.cpp",
+            "scope.singleplayer",
+            "modules.fps"
+          ],
+          "requiredOptions": {
+            "BUILD_GAME_MODULES": "ON"
+          }
+        },
+        {
+          "target": "SparkEditor",
+          "kind": "executable",
+          "buildProfile": "windows-shipping",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp",
+            "rendering.d3d11",
+            "editor.authoring"
+          ],
+          "requiredOptions": {
+            "ENABLE_EDITOR": "ON"
+          }
+        },
+        {
+          "target": "SparkConsole",
+          "kind": "executable",
+          "buildProfile": "windows-shipping",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp",
+            "scope.singleplayer"
+          ],
+          "requiredOptions": {}
+        },
+        {
+          "target": "SparkShaderCompiler",
+          "kind": "executable",
+          "buildProfile": "windows-shipping",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp",
+            "rendering.d3d11",
+            "editor.authoring"
+          ],
+          "requiredOptions": {}
+        },
+        {
+          "target": "SparkCrashReporter",
+          "kind": "executable",
+          "buildProfile": "windows-shipping",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp"
+          ],
+          "requiredOptions": {}
+        },
+        {
+          "target": "SparkCooker",
+          "kind": "executable",
+          "buildProfile": "windows-shipping",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp",
+            "editor.authoring"
+          ],
+          "requiredOptions": {
+            "ENABLE_ASSET_PIPELINE_TOOLS": "ON"
+          }
+        },
+        {
+          "target": "SparkAutomation",
+          "kind": "executable",
+          "buildProfile": "windows-shipping",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp",
+            "runtime.nullrhi"
+          ],
+          "requiredOptions": {
+            "ENABLE_AUTOMATION_HOST": "ON"
+          }
+        },
+        {
+          "target": "SparkLauncher",
+          "kind": "executable",
+          "buildProfile": "windows-shipping",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp",
+            "editor.authoring"
+          ],
+          "requiredOptions": {
+            "ENABLE_LAUNCHER": "ON"
+          }
+        },
+        {
+          "target": "SparkBuild",
+          "kind": "executable",
+          "buildProfile": "windows-shipping",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp",
+            "editor.authoring"
+          ],
+          "requiredOptions": {
+            "ENABLE_SPARKBUILD": "ON"
+          }
+        },
+        {
+          "target": "SparkInstaller",
+          "kind": "executable",
+          "buildProfile": "windows-shipping",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp",
+            "editor.authoring"
+          ],
+          "requiredOptions": {
+            "ENABLE_INSTALLER": "ON",
+            "ENABLE_SPARKBUILD": "ON"
+          }
+        },
+        {
+          "target": "SparkTests",
+          "kind": "executable",
+          "buildProfile": "windows-validation",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp",
+            "runtime.nullrhi",
+            "rendering.d3d11",
+            "scope.singleplayer",
+            "editor.authoring",
+            "modules.fps"
+          ],
+          "requiredOptions": {
+            "BUILD_TESTS": "ON"
+          }
+        },
+        {
+          "target": "spark_package_smoke",
+          "kind": "executable",
+          "buildProfile": "installed-sdk-consumer",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp"
+          ],
+          "requiredOptions": {}
+        },
+        {
+          "target": "spark_package_module_header_smoke",
+          "kind": "module_library",
+          "buildProfile": "installed-sdk-consumer",
+          "applicability": "required",
+          "capabilityIds": [
+            "platform.windows",
+            "runtime.cpp",
+            "scope.singleplayer",
+            "modules.fps"
+          ],
+          "requiredOptions": {}
+        }
+      ],
+      "buildOptionApplicability": [
+        {
+          "name": "ENABLE_ANGELSCRIPT",
+          "applicability": "outside",
+          "reason": "AngelScript is experimental and excluded from stable-v1 with G11."
+        },
+        {
+          "name": "ENABLE_COLLABORATIVE",
+          "applicability": "outside",
+          "reason": "Collaborative service behavior is outside the service-free single-player profile."
+        },
+        {
+          "name": "ENABLE_DXR",
+          "applicability": "outside",
+          "reason": "DXR belongs to the experimental D3D12 breadth; stable-v1 renders through D3D11."
+        },
+        {
+          "name": "ENABLE_HYBRID_RT",
+          "applicability": "outside",
+          "reason": "Hybrid ray-tracing breadth is not part of the D3D11 stable-v1 rendering contract."
+        },
+        {
+          "name": "ENABLE_LUA",
+          "applicability": "outside",
+          "reason": "No scripting runtime is included in stable-v1; scripting work remains outside G11."
+        },
+        {
+          "name": "ENABLE_METAL",
+          "applicability": "outside",
+          "reason": "Metal and macOS are experimental capabilities outside the Windows D3D11 profile."
+        },
+        {
+          "name": "ENABLE_MOBILE",
+          "applicability": "outside",
+          "reason": "Mobile hosts are explicitly unsupported by stable-v1."
+        },
+        {
+          "name": "ENABLE_NETWORKING",
+          "applicability": "outside",
+          "reason": "Constrained LAN is optional, multiplayer is experimental, and neither is required by the single-player profile."
+        },
+        {
+          "name": "ENABLE_NEURAL_RENDERING",
+          "applicability": "shared",
+          "reason": "Neural rendering is engine-wide experimental breadth and is not required by the D3D11 first-party slice."
+        },
+        {
+          "name": "ENABLE_PHYSX",
+          "applicability": "outside",
+          "reason": "The alternative PhysX surface is not part of the stable-v1 runtime contract."
+        },
+        {
+          "name": "ENABLE_SERVER_PROCESSES",
+          "applicability": "outside",
+          "reason": "Dedicated services and production multiplayer are outside the service-free single-player profile."
+        },
+        {
+          "name": "ENABLE_VR",
+          "applicability": "outside",
+          "reason": "VR hosts are explicitly unsupported by stable-v1."
+        },
+        {
+          "name": "SPARK_DOUBLE_PRECISION_PHYSICS",
+          "applicability": "shared",
+          "reason": "Large-world double-precision physics is shared engine breadth, not a requirement of the first stable FPS slice."
+        }
+      ],
       "supportedHosts": [
         "Windows 11 x64"
       ],
