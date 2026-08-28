@@ -6,6 +6,10 @@ cmake_minimum_required(VERSION 3.25)
 if(NOT DEFINED SPARK_PACKAGE_ROOT OR SPARK_PACKAGE_ROOT STREQUAL "")
     message(FATAL_ERROR "SPARK_PACKAGE_ROOT must name the staged install root")
 endif()
+if(SPARK_PACKAGE_ROOT MATCHES "[\r\n;]")
+    message(FATAL_ERROR
+        "SPARK_PACKAGE_ROOT contains unsupported control or list characters")
+endif()
 
 set(_spark_package_root_input "${SPARK_PACKAGE_ROOT}")
 cmake_path(ABSOLUTE_PATH _spark_package_root_input
@@ -16,6 +20,92 @@ if(NOT IS_DIRECTORY "${_spark_package_root_normalized}")
     message(FATAL_ERROR
         "SPARK_PACKAGE_ROOT is not an existing directory: ${SPARK_PACKAGE_ROOT}")
 endif()
+
+# CMake versions available on supported Windows runners do not all resolve
+# directory junctions through file(REAL_PATH). Probe directory ancestry through
+# the native file attributes so older CMake releases cannot silently follow a
+# reparse point into package content outside the lexical root.
+if(CMAKE_HOST_WIN32)
+    set(_spark_windows_powershell
+        "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe")
+    cmake_path(NORMAL_PATH _spark_windows_powershell)
+    if(NOT EXISTS "${_spark_windows_powershell}"
+       OR IS_DIRECTORY "${_spark_windows_powershell}"
+       OR IS_SYMLINK "${_spark_windows_powershell}")
+        message(FATAL_ERROR
+            "Could not locate the trusted Windows reparse-point probe")
+    endif()
+    set(_spark_windows_reparse_probe [=[
+$ErrorActionPreference = 'Stop'
+$stop = [IO.Path]::GetFullPath($env:SPARK_REPARSE_PROBE_STOP)
+foreach ($path in ($env:SPARK_REPARSE_PROBE_PATHS -split ';')) {
+    $current = [IO.Path]::GetFullPath($path)
+    while ($true) {
+        $attributes = [IO.File]::GetAttributes($current)
+        if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            [Console]::Out.Write($current)
+            exit 0
+        }
+        if ([StringComparer]::OrdinalIgnoreCase.Equals($current, $stop)) {
+            break
+        }
+        $parent = [IO.Directory]::GetParent($current)
+        if ($null -eq $parent -or
+            [StringComparer]::OrdinalIgnoreCase.Equals($parent.FullName, $current)) {
+            throw "Reparse probe escaped its bounded stop path"
+        }
+        $current = $parent.FullName
+    }
+}
+]=])
+
+    function(_spark_require_no_windows_reparse_traversal
+             _spark_description _spark_stop)
+        execute_process(
+            COMMAND "${CMAKE_COMMAND}" -E env
+                "SPARK_REPARSE_PROBE_STOP=${_spark_stop}"
+                "SPARK_REPARSE_PROBE_PATHS=${ARGN}"
+                "${_spark_windows_powershell}"
+                -NoLogo -NoProfile -NonInteractive
+                -Command "${_spark_windows_reparse_probe}"
+            RESULT_VARIABLE _spark_reparse_probe_result
+            OUTPUT_VARIABLE _spark_reparse_probe_output
+            ERROR_VARIABLE _spark_reparse_probe_error
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_STRIP_TRAILING_WHITESPACE)
+        if(NOT _spark_reparse_probe_result EQUAL 0)
+            message(FATAL_ERROR
+                "Could not inspect ${_spark_description} for Windows reparse traversal:\n"
+                "${_spark_reparse_probe_error}")
+        endif()
+        if(NOT _spark_reparse_probe_output STREQUAL "")
+            message(FATAL_ERROR
+                "${_spark_description} crosses a symlink, junction, or reparse boundary:\n"
+                "  reparse path: ${_spark_reparse_probe_output}")
+        endif()
+    endfunction()
+
+    cmake_path(GET _spark_package_root_normalized ROOT_PATH
+        _spark_package_volume_root)
+    set(_spark_initial_windows_reparse_paths
+        "${_spark_package_root_normalized}")
+    foreach(_spark_fixed_directory IN ITEMS
+            bin include/Spark lib/cmake/SparkEngine)
+        if(IS_DIRECTORY
+           "${_spark_package_root_normalized}/${_spark_fixed_directory}")
+            list(APPEND _spark_initial_windows_reparse_paths
+                "${_spark_package_root_normalized}/${_spark_fixed_directory}")
+        endif()
+    endforeach()
+    _spark_require_no_windows_reparse_traversal(
+        "SPARK_PACKAGE_ROOT and fixed package directories"
+        "${_spark_package_volume_root}"
+        ${_spark_initial_windows_reparse_paths})
+    set_property(GLOBAL PROPERTY
+        SPARK_PACKAGE_VALIDATOR_CHECKED_WINDOWS_DIRECTORIES
+        "${_spark_initial_windows_reparse_paths}")
+endif()
+
 file(REAL_PATH "${_spark_package_root_normalized}" _spark_package_root_real)
 if(CMAKE_HOST_WIN32)
     string(TOLOWER "${_spark_package_root_normalized}" _spark_package_root_compare)
@@ -38,6 +128,21 @@ function(_spark_require_bounded_regular_file _spark_candidate _spark_description
         message(FATAL_ERROR
             "${_spark_description} is missing or is not a regular non-link file:\n"
             "  ${_spark_candidate}")
+    endif()
+
+    if(CMAKE_HOST_WIN32)
+        cmake_path(GET _spark_candidate PARENT_PATH _spark_candidate_parent)
+        get_property(_spark_checked_windows_directories GLOBAL PROPERTY
+            SPARK_PACKAGE_VALIDATOR_CHECKED_WINDOWS_DIRECTORIES)
+        if(NOT _spark_candidate_parent IN_LIST _spark_checked_windows_directories)
+            _spark_require_no_windows_reparse_traversal(
+                "${_spark_description} directory ancestry"
+                "${_spark_package_volume_root}"
+                "${_spark_candidate_parent}")
+            set_property(GLOBAL APPEND PROPERTY
+                SPARK_PACKAGE_VALIDATOR_CHECKED_WINDOWS_DIRECTORIES
+                "${_spark_candidate_parent}")
+        endif()
     endif()
 
     set(_spark_candidate_normalized "${_spark_candidate}")
