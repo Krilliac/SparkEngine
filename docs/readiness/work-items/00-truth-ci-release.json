@@ -129,7 +129,10 @@
         "Tests/CMakeLists.txt",
         "Tests/TestModuleDiscovery.cpp",
         "SparkEngine/Source/Core/ModuleManager.cpp",
-        "cmake/RunSparkModuleProfileLifecycle.cmake"
+        "cmake/RunSparkModuleProfileLifecycle.cmake",
+        "tools/module-evidence/manifest.json",
+        "tools/module-evidence/validate_manifest.py",
+        "Tests/Tools/test_module_evidence.py"
       ],
       "implementationScope": [
         "Build every module included by a declared release profile from its real source and shared library",

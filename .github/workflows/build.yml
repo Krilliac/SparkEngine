@@ -165,6 +165,12 @@ jobs:
     - name: Verify repository asset integrity baseline
       run: python3 tools/asset-integrity/verify_asset_integrity.py check-all --repo-root .
 
+    - name: Validate module evidence manifest
+      run: python3 tools/module-evidence/validate_manifest.py --manifest tools/module-evidence/manifest.json --repo-root .
+
+    - name: Run module evidence adversarial tests
+      run: python3 -m pytest Tests/Tools/test_module_evidence.py -v
+
     - name: Validate model and template asset contracts
       run: python3 Tools/model_pipeline/validate_models.py --repo-root .
 

@@ -467,6 +467,9 @@ In-profile module tests compile subsets, tautologies, standalone mirrors, or rei
 - `Tests/TestModuleDiscovery.cpp`
 - `SparkEngine/Source/Core/ModuleManager.cpp`
 - `cmake/RunSparkModuleProfileLifecycle.cmake`
+- `tools/module-evidence/manifest.json`
+- `tools/module-evidence/validate_manifest.py`
+- `Tests/Tools/test_module_evidence.py`
 
 **Implementation scope**
 
