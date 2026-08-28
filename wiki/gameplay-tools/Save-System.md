@@ -119,10 +119,13 @@ Each listed field is newline-delimited except the three position coordinates,
 which share one line. Embedded carriage returns or newlines in string metadata
 are rejected by the writer.
 
-Every entity/component/property string has a `uint16_t` length prefix. The
-writer rejects oversize values instead of truncating them. The reader also caps
-the save at 512 MiB, the entity count at 1,000,000, and custom-state entries at
-100,000.
+Every entity/component/property/custom-state key and value has a `uint16_t`
+length prefix. One shared `SaveRepresentationLimits` contract applies to disk
+reads/writes and public in-memory restore: 512 MiB total wire size, 64 KiB
+metadata, 1,000,000 entities, `uint16_t` components per entity, `uint16_t`
+properties per component, wire-derived aggregate component/property limits, and
+100,000 custom-state records. `SaveRepresentationBudget` performs overflow-safe
+aggregate accounting. Oversize values are rejected instead of truncated.
 
 ## Compatibility and migration
 
@@ -160,21 +163,33 @@ after the replacement succeeds.
 2. validate magic, version, metadata, entities, components, and custom state;
 3. migrate the parsed `SaveData` in memory;
 4. run the optional custom-state validator;
-5. restore every entity into a fresh candidate `World`;
-6. stage a copy of `customState` and all required live/candidate component pools;
-7. retire live entities through `World::DestroyEntity`, which removes hierarchy
+5. copy `customState`, restore every entity into a fresh candidate `World`, and
+   prove every custom deserializer materialized its declared component;
+6. resolve and validate every type-erased add/presence/remove/raw/storage-swap/
+   rebind operation without touching the live registry;
+7. cross the explicit live-storage boundary by preparing missing live pools;
+8. retire live entities through `World::DestroyEntity`, which removes hierarchy
    links, fires destroy observers, and clears per-entity event subscriptions;
-8. exchange only the validated component/entity storage payloads;
-9. emit an explicit live `on_update` rebind for every incoming component (the
+9. exchange only the validated component/entity storage payloads;
+10. emit an explicit live `on_update` rebind for every incoming component (the
    same rebuild path consumed by all production `ReactiveSystem` subscribers);
-10. exchange the staged custom-state map with a non-throwing swap.
+11. exchange the staged custom-state map with a non-throwing swap.
 
 An unknown or duplicate component type, an explicit `NameComponent` record,
 duplicate property/custom-state keys, a missing/malformed/oversized required
 built-in value, a failed reflected-field conversion, or any standard/unknown
-exception from a registered deserializer fails the candidate restore. These
-failures occur before retirement, so the live entities, components, per-entity
-subscriptions, and custom-state output remain unchanged.
+exception from a registered deserializer, a deserializer that returns without
+materializing its declared component, incomplete type-erased operations, or any
+representation-limit violation fails the candidate restore. These failures occur
+before live storage preparation, so exact registry topology, live entities,
+components, per-entity subscriptions, and custom-state output remain unchanged.
+
+Live-pool preparation is intentionally outside the ordinary-failure catch. If a
+pool allocation or preparation callback throws, the exception propagates and an
+empty pool may remain in the registry. Retirement has not begun, so entity and
+component payloads, per-entity EventBus subscriptions, and custom-state output
+remain unchanged, but exact topology/rollback is no longer promised and the
+failure is never misreported as `false`.
 
 The current `World` API exposes EnTT lifecycle sinks whose callbacks are not
 required to be non-throwing. An exception from `on_destroy` after retirement
@@ -235,7 +250,7 @@ CTest labels `compatibility;save;unit`:
 ctest --test-dir build -C Release -L compatibility --output-on-failure
 ```
 
-The compatibility-labeled coverage proves:
+The compatibility-labeled coverage includes:
 
 - v2 writer/header and screenshot-path round trip;
 - exact, idempotent v1-to-v2 in-memory migration;
@@ -246,6 +261,12 @@ The compatibility-labeled coverage proves:
 - fail-closed missing, malformed, oversized, and reflected component values;
 - fail-closed duplicate component/property/custom-state records and explicit
   `NameComponent` records, without entering entity lifecycle;
+- shared disk/in-memory size and count boundaries, including exact/max+1 string
+  and overflow-safe synthetic aggregate cases;
+- a custom deserializer that omits its declared component, with exact live
+  registry topology, entity/component, EventBus, and custom-state preservation;
+- propagation of live-storage-preparation failure after an empty pool appears,
+  proving no catch reports a false unchanged-topology rollback;
 - unknown-component rollback;
 - throwing-deserializer rollback for both World and custom state;
 - propagation of throwing lifecycle observers instead of a false unchanged-world
@@ -276,6 +297,6 @@ public API rather than invoking background I/O against singleton state.
 
 ## Source & Freshness
 
-Verified against the SAVE-230 save-format slice on 2026-08-27. The constants and
+Updated against the SAVE-230 save-format slice on 2026-08-27. The constants and
 implementation named above are authoritative; this page must change in the same
 commit as any save-format or compatibility-window change.

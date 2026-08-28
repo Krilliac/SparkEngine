@@ -20,7 +20,9 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 
 namespace Spark
 {
@@ -30,6 +32,93 @@ namespace Spark
 
     /** @brief Save format emitted by every writer in this build. */
     inline constexpr uint32_t kCurrentSaveVersion = 2;
+
+    /**
+     * @brief Shared structural limits for both disk-backed and in-memory saves.
+     *
+     * The binary format uses uint16 length/count fields below the entity and
+     * custom-state layers. Aggregate limits are derived from the 512 MiB wire
+     * budget and the four-byte minimum encoding of a component/property record.
+     * Keeping these values in the representation layer prevents WriteToFile(),
+     * ReadFromFile(), and DeserializeWorld() from accepting different shapes.
+     */
+    struct SaveRepresentationLimits
+    {
+        static constexpr size_t maxWireBytes = 512ull * 1024ull * 1024ull;
+        static constexpr size_t maxMetadataBytes = 64ull * 1024ull;
+        static constexpr size_t maxStringBytes = std::numeric_limits<uint16_t>::max();
+        static constexpr size_t maxEntities = 1'000'000;
+        static constexpr size_t maxComponentsPerEntity = std::numeric_limits<uint16_t>::max();
+        static constexpr size_t maxPropertiesPerComponent = std::numeric_limits<uint16_t>::max();
+        static constexpr size_t maxCustomStateEntries = 100'000;
+        static constexpr size_t minimumComponentWireBytes = sizeof(uint16_t) + sizeof(uint16_t);
+        static constexpr size_t minimumPropertyWireBytes = sizeof(uint16_t) + sizeof(uint16_t);
+        static constexpr size_t maxTotalComponents = maxWireBytes / minimumComponentWireBytes;
+        static constexpr size_t maxTotalProperties = maxWireBytes / minimumPropertyWireBytes;
+
+        [[nodiscard]] static constexpr bool SupportsStringBytes(size_t count) noexcept
+        {
+            return count <= maxStringBytes;
+        }
+        [[nodiscard]] static constexpr bool SupportsMetadataBytes(size_t count) noexcept
+        {
+            return count <= maxMetadataBytes;
+        }
+        [[nodiscard]] static constexpr bool SupportsWireBytes(size_t count) noexcept { return count <= maxWireBytes; }
+        [[nodiscard]] static constexpr bool SupportsEntityCount(size_t count) noexcept { return count <= maxEntities; }
+        [[nodiscard]] static constexpr bool SupportsComponentCount(size_t count) noexcept
+        {
+            return count <= maxComponentsPerEntity;
+        }
+        [[nodiscard]] static constexpr bool SupportsPropertyCount(size_t count) noexcept
+        {
+            return count <= maxPropertiesPerComponent;
+        }
+        [[nodiscard]] static constexpr bool SupportsCustomStateCount(size_t count) noexcept
+        {
+            return count <= maxCustomStateEntries;
+        }
+    };
+
+    /**
+     * @brief Overflow-safe aggregate accounting for a serialized save shape.
+     *
+     * This small value type is also useful to validate synthetic boundary cases
+     * without allocating a maximum-sized SaveData in a test.
+     */
+    struct SaveRepresentationBudget
+    {
+        size_t wireBytes = 0;
+        size_t totalComponents = 0;
+        size_t totalProperties = 0;
+        size_t totalCustomStateEntries = 0;
+
+        [[nodiscard]] constexpr bool AddWireBytes(size_t count) noexcept
+        {
+            return Accumulate(wireBytes, count, SaveRepresentationLimits::maxWireBytes);
+        }
+        [[nodiscard]] constexpr bool AddComponents(size_t count) noexcept
+        {
+            return Accumulate(totalComponents, count, SaveRepresentationLimits::maxTotalComponents);
+        }
+        [[nodiscard]] constexpr bool AddProperties(size_t count) noexcept
+        {
+            return Accumulate(totalProperties, count, SaveRepresentationLimits::maxTotalProperties);
+        }
+        [[nodiscard]] constexpr bool AddCustomStateEntries(size_t count) noexcept
+        {
+            return Accumulate(totalCustomStateEntries, count, SaveRepresentationLimits::maxCustomStateEntries);
+        }
+
+      private:
+        [[nodiscard]] static constexpr bool Accumulate(size_t& total, size_t count, size_t limit) noexcept
+        {
+            if (total > limit || count > limit - total)
+                return false;
+            total += count;
+            return true;
+        }
+    };
 
     // ============================================================================
     // Save Data Types

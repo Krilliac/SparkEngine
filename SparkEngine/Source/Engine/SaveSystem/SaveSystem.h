@@ -315,9 +315,16 @@ namespace Spark
  * ### Error handling
  * All public save/load methods return `bool` for ordinary validation, I/O, migration,
  * and candidate-deserialization failures. Load() builds a fresh candidate World and
- * commits it only after every component has restored successfully, so those pre-commit
- * failures leave the caller's entities, components, event subscriptions, and custom-state
- * output unchanged. The commit preserves the live registry's signal objects while
+ * verifies every declared component, type-erased operation, representation bound, and
+ * custom-state copy before touching live component storage. Therefore an ordinary
+ * `false` leaves the caller's exact registry topology, entities, components, per-entity
+ * event subscriptions, and custom-state output unchanged.
+ *
+ * Preparing a previously absent live component pool is the explicit commit boundary.
+ * Allocation or callback exceptions at that boundary propagate; they are never converted
+ * to `false`, because an empty pool may already have changed registry topology even though
+ * entity/component payloads, per-entity subscriptions, and custom state remain unchanged.
+ * After preparation, the commit preserves the live registry's signal objects while
  * retiring old entity lifecycle state and explicitly rebinding live reactive consumers.
  *
  * EnTT lifecycle observers are application callbacks and are not constrained to be
@@ -420,16 +427,19 @@ namespace Spark
      *
      * @warning A successful load replaces the provided `world`. Ensure no raw pointers
      *          to world entities are held by callers before invoking this method.
-     *          Ordinary pre-commit failures leave the world unchanged. An exception
-     *          from a lifecycle observer during retirement propagates and may leave a
-     *          partially retired world; treat it as fatal rather than continuing.
+     *          Ordinary pre-commit failures leave exact registry topology and world state
+     *          unchanged. Live-pool preparation exceptions propagate and may leave an
+     *          empty pool in the registry before retirement. A lifecycle-observer exception
+     *          during/after retirement also propagates and may leave a partially committed
+     *          world; neither condition is reported as an ordinary `false` rollback.
      *
      * @param slotName  Save slot to load (must match a slot previously written by Save()).
      * @param world     The ECS World to restore into. Existing state is cleared.
      * @return          `true` if the world was fully restored; `false` on ordinary
      *                  pre-commit errors (file not found, corrupt/truncated data,
      *                  version mismatch, candidate deserialization, etc.).
-     * @throws           Any exception emitted by a lifecycle observer after commit begins.
+     * @throws           Storage-preparation exceptions after the live-registry boundary,
+     *                   and lifecycle-observer exceptions during or after retirement.
      */
         bool Load(const std::string& slotName, World& world);
 
@@ -572,17 +582,21 @@ namespace Spark
      * Reconstructs all entities and components in a fresh candidate World, then retires
      * old entities, swaps validated storage payloads into the existing live registry,
      * and emits explicit reactive rebind notifications for incoming components.
-     * Unknown/duplicate component types, unsupported versions, and candidate-deserializer
-     * exceptions fail without changing entity/component or EventBus state.
+     * Unknown/duplicate component types, unsupported versions, representation-limit
+     * failures, incomplete type-erased operations, and candidate-deserializer failures
+     * (including a callback that does not materialize its declared component) return
+     * `false` without changing exact registry topology, entity/component state, or
+     * per-entity EventBus subscriptions.
      * Pair with SerializeWorld() for in-memory snapshot/restore patterns.
      *
      * @param data   SaveData snapshot (e.g. from a previous SerializeWorld() call).
      * @param world  The ECS World to replace after a successful restore.
      * @return       `true` if all entities were restored successfully; `false` on a
      *               pre-commit validation/deserialization error.
-     * @throws       Lifecycle-observer exceptions after retirement begins. Such an
-     *               exception is not recoverable through this API and may leave the
-     *               caller's World partially retired.
+     * @throws       Live-storage-preparation exceptions after validation. Preparation
+     *               may leave a newly materialized empty pool even when retirement has
+     *               not begun. Lifecycle-observer exceptions during/after retirement
+     *               also propagate and may leave the caller's World partially committed.
      */
         bool DeserializeWorld(const SaveData& data, World& world) const;
 

@@ -8,6 +8,7 @@
 // by hand-crafting .spark_save files with the real on-disk binary layout.
 
 #include "TestFramework.h"
+#include "Core/Reflection.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/ReactiveSystem.h"
@@ -317,6 +318,77 @@ namespace
     {
         void OnDestroy(entt::registry&, entt::entity) { throw std::runtime_error("intentional destroy observer"); }
     };
+
+    struct MissingRestoreProbe
+    {
+        uint8_t marker = 0;
+    };
+
+    struct PrepareFailureProbe
+    {
+        uint8_t marker = 0;
+    };
+
+    int g_missingRestorePrepareCalls = 0;
+    int g_prepareFailureCalls = 0;
+
+    template <typename Type> void SwapProbeStorageContents(void* destinationWorld, void* sourceWorld) noexcept
+    {
+        using PayloadStorage = entt::basic_storage<Type>;
+        auto& destination = static_cast<World*>(destinationWorld)->GetRegistry().storage<Type>();
+        auto& source = static_cast<World*>(sourceWorld)->GetRegistry().storage<Type>();
+        static_cast<PayloadStorage&>(destination).swap(static_cast<PayloadStorage&>(source));
+    }
+
+    template <typename Type> void NotifyProbeRebound(void* world, uint32_t entity)
+    {
+        auto& registry = static_cast<World*>(world)->GetRegistry();
+        const EntityID entityID = static_cast<EntityID>(entity);
+        if (registry.valid(entityID) && registry.all_of<Type>(entityID))
+            registry.patch<Type>(entityID, [](Type&) noexcept {});
+    }
+
+    void CountMissingRestorePrepare(void* world)
+    {
+        ++g_missingRestorePrepareCalls;
+        (void)static_cast<World*>(world)->GetRegistry().storage<MissingRestoreProbe>();
+    }
+
+    void ThrowAfterPreparingLiveStorage(void* world)
+    {
+        ++g_prepareFailureCalls;
+        (void)static_cast<World*>(world)->GetRegistry().storage<PrepareFailureProbe>();
+        throw std::runtime_error("intentional live storage preparation failure");
+    }
+
+    template <typename Type> ComponentOps MakeProbeComponentOps(ComponentOps::PrepareStorageFn prepareStorage)
+    {
+        ComponentOps operations;
+        operations.add = [](void* world, uint32_t entity)
+        { static_cast<World*>(world)->AddComponent<Type>(static_cast<EntityID>(entity)); };
+        operations.has = [](void* world, uint32_t entity)
+        { return static_cast<World*>(world)->HasComponent<Type>(static_cast<EntityID>(entity)); };
+        operations.remove = [](void* world, uint32_t entity)
+        { static_cast<World*>(world)->RemoveComponent<Type>(static_cast<EntityID>(entity)); };
+        operations.getRaw = [](void* world, uint32_t entity) -> void*
+        { return static_cast<World*>(world)->GetComponent<Type>(static_cast<EntityID>(entity)); };
+        operations.prepareStorage = prepareStorage;
+        operations.swapStorageContents = &SwapProbeStorageContents<Type>;
+        operations.notifyRebound = &NotifyProbeRebound<Type>;
+        return operations;
+    }
+
+    std::vector<entt::id_type> RegistryStorageIds(const World& world)
+    {
+        std::vector<entt::id_type> ids;
+        for (const auto& [id, storage] : world.GetRegistry().storage())
+        {
+            (void)storage;
+            ids.push_back(id);
+        }
+        std::sort(ids.begin(), ids.end());
+        return ids;
+    }
 } // namespace
 
 TEST(ComponentSerializerRegistry_UnregisterDestroysOwnedCallbacks)
@@ -832,6 +904,230 @@ TEST(SaveMigration_InMemoryRejectsDuplicateAndExplicitNameComponentsBeforeLifecy
             static_cast<Spark::EventEntityID>(sentinel), {1});
         EXPECT_EQ(deliveries, 1);
     }
+}
+
+TEST(SaveMigration_DiskAndMemoryUseSharedRepresentationBoundaries)
+{
+    using Limits = SaveRepresentationLimits;
+
+    // Synthetic checks cover very large record-count boundaries without
+    // constructing pathological vectors or maps merely to reach them.
+    EXPECT_TRUE(Limits::SupportsStringBytes(Limits::maxStringBytes));
+    EXPECT_FALSE(Limits::SupportsStringBytes(Limits::maxStringBytes + 1u));
+    EXPECT_TRUE(Limits::SupportsMetadataBytes(Limits::maxMetadataBytes));
+    EXPECT_FALSE(Limits::SupportsMetadataBytes(Limits::maxMetadataBytes + 1u));
+    EXPECT_TRUE(Limits::SupportsWireBytes(Limits::maxWireBytes));
+    EXPECT_FALSE(Limits::SupportsWireBytes(Limits::maxWireBytes + 1u));
+    EXPECT_TRUE(Limits::SupportsEntityCount(Limits::maxEntities));
+    EXPECT_FALSE(Limits::SupportsEntityCount(Limits::maxEntities + 1u));
+    EXPECT_TRUE(Limits::SupportsComponentCount(Limits::maxComponentsPerEntity));
+    EXPECT_FALSE(Limits::SupportsComponentCount(Limits::maxComponentsPerEntity + 1u));
+    EXPECT_TRUE(Limits::SupportsPropertyCount(Limits::maxPropertiesPerComponent));
+    EXPECT_FALSE(Limits::SupportsPropertyCount(Limits::maxPropertiesPerComponent + 1u));
+    EXPECT_TRUE(Limits::SupportsCustomStateCount(Limits::maxCustomStateEntries));
+    EXPECT_FALSE(Limits::SupportsCustomStateCount(Limits::maxCustomStateEntries + 1u));
+
+    SaveRepresentationBudget componentBudget;
+    EXPECT_TRUE(componentBudget.AddComponents(Limits::maxTotalComponents));
+    EXPECT_FALSE(componentBudget.AddComponents(1u));
+    SaveRepresentationBudget propertyBudget;
+    EXPECT_TRUE(propertyBudget.AddProperties(Limits::maxTotalProperties));
+    EXPECT_FALSE(propertyBudget.AddProperties(1u));
+    SaveRepresentationBudget customStateBudget;
+    EXPECT_TRUE(customStateBudget.AddCustomStateEntries(Limits::maxCustomStateEntries));
+    EXPECT_FALSE(customStateBudget.AddCustomStateEntries(1u));
+    SaveRepresentationBudget wireBudget;
+    EXPECT_TRUE(wireBudget.AddWireBytes(Limits::maxWireBytes));
+    EXPECT_FALSE(wireBudget.AddWireBytes(1u));
+    SaveRepresentationBudget overflowBudget;
+    EXPECT_FALSE(overflowBudget.AddWireBytes(std::numeric_limits<size_t>::max()));
+
+    const std::string dir = MakeTempSaveDir("shared_representation_limits");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    // A representative uint16-sized key must round-trip through the disk path.
+    const std::string maximumKey(Limits::maxStringBytes, 'k');
+    World diskSource;
+    SaveMetadata metadata;
+    metadata.saveName = "Representation boundary";
+    EXPECT_TRUE(saveSystem.Save("maximum-key", diskSource, metadata, {{maximumKey, "value"}}));
+    World diskTarget;
+    std::unordered_map<std::string, std::string> loadedCustomState;
+    EXPECT_TRUE(saveSystem.Load("maximum-key", diskTarget, loadedCustomState));
+    EXPECT_EQ(loadedCustomState.size(), 1u);
+    EXPECT_EQ(loadedCustomState.at(maximumKey), std::string("value"));
+
+    const std::string oversizedKey(Limits::maxStringBytes + 1u, 'x');
+    EXPECT_FALSE(saveSystem.Save("oversized-key", diskSource, metadata, {{oversizedKey, "value"}}));
+    EXPECT_FALSE(saveSystem.SaveExists("oversized-key"));
+
+    // The public in-memory path accepts the exact name boundary and rejects
+    // max+1 before it can touch live registry topology or entity subscriptions.
+    SaveData maximumName;
+    SerializedEntity maximumNameEntity{};
+    maximumNameEntity.name.assign(Limits::maxStringBytes, 'n');
+    maximumName.entities.push_back(std::move(maximumNameEntity));
+    World acceptedWorld;
+    EXPECT_TRUE(saveSystem.DeserializeWorld(maximumName, acceptedWorld));
+    EXPECT_EQ(acceptedWorld.GetEntityCount(), 1u);
+
+    SaveData oversizedName;
+    SerializedEntity oversizedNameEntity{};
+    oversizedNameEntity.name.assign(Limits::maxStringBytes + 1u, 'n');
+    oversizedName.entities.push_back(std::move(oversizedNameEntity));
+    World liveWorld;
+    const EntityID sentinel = liveWorld.CreateEntity("representation-live-sentinel");
+    liveWorld.AddComponent<Transform>(sentinel).position.x = 515.0f;
+    int deliveries = 0;
+    auto subscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(sentinel), [&](const SaveLoadLifecycleProbeEvent&) { ++deliveries; });
+    const auto topologyBefore = RegistryStorageIds(liveWorld);
+
+    EXPECT_FALSE(saveSystem.DeserializeWorld(oversizedName, liveWorld));
+    EXPECT_TRUE(RegistryStorageIds(liveWorld) == topologyBefore);
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "representation-live-sentinel"));
+    EXPECT_NEAR(liveWorld.GetComponent<Transform>(sentinel)->position.x, 515.0f, 0.0001f);
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(sentinel)),
+              1u);
+    Spark::EntityEventBus::Global().Publish<SaveLoadLifecycleProbeEvent>(static_cast<Spark::EventEntityID>(sentinel),
+                                                                         {1});
+    EXPECT_EQ(deliveries, 1);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_MissingCustomComponentFailsBeforeLiveStoragePreparation)
+{
+    const std::string dir = MakeTempSaveDir("missing_custom_component");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("missing-component-source");
+    source.AddComponent<Transform>(sourceEntity).position.x = 21.0f;
+    SaveMetadata metadata;
+    metadata.saveName = "Missing custom component";
+    EXPECT_TRUE(saveSystem.Save("missing-custom-component", source, metadata, {{"candidate", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "missing-custom-component.spark_save";
+    std::vector<char> bytes = ReadBytes(path);
+    ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "MissingTx"));
+    ASSERT_TRUE(WriteBytes(path, bytes));
+
+    auto& serializers = ComponentSerializerRegistry::GetInstance();
+    serializers.Unregister("MissingTx");
+    serializers.Register(
+        "MissingTx", [](const void*) { return SerializedComponent{"MissingTx", {}}; },
+        [](World&, EntityID, const SerializedComponent&)
+        {
+            // Deliberately broken: a successful callback must materialize the
+            // component declared by the serialized record.
+        });
+    ComponentFactory::Get().Register("MissingTx",
+                                     MakeProbeComponentOps<MissingRestoreProbe>(&CountMissingRestorePrepare));
+    g_missingRestorePrepareCalls = 0;
+
+    World liveWorld;
+    const EntityID sentinel = liveWorld.CreateEntity("missing-component-live-sentinel");
+    liveWorld.AddComponent<Transform>(sentinel).position.x = 616.0f;
+    int deliveries = 0;
+    auto subscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(sentinel), [&](const SaveLoadLifecycleProbeEvent&) { ++deliveries; });
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+    const auto topologyBefore = RegistryStorageIds(liveWorld);
+    const entt::registry& registryBefore = liveWorld.GetRegistry();
+    EXPECT_TRUE(registryBefore.storage<MissingRestoreProbe>() == nullptr);
+
+    const bool loaded = saveSystem.Load("missing-custom-component", liveWorld, customState);
+    serializers.Unregister("MissingTx");
+
+    EXPECT_FALSE(loaded);
+    EXPECT_EQ(g_missingRestorePrepareCalls, 0);
+    EXPECT_TRUE(RegistryStorageIds(liveWorld) == topologyBefore);
+    const entt::registry& registryAfter = liveWorld.GetRegistry();
+    EXPECT_TRUE(registryAfter.storage<MissingRestoreProbe>() == nullptr);
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "missing-component-live-sentinel"));
+    EXPECT_NEAR(liveWorld.GetComponent<Transform>(sentinel)->position.x, 616.0f, 0.0001f);
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("live"), std::string("sentinel"));
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(sentinel)),
+              1u);
+    Spark::EntityEventBus::Global().Publish<SaveLoadLifecycleProbeEvent>(static_cast<Spark::EventEntityID>(sentinel),
+                                                                         {1});
+    EXPECT_EQ(deliveries, 1);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_LiveStoragePreparationFailurePropagatesWithoutFalseRollbackClaim)
+{
+    const std::string dir = MakeTempSaveDir("storage_preparation_failure");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("storage-preparation-source");
+    source.AddComponent<Transform>(sourceEntity).position.x = 31.0f;
+    SaveMetadata metadata;
+    metadata.saveName = "Storage preparation failure";
+    EXPECT_TRUE(saveSystem.Save("storage-preparation", source, metadata, {{"candidate", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "storage-preparation.spark_save";
+    std::vector<char> bytes = ReadBytes(path);
+    ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "PrepareTx"));
+    ASSERT_TRUE(WriteBytes(path, bytes));
+
+    auto& serializers = ComponentSerializerRegistry::GetInstance();
+    serializers.Unregister("PrepareTx");
+    serializers.Register(
+        "PrepareTx", [](const void*) { return SerializedComponent{"PrepareTx", {}}; },
+        [](World& world, EntityID entity, const SerializedComponent&)
+        { world.AddComponent<PrepareFailureProbe>(entity); });
+    ComponentFactory::Get().Register("PrepareTx",
+                                     MakeProbeComponentOps<PrepareFailureProbe>(&ThrowAfterPreparingLiveStorage));
+    g_prepareFailureCalls = 0;
+
+    World liveWorld;
+    const EntityID sentinel = liveWorld.CreateEntity("storage-preparation-live-sentinel");
+    liveWorld.AddComponent<Transform>(sentinel).position.x = 717.0f;
+    int deliveries = 0;
+    auto subscription = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(sentinel), [&](const SaveLoadLifecycleProbeEvent&) { ++deliveries; });
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+    const auto topologyBefore = RegistryStorageIds(liveWorld);
+    const entt::registry& registryBefore = liveWorld.GetRegistry();
+    EXPECT_TRUE(registryBefore.storage<PrepareFailureProbe>() == nullptr);
+
+    EXPECT_THROW(saveSystem.Load("storage-preparation", liveWorld, customState), std::runtime_error);
+    serializers.Unregister("PrepareTx");
+
+    EXPECT_EQ(g_prepareFailureCalls, 1);
+    const entt::registry& registryAfter = liveWorld.GetRegistry();
+    const auto* preparedStorage = registryAfter.storage<PrepareFailureProbe>();
+    ASSERT_TRUE(preparedStorage != nullptr);
+    EXPECT_TRUE(preparedStorage->empty());
+    const auto topologyAfter = RegistryStorageIds(liveWorld);
+    EXPECT_EQ(topologyAfter.size(), topologyBefore.size() + 1u);
+    EXPECT_TRUE(std::find(topologyAfter.begin(), topologyAfter.end(), entt::type_hash<PrepareFailureProbe>::value()) !=
+                topologyAfter.end());
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "storage-preparation-live-sentinel"));
+    EXPECT_NEAR(liveWorld.GetComponent<Transform>(sentinel)->position.x, 717.0f, 0.0001f);
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("live"), std::string("sentinel"));
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(sentinel)),
+              1u);
+    Spark::EntityEventBus::Global().Publish<SaveLoadLifecycleProbeEvent>(static_cast<Spark::EventEntityID>(sentinel),
+                                                                         {1});
+    EXPECT_EQ(deliveries, 1);
+
+    std::filesystem::remove_all(dir);
 }
 
 TEST(SaveMigration_LifecycleObserverExceptionPropagatesInsteadOfReturningFalse)

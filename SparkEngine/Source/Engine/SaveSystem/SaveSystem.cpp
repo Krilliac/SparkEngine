@@ -191,12 +191,160 @@ namespace Spark
             stream >> parsedMetadata.playerDeaths;
             if (!stream)
                 return false;
+            if (!std::isfinite(parsedMetadata.playTime) || !std::isfinite(parsedMetadata.playerHealth) ||
+                !std::isfinite(parsedMetadata.playerArmor) || !std::isfinite(parsedMetadata.playerPosition.x) ||
+                !std::isfinite(parsedMetadata.playerPosition.y) || !std::isfinite(parsedMetadata.playerPosition.z))
+            {
+                return false;
+            }
 
             stream >> std::ws;
             if (!stream.eof())
                 return false;
 
             outMetadata = std::move(parsedMetadata);
+            return true;
+        }
+
+        bool BuildMetadataBlock(const SaveMetadata& metadata, uint32_t version, const char* operation,
+                                std::string& outBlock)
+        {
+            auto rejectNewline = [&](const std::string& value, const char* field)
+            {
+                if (value.find_first_of("\n\r") == std::string::npos)
+                    return false;
+                SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: metadata field '%s' contains an embedded newline",
+                               operation, field);
+                return true;
+            };
+
+            if (rejectNewline(metadata.saveName, "saveName") || rejectNewline(metadata.sceneName, "sceneName") ||
+                rejectNewline(metadata.playerClass, "playerClass") ||
+                (version >= 2 && rejectNewline(metadata.screenshotPath, "screenshotPath")))
+            {
+                return false;
+            }
+            if (!std::isfinite(metadata.playTime) || !std::isfinite(metadata.playerHealth) ||
+                !std::isfinite(metadata.playerArmor) || !std::isfinite(metadata.playerPosition.x) ||
+                !std::isfinite(metadata.playerPosition.y) || !std::isfinite(metadata.playerPosition.z))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: metadata contains a non-finite numeric value", operation);
+                return false;
+            }
+
+            std::ostringstream stream;
+            stream << metadata.saveName << "\n";
+            stream << metadata.sceneName << "\n";
+            stream << metadata.playerClass << "\n";
+            if (version >= 2)
+                stream << metadata.screenshotPath << "\n";
+            stream << metadata.timestamp << "\n";
+            stream << metadata.playTime << "\n";
+            stream << metadata.playerHealth << "\n";
+            stream << metadata.playerArmor << "\n";
+            stream << metadata.playerPosition.x << " " << metadata.playerPosition.y << " " << metadata.playerPosition.z
+                   << "\n";
+            stream << metadata.playerKills << "\n";
+            stream << metadata.playerDeaths << "\n";
+            outBlock = stream.str();
+            return true;
+        }
+
+        bool AddLengthPrefixedString(SaveRepresentationBudget& budget, const std::string& value, const char* field,
+                                     const char* operation)
+        {
+            if (!SaveRepresentationLimits::SupportsStringBytes(value.size()))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: %s length %zu exceeds the uint16 wire limit %zu",
+                               operation, field, value.size(), SaveRepresentationLimits::maxStringBytes);
+                return false;
+            }
+            return budget.AddWireBytes(sizeof(uint16_t)) && budget.AddWireBytes(value.size());
+        }
+
+        bool ValidateSaveRepresentation(const SaveData& data, size_t metadataWireBytes, const char* operation)
+        {
+            if (!SaveRepresentationLimits::SupportsMetadataBytes(metadataWireBytes))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: metadata block %zu exceeds limit %zu", operation,
+                               metadataWireBytes, SaveRepresentationLimits::maxMetadataBytes);
+                return false;
+            }
+            if (!SaveRepresentationLimits::SupportsEntityCount(data.entities.size()))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: entity count %zu exceeds limit %zu", operation,
+                               data.entities.size(), SaveRepresentationLimits::maxEntities);
+                return false;
+            }
+            if (!SaveRepresentationLimits::SupportsCustomStateCount(data.customState.size()))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: custom-state count %zu exceeds limit %zu", operation,
+                               data.customState.size(), SaveRepresentationLimits::maxCustomStateEntries);
+                return false;
+            }
+
+            SaveRepresentationBudget budget;
+            constexpr size_t fixedHeaderBytes =
+                4u + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+            if (!budget.AddWireBytes(fixedHeaderBytes) || !budget.AddWireBytes(metadataWireBytes) ||
+                !budget.AddCustomStateEntries(data.customState.size()))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: save representation exceeds aggregate limits", operation);
+                return false;
+            }
+
+            for (const auto& entity : data.entities)
+            {
+                if (!SaveRepresentationLimits::SupportsComponentCount(entity.components.size()))
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: per-entity component count %zu exceeds limit %zu",
+                                   operation, entity.components.size(),
+                                   SaveRepresentationLimits::maxComponentsPerEntity);
+                    return false;
+                }
+                if (!AddLengthPrefixedString(budget, entity.name, "entity.name", operation) ||
+                    !budget.AddWireBytes(sizeof(uint16_t)) || !budget.AddComponents(entity.components.size()))
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: entity records exceed aggregate limits", operation);
+                    return false;
+                }
+
+                for (const auto& component : entity.components)
+                {
+                    if (!SaveRepresentationLimits::SupportsPropertyCount(component.properties.size()))
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                       "%s: per-component property count %zu exceeds limit %zu", operation,
+                                       component.properties.size(),
+                                       SaveRepresentationLimits::maxPropertiesPerComponent);
+                        return false;
+                    }
+                    if (!AddLengthPrefixedString(budget, component.typeName, "component.typeName", operation) ||
+                        !budget.AddWireBytes(sizeof(uint16_t)) || !budget.AddProperties(component.properties.size()))
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: component records exceed aggregate limits",
+                                       operation);
+                        return false;
+                    }
+                    for (const auto& [key, value] : component.properties)
+                    {
+                        if (!AddLengthPrefixedString(budget, key, "property.key", operation) ||
+                            !AddLengthPrefixedString(budget, value, "property.value", operation))
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            for (const auto& [key, value] : data.customState)
+            {
+                if (!AddLengthPrefixedString(budget, key, "customState.key", operation) ||
+                    !AddLengthPrefixedString(budget, value, "customState.value", operation))
+                {
+                    return false;
+                }
+            }
             return true;
         }
 
@@ -279,17 +427,15 @@ namespace Spark
     // Strict deserialization helpers — a malformed required field invalidates the snapshot
     // ============================================================================
 
-    // Must match the writer's limit (rejectIfTooLong in WriteToFile): every string on the wire
-    // carries a uint16 length prefix, so anything the writer accepts must load back cleanly.
-    static constexpr size_t kMaxPropertyLen = std::numeric_limits<uint16_t>::max();
-
+    // Must match SaveRepresentationLimits: every property string on the wire carries a
+    // uint16 length prefix, so anything the shared writer validator accepts must load cleanly.
     static const std::string& RequireString(const std::unordered_map<std::string, std::string>& props,
                                             const std::string& key)
     {
         const auto it = props.find(key);
         if (it == props.end())
             throw std::runtime_error("missing required save property '" + key + "'");
-        if (it->second.size() > kMaxPropertyLen)
+        if (!SaveRepresentationLimits::SupportsStringBytes(it->second.size()))
             throw std::runtime_error("save property '" + key + "' exceeds the uint16 wire limit");
         return it->second;
     }
@@ -725,7 +871,7 @@ namespace Spark
                         if (it == data.properties.end())
                             throw std::runtime_error("reflected component '" + capturedName +
                                                      "' is missing required field '" + field.fieldName + "'");
-                        if (it->second.size() > kMaxPropertyLen)
+                        if (!SaveRepresentationLimits::SupportsStringBytes(it->second.size()))
                             throw std::runtime_error("reflected field '" + capturedName + "." + field.fieldName +
                                                      "' exceeds the uint16 wire limit");
                         if (!Spark::SetFieldFromString(raw, field, it->second))
@@ -848,9 +994,9 @@ namespace Spark
         }
 
         // Validation/deserialization failures are converted to false internally.
-        // Lifecycle-observer exceptions deliberately propagate: once retirement
-        // begins, reporting an ordinary false would invite callers to continue with
-        // a potentially partially-retired World.
+        // Live-storage preparation and lifecycle-observer exceptions deliberately
+        // propagate: once topology or retirement can change, reporting an ordinary
+        // false would overstate the rollback guarantee.
         const bool restored = DeserializeWorld(data, world);
         if (restored)
         {
@@ -1038,31 +1184,46 @@ namespace Spark
 
     bool SaveSystem::DeserializeWorld(const SaveData& data, World& world) const
     {
-        SaveData migratedData = data;
-        if (!MigrateToCurrentVersion(migratedData))
+        if (!IsSupportedSaveVersion(data.metadata.version))
         {
             SPARK_LOG_WARN(Spark::LogCategory::Save,
                            "DeserializeWorld: save version %u is unsupported; supported versions are %u..%u",
                            data.metadata.version, kOldestSupportedSaveVersion, kCurrentSaveVersion);
             return false;
         }
-        if (!ValidateSerializedWorldStructure(migratedData, "DeserializeWorld"))
-            return false;
 
         const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
         const auto& componentFactory = Spark::ComponentFactory::Get();
+        SaveData migratedData;
         World candidateWorld;
-        std::vector<Spark::ComponentOps::SwapStorageContentsFn> stagedStorageSwaps;
+        struct StagedStorage
+        {
+            Spark::ComponentOps::PrepareStorageFn prepare = nullptr;
+            Spark::ComponentOps::SwapStorageContentsFn swap = nullptr;
+        };
         struct ReboundNotification
         {
             Spark::ComponentOps::NotifyReboundFn notify = nullptr;
             EntityID entity = entt::null;
         };
+        std::vector<StagedStorage> stagedStorages;
         std::vector<ReboundNotification> reboundNotifications;
         std::vector<EntityID> liveEntities;
         std::vector<EntityID> incomingEntities;
         try
         {
+            std::string metadataBlock;
+            if (!BuildMetadataBlock(data.metadata, data.metadata.version, "DeserializeWorld", metadataBlock) ||
+                !ValidateSaveRepresentation(data, metadataBlock.size(), "DeserializeWorld") ||
+                !ValidateSerializedWorldStructure(data, "DeserializeWorld"))
+            {
+                return false;
+            }
+
+            migratedData = data;
+            if (!MigrateToCurrentVersion(migratedData))
+                return false;
+
             incomingEntities.reserve(migratedData.entities.size());
             for (const auto& serializedEntity : migratedData.entities)
             {
@@ -1084,9 +1245,8 @@ namespace Spark
                 }
             }
 
-            // Resolve and materialize every component pool before touching the
-            // live world. The stored callbacks swap only basic_storage payloads,
-            // leaving the live EnTT signal mixins (and their observers) in place.
+            // Resolve every operation and prove each declared component was
+            // materialized in the candidate before touching the live registry.
             std::unordered_set<std::string> stagedTypes;
             auto stageComponentType = [&](const std::string& typeName)
             {
@@ -1094,26 +1254,35 @@ namespace Spark
                     return;
 
                 const Spark::ComponentOps* operations = componentFactory.GetOperations(typeName);
-                if (!operations || !operations->prepareStorage || !operations->swapStorageContents ||
-                    !operations->notifyRebound)
+                if (!operations || !operations->add || !operations->has || !operations->remove || !operations->getRaw ||
+                    !operations->prepareStorage || !operations->swapStorageContents || !operations->notifyRebound)
+                {
                     throw std::runtime_error("component '" + typeName +
-                                             "' has no transactional storage operations registered");
+                                             "' has incomplete transactional component operations");
+                }
 
-                operations->prepareStorage(&world);
-                operations->prepareStorage(&candidateWorld);
-                stagedStorageSwaps.push_back(operations->swapStorageContents);
+                stagedStorages.push_back({operations->prepareStorage, operations->swapStorageContents});
             };
 
-            stageComponentType("NameComponent");
+            bool hasIncomingNames = false;
             for (const auto& serializedEntity : migratedData.entities)
             {
+                hasIncomingNames = hasIncomingNames || !serializedEntity.name.empty();
                 for (const auto& component : serializedEntity.components)
                     stageComponentType(component.typeName);
             }
+            if (hasIncomingNames)
+                stageComponentType("NameComponent");
 
             size_t notificationCount = 0;
             for (const auto& serializedEntity : migratedData.entities)
-                notificationCount += serializedEntity.components.size() + (serializedEntity.name.empty() ? 0u : 1u);
+            {
+                const size_t entityNotifications =
+                    serializedEntity.components.size() + (serializedEntity.name.empty() ? 0u : 1u);
+                if (entityNotifications > std::numeric_limits<size_t>::max() - notificationCount)
+                    throw std::runtime_error("reactive notification count overflow");
+                notificationCount += entityNotifications;
+            }
             reboundNotifications.reserve(notificationCount);
 
             auto&& currentStorage = world.GetRegistry().storage<entt::entity>();
@@ -1132,7 +1301,7 @@ namespace Spark
                 {
                     const Spark::ComponentOps* operations = componentFactory.GetOperations(typeName);
                     if (!operations || !operations->has || !operations->notifyRebound)
-                        throw std::runtime_error("component '" + typeName + "' has no reactive rebind operation");
+                        throw std::runtime_error("component '" + typeName + "' lost its reactive rebind operation");
                     if (!operations->has(&candidateWorld, static_cast<uint32_t>(entity)))
                         throw std::runtime_error("component '" + typeName +
                                                  "' was not materialized by its deserializer");
@@ -1148,17 +1317,26 @@ namespace Spark
         catch (const std::exception& error)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Save,
-                           "DeserializeWorld: component deserializer failed: %s; the live world was not changed",
+                           "DeserializeWorld: pre-commit validation or candidate restore failed: %s; "
+                           "the live world was not changed",
                            error.what());
             return false;
         }
         catch (...)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Save,
-                           "DeserializeWorld: component deserializer threw an unknown exception; "
+                           "DeserializeWorld: pre-commit validation or candidate restore failed unexpectedly; "
                            "the live world was not changed");
             return false;
         }
+
+        // This is the explicit live-registry boundary. All recoverable data,
+        // operation, allocation, and candidate-presence checks are complete.
+        // Preparing a previously absent pool may change registry topology before
+        // retirement; any exception from this point propagates and must not be
+        // reported as an ordinary unchanged-world false.
+        for (const StagedStorage& storage : stagedStorages)
+            storage.prepare(&world);
 
         // Use the World's lifecycle path so hierarchy links, EnTT destroy
         // observers, and per-entity event subscriptions are retired before
@@ -1173,8 +1351,8 @@ namespace Spark
         // All allocations and type lookups are complete. These exchanges are
         // noexcept and intentionally avoid registry move-assignment, which would
         // transplant signal objects away from live observers.
-        for (const auto swapStorageContents : stagedStorageSwaps)
-            swapStorageContents(&world, &candidateWorld);
+        for (const StagedStorage& storage : stagedStorages)
+            storage.swap(&world, &candidateWorld);
 
         using EntityPayloadStorage = entt::basic_storage<entt::entity>;
         auto& destinationEntities = world.GetRegistry().storage<entt::entity>();
@@ -1203,73 +1381,12 @@ namespace Spark
                 return false;
             }
 
-            // Reject any string that would silently truncate to uint16_t on the wire.
-            // Silent truncation corrupts saves: the length prefix disagrees with the payload.
-            constexpr size_t kMaxStr16 = std::numeric_limits<uint16_t>::max();
-            auto rejectIfTooLong = [&](const std::string& s, const char* field)
-            {
-                if (s.size() > kMaxStr16)
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Core,
-                                   "Save system: %s length %zu exceeds uint16 max (%zu); refusing to truncate", field,
-                                   s.size(), kMaxStr16);
-                    return true;
-                }
-                return false;
-            };
-            // The metadata block is stored as newline-delimited text and parsed back with
-            // std::getline. An embedded '\n'/'\r' in any of the first three fields shifts
-            // every subsequent getline/>> read and corrupts the rest of the metadata on
-            // load, so reject such values instead of writing a corrupt save.
-            auto rejectIfHasNewline = [&](const std::string& s, const char* field)
-            {
-                if (s.find_first_of("\n\r") != std::string::npos)
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Core,
-                                   "Save system: %s contains an embedded newline; refusing to write a corrupt save",
-                                   field);
-                    return true;
-                }
-                return false;
-            };
-            if (rejectIfHasNewline(data.metadata.saveName, "metadata.saveName") ||
-                rejectIfHasNewline(data.metadata.sceneName, "metadata.sceneName") ||
-                rejectIfHasNewline(data.metadata.playerClass, "metadata.playerClass") ||
-                rejectIfHasNewline(data.metadata.screenshotPath, "metadata.screenshotPath"))
+            std::string metaStr;
+            if (!BuildMetadataBlock(data.metadata, kCurrentSaveVersion, "WriteToFile", metaStr) ||
+                !ValidateSaveRepresentation(data, metaStr.size(), "WriteToFile") ||
+                !ValidateSerializedWorldStructure(data, "WriteToFile"))
             {
                 return false;
-            }
-            for (const auto& entity : data.entities)
-            {
-                if (rejectIfTooLong(entity.name, "entity.name"))
-                    return false;
-                if (entity.components.size() > kMaxStr16)
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: component count %zu exceeds uint16 max",
-                                   entity.components.size());
-                    return false;
-                }
-                for (const auto& comp : entity.components)
-                {
-                    if (rejectIfTooLong(comp.typeName, "component.typeName"))
-                        return false;
-                    if (comp.properties.size() > kMaxStr16)
-                    {
-                        SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: property count %zu exceeds uint16 max",
-                                       comp.properties.size());
-                        return false;
-                    }
-                    for (const auto& [key, value] : comp.properties)
-                    {
-                        if (rejectIfTooLong(key, "property.key") || rejectIfTooLong(value, "property.value"))
-                            return false;
-                    }
-                }
-            }
-            for (const auto& [key, value] : data.customState)
-            {
-                if (rejectIfTooLong(key, "customState.key") || rejectIfTooLong(value, "customState.value"))
-                    return false;
             }
 
             // Write to temp file first, then rename for atomic save (prevents corruption on crash)
@@ -1289,23 +1406,9 @@ namespace Spark
             const uint32_t version = kCurrentSaveVersion;
             file.write(reinterpret_cast<const char*>(&version), sizeof(version));
 
-            // Write metadata as text block
-            std::ostringstream metaStream;
-            metaStream << data.metadata.saveName << "\n";
-            metaStream << data.metadata.sceneName << "\n";
-            metaStream << data.metadata.playerClass << "\n";
-            metaStream << data.metadata.screenshotPath << "\n";
-            metaStream << data.metadata.timestamp << "\n";
-            metaStream << data.metadata.playTime << "\n";
-            metaStream << data.metadata.playerHealth << "\n";
-            metaStream << data.metadata.playerArmor << "\n";
-            metaStream << data.metadata.playerPosition.x << " " << data.metadata.playerPosition.y << " "
-                       << data.metadata.playerPosition.z << "\n";
-            metaStream << data.metadata.playerKills << "\n";
-            metaStream << data.metadata.playerDeaths << "\n";
-
-            std::string metaStr = metaStream.str();
-            uint32_t metaSize = static_cast<uint32_t>(metaStr.size());
+            // Write the metadata block already validated against the shared
+            // disk/in-memory representation budget.
+            const uint32_t metaSize = static_cast<uint32_t>(metaStr.size());
             file.write(reinterpret_cast<const char*>(&metaSize), sizeof(metaSize));
             file.write(metaStr.c_str(), metaSize);
 
@@ -1424,8 +1527,6 @@ namespace Spark
     {
         try
         {
-            constexpr uintmax_t kMaxSaveFileSize = 512ull * 1024ull * 1024ull;
-
             // Parse transactionally so a malformed file never leaves callers
             // with a partially populated SaveData object.
             SaveData parsedData;
@@ -1435,7 +1536,7 @@ namespace Spark
             // stream branch's limit entirely.
             std::error_code sizeError;
             const uintmax_t onDiskSize = std::filesystem::file_size(filepath, sizeError);
-            if (!sizeError && onDiskSize > kMaxSaveFileSize)
+            if (!sizeError && onDiskSize > static_cast<uintmax_t>(SaveRepresentationLimits::maxWireBytes))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file too large: %llu bytes",
                                static_cast<unsigned long long>(onDiskSize));
@@ -1478,7 +1579,7 @@ namespace Spark
                 file.seekg(0, std::ios::beg);
 
                 // Sanity cap: reject unreasonably large save files (512 MB)
-                if (static_cast<uintmax_t>(size) > kMaxSaveFileSize)
+                if (!SaveRepresentationLimits::SupportsWireBytes(static_cast<size_t>(size)))
                 {
                     SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file too large: %lld bytes",
                                    static_cast<long long>(size));
@@ -1498,7 +1599,7 @@ namespace Spark
             // A cache entry may outlive an external file replacement. Keep the
             // parser cap authoritative even when the on-disk preflight raced or
             // the value came from an existing cache entry.
-            if (fileData.size() > kMaxSaveFileSize)
+            if (!SaveRepresentationLimits::SupportsWireBytes(fileData.size()))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Core, "Cached save file too large: %zu bytes", fileData.size());
                 return false;
@@ -1514,10 +1615,11 @@ namespace Spark
 
             // Parse from the byte buffer using an offset cursor
             size_t offset = 0;
+            SaveRepresentationBudget parsedBudget;
 
             auto readBytes = [&](void* dest, size_t count) -> bool
             {
-                if (offset + count > fileData.size())
+                if (offset > fileData.size() || count > fileData.size() - offset)
                     return false;
                 std::memcpy(dest, fileData.data() + offset, count);
                 offset += count;
@@ -1555,7 +1657,8 @@ namespace Spark
             uint32_t metaSize;
             if (!readBytes(&metaSize, sizeof(metaSize)))
                 return false;
-            if (offset + metaSize > fileData.size())
+            if (!SaveRepresentationLimits::SupportsMetadataBytes(metaSize) || offset > fileData.size() ||
+                metaSize > fileData.size() - offset)
                 return false;
             std::string metaStr(reinterpret_cast<const char*>(fileData.data() + offset), metaSize);
             offset += metaSize;
@@ -1572,12 +1675,11 @@ namespace Spark
             if (!readBytes(&entityCount, sizeof(entityCount)))
                 return false;
 
-            // Sanity cap: prevent malformed files from causing huge allocations
-            constexpr uint32_t kMaxEntities = 1'000'000;
-            if (entityCount > kMaxEntities)
+            // Sanity cap: prevent malformed files from causing huge allocations.
+            if (!SaveRepresentationLimits::SupportsEntityCount(entityCount))
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file entity count %u exceeds limit %u", entityCount,
-                               kMaxEntities);
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file entity count %u exceeds limit %zu", entityCount,
+                               SaveRepresentationLimits::maxEntities);
                 return false;
             }
 
@@ -1588,9 +1690,8 @@ namespace Spark
                 uint16_t nameLen;
                 if (!readBytes(&nameLen, sizeof(nameLen)))
                     return false;
-                // No explicit cap: the uint16 length prefix bounds allocations to 65535 bytes,
-                // matching the writer's rejectIfTooLong limit. A tighter cap here would make
-                // saves the writer accepted unloadable.
+                // No tighter local cap: the uint16 prefix is the shared representation
+                // boundary, so disk and in-memory inputs accept the same maximum name.
                 entity.name.resize(nameLen);
                 if (!readBytes(entity.name.data(), nameLen))
                     return false;
@@ -1598,6 +1699,13 @@ namespace Spark
                 uint16_t compCount;
                 if (!readBytes(&compCount, sizeof(compCount)))
                     return false;
+                if (!parsedBudget.AddComponents(compCount))
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                   "ReadFromFile: aggregate component count exceeds limit %zu",
+                                   SaveRepresentationLimits::maxTotalComponents);
+                    return false;
+                }
 
                 std::unordered_set<std::string> componentTypes;
                 componentTypes.reserve(compCount);
@@ -1629,6 +1737,13 @@ namespace Spark
                     uint16_t propCount;
                     if (!readBytes(&propCount, sizeof(propCount)))
                         return false;
+                    if (!parsedBudget.AddProperties(propCount))
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                       "ReadFromFile: aggregate property count exceeds limit %zu",
+                                       SaveRepresentationLimits::maxTotalProperties);
+                        return false;
+                    }
 
                     for (uint16_t p = 0; p < propCount; ++p)
                     {
@@ -1666,8 +1781,8 @@ namespace Spark
             if (!readBytes(&customStateCount, sizeof(customStateCount)))
                 return false;
 
-            constexpr uint32_t kMaxCustomState = 100'000;
-            if (customStateCount > kMaxCustomState)
+            if (!SaveRepresentationLimits::SupportsCustomStateCount(customStateCount) ||
+                !parsedBudget.AddCustomStateEntries(customStateCount))
                 return false;
             for (uint32_t i = 0; i < customStateCount; ++i)
             {
@@ -1695,6 +1810,12 @@ namespace Spark
 
             if (offset != fileData.size())
                 return false;
+
+            if (!ValidateSaveRepresentation(parsedData, metaStr.size(), "ReadFromFile") ||
+                !ValidateSerializedWorldStructure(parsedData, "ReadFromFile"))
+            {
+                return false;
+            }
 
             if (version < kCurrentSaveVersion)
             {
@@ -1751,8 +1872,7 @@ namespace Spark
             if (!file)
                 return false;
             // Guard against a corrupt/oversized length before allocating.
-            constexpr uint32_t kMaxMetaSize = 64 * 1024;
-            if (metaSize > kMaxMetaSize)
+            if (!SaveRepresentationLimits::SupportsMetadataBytes(metaSize))
                 return false;
 
             std::string metaStr(metaSize, '\0');
