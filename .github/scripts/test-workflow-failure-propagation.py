@@ -243,6 +243,33 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1", self.build)
         self.assertIn("ASAN_OPTIONS: detect_leaks=1:halt_on_error=1", self.build)
 
+    def test_sanitizer_runner_receives_runtime_log_prefix(self) -> None:
+        self.assertIn("--runtime-log-prefix build/asan-runtime", self.build)
+        self.assertIn("--runtime-log-prefix build/tsan-runtime", self.build)
+
+    def test_msan_does_not_receive_runtime_log_prefix(self) -> None:
+        msan_block = named_step(self.build, "Run Tests under MSan")
+        self.assertNotIn("--runtime-log-prefix", msan_block)
+
+    def test_asan_tsan_are_required_msan_is_optional(self) -> None:
+        gate_section = self.build[self.build.index("required-ci-gate:"):]
+        gate_needs = gate_section[:gate_section.index("runs-on:")]
+        self.assertIn("build-linux-asan", gate_needs)
+        self.assertIn("build-linux-tsan", gate_needs)
+        self.assertNotIn("build-linux-msan", gate_needs)
+
+    def test_msan_has_continue_on_error(self) -> None:
+        msan_start = self.build.index("build-linux-msan:")
+        next_job = self.build.index("\n  build-", msan_start + 1)
+        msan_section = self.build[msan_start:next_job]
+        self.assertIn("continue-on-error: true", msan_section)
+
+    def test_asan_does_not_have_continue_on_error(self) -> None:
+        asan_start = self.build.index("build-linux-asan:")
+        next_job = self.build.index("\n  build-", asan_start + 1)
+        asan_section = self.build[asan_start:next_job]
+        self.assertNotIn("continue-on-error", asan_section)
+
     def test_working_pushes_are_not_cancelled_before_evidence_finishes(self) -> None:
         self.assertIn("|| github.sha }}", self.build)
         self.assertIn(

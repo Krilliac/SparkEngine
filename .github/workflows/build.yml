@@ -322,6 +322,7 @@ jobs:
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/Tests/lsan_suppressions.txt
       run: |
         bash .github/scripts/run-sanitizer-tests.sh \
+          --runtime-log-prefix build/asan-runtime \
           build/asan-ubsan-lsan-results.txt \
           build/asan-console.txt \
           -- build/bin/SparkTests --output-file build/asan-ubsan-lsan-results.txt
@@ -417,6 +418,7 @@ jobs:
         TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:print_suppressions=1:suppressions=${{ github.workspace }}/Tests/tsan_suppressions.txt:log_path=${{ github.workspace }}/build/tsan-runtime
       run: |
         bash .github/scripts/run-sanitizer-tests.sh \
+          --runtime-log-prefix build/tsan-runtime \
           build/tsan-results.txt \
           build/tsan-console.txt \
           -- build/bin/SparkTests --output-file build/tsan-results.txt
