@@ -463,11 +463,12 @@ else()
     endif()
 endif()
 
-# MinGW cross-compilation from Linux: defines the same Windows macros as MSVC
-# so that D3D11/D3D12 code paths compile. MinGW uses GCC flags (set above).
+# MinGW cross-compilation from Linux: defines the Windows macros needed by the
+# general Windows and D3D11 paths. The D3D12/DXR sources are excluded below
+# because the MinGW SDK headers do not provide the required interfaces.
 if(MINGW AND NOT MSVC)
     add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX SPARK_PLATFORM_WINDOWS)
-    message(STATUS "MinGW detected — enabling Windows code paths (D3D11/D3D12)")
+    message(STATUS "MinGW detected — enabling Windows/D3D11 code paths; D3D12/DXR will be excluded")
 
     # MinGW toolchain restricts find_path to the sysroot. Our ThirdParty
     # dependencies live in the source tree, so allow both search modes.
@@ -2733,7 +2734,7 @@ message(STATUS "Output: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 message(STATUS "Graphics Backends:")
 if(WIN32 AND MINGW)
     message(STATUS "  DirectX 11 : ENABLED (MinGW cross-compilation — run under Wine + DXVK)")
-    message(STATUS "  DirectX 12 : ENABLED (MinGW cross-compilation — run under Wine + VKD3D-Proton)")
+    message(STATUS "  DirectX 12 : EXCLUDED (MinGW SDK headers lack required D3D12/DXR interfaces)")
 elseif(WIN32)
     message(STATUS "  DirectX 11 : ENABLED (Windows)")
 else()

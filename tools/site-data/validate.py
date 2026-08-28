@@ -6,9 +6,12 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import hashlib
+import html
 import re
 import sys
+import unicodedata
 from collections import Counter
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -42,18 +45,119 @@ BUILD_PRODUCT_KINDS = {
 BUILD_PRODUCT_APPLICABILITY = {"required", "shared"}
 BUILD_CONFIGURATION_PURPOSES = {"shipping", "validation", "installed-sdk-consumer"}
 UNASSIGNED_OWNERS = {"", "unassigned", "none", "tbd", "todo"}
-REQUIRED_PUBLIC_CLAIM_SURFACES = {
+REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES = {
+    ".github/copilot-instructions.md",
+    ".github/prompts/build-test.prompt.md",
+    ".github/prompts/copilot-instructions.md",
     "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "SparkInstaller/README.md",
+    "Templates/EmptyProject/README.md",
+    "Templates/FPSStarter/README.md",
+    "Templates/MultiplayerArena/README.md",
+    "Templates/ThirdPersonStarter/README.md",
     "docs/README.md",
+    "docs/guides/External-Services-and-Orchestration.md",
+    "docs/plans/FEATURE_ROADMAP.md",
     "docs/site/content.json",
+    "docs/status/PROJECT_STATUS.md",
+    "docs/tooling/README.md",
+    "wiki/Build-Guide.md",
+    "wiki/Changelog.md",
+    "wiki/Documentation.md",
+    "wiki/Docs.md",
+    "wiki/API.md",
+    "wiki/Examples.md",
+    "wiki/Guides.md",
+    "wiki/Home.md",
+    "wiki/Reference.md",
+    "wiki/Tutorials.md",
+    "wiki/Wiki.md",
+    "wiki/Roadmap.md",
+    "wiki/Samples.md",
+    "wiki/advanced/Build-System-and-CMake-Modules.md",
+    "wiki/advanced/Codebase-Health.md",
+    "wiki/advanced/Codebase-Statistics.md",
+    "wiki/advanced/Gameplay-Systems-Status.md",
+    "wiki/advanced/SparkGame-Module-Status.md",
+    "wiki/advanced/Testing.md",
+    "wiki/gameplay-tools/Asset-Pipeline.md",
+    "wiki/gameplay-tools/Project-Templates.md",
+    "wiki/gameplay-tools/SparkEditor.md",
+    "wiki/gameplay-tools/SparkConsole.md",
+    "wiki/getting-started/Editor-Walkthrough.md",
+    "wiki/getting-started/Architecture-Overview.md",
+    "wiki/getting-started/FAQ.md",
+    "wiki/getting-started/Game-Modules.md",
+    "wiki/getting-started/Getting-Started.md",
+    "wiki/getting-started/Migration-Guide.md",
+    "wiki/getting-started/Making-Your-First-Game.md",
+    "wiki/getting-started/Making-Your-First-Multiplayer-Game.md",
+    "wiki/getting-started/Quick-Start-Tutorial.md",
+    "wiki/getting-started/Creating-a-Game-Module.md",
+    "wiki/graphics/D3D12-Backend.md",
+    "wiki/graphics/D3D11-Backend.md",
+    "wiki/graphics/Metal-Backend.md",
+    "wiki/graphics/OpenGL-Backend.md",
+    "wiki/graphics/Vulkan-Backend.md",
+    "wiki/platform/Cross-Compilation-Wine-Testing.md",
+    "wiki/subsystems/Collaborative-Editing.md",
+    "wiki/subsystems/Dedicated-Server.md",
+    "wiki/subsystems/Animation.md",
+    "wiki/subsystems/Rendering-and-Graphics.md",
+    "wiki/subsystems/Scene-Management.md",
+    "wiki/subsystems/Scripting-with-AngelScript.md",
+    "wiki/subsystems/Tween-System.md",
 }
+REQUIRED_PROFILE_DOCUMENTATION_SURFACES = {
+    "stable-v1": {
+        "README.md",
+        "wiki/platform/System-Requirements.md",
+        "wiki/graphics/RHI-Abstraction-Layer.md",
+        "wiki/gameplay-tools/Game-Packaging.md",
+        "GameModules/README.md",
+    }
+}
+REQUIRED_PROFILE_SUPPORTED_HOSTS = {"stable-v1": {"Windows 11 x64"}}
 REQUIRED_BREADTH_TOKENS = {
-    "windows 10", "windows 10+", "any platform", "any host", "any compiler"
+    "windows 7",
+    "windows 8",
+    "windows 10",
+    "windows 10+",
+    "windows server",
+    "linux",
+    "ubuntu",
+    "macos",
+    "mac os",
+    "android",
+    "ios",
+    "any platform",
+    "any host",
+    "any compiler",
+}
+REQUIRED_FORBIDDEN_UNQUALIFIED_CLAIMS = {
+    "fully supported", "production-ready", "production ready"
 }
 REQUIRED_FORBIDDEN_PROFILE_CELLS = {
-    "Any", "Any platform", "Any host", "Windows", "Windows 10", "Windows 10+", "Headless"
+    "Any",
+    "All",
+    "Any platform",
+    "Any host",
+    "Windows",
+    "Windows 10",
+    "Windows 10+",
+    "Headless",
 }
-REQUIRED_NULLRHI_CONFLICTS = {"llvmpipe", "software rendering", "software render"}
+REQUIRED_NULLRHI_CONFLICTS = {
+    "llvmpipe",
+    "software rendering",
+    "software render",
+    "software rasterization",
+    "software rasterizer",
+    "software renderer",
+    "render in software",
+}
 
 # Deliberate outputs of unfinished work items. A missing path not listed here is
 # a contract error, not a soft warning.
@@ -107,6 +211,34 @@ WORK_ITEM_LIST_KEYS = {
     "performanceBudgets", "documentationUpdates", "readinessChanges", "websiteImpact",
     "risks", "outOfScope", "definitionOfDone",
 }
+
+
+_CTEST_COMMAND_TOKEN = re.compile(
+    r"(?<![A-Za-z0-9_.-])ctest(?:\.exe)?(?=$|[\s()\"'])",
+    re.IGNORECASE,
+)
+_CTEST_DISCOVERY_ONLY = re.compile(
+    r"(?<!\S)--show-only=json-v1(?=\s|$|\))",
+    re.IGNORECASE,
+)
+_CTEST_FAIL_ON_EMPTY = re.compile(
+    r"(?<!\S)--no-tests=error(?=\s|$|\))",
+    re.IGNORECASE,
+)
+
+
+def executable_ctest_segments(command: str) -> list[str]:
+    """Return shell segments that can execute CTest.
+
+    Work-item ``commands`` are executable acceptance instructions rather than
+    prose. Splitting conservatively on common shell control operators makes a
+    discovery-only invocation unable to mask a later test-running invocation.
+    """
+    return [
+        segment.strip()
+        for segment in re.split(r"[;&|\r\n]+", command)
+        if _CTEST_COMMAND_TOKEN.search(segment)
+    ]
 
 
 def build_matrix_evidence_errors(
@@ -193,6 +325,321 @@ def build_matrix_evidence_errors(
     return errors
 
 
+class _AccessibilityTextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.rendered: list[str] = []
+
+    def handle_starttag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
+        del tag
+        self.rendered.extend(
+            value
+            for name, value in attrs
+            if name.lower() in {"alt", "title"} and value
+        )
+
+    handle_startendtag = handle_starttag
+
+
+def _html_accessibility_text(value: str) -> str:
+    if "<" not in value or not re.search(r"\b(?:alt|title)\s*=", value, re.IGNORECASE):
+        return ""
+    parser = _AccessibilityTextParser()
+    try:
+        parser.feed(value)
+        parser.close()
+    except (AssertionError, ValueError):
+        return ""
+    return " ".join(parser.rendered)
+
+
+def _normalized_claim_text(value: str) -> str:
+    accessibility_text = _html_accessibility_text(value)
+    source = f"{value}\n{accessibility_text}" if accessibility_text else value
+    normalized = unicodedata.normalize("NFKC", html.unescape(source).lower())
+    invisible_fillers = {"\u115f", "\u1160", "\u3164", "\uffa0"}
+    normalized = "".join(
+        character
+        for character in normalized
+        if unicodedata.category(character) not in {"Cf", "Mn", "Me"}
+        and character not in invisible_fillers
+    )
+    normalized = re.sub(r"<!--.*?-->", "", normalized, flags=re.DOTALL)
+    normalized = re.sub(
+        r"\\([\\`*_{}\[\]()#+\-.!~|>])",
+        r"\1",
+        normalized,
+    )
+    normalized = re.sub(r"!?\[([^\]\n]+)\]\([^\)\n]*\)", r"\1", normalized)
+    normalized = re.sub(r"!?\[([^\]\n]+)\]\[[^\]\n]*\]", r"\1", normalized)
+    normalized = re.sub(r"!?\[([^\]\n]+)\]", r"\1", normalized)
+
+    normalized = re.sub(r"<[A-Za-z][^>\n]*>", " ", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"</[A-Za-z][^>\n]*>", " ", normalized)
+    normalized = normalized.translate(
+        str.maketrans(
+            {
+                "‐": "-",
+                "‑": "-",
+                "‒": "-",
+                "–": "-",
+                "—": "-",
+                "―": "-",
+                "−": "-",
+            }
+        )
+    )
+    normalized = re.sub(r"[`*_~]+", "", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _claim_phrase_pattern(value: str) -> str:
+    normalized = _normalized_claim_text(value)
+    tokens = [token for token in re.split(r"[\s-]+", normalized) if token]
+    if not tokens:
+        return r"(?!)"
+    variants = [tokens]
+    for index, token in enumerate(tokens):
+        replacements: tuple[str, ...] = ()
+        if token == "render":
+            replacements = ("renders", "rendered", "rendering")
+        elif token == "renderer":
+            replacements = ("renderers",)
+        elif token == "rasterizer":
+            replacements = ("rasterizers",)
+        for replacement in replacements:
+            variant = list(tokens)
+            variant[index] = replacement
+            variants.append(variant)
+    alternatives = [
+        r"[\s-]*".join(re.escape(token) for token in variant)
+        for variant in variants
+    ]
+    return (
+        r"(?<![A-Za-z0-9_])(?:"
+        + "|".join(alternatives)
+        + r")(?![A-Za-z0-9_])"
+    )
+
+
+def _contains_claim_phrase(value: str, phrase: str) -> bool:
+    return bool(re.search(_claim_phrase_pattern(phrase), _normalized_claim_text(value)))
+
+
+def _forbidden_claims(value: str, claims: Iterable[str]) -> list[str]:
+    normalized = _normalized_claim_text(value)
+    matches: set[str] = set()
+    for claim in claims:
+        if re.search(_claim_phrase_pattern(claim), normalized):
+            matches.add(claim.lower())
+    return sorted(matches)
+
+
+def _claim_paragraphs(text: str) -> Iterable[tuple[int, str]]:
+    start = 1
+    lines: list[str] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if line.strip():
+            if not lines:
+                start = number
+            lines.append(line)
+            continue
+        if lines:
+            yield start, "\n".join(lines)
+            lines = []
+    if lines:
+        yield start, "\n".join(lines)
+
+
+def _claim_units(text: str) -> Iterable[tuple[int, str, list[str] | None]]:
+    """Yield prose, table rows, or list items bound to a scope-bearing introduction."""
+
+    start = 1
+    lines: list[str] = []
+    list_introduction: tuple[int, str] | None = None
+    in_list = False
+    table_header: list[str] | None = None
+    in_table = False
+
+    logical_lines: list[tuple[int, str]] = []
+    continuing_list_item = False
+    for number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        is_list_item = bool(re.match(r"^(?:[-+*]|\d+[.)])\s+", stripped))
+        if (
+            continuing_list_item
+            and stripped
+            and (line.startswith("  ") or line.startswith("\t"))
+            and not is_list_item
+        ):
+            original_number, original_line = logical_lines[-1]
+            logical_lines[-1] = (original_number, f"{original_line}\n{stripped}")
+            continue
+        logical_lines.append((number, line))
+        continuing_list_item = is_list_item
+        if not stripped:
+            continuing_list_item = False
+
+    def flush() -> tuple[int, str, list[str] | None] | None:
+        nonlocal lines, list_introduction
+        if not lines:
+            return None
+        value = "\n".join(lines)
+        result = (start, value, None)
+        normalized = _normalized_claim_text(value)
+        list_introduction = (
+            (start, value)
+            if normalized.endswith(":") or re.search(r"\bthe following\b", normalized)
+            else None
+        )
+        lines = []
+        return result
+
+    for number, line in logical_lines:
+        stripped = line.strip()
+        if "|" in stripped and not stripped.startswith("```"):
+            paragraph = flush()
+            if paragraph is not None:
+                yield paragraph
+            list_introduction = None
+            in_list = False
+            cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+            if len(cells) > 1:
+                separator = all(
+                    bool(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")))
+                    for cell in cells
+                )
+                if not in_table:
+                    table_header = None
+                    in_table = True
+                if separator:
+                    continue
+                if table_header is None:
+                    table_header = cells
+                    yield number, " | ".join(cells), cells
+                    continue
+                contextual_cells = [
+                    f"{table_header[index]}: {cell}"
+                    if index < len(table_header)
+                    else cell
+                    for index, cell in enumerate(cells)
+                ]
+                yield number, " | ".join(contextual_cells), cells
+                continue
+        table_header = None
+        in_table = False
+        if re.match(r"^(?:[-+*]|\d+[.)])\s+", stripped):
+            paragraph = flush()
+            if paragraph is not None:
+                yield paragraph
+            in_list = True
+            value = (
+                f"{list_introduction[1]}\n{stripped}"
+                if list_introduction is not None
+                else stripped
+            )
+            yield number, value, None
+            continue
+        if stripped:
+            if in_list:
+                list_introduction = None
+                in_list = False
+            if not lines:
+                start = number
+            lines.append(line)
+            continue
+        paragraph = flush()
+        if paragraph is not None:
+            yield paragraph
+        table_header = None
+        in_table = False
+    paragraph = flush()
+    if paragraph is not None:
+        yield paragraph
+
+
+def _explicitly_distinguishes(value: str, term: str, conflict: str) -> bool:
+    """Return true only when every conflict occurrence is bound to a distinction."""
+
+    normalized = _normalized_claim_text(value)
+    term_pattern = _claim_phrase_pattern(term)
+    conflict_pattern = _claim_phrase_pattern(conflict)
+
+    def directed(left: str, right: str) -> list[str]:
+        return [
+            rf"{left}\s+(?:is|are)\s+not\s+"
+            rf"(?:(?:the\s+same\s+as|an?|the)\s+)?{right}",
+            rf"{left}\s+(?:is|are|remains?)\s+"
+            rf"(?:separate|distinct|different)\s+from\s+{right}",
+            rf"{left}\s+(?:must|should)\s+not\s+be\s+conflated\s+with\s+{right}",
+            rf"{left}\s+(?:does|do)\s+not\s+"
+            rf"(?:perform|use|provide|implement|constitute)\s+{right}",
+            rf"{left}\s+(?:does|do)\s+not\s+{right}",
+            rf"{left}\s+(?:cannot|can\s+not|never)\s+{right}",
+            rf"{left}\s+(?:doesn['’]?t|doesnt|don['’]?t|dont)\s+{right}",
+            rf"{left}\s+(?:performs?|uses?|provides?|implements?|constitutes?)\s+"
+            rf"no\s+{right}",
+        ]
+
+    patterns = [
+        *directed(term_pattern, conflict_pattern),
+        *directed(conflict_pattern, term_pattern),
+        rf"{term_pattern}\s+(?:and|versus|vs\.?)\s+{conflict_pattern}\s+"
+        rf"(?:are|remain)\s+(?:separate|distinct|different)",
+        rf"{conflict_pattern}\s+(?:and|versus|vs\.?)\s+{term_pattern}\s+"
+        rf"(?:are|remain)\s+(?:separate|distinct|different)",
+        rf"{term_pattern}(?:(?![.;]).){{0,160}}\brather\s+than\s+{conflict_pattern}",
+        rf"{conflict_pattern}(?:(?![.;]).){{0,160}}\brather\s+than\s+{term_pattern}",
+        rf"{term_pattern}\s+(?:is|are|remains?)\s+"
+        rf"(?:separate|distinct|different)\s+from\s+both\s+"
+        rf"(?:(?![.;]).){{0,160}}",
+        rf"{term_pattern}\s+neither\s+(?:(?![.;]).){{0,200}}\bnor\b"
+        rf"(?:(?![.;]).){{0,200}}",
+        rf"{term_pattern}(?:(?![.;]).){{0,160}}\b(?:and|nor)\s+"
+        rf"(?:does|do)\s+not\s+"
+        rf"(?:(?:perform|use|provide|implement|constitute)\s+)?{conflict_pattern}",
+        rf"\bunlike\s+{term_pattern}\s*,?(?:(?![.;]).){{0,160}}",
+        rf"{term_pattern}(?:(?![.;]).){{0,100}}\b"
+        rf"(?:no|not|nothing|never|cannot|doesn['’]?t|doesnt)\b"
+        rf"(?:(?![.;]).){{0,100}}\bwhereas\b(?:(?![.;]).){{0,160}}",
+        rf"(?:(?![.;]).){{0,160}}\bwhereas\b\s+{term_pattern}"
+        rf"(?:(?![.;]).){{0,100}}\b"
+        rf"(?:no|not|nothing|never|cannot|doesn['’]?t|doesnt)\b"
+        rf"(?:(?![.;]).){{0,100}}",
+    ]
+    distinction_spans = [
+        match.span()
+        for pattern in patterns
+        for match in re.finditer(pattern, normalized)
+    ]
+    conflict_spans = [match.span() for match in re.finditer(conflict_pattern, normalized)]
+    reversal_subject = rf"(?:it|that|this|the\s+term|{term_pattern})"
+    reversal = re.search(
+        rf"(?:[;,:-]|[.!?]\s+|\(\s*)\s*"
+        rf"(?:(?:however|but|yet)\s*,?\s*)?{reversal_subject}\s+"
+        rf"(?:actually\s+)?(?:is|are)(?:\s*,\s*actually)?(?:\s+one)?\s*"
+        rf"(?:[).!?]|$)",
+        normalized,
+    )
+    return not reversal and bool(conflict_spans) and all(
+        any(start <= conflict_start and conflict_end <= end for start, end in distinction_spans)
+        for conflict_start, conflict_end in conflict_spans
+    )
+
+
+def contains_release_profile_identifier(identifier: str, text: str) -> bool:
+    """Match a profile identifier without accepting a wider near-match token."""
+
+    normalized_identifier = _normalized_claim_text(identifier)
+    marker = re.compile(
+        rf"(?<![A-Za-z0-9_-]){re.escape(normalized_identifier)}(?![A-Za-z0-9_-])",
+        re.IGNORECASE,
+    )
+    return bool(marker.search(_normalized_claim_text(text)))
+
+
 def validate_public_claim_text(
     profile: dict[str, Any],
     surface_location: str,
@@ -201,37 +648,267 @@ def validate_public_claim_text(
     """Return deterministic public-claim violations without touching the filesystem."""
     violations: list[str] = []
     identifier = str(profile.get("id", ""))
-    rules = profile.get("publicClaimRules") or {}
-    breadth_tokens = [str(value).lower() for value in rules.get("breadthTokens", [])]
-    forbidden_cells = [str(value) for value in rules.get("forbiddenInProfileCells", [])]
-    marker = re.compile(rf"\bin\s+`{re.escape(identifier)}`", re.IGNORECASE)
-    for number, line in enumerate(text.splitlines(), start=1):
-        lowered = line.lower()
-        if marker.search(line):
-            widened = [token for token in breadth_tokens if token in lowered]
-            if widened:
+    rules_value = profile.get("publicClaimRules")
+    if not isinstance(rules_value, dict):
+        return [f"{surface_location}: publicClaimRules must be an object"]
+    rules = rules_value
+    supported_hosts = sorted(REQUIRED_PROFILE_SUPPORTED_HOSTS.get(identifier, set()))
+
+    def host_scope_error(value: str) -> str | None:
+        normalized_value = _normalized_claim_text(value)
+        if not re.search(
+            r"\b(?:windows|win32|linux|ubuntu|macos|mac\s+os|android|ios|"
+            r"headless|nullrhi)\b",
+            normalized_value,
+        ):
+            return None
+        if not any(
+            _contains_claim_phrase(normalized_value, host) for host in supported_hosts
+        ):
+            return "host-scoped profile claim omits the exact supported host"
+        for host in supported_hosts:
+            for match in re.finditer(_claim_phrase_pattern(host), normalized_value):
+                suffix = normalized_value[match.end():match.end() + 32]
+                if re.match(
+                    r"\s*(?:\+(?!\w)|(?:(?:or|and)\s+(?:later|newer|above)|and\s+up)\b)",
+                    suffix,
+                ):
+                    return "host-scoped profile claim widens the exact supported host"
+        if re.search(r"\b(?:arm64|aarch64|x86)\b", normalized_value):
+            return "host-scoped profile claim adds an unsupported architecture"
+        return None
+
+    def string_rule_values(field: str, *, lowercase: bool = False) -> list[str]:
+        value = rules.get(field, [])
+        if not isinstance(value, list):
+            violations.append(f"{surface_location}: {field} must be an array")
+            return []
+        result: list[str] = []
+        for index, member in enumerate(value):
+            if not isinstance(member, str) or not member.strip():
                 violations.append(
-                    f"{surface_location}:{number}: claims {widened} inside the profile"
+                    f"{surface_location}: {field}[{index}] must be a non-empty string"
                 )
-            cells = {value.strip().lower() for value in line.split("|") if value.strip()}
-            vague = sorted(value for value in forbidden_cells if value.lower() in cells)
-            if vague:
+                continue
+            result.append(member.lower() if lowercase else member)
+        return result
+
+    conflated_terms_value = rules.get("conflatedTerms", [])
+    breadth_tokens = string_rule_values("breadthTokens", lowercase=True)
+    forbidden_cells = string_rule_values("forbiddenInProfileCells")
+    forbidden_claims = string_rule_values(
+        "forbiddenUnqualifiedClaims", lowercase=True
+    )
+    if not isinstance(conflated_terms_value, list):
+        violations.append(f"{surface_location}: conflatedTerms must be an array")
+    conflated_terms = (
+        conflated_terms_value if isinstance(conflated_terms_value, list) else []
+    )
+    validated_conflated_terms: list[tuple[str, list[str], str]] = []
+    for entry_index, entry in enumerate(conflated_terms):
+        if not isinstance(entry, dict):
+            violations.append(
+                f"{surface_location}: conflatedTerms[{entry_index}] must be an object"
+            )
+            continue
+        term_value = entry.get("term")
+        term_valid = isinstance(term_value, str) and bool(term_value.strip())
+        if not term_valid:
+            violations.append(
+                f"{surface_location}: conflatedTerms[{entry_index}].term must be a non-empty string"
+            )
+        conflicts_value = entry.get("conflictsWith", [])
+        conflicts_valid = isinstance(conflicts_value, list)
+        if not conflicts_valid:
+            violations.append(
+                f"{surface_location}: conflatedTerms[{entry_index}].conflictsWith must be an array"
+            )
+            conflicts_value = []
+        elif not conflicts_value:
+            violations.append(
+                f"{surface_location}: conflatedTerms[{entry_index}].conflictsWith must not be empty"
+            )
+        valid_conflicts: list[str] = []
+        for conflict_index, conflict in enumerate(conflicts_value):
+            if not isinstance(conflict, str) or not conflict.strip():
+                violations.append(
+                    f"{surface_location}: conflatedTerms[{entry_index}].conflictsWith[{conflict_index}] must be a non-empty string"
+                )
+                continue
+            valid_conflicts.append(conflict)
+        reason_value = entry.get("reason")
+        reason_valid = isinstance(reason_value, str) and bool(reason_value.strip())
+        if not reason_valid:
+            violations.append(
+                f"{surface_location}: conflatedTerms[{entry_index}].reason must be a non-empty string"
+            )
+        if term_valid and reason_valid and valid_conflicts:
+            validated_conflated_terms.append(
+                (term_value, valid_conflicts, reason_value)
+            )
+    escaped_identifier = re.escape(identifier)
+    identifier_pattern = (
+        rf"(?<![A-Za-z0-9_-]){escaped_identifier}(?![A-Za-z0-9_-])"
+    )
+    identifier_profile_pattern = rf"{identifier_pattern}(?:\s+profile)?"
+    marker = re.compile(
+        rf"(?:"
+        rf"\b(?:in|inside|within|part\s+of)\s+(?:the\s+)?{identifier_profile_pattern}"
+        rf"|\b(?:in|within)\s+(?:the\s+)?scope\s+(?:for|of)\s+"
+        rf"{identifier_profile_pattern}"
+        rf"|{identifier_profile_pattern}"
+        rf"(?:\s+profile)?\s+(?:supports|includes?|covers?|certifies?|targets?|allows?|accepts?)\b"
+        rf"|{identifier_profile_pattern}\s+(?:is|remains)\s+"
+        rf"(?:supported|available|certified|targeted)\s+(?:on|for)\b"
+        rf"|{identifier_pattern}(?:['’]s)?\s+(?:supported\s+)?hosts?\s+"
+        rf"(?:includes?|covers?|allows?|accepts?)\b"
+        rf"|{identifier_pattern}\s+(?:supported\s+)?hosts?\s*[:=-]"
+        rf"|{identifier_pattern}\s+support\s+(?:includes?|covers?|allows?|accepts?)\b"
+        rf"|\bsupported\s+hosts?\s*\(\s*{identifier_pattern}\s*\)\s*[:=-]"
+        rf"|\b(?:supported|included|covered|certified|targeted)\s+"
+        rf"(?:by|in|under)\s+(?:the\s+)?{identifier_profile_pattern}"
+        rf")",
+        re.IGNORECASE,
+    )
+    table_predicate = re.compile(
+        r"\b(?:supports?|includes?|covers?|certifies?|targets?|allows?|accepts?|"
+        r"supported|included|covered|certified|targeted|available|target|candidate)\b",
+        re.IGNORECASE,
+    )
+    anaphoric_marker = re.compile(
+        r"\b(?:it|this\s+profile|the\s+profile)\s+(?:also\s+)?"
+        r"(?:supports|includes?|covers?|certifies?|targets?|allows?|accepts?)\b",
+        re.IGNORECASE,
+    )
+
+    def match_is_negated(value: str, match: re.Match[str]) -> bool:
+        prefix = value[max(0, match.start() - 48):match.start()]
+        suffix = value[match.end():match.end() + 48]
+        return bool(
+            re.search(
+                r"\b(?:not(?:\s+(?:currently|yet|presently|now|actually))?|never|"
+                r"no\s+longer|isn['’]?t|aren['’]?t|doesn['’]?t|outside|"
+                r"unsupported|uncertified|experimental|excluding|excluded\s+from)\s+$",
+                prefix,
+            )
+            or re.match(r"\s+(?:none|neither|no\b)", suffix)
+        )
+
+    def positive_scope_clauses(value: str) -> Iterable[str]:
+        normalized_value = _normalized_claim_text(value)
+        clauses = re.split(r"\s*[;!?]\s*|(?<=\.)\s+", normalized_value)
+        carry_profile_subject = False
+        for clause in clauses:
+            clause = clause.strip()
+            if not clause:
+                continue
+            direct = any(
+                not match_is_negated(clause, match) for match in marker.finditer(clause)
+            )
+            carried = carry_profile_subject and any(
+                not match_is_negated(clause, match)
+                for match in anaphoric_marker.finditer(clause)
+            )
+            if direct or carried:
+                yield clause
+            carry_profile_subject = direct
+
+    def table_claims_profile(value: str) -> bool:
+        if not re.search(identifier_pattern, value, flags=re.IGNORECASE):
+            return False
+        if any(positive_scope_clauses(value)):
+            return True
+        negative_profile_relation = re.compile(
+            rf"\b(?:outside|excluded\s+from|not(?:\s+currently)?\s+in)\s+"
+            rf"(?:the\s+)?{identifier_profile_pattern}"
+            rf"|\b(?:unsupported|uncertified|experimental)\s+(?:by|in|under)\s+"
+            rf"(?:the\s+)?{identifier_profile_pattern}",
+            re.IGNORECASE,
+        )
+        if negative_profile_relation.search(value):
+            return False
+        return any(
+            not match_is_negated(value, match)
+            for match in table_predicate.finditer(value)
+        )
+
+    def widened_claims(value: str) -> list[str]:
+        widened: list[str] = []
+        for token in breadth_tokens:
+            for match in re.finditer(_claim_phrase_pattern(token), value):
+                prefix = value[max(0, match.start() - 48):match.start()]
+                suffix = value[match.end():match.end() + 48]
+                if re.search(
+                    r"\b(?:not|never|neither|outside|excluding|excluded|except(?:\s+for)?|"
+                    r"other\s+than|experimental|unsupported|uncertified)\s+$",
+                    prefix,
+                ):
+                    continue
+                if re.match(
+                    r"\s+(?:is|are|remains?)\s+"
+                    r"(?:outside|unsupported|experimental|excluded|uncertified)\b",
+                    suffix,
+                ):
+                    continue
+                widened.append(token)
+                break
+        return sorted(set(widened))
+
+    def validate_scope_value(value: str, number: int) -> None:
+        host_error = host_scope_error(value)
+        if host_error:
+            violations.append(f"{surface_location}:{number}: {host_error}")
+        widened = widened_claims(value)
+        if widened:
+            violations.append(
+                f"{surface_location}:{number}: claims {widened} inside the profile"
+            )
+
+    for number, paragraph in _claim_paragraphs(text):
+        unqualified = _forbidden_claims(paragraph, forbidden_claims)
+        if unqualified:
+            violations.append(
+                f"{surface_location}:{number}: contains forbidden unqualified claim {unqualified}"
+            )
+    for number, unit, table_cells in _claim_units(text):
+        normalized = _normalized_claim_text(unit)
+        normalized_cells = (
+            [_normalized_claim_text(cell) for cell in table_cells]
+            if table_cells is not None
+            else None
+        )
+        if normalized_cells is None:
+            for scope_value in positive_scope_clauses(normalized):
+                validate_scope_value(scope_value, number)
+        else:
+            row_text = normalized
+            if not table_claims_profile(row_text):
+                row_text = ""
+            if row_text:
+                validate_scope_value(row_text, number)
+            cells = set(normalized_cells)
+            vague = sorted(
+                value
+                for value in forbidden_cells
+                if _normalized_claim_text(value) in cells
+            )
+            if row_text and vague:
                 violations.append(
                     f"{surface_location}:{number}: marks unscoped column {vague} as inside the profile"
                 )
-        for entry in rules.get("conflatedTerms", []):
-            term = str(entry.get("term", ""))
-            if not term or term.lower() not in lowered:
+        for term, valid_conflicts, reason in validated_conflated_terms:
+            if not _contains_claim_phrase(normalized, term):
                 continue
             clashes = [
-                str(value)
-                for value in entry.get("conflictsWith", [])
-                if str(value).lower() in lowered
+                value
+                for value in valid_conflicts
+                if _contains_claim_phrase(normalized, value)
+                and not _explicitly_distinguishes(normalized, term, value)
             ]
             if clashes:
                 violations.append(
                     f"{surface_location}:{number}: conflates {term!r} with {clashes}: "
-                    f"{entry.get('reason')}"
+                    f"{reason}"
                 )
     return violations
 
@@ -320,6 +997,33 @@ class Validator:
                     )
             for key in WORK_ITEM_LIST_KEYS:
                 self.require(isinstance(item.get(key), list), location, f"{key} must be an array")
+            commands = item.get("commands", [])
+            if isinstance(commands, list):
+                for index, command in enumerate(commands):
+                    command_location = f"{location}.commands[{index}]"
+                    self.require(
+                        isinstance(command, str) and bool(command.strip()),
+                        command_location,
+                        "command must be a non-empty string",
+                    )
+                    if not isinstance(command, str):
+                        continue
+                    for segment in executable_ctest_segments(command):
+                        invocations = list(_CTEST_COMMAND_TOKEN.finditer(segment))
+                        for invocation_index, invocation in enumerate(invocations):
+                            end = (
+                                invocations[invocation_index + 1].start()
+                                if invocation_index + 1 < len(invocations)
+                                else len(segment)
+                            )
+                            arguments = segment[invocation.end():end]
+                            discovery_only = bool(_CTEST_DISCOVERY_ONLY.search(arguments))
+                            self.require(
+                                discovery_only or bool(_CTEST_FAIL_ON_EMPTY.search(arguments)),
+                                command_location,
+                                "executable CTest commands must include --no-tests=error "
+                                "unless they are --show-only=json-v1 discovery commands",
+                            )
             for dependency in item.get("dependencies", []):
                 self.require(dependency in item_ids, location, f"unknown dependency {dependency}")
                 self.require(dependency != identifier, location, "cannot depend on itself")
@@ -822,41 +1526,182 @@ class Validator:
                         self.require(bool(evidence.get("label")), evidence_location, "label is required")
                         self.require_path(evidence.get("path"), evidence_location)
 
-            for index, path in enumerate(profile.get("documentation", [])):
+            documentation_value = profile.get("documentation", [])
+            self.require(
+                isinstance(documentation_value, list),
+                f"{location}.documentation",
+                "documentation must be an array",
+            )
+            documentation = documentation_value if isinstance(documentation_value, list) else []
+            for index, path in enumerate(documentation):
                 self.require_path(path, f"{location}.documentation[{index}]")
+            documentation_paths = [
+                value for value in documentation if isinstance(value, str) and value
+            ]
+            required_documentation = REQUIRED_PROFILE_DOCUMENTATION_SURFACES.get(identifier)
+            self.require(
+                required_documentation is not None,
+                f"{location}.documentation",
+                "release profile has no independently frozen documentation contract",
+            )
+            if required_documentation is not None:
+                self.require(
+                    set(documentation_paths) == required_documentation,
+                    f"{location}.documentation",
+                    "profile documentation must exactly match the independently required set",
+                )
+            self.require(
+                len(documentation_paths) == len(set(documentation_paths)),
+                f"{location}.documentation",
+                "documentation must not contain duplicates",
+            )
 
             # The supported host set is a declaration, not prose. A host string that
             # smuggles in a breadth token ("Windows 10", "any platform") widens the
             # profile without anyone editing its boundaries.
-            rules = profile.get("publicClaimRules") or {}
-            breadth_tokens = [str(value).lower() for value in rules.get("breadthTokens", [])]
-            forbidden_cells = [str(value) for value in rules.get("forbiddenInProfileCells", [])]
+            rules_value = profile.get("publicClaimRules")
             self.require(
-                REQUIRED_BREADTH_TOKENS.issubset(set(breadth_tokens)),
+                isinstance(rules_value, dict),
+                f"{location}.publicClaimRules",
+                "publicClaimRules must be an object",
+            )
+            rules = rules_value if isinstance(rules_value, dict) else {}
+            breadth_value = rules.get("breadthTokens", [])
+            forbidden_cells_value = rules.get("forbiddenInProfileCells", [])
+            forbidden_claims_value = rules.get("forbiddenUnqualifiedClaims", [])
+            conflated_terms_value = rules.get("conflatedTerms", [])
+            for field, value in (
+                ("breadthTokens", breadth_value),
+                ("forbiddenInProfileCells", forbidden_cells_value),
+                ("forbiddenUnqualifiedClaims", forbidden_claims_value),
+                ("conflatedTerms", conflated_terms_value),
+            ):
+                self.require(
+                    isinstance(value, list),
+                    f"{location}.publicClaimRules.{field}",
+                    f"{field} must be an array",
+                )
+            for field, value in (
+                ("breadthTokens", breadth_value),
+                ("forbiddenInProfileCells", forbidden_cells_value),
+                ("forbiddenUnqualifiedClaims", forbidden_claims_value),
+            ):
+                if not isinstance(value, list):
+                    continue
+                for index, member in enumerate(value):
+                    self.require(
+                        isinstance(member, str) and bool(member.strip()),
+                        f"{location}.publicClaimRules.{field}[{index}]",
+                        "member must be a non-empty string",
+                    )
+            breadth_tokens = [
+                value.lower()
+                for value in breadth_value
+                if isinstance(value, str) and value.strip()
+            ] if isinstance(breadth_value, list) else []
+            forbidden_cells = [
+                value
+                for value in forbidden_cells_value
+                if isinstance(value, str) and value.strip()
+            ] if isinstance(forbidden_cells_value, list) else []
+            forbidden_claims = [
+                value.lower()
+                for value in forbidden_claims_value
+                if isinstance(value, str) and value.strip()
+            ] if isinstance(forbidden_claims_value, list) else []
+            conflated_terms = (
+                conflated_terms_value if isinstance(conflated_terms_value, list) else []
+            )
+            actual_breadth_tokens = set(breadth_tokens)
+            self.require(
+                actual_breadth_tokens == REQUIRED_BREADTH_TOKENS
+                and len(breadth_tokens) == len(actual_breadth_tokens),
                 f"{location}.publicClaimRules.breadthTokens",
-                f"mandatory invariants are missing: {sorted(REQUIRED_BREADTH_TOKENS.difference(breadth_tokens))}",
+                "mandatory invariants are missing or unexpected values were added: "
+                f"missing={sorted(REQUIRED_BREADTH_TOKENS - actual_breadth_tokens)}, "
+                f"unexpected={sorted(actual_breadth_tokens - REQUIRED_BREADTH_TOKENS)}",
             )
+            actual_forbidden_cells = set(forbidden_cells)
             self.require(
-                REQUIRED_FORBIDDEN_PROFILE_CELLS.issubset(set(forbidden_cells)),
+                actual_forbidden_cells == REQUIRED_FORBIDDEN_PROFILE_CELLS
+                and len(forbidden_cells) == len(actual_forbidden_cells),
                 f"{location}.publicClaimRules.forbiddenInProfileCells",
-                "mandatory ambiguous profile cells are missing",
+                "mandatory ambiguous profile cells are missing or unexpected values were added",
             )
-            hosts = profile.get("supportedHosts", [])
+            actual_forbidden_claims = set(forbidden_claims)
+            self.require(
+                actual_forbidden_claims == REQUIRED_FORBIDDEN_UNQUALIFIED_CLAIMS
+                and len(forbidden_claims) == len(actual_forbidden_claims),
+                f"{location}.publicClaimRules.forbiddenUnqualifiedClaims",
+                "mandatory unqualified release/support claims are missing or unexpected values were added",
+            )
+            hosts_value = profile.get("supportedHosts", [])
+            self.require(
+                isinstance(hosts_value, list),
+                f"{location}.supportedHosts",
+                "supportedHosts must be an array",
+            )
+            hosts = hosts_value if isinstance(hosts_value, list) else []
             self.require(bool(hosts), location, "must declare at least one supported host")
+            host_paths = [
+                value for value in hosts if isinstance(value, str) and value.strip()
+            ]
+            required_hosts = REQUIRED_PROFILE_SUPPORTED_HOSTS.get(identifier)
+            self.require(
+                required_hosts is not None,
+                f"{location}.supportedHosts",
+                "release profile has no independently frozen supported-host contract",
+            )
+            if required_hosts is not None:
+                self.require(
+                    set(host_paths) == required_hosts,
+                    f"{location}.supportedHosts",
+                    "supportedHosts must exactly match the independently required host set",
+                )
+            self.require(
+                len(host_paths) == len(set(host_paths)),
+                f"{location}.supportedHosts",
+                "supportedHosts must not contain duplicates",
+            )
             for index, host in enumerate(hosts):
                 host_location = f"{location}.supportedHosts[{index}]"
                 self.require(isinstance(host, str) and host.strip(), host_location, "host must be a non-empty string")
                 widened = [token for token in breadth_tokens if token in str(host).lower()]
                 self.require(not widened, host_location, f"supported host widens the profile: {widened}")
-            for index, entry in enumerate(rules.get("conflatedTerms", [])):
+            for index, entry in enumerate(conflated_terms):
                 term_location = f"{location}.publicClaimRules.conflatedTerms[{index}]"
-                self.require(bool(entry.get("term")), term_location, "term is required")
-                self.require(bool(entry.get("conflictsWith")), term_location, "conflictsWith must not be empty")
-                self.require(bool(entry.get("reason")), term_location, "reason is required")
+                self.require(isinstance(entry, dict), term_location, "entry must be an object")
+                if not isinstance(entry, dict):
+                    continue
+                self.require(
+                    isinstance(entry.get("term"), str) and bool(entry["term"].strip()),
+                    term_location,
+                    "term must be a non-empty string",
+                )
+                conflicts_value = entry.get("conflictsWith", [])
+                self.require(
+                    isinstance(conflicts_value, list),
+                    f"{term_location}.conflictsWith",
+                    "conflictsWith must be an array",
+                )
+                self.require(bool(conflicts_value), term_location, "conflictsWith must not be empty")
+                if isinstance(conflicts_value, list):
+                    for conflict_index, conflict in enumerate(conflicts_value):
+                        self.require(
+                            isinstance(conflict, str) and bool(conflict.strip()),
+                            f"{term_location}.conflictsWith[{conflict_index}]",
+                            "member must be a non-empty string",
+                        )
+                self.require(
+                    isinstance(entry.get("reason"), str) and bool(entry["reason"].strip()),
+                    term_location,
+                    "reason must be a non-empty string",
+                )
             nullrhi_rule = next(
                 (
                     entry
-                    for entry in rules.get("conflatedTerms", [])
+                    for entry in conflated_terms
+                    if isinstance(entry, dict)
                     if str(entry.get("term", "")).lower() == "nullrhi"
                 ),
                 None,
@@ -867,23 +1712,42 @@ class Validator:
                 "mandatory NullRHI distinction is missing",
             )
             if nullrhi_rule is not None:
+                conflicts_value = nullrhi_rule.get("conflictsWith", [])
                 conflicts = {
-                    str(value).lower() for value in nullrhi_rule.get("conflictsWith", [])
-                }
+                    str(value).lower() for value in conflicts_value
+                } if isinstance(conflicts_value, list) else set()
                 self.require(
-                    REQUIRED_NULLRHI_CONFLICTS.issubset(conflicts),
+                    conflicts == REQUIRED_NULLRHI_CONFLICTS
+                    and len(conflicts_value) == len(conflicts),
                     f"{location}.publicClaimRules.conflatedTerms",
-                    "NullRHI must remain distinct from llvmpipe and software rendering",
+                    "NullRHI conflict vocabulary must exactly preserve the independent distinction contract",
                 )
 
             # Public support wording must point back at the profile that owns it, must
             # not mark a broader host or platform as inside it, and must not conflate
             # terms the contract declares distinct.
-            surfaces = profile.get("publicClaimSurfaces", [])
+            surfaces_value = profile.get("publicClaimSurfaces", [])
             self.require(
-                set(surfaces) == REQUIRED_PUBLIC_CLAIM_SURFACES,
+                isinstance(surfaces_value, list),
+                f"{location}.publicClaimSurfaces",
+                "publicClaimSurfaces must be an array",
+            )
+            surfaces = surfaces_value if isinstance(surfaces_value, list) else []
+            surface_paths = [
+                value for value in surfaces if isinstance(value, str) and value
+            ]
+            expected_surfaces = REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES | (
+                required_documentation or set()
+            )
+            self.require(
+                set(surface_paths) == expected_surfaces,
                 location,
-                "publicClaimSurfaces must exactly match the independently required support surfaces",
+                "publicClaimSurfaces must exactly match the independently required support surfaces and profile documentation",
+            )
+            self.require(
+                len(surface_paths) == len(set(surface_paths)),
+                location,
+                "publicClaimSurfaces must not contain duplicates",
             )
             for index, path in enumerate(surfaces):
                 surface_location = f"{location}.publicClaimSurfaces[{index}]"
@@ -893,7 +1757,7 @@ class Validator:
                     continue
                 text = resolved.read_text(encoding="utf-8", errors="replace")
                 self.require(
-                    identifier in text,
+                    contains_release_profile_identifier(identifier, text),
                     surface_location,
                     f"public surface does not reference release profile {identifier!r}",
                 )

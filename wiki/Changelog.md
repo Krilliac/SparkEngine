@@ -4,9 +4,9 @@
 >
 > **Thread Context:** Not applicable — release history
 >
-> **Platform/Backend Scope:** All supported platforms and backends
+> **Platform/Backend Scope:** Source-history coverage; not a release support matrix
 
-The canonical change history is maintained in [`CHANGELOG.md`](https://github.com/Krilliac/SparkEngine/blob/Working/CHANGELOG.md) beside the source. No versioned release has been published yet.
+The canonical change history is maintained in [`CHANGELOG.md`](https://github.com/Krilliac/SparkEngine/blob/Working/CHANGELOG.md) beside the source. No versioned release has been published yet; the `stable-v1` profile remains blocked and uncertified.
 
 - [Read the complete changelog](https://github.com/Krilliac/SparkEngine/blob/Working/CHANGELOG.md)
 - [Release readiness and current status](../docs/readiness/ENGINE_READINESS_HANDOFF.md)

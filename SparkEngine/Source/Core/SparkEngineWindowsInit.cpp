@@ -153,13 +153,13 @@ static void LoadAndInitModules(LPWSTR lpCmdLine)
     if (LoadGameModules(*GetEngineRuntime().moduleManager, lpCmdLine))
     {
         GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
+        const size_t initializedModules = GetEngineRuntime().moduleManager->GetInitializedModuleCount();
 
         auto* primary = GetEngineRuntime().moduleManager->GetPrimaryModule();
         if (primary)
             ApplyRuntimeWindowCaption();
 
-        console.LogSuccess("Loaded " + std::to_string(GetEngineRuntime().moduleManager->GetModuleCount()) +
-                           " module(s)");
+        console.LogSuccess("Loaded " + std::to_string(initializedModules) + " module(s)");
     }
     else if (!g_projectSelectorCandidates.empty() && !g_scenePath.empty())
     {

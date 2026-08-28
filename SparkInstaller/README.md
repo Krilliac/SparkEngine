@@ -69,9 +69,11 @@ install to a new ref.
 
 ## Where it lives
 
-Source lives in-tree at `SparkInstaller/`. It's also released as a tiny
-standalone per-OS binary (~1–3 MB) on every nightly and stable release — that's
-what the "Install (one click)" buttons on the repo README download.
+Source lives in-tree at `SparkInstaller/`. A rolling Windows nightly installer
+may be published for development evaluation; it is not a versioned stable release
+and does not certify `stable-v1`. No versioned stable installer or release has
+been published. Installer size and per-OS distribution remain future release
+concerns outside the blocked `stable-v1` contract.
 
 ## Git bootstrap behaviour
 

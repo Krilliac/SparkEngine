@@ -1,6 +1,6 @@
 # SparkEditor
 
-The SparkEditor is an ImGui-based visual editor with 59 specialized dockable panels for creating and editing game content. It provides a full-featured workspace for [scene editing](../subsystems/Scene-Management.md), material authoring with [Shader Graph](../graphics/Shader-Graph.md), [visual scripting](../subsystems/Visual-Scripting.md) (60 node types), [animation](../subsystems/Animation.md) timelines, [cinematic sequencing](Cinematic-Sequencer.md), AI/dialogue/ability/destruction editors, debugging, profiling, and [collaborative multi-user editing](../subsystems/Collaborative-Editing.md) (HeroEngine-inspired node locking and presence awareness). Features include a command palette (Ctrl+P), full undo/redo, play-mode editing, layout save/load, theming, and a plugin system (built-in + DLL).
+SparkEditor is a required Windows build product and authoring surface in the blocked and uncertified `stable-v1` profile. Its source inventory contains 65 `*Panel.h` classes; registration and default visibility are separate metrics. Rotate/scale gizmo application and complete undo/redo coverage remain open under `EDT-210`. Collaboration, visual scripting, plugin breadth, and non-Windows editor paths remain experimental or outside the profile.
 
 ![SparkEditor default layout](../../docs/screenshots/editor-overview.png)
 
@@ -38,7 +38,7 @@ Weapon editor, spawn points, objectives, explosives, and cover points:
 
 **Platforms:**
 - **Windows:** Win32 + DirectX 11 ImGui backends (primary)
-- **Linux:** SDL2 + OpenGL 3.3 ImGui backends (software rendering via Mesa llvmpipe supported)
+- **Linux:** Experimental SDL2 + OpenGL 3.3 ImGui path; Mesa llvmpipe is an explicitly configured development route, not certified support
 
 `ENABLE_EDITOR=ON`
 
@@ -51,8 +51,8 @@ EditorApplication
   |     |
   |     +-- EditorLayoutManager   (dock positions, panel visibility, layout save/load)
   |     +-- EditorTheme           (color palette, rounding, spacing, font config)
-  |     +-- EditorPanel* panels[] (57 registered panels)
-  |     +-- GizmoSystem           (translate/rotate/scale gizmos via DX11)
+  |     +-- EditorPanel* panels[] (registered panel set)
+  |     +-- GizmoSystem           (transform modes through the platform render path)
   |     +-- UndoRedoManager       (command history stack)
   |     +-- CommandPalette        (Ctrl+P quick-command search)
   |
@@ -67,7 +67,10 @@ EditorApplication
 
 ### EditorApplication
 
-The entry point is `EditorApplication` (`Core/EditorApplication.h`). It owns the Win32 window, DirectX 11 device/context/swap chain, and the ImGui context.
+The entry point is `EditorApplication` (`Core/EditorApplication.h`). On Windows it
+owns the Win32 window and DirectX 11 device/context/swap chain; the experimental
+Linux implementation owns an SDL2 window and OpenGL 3.3 context. Each platform
+path owns its ImGui context and backend bindings.
 
 ```cpp
 struct EditorConfig
@@ -100,9 +103,9 @@ public:
 
 Each frame executes the following steps:
 
-1. `ProcessMessages()` -- Win32 message pump (or SDL on Linux stubs)
+1. `ProcessMessages()` -- Win32 message pump or the Linux SDL2 event loop
 2. `Update(deltaTime)` -- tick all panels, gizmo system, profiler
-3. `Render()` -- ImGui new frame, render all visible panels, ImGui render, DX11 present
+3. `Render()` -- begin the platform ImGui frame, render visible panels, and present through DX11 or swap the SDL/OpenGL window
 
 ## EditorPanel Base Class
 
@@ -148,7 +151,7 @@ protected:
 
 ## Editor Panels
 
-The editor includes 57 subsystem panels:
+The generated inventory below tracks source `*Panel.h` headers rather than a fixed count of registered, visible, or certified subsystem panels.
 
 ### Scene Hierarchy
 
@@ -174,39 +177,11 @@ The editor includes 57 subsystem panels:
 
 ### Gizmos (GizmoSystem)
 
-The `GizmoSystem` (`Gizmos/GizmoSystem.h`) provides industry-standard 3D object manipulation:
-
-```cpp
-enum class GizmoMode
-{
-    TRANSLATE = 0,   // Move objects
-    ROTATE    = 1,   // Rotate objects
-    SCALE     = 2,   // Scale objects
-    UNIVERSAL = 3    // All operations
-};
-
-enum class GizmoSpace
-{
-    WORLD = 0,       // World coordinate space
-    LOCAL = 1        // Local coordinate space
-};
-
-enum class GizmoAxis
-{
-    NONE = 0,
-    X = 1,    Y = 2,    Z = 4,
-    XY = 3,   XZ = 5,   YZ = 6,   XYZ = 7,
-    SCREEN = 8
-};
-```
-
-Features:
-- Axis-constrained and plane-constrained manipulation
-- Grid snapping (`SetSnapToGrid(bool)`, `SetSnapSize(float)`)
-- Rotation snap (`SetRotationSnapAngle(float)` -- default 15 degrees)
-- Adaptive gizmo size based on camera distance
-- Multi-object editing support
-- Undo/redo integration
+The currently wired Scene View runtime path renders and applies a translation
+gizmo for selected `World` entities on Windows, including grid snapping. The
+`GizmoSystem` contains rotate/scale enum and helper surfaces, but their Scene
+View interaction path is incomplete and not release evidence. Gizmo edits also
+do not establish complete editor-wide undo/redo coverage (`EDT-210`).
 
 ### Asset Browser (see [Asset Pipeline](Asset-Pipeline.md))
 
@@ -274,7 +249,7 @@ Full-featured debug console with real-time log streaming, severity filtering, an
 - Orbit, pan, and fly-through camera modes
 - Grid overlay with configurable spacing
 - Multiple render modes (lit, wireframe, unlit, normals)
-- Gizmo rendering for selected entities
+- Translation-gizmo rendering for selected entities (Windows path)
 - Click-to-select entities via raycasting
 
 **Source:** `SparkEditor/Source/Panels/SceneViewPanel.cpp` (404 lines)
@@ -578,7 +553,7 @@ Real-time [AI agent](../subsystems/AI-and-Navigation.md) runtime inspector for p
 - Collision layer painting
 - Auto-tiling rules configuration
 - Zoom and pan viewport
-- Full undo/redo support
+- Panel-local undo/redo commands; this does not establish complete editor-wide coverage
 
 **Source:** `SparkEditor/Source/Panels/TilemapEditorPanel.cpp` (540 lines)
 
@@ -596,7 +571,7 @@ Full game viewport with FPS HUD preview.
 
 ## Collaborative Editing
 
-SparkEditor supports multi-user collaborative editing sessions where multiple editor instances can work on the same scene simultaneously. See [Collaborative Editing](../subsystems/Collaborative-Editing.md) for full documentation.
+SparkEditor contains an experimental multi-user collaboration implementation outside `stable-v1`. See [Collaborative Editing](../subsystems/Collaborative-Editing.md) for development documentation.
 
 Key features:
 - **Peer presence** — see other editors' selections and viewport cameras
@@ -608,7 +583,7 @@ Source: `SparkEditor/Source/Communication/CollaborativeEditSession.h`
 
 ## Undo/Redo System
 
-The `UndoRedoManager` (`UndoRedo/UndoRedoManager.h`) maintains command stacks for full undo/redo support:
+The `UndoRedoManager` (`UndoRedo/UndoRedoManager.h`) maintains command stacks used by participating operations. Complete editor-wide coverage is not implemented or certified (`EDT-210`):
 
 ```cpp
 class UndoRedoManager
@@ -634,7 +609,7 @@ public:
 };
 ```
 
-All editor operations that modify scene state go through `ExecuteCommand()`. Each command implements `EditorCommand::Execute()` and `EditorCommand::Undo()`. Executing a new command clears the redo stack. The `UndoHistoryPanel` provides a visual timeline of the command history.
+Operations that opt into the command path use `ExecuteCommand()` and implement `EditorCommand::Execute()` / `Undo()`. Some scene mutations bypass or incompletely implement that path. Executing a new command clears the redo stack, and `UndoHistoryPanel` exposes the recorded command history.
 
 ## Theme System
 

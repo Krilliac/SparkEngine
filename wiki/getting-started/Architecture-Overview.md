@@ -2,6 +2,11 @@
 
 SparkEngine follows a modular, service-oriented architecture where the engine executable loads game logic as dynamically linked modules (DLLs on Windows, shared libraries on Linux).
 
+> **Release boundary:** The only declared profile is the blocked and uncertified
+> `stable-v1` Windows 11 x64/MSVC v143 + D3D11/Windows NullRHI + C++ module
+> product set. Architecture described beyond that boundary is implementation
+> inventory, not certified support.
+
 ## High-Level Architecture
 
 ```
@@ -32,18 +37,16 @@ SparkEngine follows a modular, service-oriented architecture where the engine ex
 │  • GetSaveSystem()    → SaveSystem*                          │
 │  • GetCoroutineScheduler() → CoroutineScheduler*             │
 │                                                              │
-│  Generic registry:                                           │
-│  • RegisterSystem<T>(ptr) / GetSystem<T>()                   │
-│  • RegisterSubsystem<T>(ptr, DependsOn<...>{}, init, shut)  │
-│  • InitializeAll() / ShutdownAll()                           │
+│  Host-only concrete registry/lifecycle APIs are not exposed  │
+│  through the public IEngineContext module interface.         │
 └─────────────────────────────────────────────────────────────┘
                             │
               ┌─────────────┼─────────────┐
               ▼             ▼             ▼
-     ┌──────────────┐ ┌──────────┐ ┌──────────────┐
-     │ SparkGame.dll│ │Module2.dll│ │ Module3.dll  │
-     │ (IModule)    │ │ (IModule) │ │  (IModule)   │
-     └──────────────┘ └──────────┘ └──────────────┘
+     ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+     │ SparkGame.dll│ │  Addon1.dll  │ │  Addon2.dll  │
+     │ (Game kind)  │ │ (Addon kind) │ │ (Addon kind) │
+     └──────────────┘ └──────────────┘ └──────────────┘
 ```
 
 ## Module System
@@ -71,12 +74,13 @@ public:
 5. `OnUnload()` -- Cleanup before DLL unload
 6. `DestroyModule()` -- Deallocate module instance (DLL export)
 
-Multiple modules can be loaded simultaneously and are initialized in load-order (lower `ModuleInfo::loadOrder` values first, default is 1000). Shutdown happens in reverse order.
+A process may load exactly one `ModuleKind::Game` module plus compatible `ModuleKind::Addon` modules. The manager hard-refuses a second Game-kind module; addons may coexist with the active game and with one another. Loaded modules are initialized in load-order (lower `ModuleInfo::loadOrder` values first, default is 1000), and shutdown happens in reverse order.
 
 **Module discovery** (in order of priority):
 1. Command-line argument: `-game <path>`
-2. `spark.modules.json` manifest next to the executable
-3. Directory scan for `*Game*.dll` or `*Module*.dll`
+2. Explicit manifest: `-manifest <path>`
+3. `spark.modules.json` manifest next to the executable
+4. Platform-specific bare-launch candidate discovery/directory scan
 
 See [Creating a Game Module](Creating-a-Game-Module.md) for a step-by-step guide.
 
@@ -132,7 +136,11 @@ template <typename T> TypeId GetTypeId()
 }
 ```
 
-#### Generic System Registry
+#### Host-Only Generic System Registry
+
+The following APIs belong to the concrete engine-owned `EngineContext`; they
+are not members of the public `Spark::IEngineContext` passed to game modules.
+Engine startup code uses them to assemble named services internally.
 
 ```cpp
 // Register any subsystem by type (non-owning pointer)
@@ -142,12 +150,17 @@ template <typename T> void RegisterSystem(T* system);
 template <typename T> T* GetSystem() const;
 ```
 
-This allows game modules to register and retrieve custom subsystems beyond the named getters:
+Concrete host bootstrap code can register and retrieve services beyond the
+named public getters:
 
 ```cpp
-context->RegisterSystem<MyCustomManager>(&myManager);
-auto* mgr = context->GetSystem<MyCustomManager>();
+engineContext.RegisterSystem<MyCustomManager>(&myManager);
+auto* mgr = engineContext.GetSystem<MyCustomManager>();
 ```
+
+Game modules must use the named `IEngineContext` getters, their own owned state,
+or an explicit public addon/event interface; they cannot downcast the public
+context and depend on this private host registry.
 
 #### Dependency-Aware Subsystem Registration
 
@@ -174,13 +187,13 @@ Usage:
 // Register with dependencies
 ctx->RegisterSubsystem<AudioEngine>(&audio,
     DependsOn<Timer, Spark::EventBus>{},
-    []{ return audio.Initialize(); },
-    []{ audio.Shutdown(); });
+    [&audio]{ return audio.Initialize(); },
+    [&audio]{ audio.Shutdown(); });
 
 ctx->RegisterSubsystem<PhysicsSystem>(&physics,
     DependsOn<Timer>{},
-    []{ return physics.Initialize(); },
-    []{ physics.Shutdown(); });
+    [&physics]{ return physics.Initialize(); },
+    [&physics]{ physics.Shutdown(); });
 
 // Initialize all in topological (dependency) order
 ctx->InitializeAll();
@@ -191,7 +204,10 @@ ctx->ShutdownAll();
 
 `InitializeAll()` performs a topological sort of subsystem entries based on declared dependencies. It returns `false` if a dependency cycle is detected or any subsystem fails to initialize.
 
-#### EngineContext API Summary
+#### Concrete EngineContext API Summary
+
+This table describes host-internal construction and teardown, not the public
+module-facing `IEngineContext` contract.
 
 | Method | Description |
 |--------|-------------|
@@ -213,9 +229,9 @@ ctx->ShutdownAll();
 │   RENDERING      │    PHYSICS       │      AUDIO       │
 │                  │                  │                  │
 │ GraphicsEngine   │ PhysicsSystem    │ AudioEngine      │
-│ RHI (DX11,      │ Jolt Physics     │ XAudio2 / mini   │
+│ RHI (DX11,      │ Jolt Physics     │ XAudio2/OpenAL/  │
 │   Vulkan, GL)   │ Collision        │ 3D Spatial       │
-│ PBR Materials   │ Raycasting       │ Object Pool      │
+│ PBR Materials   │ Raycasting       │ Null audio       │
 │ Post-Processing │ Rigid Bodies     │ Doppler          │
 ├──────────────────┼──────────────────┼──────────────────┤
 │   SCRIPTING      │    INPUT & UI    │    CORE & ECS    │
@@ -245,9 +261,9 @@ ctx->ShutdownAll();
 
 | Subsystem | Key Class | Description |
 |-----------|-----------|-------------|
-| **Rendering** | `GraphicsEngine` | DX11 primary, Vulkan/GL stubs; PBR materials, shadow maps, post-processing pipeline |
+| **Rendering** | `GraphicsEngine` | DX11 primary implementation; Vulkan and OpenGL have substantive experimental RHI device/resource implementations; PBR materials, shadow maps, post-processing pipeline |
 | **Physics** | `PhysicsSystem` | Jolt Physics wrapper; rigid bodies, collision detection, raycasting, trigger volumes |
-| **Audio** | `AudioEngine` | XAudio2 on Windows, miniaudio fallback; 3D spatial audio, object pool, Doppler |
+| **Audio** | `AudioEngine` | Concrete service returned by `IEngineContext::GetAudio()`; the separate `IAudioBackend` factory selects XAudio2/OpenAL/Null implementations for host wiring |
 | **ECS** | `World`, `SystemManager` | EnTT-backed entity registry; POD components, ordered system execution |
 | **Scene** | `SceneManager` | JSON scene files, hierarchy management, prefabs, async loading |
 | **Events** | `EventBus` | Type-safe pub/sub with 24+ built-in event types, queued dispatch |
@@ -288,7 +304,11 @@ Frame Start
          └── UI / HUD overlay
 ```
 
-Components are pure POD structs (state only, no behavior). Systems query and mutate components each frame. Systems communicate indirectly through shared components, never by calling each other directly.
+Components are EnTT-attached, data-oriented structs. Some own standard-library
+containers or expose validation/transform/tag helpers, so the inventory is not
+uniformly POD or behavior-free. Systems query and mutate component state each
+frame; cross-system interaction commonly flows through shared components and
+events.
 
 ## Project Structure
 
@@ -296,7 +316,7 @@ Components are pure POD structs (state only, no behavior). Systems query and mut
 SparkEngine/
 ├── SparkEngine/              # Main engine executable + core library
 │   └── Source/
-│       ├── Audio/            # XAudio2 3D audio engine
+│       ├── Audio/            # XAudio2, OpenAL, and Null backend implementations
 │       ├── Camera/           # First-person camera controller
 │       ├── Console/          # Debug console integration
 │       ├── Core/             # Entry point, Platform.h, EngineContext.h
@@ -343,19 +363,20 @@ SparkEngine/
 │       ├── Physics/          # Jolt Physics integration
 │       ├── SceneManager/     # Scene hierarchy, serialization
 │       └── Utils/            # Logging, profiler, crash handler, JobSystem
-├── SparkEditor/              # ImGui-based visual editor (Windows only)
-├── GameModules/              # Game modules
-│   ├── SparkGame/            # Default game module (DLL)
-│   └── SparkGameMMO/         # MMO game module (DLL)
+├── SparkEditor/              # Windows 11 x64 stable-v1 target; experimental Linux SDL2/OpenGL path
+├── GameModules/              # 11 in-tree module directories
+│   ├── SparkGameFPS/         # Blocked stable-v1 candidate
+│   ├── SparkGameMMO/         # Outside-profile prototype surface
+│   └── ...                   # Nine additional prototype/template/showcase modules
 ├── SparkConsole/             # Standalone debug console
 ├── SparkShaderCompiler/      # Offline shader compilation tool
 ├── SparkBuild/               # Terminal-UI CMake configurator (C++17, in-tree)
 ├── SparkSDK/                 # Public SDK headers for module development
 ├── Templates/                # Game module templates (EmptyProject)
-├── ThirdParty/               # Git submodules (15 libraries)
+├── ThirdParty/               # Audited dependencies: six submodules plus vendored snapshots
 ├── Assets/                   # Models, Scenes, Scripts
 ├── Shaders/                  # HLSL, GLSL, Compiled bytecode
-├── Tests/                    # 244 test files, 3,119 test cases
+├── Tests/                    # Test-bearing sources and internal test framework
 ├── Tools/                    # CLI tools (spark-cli)
 ├── docs/                     # API docs, gap analysis, roadmap
 ├── wiki/                     # Wiki documentation pages
@@ -393,7 +414,9 @@ SparkEngine/
 
 ## Build System
 
-CMake-based with 30+ toggleable feature flags. See [Build System and CMake Modules](../advanced/Build-System-and-CMake-Modules.md) for details.
+CMake-based with declared build options, including several compatibility cache
+variables that are not source-selection switches. See [Build System and CMake
+Modules](../advanced/Build-System-and-CMake-Modules.md) for the source-backed set.
 
 Key build targets:
 
@@ -402,51 +425,56 @@ Key build targets:
 | `SparkEngineLib` | Static library | All engine subsystems |
 | `SparkEngine` | Executable | Runtime host |
 | `SparkGame` | Shared library | Default game module |
-| `SparkEditor` | Executable | ImGui editor (Windows) |
+| `SparkEditor` | Executable | Windows 11 x64 stable-v1 target; experimental Linux SDL2/OpenGL path |
 | `SparkTests` | Executable | Unit test runner |
 
 ## Dependencies
 
-| Library | Version | Purpose |
-|---------|---------|---------|
-| EnTT | 3.x | Entity Component System |
-| Jolt Physics | 5.x | Physics simulation |
-| Dear ImGui | Docking branch | Editor UI |
-| AngelScript | 2.x | Gameplay scripting |
-| Assimp | 5.x | 3D model import (FBX, glTF, OBJ) |
-| GLM | 0.9+ | Math library |
-| RapidJSON | 1.1+ | JSON parsing |
-| spdlog | 1.x | Structured logging |
-| stb | -- | Image loading (stb_image) |
-| miniaudio | 0.11+ | Cross-platform audio fallback |
-| DirectXTK | -- | DirectX 11 toolkit (Windows) |
-| ImGuizmo | -- | 3D editor gizmos |
-| imnodes | -- | Node graph editor |
-| miniz | -- | Compression (save system) |
-| tinyobjloader | -- | OBJ file loading |
+`ThirdParty/dependencies.lock` is the authoritative audited dependency
+manifest. The selected linked or compiled surfaces below are implementation
+inventory, not support certification.
+
+| Library | Purpose |
+|---------|---------|
+| EnTT | Entity Component System |
+| Jolt Physics | Physics simulation |
+| Dear ImGui, ImGuizmo, imnodes | Editor and node/gizmo UI |
+| AngelScript | Gameplay scripting |
+| SDL2 | Experimental non-Windows window/input path |
+| Recast/Detour | Navigation backend |
+| miniz and zstd | Compression paths |
+| stb_image, cgltf, tinyobjloader, tinyexr | Image/model import paths |
+| nlohmann/json | JSON parsing when available |
+| VulkanMemoryAllocator and glad | Experimental Vulkan/OpenGL backend support |
+| miniaudio | Linked implementation surface; not the active audio-factory fallback |
 
 ---
 
 ## Codebase Scale
 
-SparkEngine is a substantial codebase with ~371,500 lines of original C++ code across 2,233 source files. For detailed metrics, see [Codebase Statistics](../advanced/Codebase-Statistics.md).
+The deterministic source inventory produced by
+`python docs/codebase-metrics.py --shell` currently reports:
 
-| Section | Lines | Files |
-|---------|------:|------:|
-| SparkEngine/Source | 203,317 | ~1,100 |
-| SparkEditor/Source | 72,945 | ~250 |
-| GameModules | 50,630 | ~200 |
-| Tests | 41,279 | 160 |
-| Tools (Console + ShaderCompiler) | 2,326 | ~20 |
+| Inventory metric | Value |
+|---|---:|
+| Total source lines (`TOTAL_LINES`) | 760,331 |
+| Scanned source files (`FILE_COUNT`) | 2,583 |
+| Engine lines (`ENGINE_LINES`) | 311,582 |
+| Editor lines (`EDITOR_LINES`) | 109,363 |
+| Game/template lines (`GAME_LINES`) | 143,040 |
+| Test-source lines (`TEST_LINES`) | 169,319 |
+| Tool-source lines (`TOOL_LINES`) | 13,450 |
 
-The largest subsystem is Graphics at 83,986 lines (41% of engine source), followed by the Engine subsystem collection at 60,445 lines covering AI, Networking, ECS, Animation, and 20+ other subsystems.
+These are checkout source-inventory metrics, not claims of build success, test
+execution, platform support, or release readiness. For detailed metrics, see
+[Codebase Statistics](../advanced/Codebase-Statistics.md).
 
 ## See Also
 
 - [Entity Component System](../subsystems/Entity-Component-System.md) -- ECS architecture using EnTT
 - [Rendering and Graphics](../subsystems/Rendering-and-Graphics.md) -- Render pipelines, PBR materials, post-processing
 - [Physics](../subsystems/Physics.md) -- Jolt Physics integration
-- [Audio](../subsystems/Audio.md) -- XAudio2 / miniaudio audio engine
+- [Audio](../subsystems/Audio.md) -- concrete `AudioEngine` service and the separate XAudio2/OpenAL/Null backend factory
 - [AI and Navigation](../subsystems/AI-and-Navigation.md) -- Behavior trees, NavMesh, perception
 - [Animation](../subsystems/Animation.md) -- Skeletal animation, IK, state machines
 - [Networking](../subsystems/Networking.md) -- UDP multiplayer and replication

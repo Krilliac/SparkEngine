@@ -93,7 +93,7 @@
       "id": "RDY-010",
       "title": "Make real module and production-source tests the readiness evidence",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 0,
       "area": "tests",
@@ -113,12 +113,15 @@
         "Tests/TestModuleDiscovery.cpp",
         "Tests/TestTemplatesCompile.cpp",
         "Tests/TestFPSMultiplayer.cpp",
+        "SparkEngine/Source/Core/SparkEngineWindows.cpp",
+        "cmake/RunSparkModuleProfileLifecycle.cmake",
         "GameModules"
       ],
       "entryPoints": [
         "Tests/CMakeLists.txt",
         "Tests/TestModuleDiscovery.cpp",
-        "SparkEngine/Source/Core/ModuleManager.cpp"
+        "SparkEngine/Source/Core/ModuleManager.cpp",
+        "cmake/RunSparkModuleProfileLifecycle.cmake"
       ],
       "implementationScope": [
         "Build every module included by a declared release profile from its real source and shared library",
@@ -136,7 +139,8 @@
       "commands": [
         "cmake --preset windows-shipping -DBUILD_GAME_MODULES=ON -DENABLE_EDITOR=ON -DBUILD_TESTS=ON",
         "cmake --build --preset windows-shipping --config MinSizeRel --parallel 2",
-        "ctest --test-dir build/windows-shipping -L module-profile --output-on-failure",
+        "ctest --test-dir build/windows-shipping -C MinSizeRel -R ^ModuleProfileLifecycle_SparkGameFPS_D3D11$ --output-on-failure --no-tests=error",
+        "ctest --test-dir build/windows-shipping -C MinSizeRel -L module-profile --output-on-failure --no-tests=error",
         "Tools/check-test-registration.sh"
       ],
       "testSelectors": [
@@ -145,6 +149,7 @@
         "ProfilePackageModule_*"
       ],
       "requiredCiJobs": [
+        "build-windows-vs2022",
         "build-windows-shipping",
         "module-profile-package-smoke"
       ],
@@ -223,7 +228,7 @@
       ],
       "commands": [
         "python3 tools/site-data/validate.py --assets",
-        "ctest --test-dir build/windows-shipping -L profile-package --output-on-failure"
+        "ctest --test-dir build/windows-shipping -L profile-package --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "AssetManifest_*",
@@ -397,8 +402,8 @@
       ],
       "commands": [
         "ctest --test-dir build/linux-shipping --show-only=json-v1",
-        "ctest --test-dir build/linux-shipping -L unit --output-on-failure",
-        "ctest --test-dir build/linux-shipping -L integration --output-on-failure",
+        "ctest --test-dir build/linux-shipping -L unit --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-shipping -L integration --output-on-failure --no-tests=error",
         "SparkTests --warn-is-error --shuffle 123 --junit-xml test-results.xml"
       ],
       "testSelectors": [

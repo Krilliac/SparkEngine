@@ -124,7 +124,7 @@
         "src": "/images/headless-server.png",
         "eyebrow": "Headless runtime",
         "title": "Authority without a GPU",
-        "copy": "A repository capture of NullRHI-backed headless execution for dedicated-server and automation paths."
+        "copy": "A repository capture of headless host execution; explicit Windows NullRHI wiring and its automation evidence remain open."
       },
       {
         "src": "/images/spark-console.png",
@@ -367,7 +367,7 @@
             "tag": "Primary candidate",
             "level": 0,
             "strengths": [
-              "D3D11 carries the deepest production-renderer implementation."
+              "D3D11 carries the deepest renderer implementation."
             ],
             "boundaries": [
               "Golden-scene coverage, performance budgets, packaging, and current release evidence still gate readiness."
@@ -380,16 +380,16 @@
           {
             "value": "nullrhi",
             "label": "Headless / NullRHI",
-            "note": "Purpose-built for no-render servers and automation.",
-            "tag": "Supported candidate",
+            "note": "A blocked in-profile no-render candidate on Windows 11 x64.",
+            "tag": "Blocked candidate",
             "level": 1,
             "strengths": [
-              "NullRHI provides a real no-GPU device path."
+              "The NullRHI implementation provides a no-GPU device path."
             ],
             "boundaries": [
-              "Soak, load, shutdown, crash, and packaged-server gates remain required."
+              "Explicit Windows headless-host wiring, automation evidence, and packaging gates remain required."
             ],
-            "nextMove": "Run the packaged dedicated-server soak and load suite.",
+            "nextMove": "Wire NullRHI into the Windows headless host and run the required no-render automation lane.",
             "capabilityIds": [
               "runtime.nullrhi"
             ]

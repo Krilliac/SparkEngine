@@ -1,6 +1,17 @@
 # Scripting with AngelScript
 
-SparkEngine integrates **AngelScript** as its primary gameplay scripting language, supporting hot-reload, entity binding, [visual scripting](Visual-Scripting.md) (60 node types that compile to AngelScript), and full engine API access. **Lua** is also supported as an alternative scripting engine via `LuaScriptEngine`. A [mod system](Mod-System.md) enables user-created content.
+> **Stable-v1 boundary:** `stable-v1` is blocked and uncertified, with its
+> declared product shape limited to Windows 11 x64, MSVC v143, D3D11 or the
+> no-render Windows NullRHI path, and C++ game modules. AngelScript and visual
+> scripting tooling are experimental and outside that profile, not certified
+> gameplay-runtime support.
+
+SparkEngine contains an optional **AngelScript** integration for development,
+including VM, binding, hot-reload, and visual-scripting generation surfaces.
+Those surfaces remain experimental and incomplete. There is no `LuaScriptEngine`
+or Lua runtime implementation in the engine source; generic `.lua` asset labels
+do not provide Lua execution support. A [mod system](Mod-System.md) enables
+user-created content.
 
 **Source:** `SparkEngine/Source/Engine/Scripting/`
 
@@ -85,7 +96,9 @@ class EnemyBehavior
 
 - Every script class must be declared at the top level of the `.as` file.
 - Method names are case-sensitive and must match the lifecycle signatures exactly.
-- Member variables are instance-scoped. They are preserved between `Update()` calls and survive hot-reload when possible.
+- Member variables are instance-scoped and persist between ordinary `Update()`
+  calls. Hot reload does not preserve per-instance script state; constructors
+  run again for recreated instances.
 - Scripts can define additional methods beyond the lifecycle callbacks; they are callable from other scripts or from C++ via the AngelScript context API.
 
 ## Lifecycle Callbacks
@@ -508,7 +521,9 @@ Modules are stored in `m_modules: std::unordered_map<std::string, asIScriptModul
 - **Method caching**: `Start()`, `Update()`, and `OnCollision()` function pointers are cached at attach time. This avoids the cost of name-based lookup on every frame.
 - **Context reuse**: Each `ScriptInstance` holds a dedicated `asIScriptContext`. Contexts are created once and reused across calls.
 - **Hot-reload debounce**: The default 300ms debounce prevents rapid recompilation while the user is still typing/saving.
-- **Visual script compilation**: Compiling a visual script graph to AngelScript is a one-time operation; the resulting AngelScript module runs at the same speed as hand-written scripts.
+- **Visual script compilation**: Visual graphs target the same AngelScript
+  runtime as hand-written scripts. No generated-code performance-parity
+  benchmark or stable-v1 certification exists.
 
 ## Thread Safety
 

@@ -1,8 +1,13 @@
 # RHI Abstraction Layer
 
+> **Release boundary:** D3D11 and the no-render NullRHI path are declared in
+> `stable-v1` only on Windows 11 x64, and that profile remains blocked and
+> uncertified. D3D12, Vulkan, OpenGL, Metal, and NullRHI on other hosts are
+> experimental or uncertified implementation paths outside the profile.
+
 ## Overview
 
-The **Rendering Hardware Interface (RHI)** is SparkEngine's backend-agnostic graphics abstraction layer. It decouples all rendering code from any specific graphics API, allowing the engine to target DirectX 11, DirectX 12, Vulkan, OpenGL, and Metal through a single set of abstract interfaces. Application-level rendering code interacts exclusively with the RHI; the concrete backend is selected at runtime via the `RHIFactory`.
+The **Rendering Hardware Interface (RHI)** provides backend-neutral interfaces used by backend-aware rendering paths. The primary Windows renderer still contains substantial native D3D11 integration, so the RHI does not yet decouple all rendering code and cross-backend parity is incomplete. `RHIFactory` selects among the implementations compiled into a build.
 
 The RHI lives under `SparkEngine/Source/Graphics/RHI/` and is consumed by the higher-level `GraphicsEngine`, `RenderPipeline`, and `RenderGraph` systems. A single master include (`RHI.h`) pulls in the entire abstraction:
 
@@ -12,7 +17,7 @@ The RHI lives under `SparkEngine/Source/Graphics/RHI/` and is consumed by the hi
 
 ### Design goals
 
-- **Backend transparency** -- rendering code never references D3D11, Vulkan, or OpenGL types directly.
+- **Backend-transparency goal** -- RHI-aware paths avoid native backend types; the current Windows renderer still has direct D3D11 integration.
 - **Runtime backend selection** -- the `GraphicsBackend` enum and `RHIFactory` allow switching APIs without recompilation.
 - **Minimal overhead** -- thin virtual interface; backend implementations map directly to native API calls.
 - **Resource safety** -- RAII lifetime management; the `RHIAdapter` tracks all created resources and destroys them on shutdown.
@@ -36,8 +41,8 @@ The RHI is organised into several layers, each with a distinct responsibility:
         v
   RHIFactory                    <-- Backend detection & device creation
         |
-        +---> D3D11Device       (Windows, production)
-        +---> D3D12Device       (Windows 10+, production)
+        +---> D3D11Device       (Windows implementation; profile target only on Windows 11 x64, blocked/uncertified)
+        +---> D3D12Device       (Windows 10+; experimental/outside stable-v1)
         +---> VulkanDevice      (Windows/Linux/macOS via MoltenVK, experimental)
         +---> GLDevice          (Windows/Linux, experimental)
         +---> MetalDevice       (macOS, experimental)
@@ -76,35 +81,50 @@ auto device = Spark::RHI::CreateDevice(Spark::RHI::GraphicsBackend::Vulkan);
 | Function | Description |
 |----------|-------------|
 | `CreateDevice(backend)` | Create an `IRHIDevice` for the given backend. `Auto` picks the recommended one. Returns `nullptr` if unavailable. |
-| `DetectAvailableBackends()` | Returns a `std::vector<GraphicsBackend>` of all backends compiled in and available at runtime. |
-| `GetRecommendedBackend()` | Returns the platform's preferred backend (D3D11 on Windows, Vulkan on Linux). |
-| `IsBackendAvailable(backend)` | Checks whether a specific backend can be created. |
+| `DetectAvailableBackends()` | Enumerates backends included by the current platform and compile-time defines; it does not probe the runtime or initialize a device. |
+| `GetRecommendedBackend()` | Applies the environment/gVisor rules and compile-time list, then prefers D3D11 on Windows, Metal on Apple hosts, or Vulkan elsewhere. |
+| `IsBackendAvailable(backend)` | Checks membership in the compile-time backend list; it does not prove that device initialization will succeed. |
 | `GetBackendName(backend)` | Returns a human-readable string (e.g. `"DirectX 11"`, `"Vulkan"`). |
 
 ### Compile-time backend availability
 
 Backend inclusion is controlled by preprocessor defines and platform detection:
 
-- **D3D11 / D3D12** -- available when `_WIN32` is defined (always on Windows builds).
+- **D3D11** -- included when `_WIN32` is defined.
+- **D3D12** -- included when `_WIN32` is defined and `SPARK_NO_D3D12` is not defined (the MinGW path defines it).
 - **Vulkan** -- available when `SPARK_VULKAN_SUPPORT` is defined at CMake configure time.
 - **OpenGL** -- available when `SPARK_OPENGL_SUPPORT` is defined at CMake configure time.
-- **Metal** -- defined in the `GraphicsBackend` enum but requires the Metal backend subdirectory (macOS experimental).
-- **None (NullRHIDevice)** -- always available. Automatic fallback when no GPU backend can be created. Used for headless servers, CI pipelines, and GPU-less environments.
+- **Metal** -- Objective-C++ implementation compiled under `SPARK_METAL_SUPPORT` on macOS; experimental and outside `stable-v1`.
+- **None (NullRHIDevice)** -- always-compiled no-render device implementation. The factory selects it for an explicit `None`, the recognized null/headless environment override, gVisor, or an empty compile-time backend list. It is in `stable-v1` only on Windows 11 x64; other hosts are uncertified.
 
 ---
 
 ## Backend Selection Logic
 
-When `GraphicsBackend::Auto` is passed to `CreateDevice()`, the factory calls `GetRecommendedBackend()` which applies the following priority:
+When `GraphicsBackend::Auto` is passed to `CreateDevice()`, the factory calls `GetRecommendedBackend()` in this order:
 
-1. **Windows**: D3D11 (stable, fully featured).
-2. **Linux**: Vulkan (if `SPARK_VULKAN_SUPPORT` is enabled), then OpenGL.
-3. **Fallback**: the first backend returned by `DetectAvailableBackends()`.
-4. **No backend**: returns `GraphicsBackend::None` and the factory creates a `NullRHIDevice` -- a no-op backend that implements the full `IRHIDevice` interface without GPU interaction.
+1. Honor a recognized `SPARK_RHI_BACKEND` override when that backend is in the compile-time list; `null`, `none`, and `headless` select `None` directly.
+2. Select `None` under gVisor.
+3. Select `None` when the compile-time backend list is empty.
+4. Prefer D3D11 on Windows, Metal on Apple hosts, or Vulkan on other hosts when the preferred backend is compiled in.
+5. Otherwise select the first compile-time backend in the list.
 
-### Automatic Fallback to NullRHIDevice
+The bare `RHIFactory::CreateDevice()` call performs selection and construction
+only; it does not initialize the device or retry another backend. The higher-level
+`RHIBridge::Initialize()` adds runtime failover: it orders the compiled/available
+GPU candidates with the requested backend first, tries device initialization and
+swap-chain creation for each, and continues after either failure. If every GPU
+candidate fails, the bridge creates `NullRHIDevice` and enters headless mode.
+That resilience mechanism is not release certification for the fallback backend
+or host.
 
-When `GraphicsBackend::None` is resolved (no GPU backends compiled or available), `RHIFactory::CreateDevice()` returns a `NullRHIDevice` instead of `nullptr`. `RHIBridge::Initialize()` detects this and enters **headless mode**, skipping swap chain and depth buffer creation:
+### NullRHIDevice Selection and Bridge Failover
+
+When `GraphicsBackend::None` is selected, `RHIFactory::CreateDevice()` returns a
+`NullRHIDevice` instead of `nullptr`. `RHIBridge::Initialize()` also reaches the
+same device when its window handle forces the no-render path or every GPU
+candidate fails. The bridge then enters **headless mode**, skipping swap-chain
+and depth-buffer creation:
 
 ```cpp
 // RHIBridge automatically enters headless mode when NullRHIDevice is active
@@ -112,7 +132,7 @@ RHIBridge bridge;
 bridge.Initialize(nullptr, 800, 600, GraphicsBackend::Auto);
 if (bridge.IsHeadless()) {
     // No swap chain, no depth buffer, but device is valid
-    // ECS, physics, AI, audio, networking all work normally
+    // No rendering occurs. Each non-render subsystem still needs its own host wiring and evidence.
 }
 ```
 
@@ -128,7 +148,7 @@ Xvfb :99 -screen 0 1024x768x24 &
 DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./SparkEngine
 ```
 
-The OpenGL backend creates a GLX PBuffer context on Linux and uses FBO-backed swap chains for off-screen rendering. All buffer, texture, shader, and pipeline creation works identically to GPU-accelerated rendering.
+The OpenGL backend contains a Linux GLX PBuffer and FBO-backed off-screen path. llvmpipe is an explicitly configured development route; it does not establish identical behavior or release parity with a GPU-backed path.
 
 ---
 
@@ -317,7 +337,7 @@ Higher-level systems (e.g. the render pipeline, post-processing stack) query the
 | `CrossCompileHLSLtoGLSL()` | Basic HLSL-to-GLSL keyword translation (for simple shaders; complex shaders need SPIRV-Cross). |
 | `CrossCompileHLSLtoSPIRV()` | HLSL-to-SPIR-V via DXC (requires `dxcompiler.dll` integration). |
 | `CompileGLSLtoSPIRV()` | GLSL-to-SPIR-V via glslang (requires glslang library integration). |
-| `ReflectSPIRV()` | Extract binding and input attribute information from SPIR-V bytecode. |
+| `ReflectSPIRV()` | Placeholder validation: checks the SPIR-V header and currently returns empty reflection because SPIRV-Reflect is not integrated. |
 | `LoadPrecompiledShader()` / `SaveCompiledShader()` | Load/save pre-compiled shader bytecode to disk. |
 
 The `ShaderCache` class (in `RHIBridge.h`) manages shader variants per backend, loading the correct HLSL, GLSL, or SPIR-V file depending on the active `GraphicsBackend`.
@@ -387,12 +407,12 @@ The `RenderGraphBuilder` integrates with the RHI through `RHIAdapter`, so all GP
 
 | Backend | Platform | Status | Compile Define | Notes |
 |---------|----------|--------|----------------|-------|
-| **DirectX 11** | Windows | Production | `_WIN32` (automatic) | Primary backend. Fully featured. Always available on Windows builds. |
-| **DirectX 12** | Windows 10+ | Production | `_WIN32` (automatic) | Supports advanced features (mesh shaders, ray tracing, VRS). See [D3D12 Backend](D3D12-Backend.md). |
+| **DirectX 11** | Windows 11 x64 | `stable-v1` target — blocked/uncertified | `_WIN32` (automatic) | Primary implementation path; other Windows rows are development-only and certification gates remain open. |
+| **DirectX 12** | Windows development builds | Experimental / outside `stable-v1` | `_WIN32` and not `SPARK_NO_D3D12` | Advanced implementation path (mesh shaders, ray tracing, VRS). See [D3D12 Backend](D3D12-Backend.md). |
 | **Vulkan** | Windows, Linux, macOS (MoltenVK) | Experimental | `SPARK_VULKAN_SUPPORT` | Cross-platform. Requires Vulkan SDK at build time. |
-| **OpenGL** | Windows, Linux | Experimental | `SPARK_OPENGL_SUPPORT` | GL 4.6 Core Profile, DSA, SPIR-V support. CPU software rendering via Mesa llvmpipe. HLSL-to-GLSL translation. |
-| **Metal** | macOS | Experimental | N/A (planned) | Enum value exists; backend subdirectory is stubbed. |
-| **None (Null)** | All | Production | Always available | `NullRHIDevice` -- no-op backend for headless servers, CI, and GPU-less environments. Tracks resource creation statistics. |
+| **OpenGL** | Windows, Linux, macOS development builds | Experimental | `SPARK_OPENGL_SUPPORT` | GL implementation path; CPU software rendering via Mesa llvmpipe requires explicit host configuration. |
+| **Metal** | macOS | Experimental / outside `stable-v1` | `SPARK_METAL_SUPPORT` | Objective-C++ device, ray-tracing, interop, and readback implementations exist; no release certification. |
+| **None (Null)** | Host-dependent | No-render implementation; in-profile only on Windows 11 x64 | Always available | `NullRHIDevice` rasterizes nothing. Other-host use is uncertified. |
 
 ---
 
@@ -414,10 +434,10 @@ The Vulkan backend now exposes an explicit parity milestone snapshot in `VulkanD
 
 ### Explicitly unsupported / not-yet-parity-complete features
 
-Until full Vulkan parity is completed, the following remain explicitly unsupported or incomplete versus the mature D3D11 path:
+Until full Vulkan parity is completed, the following remain explicitly unsupported or incomplete versus the primary D3D11 implementation:
 
-1. Full GPU-backed golden-scene readback parity (current canonical route is deterministic and backend-owned, but not yet a full swapchain readback of the production renderer in CI).
-2. End-to-end Vulkan pass execution validation for every production shadow/deferred/post variant (current milestone verifies route wiring and deterministic reference output, not full feature-by-feature visual equivalence).
+1. Full GPU-backed golden-scene readback parity (current canonical route is deterministic and backend-owned, but not yet a full swapchain readback of the renderer in CI).
+2. End-to-end Vulkan pass execution validation for every shadow/deferred/post variant (current milestone verifies route wiring and deterministic reference output, not full feature-by-feature visual equivalence).
 3. Vulkan shader toolchain hard dependency in CI (DXC/glslang integration may still be optional; current gate asserts the path executes and reports deterministic outcome).
 
 These items remain documented here by design and should be removed only when the Vulkan path is verified feature-complete against D3D11.

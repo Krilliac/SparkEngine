@@ -4,9 +4,13 @@
 >
 > **Thread Context:** Mixed; sample-specific behavior is documented with each module
 >
-> **Platform/Backend Scope:** All supported platforms; template requirements vary
+> **Platform/Backend Scope:** The blocked and uncertified `stable-v1` target is
+> Windows 11 x64/MSVC v143 with D3D11 or Windows NullRHI and the SparkGameFPS
+> single-player slice. Other sample/module paths are source examples outside
+> that support claim unless the readiness contract says otherwise.
 
-SparkEngine ships starter templates and reference game modules in the main repository. They are source-backed examples rather than separately versioned downloads.
+The repository contains starter templates and reference game modules. They are
+source-backed examples rather than separately versioned or certified downloads.
 
 ## Starter templates
 

@@ -22,7 +22,7 @@ SparkEngine is licensed under the **Spark Open License 1.0**. All contributions 
    ```bash
    cmake -B build -DBUILD_TESTS=ON
    cmake --build build
-   ctest --test-dir build --output-on-failure
+   ctest --test-dir build --output-on-failure --no-tests=error
    ```
 6. Push and open a Pull Request
 
@@ -57,7 +57,7 @@ clang-tidy -p build SparkEngine/Source/**/*.cpp
 ```bash
 cmake --preset linux-gcc-release     # or windows-release
 cmake --build build --config Release
-cd build && ctest --output-on-failure
+cd build && ctest --output-on-failure --no-tests=error
 ```
 
 All checks must pass before submitting a PR.
@@ -223,7 +223,7 @@ Before submitting a PR, verify your changes thoroughly:
 # 1. Run the full test suite
 cmake -B build -DBUILD_TESTS=ON
 cmake --build build
-cd build && ctest --output-on-failure && cd ..
+cd build && ctest --output-on-failure --no-tests=error && cd ..
 
 # 2. Run with AddressSanitizer (catches memory bugs)
 cmake -B build-asan \
@@ -231,7 +231,7 @@ cmake -B build-asan \
   -DBUILD_TESTS=ON \
   -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
 cmake --build build-asan
-cd build-asan && ctest --output-on-failure && cd ..
+cd build-asan && ctest --output-on-failure --no-tests=error && cd ..
 
 # 3. Verify formatting
 find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules/SparkGame/Source \

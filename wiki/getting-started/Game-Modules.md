@@ -1,6 +1,6 @@
 # Game Modules
 
-SparkEngine ships with **ten** fully playable game modules that double as genre showcases and integration tests. Each module is a shared library (DLL on Windows, `.so` on Linux) that implements the `Spark::IModule` interface and wires specific engine subsystems together to demonstrate one genre's conventions.
+SparkEngine contains **11 in-tree game-module directories** with differing prototype maturity. They are source showcases and test fixtures, not released games. Only the blocked and uncertified `SparkGameFPS` single-player slice is inside `stable-v1`; the other modules and multiplayer breadth are outside it. Dynamic modules implement `Spark::IModule` and build as shared libraries where their targets are enabled.
 
 > **Building your own:** see [Creating a Game Module](Creating-a-Game-Module.md) for the step-by-step integration tutorial. This page catalogs what already exists.
 
@@ -13,6 +13,7 @@ SparkEngine ships with **ten** fully playable game modules that double as genre 
 | [SparkGame](#sparkgame)                     | ~870   | Base / showcase — a bit of everything | All core subsystems |
 | [SparkGameFPS](#sparkgamefps)               | ~22.7K | First-person shooter | Weapons, player controller, multiplayer, AI |
 | [SparkGameMMO](#sparkgamemmo)               | ~10.0K | Massively multiplayer online | AreaServer, WorldServer, persistence, dialogue |
+| [SparkGameMMOFPS](#sparkgamemmofps)         | —      | MMOFPS / Terrafront | Combined-arms MMOFPS systems |
 | [SparkGameRPG](#sparkgamerpg)               | ~5.1K  | RPG mechanics | Save, animation, AI, cinematic, quest, dialogue |
 | [SparkGameARPG](#sparkgamearpg)             | ~3.3K  | Diablo-style action RPG | Combat, loot, abilities, dungeon generation |
 | [SparkGameOpenWorld](#sparkgameopenworld)   | ~4.9K  | Large-world exploration | Seamless streaming, origin rebasing, weather |
@@ -21,20 +22,20 @@ SparkEngine ships with **ten** fully playable game modules that double as genre 
 | [SparkGameRacing](#sparkgameracing)         | ~3.8K  | Vehicle racing | Vehicle physics, camera, audio, cinematic |
 | [SparkGameVisualScript](#sparkgamevisualscript) | ~370 | Script-only module | Visual scripting graphs, zero C++ game logic |
 
-All ten are auto-discovered at CMake configure time via `GameModules/*/CMakeLists.txt` and toggled by `BUILD_GAME_MODULES` (ON by default).
+The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled (ON by default); this target inventory is not a claim that every module is playable or release-ready.
 
 ---
 
 ## SparkGame
 
-**Purpose:** baseline module with a `GameplayShowcase` scene that walks new contributors through every subsystem at least once. Always built first; other modules inherit from its CMake targets.
+**Purpose:** baseline module with a `GameplayShowcase` scene that walks new contributors through every subsystem at least once. It follows the same CMake module pattern as the other in-tree targets; it is not a prerequisite target for them.
 
 - **Source:** `GameModules/SparkGame/Source/`
 - **Primary headers:** `Core/SparkGame.h`, `Core/GameplayShowcase.h`
 
 ## SparkGameFPS
 
-**Purpose:** production-scale first-person shooter showcase — the largest game module by LOC. Demonstrates the FPS-specific subset of the engine originally built for this project before SparkEngine generalized.
+**Purpose:** first-person shooter implementation showcase and the blocked stable-v1 vertical-slice candidate. It is not yet a certified or released product.
 
 - **Source:** `GameModules/SparkGameFPS/Source/`
 - **Notable:** `Game/Player.h` (~800 LOC), `Game/Game.h` (~660 LOC), weapon system, multiplayer integration.
@@ -46,6 +47,13 @@ All ten are auto-discovered at CMake configure time via `GameModules/*/CMakeList
 
 - **Source:** `GameModules/SparkGameMMO/Source/`
 - **Wires:** [Area Server Architecture](../subsystems/Area-Server-Architecture.md), [Dedicated Server](../subsystems/Dedicated-Server.md), [Persistence System](../gameplay-tools/Persistence-System.md), weather, abilities, dialogue.
+
+## SparkGameMMOFPS
+
+**Purpose:** Terrafront MMOFPS source module. It is an in-tree development artifact, not a `stable-v1` certified or released game.
+
+- **Source:** `GameModules/SparkGameMMOFPS/`
+- **Reference:** `GameModules/SparkGameMMOFPS/README.md`
 
 ## SparkGameRPG
 
@@ -103,10 +111,10 @@ All ten are auto-discovered at CMake configure time via `GameModules/*/CMakeList
 
 ## Lifecycle — how the engine loads them
 
-1. `EngineContext` queries each built module's `IModule::GetModuleInfo()` for metadata (name, dependencies, load order).
-2. Modules load in dependency order; each `OnLoad(context)` call gets a stable service-locator pointer.
-3. `OnUpdate(dt)` is ticked every frame between physics and render.
-4. `OnUnload()` runs on engine shutdown or when [Hot Reload](../advanced/Hot-Reload-Overview.md) rebuilds the DLL.
+1. At runtime, the host resolves a game-module candidate through `-game`, a manifest, or discovery; CMake-built targets are candidates, not a bulk-load list.
+2. `ModuleManager` reads a candidate's `IModule::GetModuleInfo()` while loading it and permits only one `Game`-kind primary module.
+3. The selected primary game module receives `OnLoad(context)` and `OnUpdate(dt)` in the engine lifecycle.
+4. Its `OnUnload()` runs on engine shutdown or when [Hot Reload](../advanced/Hot-Reload-Overview.md) rebuilds the DLL.
 
 See [Creating a Game Module](Creating-a-Game-Module.md) for the full `IModule` contract.
 

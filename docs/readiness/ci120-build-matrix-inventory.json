@@ -1895,10 +1895,10 @@
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1586,
+      "line": 1587,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1572",
+          "id": "CMakeLists.txt:1573",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -1953,31 +1953,31 @@
       "target": "OpenGL::GL",
       "kind": "imported",
       "file": "CMakeLists.txt",
-      "line": 548,
+      "line": 549,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:483",
+          "id": "CMakeLists.txt:484",
           "branch": 0,
           "branches": [
             "NOT WIN32 AND ENABLE_SDL2 AND EXISTS \"${SDL2_SUBMODULE_DIR}/CMakeLists.txt\""
           ]
         },
         {
-          "id": "CMakeLists.txt:487",
+          "id": "CMakeLists.txt:488",
           "branch": 0,
           "branches": [
             "NOT OpenGL_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:502",
+          "id": "CMakeLists.txt:503",
           "branch": 0,
           "branches": [
             "_LIBGL_RUNTIME AND EXISTS \"${_FALLBACK_GL_HEADERS}/GL/gl.h\""
           ]
         },
         {
-          "id": "CMakeLists.txt:547",
+          "id": "CMakeLists.txt:548",
           "branch": 0,
           "branches": [
             "NOT TARGET OpenGL::GL"
@@ -2012,10 +2012,10 @@
       "target": "Recast",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1574,
+      "line": 1575,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1572",
+          "id": "CMakeLists.txt:1573",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2392,10 +2392,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1329,
+      "line": 1330,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1328",
+          "id": "CMakeLists.txt:1329",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -2410,10 +2410,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1331,
+      "line": 1332,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1328",
+          "id": "CMakeLists.txt:1329",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -2429,10 +2429,10 @@
       "target": "SparkEngineInterface",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 1312,
+      "line": 1313,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1311",
+          "id": "CMakeLists.txt:1312",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -2447,7 +2447,7 @@
       "target": "SparkEngineLib",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1285,
+      "line": 1286,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2876,10 +2876,10 @@
       "target": "VulkanMemoryAllocator",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 689,
+      "line": 690,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:688",
+          "id": "CMakeLists.txt:689",
           "branch": 0,
           "branches": [
             "NOT TARGET VulkanMemoryAllocator AND EXISTS \"${VMA_ROOT}/vk_mem_alloc.h\""
@@ -2894,10 +2894,10 @@
       "target": "cgltf",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 758,
+      "line": 759,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:757",
+          "id": "CMakeLists.txt:758",
           "branch": 0,
           "branches": [
             "NOT TARGET cgltf AND EXISTS \"${CGLTF_DIR}/cgltf.h\""
@@ -2912,17 +2912,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2106,
+      "line": 2107,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2101",
+          "id": "CMakeLists.txt:2102",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2105",
+          "id": "CMakeLists.txt:2106",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -3002,10 +3002,10 @@
       "target": "miniaudio",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 777,
+      "line": 778,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:776",
+          "id": "CMakeLists.txt:777",
           "branch": 0,
           "branches": [
             "NOT TARGET miniaudio AND EXISTS \"${MINIAUDIO_DIR}/miniaudio.h\""
@@ -3020,10 +3020,10 @@
       "target": "miniz",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 640,
+      "line": 641,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:638",
+          "id": "CMakeLists.txt:639",
           "branch": 0,
           "branches": [
             "MINIZ_SOURCES"
@@ -3038,10 +3038,10 @@
       "target": "nlohmann_json",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 803,
+      "line": 804,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:802",
+          "id": "CMakeLists.txt:803",
           "branch": 0,
           "branches": [
             "NOT TARGET nlohmann_json AND EXISTS \"${NLOHMANN_JSON_DIR}/nlohmann_json.h\""
@@ -3076,10 +3076,10 @@
       "target": "stb_image",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 739,
+      "line": 740,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:738",
+          "id": "CMakeLists.txt:739",
           "branch": 0,
           "branches": [
             "NOT TARGET stb_image AND EXISTS \"${STB_DIR}/stb_image.h\""
@@ -3094,10 +3094,10 @@
       "target": "tinyexr",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 816,
+      "line": 817,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:815",
+          "id": "CMakeLists.txt:816",
           "branch": 0,
           "branches": [
             "NOT TARGET tinyexr AND EXISTS \"${TINYEXR_DIR}/tinyexr.h\""
@@ -3112,10 +3112,10 @@
       "target": "tinyobjloader",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 712,
+      "line": 713,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:709",
+          "id": "CMakeLists.txt:710",
           "branch": 0,
           "branches": [
             "TINYOBJLOADER_INCLUDE_DIR"
@@ -3130,10 +3130,10 @@
       "target": "zstd",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 668,
+      "line": 669,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:667",
+          "id": "CMakeLists.txt:668",
           "branch": 0,
           "branches": [
             "NOT TARGET zstd AND EXISTS \"${ZSTD_ROOT}/zstd.h\""
@@ -3204,7 +3204,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1586,
+          "line": 1587,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3294,7 +3294,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 548,
+          "line": 549,
           "kind": "imported",
           "origin": "non-build",
           "definitionScope": [],
@@ -3348,7 +3348,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1574,
+          "line": 1575,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3798,7 +3798,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1329,
+          "line": 1330,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -3806,7 +3806,7 @@
         },
         {
           "file": "CMakeLists.txt",
-          "line": 1331,
+          "line": 1332,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -3824,7 +3824,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1312,
+          "line": 1313,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3842,7 +3842,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1285,
+          "line": 1286,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4524,7 +4524,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 689,
+          "line": 690,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4542,7 +4542,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 758,
+          "line": 759,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4560,7 +4560,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2106,
+          "line": 2107,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4604,7 +4604,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 777,
+          "line": 778,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4622,7 +4622,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 640,
+          "line": 641,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4640,7 +4640,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 803,
+          "line": 804,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4694,7 +4694,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 739,
+          "line": 740,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4712,7 +4712,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 816,
+          "line": 817,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4730,7 +4730,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 712,
+          "line": 713,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4748,7 +4748,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 668,
+          "line": 669,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6212,7 +6212,7 @@
         "continueOnError": "absent",
         "timeoutMinutes": "absent",
         "needs": [],
-        "failFast": "absent",
+        "failFast": false,
         "maxParallel": "absent",
         "matrixAxes": [
           "config"
@@ -6288,7 +6288,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "487a7df636f9ba5c"
+            "runDigest": "0171433a63de724b"
           },
           {
             "index": 5,
@@ -6324,7 +6324,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "1038772de704bbf9"
+            "runDigest": "77936e3524aed631"
           },
           {
             "index": 8,
@@ -6629,7 +6629,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "a458f70ed486b483"
+            "runDigest": "906d1ad0ff00245e"
           },
           {
             "index": 7,
@@ -6797,7 +6797,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "1038772de704bbf9"
+            "runDigest": "5c7d5ba22d306112"
           },
           {
             "index": 8,
@@ -7025,7 +7025,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "1038772de704bbf9"
+            "runDigest": "5c7d5ba22d306112"
           },
           {
             "index": 8,
@@ -7412,7 +7412,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "1038772de704bbf9"
+            "runDigest": "5c7d5ba22d306112"
           },
           {
             "index": 8,
@@ -8613,10 +8613,11 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
+        "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
-          "BUILD_TESTS": "ON"
+          "BUILD_TESTS": "ON",
+          "BUILD_GAME_MODULES": "ON"
         },
         "fresh": true,
         "buildDir": "build",
@@ -8671,11 +8672,11 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -8696,10 +8697,11 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
+        "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
-          "BUILD_TESTS": "ON"
+          "BUILD_TESTS": "ON",
+          "BUILD_GAME_MODULES": "ON"
         },
         "fresh": true,
         "buildDir": "build",
@@ -8754,11 +8756,11 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -8836,11 +8838,11 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug --output-on-failure --parallel 2 --output-junit build/ctest-junit.xml",
+        "command": "ctest --test-dir build -C Debug --output-on-failure --no-tests=error --parallel 2 --output-junit build/ctest-junit.xml",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -8918,11 +8920,11 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release --output-on-failure --parallel 2 --output-junit build/ctest-junit.xml",
+        "command": "ctest --test-dir build -C Release --output-on-failure --no-tests=error --parallel 2 --output-junit build/ctest-junit.xml",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -9002,11 +9004,11 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -9086,11 +9088,11 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -9174,11 +9176,11 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -9262,11 +9264,11 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -9414,11 +9416,11 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -9509,11 +9511,11 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -9604,11 +9606,11 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -10093,10 +10095,11 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
+        "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
-          "BUILD_TESTS": "ON"
+          "BUILD_TESTS": "ON",
+          "BUILD_GAME_MODULES": "ON"
         },
         "fresh": true,
         "buildDir": "build",
@@ -10122,10 +10125,11 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
+        "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
-          "BUILD_TESTS": "ON"
+          "BUILD_TESTS": "ON",
+          "BUILD_GAME_MODULES": "ON"
         },
         "fresh": true,
         "buildDir": "build",
@@ -11197,11 +11201,11 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -11222,11 +11226,11 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -11247,11 +11251,11 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug --output-on-failure --parallel 2 --output-junit build/ctest-junit.xml",
+        "command": "ctest --test-dir build -C Debug --output-on-failure --no-tests=error --parallel 2 --output-junit build/ctest-junit.xml",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -11272,11 +11276,11 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release --output-on-failure --parallel 2 --output-junit build/ctest-junit.xml",
+        "command": "ctest --test-dir build -C Release --output-on-failure --no-tests=error --parallel 2 --output-junit build/ctest-junit.xml",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -11297,11 +11301,11 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -11322,11 +11326,11 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -11347,11 +11351,11 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -11372,11 +11376,11 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -11399,11 +11403,11 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -11426,11 +11430,11 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -11453,11 +11457,11 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
-        "noTestsAction": "",
+        "noTestsAction": "error",
         "outputJUnit": "build/ctest-junit.xml",
         "commandIndex": 0
       },
@@ -11817,10 +11821,11 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
+      "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
-        "BUILD_TESTS": "ON"
+        "BUILD_TESTS": "ON",
+        "BUILD_GAME_MODULES": "ON"
       },
       "fresh": true,
       "buildDir": "build",
@@ -11846,10 +11851,11 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
+      "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
-        "BUILD_TESTS": "ON"
+        "BUILD_TESTS": "ON",
+        "BUILD_GAME_MODULES": "ON"
       },
       "fresh": true,
       "buildDir": "build",

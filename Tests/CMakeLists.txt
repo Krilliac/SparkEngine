@@ -1117,6 +1117,43 @@ set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
     LABELS "compatibility;save;unit"
     RUN_SERIAL TRUE
     TIMEOUT 30)
+
+add_test(
+    NAME ModuleProfileLifecycleParserContract
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_LIFECYCLE_PARSER_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkModuleProfileLifecycle.cmake
+)
+set_tests_properties(ModuleProfileLifecycleParserContract PROPERTIES
+    LABELS "module-profile;stable-v1;d3d11;unit"
+    TIMEOUT 10)
+
+if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
+    if(NOT TARGET SparkEngine OR NOT TARGET SparkGameFPS)
+        message(FATAL_ERROR
+            "BUILD_GAME_MODULES=ON requires SparkEngine and SparkGameFPS "
+            "for the stable-v1 module-profile lifecycle gate")
+    endif()
+
+    # Exercise the stable-v1 first-party slice through the production host and
+    # real module DLL. Generator expressions keep every path correct for the
+    # selected Visual Studio/Ninja Multi-Config configuration.
+    add_dependencies(SparkTests SparkEngine SparkGameFPS)
+    add_test(
+        NAME ModuleProfileLifecycle_SparkGameFPS_D3D11
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGameFPS>"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            -DSPARK_RHI_BACKEND=d3d11
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkModuleProfileLifecycle.cmake
+    )
+    set_tests_properties(ModuleProfileLifecycle_SparkGameFPS_D3D11 PROPERTIES
+        LABELS "module-profile;stable-v1;d3d11;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endif()
+
 add_test(
     NAME SparkTemplateAssets
     COMMAND ${CMAKE_COMMAND}

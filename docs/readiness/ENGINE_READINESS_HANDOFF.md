@@ -5,7 +5,7 @@
 
 ## Current verdict
 
-**Pre-release hardening — `blocked`.** SparkEngine is source-usable and feature-rich, but it is not yet a fully ready engine release. Required CI can mask failures, no versioned release exists, shipping artifacts are not signed or attested, and the stable-v1 Windows, D3D11, editor, NullRHI, installed-package, public-SDK, and SparkGameFPS evidence is not certified.
+**Pre-release hardening — `blocked`.** SparkEngine is source-usable and feature-rich, but it is not yet a fully ready engine release. Required CI can mask failures, no versioned release exists, no versioned Shipping artifact has same-commit stable-v1 qualification, code-signing, install, uninstall, and rollback evidence, and the stable-v1 Windows, D3D11, editor, NullRHI, installed-package, public-SDK, and SparkGameFPS evidence is not certified.
 
 - Capabilities tracked: **22**
 - Ledger gates marked blocking: **18** (profile applicability determines release impact)
@@ -71,7 +71,7 @@ Before ending the session, update the item status/evidence and regenerate this f
 
 **Stable v1 — `blocked`.** Owner: unassigned.
 
-The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as one installed first-party single-player vertical slice, SparkGameFPS, that must build through the public SDK surface alone. Constrained LAN play is optional and is not required. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface. Nothing in this profile is certified while its state is blocked.
+The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as one installed first-party single-player vertical slice, SparkGameFPS, that must build through the public SDK surface alone. The complete required Windows build-product set is enumerated below and includes SparkEditor, SparkConsole, shader compiler, crash reporter, cooker, automation host, launcher, build tool, and installer; those products are in profile but remain blocked and uncertified. Constrained LAN play is optional and is not required. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface. Nothing in this profile is certified while its state is blocked.
 
 | Dimension | Declared value | In-profile capabilities | Evidence |
 |---|---|---|---|
@@ -156,7 +156,7 @@ Configuration-surface exceptions (every omitted option remains required):
 - Windows 10 x64 and the Linux and macOS build floors stay documented as development minima, but this profile certifies only Windows 11 x64; headless execution is in profile only on that same host.
 - Breadth is frozen: this profile inherits no work that exists only for out-of-profile capabilities. Linux, macOS, D3D12, Vulkan, OpenGL, Metal, multiplayer transport, production service operations, and the prototype modules keep their own open work outside this gate and stay uncertified.
 
-- Public surfaces this profile owns: `README.md`, `docs/README.md`, `docs/site/content.json`
+- Public surfaces this profile owns: `.github/copilot-instructions.md`, `.github/prompts/build-test.prompt.md`, `.github/prompts/copilot-instructions.md`, `README.md`, `CHANGELOG.md`, `SECURITY.md`, `SparkInstaller/README.md`, `Templates/EmptyProject/README.md`, `Templates/FPSStarter/README.md`, `Templates/MultiplayerArena/README.md`, `Templates/ThirdPersonStarter/README.md`, `docs/README.md`, `docs/guides/External-Services-and-Orchestration.md`, `docs/plans/FEATURE_ROADMAP.md`, `docs/site/content.json`, `docs/status/PROJECT_STATUS.md`, `docs/tooling/README.md`, `wiki/Build-Guide.md`, `wiki/Changelog.md`, `wiki/Documentation.md`, `wiki/Docs.md`, `wiki/API.md`, `wiki/Examples.md`, `wiki/Guides.md`, `wiki/Home.md`, `wiki/Reference.md`, `wiki/Roadmap.md`, `wiki/Samples.md`, `wiki/Tutorials.md`, `wiki/Wiki.md`, `wiki/advanced/Build-System-and-CMake-Modules.md`, `wiki/advanced/Codebase-Health.md`, `wiki/advanced/Codebase-Statistics.md`, `wiki/advanced/Gameplay-Systems-Status.md`, `wiki/advanced/SparkGame-Module-Status.md`, `wiki/advanced/Testing.md`, `wiki/gameplay-tools/Asset-Pipeline.md`, `wiki/gameplay-tools/Project-Templates.md`, `wiki/gameplay-tools/SparkEditor.md`, `wiki/getting-started/Architecture-Overview.md`, `wiki/getting-started/Editor-Walkthrough.md`, `wiki/getting-started/FAQ.md`, `wiki/getting-started/Game-Modules.md`, `wiki/getting-started/Getting-Started.md`, `wiki/getting-started/Migration-Guide.md`, `wiki/getting-started/Making-Your-First-Game.md`, `wiki/getting-started/Making-Your-First-Multiplayer-Game.md`, `wiki/getting-started/Quick-Start-Tutorial.md`, `wiki/getting-started/Creating-a-Game-Module.md`, `wiki/gameplay-tools/Game-Packaging.md`, `wiki/gameplay-tools/SparkConsole.md`, `wiki/graphics/D3D11-Backend.md`, `wiki/graphics/D3D12-Backend.md`, `wiki/graphics/Metal-Backend.md`, `wiki/graphics/OpenGL-Backend.md`, `wiki/graphics/RHI-Abstraction-Layer.md`, `wiki/graphics/Vulkan-Backend.md`, `wiki/platform/System-Requirements.md`, `wiki/platform/Cross-Compilation-Wine-Testing.md`, `wiki/subsystems/Collaborative-Editing.md`, `wiki/subsystems/Dedicated-Server.md`, `wiki/subsystems/Animation.md`, `wiki/subsystems/Rendering-and-Graphics.md`, `wiki/subsystems/Scene-Management.md`, `wiki/subsystems/Scripting-with-AngelScript.md`, `wiki/subsystems/Tween-System.md`, `GameModules/README.md`
 - Sign-off evidence: none recorded
 
 ## Release-gate ledger
@@ -227,7 +227,7 @@ Establish the only source of readiness truth and make CI report reality.
 | Work item | Priority | Status | Depends on | Safe parallel work |
 |---|---|---|---|---|
 | [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | — | `CI-100`, `SEC-100`, `OPS-100` |
-| [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **open** | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
+| [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
 | [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **open** | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **open** | — | `RDY-000`, `SEC-100`, `OPS-100` |
 | [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **open** | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
@@ -437,7 +437,7 @@ git diff --exit-code
 
 ### RDY-010 — Make real module and production-source tests the readiness evidence
 
-**Priority:** P0 · **Status:** open · **Wave:** 0 · **Area:** tests · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** in-progress · **Wave:** 0 · **Area:** tests · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
 In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately.
@@ -453,6 +453,8 @@ In-profile module tests compile subsets, tautologies, standalone mirrors, or rei
 - `Tests/TestModuleDiscovery.cpp`
 - `Tests/TestTemplatesCompile.cpp`
 - `Tests/TestFPSMultiplayer.cpp`
+- `SparkEngine/Source/Core/SparkEngineWindows.cpp`
+- `cmake/RunSparkModuleProfileLifecycle.cmake`
 - `GameModules`
 
 **Entry points**
@@ -460,6 +462,7 @@ In-profile module tests compile subsets, tautologies, standalone mirrors, or rei
 - `Tests/CMakeLists.txt`
 - `Tests/TestModuleDiscovery.cpp`
 - `SparkEngine/Source/Core/ModuleManager.cpp`
+- `cmake/RunSparkModuleProfileLifecycle.cmake`
 
 **Implementation scope**
 
@@ -481,14 +484,15 @@ In-profile module tests compile subsets, tautologies, standalone mirrors, or rei
 ```bash
 cmake --preset windows-shipping -DBUILD_GAME_MODULES=ON -DENABLE_EDITOR=ON -DBUILD_TESTS=ON
 cmake --build --preset windows-shipping --config MinSizeRel --parallel 2
-ctest --test-dir build/windows-shipping -L module-profile --output-on-failure
+ctest --test-dir build/windows-shipping -C MinSizeRel -R ^ModuleProfileLifecycle_SparkGameFPS_D3D11$ --output-on-failure --no-tests=error
+ctest --test-dir build/windows-shipping -C MinSizeRel -L module-profile --output-on-failure --no-tests=error
 Tools/check-test-registration.sh
 ```
 
 **Automated evidence**
 
 - Test selectors: `ModuleProfileDiscovery_*`, `ModuleProfileLifecycle_*`, `ProfilePackageModule_*`
-- Required CI jobs: `build-windows-shipping`, `module-profile-package-smoke`
+- Required CI jobs: `build-windows-vs2022`, `build-windows-shipping`, `module-profile-package-smoke`
 - Performance / reliability budgets:
   - Every module lifecycle smoke completes within its declared timeout
   - No unbounded allocation or sanitizer report
@@ -562,7 +566,7 @@ Several modules reference missing music/models/scenes, depend on path case that 
 
 ```bash
 python3 tools/site-data/validate.py --assets
-ctest --test-dir build/windows-shipping -L profile-package --output-on-failure
+ctest --test-dir build/windows-shipping -L profile-package --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -819,8 +823,8 @@ One monolithic CTest registration, warning-tolerated flaky patterns, nonblocking
 
 ```bash
 ctest --test-dir build/linux-shipping --show-only=json-v1
-ctest --test-dir build/linux-shipping -L unit --output-on-failure
-ctest --test-dir build/linux-shipping -L integration --output-on-failure
+ctest --test-dir build/linux-shipping -L unit --output-on-failure --no-tests=error
+ctest --test-dir build/linux-shipping -L integration --output-on-failure --no-tests=error
 SparkTests --warn-is-error --shuffle 123 --junit-xml test-results.xml
 ```
 
@@ -1243,7 +1247,7 @@ Dedicated-server chat can reach RCON dispatch without validating the configured 
 
 ```bash
 rg -n "RCON|rconPassword|ExecuteCommand" SparkEngine/Source/Engine/Networking
-ctest --test-dir build/linux-shipping -R RemoteAdmin --output-on-failure
+ctest --test-dir build/linux-shipping -R RemoteAdmin --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1400,7 +1404,7 @@ Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross st
 ```bash
 cmake --preset linux-fuzz
 cmake --build build/linux-fuzz
-ctest --test-dir build/linux-fuzz -L fuzz-smoke --output-on-failure
+ctest --test-dir build/linux-fuzz -L fuzz-smoke --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1479,8 +1483,8 @@ Crash manifests can write GitHub/SMTP credentials to plaintext temporary files, 
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L crash-security --output-on-failure
-ctest --test-dir build/linux-shipping -R TelemetrySpool --output-on-failure
+ctest --test-dir build/linux-shipping -L crash-security --output-on-failure --no-tests=error
+ctest --test-dir build/linux-shipping -R TelemetrySpool --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1563,7 +1567,7 @@ Windows is the intended primary host but lacks one blocking clean-machine Shippi
 ```bash
 cmake --preset windows-shipping
 cmake --build build/windows-shipping --config MinSizeRel
-ctest --test-dir build/windows-shipping -L certification --output-on-failure
+ctest --test-dir build/windows-shipping -L certification --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1639,8 +1643,8 @@ D3D11 is the deepest renderer but lacks a same-commit packaged golden-scene/pass
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L d3d11-golden --output-on-failure
-ctest --test-dir build/windows-shipping -L d3d11-stress --output-on-failure
+ctest --test-dir build/windows-shipping -L d3d11-golden --output-on-failure --no-tests=error
+ctest --test-dir build/windows-shipping -L d3d11-stress --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1714,7 +1718,7 @@ NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS mod
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L nullrhi-headless --output-on-failure
+ctest --test-dir build/windows-shipping -L nullrhi-headless --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1789,8 +1793,8 @@ A fully ready engine needs deterministic initialization/teardown and safe partia
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-asan -L lifecycle --output-on-failure
-ctest --test-dir build/linux-tsan -L lifecycle --output-on-failure
+ctest --test-dir build/linux-asan -L lifecycle --output-on-failure --no-tests=error
+ctest --test-dir build/linux-tsan -L lifecycle --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1864,7 +1868,7 @@ Hierarchy and inspector can mutate World outside the command stack; rotate/scale
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L editor-integration --output-on-failure
+ctest --test-dir build/windows-shipping -L editor-integration --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1948,7 +1952,7 @@ CPack omits products/modules, package smoke does not call Spark symbols, install
 cmake --install build/linux-shipping --prefix /tmp/spark-install
 cmake -S Tests/PackageSmoke -B /tmp/spark-consumer -DCMAKE_PREFIX_PATH=/tmp/spark-install
 cmake --build /tmp/spark-consumer
-ctest --test-dir /tmp/spark-consumer --output-on-failure
+ctest --test-dir /tmp/spark-consumer --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2030,7 +2034,7 @@ The published installer configuration and public GUI claims diverge; prerequisit
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L installer --output-on-failure
+ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2110,7 +2114,7 @@ A release engine must preserve or explicitly migrate user projects and game stat
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L compatibility --output-on-failure
+ctest --test-dir build/linux-shipping -L compatibility --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2192,7 +2196,7 @@ Dynamic modules and installed consumers need a declared version/ABI contract, co
 ```bash
 cmake -S Tests/PackageSmoke -B /tmp/spark-sdk-consumer -DCMAKE_PREFIX_PATH=/tmp/spark-install
 cmake --build /tmp/spark-sdk-consumer
-ctest --test-dir /tmp/spark-sdk-consumer --output-on-failure
+ctest --test-dir /tmp/spark-sdk-consumer --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2272,9 +2276,9 @@ Profiler and benchmark scaffolding exists, but no representative regression budg
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L benchmark --output-on-failure
-ctest --test-dir build/windows-shipping -L golden --output-on-failure
-ctest --test-dir build/windows-shipping -L nullrhi-soak --output-on-failure
+ctest --test-dir build/windows-shipping -L benchmark --output-on-failure --no-tests=error
+ctest --test-dir build/windows-shipping -L golden --output-on-failure --no-tests=error
+ctest --test-dir build/windows-shipping -L nullrhi-soak --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2351,7 +2355,7 @@ Script objects/methods are cached, but entity identity and production start/upda
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L scripting-integration --output-on-failure
+ctest --test-dir build/windows-shipping -L scripting-integration --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2433,7 +2437,7 @@ MMOFPS authentication fields can carry plaintext credentials, while engine netwo
 
 ```bash
 rg -n "mt19937|FNV|XOR|placeholder for DTLS|placeholder for AES|char pass" SparkEngine/Source GameModules/SparkGameMMOFPS
-ctest --test-dir build/linux-shipping -L network-security --output-on-failure
+ctest --test-dir build/linux-shipping -L network-security --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2513,7 +2517,7 @@ Engine networking and reference modules do not provide turnkey identity, matchma
 
 ```bash
 python3 tools/site-data/validate.py --capability services.production
-ctest --test-dir build/linux-shipping -L online-services --output-on-failure
+ctest --test-dir build/linux-shipping -L online-services --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2588,8 +2592,8 @@ MMO/MMOFPS reference persistence is local/demo-grade and does not prove atomic o
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L persistence --output-on-failure
-ctest --test-dir build/linux-shipping -R BackupRestore --output-on-failure
+ctest --test-dir build/linux-shipping -L persistence --output-on-failure --no-tests=error
+ctest --test-dir build/linux-shipping -R BackupRestore --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2668,7 +2672,7 @@ Current chaos/listen-host/screenshot paths do not prove two independent client p
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -R TerrafrontMultiClient --output-on-failure
+ctest --test-dir build/linux-shipping -R TerrafrontMultiClient --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2745,8 +2749,8 @@ Shared save storage, client scene/collision reload, topology-driven migration, t
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -R TerrafrontMigration --output-on-failure
-ctest --test-dir build/linux-shipping -R TerrafrontRestart --output-on-failure
+ctest --test-dir build/linux-shipping -R TerrafrontMigration --output-on-failure --no-tests=error
+ctest --test-dir build/linux-shipping -R TerrafrontRestart --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2823,8 +2827,8 @@ Profiling utilities and local chaos scripts do not substitute for externally con
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L server-soak --output-on-failure
-ctest --test-dir build/linux-shipping -L recovery-drill --output-on-failure
+ctest --test-dir build/linux-shipping -L server-soak --output-on-failure --no-tests=error
+ctest --test-dir build/linux-shipping -L recovery-drill --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2904,7 +2908,7 @@ Every discovered module needs a truthful manifest, while stable-v1 needs a small
 
 ```bash
 python3 tools/site-data/validate.py --modules
-ctest --test-dir build/windows-shipping -L module-kit --output-on-failure
+ctest --test-dir build/windows-shipping -L module-kit --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2979,7 +2983,7 @@ SparkGame has real lifecycle, ECS spawn, EventBus, weather, time of day, and qui
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R SparkGameShowcase --output-on-failure
+ctest --test-dir build/windows-shipping -R SparkGameShowcase --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3052,8 +3056,8 @@ FPS has a local arena, input, combat, rendering, and AI foundation, but it is no
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R FPSSinglePlayerSlice --output-on-failure
-ctest --test-dir build/windows-shipping -R FPSPackage --output-on-failure
+ctest --test-dir build/windows-shipping -R FPSSinglePlayerSlice --output-on-failure --no-tests=error
+ctest --test-dir build/windows-shipping -R FPSPackage --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3128,7 +3132,7 @@ MMO account storage is in-memory with demo hashing, scene paths mismatch the tre
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -R MMOIntegratedWorld --output-on-failure
+ctest --test-dir build/linux-shipping -R MMOIntegratedWorld --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3201,7 +3205,7 @@ ARPG is mostly in-memory/debug state without integrated input, ECS world, assets
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R ARPGDungeon --output-on-failure
+ctest --test-dir build/windows-shipping -R ARPGDungeon --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3273,7 +3277,7 @@ Player input is documentation-only, collision assumes y=0, render/animation path
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R PlatformerCompletion --output-on-failure
+ctest --test-dir build/windows-shipping -R PlatformerCompletion --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3344,7 +3348,7 @@ RPG has broad in-memory models but no integrated input, entities, rendered scene
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R RPGQuestSlice --output-on-failure
+ctest --test-dir build/windows-shipping -R RPGQuestSlice --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3417,7 +3421,7 @@ Player, wildlife, events, and settlements are internal/prototype structures; sce
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R OpenWorldTraversal --output-on-failure
+ctest --test-dir build/windows-shipping -R OpenWorldTraversal --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3490,7 +3494,7 @@ Selection/commands, movement/pathfinding, fog updates, fixed update, persistence
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R RTSSkirmish --output-on-failure
+ctest --test-dir build/windows-shipping -R RTSSkirmish --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3563,7 +3567,7 @@ No real player input path exists; vehicles use custom fixed-step kinematic math,
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R RacingCompleteRace --output-on-failure
+ctest --test-dir build/windows-shipping -R RacingCompleteRace --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3635,7 +3639,7 @@ The module compiles/spawns surfaces but runtime lifecycle is disconnected, Attac
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R VisualScriptGameplay --output-on-failure
+ctest --test-dir build/windows-shipping -R VisualScriptGameplay --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3706,7 +3710,7 @@ Modules outside every declared release profile still need honest real-source lif
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L experimental-modules --output-on-failure
+ctest --test-dir build/linux-shipping -L experimental-modules --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3775,7 +3779,7 @@ Prototype modules need reusable controller, ECS, camera, render, save, HUD, AI, 
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L prototype-module-kit --output-on-failure
+ctest --test-dir build/linux-shipping -L prototype-module-kit --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3844,7 +3848,7 @@ SparkGameFPS multiplayer currently ignores address and port and fabricates conne
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R FPSLAN --output-on-failure
+ctest --test-dir build/windows-shipping -R FPSLAN --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3921,7 +3925,7 @@ Linux compilers, sanitizers, Vulkan/OpenGL, and headless paths exist without a c
 ```bash
 cmake --preset linux-shipping
 cmake --build build/linux-shipping
-ctest --test-dir build/linux-shipping -L certification --output-on-failure
+ctest --test-dir build/linux-shipping -L certification --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -4277,7 +4281,7 @@ Metal is incomplete and cannot support current broad backend framing.
 **Required commands**
 
 ```bash
-ctest --test-dir build/macos-shipping -L metal --output-on-failure
+ctest --test-dir build/macos-shipping -L metal --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -4349,7 +4353,7 @@ D3D12 has modern feature depth without certification against the primary rendere
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L d3d12 --output-on-failure
+ctest --test-dir build/windows-shipping -L d3d12 --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -4423,7 +4427,7 @@ Vulkan's deterministic reference route and parity milestones do not yet prove fu
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L vulkan --output-on-failure
+ctest --test-dir build/linux-shipping -L vulkan --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -4494,7 +4498,7 @@ OpenGL provides useful portability and llvmpipe execution without production vis
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L opengl --output-on-failure
+ctest --test-dir build/linux-shipping -L opengl --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -4568,7 +4572,7 @@ The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L gltf-d3d11 --output-on-failure
+ctest --test-dir build/windows-shipping -L gltf-d3d11 --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**

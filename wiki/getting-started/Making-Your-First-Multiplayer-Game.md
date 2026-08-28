@@ -1,6 +1,8 @@
 # Making Your First Multiplayer Game
 
-This tutorial walks through building a simple multiplayer FPS prototype using SparkEngine's networking systems. By the end you will have two players connecting over localhost, moving, shooting, and seeing each other's state in real time.
+This tutorial records source-level design patterns for a multiplayer FPS prototype using SparkEngine networking surfaces. It is not a turnkey two-client/server walkthrough or an operational deployment guide.
+
+> **Stable-v1 boundary:** Multiplayer is experimental, outside stable-v1, and blocked. Stable-v1 is limited to an uncertified Windows 11 x64/MSVC v143/D3D11 (or Windows NullRHI) C++-module product shape with one first-party **single-player** `SparkGameFPS` vertical slice. The networking examples below do not certify a supported backend, host, package, protocol, or production service.
 
 ## Prerequisites
 
@@ -10,7 +12,7 @@ This tutorial walks through building a simple multiplayer FPS prototype using Sp
 
 ## 1. Network Architecture Overview
 
-SparkEngine uses an authoritative server model over UDP:
+The code patterns below use an authoritative-server model over UDP. They describe a development direction, not a verified end-to-end transport contract:
 
 - **Server** owns the game state. It validates all player actions and broadcasts the canonical world state.
 - **Clients** send input to the server and render the state they receive.
@@ -363,41 +365,19 @@ void RenderScoreboard(const std::vector<PlayerScore>& scores)
 }
 ```
 
-## 12. Testing Locally
+## 12. Contained Development Testing
 
-Run two instances on the same machine:
+Do not use the old `SparkEngine.exe --server`, `--connect`, `--port`, or `--name` commands: the engine executable does not implement those options. Its runtime selectors are `-game <module>`, `-manifest <path>`, and `-headless`/`-dedicated`; those selectors do not configure a complete client/server session for this tutorial.
 
-1. **Start the server** in one terminal or instance:
-   ```
-   SparkEngine.exe --server --port 27015
-   ```
+For source development, implement and test the `NetworkManager` calls in the selected module or use the separate server surface with its own documented configuration. Keep experiments on loopback unless a development LAN endpoint explicitly names a canonical RFC1918 interface and prefix. The current UDP protocol is unauthenticated and unencrypted, so do not send credentials, expose it to hostile networks, open firewall rules, or configure port forwarding from this guide. See [SECURITY.md](../../SECURITY.md) for the containment boundary.
 
-2. **Start a client** in another:
-   ```
-   SparkEngine.exe --connect 127.0.0.1 --port 27015 --name Player1
-   ```
+## 13. Deployment Status
 
-3. **Start a second client**:
-   ```
-   SparkEngine.exe --connect 127.0.0.1 --port 27015 --name Player2
-   ```
-
-Both clients should see each other moving and shooting. Use the console command `net_stats` to view ping, packet loss, and bandwidth.
-
-## 13. LAN / Internet Deployment
-
-For LAN play, use the machine's local IP address (e.g. `192.168.1.x`) instead of `127.0.0.1`.
-
-For internet play:
-
-- **Port forwarding**: Forward UDP port 27015 on the server's router.
-- **Dedicated server**: Use `SparkEngine.exe --server --headless` for a dedicated server with no rendering overhead (uses NullRHIDevice).
-- **Firewall**: Ensure the server port is open in the OS firewall.
-- **Bandwidth**: With 16 players at 60 Hz, expect approximately 200-400 KB/s upstream on the server.
+This page does not provide a LAN or Internet deployment procedure, supported host matrix, or bandwidth estimate. Remote/production operations, hostile multi-client testing, protocol compatibility, authentication, encryption, and lifecycle evidence remain open. The headless/NullRHI delivery evidence is separately blocked by `HEAD-220`; `-headless` alone is not proof of a configured NullRHI server deployment.
 
 ## Next Steps
 
 - Read the [Networking](../subsystems/Networking.md) wiki page for full API details
 - See [Area Server Architecture](../subsystems/Area-Server-Architecture.md) for scaling to larger worlds
 - Explore the [Networking Wire Format](../specifications/Networking-Wire-Format.md) specification
-- Check out the SparkGameFPS module (`GameModules/SparkGameFPS/`) for a complete FPS implementation
+- Inspect `GameModules/SparkGameFPS/` as the blocked, uncertified first-party **single-player** vertical-slice reference; it is not multiplayer or service evidence

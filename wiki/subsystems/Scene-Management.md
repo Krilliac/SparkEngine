@@ -2,6 +2,8 @@
 
 The `SceneManager` handles loading, saving, and manipulating scenes at runtime. Scenes are stored as JSON files with a hierarchical node structure. The SceneManager is the single point of truth for the live scene graph.
 
+> **stable-v1 support boundary:** [`stable-v1`](../../docs/site/readiness.json) is blocked and uncertified; its exact host is Windows 11 x64. This page describes source-level scene behavior, including paths that are outside that profile, and does not certify a release or platform.
+
 **Source:** `SparkEngine/Source/SceneManager/SceneManager.h`
 
 ## Overview
@@ -112,7 +114,7 @@ struct SceneNode
 | `"cube"` | Unit cube mesh with optional material | `Primitives::CreateCube()` |
 | `"sphere"` | Unit sphere mesh with optional material | `Primitives::CreateSphere()` |
 | `"plane"` | Flat plane mesh (XZ-aligned) | `Primitives::CreatePlane()` |
-| `"model"` | External mesh loaded from `modelPath` | `Assimp` import |
+| `"model"` | Mesh requested from `modelPath` | `.obj` through `Mesh`/tinyobjloader; unsupported, missing, or failed paths use a placeholder mesh |
 | `"light"` | Light source (point, directional, spot) | Creates `LightComponent` |
 | `"trigger"` | Invisible trigger volume | Creates `ColliderComponent` (trigger) |
 
@@ -181,7 +183,7 @@ LoadScene(filepath)
     ├── InstantiateNodes()
     │   └── For each node: create GameObject based on type
     │       ├── cube/sphere/plane → Primitives factory
-    │       ├── model → Assimp import from modelPath
+    │       ├── model → LoadOrPlaceholderMesh(modelPath): OBJ or placeholder
     │       ├── light → Create LightComponent
     │       └── trigger → Create ColliderComponent (isTrigger=true)
     │
@@ -353,7 +355,7 @@ sceneMgr.AddNode(light);
 SceneNode enemy;
 enemy.name      = "EnemySpawn";
 enemy.type      = "model";
-enemy.modelPath = "Assets/Models/Enemy.fbx";
+enemy.modelPath = "Assets/Models/Enemy.obj";
 enemy.position  = {10.0f, 0.0f, 5.0f};
 int enemyIdx    = sceneMgr.AddNode(enemy);
 sceneMgr.SetParent(enemyIdx, groundIdx);  // Parent to ground

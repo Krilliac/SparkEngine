@@ -1,6 +1,12 @@
 # SparkConsole
 
-SparkConsole is a standalone debug console application that communicates with the SparkEngine runtime via named pipes, providing real-time engine inspection with 200+ commands.
+SparkConsole is a standalone debug console application. Windows uses named pipes
+for engine communication; non-Windows builds expose bidirectional inherited
+stdin/stdout development transport. It provides development-time inspection and registered commands.
+
+> **Release boundary:** SparkConsole is a required Windows build product in
+> `stable-v1`, but the profile and this transport are blocked and uncertified.
+> Non-Windows console paths are development implementations outside the profile.
 
 **Source:** `SparkConsole/src/`
 
@@ -9,7 +15,7 @@ SparkConsole is a standalone debug console application that communicates with th
 ## Architecture
 
 ```
-┌──────────────────────────────┐     Named Pipes     ┌──────────────────────────────┐
+┌──────────────────────────────┐  Windows Named Pipes  ┌──────────────────────────────┐
 │        SparkEngine           │ ◄──────────────────► │        SparkConsole          │
 │                              │                      │                              │
 │  ┌────────────────────────┐  │   Engine Output      │  ┌────────────────────────┐  │
@@ -37,7 +43,10 @@ SparkConsole is a standalone debug console application that communicates with th
 
 ## Overview
 
-SparkConsole runs as a separate process alongside SparkEngine. When SparkEngine starts, it automatically launches SparkConsole and establishes a named pipe connection for bidirectional communication.
+SparkConsole runs as a separate process alongside SparkEngine. On the Windows
+development path, the engine can launch it and establish bidirectional named
+pipes. Non-Windows paths use inherited stdin/stdout and do not implement the same
+pipe transport.
 
 ### Communication Flow
 
@@ -51,7 +60,9 @@ SparkConsole runs as a separate process alongside SparkEngine. When SparkEngine 
 
 ### Automatic Launch
 
-SparkConsole opens automatically when SparkEngine starts. No manual configuration is required.
+On the Windows development path, SparkEngine attempts to launch SparkConsole only
+when the packaged console executable can be resolved and `-no-subprocess` is not
+present. Otherwise launch it explicitly and provide the applicable transport.
 
 ### Standalone Mode
 
@@ -393,10 +404,10 @@ Engine output messages are buffered in `m_messageBuffer` (`std::deque<std::wstri
 
 ## Performance Considerations
 
-- Named pipe communication is low-latency (< 1ms on Windows)
+- Windows named-pipe communication is local IPC; no latency budget is certified
 - The engine input thread runs continuously but blocks on pipe reads (no CPU spin)
 - Message buffer caps at 1000 entries to bound memory usage
-- Tab completion scans all registered commands (typically < 300) -- negligible cost
+- Tab completion scans the registered command set linearly
 - Command parsing uses simple tokenization -- no regex or complex grammar
 
 ---
@@ -405,9 +416,9 @@ Engine output messages are buffered in `m_messageBuffer` (`std::deque<std::wstri
 
 | Platform | Communication | Status |
 |----------|--------------|--------|
-| Windows | Named Pipes (`HANDLE`) | Fully supported |
-| Linux | stdout / stdin (file descriptors) | Basic output only |
-| macOS | stdout / stdin | Basic output only |
+| Windows 11 x64 | Named Pipes (`HANDLE`) | Required `stable-v1` product path; blocked/uncertified |
+| Linux | stdout / stdin (file descriptors) | Bidirectional inherited development transport |
+| macOS | stdout / stdin | Bidirectional inherited development transport |
 
 On non-Windows platforms, `m_consoleOutput` and `m_consoleInput` are integer file descriptors instead of Windows `HANDLE` values. The `SetConsoleColor()` function uses ANSI escape codes instead of `SetConsoleTextAttribute()`.
 

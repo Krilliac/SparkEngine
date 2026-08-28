@@ -4,45 +4,47 @@
 >
 > **Thread Context:** Most systems initialize and tick on the main thread via the shared gameplay lifecycle (`GameplayLifecycleShared.cpp`). PhysicsSystem dispatches Jolt jobs across threads; NetworkManager uses a queue mutex. ECS execution order is Physics → Animation → AI → Audio → Lifecycle → Render.
 >
-> **Platform/Backend Scope:** Engine-wide. Networking is opt-in (`ENABLE_NETWORKING`, ON by default). VR registers but ships as an OpenXR stub backend.
+> **Platform/Backend Scope:** Cross-platform source inventory. Networking is conditional (`ENABLE_NETWORKING`, ON by default); backend and platform support must be read from the release profile rather than inferred from source presence. VR registers but ships as an OpenXR stub backend.
+>
+> **`stable-v1` support boundary:** [`stable-v1`](../../docs/site/readiness.json) is blocked and uncertified. This page inventories source, lifecycle-call, and test-file surfaces, including experimental and out-of-profile capabilities; it is not a support matrix, passing-test report, or release claim.
 
 ## Overview
 
-This page is a live inventory of SparkEngine's gameplay and engine subsystems: which are fully wired (Initialize/Update/Shutdown called from the lifecycle path), which were deliberately deleted as orphaned stubs, and which previously-missing capabilities have since been added. It consolidates an audit originally run in March 2026 and re-verifies every claim against the current codebase.
+This page records a source-level inventory of SparkEngine gameplay and engine subsystems: named lifecycle calls, source surfaces, test-file references, and an older record of orphaned-stub deletions. Source or test-file presence does not establish runtime behavior, current test results, platform support, or release readiness.
 
 The canonical wiring point for engine-lifetime gameplay systems is `SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp` — its `Init*`, `Update*`, and `Shutdown*` functions are where each subsystem's lifecycle hooks are called.
 
-## Working Systems
+## Source and Lifecycle Inventory
 
 ### Core Systems
 
 | System | Status | Key Files |
 |--------|--------|-----------|
-| ECS (EnTT) | Fully wired | `Engine/ECS/` (CoreComponents.h + domain headers, Systems/ECSystems.h) |
-| Physics (Jolt) | Fully wired | `PhysicsSystem.cpp` + `PhysicsSystemQueries.cpp` + `PhysicsShapeFactory.cpp` |
-| AI | Fully wired | `AISystem`, `NavMesh`, `BehaviorTree` |
-| Animation | Fully wired via ECS | `AnimationSystem.cpp` |
-| Audio (XAudio2) | Fully wired | `AudioEngine.cpp` |
-| Input | Fully wired | `InputManager.cpp` |
-| Camera | Fully wired | `SparkEngineCamera.cpp` |
-| Scripting (AngelScript) | Fully wired with hot-reload | `Engine/Scripting/` |
-| Save system | Fully wired | `SaveSystem.cpp` |
-| UI system | Registered in EngineContext, updated | `UISystem.cpp` |
-| Modding | Registered in EngineContext | `ModSystem.cpp` |
-| Events / EventBus | Active | `EventSystem.h` delegates to `EventBus.h` |
-| Coroutines | Registered with EngineContext | `CoroutineScheduler.h` |
-| 2D graphics / sprites | Phase-manager registration | `Systems2D.h`, `Physics2D.h` |
-| Dialogue | Registered & updated via EngineContext | `DialogueSystem.cpp` |
-| Weather | Registered & updated via EngineContext | `WeatherSystem.cpp` |
-| World origin | Active | `WorldOriginSystem` |
-| Localization | Wired & tested | `LocalizationSystem.cpp` |
-| Destruction | Wired in the gameplay init path | `DestructionSystem.cpp` |
+| ECS (EnTT) | Source surface present | `Engine/ECS/` (CoreComponents.h + domain headers, Systems/ECSystems.h) |
+| Physics (Jolt) | Lifecycle and query source present | `PhysicsSystem.cpp` + `PhysicsSystemQueries.cpp` + `PhysicsShapeFactory.cpp` |
+| AI | Source surface present | `AISystem`, `NavMesh`, `BehaviorTree` |
+| Animation | ECS system source present | `AnimationSystem.cpp` |
+| Audio | Backend factory and engine source present | `Audio/AudioEngine.cpp`, with XAudio2 on Windows, OpenAL on non-Windows, and Null fallback paths |
+| Input | Source surface present | `InputManager.cpp` |
+| Camera | Source surface present | `SparkEngineCamera.cpp` |
+| Scripting (AngelScript) | VM and file-watcher source present | `Engine/Scripting/` |
+| Save system | Source surface present | `SaveSystem.cpp` |
+| UI system | EngineContext registration/update source present | `UISystem.cpp` |
+| Modding | EngineContext registration source present | `ModSystem.cpp` |
+| Events / EventBus | Delegation source present | `EventSystem.h` delegates to `EventBus.h` |
+| Coroutines | EngineContext registration source present | `CoroutineScheduler.h` |
+| 2D graphics / sprites | Phase-manager registration source present | `Systems2D.h`, `Physics2D.h` |
+| Dialogue | EngineContext registration/update source present | `DialogueSystem.cpp` |
+| Weather | EngineContext registration/update source present | `WeatherSystem.cpp` |
+| World origin | Source surface present | `WorldOriginSystem` |
+| Localization | Source and test files present | `LocalizationSystem.cpp`; `Tests/TestLocalizationSystem.cpp` (test presence only) |
+| Destruction | Lifecycle calls present | `DestructionSystem.cpp` |
 
 ### TrinityCore-Inspired Systems
 
-All wired into the gameplay lifecycle via the `Init*`/`Update*`/`Shutdown*` functions.
+The current lifecycle source contains the named hooks. Test filenames below are inventory references; they do not assert that a test was executed or passed for the current commit or profile.
 
-| System | Namespace | Init | Update | Shutdown | Tests |
+| System | Namespace | Init | Update | Shutdown | Test source |
 |--------|-----------|------|--------|----------|-------|
 | AbilitySystem | `Spark::Gameplay` | Yes | Yes (world, dt) | Yes | `TestAbilitySystem.cpp` |
 | ConditionSystem | `Spark::Gameplay` | Yes | N/A (stateless) | Yes | `TestConditionSystem.cpp` |
@@ -52,16 +54,16 @@ All wired into the gameplay lifecycle via the `Init*`/`Update*`/`Shutdown*` func
 | AsyncDatabase | `Spark::Persistence` | `Open()` | `ProcessCallbacks()` | `Close()` | `TestAsyncDatabase.cpp` |
 | ReplicationFields | `Spark::Net` | N/A (data) | N/A (data) | N/A | `TestReplicationFields.cpp` |
 | ScriptHookManager | `Spark::Scripting` | Singleton | `DispatchHook()` | `Clear()` | `TestScriptHookManager.cpp` |
-| ConsoleRBAC | `Spark::Console` | Singleton | N/A (query) | N/A | N/A (minimal) |
+| ConsoleRBAC | `Spark::Console` | Singleton | N/A (query) | N/A | `TestConsoleRBAC.cpp` |
 | ModuleHotReload | `Spark` | `Initialize()` | `PollChanges()` | `Stop()` | `TestModuleHotReload.cpp` |
 
-### Previously Missing Systems (Added)
+### Source Surfaces Added Since the Historical Audit
 
 | System | Status | Notes |
 |--------|--------|-------|
-| Inventory (engine-level) | Added & wired | `Spark::Gameplay::InventorySystem` — item registry, per-entity slots, stacking, transfer. Init/Update/Shutdown called from the lifecycle path. |
-| Quest (engine-level) | Added & wired | `Spark::Gameplay::QuestSystem` — objectives, progress tracking, rewards, prerequisites. Wired in the lifecycle path. |
-| Terrain rendering | Added & wired | `Graphics::ClipmapTerrain` with heightmap sampling, LOD levels, GPU buffer creation. Init/Shutdown called from the lifecycle path. |
+| Inventory (engine-level) | Lifecycle calls present | `Spark::Gameplay::InventorySystem` — item registry, per-entity slots, stacking, transfer. Init/Update/Shutdown calls appear in the lifecycle source. |
+| Quest (engine-level) | Lifecycle calls present | `Spark::Gameplay::QuestSystem` — objectives, progress tracking, rewards, prerequisites. Lifecycle calls appear in the current source. |
+| Terrain rendering | Lifecycle calls present | `Graphics::ClipmapTerrain` with heightmap sampling, LOD levels, GPU buffer creation. Init/Shutdown calls appear in the lifecycle source. |
 
 ## Systems Deleted (orphaned / stub in prior sessions)
 
@@ -75,24 +77,26 @@ All wired into the gameplay lifecycle via the `Init*`/`Update*`/`Shutdown*` func
 | Content Delivery | 337 lines | Stub-only CDN |
 | Visual Scripting (2 copies) | 7,343 lines | Duplicate, neither wired |
 
-> **Note:** Several of these names now appear again as active subsystem wiki pages (Replay System, Achievement System, Content Delivery, Cinematic, Streaming). The engine has since re-introduced or re-implemented some of these capabilities. Treat this table as the historical record of the *earlier* stub deletions, not the current presence of those features — verify against the corresponding subsystem wiki page.
+> **Note:** Several of these names now have current source or documentation surfaces. Treat this table only as the historical record of the *earlier* stub deletions; verify current source and the readiness contract individually. A wiki page by itself is not implementation or support evidence.
 
 ## Notes
 
-- Networking is fully implemented but opt-in. The default build (`ENABLE_NETWORKING=ON`) compiles it; transports such as `SteamTransport` remain stubs (see [Stub & Abandoned Features](Stub-and-Abandoned-Features.md)).
+- Networking source and conditional test surfaces exist behind `ENABLE_NETWORKING` (ON by default in the root CMake configuration). The readiness contract classifies multiplayer as experimental and blocked; hostile multi-client, compatibility, and transport work remains open, and transports such as `SteamTransport` remain stubs (see [Stub & Abandoned Features](Stub-and-Abandoned-Features.md)).
 - VR is registered via core subsystems but ships an OpenXR stub backend — see the Stub page.
-- ConsoleRBAC is minimal enough not to warrant dedicated tests.
+- `Tests/TestConsoleRBAC.cpp` is a dedicated test source; its presence is not a claim that it passed for this commit.
 
-## Source & Freshness
+## Source Snapshot and Limitations
 
 - Original entry: `.claude/knowledge/gameplay-systems-status.md` (last updated 2026-03-18; physics Jolt migration noted 2026-03-22; missing systems noted 2026-04-01).
-- Verified against codebase 2026-06-08.
+- Older audit review date: 2026-06-08. This is not same-commit verification.
 
-Status changes / verifications found during freshening:
+This correction checked the named lifecycle call sites and readiness classifications on 2026-08-28 without executing builds or tests. It does not certify behavior or regression status.
 
-- **Confirmed wired:** AbilitySystem, ConditionSystem, InstanceManager, InventorySystem, QuestSystem, and ClipmapTerrain all have `Initialize`/`Update`/`Shutdown` calls in `GameplayLifecycleShared.cpp` (lines ~414–418, 482, 871–877, 1176, 1209–1213).
-- **Re-introduced features:** Replay, Achievement, Content Delivery, Cinematic, and Streaming — listed as deleted in the original — now exist again as documented subsystem wiki pages. The "Systems Deleted" table is retained as a historical record with a caveat.
-- No regressions found: every "Working Systems" entry still has its named source file present.
+Source observations retained or corrected:
+
+- **Lifecycle call sites observed:** AbilitySystem, ConditionSystem, InstanceManager, InventorySystem, QuestSystem, MovementSystem, DestructionSystem, and ClipmapTerrain have named init/update/shutdown calls in `GameplayLifecycleShared.cpp`.
+- **Re-introduced source surfaces:** Replay, Achievement, Cinematic, and Streaming have current lifecycle or source entries. The "Systems Deleted" table is retained only as a historical record with a caveat.
+- Named paths must be checked at the commit under review; file presence alone cannot establish behavior, passing tests, or the absence of regressions.
 
 ## Related Pages
 

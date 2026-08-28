@@ -474,6 +474,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
                                        "  --help, -h                 Show this help and exit\n"
                                        "  --version                  Show the engine version and exit\n"
                                        "  -game <module>             Load a game module\n"
+                                       "  -require-game              Fail if no game module initializes\n"
                                        "  -manifest <path>           Load a packaged runtime manifest\n"
                                        "  -scene <path>              Load a reflected-scene document\n"
                                        "  -headless, -dedicated      Run without a graphics window\n"
@@ -611,8 +612,41 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     InitializeWindowedSubsystems(hInstance, lpCmdLine);
     ApplyRuntimeWindowCaption();
 
+    const size_t initializedModules =
+        GetEngineRuntime().moduleManager
+            ? GetEngineRuntime().moduleManager->GetInitializedModuleCount()
+            : 0;
+
+    // Keep the ordinary windowed teardown path authoritative even when an
+    // explicitly required module failed to initialize. Posting WM_QUIT with a
+    // nonzero status lets RunWindowedMainLoop perform its persistence preflight
+    // and reverse-order cleanup before returning the failure to the caller.
+    const bool requireGame = Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-require-game");
+    const bool requiredGameMissing = requireGame && initializedModules == 0;
+    if (requiredGameMissing)
+    {
+        Spark::SimpleConsole::GetInstance().LogError(
+            "Required game module was not initialized; terminating with a failure status.");
+        PostQuitMessage(2);
+    }
+
     // Run the message pump + tick loop until WM_QUIT
-    return RunWindowedMainLoop(hInstance);
+    const int loopExitCode = RunWindowedMainLoop(hInstance);
+
+    // Publish exactly one machine-readable record only after the ordinary
+    // windowed teardown has destroyed the ModuleManager. The final snapshot
+    // therefore proves successful callbacks across the complete manager
+    // lifetime rather than merely proving that startup reached OnLoad.
+    if (requireGame)
+    {
+        const ModuleManager::LifecycleEvidence evidence = ModuleManager::GetLastTeardownLifecycleEvidence();
+        WriteCommandOutput(std::format(
+            "SPARK_MODULE_LIFECYCLE initialized={} updated={} fixed={} rendered={} unloaded={} faults={}\n",
+            evidence.initialized, evidence.updated, evidence.fixedUpdated, evidence.rendered, evidence.unloaded,
+            evidence.faults));
+    }
+
+    return requiredGameMissing ? 2 : loopExitCode;
 }
 
 #endif // SPARK_PLATFORM_WINDOWS

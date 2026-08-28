@@ -1,5 +1,10 @@
 # Getting Started
 
+> **Release boundary:** The only declared profile is the blocked and uncertified
+> `stable-v1` Windows 11 x64/MSVC v143 + D3D11/Windows NullRHI + C++ module slice.
+> Windows 10, Linux, macOS, and other toolchain/backend paths below are development
+> instructions outside that profile.
+
 This guide covers everything you need to clone, build, and run SparkEngine from source. It includes platform-specific setup instructions, troubleshooting for common build issues, and verification steps.
 
 For end-user hardware targets (CPU/RAM/VRAM minimums and recommended specs),
@@ -12,7 +17,8 @@ see [System Requirements](../platform/System-Requirements.md).
 | **C++ Compiler** | MSVC v143 (Visual Studio 2022 17.6+), GCC 13+, or Clang 17+ with C++23 support |
 | **CMake** | 3.25 or newer |
 | **Graphics** | DirectX 11 capable GPU (Windows). Vulkan SDK optional. OpenGL 4.5 optional. Metal 2.3+ on macOS. |
-| **Platform** | Windows 10+ (primary), Linux x64 (experimental), macOS 11+ (experimental) |
+| **Release candidate host** | Windows 11 x64 is the blocked and uncertified `stable-v1` target |
+| **Development hosts** | Windows 10 x64, Linux x64, and macOS are outside the release profile |
 | **Git** | For cloning with submodules |
 | **Linux packages** | `build-essential`, `ninja-build`, `cmake` |
 | **macOS packages** | `brew install cmake sdl2 openal-soft` (plus `molten-vk` for Vulkan) |
@@ -23,7 +29,7 @@ see [System Requirements](../platform/System-Requirements.md).
    - "Desktop development with C++" workload
    - Windows 10/11 SDK (any recent version)
    - MSVC v143 build tools
-2. **CMake 3.16+** (bundled with Visual Studio, or install separately from cmake.org)
+2. **CMake 3.25+** (bundled with current Visual Studio installations, or install separately from cmake.org)
 3. **Git** (install from git-scm.com or via `winget install Git.Git`)
 
 To verify your Windows setup:
@@ -107,14 +113,20 @@ git submodule update --recursive
 
 ### Verifying Submodules
 
-SparkEngine depends on 15 third-party libraries managed as Git submodules. After cloning, verify they are present:
+SparkEngine currently declares six Git submodules. After cloning, verify they
+are present; additional audited dependencies are vendored snapshots recorded in
+`ThirdParty/dependencies.lock` rather than submodules:
 
 ```bash
 # Check that ThirdParty directories are populated
 ls ThirdParty/
 ```
 
-You should see directories for: entt, JoltPhysics, imgui, angelscript, assimp, glm, rapidjson, spdlog, stb, miniaudio, DirectXTK, ImGuizmo, imnodes, miniz, tinyobjloader.
+The submodule paths are `ThirdParty/Utils/miniz`, `ThirdParty/UI/imgui`,
+`ThirdParty/ECS/entt`, `ThirdParty/Scripting/angelscript-mirror`,
+`ThirdParty/AI/recastnavigation`, and `ThirdParty/SDL2`. Do not infer a
+dependency from an old documentation name; the manifest and CMake target graph
+are authoritative.
 
 If any are empty, re-run:
 
@@ -157,23 +169,27 @@ SparkEngine includes `CMakePresets.json` with ready-made configurations:
 | `linux-clang-release` | Linux | Clang, Release |
 | `ci-linux-asan` | Linux | AddressSanitizer build |
 | `ci-linux-tsan` | Linux | ThreadSanitizer build |
-| `minimal` | Any | Core-only build without advanced features |
+| `minimal` | Any | Reduced development preset: networking and DXR are effectively disabled; several other preset variables are inert |
 
 ```bash
 cmake --preset windows-release
 cmake --build --preset windows-release
 ```
 
-### Minimal Build (Core Only)
+### Reduced Development Preset (Not Core Only)
 
-If you want the fastest possible build with only essential features:
+For a release-configured development build with networking and DXR disabled:
 
 ```bash
 cmake --preset minimal
 cmake --build build --config Release
 ```
 
-This disables the editor, advanced graphics, AI, animation, networking, and other optional subsystems. Useful for CI or for working on core engine code.
+This preset effectively disables networking and DXR. Its AI, animation, save,
+procedural, cinematic, decal, and mesh-LOD cache variables do not correspond to
+root options and therefore do not strip those sources; the editor also remains
+enabled. Disable declared targets explicitly when needed. `HEAD-220` tracks a
+true stripped/headless configuration.
 
 ## Build
 
@@ -227,30 +243,46 @@ After a successful build:
 ```
 build/
 ├── bin/
-│   ├── SparkEngine.exe      # Main engine executable
-│   ├── SparkConsole.exe     # Debug console (Windows) — see [SparkConsole](../gameplay-tools/SparkConsole.md)
-│   ├── SparkEditor.exe      # Visual editor (Windows) — see [SparkEditor](../gameplay-tools/SparkEditor.md)
-│   ├── SparkShaderCompiler.exe  # Shader compilation tool
-│   ├── SparkTests           # Unit test runner (when BUILD_TESTS=ON)
-│   └── SparkGame.dll        # Default game module
+│   └── Release/             # VS/Ninja Multi-Config output; use the built configuration
+│       ├── SparkBuild.exe   # In-tree SparkBuild target
+│       ├── SparkEngine.exe  # Main engine executable
+│       ├── SparkConsole.exe # Optional debug-console subprocess (Windows)
+│       ├── SparkEditor.exe  # Visual editor (Windows)
+│       ├── SparkShaderCompiler.exe
+│       ├── SparkTests.exe   # Unit test runner (when BUILD_TESTS=ON)
+│       └── SparkGameFPS.dll # A built game module; choose it explicitly at launch
 ├── lib/                     # Static/shared libraries
 ├── Shaders/                 # Compiled shaders
 └── Assets/                  # Game assets
 ```
+
+Single-config generators retain the flat `build/bin/` layout. With a CMake
+preset, substitute that preset's binary directory for `build/`.
 
 ## Run the Engine
 
 ### Windows
 
 ```batch
-cd build\bin
-SparkEngine.exe
+cd build\bin\Release
+SparkEngine.exe -game .\SparkGameFPS.dll
 ```
+
+For a VS/Ninja Multi-Config build, replace `Release` with the configuration you
+built. The game module is selected explicitly; a bare launch only discovers
+candidates and prompts for a selection.
 
 You should see:
 1. A DirectX 11 window with a blue background
-2. [SparkConsole](../gameplay-tools/SparkConsole.md) opens automatically
-3. Console shows initialization messages
+2. Unless `-no-subprocess` is supplied, the engine attempts to launch the optional [SparkConsole](../gameplay-tools/SparkConsole.md) subprocess
+3. The in-process console emits initialization messages
+
+`SparkEditor` is a separate executable. When `ENABLE_EDITOR=ON`, launch the
+same configuration directly:
+
+```batch
+.\build\bin\Release\SparkEditor.exe
+```
 
 ### Linux
 
@@ -259,7 +291,8 @@ cd build/bin
 ./SparkEngine
 ```
 
-On Linux with a GPU, the engine uses the Vulkan or OpenGL backend. Without a GPU, the engine falls back to `NullRHIDevice` (headless mode) or can render on CPU using the OpenGL backend with Mesa llvmpipe:
+On Linux, select a compiled Vulkan or OpenGL development backend. For explicit
+CPU-rendered OpenGL, configure Mesa llvmpipe and the required virtual display:
 
 ```bash
 # Software rendering (no GPU required)
@@ -268,23 +301,25 @@ Xvfb :99 -screen 0 1024x768x24 &
 DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./SparkEngine
 ```
 
+`RHIFactory::CreateDevice` alone does not retry a failed backend. At runtime,
+`RHIBridge::Initialize` retries its available GPU backends after device or
+swap-chain setup fails, then creates the no-render `NullRHIDevice` only if all
+of them fail. That resilience path is not a certified Linux compatibility claim.
+
 ### Command-Line Options
 
 | Option | Description |
 |--------|-------------|
-| `-headless` | Run without graphics or audio (for dedicated servers). Falls back to `NullRHIDevice` automatically. |
+| `-headless` | Select the host headless entry path. Current host wiring initializes no RHI; wiring the separate `NullRHIDevice` path remains `HEAD-220`. |
 | `-game <path>` | Load a specific game module DLL |
 | `-scene <path>` | Load a specific scene on startup |
-| `-width <N>` | Set window width in pixels |
-| `-height <N>` | Set window height in pixels |
-| `-fullscreen` | Start in fullscreen mode |
-| `-console` | Force enable the debug console |
-| `-noconsole` | Disable the debug console |
+| `-window-size <W>x<H>` | Override the initial window size, for example `-window-size 1920x1080` |
+| `-no-subprocess` | Skip the optional standalone `SparkConsole` subprocess; the in-process console remains available |
 
 Example:
 
 ```bash
-./SparkEngine -game MyGame.dll -scene Assets/Scenes/Level01.scene -width 1920 -height 1080
+./SparkEngine -game MyGame.dll -scene Assets/Scenes/Level01.scene -window-size 1920x1080
 ```
 
 ## Default Controls
@@ -337,28 +372,31 @@ cmake -B build -DBUILD_TESTS=ON
 cmake --build build --config Release
 
 # Run tests
-ctest --test-dir build --output-on-failure
+ctest --test-dir build -C Release --output-on-failure --no-tests=error
 ```
 
-All 71 test files (864+ test cases) should pass. See [Testing](../advanced/Testing.md) for details.
+The generated source inventory currently records 6,952 GoogleTest definitions across 575 test-bearing implementation files; that inventory is not a CTest verdict. Use the command's exit status and final CTest summary to determine the actual result. See [Testing](../advanced/Testing.md) for details.
 
 ## SparkBuild Tool
 
-SparkEngine ships with **SparkBuild**, a cross-platform terminal-UI wrapper around CMake. The source lives in-tree under `SparkBuild/` and is built as part of the normal engine build (opt-out with `-DENABLE_SPARKBUILD=OFF`).
+The repository includes **SparkBuild**, a cross-platform terminal-UI wrapper around CMake. Its source lives in-tree under `SparkBuild/`; when `ENABLE_SPARKBUILD=ON` (the root default), normal CMake configuration adds its target to the build. Opt out with `-DENABLE_SPARKBUILD=OFF`.
 
-```bash
-cmake --build build --target SparkBuild
-./build/bin/SparkBuild           # launches the interactive configurator
+```powershell
+cmake --build build --config Release --target SparkBuild
+.\build\bin\Release\SparkBuild.exe
 ```
+
+Single-config superproject builds use `build/bin/SparkBuild`; a standalone
+SparkBuild-only project also retains its historical flat `bin` output.
 
 See [Build System and CMake Modules -- SparkBuild](../advanced/Build-System-and-CMake-Modules.md#sparkbuild) for more details.
 
 ## Build Options
 
-SparkEngine has 30+ toggleable CMake modules. Pass them during configuration:
+SparkEngine exposes documented root CMake options. Pass supported options during configuration:
 
 ```bash
-cmake -B build -DENABLE_AI=OFF -DENABLE_NETWORKING=ON ...
+cmake -B build -DENABLE_EDITOR=OFF -DENABLE_NETWORKING=ON ...
 ```
 
 ### Commonly Used Build Flags
@@ -367,13 +405,12 @@ cmake -B build -DENABLE_AI=OFF -DENABLE_NETWORKING=ON ...
 |------|---------|-------------|
 | `BUILD_TESTS` | ON | Build the unit test suite |
 | `ENABLE_EDITOR` | ON (Windows) | Include the ImGui editor |
-| `ENABLE_GRAPHICS` | ON | Enable graphics rendering |
-| `ENABLE_PHYSX` | ON | Enable Jolt Physics integration |
-| `ENABLE_AI` | ON | Enable AI and navigation |
-| `ENABLE_ANIMATION` | ON | Enable skeletal animation |
-| `ENABLE_NETWORKING` | ON | Enable networking (UDP sockets) |
-| `ENABLE_PROFILING` | ON | Enable performance profiler |
-| `ENABLE_HOT_RELOAD` | ON | Enable script hot-reload |
+| `ENABLE_GRAPHICS` | ON | Declared but currently inert; OFF does not remove graphics/RHI (`HEAD-220`) |
+| `ENABLE_NETWORKING` | ON | Controls networking definitions/libraries; server-process targets have a separate option |
+| `ENABLE_PROFILING` | ON | Controls the `PROFILING_ENABLED` compile definition |
+| `ENABLE_VULKAN` | ON | Controls Vulkan discovery and its support definition; source-glob breadth still needs verification |
+| `ENABLE_OPENGL` | ON | Controls OpenGL discovery/enablement; host context setup remains separate |
+| `BUILD_GAME_MODULES` | ON | Include in-tree game-module targets |
 
 See [Build System and CMake Modules](../advanced/Build-System-and-CMake-Modules.md) for the full list of options.
 
@@ -400,7 +437,7 @@ git submodule update --init --recursive --force
 
 **Symptom:** CMake errors about unsupported features or policy warnings.
 
-**Fix:** Update to CMake 3.16 or newer:
+**Fix:** Update to CMake 3.25 or newer:
 
 ```bash
 # Ubuntu (may need to add Kitware PPA for latest version)
@@ -475,7 +512,7 @@ cmake --build build --config Release --target install
 ```bash
 cmake --preset ci-linux-asan
 cmake --build build
-cd build && ctest --output-on-failure
+cd build && ctest --output-on-failure --no-tests=error
 ```
 
 ## Project Structure Quick Reference
@@ -499,8 +536,8 @@ SparkEngine/
 ├── SparkShaderCompiler/  # Shader compilation tool
 ├── SparkSDK/             # Public SDK headers
 ├── Templates/            # Game module templates
-├── ThirdParty/           # Git submodules (15 libraries)
-├── Tests/                # Unit tests (71 files, 864+ cases)
+├── ThirdParty/           # Audited dependencies: six submodules plus vendored snapshots
+├── Tests/                # Unit-test sources (generated inventory above; CTest is the verdict)
 ├── Shaders/              # HLSL, GLSL shaders
 ├── Assets/               # Models, Scenes, Scripts
 ├── cmake/                # CMake helper modules

@@ -2,6 +2,11 @@
 
 SparkEngine's collaborative editing system enables multiple editor instances to work on the same scene simultaneously, inspired by HeroEngine's live collaborative editing. The system provides real-time peer presence awareness, node-level locking, edit broadcasting, and optional live push to running game servers.
 
+> **Release boundary:** Collaboration and its broker/client/service paths are
+> experimental development implementations outside the blocked and uncertified
+> `stable-v1` service-free profile. This page is implementation guidance, not a
+> production or deployment-support claim.
+
 ## Architecture
 
 ```
@@ -14,7 +19,7 @@ SparkEngine's collaborative editing system enables multiple editor instances to 
                             [AreaServer]
 ```
 
-`SparkCollabServer` is the production authority. The editor's existing
+`SparkCollabServer` is the development reference authority. The editor's existing
 `CollaborativeEditSession` API translates selection, camera presence, node
 locks, and serialized `EditMessage` objects through
 `StandaloneCollaborationClient`, so hierarchy and viewport callers do not need
@@ -34,7 +39,7 @@ These are intentionally separate systems. Editor collaboration uses TCP for reli
 
 ## No Game Module Code Required
 
-**All collaborative editing is handled entirely within the editor.** There is no need to write any C++ code in your game module to use collaborative editing. The system is fully integrated into the SparkEditor:
+The current development path keeps collaborative editing logic in the editor-side integration, so the examples do not require game-module code. Coverage and release integration remain unverified:
 
 - **Hosting/joining**: Use the **Collaboration panel** (View > Collaboration) to host or join sessions
 - **Locking**: The editor automatically acquires/releases locks when you select and edit nodes
@@ -135,7 +140,7 @@ session.SetLockChangedCallback([](const std::string& nodeId, SparkEditor::PeerID
 
 ## Standalone Collaboration Broker
 
-Run the isolated production broker without a GUI:
+Run the isolated development broker without a GUI:
 
 ```bash
 SparkCollabServer --socket spark-collab-project-a
@@ -262,9 +267,9 @@ auto stats = session.GetStats();
 
 | File | Description |
 |------|-------------|
-| `SparkEditor/Source/Communication/CollaborativeEditSession.h` | Stable editor-facing session API and broker/peer mode ownership |
+| `SparkEditor/Source/Communication/CollaborativeEditSession.h` | Editor-facing session API and broker/peer mode ownership |
 | `SparkEditor/Source/Communication/CollaborativeEditSession.cpp` | Editor translation, snapshots, callbacks, and legacy TCP fallback |
-| `SparkEditor/Source/Communication/StandaloneCollaborationClient.*` | Typed production client for the broker protocol |
+| `SparkEditor/Source/Communication/StandaloneCollaborationClient.*` | Typed development client for the broker protocol |
 | `SparkDaemon/src/CollaborationProtocol.h` | Bounded versioned collaboration wire DTOs and codecs |
 | `SparkDaemon/src/CollaborationService.*` | Authoritative presence, lock, and edit-history service |
 | `SparkDaemon/src/CollabServerMain.cpp` | Standalone process entry point |

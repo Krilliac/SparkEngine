@@ -2,19 +2,24 @@
 
 A practical, hands-on guide to the SparkEditor. This page covers day-to-day workflows rather than exhaustive API details. For the full panel reference, see [SparkEditor](../gameplay-tools/SparkEditor.md).
 
+> **Release boundary:** SparkEditor is a required Windows authoring product in the
+> blocked and uncertified `stable-v1` profile. Panel descriptions are source-level
+> guidance; registration, default visibility, and complete undo/gizmo behavior are
+> separate gates. Collaboration, visual scripting, plugins, and non-Windows paths
+> remain experimental or outside the profile.
+
 ---
 
 ## Opening the Editor
 
-Press **F1** while the engine is running. The editor is an ImGui overlay that runs on top of the game viewport. Press **F1** again to close it.
-
-The editor requires `ENABLE_EDITOR=ON` at build time (default on Windows).
+Build with `ENABLE_EDITOR=ON` and launch the separate `SparkEditor` executable.
+The runtime hosts do not currently define an F1 editor-overlay toggle.
 
 ---
 
 ## Default Layout
 
-When you first open the editor, 7 core panels are visible:
+The current factory metadata marks 6 core panels visible by default:
 
 | Panel | Position | What it does |
 |-------|----------|--------------|
@@ -24,9 +29,8 @@ When you first open the editor, 7 core panels are visible:
 | **Asset Browser** | Bottom | Project file browser with thumbnails |
 | **Console** | Bottom | Log output, command input, and filtering |
 | **Game View** | Tab (center) | In-game camera preview with HUD |
-| **Profiler** | Tab (bottom) | Real-time performance graphs |
 
-All panels can be dragged, docked, resized, or closed. Reopen any panel from the **Window** menu.
+Registered panels can be dragged, docked, resized, or closed. The **Window** menu can reopen the panels that the current editor build registers; the 65-header inventory is not a registration or release-certification count.
 
 ---
 
@@ -40,9 +44,9 @@ The Scene View is your primary 3D viewport.
 | Middle-click + drag | Pan camera |
 | Scroll wheel | Zoom in/out |
 | Click entity | Select it |
-| W | Translate gizmo (move) |
-| E | Rotate gizmo |
-| R | Scale gizmo |
+| W | Translate gizmo (implemented path) |
+| E | Select rotate mode (current transform application is incomplete; `EDT-210`) |
+| R | Select scale mode (current transform application is incomplete; `EDT-210`) |
 
 ### Render Modes
 
@@ -90,7 +94,7 @@ Click **Add Component** at the bottom of the Inspector to attach new components.
 
 ### Undo / Redo
 
-All editor operations support undo/redo:
+Some scene-edit operations participate in the command stack; complete operation coverage remains blocked by `EDT-210`:
 
 - **Ctrl+Z** — Undo
 - **Ctrl+Y** — Redo
@@ -235,12 +239,12 @@ Changes apply at runtime and can be saved to `settings.ini`.
 
 ### Build & Cook
 
-Open from **Window → Build & Cook**. Package your game:
+Open **Window → Build & Cook** for the current local build/staging interface. Its output is not a certified release package:
 
 - Select build profile (Debug / Development / Release / Shipping)
 - Choose target platform
-- Configure asset cooking (texture, audio, mesh compression)
-- One-click build with progress monitoring
+- Inspect reserved texture/audio/mesh transform controls; those transforms are not implemented and content is copied unchanged
+- Run the available local build/staging step with progress monitoring
 
 ### Game Module Selector
 
@@ -324,7 +328,7 @@ This is useful for isolating bugs — disable everything except the system you a
 
 ## Collaborative Editing
 
-SparkEngine supports multi-user editing sessions:
+Collaborative editing is an experimental implementation outside `stable-v1`; the following is development guidance rather than a release-support claim:
 
 1. Open **Window → Collaboration**
 2. One user clicks **Host** to start a session
@@ -344,7 +348,8 @@ The editor uses a customizable theme system. Default themes are applied via `Edi
 
 ### Panel Visibility
 
-- All 56 panels are accessible from the **Window** menu
+- Registered panels are accessible from the **Window** menu; the repository's
+  65 `*Panel.h` classes are a source inventory, not a visibility guarantee
 - Drag panels to rearrange the layout
 - Layouts persist between sessions
 
@@ -354,12 +359,11 @@ The editor uses a customizable theme system. Default themes are applied via `Edi
 
 | Shortcut | Action |
 |----------|--------|
-| F1 | Toggle editor |
 | F3 | Toggle FPS stats |
 | ` (Backtick) | Toggle console |
 | W | Translate gizmo |
-| E | Rotate gizmo |
-| R | Scale gizmo |
+| E | Select rotate mode (transform application incomplete) |
+| R | Select scale mode (transform application incomplete) |
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
 | Ctrl+S | Save scene |

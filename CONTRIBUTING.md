@@ -17,7 +17,7 @@ guidelines and information for contributors.
    ```
 4. **Run tests**:
    ```bash
-   cd build && ctest --output-on-failure
+   cd build && ctest --output-on-failure --no-tests=error
    ```
 
 ## Code Standards
@@ -43,7 +43,7 @@ See `.clang-format` for the full style configuration.
 
    # Build + test
    cmake --build build --config Release
-   cd build && ctest --output-on-failure
+   cd build && ctest --output-on-failure --no-tests=error
 
    # Documentation
    docs/update-all-docs.sh

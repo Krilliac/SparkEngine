@@ -1,9 +1,9 @@
 # External Services and Orchestration
 
-SparkEngine ships its production-facing server and tool responsibilities as
-small, independently deployable executables. The game runtime stays focused on
-simulation; process ownership, ingress, collaboration, cooking, and automation
-have explicit boundaries and failure domains.
+SparkEngine contains development/reference executables for server and tool
+responsibilities. They are outside the service-free `stable-v1` profile and are
+not production deployment evidence. The implementations separate simulation,
+process ownership, ingress, collaboration, cooking, and automation boundaries.
 
 ## Process map
 
@@ -152,7 +152,7 @@ flow through the broker-backed `CollaborativeEditSession` path. Direct
 peer-hosted TCP is retained only as an explicit fallback.
 
 CTest's `SparkCollabProcessSmoke` launches the real broker executable, waits for
-IPC readiness, connects two production clients, exercises presence, locking,
+IPC readiness, connects two standalone clients, exercises presence, locking,
 ordered edits and snapshots, then requests and verifies graceful process
 shutdown.
 
@@ -174,7 +174,7 @@ Treat health JSON, orchestration status, JUnit, and captured logs as distinct
 signals. A process existing is not the same as readiness, and a routed session
 is not proof that an area has accepted gameplay authority.
 
-CTest's `SparkOrchestrationProcessSmoke` also exercises the production process
+CTest's `SparkOrchestrationProcessSmoke` also exercises the standalone process
 boundary directly. It starts a real `SparkDaemon`, drives the real
 `SparkOrchestrator` CLI through define/start/status/drain/stop/undefine, supervises
 a real `SparkCollabServer` child, and verifies an orderly daemon shutdown. The

@@ -21,6 +21,7 @@
 #include "Spark/IModule.h"
 #include "Spark/IEngineContext.h"
 #include "Core/Contracts.h"
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <memory>
@@ -61,6 +62,17 @@ struct DiscoveredModule
 class ModuleManager
 {
   public:
+    /** @brief Successfully completed module lifecycle callbacks for one manager lifetime. */
+    struct LifecycleEvidence
+    {
+        uint64_t initialized = 0;
+        uint64_t updated = 0;
+        uint64_t fixedUpdated = 0;
+        uint64_t rendered = 0;
+        uint64_t unloaded = 0;
+        uint64_t faults = 0; ///< Guarded callback dispatches that threw or were disabled
+    };
+
     enum class DiscoveryMode
     {
         ConservativeNameHints,
@@ -221,6 +233,18 @@ class ModuleManager
     /** @brief Get the number of modules whose OnLoad completed successfully. */
     size_t GetInitializedModuleCount() const;
 
+    /** @brief Get cumulative successful callback counts for this manager lifetime. */
+    LifecycleEvidence GetLifecycleEvidence() const { return m_lifecycleEvidence; }
+
+    /**
+     * @brief Get the evidence snapshot published by the last owning manager teardown.
+     *
+     * The snapshot remains available after the manager object has been destroyed,
+     * allowing a platform entry point to report evidence only after normal engine
+     * teardown has completed.
+     */
+    static LifecycleEvidence GetLastTeardownLifecycleEvidence();
+
     /**
      * @brief Detailed reason from the most recent load operation.
      *
@@ -283,4 +307,6 @@ class ModuleManager
     std::vector<LoadedModule> m_modules;
     Spark::LocalFileCache* m_fileCache = nullptr;
     std::string m_lastLoadError;
+    LifecycleEvidence m_lifecycleEvidence;
+    bool m_publishTeardownLifecycleEvidence = true;
 };

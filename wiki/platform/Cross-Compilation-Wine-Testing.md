@@ -42,7 +42,7 @@ sudo apt-get install mingw-w64 wine64 mesa-vulkan-drivers
 |---------|---------|
 | `dxvk` | D3D11->Vulkan translation (much faster than WineD3D for rendering) |
 | `xvfb` | Virtual X11 framebuffer (needed for windowed mode without a display) |
-| `libgl-dev` | OpenGL headers (needed if building OpenGL backend too) |
+| `libgl-dev` | OpenGL headers only for a manual experimental override; the canonical MinGW presets disable Vulkan and OpenGL and exercise D3D11 |
 
 ### DirectXMath Headers
 
@@ -97,8 +97,8 @@ cmake --build build/linux-mingw-release --parallel $(nproc)
 
 | Feature | MSVC Build | MinGW Build |
 |---------|-----------|-------------|
-| D3D11 | Full support | Full support |
-| D3D12 | Full support | **Excluded** (MinGW headers too old for ID3D12Device5) |
+| D3D11 | In-profile candidate only for Windows 11 x64/MSVC v143; blocked/uncertified | Development evaluation path outside `stable-v1` |
+| D3D12 | Experimental/outside `stable-v1` | **Excluded** (`SPARK_NO_D3D12`; MinGW headers lack required interfaces) |
 | DXR Raytracing | Optional | **Excluded** (requires D3D12) |
 | DirectXMath | Built-in | Requires manual header install (see above) |
 | XAudio2 | Built-in | Linked via `-lxaudio2_8` |
@@ -198,7 +198,7 @@ python3 tools/test-windows-wine.py --build-dir build/linux-mingw-release
 |-------|------|---------------|
 | 0 | Prerequisites | Wine, MinGW, Lavapipe, build artifacts exist |
 | 1 | Wine Setup | Wine prefix initialization, DXVK/VKD3D detection |
-| 2 | Unit Tests | Full test suite under Wine (2,509 tests) |
+| 2 | Unit Tests | The configured CTest suite under Wine; use that run's discovery count and terminal summary as evidence |
 | 3 | Engine Live | D3D11 initialization, frame rendering, headless mode |
 | 4 | Editor Live | D3D11 + ImGui initialization, test-mode rendering |
 | 5 | Stress Tests | Rapid start/stop, concurrent instances, bad args |

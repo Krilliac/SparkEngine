@@ -25,6 +25,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string_view>
@@ -52,6 +53,25 @@ namespace
     void* s_imguiAllocFn = nullptr;
     void* s_imguiFreeFn = nullptr;
     void* s_imguiUserData = nullptr;
+    std::mutex s_teardownLifecycleEvidenceMutex;
+    ModuleManager::LifecycleEvidence s_lastTeardownLifecycleEvidence;
+
+    void AccumulateLifecycleEvidence(ModuleManager::LifecycleEvidence& target,
+                                     const ModuleManager::LifecycleEvidence& source)
+    {
+        target.initialized += source.initialized;
+        target.updated += source.updated;
+        target.fixedUpdated += source.fixedUpdated;
+        target.rendered += source.rendered;
+        target.unloaded += source.unloaded;
+        target.faults += source.faults;
+    }
+
+    void PublishTeardownLifecycleEvidence(const ModuleManager::LifecycleEvidence& evidence)
+    {
+        const std::scoped_lock lock(s_teardownLifecycleEvidenceMutex);
+        s_lastTeardownLifecycleEvidence = evidence;
+    }
 
     std::filesystem::path PathFromUtf8(std::string_view path)
     {
@@ -598,6 +618,14 @@ class LegacyModuleAdapter : public Spark::IModule
 ModuleManager::~ModuleManager()
 {
     UnloadAll();
+    if (m_publishTeardownLifecycleEvidence)
+        PublishTeardownLifecycleEvidence(m_lifecycleEvidence);
+}
+
+ModuleManager::LifecycleEvidence ModuleManager::GetLastTeardownLifecycleEvidence()
+{
+    const std::scoped_lock lock(s_teardownLifecycleEvidenceMutex);
+    return s_lastTeardownLifecycleEvidence;
 }
 
 bool ModuleManager::LoadModule(const std::string& path)
@@ -1186,6 +1214,17 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
         console.LogInfo("Initializing module: " + entry.name);
         if (entry.instance->OnLoad(context))
         {
+            // A manager lifetime owns fresh evidence. Clear same-name records
+            // left by a previous manager so an otherwise healthy replacement
+            // is not born disabled; any faults already seen by this manager
+            // remain preserved in m_lifecycleEvidence.
+            if (m_publishTeardownLifecycleEvidence)
+            {
+                auto& faultIsolator = Spark::SubsystemFaultIsolator::GetInstance();
+                faultIsolator.ResetSubsystem("Module:" + entry.name);
+                faultIsolator.ResetSubsystem("ModuleFixed:" + entry.name);
+            }
+            ++m_lifecycleEvidence.initialized;
             entry.initialized = true;
             console.LogSuccess("Module initialized: " + entry.name);
         }
@@ -1210,6 +1249,7 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
                            "(DLL stays mapped until engine shutdown)",
                            entry.name.c_str());
             entry.instance->OnUnload();
+            ++m_lifecycleEvidence.unloaded;
             if (entry.destroyFn)
             {
                 entry.destroyFn(entry.instance);
@@ -1227,7 +1267,14 @@ void ModuleManager::UpdateAll(float deltaTime)
         if (entry.initialized && entry.instance)
         {
             std::string guardName = "Module:" + entry.name;
-            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", { entry.instance->OnUpdate(deltaTime); });
+            bool callbackCompleted = false;
+            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", {
+                entry.instance->OnUpdate(deltaTime);
+                ++m_lifecycleEvidence.updated;
+                callbackCompleted = true;
+            });
+            if (!callbackCompleted)
+                ++m_lifecycleEvidence.faults;
         }
     }
 }
@@ -1239,7 +1286,14 @@ void ModuleManager::FixedUpdateAll(float fixedDeltaTime)
         if (entry.initialized && entry.instance)
         {
             std::string guardName = "ModuleFixed:" + entry.name;
-            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", { entry.instance->OnFixedUpdate(fixedDeltaTime); });
+            bool callbackCompleted = false;
+            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", {
+                entry.instance->OnFixedUpdate(fixedDeltaTime);
+                ++m_lifecycleEvidence.fixedUpdated;
+                callbackCompleted = true;
+            });
+            if (!callbackCompleted)
+                ++m_lifecycleEvidence.faults;
         }
     }
 }
@@ -1257,7 +1311,14 @@ void ModuleManager::RenderAll()
         if (entry.initialized && entry.instance)
         {
             std::string guardName = "Module:" + entry.name;
-            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", { entry.instance->OnRender(); });
+            bool callbackCompleted = false;
+            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", {
+                entry.instance->OnRender();
+                ++m_lifecycleEvidence.rendered;
+                callbackCompleted = true;
+            });
+            if (!callbackCompleted)
+                ++m_lifecycleEvidence.faults;
         }
     }
 }
@@ -1331,6 +1392,7 @@ void ModuleManager::ShutdownAllAfterPreflight()
         {
             console.LogInfo("Shutting down module: " + it->name);
             it->instance->OnUnload();
+            ++m_lifecycleEvidence.unloaded;
             it->initialized = false;
         }
     }
@@ -1430,6 +1492,7 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
 #endif
 
         ModuleManager stagedManager;
+        stagedManager.m_publishTeardownLifecycleEvidence = false;
         stagedManager.m_fileCache = m_fileCache;
         if (!stagedManager.LoadModule(PathToUtf8(shadowPath)))
         {
@@ -1466,6 +1529,8 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         // failed OnLoad is cleaned up by InitializeAll and leaves the old
         // module, including its in-memory state, intact.
         stagedManager.InitializeAll(context);
+        AccumulateLifecycleEvidence(m_lifecycleEvidence, stagedManager.m_lifecycleEvidence);
+        stagedManager.m_lifecycleEvidence = {};
         if (!stagedManager.m_modules.front().initialized || !stagedManager.m_modules.front().instance)
         {
             stagedManager.UnloadAll();
@@ -1489,9 +1554,15 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
 
         // Commit only after the replacement is fully usable.
         if (entry.initialized && entry.instance)
+        {
             entry.instance->OnUnload();
+            ++m_lifecycleEvidence.unloaded;
+        }
         UnloadEntry(entry);
         m_modules[index] = std::move(replacement);
+        auto& faultIsolator = Spark::SubsystemFaultIsolator::GetInstance();
+        faultIsolator.ResetSubsystem("Module:" + name);
+        faultIsolator.ResetSubsystem("ModuleFixed:" + name);
         SortModules();
         console.LogSuccess("Module transactionally reloaded and initialized: " + name);
         return true;

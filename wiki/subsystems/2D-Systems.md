@@ -656,7 +656,7 @@ The test file uses minimal re-declarations of DirectXMath types (`TestHelper::Fl
 Run the tests with:
 
 ```bash
-cd build && ctest --output-on-failure
+cd build && ctest --output-on-failure --no-tests=error
 # Or directly:
 ./bin/SparkTests --gtest_filter="*Sprite2D*"
 ```

@@ -1,6 +1,8 @@
 # Codebase Statistics
 
 Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-28.
+This source inventory is not readiness evidence. The `stable-v1` Windows 11
+x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ## Code Volume
 
@@ -8,7 +10,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 311582 |
+| **SparkEngine/Source** | 311718 |
 | **SparkEditor/Source** | 109363 |
 | **GameModules** | 143040 |
 | **External services** | 11178 |
@@ -16,7 +18,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | **Tests** | 169319 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~760331** |
+| **Total C++ (excl. ThirdParty)** | **~760467** |
 
 ### File Counts
 
@@ -27,16 +29,12 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 575 |
+| Test-bearing implementation files (.cpp/.mm) | 575 |
 | Wiki pages (.md) | 198 |
 
-### Code Density
+### Largest Top-Level Source Section
 
-| Metric | Value |
-|--------|-------|
-| Average lines per .cpp file | ~712 |
-| Average lines per .h file | ~583 |
-| Largest codebase section | Graphics (119441 lines — 38% of SparkEngine/Source) |
+Graphics contains 119441 lines, or 38% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -45,9 +43,9 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 119441 | 38.3% |
-| Engine (all subsystems) | 87621 | 28.1% |
+| Engine (all subsystems) | 87626 | 28.1% |
 | Utils | 42446 | 13.6% |
-| Core | 29497 | 9.4% |
+| Core | 29628 | 9.5% |
 | Physics | 10814 | 3.4% |
 | Audio | 6090 | 1.9% |
 | Input | 3953 | 1.2% |
@@ -64,7 +62,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | AI | 13490 |
 | ECS | 8447 |
 | Gameplay | 7755 |
-| Animation | 6700 |
+| Animation | 6705 |
 | Scripting | 5093 |
 | SaveSystem | 3471 |
 | UI | 2522 |
@@ -91,16 +89,20 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 
 | Metric | Count |
 |--------|------:|
-| Component header files | 17 |
-| Component struct definitions | 75 |
+| Concrete component-group headers (`Engine/ECS/Components/*Components.h`) | 17 |
+| Struct declarations in those headers | 79 |
 | ECS systems | 25 |
 | Execution order | Physics → Animation → AI → Audio → Lifecycle → Render |
+
+Component provenance: this declaration inventory scans only the concrete
+`*Components.h` files and matches whitespace-tolerant `struct` declarations.
+It does not measure registration, runtime use, support, or readiness.
 
 ## Editor Metrics
 
 | Metric | Count |
 |--------|------:|
-| Editor panel classes | 65 |
+| `*Panel.h` class inventory | 65 |
 | Total editor lines | 109363 |
 
 ## Testing Metrics
@@ -109,8 +111,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 |--------|------:|
 | Test files | 575 |
 | TEST() definitions | 6952 |
-| Subsystems covered | All major |
-| Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
+| Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
 
@@ -120,12 +121,15 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | ENABLE_* feature toggles | 22 |
 | Game modules | 11 |
 | SDK public headers | 15 |
-| Supported compilers | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
+| Documented build compiler paths | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
 | Platforms | Windows, Linux, macOS (experimental) |
 
 ## Third-Party Dependencies
 
-### Git Submodules
+### Audited Dependency Inventory
+
+`ThirdParty/dependencies.lock` is the authoritative manifest. This selected
+inventory is implementation evidence, not support certification.
 
 | Library | Path | Purpose |
 |---------|------|---------|
@@ -135,20 +139,16 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | AngelScript | `ThirdParty/Scripting/angelscript-mirror` | Scripting VM |
 | miniz | `ThirdParty/Utils/miniz` | Compression |
 | Recast Navigation | `ThirdParty/AI/recastnavigation` | NavMesh pathfinding |
-
-### Embedded Libraries
-
-| Library | Purpose |
-|---------|---------|
-| DirectXTK | DirectX 11 toolkit |
-| Assimp | 3D model import (FBX, glTF) |
-| ImGuizmo | 3D editor gizmos |
-| imnodes | Node graph editor |
-| GLM | Math library |
-| RapidJSON | JSON parsing |
-| spdlog | Structured logging |
-| stb | Image loading |
-| miniaudio | Cross-platform audio fallback |
+| SDL2 | `ThirdParty/SDL2` | Experimental non-Windows window/input path |
+| tinyobjloader | `ThirdParty/Utils/tinyobjloader` | OBJ import |
+| stb_image | `ThirdParty/Utils/stb` | Image import |
+| cgltf | `ThirdParty/Utils/cgltf` | glTF import |
+| miniaudio | `ThirdParty/Audio/miniaudio` | Linked XAudio2-stub implementation surface; not the active audio-factory fallback |
+| nlohmann/json | `ThirdParty/Utils/json` | JSON parsing when available |
+| tinyexr | `ThirdParty/Utils/tinyexr` | EXR import |
+| zstd | `ThirdParty/Utils/zstd` | Compression path |
+| VulkanMemoryAllocator | `ThirdParty/VulkanMemoryAllocator` | Experimental Vulkan allocation path |
+| glad | `ThirdParty/glad` | Experimental OpenGL loader |
 
 ## Largest Files
 
@@ -160,7 +160,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-
 | `CrashHandler.cpp` | 2093 |
 | `SaveSystem.cpp` | 2036 |
 | `VulkanDevice.cpp` | 1991 |
-| `ModuleManager.cpp` | 1777 |
+| `ModuleManager.cpp` | 1848 |
 | `NetworkConnection.cpp` | 1678 |
 | `EngineSettings.cpp` | 1623 |
 | `PostProcessingPipeline.cpp` | 1602 |

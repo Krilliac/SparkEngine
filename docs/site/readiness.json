@@ -3,7 +3,7 @@
   "globalRelease": {
     "state": "blocked",
     "label": "Pre-release hardening",
-    "summary": "SparkEngine is source-usable and feature-rich, but it is not yet a fully ready engine release. Required CI can mask failures, no versioned release exists, shipping artifacts are not signed or attested, and the stable-v1 Windows, D3D11, editor, NullRHI, installed-package, public-SDK, and SparkGameFPS evidence is not certified.",
+    "summary": "SparkEngine is source-usable and feature-rich, but it is not yet a fully ready engine release. Required CI can mask failures, no versioned release exists, no versioned Shipping artifact has same-commit stable-v1 qualification, code-signing, install, uninstall, and rollback evidence, and the stable-v1 Windows, D3D11, editor, NullRHI, installed-package, public-SDK, and SparkGameFPS evidence is not certified.",
     "definition": [
       "Every declared release profile is ready at the same source commit; each profile's required gates are passing and its applicable work is complete.",
       "Required builds and tests fail closed and attach machine-readable evidence.",
@@ -1650,7 +1650,7 @@
       "name": "Stable v1",
       "state": "blocked",
       "owner": "unassigned",
-      "summary": "The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as one installed first-party single-player vertical slice, SparkGameFPS, that must build through the public SDK surface alone. Constrained LAN play is optional and is not required. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface. Nothing in this profile is certified while its state is blocked.",
+      "summary": "The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as one installed first-party single-player vertical slice, SparkGameFPS, that must build through the public SDK surface alone. The complete required Windows build-product set is enumerated below and includes SparkEditor, SparkConsole, shader compiler, crash reporter, cooker, automation host, launcher, build tool, and installer; those products are in profile but remain blocked and uncertified. Constrained LAN play is optional and is not required. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface. Nothing in this profile is certified while its state is blocked.",
       "scope": [
         {
           "id": "host",
@@ -2123,13 +2123,20 @@
       ],
       "publicClaimRules": {
         "breadthTokens": [
-          "Windows 10",
-          "Windows 8",
           "Windows 7",
-        "Windows 10+",
-        "any platform",
-        "any host",
-        "any compiler"
+          "Windows 8",
+          "Windows 10",
+          "Windows 10+",
+          "Windows Server",
+          "Linux",
+          "Ubuntu",
+          "macOS",
+          "Mac OS",
+          "Android",
+          "iOS",
+          "any platform",
+          "any host",
+          "any compiler"
         ],
         "forbiddenInProfileCells": [
           "Any",
@@ -2141,13 +2148,22 @@
           "Windows 10+",
           "Headless"
         ],
+        "forbiddenUnqualifiedClaims": [
+          "fully supported",
+          "production-ready",
+          "production ready"
+        ],
         "conflatedTerms": [
           {
             "term": "NullRHI",
             "conflictsWith": [
               "llvmpipe",
               "software rendering",
-              "software render"
+              "software render",
+              "software rasterization",
+              "software rasterizer",
+              "software renderer",
+              "render in software"
             ],
             "reason": "NullRHI is a no-render device that rasterizes nothing. Software rasterization through Mesa llvmpipe is the experimental OpenGL path and is outside this profile, so the two must never be described as the same thing."
           }
@@ -2254,9 +2270,73 @@
         "GameModules/README.md"
       ],
       "publicClaimSurfaces": [
+        ".github/copilot-instructions.md",
+        ".github/prompts/build-test.prompt.md",
+        ".github/prompts/copilot-instructions.md",
         "README.md",
+        "CHANGELOG.md",
+        "SECURITY.md",
+        "SparkInstaller/README.md",
+        "Templates/EmptyProject/README.md",
+        "Templates/FPSStarter/README.md",
+        "Templates/MultiplayerArena/README.md",
+        "Templates/ThirdPersonStarter/README.md",
         "docs/README.md",
-        "docs/site/content.json"
+        "docs/guides/External-Services-and-Orchestration.md",
+        "docs/plans/FEATURE_ROADMAP.md",
+        "docs/site/content.json",
+        "docs/status/PROJECT_STATUS.md",
+        "docs/tooling/README.md",
+        "wiki/Build-Guide.md",
+        "wiki/Changelog.md",
+        "wiki/Documentation.md",
+        "wiki/Docs.md",
+        "wiki/API.md",
+        "wiki/Examples.md",
+        "wiki/Guides.md",
+        "wiki/Home.md",
+        "wiki/Reference.md",
+        "wiki/Roadmap.md",
+        "wiki/Samples.md",
+        "wiki/Tutorials.md",
+        "wiki/Wiki.md",
+        "wiki/advanced/Build-System-and-CMake-Modules.md",
+        "wiki/advanced/Codebase-Health.md",
+        "wiki/advanced/Codebase-Statistics.md",
+        "wiki/advanced/Gameplay-Systems-Status.md",
+        "wiki/advanced/SparkGame-Module-Status.md",
+        "wiki/advanced/Testing.md",
+        "wiki/gameplay-tools/Asset-Pipeline.md",
+        "wiki/gameplay-tools/Project-Templates.md",
+        "wiki/gameplay-tools/SparkEditor.md",
+        "wiki/getting-started/Architecture-Overview.md",
+        "wiki/getting-started/Editor-Walkthrough.md",
+        "wiki/getting-started/FAQ.md",
+        "wiki/getting-started/Game-Modules.md",
+        "wiki/getting-started/Getting-Started.md",
+        "wiki/getting-started/Migration-Guide.md",
+        "wiki/getting-started/Making-Your-First-Game.md",
+        "wiki/getting-started/Making-Your-First-Multiplayer-Game.md",
+        "wiki/getting-started/Quick-Start-Tutorial.md",
+        "wiki/getting-started/Creating-a-Game-Module.md",
+        "wiki/gameplay-tools/Game-Packaging.md",
+        "wiki/gameplay-tools/SparkConsole.md",
+        "wiki/graphics/D3D11-Backend.md",
+        "wiki/graphics/D3D12-Backend.md",
+        "wiki/graphics/Metal-Backend.md",
+        "wiki/graphics/OpenGL-Backend.md",
+        "wiki/graphics/RHI-Abstraction-Layer.md",
+        "wiki/graphics/Vulkan-Backend.md",
+        "wiki/platform/System-Requirements.md",
+        "wiki/platform/Cross-Compilation-Wine-Testing.md",
+        "wiki/subsystems/Collaborative-Editing.md",
+        "wiki/subsystems/Dedicated-Server.md",
+        "wiki/subsystems/Animation.md",
+        "wiki/subsystems/Rendering-and-Graphics.md",
+        "wiki/subsystems/Scene-Management.md",
+        "wiki/subsystems/Scripting-with-AngelScript.md",
+        "wiki/subsystems/Tween-System.md",
+        "GameModules/README.md"
       ],
       "signOffEvidence": []
     }

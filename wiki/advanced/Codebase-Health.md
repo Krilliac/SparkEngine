@@ -1,12 +1,16 @@
 # Codebase Health
 
-System maturity status, known gaps, and improvement priorities across the SparkEngine codebase. This page consolidates findings from comprehensive gap analyses and code quality audits.
+Historical implementation-inventory snapshot from 2026-03-26. Its status labels
+record what that audit believed was present in source; they are not current release,
+support, interoperability, or deployment certification. The authoritative profile is
+the blocked and uncertified `stable-v1` Windows 11 x64/MSVC v143 + D3D11/Windows
+NullRHI + C++ module slice in `docs/site/readiness.json`.
 
 Last updated: 2026-03-26
 
 ## System Maturity Overview
 
-Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core works, some features missing | **STUB** = interface exists, minimal implementation | **EXPERIMENTAL** = functional but not production-tested
+Historical legend: **DONE** = the 2026-03-26 audit marked an implementation present/wired, not release-ready | **PARTIAL** = that audit found missing breadth | **STUB** = interface/minimal implementation | **EXPERIMENTAL** = implementation without release evidence
 
 ### Core Systems
 
@@ -15,7 +19,7 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 | Engine initialization (EngineContext) | **DONE** | Service locator with dependency-aware init/shutdown |
 | Module system (IModule, DLL loading) | **DONE** | Dynamic loading, discovery, load ordering |
 | Error handling (Result, CrashHandler) | **DONE** | Minidump generation, stack traces, HTTP upload |
-| Logging (spdlog + SimpleConsole) | **DONE** | Thread-safe, multi-sink |
+| Logging (project logger + SimpleConsole) | **DONE** | Historical audit found the custom logging path present; no spdlog dependency is tracked |
 | Event system (EventBus) | **DONE** | Type-safe pub/sub, queued dispatch |
 | Job system (ThreadPool) | **DONE** | Built but underutilized by core systems |
 | Coroutine scheduler | **DONE** | C++20 coroutines, yield/resume |
@@ -37,8 +41,8 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 | DXR raytracing | **EXPERIMENTAL** | Requires D3D12 (Windows); enabled by default with SDFGI fallback |
 | DLSS/FSR upscaling | **EXPERIMENTAL** | Requires NVIDIA/AMD SDK |
 | Render graph | **DONE** | Pass dependency management |
-| NullRHIDevice (headless) | **DONE** | Auto-fallback when no GPU; tested with 5 integration tests |
-| Software rendering (llvmpipe) | **DONE** | Full OpenGL 4.5 on CPU via Mesa llvmpipe; GLAD bundled |
+| NullRHIDevice (headless) | **DONE** | `RHIBridge` retries available GPU candidates after device/swap-chain failure, then creates NullRHI if none succeeds; the historical “5 integration tests” count is not a current verdict |
+| Software rendering (llvmpipe) | **DONE** | Historical development-route note: OpenGL can be exercised with Mesa llvmpipe and required host/display setup; not a universal or certified fallback |
 
 ### Physics
 
@@ -57,14 +61,14 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 | System | Status | Notes |
 |--------|:------:|-------|
 | XAudio2 3D spatial | **DONE** | Distance attenuation, Doppler |
-| Miniaudio fallback | **DONE** | Cross-platform |
+| Audio backend factory | **DONE** | Active factory: XAudio2 on Windows, OpenAL on non-Windows, then Null audio; miniaudio is a linked compatibility/implementation surface, not the active fallback |
 | Audio mixer | **DONE** | Master/SFX/music channels |
 
 ### ECS
 
 | System | Status | Notes |
 |--------|:------:|-------|
-| EnTT registry | **DONE** | 75 component types, 25 systems |
+| EnTT registry | **DONE** | Current source inventory finds 79 component structs across 17 component headers |
 | System execution order | **DONE** | Physics → Animation → AI → Audio → Lifecycle → Render |
 | Reactive systems | **DONE** | Component change detection via EnTT signals |
 
@@ -148,9 +152,9 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 
 | System | Status | Notes |
 |--------|:------:|-------|
-| Windows (MSVC) | **DONE** | Primary platform, full CI |
-| Linux (GCC/Clang) | **EXPERIMENTAL** | CI tested, pre-built binaries |
-| macOS | **EXPERIMENTAL** | Builds, no CI |
+| Windows (MSVC) | **DONE** | Historical primary-platform CI note; `stable-v1` remains blocked and uncertified |
+| Linux (GCC/Clang) | **EXPERIMENTAL** | Historical CI/build-artifact note; no Linux product certification |
+| macOS | **EXPERIMENTAL** | Historical build note; no macOS product certification |
 | VR (OpenXR) | **STUB** | Framework exists, requires OpenXR SDK |
 | Mobile (iOS/Android) | **STUB** | Platform abstraction layer |
 
@@ -159,8 +163,8 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 ### Strengths
 
 - **Modular service locator** — EngineContext provides clean subsystem access with dependency-aware initialization
-- **Comprehensive ECS** — 75 component types with well-ordered system execution
-- **Strong test coverage** — 3,119 test cases across 244 files covering all major subsystems
+- **ECS source breadth** — Current source inventory finds 79 component structs across 17 component headers
+- **Test source inventory** — 6,952 test definitions across 575 test-bearing files; these counts do not establish execution or pass results
 - **Consistent code style** — clang-format enforced in CI, Allman braces, 120-col limit
 - **RHI abstraction** — Clean backend selection via factory pattern
 
@@ -172,9 +176,9 @@ These are areas identified during code audits where future improvement may be be
 
 2. **ECS parallelism** — Systems currently execute serially on the main thread. The Job System exists and could be integrated for parallel system execution in the future.
 
-3. **RHI integration depth** — D3D11 is the primary, fully-tested backend. D3D12/Vulkan/OpenGL are functional via RHI but have less test coverage.
+3. **RHI integration depth** — D3D11 is the primary implementation path, but no backend is certified by the blocked `stable-v1` profile. D3D12/Vulkan/OpenGL remain experimental implementations outside that profile.
 
-4. **Networking** — All three formerly-partial networking systems (reliable channels, lag compensation, client-side prediction) are now fully implemented and tested.
+4. **Networking** — Source implementations exist for reliable channels, lag compensation, and client-side prediction, but this historical inventory does not establish interoperability or test status. Networking is outside `stable-v1`, and `NET-100` remains open.
 
 ## Priority Improvements
 

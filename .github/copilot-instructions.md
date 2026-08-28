@@ -2,7 +2,7 @@
 
 ## Identity
 
-SparkEngine is a C++23 open-source 3D game engine. Originally built for first-person shooters, it is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It uses DirectX 11 for rendering (with experimental D3D12/Vulkan/OpenGL/Metal backends via RHI abstraction), Jolt Physics for simulation, XAudio2 for spatial audio, EnTT for ECS, AngelScript for scripting, and Dear ImGui for the editor. Primary platform is Windows 10+ (MSVC); Linux/macOS are experimental.
+SparkEngine is a C++23 open-source 3D game engine. Originally built for first-person shooters, it is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It uses DirectX 11 for rendering (with experimental D3D12/Vulkan/OpenGL/Metal backends via RHI abstraction), Jolt Physics for simulation, XAudio2 for spatial audio, EnTT for ECS, AngelScript for scripting, and Dear ImGui for the editor. The `stable-v1` profile targets Windows 11 x64 with MSVC v143 and is currently blocked and uncertified. Other Windows versions and Linux/macOS paths remain outside that profile and uncertified.
 
 ## Architecture
 
@@ -28,7 +28,7 @@ SparkEngine/         ← Executable host (like Unreal's runtime)
       Cinematic/     ← Sequencer system
     Utils/           ← SparkConsole.h, Logger, Profiler, CrashHandler, Assert.h
 
-SparkEditor/         ← ImGui-based editor (65 panels)
+SparkEditor/         ← ImGui editor (65 `*Panel.h` source classes; not an operational-panel count)
   Source/            ← Animation, AssetBrowser, BuildSystem, Gizmos, LevelStreaming,
                        MaterialEditor, Profiler, VersionControl, etc.
 
@@ -81,15 +81,15 @@ ECS execution order: Physics → Animation → AI → Audio → Lifecycle → Re
 
 ## Build
 
-- CMake 3.25+, 30+ toggles (`ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, etc.)
+- CMake 3.25+ with a bounded source-backed option set; several legacy cache variables are compatibility metadata rather than source selectors
 - Zero warnings: `/W4` MSVC, `-Wall -Wextra` GCC/Clang
 - Targets: SparkEngine (exe), SparkEditor (exe), SparkGame (DLL), SparkConsole (exe)
 - CI: GitHub Actions — Windows MSVC, Linux GCC, Linux Clang (Debug + Release)
 
 ## Experimental Systems
 
-These systems exist but are not yet production-ready:
-- **VR** — OpenXR-ready framework stub; needs OpenXR SDK for actual hardware
-- **DXR ray tracing** — Feature-complete, enabled by default with SDFGI software fallback
+These systems are experimental and outside `stable-v1`; no release certification is claimed:
+- **VR** — Framework/stub source; hardware integration remains open
+- **DXR ray tracing** — Experimental implementation path without certified parity, performance, or package evidence
 - **D3D12/Vulkan/OpenGL/Metal** — Experimental RHI backends via abstraction layer
 - **Mobile/Console** — Build targets defined but untested

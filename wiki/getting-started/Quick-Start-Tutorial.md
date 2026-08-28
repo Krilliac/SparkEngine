@@ -1,6 +1,10 @@
 # Quick-Start Tutorial
 
-A hands-on guide to your first 10 minutes with SparkEngine. By the end, you will have built the engine, launched it, explored the editor, and spawned objects in a scene.
+A hands-on guide to your first 10 minutes with SparkEngine. By the end, you will have built the engine, launched it with an explicitly selected module, opened the separate editor executable, and spawned objects in a scene.
+
+> **Release boundary:** These are development instructions. The declared
+> `stable-v1` Windows 11 x64/MSVC v143 profile remains blocked and uncertified;
+> other hosts and module breadth are outside it.
 
 > **Prerequisites:** You have already completed the [Getting Started](Getting-Started.md) guide and have a successful build.
 
@@ -9,18 +13,18 @@ A hands-on guide to your first 10 minutes with SparkEngine. By the end, you will
 ## Step 1: Launch the Engine
 
 ```bash
-# Windows
-cd build\bin
-SparkEngine.exe
+# Windows: Visual Studio or Ninja Multi-Config Release build; select a module explicitly
+cd build\bin\Release
+.\SparkEngine.exe -game .\SparkGameFPS.dll
 
-# Linux
+# Linux: select a built module explicitly
 cd build/bin
-./SparkEngine
+./SparkEngine -game ../lib/libSparkGameFPS.so
 ```
 
-You should see a window with a 3D viewport and the debug console. The default game module (SparkGameFPS) loads automatically.
+The engine does not auto-load `SparkGameFPS`. Replace the placeholder with the path to a built game-module binary; the command above selects that module explicitly. On Windows, a bare launch loads one discovered candidate directly or asks the user to choose among several (windowed selector or headless guidance). The current non-Windows fallback still scans the executable directory and attempts to load its matches, subject to the one-Game-module refusal, so use `-game` or `-manifest` there instead of relying on a bare launch.
 
-**Default controls:**
+**SparkGameFPS controls (when that module is selected):**
 
 | Key | Action |
 |-----|--------|
@@ -31,7 +35,6 @@ You should see a window with a 3D viewport and the debug console. The default ga
 | Left Click | Fire (captures mouse) |
 | Esc | Release mouse |
 | ` (Backtick) | Toggle console |
-| F1 | Toggle editor |
 | F3 | Toggle FPS stats |
 
 ---
@@ -51,9 +54,19 @@ The console supports tab-completion and command history (up/down arrows).
 
 ---
 
-## Step 3: Explore the Editor
+## Step 3: Launch SparkEditor Separately
 
-Press **F1** to open the editor overlay. You will see these panels:
+`SparkEditor` is a separate executable, not an in-engine F1 overlay. Configure with `ENABLE_EDITOR=ON`, build its target, then launch it from the active output directory:
+
+```bash
+# Windows: Visual Studio or Ninja Multi-Config Release build
+.\build\bin\Release\SparkEditor.exe
+
+# Non-Windows single-config development build
+./build/bin/SparkEditor
+```
+
+Replace `Release` with the configuration you built. You will see these panels:
 
 | Panel | Purpose |
 |-------|---------|
@@ -67,7 +80,7 @@ Press **F1** to open the editor overlay. You will see these panels:
 
 1. **Select an entity** — Click any item in the Hierarchy panel
 2. **Inspect it** — The Inspector shows its Transform, MeshRenderer, and other components
-3. **Move it** — In the Scene View, use the gizmo handles (arrows) to drag the entity. Press **W** for translate, **E** for rotate, **R** for scale gizmos
+3. **Move it** — In the Scene View, use **W** and the translate arrows to drag the entity. **E** and **R** select rotate/scale modes, but applying those transforms remains incomplete (`EDT-210`)
 4. **Add a component** — In the Inspector, click "Add Component" and choose a type
 
 ---

@@ -5,16 +5,16 @@
  * @date 2025
  *
  * @details
- * This file defines the complete skeletal animation pipeline for Spark Engine. It supports
- * everything from simple single-clip playback to layered blending, additive animation, and
- * full Inverse Kinematics (IK) solving.
+ * This file defines Spark Engine's runtime skeletal-animation data, control, blending,
+ * evaluation, root-motion, and Inverse Kinematics (IK) surfaces. Asset ingestion is limited
+ * to the engine-specific binary formats documented on AnimationManager.
  *
  * ## Architecture overview
  *
  * ```
  * AnimationManager (asset cache)
- *     └── AnimationClip  (keyframe data, loaded from FBX/GLTF)
- *     └── Skeleton       (bone hierarchy)
+ *     └── AnimationClip  (keyframe data loaded from .sanim)
+ *     └── Skeleton       (bone hierarchy loaded from .skel)
  *
  * Per-entity runtime data:
  *     AnimationInstance
@@ -40,8 +40,8 @@
  * @code
  *   // Load skeleton and clips at level load
  *   auto& mgr = Spark::Animation::AnimationManager::GetInstance();
- *   auto skeleton = mgr.LoadSkeleton("Assets/Characters/Soldier.fbx");
- *   auto clips    = mgr.LoadAnimations("Assets/Characters/Soldier_Anims.fbx");
+ *   auto skeleton = mgr.LoadSkeleton("Assets/Characters/Soldier.skel");
+ *   auto clips    = mgr.LoadAnimations("Assets/Characters/Soldier_Anims.sanim");
  *   for (auto& c : clips) mgr.RegisterClip(c->name, c);
  *
  *   // Attach component to entity
@@ -292,7 +292,7 @@ namespace Spark::Animation
         /**
      * @brief Advance the animation instance by one frame.
      *
-     * Executes the full per-entity animation pipeline:
+     * Executes the per-entity animation evaluation sequence:
      * 1. Update the state machine (transition evaluation, crossfade blending).
      * 2. Advance layer playback times.
      * 3. Sample clips for each layer and blend them together.
@@ -329,8 +329,8 @@ namespace Spark::Animation
  *
  * @code
  *   auto& mgr = AnimationManager::GetInstance();
- *   auto skeleton = mgr.LoadSkeleton("Assets/Characters/Soldier.fbx");
- *   auto clips    = mgr.LoadAnimations("Assets/Characters/Soldier_Anims.fbx");
+ *   auto skeleton = mgr.LoadSkeleton("Assets/Characters/Soldier.skel");
+ *   auto clips    = mgr.LoadAnimations("Assets/Characters/Soldier_Anims.sanim");
  *   for (auto& c : clips) mgr.RegisterClip(c->name, c);
  *   auto runClip = mgr.GetClip("Run");
  * @endcode
@@ -345,15 +345,20 @@ namespace Spark::Animation
      *       The ECS `AnimationUpdateSystem` (registered at
      *       `EngineSetup.h:187`, `Phase::Animation`) calls into
      *       `GetClip()` / `GetSkeleton()` on demand each frame to drive
-     *       per-entity playback, and asset importers call `RegisterClip()`
-     *       / `LoadSkeleton()` / `LoadAnimations()` at load time. The
+     *       per-entity playback. Callers provide engine `.skel` / `.sanim`
+     *       assets through `LoadSkeleton()` / `LoadAnimations()` and explicitly
+     *       `RegisterClip()` as needed; current model importers do not populate
+     *       this registry directly. The
      *       complementary `AnimNotifyManager` (wired at
      *       `GameplayLifecycleShared.cpp:445,1032`) handles event
      *       delivery — it is orthogonal to this registry, not a
      *       duplicate. `Clear()` is safe to call at level unload but is
      *       not a lifecycle requirement because cached entries use
      *       `shared_ptr` and outlive this map while anyone holds a ref.
-     *       Exercised by `Tests/TestAnimationSystem.cpp` (895 lines).
+     *       Production `.skel` parsing is exercised by
+     *       `Tests/harden/Test_ai-anim_animation.cpp`;
+     *       `Tests/TestAnimationSystem.cpp` is standalone behavior coverage,
+     *       not evidence for the production file loaders.
      */
     class AnimationManager
     {
@@ -365,21 +370,21 @@ namespace Spark::Animation
         static AnimationManager& GetInstance();
 
         /**
-     * @brief Load a skeleton from a 3D asset file (FBX, GLTF, etc.) using Assimp.
+     * @brief Load and cache a skeleton from Spark Engine `.skel` binary data.
      *
      * Cached by filepath; calling twice with the same path returns the cached result.
      *
-     * @param filepath  Path to the model file containing skeleton data.
-     * @return          Shared pointer to the loaded Skeleton.
+     * @param filepath  Path to a file with the `SKEL` binary layout.
+     * @return          Shared pointer to the cached Skeleton, which may be empty when loading fails.
      */
         std::shared_ptr<Skeleton> LoadSkeleton(const std::string& filepath);
 
         /**
-     * @brief Load all animation clips from a 3D asset file using Assimp.
+     * @brief Load animation clips from Spark Engine `.sanim` binary data.
      *
      * Does NOT register clips automatically; call `RegisterClip()` for each.
      *
-     * @param filepath  Path to the model/animation file.
+     * @param filepath  Path to a file with the `ANIM` binary layout.
      * @return          Vector of shared pointers to loaded AnimationClips.
      */
         std::vector<std::shared_ptr<AnimationClip>> LoadAnimations(const std::string& filepath);

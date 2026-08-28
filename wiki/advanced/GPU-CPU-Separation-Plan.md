@@ -4,7 +4,7 @@
 >
 > **Thread Context:** Build-time / source-organization concern, not runtime. The split governs which translation units compile on which platform.
 >
-> **Platform/Backend Scope:** Windows (D3D11) vs. Linux/headless. The goal is that pure-CPU logic compiles everywhere while GPU-specific (D3D11) code is isolated into per-platform translation units.
+> **Platform/Backend Scope:** This historical source-separation plan began as Windows (D3D11) vs. Linux/headless work. The goal is that pure-CPU logic compiles everywhere while backend-specific code is isolated into per-platform translation units. Current backend implementation and release-support status is called out separately below.
 
 ## Overview
 
@@ -12,16 +12,16 @@ SparkEngine has a D3D11-primary rendering backend with Linux support via `Core/P
 
 A naming note: the original plan proposed `*GPU.cpp` suffixes for the extracted GPU code. The implementation instead settled on **per-platform suffixes** — `*Windows.cpp` (D3D11) and `*Linux.cpp` (CPU stub) — which more directly expresses the three-way split the plan called for.
 
-## Current Status (as of 2026-06-08)
+## Current Status (as of 2026-08-28)
 
-**Overall: Substantially Completed (Phases 1-2), Partial (Phase 3), Not Started (Phase 4).**
+**Overall: Substantially Completed (Phases 1-2), Partial (Phases 3-4); backend breadth remains experimental and uncertified.**
 
 | Phase | Scope | Status | Evidence |
 |-------|-------|--------|----------|
 | 1 | Complete the 4 deferred file splits | **Completed** | `AssetTypesWindows.cpp` + `AssetTypesLinux.cpp`, `MaterialSystemWindows.cpp` + `MaterialSystemLinux.cpp`, `PBRMaterialLightingWindows.cpp` + `PBRMaterialLightingLinux.cpp`, `GPUParticleSystemWindows.cpp` + `GPUParticleSystemLinux.cpp` all exist under `SparkEngine/Source/Graphics/` |
 | 2 | Unguard CPU-portable headers | **Likely Completed / N/A** | Earlier splits (Foliage, PostProcessing, TextureSystem, UpscalingSystem) now ship as `*Windows.cpp` companions; portable headers compile on Linux. Not separately re-audited line-by-line. |
 | 3 | Wire 6 lifecycle-only systems to the GPU pipeline | **Partial** | `BVHAccelerator::FrustumQuery` is now called from `SceneRenderer.cpp:132`. GTAO, VCT (`TraceDiffuse`/`TraceSpecular`), `ShaderVariantSystem::RequestVariant`, and the denoiser remain documented as not called from any render pass (see their header comments). |
-| 4 | RHI backend parity (Vulkan/OpenGL/D3D12/Metal) | **Not Started** | D3D11 remains the only fully functional backend; others are scaffolds. `NullRHIDevice` works as the headless fallback. |
+| 4 | RHI backend parity (Vulkan/OpenGL/D3D12/Metal) | **Partial / Uncertified** | `RHIFactory` has concrete creation paths for D3D12, Vulkan, OpenGL, and Metal behind platform/build guards, but those implementations remain experimental and outside `stable-v1`; parity and release evidence are incomplete. `RHIBridge` can force or fall back to `NullRHIDevice`, while the current Windows and `SparkServer` headless hosts still pass a null graphics service instead of instantiating that bridge/device (`HEAD-220`). |
 
 The earlier-completed splits described in the original "Current State" section (FoliageRenderer, FoliageImpostorBaker, PostProcessingPipeline, TextureSystem, UpscalingSystem) are confirmed present, now as `*Windows.cpp` companion files rather than `*GPU.cpp`.
 
@@ -55,25 +55,29 @@ Six systems were "lifecycle-only" — initialized but never producing GPU output
 
 The original priority order put BVHAccelerator → SceneRenderer first; that is the one that landed.
 
-## Phase 4 — RHI Backend Parity (Not Started)
+## Phase 4 — RHI Backend Parity (Partial, Uncertified)
 
-D3D11 remains the only functional backend. The RHI abstraction exists but D3D12/Vulkan/Metal/OpenGL are scaffolds; `NullRHIDevice` is the working headless fallback. The per-platform split is the enabler: a second backend would add `*Vulkan.cpp`/`*OpenGL.cpp` alongside the existing `*Windows.cpp`, with the shared CPU `.cpp` unchanged and CMake selecting the backend via `ENABLE_VULKAN` etc.
+`RHIFactory` now contains concrete device-creation paths for D3D11, D3D12, Vulkan, OpenGL, and Metal when their platform/build guards are enabled. Their maturity differs: D3D11 is the primary `stable-v1` implementation path, while D3D12, Vulkan, OpenGL, and Metal remain experimental, outside the profile, and lack parity/release evidence.
+
+`RHIBridge::Initialize()` can explicitly select `NullRHIDevice` for a null window and can fall back to it after GPU backend failures. That bridge-level behavior is not the same as end-to-end headless host integration: `SparkEngineWindowsHeadless.cpp` and `SparkServer/src/ServerApplication.cpp` currently construct `EngineContext` with null graphics and input services, so they bypass `RHIBridge` and do not instantiate `NullRHIDevice`. Packaged Windows/server headless certification therefore remains open under `HEAD-220`.
+
+The per-platform split remains the enabler for backend-specific companions such as `*Vulkan.cpp` or `*OpenGL.cpp` alongside existing `*Windows.cpp`, with shared CPU logic kept in the unsuffixed `.cpp` and CMake selecting compiled implementations.
 
 ## Verification (per phase)
 
 1. `cmake --preset linux-gcc-release && cmake --build build --config Release`
-2. `cd build && ctest --output-on-failure`
+2. `cd build && ctest --output-on-failure --no-tests=error`
 3. `tools/validate-all.sh --warn-only`
 4. `clang-format -i` on modified files
 
 ## Source & Freshness
 
 - **Original entry date:** 2026-04-12 (`gpu-cpu-separation-plan-2026-04-12.md`, type: Plan)
-- **Verified against codebase 2026-06-08.**
+- **Verified against codebase 2026-08-28.**
 - Status bullets:
   - **Phase 1 Completed** — all four deferred files now have `*Windows.cpp`/`*Linux.cpp` companions (naming differs from the plan's `*GPU.cpp` proposal).
   - **Phase 3 Partial** — only `BVHAccelerator::FrustumQuery` is wired in (`SceneRenderer.cpp:132`); GTAO/VCT/ShaderVariant/Denoiser headers still self-document as uncalled.
-  - **Phase 4 Not Started** — D3D11-only; other RHI backends remain scaffolds, `NullRHIDevice` is the headless fallback.
+  - **Phase 4 Partial / Uncertified** — guarded implementations exist for D3D12, Vulkan, OpenGL, and Metal but remain experimental and outside `stable-v1`; `RHIBridge` has a `NullRHIDevice` path, while the current Windows/server headless hosts bypass it with null graphics services (`HEAD-220`).
 
 ## Related Pages
 

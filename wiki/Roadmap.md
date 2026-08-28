@@ -4,7 +4,10 @@
 >
 > **Thread Context:** Not applicable — project planning
 >
-> **Platform/Backend Scope:** All supported platforms and backends
+> **Platform/Backend Scope:** The canonical roadmap covers implementation breadth,
+> but the only declared release profile is blocked/uncertified `stable-v1` on
+> Windows 11 x64/MSVC v143 with D3D11 and Windows NullRHI. Other hosts/backends
+> remain development or experimental scope outside it.
 
 The canonical roadmap is maintained in [`docs/plans/FEATURE_ROADMAP.md`](https://github.com/Krilliac/SparkEngine/blob/Working/docs/plans/FEATURE_ROADMAP.md). It distinguishes implemented capability, active work, planned work, and research so forward-looking material is not presented as shipped functionality.
 

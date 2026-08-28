@@ -269,7 +269,7 @@ When an attacker modifies a specific function:
 Run tests:
 ```bash
 cmake --build build --config Release
-cd build && ctest --output-on-failure
+cd build && ctest --output-on-failure --no-tests=error
 # Or run directly:
 ./build/linux-gcc-release/bin/SparkTests 2>&1 | grep MemoryIntegrity
 ```

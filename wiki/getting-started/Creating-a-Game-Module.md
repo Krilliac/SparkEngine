@@ -1,18 +1,22 @@
 # Creating a Game Module
 
-SparkEngine uses a dynamic module system similar to Unreal Engine and Unity. Your game logic is compiled as a shared library (DLL on Windows, .so on Linux) that the engine loads at runtime. This architecture enables hot-reload during development, clean separation of engine and game code, and the ability to load multiple modules simultaneously.
+> **Stable-v1 boundary:** Stable-v1 is blocked and uncertified. Its intended product shape is Windows 11 x64 with MSVC v143, D3D11 (or Windows NullRHI), C++ game modules, and one first-party single-player `SparkGameFPS` vertical slice. There is no certified versioned SDK or module ABI release. Other hosts, backends, scripting, templates, addons, and multiplayer remain experimental or unsupported.
 
-**Source:** `SparkSDK/Include/Spark/SparkSDK.h`, `cmake/SparkGameModule.cmake`, `cmake/SparkEnginePreflight.cmake`
+SparkEngine uses a dynamic module system. Game logic is compiled as a shared library (a DLL on the declared Windows profile; source build paths also exist elsewhere). The current manager permits **one** `ModuleKind::Game` module per process; `ModuleKind::Addon` modules (library/extension-style modules) may coexist when their own metadata permits it. Development reload and compatibility checks do not establish a stable public ABI or hot-reload support guarantee.
+
+**Source:** `SparkSDK/Include/Spark/SparkSDK.h`, `cmake/SparkGameModule.cmake`
 
 ## Quick Start from Template
 
-The fastest way to start is using the `EmptyProject` template:
+`Templates/EmptyProject` is a standalone installed-SDK package, not an in-tree `GameModules/` directory. Copy or materialize it outside the engine checkout, install a configured engine build, and configure it against the installed CMake package:
 
-```bash
-cp -r Templates/EmptyProject MyGame
+```powershell
+cmake --install <engine-build> --prefix <sdk> --config Release
+cmake -S <MyGame> -B <MyGame>/build -DSparkEngine_DIR="<sdk>/lib/cmake/SparkEngine"
+cmake --build <MyGame>/build --config Release
 ```
 
-This gives you:
+The template package layout is:
 
 ```
 MyGame/
@@ -20,9 +24,11 @@ MyGame/
 ├── Source/
 │   ├── GameModule.h        # Module class (IModule implementation)
 │   └── GameModule.cpp      # Module factory exports
-├── spark.project.json      # Project metadata
+├── <ProjectName>.sparkproject # Project/editor metadata
 └── spark.modules.json      # Module manifest
 ```
+
+When materializing a template under a new name, update the literal package name consistently across its directory, CMake target, source, metadata, and scene files. Do not copy the stock package directly below `GameModules/`; use the in-tree setup below for that route.
 
 ## The IModule Interface
 
@@ -78,7 +84,7 @@ The `ModuleInfo` struct provides metadata about your module:
 | `OnRender()` | No | Every frame after update | Custom rendering (HUD, debug overlays) |
 | `OnResize()` | No | Window resize | Handle viewport changes |
 
-### Complete Module Implementation
+### Example Module Implementation
 
 ```cpp
 #include <Spark/SparkSDK.h>
@@ -212,18 +218,20 @@ On Linux, `__declspec(dllexport)` is replaced with `__attribute__((visibility("d
 
 ### As Part of the SparkEngine Tree
 
-If your game module lives inside the SparkEngine source tree, use the `spark_add_game_module()` helper from `cmake/SparkGameModule.cmake`:
+If your game module lives inside the SparkEngine source tree, put its CMake file under `GameModules/<name>/`. The root `CMakeLists.txt` already includes `cmake/SparkGameModule.cmake` and auto-discovers those directories, so the child file should use the helper directly:
 
 ```cmake
-cmake_minimum_required(VERSION 3.25)
-project(MyGame LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 23)
-
-include(${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake)
-
-file(GLOB_RECURSE GAME_SOURCES "Source/*.cpp" "Source/*.h")
+file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS "Source/*.cpp" "Source/*.h")
 spark_add_game_module(MyGame ${GAME_SOURCES})
 target_include_directories(MyGame PRIVATE "Source")
+```
+
+Configure and launch an in-tree module from the repository root. With a multi-config generator, keep the configuration segment in both paths:
+
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release --target SparkEngine MyGame
+.\build\bin\Release\SparkEngine.exe -game .\build\bin\Release\MyGame.dll
 ```
 
 ### What spark_add_game_module() Does
@@ -241,50 +249,42 @@ The `spark_add_game_module(TARGET_NAME ...)` function performs the following:
 
 ### As a Standalone Project
 
-For standalone projects outside the engine tree, use `find_package`. Including the preflight check first gives clear diagnostics if the SDK installation is incomplete:
+For standalone projects outside the engine tree, use the installed CMake package:
 
 ```cmake
 cmake_minimum_required(VERSION 3.25)
 project(MyGame LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 
-# Pre-flight validation (optional but recommended)
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
-include(SparkEnginePreflight)
+find_package(SparkEngine CONFIG REQUIRED)
 
-find_package(SparkEngine REQUIRED)
-
-file(GLOB_RECURSE GAME_SOURCES "Source/*.cpp" "Source/*.h")
+file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS "Source/*.cpp" "Source/*.h")
 spark_add_game_module(MyGame ${GAME_SOURCES})
 target_include_directories(MyGame PRIVATE "Source")
 ```
 
-### Preflight Validation
+### Installed SDK Configuration
 
-The `SparkEnginePreflight.cmake` module validates that the SparkEngine SDK installation is complete before `find_package` runs. It checks for:
+`SparkEngineConfig.cmake` imports the package targets and the installed `SparkGameModule.cmake` helper. `SparkEnginePreflight.cmake` is a source-tree utility, not an installed-SDK dependency; do not add a relative source-tree module path to a standalone package.
 
-| Required File | Purpose |
-|---------------|---------|
-| `SparkEngineConfig.cmake` | CMake package configuration |
-| `SparkEngineTargets.cmake` | Imported target definitions |
-| `SparkGameModule.cmake` | Game module helper function |
-
-If any file is missing, the preflight check emits a `FATAL_ERROR` with the exact missing file and remediation steps, rather than letting CMake produce a cryptic error message.
+Use `-DSparkEngine_DIR="<sdk>/lib/cmake/SparkEngine"` (or an equivalent package-discovery setting) after `cmake --install <engine-build> --prefix <sdk> --config Release`. A raw engine build directory is not the standalone SDK contract.
 
 ## Configuration Files
 
-### spark.project.json
+### `<ProjectName>.sparkproject`
 
-Project metadata describing your game:
+Current template packages use a project/editor metadata file. It does not replace explicit runtime module selection:
 
 ```json
 {
+    "projectFileVersion": 1,
     "name": "MyGame",
     "version": "0.1.0",
     "engineVersion": "1.0.0",
     "description": "My first SparkEngine game",
     "modules": ["MyGame"],
-    "defaultScene": "Assets/Scenes/Default.scene"
+    "defaultScene": "Scenes/Default.sparkscene",
+    "scenes": ["Scenes/Default.sparkscene"]
 }
 ```
 
@@ -294,20 +294,18 @@ Project metadata describing your game:
 | `version` | Yes | Semantic version of your game |
 | `engineVersion` | Yes | Minimum compatible engine version |
 | `description` | No | Human-readable project description |
-| `modules` | Yes | Array of module names to load |
+| `modules` | Yes | Project metadata naming this package's module target |
 | `defaultScene` | No | Scene to load on startup |
 
 ### spark.modules.json
 
-Module manifest that tells the engine which DLLs to load:
+Module manifest whose loader consumes each non-empty `path` entry:
 
 ```json
 {
     "modules": [
         {
-            "name": "MyGame",
-            "path": "MyGame.dll",
-            "loadOrder": 1000
+            "path": "MyGame.dll"
         }
     ]
 }
@@ -315,33 +313,34 @@ Module manifest that tells the engine which DLLs to load:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `name` | `string` | Must match the module's `GetModuleInfo().name` |
-| `path` | `string` | Relative or absolute path to the DLL/SO |
-| `loadOrder` | `int` | Initialization priority (lower = earlier) |
+| `path` | `string` | Non-empty relative or absolute path to the DLL/SO; a relative path is resolved against the manifest directory |
+| `name` / `loadOrder` | metadata | Not consumed by the current manifest parser; use `ModuleInfo` for module metadata |
 
-Place `spark.modules.json` next to the engine executable (`build/bin/`).
+For the engine-directory fallback, place `spark.modules.json` next to the executable: `build/bin/<Config>/` for a multi-config root build and `build/bin/` for a single-config root build. An explicit `-manifest <path>` may name a regular manifest file elsewhere.
 
-### Loading Multiple Modules
+### One Game Module Plus Addons
 
-You can load multiple modules simultaneously. They are initialized in `loadOrder` and shut down in reverse order:
+The loader rejects a second `ModuleKind::Game` module because two games would own the same simulation. A manifest can include the selected Game module plus compatible `ModuleKind::Addon` modules (library/extension-style modules); their kinds and lifecycle dependencies come from their `ModuleInfo`, not manifest `loadOrder` metadata:
 
 ```json
 {
     "modules": [
-        { "name": "CoreGameplay", "path": "CoreGameplay.dll", "loadOrder": 100 },
-        { "name": "UIModule",     "path": "UIModule.dll",     "loadOrder": 200 },
-        { "name": "DebugTools",   "path": "DebugTools.dll",   "loadOrder": 9000 }
+        { "path": "MyGame.dll" },
+        { "path": "MyGameplayAddon.dll" }
     ]
 }
 ```
 
 ## Module Discovery
 
-The engine finds modules using three fallback mechanisms (in order):
+The engine resolves a selected game module using this priority:
 
-1. **Command-line argument**: `SparkEngine.exe -game path/to/MyGame.dll`
-2. **Manifest file**: `spark.modules.json` next to the executable
-3. **Directory scan**: Scans for `*Game*.dll` or `*Module*.dll` in the executable directory
+1. **Command-line game path**: `SparkEngine.exe -game path/to/MyGame.dll`
+2. **Explicit manifest**: `SparkEngine.exe -manifest path/to/spark.modules.json`
+3. **Engine-directory manifest**: `spark.modules.json` next to the executable
+4. **Bare launch (platform-specific):**
+   - **Windows:** discover candidates without bulk-loading them; one candidate loads directly, while several require the windowed selector or headless pick-one guidance
+   - **Current non-Windows path:** scan the executable directory through `LoadModulesFromDirectory`; the manager still refuses a second Game-kind module, so prefer `-game` or `-manifest`
 
 ```
 Module Discovery Flow
@@ -349,11 +348,15 @@ Module Discovery Flow
     ├── Check command line: -game <path>
     │   └── Found? → Load specified DLL
     │
-    ├── Check for spark.modules.json
-    │   └── Found? → Load all listed modules in loadOrder
+    ├── Check command line: -manifest <path>
+    │   └── Found? → Load each manifest path (one Game module maximum)
     │
-    └── Scan executable directory
-        └── Match *Game*.dll or *Module*.dll → Load matched DLLs
+    ├── Check for spark.modules.json next to the executable
+    │   └── Found? → Load each manifest path (one Game module maximum)
+    │
+    └── Bare launch (platform-specific)
+        ├── Windows: one candidate loads; multiple candidates require an explicit choice
+        └── Non-Windows: directory scan attempts matches; one-Game policy still applies
 ```
 
 ## Module Lifecycle
@@ -380,13 +383,13 @@ Engine Startup
     └── Unload DLL/SO (FreeLibrary / dlclose)
 ```
 
-Multiple modules are loaded in `loadOrder` and shut down in reverse order.
+The process hosts one Game module. Compatible `ModuleKind::Addon` modules (library/extension-style modules), when present, follow their own `ModuleInfo` lifecycle rules; manifest `loadOrder` is not a runtime control.
 
 ## Using Engine Services
 
 ### The IEngineContext Interface
 
-Once you have the `IEngineContext*`, access any engine subsystem. The context uses a service locator pattern backed by a generic registry.
+Once you have the `IEngineContext*`, access services exposed by the active build. Availability varies by configuration; do not infer that every listed subsystem is part of stable-v1.
 
 ```cpp
 class IEngineContext
@@ -415,34 +418,28 @@ public:
 
 | Getter | Returns | Description |
 |--------|---------|-------------|
-| `GetGraphics()` | `GraphicsEngine*` | DX11/Vulkan/GL rendering engine |
+| `GetGraphics()` | `GraphicsEngine*` | Rendering implementation compiled into the active build; stable-v1 is D3D11/Windows NullRHI only |
 | `GetInput()` | `InputManager*` | Keyboard, mouse, gamepad input |
 | `GetTimer()` | `Timer*` | Frame timing and delta time |
 | `GetEventBus()` | `EventBus*` | Publish/subscribe event system |
-| `GetAudio()` | `AudioEngine*` | XAudio2 / miniaudio spatial audio |
+| `GetAudio()` | `AudioEngine*` | Concrete engine audio service; the host's separate `IAudioBackend` factory is not exposed through this getter |
 | `GetPhysics()` | `PhysicsSystem*` | Jolt Physics simulation |
 | `GetAnimation()` | `AnimationSystem*` | Skeletal animation pipeline |
 | `GetAI()` | `AISystem*` | Behavior trees and NavMesh |
 | `GetNetwork()` | `NetworkManager*` | UDP multiplayer (requires `ENABLE_NETWORKING`) |
 | `GetSceneManager()` | `SceneManager*` | Scene hierarchy and serialization |
-| `GetScriptEngine()` | `AngelScriptEngine*` | AngelScript VM and hot-reload |
+| `GetScriptEngine()` | `AngelScriptEngine*` | Experimental AngelScript surface outside stable-v1 |
 | `GetSaveSystem()` | `SaveSystem*` | Game state serialization |
 | `GetCoroutineScheduler()` | `CoroutineScheduler*` | Coroutine-based async tasks |
 | `IsHeadless()` | `bool` | True if running without graphics (dedicated server) |
 
-### Custom Subsystems via Generic Registry
+### Module-Owned and Addon Services
 
-The `EngineContext` also supports registering custom subsystems via a generic type-based registry:
-
-```cpp
-// Register a custom subsystem
-context->RegisterSystem<MyCustomManager>(&myManager);
-
-// Retrieve it later
-MyCustomManager* mgr = context->GetSystem<MyCustomManager>();
-```
-
-This uses a compile-time `TypeId` system that works with forward-declared types. No RTTI is required.
+The public `Spark::IEngineContext` passed to a module does **not** expose the
+concrete host's `RegisterSystem<T>()` or `GetSystem<T>()` registry APIs. Keep
+game-specific managers in module-owned state, communicate through the public
+event bus or named getters, or define an explicit addon interface. Do not
+downcast `IEngineContext` to the private engine implementation.
 
 ## Subscribing to Events
 
@@ -549,7 +546,7 @@ module_reload <name># Hot-reload a module (development only)
        audio->PlaySound("startup");
    ```
 
-4. **Use `loadOrder` wisely** -- Modules with lower `loadOrder` values are initialized first. If your module depends on another module's initialization, give it a higher `loadOrder`.
+4. **Keep module metadata coherent** -- `ModuleInfo` owns a module's kind and lifecycle metadata. Do not rely on manifest `loadOrder`; a second Game-kind module is refused.
 
 5. **Avoid global state** -- Keep all state inside your module class. Global variables in a DLL can cause issues with hot-reload and multiple module instances.
 

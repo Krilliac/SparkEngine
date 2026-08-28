@@ -83,7 +83,7 @@ cmake --preset linux-gcc-release 2>&1 | tail -20
 cmake --build build --config Release --parallel $(nproc) 2>&1 | tail -30
 
 # 4. Tests (catches regressions)
-cd build && ctest --output-on-failure && cd ..
+cd build && ctest --output-on-failure --no-tests=error && cd ..
 
 # 5. Docs (catches stale auto-generated content)
 docs/update-all-docs.sh

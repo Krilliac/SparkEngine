@@ -258,7 +258,7 @@ compatibility tests use the `SaveMigration_` selector and are registered with
 CTest labels `compatibility;save;unit`:
 
 ```bash
-ctest --test-dir build -C Release -L compatibility --output-on-failure
+ctest --test-dir build -C Release -L compatibility --output-on-failure --no-tests=error
 ```
 
 The compatibility-labeled coverage includes:

@@ -239,7 +239,7 @@
 | `DirectorPhase` | enum | SparkEngine | [AIDirector.h:L59](../../SparkEngine/Source/Engine/AI/AIDirector.h#L59) | Phases of the AI Director's intensity cycle. |
 | `DirtyFlag` | enum | SparkEngine | [UIDirtyTracking.h:L35](../../SparkEngine/Source/Engine/UI/UIDirtyTracking.h#L35) | Bitfield flags indicating what changed on a widget |
 | `DirtyFlag` | enum | SparkEngine | [PipelineStateCache.h:L61](../../SparkEngine/Source/Graphics/PipelineStateCache.h#L61) | Dirty flags for tracking which pipeline state categories need flushing. |
-| `DiscoveryMode` | enum | SparkEngine | [ModuleManager.h:L64](../../SparkEngine/Source/Core/ModuleManager.h#L64) | Manages the lifecycle of multiple dynamically loaded modules |
+| `DiscoveryMode` | enum | SparkEngine | [ModuleManager.h:L76](../../SparkEngine/Source/Core/ModuleManager.h#L76) |  |
 | `DiscoveryState` | enum | GameModules | [OpenWorldEnums.h:L119](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L119) | Discovery state for map fog / exploration progress |
 | `DockPosition` | enum | SparkEditor | [CoreEditorEnums.h:L19](../../SparkEditor/Source/Enums/CoreEditorEnums.h#L19) | Dock position enumeration for panel docking |
 | `DocumentTransitionAction` | enum | SparkEditor | [EditorUI.h:L48](../../SparkEditor/Source/Core/EditorUI.h#L48) |  |

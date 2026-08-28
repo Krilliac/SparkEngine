@@ -2,7 +2,10 @@
 
 Scripts, configuration, and automation that keep SparkEngine documentation — wikis, API reference, badges, statistics, and AI context — in sync with the source tree.
 
-All automation lives under `docs/` (generator scripts) and `tools/` (validation scripts). Every script supports a `check` or `--warn-only` mode for CI dry-runs.
+> Documentation automation is outside the blocked `stable-v1` runtime profile;
+> generated metrics describe repository inventory, not release certification.
+
+Automation lives under `docs/` (generator scripts) and `tools/` (validation scripts), but command interfaces vary. Use each script's documented usage: `check` and `--warn-only` are available only where that script explicitly names them, not as a universal dry-run contract.
 
 ---
 
@@ -29,7 +32,7 @@ docs/update-all-docs.sh check        # Dry-run: report what's stale
 | `docs/update-readme-badges.sh readme` | `README.md` generated counts only (narrow CI mode) | None | ~3s |
 | `docs/update-context.sh update` | `CLAUDE.md` counts | None | ~2s |
 
-All scripts support a `check` mode that exits 1 if stale (for CI use).
+The commands in this table show the supported modes for those generators. Do not assume that every generator, validator, or helper accepts `check`; use its own usage text before placing it in CI.
 
 ## Validation Scripts
 
@@ -85,10 +88,10 @@ docs/
 | Directory | Description |
 |-----------|-------------|
 | `SparkEngine/Source/` | Core engine library (all subsystems) |
-| `SparkEditor/Source/` | ImGui visual editor (59 panels) |
+| `SparkEditor/Source/` | ImGui visual editor (65 `*Panel.h` classes; registration and visibility are separate metrics) |
 | `SparkConsole/src/` | Standalone debug console application |
 | `SparkShaderCompiler/src/` | Offline shader compilation tool |
-| `GameModules/*/Source/` | 10 game modules (FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript) |
+| `GameModules/*/Source/` | 11 in-tree module targets: the base game plus genre and prototype modules |
 | `SparkSDK/` | Public SDK headers |
 
 ### Writing Doxygen Comments

@@ -4,9 +4,9 @@
 >
 > **Thread Context:** Mixed; each referenced API documents its own constraints
 >
-> **Platform/Backend Scope:** All supported platforms and backends
+> **Platform/Backend Scope:** These docs describe implementation and experimental paths. The only declared product set is the blocked, uncertified `stable-v1` C++ module slice: Windows 11 x64/MSVC v143, D3D11/Windows NullRHI.
 
-This page is the stable `/api` entry point.
+This page is the canonical `/api` entry point. Its reference indexes describe source interfaces, not a released SDK or ABI compatibility contract.
 
 - [API Reference](reference/API-Reference.md)
 - [Symbol Index](reference/Symbol-Index.md)

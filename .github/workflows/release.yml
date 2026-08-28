@@ -134,7 +134,7 @@ jobs:
       run: cmake --build build --config ${{ matrix.config }} --parallel
 
     - name: Run Tests
-      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
+      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error
 
     - name: Validate external package consumption
       shell: pwsh
@@ -144,7 +144,7 @@ jobs:
           -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" `
           -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
         cmake --build smoke-build --config ${{ matrix.config }} --parallel
-        ctest --test-dir smoke-build -C ${{ matrix.config }} --output-on-failure
+        ctest --test-dir smoke-build -C ${{ matrix.config }} --output-on-failure --no-tests=error
 
     - name: Build every template against the installed SDK
       shell: pwsh
@@ -209,7 +209,7 @@ jobs:
         cmake -DSPARK_PACKAGE_ROOT="$packageRoot" -DSPARK_EXECUTABLE_SUFFIX:STRING=.exe -P cmake/ValidateStagedPackageExecutables.cmake
         cmake -S Tests/PackageSmoke -B package-smoke-build -G "Visual Studio 17 2022" -A x64 -T v143 -DSparkEngine_DIR="$packageRoot/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
         cmake --build package-smoke-build --config ${{ matrix.config }} --parallel
-        ctest --test-dir package-smoke-build -C ${{ matrix.config }} --output-on-failure
+        ctest --test-dir package-smoke-build -C ${{ matrix.config }} --output-on-failure --no-tests=error
         cmake `
           -DSPARK_TEMPLATE_ROOT="$packageRoot/share/SparkEngine/templates" `
           -DSPARK_TEMPLATE_SOURCE_ROOT="${{ github.workspace }}/Templates" `
@@ -283,7 +283,7 @@ jobs:
     - name: Run Tests
       run: |
         cd build
-        ctest --output-on-failure
+        ctest --output-on-failure --no-tests=error
         if [ -f bin/SparkTests ]; then ./bin/SparkTests; fi
 
     - name: Validate external package consumption
@@ -296,7 +296,7 @@ jobs:
           -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" \
           -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
         cmake --build smoke-build --parallel $(nproc)
-        ctest --test-dir smoke-build --output-on-failure
+        ctest --test-dir smoke-build --output-on-failure --no-tests=error
 
     - name: Build every template against the installed SDK
       run: |
@@ -351,7 +351,7 @@ jobs:
         cmake -DSPARK_PACKAGE_ROOT="$package_root" -P cmake/ValidateStagedPackageExecutables.cmake
         cmake -S Tests/PackageSmoke -B package-smoke-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -DSparkEngine_DIR="$package_root/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
         cmake --build package-smoke-build --parallel $(nproc)
-        ctest --test-dir package-smoke-build --output-on-failure
+        ctest --test-dir package-smoke-build --output-on-failure --no-tests=error
         cmake \
           -DSPARK_TEMPLATE_ROOT="$package_root/share/SparkEngine/templates" \
           -DSPARK_TEMPLATE_SOURCE_ROOT="${{ github.workspace }}/Templates" \
@@ -416,7 +416,7 @@ jobs:
       run: cmake --build build --parallel $(sysctl -n hw.logicalcpu)
 
     - name: Run Tests
-      run: ctest --test-dir build --output-on-failure
+      run: ctest --test-dir build --output-on-failure --no-tests=error
 
     - name: Validate external package consumption
       run: |
@@ -426,7 +426,7 @@ jobs:
           -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" \
           -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
         cmake --build smoke-build --parallel $(sysctl -n hw.logicalcpu)
-        ctest --test-dir smoke-build --output-on-failure
+        ctest --test-dir smoke-build --output-on-failure --no-tests=error
 
     - name: Build every template against the installed SDK
       run: |
@@ -478,7 +478,7 @@ jobs:
         cmake -DSPARK_PACKAGE_ROOT="$package_root" -P cmake/ValidateStagedPackageExecutables.cmake
         cmake -S Tests/PackageSmoke -B package-smoke-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DSparkEngine_DIR="$package_root/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
         cmake --build package-smoke-build --parallel $(sysctl -n hw.logicalcpu)
-        ctest --test-dir package-smoke-build --output-on-failure
+        ctest --test-dir package-smoke-build --output-on-failure --no-tests=error
         cmake \
           -DSPARK_TEMPLATE_ROOT="$package_root/share/SparkEngine/templates" \
           -DSPARK_TEMPLATE_SOURCE_ROOT="${{ github.workspace }}/Templates" \

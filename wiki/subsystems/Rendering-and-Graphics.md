@@ -1,6 +1,17 @@
 # Rendering and Graphics
 
-SparkEngine's rendering system supports six backends — DirectX 11 (stable), DirectX 12 (mesh shaders, DXR, VRS), Vulkan 1.4, OpenGL 4.6, Metal (in progress), and NullRHIDevice (headless) — through a Render Hardware Interface (RHI) abstraction layer. The `GraphicsEngine` class manages the entire rendering pipeline including PBR materials, multiple render paths (forward, deferred, forward+, clustered), a declarative RenderGraph, global illumination (DDGI + Adaptive Probe Volumes), GPU-driven rendering, mesh shaders, virtual texturing, DXR 1.1 ray tracing, post-processing, temporal effects, texture streaming, and comprehensive console integration.
+> **Stable-v1 boundary:** `stable-v1` is blocked and uncertified. Its declared
+> rendering scope is Windows 11 x64 with MSVC v143, D3D11, or the no-render
+> Windows NullRHI path. D3D12, Vulkan, OpenGL, and Metal remain experimental
+> and outside the profile; this page is not a six-backend support claim.
+
+SparkEngine contains RHI implementations for D3D11, D3D12, Vulkan, OpenGL,
+Metal, and NullRHI behind a Render Hardware Interface (RHI) abstraction. That
+source inventory does not establish feature parity, host support, or release
+certification for every backend. The `GraphicsEngine` source includes PBR
+materials, several render-path implementations, a RenderGraph, GI, GPU-driven
+rendering, post-processing, temporal effects, texture streaming, and console
+integration; individual capabilities retain their own verification boundaries.
 
 **Source:** `SparkEngine/Source/Graphics/`
 
@@ -499,12 +510,12 @@ The Render Hardware Interface provides backend-agnostic graphics through abstrac
 
 | Backend | File | Status | Platform |
 |---------|------|--------|----------|
-| DirectX 11 | `RHI/D3D11/D3D11Device.h` | Primary, fully featured | Windows |
+| DirectX 11 | `RHI/D3D11/D3D11Device.h` | In-profile implementation; blocked and uncertified | Windows 11 x64 stable-v1 target |
 | DirectX 12 | `RHI/D3D12/D3D12Device.h` | Experimental | Windows |
-| Vulkan | `RHI/Vulkan/VulkanDevice.h` | Experimental | Cross-platform |
-| OpenGL | `RHI/OpenGL/OpenGLDevice.h` | Experimental | Cross-platform |
-| Metal | `RHI/Metal/MetalDevice.h` | Stub | macOS/iOS |
-| DXR | `RHI/DXRSupport.h` | Optional raytracing | Windows (D3D12) |
+| Vulkan | `RHI/Vulkan/VulkanDevice.h` | Experimental, incomplete renderer parity | Desktop development paths |
+| OpenGL | `RHI/OpenGL/OpenGLDevice.h` | Experimental, context/host dependent | Desktop development paths |
+| Metal | `RHI/Metal/MetalDevice.h` plus Objective-C++ sources | Partial implementation | macOS development path |
+| DXR | `RHI/DXRSupport.h` | Experimental ray-tracing source path | Eligible Windows D3D12 builds |
 
 ### IRHIDevice Key Methods
 
@@ -668,19 +679,18 @@ shader_reload              # Hot-reload all shaders
 
 ## Headless Mode and Software Rendering
 
-The engine supports two levels of GPU-less operation:
+These are distinct development routes, not interchangeable automatic
+fallbacks or release certification.
 
 ### NullRHIDevice (Headless -- No Rendering)
 
-When no GPU backend is available, the RHI automatically falls back to `NullRHIDevice`. This provides a fully functional engine without any rendering:
-
-- All `IRHIDevice` methods are implemented as no-ops
-- Resource creation calls return `nullptr` but track allocation statistics
-- Frame lifecycle (`BeginFrame`/`EndFrame`) works normally
-- `RHIBridge::IsHeadless()` returns `true`
-- All non-rendering subsystems work: ECS, physics, AI, audio, networking, scripting
-
-**Use cases:** Dedicated servers, CI/CD test pipelines, cloud batch processing.
+`RHIFactory::CreateDevice()` selects and constructs one requested device; it
+does not retry the whole backend sequence. `RHIBridge::Initialize()` can retry
+candidates after device or swap-chain failures and finally construct
+`NullRHIDevice`. However, the current shared/server headless entry points pass
+null graphics state and do not instantiate NullRHI. Closing and certifying that
+integration is tracked by HEAD-220, so this page does not claim that every
+non-rendering subsystem or host lifecycle is functional headlessly.
 
 ### Software Rendering via OpenGL + Mesa llvmpipe
 
@@ -694,13 +704,11 @@ Xvfb :99 -screen 0 1920x1080x24 &
 DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./SparkEngine
 ```
 
-**Capabilities in software mode:**
-- Full OpenGL 4.5 Core Profile (Mesa 25.x)
-- Real buffer, texture, shader, and pipeline creation
-- GLSL shader compilation via LLVM JIT
-- FBO-backed off-screen rendering
-- All post-processing effects
-- Runs on any CPU with AVX2+ (llvmpipe uses SIMD)
+**Development-route boundary:** when the explicitly selected Mesa/X11/EGL
+stack initializes, llvmpipe can provide real OpenGL pixel output rather than
+`NullRHI` no-ops. `NullRHI` does not perform software rendering. Exact context
+extensions, shader support, CPU requirements, and renderer-pass behavior come
+from the installed Mesa/runtime configuration and are not release-certified.
 
 **Source:** `SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp` (GLX bootstrap, EGL headless path)
 **Dependencies:** GLAD (bundled in `ThirdParty/glad/`), Mesa (system), X11 (system)
@@ -711,7 +719,9 @@ DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./SparkEngine
 
 - `GraphicsEngine::Initialize()` returns `HRESULT`. Check with `FAILED()` macro.
 - Device creation validates feature level support (D3D_FEATURE_LEVEL_11_0 minimum).
-- When no GPU backend is available, `RHIFactory::CreateDevice()` returns a `NullRHIDevice` instead of `nullptr` -- the engine continues in headless mode rather than crashing.
+- `RHIFactory::CreateDevice()` constructs one selected device. Retry and
+  NullRHI fallback live in `RHIBridge::Initialize()`; whole-engine headless
+  continuation remains unproven until HEAD-220 closes.
 - Render target creation validates format support and MSAA sample count.
 - Material loading returns `nullptr` for missing files (falls back to error material with magenta color).
 - Texture streaming failures are logged and fall back to default white/black textures.

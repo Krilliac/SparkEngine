@@ -1,6 +1,14 @@
 # OpenGL Backend
 
-Cross-platform fallback backend targeting **OpenGL 4.6**. Useful when the host has no Vulkan or D3D support — most notably Linux systems with only software rasterization (`llvmpipe`) or legacy adapters.
+> **Release boundary:** This page documents an experimental implementation outside
+> the blocked and uncertified `stable-v1` product scope (Windows 11 x64/MSVC
+> v143 with D3D11 or Windows NullRHI and C++ modules). It is not a supported or
+> release-certified backend.
+
+Experimental OpenGL RHI development implementation. The direct EGL/GLX device
+path requests a 4.5 context, while the SDL runtime/editor hosts request 3.3;
+source-level DSA and SPIR-V paths still depend on the context and driver that is
+actually created. It is not a generic or certified fallback.
 
 ## Overview
 
@@ -8,7 +16,9 @@ Cross-platform fallback backend targeting **OpenGL 4.6**. Useful when the host h
 - **Files:** `Graphics/RHI/OpenGL/OpenGLDevice.{h,cpp}` (~450 LOC header).
 - **Guard:** `#ifdef SPARK_OPENGL_SUPPORT` (CMake toggle `ENABLE_OPENGL=ON`).
 - **Linkage:** GLAD loader (bundled in `ThirdParty/`) + SDL2 for context creation.
-- **Core profile:** OpenGL 4.6 core, direct-state access (DSA), SPIR-V binary shader ingest.
+- **Context/feature boundary:** EGL/GLX requests OpenGL 4.5; SDL hosts request
+  3.3. DSA and SPIR-V binary-shader calls exist in source but are not a blanket
+  OpenGL 4.6 runtime guarantee.
 
 ## Architecture
 
@@ -29,7 +39,7 @@ OpenGL is single-threaded — command recording is serialized on the render thre
 
 - **Direct state access (DSA)** — all resource creation uses the DSA variants (`glCreateTextures`, `glNamedBufferStorage`, etc.). Cleaner than bind-to-modify.
 - **SPIR-V ingest** — shader loading accepts compiled SPIR-V binaries via `glShaderBinary(GL_SHADER_BINARY_FORMAT_SPIR_V)`, so the offline shader cook path produces one binary format for both OpenGL and Vulkan.
-- **Mesa `llvmpipe` software rasterization** — valid headless-render fallback on CI. See the [RHI fallback chain](RHI-Abstraction-Layer.md#automatic-fallback-to-nullrhidevice).
+- **Mesa `llvmpipe` development route** — requires explicit Mesa/driver and headless-display configuration; it is not a generic CI or release-certified fallback. See the [RHI fallback chain](RHI-Abstraction-Layer.md#nullrhidevice-selection-and-bridge-failover).
 - **KHR_debug callback** — validation messages routed through `Spark::Logger` in debug builds.
 - **Persistent-mapped buffers** — `GL_MAP_PERSISTENT_BIT` used for per-frame transient UI / debug-draw streams.
 - **Framebuffer object (FBO) abstraction** — `GLTexture::SetFramebuffer` caches the FBO that owns this texture as a color/depth attachment, avoiding per-draw-call FBO churn.
@@ -53,7 +63,7 @@ case GraphicsBackend::OpenGL:
     break;
 ```
 
-Used by `RHIFactory::GetRecommendedBackend()` on Linux when `SPARK_VULKAN_SUPPORT` is disabled, and as the NullRHIDevice fallback tier immediately before the null sink.
+`RHIFactory::GetRecommendedBackend()` selects a preferred compiled and available backend; it does not retry device startup. `RHIBridge::Initialize` tries available GPU candidates after device or swap-chain failure and creates `NullRHIDevice` only if they all fail. OpenGL is one optional candidate, not a `NullRHI` fallback tier.
 
 ## Limitations
 
@@ -65,6 +75,6 @@ Used by `RHIFactory::GetRecommendedBackend()` on Linux when `SPARK_VULKAN_SUPPOR
 ## Related
 
 - [RHI Abstraction Layer](RHI-Abstraction-Layer.md)
-- [Vulkan Backend](Vulkan-Backend.md) — preferred on Linux when available.
+- [Vulkan Backend](Vulkan-Backend.md) — experimental Linux development alternative when compiled.
 - [D3D11 Backend](D3D11-Backend.md) — Windows equivalent tier.
 - [Shader Pipeline](../gameplay-tools/Shader-Pipeline.md) — how shaders are built into the SPIR-V blobs that OpenGL consumes.

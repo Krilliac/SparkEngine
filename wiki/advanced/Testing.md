@@ -2,6 +2,10 @@
 
 SparkEngine includes a comprehensive test suite using a lightweight internal test framework with CTest integration. For current test file and test case counts, see the auto-generated inventory section on this page.
 
+> **Release boundary:** Test inventory is not release certification. The blocked
+> and uncertified `stable-v1` profile remains governed by the required gates and
+> exact-SHA evidence in `docs/site/readiness.json`.
+
 **Source:** `Tests/TestFramework.h`, `Tests/`
 
 ## Test Framework
@@ -82,17 +86,18 @@ All macros use `do { ... } while(0)` for safe use in if/else blocks. Failed asse
 
 ```bash
 cmake -B build -DBUILD_TESTS=ON
-cmake --build build
+cmake --build build --config Release
 ```
 
 ### Run All Tests
 
 ```bash
 # Via CTest (recommended)
-ctest --test-dir build --output-on-failure
+ctest --test-dir build -C Release --output-on-failure --no-tests=error
 
 # Via direct binary execution
-./build/bin/SparkTests
+./build/bin/Release/SparkTests  # VS/Ninja Multi-Config
+# ./build/bin/SparkTests        # Single-config generator
 ```
 
 ### CI Test Evidence
@@ -106,25 +111,46 @@ from being reported as a zero-failure test run. Repository badges count source
 test definitions separately because platform and feature gates affect the
 runtime set.
 
-### Run Specific Tests
+### Run Registered CTest Entries
 
 ```bash
-# CTest pattern matching
-ctest --test-dir build -R "TestPhysics"           # Run tests matching pattern
-ctest --test-dir build -R "TestECS|TestAnimation"  # Run multiple patterns
-ctest --test-dir build -E "TestNetworking"         # Exclude a pattern
+# CTest patterns match registered CTest entries, not individual source-test
+# file names. This entry runs the native SparkTests aggregate.
+ctest --test-dir build -C Release -R "^SparkEngineTests$" --output-on-failure --no-tests=error
+
+# An independently registered, targeted CTest entry.
+ctest --test-dir build -C Release -R "^SparkSaveCompatibilityTests$" --output-on-failure --no-tests=error
 
 # Verbose output
-ctest --test-dir build -V
+ctest --test-dir build -C Release -V --no-tests=error
 
 # List all available tests without running them
-ctest --test-dir build -N
+ctest --test-dir build -C Release -N --no-tests=error
+```
+
+`TestPhysics`, `TestECS`, and `TestAnimation` are source-test families, not
+CTest registration names. Do not put those strings in a CTest `-R` selector; an anchored
+registered name plus `--no-tests=error` prevents a zero-selected CTest run from
+being reported as success. For an interactive native-runner filter, use
+`SPARK_TEST_FILE` or `SPARK_TEST_NAME` and enforce a nonzero runner total:
+
+```powershell
+$runner = '.\build\bin\Release\SparkTests.exe' # Adjust to the configured output path.
+$env:SPARK_TEST_FILE = 'TestPhysicsComponents.cpp' # Or use SPARK_TEST_NAME='Physics'.
+$output = & $runner --quiet 2>&1
+$exitCode = $LASTEXITCODE
+$summary = $output -join "`n"
+$output
+Remove-Item Env:SPARK_TEST_FILE
+if ($exitCode -ne 0 -or $summary -notmatch 'Tests:\s+.*,\s+[1-9]\d* total') {
+    throw 'SparkTests failed or the filter selected zero tests.'
+}
 ```
 
 ### Run Tests in Parallel
 
 ```bash
-ctest --test-dir build --output-on-failure -j$(nproc)
+ctest --test-dir build -C Release --output-on-failure --no-tests=error -j$(nproc)
 ```
 
 ### Run Windows Tests Under Wine (Cross-Compilation)
@@ -339,8 +365,8 @@ TEST(MyFeature_Comparisons) {
 3. Build and run:
 
 ```bash
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure --no-tests=error
 ```
 
 ### Test Naming Conventions
@@ -396,7 +422,7 @@ cmake -B build \
 cmake --build build --parallel $(nproc)
 
 # Run tests to generate coverage data
-cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+cd build && ctest --output-on-failure --no-tests=error && ./bin/SparkTests && cd ..
 
 # Generate coverage report (requires lcov)
 lcov --capture --directory build --output-file coverage.info
@@ -419,7 +445,7 @@ cmake -B build \
   -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
   -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 cmake --build build --parallel $(nproc)
-cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+cd build && ctest --output-on-failure --no-tests=error && ./bin/SparkTests && cd ..
 ```
 
 Or use the preset:
@@ -427,7 +453,7 @@ Or use the preset:
 ```bash
 cmake --preset ci-linux-asan
 cmake --build build
-cd build && ctest --output-on-failure
+cd build && ctest --output-on-failure --no-tests=error
 ```
 
 #### ThreadSanitizer
@@ -435,7 +461,7 @@ cd build && ctest --output-on-failure
 ```bash
 cmake --preset ci-linux-tsan
 cmake --build build
-cd build && ctest --output-on-failure
+cd build && ctest --output-on-failure --no-tests=error
 ```
 
 ### Matching CI Locally
@@ -446,12 +472,12 @@ To reproduce a specific CI failure, match the exact compiler and flags:
 # Linux GCC (matches build-linux-gcc)
 cmake -B build -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DBUILD_TESTS=ON
 cmake --build build --parallel $(nproc)
-cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+cd build && ctest --output-on-failure --no-tests=error && ./bin/SparkTests && cd ..
 
 # Linux Clang (matches build-linux-clang)
 cmake -B build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DBUILD_TESTS=ON
 cmake --build build --parallel $(nproc)
-cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+cd build && ctest --output-on-failure --no-tests=error && ./bin/SparkTests && cd ..
 ```
 
 ### Clang-Format Check
@@ -528,7 +554,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*574 test files, 6951 source-level test definitions*
+*575 test-bearing `.cpp`/`.mm` files, 6952 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|

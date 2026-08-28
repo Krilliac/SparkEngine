@@ -1,12 +1,22 @@
 # GameModules
 
-This directory contains game modules that the engine discovers and builds automatically.
+This directory contains in-tree game-module targets. The root build enumerates
+them when `BUILD_GAME_MODULES` is enabled; runtime selection is a separate step.
+
+Only the SparkGameFPS single-player slice is declared in `stable-v1`, and it is
+blocked and uncertified. Every other module is experimental or outside the
+profile. SparkGameFPS still links the private engine and includes source-tree
+headers, so it does not yet prove the required installed-public-SDK boundary.
 
 ## How It Works
 
-CMake scans `GameModules/*/CMakeLists.txt` at configure time. Every subdirectory with a
-`CMakeLists.txt` is added to the build as a shared library (DLL on Windows, `.so` on Linux).
-At runtime, the engine's `ModuleManager` loads these DLLs and manages their lifecycle.
+Root CMake enumerates the known `GameModules/*/CMakeLists.txt` targets at configure
+time and builds enabled modules as shared libraries. An explicit `-game <path>`
+loads one requested module. On Windows, a bare launch discovers candidates but
+loads only one directly or through the project selector; it does not bulk-load
+them. Manifests and the Linux executable-directory fallback may iterate multiple
+modules for an addon pack, but `ModuleManager` allows only one `ModuleKind::Game`;
+library/extension modules must be declared as add-ons and can coexist with it.
 
 **Add a module** -- create a folder here with a `CMakeLists.txt` and source files.
 **Remove a module** -- delete the folder (or move it out). No CMake editing required.
@@ -113,7 +123,7 @@ add_library(MyGame SHARED ${MY_SOURCES})
 
 target_compile_definitions(MyGame PRIVATE SPARK_MODULE_DLL)
 
-# Link engine (available when built as subdirectory of the engine)
+# In-tree-only link example; this cannot prove installed-SDK compatibility.
 # On Linux, use SparkEngineInterface (headers only) to avoid duplicate
 # singletons — symbols resolve from the exe at dlopen time.
 if(WIN32)
@@ -122,7 +132,8 @@ elseif(TARGET SparkEngineInterface)
     target_link_libraries(MyGame PRIVATE SparkEngineInterface)
 endif()
 
-# Include paths
+# In-tree-only include paths; the engine-source include violates the stable-v1
+# standalone installed-SDK contract and must not be copied into an SDK consumer.
 target_include_directories(MyGame PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Source
     ${CMAKE_SOURCE_DIR}/SparkEngine/Source
@@ -130,27 +141,28 @@ target_include_directories(MyGame PRIVATE
 )
 ```
 
-See `SparkGame/CMakeLists.txt` for a full example including standalone build support,
-platform libraries, and optional dependencies (Jolt, Vulkan, OpenGL).
+See `SparkGame/CMakeLists.txt` for an in-tree example with platform libraries and
+optional dependencies (Jolt, Vulkan, OpenGL). It does not establish standalone
+installed-SDK support.
 
 ## Module Lifecycle
 
 ```
-Engine startup
-  1. Discover modules in GameModules/
-  2. Load each DLL (LoadLibrary / dlopen)
-  3. Call CreateModule() to get an IModule*
-  4. Sort by loadOrder and dependencies
-  5. Call OnLoad(context) on each module
+Engine startup (one Game-kind module maximum)
+  1. `-game` loads one explicit module; the Windows selector also chooses one
+  2. A manifest or Linux directory fallback may add compatible addon modules
+  3. Reject a second Game-kind module; load selected Game module plus add-ons
+  4. Call CreateModule() and validate each loaded module's metadata/compatibility
+  5. Call OnLoad(context) in load order
 
 Main loop (each frame)
-  6. OnUpdate(deltaTime) on all modules
+  6. OnUpdate(deltaTime) on loaded modules in load order
   7. OnFixedUpdate(fixedDt) at fixed intervals
-  8. OnRender() on all modules
+  8. OnRender() on loaded modules
 
 Engine shutdown
   9. OnUnload() in reverse load order
- 10. DestroyModule() and unload DLLs
+ 10. DestroyModule() and unload each loaded library
 ```
 
 ## Module Dependencies
@@ -185,8 +197,8 @@ You can also trigger a manual reload via the console: `reload_module MyGame`
 
 Modules don't have to live in `GameModules/`. The engine can load any module DLL at runtime:
 
-- **Command line:** `SparkEngine.exe -game path/to/MyGame.dll`
-- **Manifest:** Create a `spark.modules.json` next to the engine executable:
+- **Command line:** `SparkEngine.exe -game path/to/MyGame.dll` loads one explicit module.
+- **Manifest:** Create a `spark.modules.json` next to the engine executable. It may list one Game-kind module and compatible add-on/library entries:
   ```json
   {
     "modules": [
@@ -194,9 +206,14 @@ Modules don't have to live in `GameModules/`. The engine can load any module DLL
     ]
   }
   ```
-- **Directory scan:** Place the DLL next to the engine executable (auto-discovered)
+- **Windows staged candidates:** a bare Windows launch loads one candidate directly or presents the project selector when several are found; it does not bulk-load game modules.
+- **Linux directory fallback:** absent `-game` and a manifest, the Linux host iterates executable-directory candidates. This can load an addon pack, but a second Game-kind module is rejected.
 
-## Included Modules
+## Selected Module Examples
+
+The two rows below are selected examples, not a complete target inventory. The
+root build currently enumerates 11 in-tree module directories when
+`BUILD_GAME_MODULES` is enabled; see the [full game-module catalog](../wiki/getting-started/Game-Modules.md).
 
 | Module | Description | Load Order |
 |--------|-------------|------------|

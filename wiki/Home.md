@@ -1,10 +1,13 @@
 # Spark Engine
 
-**Spark Engine** is a free, open-source 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It ships with a multi-backend RHI (DirectX 11/12, Vulkan, OpenGL, Metal, NullRHI), global illumination, GPU-driven rendering, mesh shaders, DXR ray tracing, Jolt Physics, XAudio2 spatial audio, AngelScript hot-reload scripting with visual scripting and Shader Graph, an EnTT-based ECS architecture, an ImGui visual editor with dockable panels, and HeroEngine-inspired features including seamless world streaming, area-based server architecture, and collaborative multi-user editing.
+**Spark Engine** is a free, open-source 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine with a broad source inventory spanning FPS, RPG, MMO, open-world, and other genres. That inventory includes a multi-backend RHI (DirectX 11/12, Vulkan, OpenGL, Metal, NullRHI), rendering experiments, Jolt Physics, audio paths, scripting tools, an EnTT-based ECS architecture, an ImGui editor, world streaming, server architecture, and collaborative-editing prototypes. Presence in the source tree is not a support or release claim; non-profile breadth remains experimental unless the readiness contract says otherwise.
 
 > **Release hardening in progress** — SparkEngine is currently source-usable,
 > but no versioned release has been published. The repository's readiness gates
-> distinguish implemented features from verified, supported release claims.
+> distinguish implemented features from verified release claims. The only declared
+> profile is the blocked and uncertified `stable-v1` Windows 11 x64/MSVC v143 +
+> D3D11/Windows NullRHI + C++ module/SparkGameFPS slice, together with the
+> required Windows editor and delivery-tool products enumerated in readiness.
 
 ![SparkEditor — ImGui-based visual editor](../docs/screenshots/editor-overview.png)
 
@@ -14,7 +17,8 @@
 
 | Platform | Status | Compiler |
 |----------|--------|----------|
-| Windows 10+ | Primary | MSVC v143 (VS 2022), v145 (VS 2026) |
+| Windows 11 x64 | `stable-v1` target — blocked/uncertified | MSVC v143 (VS 2022) |
+| Windows 10 x64 | Documented development path — outside `stable-v1` | MSVC development toolchains |
 | Linux x64 | Experimental | GCC 13+, Clang 17+ |
 | macOS 11+ | Experimental | Apple Clang with C++23 |
 
@@ -24,21 +28,22 @@ footprint, and the build toggles that move the needle.
 
 ## Feature Highlights
 
-- **Rendering** — Multi-backend RHI (DirectX 11/12, Vulkan 1.4, OpenGL 4.6, Metal, NullRHI) with forward, deferred, forward+, and clustered pipelines via a declarative RenderGraph. PBR materials, cascaded shadow mapping, SSAO, SSR, volumetric lighting/fog, bloom, HDR tone mapping, TAA/FXAA/MSAA, IBL, GPU particles, decals, water rendering, sky atmosphere, and quality presets. [Global illumination](graphics/Global-Illumination.md) (DDGI + Adaptive Probe Volumes), [GPU-driven rendering](graphics/GPU-Driven-Rendering.md) (compute culling, HiZ occlusion), [mesh shaders](graphics/Mesh-Shaders.md) (meshlet pipeline), [virtual texturing](graphics/Virtual-Texturing.md), [DXR 1.1 ray tracing](graphics/DXR-Raytracing.md) (reflections, shadows, AO, GI), [Shader Graph](graphics/Shader-Graph.md) (35+ nodes, HLSL generation), and FSR upscaling.
+- **Rendering** — Multi-backend RHI source paths (DirectX 11/12, Vulkan, path-specific OpenGL development contexts, Metal, NullRHI) with forward, deferred, forward+, and clustered pipeline implementations via a declarative RenderGraph. PBR materials, cascaded shadow mapping, SSAO, SSR, volumetric lighting/fog, bloom, HDR tone mapping, TAA/FXAA/MSAA, IBL, GPU particles, decals, water rendering, sky atmosphere, and quality presets are implementation inventory, not blanket support claims. [Global illumination](graphics/Global-Illumination.md), [GPU-driven rendering](graphics/GPU-Driven-Rendering.md), [mesh shaders](graphics/Mesh-Shaders.md), [virtual texturing](graphics/Virtual-Texturing.md), [DXR ray tracing](graphics/DXR-Raytracing.md), [Shader Graph](graphics/Shader-Graph.md), and FSR paths remain subject to their declared experimental boundaries.
 - **Physics** — Jolt Physics with rigid bodies, 15 collision shape types, 12 constraint types, raycasting, overlap queries, physics materials, character controller, vehicle physics (wheeled/tracked/motorcycle), ragdoll, soft body/cloth, destruction/fracture, deterministic mode, and debug draw.
-- **Audio** — XAudio2 3D spatial audio with Doppler effects, distance attenuation, volume channels, audio mixer, and object pooling. Miniaudio as cross-platform fallback.
+- **Audio** — The active factory selects XAudio2 on Windows, OpenAL on non-Windows hosts, then Null audio if neither backend initializes. Spatial-audio, mixer, and pooling code exists, but audio is outside the stable profile.
 - **Gameplay** — ECS architecture (EnTT components and systems), FPS player controller, weapons, vehicles, inventory, quests, achievements, abilities/conditions, event response system, dialogue, destruction, replay, day/night cycle, weather, terrain with quadtree LOD, tween/coroutine systems, and [accessibility](platform/Accessibility.md) (colorblind modes, subtitles, reduced motion).
 - **AI** — Behavior trees, NavMesh A* pathfinding (Recast/Detour), perception system (vision/hearing/memory), steering behaviors (seek/flee/pursue/evade/flocking), tactical points (EQS-like), cover/formation system, AI budget limiter for 100+ agents, and AI director.
 - **Animation** — Skeletal animation, state machines, multi-layer blending, IK (two-bone, look-at, FABRIK), root motion, retargeting, ragdoll blending, cloth simulation, [cinematic sequencer](gameplay-tools/Cinematic-Sequencer.md), FBX/glTF import.
-- **Scripting** — AngelScript with hot-reload, lifecycle callbacks, full engine API bindings, client/server separation. [Visual scripting](subsystems/Visual-Scripting.md) with 60 node types that compiles to AngelScript. Lua also supported. [Mod system](subsystems/Mod-System.md).
+- **Scripting** — Experimental AngelScript integration includes hot reload, lifecycle callbacks, partial engine bindings, and client/server-oriented source paths. [Visual scripting](subsystems/Visual-Scripting.md), Lua-related source paths, and the [mod system](subsystems/Mod-System.md) are implementation inventory, not certified support.
 - **Networking** — UDP client/server, entity replication, client-side prediction, lag compensation (hitbox rewinding), delta snapshots. [HeroEngine-inspired MMO architecture](subsystems/Area-Server-Architecture.md) with AreaServers, WorldServer, seamless entity migration, and dynamic load balancing.
-- **Editor** — ImGui-powered visual editor with 59 dockable panels: scene hierarchy, inspector, gizmos, [Shader Graph](graphics/Shader-Graph.md) material editor, [visual script editor](subsystems/Visual-Scripting.md), cinematic sequencer, dialogue editor, AI debugger, command palette (Ctrl+P), collaborative multi-user editing, and 200+ debug console commands.
+- **Editor** — ImGui-powered visual editor with 65 `*Panel.h` classes in the source inventory; registration and default visibility are separate. It includes scene hierarchy, inspector, gizmos, [Shader Graph](graphics/Shader-Graph.md), [visual scripting](subsystems/Visual-Scripting.md), and other experimental tooling. Required command-backed world editing and undo coverage are inside the release profile but remain blocked; collaborative editing stays outside it.
 
 ## Get the Source
 
-There are no supported release or nightly binary downloads yet. Clone the
-canonical repository and follow the [Build Guide](Build-Guide.md). CI artifacts,
-when present, are diagnostic snapshots for a specific run rather than releases.
+There are no supported or versioned binary releases yet. Rolling `nightly`
+artifacts may be published for development evaluation; they remain unsupported,
+unversioned snapshots of a specific commit. Clone the canonical repository and
+follow the [Build Guide](Build-Guide.md) for the authoritative development path.
 
 ```bash
 git clone --recurse-submodules https://github.com/Krilliac/SparkEngine.git
@@ -92,10 +97,10 @@ SparkEngine is licensed under the [Spark Open License](https://github.com/Krilli
 | Metric | Count |
 |--------|-------|
 | Header files | 998 |
-| ECS Components | 80 |
+| ECS component structs | 79 |
 | Engine System Classes | 75 |
 | Editor Panels | 65 |
-| Test files | 574 |
-| Test definitions | 6951 |
+| Test-bearing `.cpp`/`.mm` files | 575 |
+| Source-level test definitions | 6952 |
 | Wiki pages | 198 |
 <!-- /AUTO:stats -->

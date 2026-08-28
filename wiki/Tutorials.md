@@ -4,7 +4,12 @@
 >
 > **Thread Context:** Not applicable — tutorial index
 >
-> **Platform/Backend Scope:** All supported platforms; tutorial-specific limits are documented per page
+> **Stable-v1 boundary:** `stable-v1` is blocked and uncertified. Its declared
+> scope is Windows 11 x64 with the MSVC v143 toolset line, D3D11 rendering or
+> the no-render Windows NullRHI path, and C++ game modules. Tutorial pages may
+> describe experimental development paths, but non-Windows hosts and the
+> D3D12, Vulkan, OpenGL, and Metal RHIs are outside this profile, not supported
+> release surfaces.
 
 ## First project
 

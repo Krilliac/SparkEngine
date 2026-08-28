@@ -168,7 +168,7 @@
         "No experimental test promotes a stable profile"
       ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L experimental-modules --output-on-failure"
+        "ctest --test-dir build/linux-shipping -L experimental-modules --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "ExperimentalModuleLifecycle_*"
@@ -247,7 +247,7 @@
       ],
       "commands": [
         "python3 tools/site-data/validate.py --modules",
-        "ctest --test-dir build/windows-shipping -L module-kit --output-on-failure"
+        "ctest --test-dir build/windows-shipping -L module-kit --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "ModuleKit_*",
@@ -326,7 +326,7 @@
         "Prototype completion remains outside stable-v1"
       ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L prototype-module-kit --output-on-failure"
+        "ctest --test-dir build/linux-shipping -L prototype-module-kit --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "PrototypeModuleKit_*"
@@ -406,7 +406,7 @@
         "Public label never calls it a finished game"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -R SparkGameShowcase --output-on-failure"
+        "ctest --test-dir build/windows-shipping -R SparkGameShowcase --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "SparkGameShowcase_*"
@@ -489,8 +489,8 @@
         "No multiplayer result is required for stable-v1"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -R FPSSinglePlayerSlice --output-on-failure",
-        "ctest --test-dir build/windows-shipping -R FPSPackage --output-on-failure"
+        "ctest --test-dir build/windows-shipping -R FPSSinglePlayerSlice --output-on-failure --no-tests=error",
+        "ctest --test-dir build/windows-shipping -R FPSPackage --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "FPSSinglePlayerSlice_*",
@@ -566,7 +566,7 @@
         "Failure cannot affect stable-v1 single-player readiness"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -R FPSLAN --output-on-failure"
+        "ctest --test-dir build/windows-shipping -R FPSLAN --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "FPSLAN_*",
@@ -654,7 +654,7 @@
         "Applicable parity scores reach 3"
       ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -R MMOIntegratedWorld --output-on-failure"
+        "ctest --test-dir build/linux-shipping -R MMOIntegratedWorld --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "MMOAccount_*",
@@ -739,7 +739,7 @@
         "Applicable scores reach 3"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -R ARPGDungeon --output-on-failure"
+        "ctest --test-dir build/windows-shipping -R ARPGDungeon --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "ARPGDungeon_*",
@@ -821,7 +821,7 @@
         "Applicable scores reach 3"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -R PlatformerCompletion --output-on-failure"
+        "ctest --test-dir build/windows-shipping -R PlatformerCompletion --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "PlatformerCompletion_*"
@@ -902,7 +902,7 @@
         "Applicable scores reach 3"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -R RPGQuestSlice --output-on-failure"
+        "ctest --test-dir build/windows-shipping -R RPGQuestSlice --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "RPGQuestSlice_*",
@@ -985,7 +985,7 @@
         "Applicable scores reach 3"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -R OpenWorldTraversal --output-on-failure"
+        "ctest --test-dir build/windows-shipping -R OpenWorldTraversal --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "OpenWorldTraversal_*",
@@ -1068,7 +1068,7 @@
         "Applicable scores reach 3"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -R RTSSkirmish --output-on-failure"
+        "ctest --test-dir build/windows-shipping -R RTSSkirmish --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "RTSSkirmish_*",
@@ -1151,7 +1151,7 @@
         "Applicable scores reach 3"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -R RacingCompleteRace --output-on-failure"
+        "ctest --test-dir build/windows-shipping -R RacingCompleteRace --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "RacingCompleteRace_*"
@@ -1233,7 +1233,7 @@
         "Applicable scores reach 3"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -R VisualScriptGameplay --output-on-failure"
+        "ctest --test-dir build/windows-shipping -R VisualScriptGameplay --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "VisualScriptGameplay_*",
@@ -1317,7 +1317,7 @@
         "Network/tick/memory budgets pass with no crash or unbounded growth"
       ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -R TerrafrontMultiClient --output-on-failure"
+        "ctest --test-dir build/linux-shipping -R TerrafrontMultiClient --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "TerrafrontMultiClient_*"
@@ -1396,8 +1396,8 @@
         "Budgets pass"
       ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -R TerrafrontMigration --output-on-failure",
-        "ctest --test-dir build/linux-shipping -R TerrafrontRestart --output-on-failure"
+        "ctest --test-dir build/linux-shipping -R TerrafrontMigration --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-shipping -R TerrafrontRestart --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "TerrafrontMigration_*",

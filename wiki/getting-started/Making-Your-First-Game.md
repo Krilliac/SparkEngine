@@ -1,27 +1,34 @@
 # Making Your First Game
 
-This guide walks you through building a playable game with SparkEngine -- from an empty module template to a combat arena with AI enemies, weapons, vehicles, and audio. It covers workflows for **programmers**, **artists**, and **gameplay designers**.
+This guide walks through representative source-development patterns for a game module -- from an empty module to gameplay, asset, and editor experiments. It is not an end-to-end packaging or production-game recipe.
+
+> **Stable-v1 boundary:** Stable-v1 is blocked and uncertified. Its only intended product shape is Windows 11 x64 with MSVC v143, D3D11 (or Windows NullRHI), C++ game modules, and one first-party single-player `SparkGameFPS` vertical slice. Everything in this tutorial remains development guidance until the applicable installed-package, editor, and gameplay gates pass; other platforms, backends, scripting, collaboration, and multiplayer are experimental or unsupported.
 
 > **Prerequisites:** Complete the [Getting Started](Getting-Started.md) guide first. You need a working build before proceeding.
 
 ## Step 1: Create a Game Module
 
-SparkEngine loads game logic as a DLL/shared library. Start from the template:
+SparkEngine loads one selected Game-kind module as a DLL/shared library. There are two distinct setup routes:
 
-```bash
-cp -r Templates/EmptyProject GameModules/MyGame
-```
+- **Installed template:** materialize or copy `Templates/EmptyProject` outside the engine checkout, install the engine SDK, and configure that package with `SparkEngine_DIR`. A stock template is a standalone installed-SDK project.
+- **In-tree module:** create `GameModules/MyGame` with a CMake target that the repository root auto-discovers. Do not copy a stock `Templates/EmptyProject` package directly under `GameModules/`: its `find_package(SparkEngine CONFIG REQUIRED)` setup expects an installed SDK rather than the source-tree build.
 
-This gives you:
+For the in-tree route, start with this layout:
 
 ```
 MyGame/
-  CMakeLists.txt         # Build configuration (auto-discovered by CMake)
+  CMakeLists.txt         # Build configuration (auto-discovered by root CMake)
   Source/
     GameModule.h         # IModule implementation
     GameModule.cpp       # DLL entry point + factory exports
-  spark.project.json     # Project metadata
-  spark.modules.json     # Module manifest
+```
+
+`GameModules/MyGame/CMakeLists.txt` can use the helper already included by the root build:
+
+```cmake
+file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS "Source/*.cpp" "Source/*.h")
+spark_add_game_module(MyGame ${GAME_SOURCES})
+target_include_directories(MyGame PRIVATE "Source")
 ```
 
 ### The Module Interface
@@ -64,24 +71,29 @@ private:
 };
 ```
 
-The engine exports are in `GameModule.cpp` (already provided by the template):
+Use the canonical module macro in exactly one `.cpp` file rather than hand-writing the exports:
 
 ```cpp
-extern "C" SPARK_GAME_EXPORT Spark::IModule* CreateModule()  { return new MyGameModule(); }
-extern "C" SPARK_GAME_EXPORT void DestroyModule(Spark::IModule* m) { delete m; }
+#include "GameModule.h"
+#include <Spark/ModuleDllMain.h>
+
+SPARK_IMPLEMENT_MODULE(MyGameModule)
 ```
 
 ### Build and Run
 
-```bash
-cmake --preset linux-gcc-release
-cmake --build build/linux-gcc-release
-./build/bin/SparkEngine -game build/bin/MyGame.dll
+```powershell
+# From the repository root, for the in-tree route above.
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release --target SparkEngine MyGame
+.\build\bin\Release\SparkEngine.exe -game .\build\bin\Release\MyGame.dll
 ```
+
+For Debug or another multi-config configuration, replace both `Release` path segments with the same configuration name. For the standalone-template route, use the installed-SDK commands in [Project Templates](../gameplay-tools/Project-Templates.md) instead.
 
 ## Step 2: Access Engine Services
 
-The `IEngineContext` gives you access to every engine subsystem:
+The `IEngineContext` exposes service accessors provided by the active build; availability varies by configuration:
 
 ```cpp
 bool MyGameModule::OnLoad(Spark::IEngineContext* context)
@@ -135,7 +147,7 @@ void MyGame::Update(float dt)
 }
 ```
 
-For a full FPS controller with jumping, sprinting, crouching, health, and weapons, see `GameModules/SparkGameFPS/Source/Game/Player.h`.
+For a source reference containing an FPS controller with jumping, sprinting, crouching, health, and weapons, inspect `GameModules/SparkGameFPS/Source/Game/Player.h`.
 
 ## Step 4: Add Objects to the Scene
 
@@ -383,31 +395,31 @@ Assets/
 
 ### Using the Editor
 
-Press **F1** during gameplay to open SparkEditor. Key panels:
+Start `SparkEditor.exe` as a separate executable from the matching multi-config output (for example, `build\bin\Release\SparkEditor.exe`); it is not toggled with F1 from `SparkEngine`. The editor product is in the intended stable-v1 set but remains blocked and uncertified. Current development panels include:
 
 | Panel | What it does |
 |-------|-------------|
 | **Scene Hierarchy** | View and select all objects in the scene |
-| **Properties** | Edit position, rotation, scale, and component values |
+| **Properties** | Inspect and edit available entity and component properties |
 | **Asset Browser** | Browse and drag-drop assets into the scene |
 | **Material Editor** | Create and edit PBR materials (albedo, metallic, roughness, normal) |
 | **Terrain Editor** | Sculpt and paint terrain |
 | **Lighting** | Place and configure lights (directional, point, spot) |
 | **Particle Editor** | Create and tune particle effects |
-| **Gizmo System** | Translate, rotate, scale objects with visual handles |
+| **Gizmo System** | Implemented translation path; rotation, scale, and complete undo remain incomplete |
 
 ### Workflow
 
 1. **Model:** Create your 3D model in Blender/Maya/3ds Max, export as `.glb`
 2. **Place in Assets/Models/** and they appear in the Asset Browser
-3. **Open SparkEditor** (F1), drag models into the scene
-4. **Position** using the gizmo handles or the Properties panel
+3. **Start SparkEditor separately** from the matching build output, then drag models into the scene
+4. **Position** using the implemented translation gizmo or the Properties panel
 5. **Save the scene** -- it's stored as a `.scene` file in `Assets/Scenes/`
-6. **Preview** by closing the editor (F1 again) to return to gameplay
+6. **Preview** with a separately launched engine and an explicit `-game <module-path>` selection
 
 ### Collaborative Editing
 
-SparkEditor supports multi-user editing. Multiple people can edit the same scene simultaneously -- see [Collaborative Editing](../subsystems/Collaborative-Editing.md).
+Collaborative editing is experimental and outside stable-v1. Do not treat the current development surfaces as a supported multi-user editing workflow.
 
 ---
 
@@ -415,7 +427,7 @@ SparkEditor supports multi-user editing. Multiple people can edit the same scene
 
 ### AngelScript
 
-Write gameplay logic in AngelScript without recompiling:
+AngelScript work is experimental and outside stable-v1. The following is an API-oriented development example, not a stable scripting-runtime or hot-reload promise:
 
 ```angelscript
 // Assets/Scripts/my_script.as
@@ -435,7 +447,7 @@ void OnUpdate(float dt)
 }
 ```
 
-Scripts hot-reload when saved -- no need to restart the engine.
+Do not rely on saving a script as a stable hot-reload contract; validate the active scripting path for the current development build.
 
 ### Console Commands
 
@@ -468,21 +480,9 @@ wave_set_difficulty 1.5 -- Difficulty multiplier
 
 ---
 
-## Complete Example: SparkGameFPS
+## Reference Slice: SparkGameFPS
 
-The `GameModules/SparkGameFPS/` module is a complete FPS arena game demonstrating every system above:
-
-- **Player:** Full FPS controller with 3 class types (Scout, Recon, Titan)
-- **Enemies:** 12 AI enemies with behavior trees, 6 archetype types
-- **Weapons:** 18 weapon types with projectile physics
-- **Vehicles:** 9 vehicle types with mounted weapons
-- **HUD:** Health bars, ammo counter, crosshair, kill feed, minimap
-- **Wave spawner:** 20 escalating waves with boss rounds
-- **Progression:** XP, leveling, unlocks
-- **Loot:** Enemy drops with rarity tiers
-- **Quests:** 3-quest system with tracking
-
-Study this module as a reference for building your own game.
+`GameModules/SparkGameFPS/` is the declared first-party **single-player** vertical-slice reference for stable-v1. It is in scope but blocked and uncertified; it is not a complete game, a production claim, or multiplayer evidence. Study its source as a reference while independently validating the features your own module uses.
 
 ---
 

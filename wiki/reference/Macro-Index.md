@@ -82,7 +82,7 @@
 | `ALsizei` | alias | SparkEngine | [OpenALAudioEngine.cpp:L34](../../SparkEngine/Source/Audio/OpenALAudioEngine.cpp#L34) |  |
 | `ALuint` | alias | SparkEngine | [OpenALAudioEngine.cpp:L30](../../SparkEngine/Source/Audio/OpenALAudioEngine.cpp#L30) |  |
 | `AnimationHandle` | alias | SparkEngine | [OpaqueHandle.h:L109](../../SparkEngine/Source/Utils/OpaqueHandle.h#L109) | Handle to an AnimationInstance managed by the AnimationUpdateSystem. |
-| `AnimationSystem` | alias | SparkEngine | [AnimationSystem.h:L541](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L541) | Type alias so EngineContext/EngineSetup can reference "AnimationSystem" |
+| `AnimationSystem` | alias | SparkEngine | [AnimationSystem.h:L546](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L546) | Type alias so EngineContext/EngineSetup can reference "AnimationSystem" |
 | `AnimationSystem` | alias | SparkSDK | [IEngineContext.h:L40](../../SparkSDK/Include/Spark/IEngineContext.h#L40) |  |
 | `AnimS` | alias | SparkEngine | [EngineSettings.cpp:L353](../../SparkEngine/Source/Core/EngineSettings.cpp#L353) |  |
 | `APIENTRY` | macro | SparkEngine | [PlatformTypes.h:L201](../../SparkEngine/Source/Core/PlatformTypes.h#L201) |  |
@@ -200,7 +200,7 @@
 | `CoverID` | alias | Tests | [TestCoverSystem.cpp:L13](../../Tests/TestCoverSystem.cpp#L13) |  |
 | `CrashCallback` | alias | SparkEditor | [EditorCrashHandler.h:L66](../../SparkEditor/Source/Core/EditorCrashHandler.h#L66) | Crash handler callback types |
 | `CreateGameModuleFn` | alias | SparkEngine | [IGameModule.h:L84](../../SparkEngine/Source/Core/IGameModule.h#L84) | Function signature for the game module factory exported from game DLLs |
-| `CreateGameModuleFn` | alias | SparkEngine | [ModuleManager.h:L35](../../SparkEngine/Source/Core/ModuleManager.h#L35) |  |
+| `CreateGameModuleFn` | alias | SparkEngine | [ModuleManager.h:L36](../../SparkEngine/Source/Core/ModuleManager.h#L36) |  |
 | `CreateModuleFn` | alias | SparkSDK | [IModule.h:L185](../../SparkSDK/Include/Spark/IModule.h#L185) |  |
 | `CreateProjectRequestHandler` | alias | SparkEditor | [ProjectBrowserPanel.h:L55](../../SparkEditor/Source/Panels/ProjectBrowserPanel.h#L55) |  |
 | `CrossAreaHandler` | alias | SparkEngine | [AreaServer.h:L193](../../SparkEngine/Source/Engine/Networking/AreaServer.h#L193) | Register handler for cross-area messages |
@@ -258,7 +258,7 @@
 | `DEFINE_GENERATOR` | macro | Tests | [TestMovementSystem.cpp:L46](../../Tests/TestMovementSystem.cpp#L46) |  |
 | `DeserializeFunc` | alias | SparkEngine | [SaveSystem.h:L171](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L171) | Function signature for component deserialization. |
 | `DestroyGameModuleFn` | alias | SparkEngine | [IGameModule.h:L92](../../SparkEngine/Source/Core/IGameModule.h#L92) | Function signature for destroying the game module |
-| `DestroyGameModuleFn` | alias | SparkEngine | [ModuleManager.h:L36](../../SparkEngine/Source/Core/ModuleManager.h#L36) |  |
+| `DestroyGameModuleFn` | alias | SparkEngine | [ModuleManager.h:L37](../../SparkEngine/Source/Core/ModuleManager.h#L37) |  |
 | `DestroyModuleFn` | alias | SparkSDK | [IModule.h:L186](../../SparkSDK/Include/Spark/IModule.h#L186) |  |
 | `DestS` | alias | SparkEngine | [EngineSettings.cpp:L502](../../SparkEngine/Source/Core/EngineSettings.cpp#L502) |  |
 | `Digest` | alias | SparkEngine | [PasswordHash.cpp:L22](../../SparkEngine/Source/Utils/PasswordHash.cpp#L22) |  |
@@ -617,9 +617,9 @@
 | `IDS_APP_TITLE` | macro | SparkEngine | [resource.h:L18](../../SparkEngine/Source/Core/resource.h#L18) |  |
 | `IDYES` | macro | SparkEngine | [PlatformTypes.h:L321](../../SparkEngine/Source/Core/PlatformTypes.h#L321) |  |
 | `IncomingDamageFilter` | alias | GameModules | [TFDamageSystem.h:L211](../../GameModules/SparkGameMMOFPS/Source/Game/TFDamageSystem.h#L211) |  |
-| `InjectConsoleFn` | alias | SparkEngine | [ModuleManager.cpp:L727](../../SparkEngine/Source/Core/ModuleManager.cpp#L727) |  |
-| `InjectContextFn` | alias | SparkEngine | [ModuleManager.cpp:L741](../../SparkEngine/Source/Core/ModuleManager.cpp#L741) |  |
-| `InjectImGuiFn` | alias | SparkEngine | [ModuleManager.cpp:L753](../../SparkEngine/Source/Core/ModuleManager.cpp#L753) |  |
+| `InjectConsoleFn` | alias | SparkEngine | [ModuleManager.cpp:L755](../../SparkEngine/Source/Core/ModuleManager.cpp#L755) |  |
+| `InjectContextFn` | alias | SparkEngine | [ModuleManager.cpp:L769](../../SparkEngine/Source/Core/ModuleManager.cpp#L769) |  |
+| `InjectImGuiFn` | alias | SparkEngine | [ModuleManager.cpp:L781](../../SparkEngine/Source/Core/ModuleManager.cpp#L781) |  |
 | `InstanceID` | alias | SparkEngine | [InstanceManager.h:L29](../../SparkEngine/Source/Engine/Gameplay/InstanceManager.h#L29) |  |
 | `InstanceID` | alias | Tests | [TestInstanceManager.cpp:L16](../../Tests/TestInstanceManager.cpp#L16) |  |
 | `INT` | alias | SparkEngine | [PlatformTypes.h:L36](../../SparkEngine/Source/Core/PlatformTypes.h#L36) |  |
@@ -1411,7 +1411,7 @@
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [DynamicPluginHost.cpp:L31](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L31) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [GameImGuiLayer.h:L28](../../SparkEngine/Source/Core/GameImGuiLayer.h#L28) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [GameModuleLoader.cpp:L14](../../SparkEngine/Source/Core/GameModuleLoader.cpp#L14) |  |
-| `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [ModuleManager.cpp:L35](../../SparkEngine/Source/Core/ModuleManager.cpp#L35) |  |
+| `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [ModuleManager.cpp:L36](../../SparkEngine/Source/Core/ModuleManager.cpp#L36) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [StartupSplash.cpp:L23](../../SparkEngine/Source/Core/StartupSplash.cpp#L23) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [MemoryIntegrity.cpp:L25](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp#L25) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [CrashHandlerSupport.h:L19](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L19) |  |

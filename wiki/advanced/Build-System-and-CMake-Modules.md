@@ -1,8 +1,13 @@
 # Build System and CMake Modules
 
-SparkEngine uses CMake 3.16+ as its build system with 30+ toggleable feature modules, cross-platform presets, and CI/CD integration.
+SparkEngine uses CMake 3.25+ as its build system with documented options, cross-platform presets, and CI/CD integration.
 
 **Source:** `CMakeLists.txt`, `cmake/`, `CMakePresets.json`, `Tools/buildmatrix/`
+
+> **Release boundary:** Presets and compiler paths document configuration
+> coverage, not certification. Only Windows 11 x64 with MSVC v143 is declared in
+> `stable-v1`, and that profile remains blocked and uncertified. Linux, macOS,
+> MinGW/Wine, other compiler lines, and non-D3D11 graphics paths stay outside it.
 
 ## CMake Configuration
 
@@ -38,9 +43,9 @@ cmake -B build [options]
     ├── Set C++23 standard (no extensions)
     ├── Apply CMP0091 policy (MSVC runtime)
     │
-    ├── Evaluate feature flags (-DENABLE_*)
-    │   ├── ON  → include subsystem sources, define compile macros
-    │   └── OFF → skip subsystem, set stub/no-op implementations
+    ├── Evaluate declared CMake options
+    │   ├── consumed options alter definitions, dependencies, or selected targets
+    │   └── inert cache variables do not remove a subsystem (tracked by HEAD-220)
     │
     ├── Detect platform and compiler
     │   ├── MSVC → /W4, MSVC runtime selection
@@ -53,82 +58,36 @@ cmake -B build [options]
     └── Generate build files
 ```
 
-## Feature Flags
+## Selected Root Build Options
 
-All flags can be set during CMake configuration with `-D<FLAG>=ON|OFF`.
+Only options declared and consumed by the current root `CMakeLists.txt` have a
+proven build effect. Setting an arbitrary `ENABLE_*` cache variable does not remove
+a subsystem. The table below intentionally avoids undocumented pseudo-options.
 
-### Graphics Flags
+| Option | Root default | Source-backed effect when disabled |
+|--------|--------------|------------------------------------|
+| `ENABLE_GRAPHICS` | ON | Currently inert; OFF does not remove graphics/RHI (`HEAD-220`) |
+| `ENABLE_VULKAN` | ON | Disables Vulkan discovery and omits `SPARK_VULKAN_SUPPORT`; root source glob remains |
+| `ENABLE_OPENGL` | ON | Disables OpenGL discovery/enablement; verify host context separately |
+| `ENABLE_METAL` | ON on Apple, OFF elsewhere | Omits Metal enablement on Apple development builds |
+| `ENABLE_DXR` | ON | Skips DXR shader compilation and hardware-RT definition setup |
+| `ENABLE_HYBRID_RT` | ON | Omits `SPARK_HYBRID_RT` and its hardware-RT definition setup |
+| `ENABLE_NETWORKING` | ON | Omits networking definition/libraries from `SparkEngineLib`; service targets use `ENABLE_SERVER_PROCESSES` |
+| `SPARK_HEADLESS_SUPPORT` | ON | Omits the compile definition; host entry sources are still listed |
+| `ENABLE_EDITOR` | ON | Omits the SparkEditor target |
+| `BUILD_TESTS` | ON | Omits test targets |
+| `BUILD_GAME_MODULES` | ON | Omits in-tree game-module targets |
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `ENABLE_GRAPHICS` | ON | Graphics rendering engine (DX11, Vulkan, GL) |
-| `ENABLE_VULKAN` | ON | Vulkan backend |
-| `ENABLE_OPENGL` | ON | OpenGL backend (supports CPU software rendering via Mesa llvmpipe) |
-| `ENABLE_DXR` | ON | DirectX Raytracing (Windows/D3D12; SDFGI fallback on other platforms) |
-| `SPARK_HEADLESS_SUPPORT` | ON | Headless/dedicated server mode support |
-| `ENABLE_POST_PROCESSING` | ON | Post-processing effects (bloom, SSAO, etc.) |
-| `ENABLE_LIGHTING_SYSTEM` | ON | Advanced lighting (PBR, IBL) |
-| `ENABLE_MESH_LOD` | ON | Mesh level-of-detail |
-| `ENABLE_DECALS` | ON | Projected decal system |
-| `ENABLE_FOG_SYSTEM` | ON | Fog rendering (distance, height) |
-| `ENABLE_SCREEN_SPACE` | ON | Screen-space effects (SSAO, SSR) |
+### Reduced Development Preset
 
-### Gameplay Flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `ENABLE_PHYSX` | ON | Physics engine (Jolt Physics) |
-| `ENABLE_AI` | ON | AI and navigation (behavior trees, NavMesh) |
-| `ENABLE_ANIMATION` | ON | Skeletal animation (blending, IK, state machines) |
-| `ENABLE_TERRAIN_SYSTEM` | ON | Heightmap terrain rendering and generation |
-| `ENABLE_WEATHER` | ON | Dynamic weather system |
-| `ENABLE_INVENTORY` | ON | Item inventory system |
-| `ENABLE_QUEST_SYSTEM` | ON | Quest/objective tracking |
-| `ENABLE_DAY_NIGHT` | ON | Day/night cycle with time-of-day lighting |
-| `ENABLE_SAVE_SYSTEM` | ON | Game state save/load |
-| `ENABLE_PROCEDURAL` | ON | Procedural generation (noise, erosion, WFC) |
-| `ENABLE_CINEMATIC` | ON | Cinematic sequencer |
-| `ENABLE_EVENT_SYSTEM` | ON | Publish/subscribe event bus |
-
-### Feature Flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `ENABLE_EDITOR` | ON (Windows) | ImGui-based visual editor |
-| `ENABLE_PROFILING` | ON | Performance profiler integration |
-| `ENABLE_HOT_RELOAD` | ON | AngelScript hot-reload during development |
-| `ENABLE_ASSET_STREAMING` | ON | Runtime asset streaming |
-| `ENABLE_ADVANCED_INPUT` | ON | Advanced input features (rebinding, combos) |
-| `ENABLE_PERF_STATS` | ON | Performance statistics overlay |
-| `ENABLE_COLLABORATIVE` | ON | Collaborative editing features |
-
-### External / Disabled by Default
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `ENABLE_NETWORKING` | ON | Networking subsystem (UDP sockets, no external dependencies) |
-| `ENABLE_SDL2` | OFF | SDL2 cross-platform input (alternative to native) |
-| `BUILD_TESTS` | ON | Unit test suite (see [Testing](Testing.md)) |
-
-### Minimal Build Example
-
-Disable most features for a core-only build:
-
-```bash
-cmake -B build \
-    -DENABLE_GRAPHICS=OFF \
-    -DENABLE_AI=OFF \
-    -DENABLE_ANIMATION=OFF \
-    -DENABLE_EDITOR=OFF \
-    -DENABLE_WEATHER=OFF \
-    -DENABLE_TERRAIN_SYSTEM=OFF \
-    -DENABLE_CINEMATIC=OFF
-```
-
-Or use the `minimal` preset:
+The `minimal` preset currently disables networking and DXR. Several additional
+preset cache variables have no matching root option and are inert, so this is not
+a core-only build contract. Disable declared targets such as the editor explicitly
+when needed; `HEAD-220` tracks a true stripped/headless configuration.
 
 ```bash
 cmake --preset minimal
+cmake -B build -DENABLE_EDITOR=OFF
 ```
 
 ### Headless / Software Rendering Build (Linux)
@@ -150,7 +109,12 @@ Xvfb :99 -screen 0 1024x768x24 &
 DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./build/bin/SparkEngine
 ```
 
-The GLAD OpenGL loader is bundled in `ThirdParty/glad/` and detected automatically. When no GPU backend is available at runtime, the engine automatically falls back to `NullRHIDevice` (headless no-op mode).
+The GLAD OpenGL loader is bundled in `ThirdParty/glad/`. A bare
+`RHIFactory::CreateDevice` call does not retry a failed backend, but runtime
+`RHIBridge::Initialize` retries its available GPU candidates after device or
+swap-chain setup fails and creates `NullRHIDevice` only after all candidates
+fail. That no-render resilience path is in `stable-v1` only on Windows 11 x64;
+other hosts are uncertified.
 
 ### Third-Party Manifest + Configure-Time Audit
 
@@ -183,6 +147,10 @@ Toolset and platform are generator inputs; select them with `-T`/`-A` or the pre
 
 `CMakePresets.json` provides ready-made configurations:
 
+Preset availability is configuration coverage, not release certification. The
+Windows 11 x64/v143 line is the only toolchain family in `stable-v1`, which remains
+blocked; Linux and MinGW/Wine rows are development paths outside the profile.
+
 | Preset | Generator | Compiler | Config | Notes |
 |--------|-----------|----------|--------|-------|
 | `windows-debug` | VS 2022 | MSVC | Debug | Full features |
@@ -193,9 +161,9 @@ Toolset and platform are generator inputs; select them with `-T`/`-A` or the pre
 | `linux-clang-release` | Ninja | Clang | Release | Full features |
 | `ci-linux-asan` | Ninja | GCC | Debug | AddressSanitizer + UBSan |
 | `ci-linux-tsan` | Ninja | GCC | Debug | ThreadSanitizer |
-| `linux-mingw-release` | Makefiles | MinGW-w64 | Release | Cross-compile Windows D3D11/D3D12, run under Wine |
-| `linux-mingw-debug` | Makefiles | MinGW-w64 | Debug | Cross-compile Windows D3D11/D3D12, run under Wine |
-| `minimal` | Default | Default | Release | Core-only, no advanced features |
+| `linux-mingw-release` | Makefiles | MinGW-w64 | Release | Cross-compile the Windows D3D11 path; D3D12/DXR are excluded; run under Wine |
+| `linux-mingw-debug` | Makefiles | MinGW-w64 | Debug | Cross-compile the Windows D3D11 path; D3D12/DXR are excluded; run under Wine |
+| `minimal` | Default | Default | Release | Disables networking and DXR; several additional preset variables are currently inert because the root build declares no matching options |
 
 ```bash
 # List available presets
@@ -228,7 +196,7 @@ The local record detects reply substitution but is not a signed remote attestati
 
 ## Cross-Compilation: Windows on Linux (MinGW + Wine)
 
-SparkEngine supports cross-compiling the Windows D3D11 code paths on a Linux host using MinGW-w64. The resulting `.exe` files run under Wine, with DXVK translating D3D11 calls to Vulkan (or WineD3D as fallback). Combined with Mesa Lavapipe, this enables full D3D11 testing without a GPU.
+The repository can cross-compile Windows D3D11 code paths on a Linux host using MinGW-w64 for development evaluation. The resulting `.exe` files run under Wine, with DXVK translating D3D11 calls to Vulkan (or WineD3D as fallback). Combined with Mesa Lavapipe, this exercises D3D11 paths without a GPU; it does not certify D3D11 or a Linux host for `stable-v1`.
 
 > **Full guide:** See [Cross-Compilation: Wine Testing](../platform/Cross-Compilation-Wine-Testing.md) for complete setup, troubleshooting, and the automated test suite.
 
@@ -260,7 +228,7 @@ python3 tools/test-windows-wine.py --build-dir build/linux-mingw-release
 ### Key Differences from MSVC
 
 - **D3D12 excluded** (MinGW headers too old for ID3D12Device5/DXR)
-- **D3D11 fully supported** (primary backend, works under Wine + DXVK)
+- **D3D11 paths exercised** under Wine + DXVK; this is outside `stable-v1` and not certification
 - **DirectXMath** must be installed manually to the MinGW sysroot
 - **`-municode`** required for `wWinMain` Unicode entry point
 
@@ -273,19 +241,26 @@ python3 tools/test-windows-wine.py --build-dir build/linux-mingw-release
 | `tools/test-windows-wine.py` | Automated 7-phase Wine test suite |
 | `CMakePresets.json` | `linux-mingw-release` / `linux-mingw-debug` presets |
 
-### Software Rendering Fallback (All Backends)
+### Development Software/No-Render Routes and Bridge Fallback
 
-Every RHI backend gracefully falls back to software rendering when no GPU is available:
+The routes below are configuration/development paths, not universal host
+certification. `RHIBridge::Initialize` tries the available GPU candidates in
+order after device or swap-chain failure, then creates `NullRHIDevice` if none
+succeeds; the bare `RHIFactory::CreateDevice` operation has no retry loop. The
+bridge does not probe every conceptual backend row regardless of what was
+compiled or made available.
 
 | Backend | Platform | Software Fallback |
 |---------|----------|-------------------|
-| D3D11 | Windows | WARP (`D3D_DRIVER_TYPE_WARP`, built into Windows 10+) |
-| D3D12 | Windows | WARP (`EnumWarpAdapter()`, built into Windows 10+) |
-| Vulkan | Cross-platform | Mesa Lavapipe (`VK_PHYSICAL_DEVICE_TYPE_CPU`) |
-| OpenGL | Linux | Mesa llvmpipe (EGL headless or GLX + Xvfb) |
-| None | All | NullRHIDevice (no-op headless mode) |
+| D3D11 | Windows | WARP route where explicitly selected by the backend |
+| D3D12 | Windows | WARP adapter route where explicitly selected by the backend |
+| Vulkan | Host/runtime dependent | A CPU ICD such as Lavapipe, only when installed and selected |
+| OpenGL | Linux development | Mesa llvmpipe with the required EGL/GLX/display setup |
+| Metal | macOS | No software fallback declared |
+| None | Host-independent implementation | Explicit `NullRHIDevice`; no pixels are rendered |
 
-All backends expose `isSoftwareDevice` in `RHIDeviceCapabilities` and report it in `GetDeviceInfo()`.
+`RHIDeviceCapabilities` contains an `isSoftwareDevice` field, but that field is
+not evidence of automatic fallback or uniform runtime probing.
 
 ## Build Targets
 
@@ -294,8 +269,8 @@ All backends expose `isSoftwareDevice` in `RHIDeviceCapabilities` and report it 
 | `SparkEngineLib` | Static library | Core engine systems (all subsystems linked here) |
 | `SparkEngine` | Executable | Runtime host (loads game modules) |
 | `SparkGame` | Shared library | Default game module DLL |
-| [SparkEditor](../gameplay-tools/SparkEditor.md) | Executable | ImGui visual editor (Windows only) |
-| [SparkConsole](../gameplay-tools/SparkConsole.md) | Executable | Standalone debug console (Windows only) |
+| [SparkEditor](../gameplay-tools/SparkEditor.md) | Executable | ImGui visual editor with Windows and experimental non-Windows build paths |
+| [SparkConsole](../gameplay-tools/SparkConsole.md) | Executable | Debug console with named-pipe transport on Windows and bidirectional inherited stdio transport elsewhere |
 | `SparkShaderCompiler` | Executable | Offline HLSL/GLSL shader compilation tool |
 | `SparkTests` | Executable | Unit test runner (when `BUILD_TESTS=ON`) |
 
@@ -456,7 +431,7 @@ See the [Documentation Index](../../docs/README.md) and the [Doc Tooling page](.
 
 ### build.yml
 
-Runs on every push to `main`, `develop`, and `feature/*` branches, and on all pull requests.
+Runs on pushes to `main`, `develop`, `Working`, `feature/**`, `claude/**`, and `release/**`; pull requests targeting `main`, `develop`, or `Working`; and manual dispatch.
 
 #### CI Job Matrix
 
@@ -467,7 +442,7 @@ Runs on every push to `main`, `develop`, and `feature/*` branches, and on all pu
 | `build-linux-gcc` | ubuntu-24.04 | GCC | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-linux-clang` | ubuntu-24.04 | Clang | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan |
-| `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
+| `build-windows-vs2022` | windows-2022 | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-windows-vs2026` | windows-latest | MSVC v145 | Debug, Release | native VS 18 generator; advisory until runner availability is guaranteed |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
@@ -480,7 +455,7 @@ Runs on every push to `main`, `develop`, and `feature/*` branches, and on all pu
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON \
     -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
 cmake --build build --parallel $(nproc)
-cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+cd build && ctest --output-on-failure --no-tests=error && ./bin/SparkTests && cd ..
 ```
 
 **Linux Clang:**
@@ -488,7 +463,7 @@ cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON \
     -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 cmake --build build --parallel $(nproc)
-cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+cd build && ctest --output-on-failure --no-tests=error && ./bin/SparkTests && cd ..
 ```
 
 **AddressSanitizer (ASan + UBSan):**
@@ -499,7 +474,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON \
     -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
     -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 cmake --build build --parallel $(nproc)
-cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+cd build && ctest --output-on-failure --no-tests=error && ./bin/SparkTests && cd ..
 ```
 
 **Windows MSVC (VS 2022):**
@@ -507,25 +482,25 @@ cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
 cmake -B build -G "Visual Studio 17 2022" -A x64 \
     -T v143 -DBUILD_TESTS=ON
 cmake --build build --config Release --parallel
-ctest --test-dir build -C Release --output-on-failure
+ctest --test-dir build -C Release --output-on-failure --no-tests=error
 ```
 
-### release.yml
+### release.yml (rolling pre-release artifacts)
 
-Runs on every push to the canonical `Working` branch:
-- Creates rolling `latest` GitHub Release
-- Packages: Windows and Linux binaries (Debug + Release)
-- Formats: `.zip` (Windows), `.tar.gz` (Linux)
+Runs for `release/**` pushes, `v*` tags, the nightly schedule, and manual dispatch:
+- Can publish rolling `nightly` assets with `make_latest: false` for development evaluation; these are not versioned releases and do not supply `stable-v1` signing, install, or attestation certification
+- Builds Windows, Linux, and macOS Debug/Release packages plus configured Windows installer artifacts
+- Formats include `.zip` (Windows) and `.tar.gz` (Linux/macOS)
 - Includes exact commit hash and timestamp
 
 ## Compiler Support
 
 | Compiler | Version | Platform | Status |
 |----------|---------|----------|--------|
-| MSVC | v143 (VS 2022) | Windows | Fully supported |
+| MSVC | v143 (VS 2022) | Windows | Declared `stable-v1` toolset line; profile blocked and uncertified |
 | MSVC | v145 (VS 2026) | Windows | Experimental (`continue-on-error`) |
-| GCC | 13+ | Linux | Fully supported |
-| Clang | 17+ | Linux | Fully supported |
+| GCC | 13+ | Linux | Development build floor; outside `stable-v1` |
+| Clang | 17+ | Linux | Development build floor; outside `stable-v1` |
 | Apple Clang | C++23 capable | macOS | Experimental |
 
 ### Compiler Flags

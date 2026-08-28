@@ -1,6 +1,8 @@
 # Animation
 
-SparkEngine provides a full skeletal animation system with bone hierarchies, state machines, multi-layer blending, inverse kinematics, and root motion support.
+SparkEngine contains runtime skeletal-animation types and evaluators for bone hierarchies, state machines, multi-layer blending, inverse kinematics, and root-motion extraction.
+
+> **stable-v1 support boundary:** [`stable-v1`](../../docs/site/readiness.json) is blocked and uncertified; its exact host is Windows 11 x64. This page documents source-level runtime surfaces, not a certified animation authoring or import workflow.
 
 **Source:** `SparkEngine/Source/Engine/Animation/AnimationSystem.h`
 
@@ -8,8 +10,8 @@ SparkEngine provides a full skeletal animation system with bone hierarchies, sta
 
 ```
 AnimationManager (singleton asset cache)
-    ├── Skeleton       (bone hierarchy, shared across instances)
-    └── AnimationClip  (keyframe data, loaded from FBX/GLTF)
+    ├── Skeleton       (bone hierarchy loaded from Spark .skel data)
+    └── AnimationClip  (keyframe data loaded from Spark .sanim data)
 
 Per-entity runtime data:
     AnimationInstance
@@ -32,7 +34,7 @@ The animation system supports:
 - Multi-layer blending (override, additive, layered with per-bone masks)
 - Inverse kinematics (two-bone, look-at, FABRIK)
 - Root motion extraction for locomotion
-- FBX and glTF import via Assimp
+- Spark `.skel` skeleton and `.sanim` animation binary loaders; direct FBX/glTF animation import is not implemented by `AnimationManager`
 
 ## Skeletal Animation
 
@@ -79,7 +81,7 @@ The `bones` array is ordered such that every bone appears AFTER its parent. This
 auto& animMgr = Spark::Animation::AnimationManager::GetInstance();
 
 // Load a skeleton (cached by filepath)
-auto skeleton = animMgr.LoadSkeleton("Assets/Models/Soldier.fbx");
+auto skeleton = animMgr.LoadSkeleton("Assets/Animations/Soldier.skel");
 
 // Query bone information
 int boneCount = skeleton->GetBoneCount();          // e.g. 65
@@ -150,7 +152,7 @@ struct AnimationClip
 auto& animMgr = Spark::Animation::AnimationManager::GetInstance();
 
 // Load all clips from an animation file
-auto clips = animMgr.LoadAnimations("Assets/Animations/Soldier_Anims.fbx");
+auto clips = animMgr.LoadAnimations("Assets/Animations/Soldier_Anims.sanim");
 
 // Register each clip by name for later lookup
 for (auto& clip : clips)
@@ -176,8 +178,8 @@ The `AnimationManager` ensures each unique asset is loaded once. All runtime ins
 | Method | Description |
 |--------|-------------|
 | `GetInstance()` | Access the global singleton |
-| `LoadSkeleton(filepath)` | Load/cache skeleton from FBX/GLTF |
-| `LoadAnimations(filepath)` | Load all clips from a file (does NOT auto-register) |
+| `LoadSkeleton(filepath)` | Load/cache a Spark `SKEL`/`.skel` skeleton binary |
+| `LoadAnimations(filepath)` | Load clips from a Spark `ANIM`/`.sanim` binary (does NOT auto-register) |
 | `RegisterClip(name, clip)` | Register a clip by name for lookup |
 | `GetClip(name)` | Retrieve a cached clip (nullptr if not found) |
 | `GetSkeleton(name)` | Retrieve a cached skeleton |
@@ -555,15 +557,18 @@ The `AnimationUpdateSystem` evaluates state machines and blends poses each frame
 5. Solves enabled IK chains
 6. Uploads bone matrices to the per-entity GPU constant buffer
 
-## Asset Import
+## Asset Ingestion Boundary
 
-Models with animations are imported via Assimp (see [Asset Pipeline](../gameplay-tools/Asset-Pipeline.md)):
+`AnimationManager` does not parse authoring formats. `LoadSkeleton()` accepts the engine's binary `SKEL`/`.skel` layout, while `LoadAnimations()` accepts the engine's binary `ANIM`/`.sanim` layout and leaves registration to the caller.
 
-| Format | Description |
-|--------|-------------|
-| **FBX** | Industry standard; full skeleton and animation support |
-| **glTF** | Modern format with PBR materials and animations |
-| **DAE (Collada)** | XML-based interchange format |
+| Source surface | Current animation handoff |
+|----------------|---------------------------|
+| Native `FBXImporter` | Exposes bone and animation result structures, but the mesh path does not convert or register them with `AnimationManager` |
+| cgltf static-mesh loader | Rejects skins and animations rather than converting them |
+| DAE/Collada | No current loader-to-`AnimationManager` path is present |
+| Spark `.skel` / `.sanim` | Formats consumed directly by `AnimationManager` |
+
+Consequently, model-pipeline animation conversion is absent or unproven. Production-loader evidence includes hardened `.skel` parsing tests; FBX validation tests and the static glTF tests do not establish an end-to-end animated-character import workflow. See [Asset Pipeline](../gameplay-tools/Asset-Pipeline.md) for the mesh-format limits.
 
 ## Thread Safety
 
@@ -574,7 +579,7 @@ The animation system is **main thread only**. All state machine updates, blendin
 ## See Also
 
 - [Entity Component System](Entity-Component-System.md) -- AnimationController component
-- [Asset Pipeline](../gameplay-tools/Asset-Pipeline.md) -- Importing animated models
+- [Asset Pipeline](../gameplay-tools/Asset-Pipeline.md) -- Model-format and runtime animation boundaries
 - [SparkEditor](../gameplay-tools/SparkEditor.md) -- Animation timeline editor
 - [Rendering and Graphics](Rendering-and-Graphics.md) -- Skinned mesh rendering
 - [AI and Navigation](AI-and-Navigation.md) -- NPC animation integration

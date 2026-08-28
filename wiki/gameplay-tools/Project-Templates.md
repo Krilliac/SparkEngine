@@ -1,18 +1,24 @@
 # Project Templates
 
-Project templates provide ready-to-use starting points for building games on SparkEngine. Each template is a standalone CMake project that compiles into a game module (shared library) loaded by the engine at runtime. Templates include pre-configured gameplay systems, placeholder content, and the `IModule` lifecycle wiring needed to get a new project running immediately.
+> **Stable-v1 boundary:** Stable-v1 is blocked and uncertified. Its intended product shape is Windows 11 x64 with MSVC v143, D3D11 (or Windows NullRHI), C++ game modules, and one first-party single-player `SparkGameFPS` vertical slice. The template catalog is source-development material outside that certified release surface; it is not a versioned stable installer, SDK, or game release. Other platforms, backends, template packages, and multiplayer work remain experimental or unsupported.
+
+Project templates are source-development starting packages for SparkEngine. Each is a standalone CMake project that consumes an **installed** SparkEngine SDK and produces one game-module shared library. They provide authored examples and `IModule` lifecycle wiring; they do not certify a complete, packaged, or production game.
 
 **Source:** `Templates/` directory
 
 ## Overview
 
-| Template | Genre | Game Module | Description |
-|----------|-------|-------------|-------------|
-| `EmptyProject` | General | `SparkGame` | Minimal boilerplate with a blank `IModule` implementation |
-| `FPSStarter` | FPS | `SparkGameFPS` | First-person shooter with weapons, AI enemies, health, and HUD |
-| `RPGStarter` | RPG | `SparkGameRPG` | RPG with inventory, dialogue, quests, abilities, and save system |
-| `PlatformerKit` | Platformer | `SparkGamePlatformer` | 2D/3D platformer with character controller, collectibles, and checkpoints |
-| `MultiplayerArena` | Multiplayer | `SparkGameFPS` | Multiplayer arena with networking, lobby, scoreboard, and teams |
+| Package | Genre | CMake module target | Source example |
+|---------|-------|---------------------|----------------|
+| `EmptyProject` | General | `EmptyProject` | Minimal scene-editing and runtime-preview starter |
+| `FPSStarter` | FPS | `FPSStarter` | Movement, mouselook, weapons, damage, HUD, and a training range |
+| `ThirdPersonStarter` | Adventure | `ThirdPersonStarter` | Third-person movement, orbit camera, pickup, and objective example |
+| `TopDownStarter` | Action | `TopDownStarter` | Top-down movement, camera, enemy pursuit, and combat-feedback example |
+| `Blank3D` | General | `Blank3D` | Primitives, lighting, fly camera, and composition study |
+| `MMOStarter` | MMO | `MMOStarter` | Local client/server-shaped gameplay example, not an MMO service |
+| `PlatformerKit` | Platformer | `PlatformerKit` | Movement, collectibles, hazards, checkpoints, and finish example |
+| `RPGStarter` | RPG | `RPGStarter` | Dialogue, quest, inventory, combat, and bounded save/load example |
+| `MultiplayerArena` | Multiplayer Arena | `MultiplayerArena` | Legacy compatibility sample with deterministic local arena rules; outside the built-in registry and not network transport/server evidence |
 
 ## Key Types
 
@@ -23,10 +29,12 @@ Each template contains a `template.json` file describing its metadata:
 ```json
 {
     "name": "FPSStarter",
-    "description": "First-person shooter with weapons, AI enemies, and HUD",
+    "identity": "first-person",
+    "description": "A playable first-person training range with authored arena props, hitscan combat, a live HUD, reloads, and round reset.",
     "genre": "FPS",
-    "gameModule": "SparkGameFPS",
-    "features": ["weapons", "ai-enemies", "hud", "health-system"]
+    "gameModule": "FPSStarter",
+    "defaultScene": "Scenes/Arena.sparkscene",
+    "features": ["movement", "mouselook", "weapons", "damage", "hud", "restart"]
 }
 ```
 
@@ -35,23 +43,27 @@ Each template contains a `template.json` file describing its metadata:
 | `name` | string | Template identifier (matches directory name) |
 | `description` | string | Human-readable description |
 | `genre` | string | Game genre classification |
-| `gameModule` | string | Which engine game module DLL to base on |
+| `gameModule` | string | This package's CMake module target; it is not an alias for an in-tree `GameModules/` target |
 | `features` | string[] | Feature tags included in this template |
 
-### spark.project.json
+### `<Package>.sparkproject`
 
-Project metadata used by the engine at load time:
+Each package has a project file used by project/editor tooling. Module selection remains an explicit runtime choice through `-game` or `-manifest`.
 
 ```json
 {
-    "name": "{{PROJECT_NAME}}",
-    "version": "0.1.0",
+    "projectFileVersion": 1,
+    "name": "FPSStarter",
+    "version": "0.2.0",
     "engineVersion": "1.0.0",
-    "description": "A new SparkEngine game project",
-    "modules": ["{{PROJECT_NAME}}"],
-    "defaultScene": "Assets/Scenes/Default.scene"
+    "template": "first-person",
+    "defaultScene": "Scenes/Arena.sparkscene",
+    "modules": ["FPSStarter"],
+    "scenes": ["Scenes/Arena.sparkscene"]
 }
 ```
+
+The older `spark.project.json` name is a compatibility path, not the package layout used by the current templates.
 
 ### spark.modules.json
 
@@ -61,9 +73,7 @@ Module loading configuration:
 {
     "modules": [
         {
-            "name": "{{PROJECT_NAME}}",
-            "path": "{{PROJECT_NAME}}.dll",
-            "loadOrder": 1000
+            "path": "FPSStarter.dll"
         }
     ]
 }
@@ -73,37 +83,28 @@ Module loading configuration:
 
 ### Creating a New Project
 
-1. Copy a template directory and rename it:
+1. Install a configured engine build, then configure an unmodified package against that SDK:
 
-```bash
-cp -r Templates/FPSStarter MyShooter
-cd MyShooter
+```powershell
+cmake --install <engine-build> --prefix <sdk> --config Release
+cmake -S Templates/FPSStarter -B build/fps-starter -DSparkEngine_DIR="<sdk>/lib/cmake/SparkEngine"
+cmake --build build/fps-starter --config Release
 ```
 
-2. Replace all `{{PROJECT_NAME}}` placeholders with your project name:
+2. On Windows with a multi-config generator, launch the matching configuration and pass the actual module artifact:
 
-```bash
-# Replace in all files
-find . -type f \( -name '*.h' -o -name '*.cpp' -o -name '*.json' -o -name 'CMakeLists.txt' \) \
-  -exec sed -i 's/{{PROJECT_NAME}}/MyShooter/g' {} +
+```powershell
+<sdk>\bin\SparkEngine.exe -game .\build\fps-starter\Release\FPSStarter.dll
 ```
 
-3. Build the game module:
+On a single-config POSIX build, the corresponding target normally has the flat library path:
 
 ```bash
-cmake -B build -DCMAKE_PREFIX_PATH=~/SparkEngine-install
-cmake --build build --config Release
+<sdk>/bin/SparkEngine -game "$PWD/build/fps-starter/libFPSStarter.so"
 ```
 
-4. Run with the engine:
+`-game` requires a non-empty path to an existing regular module file. If you materialize a package under a new name, use SparkEditor or rename the literal package token consistently across its directory, CMake target, source, metadata, and scene files; current templates do not use `{{PROJECT_NAME}}` placeholders.
 
-```bash
-# Windows
-SparkEngine.exe -game MyShooter.dll
-
-# Linux
-./SparkEngine -game libMyShooter.so
-```
 
 ### Template Structure
 
@@ -113,8 +114,8 @@ Every template follows this layout:
 TemplateName/
 ├── CMakeLists.txt          # Standalone CMake project using find_package(SparkEngine)
 ├── template.json           # Template metadata (name, genre, features)
-├── spark.project.json      # Project metadata (name, version, default scene)
-├── spark.modules.json      # Module loading configuration (DLL path, load order)
+├── Package.sparkproject    # Project/editor metadata
+├── spark.modules.json      # Optional module-path manifest
 └── Source/
     ├── GameModule.h        # IModule implementation (game logic entry point)
     └── GameModule.cpp      # DLL exports via SPARK_IMPLEMENT_MODULE()
@@ -249,7 +250,7 @@ A 2D/3D platformer template with character controller, collectibles, checkpoints
 
 **Features:** `character-controller`, `collectibles`, `checkpoints`, `level-timer`
 
-Based on the `SparkGamePlatformer` module.
+This package builds its own `PlatformerKit` module target; it does not inherit the in-tree `SparkGamePlatformer` target.
 
 ### MultiplayerArena
 
@@ -263,7 +264,7 @@ The stable team and player IDs are suitable for a future transport adapter, but 
 
 ### CMakeLists.txt
 
-Templates use `find_package(SparkEngine REQUIRED)` and the `spark_add_game_module()` CMake helper:
+Templates use the installed package's `find_package(SparkEngine CONFIG REQUIRED)` and `spark_add_game_module()` helper:
 
 ```cmake
 cmake_minimum_required(VERSION 3.25)
@@ -272,10 +273,7 @@ project(MyGame LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
-include(SparkEnginePreflight)
-
-find_package(SparkEngine REQUIRED)
+find_package(SparkEngine CONFIG REQUIRED)
 
 file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS "Source/*.cpp" "Source/*.h")
 
@@ -285,16 +283,16 @@ target_include_directories(MyGame PRIVATE "Source")
 
 ### Prerequisites
 
-Templates require a **built and installed** copy of SparkEngine. Point `CMAKE_PREFIX_PATH` at the install prefix (not the build directory):
+Templates require a **built and installed** copy of SparkEngine. A raw engine build tree is not the standalone SDK package:
 
-```bash
-cmake --install build --prefix ~/SparkEngine-install
-cmake -B build -DCMAKE_PREFIX_PATH=~/SparkEngine-install
+```powershell
+cmake --install <engine-build> --prefix <sdk> --config Release
+cmake -S <package> -B <package>/build -DSparkEngine_DIR="<sdk>/lib/cmake/SparkEngine"
 ```
 
 ### Module Load Order
 
-Manifest array order controls discovery. Dependency ordering and initialization priority come from each loaded module's `Spark::ModuleInfo` (`dependencies` and `loadOrder`); the legacy `loadOrder` keys still present in some example manifests are descriptive metadata and are not runtime overrides.
+The manifest loader consumes each `modules[*].path` in array order and resolves a relative path against the manifest directory. It does not consume manifest `name` or `loadOrder`; module metadata supplies its own kind and lifecycle ordering. A process accepts one `ModuleKind::Game` module; `ModuleKind::Addon` modules (library/extension-style modules) may coexist when their own metadata allows it.
 
 ## Creating Custom Templates
 
@@ -307,12 +305,12 @@ Manifest array order controls discovery. Dependency ordering and initialization 
     "name": "MyTemplate",
     "description": "Description of what this template provides",
     "genre": "YourGenre",
-    "gameModule": "SparkGame",
+    "gameModule": "MyTemplate",
     "features": ["feature-a", "feature-b"]
 }
 ```
 
-4. Use `{{PROJECT_NAME}}` placeholders in all files that should be renamed per-project
+4. Keep the package's literal name consistent across its CMake target, source, metadata, and scene files when materializing a new package
 5. Place the template directory under `Templates/`
 
 ## Integration
@@ -321,22 +319,14 @@ Manifest array order controls discovery. Dependency ordering and initialization 
 
 Game modules are shared libraries loaded at startup. The engine calls `CreateModule()` (exported via `SPARK_IMPLEMENT_MODULE`) to instantiate the module, then drives it through the `IModule` lifecycle.
 
-```bash
+```powershell
 # The engine loads the game module and calls OnLoad -> OnUpdate/OnRender loop -> OnUnload
-SparkEngine.exe -game MyGame.dll
+<sdk>\bin\SparkEngine.exe -game <absolute-path-to-MyGame.dll>
 ```
 
 ### With Game Modules
 
-Templates map to specific `GameModules/` directories that provide genre-specific engine integrations:
-
-| Template | Game Module | Module Path |
-|----------|-------------|-------------|
-| EmptyProject | SparkGame | `GameModules/SparkGame/` |
-| FPSStarter | SparkGameFPS | `GameModules/SparkGameFPS/` |
-| RPGStarter | SparkGameRPG | `GameModules/SparkGameRPG/` |
-| PlatformerKit | SparkGamePlatformer | `GameModules/SparkGamePlatformer/` |
-| MultiplayerArena | SparkGameFPS | `GameModules/SparkGameFPS/` |
+Template packages and in-tree `GameModules/` directories are independent targets. A template's `gameModule` field names its own package target; it does not select or inherit a same-genre in-tree module. Use an explicit `-game` path or a manifest when choosing a module to load.
 
 ### With the SparkSDK
 
@@ -344,7 +334,7 @@ Templates include `<Spark/SparkSDK.h>` which provides access to the `IModule` in
 
 ### With AngelScript
 
-Game modules provide the C++ framework, but gameplay scripting can be done in AngelScript with hot-reload support. Templates include TODO comments indicating where script system initialization belongs.
+Game modules provide the C++ framework. AngelScript work is experimental and outside stable-v1, so template TODO comments are extension points rather than a scripting or hot-reload support guarantee.
 
 ## API Reference
 
@@ -378,5 +368,5 @@ The `IEngineContext` pointer received in `OnLoad()` is valid for the module's en
 - [[Game-Modules]] -- Engine game module architecture
 - [[SparkSDK]] -- Public SDK interface headers
 - [[Networking]] -- NetworkManager for multiplayer templates
-- [[Scripting]] -- AngelScript hot-reload scripting
+- [[Scripting]] -- Experimental AngelScript scripting surface
 - [[Build-System]] -- CMake build system and presets

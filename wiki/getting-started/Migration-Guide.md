@@ -1,30 +1,32 @@
 # Migration Guide
 
-How to upgrade between SparkEngine versions and handle breaking changes.
+How to migrate between SparkEngine source revisions and handle breaking changes.
+No versioned stable release currently establishes a public compatibility policy;
+the declared `stable-v1` profile remains blocked and uncertified.
 
 ---
 
-## Version Numbering
+## Source Version Fields
 
-SparkEngine uses **semantic versioning** (`MAJOR.MINOR.PATCH`):
+Source headers carry `MAJOR.MINOR.PATCH` fields and `GetSDKVersion()` values for loader and source-migration checks. Until a versioned release exists, those fields are versioned but uncertified: they do not promise public source, SDK, or binary compatibility across `Working` revisions.
 
-- **MAJOR** — Breaking API changes (e.g., removed public methods, changed signatures)
-- **MINOR** — New features, backward-compatible additions
-- **PATCH** — Bug fixes, documentation updates
+- **MAJOR** — Source changes may include breaking API changes (for example, removed public methods or changed signatures)
+- **MINOR** — Source changes may add features
+- **PATCH** — Source changes may include fixes or documentation updates
 
 Check the current engine version via `IModule::GetSDKVersion()` or the `SPARK_ENGINE_VERSION` macro in `SparkSDK/SparkSDK.h`.
 
 ---
 
-## Compatibility Promises
+## Source Compatibility Boundaries
 
 | Component | Stability |
 |-----------|-----------|
-| SparkSDK public headers | Stable across minor versions |
-| IModule interface | Stable (ABI-compatible within major version) |
-| Wire format (networking) | Versioned — see `docs/specs/networking-wire-format.md` |
-| Asset formats | Versioned — see `docs/specs/asset-format.md` |
-| Plugin ABI | Stable within major version — see `docs/specs/plugin-abi-guide.md` |
+| SparkSDK public headers | Versioned source interface; rebuild against the target revision; no released SDK stability promise |
+| IModule interface | Loader SDK-version check; rebuild for the target revision; no released ABI promise |
+| Wire format (networking) | Source-versioned where specified; uncertified until a release contract exists |
+| Asset formats | Source-versioned where specified; validate migration against the target revision |
+| Plugin ABI | Source ABI fields/checks; rebuild against target headers; no released ABI stability promise |
 | Internal engine headers | No stability guarantee |
 | Console commands | May change between minor versions |
 
@@ -40,10 +42,7 @@ A **breaking change** is any of the following:
 4. Changing the asset binary format without migration support
 5. Removing a CMake option or changing its default value
 
-Breaking changes are:
-- Announced in release notes with migration instructions
-- Accompanied by a deprecation period (minimum one minor version)
-- Documented in this guide
+Until a versioned release policy exists, treat any such source change as a migration trigger: pin the target revision, rebuild consumers, and validate them there. Working documentation may record known changes, but it does not establish release-note, deprecation-period, or stable-compatibility guarantees.
 
 ---
 
@@ -82,20 +81,24 @@ spark_console asset.reimport_all
 
 ---
 
-## Plugin ABI Stability
+## Plugin ABI and Source Migration
 
-Game modules (DLLs) are loaded dynamically. ABI compatibility requires:
+Game modules (DLLs) are loaded dynamically. Current source uses SDK/ABI version checks to reject incompatible combinations; it does not certify a stable public SDK, `IModule`, or plugin ABI before a versioned release. For a source migration, keep these build constraints aligned:
 
 - Same compiler family and major version (e.g., MSVC v143)
 - Same C++ standard library
 - Same `IModule` interface version (checked at load time)
 
-When upgrading the engine:
-1. Check `IModule::GetSDKVersion()` matches the engine
-2. Recompile all game modules against the new SDK headers
-3. Run module tests: `ctest --test-dir build -R GameModule`
+When moving to another source revision:
+1. Record the target commit and check `IModule::GetSDKVersion()` against that engine
+2. Recompile all game modules and plugins against the target SDK headers
+3. Run the registered `SparkEngineTests` aggregate for that configuration:
+   `ctest --test-dir build -C Release -R "^SparkEngineTests$" --output-on-failure --no-tests=error`.
+   There is no `GameModule` CTest suite name; use this registered aggregate or
+   invoke `SparkTests` directly with its documented `SPARK_TEST_FILE` or
+   `SPARK_TEST_NAME` filters when narrowing a diagnosis.
 
-See `docs/specs/plugin-abi-guide.md` for full ABI details.
+See `docs/specs/plugin-abi-guide.md` for the current source ABI layout, not a release compatibility guarantee.
 
 ---
 
@@ -109,7 +112,7 @@ See `docs/specs/plugin-abi-guide.md` for full ABI details.
 
 ### During upgrade
 
-- [ ] Update engine source (git pull / download release)
+- [ ] Update engine source to the chosen commit or versioned-but-uncertified source snapshot
 - [ ] Update SparkSDK headers in your project
 - [ ] Fix any compilation errors from removed/changed APIs
 - [ ] Address deprecation warnings
@@ -118,7 +121,7 @@ See `docs/specs/plugin-abi-guide.md` for full ABI details.
 
 ### After upgrading
 
-- [ ] Run all tests: `ctest --test-dir build --output-on-failure`
+- [ ] Run all tests: `ctest --test-dir build -C Release --output-on-failure --no-tests=error`
 - [ ] Run your game module tests
 - [ ] Test asset loading — watch for migration warnings in the log
 - [ ] Verify networking compatibility if running multiplayer

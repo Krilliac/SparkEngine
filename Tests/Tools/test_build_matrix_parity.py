@@ -8,6 +8,7 @@ from contextlib import contextmanager
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -692,6 +693,130 @@ class WorkflowEnforcementTests(unittest.TestCase):
         self.assertIn("actions/upload-artifact", text)
         self.assertIn("Enforce reviewed CI-120 findings", text)
 
+    def test_all_executable_ctest_invocations_fail_closed(self) -> None:
+        ctest_word = re.compile(
+            r"(?<![A-Za-z0-9_.-])ctest(?:\.exe)?(?=$|[\s()\"';&|])",
+            re.IGNORECASE,
+        )
+
+        def is_ctest_token(token: str) -> bool:
+            candidate = token.strip("$()")
+            return re.split(r"[\\/]", candidate)[-1].lower() in {
+                "ctest",
+                "ctest.exe",
+            }
+
+        def executable_ctest_commands(script: str) -> list[list[str]]:
+            commands: list[list[str]] = []
+            pending = ""
+            heredoc_end = ""
+            for raw_line in script.splitlines():
+                stripped = raw_line.strip()
+                if heredoc_end:
+                    if stripped == heredoc_end:
+                        heredoc_end = ""
+                    continue
+                if not stripped or stripped.startswith("#"):
+                    continue
+
+                heredoc = re.search(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?", stripped)
+                if heredoc:
+                    heredoc_end = heredoc.group(1)
+                    stripped = stripped[: heredoc.start()].rstrip()
+                    if not stripped:
+                        continue
+
+                pending = f"{pending} {stripped}".strip()
+                if stripped.endswith(("\\", "`", "^")):
+                    pending = pending[:-1].rstrip()
+                    continue
+
+                if not ctest_word.search(pending):
+                    pending = ""
+                    continue
+
+                tokens = inventory.workflow_tool.shell_tokens(pending)
+                for segment in inventory.workflow_tool.split_segments(tokens):
+                    command_words = [
+                        index
+                        for index, token in enumerate(segment)
+                        if is_ctest_token(token)
+                    ]
+                    for command_index, token_index in enumerate(command_words):
+                        end = (
+                            command_words[command_index + 1]
+                            if command_index + 1 < len(command_words)
+                            else len(segment)
+                        )
+                        commands.append(segment[token_index:end])
+                pending = ""
+            return commands
+
+        self.assertEqual(
+            executable_ctest_commands(
+                "cat > CMakeLists.txt <<'EOF'\nctest --output-on-failure\nEOF\n"
+                "ctest --output-on-failure --no-tests=error\n"
+            ),
+            [["ctest", "--output-on-failure", "--no-tests=error"]],
+        )
+
+        hostile_forms = (
+            "if ctest --output-on-failure; then echo ok; fi",
+            "env CTEST_OUTPUT_ON_FAILURE=1 ctest --output-on-failure",
+            "(ctest --output-on-failure)",
+            "! ctest --output-on-failure",
+            "time ctest --output-on-failure",
+            "ctest; echo reached",
+            "ctest&&echo reached",
+            "echo --no-tests=error $(ctest --output-on-failure)",
+        )
+        for script in hostile_forms:
+            with self.subTest(script=script):
+                self.assertEqual(len(executable_ctest_commands(script)), 1)
+
+        nested = executable_ctest_commands(
+            "echo --no-tests=error $(ctest --output-on-failure)"
+        )[0]
+        self.assertNotIn(
+            "--no-tests=error",
+            {token.strip("()") for token in nested},
+        )
+
+        missing: set[str] = set()
+        for workflow_name in ("build.yml", "release.yml"):
+            workflow_path = REPO_ROOT / ".github" / "workflows" / workflow_name
+            document = inventory.workflow_tool.parse_workflow_yaml(
+                workflow_path.read_text(encoding="utf-8")
+            )
+            invocation_count = 0
+            for job_name, job in document.get("jobs", {}).items():
+                if not isinstance(job, dict):
+                    continue
+                for step in job.get("steps", []):
+                    if not isinstance(step, dict) or not isinstance(step.get("run"), str):
+                        continue
+                    commands = executable_ctest_commands(step["run"])
+                    invocation_count += len(commands)
+                    for command in commands:
+                        normalized = {token.strip("()") for token in command}
+                        if "--no-tests=error" not in normalized:
+                            missing.add(
+                                f"{workflow_name}:{job_name}/{step.get('name', '<unnamed>')}: "
+                                + " ".join(command)
+                            )
+            self.assertGreater(
+                invocation_count,
+                0,
+                f"{workflow_name}: expected at least one executable ctest invocation",
+            )
+
+        self.assertEqual(
+            missing,
+            set(),
+            "Every executable workflow ctest invocation must include --no-tests=error:\n"
+            + "\n".join(sorted(missing)),
+        )
+
     def test_ci120_work_item_remains_in_progress_and_blocking(self) -> None:
         data = json.loads(
             (REPO_ROOT / "docs" / "readiness" / "work-items" / "00-truth-ci-release.json").read_text(
@@ -701,6 +826,25 @@ class WorkflowEnforcementTests(unittest.TestCase):
         item = next(entry for entry in data["workItems"] if entry["id"] == "CI-120")
         self.assertEqual(item["status"], "in-progress")
         self.assertTrue(item["blocking"])
+
+    def test_fps_lifecycle_is_forced_into_windows_release_evidence(self) -> None:
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "build.yml"
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        document = inventory.workflow_tool.parse_workflow_yaml(workflow_text)
+        job = document["jobs"]["build-windows-vs2022"]
+        self.assertIs(job["strategy"]["fail-fast"], False)
+
+        run_steps = {
+            step.get("name"): step.get("run", "")
+            for step in job["steps"]
+            if isinstance(step, dict)
+        }
+        self.assertIn("-DBUILD_GAME_MODULES=ON", run_steps["Configure CMake (VS 2022 / v143)"])
+        release_tests = run_steps["Run Tests"]
+        self.assertIn("set -euo pipefail", release_tests)
+        self.assertIn("--output-junit build/ctest-junit.xml", release_tests)
+        self.assertIn("ModuleProfileLifecycle_SparkGameFPS_D3D11", release_tests)
+        self.assertIn("count == 1", release_tests)
 
 
 

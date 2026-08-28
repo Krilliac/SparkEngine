@@ -2,6 +2,11 @@
 
 SparkEngine provides a handle-based tween system for smoothly interpolating values over time. The system supports sequencing, parallel composition, configurable easing, looping, and lifecycle control — suitable for UI animations, camera movements, gameplay feedback, and any time-driven interpolation.
 
+> **Release boundary:** This is implementation guidance, not a support claim.
+> The `stable-v1` profile remains blocked and does not separately certify the
+> tween system's feature breadth. The required Windows editor product is inside
+> the profile, but its own release evidence is also blocked.
+
 **Source:** `SparkEngine/Source/Engine/Tween/TweenSystem.h`
 **Namespace:** `Spark`
 **Tests:** `Tests/TestTween.cpp` (14 test cases)
@@ -328,9 +333,9 @@ SparkEngine has two tween systems:
 | Parallel groups | No | Yes (`CreateParallel`) |
 | Loop modes | No | Yes (Loop, PingPong) |
 | Delay / play rate | No | Yes |
-| Best for | Quick one-off lerps | Production animation systems |
+| Best for | Quick one-off lerps | Handle-owning animation systems |
 
-The `TweenSystem` in `Engine/Tween/` is the production-ready API. `Utils/Tween.h` is a lightweight helper for simple cases where handle management is unnecessary.
+The `TweenSystem` in `Engine/Tween/` is the handle-owning engine API. `Utils/Tween.h` is a lightweight helper for simple cases where handle management is unnecessary.
 
 ---
 

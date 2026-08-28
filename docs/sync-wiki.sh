@@ -82,7 +82,11 @@ collect_inventory() {
     local tmpfile
     tmpfile=$(mktemp)
 
-    find "$PROJECT_ROOT/SparkEngine/Source" -name '*Components.h' 2>/dev/null | sort > "$tmpfile"
+    # Count concrete ECS component-group headers only. The umbrella
+    # Engine/ECS/Components.h also contains EntityRetirementPlan, which is
+    # lifecycle bookkeeping rather than an ECS component.
+    find "$PROJECT_ROOT/SparkEngine/Source/Engine/ECS/Components" \
+        -type f -name '*Components.h' 2>/dev/null | sort > "$tmpfile"
     while IFS= read -r cfile; do
         [ -z "$cfile" ] && continue
         local rel="${cfile#$PROJECT_ROOT/}"
@@ -227,7 +231,7 @@ sync_testing_page() {
     fi
 
     local test_content=""
-    test_content="*${TEST_FILE_COUNT} test files, ${TEST_DEFINITION_COUNT} source-level test definitions*\n\n"
+    test_content="*${TEST_FILE_COUNT} test-bearing \`.cpp\`/\`.mm\` files, ${TEST_DEFINITION_COUNT} source-level test definitions*\n\n"
     test_content+="| Test File | Test Definitions |\n|-----------|------------------|\n"
     test_content+=$(find "$PROJECT_ROOT/Tests" -type f \( -name 'Test*.cpp' -o -name 'Test*.mm' \) \
         ! -name 'TestMain.cpp' ! -name 'TestFramework*' 2>/dev/null | \
@@ -301,11 +305,11 @@ sync_home_page() {
     stats_content="| Metric | Count |
 |--------|-------|
 | Header files | ${HEADER_COUNT} |
-| ECS Components | ${comp_count} |
+| Struct declarations in 17 component headers | ${comp_count} |
 | Engine System Classes | ${sys_count} |
-| Editor Panels | ${panel_count} |
-| Test files | ${TEST_FILE_COUNT} |
-| Test definitions | ${TEST_DEFINITION_COUNT} |
+| \`*Panel.h\` class inventory | ${panel_count} |
+| Test-bearing \`.cpp\`/\`.mm\` files | ${TEST_FILE_COUNT} |
+| Source-level test definitions | ${TEST_DEFINITION_COUNT} |
 | Wiki pages | ${WIKI_PAGE_COUNT} |"
 
     update_auto_section "$page" "stats" "$stats_content"

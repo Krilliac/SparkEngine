@@ -1,20 +1,37 @@
 # Dedicated Server
 
-SparkEngine supports two approaches for running a dedicated server: a **built-in dedicated server** compiled into the engine core, and a **game module dedicated server** loaded as a DLL plugin at runtime. This page compares both approaches and helps you choose the right one for your project.
+The repository contains two development host paths for dynamically loaded game
+modules: the shared `SparkEngine -headless` runtime and the separate
+`SparkServer` process. Both drive `IModule` callbacks through `ModuleManager`;
+`SparkServer` adds dedicated health, stop, and gateway-control surfaces. The
+Windows 11 x64 shared no-render host is inside the single-player, service-free
+release profile, but it remains blocked and uncertified while explicit NullRHI
+wiring and headless automation evidence are open. The networked dedicated-server
+use case, `SparkServer`, and non-Windows headless hosts are outside that profile;
+no production deployment or transport-security certification is claimed.
 
 For MMO-scale multiplayer with multiple server processes managing different world areas, see [Area Server Architecture](Area-Server-Architecture.md).
 
-**Source:** `SparkEngine/Source/Engine/Networking/DedicatedServer.h`, `SparkEngine/Source/Engine/Networking/NetworkManager.h`
+**Source:** `SparkEngine/Source/Engine/Networking/DedicatedServer.h`,
+`SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp`,
+`SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp`,
+`SparkServer/src/ServerApplication.cpp`
 
-> **Note:** Both approaches require `ENABLE_NETWORKING=ON` during CMake configuration. See [Networking](Networking.md) for full networking documentation.
+> **Note:** The `SparkServer` target and gameplay-networking services require
+> `ENABLE_NETWORKING=ON`. The shared headless host can still execute a module
+> without networking. See [Networking](Networking.md) for networking details.
 
-> **Security status:** The gameplay UDP path is experimental, unauthenticated, and unencrypted. Servers bind to IPv4 loopback by default. Isolated LAN development requires one canonical RFC1918 interface/prefix such as `192.168.1.20/24`; the full subnet must remain private, exact network/broadcast addresses fail, and admitted peers must be concrete hosts in that subnet. Gateway-managed `SparkServer` processes require loopback and reject conflicting LAN configuration. NET-100 remains open and release-blocking pending reviewed authenticated encryption.
+> **Security status:** The gameplay UDP path is experimental, unauthenticated, and unencrypted. Servers bind to IPv4 loopback by default. Isolated LAN development requires one canonical RFC1918 interface/prefix such as `192.168.1.20/24`; the full subnet must remain private, exact network/broadcast addresses fail, and admitted peers must be concrete hosts in that subnet. Gateway-managed `SparkServer` processes require loopback and reject conflicting LAN configuration. NET-100 remains open for this experimental surface outside `stable-v1`.
 
 ## Architecture Overview
 
-### Game Module Approach
+### Shared SparkEngine Headless Host
 
-The game module approach uses the engine's [IModule plugin system](../getting-started/Creating-a-Game-Module.md) to run the server. The dedicated server is a DLL loaded by the engine executable at runtime, with a `-headless` flag disabling graphics and audio.
+This path starts the normal engine executable with `-headless` or `-dedicated`,
+selects a dynamic DLL/SO game module, constructs the platform's headless runtime
+state, and drives the module through `ModuleManager`. Initialization details are
+platform-specific; the current Windows headless entry supplies null graphics and
+input services, while the Linux headless entry initializes no graphics/audio path.
 
 ```
 ┌─────────────────────────────────┐
@@ -22,10 +39,10 @@ The game module approach uses the engine's [IModule plugin system](../getting-st
 │         -headless               │
 │                                 │
 │  ┌───────────────────────────┐  │
-│  │  Full Engine Init         │  │
-│  │  (Graphics stubbed)       │  │
+│  │ Headless host setup       │  │
+│  │ (platform-specific)       │  │
 │  └───────┬───────────────────┘  │
-│          │ LoadLibrary()        │
+│          │ ModuleManager        │
 │  ┌───────▼───────────────────┐  │
 │  │  SparkGame.dll            │  │
 │  │  (Server game logic)      │  │
@@ -33,50 +50,48 @@ The game module approach uses the engine's [IModule plugin system](../getting-st
 └─────────────────────────────────┘
 ```
 
-- Engine executable is shared between editor, client, and server
-- Server game logic lives in a DLL implementing `Spark::IModule`
-- `-headless` flag disables rendering at runtime (subsystems still initialized)
-- `NetworkManager` accessed via `EngineContext` service locator
+- Uses the shared engine executable as the host process
+- Loads selected server/game logic as a dynamic `Spark::IModule`
+- Calls `InitializeAll`, `UpdateAll`, and `FixedUpdateAll` through `ModuleManager`
+- Uses platform-specific headless initialization rather than a certified common host contract
 
-### Built-in Dedicated Server Approach
+### Separate SparkServer Process
 
-The built-in approach compiles server functionality directly into a dedicated executable (or engine build variant), skipping unnecessary subsystems entirely at compile time.
+The `SparkServer` approach builds a separate executable linked against the full `SparkEngineLib`. At runtime it constructs a headless `EngineContext` with graphics and input set to `nullptr`, initializes selected headless asset services, and dynamically loads the requested game module or manifest. The current target does not prove compile-time removal of graphics, audio, or input code.
 
 ```
 ┌─────────────────────────────────┐
 │     SparkServer.exe             │
 │                                 │
 │  ┌───────────────────────────┐  │
-│  │  Selective Init           │  │
-│  │  (No graphics/audio)      │  │
+│  │  Headless EngineContext   │  │
+│  │  (graphics/input nullptr) │  │
 │  └───────┬───────────────────┘  │
-│          │                      │
+│          │ dynamic module       │
 │  ┌───────▼───────────────────┐  │
+│  │  ModuleManager +          │  │
 │  │  DedicatedServer          │  │
-│  │  (Statically linked)      │  │
 │  └───────────────────────────┘  │
 └─────────────────────────────────┘
 ```
 
-- Separate executable with only the subsystems a server needs
-- No DLL loading -- server logic is statically linked
-- Can omit `GraphicsEngine`, `InputManager`, `AudioEngine` at compile time
-- Tighter integration with `NetworkManager`, `PhysicsSystem`, and ECS
+- Separate executable linked to the complete `SparkEngineLib` module-facing runtime
+- Dynamically loads one game module or a module manifest
+- Constructs graphics/input-null `EngineContext` state and selected headless asset services
+- Does not currently instantiate `NullRHIDevice` or prove compile-time subsystem stripping (`HEAD-220`)
 
 ## Comparison
 
-| Aspect | Game Module | Built-in Server |
+| Aspect | Shared headless host | `SparkServer` process |
 |--------|-------------|-----------------|
 | **Entry point** | `SparkEngine.exe -headless` | Dedicated `SparkServer.exe` |
-| **Module loading** | Dynamic DLL via `CreateModule()` | Static linking |
-| **Engine init** | Full engine init (graphics stubbed) | Selective init (skip graphics entirely) |
-| **Game logic** | Via `IModule::OnUpdate()` | Direct engine API access |
-| **Hot reload** | Yes -- reload DLL without restart | No -- requires full rebuild |
-| **Binary size** | Larger (includes graphics stubs) | Smaller (graphics omitted) |
-| **Startup time** | Longer (full init + DLL load) | Faster (minimal init) |
-| **Memory footprint** | Higher (all subsystems initialized) | Lower (only server subsystems) |
-| **Scaling** | Good for small teams | Better for large deployments |
-| **Rebuild required** | Only the DLL | Full engine rebuild |
+| **Module loading** | Dynamic module via `CreateModule()` | Dynamic selected module or manifest |
+| **Engine init** | Windows headless entry with graphics/input `nullptr` | Headless `EngineContext` with graphics/input `nullptr` plus selected asset services |
+| **Game logic** | Dynamic `IModule` callbacks through `ModuleManager` | Dynamic `IModule` callbacks through `ModuleManager` |
+| **Host process** | Shared `SparkEngine.exe` headless entry | Separate `SparkServer.exe` linked to full `SparkEngineLib` |
+| **NullRHI wiring** | Not instantiated by the current headless entry | Not instantiated by the current server entry (`HEAD-220`) |
+| **Service controls** | Shared engine lifecycle | Dedicated health/stop and gateway-facing control surfaces |
+| **Performance claims** | No release-certified comparison | No release-certified comparison |
 
 ## ServerConfig Reference
 
@@ -160,48 +175,30 @@ enum class GameModeType : uint8_t
 
 ## Initialization Flow
 
-### Game Module
+### Shared Headless Host
 
 ```cpp
 // Launch: SparkEngine.exe -headless -game SparkGame.dll
-
-// 1. Engine initializes all subsystems (graphics stubbed in headless mode)
-// 2. Engine loads SparkGame.dll via LoadLibrary/dlopen
-// 3. Engine calls CreateModule() -> IModule*
-// 4. Engine calls OnLoad(context) with full EngineContext
-// 5. Main loop calls OnUpdate(deltaTime) each frame
-// 6. NetworkManager available via context, already initialized
+// 1. Parse the headless/dedicated flag and enter the platform headless path.
+// 2. Create the platform-specific headless context, world, and selected services.
+// 3. Load the selected dynamic module through ModuleManager.
+// 4. Call ModuleManager::InitializeAll(context).
+// 5. Drive ModuleManager::UpdateAll and FixedUpdateAll in the headless loop.
+// 6. Preflight shutdown callbacks, unload modules, and tear down owned services.
 ```
 
-### Built-in Server
+### SparkServer Process
 
 ```cpp
 // Launch: SparkServer.exe --manifest spark.modules.json --port 27015 --max-clients 32
 
-int main()
-{
-    EngineContext ctx;
-    // Only register what the server needs
-    ctx.RegisterSubsystem<Spark::Net::NetworkManager>();
-    ctx.RegisterSubsystem<PhysicsSystem>();
-    ctx.RegisterSubsystem<ECSManager>();
-    // Skip: GraphicsEngine, InputManager, AudioEngine
-
-    auto& net = Spark::Net::NetworkManager::GetInstance();
-    net.Initialize();
-    net.StartServer(27015, 32);
-
-    // Server main loop
-    while (running)
-    {
-        float dt = timer.GetDeltaTime();
-        net.Update(dt);
-        physics.StepSimulation(dt);
-        ecs.Update(dt);
-    }
-
-    net.Shutdown();
-}
+// 1. ParseServerOptions requires exactly one --module or --manifest selection.
+// 2. Create EngineContext(nullptr, nullptr, timer, eventBus).
+// 3. Initialize headless asset services, World, SaveSystem, and CoroutineScheduler.
+// 4. Load the selected dynamic module(s), then call ModuleManager::InitializeAll.
+// 5. Start Net::DedicatedServer and optional authenticated local gateway control.
+// 6. Drive ModuleManager::UpdateAll and FixedUpdateAll at the configured tick rate.
+// 7. Preflight module shutdown, stop services, unload modules, and reset the context.
 ```
 
 ### Using DedicatedServer Class
@@ -371,7 +368,7 @@ struct ServerCallbacks
 
 ## Local Administration Commands
 
-### Built-in Commands
+### Local Administration Commands
 
 The server registers these local commands automatically:
 
@@ -453,25 +450,24 @@ for (const auto& s : servers)
 - You need **console command integration** via `SimpleConsole`
 - You want to **test server code** in the editor without a separate build
 
-### Use the Built-in Dedicated Server If
+### Evaluate the SparkServer Process If
 
-- You are deploying to **production** at scale (many server instances)
-- You need **optimal performance** with minimal overhead
-- You want **compile-time elimination** of unused subsystems (smaller binary)
-- You operate **dedicated server infrastructure** (cloud fleets, containers)
-- You need **server-specific optimizations** (higher tick rate, custom scheduling)
+- You are evaluating a future many-instance deployment after security and operations gates pass
+- You need a separate process boundary from the client/editor host
+- You need explicit module/manifest selection and headless asset-service initialization
+- You need the dedicated health/stop or gateway-facing control surfaces for integration testing
 
 ## Headless Operation
 
 Both approaches can run without a display, but they differ in how they achieve it:
 
-| Aspect | Game Module | Built-in Server |
+| Aspect | Shared headless host | `SparkServer` process |
 |--------|-------------|-----------------|
-| **Graphics** | Disabled at runtime (`-headless` flag) -- auto-falls back to `NullRHIDevice` | Omitted at compile time |
-| **Audio** | Disabled at runtime | Omitted at compile time |
-| **Input** | Disabled at runtime | Omitted at compile time |
-| **Physics** | Active | Active |
-| **Networking** | Active (via `ENABLE_NETWORKING`) | Active (always compiled in) |
+| **Graphics** | Graphics service is `nullptr`; no `NullRHIDevice` instance (`HEAD-220`) | Graphics service is `nullptr`; no `NullRHIDevice` instance (`HEAD-220`) |
+| **Audio** | Not initialized by the headless entry; engine code remains available | Not initialized by the server entry; full engine library remains linked |
+| **Input** | `EngineContext` input is `nullptr` | `EngineContext` input is `nullptr` |
+| **Physics** | Module/runtime dependent | Module/runtime dependent |
+| **Networking** | Available when `ENABLE_NETWORKING=ON` | Target exists only when `ENABLE_NETWORKING=ON` |
 | **ECS** | Active | Active |
 
 ## Build Configuration
@@ -487,11 +483,11 @@ cmake --build build --config Release
 ./build/bin/SparkEngine -headless -game SparkGame.dll
 ```
 
-### Built-in Server Build
+### SparkServer Process Build
 
 ```bash
 # Separate build target for the dedicated server
-cmake -B build -DENABLE_NETWORKING=ON -DENABLE_GRAPHICS=OFF -DENABLE_SERVER_PROCESSES=ON
+cmake -B build -DENABLE_NETWORKING=ON -DENABLE_SERVER_PROCESSES=ON
 cmake --build build --config Release --target SparkServer
 
 # Run the dedicated server using the project's module manifest
@@ -500,6 +496,8 @@ cmake --build build --config Release --target SparkServer
 
 `SparkServer` requires either `--manifest <path>` or `--module <game-library>`
 so that it can select the server game module explicitly.
+`ENABLE_GRAPHICS=OFF` is not used here because that option is currently inert;
+`SparkServer` still links the full engine library and relies on runtime headless wiring.
 
 ## Thread Safety
 
@@ -529,26 +527,20 @@ Regardless of which approach you use, the underlying `NetworkManager` provides t
 
 See [Networking](Networking.md) for full details on these systems.
 
-## Migration Between Approaches
+## Switching Host Processes
 
-### From Game Module to Built-in
+Both host paths require dynamic `IModule` game logic; switching hosts does not
+mean moving logic into a statically linked server loop or replacing
+`IEngineContext` with direct subsystem ownership.
 
-If you start with the game module approach during development and want to switch to built-in for production:
-
-1. Move game logic from `IModule::OnUpdate()` into the server's main loop
-2. Replace `IEngineContext*` calls with direct subsystem access
-3. Remove DLL export macros (`SPARK_IMPLEMENT_MODULE`)
-4. Enable the existing `SparkServer` target with `-DENABLE_SERVER_PROCESSES=ON`
-5. Configure the build to exclude graphics/audio subsystems
-
-### From Built-in to Game Module
-
-If you want to add hot-reload support during development:
-
-1. Extract server game logic into a class implementing `Spark::IModule`
-2. Add DLL exports via `SPARK_IMPLEMENT_MODULE`
-3. Access subsystems through `IEngineContext*` instead of directly
-4. Run via `SparkEngine.exe -headless -game YourServer.dll`
+1. Keep the game/server logic in a module exported with the repository's module ABI.
+2. For the shared host, select it with `SparkEngine.exe -headless -game YourServer.dll`.
+3. For the separate process, enable `ENABLE_SERVER_PROCESSES=ON` and pass the
+   same module with `SparkServer.exe --module YourServer.dll` (or use a manifest).
+4. Revalidate module dependencies against the different headless context and
+   service set; neither host currently instantiates `NullRHIDevice` (`HEAD-220`).
+5. Treat both paths as experimental until their security, operations, packaging,
+   and exact-SHA release gates pass.
 
 ---
 

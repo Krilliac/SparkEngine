@@ -1,5 +1,10 @@
 # D3D12 Backend
 
+> **Release boundary:** This page documents an experimental implementation outside
+> the blocked and uncertified `stable-v1` product scope (Windows 11 x64/MSVC
+> v143 with D3D11 or Windows NullRHI and C++ modules). It is not a supported or
+> release-certified backend.
+
 ## Overview
 
 SparkEngine's D3D12 backend provides a modern, low-level graphics API implementation using Direct3D 12. It sits behind the RHI (Rendering Hardware Interface) abstraction layer.
@@ -150,7 +155,7 @@ When enabled in debug builds, the backend activates:
 
 ## Integration with RHI
 
-The D3D12 backend integrates with the [RHI abstraction layer](RHI-Abstraction-Layer.md) through the `IRHIDevice` interface. `D3D12Device` implements all abstract resource creation, command list management, and capability query methods.
+The D3D12 backend exposes resource, command-list, and capability-query paths through the [RHI abstraction layer](RHI-Abstraction-Layer.md) and `IRHIDevice`. That interface coverage is implementation evidence only: pass parity, synchronization, shader tooling, golden-scene, performance, and driver evidence remain incomplete.
 
 ## Threading Model
 
@@ -580,20 +585,9 @@ device->ResetStatistics();
 
 ---
 
-## MinGW Compatibility
+## MinGW Cross-Compilation
 
-The D3D12 backend includes compatibility stubs for MinGW cross-compilation:
-
-```cpp
-// MinGW's d3d12.h only defines up to ID3D12Device1
-// The header stubs ID3D12Device5 to allow compilation:
-#if defined(__MINGW32__) && !defined(__ID3D12Device5_FWD_DEFINED__)
-#define __ID3D12Device5_FWD_DEFINED__
-typedef ID3D12Device1 ID3D12Device5; // Safe stub -- DXR disabled at runtime
-#endif
-```
-
-DXR features are automatically disabled when running under MinGW/Wine. The device still functions for all standard rendering via DXVK/D3D12 translation layers.
+MinGW headers are too old for the complete D3D12 backend, including `ID3D12Device5`, debug-layer types, mesh shaders, and variable-rate shading. The root CMake build excludes D3D12 and DXR sources and defines `SPARK_NO_D3D12` for MinGW. D3D11 may be exercised under Wine + DXVK as a separate development route; it does not validate D3D12 or certify this backend.
 
 ---
 

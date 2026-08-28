@@ -1,6 +1,11 @@
 # Vulkan Backend
 
-SparkEngine's primary **cross-platform** RHI backend, targeting Vulkan 1.4 on Windows, Linux, and (via MoltenVK) macOS. It's the default backend chosen by `RHIFactory::GetRecommendedBackend()` on Linux.
+> **Release boundary:** This page documents an experimental implementation outside
+> the blocked and uncertified `stable-v1` product scope (Windows 11 x64/MSVC
+> v143 with D3D11 or Windows NullRHI and C++ modules). It is not a supported or
+> release-certified backend.
+
+SparkEngine has a Vulkan RHI implementation for Windows, Linux, and MoltenVK-based macOS development work. It is experimental and outside `stable-v1`, not a primary cross-platform supported renderer.
 
 ## Overview
 
@@ -50,7 +55,7 @@ Separate compute and transfer queues are used when the adapter exposes them; oth
 - **VMA / explicit memory** — currently plain `vkAllocateMemory` with a per-heap budget cache; the VMA port is on the Tier-2 roadmap.
 - **Descriptor cache** — `VulkanDescriptorCache` memoizes `VkDescriptorSetLayout` so render passes don't rebuild them every frame.
 - **Validation layer** — Debug builds automatically enable `VK_LAYER_KHRONOS_validation`; the `VK_EXT_debug_utils` callback routes messages through `Spark::Logger`.
-- **Lavapipe fallback** — on Linux CI without a GPU, SparkEngine runs on Mesa's `VK_LAYER_KHRONOS_validation` + Lavapipe for headless rendering tests. See [Cross-Compilation: Wine Testing](../platform/Cross-Compilation-Wine-Testing.md).
+- **Lavapipe development route** — Linux development tests may use Mesa Lavapipe with explicitly configured software-ICD and display settings. This is not a generic fallback or a support/certification claim. See [Cross-Compilation: Wine Testing](../platform/Cross-Compilation-Wine-Testing.md).
 
 ## Capability detection
 
@@ -71,17 +76,18 @@ case GraphicsBackend::Vulkan:
     break;
 ```
 
-Selected automatically by `RHIFactory::GetRecommendedBackend()` on Linux.
+On Linux, `RHIFactory::GetRecommendedBackend()` can select Vulkan from the compiled and available candidates. Runtime availability and failure handling are owned by `RHIBridge`, not by the factory selector.
 
 ## Known issues / scope
 
-- **Metal via MoltenVK** — works for headless tests but surface integration on macOS is untested. Prefer the native [Metal backend](Metal-Backend.md) when available.
+- **MoltenVK macOS development path** — no certified surface or packaged-runtime proof exists; the native [Metal backend](Metal-Backend.md) is also partial and blocked.
 - **Mesh shaders** — plumbed through `VK_EXT_mesh_shader`, requires recent Mesa (RADV) or NVIDIA drivers.
 - **DXR equivalent** — implemented via `VK_KHR_ray_tracing_pipeline` but currently flagged experimental. See [DXR Raytracing](DXR-Raytracing.md) for the D3D12 sibling.
+- **Release evidence** — full production-pass execution, GPU readback, shader-toolchain, and supported-driver evidence remain incomplete.
 
 ## Related
 
 - [RHI Abstraction Layer](RHI-Abstraction-Layer.md) — shared interface.
 - [D3D12 Backend](D3D12-Backend.md) — Windows modern alternative.
-- [OpenGL Backend](OpenGL-Backend.md) — fallback on systems without Vulkan.
+- [OpenGL Backend](OpenGL-Backend.md) — experimental development alternative when compiled.
 - [Cross-Compilation: Wine Testing](../platform/Cross-Compilation-Wine-Testing.md) — running D3D11 builds under Wine + DXVK (Vulkan).

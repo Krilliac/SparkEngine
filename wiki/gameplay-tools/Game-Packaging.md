@@ -1,6 +1,6 @@
 # Game Packaging
 
-The Game Packaging system provides a complete pipeline for producing distributable game builds from engine output, game DLLs, and cooked assets. It supports multiple target platforms, optional debug symbol stripping, asset compression via SparkPak archives, and manifest generation for integrity verification.
+The Game Packaging code provides a local staging pipeline that can copy engine output, game DLLs, and raw assets into a package directory. Its output is not a release artifact: `stable-v1` is blocked and has no same-commit package/install/run/signing/attestation certification. The current implementation supports target selectors, optional `.pdb` removal, and a size-only manifest; it does not cook asset formats, calculate checksums, or create SparkPak archives.
 
 **Source:** `SparkEngine/Source/Core/GamePackager.h`
 
@@ -8,7 +8,7 @@ The Game Packaging system provides a complete pipeline for producing distributab
 
 | Class | Responsibility |
 |-------|---------------|
-| `GamePackager` | Singleton orchestrating the full packaging pipeline: config validation, asset cooking, binary copying, symbol stripping, manifest generation, and compression |
+| `GamePackager` | Singleton orchestrating local staging: config validation, raw asset/binary copying, optional `.pdb` removal, and size-only manifest generation |
 | `PackageConfig` | Configuration struct controlling output directory, platform, build config, and feature toggles |
 | `PackageResult` | Result struct describing pipeline outcome: success flag, output path, file counts, errors, and warnings |
 
@@ -48,8 +48,8 @@ struct PackageConfig
     std::string projectName = "SparkGame";   // Project name (used in folder/manifest)
     TargetPlatform platform = TargetPlatform::Windows;
     PackageBuildConfig buildConfig = PackageBuildConfig::Release;
-    bool stripDebugSymbols = true;  // Strip .pdb / debug info from binaries
-    bool compressAssets = true;     // Pack assets into .spk archives
+    bool stripDebugSymbols = true;  // Remove .pdb files only
+    bool compressAssets = true;     // Invokes the current inspection/counting hook; no archive is created
     bool includeEditor = false;     // Include editor binaries (rarely wanted)
 };
 ```
@@ -86,7 +86,7 @@ void PackageMyGame()
     cfg.projectName  = "MyGame";
     cfg.platform     = Spark::TargetPlatform::Windows;
     cfg.buildConfig  = Spark::PackageBuildConfig::Release;
-    cfg.compressAssets = true;
+    cfg.compressAssets = true; // Current hook validates/counts only; it does not create SparkPak output
 
     auto result = packager.Package(cfg);
     if (!result.success)
@@ -121,7 +121,7 @@ Validation catches: empty output directory, empty project name, invalid filesyst
 
 ### Packaging for Linux from a Windows host
 
-Cross-compilation targets are always available (the packager copies files regardless of host platform):
+Cross-platform target selectors are available because the packager copies files regardless of host platform. Linux selection is experimental and outside `stable-v1`; a selected target does not prove a runnable package:
 
 ```cpp
 Spark::PackageConfig cfg;
@@ -140,7 +140,7 @@ Spark::PackageConfig cfg;
 cfg.buildConfig       = Spark::PackageBuildConfig::Debug;
 cfg.stripDebugSymbols = false;   // Keep .pdb files for debugging
 cfg.includeEditor     = true;    // Include SparkEditor binaries
-cfg.compressAssets    = false;   // Loose files for faster iteration
+cfg.compressAssets    = false;   // Disable the current inspection/counting hook
 
 auto result = packager.Package(cfg);
 // Debug packages include .pdb files alongside DLLs
@@ -157,7 +157,7 @@ auto result = packager.Package(cfg);
 | `platform` | `Windows` | Target platform for binary selection |
 | `buildConfig` | `Release` | Controls binary source path and symbol stripping |
 | `stripDebugSymbols` | `true` | Only applies when `buildConfig == Release` |
-| `compressAssets` | `true` | Packs assets into `.spk` archives |
+| `compressAssets` | `true` | Invokes a validation/counting hook; no `.spk` archive is currently created |
 | `includeEditor` | `false` | Excludes editor binaries and editor-only assets |
 
 ### Output directory structure
@@ -170,12 +170,12 @@ Build/Package/MyGame_Windows_Release/
         SparkEngine.exe
         SparkGame.dll
         SparkGameFPS.dll
-    Assets/                 -- Cooked game assets (or .spk archives)
+    Assets/                 -- Raw copied assets; no .spk archive is currently produced
         Textures/
         Models/
         Shaders/
     Config/                 -- Configuration files
-    manifest.txt            -- File listing with sizes and checksums
+    manifest.txt            -- File listing with sizes only; no checksums
 ```
 
 The folder name follows the pattern `{projectName}_{platform}_{config}`.
@@ -201,11 +201,11 @@ GamePackager: initialized, 3 supported platform(s)
 The `Package()` method executes these steps in order:
 
 1. **Validate configuration** -- Checks for empty fields, invalid characters, initialization state
-2. **Cook/copy assets** -- Recursively copies `Assets/` to the output, skipping `Editor/` assets unless `includeEditor` is set
+2. **Copy assets** -- `CookAssets()` recursively copies raw `Assets/` files, skipping `Editor/` assets unless `includeEditor` is set; it performs no format cooking
 3. **Copy binaries** -- Copies `.dll`/`.so`/`.dylib` and `.exe` files from `build/{Config}/` to `Bin/`; skips editor binaries unless requested
 4. **Strip debug symbols** -- In Release mode with `stripDebugSymbols`, removes `.pdb` files from the output `Bin/` directory
 5. **Generate manifest** -- Writes `manifest.txt` with project metadata, timestamp, and a listing of all files with sizes
-6. **Compress assets** -- When `compressAssets` is enabled, packs the `Assets/` subdirectory into `.spk` archives via SparkPakWriter
+6. **Inspect compression input** -- When `compressAssets` is enabled, `CompressOutput()` counts regular files and may emit warnings; it currently writes no archive
 7. **Calculate total size** -- Walks the output tree and sums file sizes for the result
 
 If any step produces fatal errors, the pipeline returns early with `success = false`.
@@ -239,10 +239,10 @@ for (const auto& w : result.warnings)
     Log::Warn("Packaging", w);
 
 if (result.success)
-    Log::Info("Packaging", "Ready to ship: {}", result.outputPath);
+    Log::Info("Packaging", "Package generated for local validation (not release-certified): {}", result.outputPath);
 ```
 
-### Step 3: Verify the manifest
+### Step 3: Inspect the size-only manifest
 
 The generated `manifest.txt` contains:
 
@@ -263,7 +263,7 @@ Assets/Textures/player.dds 2097152
 
 ### Step 4: Distribute
 
-The output directory is self-contained and ready for distribution. Copy or archive the entire folder.
+The output may be used for local validation. Do not distribute it as a certified release until the same-commit packaging, signing, attestation, install, upgrade, and rollback gates pass.
 
 ## Integration
 
@@ -317,11 +317,11 @@ Game module DLLs (SparkGame, SparkGameFPS, etc.) are automatically discovered in
 | `PlatformToString` | Convert `TargetPlatform` enum to display string |
 | `GetDllExtension` | Get binary extension for target (`.dll`, `.so`, `.dylib`) |
 | `GetExeExtension` | Get executable extension (`.exe` or empty) |
-| `CookAssets` | Copy and optionally cook assets to output |
+| `CookAssets` | Copy raw assets to output; no format cooking |
 | `CopyBinaries` | Copy engine and game binaries to `Bin/` |
 | `StripSymbols` | Remove `.pdb` files from output directory |
-| `CreateManifest` | Write `manifest.txt` with file listing |
-| `CompressOutput` | Compress assets into `.spk` archives |
+| `CreateManifest` | Write `manifest.txt` with file names and sizes; no checksums |
+| `CompressOutput` | Count assets and emit warnings; no compression output |
 
 ## Thread Safety
 

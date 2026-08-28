@@ -2,10 +2,14 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-|---------|--------------------|
-| 1.0.x   | Yes                |
-| < 1.0   | No                 |
+SparkEngine has not published a certified versioned release. The declared
+`stable-v1` profile is blocked and uncertified, so there is no released version
+line with a security-support commitment.
+
+| Release line | Status |
+|---|---|
+| `stable-v1` | Pre-release and blocked; no supported version has been published |
+| `Working` / nightly artifacts | Development evaluation only; fixes are best-effort and do not constitute a release SLA |
 
 ## Reporting a Vulnerability
 
@@ -27,7 +31,7 @@ This ensures your report is private and only visible to the maintainers until a 
 
 ## Scope
 
-SparkEngine's first-party gameplay, discovery, collaboration, and live-editor endpoints default to loopback. A development LAN endpoint must name one canonical RFC1918 interface and prefix (for example `192.168.1.20/24`); the entire subnet must remain inside RFC1918 space, and its exact network and directed-broadcast addresses are rejected. Peers are limited to that same subnet. Wildcard, public, documentation, multicast, limited-broadcast, CGNAT, IPv4-mapped IPv6, and alternate textual forms are rejected before socket creation. This is a containment boundary, not transport security: the active UDP protocol is unauthenticated and unencrypted, and the legacy XOR/FNV helpers must not protect credentials or hostile-network traffic. NET-100 remains release-blocking until maintained authenticated encryption and an independent security review land.
+SparkEngine's first-party gameplay, discovery, collaboration, and live-editor endpoints default to loopback. A development LAN endpoint must name one canonical RFC1918 interface and prefix (for example `192.168.1.20/24`); the entire subnet must remain inside RFC1918 space, and its exact network and directed-broadcast addresses are rejected. Peers are limited to that same subnet. Wildcard, public, documentation, multicast, limited-broadcast, CGNAT, IPv4-mapped IPv6, and alternate textual forms are rejected before socket creation. This is a containment boundary, not transport security: the active UDP protocol is unauthenticated and unencrypted, and the legacy XOR/FNV helpers must not protect credentials or hostile-network traffic. NET-100 remains open for the experimental multiplayer surface, which is outside the single-player, service-free `stable-v1` profile and does not certify it.
 
 The following are considered security vulnerabilities:
 

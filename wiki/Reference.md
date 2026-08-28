@@ -4,9 +4,11 @@
 >
 > **Thread Context:** Mixed; each reference documents its own constraints
 >
-> **Platform/Backend Scope:** All supported platforms and backends
+> **Platform/Backend Scope:** Navigation index only; each linked reference declares its own platform/backend scope, and some describe experimental or out-of-profile surfaces.
+>
+> **`stable-v1` support boundary:** [`stable-v1`](../docs/site/readiness.json) is blocked and uncertified. Inclusion in this index does not make an API, format, tool, platform, or backend supported; follow the linked page's limitations and the readiness contract.
 
-This page is the stable `/reference` entry point.
+This page is the `/reference` navigation entry point.
 
 ## Code reference
 
@@ -26,4 +28,4 @@ This page is the stable `/reference` entry point.
 
 ## Source & Freshness
 
-Reference pages are versioned with `Working`; generated indexes identify the source revision used by the website publication.
+Reference pages track `Working`; generated indexes identify the source revision used by website publication. Versioned source text is not a support or compatibility guarantee.

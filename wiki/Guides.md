@@ -4,9 +4,11 @@
 >
 > **Thread Context:** Not applicable — guide index
 >
-> **Platform/Backend Scope:** All supported platforms and backends
+> **Platform/Backend Scope:** Navigation index only; each linked guide declares its own platform/backend scope, and some describe experimental or out-of-profile paths.
+>
+> **`stable-v1` support boundary:** [`stable-v1`](../docs/site/readiness.json) is blocked and uncertified. Inclusion in this index does not make a workflow, platform, backend, or subsystem supported; follow the linked page's limitations and the readiness contract.
 
-Use this page as the stable guide index for the website and GitHub Wiki.
+Use this page as the guide-navigation index for the website and GitHub Wiki.
 
 ## Setup and orientation
 
@@ -44,4 +46,4 @@ Use this page as the stable guide index for the website and GitHub Wiki.
 
 ## Source & Freshness
 
-This guide index follows the canonical `wiki/` tree on `Working`; individual pages document narrower platform or backend scope where required.
+This guide index follows the `wiki/` tree on `Working`. Link presence is repository inventory, not evidence that the linked workflow is supported or release-ready.

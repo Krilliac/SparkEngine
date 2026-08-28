@@ -2,6 +2,10 @@
 
 All notable changes to SparkEngine will be documented in this file.
 
+No versioned release has been published. The `stable-v1` profile remains blocked
+and uncertified; entries below record source-history milestones, not release
+certification.
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -9,16 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Live authored-scene, input, render, HUD, and cleanup loops for every built-in project template and the MultiplayerArena compatibility sample
-- Installed-SDK and packaged headless smoke coverage for all nine shipped template projects
+- Installed-SDK and packaged headless smoke coverage for all nine in-tree template projects
 - Standalone `SparkServer` dedicated host with dynamic game-module selection, bounded health/stop controls, and gateway-facing area handoff fencing
 - `SparkGateway` authenticated ingress and idempotent, epoch-fenced area transfer coordination across owner-local named-pipe and Unix-domain-socket transports
 - `SparkOrchestrator` and standalone `SparkCollabServer` processes for daemon-backed lifecycle control and isolated presence, locking, and edit-history traffic
 - Deterministic `SparkCooker` and digest-pinned `SparkWorker` asset pipeline, plus `SparkAutomation` black-box runtime, screenshot, log, JSON, and JUnit smoke-test hosting
-- Stable, versioned C plugin ABI for importers, processors, editor/runtime extensions, and tools, with deterministic metadata sidecars and a hardened `DynamicPluginHost`
+- Versioned C plugin ABI for ongoing compatibility work (not `stable-v1` certification) across importers, processors, editor/runtime extensions, and tools, with deterministic metadata sidecars and a hardened `DynamicPluginHost`
 - Editor Dedicated Server and Service Topology panels for configuring, launching, monitoring, draining, and stopping the external service fleet
 - Read-only SparkPak inspection commands and unified CLI entry points for cooking, packaging, validation, migration, templates, and package diagnostics
 - Provenance-backed hero, wide, and detail runtime galleries for all nine installed-SDK project templates
-- Stable rolling Debug/Release installer and ZIP download aliases, lifetime download badges, SPDX release SBOMs, and build-provenance attestations
+- Rolling Debug/Release build aliases and generated checksum/SBOM/provenance metadata for development artifacts; binaries/installers are not code-signed, and none of this is versioned stable-v1 release qualification
 
 ### Changed
 - World saves now write format v2, persist `screenshotPath`, and retain an explicit v1/v2 reader window with an idempotent in-memory v1-to-v2 migration
@@ -43,10 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows external-process launch now preserves UTF-8 project paths through `CreateProcessW`; installed launcher templates outrank caller working directories, and failed editor-plugin rollback retains truthful fail-closed ownership
 - POSIX orchestration now durably records child identity before releasing `exec`, closing the daemon-crash orphan window
 
-## [1.0.0] - 2026-04-04
+## Historical implementation baseline — 2026-04-04 (unreleased)
 
 ### Added
-- Initial release of SparkEngine
+- Initial source baseline of SparkEngine; not a published 1.0.0 release
 - D3D11 primary rendering backend with PBR materials
 - Jolt Physics integration (rigid bodies, constraints, vehicles, cloth, ragdoll)
 - AI system (behavior trees, NavMesh, perception, formations, steering)

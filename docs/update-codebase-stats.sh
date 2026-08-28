@@ -125,21 +125,6 @@ collect_metrics() {
     WIKI_COUNT=$(find "$WIKI_DIR" -name '*.md' ! -name '_Sidebar.md' 2>/dev/null | wc -l | tr -d " ")
     AS_COUNT=$(find "$PROJECT_ROOT/Assets" -name '*.as' 2>/dev/null | wc -l | tr -d " ")
 
-    # Code density (engine source only, not tests/gamemodules)
-    local engine_cpp_count engine_h_count
-    engine_cpp_count=$(find "$SRC" "$EDITOR_SRC" -name '*.cpp' 2>/dev/null | wc -l | tr -d " ")
-    engine_h_count=$(find "$SRC" "$EDITOR_SRC" -name '*.h' 2>/dev/null | wc -l | tr -d " ")
-    if [ "$engine_cpp_count" -gt 0 ]; then
-        AVG_CPP=$(( (LINES_ENGINE + LINES_EDITOR) / engine_cpp_count ))
-    else
-        AVG_CPP=0
-    fi
-    if [ "$engine_h_count" -gt 0 ]; then
-        AVG_H=$(( (LINES_ENGINE + LINES_EDITOR) / engine_h_count ))
-    else
-        AVG_H=0
-    fi
-
     # Engine subsystem lines
     LINES_GRAPHICS=$(engine_subsystem_lines "Graphics")
     LINES_ENGINE_SUB=$(engine_subsystem_lines "Engine")
@@ -161,8 +146,8 @@ collect_metrics() {
     done
 
     # ECS metrics
-    COMP_HEADERS=$(find "$SRC/Engine/ECS/Components" -name '*.h' 2>/dev/null | wc -l | tr -d " ")
-    COMP_STRUCTS=$(grep -rh "^struct " "$SRC/Engine/ECS/Components" 2>/dev/null | grep -v "//" | wc -l | tr -d " ")
+    COMP_HEADERS=$(find "$SRC/Engine/ECS/Components" -type f -name '*Components.h' 2>/dev/null | wc -l | tr -d " ")
+    COMP_STRUCTS=$("${PYTHON[@]}" -c 'import pathlib,re,sys; root=pathlib.Path(sys.argv[1]); pat=re.compile(r"^\s*struct\s+[A-Z][A-Za-z0-9]*"); print(sum(1 for path in root.glob("*Components.h") for line in path.read_text(encoding="utf-8", errors="replace").splitlines() if pat.match(line)))' "$SRC/Engine/ECS/Components")
     ECS_SYSTEMS=$(grep -c "class .*System" "$SRC/Engine/ECS/Systems/ECSystems.h" 2>/dev/null || echo "0")
 
     # Editor metrics
@@ -192,6 +177,8 @@ generate_page() {
 # Codebase Statistics
 
 Comprehensive metrics and analysis of the SparkEngine codebase. Updated ${today}.
+This source inventory is not readiness evidence. The \`stable-v1\` Windows 11
+x64 profile remains blocked and uncertified in \`docs/site/readiness.json\`.
 
 ## Code Volume
 
@@ -218,16 +205,12 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated ${today}
 | HLSL shader files | ${HLSL_COUNT} |
 | GLSL shader files | ${GLSL_COUNT} |
 | AngelScript files (.as) | ${AS_COUNT} |
-| Test files (.cpp) | ${TEST_FILE_COUNT} |
+| Test-bearing implementation files (.cpp/.mm) | ${TEST_FILE_COUNT} |
 | Wiki pages (.md) | ${WIKI_COUNT} |
 
-### Code Density
+### Largest Top-Level Source Section
 
-| Metric | Value |
-|--------|-------|
-| Average lines per .cpp file | ~${AVG_CPP} |
-| Average lines per .h file | ~${AVG_H} |
-| Largest codebase section | Graphics ($(format_number "$LINES_GRAPHICS") lines — $((LINES_GRAPHICS * 100 / LINES_ENGINE))% of SparkEngine/Source) |
+Graphics contains $(format_number "$LINES_GRAPHICS") lines, or $((LINES_GRAPHICS * 100 / LINES_ENGINE))% of \`SparkEngine/Source\`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -267,16 +250,20 @@ HEREDOC
 
 | Metric | Count |
 |--------|------:|
-| Component header files | ${COMP_HEADERS} |
-| Component struct definitions | ${COMP_STRUCTS} |
+| Concrete component-group headers (\`Engine/ECS/Components/*Components.h\`) | ${COMP_HEADERS} |
+| Struct declarations in those headers | ${COMP_STRUCTS} |
 | ECS systems | ${ECS_SYSTEMS} |
 | Execution order | Physics → Animation → AI → Audio → Lifecycle → Render |
+
+Component provenance: this declaration inventory scans only the concrete
+\`*Components.h\` files and matches whitespace-tolerant \`struct\` declarations.
+It does not measure registration, runtime use, support, or readiness.
 
 ## Editor Metrics
 
 | Metric | Count |
 |--------|------:|
-| Editor panel classes | ${PANEL_COUNT} |
+| \`*Panel.h\` class inventory | ${PANEL_COUNT} |
 | Total editor lines | $(format_number "$LINES_EDITOR") |
 
 ## Testing Metrics
@@ -285,8 +272,7 @@ HEREDOC
 |--------|------:|
 | Test files | ${TEST_FILE_COUNT} |
 | TEST() definitions | $(format_number "$TEST_CASE_COUNT") |
-| Subsystems covered | All major |
-| Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
+| Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
 
@@ -296,12 +282,15 @@ HEREDOC
 | ENABLE_* feature toggles | ${ENABLE_TOGGLES} |
 | Game modules | ${GAME_MODULE_COUNT} |
 | SDK public headers | ${SDK_HEADER_COUNT} |
-| Supported compilers | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
+| Documented build compiler paths | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
 | Platforms | Windows, Linux, macOS (experimental) |
 
 ## Third-Party Dependencies
 
-### Git Submodules
+### Audited Dependency Inventory
+
+\`ThirdParty/dependencies.lock\` is the authoritative manifest. This selected
+inventory is implementation evidence, not support certification.
 
 | Library | Path | Purpose |
 |---------|------|---------|
@@ -311,20 +300,16 @@ HEREDOC
 | AngelScript | \`ThirdParty/Scripting/angelscript-mirror\` | Scripting VM |
 | miniz | \`ThirdParty/Utils/miniz\` | Compression |
 | Recast Navigation | \`ThirdParty/AI/recastnavigation\` | NavMesh pathfinding |
-
-### Embedded Libraries
-
-| Library | Purpose |
-|---------|---------|
-| DirectXTK | DirectX 11 toolkit |
-| Assimp | 3D model import (FBX, glTF) |
-| ImGuizmo | 3D editor gizmos |
-| imnodes | Node graph editor |
-| GLM | Math library |
-| RapidJSON | JSON parsing |
-| spdlog | Structured logging |
-| stb | Image loading |
-| miniaudio | Cross-platform audio fallback |
+| SDL2 | \`ThirdParty/SDL2\` | Experimental non-Windows window/input path |
+| tinyobjloader | \`ThirdParty/Utils/tinyobjloader\` | OBJ import |
+| stb_image | \`ThirdParty/Utils/stb\` | Image import |
+| cgltf | \`ThirdParty/Utils/cgltf\` | glTF import |
+| miniaudio | \`ThirdParty/Audio/miniaudio\` | Linked XAudio2-stub implementation surface; not the active audio-factory fallback |
+| nlohmann/json | \`ThirdParty/Utils/json\` | JSON parsing when available |
+| tinyexr | \`ThirdParty/Utils/tinyexr\` | EXR import |
+| zstd | \`ThirdParty/Utils/zstd\` | Compression path |
+| VulkanMemoryAllocator | \`ThirdParty/VulkanMemoryAllocator\` | Experimental Vulkan allocation path |
+| glad | \`ThirdParty/glad\` | Experimental OpenGL loader |
 
 ## Largest Files
 

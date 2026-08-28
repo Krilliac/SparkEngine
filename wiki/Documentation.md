@@ -4,9 +4,9 @@
 >
 > **Thread Context:** Not applicable — documentation index
 >
-> **Platform/Backend Scope:** All supported platforms and backends
+> **Platform/Backend Scope:** These docs describe implementation and experimental paths. The only declared product set is the blocked, uncertified `stable-v1` C++ module slice: Windows 11 x64/MSVC v143, D3D11/Windows NullRHI.
 
-This is the stable documentation entry point used by [sparkengine.dev](https://sparkengine.dev/). SparkEngine's documentation is authored with the engine source, published to this GitHub Wiki, and also packaged into the website's repository-driven documentation bundle.
+This is the canonical documentation entry point used by [sparkengine.dev](https://sparkengine.dev/). SparkEngine's documentation is authored with the engine source, published to this GitHub Wiki, and also packaged into the website's repository-driven documentation bundle.
 
 ## Start here
 
@@ -25,7 +25,7 @@ This is the stable documentation entry point used by [sparkengine.dev](https://s
 - [Tutorials](Tutorials.md) — guided first-project, editor, gameplay, and multiplayer walkthroughs.
 - [Samples](Samples.md) and [Examples](Examples.md) — starter templates and reference game modules.
 - [API Reference](reference/API-Reference.md) — generated symbol, class, function, enum, macro, file, and hierarchy indexes.
-- [Build Guide](Build-Guide.md) — supported toolchains, prerequisites, presets, and troubleshooting.
+- [Build Guide](Build-Guide.md) — documented toolchains, prerequisites, presets, and troubleshooting.
 - [Dependencies](Dependencies.md) — bundled and system dependencies plus audit references.
 - [Roadmap](Roadmap.md), [Changelog](Changelog.md), and [project status](../docs/status/PROJECT_STATUS.md).
 

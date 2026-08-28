@@ -36,7 +36,7 @@ cmake --build build --parallel $(nproc)
 cd build && ./bin/SparkTests && cd ..
 ```
 
-CI also runs `ctest --test-dir build --output-on-failure --parallel` on the Windows/macOS matrix jobs; on the Linux GCC/Clang jobs it invokes `./bin/SparkTests` directly. Either is fine locally — `ctest` gives per-test isolation, `./bin/SparkTests` gives a single combined run.
+CI also runs CTest on the Windows/macOS matrix jobs; for a fail-closed local equivalent, use `ctest --test-dir build --output-on-failure --parallel --no-tests=error`. On the Linux GCC/Clang jobs it invokes `./bin/SparkTests` directly. Either is fine locally — CTest gives per-test isolation, `./bin/SparkTests` gives a single combined run.
 
 ## Linux Clang build — Debug + Release (job `build-linux-clang`)
 
@@ -114,7 +114,7 @@ MSan requires libc++ built with `-fsanitize=memory`; this is why the job is `con
 ```bash
 cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON
 cmake --build build --config Release --parallel
-ctest --test-dir build -C Release --output-on-failure --parallel
+ctest --test-dir build -C Release --output-on-failure --parallel --no-tests=error
 ```
 
 The engine selects embedded MSVC debug information (`/Z7`) through CMake policy CMP0141 so Ninja-based local builds can use sccache effectively. The advisory VS 2026 job uses CMake 4.2+'s native `Visual Studio 18 2026` generator and its default v145 toolset; it fails visibly when that toolchain is absent instead of reporting a green no-op.
@@ -166,7 +166,7 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
 - Updated / found stale:
   - **Fixed a broken shell construct** in the ASan/TSan/MSan run lines: the source wrote `ENV=... cd build && ./bin/SparkTests` which applies the env var to `cd`, not to the test binary. Rewritten as `cd build` then the env-prefixed `./bin/SparkTests` run, matching how CI actually invokes it.
   - Aligned the LSan suppressions path to `../Tests/lsan_suppressions.txt` (relative to `build/`); verified `Tests/lsan_suppressions.txt` and `Tests/msan_ignorelist.txt` exist.
-  - Removed the source's `ctest --output-on-failure && ./bin/SparkTests` combo from the GCC/Clang jobs — CI runs `./bin/SparkTests` directly there; clarified where `ctest` actually runs (Windows/macOS matrix).
+  - Removed the source's prior CTest-plus-`SparkTests` combo from the GCC/Clang jobs — CI runs `./bin/SparkTests` directly there; clarified where CTest actually runs (Windows/macOS matrix).
   - Output filenames updated to match current CI (`asan-ubsan-lsan-results.txt`, etc.).
   - Added the new `ci-linux-asan` / `ci-linux-tsan` presets as alternatives.
   - Noted MSan builds only the `SparkTests` target in CI; added `|| true` to match CI.

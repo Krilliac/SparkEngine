@@ -14,7 +14,7 @@ The repository is the canonical documentation source. [GitHub Wiki](https://gith
 The website does not maintain a second copy of engine status, counts, learning paths, legal framing, or documentation. The controlling inputs are:
 
 - [`site/content.json`](site/content.json) — repository-owned public wording and navigation data.
-- [`site/readiness.json`](site/readiness.json) — capability dimensions, release gates, promotion rules, execution waves, and the declared release profiles. The only declared profile is `stable-v1` (Windows 11 x64 and no other host, the MSVC v143 toolset line, D3D11, NullRHI as the no-render headless path on that same host, C++ gameplay modules, and one installed first-party single-player vertical slice, `GameModules/SparkGameFPS`); every capability outside it is explicitly classified experimental or unsupported, and every public surface the profile owns must name it. The profile is `blocked` and uncertified: the first-party slice does not yet build through the public SDK alone, and no exact MSVC compiler build or Windows SDK version is pinned. Every work item explicitly declares whether it is required, shared, or outside for each profile; the profile blocker set is exactly its required/shared work, and transitive dependencies fail closed if they enter outside work. Global ready is derived from all declared profiles being ready, so gates excluded by every target profile may remain blocked while their open work stays owned and visible.
+- [`site/readiness.json`](site/readiness.json) — capability dimensions, release gates, promotion rules, execution waves, and the declared release profiles. The only declared profile is `stable-v1`: its host/backend/gameplay core is Windows 11 x64, MSVC v143, D3D11, Windows NullRHI, C++ modules, and the installed SparkGameFPS single-player slice, while its complete required Windows product set (including SparkEditor, SparkConsole, cooker, launcher, installer, and the other listed build products) is machine-readable in that file. Every capability outside it is explicitly classified experimental or unsupported, and every public surface the profile owns must name it. The profile is `blocked` and uncertified: the first-party slice does not yet build through the public SDK alone, and no exact MSVC compiler build or Windows SDK version is pinned. Every work item explicitly declares whether it is required, shared, or outside for each profile; the profile blocker set is exactly its required/shared work, and transitive dependencies fail closed if they enter outside work. Global ready is derived from all declared profiles being ready, so gates excluded by every target profile may remain blocked while their open work stays owned and visible.
 - [`site/docs-catalog.json`](site/docs-catalog.json) — recursive documentation inclusion, classification, and routes.
 - [`readiness/work-items/`](readiness/work-items/) — dependency-ordered, code-session-ready implementation briefs.
 - [`readiness/ENGINE_READINESS_HANDOFF.md`](readiness/ENGINE_READINESS_HANDOFF.md) — generated complete handoff; do not edit it directly.
@@ -49,7 +49,7 @@ clean CI runners and local generation on the same exact-commit inputs.
 | [`api/`](api/) *(generated)* | Per-header API reference pages (regenerated locally) | [jump ↓](#api-reference) |
 | [`screenshots/`](screenshots/) | Editor and engine screenshots (images) | [jump ↓](#screenshots) |
 | [`wine-upstream/`](wine-upstream/) | Upstream Wine patches for gVisor/UMH compatibility | [jump ↓](#wine-upstream-patches) |
-| [`../wiki/`](../wiki/) | Primary user and developer wiki (136 pages) | [jump ↓](#wiki-user--developer-docs) |
+| [`../wiki/`](../wiki/) | Primary user and developer wiki (198 Markdown pages in the current source inventory, excluding `_Sidebar.md`; not a support metric) | [jump ↓](#wiki-user--developer-docs) |
 
 ---
 
@@ -62,7 +62,7 @@ Architectural decisions and cross-subsystem policies.
 
 ## Specifications
 
-Wire formats, binary layouts, and stable ABI contracts.
+Wire formats, binary layouts, and versioned, uncertified interface specifications.
 
 - [Asset Format](specs/asset-format.md) — SparkEngine native asset binary layout.
 - [Networking Wire Format](specs/networking-wire-format.md) — UDP packet structure and serialization rules.
@@ -80,7 +80,7 @@ Forward-looking work plans — what's next, why, and when.
 
 Snapshots of current subsystem maturity.
 
-- [Project Status](status/PROJECT_STATUS.md) — Per-subsystem status (stable / experimental / framework / planned).
+- [Project Status](status/PROJECT_STATUS.md) — Per-subsystem status legend: **Implemented**, **Experimental**, **Framework**, and **Planned**.
 
 ## Guides
 
@@ -89,7 +89,7 @@ User-facing how-to guides that live outside the wiki.
 - [Packaging Guide](guides/packaging.md) — Package formats, install layout, components, and versioning policy.
 - [External Services and Orchestration](guides/External-Services-and-Orchestration.md) — Dedicated hosting, gateway handoff, daemon supervision, orchestration, and collaboration isolation.
 - [Offline Cooking and Runtime Automation](guides/Offline-Cooking-and-Automation.md) — Deterministic cooking, bounded workers, runtime smoke tests, and read-only package inspection.
-- [Stable C Plugin ABI](guides/plugin-abi.md) — Versioned C extension boundary, sidecar integrity, task quiescence, and hot reload.
+- [Versioned Plugin ABI](guides/plugin-abi.md) — Versioned C extension boundary, sidecar integrity, task quiescence, and hot reload.
 
 ## Tooling
 
@@ -138,7 +138,7 @@ See [Tooling Index](tooling/README.md) for the full generator pipeline.
 
 ## Wiki (User & Developer Docs)
 
-The primary user-facing docs are in [`wiki/`](../wiki/) — 136 pages. The authoritative navigation is [`wiki/_Sidebar.md`](../wiki/_Sidebar.md); [`wiki/Home.md`](../wiki/Home.md) is the landing page.
+The primary user-facing docs are in [`wiki/`](../wiki/) — 198 Markdown pages in the current source inventory, excluding `_Sidebar.md`. This count describes repository inventory, not support or readiness. The authoritative navigation is [`wiki/_Sidebar.md`](../wiki/_Sidebar.md); [`wiki/Home.md`](../wiki/Home.md) is the landing page.
 
 Categories (mirrored from the sidebar):
 

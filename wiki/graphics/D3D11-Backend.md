@@ -1,6 +1,6 @@
 # D3D11 Backend
 
-SparkEngine's **primary production backend** — DirectX 11. When the engine launches on Windows without an explicit `-backend` override, it lands here. All gameplay-critical rendering paths (shadow cascades, clustered lighting, deferred shading, particles, UI) are known-stable on D3D11.
+DirectX 11 is SparkEngine's primary Windows implementation and the renderer candidate in the blocked, uncertified `stable-v1` Windows 11 x64 profile. Auto-selection prefers it on Windows when compiled in. The implementation contains the major rendering paths described below, but their stable-v1 certification gates remain open; this page does not claim production or known-stable status.
 
 ## Overview
 
@@ -32,7 +32,7 @@ Each `D3D11Device` owns a `TransientBufferAllocator` used for per-frame CPU-visi
 ## Features
 
 - **Debug layer** — auto-enabled on Debug builds (`D3D11_CREATE_DEVICE_DEBUG` + info-queue breakpoints).
-- **WARP fallback** — if no hardware adapter matches, the engine retries with `D3D_DRIVER_TYPE_WARP`; see [RHI Abstraction Layer](RHI-Abstraction-Layer.md#automatic-fallback-to-nullrhidevice) for the broader fallback chain.
+- **WARP fallback** — if no hardware adapter matches, the engine retries with `D3D_DRIVER_TYPE_WARP`; see [RHI Abstraction Layer](RHI-Abstraction-Layer.md#nullrhidevice-selection-and-bridge-failover) for the broader fallback chain.
 - **Deferred deletion queue** — resources freed mid-frame are kept alive until the GPU has finished referencing them (see `DeferredDeletionQueue.h`).
 - **Tearing / flip-discard** — swap chain opts into `DXGI_SWAP_EFFECT_FLIP_DISCARD` and `DXGI_FEATURE_PRESENT_ALLOW_TEARING` when the adapter reports support.
 - **MSAA / sRGB / HDR formats** — supported; per-texture MSAA sample count is validated via `CheckMultisampleQualityLevels`.

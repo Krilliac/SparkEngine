@@ -1,6 +1,8 @@
 # Asset Pipeline
 
-SparkEngine's asset pipeline handles loading, streaming, caching, and management of game assets including 3D models, textures, [audio](../subsystems/Audio.md), animations, and [scenes](../subsystems/Scene-Management.md). It provides both synchronous and asynchronous loading, an LRU cache with configurable memory budgets, hot reloading for development, and background streaming threads.
+SparkEngine's `AssetPipeline` wires runtime loading, streaming, caching, and management for mesh, texture, and WAV audio assets. It provides synchronous and asynchronous entry points, an LRU cache with configurable memory budgets, hot reloading for development, and background streaming threads. Other asset kinds named by its enums and data structures are schema surfaces, not implemented `LoadAsset()` branches.
+
+> **stable-v1 support boundary:** [`stable-v1`](../../docs/site/readiness.json) is blocked and uncertified; its exact host is Windows 11 x64. Source presence and format parsing do not certify a format, backend, or authoring workflow for release use.
 
 **Source:** `SparkEngine/Source/Graphics/AssetPipeline.h`
 
@@ -9,7 +11,7 @@ SparkEngine's asset pipeline handles loading, streaming, caching, and management
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                          Game Code                                   │
-│   LoadMesh() / LoadTexture() / LoadAssetAsync() / PreloadAssets()    │
+│ LoadMesh() / LoadTexture() / LoadAudio() / LoadAssetAsync()          │
 ├──────────────────────────────┬──────────────────────────────────────┤
 │       AssetPipeline          │         Console Integration           │
 │  (orchestrator, metrics,     │   Console_ListAssets()                │
@@ -21,10 +23,10 @@ SparkEngine's asset pipeline handles loading, streaming, caching, and management
 │       v              v       │                                      │
 │   ┌─────────────────────┐    │                                      │
 │   │  Format Loaders     │    │                                      │
-│   │  LoadOBJ()          │    │                                      │
-│   │  LoadFBX()          │    │                                      │
-│   │  LoadGLTF()         │    │                                      │
-│   │  stb_image          │    │                                      │
+│   │  OBJ mesh path      │    │                                      │
+│   │  native FBXImporter │    │                                      │
+│   │  cgltf static mesh  │    │                                      │
+│   │  texture loaders    │    │                                      │
 │   │  WAV loader         │    │                                      │
 │   └─────────┬───────────┘    │                                      │
 │             v                │                                      │
@@ -55,7 +57,9 @@ SparkEngine's asset pipeline handles loading, streaming, caching, and management
 | `AssetMetadata` | Per-asset metadata: GUID, path, size, checksum, dependencies |
 | `AssetLoadRequest` | Async load request with callbacks |
 | `MeshAssetData` | CPU-side mesh data (vertices, indices, bounds) |
-| `AnimationAssetData` | Animation clips with keyframe tracks |
+| `AnimationAssetData` | Animation-shaped CPU data schema; no `LoadAsset()` branch or model-import handoff currently consumes it |
+
+Only `MeshAsset`, `TextureAsset`, and `AudioAsset` are constructed by the Windows and Linux `AssetPipeline::LoadAsset()` switches. The remaining enum values and data schemas are placeholders until a loader and runtime handoff are wired.
 
 ## Enums
 
@@ -66,13 +70,13 @@ SparkEngine's asset pipeline handles loading, streaming, caching, and management
 | `Unknown` | Type not yet determined |
 | `Mesh` | 3D model geometry |
 | `Texture` | 2D texture image |
-| `Material` | Material definition |
+| `Material` | Material definition placeholder (not loaded by `LoadAsset()`) |
 | `Audio` | Sound data |
-| `Animation` | Animation clip |
-| `Prefab` | Entity prefab template |
-| `Scene` | Scene definition |
-| `Shader` | Shader program |
-| `Font` | Font asset |
+| `Animation` | Animation clip placeholder (not loaded by `LoadAsset()`) |
+| `Prefab` | Entity prefab template placeholder (not loaded by `LoadAsset()`) |
+| `Scene` | Scene definition placeholder (not loaded by `LoadAsset()`) |
+| `Shader` | Shader program placeholder (not loaded by `LoadAsset()`) |
+| `Font` | Font asset placeholder (not loaded by `LoadAsset()`) |
 
 ### LoadingPriority
 
@@ -93,15 +97,17 @@ SparkEngine's asset pipeline handles loading, streaming, caching, and management
 | `Failed` | Load failed (file not found, corrupt, etc.) |
 | `Evicted` | Was loaded but evicted from cache |
 
-## Supported Formats
+## Implemented Format Paths
+
+These entries describe observed source paths, not a stable-v1 support matrix.
 
 ### 3D Models
 
 | Format | Description | Library | Loader Method |
 |--------|-------------|---------|---------------|
-| `.obj` | Wavefront OBJ | tinyobjloader | `LoadOBJ()` |
-| `.fbx` | Autodesk FBX (meshes, skeletons, animations) | Assimp | `LoadFBX()` |
-| `.gltf` / `.glb` | glTF 2.0 (PBR materials, animations) | Assimp | `LoadGLTF()` |
+| `.obj` | Static Wavefront OBJ geometry | tinyobjloader in the general mesh/scene and non-Windows paths; a limited parser in the Windows `MeshAsset` path | `MeshAsset::Load()` / `LoadOBJ()` |
+| `.fbx` | Native binary FBX parsing; the non-Windows mesh path consumes geometry only | `FBXImporter` (no external FBX SDK) | Native importer source; not wired into the Windows stable-v1 `MeshAsset` path |
+| `.gltf` / `.glb` | Validated static triangle geometry; skins, animations, morph targets, sparse accessors, and required extensions are rejected | cgltf | `LoadGLTFStaticMesh()` |
 
 ### Textures
 
@@ -117,9 +123,11 @@ SparkEngine's asset pipeline handles loading, streaming, caching, and management
 
 | Format | Description | Library |
 |--------|-------------|---------|
-| `.wav` | Waveform audio | XAudio2 / miniaudio |
+| `.wav` | RIFF/WAVE runtime asset loading | WAV loader; playback factory selects XAudio2 on Windows, OpenAL on non-Windows, then Null |
 
-### Scenes and Data
+### Adjacent Scenes and Data
+
+These formats are handled by other subsystems or represented by schema; they are not additional `AssetPipeline::LoadAsset()` branches.
 
 | Format | Description |
 |--------|-------------|
@@ -184,13 +192,15 @@ struct MeshAssetData
 };
 ```
 
-Each vertex is **96 bytes** (3+3+3+2+2+4+4+4 floats/uints). The vertex layout supports:
+The declared fields cover:
 
 - Static meshes (position, normal, tangent, UVs, color)
 - Skeletal meshes (adds boneIndices and boneWeights for up to 4 bone influences)
 - Lightmapped meshes (uses texCoord1 for lightmap UVs)
 
 ### AnimationAssetData
+
+`AnimationAssetData` is a data schema only. The current `AssetPipeline` does not load `AssetType::Animation`, and the model format paths do not convert or register this structure with `AnimationManager`.
 
 ```cpp
 struct AnimationAssetData
@@ -612,36 +622,29 @@ auto mesh = pipeline.LoadMesh("Assets/Models/crate.obj");
 // Generates: tangents, bounding box/sphere
 ```
 
-### FBX Files (Assimp)
+### FBX Files (Native Importer)
 
-Full-featured import for animated characters and complex scenes:
+`FBXImporter` is a native binary FBX parser with no external FBX SDK dependency. Its result type exposes meshes, bones, and animations, but the current `MeshAsset` integration validates without requiring a skeleton or animation and copies only geometry on the non-Windows path. The Windows `MeshAsset` path has no FBX branch.
 
-```cpp
-auto mesh = pipeline.LoadMesh("Assets/Models/character.fbx");
-// Imports: mesh geometry, materials, bone hierarchy,
-//          skinning data, animation clips
-```
+There is no current conversion or registration handoff from `FBXImportResult` to `AnimationManager`. End-to-end FBX skeletal or animation ingestion is therefore absent from this pipeline rather than an implied feature of the result structures.
 
-### glTF 2.0 Files (Assimp)
-
-Modern PBR workflow with embedded or referenced textures:
+### glTF 2.0 Static Meshes (cgltf)
 
 ```cpp
 auto mesh = pipeline.LoadMesh("Assets/Models/weapon.gltf");
-// Imports: PBR materials (metallic/roughness),
-//          mesh geometry, animations, morph targets
+// Parses validated static triangle geometry: POSITION, NORMAL,
+// TEXCOORD_0, and optional unsigned indices.
 ```
 
-Assimp imports the following data from all model formats:
+`LoadGLTFStaticMesh()` is deliberately a static-mesh subset. It rejects skins, animations, morph targets, sparse accessors, non-triangle primitives, and required extensions; it does not import PBR material or texture graphs.
 
-| Data | Description |
-|------|-------------|
-| Mesh geometry | Vertices, normals, UVs (2 channels), tangents, vertex colors |
-| Materials | Mapped to PBR properties (albedo, normal, metallic, roughness) |
-| Bone hierarchy | Skeletal structure for skinned meshes |
-| Skinning data | Bone indices and weights (4 bones per vertex) |
-| Animation clips | Keyframe tracks per bone (position, rotation, scale) |
-| Bounding volumes | AABB and bounding sphere computed automatically |
+### Observed Model Data Handoffs
+
+| Format path | Data handed to `MeshAssetData` | Current limit |
+|-------------|--------------------------------|---------------|
+| OBJ | Positions, normals, texture coordinates, and triangle indices | Static geometry path; parser details vary by platform/caller |
+| Native FBX | Geometry on the non-Windows `MeshAsset` path | No Windows `MeshAsset` branch and no `AnimationManager` handoff |
+| cgltf | Static triangle positions, normals, one UV set, and indices | Skins, animations, morph targets, and PBR material graphs are not ingested |
 
 ## Error Handling
 
@@ -670,7 +673,7 @@ Assimp imports the following data from all model formats:
 2. **Set appropriate priorities**: Use `Critical` for player/weapon assets, `Low` for distant scenery
 3. **Monitor cache hit ratio**: Below 0.5 suggests the cache is too small or assets churn too fast
 4. **Disable hot reloading** in shipping builds to avoid file timestamp overhead
-5. **Use `.gltf`/`.glb`** for new content -- more efficient than FBX for PBR workflows
+5. **Use `.gltf`/`.glb` only for the implemented static subset**; validate authoring output against the rejected-feature list
 6. **Batch directory scans** during loading rather than at runtime
 
 ## Thread Safety
@@ -724,8 +727,8 @@ asset_reload_all            # Force reload all loaded assets
 | Hot reload not working | Hot reloading disabled | Call `EnableHotReloading(true)`; ensure `Update()` called each frame |
 | Load takes too long | Too few streaming threads | Increase with `SetStreamingThreadCount()` |
 | Cache hit ratio is 0 | Assets loaded but not accessed through cache | Use `GetAsset()` for subsequent accesses |
-| FBX import missing bones | Assimp flags not set correctly | Verify Assimp import flags include `aiProcess_PopulateArmatureData` |
-| glTF textures not loading | Texture paths relative to .gltf file | Ensure textures are in the expected relative path |
+| FBX skeleton or clips are unavailable | No current importer-to-`AnimationManager` handoff | A separately verified conversion tool would be required to produce `.skel`/`.sanim`; this pipeline does not provide that conversion |
+| glTF skin, animation, morph, or material data is unavailable | The cgltf path intentionally loads static geometry only | Export a static triangle mesh subset; use separately wired systems for other data |
 
 ## Utility Functions
 
@@ -741,7 +744,7 @@ std::string LoadingPriorityToString(LoadingPriority p);   // "Low", "Normal", et
 ## See Also
 
 - [Rendering and Graphics](../subsystems/Rendering-and-Graphics.md) -- Material and texture systems
-- [Animation](../subsystems/Animation.md) -- Importing animated models
+- [Animation](../subsystems/Animation.md) -- Runtime `.skel`/`.sanim` asset boundary
 - [Shader Pipeline](Shader-Pipeline.md) -- Shader compilation
 - [Scene Management](../subsystems/Scene-Management.md) -- Scene file loading
 - [Audio](../subsystems/Audio.md) -- Audio asset formats and loading

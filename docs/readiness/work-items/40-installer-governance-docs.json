@@ -49,7 +49,7 @@
         "Experimental platform installers remain owned by their platform work"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L installer --output-on-failure"
+        "ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Installer_Tamper",

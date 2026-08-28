@@ -311,6 +311,68 @@ class WorkItemApplicabilityTests(ContractTestCase):
                 self.assertTrue(anchors.get(work_id), f"{work_id} has lost all ownership anchors")
                 self.assertNotIn(work_id, profile["blockingWorkItemIds"])
 
+    def test_executable_ctest_work_item_commands_fail_closed(self) -> None:
+        hostile_forms = (
+            "if ctest --output-on-failure; then echo ok; fi",
+            "env CTEST_OUTPUT_ON_FAILURE=1 ctest --output-on-failure",
+            "(ctest --output-on-failure)",
+            "! ctest --output-on-failure",
+            "time ctest --output-on-failure",
+            '"C:/Program Files/CMake/bin/ctest.exe" --output-on-failure',
+        )
+        for command in hostile_forms:
+            with self.subTest(command=command):
+                self.assertEqual(
+                    len(site_data_validate.executable_ctest_segments(command)),
+                    1,
+                )
+
+        rdy_010 = self.items_of(self.mutable)["RDY-010"]
+        command_index = next(
+            index
+            for index, command in enumerate(rdy_010["commands"])
+            if command.startswith("ctest ")
+        )
+        original_command = rdy_010["commands"][command_index]
+        before_flag, separator, after_flag = original_command.partition(
+            " --no-tests=error"
+        )
+        self.assertTrue(separator, "fixture must contain the fail-on-empty flag")
+        rdy_010["commands"][command_index] = before_flag + after_flag
+        self.assert_rejected(
+            self.mutable,
+            "executable CTest commands must include --no-tests=error",
+        )
+
+        discovery = copy.deepcopy(self.contract)
+        self.items_of(discovery)["RDY-010"]["commands"].append(
+            "ctest --show-only=json-v1"
+        )
+        site_data_validate.Validator(discovery).validate()
+
+        masked = copy.deepcopy(self.contract)
+        self.items_of(masked)["RDY-010"]["commands"].append(
+            "ctest --show-only=json-v1 && ctest -R ModuleProfileLifecycle"
+        )
+        self.assert_rejected(
+            masked,
+            "executable CTest commands must include --no-tests=error",
+        )
+
+        for smuggled_command in (
+            "ctest --no-tests=error\nctest -R MissingFlag",
+            "echo --no-tests=error $(ctest -R MissingFlag)",
+        ):
+            with self.subTest(smuggled_command=smuggled_command):
+                smuggled = copy.deepcopy(self.contract)
+                self.items_of(smuggled)["RDY-010"]["commands"].append(
+                    smuggled_command
+                )
+                self.assert_rejected(
+                    smuggled,
+                    "executable CTest commands must include --no-tests=error",
+                )
+
 
 class TransitiveDependencyTests(ContractTestCase):
     """Frozen case 4: profile dependency closure is transitive and diagnostic."""
@@ -514,14 +576,207 @@ class PublicClaimInvariantTests(ContractTestCase):
 
     def test_mandatory_public_surfaces_cannot_be_removed(self) -> None:
         profile = self.profile_of(self.mutable)
-        self.assertEqual(
-            set(profile["publicClaimSurfaces"]),
-            {"README.md", "docs/README.md", "docs/site/content.json"},
-        )
+        expected = {
+            ".github/copilot-instructions.md",
+            ".github/prompts/build-test.prompt.md",
+            ".github/prompts/copilot-instructions.md",
+            "README.md",
+            "CHANGELOG.md",
+            "SECURITY.md",
+            "SparkInstaller/README.md",
+            "Templates/EmptyProject/README.md",
+            "Templates/FPSStarter/README.md",
+            "Templates/MultiplayerArena/README.md",
+            "Templates/ThirdPersonStarter/README.md",
+            "docs/README.md",
+            "docs/guides/External-Services-and-Orchestration.md",
+            "docs/plans/FEATURE_ROADMAP.md",
+            "docs/site/content.json",
+            "docs/status/PROJECT_STATUS.md",
+            "docs/tooling/README.md",
+            "wiki/Build-Guide.md",
+            "wiki/Changelog.md",
+            "wiki/Documentation.md",
+            "wiki/Docs.md",
+            "wiki/API.md",
+            "wiki/Examples.md",
+            "wiki/Guides.md",
+            "wiki/Home.md",
+            "wiki/Reference.md",
+            "wiki/Roadmap.md",
+            "wiki/Samples.md",
+            "wiki/Tutorials.md",
+            "wiki/Wiki.md",
+            "wiki/advanced/Build-System-and-CMake-Modules.md",
+            "wiki/advanced/Codebase-Health.md",
+            "wiki/advanced/Codebase-Statistics.md",
+            "wiki/advanced/Gameplay-Systems-Status.md",
+            "wiki/advanced/SparkGame-Module-Status.md",
+            "wiki/advanced/Testing.md",
+            "wiki/gameplay-tools/Asset-Pipeline.md",
+            "wiki/gameplay-tools/Project-Templates.md",
+            "wiki/gameplay-tools/SparkEditor.md",
+            "wiki/getting-started/Architecture-Overview.md",
+            "wiki/getting-started/FAQ.md",
+            "wiki/getting-started/Game-Modules.md",
+            "wiki/getting-started/Getting-Started.md",
+            "wiki/getting-started/Migration-Guide.md",
+            "wiki/getting-started/Making-Your-First-Game.md",
+            "wiki/getting-started/Making-Your-First-Multiplayer-Game.md",
+            "wiki/getting-started/Quick-Start-Tutorial.md",
+            "wiki/getting-started/Creating-a-Game-Module.md",
+            "wiki/gameplay-tools/Game-Packaging.md",
+            "wiki/gameplay-tools/SparkConsole.md",
+            "wiki/graphics/D3D11-Backend.md",
+            "wiki/graphics/D3D12-Backend.md",
+            "wiki/graphics/Metal-Backend.md",
+            "wiki/graphics/OpenGL-Backend.md",
+            "wiki/graphics/RHI-Abstraction-Layer.md",
+            "wiki/graphics/Vulkan-Backend.md",
+            "wiki/getting-started/Editor-Walkthrough.md",
+            "wiki/platform/System-Requirements.md",
+            "wiki/platform/Cross-Compilation-Wine-Testing.md",
+            "wiki/subsystems/Collaborative-Editing.md",
+            "wiki/subsystems/Dedicated-Server.md",
+            "wiki/subsystems/Animation.md",
+            "wiki/subsystems/Rendering-and-Graphics.md",
+            "wiki/subsystems/Scene-Management.md",
+            "wiki/subsystems/Scripting-with-AngelScript.md",
+            "wiki/subsystems/Tween-System.md",
+            "GameModules/README.md",
+        }
+        self.assertEqual(set(profile["publicClaimSurfaces"]), expected)
         profile["publicClaimSurfaces"].remove("README.md")
         self.assert_rejected(self.mutable, "must exactly match the independently required")
 
+        missing_profile_doc = copy.deepcopy(self.contract)
+        self.profile_of(missing_profile_doc)["publicClaimSurfaces"].remove(
+            "GameModules/README.md"
+        )
+        self.assert_rejected(missing_profile_doc, "and profile documentation")
+
+        for path in tuple(profile["documentation"]):
+            with self.subTest(paired_removal=path):
+                paired_removal = copy.deepcopy(self.contract)
+                paired_profile = self.profile_of(paired_removal)
+                paired_profile["documentation"].remove(path)
+                paired_profile["publicClaimSurfaces"].remove(path)
+                self.assert_rejected(
+                    paired_removal,
+                    "profile documentation must exactly match",
+                )
+
+        undocumented_surface = copy.deepcopy(self.contract)
+        self.profile_of(undocumented_surface)["documentation"].append(
+            "Tests/Tools/test_site_data_contract.py"
+        )
+        self.assert_rejected(
+            undocumented_surface,
+            "profile documentation must exactly match",
+        )
+
+        duplicate_surface = copy.deepcopy(self.contract)
+        self.profile_of(duplicate_surface)["publicClaimSurfaces"].append("README.md")
+        self.assert_rejected(duplicate_surface, "must not contain duplicates")
+
+    def test_public_claim_arrays_reject_mapping_and_null_shapes(self) -> None:
+        for field in (
+            "publicClaimSurfaces",
+            "documentation",
+            "forbiddenUnqualifiedClaims",
+        ):
+            for shape in ("mapping", "null"):
+                with self.subTest(field=field, shape=shape):
+                    hostile = copy.deepcopy(self.contract)
+                    profile = self.profile_of(hostile)
+                    owner = profile["publicClaimRules"] if field == "forbiddenUnqualifiedClaims" else profile
+                    original = owner[field]
+                    owner[field] = (
+                        {str(value): True for value in original}
+                        if shape == "mapping"
+                        else None
+                    )
+                    self.assert_rejected(hostile, f"{field} must be an array")
+
+        for shape in (["unexpected"], None):
+            with self.subTest(field="publicClaimRules", shape=type(shape).__name__):
+                hostile = copy.deepcopy(self.contract)
+                self.profile_of(hostile)["publicClaimRules"] = shape
+                self.assert_rejected(hostile, "publicClaimRules must be an object")
+
+        non_string_surface = copy.deepcopy(self.contract)
+        self.profile_of(non_string_surface)["publicClaimSurfaces"].append(
+            {"README.md": True}
+        )
+        self.assert_rejected(non_string_surface, "path must be a non-empty string")
+
+        for field in (
+            "breadthTokens",
+            "forbiddenInProfileCells",
+            "forbiddenUnqualifiedClaims",
+        ):
+            with self.subTest(field=field, shape="non-string-member"):
+                hostile = copy.deepcopy(self.contract)
+                self.profile_of(hostile)["publicClaimRules"][field].append(
+                    {"hostile": True}
+                )
+                self.assert_rejected(hostile, "member must be a non-empty string")
+
+        hostile_conflict = copy.deepcopy(self.contract)
+        self.profile_of(hostile_conflict)["publicClaimRules"]["conflatedTerms"][0][
+            "conflictsWith"
+        ].append({"hostile": True})
+        self.assert_rejected(hostile_conflict, "member must be a non-empty string")
+
     def test_mandatory_breadth_and_nullrhi_rules_cannot_be_removed(self) -> None:
+        profile = self.profile_of(self.mutable)
+        expected_breadth = {
+            "windows 7",
+            "windows 8",
+            "windows 10",
+            "windows 10+",
+            "windows server",
+            "linux",
+            "ubuntu",
+            "macos",
+            "mac os",
+            "android",
+            "ios",
+            "any platform",
+            "any host",
+            "any compiler",
+        }
+        expected_cells = {
+            "Any",
+            "All",
+            "Any platform",
+            "Any host",
+            "Windows",
+            "Windows 10",
+            "Windows 10+",
+            "Headless",
+        }
+        expected_conflicts = {
+            "llvmpipe",
+            "software rendering",
+            "software render",
+            "software rasterization",
+            "software rasterizer",
+            "software renderer",
+            "render in software",
+        }
+        rules = profile["publicClaimRules"]
+        self.assertEqual({value.lower() for value in rules["breadthTokens"]}, expected_breadth)
+        self.assertEqual(set(rules["forbiddenInProfileCells"]), expected_cells)
+        self.assertEqual(set(rules["conflatedTerms"][0]["conflictsWith"]), expected_conflicts)
+
+        profile["supportedHosts"] = ["Windows"]
+        self.assert_rejected(
+            self.mutable,
+            "supportedHosts must exactly match the independently required host set",
+        )
+
+        self.mutable = copy.deepcopy(self.contract)
         profile = self.profile_of(self.mutable)
         profile["publicClaimRules"]["breadthTokens"] = []
         self.assert_rejected(self.mutable, "mandatory invariants are missing")
@@ -532,20 +787,349 @@ class PublicClaimInvariantTests(ContractTestCase):
         )
         self.assert_rejected(missing_any_host, "mandatory invariants are missing")
 
+        for token in expected_breadth:
+            with self.subTest(removed_breadth=token):
+                hostile = copy.deepcopy(self.contract)
+                values = self.profile_of(hostile)["publicClaimRules"]["breadthTokens"]
+                values.remove(next(value for value in values if value.lower() == token))
+                self.assert_rejected(hostile, "mandatory invariants are missing")
+
+        for cell in expected_cells:
+            with self.subTest(removed_forbidden_cell=cell):
+                hostile = copy.deepcopy(self.contract)
+                self.profile_of(hostile)["publicClaimRules"]["forbiddenInProfileCells"].remove(cell)
+                self.assert_rejected(hostile, "mandatory ambiguous profile cells")
+
+        for conflict in expected_conflicts:
+            with self.subTest(removed_nullrhi_conflict=conflict):
+                hostile = copy.deepcopy(self.contract)
+                self.profile_of(hostile)["publicClaimRules"]["conflatedTerms"][0][
+                    "conflictsWith"
+                ].remove(conflict)
+                self.assert_rejected(hostile, "conflict vocabulary must exactly preserve")
+
+        unexpected = copy.deepcopy(self.contract)
+        self.profile_of(unexpected)["publicClaimRules"]["breadthTokens"].append("surprise host")
+        self.assert_rejected(unexpected, "unexpected values were added")
+
+        duplicate = copy.deepcopy(self.contract)
+        self.profile_of(duplicate)["publicClaimRules"]["forbiddenInProfileCells"].append("All")
+        self.assert_rejected(duplicate, "mandatory ambiguous profile cells")
+
         no_nullrhi = copy.deepcopy(self.contract)
         self.profile_of(no_nullrhi)["publicClaimRules"]["conflatedTerms"] = []
         self.assert_rejected(no_nullrhi, "mandatory NullRHI distinction is missing")
+
+        for claim in ("fully supported", "production-ready", "production ready"):
+            with self.subTest(claim=claim):
+                missing_claim = copy.deepcopy(self.contract)
+                self.profile_of(missing_claim)["publicClaimRules"][
+                    "forbiddenUnqualifiedClaims"
+                ].remove(claim)
+                self.assert_rejected(
+                    missing_claim,
+                    "mandatory unqualified release/support claims are missing",
+                )
 
     def test_pure_public_claim_helper_rejects_scope_widening(self) -> None:
         profile = self.profile_of(self.mutable)
         cases = {
             "windows": "| Windows 10+ | MSVC v143 | D3D11 | In `stable-v1` |",
+            "linux-profile-subject": "stable-v1 supports Linux.",
+            "macos-profile-subject": "stable-v1 supports macOS.",
+            "ubuntu-profile-subject": "stable-v1 supports Ubuntu 24.04.",
+            "android-profile-subject": "stable-v1 supports Android.",
+            "mixed-supported-hosts": "stable-v1 supports Windows 11 x64 and Linux.",
+            "mixed-windows-server": (
+                "stable-v1 supports Windows 11 x64 and Windows Server 2025."
+            ),
+            "windows-or-later": "stable-v1 supports Windows 11 x64 or later.",
+            "windows-x64-plus": "stable-v1 supports Windows 11 x64+.",
+            "windows-generic": "stable-v1 supports Windows.",
+            "windows-generic-x64": "stable-v1 supports Windows x64.",
+            "windows-eleven-no-arch": "| Windows 11 | stable-v1 target |",
+            "windows-win32": "| Win32 | In stable-v1 |",
+            "windows-arm64": "| Windows ARM64 | In stable-v1 |",
+            "windows-unformatted": "| Windows 10+ | MSVC v143 | D3D11 | In stable-v1 |",
+            "windows-profile-subject": "stable-v1 supports Windows 10+.",
+            "windows-profile-object": "Windows 10+ is supported by stable-v1.",
+            "windows-profile-copular": "stable-v1 is supported on Windows 10+.",
+            "windows-profile-in": "Windows 10+ is supported in the stable-v1 profile.",
+            "possessive-supported-hosts": "stable-v1's supported hosts include Linux.",
+            "support-includes": "stable-v1 support includes macOS.",
+            "profile-host-label": "stable-v1 hosts: Linux",
+            "supported-host-label": "Supported hosts (stable-v1): Linux",
+            "cross-clause-carry": (
+                "stable-v1 supports Windows 11 x64; it also supports Linux."
+            ),
+            "windows-profile-soft-wrapped": "stable-v1 supports\nWindows 10+.",
+            "windows-in-scope": "Windows 10+ is in scope for stable-v1.",
+            "windows-format-characters": "stable-\u200bv1 supports Win\u200bdows 10+.",
+            "windows-qualified-status": "| Windows 10 x64 | In stable-v1 - supported |",
+            "windows-noun-status": "| Windows 10 x64 | stable-v1 target |",
+            "windows-object-status": "| Windows 10+ | Supported by stable-v1 |",
+            "windows-no-outer-pipes": "Windows 10+ | stable-v1 target",
+            "table-profile-and-breadth-split": (
+                "| stable-v1 supports Windows 11 x64 | Windows 10+ |"
+            ),
+            "table-predicate-and-profile-split": "| Linux | Supported | stable-v1 |",
+            "table-target-and-profile-split": "| Windows 10+ | stable-v1 | target |",
+            "table-header-profile-scope": (
+                "| Host | Supported in stable-v1 |\n"
+                "|---|---|\n"
+                "| Linux | Yes |"
+            ),
+            "list-profile-split": (
+                "stable-v1 supports the following hosts:\n- Windows 10+"
+            ),
+            "list-profile-split-blank": (
+                "stable-v1 supports the following hosts:\n\n- Windows 10+"
+            ),
+            "list-profile-wrapped-item": (
+                "stable-v1 supports the following hosts:\n"
+                "- Windows 11 x64 and\n"
+                "  Linux"
+            ),
             "any-host": "| Headless | Any | NullRHI | In `stable-v1` |",
+            "headless-qualified-status": "| Headless | In stable-v1 - blocked |",
+            "any-qualified-status": "| Any | In stable-v1 - target |",
+            "any-noun-status": "| Any host | stable-v1 target |",
             "nullrhi": "| NullRHI | headless software rendering via llvmpipe |",
+            "nullrhi-format-character": "Null\u200bRHI is software rendering.",
+            "nullrhi-hyphenated-rendering": "NullRHI is software-rendering.",
+            "nullrhi-rasterizer": "NullRHI is a software rasterizer.",
+            "nullrhi-renderer": "NullRHI is the software renderer.",
+            "nullrhi-renders-in-software": "NullRHI renders in software.",
+            "nullrhi-software-rendered": (
+                "NullRHI produces software-rendered frames."
+            ),
+            "nullrhi-list-split": (
+                "NullRHI provides the following headless renderer:\n"
+                "- software rendering via llvmpipe"
+            ),
+            "nullrhi-list-split-blank": (
+                "NullRHI provides the following headless renderer:\n\n"
+                "- software rendering via llvmpipe"
+            ),
+            "nullrhi-pronoun-reversal": (
+                "NullRHI is not software rendering; it actually is."
+            ),
+            "nullrhi-postfix-reversal": (
+                "NullRHI is not software rendering; it is, actually."
+            ),
+            "nullrhi-repeated-term-reversal": (
+                "NullRHI is not software rendering; NullRHI actually is."
+            ),
+            "nullrhi-dash-reversal": (
+                "NullRHI is not software rendering—but it actually is."
+            ),
+            "nullrhi-colon-reversal": (
+                "NullRHI is not software rendering: but it actually is."
+            ),
+            "nullrhi-parenthetical-reversal": (
+                "NullRHI is not software rendering (but it actually is)."
+            ),
+            "nullrhi-one-reversal": (
+                "NullRHI is not software rendering; it actually is one."
+            ),
+            "nullrhi-contradictory-distinction": (
+                "NullRHI is not llvmpipe. NullRHI is not software rendering. "
+                "However, NullRHI is software rendering via llvmpipe."
+            ),
+            "nullrhi-false-distinction": (
+                "NullRHI is not certified; llvmpipe is the same software-rendering "
+                "headless path."
+            ),
+            "fully-supported": "Linux is fully supported.",
+            "production-hyphen": "SparkEngine is production-ready.",
+            "production-space-uppercase": "SPARKENGINE IS PRODUCTION READY.",
+            "production-nonbreaking-hyphen": "SparkEngine is production‑ready.",
+            "production-en-dash": "SparkEngine is production–ready.",
+            "fully-spaced": "Linux is fully   supported.",
+            "fully-marked-up": "Linux is fully **supported**.",
+            "fully-linked": "Linux is fully [supported](https://example.invalid).",
+            "fully-reference-linked": (
+                "Linux is fully [supported][status].\n\n"
+                "[status]: https://example.invalid"
+            ),
+            "fully-shortcut-linked": (
+                "Linux is fully [supported].\n\n"
+                "[supported]: https://example.invalid"
+            ),
+            "fully-image-alt": "Linux is fully ![supported](badge.svg).",
+            "fully-html": "Linux is fully <strong>supported</strong>.",
+            "fully-html-break": "Linux is fully<br>supported.",
+            "fully-html-comment": "Linux is fully<!-- invisible --> supported.",
+            "fully-zero-width": "Linux is fully\u200bsupported.",
+            "fully-soft-wrapped": "Linux is fully\nsupported.",
+            "production-soft-hyphen": "SparkEngine is production\u00adready.",
+            "production-markdown-escape": "SparkEngine is production\\-ready.",
+            "production-variation-selector": "SparkEngine is production\ufe0f-ready.",
+            "production-cgj": "SparkEngine is produc\u034ftion-ready.",
+            "production-hangul-filler": "SparkEngine is produc\u3164tion-ready.",
+            "production-hangul-choseong-filler": (
+                "SparkEngine is produc\u115ftion-ready."
+            ),
+            "production-html-alt": '<img alt="SparkEngine is production-ready">',
+            "production-html-alt-quoted-gt": (
+                '<img alt="SparkEngine is production-ready >">'
+            ),
+            "production-html-alt-entity-gt": (
+                '<img alt="SparkEngine is production-ready &gt;">'
+            ),
+            "production-html-title-quoted-gt": (
+                '<abbr title="SparkEngine is production-ready >">preview</abbr>'
+            ),
         }
         for name, text in cases.items():
             with self.subTest(case=name):
                 self.assertTrue(site_data_validate.validate_public_claim_text(profile, name, text))
+
+        malformed = copy.deepcopy(profile)
+        malformed["publicClaimRules"] = None
+        self.assertIn(
+            "publicClaimRules must be an object",
+            site_data_validate.validate_public_claim_text(
+                malformed, "malformed", "Linux is fully supported."
+            )[0],
+        )
+
+        malformed_member = copy.deepcopy(profile)
+        malformed_member["publicClaimRules"]["forbiddenUnqualifiedClaims"].append(
+            {"hostile": True}
+        )
+        self.assertTrue(
+            any(
+                "must be a non-empty string" in value
+                for value in site_data_validate.validate_public_claim_text(
+                    malformed_member, "malformed-member", "bounded text"
+                )
+            )
+        )
+
+        malformed_term = copy.deepcopy(profile)
+        malformed_term["publicClaimRules"]["conflatedTerms"] = [None]
+        self.assertTrue(
+            any(
+                "must be an object" in value
+                for value in site_data_validate.validate_public_claim_text(
+                    malformed_term, "malformed-term", "bounded text"
+                )
+            )
+        )
+
+        malformed_conflicts = copy.deepcopy(profile)
+        malformed_conflicts["publicClaimRules"]["conflatedTerms"][0][
+            "conflictsWith"
+        ] = None
+        self.assertTrue(
+            any(
+                "conflictsWith must be an array" in value
+                for value in site_data_validate.validate_public_claim_text(
+                    malformed_conflicts,
+                    "malformed-conflicts",
+                    "NullRHI software rendering",
+                )
+            )
+        )
+
+        for field, hostile_value, expected in (
+            ("conflictsWith", None, "conflictsWith must be an array"),
+            ("conflictsWith", [], "conflictsWith must not be empty"),
+            ("conflictsWith", [{"hostile": True}], "must be a non-empty string"),
+            ("reason", {"hostile": True}, "reason must be a non-empty string"),
+        ):
+            with self.subTest(helper_field=field, text="unrelated"):
+                malformed_policy = copy.deepcopy(profile)
+                malformed_policy["publicClaimRules"]["conflatedTerms"][0][
+                    field
+                ] = hostile_value
+                self.assertTrue(
+                    any(
+                        expected in value
+                        for value in site_data_validate.validate_public_claim_text(
+                            malformed_policy, "malformed-policy", ""
+                        )
+                    )
+                )
+
+    def test_pure_public_claim_helper_accepts_bounded_profile_status(self) -> None:
+        profile = self.profile_of(self.mutable)
+        cases = {
+            "bounded": "The `stable-v1` profile is blocked and uncertified.",
+            "null-not-llvmpipe": "NullRHI is not llvmpipe.",
+            "null-separate-software": "NullRHI is separate from software rendering.",
+            "null-does-not-render": "NullRHI does not perform software rendering.",
+            "null-does-not-render-in-software": "NullRHI does not render in software.",
+            "null-cannot-render-in-software": "NullRHI cannot render in software.",
+            "null-never-renders-in-software": "NullRHI never renders in software.",
+            "null-contraction-render-in-software": (
+                "NullRHI doesn't render in software."
+            ),
+            "null-performs-no-software-rendering": (
+                "NullRHI performs no software rendering."
+            ),
+            "null-neither-nor": (
+                "NullRHI neither uses llvmpipe nor performs software rendering."
+            ),
+            "null-coordinated-negatives": (
+                "NullRHI is not llvmpipe and does not perform software rendering."
+            ),
+            "null-distinct-from-both": (
+                "NullRHI is distinct from both llvmpipe and software rendering."
+            ),
+            "null-unlike": "Unlike NullRHI, llvmpipe provides software rendering.",
+            "null-whereas": (
+                "NullRHI rasterizes no pixels, whereas llvmpipe provides software "
+                "rendering."
+            ),
+            "null-rather-than": (
+                "llvmpipe can provide software rendering rather than NullRHI no-ops."
+            ),
+            "linux-macos-outside": (
+                "Linux and macOS remain outside stable-v1; only Windows 11 x64 "
+                "is certified."
+            ),
+            "linux-not-supported": "Linux is not supported by stable-v1.",
+            "linux-not-currently-in": "Linux is not currently in stable-v1.",
+            "linux-unsupported-in": "Linux remains unsupported in stable-v1.",
+            "linux-uncertified-in": "Linux is uncertified in stable-v1.",
+            "linux-table-outside": "| Linux | Outside stable-v1 |",
+            "safe-list-items": (
+                "- Windows 10 x64 is outside the release profile.\n"
+                "- Windows 11 x64 is the stable-v1 target."
+            ),
+            "safe-table-cells": (
+                "| Host | Classification |\n"
+                "|---|---|\n"
+                "| Windows 10 x64 | Outside the release profile |\n"
+                "| Windows 11 x64 | stable-v1 target |"
+            ),
+            "safe-table-no-outer-pipes": (
+                "Host | Classification\n"
+                "--- | ---\n"
+                "Windows 10 x64 | Outside the release profile\n"
+                "Windows 11 x64 | stable-v1 target"
+            ),
+        }
+        for name, text in cases.items():
+            with self.subTest(case=name):
+                self.assertEqual(
+                    site_data_validate.validate_public_claim_text(profile, name, text),
+                    [],
+                )
+
+    def test_profile_identifier_rejects_near_match_tokens(self) -> None:
+        contains = site_data_validate.contains_release_profile_identifier
+        self.assertTrue(contains("stable-v1", "The stable-v1 profile is blocked."))
+        self.assertTrue(contains("stable-v1", "The [stable-v1](status.md) profile is blocked."))
+        for near_match in ("stable-v1x", "xstable-v1", "stable-v1_extra"):
+            with self.subTest(near_match=near_match):
+                self.assertFalse(contains("stable-v1", near_match))
+        self.assertFalse(contains("stable-v1", "<!-- stable-v1 -->"))
+        self.assertFalse(
+            contains("stable-v1", "[release profile](https://example.invalid/stable-v1)")
+        )
 
     def test_current_public_surfaces_pass_the_pure_helper(self) -> None:
         profile = self.profile_of(self.mutable)
@@ -573,8 +1157,9 @@ class PublicClaimInvariantTests(ContractTestCase):
     def test_readme_does_not_overclaim_templates_or_generic_nullrhi(self) -> None:
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         self.assertNotIn("Nine complete installed-SDK-independent templates", readme)
-        self.assertIn("The stable-v1 headless row uses", readme)
-        self.assertIn("no pixels are rasterized", readme)
+        self.assertIn("contract targets the no-render `NullRHIDevice` path", readme)
+        self.assertIn("do not instantiate it (`HEAD-220` remains open)", readme)
+        self.assertIn("NullRHI itself rasterizes no pixels", readme)
 
     def test_public_content_uses_profile_derived_gate_wording(self) -> None:
         content = (REPO_ROOT / "docs" / "site" / "content.json").read_text(
