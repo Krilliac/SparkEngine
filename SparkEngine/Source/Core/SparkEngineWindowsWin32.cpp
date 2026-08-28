@@ -38,6 +38,7 @@
 #include "Utils/DeltaSmoother.h"
 #include "Utils/FreezeDetector.h"
 #include "Utils/LocalFileCache.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Timer.h"
 #include <format>
@@ -347,7 +348,12 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
         DWORD err = GetLastError();
         wchar_t buf[256];
         swprintf_s(buf, L"CreateWindowW failed (0x%08X)", static_cast<unsigned>(err));
-        MessageBoxW(nullptr, buf, L"Fatal Error", MB_ICONERROR);
+        if (ShouldShowWindowsFatalDialog())
+            MessageBoxW(nullptr, buf, L"Fatal Error", MB_ICONERROR);
+        else
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "CreateWindowW failed during automated startup (error=0x%08lX)",
+                            static_cast<unsigned long>(err));
         return FALSE;
     }
     g_mainWindow = hWnd;
@@ -363,7 +369,12 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
     {
         wchar_t buf[256];
         swprintf_s(buf, L"Graphics initialization failed (HR=0x%08X)", static_cast<unsigned>(hr));
-        MessageBoxW(hWnd, buf, L"Fatal Error", MB_ICONERROR);
+        if (ShouldShowWindowsFatalDialog())
+            MessageBoxW(hWnd, buf, L"Fatal Error", MB_ICONERROR);
+        else
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "Graphics initialization failed during automated startup (HR=0x%08lX)",
+                            static_cast<unsigned long>(hr));
         return FALSE;
     }
 

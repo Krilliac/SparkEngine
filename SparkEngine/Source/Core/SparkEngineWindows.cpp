@@ -331,6 +331,11 @@ static std::vector<ScriptedCommand> g_execScript;
 static size_t g_execScriptNext = 0;
 double g_testSecondsLimit = 0.0; ///< -test-seconds N: exit after N wall seconds
 
+bool ShouldShowWindowsFatalDialog()
+{
+    return g_testFrameLimit <= 0 && g_testSecondsLimit <= 0.0;
+}
+
 /// Wall-clock since the first due-check of the main loop (lazy start so boot
 /// time is excluded from both t-entries and -test-seconds).
 double ExecElapsedSeconds()
@@ -583,7 +588,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     ASSERT_MSG(cls != 0, "MyRegisterClass failed");
     if (cls == 0)
     {
-        MessageBoxW(nullptr, L"RegisterClassExW failed", L"Fatal Error", MB_ICONERROR);
+        if (ShouldShowWindowsFatalDialog())
+            MessageBoxW(nullptr, L"RegisterClassExW failed", L"Fatal Error", MB_ICONERROR);
+        else
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "RegisterClassExW failed during automated windowed startup");
         return -1;
     }
 

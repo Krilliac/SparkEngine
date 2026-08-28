@@ -28,6 +28,7 @@
 
 #include <string>
 #include <cstdint>
+#include <cwchar>
 #include <cstring>
 #include <utility>
 
@@ -56,18 +57,46 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     ComPtr<ID3D11Device> baseDevice;
     ComPtr<ID3D11DeviceContext> baseContext;
 
-    SPARK_LOG_INFO("Graphics", "Creating D3D11 device (flags=0x%X)...", createDeviceFlags);
+    // Standard GitHub-hosted Windows runners do not guarantee a hardware GPU.
+    // Keep interactive runtime behavior hardware-only, but allow an explicit
+    // software D3D11 mode for the production-host lifecycle smoke. Unknown
+    // values fail closed instead of silently changing the selected driver.
+    wchar_t driverOverride[16] = {};
+    const DWORD driverOverrideLength =
+        GetEnvironmentVariableW(L"SPARK_D3D11_DRIVER", driverOverride, ARRAYSIZE(driverOverride));
+    const bool useWarp =
+        driverOverrideLength == 4 && _wcsicmp(driverOverride, L"warp") == 0;
+    if (driverOverrideLength != 0 && !useWarp)
+    {
+        SPARK_LOG_FATAL("Graphics",
+                        "Unsupported SPARK_D3D11_DRIVER override; expected exactly 'warp' or an unset variable.");
+        return E_INVALIDARG;
+    }
+    const D3D_DRIVER_TYPE driverType = useWarp ? D3D_DRIVER_TYPE_WARP : D3D_DRIVER_TYPE_HARDWARE;
+
+    if (useWarp)
+    {
+        SPARK_LOG_INFO("Graphics",
+                       "SPARK_D3D11_DEVICE driver=warp certification=software-only; "
+                       "creating explicit WARP D3D11 device (flags=0x%X)",
+                       createDeviceFlags);
+    }
+    else
+    {
+        SPARK_LOG_INFO("Graphics", "Creating hardware D3D11 device (flags=0x%X)...", createDeviceFlags);
+    }
 
     HRESULT hr =
-        D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, createDeviceFlags, featureLevels,
+        D3D11CreateDevice(nullptr, driverType, nullptr, createDeviceFlags, featureLevels,
                           ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, &baseDevice, &featureLevel, &baseContext);
 
     if (FAILED(hr))
     {
         SPARK_LOG_FATAL("Graphics",
-                        "D3D11CreateDevice failed with HR=0x%08lX. "
-                        "Check GPU driver installation and DirectX 11 support.",
-                        static_cast<long>(hr));
+                        "%s D3D11CreateDevice failed with HR=0x%08lX.%s",
+                        useWarp ? "WARP" : "Hardware", static_cast<long>(hr),
+                        useWarp ? " The software-only lifecycle smoke cannot continue."
+                                : " Check GPU driver installation and DirectX 11 support.");
         return hr;
     }
 
@@ -90,7 +119,8 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     default:
         break;
     }
-    SPARK_LOG_INFO("Graphics", "D3D11 device created -- Feature Level %s", featureLevelStr);
+    SPARK_LOG_INFO("Graphics", "%s D3D11 device created -- Feature Level %s",
+                   useWarp ? "WARP software" : "Hardware", featureLevelStr);
 
     // Query for ID3D11Device1 interface
     hr = baseDevice.As(&m_device);

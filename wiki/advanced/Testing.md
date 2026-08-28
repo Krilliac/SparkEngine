@@ -554,7 +554,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*575 test-bearing `.cpp`/`.mm` files, 6952 source-level test definitions*
+*574 test-bearing `.cpp`/`.mm` files, 6951 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|

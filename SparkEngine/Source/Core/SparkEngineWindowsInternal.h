@@ -65,6 +65,9 @@ extern std::unique_ptr<Spark::ModSystem> g_modSystem;
 extern std::string g_scenePath;   ///< -scene <path>: reflected-scene JSON rendered when no game module loads
 extern double g_testSecondsLimit; ///< -test-seconds N: exit after N wall seconds
 
+/// @brief Whether an automated windowed run must log fatal startup errors instead of opening a modal dialog.
+bool ShouldShowWindowsFatalDialog();
+
 /// @brief Reapply the authoritative engine/project caption to the main window.
 void ApplyRuntimeWindowCaption();
 

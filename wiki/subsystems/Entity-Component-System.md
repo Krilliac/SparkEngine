@@ -487,7 +487,6 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `DecalComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
 | `DestructibleComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `DialogueTriggerComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
-| `EntityRetirementPlan` | `SparkEngine/Source/Engine/ECS/Components.h` |
 | `FogVolumeComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `FoliageVolumeComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |
 | `ForceRegionComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |

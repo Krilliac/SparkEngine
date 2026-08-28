@@ -19,6 +19,15 @@ function(_spark_validate_lifecycle_result child_result child_stdout child_stderr
         # deliberately excluded: only the post-teardown wWinMain write is
         # admissible evidence.
         set(_combined "${_stdout}\n${_stderr}")
+        string(REGEX MATCHALL
+            "SPARK_D3D11_DEVICE driver=warp certification=software-only"
+            _device_records "${_combined}")
+        list(LENGTH _device_records _device_record_count)
+        if(NOT _device_record_count EQUAL 1)
+            set(_ok FALSE)
+            set(_reason
+                "found ${_device_record_count} explicit WARP D3D11 device records, expected exactly 1")
+        endif()
         string(REPLACE ";" "\\;" _combined "${_combined}")
         string(REPLACE "\n" ";" _lines "${_combined}")
         set(_markers)
@@ -29,10 +38,10 @@ function(_spark_validate_lifecycle_result child_result child_stdout child_stderr
             endif()
         endforeach()
         list(LENGTH _markers _marker_count)
-        if(NOT _marker_count EQUAL 1)
+        if(_ok AND NOT _marker_count EQUAL 1)
             set(_ok FALSE)
             set(_reason "found ${_marker_count} standalone lifecycle records, expected exactly 1")
-        else()
+        elseif(_ok)
             list(GET _markers 0 _marker)
 
             string(REGEX MATCH "initialized=([0-9]+)" _unused "${_marker}")
@@ -84,23 +93,26 @@ if(SPARK_LIFECYCLE_PARSER_SELF_TEST)
         endif()
     endfunction()
 
-    set(_valid "SPARK_MODULE_LIFECYCLE initialized=1 updated=4 fixed=2 rendered=4 unloaded=1 faults=0\n")
+    set(_device "[info] SPARK_D3D11_DEVICE driver=warp certification=software-only\n")
+    set(_marker "SPARK_MODULE_LIFECYCLE initialized=1 updated=4 fixed=2 rendered=4 unloaded=1 faults=0\n")
+    set(_valid "${_device}${_marker}")
     _spark_expect_lifecycle_case(valid 0 "${_valid}" "" TRUE)
     _spark_expect_lifecycle_case(nonzero-exit 2 "${_valid}" "" FALSE)
-    _spark_expect_lifecycle_case(logger-copy 0 "[info] ${_valid}" "" FALSE)
+    _spark_expect_lifecycle_case(missing-warp-record 0 "${_marker}" "" FALSE)
+    _spark_expect_lifecycle_case(logger-copy 0 "${_device}[info] ${_marker}" "" FALSE)
     _spark_expect_lifecycle_case(duplicate 0 "${_valid}${_valid}" "" FALSE)
     _spark_expect_lifecycle_case(wrong-initialized 0
-        "SPARK_MODULE_LIFECYCLE initialized=2 updated=4 fixed=2 rendered=4 unloaded=1 faults=0\n" "" FALSE)
+        "${_device}SPARK_MODULE_LIFECYCLE initialized=2 updated=4 fixed=2 rendered=4 unloaded=1 faults=0\n" "" FALSE)
     _spark_expect_lifecycle_case(wrong-unloaded 0
-        "SPARK_MODULE_LIFECYCLE initialized=1 updated=4 fixed=2 rendered=4 unloaded=0 faults=0\n" "" FALSE)
+        "${_device}SPARK_MODULE_LIFECYCLE initialized=1 updated=4 fixed=2 rendered=4 unloaded=0 faults=0\n" "" FALSE)
     _spark_expect_lifecycle_case(missing-update 0
-        "SPARK_MODULE_LIFECYCLE initialized=1 updated=0 fixed=2 rendered=4 unloaded=1 faults=0\n" "" FALSE)
+        "${_device}SPARK_MODULE_LIFECYCLE initialized=1 updated=0 fixed=2 rendered=4 unloaded=1 faults=0\n" "" FALSE)
     _spark_expect_lifecycle_case(missing-fixed 0
-        "SPARK_MODULE_LIFECYCLE initialized=1 updated=4 fixed=0 rendered=4 unloaded=1 faults=0\n" "" FALSE)
+        "${_device}SPARK_MODULE_LIFECYCLE initialized=1 updated=4 fixed=0 rendered=4 unloaded=1 faults=0\n" "" FALSE)
     _spark_expect_lifecycle_case(missing-render 0
-        "SPARK_MODULE_LIFECYCLE initialized=1 updated=4 fixed=2 rendered=0 unloaded=1 faults=0\n" "" FALSE)
+        "${_device}SPARK_MODULE_LIFECYCLE initialized=1 updated=4 fixed=2 rendered=0 unloaded=1 faults=0\n" "" FALSE)
     _spark_expect_lifecycle_case(nonzero-faults 0
-        "SPARK_MODULE_LIFECYCLE initialized=1 updated=4 fixed=2 rendered=4 unloaded=1 faults=1\n" "" FALSE)
+        "${_device}SPARK_MODULE_LIFECYCLE initialized=1 updated=4 fixed=2 rendered=4 unloaded=1 faults=1\n" "" FALSE)
     message(STATUS "SparkGameFPS D3D11 lifecycle parser contract passed")
     return()
 endif()
@@ -133,6 +145,7 @@ endif()
 execute_process(
     COMMAND "${CMAKE_COMMAND}" -E env
         "SPARK_RHI_BACKEND=${SPARK_RHI_BACKEND}"
+        "SPARK_D3D11_DRIVER=warp"
         "${SPARK_ENGINE_EXECUTABLE}"
         -game "${SPARK_GAME_MODULE}"
         -require-game
