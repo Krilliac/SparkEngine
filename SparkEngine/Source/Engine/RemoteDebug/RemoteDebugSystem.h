@@ -21,6 +21,7 @@
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -148,9 +149,6 @@ namespace Spark::RemoteDebug
       private:
         friend class RemoteDebugServer;
         friend class RemoteDebugSystem;
-#if defined(SPARK_REMOTE_DEBUG_TESTING)
-        friend class RemoteDebugAccessControlTestHarness;
-#endif
 
         struct InboundCommand
         {
@@ -248,7 +246,8 @@ namespace Spark::RemoteDebug
             // A restart starts a new authority epoch. Preserve the monotonically
             // increasing grant id in the access-control object so a stale copied
             // principal cannot become valid again after reset.
-            m_accessControl.Reset();
+            std::unique_lock executionLock(m_executionMutex);
+            m_accessControl.RevokeAll();
             m_session.SetPort(port);
             m_session.SetState(SessionState::Listening);
             RegisterBuiltinHandlers();
@@ -260,8 +259,14 @@ namespace Spark::RemoteDebug
         /** @brief Stop listening and disconnect */
         void StopListening()
         {
+            // A protected handler holds a shared execution lease from
+            // authorization through its side effect and the matching audit
+            // record. Taking the exclusive lease here means that when this
+            // function returns no protected handler can subsequently execute
+            // with a principal revoked by this call.
+            std::unique_lock executionLock(m_executionMutex);
             m_session.Reset();
-            m_accessControl.Reset();
+            m_accessControl.RevokeAll();
         }
 
         /** @brief Process queued commands and send responses (call per frame) */
@@ -313,15 +318,10 @@ namespace Spark::RemoteDebug
      * @param handler Callback returning a response.
      */
         void RegisterCommandHandler(const std::string& type, RemoteDebugCapability requiredCapability,
-                                    CommandHandler handler)
+                                     CommandHandler handler)
         {
-            m_handlers[type] = std::move(handler);
-            // A custom handler cannot silently become available to every
-            // authenticated role. Callers that have no narrower capability
-            // declaration get the conservative execution capability.
-            m_handlerCapabilities[type] = requiredCapability == RemoteDebugCapability::None
-                                              ? RemoteDebugCapability::ExecuteConsole
-                                              : requiredCapability;
+            std::unique_lock executionLock(m_executionMutex);
+            RegisterCommandHandlerUnlocked(type, requiredCapability, std::move(handler));
         }
 
         RemoteSession& GetSession() { return m_session; }             ///< @brief Access session
@@ -335,14 +335,31 @@ namespace Spark::RemoteDebug
 
       private:
         friend class RemoteDebugSystem;
-#if defined(SPARK_REMOTE_DEBUG_TESTING)
-        friend class RemoteDebugAccessControlTestHarness;
-#endif
 
-        [[nodiscard]] RemoteDebugPrincipal IssueTrustedLoopbackPrincipal(RemoteDebugRole role,
-                                                                           uint64_t lifetimeMilliseconds)
+        /**
+         * @brief Mint the sole built-in local capability.
+         *
+         * Public loopback intentionally gets Observer only. There is no public
+         * or macro-controlled API for a caller to mint an Operator or
+         * Administrator principal; a future authenticated transport must add a
+         * separately reviewed server-owned enrollment path.
+         */
+        [[nodiscard]] RemoteDebugPrincipal IssueLoopbackObserverPrincipal()
         {
-            return m_accessControl.IssueTrustedLoopbackPrincipal(role, lifetimeMilliseconds);
+            return m_accessControl.IssueLoopbackPrincipal(
+                RemoteDebugRole::Observer, RemoteDebugAccessControl::kDefaultLoopbackLifetimeMilliseconds);
+        }
+
+        void RegisterCommandHandlerUnlocked(const std::string& type, RemoteDebugCapability requiredCapability,
+                                            CommandHandler handler)
+        {
+            m_handlers[type] = std::move(handler);
+            // A custom handler cannot silently become available to every
+            // authenticated role. Callers that have no narrower capability
+            // declaration get the conservative execution capability.
+            m_handlerCapabilities[type] = requiredCapability == RemoteDebugCapability::None
+                                               ? RemoteDebugCapability::ExecuteConsole
+                                               : requiredCapability;
         }
 
         [[nodiscard]] static RemoteCommand AccessDeniedResponse(const RemoteCommand& cmd)
@@ -354,8 +371,13 @@ namespace Spark::RemoteDebug
         }
 
         [[nodiscard]] RemoteCommand ProcessCommandWithPrincipal(const RemoteCommand& cmd,
-                                                                  const RemoteDebugPrincipal& principal)
+                                                                   const RemoteDebugPrincipal& principal)
         {
+            // This shared lease covers the complete authorization -> handler ->
+            // audit sequence. StopListening/StartListening take it exclusively,
+            // so revocation cannot race a previously authorized side effect or
+            // turn a completed effect into a misleading denial audit event.
+            std::shared_lock executionLock(m_executionMutex);
             const auto handlerIt = m_handlers.find(cmd.type);
             if (handlerIt == m_handlers.end())
             {
@@ -394,7 +416,7 @@ namespace Spark::RemoteDebug
                 return;
             m_builtinsRegistered = true;
 
-            RegisterCommandHandler("console_cmd", RemoteDebugCapability::ExecuteConsole, [](const RemoteCommand& c)
+            RegisterCommandHandlerUnlocked("console_cmd", RemoteDebugCapability::ExecuteConsole, [](const RemoteCommand& c)
             {
                 // Extract the command string from the JSON payload
                 std::string command = c.payload;
@@ -432,22 +454,23 @@ namespace Spark::RemoteDebug
                                       EscapeJson(output) + "\"}";
                 return RemoteCommand{"console_cmd_result", payload, c.requestId, 0.0f};
             });
-            RegisterCommandHandler("property_get", RemoteDebugCapability::Inspect, [](const RemoteCommand& c)
+            RegisterCommandHandlerUnlocked("property_get", RemoteDebugCapability::Inspect, [](const RemoteCommand& c)
             {
                 std::string payload = "{\"path\":\"" + EscapeJson(c.payload) + "\",\"value\":null}";
                 return RemoteCommand{"property_value", payload, c.requestId, 0.0f};
             });
-            RegisterCommandHandler("property_set", RemoteDebugCapability::ModifyProperties, [](const RemoteCommand& c)
+            RegisterCommandHandlerUnlocked("property_set", RemoteDebugCapability::ModifyProperties, [](const RemoteCommand& c)
             { return RemoteCommand{"property_set_result", R"({"status":"ok"})", c.requestId, 0.0f}; });
-            RegisterCommandHandler("profile_data", RemoteDebugCapability::Inspect, [](const RemoteCommand& c) {
+            RegisterCommandHandlerUnlocked("profile_data", RemoteDebugCapability::Inspect, [](const RemoteCommand& c) {
                 return RemoteCommand{"profile_data", R"({"fps":0,"cpuMs":0,"gpuMs":0,"memoryMB":0})", c.requestId,
                                      0.0f};
             });
-            RegisterCommandHandler("heartbeat", RemoteDebugCapability::Inspect, [](const RemoteCommand& c)
+            RegisterCommandHandlerUnlocked("heartbeat", RemoteDebugCapability::Inspect, [](const RemoteCommand& c)
             { return RemoteCommand{"heartbeat", R"({"status":"alive"})", c.requestId, 0.0f}; });
         }
 
         RemoteSession m_session;
+        mutable std::shared_mutex m_executionMutex;
         std::unordered_map<std::string, CommandHandler> m_handlers;
         std::unordered_map<std::string, RemoteDebugCapability> m_handlerCapabilities;
         RemoteDebugAccessControl m_accessControl;
@@ -663,10 +686,10 @@ namespace Spark::RemoteDebug
             if (!m_initialized || !m_server || !m_client)
                 return;
             m_server->StartListening(0);
-            // The grant is minted and retained by the server/system plumbing;
-            // it is never stored in a RemoteCommand or exposed by client APIs.
-            m_loopbackPrincipal = m_server->IssueTrustedLoopbackPrincipal(
-                RemoteDebugRole::Administrator, RemoteDebugAccessControl::kDefaultLoopbackLifetimeMilliseconds);
+            // Public loopback is intentionally observation-only. It is retained
+            // for local tests and inspection but cannot acquire console or
+            // property-mutation authority by following the public client API.
+            m_loopbackPrincipal = m_server->IssueLoopbackObserverPrincipal();
             m_server->GetSession().SetState(SessionState::Connected);
             m_client->GetSession().SetState(SessionState::Connected);
             m_loopbackEnabled = true;

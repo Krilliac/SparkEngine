@@ -23,11 +23,6 @@ namespace Spark::RemoteDebug
 {
 
     class RemoteDebugServer;
-#if defined(SPARK_REMOTE_DEBUG_TESTING)
-    // Available only while compiling the focused unit test translation unit.
-    // It avoids adding any production minting API.
-    class RemoteDebugAccessControlTestHarness;
-#endif
 
     /** @brief Fixed least-privilege role policy for trusted local loopback. */
     enum class RemoteDebugRole : uint8_t
@@ -122,9 +117,6 @@ namespace Spark::RemoteDebug
 
         friend class RemoteDebugServer;
         friend class RemoteDebugAccessControl;
-#if defined(SPARK_REMOTE_DEBUG_TESTING)
-        friend class RemoteDebugAccessControlTestHarness;
-#endif
     };
 
     /** @brief Authorization, replay, rate, and audit state owned by RemoteDebugServer. */
@@ -143,9 +135,6 @@ namespace Spark::RemoteDebug
 
       private:
         friend class RemoteDebugServer;
-#if defined(SPARK_REMOTE_DEBUG_TESTING)
-        friend class RemoteDebugAccessControlTestHarness;
-#endif
 
         struct GrantState
         {
@@ -198,8 +187,7 @@ namespace Spark::RemoteDebug
                    principal.m_capabilities == state.capabilities && principal.m_expiresAtMs == state.expiresAtMs;
         }
 
-        [[nodiscard]] RemoteDebugPrincipal IssueTrustedLoopbackPrincipal(RemoteDebugRole role,
-                                                                           uint64_t lifetimeMilliseconds)
+        [[nodiscard]] RemoteDebugPrincipal IssueLoopbackPrincipal(RemoteDebugRole role, uint64_t lifetimeMilliseconds)
         {
             std::lock_guard lock(m_mutex);
             const uint64_t now = CurrentTimeMilliseconds();
@@ -305,11 +293,18 @@ namespace Spark::RemoteDebug
                          decision);
         }
 
-        void Reset()
+        /**
+         * @brief Revoke every active principal while retaining bounded audit history.
+         *
+         * StopListening uses this only after taking the server's exclusive
+         * execution gate. Therefore an Allowed event always describes an effect
+         * that completed before revocation returned, rather than a post-hoc
+         * decision recorded after the grant was already removed.
+         */
+        void RevokeAll()
         {
             std::lock_guard lock(m_mutex);
             m_grants.clear();
-            m_auditEvents.clear();
         }
 
         void RecordLocked(const std::string& principal, const std::string& source, const std::string& commandType,
