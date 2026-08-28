@@ -5647,7 +5647,7 @@
         ],
         "if": "absent",
         "continueOnError": "absent",
-        "timeoutMinutes": "absent",
+        "timeoutMinutes": 90,
         "needs": [],
         "failFast": "absent",
         "maxParallel": "absent",
@@ -5656,7 +5656,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 11,
+        "stepCount": 14,
         "steps": [
           {
             "index": 0,
@@ -5756,10 +5756,34 @@
               "LSAN_OPTIONS",
               "UBSAN_OPTIONS"
             ],
-            "runDigest": "ff5ab281e71a40fe"
+            "runDigest": "d2f517200cbe4b4d"
           },
           {
             "index": 8,
+            "name": "Summarize ASan exact-commit test evidence",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "f4e8c59a1570a5e9"
+          },
+          {
+            "index": 9,
+            "name": "Verify published ASan exact-commit evidence",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "450ac819f55e1bee"
+          },
+          {
+            "index": 10,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -5768,10 +5792,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "d0031bf71084f471"
+            "runDigest": "9b0ab6c92e7ae213"
           },
           {
-            "index": 9,
+            "index": 11,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -5783,7 +5807,7 @@
             "runDigest": ""
           },
           {
-            "index": 10,
+            "index": 12,
             "name": "Upload ASan + UBSan + LSan report",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -5793,9 +5817,23 @@
             "hasRun": false,
             "env": [],
             "runDigest": ""
+          },
+          {
+            "index": 13,
+            "name": "Upload ASan exact-commit test evidence",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
           }
         ],
-        "envNames": [],
+        "envNames": [
+          "SANITIZER_EVIDENCE_DIR"
+        ],
         "gating": "blocking"
       },
       {
@@ -5810,7 +5848,7 @@
         ],
         "if": "absent",
         "continueOnError": "absent",
-        "timeoutMinutes": "absent",
+        "timeoutMinutes": 90,
         "needs": [],
         "failFast": "absent",
         "maxParallel": "absent",
@@ -5819,7 +5857,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 11,
+        "stepCount": 14,
         "steps": [
           {
             "index": 0,
@@ -5917,10 +5955,34 @@
             "env": [
               "TSAN_OPTIONS"
             ],
-            "runDigest": "6d5062e6c495f334"
+            "runDigest": "a13ce8eb60a698c1"
           },
           {
             "index": 8,
+            "name": "Summarize TSan exact-commit test evidence",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "f30cfb52e98aadf9"
+          },
+          {
+            "index": 9,
+            "name": "Verify published TSan exact-commit evidence",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "0c40b58f4024a37b"
+          },
+          {
+            "index": 10,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -5929,10 +5991,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "9c6ceb51af2de929"
+            "runDigest": "d7a9ad80b77bef4c"
           },
           {
-            "index": 9,
+            "index": 11,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -5944,7 +6006,7 @@
             "runDigest": ""
           },
           {
-            "index": 10,
+            "index": 12,
             "name": "Upload TSan report",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -5954,9 +6016,23 @@
             "hasRun": false,
             "env": [],
             "runDigest": ""
+          },
+          {
+            "index": 13,
+            "name": "Upload TSan exact-commit test evidence",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
           }
         ],
-        "envNames": [],
+        "envNames": [
+          "SANITIZER_EVIDENCE_DIR"
+        ],
         "gating": "blocking"
       },
       {
@@ -5971,7 +6047,7 @@
         ],
         "if": "absent",
         "continueOnError": true,
-        "timeoutMinutes": "absent",
+        "timeoutMinutes": 90,
         "needs": [],
         "failFast": "absent",
         "maxParallel": "absent",
@@ -6078,7 +6154,7 @@
             "env": [
               "MSAN_OPTIONS"
             ],
-            "runDigest": "c52ce3ed64559587"
+            "runDigest": "f59214d781025153"
           },
           {
             "index": 8,
@@ -6090,7 +6166,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "9989b85551c33c62"
+            "runDigest": "ad82a96f35485df3"
           },
           {
             "index": 9,
@@ -6117,7 +6193,9 @@
             "runDigest": ""
           }
         ],
-        "envNames": [],
+        "envNames": [
+          "SANITIZER_EVIDENCE_DIR"
+        ],
         "gating": "advisory"
       },
       {
@@ -7865,6 +7943,8 @@
         "timeoutMinutes": "absent",
         "needs": [
           "validate-ci-tools",
+          "build-linux-asan",
+          "build-linux-tsan",
           "build-windows-vs2022",
           "build-linux-gcc",
           "build-linux-clang"
@@ -7878,7 +7958,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 5,
+        "stepCount": 7,
         "steps": [
           {
             "index": 0,
@@ -7899,13 +7979,37 @@
             "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
             "shell": "",
             "if": "absent",
-            "continueOnError": true,
+            "continueOnError": "absent",
             "hasRun": false,
             "env": [],
             "runDigest": ""
           },
           {
             "index": 2,
+            "name": "Verify downloaded ASan evidence identity",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "5d0b4b998325a9a8"
+          },
+          {
+            "index": 3,
+            "name": "Verify downloaded TSan evidence identity",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "82ebb27627176769"
+          },
+          {
+            "index": 4,
             "name": "Collect deterministic repository metrics",
             "id": "",
             "uses": "",
@@ -7917,7 +8021,7 @@
             "runDigest": "75010e30585dcead"
           },
           {
-            "index": 3,
+            "index": 5,
             "name": "Require and aggregate primary-lane evidence",
             "id": "",
             "uses": "",
@@ -7926,10 +8030,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "fff2f0a29eb637e6"
+            "runDigest": "1d1e18c29bd2f701"
           },
           {
-            "index": 4,
+            "index": 6,
             "name": "Upload exact-commit CI metrics",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
