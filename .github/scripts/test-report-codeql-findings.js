@@ -683,6 +683,81 @@ async function main() {
             error.includes("extraction-failure diagnostic 'cpp/diagnostics/extraction-warnings'")),
         'index-only SARIF references into extension notification descriptors must resolve and fail closed');
 
+        const childIdConfusionData = fixture();
+        const childIdConfusionSarif = sarif('c-cpp');
+        childIdConfusionSarif.runs[0].tool.driver.notifications.push({ id: 'cpp/diagnostics' });
+        childIdConfusionSarif.runs[0].invocations = [{
+            executionSuccessful: true,
+            toolExecutionNotifications: [{
+                level: 'warning',
+                descriptor: { id: 'cpp/diagnostics/extraction-warnings', index: 3 },
+                message: {
+                    text: 'Extraction failed in SparkEngine/Source/Broken.cpp with warning compiler exited early.'
+                }
+            }]
+        }];
+        const childIdConfusion = await preflightAndReport(
+            root,
+            childIdConfusionData,
+            childIdConfusionData,
+            writeArtifacts(root, { 'c-cpp': childIdConfusionSarif })
+        );
+        assert.strictEqual(childIdConfusion.summary.status, 'incomplete');
+        assert(childIdConfusion.summary.evidenceErrors.some(error =>
+            error.includes("extraction-failure diagnostic 'cpp/diagnostics/extraction-warnings'")),
+        'a specific extraction-failure ID must not be downgraded to its broader indexed descriptor');
+
+        const duplicateComponentGuidData = fixture();
+        const duplicateComponentGuidSarif = sarif('c-cpp');
+        duplicateComponentGuidSarif.runs[0].tool.driver.guid =
+            'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
+        duplicateComponentGuidSarif.runs[0].tool.extensions = [{
+            name: 'duplicate-component',
+            guid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            notifications: []
+        }];
+        const duplicateComponentGuid = await preflightAndReport(
+            root,
+            duplicateComponentGuidData,
+            duplicateComponentGuidData,
+            writeArtifacts(root, { 'c-cpp': duplicateComponentGuidSarif })
+        );
+        assert.strictEqual(duplicateComponentGuid.summary.status, 'incomplete');
+        assert(duplicateComponentGuid.summary.evidenceErrors.some(error =>
+            error.includes('duplicate tool component GUID')));
+
+        const duplicateDescriptorGuidData = fixture();
+        const duplicateDescriptorGuidSarif = sarif('c-cpp');
+        duplicateDescriptorGuidSarif.runs[0].tool.driver.notifications[0].guid =
+            'BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB';
+        duplicateDescriptorGuidSarif.runs[0].tool.driver.notifications[1].guid =
+            'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+        const duplicateDescriptorGuid = await preflightAndReport(
+            root,
+            duplicateDescriptorGuidData,
+            duplicateDescriptorGuidData,
+            writeArtifacts(root, { 'c-cpp': duplicateDescriptorGuidSarif })
+        );
+        assert.strictEqual(duplicateDescriptorGuid.summary.status, 'incomplete');
+        assert(duplicateDescriptorGuid.summary.evidenceErrors.some(error =>
+            error.includes('duplicate notification descriptor GUID')));
+
+        const duplicateDescriptorIdData = fixture();
+        const duplicateDescriptorIdSarif = sarif('c-cpp');
+        duplicateDescriptorIdSarif.runs[0].tool.extensions = [{
+            name: 'duplicate-descriptor',
+            notifications: [{ id: 'cpp/diagnostics/extraction-warnings' }]
+        }];
+        const duplicateDescriptorId = await preflightAndReport(
+            root,
+            duplicateDescriptorIdData,
+            duplicateDescriptorIdData,
+            writeArtifacts(root, { 'c-cpp': duplicateDescriptorIdSarif })
+        );
+        assert.strictEqual(duplicateDescriptorId.summary.status, 'incomplete');
+        assert(duplicateDescriptorId.summary.evidenceErrors.some(error =>
+            error.includes('duplicate notification descriptor ID')));
+
         const failedInvocationData = fixture();
         const failedInvocation = await preflightAndReport(
             root,

@@ -68,6 +68,7 @@ const EXTRACTION_FAILURE_DESCRIPTORS = Object.freeze([
 
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const normalizedSha = value => SHA_PATTERN.test(value || '') ? value.toLowerCase() : null;
+const normalizedGuid = value => typeof value === 'string' ? value.toLowerCase() : null;
 
 function unique(values) {
     return [...new Set(values)];
@@ -469,9 +470,23 @@ function notificationComponents(tool, runIndex, language) {
         components.push({ label: `tool.extensions[${extensionIndex}]`, component });
     });
 
+    const componentGuids = new Set();
     const descriptorIds = new Set();
+    const descriptorGuids = new Set();
     let descriptorCount = 0;
     for (const entry of components) {
+        const componentGuid = entry.component.guid;
+        if (componentGuid !== undefined) {
+            if (typeof componentGuid !== 'string' || componentGuid.length === 0 || componentGuid.length > 200) {
+                throw new Error(`run ${runIndex} ${entry.label} has an invalid GUID`);
+            }
+            const canonicalComponentGuid = normalizedGuid(componentGuid);
+            if (componentGuids.has(canonicalComponentGuid)) {
+                throw new Error(`run ${runIndex} has duplicate tool component GUID '${componentGuid}'`);
+            }
+            componentGuids.add(canonicalComponentGuid);
+        }
+
         const notifications = entry.component.notifications === undefined ? [] : entry.component.notifications;
         if (!Array.isArray(notifications)) {
             throw new Error(`run ${runIndex} has malformed ${entry.label}.notifications`);
@@ -487,7 +502,26 @@ function notificationComponents(tool, runIndex, language) {
                     `run ${runIndex} ${entry.label}.notifications[${descriptorIndex}] has an invalid ID`
                 );
             }
+            if (descriptorIds.has(descriptor.id)) {
+                throw new Error(`run ${runIndex} has duplicate notification descriptor ID '${descriptor.id}'`);
+            }
             descriptorIds.add(descriptor.id);
+
+            if (descriptor.guid !== undefined) {
+                if (typeof descriptor.guid !== 'string' ||
+                    descriptor.guid.length === 0 || descriptor.guid.length > 200) {
+                    throw new Error(
+                        `run ${runIndex} ${entry.label}.notifications[${descriptorIndex}] has an invalid GUID`
+                    );
+                }
+                const canonicalDescriptorGuid = normalizedGuid(descriptor.guid);
+                if (descriptorGuids.has(canonicalDescriptorGuid)) {
+                    throw new Error(
+                        `run ${runIndex} has duplicate notification descriptor GUID '${descriptor.guid}'`
+                    );
+                }
+                descriptorGuids.add(canonicalDescriptorGuid);
+            }
         });
         entry.notifications = notifications;
     }
@@ -529,7 +563,10 @@ function referencedNotificationDescriptorId(reference, components, context) {
             if (typeof componentReference.guid !== 'string') {
                 throw new Error(`${context} has an invalid tool component GUID`);
             }
-            componentIndex = components.findIndex(entry => entry.component.guid === componentReference.guid);
+            const referencedGuid = normalizedGuid(componentReference.guid);
+            componentIndex = components.findIndex(
+                entry => normalizedGuid(entry.component.guid) === referencedGuid
+            );
             if (componentIndex < 0) throw new Error(`${context} references an unknown tool component`);
         }
     }
@@ -537,7 +574,7 @@ function referencedNotificationDescriptorId(reference, components, context) {
     const component = components[componentIndex];
     const componentReference = reference.toolComponent;
     if (componentReference?.guid !== undefined &&
-        componentReference.guid !== component.component.guid) {
+        normalizedGuid(componentReference.guid) !== normalizedGuid(component.component.guid)) {
         throw new Error(`${context} has inconsistent tool component metadata`);
     }
     if (componentReference?.name !== undefined &&
@@ -554,18 +591,28 @@ function referencedNotificationDescriptorId(reference, components, context) {
         descriptor = component.notifications[reference.index];
     } else if (reference.guid !== undefined) {
         if (typeof reference.guid !== 'string') throw new Error(`${context} has an invalid descriptor GUID`);
-        descriptor = component.notifications.find(candidate => candidate.guid === reference.guid) || null;
+        const referencedGuid = normalizedGuid(reference.guid);
+        descriptor = component.notifications.find(
+            candidate => normalizedGuid(candidate.guid) === referencedGuid
+        ) || null;
         if (!descriptor) throw new Error(`${context} references an unknown notification descriptor`);
     }
 
-    if (descriptor && reference.guid !== undefined && reference.guid !== descriptor.guid) {
+    if (descriptor && reference.guid !== undefined &&
+        normalizedGuid(reference.guid) !== normalizedGuid(descriptor.guid)) {
         throw new Error(`${context} has inconsistent notification descriptor metadata`);
     }
-    if (descriptor && directId !== undefined &&
-        directId !== descriptor.id && !directId.startsWith(`${descriptor.id}/`)) {
-        throw new Error(`${context} has inconsistent notification descriptor metadata`);
+    if (descriptor && directId !== undefined && directId !== descriptor.id) {
+        // SARIF 2.1.0 section 3.52.4 permits exactly one additional
+        // hierarchical component. Keep that more specific ID canonical so a
+        // broad indexed descriptor cannot mask an extraction-failure child.
+        const childPrefix = `${descriptor.id}/`;
+        const child = directId.startsWith(childPrefix) ? directId.slice(childPrefix.length) : '';
+        if (child.length === 0 || child.includes('/')) {
+            throw new Error(`${context} has inconsistent notification descriptor metadata`);
+        }
     }
-    return descriptor?.id || directId || null;
+    return directId || descriptor?.id || null;
 }
 
 function isExtractionFailureDescriptor(id) {
