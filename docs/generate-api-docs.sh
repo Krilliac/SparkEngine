@@ -551,26 +551,34 @@ main() {
             ;;
 
         check)
-            # Check if docs are stale (sources newer than generated docs)
-            local checksum_file="$SCRIPT_DIR/.api_checksums"
-            local current=""
-            for dir in "${SOURCE_DIRS[@]}"; do
-                [ -d "$dir" ] || continue
-                current="$current$(find "$dir" -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) -exec md5sum {} \; 2>/dev/null | sort)"
-            done
-
-            if [ -f "$checksum_file" ]; then
-                local previous
-                previous=$(cat "$checksum_file")
-                if [ "$current" = "$previous" ]; then
-                    log_info "API docs are up to date"
-                    exit 0
-                fi
+            # Dry-run: report whether API docs are stale without regenerating.
+            if [ ! -d "$OUTPUT_DIR" ] || [ ! -f "$OUTPUT_DIR/README.md" ]; then
+                log_warning "API docs directory is missing — stale"
+                exit 1
             fi
 
-            log_warning "API docs are stale — regenerating..."
-            echo "$current" > "$checksum_file"
-            main generate
+            local newest_source=0
+            for dir in "${SOURCE_DIRS[@]}"; do
+                [ -d "$dir" ] || continue
+                while IFS= read -r -d '' src; do
+                    local mtime
+                    mtime=$(stat -c %Y "$src" 2>/dev/null || stat -f %m "$src" 2>/dev/null || echo 0)
+                    if [ "$mtime" -gt "$newest_source" ]; then
+                        newest_source="$mtime"
+                    fi
+                done < <(find "$dir" -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) -print0 2>/dev/null)
+            done
+
+            local generated_mtime
+            generated_mtime=$(stat -c %Y "$OUTPUT_DIR/README.md" 2>/dev/null || stat -f %m "$OUTPUT_DIR/README.md" 2>/dev/null || echo 0)
+
+            if [ "$newest_source" -gt "$generated_mtime" ]; then
+                log_warning "API docs are stale (sources newer than generated output)"
+                exit 1
+            fi
+
+            log_info "API docs are up to date"
+            exit 0
             ;;
 
         status)

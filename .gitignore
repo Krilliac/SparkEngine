@@ -470,6 +470,7 @@ docs/api/
 docs/output/
 docs/.api_checksums
 docs/.doc_checksums
+docs/.health.json
 
 # Repository-generated website bundle (published by .github/workflows/site-data-publish.yml)
 /.site-data/

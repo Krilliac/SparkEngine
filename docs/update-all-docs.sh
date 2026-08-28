@@ -40,9 +40,11 @@ log_header()  { echo -e "\n${BOLD}${BLUE}═══ $1 ═══${NC}"; }
 
 FAILURES=0
 UPDATES=0
+HEALTH_JSON="$SCRIPT_DIR/.health.json"
+HEALTH_RESULTS=()
 
 # ============================================================================
-# Run a doc script, tracking success/failure
+# Run a doc script, tracking success/failure and recording structured results
 # ============================================================================
 run_script() {
     local name="$1"
@@ -55,6 +57,7 @@ run_script() {
 
     if [ ! -f "$script" ]; then
         log_warning "Script not found: $script — skipping"
+        HEALTH_RESULTS+=("{\"name\":\"$name\",\"script\":\"$(basename "$script")\",\"status\":\"missing\"}")
         return
     fi
 
@@ -62,14 +65,43 @@ run_script() {
 
     if bash "$script" "$mode"; then
         UPDATES=$((UPDATES + 1))
+        HEALTH_RESULTS+=("{\"name\":\"$name\",\"script\":\"$(basename "$script")\",\"status\":\"current\"}")
     else
         if [ "$mode" = "check" ]; then
             FAILURES=$((FAILURES + 1))
+            HEALTH_RESULTS+=("{\"name\":\"$name\",\"script\":\"$(basename "$script")\",\"status\":\"stale\"}")
         else
             log_warning "$name failed"
             FAILURES=$((FAILURES + 1))
+            HEALTH_RESULTS+=("{\"name\":\"$name\",\"script\":\"$(basename "$script")\",\"status\":\"failed\"}")
         fi
     fi
+}
+
+# ============================================================================
+# Write structured health JSON — machine-readable complement to terminal output
+# ============================================================================
+write_health_json() {
+    local mode="$1"
+    local overall="pass"
+    if [ "$FAILURES" -gt 0 ]; then
+        overall="fail"
+    fi
+
+    {
+        printf '{"mode":"%s","overall":"%s","failures":%d,"successes":%d,"results":[' \
+            "$mode" "$overall" "$FAILURES" "$UPDATES"
+        local first=true
+        for entry in "${HEALTH_RESULTS[@]}"; do
+            if [ "$first" = "true" ]; then
+                first=false
+            else
+                printf ','
+            fi
+            printf '%s' "$entry"
+        done
+        printf ']}\n'
+    } > "$HEALTH_JSON"
 }
 
 # ============================================================================
@@ -120,6 +152,7 @@ update_all() {
     # Summary
     echo ""
     log_header "Summary"
+    write_health_json "update"
     if [ "$FAILURES" -eq 0 ]; then
         log_success "All documentation is up to date ($UPDATES scripts ran successfully)"
         return 0
@@ -166,14 +199,19 @@ check_all() {
         local check_output
         if check_output=$(bash "$full_path" "$mode" 2>&1); then
             echo -e "${GREEN}✓ up to date${NC}"
+            HEALTH_RESULTS+=("{\"name\":\"$name\",\"script\":\"$script\",\"status\":\"current\"}")
+            UPDATES=$((UPDATES + 1))
         else
             echo -e "${YELLOW}✗ out of date${NC}"
             printf '%s\n' "$check_output" | sed 's/^/    /'
             stale=$((stale + 1))
+            HEALTH_RESULTS+=("{\"name\":\"$name\",\"script\":\"$script\",\"status\":\"stale\"}")
+            FAILURES=$((FAILURES + 1))
         fi
     done
 
     echo ""
+    write_health_json "check"
     if [ "$stale" -eq 0 ]; then
         log_success "All documentation is up to date."
         exit 0
