@@ -1,0 +1,254 @@
+{
+  "version": 1,
+  "generated": "2026-08-28",
+  "description": "Authoritative supply-chain content lockfile. Verified by tools/check-supply-chain.py on every CI run. Update with: python tools/check-supply-chain.py --update-lockfile",
+  "submodule_gitlinks": {
+    "ThirdParty/AI/recastnavigation": "9f4ce64458dfae86e1239c525ddc219c4e9e06f1",
+    "ThirdParty/ECS/entt": "85c6bba014049b5de8fad49d25424df2f1f6a8c1",
+    "ThirdParty/SDL2": "5882a4f13d3bf374d2345280c679173f4ff324da",
+    "ThirdParty/Scripting/angelscript-mirror": "c81df254037524b18cd41a57805cfec76acd05bf",
+    "ThirdParty/UI/imgui": "fd13a1e8923a0a7077b404fc36fd063b25a0c0b5",
+    "ThirdParty/Utils/miniz": "77d0dce8627735138c51770d1799a1ef48f2117d"
+  },
+  "managed_vendored_dirs": [
+    "ThirdParty/Audio/miniaudio",
+    "ThirdParty/OpenGL/GL",
+    "ThirdParty/Physics/JoltPhysics",
+    "ThirdParty/Utils/cgltf",
+    "ThirdParty/Utils/json",
+    "ThirdParty/Utils/stb",
+    "ThirdParty/Utils/tinyexr",
+    "ThirdParty/Utils/tinyobjloader",
+    "ThirdParty/Utils/zstd",
+    "ThirdParty/VulkanMemoryAllocator",
+    "ThirdParty/glad"
+  ],
+  "project_owned_dirs": [
+    "ThirdParty/ECS/entt_stub",
+    "ThirdParty/Licenses"
+  ],
+  "sentinel_files": {
+    "ThirdParty/Audio/miniaudio/LICENSE": {
+      "sha256": "c53c3dc44b331940d63f27902c0c38949f4871d62c63fffbef57441ab32ebffe",
+      "git_blob": "cc5adc4328fe729150bc0dd9c13be2fc0a31fc3c",
+      "size": 2633,
+      "type": "license"
+    },
+    "ThirdParty/Audio/miniaudio/miniaudio.h": {
+      "sha256": "b43e915b8338befe4e2d52f0b726d17ac986323422273ee2c0826f5015adb7ef",
+      "git_blob": "2ad4c8eaa80a16a4fc9de1387707cf8d3266f040",
+      "size": 10782,
+      "type": "source"
+    },
+    "ThirdParty/Audio/miniaudio/miniaudio_impl.cpp": {
+      "sha256": "83d9c37723988668882249e28a66a60d65462f9c63e1fb2b0c68012a769a2ee7",
+      "git_blob": "6d3d58c097e2a15f48e8f489566a8987c30dc1f9",
+      "size": 457,
+      "type": "source"
+    },
+    "ThirdParty/Licenses/SDL2-LICENSE.txt": {
+      "sha256": "e5bdf7f60804212b335e6e63c821c21cb9afa17a9bb80c942648cdaeed38ab99",
+      "git_blob": "72ccca937879b7e4f237ac49089ff0c02ae825f3",
+      "size": 894,
+      "type": "license"
+    },
+    "ThirdParty/Licenses/angelscript-LICENSE.txt": {
+      "sha256": "52e0c5703a3d4f5813811240dc6e4e6c8b1ff8b7d00997764a84be1a37dca484",
+      "git_blob": "7993d29c57e672f8b8b281be3185a7ef1778373c",
+      "size": 903,
+      "type": "license"
+    },
+    "ThirdParty/Licenses/entt-LICENSE.txt": {
+      "sha256": "b2350d771fba8d3f9cbe481d2fa16644d9dae6521b733356e74add069fcdbd56",
+      "git_blob": "615c47c5b34953d14de2c70c49c519db736894e3",
+      "size": 1118,
+      "type": "license"
+    },
+    "ThirdParty/Licenses/imgui-LICENSE.txt": {
+      "sha256": "f20418b409e53c8c9f4e90917ff395554a60320d4dfbf833da89b339cad8628a",
+      "git_blob": "d5ba3155f0f438ba765551a5e2419bf3eaa8be64",
+      "size": 1104,
+      "type": "license"
+    },
+    "ThirdParty/Licenses/miniz-LICENSE.txt": {
+      "sha256": "0115478d567121238cf6cc1c0c361926cf07a49d9e4c9e66da97fac6a01646b3",
+      "git_blob": "b6ff45a30fb56f0bbd9e398f4997b2d491e25ad3",
+      "size": 1184,
+      "type": "license"
+    },
+    "ThirdParty/Licenses/recastnavigation-LICENSE.txt": {
+      "sha256": "03a3b4080056222816f52f549a74cde41e799b453e14536911bed9b537acf733",
+      "git_blob": "018951f0ee7eda104fb341a486a966911cbef369",
+      "size": 886,
+      "type": "license"
+    },
+    "ThirdParty/Physics/JoltPhysics/Build/CMakeLists.txt": {
+      "sha256": "ee2f9cc2ccd28d04a82403b688c8ec720a52eff941917d39506a446c73ae2e78",
+      "git_blob": "7cda755e671fe0ac6f57141bf84194e0a6c95025",
+      "size": 23965,
+      "type": "source"
+    },
+    "ThirdParty/Physics/JoltPhysics/Jolt/Jolt.h": {
+      "sha256": "e38bb9db7f4cb0edc4ade253b420e5067931cbfd893b26f70662b4e7fdab76cf",
+      "git_blob": "7c9359358ad2ce364f60dc12f81936a2ee983853",
+      "size": 497,
+      "type": "source"
+    },
+    "ThirdParty/Physics/JoltPhysics/LICENSE": {
+      "sha256": "8d1c7e0303333dfdafcc6583c620eb163e9c6c53c7cebcb53db78eaa9807e76c",
+      "git_blob": "4f0976848529e8243687918193e0742032aef7dc",
+      "size": 1059,
+      "type": "license"
+    },
+    "ThirdParty/Utils/cgltf/LICENSE": {
+      "sha256": "c966632e900a3f8c882f76ae82511a12cfd2eee1744d83074b0f50345fe4f235",
+      "git_blob": "1cd9883316d753594452b49eaddbbca6a7285f3f",
+      "size": 1085,
+      "type": "license"
+    },
+    "ThirdParty/Utils/cgltf/cgltf.h": {
+      "sha256": "22f92f469c19b11594046c846961988ff90d9e12b48b7d353f02eb98a1eccccf",
+      "git_blob": "767e7b2436d718b21a7da692d78305cac6762d15",
+      "size": 210039,
+      "type": "source"
+    },
+    "ThirdParty/Utils/cgltf/cgltf_impl.cpp": {
+      "sha256": "498ab329717553b3081c1e6fb040b57f75b6590f45d0b151e19b3a0fb05b9028",
+      "git_blob": "806a0251bdc57ba2a6176369e8a90b80138c43ae",
+      "size": 368,
+      "type": "source"
+    },
+    "ThirdParty/Utils/json/LICENSE.MIT": {
+      "sha256": "906d3f4ee82a34b60784364f0b4bcda9f59a6a019e128be9a1cb97e77962c3f4",
+      "git_blob": "10bd9f66aa7bf42493c4582f43e42ef3447f096f",
+      "size": 1092,
+      "type": "license"
+    },
+    "ThirdParty/Utils/json/nlohmann_json.h": {
+      "sha256": "e8e09c80b1ebc41ea1262f8e390f4ec32c26d6b11352bc8a4db2dd007c0900a2",
+      "git_blob": "9c8af5d9821e05048ab59dbf9d834dffa968820c",
+      "size": 25073,
+      "type": "source"
+    },
+    "ThirdParty/Utils/stb/LICENSE": {
+      "sha256": "11dd149dbc50748419a22fcec275b5bcfb4c2d86d9fba8802e5c4ffd40c94609",
+      "git_blob": "a77ae91f3ec0abb0028c9d9bd8d34d880b454d38",
+      "size": 2547,
+      "type": "license"
+    },
+    "ThirdParty/Utils/stb/stb_image.h": {
+      "sha256": "ab4a06085666742754ebb834837a6a3b770a06bd5f33db797e2e861e652c7f89",
+      "git_blob": "edff2054dfc231fe42c34bf620c913a90842c5c8",
+      "size": 15726,
+      "type": "source"
+    },
+    "ThirdParty/Utils/stb/stb_image_write.h": {
+      "sha256": "37035a1d26371eef80b77ce030154957cac8ff4bbb682e85c4c646a601d486e7",
+      "git_blob": "81eac8ad6945687cad21769941b4465efdd5c3ef",
+      "size": 2454,
+      "type": "source"
+    },
+    "ThirdParty/Utils/stb/stb_impl.cpp": {
+      "sha256": "356fd58ef7b89023742f9a61996c27d7f0d56c67eb111527b46f7e614ebaa7c1",
+      "git_blob": "74b4904111cb5ddb95a154e5b2faf6a146fc1c2a",
+      "size": 741,
+      "type": "source"
+    },
+    "ThirdParty/Utils/tinyexr/LICENSE": {
+      "sha256": "137848791271fe9a6a9b8b8679708df0967a518f5925ab3757c038e1ecad7e75",
+      "git_blob": "3ccf617d4d8f3f24762fe0c0acebdcf3074ad3c0",
+      "size": 3236,
+      "type": "license"
+    },
+    "ThirdParty/Utils/tinyexr/exr_reader.hh": {
+      "sha256": "d8fba016fbab4bca34747c7cf00f6523ae89f25f06ff7e377d91fb5c6c806c3c",
+      "git_blob": "8ea0d666fd87a4873e0bf15f6b60c7b9ee979d1f",
+      "size": 4836,
+      "type": "source"
+    },
+    "ThirdParty/Utils/tinyexr/streamreader.hh": {
+      "sha256": "0d039e046087972a7e6cbe54ad7fa8949c877a6d61c951aba037869b825151de",
+      "git_blob": "3dbf278b37f588fe75e60beaf634b0171254063d",
+      "size": 3953,
+      "type": "source"
+    },
+    "ThirdParty/Utils/tinyexr/tinyexr.h": {
+      "sha256": "dc67cce4e4018973191c54d46c8ebfe756e491f7b3e549bea3a0a02f128dff19",
+      "git_blob": "017679b541f205583d62e8dfb47be8d5ae7a1ddf",
+      "size": 384925,
+      "type": "source"
+    },
+    "ThirdParty/Utils/tinyexr/tinyexr_impl.cpp": {
+      "sha256": "14095bee0bc5e312ff278f7713d9b6f56875ae8b8e8581be3ac7bbc290908e3a",
+      "git_blob": "eeab95c088ef9f6bd08751b78a290888bfbfac7b",
+      "size": 376,
+      "type": "source"
+    },
+    "ThirdParty/Utils/tinyobjloader/LICENSE": {
+      "sha256": "0470fdea41b693b2c3201388763bf32f85abaa6d5604ffa7f0dda7ed92013cac",
+      "git_blob": "25a5fa4c4bf2ea5162a971a898b4f79549dd9eae",
+      "size": 1132,
+      "type": "license"
+    },
+    "ThirdParty/Utils/tinyobjloader/include/tiny_obj_loader.h": {
+      "sha256": "f2f7cf0cf39f5a5ebee249d54c51b1eb86da9a529e83b95fe12ed347c92c79b7",
+      "git_blob": "a927864e892027d08589c54c34dec5158db906f7",
+      "size": 111804,
+      "type": "source"
+    },
+    "ThirdParty/Utils/zstd/LICENSE": {
+      "sha256": "c63a8c5d4d039718f1100d2c65c314e829965f50a8ea193e61c5476935944fe6",
+      "git_blob": "f4ca3c0f261461c198ecb0d208f66da8f9081821",
+      "size": 1575,
+      "type": "license"
+    },
+    "ThirdParty/Utils/zstd/zstd.h": {
+      "sha256": "85d27e5971d0e598a42163a2d9af322d9ebeb2e19a7794a93be28b124451ed52",
+      "git_blob": "cfd7349268b5a2492d04398f36ea3ebee700e1c7",
+      "size": 5014,
+      "type": "source"
+    },
+    "ThirdParty/Utils/zstd/zstd_impl.cpp": {
+      "sha256": "7721871a2eb3b0e78e35f425d5753c6cd35ac10f017520ecda72a4224645ac1b",
+      "git_blob": "bf82e1ac61be5c2234a24dd448f2da8ca03f136e",
+      "size": 410,
+      "type": "source"
+    },
+    "ThirdParty/VulkanMemoryAllocator/LICENSE.txt": {
+      "sha256": "10e96961c11cfba3c3b17d08cd81dc94b32f1a5fd119b8e38d784f7abe9fdea9",
+      "git_blob": "62106fe9783872796af9a48632c945bcd2268555",
+      "size": 1113,
+      "type": "license"
+    },
+    "ThirdParty/VulkanMemoryAllocator/vk_mem_alloc.h": {
+      "sha256": "50af7f2bc9c8dc873ace6c48018118903b3b70f313cc328022b3c7f420f66b72",
+      "git_blob": "c7d3de9b0c4c1d4db35e24ddb6429bac70141559",
+      "size": 9532,
+      "type": "source"
+    },
+    "ThirdParty/glad/APACHE-2.0.txt": {
+      "sha256": "79addb775a25fcac52939fb2abbc1751887840cb65b894470cc6959c9d29a1af",
+      "git_blob": "3f2dc74f243dee497abea3b3759db3bbaac41555",
+      "size": 11524,
+      "type": "license"
+    },
+    "ThirdParty/glad/LICENSE": {
+      "sha256": "5061b97709f335805ddc57e586e944141643e94357468f3ae077bfe2e4a157e6",
+      "git_blob": "933d417c25ce0f3211bbaa1a0972989f1341bd75",
+      "size": 3061,
+      "type": "license"
+    },
+    "ThirdParty/glad/include/glad/glad.h": {
+      "sha256": "bb48398c1fc41709c20597ba665fd08579aea41acc4449d90b8530a3be36f739",
+      "git_blob": "296a82beae1f2cf5e1248366e832195657bbf415",
+      "size": 938446,
+      "type": "source"
+    },
+    "ThirdParty/glad/src/glad.c": {
+      "sha256": "9ac6db133ab1a9fc50cc53aca7d11560fa5da8880d6308b7d036616262ea8006",
+      "git_blob": "6fc670f2f6a3c989f8988e41e94a035825d59186",
+      "size": 643578,
+      "type": "source"
+    }
+  }
+}
