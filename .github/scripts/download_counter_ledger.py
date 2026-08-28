@@ -27,6 +27,7 @@ REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 VERSION_TAG_RE = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 OPERATION_RE = re.compile(r"^[0-9]+:[0-9]+$")
+DIGEST_RE = re.compile(r"^sha256:[0-9a-fA-F]{64}$")
 
 
 class CounterError(RuntimeError):
@@ -118,6 +119,7 @@ class AssetRecord:
     release_id: int
     name: str
     download_count: int
+    digest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -125,6 +127,7 @@ class ReleaseRecord:
     release_id: int
     tag_name: str
     assets: tuple[AssetRecord, ...]
+    draft: bool = False
 
 
 @dataclass(frozen=True)
@@ -610,6 +613,9 @@ def fetch_inventory_once(api: GitHubApi, repository: str) -> Inventory:
         tag_name = raw_release.get("tag_name")
         if not isinstance(tag_name, str) or not tag_name:
             raise CounterError(f"releases[{release_index}].tag_name must be non-empty")
+        draft = raw_release.get("draft")
+        if not isinstance(draft, bool):
+            raise CounterError(f"releases[{release_index}].draft must be boolean")
         raw_assets = fetch_release_assets(api, repository, release_id)
         release_assets: list[AssetRecord] = []
         for asset_index, raw_asset in enumerate(raw_assets):
@@ -621,19 +627,34 @@ def fetch_inventory_once(api: GitHubApi, repository: str) -> Inventory:
             count = _nonnegative_integer(
                 raw_asset.get("download_count"), f"{label}.download_count"
             )
+            digest = raw_asset.get("digest")
+            if digest is not None:
+                if not isinstance(digest, str) or not DIGEST_RE.fullmatch(digest):
+                    raise CounterError(f"{label}.digest must be a SHA-256 digest")
+                digest = digest.lower()
             if asset_id in all_asset_ids:
                 raise CounterError(f"GitHub inventory repeats asset ID {asset_id}")
             all_asset_ids.add(asset_id)
-            release_assets.append(AssetRecord(asset_id, release_id, name, count))
-        releases.append(ReleaseRecord(release_id, tag_name, tuple(release_assets)))
+            release_assets.append(
+                AssetRecord(asset_id, release_id, name, count, digest)
+            )
+        releases.append(
+            ReleaseRecord(release_id, tag_name, tuple(release_assets), draft)
+        )
     return Inventory(tuple(releases))
 
 
-def _inventory_shape(inventory: Inventory) -> dict[int, tuple[str, dict[int, str]]]:
+def _inventory_shape(
+    inventory: Inventory,
+) -> dict[int, tuple[str, bool, dict[int, tuple[str, str | None]]]]:
     return {
         release.release_id: (
             release.tag_name,
-            {asset.asset_id: asset.name for asset in release.assets},
+            release.draft,
+            {
+                asset.asset_id: (asset.name, asset.digest)
+                for asset in release.assets
+            },
         )
         for release in inventory.releases
     }
@@ -724,6 +745,14 @@ class PublicationResult:
 class PublicationPreflightResult:
     target_exists: bool
     target_asset_count: int
+    target_release_id: int | None
+    target_is_draft: bool
+
+
+@dataclass(frozen=True)
+class CounterRefreshResult:
+    total: int
+    installer_total: int
 
 
 def _validate_publication_inputs(
@@ -839,6 +868,34 @@ def prepare_publication(
     )
 
 
+def refresh_counters(
+    *,
+    repository: str,
+    data_file: Path,
+    badge_directory: Path,
+    api: GitHubApi,
+    now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+) -> CounterRefreshResult:
+    """Refresh durable lifetime counters without beginning a publication."""
+    if not REPOSITORY_RE.fullmatch(repository):
+        raise CounterError(f"invalid GitHub repository name: {repository!r}")
+    timestamp = _utc_now(now)
+    loaded = load_state(data_file)
+    inventory = fetch_consistent_inventory(api, repository)
+    if isinstance(loaded, LegacyState):
+        state = _migrate_legacy(loaded, inventory, updated=timestamp)
+    else:
+        if loaded.pending is not None:
+            raise CounterError(
+                "cannot refresh counters while a publication is pending recovery"
+            )
+        state = reconcile_inventory(loaded, inventory, updated=timestamp)
+    _write_files(
+        _counter_files(state, data_file=data_file, badge_directory=badge_directory)
+    )
+    return CounterRefreshResult(state.total, state.installer_total)
+
+
 def _read_expected_assets(path: Path) -> frozenset[str]:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -854,6 +911,41 @@ def _read_expected_assets(path: Path) -> frozenset[str]:
             raise CounterError(f"expected release asset list repeats {name}")
         expected.add(name)
     return frozenset(expected)
+
+
+def _read_expected_digests(
+    path: Path, expected_assets: frozenset[str]
+) -> dict[str, str]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise CounterError(f"cannot read expected release digests {path}: {exc}") from exc
+    digests: dict[str, str] = {}
+    for index, line in enumerate(lines):
+        match = re.fullmatch(r"([0-9a-fA-F]{64})  (.+)", line)
+        if match is None:
+            raise CounterError(f"expected digest line {index + 1} is malformed")
+        name = match.group(2)
+        if not name or name != Path(name).name:
+            raise CounterError(f"expected digest line {index + 1} has an invalid filename")
+        if name in digests:
+            raise CounterError(f"expected release digests repeat {name}")
+        digests[name] = "sha256:" + match.group(1).lower()
+    actual_names = frozenset(digests)
+    if actual_names != expected_assets:
+        missing = expected_assets - actual_names
+        unexpected = actual_names - expected_assets
+        details: list[str] = []
+        if missing:
+            details.append("missing: " + ", ".join(sorted(missing)))
+        if unexpected:
+            details.append("unexpected: " + ", ".join(sorted(unexpected)))
+        raise CounterError(
+            "expected digest set differs from expected assets ("
+            + "; ".join(details)
+            + ")"
+        )
+    return digests
 
 
 def _require_exact_asset_set(
@@ -874,6 +966,39 @@ def _require_exact_asset_set(
         raise CounterError(f"{label} asset set differs (" + "; ".join(details) + ")")
 
 
+def _require_existing_nightly_subset(
+    expected: frozenset[str], assets: tuple[AssetRecord, ...]
+) -> None:
+    actual_names = [asset.name for asset in assets]
+    if len(actual_names) != len(set(actual_names)):
+        raise CounterError("existing nightly release contains duplicate asset names")
+    unexpected = set(actual_names) - expected
+    if unexpected:
+        raise CounterError(
+            "existing nightly release contains unexpected assets: "
+            + ", ".join(sorted(unexpected))
+        )
+
+
+def _require_exact_asset_digests(
+    expected: dict[str, str], assets: tuple[AssetRecord, ...], *, label: str
+) -> None:
+    actual = {asset.name: asset.digest for asset in assets}
+    missing_digests = sorted(name for name, digest in actual.items() if digest is None)
+    mismatched = sorted(
+        name
+        for name, digest in actual.items()
+        if digest is not None and expected.get(name) != digest
+    )
+    if missing_digests or mismatched:
+        details: list[str] = []
+        if missing_digests:
+            details.append("missing remote digest: " + ", ".join(missing_digests))
+        if mismatched:
+            details.append("digest mismatch: " + ", ".join(mismatched))
+        raise CounterError(f"{label} asset digests differ (" + "; ".join(details) + ")")
+
+
 def preflight_publication(
     *,
     repository: str,
@@ -883,10 +1008,11 @@ def preflight_publication(
     source_sha: str,
     target_tag: str,
     expected_assets_file: Path,
+    expected_digests_file: Path,
     data_file: Path,
     api: GitHubApi,
 ) -> PublicationPreflightResult:
-    """Prove an existing target release is an exact, snapshotted rerun base."""
+    """Prove an existing target release is a safe, snapshotted publication base."""
     operation_id = _validate_publication_inputs(
         repository=repository, is_versioned=is_versioned, run_id=run_id,
         run_attempt=run_attempt, source_sha=source_sha, target_tag=target_tag,
@@ -903,12 +1029,13 @@ def preflight_publication(
         raise CounterError("preflight does not match the durable pending publication")
 
     expected = _read_expected_assets(expected_assets_file)
+    expected_digests = _read_expected_digests(expected_digests_file, expected)
     inventory = fetch_consistent_inventory(api, repository)
     target = inventory.release_by_tag(target_tag)
     if target is None:
         if pending.target_release_id is not None or pending.prepared_asset_ids:
             raise CounterError("target release disappeared after the durable counter snapshot")
-        return PublicationPreflightResult(False, 0)
+        return PublicationPreflightResult(False, 0, None, False)
 
     actual_asset_ids = frozenset(asset.asset_id for asset in target.assets)
     if (
@@ -917,8 +1044,19 @@ def preflight_publication(
     ):
         raise CounterError("target release assets changed after the durable counter snapshot")
 
-    _require_exact_asset_set(expected, target.assets, label="existing release")
-    return PublicationPreflightResult(True, len(target.assets))
+    if is_versioned:
+        _require_exact_asset_set(expected, target.assets, label="existing release")
+        _require_exact_asset_digests(
+            expected_digests, target.assets, label="existing release"
+        )
+    else:
+        # Rolling nightlies may add newly introduced aliases/metadata, but an
+        # asset removed from the desired contract is stale and must be handled
+        # by an explicit migration rather than silently surviving forever.
+        _require_existing_nightly_subset(expected, target.assets)
+    return PublicationPreflightResult(
+        True, len(target.assets), target.release_id, target.draft
+    )
 
 
 def finalize_publication(
@@ -930,6 +1068,7 @@ def finalize_publication(
     source_sha: str,
     target_tag: str,
     expected_assets_file: Path,
+    expected_digests_file: Path,
     data_file: Path,
     badge_directory: Path,
     api: GitHubApi,
@@ -952,6 +1091,7 @@ def finalize_publication(
     ):
         raise CounterError("finalize does not match the durable pending publication")
     expected = _read_expected_assets(expected_assets_file)
+    expected_digests = _read_expected_digests(expected_digests_file, expected)
     timestamp = _utc_now(now)
     inventory = fetch_consistent_inventory(api, repository)
     state = reconcile_inventory(
@@ -963,6 +1103,9 @@ def finalize_publication(
     if target is None:
         raise CounterError(f"published release {target_tag} is absent")
     _require_exact_asset_set(expected, target.assets, label="published release")
+    _require_exact_asset_digests(
+        expected_digests, target.assets, label="published release"
+    )
     state = replace(state, pending=None)
     files = _counter_files(state, data_file=data_file, badge_directory=badge_directory)
     target_downloads = sum(asset.download_count for asset in target.assets)
@@ -982,7 +1125,9 @@ def finalize_publication(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=("preflight", "prepare", "finalize"))
+    parser.add_argument(
+        "phase", choices=("preflight", "prepare", "finalize", "refresh")
+    )
     parser.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY"))
     parser.add_argument(
         "--is-versioned", choices=("true", "false"),
@@ -999,6 +1144,7 @@ def parse_args() -> argparse.Namespace:
         "--badge-directory", type=Path, default=Path(".github/badges")
     )
     parser.add_argument("--expected-assets-file", type=Path)
+    parser.add_argument("--expected-digests-file", type=Path)
     parser.add_argument("--initialize", action="store_true")
     return parser.parse_args()
 
@@ -1006,6 +1152,32 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
+        api = GitHubApi(os.environ.get("GH_TOKEN", ""))
+        if args.phase == "refresh":
+            if args.repository is None:
+                raise CounterError("missing required argument: repository")
+            if args.initialize:
+                raise CounterError("--initialize is valid only during prepare")
+            if (
+                args.expected_assets_file is not None
+                or args.expected_digests_file is not None
+            ):
+                raise CounterError("expected asset files are not valid during refresh")
+            refreshed = refresh_counters(
+                repository=args.repository,
+                data_file=args.data_file,
+                badge_directory=args.badge_directory,
+                api=api,
+            )
+            print(f"Lifetime downloads: {refreshed.total}")
+            print(f"Installer downloads: {refreshed.installer_total}")
+            output_path = os.environ.get("GITHUB_OUTPUT")
+            if output_path:
+                with open(output_path, "a", encoding="utf-8", newline="\n") as output:
+                    output.write(f"new_total={refreshed.total}\n")
+                    output.write(f"installer_total={refreshed.installer_total}\n")
+            return 0
+
         required = {
             "repository": args.repository, "is-versioned": args.is_versioned,
             "run-id": args.run_id, "run-attempt": args.run_attempt,
@@ -1022,15 +1194,17 @@ def main() -> int:
             source_sha=args.source_sha,
             target_tag=args.target_tag,
         )
-        api = GitHubApi(os.environ.get("GH_TOKEN", ""))
         if args.phase == "preflight":
             if args.initialize:
                 raise CounterError("--initialize is valid only during prepare")
             if args.expected_assets_file is None:
                 raise CounterError("--expected-assets-file is required during preflight")
+            if args.expected_digests_file is None:
+                raise CounterError("--expected-digests-file is required during preflight")
             result = preflight_publication(
                 **identity,
                 expected_assets_file=args.expected_assets_file,
+                expected_digests_file=args.expected_digests_file,
                 data_file=args.data_file,
                 api=api,
             )
@@ -1039,6 +1213,25 @@ def main() -> int:
                 + ("present" if result.target_exists else "absent (first publication)")
             )
             print(f"Existing target assets: {result.target_asset_count}")
+            output_path = os.environ.get("GITHUB_OUTPUT")
+            if output_path:
+                with open(output_path, "a", encoding="utf-8", newline="\n") as output:
+                    output.write(
+                        f"target_exists={'true' if result.target_exists else 'false'}\n"
+                    )
+                    output.write(f"target_asset_count={result.target_asset_count}\n")
+                    output.write(
+                        "target_release_id="
+                        + (
+                            str(result.target_release_id)
+                            if result.target_release_id
+                            else ""
+                        )
+                        + "\n"
+                    )
+                    output.write(
+                        f"target_is_draft={'true' if result.target_is_draft else 'false'}\n"
+                    )
             return 0
 
         common = dict(
@@ -1054,8 +1247,12 @@ def main() -> int:
                 raise CounterError("--initialize is valid only during prepare")
             if args.expected_assets_file is None:
                 raise CounterError("--expected-assets-file is required during finalize")
+            if args.expected_digests_file is None:
+                raise CounterError("--expected-digests-file is required during finalize")
             result = finalize_publication(
-                **common, expected_assets_file=args.expected_assets_file
+                **common,
+                expected_assets_file=args.expected_assets_file,
+                expected_digests_file=args.expected_digests_file,
             )
         print(f"Lifetime downloads: {result.total}")
         print(f"Installer downloads: {result.installer_total}")

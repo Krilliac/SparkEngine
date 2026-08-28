@@ -86,13 +86,13 @@ jobs:
       id: matrix
       env:
         EVENT_NAME: ${{ github.event_name }}
+        IS_VERSIONED: ${{ steps.meta.outputs.is_versioned }}
         REQUESTED_CONFIGS: ${{ inputs.build_configs || 'both' }}
       run: |
-        # Scheduled nightlies publish both configurations so the README's
-        # rolling Debug and Release download links always identify assets from
-        # the same exact source revision. Tags and manual runs retain the
-        # explicit Debug/Release choice.
-        if [[ "$EVENT_NAME" == "schedule" ]]; then
+        # Every rolling nightly publishes both configurations so direct Debug
+        # and Release links always identify assets from one exact source SHA.
+        # Only versioned releases may honor an explicit single-config choice.
+        if [[ "$IS_VERSIONED" == "false" ]]; then
           BUILD_CONFIGS="both"
         else
           BUILD_CONFIGS="$REQUESTED_CONFIGS"
@@ -637,6 +637,7 @@ jobs:
     - name: Collect release assets
       id: assets
       run: |
+        set -euo pipefail
         # Flatten all package artifacts + standalone installer binaries to current directory.
         while IFS= read -r -d '' artifact; do
           name=$(basename "$artifact")
@@ -669,6 +670,27 @@ jobs:
             cp -- "${installer_matches[0]}" "SparkEngine-Windows-x64-${config}-Installer.exe"
           fi
         done
+
+        # A rolling release is public only when every README direct-download
+        # target is present. This blocks a one-config/manual run or a missing
+        # package from publishing a mixed or incomplete nightly.
+        if [[ "${{ needs.prepare.outputs.is_versioned }}" == "false" ]]; then
+          mapfile -t readme_nightly_assets < <(
+            grep -oE 'releases/download/nightly/[^) ]+' README.md \
+              | sed 's#^.*/##' \
+              | sort -u
+          )
+          if (( ${#readme_nightly_assets[@]} == 0 )); then
+            echo "README declares no nightly direct-download assets." >&2
+            exit 1
+          fi
+          for required_asset in "${readme_nightly_assets[@]}"; do
+            if [[ ! -f "$required_asset" ]]; then
+              echo "Missing README nightly asset: $required_asset" >&2
+              exit 1
+            fi
+          done
+        fi
 
         FILES=""
         TABLE="| Asset | Size | Notes |"$'\n'"|---|---:|---|"
@@ -706,6 +728,9 @@ jobs:
         FILES="${FILES}SHA256SUMS"$'\n'
         TABLE="${TABLE}"$'\n'"| \`SHA256SUMS\` | — | SHA-256 verification manifest |"
         printf '%s' "$FILES" > expected-release-assets.txt
+        while IFS= read -r artifact; do
+          sha256sum -- "$artifact"
+        done < expected-release-assets.txt > expected-release-digests.txt
 
         {
           echo "### Release artifact statistics"
@@ -790,7 +815,8 @@ jobs:
         fi
         echo "pending_commit=$PENDING_COMMIT" >> "$GITHUB_OUTPUT"
 
-    - name: Verify exact existing release asset set before publication
+    - name: Verify compatible existing release assets before publication
+      id: release-preflight
       # The pending ledger commit above makes every currently published asset
       # recoverable before this read-only guard can stop a rerun. The guard
       # still precedes every tag, release, and release-asset mutation below.
@@ -806,6 +832,7 @@ jobs:
         set -euo pipefail
         python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" preflight \
           --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
           --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
 
     - name: Determine release title suffix
@@ -876,11 +903,13 @@ jobs:
       with:
         subject-path: ${{ steps.assets.outputs.files }}
 
-    - name: Create stable versioned release
-      if: needs.prepare.outputs.is_versioned == 'true'
+    - name: Stage new stable versioned release as draft
+      id: stable-stage
+      if: needs.prepare.outputs.is_versioned == 'true' && steps.release-preflight.outputs.target_exists != 'true'
       uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
       with:
         tag_name: ${{ needs.prepare.outputs.tag }}
+        target_commitish: ${{ github.sha }}
         name: "SparkEngine ${{ needs.prepare.outputs.version }} (Stable)${{ steps.suffix.outputs.label }}"
         body: |
           ## SparkEngine ${{ needs.prepare.outputs.version }} — Stable Release${{ steps.suffix.outputs.label }}
@@ -894,16 +923,19 @@ jobs:
 
           ${{ steps.assets.outputs.table }}
         prerelease: false
-        make_latest: true
+        draft: true
+        make_latest: false
         fail_on_unmatched_files: true
-        overwrite_files: true
+        overwrite_files: false
         files: ${{ steps.assets.outputs.files }}
 
-    - name: Create or update nightly rolling release
+    - name: Stage nightly rolling release as draft
+      id: nightly-stage
       if: needs.prepare.outputs.is_versioned == 'false'
       uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
       with:
         tag_name: nightly
+        target_commitish: ${{ github.sha }}
         name: "Nightly Build (${{ steps.sha.outputs.short }})${{ steps.suffix.outputs.label }}"
         body: |
           ## Nightly Build${{ steps.suffix.outputs.label }}
@@ -916,6 +948,7 @@ jobs:
 
           ${{ steps.assets.outputs.table }}
         prerelease: false
+        draft: true
         make_latest: false
         fail_on_unmatched_files: true
         overwrite_files: true
@@ -941,6 +974,7 @@ jobs:
         for attempt in 1 2 3 4 5 6; do
           if python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" finalize \
             --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+            --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
             --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json" \
             --badge-directory "$GITHUB_WORKSPACE/badge-repository/.github/badges"; then
             exit 0
@@ -1005,6 +1039,32 @@ jobs:
         fi
         echo "changed=true" >> "$GITHUB_OUTPUT"
         echo "final_commit=$FINAL_COMMIT" >> "$GITHUB_OUTPUT"
+
+    - name: Publish complete stable versioned release
+      if: needs.prepare.outputs.is_versioned == 'true' && (steps.release-preflight.outputs.target_exists != 'true' || steps.release-preflight.outputs.target_is_draft == 'true')
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_ID: ${{ steps.stable-stage.outputs.id || steps.release-preflight.outputs.target_release_id }}
+      run: |
+        set -euo pipefail
+        test -n "$RELEASE_ID"
+        gh api --method PATCH \
+          "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+          -F draft=false \
+          -f make_latest=true >/dev/null
+
+    - name: Publish complete nightly rolling release
+      if: needs.prepare.outputs.is_versioned == 'false'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_ID: ${{ steps.nightly-stage.outputs.id }}
+      run: |
+        set -euo pipefail
+        test -n "$RELEASE_ID"
+        gh api --method PATCH \
+          "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+          -F draft=false \
+          -f make_latest=false >/dev/null
 
     # GITHUB_TOKEN pushes do not trigger ordinary push workflows, so explicitly
     # prove and publish the generated Working head.
