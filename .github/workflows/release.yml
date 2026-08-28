@@ -605,6 +605,11 @@ jobs:
         TARGET_SHA: ${{ github.sha }}
       run: python3 .github/scripts/verify-exact-required-gate.py
 
+    - name: Verify stable-v1 is ready for versioned publication
+      if: needs.prepare.outputs.is_versioned == 'true'
+      shell: bash
+      run: python3 tools/site-data/validate.py --require-ready
+
     # Counters are repository-global/default-branch state, not tag state. A
     # separate checkout keeps release tags immutable and preserves the exact
     # source checkout used by the release metadata below.

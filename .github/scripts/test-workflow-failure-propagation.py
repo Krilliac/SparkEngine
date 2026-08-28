@@ -166,6 +166,63 @@ def exact_field(block: str, field: str, value: str, *, indent: int = 4) -> bool:
     return len(matches) == 1 and matches[0] == value
 
 
+def versioned_publication_gate_errors(workflow: str) -> list[str]:
+    """Validate the exact fail-closed gate before versioned publication."""
+
+    errors: list[str] = []
+    step_name = "Verify stable-v1 is ready for versioned publication"
+    try:
+        readiness = named_step(workflow, step_name)
+    except AssertionError as error:
+        return [str(error)]
+
+    if not exact_field(
+        readiness,
+        "if",
+        "needs.prepare.outputs.is_versioned == 'true'",
+        indent=6,
+    ):
+        errors.append("stable-v1 publication gate must use the exact versioned-release condition")
+    if not exact_field(
+        readiness,
+        "run",
+        "python3 tools/site-data/validate.py --require-ready",
+        indent=6,
+    ):
+        errors.append("stable-v1 publication gate must run the exact readiness validator")
+    if not exact_field(readiness, "shell", "bash", indent=6):
+        errors.append("stable-v1 publication gate must use the exact bash shell contract")
+    if re.search(
+        r'''(?mx)^\s+(?:continue-on-error|'continue-on-error'|"continue-on-error")\s*:''',
+        readiness,
+    ):
+        errors.append("stable-v1 publication gate must not continue on error")
+
+    try:
+        required_ci = named_step(
+            workflow,
+            "Verify exact source commit passed Required CI Gate",
+        )
+        badge_checkout = named_step(workflow, "Checkout canonical badge branch")
+    except AssertionError as error:
+        errors.append(str(error))
+    else:
+        ordered_step_names = [name for name, _block in step_blocks(workflow)]
+        required_ci_position = ordered_step_names.index(
+            "Verify exact source commit passed Required CI Gate"
+        )
+        profile_gate_position = ordered_step_names.index(step_name)
+        badge_checkout_position = ordered_step_names.index("Checkout canonical badge branch")
+        if profile_gate_position != required_ci_position + 1:
+            errors.append(
+                "stable-v1 publication gate must run immediately after Required CI"
+            )
+        if profile_gate_position >= badge_checkout_position:
+            errors.append("stable-v1 publication gate must precede badge publication")
+
+    return errors
+
+
 def required_workflow_errors(workflow: str) -> list[str]:
     """Conservatively parse the fail-closed sanitizer/aggregation YAML contract."""
 
@@ -470,6 +527,57 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         for path, workflow in ((BUILD_WORKFLOW, self.build), (RELEASE_WORKFLOW, self.release)):
             with self.subTest(workflow=path.name):
                 self.assertEqual(unprotected_tee_steps(workflow), [])
+
+    def test_versioned_publication_requires_ready_release_profile(self) -> None:
+        self.assertEqual(versioned_publication_gate_errors(self.release), [])
+
+    def test_versioned_publication_gate_rejects_hostile_mutations(self) -> None:
+        readiness = named_step(
+            self.release,
+            "Verify stable-v1 is ready for versioned publication",
+        )
+        tag_binding = named_step(self.release, "Bind release tag to workflow commit")
+        gate_after_tag_binding = self.release.replace(readiness, "", 1).replace(
+            tag_binding,
+            f"{tag_binding}\n{readiness}",
+            1,
+        )
+        mutations = {
+            "condition bypass": self.release.replace(
+                "      if: needs.prepare.outputs.is_versioned == 'true'",
+                "      if: needs.prepare.outputs.is_versioned == 'true' || github.event_name == 'workflow_dispatch'",
+                1,
+            ),
+            "suppressed validator": self.release.replace(
+                "      run: python3 tools/site-data/validate.py --require-ready",
+                "      run: python3 tools/site-data/validate.py --require-ready || echo ignored",
+                1,
+            ),
+            "shell suppresses validator": self.release.replace(
+                readiness,
+                readiness.replace(
+                    "      shell: bash",
+                    "      shell: bash {0} || true",
+                    1,
+                ),
+                1,
+            ),
+            "continue on error": self.release.replace(
+                "      run: python3 tools/site-data/validate.py --require-ready",
+                "      continue-on-error: true\n      run: python3 tools/site-data/validate.py --require-ready",
+                1,
+            ),
+            "quoted continue on error": self.release.replace(
+                "      run: python3 tools/site-data/validate.py --require-ready",
+                "      'continue-on-error': true\n      run: python3 tools/site-data/validate.py --require-ready",
+                1,
+            ),
+            "gate after tag mutation": gate_after_tag_binding,
+        }
+        for label, mutated in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, self.release, "mutation fixture did not alter YAML")
+                self.assertTrue(versioned_publication_gate_errors(mutated), label)
 
     def test_installer_pipeline_mutations_are_detected_at_nested_indent(self) -> None:
         for path, workflow in ((BUILD_WORKFLOW, self.build), (RELEASE_WORKFLOW, self.release)):
