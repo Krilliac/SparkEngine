@@ -437,10 +437,16 @@ def compare_outputs(contract: dict, first: Path, second: Path, tracked: list[str
         raise CurrentnessError(f"generator changed undeclared tracked output: {undeclared[0]}")
 
 
-def working_tree_projection(paths: list[str]) -> dict[str, str]:
+def working_tree_projection(paths: list[str], modes: dict[str, str]) -> dict[str, str]:
     result: dict[str, str] = {}
     for raw in paths:
         rel = safe_relative(raw)
+        if modes.get(raw) == "160000":
+            # A Gitlink is deliberately represented by an empty placeholder in
+            # isolated snapshots.  It has no byte payload to project from the
+            # worktree, and treating its checkout directory as a regular file
+            # makes exact-currentness fail on every repository with submodules.
+            continue
         full = REPO_ROOT.joinpath(*rel.parts)
         if not os.path.lexists(full):
             continue
@@ -455,7 +461,7 @@ def check_currentness(source_sha: str | None, committed_at: str | None) -> None:
     contract = load_contract()
     sha, timestamp = exact_identity(source_sha, committed_at)
     tracked, modes = tracked_inventory()
-    before = working_tree_projection(tracked)
+    before = working_tree_projection(tracked, modes)
     with tempfile.TemporaryDirectory(prefix="spark-doc-check-") as parent:
         parent_path = Path(parent)
         first = parent_path / "first"
@@ -469,7 +475,7 @@ def check_currentness(source_sha: str | None, committed_at: str | None) -> None:
         validate_health(first / "docs" / ".health.json", sha, timestamp)
         validate_health(second / "docs" / ".health.json", sha, timestamp)
         compare_outputs(contract, first, second, tracked)
-    after = working_tree_projection(tracked)
+    after = working_tree_projection(tracked, modes)
     if before != after:
         raise CurrentnessError("documentation check mutated the tracked working tree")
     print(f"Documentation is deterministic, exact-current, and bound to {sha}.")

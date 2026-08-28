@@ -314,6 +314,34 @@ class DocsGenerationHostileTests(unittest.TestCase):
             )
         )
 
+    def test_currentness_projection_skips_only_gitlink_directories(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-gitlink-projection-") as directory:
+            root = Path(directory)
+            gitlink = root / "ThirdParty" / "AI" / "recastnavigation"
+            gitlink.mkdir(parents=True)
+            ordinary_directory = root / "SparkEngine" / "ordinary-directory"
+            ordinary_directory.mkdir(parents=True)
+            ordinary_file = root / "SparkEngine" / "ordinary-file.h"
+            write(ordinary_file, "#pragma once\n")
+            with mock.patch.object(docs_currentness, "REPO_ROOT", root):
+                projection = docs_currentness.working_tree_projection(
+                    ["ThirdParty/AI/recastnavigation", "SparkEngine/ordinary-file.h"],
+                    {
+                        "ThirdParty/AI/recastnavigation": "160000",
+                        "SparkEngine/ordinary-file.h": "100644",
+                    },
+                )
+                with self.assertRaises(docs_currentness.CurrentnessError) as caught:
+                    docs_currentness.working_tree_projection(
+                        ["SparkEngine/ordinary-directory"],
+                        {"SparkEngine/ordinary-directory": "100644"},
+                    )
+            self.assertEqual(
+                {"SparkEngine/ordinary-file.h": hashlib.sha256(ordinary_file.read_bytes()).hexdigest()},
+                projection,
+            )
+            self.assertIn("not a regular non-reparse file", str(caught.exception))
+
     def test_newer_readme_cannot_hide_stale_source_or_missing_page(self) -> None:
         with MiniContract() as fixture:
             api = fixture.root / "docs" / "api"
