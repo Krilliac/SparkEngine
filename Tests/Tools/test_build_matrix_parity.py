@@ -28,6 +28,33 @@ import check_parity  # noqa: E402
 import inventory  # noqa: E402
 
 
+def synthetic_ci_context(commit: str = "0" * 40) -> dict[str, str]:
+    return {
+        "provider": "github-actions",
+        "repository": "Krilliac/SparkEngine",
+        "sourceCommit": commit,
+        "runId": "120",
+        "runAttempt": "1",
+        "workflowRef": "Krilliac/SparkEngine/.github/workflows/build.yml@refs/heads/Working",
+        "job": "build-windows-shipping",
+        "runnerOs": "Windows",
+    }
+
+
+def synthetic_ci_environment(commit: str = "0" * 40) -> dict[str, str]:
+    context = synthetic_ci_context(commit)
+    return {
+        "GITHUB_ACTIONS": "true",
+        "GITHUB_REPOSITORY": context["repository"],
+        "GITHUB_SHA": context["sourceCommit"],
+        "GITHUB_RUN_ID": context["runId"],
+        "GITHUB_RUN_ATTEMPT": context["runAttempt"],
+        "GITHUB_WORKFLOW_REF": context["workflowRef"],
+        "GITHUB_JOB": context["job"],
+        "RUNNER_OS": context["runnerOs"],
+    }
+
+
 def finding_categories(findings: list[check_parity.Finding]) -> set[str]:
     return {finding.category for finding in findings}
 
@@ -137,8 +164,12 @@ class RepositoryInventoryTests(unittest.TestCase):
         self.assertEqual(workflow["pathFilteredEvents"], [])
         self.assertEqual(workflow["unresolvedInvocations"], [])
         summary = workflow["summary"]
-        self.assertEqual(summary["jobCount"], 21)
-        self.assertEqual(summary["matrixLegCount"], 29)
+        self.assertEqual(summary["jobCount"], len(workflow["jobs"]))
+        self.assertEqual(
+            summary["matrixLegCount"],
+            sum(max(1, len(job["matrixCombinations"])) for job in workflow["jobs"]),
+        )
+        self.assertEqual(summary["ci120InvocationCount"], len(workflow["ci120Invocations"]))
         self.assertGreater(summary["buildCount"], 0)
         self.assertGreater(summary["testCount"], 0)
         self.assertIn("windows:Release", summary["builtOsConfigurationPairs"])
@@ -718,7 +749,10 @@ class WorkflowWeakeningTests(unittest.TestCase):
     def test_debug_only_matrix_loses_a_leg(self) -> None:
         mutated = LIVE_WORKFLOW.replace("        config: [Debug, Release]", "        config: [Debug]", 1)
         record = self.assert_weakening_is_visible(mutated, "Debug+Release -> Debug")
-        self.assertLess(record["summary"]["matrixLegCount"], 29)
+        self.assertLess(
+            record["summary"]["matrixLegCount"],
+            workflow_record(LIVE_WORKFLOW)["summary"]["matrixLegCount"],
+        )
         narrowed = next(item for item in record["jobs"] if item["id"] == "build-windows-vs2022")
         self.assertEqual([entry["config"] for entry in narrowed["matrixCombinations"]], ["Debug"])
         self.assertEqual(
@@ -817,6 +851,14 @@ jobs:
         )
         categories = finding_categories(check_parity.check_workflow_semantics(data))
         self.assertIn("workflow-configuration-not-built", categories)
+
+    def test_ci120_producer_without_oidc_permission_is_blocking(self) -> None:
+        mutated = LIVE_WORKFLOW.replace("      id-token: write\n", "", 1)
+        record = self.assert_weakening_is_visible(mutated, "CI-120 OIDC permission removed")
+        data = copy.deepcopy(inventory.build_inventory())
+        data["workflow"] = record
+        categories = finding_categories(check_parity.check_ci120_producer_chain(data))
+        self.assertIn("ci120-producer-oidc-permission-missing", categories)
 
     def test_unresolved_matrix_cannot_satisfy_a_profile(self) -> None:
         data = copy.deepcopy(inventory.build_inventory())
@@ -1006,6 +1048,8 @@ def write_codemodel_reply(
     """Write a real CMake File API reply tree, not a hand-built dict."""
     reply = root / ".cmake" / "api" / "v1" / "reply"
     reply.mkdir(parents=True, exist_ok=True)
+    cmake_producer = root / "cmake-producer.exe"
+    cmake_producer.write_bytes(b"synthetic-cmake-producer")
     target_refs = []
     for index, (name, kind) in enumerate(targets):
         target_file = f"target-{index}.json"
@@ -1050,7 +1094,7 @@ def write_codemodel_reply(
         {
             "cmake": {
                 "version": {"string": "9.9.9"},
-                "paths": {"cmake": "C:/synthetic/cmake.exe"},
+                "paths": {"cmake": cmake_producer.as_posix()},
                 "generator": {
                     "name": generator,
                     "platform": architecture,
@@ -1074,7 +1118,7 @@ def write_synthetic_transaction_provenance(
     repository_root: str,
     commit: str = "0" * 40,
 ) -> None:
-    """Complete a synthetic fixture with the v2 client mirror and transaction record."""
+    """Complete a synthetic fixture with the v3 client mirror and transaction record."""
     run_id = "1" * 32
     client_name = inventory._CAPTURE_CLIENT_PREFIX + run_id
     query = inventory._capture_query(profile, run_id)
@@ -1092,9 +1136,10 @@ def write_synthetic_transaction_provenance(
         }
     }
     write_json(index_path, index)
-    evidence, _, records = inventory._extract_reply_core(
+    evidence, snapshot, records = inventory._extract_reply_core(
         root, profile, client_name=client_name, query=query
     )
+    snapshot.close()
     repository = {
         "root": repository_root,
         "commit": commit,
@@ -1123,7 +1168,7 @@ def write_synthetic_transaction_provenance(
             "buildDirectory": evidence["buildDirectory"],
             "configure": {
                 "executable": executable,
-                "executableIdentity": {"bytes": 1, "sha256": "a" * 64},
+                "executableIdentity": inventory._executable_identity(Path(executable)),
                 "version": evidence["cmakeProducer"]["version"],
                 "argv": [executable, "--preset", profile],
                 "cwd": repository_root,
@@ -1132,6 +1177,7 @@ def write_synthetic_transaction_provenance(
             "repositoryBefore": repository,
             "repositoryAfter": copy.deepcopy(repository),
         },
+        "ci": synthetic_ci_context(commit),
         "observed": {
             "sourceDirectory": evidence["sourceDirectory"],
             "buildDirectory": evidence["buildDirectory"],
@@ -1143,12 +1189,14 @@ def write_synthetic_transaction_provenance(
             "cacheVariables": evidence["cacheVariables"],
             "cmakeProducer": evidence["cmakeProducer"],
         },
+        "artifacts": {"state": "declared-not-built", "build": None, "targets": []},
         "reply": {
             "index": evidence["replyIndex"],
             "files": records,
             "digest": inventory._reply_records_digest(records),
         },
     }
+    record["identity"] = inventory._ci120_oidc_identity(record)
     provenance_path = inventory._provenance_path(root, profile)
     provenance_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(provenance_path, record)
@@ -1203,7 +1251,11 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 "windows-shipping",
                 repository_root=Path(REPO_ROOT).as_posix(),
             )
-        return inventory.extract_codemodel_targets(directory, "windows-shipping", "0" * 40)
+        with (
+            mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False),
+            mock.patch.object(inventory, "_verify_ci120_oidc_identity"),
+        ):
+            return inventory.extract_codemodel_targets(directory, "windows-shipping", "0" * 40)
 
     def categories(self, data: dict[str, Any]) -> set[str]:
         return {item.category for item in check_parity.check_codemodel_provenance(data)}
@@ -1250,10 +1302,17 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 "configuration": "MinSizeRel",
             }
             configure_calls: list[list[str]] = []
+            build_calls: list[list[str]] = []
 
             def fake_run(arguments: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
                 if arguments[1:] == ["--version"]:
                     return subprocess.CompletedProcess(arguments, 0, "cmake version 9.9.9\n", "")
+                if arguments[1:2] == ["--build"]:
+                    build_calls.append(list(arguments))
+                    artifact = build / "bin" / "MinSizeRel" / "SparkEngine.exe"
+                    artifact.parent.mkdir(parents=True, exist_ok=True)
+                    artifact.write_bytes(b"built-spark-engine")
+                    return subprocess.CompletedProcess(arguments, 0, "", "")
                 configure_calls.append(list(arguments))
                 write_codemodel_reply(
                     build,
@@ -1297,9 +1356,11 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 mock.patch.object(inventory, "_repository_provenance", return_value=repository),
                 mock.patch.object(inventory, "_capture_material_errors", return_value=[]),
                 mock.patch.object(inventory.subprocess, "run", side_effect=fake_run),
+                mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False),
+                mock.patch.object(inventory, "_verify_ci120_oidc_identity"),
             ):
                 record_path = inventory.capture_codemodel_transaction(
-                    build, "windows-shipping", cmake_executable=executable
+                    build, "windows-shipping", cmake_executable=executable, build=True
                 )
                 evidence = inventory.extract_codemodel_targets(build, "windows-shipping")
 
@@ -1308,8 +1369,16 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 configure_calls,
                 [[executable.as_posix(), "--preset", "windows-shipping"]],
             )
+            self.assertEqual(
+                build_calls,
+                [[
+                    executable.as_posix(), "--build", build.as_posix(), "--config", "MinSizeRel", "--parallel"
+                ]],
+            )
             self.assertEqual(evidence["status"], "available")
             self.assertEqual(evidence["producerProvenance"]["state"], "verified")
+            self.assertEqual(evidence["producerProvenance"]["artifactState"], "verified-post-build")
+            self.assertEqual(evidence["targets"][0]["artifactState"], "verified-post-build")
             self.assertFalse(
                 any((build / ".cmake" / "api" / "v1" / "query").glob("client-*/query.json"))
             )
@@ -1355,6 +1424,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 ),
                 mock.patch.object(inventory, "_repository_provenance", return_value=repository),
                 mock.patch.object(inventory.subprocess, "run", side_effect=fake_run),
+                mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False),
             ):
                 with self.assertRaisesRegex(inventory.InventoryError, "changed while querying"):
                     inventory.capture_codemodel_transaction(
@@ -1438,6 +1508,48 @@ class CodemodelProvenanceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             evidence = self.shipping_evidence(Path(raw))
         self.assertIn("codemodel-commit-mismatch", self.categories(self.bound_data(evidence, commit="a" * 40)))
+
+    def test_oidc_binding_rejects_post_capture_record_change(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = Path(raw)
+            write_codemodel_reply(
+                root,
+                source_dir=Path(REPO_ROOT).as_posix(),
+                build_dir=root.as_posix(),
+                cache=self.shipping_cache,
+            )
+            write_synthetic_transaction_provenance(
+                root, "windows-shipping", repository_root=Path(REPO_ROOT).as_posix()
+            )
+            provenance = inventory._provenance_path(root, "windows-shipping")
+            record = json.loads(provenance.read_text(encoding="utf-8"))
+            record["observed"]["toolset"] = "forged-v143"
+            write_json(provenance, record)
+            with (
+                mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False),
+                mock.patch.object(inventory, "_request_ci120_oidc_token", return_value="synthetic"),
+                mock.patch.object(inventory, "_verify_rs256_oidc_token"),
+            ):
+                evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertIn("does not bind", evidence["rejection"])
+
+    def test_spoofed_github_environment_without_oidc_capability_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = Path(raw)
+            write_codemodel_reply(
+                root,
+                source_dir=Path(REPO_ROOT).as_posix(),
+                build_dir=root.as_posix(),
+                cache=self.shipping_cache,
+            )
+            write_synthetic_transaction_provenance(
+                root, "windows-shipping", repository_root=Path(REPO_ROOT).as_posix()
+            )
+            with mock.patch.dict(os.environ, synthetic_ci_environment(), clear=True):
+                evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertIn("OIDC request capability", evidence["rejection"])
 
     def test_dirty_worktree_evidence_is_blocking(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:

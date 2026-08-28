@@ -520,6 +520,19 @@ def analyze_workflow(text: str, source: str) -> dict[str, Any]:
         runs_on = body.get("runs-on")
         job_env = body.get("env") if isinstance(body.get("env"), dict) else {}
         job_shell = _default_shell(body.get("defaults")) or workflow_shell
+        raw_permissions = body.get("permissions")
+        if raw_permissions is None:
+            permissions: dict[str, str] = {}
+        elif isinstance(raw_permissions, dict):
+            permissions = {
+                str(name): str(value)
+                for name, value in raw_permissions.items()
+                if isinstance(name, str) and isinstance(value, str)
+            }
+            if len(permissions) != len(raw_permissions):
+                permissions = {"__unresolved__": "true"}
+        else:
+            permissions = {"__unresolved__": str(raw_permissions)}
 
         runner_labels: list[str] = []
         for combination in combinations:
@@ -562,6 +575,7 @@ def analyze_workflow(text: str, source: str) -> dict[str, Any]:
                 "matrixCombinations": combinations if combinations != [{}] else [],
                 "matrixResolved": matrix_resolved,
                 "defaultShell": job_shell or "",
+                "permissions": dict(sorted(permissions.items())),
                 "stepCount": len(steps),
                 "steps": steps,
                 "envNames": sorted(job_env),
@@ -819,6 +833,83 @@ def parse_commands(
     return commands, unresolved
 
 
+def _ci120_option(args: list[str], name: str) -> str:
+    """Read one exact long option without guessing through an opaque shell wrapper."""
+    value = ""
+    for index, argument in enumerate(args):
+        if argument == name:
+            if index + 1 >= len(args) or args[index + 1].startswith("-"):
+                raise WorkflowError(f"CI-120 invocation {name} lacks a value")
+            if value:
+                raise WorkflowError(f"CI-120 invocation repeats {name}")
+            value = args[index + 1]
+        elif argument.startswith(name + "="):
+            if value or not argument[len(name) + 1 :]:
+                raise WorkflowError(f"CI-120 invocation has an invalid {name}")
+            value = argument[len(name) + 1 :]
+    return value
+
+
+def parse_ci120_invocations(
+    script: str,
+    shell: str,
+    env: dict[str, Any],
+    combination: dict[str, Any],
+    context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Extract the producer/validator commands that make CI-120 evidence trusted.
+
+    These commands are intentionally parsed separately from CMake commands: a
+    textual mention of ``capture_provenance.py`` must not be mistaken for the
+    CI producer that ran before the validator.
+    """
+    records: list[dict[str, Any]] = []
+    scripts = {
+        "tools/buildmatrix/capture_provenance.py": "producer",
+        "tools/buildmatrix/inventory.py": "inventory",
+        "tools/buildmatrix/check_parity.py": "parity",
+    }
+    for line in logical_shell_lines(script, shell):
+        resolved_line = _substitute_env(_substitute_matrix(line, combination), env)
+        for segment in split_segments(shell_tokens(resolved_line)):
+            if not segment:
+                continue
+            index = 0
+            while index < len(segment) and segment[index] in _PREFIX_NOISE:
+                index += 1
+            if index >= len(segment):
+                continue
+            word, provenance = resolve_command_word(segment[index], env)
+            launcher = _basename(word)
+            arguments = segment[index + 1 :]
+            for script_index, argument in enumerate(arguments):
+                normalized = argument.replace("\\", "/").removeprefix("./").casefold()
+                kind = scripts.get(normalized)
+                if kind is None:
+                    continue
+                # A wrapper/echo can print the script name without executing it.
+                # Treat it as an explicit untrusted invocation, never as proof.
+                executable = launcher in {"python", "python3", "py"}
+                tool_args = arguments[script_index + 1 :]
+                records.append(
+                    {
+                        **context,
+                        "kind": kind,
+                        "launcher": launcher,
+                        "launcherProvenance": provenance,
+                        "executable": executable,
+                        "profile": _ci120_option(tool_args, "--profile"),
+                        "buildDir": _ci120_option(tool_args, "--build-dir"),
+                        "codemodel": _ci120_option(tool_args, "--codemodel"),
+                        "inventory": _ci120_option(tool_args, "--inventory"),
+                        "baseline": _ci120_option(tool_args, "--baseline"),
+                        "build": "--build" in tool_args,
+                        "command": resolved_line,
+                    }
+                )
+    return records
+
+
 def _looks_like_build_tool(args: list[str]) -> bool:
     markers = {"-B", "-S", "--build", "--preset", "--test-dir", "--config", "--install"}
     return any(argument in markers or argument.startswith(("-B", "-S", "-D", "--preset=")) for argument in args)
@@ -1018,6 +1109,7 @@ def extract_invocations(analysis: dict[str, Any]) -> dict[str, Any]:
     jobs_raw = document.get("jobs", {})
     commands: list[dict[str, Any]] = []
     unresolved: list[dict[str, Any]] = []
+    ci120_commands: list[dict[str, Any]] = []
 
     for job in analysis["jobs"]:
         raw_job = jobs_raw.get(job["id"], {})
@@ -1061,12 +1153,14 @@ def extract_invocations(analysis: dict[str, Any]) -> dict[str, Any]:
                 found, missed = parse_commands(script, shell, env, combination, context)
                 commands.extend(found)
                 unresolved.extend(missed)
+                ci120_commands.extend(parse_ci120_invocations(script, shell, env, combination, context))
 
     analysis["cmakeInvocations"] = commands
     analysis["unresolvedInvocations"] = unresolved
     analysis["configureInvocations"] = [item for item in commands if item["kind"] == "configure"]
     analysis["buildInvocations"] = [item for item in commands if item["kind"] == "build"]
     analysis["testInvocations"] = [item for item in commands if item["kind"] == "test"]
+    analysis["ci120Invocations"] = ci120_commands
     return analysis
 
 
@@ -1098,6 +1192,7 @@ def build_workflow_record(text: str, source: str) -> dict[str, Any]:
         "configureCount": len(analysis["configureInvocations"]),
         "buildCount": len(analysis["buildInvocations"]),
         "testCount": len(analysis["testInvocations"]),
+        "ci120InvocationCount": len(analysis["ci120Invocations"]),
         "unresolvedCount": len(analysis["unresolvedInvocations"]),
         "buildAllTargetCount": sum(
             1 for item in analysis["buildInvocations"] if item.get("buildsAllTargets")

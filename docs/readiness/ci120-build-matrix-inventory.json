@@ -5158,7 +5158,7 @@
       "CCACHE_SLOPPINESS",
       "ERROR_RETENTION_DAYS"
     ],
-    "jobCount": 21,
+    "jobCount": 22,
     "jobs": [
       {
         "id": "validate-ci-tools",
@@ -5180,6 +5180,9 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
         "stepCount": 21,
         "steps": [
           {
@@ -5461,6 +5464,7 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 5,
         "steps": [
           {
@@ -5549,6 +5553,7 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 2,
         "steps": [
           {
@@ -5599,6 +5604,7 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 2,
         "steps": [
           {
@@ -5649,6 +5655,7 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 11,
         "steps": [
           {
@@ -5811,6 +5818,7 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 11,
         "steps": [
           {
@@ -5971,6 +5979,7 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 11,
         "steps": [
           {
@@ -6140,6 +6149,7 @@
         ],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 14,
         "steps": [
           {
@@ -6315,6 +6325,120 @@
         "gating": "blocking"
       },
       {
+        "id": "build-windows-shipping",
+        "name": "Windows Shipping configured-evidence producer",
+        "runsOn": "windows-2022",
+        "runnerLabels": [
+          "windows-2022"
+        ],
+        "runnerOsClasses": [
+          "windows"
+        ],
+        "if": "absent",
+        "continueOnError": "absent",
+        "timeoutMinutes": "absent",
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {
+          "contents": "read",
+          "id-token": "write"
+        },
+        "stepCount": 7,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout repository",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Setup MSVC",
+            "id": "",
+            "uses": "microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 2,
+            "name": "Produce Windows Shipping CMake provenance and build artifacts (CI-120)",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "81cd8b5872e7e882"
+          },
+          {
+            "index": 3,
+            "name": "Generate configured build-matrix inventory from the owned producer (CI-120)",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "30f359017d86b630"
+          },
+          {
+            "index": 4,
+            "name": "Compare reviewed configured-evidence findings (CI-120)",
+            "id": "ci120-parity",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "45fb3158c6cb3368"
+          },
+          {
+            "index": 5,
+            "name": "Upload trusted CI-120 producer evidence",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 6,
+            "name": "Enforce reviewed CI-120 findings",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "always() && steps.ci120-parity.outputs.status != ''",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "8cc046808f7e7c7c"
+          }
+        ],
+        "envNames": [],
+        "gating": "blocking"
+      },
+      {
         "id": "build-windows-vs2026",
         "name": "",
         "runsOn": "windows-latest",
@@ -6343,6 +6467,7 @@
         ],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 10,
         "steps": [
           {
@@ -6498,6 +6623,7 @@
         ],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 16,
         "steps": [
           {
@@ -6725,6 +6851,7 @@
         ],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 14,
         "steps": [
           {
@@ -6919,6 +7046,7 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 12,
         "steps": [
           {
@@ -7110,6 +7238,7 @@
         ],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 14,
         "steps": [
           {
@@ -7304,6 +7433,9 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
         "stepCount": 16,
         "steps": [
           {
@@ -7539,6 +7671,10 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {
+          "actions": "read",
+          "pull-requests": "write"
+        },
         "stepCount": 2,
         "steps": [
           {
@@ -7598,6 +7734,9 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
         "stepCount": 9,
         "steps": [
           {
@@ -7737,6 +7876,9 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
         "stepCount": 5,
         "steps": [
           {
@@ -7842,6 +7984,10 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {
+          "contents": "read",
+          "pull-requests": "write"
+        },
         "stepCount": 4,
         "steps": [
           {
@@ -7919,6 +8065,9 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
         "stepCount": 3,
         "steps": [
           {
@@ -8001,6 +8150,7 @@
         ],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {},
         "stepCount": 7,
         "steps": [
           {
@@ -8112,6 +8262,7 @@
           "build-linux-asan",
           "build-linux-tsan",
           "build-windows-vs2022",
+          "build-windows-shipping",
           "build-linux-gcc",
           "build-linux-clang",
           "coverage",
@@ -8126,6 +8277,9 @@
         "matrixCombinations": [],
         "matrixResolved": true,
         "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
         "stepCount": 2,
         "steps": [
           {
@@ -11286,16 +11440,144 @@
         "commandIndex": 0
       }
     ],
+    "ci120Invocations": [
+      {
+        "job": "validate-ci-tools",
+        "step": "Generate and compare deterministic build-matrix inventory (CI-120)",
+        "stepIndex": 14,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "kind": "inventory",
+        "launcher": "python3",
+        "launcherProvenance": "literal",
+        "executable": true,
+        "profile": "",
+        "buildDir": "",
+        "codemodel": "",
+        "inventory": "",
+        "baseline": "",
+        "build": false,
+        "command": "python3 Tools/buildmatrix/inventory.py  --output build-matrix-inventory.json  --check docs/readiness/ci120-build-matrix-inventory.json"
+      },
+      {
+        "job": "validate-ci-tools",
+        "step": "Compare reviewed build-matrix findings (CI-120)",
+        "stepIndex": 15,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "kind": "parity",
+        "launcher": "python3",
+        "launcherProvenance": "literal",
+        "executable": true,
+        "profile": "",
+        "buildDir": "",
+        "codemodel": "",
+        "inventory": "build-matrix-inventory.json",
+        "baseline": "docs/readiness/ci120-parity-findings.json",
+        "build": false,
+        "command": "python3 Tools/buildmatrix/check_parity.py  --inventory build-matrix-inventory.json  --baseline docs/readiness/ci120-parity-findings.json  --output build-matrix-parity-findings.json  > build-matrix-parity-stdout.json"
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Produce Windows Shipping CMake provenance and build artifacts (CI-120)",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "kind": "producer",
+        "launcher": "python",
+        "launcherProvenance": "literal",
+        "executable": true,
+        "profile": "windows-shipping",
+        "buildDir": "build/windows-shipping",
+        "codemodel": "",
+        "inventory": "",
+        "baseline": "",
+        "build": true,
+        "command": "python Tools/buildmatrix/capture_provenance.py  --profile windows-shipping  --build-dir build/windows-shipping  --build 2>&1 | tee ci120-producer.log"
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Generate configured build-matrix inventory from the owned producer (CI-120)",
+        "stepIndex": 3,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "kind": "inventory",
+        "launcher": "python",
+        "launcherProvenance": "literal",
+        "executable": true,
+        "profile": "",
+        "buildDir": "",
+        "codemodel": "windows-shipping=build/windows-shipping",
+        "inventory": "",
+        "baseline": "",
+        "build": false,
+        "command": "python Tools/buildmatrix/inventory.py  --codemodel windows-shipping=build/windows-shipping  --output build-matrix-inventory.json"
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Compare reviewed configured-evidence findings (CI-120)",
+        "stepIndex": 4,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "kind": "parity",
+        "launcher": "python",
+        "launcherProvenance": "literal",
+        "executable": true,
+        "profile": "",
+        "buildDir": "",
+        "codemodel": "",
+        "inventory": "build-matrix-inventory.json",
+        "baseline": "docs/readiness/ci120-parity-findings.json",
+        "build": false,
+        "command": "python Tools/buildmatrix/check_parity.py  --inventory build-matrix-inventory.json  --baseline docs/readiness/ci120-parity-findings.json  --output build-matrix-parity-findings.json  > build-matrix-parity-stdout.json"
+      }
+    ],
     "summary": {
-      "jobCount": 21,
-      "matrixLegCount": 29,
+      "jobCount": 22,
+      "matrixLegCount": 30,
       "pathFilteredEventCount": 0,
       "configureCount": 20,
       "buildCount": 19,
       "testCount": 14,
+      "ci120InvocationCount": 5,
       "unresolvedCount": 0,
       "buildAllTargetCount": 15,
-      "blockingJobCount": 13,
+      "blockingJobCount": 14,
       "advisoryJobCount": 3,
       "conditionalJobCount": 5,
       "builtOsConfigurationPairs": [

@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "profile": "stable-v1",
   "state": "blocked",
-  "errorCount": 43,
+  "errorCount": 42,
   "warningCount": 18,
   "findings": [
     {
@@ -336,12 +336,6 @@
       "category": "workflow-missing-shipping-lane",
       "severity": "error",
       "message": "CI has no configure invocation for the canonical Windows Shipping profile"
-    },
-    {
-      "category": "workflow-no-presets",
-      "severity": "error",
-      "message": "CI contains 20 configure invocations but none uses a CMake preset",
-      "detail": "Every configure invocation is retained with its owning job and step in the inventory."
     },
     {
       "category": "workflow-configuration-not-built",

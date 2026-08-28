@@ -20,12 +20,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", required=True, help="canonical stable-v1 build profile id")
     parser.add_argument("--build-dir", required=True, type=Path, help="canonical profile build directory")
     parser.add_argument("--cmake", default="cmake", help="exact CMake executable to invoke")
+    parser.add_argument(
+        "--build",
+        action="store_true",
+        help="build all configured targets and bind immutable post-build artifact identities",
+    )
     args = parser.parse_args(argv)
     try:
         path = inventory.capture_codemodel_transaction(
             args.build_dir,
             args.profile,
             cmake_executable=args.cmake,
+            build=args.build,
         )
         print(
             json.dumps(

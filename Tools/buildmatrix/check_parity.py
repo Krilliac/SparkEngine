@@ -748,7 +748,12 @@ def check_workflow_adoption(data: dict[str, Any]) -> list[Finding]:
     findings: list[Finding] = []
     configs = data.get("workflowCmakeConfigs", [])
     presets = data.get("cmakePresets", {})
-    workflow_refs = [entry.get("preset") for entry in configs if entry.get("preset")]
+    producer_profiles = [
+        entry.get("profile")
+        for entry in (data.get("workflow") or {}).get("ci120Invocations", [])
+        if entry.get("kind") == "producer" and entry.get("executable") and entry.get("build")
+    ]
+    workflow_refs = [entry.get("preset") for entry in configs if entry.get("preset")] + producer_profiles
     findings.extend(check_preset_workflow_parity(presets, workflow_refs))
     canonical = data["profile"].get("buildConfigurations", [])
     for config in canonical:
@@ -1167,14 +1172,26 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
             == path_key(provenance.get("cmakeExecutable"))
             and isinstance(provenance.get("cmakeVersion"), str)
             and bool(provenance.get("cmakeVersion"))
+            and provenance.get("artifactState") == "verified-post-build"
+            and provenance.get("ciProvider") == "github-actions"
+            and isinstance(provenance.get("ciRepository"), str)
+            and bool(provenance.get("ciRepository"))
+            and isinstance(provenance.get("ciRunId"), str)
+            and provenance.get("ciRunId", "").isdigit()
+            and isinstance(provenance.get("ciRunAttempt"), str)
+            and provenance.get("ciRunAttempt", "").isdigit()
+            and isinstance(provenance.get("ciWorkflowRef"), str)
+            and bool(provenance.get("ciWorkflowRef"))
+            and provenance.get("ciJob") == inventory_tool._CI120_PRODUCER_JOB
+            and provenance.get("ciRunnerOs") == "Windows"
         ):
             findings.append(
                 Finding(
                     "codemodel-provenance-incomplete",
                     "error",
                     f"Profile '{identifier}' verified producer summary is incomplete or malformed",
-                    "A verified label is not sufficient without the owned query, executable, argv, "
-                    "repository-cleanliness, and reply-digest bindings.",
+                    "A verified label is not sufficient without the owned GitHub Actions run, query, "
+                    "executable, argv, repository-cleanliness, post-build artifacts, and reply-digest bindings.",
                 )
             )
         if not repository.get("commit"):
@@ -1395,6 +1412,136 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
     return findings
 
 
+def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
+    """Require the real Windows producer to run before its local validator.
+
+    A checked-in JSON receipt is not an authority.  The producer, inventory,
+    and parity validator must be mandatory steps in one Windows job, with that
+    job itself feeding the branch-protection aggregate.  This records the
+    workflow reachability boundary that a standalone parser cannot infer from
+    a File API directory alone.
+    """
+    findings: list[Finding] = []
+    workflow = data.get("workflow") or {}
+    invocations = workflow.get("ci120Invocations", [])
+    jobs = {job.get("id"): job for job in workflow.get("jobs", [])}
+
+    def normalized(value: Any) -> str:
+        return str(value or "").replace("\\", "/").removeprefix("./").rstrip("/").casefold()
+
+    def mandatory(entry: dict[str, Any]) -> bool:
+        return (
+            entry.get("gating") == "blocking"
+            and entry.get("jobIf") == "absent"
+            and entry.get("jobContinueOnError") == "absent"
+            and entry.get("stepIf") == "absent"
+            and entry.get("stepContinueOnError") == "absent"
+            and entry.get("matrixResolved") is True
+        )
+
+    producer_job = jobs.get(inventory_tool._CI120_PRODUCER_JOB)
+    producer_candidates = [
+        entry for entry in invocations
+        if entry.get("kind") == "producer"
+        and entry.get("job") == inventory_tool._CI120_PRODUCER_JOB
+        and entry.get("profile") == "windows-shipping"
+        and normalized(entry.get("buildDir")) == "build/windows-shipping"
+        and entry.get("build") is True
+    ]
+    producer = next(
+        (
+            entry for entry in producer_candidates
+            if entry.get("executable") is True
+            and entry.get("launcherProvenance") == "literal"
+            and mandatory(entry)
+            and entry.get("runnerOs") == "windows"
+        ),
+        None,
+    )
+    if producer is None:
+        detail = "No canonical capture_provenance.py --build invocation was found."
+        if producer_candidates:
+            detail = "The candidate producer is conditional, advisory, wrapped, or not Windows-hosted."
+        findings.append(
+            Finding(
+                "ci120-trusted-producer-missing",
+                "error",
+                "CI-120 has no mandatory Windows Shipping provenance producer",
+                detail,
+            )
+        )
+        return findings
+    if not isinstance(producer_job, dict) or producer_job.get("gating") != "blocking":
+        findings.append(
+            Finding(
+                "ci120-trusted-producer-job-weak",
+                "error",
+                "CI-120 provenance producer job is not a blocking job",
+            )
+        )
+    if not isinstance(producer_job, dict) or producer_job.get("permissions", {}).get("id-token") != "write":
+        findings.append(
+            Finding(
+                "ci120-producer-oidc-permission-missing",
+                "error",
+                "CI-120 provenance producer cannot obtain a GitHub-signed identity proof",
+                "The blocking build-windows-shipping job must declare permissions.id-token: write.",
+            )
+        )
+
+    def later(kind: str, predicate: Any) -> bool:
+        return any(
+            entry.get("kind") == kind
+            and entry.get("job") == producer["job"]
+            and isinstance(entry.get("stepIndex"), int)
+            and entry["stepIndex"] > producer["stepIndex"]
+            and entry.get("executable") is True
+            and entry.get("launcherProvenance") == "literal"
+            and mandatory(entry)
+            and predicate(entry)
+            for entry in invocations
+        )
+
+    inventory_after = later(
+        "inventory",
+        lambda entry: normalized(entry.get("codemodel")) == "windows-shipping=build/windows-shipping",
+    )
+    parity_after = later(
+        "parity",
+        lambda entry: normalized(entry.get("inventory")) == "build-matrix-inventory.json"
+        and normalized(entry.get("baseline")) == "docs/readiness/ci120-parity-findings.json",
+    )
+    if not inventory_after or not parity_after:
+        missing = []
+        if not inventory_after:
+            missing.append("inventory")
+        if not parity_after:
+            missing.append("parity validator")
+        findings.append(
+            Finding(
+                "ci120-producer-validator-disconnected",
+                "error",
+                "CI-120 producer is not followed by its mandatory local validator",
+                f"Missing after producer: {', '.join(missing)}.",
+            )
+        )
+
+    aggregate = jobs.get("required-ci-gate")
+    if (
+        not isinstance(aggregate, dict)
+        or inventory_tool._CI120_PRODUCER_JOB not in aggregate.get("needs", [])
+    ):
+        findings.append(
+            Finding(
+                "ci120-producer-not-required",
+                "error",
+                "Required CI Gate does not depend on the CI-120 trusted producer job",
+                "A green aggregate could otherwise bypass missing or skipped configured evidence.",
+            )
+        )
+    return findings
+
+
 def _validate_inventory_shape(data: dict[str, Any]) -> None:
     if data.get("schemaVersion") != 3:
         raise inventory_tool.InventoryError("inventory schemaVersion must be 3")
@@ -1410,6 +1557,7 @@ def _validate_inventory_shape(data: dict[str, Any]) -> None:
     workflow_required = {
         "events", "jobs", "summary", "cmakeInvocations", "unresolvedInvocations",
         "configureInvocations", "buildInvocations", "testInvocations", "pathFilteredEvents",
+        "ci120Invocations",
     }
     workflow_missing = sorted(workflow_required - set(workflow))
     if workflow_missing:
@@ -1448,6 +1596,7 @@ def run_all_checks(data: dict[str, Any] | None = None) -> list[Finding]:
     findings.extend(check_codemodel_provenance(current))
     findings.extend(check_workflow_adoption(current))
     findings.extend(check_workflow_semantics(current))
+    findings.extend(check_ci120_producer_chain(current))
     return findings
 
 
