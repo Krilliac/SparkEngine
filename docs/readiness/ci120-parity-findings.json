@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "profile": "stable-v1",
   "state": "blocked",
-  "errorCount": 41,
+  "errorCount": 43,
   "warningCount": 18,
   "findings": [
     {
@@ -346,8 +346,20 @@
     {
       "category": "workflow-configuration-not-built",
       "severity": "error",
+      "message": "No blocking CI build on ['windows'] produces configuration 'Release' for profile 'installed-sdk-consumer'",
+      "detail": "A supported build must follow its live configure in the same job/matrix leg, use the same build tree, and propagate failure."
+    },
+    {
+      "category": "workflow-configuration-not-built",
+      "severity": "error",
       "message": "No blocking CI build on ['windows'] produces configuration 'MinSizeRel' for profile 'windows-shipping'",
-      "detail": "Configuring a profile does not build it, and a lane on an unsupported host cannot stand in."
+      "detail": "A supported build must follow its live configure in the same job/matrix leg, use the same build tree, and propagate failure."
+    },
+    {
+      "category": "workflow-configuration-not-built",
+      "severity": "error",
+      "message": "No blocking CI build on ['windows'] produces configuration 'Release' for profile 'windows-validation'",
+      "detail": "A supported build must follow its live configure in the same job/matrix leg, use the same build tree, and propagate failure."
     },
     {
       "category": "workflow-shipping-runner-os",

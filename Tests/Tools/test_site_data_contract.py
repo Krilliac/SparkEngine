@@ -10,11 +10,15 @@ from __future__ import annotations
 import ast
 import copy
 import json
+import os
 import re
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "site-data"))
@@ -806,6 +810,40 @@ class DuplicateJsonKeyTests(unittest.TestCase):
         ):
             with self.subTest(name=name):
                 self.parse((REPO_ROOT / name).read_text(encoding="utf-8"))
+
+
+class StrictJsonDecoderTests(unittest.TestCase):
+    def test_numeric_overflow_is_rejected(self) -> None:
+        with self.assertRaisesRegex(SiteDataError, "non-finite"):
+            site_data_common.decode_json_bytes(b'{"value":1e999}', "probe")
+
+    def test_lone_surrogate_is_rejected(self) -> None:
+        with self.assertRaisesRegex(SiteDataError, "invalid Unicode"):
+            site_data_common.decode_json_bytes(b'{"value":"\\ud800"}', "probe")
+
+
+class AtomicPublicationTests(unittest.TestCase):
+    def test_same_content_file_substitution_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            output = directory / "bundle.json"
+            original_replace = os.replace
+            substituted = False
+
+            def substituting_replace(source: Any, destination: Any) -> None:
+                nonlocal substituted
+                original_replace(source, destination)
+                if not substituted:
+                    substituted = True
+                    impostor = directory / "impostor.json"
+                    shutil.copyfile(destination, impostor)
+                    original_replace(impostor, destination)
+
+            with mock.patch.object(
+                site_data_common.os, "replace", side_effect=substituting_replace
+            ):
+                with self.assertRaisesRegex(SiteDataError, "verified temporary file"):
+                    site_data_common.write_bytes_atomic(output, b"payload")
 
 if __name__ == "__main__":
     unittest.main()

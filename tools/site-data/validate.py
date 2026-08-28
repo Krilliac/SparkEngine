@@ -6,14 +6,22 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import hashlib
-import json
 import re
 import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
 
-from common import METRIC_IDS, REPO_ROOT, SCHEMA_VERSION, SiteDataError, load_contract, load_json
+from common import (
+    METRIC_IDS,
+    REPO_ROOT,
+    SCHEMA_VERSION,
+    SiteDataError,
+    decode_json_bytes,
+    load_contract,
+    load_json,
+    read_bytes_stable,
+)
 
 
 IMPLEMENTATION_STATES = {"absent", "stub", "partial", "functional", "complete"}
@@ -1171,12 +1179,12 @@ def validate_published_bundle(root: Path) -> None:
     latest_path = root / "latest.json"
     errors: list[str] = []
     try:
-        latest_bytes = latest_path.read_bytes()
-        latest = json.loads(latest_bytes)
-    except (OSError, json.JSONDecodeError) as error:
+        latest_bytes = read_bytes_stable(latest_path, 32 * 1024, "published latest.json")
+        latest = decode_json_bytes(latest_bytes, "published latest.json", 32 * 1024)
+    except SiteDataError as error:
         raise SiteDataError(f"cannot read published latest.json: {error}") from error
-    if len(latest_bytes) > 32 * 1024:
-        errors.append(f"latest.json exceeds 32 KiB ({len(latest_bytes)} bytes)")
+    if not isinstance(latest, dict):
+        raise SiteDataError("published latest.json must be a JSON object")
     if latest.get("schemaVersion") != SCHEMA_VERSION:
         errors.append("latest.json schemaVersion is unsupported")
 
@@ -1198,9 +1206,10 @@ def validate_published_bundle(root: Path) -> None:
         except ValueError:
             errors.append(f"{label} escapes publication root")
             return None, None
+        limit = maximum if maximum is not None else 16 * 1024 * 1024
         try:
-            payload = path.read_bytes()
-        except OSError as error:
+            payload = read_bytes_stable(path, limit, label)
+        except SiteDataError as error:
             errors.append(f"{label} cannot be read: {error}")
             return path, None
         digest = hashlib.sha256(payload).hexdigest()
@@ -1216,9 +1225,12 @@ def validate_published_bundle(root: Path) -> None:
     _, bundle_bytes = verified(bundle_pointer, "bundle", 5 * 1024 * 1024)
     if bundle_bytes is not None:
         try:
-            bundle = json.loads(bundle_bytes)
-        except json.JSONDecodeError as error:
+            bundle = decode_json_bytes(bundle_bytes, "bundle JSON", 5 * 1024 * 1024)
+        except SiteDataError as error:
             errors.append(f"bundle JSON is invalid: {error}")
+            bundle = {}
+        if not isinstance(bundle, dict):
+            errors.append("bundle JSON is not an object")
             bundle = {}
         source_commit = latest.get("source", {}).get("commit")
         if bundle.get("bundleVersion") != latest.get("bundleVersion"):
@@ -1249,12 +1261,16 @@ def validate_published_bundle(root: Path) -> None:
                     errors.append(f"document {slug!r} is not hash-addressed")
                 if page_bytes is not None:
                     try:
-                        page = json.loads(page_bytes)
+                        page = decode_json_bytes(
+                            page_bytes, f"document {slug!r} JSON", 2 * 1024 * 1024
+                        )
+                        if not isinstance(page, dict):
+                            raise SiteDataError("document JSON is not an object")
                         if page.get("sourceCommit") != source_commit or page.get("bundleVersion") != latest.get("bundleVersion"):
                             errors.append(f"document {slug!r} identity differs from latest")
                         if page.get("document", {}).get("slug") != slug:
                             errors.append(f"document payload slug differs for {slug!r}")
-                    except json.JSONDecodeError as error:
+                    except SiteDataError as error:
                         errors.append(f"document {slug!r} JSON is invalid: {error}")
 
         search_pointer = latest.get("files", {}).get("docsSearch")

@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
+import stat
 import subprocess
 import tempfile
 from pathlib import Path
@@ -19,6 +21,10 @@ WORK_ITEM_ROOT = REPO_ROOT / "docs" / "readiness" / "work-items"
 REPOSITORY = "Krilliac/SparkEngine"
 REPOSITORY_URL = f"https://github.com/{REPOSITORY}"
 SCHEMA_VERSION = 1
+MAX_AUTHORITATIVE_JSON_BYTES = 8 * 1024 * 1024
+MAX_JSON_NODES = 250_000
+MAX_JSON_DEPTH = 128
+MAX_JSON_STRING_BYTES = 2 * 1024 * 1024
 METRIC_IDS = {
     "code.files",
     "code.totalLines",
@@ -73,17 +79,209 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def load_json(path: Path) -> Any:
+def _reject_json_constant(value: str) -> Any:
+    raise ValueError(f"non-finite JSON number {value!r}")
+
+
+def _is_reparse(metadata: os.stat_result) -> bool:
+    return bool(int(getattr(metadata, "st_file_attributes", 0)) & 0x400)
+
+
+def _identity(metadata: os.stat_result) -> tuple[int, int, int]:
+    # mode/attributes are synthesized differently by Windows lstat/fstat.
+    return (int(metadata.st_dev), int(metadata.st_ino), int(metadata.st_size))
+
+
+def _mutation_token(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        int(metadata.st_dev),
+        int(metadata.st_ino),
+        int(metadata.st_size),
+        int(getattr(metadata, "st_mtime_ns", int(metadata.st_mtime * 1_000_000_000))),
+        int(getattr(metadata, "st_ctime_ns", int(metadata.st_ctime * 1_000_000_000))),
+        int(getattr(metadata, "st_file_attributes", 0)),
+    )
+
+
+def _directory_token(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        int(metadata.st_dev),
+        int(metadata.st_ino),
+        int(metadata.st_mode),
+        int(getattr(metadata, "st_mtime_ns", int(metadata.st_mtime * 1_000_000_000))),
+        int(getattr(metadata, "st_ctime_ns", int(metadata.st_ctime * 1_000_000_000))),
+        int(getattr(metadata, "st_file_attributes", 0)),
+    )
+
+
+def _validate_directory_chain(path: Path, label: str) -> list[tuple[Path, tuple[int, ...]]]:
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    parts = absolute.parts
+    if not parts:
+        raise SiteDataError(f"{label} has no absolute directory")
+    current = Path(parts[0])
+    result: list[tuple[Path, tuple[int, ...]]] = []
+    for component in parts[1:]:
+        current /= component
+        try:
+            metadata = os.lstat(current)
+        except OSError as error:
+            raise SiteDataError(f"cannot inspect {label} component {current}: {error}") from error
+        if stat.S_ISLNK(metadata.st_mode) or _is_reparse(metadata):
+            raise SiteDataError(f"{label} component {current} is a symlink or reparse point")
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise SiteDataError(f"{label} component {current} is not a directory")
+        result.append((current, _directory_token(metadata)))
+    return result
+
+
+def _ensure_directory(path: Path, label: str) -> Path:
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    parts = absolute.parts
+    if not parts:
+        raise SiteDataError(f"{label} has no absolute directory")
+    current = Path(parts[0])
+    for component in parts[1:]:
+        current /= component
+        try:
+            metadata = os.lstat(current)
+        except FileNotFoundError:
+            try:
+                os.mkdir(current)
+            except FileExistsError:
+                pass
+            metadata = os.lstat(current)
+        if stat.S_ISLNK(metadata.st_mode) or _is_reparse(metadata):
+            raise SiteDataError(f"{label} component {current} is a symlink or reparse point")
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise SiteDataError(f"{label} component {current} is not a directory")
+    _validate_directory_chain(absolute, label)
+    return absolute
+
+
+def read_bytes_stable(path: Path, maximum: int, label: str | None = None) -> bytes:
+    """Read a bounded, regular, one-link file through a stable open identity."""
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    display = label or relative_path(absolute)
+    ancestors = _validate_directory_chain(absolute.parent, f"{display} parent")
     try:
-        return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_reject_duplicate_keys)
+        before = os.lstat(absolute)
     except FileNotFoundError as error:
-        raise SiteDataError(f"Required contract file does not exist: {relative_path(path)}") from error
+        raise SiteDataError(f"Required file does not exist: {display}") from error
+    except OSError as error:
+        raise SiteDataError(f"cannot inspect {display}: {error}") from error
+    if stat.S_ISLNK(before.st_mode) or _is_reparse(before):
+        raise SiteDataError(f"{display} must not be a symlink or reparse point")
+    if not stat.S_ISREG(before.st_mode):
+        raise SiteDataError(f"{display} is not a regular file")
+    if before.st_size > maximum:
+        raise SiteDataError(f"{display} exceeds the {maximum}-byte bound")
+
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(absolute, flags)
+    except OSError as error:
+        raise SiteDataError(f"cannot open {display} without following links: {error}") from error
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or _is_reparse(opened):
+            raise SiteDataError(f"opened {display} is not a regular non-reparse file")
+        if int(opened.st_nlink) != 1:
+            raise SiteDataError(f"opened {display} must have exactly one hard link")
+        if _identity(opened) != _identity(before):
+            raise SiteDataError(f"{display} was replaced while opening")
+        opened_token = _mutation_token(opened)
+
+        def consume() -> bytes:
+            remaining = int(opened.st_size)
+            chunks: list[bytes] = []
+            while remaining:
+                chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+                if not chunk:
+                    raise SiteDataError(f"{display} was truncated while reading")
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            if os.read(descriptor, 1):
+                raise SiteDataError(f"{display} grew while reading")
+            return b"".join(chunks)
+
+        payload = consume()
+        if _mutation_token(os.fstat(descriptor)) != opened_token:
+            raise SiteDataError(f"{display} changed while reading")
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        if consume() != payload or _mutation_token(os.fstat(descriptor)) != opened_token:
+            raise SiteDataError(f"{display} content was unstable while reading")
+    finally:
+        os.close(descriptor)
+
+    try:
+        after = os.lstat(absolute)
+    except OSError as error:
+        raise SiteDataError(f"cannot revalidate {display}: {error}") from error
+    if _mutation_token(after) != _mutation_token(before):
+        raise SiteDataError(f"{display} changed after reading")
+    for ancestor, token in ancestors:
+        try:
+            current = os.lstat(ancestor)
+        except OSError as error:
+            raise SiteDataError(f"cannot revalidate {display} parent {ancestor}: {error}") from error
+        if _directory_token(current) != token:
+            raise SiteDataError(f"{display} parent {ancestor} changed while reading")
+    return payload
+
+
+def decode_json_bytes(value: bytes, label: str, maximum: int = MAX_AUTHORITATIVE_JSON_BYTES) -> Any:
+    if len(value) > maximum:
+        raise SiteDataError(f"{label} exceeds the {maximum}-byte JSON bound")
+    try:
+        decoded = json.loads(
+            value.decode("utf-8"),
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_json_constant,
+        )
+    except UnicodeDecodeError as error:
+        raise SiteDataError(f"Invalid UTF-8 in {label}: {error}") from error
     except json.JSONDecodeError as error:
         raise SiteDataError(
-            f"Invalid JSON in {relative_path(path)}:{error.lineno}:{error.colno}: {error.msg}"
+            f"Invalid JSON in {label}:{error.lineno}:{error.colno}: {error.msg}"
         ) from error
     except ValueError as error:
-        raise SiteDataError(f"Invalid JSON in {relative_path(path)}: {error}") from error
+        raise SiteDataError(f"Invalid JSON in {label}: {error}") from error
+
+    def utf8_size(text: str, kind: str) -> int:
+        try:
+            return len(text.encode("utf-8"))
+        except UnicodeEncodeError as error:
+            raise SiteDataError(f"{label} contains invalid Unicode in a JSON {kind}") from error
+
+    nodes = 0
+    stack: list[tuple[Any, int]] = [(decoded, 1)]
+    while stack:
+        item, depth = stack.pop()
+        nodes += 1
+        if nodes > MAX_JSON_NODES:
+            raise SiteDataError(f"{label} exceeds the {MAX_JSON_NODES}-node JSON bound")
+        if depth > MAX_JSON_DEPTH:
+            raise SiteDataError(f"{label} exceeds the {MAX_JSON_DEPTH}-level JSON depth bound")
+        if isinstance(item, dict):
+            for key, child in item.items():
+                if utf8_size(key, "object key") > MAX_JSON_STRING_BYTES:
+                    raise SiteDataError(f"{label} contains an oversized JSON object key")
+                stack.append((child, depth + 1))
+        elif isinstance(item, list):
+            stack.extend((child, depth + 1) for child in item)
+        elif isinstance(item, str):
+            if utf8_size(item, "string") > MAX_JSON_STRING_BYTES:
+                raise SiteDataError(f"{label} contains an oversized JSON string")
+        elif isinstance(item, float) and not math.isfinite(item):
+            raise SiteDataError(f"{label} contains a non-finite JSON number")
+    return decoded
+
+
+def load_json(path: Path, *, maximum: int = MAX_AUTHORITATIVE_JSON_BYTES) -> Any:
+    label = relative_path(path)
+    return decode_json_bytes(read_bytes_stable(path, maximum, label), label, maximum)
 
 
 def load_contract() -> dict[str, Any]:
@@ -135,15 +333,36 @@ def sha256_bytes(value: bytes) -> str:
 
 
 def write_bytes_atomic(path: Path, value: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    parent = _ensure_directory(absolute.parent, f"output parent for {absolute.name}")
+    parent_identity = _identity(os.lstat(parent))
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{absolute.name}.", suffix=".tmp", dir=parent
+    )
     temporary_path = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "wb") as stream:
             stream.write(value)
             stream.flush()
             os.fsync(stream.fileno())
-        temporary_path.replace(path)
+        temporary_identity = _identity(os.lstat(temporary_path))
+        if read_bytes_stable(
+            temporary_path, len(value), f"temporary output for {absolute.name}"
+        ) != value:
+            raise SiteDataError(f"temporary output for {absolute.name} differs before publication")
+        if _identity(os.lstat(parent)) != parent_identity:
+            raise SiteDataError(f"output parent for {absolute.name} was replaced before publication")
+        os.replace(temporary_path, absolute)
+        if _identity(os.lstat(absolute)) != temporary_identity:
+            raise SiteDataError(
+                f"published output {absolute.name} is not the verified temporary file"
+            )
+        if read_bytes_stable(
+            absolute, len(value), f"published output {absolute.name}"
+        ) != value:
+            raise SiteDataError(f"published output {absolute.name} differs after publication")
+        if _identity(os.lstat(parent)) != parent_identity:
+            raise SiteDataError(f"output parent for {absolute.name} was replaced during publication")
     finally:
         temporary_path.unlink(missing_ok=True)
 

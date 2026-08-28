@@ -13,7 +13,11 @@ JSON is the only stdout payload. Human diagnostics are written to stderr.
 from __future__ import annotations
 
 import argparse
+import fnmatch
+import hashlib
 import json
+import os
+import re
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
@@ -564,6 +568,16 @@ def check_product_preset_activation(data: dict[str, Any]) -> list[Finding]:
 def check_configured_targets(data: dict[str, Any]) -> list[Finding]:
     findings: list[Finding] = []
     profile = data["profile"]
+    supported_hosts = profile.get("supportedHosts", [])
+    windows_only = bool(supported_hosts) and all(
+        "windows" in str(host).lower() for host in supported_hosts
+    )
+    windows_suffixes = {
+        "executable": ".exe",
+        "static_library": ".lib",
+        "shared_library": ".dll",
+        "module_library": ".dll",
+    }
     products_by_profile: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for product in profile.get("buildProducts", []):
         products_by_profile[product["buildProfile"]].append(product)
@@ -641,6 +655,83 @@ def check_configured_targets(data: dict[str, Any]) -> list[Finding]:
                         f"Build profile: {identifier}.",
                     )
                 )
+            elif product.get("kind") in {
+                "executable", "static_library", "shared_library", "module_library"
+            }:
+                identity_missing = [
+                    field
+                    for field in ("id", "nameOnDisk", "artifacts", "artifactState")
+                    if not entry.get(field)
+                ]
+                artifacts = entry.get("artifacts")
+                if not isinstance(artifacts, list) or not artifacts:
+                    identity_missing.append("artifacts")
+                if identity_missing:
+                    findings.append(
+                        Finding(
+                            "configured-target-identity-incomplete",
+                            _product_severity(product),
+                            f"Configured target '{product['target']}' lacks complete File API identity",
+                            f"Missing or empty: {sorted(set(identity_missing))}.",
+                        )
+                    )
+                else:
+                    artifact_state = entry.get("artifactState")
+                    artifact_problem = ""
+                    if artifact_state not in {"declared-not-built", "verified-post-build"}:
+                        artifact_problem = f"unsupported artifactState {artifact_state!r}"
+                    expected_suffix = windows_suffixes.get(str(product.get("kind")))
+                    if (
+                        not artifact_problem
+                        and windows_only
+                        and expected_suffix
+                        and not str(entry.get("nameOnDisk", "")).casefold().endswith(expected_suffix)
+                    ):
+                        artifact_problem = (
+                            f"nameOnDisk is inconsistent with Windows {product.get('kind')}"
+                        )
+                    elif not any(
+                        Path(str(path)).name.casefold()
+                        == str(entry.get("nameOnDisk", "")).casefold()
+                        for path in artifacts
+                    ):
+                        artifact_problem = "no artifact matches nameOnDisk"
+                    build_directory = str(evidence.get("buildDirectory", ""))
+                    for artifact in artifacts:
+                        if not isinstance(artifact, str) or not artifact or not Path(artifact).is_absolute():
+                            artifact_problem = "artifact paths must be absolute"
+                            break
+                        try:
+                            common = os.path.commonpath((build_directory, artifact))
+                        except ValueError:
+                            artifact_problem = "artifact is on another volume from its build tree"
+                            break
+                        if os.path.normcase(common) != os.path.normcase(build_directory):
+                            artifact_problem = "artifact escapes its build tree"
+                            break
+                    if artifact_state == "verified-post-build":
+                        identities = entry.get("artifactIdentities")
+                        if not isinstance(identities, list) or len(identities) != len(artifacts):
+                            artifact_problem = "verified artifact claim lacks one identity per artifact"
+                        elif any(
+                            not isinstance(identity, dict)
+                            or set(identity) != {"path", "bytes", "sha256"}
+                            or identity.get("path") not in artifacts
+                            or type(identity.get("bytes")) is not int
+                            or identity.get("bytes") < 0
+                            or not re.fullmatch(r"[0-9a-f]{64}", str(identity.get("sha256", "")))
+                            for identity in identities
+                        ):
+                            artifact_problem = "verified artifact identity is malformed"
+                    if artifact_problem:
+                        findings.append(
+                            Finding(
+                                "configured-target-artifact-mismatch",
+                                _product_severity(product),
+                                f"Configured target '{product['target']}' artifact evidence is invalid",
+                                artifact_problem,
+                            )
+                        )
     unknown = sorted(set(evidence_entries) - set(_profile_config_map(profile)))
     for identifier in unknown:
         findings.append(
@@ -742,6 +833,54 @@ def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
                 )
             )
 
+    def branch_filter_matches(pattern: Any, branch: str) -> bool:
+        return isinstance(pattern, str) and fnmatch.fnmatchcase(branch, pattern)
+
+    def reaches_working(event: dict[str, Any]) -> bool:
+        if event.get("event") not in {"push", "pull_request", "merge_group"}:
+            return False
+        filters = event.get("filters") or {}
+        if event.get("event") == "push" and "tags" in filters and "branches" not in filters:
+            return False
+        branches = filters.get("branches") or []
+        if branches:
+            positives = [pattern for pattern in branches if not str(pattern).startswith("!")]
+            negatives = [str(pattern)[1:] for pattern in branches if str(pattern).startswith("!")]
+            if not any(branch_filter_matches(pattern, "Working") for pattern in positives):
+                return False
+            if any(branch_filter_matches(pattern, "Working") for pattern in negatives):
+                return False
+        ignored = filters.get("branches-ignore") or []
+        if any(branch_filter_matches(pattern, "Working") for pattern in ignored):
+            return False
+        event_types = filters.get("types") or []
+        if event.get("event") == "pull_request" and event_types and "synchronize" not in event_types:
+            return False
+        if event.get("event") == "merge_group" and event_types and "checks_requested" not in event_types:
+            return False
+        return True
+
+    if not any(reaches_working(event) for event in workflow.get("events", [])):
+        findings.append(
+            Finding(
+                "workflow-working-branch-unreachable",
+                "error",
+                "Build workflow cannot run automatically for the protected Working branch",
+                "A manually dispatched or differently filtered workflow cannot serve as its required CI gate.",
+            )
+        )
+
+    for job in workflow.get("jobs", []):
+        if job.get("matrixResolved") is not True:
+            findings.append(
+                Finding(
+                    "workflow-matrix-unresolved",
+                    "error",
+                    f"CI job '{job.get('id')}' has a matrix this inventory cannot expand",
+                    "An unresolved matrix may produce no matching leg, so its configure/build commands are not evidence.",
+                )
+            )
+
     for entry in workflow.get("unresolvedInvocations", []):
         findings.append(
             Finding(
@@ -754,6 +893,78 @@ def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
 
     configures = workflow.get("configureInvocations", [])
     builds = workflow.get("buildInvocations", [])
+    presets = data.get("cmakePresets", {})
+
+    def mandatory(entry: dict[str, Any]) -> bool:
+        """True only when both the job and step must execute and propagate failure."""
+        return (
+            entry.get("gating") == "blocking"
+            and entry.get("jobIf") == "absent"
+            and entry.get("jobContinueOnError") == "absent"
+            and entry.get("stepIf") == "absent"
+            and entry.get("stepContinueOnError") == "absent"
+            and entry.get("matrixResolved") is True
+        )
+
+    def directory_key(value: Any) -> str:
+        if not isinstance(value, str) or not value:
+            return ""
+        normalized = value.replace("\\", "/").rstrip("/")
+        normalized = normalized.replace("${sourceDir}/", "").removeprefix("./")
+        root = str(data.get("repository", {}).get("root", "")).replace("\\", "/").rstrip("/")
+        if root and normalized.casefold().startswith(root.casefold() + "/"):
+            normalized = normalized[len(root) + 1 :]
+        return normalized.casefold()
+
+    def configured_directory(entry: dict[str, Any]) -> str:
+        if entry.get("buildDir"):
+            return directory_key(entry.get("buildDir"))
+        preset_name = entry.get("preset")
+        if not preset_name:
+            return ""
+        try:
+            resolved = inventory_tool.resolve_configure_preset(presets, str(preset_name))
+        except inventory_tool.InventoryError:
+            return ""
+        return directory_key(resolved.get("resolvedBinaryDir"))
+
+    def build_binding(entry: dict[str, Any]) -> tuple[str, str, str]:
+        """Return configure preset, build directory and configuration for a build."""
+        configure_preset = ""
+        build_directory = directory_key(entry.get("buildDir"))
+        configuration = str(entry.get("configuration", ""))
+        build_preset = entry.get("preset")
+        if build_preset:
+            try:
+                resolved_build = inventory_tool.resolve_dependent_preset(
+                    presets, "buildPresets", str(build_preset)
+                )
+                configure_preset = str(resolved_build.get("configurePreset", ""))
+                configuration = configuration or str(resolved_build.get("configuration", ""))
+                resolved_configure = inventory_tool.resolve_configure_preset(
+                    presets, configure_preset
+                )
+                build_directory = directory_key(resolved_configure.get("resolvedBinaryDir"))
+            except inventory_tool.InventoryError:
+                return "", "", configuration
+        return configure_preset, build_directory, configuration
+
+    def same_expansion(left: dict[str, Any], right: dict[str, Any]) -> bool:
+        return (
+            left.get("job") == right.get("job")
+            and left.get("matrix", {}) == right.get("matrix", {})
+            and left.get("runnerOs") == right.get("runnerOs")
+        )
+
+    def occurs_after(build: dict[str, Any], configure: dict[str, Any]) -> bool:
+        return (
+            int(build.get("stepIndex", -1)),
+            int(build.get("commandIndex", 0)),
+        ) > (
+            int(configure.get("stepIndex", -1)),
+            int(configure.get("commandIndex", 0)),
+        )
+
     products_by_profile: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for product in data["profile"].get("buildProducts", []):
         products_by_profile[product["buildProfile"]].append(product)
@@ -767,14 +978,25 @@ def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
             key=lambda value: 0 if value == "warning" else 1,
             default="error",
         )
-        matching = [entry for entry in configures if preset and entry.get("preset") == preset]
-        blocking = [
+        declared_dir = directory_key(config.get("buildDirectory"))
+        declared_source = directory_key(config.get("sourceDirectory"))
+        matching = [
             entry
-            for entry in matching
-            if entry.get("gating") == "blocking"
-            and entry.get("stepIf") == "absent"
-            and entry.get("stepContinueOnError") == "absent"
+            for entry in configures
+            if (
+                (preset and entry.get("preset") == preset)
+                or (
+                    not preset
+                    and declared_dir
+                    and configured_directory(entry) == declared_dir
+                    and (
+                        not declared_source
+                        or directory_key(entry.get("sourceDir")) == declared_source
+                    )
+                )
+            )
         ]
+        blocking = [entry for entry in matching if mandatory(entry)]
         if preset and matching and not blocking:
             findings.append(
                 Finding(
@@ -785,13 +1007,23 @@ def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
                 )
             )
         supported = _required_runner_os(data["profile"])
-        supported_builds = [
-            entry
-            for entry in builds
-            if entry.get("configuration") == configuration
-            and entry.get("gating") == "blocking"
-            and (not supported or entry.get("runnerOs") in supported)
-        ]
+        supported_builds: list[dict[str, Any]] = []
+        for build in builds:
+            if not mandatory(build) or (supported and build.get("runnerOs") not in supported):
+                continue
+            build_preset, build_directory, built_configuration = build_binding(build)
+            if built_configuration != configuration:
+                continue
+            for configure in blocking:
+                if not same_expansion(build, configure) or not occurs_after(build, configure):
+                    continue
+                if build_preset and build_preset != configure.get("preset"):
+                    continue
+                configure_directory = configured_directory(configure)
+                if not configure_directory or build_directory != configure_directory:
+                    continue
+                supported_builds.append(build)
+                break
         if configuration and not supported_builds:
             findings.append(
                 Finding(
@@ -799,7 +1031,8 @@ def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
                     severity,
                     f"No blocking CI build on {sorted(supported) or 'any host'} produces configuration "
                     f"'{configuration}' for profile '{identifier}'",
-                    "Configuring a profile does not build it, and a lane on an unsupported host cannot stand in.",
+                    "A supported build must follow its live configure in the same job/matrix leg, "
+                    "use the same build tree, and propagate failure.",
                 )
             )
             continue
@@ -824,7 +1057,9 @@ def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
         lanes = [
             entry
             for entry in configures
-            if entry.get("preset") == shipping.get("preset") and entry.get("runnerOs") == "windows"
+            if entry.get("preset") == shipping.get("preset")
+            and entry.get("runnerOs") == "windows"
+            and mandatory(entry)
         ]
         if not lanes:
             findings.append(
@@ -882,7 +1117,18 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
     inherited_toolchain = next(iter(stable_toolchains)) if len(stable_toolchains) == 1 else ("", "", "")
 
     for evidence in data.get("configuredTargetEvidence", []):
-        if evidence.get("status") != "available":
+        status = evidence.get("status")
+        if status != "available":
+            if status != "absent":
+                findings.append(
+                    Finding(
+                        "codemodel-provenance-unavailable",
+                        "error",
+                        f"Profile '{evidence.get('profile')}' cannot present producer provenance "
+                        f"because its configured evidence is {status!r}",
+                        str(evidence.get("rejection", "No usable CMake File API reply was supplied.")),
+                    )
+                )
             continue
         identifier = str(evidence.get("profile"))
         config = configs.get(identifier, {})
@@ -895,7 +1141,40 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                     "codemodel-provenance-missing",
                     "error",
                     f"Profile '{identifier}' has no verified producer provenance record",
-                    "Run capture_provenance.py after CMake configure; caller-supplied commit text is not evidence.",
+                    "Run capture_provenance.py so it owns the query and configure transaction; "
+                    "caller-supplied commit text is not evidence.",
+                )
+            )
+        elif not (
+            provenance.get("producer") == inventory_tool._PROVENANCE_PRODUCER
+            and provenance.get("profile") == identifier
+            and provenance.get("sourceClean") is True
+            and provenance.get("untrackedPolicy") == "all-nonignored"
+            and isinstance(provenance.get("recordFile"), str)
+            and re.fullmatch(r"[0-9a-f]{64}", str(provenance.get("recordSha256", "")))
+            and re.fullmatch(r"[0-9a-f]{64}", str(provenance.get("replyDigest", "")))
+            and re.fullmatch(
+                re.escape(inventory_tool._CAPTURE_CLIENT_PREFIX) + r"[0-9a-f]{32}",
+                str(provenance.get("queryClient", "")),
+            )
+            and isinstance(provenance.get("configureArgv"), list)
+            and bool(provenance.get("configureArgv"))
+            and all(
+                isinstance(argument, str) and argument
+                for argument in provenance.get("configureArgv", [])
+            )
+            and path_key(provenance.get("configureArgv", [""])[0])
+            == path_key(provenance.get("cmakeExecutable"))
+            and isinstance(provenance.get("cmakeVersion"), str)
+            and bool(provenance.get("cmakeVersion"))
+        ):
+            findings.append(
+                Finding(
+                    "codemodel-provenance-incomplete",
+                    "error",
+                    f"Profile '{identifier}' verified producer summary is incomplete or malformed",
+                    "A verified label is not sufficient without the owned query, executable, argv, "
+                    "repository-cleanliness, and reply-digest bindings.",
                 )
             )
         if not repository.get("commit"):
@@ -948,6 +1227,18 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                     "error",
                     f"Profile '{identifier}' is being reported from a modified worktree",
                     "The current commit does not describe the inventory inputs.",
+                )
+            )
+        elif (
+            repository.get("untrackedPolicy") != "all-nonignored"
+            or repository.get("statusSha256") != hashlib.sha256(b"").hexdigest()
+        ):
+            findings.append(
+                Finding(
+                    "codemodel-worktree-cleanliness-incomplete",
+                    "error",
+                    f"Profile '{identifier}' current repository cleanliness omits untracked files",
+                    "Clean evidence must bind git status --untracked-files=all.",
                 )
             )
 
@@ -1193,16 +1484,15 @@ def render_internal_error(error: Exception) -> bytes:
 
 
 def _write_atomic(path: Path, payload: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_bytes(payload)
-    temporary.replace(path)
+    inventory_tool._write_atomic(path, payload)
 
 
 def _load_inventory(path: Path | None) -> dict[str, Any]:
     if path is None:
         return inventory_tool.build_inventory()
-    value = json.loads(path.read_text(encoding="utf-8"))
+    value = inventory_tool._read_bounded_json_file(
+        path, inventory_tool._MAX_INVENTORY_BYTES, "CI-120 inventory"
+    )
     if not isinstance(value, dict):
         raise inventory_tool.InventoryError("inventory JSON must be an object")
     return value
@@ -1227,9 +1517,11 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.buffer.write(payload)
         if args.baseline:
             try:
-                baseline_value = json.loads(args.baseline.read_text(encoding="utf-8"))
+                baseline_value = inventory_tool._read_bounded_json_file(
+                    args.baseline, inventory_tool._MAX_REPORT_BYTES, "CI-120 findings baseline"
+                )
                 baseline_payload = render_report(baseline_value)
-            except (OSError, ValueError, json.JSONDecodeError) as error:
+            except (inventory_tool.InventoryError, OSError, ValueError, json.JSONDecodeError) as error:
                 print(f"BASELINE DRIFT: cannot parse {args.baseline}: {error}", file=sys.stderr)
                 return EXIT_BASELINE_DRIFT
             if baseline_payload != payload or args.baseline.read_bytes() != baseline_payload:

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import posixpath
 import re
@@ -30,6 +29,7 @@ from common import (
     git_dirty_paths,
     heading_slug,
     load_contract,
+    load_json,
     plain_text,
     repository_source,
     sha256_bytes,
@@ -88,8 +88,8 @@ def regenerate_api_docs(committed_at: str) -> None:
     manifest_path = api_root / ".generation.json"
     symbols_path = api_root / ".symbols.tsv"
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        manifest = load_json(manifest_path, maximum=64 * 1024)
+    except SiteDataError as error:
         raise SiteDataError("API documentation generation manifest is missing or invalid") from error
 
     source_roots = [
@@ -685,9 +685,9 @@ def prune_snapshots(output: Path, current_commit: str, retain: int) -> None:
         if not directory.is_dir() or not bundle.is_file():
             continue
         try:
-            data = json.loads(bundle.read_text(encoding="utf-8"))
+            data = load_json(bundle, maximum=5 * 1024 * 1024)
             records.append((data.get("generatedAt", ""), directory.name, directory))
-        except (OSError, json.JSONDecodeError):
+        except SiteDataError:
             records.append(("", directory.name, directory))
     records.sort(reverse=True)
     keep = {current_commit}

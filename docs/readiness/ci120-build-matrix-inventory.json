@@ -8165,6 +8165,7 @@
         "step": "Configure CMake (ASan + UBSan + LSan)",
         "stepIndex": 4,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8188,13 +8189,15 @@
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
           "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-asan",
         "step": "Build",
         "stepIndex": 5,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8213,13 +8216,15 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-tsan",
         "step": "Configure CMake (TSan)",
         "stepIndex": 4,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8243,13 +8248,15 @@
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread",
           "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-tsan",
         "step": "Build",
         "stepIndex": 5,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8268,13 +8275,15 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-msan",
         "step": "Configure CMake (MSan)",
         "stepIndex": 4,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8299,13 +8308,15 @@
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -lc++abi",
           "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-msan",
         "step": "Build (SparkTests only)",
         "stepIndex": 5,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8325,7 +8336,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": false
+        "buildsAllTargets": false,
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
@@ -8334,6 +8346,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -8352,7 +8365,8 @@
         "buildDir": "build",
         "generator": "Visual Studio 17 2022",
         "architecture": "x64",
-        "toolset": "v143"
+        "toolset": "v143",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
@@ -8361,6 +8375,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -8379,7 +8394,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "2>",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
@@ -8388,6 +8404,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -8402,7 +8419,8 @@
         "configuration": "Debug",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
@@ -8411,6 +8429,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -8429,7 +8448,8 @@
         "buildDir": "build",
         "generator": "Visual Studio 17 2022",
         "architecture": "x64",
-        "toolset": "v143"
+        "toolset": "v143",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
@@ -8438,6 +8458,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -8456,7 +8477,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "2>",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
@@ -8465,6 +8487,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -8479,7 +8502,8 @@
         "configuration": "Release",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
@@ -8488,6 +8512,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "pwsh",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -8505,7 +8530,8 @@
         "fresh": true,
         "buildDir": "build",
         "generator": "Visual Studio 18 2026",
-        "architecture": "x64"
+        "architecture": "x64",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
@@ -8514,6 +8540,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "pwsh",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -8532,7 +8559,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "auto",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
@@ -8541,6 +8569,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "pwsh",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -8555,7 +8584,8 @@
         "configuration": "Debug",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
@@ -8564,6 +8594,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "pwsh",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -8581,7 +8612,8 @@
         "fresh": true,
         "buildDir": "build",
         "generator": "Visual Studio 18 2026",
-        "architecture": "x64"
+        "architecture": "x64",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
@@ -8590,6 +8622,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "pwsh",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -8608,7 +8641,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "auto",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
@@ -8617,6 +8651,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "pwsh",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -8631,7 +8666,8 @@
         "configuration": "Release",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-gcc",
@@ -8640,6 +8676,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8659,7 +8696,8 @@
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-gcc",
@@ -8668,6 +8706,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8686,7 +8725,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-gcc",
@@ -8695,6 +8735,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8709,7 +8750,8 @@
         "configuration": "Debug",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-gcc",
@@ -8718,6 +8760,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8737,7 +8780,8 @@
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-gcc",
@@ -8746,6 +8790,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8764,7 +8809,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-gcc",
@@ -8773,6 +8819,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8787,7 +8834,8 @@
         "configuration": "Release",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-clang",
@@ -8796,6 +8844,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8819,7 +8868,8 @@
           "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
           "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-clang",
@@ -8828,6 +8878,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8846,7 +8897,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-clang",
@@ -8855,6 +8907,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8869,7 +8922,8 @@
         "configuration": "Debug",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-clang",
@@ -8878,6 +8932,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8901,7 +8956,8 @@
           "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
           "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-clang",
@@ -8910,6 +8966,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8928,7 +8985,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-clang",
@@ -8937,6 +8995,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -8951,13 +9010,15 @@
         "configuration": "Release",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-mingw-wine",
         "step": "Configure CMake (MinGW cross-compilation)",
         "stepIndex": 4,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "github.event_name == 'workflow_dispatch'",
@@ -8979,13 +9040,15 @@
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-mingw-wine",
         "step": "Build (Windows .exe via MinGW)",
         "stepIndex": 5,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "github.event_name == 'workflow_dispatch'",
@@ -9004,7 +9067,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -9015,6 +9079,7 @@
           "config": "Debug",
           "enable_metal": "OFF"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -9039,7 +9104,8 @@
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -9050,6 +9116,7 @@
           "config": "Debug",
           "enable_metal": "OFF"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -9068,7 +9135,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(sysctl",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -9079,6 +9147,7 @@
           "config": "Debug",
           "enable_metal": "OFF"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -9093,7 +9162,8 @@
         "configuration": "Debug",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -9104,6 +9174,7 @@
           "config": "Release",
           "enable_metal": "OFF"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -9128,7 +9199,8 @@
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -9139,6 +9211,7 @@
           "config": "Release",
           "enable_metal": "OFF"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -9157,7 +9230,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(sysctl",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -9168,6 +9242,7 @@
           "config": "Release",
           "enable_metal": "OFF"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -9182,7 +9257,8 @@
         "configuration": "Release",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -9193,6 +9269,7 @@
           "config": "Release",
           "enable_metal": "ON"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -9217,7 +9294,8 @@
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -9228,6 +9306,7 @@
           "config": "Release",
           "enable_metal": "ON"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -9246,7 +9325,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(sysctl",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -9257,6 +9337,7 @@
           "config": "Release",
           "enable_metal": "ON"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -9271,13 +9352,15 @@
         "configuration": "Release",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "coverage",
         "step": "Configure",
         "stepIndex": 4,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9301,13 +9384,15 @@
           "BUILD_TESTS": "ON",
           "BUILD_GAME_MODULES": "ON"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "coverage",
         "step": "Build",
         "stepIndex": 5,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9326,13 +9411,15 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "clang-tidy",
         "step": "Configure",
         "stepIndex": 4,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9356,7 +9443,8 @@
           "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
           "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -9367,6 +9455,7 @@
           "bin_name": "SparkInstaller",
           "os": "ubuntu-24.04"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9384,7 +9473,8 @@
           "SPARKINSTALLER_BUILD_TESTS": "ON"
         },
         "sourceDir": "build-installer",
-        "buildDir": "build-installer/build"
+        "buildDir": "build-installer/build",
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -9395,6 +9485,7 @@
           "bin_name": "SparkInstaller",
           "os": "ubuntu-24.04"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9416,7 +9507,8 @@
         "buildDir": "build-installer/build",
         "preset": "",
         "parallel": "auto",
-        "buildsAllTargets": false
+        "buildsAllTargets": false,
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -9427,6 +9519,7 @@
           "bin_name": "SparkInstaller",
           "os": "ubuntu-24.04"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9441,7 +9534,8 @@
         "configuration": "Release",
         "testDir": "build-installer/build",
         "noTestsAction": "error",
-        "outputJUnit": ""
+        "outputJUnit": "",
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -9452,6 +9546,7 @@
           "bin_name": "SparkInstaller.exe",
           "os": "windows-latest"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -9469,7 +9564,8 @@
           "SPARKINSTALLER_BUILD_TESTS": "ON"
         },
         "sourceDir": "build-installer",
-        "buildDir": "build-installer/build"
+        "buildDir": "build-installer/build",
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -9480,6 +9576,7 @@
           "bin_name": "SparkInstaller.exe",
           "os": "windows-latest"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -9501,7 +9598,8 @@
         "buildDir": "build-installer/build",
         "preset": "",
         "parallel": "auto",
-        "buildsAllTargets": false
+        "buildsAllTargets": false,
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -9512,6 +9610,7 @@
           "bin_name": "SparkInstaller.exe",
           "os": "windows-latest"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -9526,7 +9625,8 @@
         "configuration": "Release",
         "testDir": "build-installer/build",
         "noTestsAction": "error",
-        "outputJUnit": ""
+        "outputJUnit": "",
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -9537,6 +9637,7 @@
           "bin_name": "SparkInstaller",
           "os": "macos-latest"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "absent",
@@ -9554,7 +9655,8 @@
           "SPARKINSTALLER_BUILD_TESTS": "ON"
         },
         "sourceDir": "build-installer",
-        "buildDir": "build-installer/build"
+        "buildDir": "build-installer/build",
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -9565,6 +9667,7 @@
           "bin_name": "SparkInstaller",
           "os": "macos-latest"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "absent",
@@ -9586,7 +9689,8 @@
         "buildDir": "build-installer/build",
         "preset": "",
         "parallel": "auto",
-        "buildsAllTargets": false
+        "buildsAllTargets": false,
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -9597,6 +9701,7 @@
           "bin_name": "SparkInstaller",
           "os": "macos-latest"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "absent",
@@ -9611,7 +9716,8 @@
         "configuration": "Release",
         "testDir": "build-installer/build",
         "noTestsAction": "error",
-        "outputJUnit": ""
+        "outputJUnit": "",
+        "commandIndex": 0
       }
     ],
     "unresolvedInvocations": [],
@@ -9621,6 +9727,7 @@
         "step": "Configure CMake (ASan + UBSan + LSan)",
         "stepIndex": 4,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9644,13 +9751,15 @@
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
           "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-tsan",
         "step": "Configure CMake (TSan)",
         "stepIndex": 4,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9674,13 +9783,15 @@
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread",
           "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-msan",
         "step": "Configure CMake (MSan)",
         "stepIndex": 4,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9705,7 +9816,8 @@
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -lc++abi",
           "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
@@ -9714,6 +9826,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -9732,7 +9845,8 @@
         "buildDir": "build",
         "generator": "Visual Studio 17 2022",
         "architecture": "x64",
-        "toolset": "v143"
+        "toolset": "v143",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
@@ -9741,6 +9855,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -9759,7 +9874,8 @@
         "buildDir": "build",
         "generator": "Visual Studio 17 2022",
         "architecture": "x64",
-        "toolset": "v143"
+        "toolset": "v143",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
@@ -9768,6 +9884,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "pwsh",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -9785,7 +9902,8 @@
         "fresh": true,
         "buildDir": "build",
         "generator": "Visual Studio 18 2026",
-        "architecture": "x64"
+        "architecture": "x64",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
@@ -9794,6 +9912,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "pwsh",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -9811,7 +9930,8 @@
         "fresh": true,
         "buildDir": "build",
         "generator": "Visual Studio 18 2026",
-        "architecture": "x64"
+        "architecture": "x64",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-gcc",
@@ -9820,6 +9940,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9839,7 +9960,8 @@
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-gcc",
@@ -9848,6 +9970,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9867,7 +9990,8 @@
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-clang",
@@ -9876,6 +10000,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9899,7 +10024,8 @@
           "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
           "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-clang",
@@ -9908,6 +10034,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -9931,13 +10058,15 @@
           "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
           "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-mingw-wine",
         "step": "Configure CMake (MinGW cross-compilation)",
         "stepIndex": 4,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "github.event_name == 'workflow_dispatch'",
@@ -9959,7 +10088,8 @@
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -9970,6 +10100,7 @@
           "config": "Debug",
           "enable_metal": "OFF"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -9994,7 +10125,8 @@
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -10005,6 +10137,7 @@
           "config": "Release",
           "enable_metal": "OFF"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -10029,7 +10162,8 @@
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -10040,6 +10174,7 @@
           "config": "Release",
           "enable_metal": "ON"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -10064,13 +10199,15 @@
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "coverage",
         "step": "Configure",
         "stepIndex": 4,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10094,13 +10231,15 @@
           "BUILD_TESTS": "ON",
           "BUILD_GAME_MODULES": "ON"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "clang-tidy",
         "step": "Configure",
         "stepIndex": 4,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10124,7 +10263,8 @@
           "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
           "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
         },
-        "buildDir": "build"
+        "buildDir": "build",
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -10135,6 +10275,7 @@
           "bin_name": "SparkInstaller",
           "os": "ubuntu-24.04"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10152,7 +10293,8 @@
           "SPARKINSTALLER_BUILD_TESTS": "ON"
         },
         "sourceDir": "build-installer",
-        "buildDir": "build-installer/build"
+        "buildDir": "build-installer/build",
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -10163,6 +10305,7 @@
           "bin_name": "SparkInstaller.exe",
           "os": "windows-latest"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -10180,7 +10323,8 @@
           "SPARKINSTALLER_BUILD_TESTS": "ON"
         },
         "sourceDir": "build-installer",
-        "buildDir": "build-installer/build"
+        "buildDir": "build-installer/build",
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -10191,6 +10335,7 @@
           "bin_name": "SparkInstaller",
           "os": "macos-latest"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "absent",
@@ -10208,7 +10353,8 @@
           "SPARKINSTALLER_BUILD_TESTS": "ON"
         },
         "sourceDir": "build-installer",
-        "buildDir": "build-installer/build"
+        "buildDir": "build-installer/build",
+        "commandIndex": 0
       }
     ],
     "buildInvocations": [
@@ -10217,6 +10363,7 @@
         "step": "Build",
         "stepIndex": 5,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10235,13 +10382,15 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-tsan",
         "step": "Build",
         "stepIndex": 5,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10260,13 +10409,15 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-msan",
         "step": "Build (SparkTests only)",
         "stepIndex": 5,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10286,7 +10437,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": false
+        "buildsAllTargets": false,
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
@@ -10295,6 +10447,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -10313,7 +10466,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "2>",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
@@ -10322,6 +10476,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -10340,7 +10495,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "2>",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
@@ -10349,6 +10505,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "pwsh",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -10367,7 +10524,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "auto",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
@@ -10376,6 +10534,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "pwsh",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -10394,7 +10553,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "auto",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-gcc",
@@ -10403,6 +10563,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10421,7 +10582,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-gcc",
@@ -10430,6 +10592,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10448,7 +10611,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-clang",
@@ -10457,6 +10621,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10475,7 +10640,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-clang",
@@ -10484,6 +10650,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10502,13 +10669,15 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-linux-mingw-wine",
         "step": "Build (Windows .exe via MinGW)",
         "stepIndex": 5,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "github.event_name == 'workflow_dispatch'",
@@ -10527,7 +10696,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -10538,6 +10708,7 @@
           "config": "Debug",
           "enable_metal": "OFF"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -10556,7 +10727,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(sysctl",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -10567,6 +10739,7 @@
           "config": "Release",
           "enable_metal": "OFF"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -10585,7 +10758,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(sysctl",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -10596,6 +10770,7 @@
           "config": "Release",
           "enable_metal": "ON"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -10614,13 +10789,15 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(sysctl",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "coverage",
         "step": "Build",
         "stepIndex": 5,
         "matrix": {},
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10639,7 +10816,8 @@
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true
+        "buildsAllTargets": true,
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -10650,6 +10828,7 @@
           "bin_name": "SparkInstaller",
           "os": "ubuntu-24.04"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10671,7 +10850,8 @@
         "buildDir": "build-installer/build",
         "preset": "",
         "parallel": "auto",
-        "buildsAllTargets": false
+        "buildsAllTargets": false,
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -10682,6 +10862,7 @@
           "bin_name": "SparkInstaller.exe",
           "os": "windows-latest"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -10703,7 +10884,8 @@
         "buildDir": "build-installer/build",
         "preset": "",
         "parallel": "auto",
-        "buildsAllTargets": false
+        "buildsAllTargets": false,
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -10714,6 +10896,7 @@
           "bin_name": "SparkInstaller",
           "os": "macos-latest"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "absent",
@@ -10735,7 +10918,8 @@
         "buildDir": "build-installer/build",
         "preset": "",
         "parallel": "auto",
-        "buildsAllTargets": false
+        "buildsAllTargets": false,
+        "commandIndex": 0
       }
     ],
     "testInvocations": [
@@ -10746,6 +10930,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -10760,7 +10945,8 @@
         "configuration": "Debug",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
@@ -10769,6 +10955,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -10783,7 +10970,8 @@
         "configuration": "Release",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
@@ -10792,6 +10980,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "pwsh",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -10806,7 +10995,8 @@
         "configuration": "Debug",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
@@ -10815,6 +11005,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "pwsh",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -10829,7 +11020,8 @@
         "configuration": "Release",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-gcc",
@@ -10838,6 +11030,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10852,7 +11045,8 @@
         "configuration": "Debug",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-gcc",
@@ -10861,6 +11055,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10875,7 +11070,8 @@
         "configuration": "Release",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-clang",
@@ -10884,6 +11080,7 @@
         "matrix": {
           "config": "Debug"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10898,7 +11095,8 @@
         "configuration": "Debug",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-linux-clang",
@@ -10907,6 +11105,7 @@
         "matrix": {
           "config": "Release"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -10921,7 +11120,8 @@
         "configuration": "Release",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -10932,6 +11132,7 @@
           "config": "Debug",
           "enable_metal": "OFF"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -10946,7 +11147,8 @@
         "configuration": "Debug",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -10957,6 +11159,7 @@
           "config": "Release",
           "enable_metal": "OFF"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -10971,7 +11174,8 @@
         "configuration": "Release",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-macos",
@@ -10982,6 +11186,7 @@
           "config": "Release",
           "enable_metal": "ON"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -10996,7 +11201,8 @@
         "configuration": "Release",
         "testDir": "build",
         "noTestsAction": "",
-        "outputJUnit": "build/ctest-junit.xml"
+        "outputJUnit": "build/ctest-junit.xml",
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -11007,6 +11213,7 @@
           "bin_name": "SparkInstaller",
           "os": "ubuntu-24.04"
         },
+        "matrixResolved": true,
         "runnerOs": "linux",
         "shell": "bash",
         "jobIf": "absent",
@@ -11021,7 +11228,8 @@
         "configuration": "Release",
         "testDir": "build-installer/build",
         "noTestsAction": "error",
-        "outputJUnit": ""
+        "outputJUnit": "",
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -11032,6 +11240,7 @@
           "bin_name": "SparkInstaller.exe",
           "os": "windows-latest"
         },
+        "matrixResolved": true,
         "runnerOs": "windows",
         "shell": "bash",
         "jobIf": "absent",
@@ -11046,7 +11255,8 @@
         "configuration": "Release",
         "testDir": "build-installer/build",
         "noTestsAction": "error",
-        "outputJUnit": ""
+        "outputJUnit": "",
+        "commandIndex": 0
       },
       {
         "job": "build-installer",
@@ -11057,6 +11267,7 @@
           "bin_name": "SparkInstaller",
           "os": "macos-latest"
         },
+        "matrixResolved": true,
         "runnerOs": "macos",
         "shell": "bash",
         "jobIf": "absent",
@@ -11071,7 +11282,8 @@
         "configuration": "Release",
         "testDir": "build-installer/build",
         "noTestsAction": "error",
-        "outputJUnit": ""
+        "outputJUnit": "",
+        "commandIndex": 0
       }
     ],
     "summary": {
@@ -11111,6 +11323,7 @@
       "step": "Configure CMake (ASan + UBSan + LSan)",
       "stepIndex": 4,
       "matrix": {},
+      "matrixResolved": true,
       "runnerOs": "linux",
       "shell": "bash",
       "jobIf": "absent",
@@ -11134,13 +11347,15 @@
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
         "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "build-linux-tsan",
       "step": "Configure CMake (TSan)",
       "stepIndex": 4,
       "matrix": {},
+      "matrixResolved": true,
       "runnerOs": "linux",
       "shell": "bash",
       "jobIf": "absent",
@@ -11164,13 +11379,15 @@
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread",
         "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "build-linux-msan",
       "step": "Configure CMake (MSan)",
       "stepIndex": 4,
       "matrix": {},
+      "matrixResolved": true,
       "runnerOs": "linux",
       "shell": "bash",
       "jobIf": "absent",
@@ -11195,7 +11412,8 @@
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -lc++abi",
         "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "build-windows-vs2022",
@@ -11204,6 +11422,7 @@
       "matrix": {
         "config": "Debug"
       },
+      "matrixResolved": true,
       "runnerOs": "windows",
       "shell": "bash",
       "jobIf": "absent",
@@ -11222,7 +11441,8 @@
       "buildDir": "build",
       "generator": "Visual Studio 17 2022",
       "architecture": "x64",
-      "toolset": "v143"
+      "toolset": "v143",
+      "commandIndex": 0
     },
     {
       "job": "build-windows-vs2022",
@@ -11231,6 +11451,7 @@
       "matrix": {
         "config": "Release"
       },
+      "matrixResolved": true,
       "runnerOs": "windows",
       "shell": "bash",
       "jobIf": "absent",
@@ -11249,7 +11470,8 @@
       "buildDir": "build",
       "generator": "Visual Studio 17 2022",
       "architecture": "x64",
-      "toolset": "v143"
+      "toolset": "v143",
+      "commandIndex": 0
     },
     {
       "job": "build-windows-vs2026",
@@ -11258,6 +11480,7 @@
       "matrix": {
         "config": "Debug"
       },
+      "matrixResolved": true,
       "runnerOs": "windows",
       "shell": "pwsh",
       "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -11275,7 +11498,8 @@
       "fresh": true,
       "buildDir": "build",
       "generator": "Visual Studio 18 2026",
-      "architecture": "x64"
+      "architecture": "x64",
+      "commandIndex": 0
     },
     {
       "job": "build-windows-vs2026",
@@ -11284,6 +11508,7 @@
       "matrix": {
         "config": "Release"
       },
+      "matrixResolved": true,
       "runnerOs": "windows",
       "shell": "pwsh",
       "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -11301,7 +11526,8 @@
       "fresh": true,
       "buildDir": "build",
       "generator": "Visual Studio 18 2026",
-      "architecture": "x64"
+      "architecture": "x64",
+      "commandIndex": 0
     },
     {
       "job": "build-linux-gcc",
@@ -11310,6 +11536,7 @@
       "matrix": {
         "config": "Debug"
       },
+      "matrixResolved": true,
       "runnerOs": "linux",
       "shell": "bash",
       "jobIf": "absent",
@@ -11329,7 +11556,8 @@
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "build-linux-gcc",
@@ -11338,6 +11566,7 @@
       "matrix": {
         "config": "Release"
       },
+      "matrixResolved": true,
       "runnerOs": "linux",
       "shell": "bash",
       "jobIf": "absent",
@@ -11357,7 +11586,8 @@
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "build-linux-clang",
@@ -11366,6 +11596,7 @@
       "matrix": {
         "config": "Debug"
       },
+      "matrixResolved": true,
       "runnerOs": "linux",
       "shell": "bash",
       "jobIf": "absent",
@@ -11389,7 +11620,8 @@
         "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
         "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "build-linux-clang",
@@ -11398,6 +11630,7 @@
       "matrix": {
         "config": "Release"
       },
+      "matrixResolved": true,
       "runnerOs": "linux",
       "shell": "bash",
       "jobIf": "absent",
@@ -11421,13 +11654,15 @@
         "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
         "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "build-linux-mingw-wine",
       "step": "Configure CMake (MinGW cross-compilation)",
       "stepIndex": 4,
       "matrix": {},
+      "matrixResolved": true,
       "runnerOs": "linux",
       "shell": "bash",
       "jobIf": "github.event_name == 'workflow_dispatch'",
@@ -11449,7 +11684,8 @@
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "build-macos",
@@ -11460,6 +11696,7 @@
         "config": "Debug",
         "enable_metal": "OFF"
       },
+      "matrixResolved": true,
       "runnerOs": "macos",
       "shell": "bash",
       "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -11484,7 +11721,8 @@
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "build-macos",
@@ -11495,6 +11733,7 @@
         "config": "Release",
         "enable_metal": "OFF"
       },
+      "matrixResolved": true,
       "runnerOs": "macos",
       "shell": "bash",
       "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -11519,7 +11758,8 @@
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "build-macos",
@@ -11530,6 +11770,7 @@
         "config": "Release",
         "enable_metal": "ON"
       },
+      "matrixResolved": true,
       "runnerOs": "macos",
       "shell": "bash",
       "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
@@ -11554,13 +11795,15 @@
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "coverage",
       "step": "Configure",
       "stepIndex": 4,
       "matrix": {},
+      "matrixResolved": true,
       "runnerOs": "linux",
       "shell": "bash",
       "jobIf": "absent",
@@ -11584,13 +11827,15 @@
         "BUILD_TESTS": "ON",
         "BUILD_GAME_MODULES": "ON"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "clang-tidy",
       "step": "Configure",
       "stepIndex": 4,
       "matrix": {},
+      "matrixResolved": true,
       "runnerOs": "linux",
       "shell": "bash",
       "jobIf": "absent",
@@ -11614,7 +11859,8 @@
         "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
-      "buildDir": "build"
+      "buildDir": "build",
+      "commandIndex": 0
     },
     {
       "job": "build-installer",
@@ -11625,6 +11871,7 @@
         "bin_name": "SparkInstaller",
         "os": "ubuntu-24.04"
       },
+      "matrixResolved": true,
       "runnerOs": "linux",
       "shell": "bash",
       "jobIf": "absent",
@@ -11642,7 +11889,8 @@
         "SPARKINSTALLER_BUILD_TESTS": "ON"
       },
       "sourceDir": "build-installer",
-      "buildDir": "build-installer/build"
+      "buildDir": "build-installer/build",
+      "commandIndex": 0
     },
     {
       "job": "build-installer",
@@ -11653,6 +11901,7 @@
         "bin_name": "SparkInstaller.exe",
         "os": "windows-latest"
       },
+      "matrixResolved": true,
       "runnerOs": "windows",
       "shell": "bash",
       "jobIf": "absent",
@@ -11670,7 +11919,8 @@
         "SPARKINSTALLER_BUILD_TESTS": "ON"
       },
       "sourceDir": "build-installer",
-      "buildDir": "build-installer/build"
+      "buildDir": "build-installer/build",
+      "commandIndex": 0
     },
     {
       "job": "build-installer",
@@ -11681,6 +11931,7 @@
         "bin_name": "SparkInstaller",
         "os": "macos-latest"
       },
+      "matrixResolved": true,
       "runnerOs": "macos",
       "shell": "bash",
       "jobIf": "absent",
@@ -11698,7 +11949,8 @@
         "SPARKINSTALLER_BUILD_TESTS": "ON"
       },
       "sourceDir": "build-installer",
-      "buildDir": "build-installer/build"
+      "buildDir": "build-installer/build",
+      "commandIndex": 0
     }
   ],
   "stableV1Products": [

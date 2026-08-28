@@ -507,7 +507,7 @@
       ],
       "commands": [
         "python3 Tools/buildmatrix/inventory.py --check docs/readiness/ci120-build-matrix-inventory.json",
-        "python3 Tools/buildmatrix/capture_provenance.py --codemodel windows-shipping=build/windows-shipping",
+        "python3 Tools/buildmatrix/capture_provenance.py --profile windows-shipping --build-dir build/windows-shipping",
         "python3 Tools/buildmatrix/inventory.py --codemodel windows-shipping=build/windows-shipping --output docs/readiness/ci120-build-matrix-inventory.json",
         "python3 Tools/buildmatrix/check_parity.py --inventory docs/readiness/ci120-build-matrix-inventory.json --baseline docs/readiness/ci120-parity-findings.json",
         "python3 Tests/Tools/test_build_matrix_parity.py",

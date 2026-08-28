@@ -760,6 +760,7 @@ def parse_commands(
     """
     commands: list[dict[str, Any]] = []
     unresolved: list[dict[str, Any]] = []
+    command_index = 0
     for line in logical_shell_lines(script, shell):
         resolved_line = _substitute_env(_substitute_matrix(line, combination), env)
         tokens = shell_tokens(resolved_line)
@@ -812,6 +813,8 @@ def parse_commands(
                     }
                 )
                 continue
+            record["commandIndex"] = command_index
+            command_index += 1
             commands.append(record)
     return commands, unresolved
 
@@ -902,14 +905,17 @@ def _parse_cmake_build(
         "buildDir": "", "preset": "", "parallel": "",
     }
     index = 0
+    saw_build = False
     while index < len(args):
         argument = args[index]
         if argument == "--build":
-            if index + 1 < len(args):
+            saw_build = True
+            if index + 1 < len(args) and not args[index + 1].startswith("-"):
                 result["buildDir"] = args[index + 1]
                 index += 2
                 continue
-            raise WorkflowError(f"{context.get('job')}/{context.get('step')}: --build lacks a directory")
+            index += 1
+            continue
         if argument in {"--config", "-C"}:
             if index + 1 >= len(args):
                 raise WorkflowError(f"{context.get('job')}/{context.get('step')}: --config lacks a value")
@@ -936,6 +942,10 @@ def _parse_cmake_build(
         if argument == "--":
             break
         index += 1
+    if not saw_build or not (result["buildDir"] or result["preset"]):
+        raise WorkflowError(
+            f"{context.get('job')}/{context.get('step')}: --build lacks a directory or preset"
+        )
     # An empty --target list means CMake builds the default `all` target. Record
     # that explicitly: absence and "everything" must never look the same.
     result["targets"] = sorted(result["targets"]) if result["targets"] else ["all"]
@@ -1034,6 +1044,7 @@ def extract_invocations(analysis: dict[str, Any]) -> dict[str, Any]:
                     "step": step["name"] or f"step[{step['index']}]",
                     "stepIndex": step["index"],
                     "matrix": dict(sorted(combination.items())),
+                    "matrixResolved": job["matrixResolved"],
                     "runnerOs": os_classes[0] if len(os_classes) == 1 else "multiple",
                     "shell": shell,
                     "jobIf": job["if"],

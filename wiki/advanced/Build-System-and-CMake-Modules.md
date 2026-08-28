@@ -208,11 +208,12 @@ cmake --build --preset windows-release
 
 ### CI-120 configured-target evidence
 
-CI-120 uses CMake File API replies to prove which targets a concrete build profile actually configured. After a successful configure, capture producer-owned provenance before generating the inventory:
+CI-120 uses CMake File API replies to prove which targets a concrete build profile actually configured. The capture command creates a unique stateful File API query, invokes the canonical configure itself, and records only the matching reply transaction before inventory generation:
 
 ```bash
 python3 Tools/buildmatrix/capture_provenance.py \
-  --codemodel windows-shipping=build/windows-shipping
+  --profile windows-shipping \
+  --build-dir build/windows-shipping
 python3 Tools/buildmatrix/inventory.py \
   --codemodel windows-shipping=build/windows-shipping \
   --output docs/readiness/ci120-build-matrix-inventory.json
@@ -221,7 +222,7 @@ python3 Tools/buildmatrix/check_parity.py \
   --baseline docs/readiness/ci120-parity-findings.json
 ```
 
-The capture step derives the clean repository commit itself and binds the profile, source/build directories, generator, cache values, and exact index/codemodel/cache/target reply digests. Inventory rejects missing, malformed, oversized, linked, out-of-directory, changed, or unbound reply data. Caller-supplied commit text is not provenance, and missing material fields or expected cache values remain blocking findings.
+The capture step requires an exactly clean repository, derives the commit itself, creates the query before configuring, and binds the profile, source/build directories, CMake executable and version, generator, cache values, and exact index/codemodel/cache/target reply digests. Inventory rejects missing, malformed, oversized, linked, out-of-directory, changed, unbound, or post-hoc reply data. Caller-supplied commit text is not provenance, and missing material fields or expected cache values remain blocking findings.
 
 The local record detects reply substitution but is not a signed remote attestation. Protected CI still owns production of the configured evidence, and release signing/attestation remains separate release work.
 

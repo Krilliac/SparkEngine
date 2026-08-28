@@ -12,12 +12,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
 import tempfile
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -75,6 +78,12 @@ _TARGET_KIND_MAP = {
     "INTERFACE_LIBRARY": "interface_library",
     "UNKNOWN_LIBRARY": "unknown_library",
 }
+_WINDOWS_PRODUCT_SUFFIX = {
+    "EXECUTABLE": ".exe",
+    "STATIC_LIBRARY": ".lib",
+    "SHARED_LIBRARY": ".dll",
+    "MODULE_LIBRARY": ".dll",
+}
 
 
 class InventoryError(RuntimeError):
@@ -83,6 +92,10 @@ class InventoryError(RuntimeError):
 
 class ReplyValidationError(InventoryError):
     """A supplied CMake File API reply is unsafe, malformed, or unstable."""
+
+
+class ConcurrentReplyUpdate(ReplyValidationError):
+    """A compliant concurrent CMake generation invalidated the selected index."""
 
 
 @dataclass
@@ -735,7 +748,9 @@ def _normalize_inherits(value: Any, label: str) -> list[str]:
 
 
 def extract_cmake_presets(path: Path | None = None) -> dict[str, Any]:
-    data = json.loads((path or PRESETS_PATH).read_text(encoding="utf-8"))
+    data = _read_bounded_json_file(
+        path or PRESETS_PATH, _MAX_PRESETS_BYTES, "CMakePresets.json"
+    )
     if not isinstance(data, dict):
         raise InventoryError("CMakePresets.json must contain an object")
     configure = []
@@ -1219,7 +1234,9 @@ def load_stable_profile_data(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_stable_profile(path: Path | None = None) -> dict[str, Any]:
-    data = json.loads((path or READINESS_PATH).read_text(encoding="utf-8"))
+    data = _read_bounded_json_file(
+        path or READINESS_PATH, _MAX_READINESS_BYTES, "stable-v1 readiness contract"
+    )
     return load_stable_profile_data(data)
 
 
@@ -1275,6 +1292,7 @@ _MAX_REPLY_INDICES = 32
 _MAX_INDEX_OBJECTS = 512
 _MAX_CONFIGURATIONS = 128
 _MAX_TARGET_REFERENCES = 8192
+_MAX_ARTIFACTS_PER_TARGET = 32
 _MAX_INDEX_BYTES = 2 * 1024 * 1024
 _MAX_CODEMODEL_BYTES = 16 * 1024 * 1024
 _MAX_CACHE_BYTES = 8 * 1024 * 1024
@@ -1286,9 +1304,15 @@ _MAX_CONSUMED_REPLY_BYTES = 128 * 1024 * 1024
 _MAX_JSON_DEPTH = 64
 _MAX_JSON_NODES = 250_000
 _MAX_JSON_STRING_BYTES = 2 * 1024 * 1024
-_PROVENANCE_FILE = "spark-ci120-provenance-v1.json"
-_PROVENANCE_SCHEMA = 1
-_PROVENANCE_PRODUCER = "spark-buildmatrix-capture-v1"
+_MAX_PRESETS_BYTES = 4 * 1024 * 1024
+_MAX_READINESS_BYTES = 16 * 1024 * 1024
+_MAX_INVENTORY_BYTES = 128 * 1024 * 1024
+_MAX_REPORT_BYTES = 64 * 1024 * 1024
+_PROVENANCE_FILE = "spark-ci120-provenance-v2.json"
+_PROVENANCE_SCHEMA = 2
+_PROVENANCE_PRODUCER = "spark-buildmatrix-configure-transaction-v2"
+_CAPTURE_CLIENT_PREFIX = "client-spark-ci120-"
+_MAX_CAPTURE_RESTARTS = 3
 _REPARSE_POINT_ATTRIBUTE = 0x400
 
 
@@ -1308,14 +1332,42 @@ def _is_reparse(metadata: os.stat_result) -> bool:
 
 
 def _stat_token(metadata: os.stat_result) -> tuple[int, ...]:
-    """Stable file identity fields shared by Windows path and handle APIs."""
+    """File identity and mutation fields shared by path and handle APIs.
+
+    Size is not mutation state.  In particular, a same-size in-place rewrite
+    retains the file id and used to survive every pre/open/post comparison.
+    CMake promises never to rewrite a reply filename with different content,
+    so any timestamp change is a protocol violation and must invalidate the
+    snapshot.
+    """
     return (
         int(metadata.st_dev),
         int(metadata.st_ino),
         int(metadata.st_mode),
         int(metadata.st_size),
+        int(getattr(metadata, "st_mtime_ns", int(metadata.st_mtime * 1_000_000_000))),
+        int(getattr(metadata, "st_ctime_ns", int(metadata.st_ctime * 1_000_000_000))),
         int(getattr(metadata, "st_file_attributes", 0)),
     )
+
+
+def _identity_token(metadata: os.stat_result) -> tuple[int, ...]:
+    """Identity fields comparable between Windows path and handle stat views.
+
+    CPython's Windows ``lstat`` and ``fstat`` adapters can report different
+    synthesized mode/attribute bits for the same file.  File id, volume id,
+    and size are the shared identity boundary; file kind and reparse state are
+    validated independently on both views before this comparison.
+    """
+    return (
+        int(metadata.st_dev),
+        int(metadata.st_ino),
+        int(metadata.st_size),
+    )
+
+
+def _identity_from_stat_token(token: tuple[int, ...]) -> tuple[int, ...]:
+    return (token[0], token[1], token[3])
 
 
 def _directory_stat_token(metadata: os.stat_result) -> tuple[int, ...]:
@@ -1386,6 +1438,160 @@ def _opened_link_count(descriptor: int, metadata: os.stat_result) -> int:
     return int(information.numberOfLinks)
 
 
+def _windows_directory_information(handle: int) -> tuple[int, int, int]:
+    """Return volume, file id, and attributes for an open Windows directory."""
+    import ctypes
+    from ctypes import wintypes
+
+    class _FileTime(ctypes.Structure):
+        _fields_ = [("low", wintypes.DWORD), ("high", wintypes.DWORD)]
+
+    class _ByHandleFileInformation(ctypes.Structure):
+        _fields_ = [
+            ("attributes", wintypes.DWORD),
+            ("creationTime", _FileTime),
+            ("lastAccessTime", _FileTime),
+            ("lastWriteTime", _FileTime),
+            ("volumeSerialNumber", wintypes.DWORD),
+            ("fileSizeHigh", wintypes.DWORD),
+            ("fileSizeLow", wintypes.DWORD),
+            ("numberOfLinks", wintypes.DWORD),
+            ("fileIndexHigh", wintypes.DWORD),
+            ("fileIndexLow", wintypes.DWORD),
+        ]
+
+    information = _ByHandleFileInformation()
+    get_information = ctypes.windll.kernel32.GetFileInformationByHandle
+    get_information.argtypes = [wintypes.HANDLE, ctypes.POINTER(_ByHandleFileInformation)]
+    get_information.restype = wintypes.BOOL
+    if not get_information(wintypes.HANDLE(handle), ctypes.byref(information)):
+        raise ReplyValidationError("cannot identify a held CMake File API directory")
+    return (
+        int(information.volumeSerialNumber),
+        (int(information.fileIndexHigh) << 32) | int(information.fileIndexLow),
+        int(information.attributes),
+    )
+
+
+@dataclass
+class _HeldDirectory:
+    """A no-delete-share handle that prevents ancestor replacement mid-read."""
+
+    path: Path
+    path_token: tuple[int, ...]
+    handle_token: tuple[int, ...]
+    native_handle: int = -1
+    descriptor: int = -1
+
+    @classmethod
+    def open(cls, path: Path, label: str) -> "_HeldDirectory":
+        before = os.lstat(path)
+        _validate_directory(before, label)
+        path_token = _directory_stat_token(before)
+        if os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+
+            create_file = ctypes.windll.kernel32.CreateFileW
+            create_file.argtypes = [
+                wintypes.LPCWSTR,
+                wintypes.DWORD,
+                wintypes.DWORD,
+                wintypes.LPVOID,
+                wintypes.DWORD,
+                wintypes.DWORD,
+                wintypes.HANDLE,
+            ]
+            create_file.restype = wintypes.HANDLE
+            handle = create_file(
+                str(path),
+                0x80,  # FILE_READ_ATTRIBUTES
+                0x1 | 0x2,  # share reads/writes, deliberately deny delete/rename
+                None,
+                3,  # OPEN_EXISTING
+                0x02000000 | 0x00200000,  # BACKUP_SEMANTICS | OPEN_REPARSE_POINT
+                None,
+            )
+            invalid = ctypes.c_void_p(-1).value
+            if handle == invalid or handle is None:
+                raise ReplyValidationError(f"cannot hold {label} against replacement")
+            handle_value = int(handle)
+            try:
+                handle_token = _windows_directory_information(handle_value)
+                if not (handle_token[2] & 0x10) or handle_token[2] & 0x400:
+                    raise ReplyValidationError(f"held {label} is not a non-reparse directory")
+                after = os.lstat(path)
+                _validate_directory(after, label)
+                if _directory_stat_token(after) != path_token:
+                    raise ReplyValidationError(f"{label} changed while its handle was acquired")
+                return cls(path, path_token, handle_token, native_handle=handle_value)
+            except Exception:
+                ctypes.windll.kernel32.CloseHandle(wintypes.HANDLE(handle_value))
+                raise
+
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+        flags |= getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        try:
+            opened = os.fstat(descriptor)
+            _validate_directory(opened, f"opened {label}")
+            if _identity_token(opened)[:2] != _identity_token(before)[:2]:
+                raise ReplyValidationError(f"{label} changed while its handle was acquired")
+            after = os.lstat(path)
+            if _directory_stat_token(after) != path_token:
+                raise ReplyValidationError(f"{label} changed while its handle was acquired")
+            return cls(path, path_token, _directory_stat_token(opened), descriptor=descriptor)
+        except Exception:
+            os.close(descriptor)
+            raise
+
+    def assert_stable(self, label: str) -> None:
+        if self.native_handle != -1:
+            if _windows_directory_information(self.native_handle) != self.handle_token:
+                raise ConcurrentReplyUpdate(f"held {label} identity changed")
+        elif self.descriptor != -1:
+            opened = os.fstat(self.descriptor)
+            if _directory_stat_token(opened) != self.handle_token:
+                raise ConcurrentReplyUpdate(f"held {label} identity changed")
+        if _directory_token(self.path, label) != self.path_token:
+            raise ConcurrentReplyUpdate(f"{label} changed while replies were read")
+
+    def close(self) -> None:
+        if self.native_handle != -1:
+            import ctypes
+            from ctypes import wintypes
+
+            ctypes.windll.kernel32.CloseHandle(wintypes.HANDLE(self.native_handle))
+            self.native_handle = -1
+        if self.descriptor != -1:
+            os.close(self.descriptor)
+            self.descriptor = -1
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
+
+def _hold_directory_chain(path: Path, label: str) -> list[_HeldDirectory]:
+    absolute = _absolute_directory(path)
+    current = Path(absolute.anchor)
+    paths = [current]
+    for component in absolute.parts[1:]:
+        current /= component
+        paths.append(current)
+    held: list[_HeldDirectory] = []
+    try:
+        for component in paths:
+            held.append(_HeldDirectory.open(component, f"{label} ancestor {component}"))
+    except Exception:
+        for item in reversed(held):
+            item.close()
+        raise
+    return held
+
+
 def _directory_token(path: Path, label: str) -> tuple[int, ...]:
     try:
         metadata = os.lstat(path)
@@ -1396,16 +1602,33 @@ def _directory_token(path: Path, label: str) -> tuple[int, ...]:
 
 
 def _validate_directory_chain(path: Path, label: str) -> tuple[Path, tuple[int, ...]] | None:
-    """Validate the caller-selected trust root without following its final entry."""
+    """Validate every existing ancestor without following a reparse point.
+
+    Checking only the leaf lets ``trusted/build`` escape when ``trusted`` is a
+    junction.  Walk from the volume/filesystem anchor so every component that
+    the kernel will traverse is checked before the leaf is trusted.
+    """
     absolute = _absolute_directory(path)
-    try:
-        metadata = os.lstat(absolute)
-    except FileNotFoundError:
-        return None
-    except OSError as error:
-        raise ReplyValidationError(f"cannot inspect {label}: {error}") from error
-    _validate_directory(metadata, label)
-    return absolute, _directory_stat_token(metadata)
+    anchor = Path(absolute.anchor)
+    current = anchor
+    final_metadata: os.stat_result | None = None
+    for offset, component in enumerate(absolute.parts[1:], start=1):
+        current /= component
+        try:
+            metadata = os.lstat(current)
+        except FileNotFoundError:
+            return None
+        except OSError as error:
+            raise ReplyValidationError(f"cannot inspect {label} ancestor {current}: {error}") from error
+        _validate_directory(metadata, f"{label} ancestor {current}")
+        final_metadata = metadata
+    if final_metadata is None:
+        try:
+            final_metadata = os.lstat(anchor)
+        except OSError as error:
+            raise ReplyValidationError(f"cannot inspect {label}: {error}") from error
+        _validate_directory(final_metadata, label)
+    return absolute, _directory_stat_token(final_metadata)
 
 
 def _reply_filename(value: Any, label: str) -> str:
@@ -1423,6 +1646,14 @@ def _reject_json_constant(value: str) -> None:
 
 
 def _decode_bounded_json(payload: bytes, label: str) -> Any:
+    def utf8_size(value: str, kind: str) -> int:
+        try:
+            return len(value.encode("utf-8"))
+        except UnicodeEncodeError as error:
+            raise ReplyValidationError(
+                f"{label} contains invalid Unicode in a JSON {kind}"
+            ) from error
+
     def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         result: dict[str, Any] = {}
         for key, value in pairs:
@@ -1451,13 +1682,16 @@ def _decode_bounded_json(payload: bytes, label: str) -> Any:
             raise ReplyValidationError(f"{label} exceeds the {_MAX_JSON_DEPTH} JSON-depth bound")
         if isinstance(value, dict):
             for key, child in value.items():
-                if len(key.encode("utf-8")) > _MAX_JSON_STRING_BYTES:
+                if utf8_size(key, "key") > _MAX_JSON_STRING_BYTES:
                     raise ReplyValidationError(f"{label} contains an oversized JSON key")
                 stack.append((child, depth + 1))
         elif isinstance(value, list):
             stack.extend((child, depth + 1) for child in value)
-        elif isinstance(value, str) and len(value.encode("utf-8")) > _MAX_JSON_STRING_BYTES:
-            raise ReplyValidationError(f"{label} contains an oversized JSON string")
+        elif isinstance(value, str):
+            if utf8_size(value, "string") > _MAX_JSON_STRING_BYTES:
+                raise ReplyValidationError(f"{label} contains an oversized JSON string")
+        elif isinstance(value, float) and not math.isfinite(value):
+            raise ReplyValidationError(f"{label} contains a non-finite JSON number")
     return decoded
 
 
@@ -1466,6 +1700,57 @@ class _ReplyFile:
     path: Path
     token: tuple[int, ...]
     size: int
+    snapshot_sha256: str = ""
+
+    def __post_init__(self) -> None:
+        """Bind enumeration to content, not merely file-system metadata.
+
+        Some Windows volumes defer or coalesce timestamp updates, so an
+        in-place same-size rewrite can preserve every ``stat`` field exposed by
+        Python.  Hash once when the directory entry is captured and require the
+        bytes consumed later to retain that identity.
+        """
+        if self.snapshot_sha256:
+            return
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(self.path, flags)
+        try:
+            opened = os.fstat(descriptor)
+            _validate_regular_file(opened, f"snapshotted reply file {self.path.name!r}")
+            if _opened_link_count(descriptor, opened) != 1:
+                raise ReplyValidationError(
+                    f"snapshotted reply file {self.path.name!r} must have exactly one hard link"
+                )
+            if _identity_token(opened) != _identity_from_stat_token(self.token):
+                raise ReplyValidationError(
+                    f"snapshotted reply file {self.path.name!r} was replaced during enumeration"
+                )
+            opened_token = _stat_token(opened)
+            remaining = self.size
+            digest = hashlib.sha256()
+            while remaining:
+                chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+                if not chunk:
+                    raise ReplyValidationError(
+                        f"snapshotted reply file {self.path.name!r} was truncated"
+                    )
+                digest.update(chunk)
+                remaining -= len(chunk)
+            if os.read(descriptor, 1):
+                raise ReplyValidationError(f"snapshotted reply file {self.path.name!r} grew")
+            if _stat_token(os.fstat(descriptor)) != opened_token:
+                raise ReplyValidationError(
+                    f"snapshotted reply file {self.path.name!r} changed while hashing"
+                )
+        finally:
+            os.close(descriptor)
+        after = os.lstat(self.path)
+        if _stat_token(after) != self.token:
+            raise ReplyValidationError(
+                f"snapshotted reply file {self.path.name!r} changed after enumeration"
+            )
+        object.__setattr__(self, "snapshot_sha256", digest.hexdigest())
 
 
 @dataclass
@@ -1474,19 +1759,61 @@ class _ReplySnapshot:
     directory: Path
     directory_token: tuple[int, ...]
     files: dict[str, _ReplyFile]
+    entry_names: set[str] = field(default_factory=set)
+    ancestor_tokens: list[tuple[Path, tuple[int, ...]]] = field(default_factory=list)
+    directory_holds: list[_HeldDirectory] = field(default_factory=list)
     payloads: dict[str, bytes] = field(default_factory=dict)
     records: dict[str, dict[str, Any]] = field(default_factory=dict)
     consumed_bytes: int = 0
 
     def assert_stable(self) -> None:
+        for held in self.directory_holds:
+            held.assert_stable(f"CMake File API ancestor {held.path}")
+        for path, token in self.ancestor_tokens:
+            if _directory_token(path, f"CMake File API ancestor {path}") != token:
+                raise ConcurrentReplyUpdate(
+                    f"CMake File API ancestor {path} changed while replies were read"
+                )
         if _directory_token(self.directory, "CMake File API reply directory") != self.directory_token:
-            raise ReplyValidationError("CMake File API reply directory changed while it was being read")
+            raise ConcurrentReplyUpdate("CMake File API reply directory changed while it was being read")
+
+    def close(self) -> None:
+        for held in reversed(self.directory_holds):
+            held.close()
+        self.directory_holds.clear()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
+    def _capture_file(self, name: str, label: str) -> _ReplyFile:
+        if name not in self.entry_names:
+            raise ConcurrentReplyUpdate(
+                f"{label} {name!r} is missing from the captured reply snapshot"
+            )
+        path = self.directory / name
+        try:
+            metadata = os.lstat(path)
+        except FileNotFoundError as error:
+            raise ConcurrentReplyUpdate(f"{label} {name!r} disappeared") from error
+        except OSError as error:
+            raise ReplyValidationError(f"cannot inspect {label} {name!r}: {error}") from error
+        _validate_regular_file(metadata, f"{label} {name!r}")
+        if metadata.st_size > _MAX_REPLY_FILE_BYTES:
+            raise ReplyValidationError(
+                f"{label} {name!r} is above the {_MAX_REPLY_FILE_BYTES}-byte bound"
+            )
+        captured = _ReplyFile(path, _stat_token(metadata), metadata.st_size)
+        self.files[name] = captured
+        return captured
 
     def read_bytes(self, name: str, maximum: int, label: str) -> bytes:
         name = _reply_filename(name, label)
         known = self.files.get(name)
         if known is None:
-            raise ReplyValidationError(f"{label} {name!r} is missing from the captured reply snapshot")
+            known = self._capture_file(name, label)
         if known.size > maximum:
             raise ReplyValidationError(f"{label} {name!r} is {known.size} bytes, above the {maximum} bound")
         if name in self.payloads:
@@ -1497,6 +1824,8 @@ class _ReplySnapshot:
 
         try:
             before = os.lstat(known.path)
+        except FileNotFoundError as error:
+            raise ConcurrentReplyUpdate(f"{label} {name!r} disappeared before reading") from error
         except OSError as error:
             raise ReplyValidationError(f"cannot re-check {label} {name!r}: {error}") from error
         _validate_regular_file(before, f"{label} {name!r}")
@@ -1507,6 +1836,8 @@ class _ReplySnapshot:
         flags |= getattr(os, "O_NOFOLLOW", 0)
         try:
             descriptor = os.open(known.path, flags)
+        except FileNotFoundError as error:
+            raise ConcurrentReplyUpdate(f"{label} {name!r} disappeared while opening") from error
         except OSError as error:
             raise ReplyValidationError(f"cannot open {label} {name!r} without following links: {error}") from error
         try:
@@ -1517,8 +1848,9 @@ class _ReplySnapshot:
                 raise ReplyValidationError(
                     f"opened {label} {name!r} has {link_count} hard links; exactly one is required"
                 )
-            if _stat_token(opened) != known.token:
+            if _identity_token(opened) != _identity_from_stat_token(known.token):
                 raise ReplyValidationError(f"{label} {name!r} was replaced between inspection and open")
+            opened_token = _stat_token(opened)
             try:
                 after_open = os.lstat(known.path)
             except OSError as error:
@@ -1537,13 +1869,19 @@ class _ReplySnapshot:
             if os.read(descriptor, 1):
                 raise ReplyValidationError(f"{label} {name!r} grew while being read")
             payload = b"".join(chunks)
-            if _stat_token(os.fstat(descriptor)) != known.token:
+            if _stat_token(os.fstat(descriptor)) != opened_token:
                 raise ReplyValidationError(f"{label} {name!r} changed while being read")
+            if hashlib.sha256(payload).hexdigest() != known.snapshot_sha256:
+                raise ReplyValidationError(
+                    f"{label} {name!r} content changed after reply enumeration"
+                )
         finally:
             os.close(descriptor)
 
         try:
             after_read = os.lstat(known.path)
+        except FileNotFoundError as error:
+            raise ConcurrentReplyUpdate(f"{label} {name!r} disappeared after reading") from error
         except OSError as error:
             raise ReplyValidationError(f"cannot verify read {label} {name!r}: {error}") from error
         if _stat_token(after_read) != known.token:
@@ -1569,6 +1907,26 @@ class _ReplySnapshot:
         return [dict(self.records[name]) for name in sorted(self.records) if name != _PROVENANCE_FILE]
 
 
+def _read_bounded_json_file(path: Path, maximum: int, label: str) -> Any:
+    """Read one authoritative JSON file with stable identity and strict syntax."""
+    absolute = _absolute_directory(path)
+    parent_state = _validate_directory_chain(absolute.parent, f"{label} parent")
+    if parent_state is None:
+        raise InventoryError(f"{label} parent does not exist")
+    parent, parent_token = parent_state
+    try:
+        metadata = os.lstat(absolute)
+    except OSError as error:
+        raise InventoryError(f"cannot inspect {label}: {error}") from error
+    _validate_regular_file(metadata, label)
+    if metadata.st_size > maximum:
+        raise InventoryError(f"{label} is {metadata.st_size} bytes, above the {maximum} bound")
+    name = _reply_filename(absolute.name, label)
+    reply_file = _ReplyFile(absolute, _stat_token(metadata), metadata.st_size)
+    snapshot = _ReplySnapshot(parent, parent, parent_token, {name: reply_file}, {name})
+    return snapshot.read_json(name, maximum, label)
+
+
 def _snapshot_reply_directory(build_dir: Path, profile: str) -> _ReplySnapshot | None:
     build = _validate_directory_chain(build_dir, f"{profile} build directory")
     if build is None:
@@ -1589,6 +1947,9 @@ def _snapshot_reply_directory(build_dir: Path, profile: str) -> _ReplySnapshot |
         _validate_directory(metadata, f"{profile} File API directory component {reply_directory}")
         directory_token = _directory_stat_token(metadata)
 
+    directory_holds = _hold_directory_chain(
+        reply_directory, f"{profile} CMake File API directory"
+    )
     try:
         with os.scandir(reply_directory) as iterator:
             entries = list(iterator)
@@ -1600,6 +1961,7 @@ def _snapshot_reply_directory(build_dir: Path, profile: str) -> _ReplySnapshot |
         )
 
     files: dict[str, _ReplyFile] = {}
+    entry_names: set[str] = set()
     casefolded: set[str] = set()
     directory_bytes = 0
     for entry in entries:
@@ -1608,6 +1970,7 @@ def _snapshot_reply_directory(build_dir: Path, profile: str) -> _ReplySnapshot |
         if folded in casefolded:
             raise ReplyValidationError(f"{profile}: reply contains case-colliding filename {name!r}")
         casefolded.add(folded)
+        entry_names.add(name)
         try:
             # os.DirEntry.stat() can return zeroed file identities on Windows
             # filter-driver volumes. lstat(path) provides the real file ID that
@@ -1625,11 +1988,28 @@ def _snapshot_reply_directory(build_dir: Path, profile: str) -> _ReplySnapshot |
             raise ReplyValidationError(
                 f"{profile}: reply directory is above the {_MAX_REPLY_DIRECTORY_BYTES}-byte aggregate bound"
             )
-        files[name] = _ReplyFile(Path(entry.path), _stat_token(metadata), metadata.st_size)
+        # Do not open or hash arbitrary reply documents during enumeration.
+        # The reader captures only the selected index and the documents named
+        # by that index's exact client response.
 
     if _directory_token(reply_directory, f"{profile} CMake File API reply directory") != directory_token:
         raise ReplyValidationError(f"{profile}: reply directory changed during enumeration")
-    return _ReplySnapshot(build_directory, reply_directory, directory_token, files)
+    ancestor_tokens: list[tuple[Path, tuple[int, ...]]] = []
+    current = Path(reply_directory.anchor)
+    for component in reply_directory.parts[1:-1]:
+        current /= component
+        metadata = os.lstat(current)
+        _validate_directory(metadata, f"{profile} File API ancestor {current}")
+        ancestor_tokens.append((current, _directory_stat_token(metadata)))
+    return _ReplySnapshot(
+        build_directory,
+        reply_directory,
+        directory_token,
+        files,
+        entry_names,
+        ancestor_tokens,
+        directory_holds,
+    )
 
 
 def _require_mapping(value: Any, label: str) -> dict[str, Any]:
@@ -1685,6 +2065,87 @@ def _reply_object(index: dict[str, Any], kind: str, major: int, profile: str) ->
     return unique[0] if unique else ""
 
 
+def _client_reply_objects(
+    index: dict[str, Any],
+    client_name: str,
+    query: dict[str, Any],
+    profile: str,
+) -> dict[str, str]:
+    """Validate the exact stateful query mirror and return only its responses."""
+    reply = _require_mapping(index.get("reply"), f"{profile} File API index reply")
+    client = _require_mapping(
+        reply.get(client_name), f"{profile} File API client reply {client_name!r}"
+    )
+    query_reply = _require_mapping(
+        client.get("query.json"), f"{profile} File API stateful query reply"
+    )
+    if set(query_reply) != {"client", "requests", "responses"}:
+        raise ReplyValidationError(
+            f"{profile}: stateful client query response has unexpected or missing fields"
+        )
+    if query_reply.get("client") != query.get("client"):
+        raise ReplyValidationError(f"{profile}: File API client identity was not mirrored exactly")
+    requests = _require_list(
+        query_reply.get("requests"), f"{profile} File API mirrored requests", 8
+    )
+    if requests != query.get("requests"):
+        raise ReplyValidationError(f"{profile}: File API client requests were not mirrored exactly")
+    responses = _require_list(
+        query_reply.get("responses"), f"{profile} File API client responses", 8
+    )
+    if len(responses) != len(requests):
+        raise ReplyValidationError(f"{profile}: File API client response cardinality differs")
+    result: dict[str, str] = {}
+    for offset, (request_value, response_value) in enumerate(zip(requests, responses)):
+        request = _require_mapping(request_value, f"{profile} File API request {offset}")
+        response = _require_mapping(response_value, f"{profile} File API response {offset}")
+        if "error" in response:
+            raise ReplyValidationError(
+                f"{profile}: File API request {offset} failed: {response.get('error')}"
+            )
+        kind = request.get("kind")
+        if kind not in {"codemodel", "cache"} or kind in result:
+            raise ReplyValidationError(f"{profile}: malformed or duplicate client request kind {kind!r}")
+        version = _require_mapping(
+            response.get("version"), f"{profile} File API response {offset} version"
+        )
+        required_major = 2
+        if response.get("kind") != kind or version.get("major") != required_major:
+            raise ReplyValidationError(
+                f"{profile}: File API response {offset} does not match its request"
+            )
+        result[str(kind)] = _reply_filename(
+            response.get("jsonFile"), f"{profile} File API response {offset} jsonFile"
+        )
+    if set(result) != {"codemodel", "cache"}:
+        raise ReplyValidationError(f"{profile}: client reply does not contain codemodel and cache")
+    return result
+
+
+def _index_cmake_identity(index: dict[str, Any], profile: str) -> dict[str, Any]:
+    cmake = _require_mapping(index.get("cmake"), f"{profile} File API index cmake")
+    version = _require_mapping(cmake.get("version"), f"{profile} File API index cmake version")
+    paths = _require_mapping(cmake.get("paths"), f"{profile} File API index cmake paths")
+    generator = _require_mapping(
+        cmake.get("generator"), f"{profile} File API index generator"
+    )
+    version_string = version.get("string")
+    executable = paths.get("cmake")
+    generator_name = generator.get("name")
+    if not all(isinstance(value, str) and value for value in (version_string, executable, generator_name)):
+        raise ReplyValidationError(f"{profile}: File API index omits CMake producer identity")
+    multi_config = generator.get("multiConfig")
+    if type(multi_config) is not bool:
+        raise ReplyValidationError(f"{profile}: File API index has invalid multiConfig")
+    return {
+        "executable": _normalize_directory(executable),
+        "version": version_string,
+        "generator": generator_name,
+        "platform": str(generator.get("platform", "")),
+        "multiConfig": multi_config,
+    }
+
+
 def _bound_cache_entries(cache: dict[str, Any], profile: str) -> dict[str, str]:
     entries = _require_list(
         cache.get("entries"), f"{profile} CMake File API cache entries", _MAX_CACHE_ENTRIES
@@ -1719,6 +2180,7 @@ def parse_codemodel_targets(
     profile: str,
     codemodel: dict[str, Any],
     target_documents: dict[str, dict[str, Any]],
+    build_directory: Path | None = None,
 ) -> dict[str, Any]:
     """Parse configured target evidence from already loaded File API documents."""
     if not isinstance(codemodel, dict):
@@ -1727,6 +2189,18 @@ def parse_codemodel_targets(
     if not isinstance(configurations, list) or len(configurations) > _MAX_CONFIGURATIONS:
         raise InventoryError(f"{profile}: codemodel configurations are missing or above the bound")
     targets: dict[tuple[str, str], dict[str, str]] = {}
+    seen_configurations: set[str] = set()
+    id_bindings: dict[str, tuple[str, str]] = {}
+    profile_data = load_stable_profile()
+    known_profile = any(
+        item.get("id") == profile for item in profile_data.get("buildConfigurations", [])
+    )
+    supported_hosts = profile_data.get("supportedHosts", [])
+    windows_only = (
+        known_profile
+        and bool(supported_hosts)
+        and all("windows" in str(host).lower() for host in supported_hosts)
+    )
     reference_count = 0
     for configuration in configurations:
         if not isinstance(configuration, dict):
@@ -1734,6 +2208,9 @@ def parse_codemodel_targets(
         config_name = configuration.get("name")
         if not isinstance(config_name, str) or not config_name:
             raise InventoryError(f"{profile}: codemodel configuration has no nonempty name")
+        if config_name in seen_configurations:
+            raise InventoryError(f"{profile}: duplicate codemodel configuration {config_name!r}")
+        seen_configurations.add(config_name)
         references = configuration.get("targets")
         if not isinstance(references, list):
             raise InventoryError(f"{profile}: codemodel configuration {config_name!r} has no target list")
@@ -1746,9 +2223,21 @@ def parse_codemodel_targets(
             name = reference.get("name")
             if not isinstance(name, str) or not name:
                 raise InventoryError(f"{profile}: codemodel target reference has no name")
-            target_file = reference.get("jsonFile")
-            if not target_file:
-                raise InventoryError(f"{profile}: codemodel target {name!r} has no jsonFile")
+            reference_id = reference.get("id")
+            if not isinstance(reference_id, str) or not reference_id or len(reference_id) > 4096:
+                raise InventoryError(f"{profile}: codemodel target reference {name!r} has no valid id")
+            try:
+                target_file = _reply_filename(
+                    reference.get("jsonFile"), f"{profile} codemodel target {name!r} jsonFile"
+                )
+            except ReplyValidationError as error:
+                raise InventoryError(str(error)) from error
+            binding = (name, target_file)
+            previous_binding = id_bindings.setdefault(reference_id, binding)
+            if previous_binding != binding:
+                raise InventoryError(
+                    f"{profile}: codemodel target id {reference_id!r} identifies multiple targets"
+                )
             target = target_documents.get(target_file)
             if target is None:
                 raise InventoryError(f"{profile}: codemodel target reply {target_file!r} is missing")
@@ -1758,12 +2247,112 @@ def parse_codemodel_targets(
                 raise InventoryError(
                     f"{profile}: codemodel reference {name!r} disagrees with target document {target.get('name')!r}"
                 )
+            if target.get("id") != reference_id:
+                raise InventoryError(
+                    f"{profile}: codemodel reference id for {name!r} disagrees with its target document"
+                )
             cmake_type = target.get("type")
             kind = _TARGET_KIND_MAP.get(cmake_type)
             if not kind:
                 raise InventoryError(f"{profile}: unsupported codemodel target type {cmake_type!r}")
+            name_on_disk = target.get("nameOnDisk")
+            artifacts_value = target.get("artifacts")
+            product_type = cmake_type in {
+                "EXECUTABLE", "STATIC_LIBRARY", "SHARED_LIBRARY", "MODULE_LIBRARY"
+            }
+            artifact_paths: list[str] = []
+            if product_type:
+                if (
+                    not isinstance(name_on_disk, str)
+                    or not name_on_disk
+                    or len(name_on_disk) > 255
+                    or Path(name_on_disk).name != name_on_disk
+                    or name_on_disk in {".", ".."}
+                    or ":" in name_on_disk
+                    or any(ord(character) < 32 for character in name_on_disk)
+                    or name_on_disk.endswith((" ", "."))
+                ):
+                    raise InventoryError(
+                        f"{profile}: linked target {name!r} has no safe nameOnDisk"
+                    )
+                expected_suffix = _WINDOWS_PRODUCT_SUFFIX.get(str(cmake_type))
+                if windows_only and expected_suffix and not name_on_disk.casefold().endswith(
+                    expected_suffix
+                ):
+                    raise InventoryError(
+                        f"{profile}: target {name!r} nameOnDisk is inconsistent with {cmake_type}"
+                    )
+                artifacts = _require_list(
+                    artifacts_value,
+                    f"{profile} target {name!r} artifacts",
+                    _MAX_ARTIFACTS_PER_TARGET,
+                )
+                if not artifacts:
+                    raise InventoryError(f"{profile}: linked target {name!r} has no artifacts")
+                if build_directory is None:
+                    raise InventoryError(
+                        f"{profile}: cannot validate artifacts for {name!r} without its build directory"
+                    )
+                build_root = _absolute_directory(build_directory)
+                seen_artifacts: set[str] = set()
+                for artifact_offset, artifact_value in enumerate(artifacts):
+                    artifact = _require_mapping(
+                        artifact_value,
+                        f"{profile} target {name!r} artifact {artifact_offset}",
+                    )
+                    artifact_path = artifact.get("path")
+                    if not isinstance(artifact_path, str) or not artifact_path or "\\" in artifact_path:
+                        raise InventoryError(
+                            f"{profile}: target {name!r} artifact {artifact_offset} has an unsafe path"
+                        )
+                    candidate = Path(artifact_path)
+                    if (
+                        (candidate.drive and not candidate.is_absolute())
+                        or any(part in {"", ".", ".."} for part in candidate.parts)
+                    ):
+                        raise InventoryError(
+                            f"{profile}: target {name!r} artifact {artifact_path!r} is not contained"
+                        )
+                    absolute_artifact = (
+                        _absolute_directory(candidate)
+                        if candidate.is_absolute()
+                        else _absolute_directory(build_root / candidate)
+                    )
+                    try:
+                        common = os.path.commonpath((os.fspath(build_root), os.fspath(absolute_artifact)))
+                    except ValueError as error:
+                        raise InventoryError(
+                            f"{profile}: target {name!r} artifact {artifact_path!r} is on another volume"
+                        ) from error
+                    if os.path.normcase(common) != os.path.normcase(os.fspath(build_root)):
+                        raise InventoryError(
+                            f"{profile}: target {name!r} artifact {artifact_path!r} escapes the build directory"
+                        )
+                    normalized_artifact = _normalize_directory(str(absolute_artifact))
+                    artifact_key = os.path.normcase(normalized_artifact)
+                    if artifact_key in seen_artifacts:
+                        raise InventoryError(
+                            f"{profile}: target {name!r} repeats artifact {artifact_path!r}"
+                        )
+                    seen_artifacts.add(artifact_key)
+                    artifact_paths.append(normalized_artifact)
+                if not any(
+                    Path(path).name.casefold() == name_on_disk.casefold()
+                    for path in artifact_paths
+                ):
+                    raise InventoryError(
+                        f"{profile}: target {name!r} nameOnDisk is absent from its artifact list"
+                    )
             key = (name, config_name)
-            value = {"target": name, "kind": kind, "configuration": config_name}
+            value: dict[str, Any] = {
+                "target": name,
+                "id": reference_id,
+                "kind": kind,
+                "configuration": config_name,
+                "artifactState": "declared-not-built",
+                "nameOnDisk": name_on_disk if isinstance(name_on_disk, str) else "",
+                "artifacts": sorted(artifact_paths),
+            }
             if key in targets:
                 raise InventoryError(f"{profile}: duplicate codemodel target {key}")
             targets[key] = value
@@ -1779,14 +2368,19 @@ def _reply_records_digest(records: list[dict[str, Any]]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def _extract_reply_core(
-    build_dir: Path, profile: str
+def _extract_reply_core_once(
+    build_dir: Path,
+    profile: str,
+    *,
+    selected_index: str = "",
+    client_name: str = "",
+    query: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], _ReplySnapshot, list[dict[str, Any]]] | None:
     snapshot = _snapshot_reply_directory(build_dir, profile)
     if snapshot is None:
         return None
     indices = sorted(
-        name for name in snapshot.files if name.startswith("index-") and name.endswith(".json")
+        name for name in snapshot.entry_names if name.startswith("index-") and name.endswith(".json")
     )
     if len(indices) > _MAX_REPLY_INDICES:
         raise ReplyValidationError(
@@ -1794,9 +2388,49 @@ def _extract_reply_core(
         )
     if not indices:
         raise ReplyValidationError(f"{profile}: CMake File API reply has no index")
-    index_name = indices[-1]
-    index = _validate_index(snapshot.read_json(index_name, _MAX_INDEX_BYTES, f"{profile} index"), profile)
-    codemodel_file = _reply_object(index, "codemodel", 2, profile)
+    if selected_index:
+        if selected_index not in indices:
+            raise ConcurrentReplyUpdate(
+                f"{profile}: selected CMake File API index {selected_index!r} is no longer present"
+            )
+        candidate_names = [selected_index]
+    else:
+        candidate_names = list(reversed(indices))
+
+    index_name = ""
+    index: dict[str, Any] | None = None
+    client_files: dict[str, str] = {}
+    cmake_identity: dict[str, Any] = {}
+    if client_name and query is None:
+        raise ReplyValidationError(f"{profile}: client-bound reply requires its exact query")
+    for candidate_name in candidate_names:
+        candidate = _validate_index(
+            snapshot.read_json(candidate_name, _MAX_INDEX_BYTES, f"{profile} index"),
+            profile,
+        )
+        if client_name:
+            reply = _require_mapping(candidate.get("reply"), f"{profile} File API index reply")
+            if client_name not in reply:
+                if selected_index:
+                    raise ReplyValidationError(
+                        f"{profile}: selected index has no reply for client {client_name!r}"
+                    )
+                continue
+            client_files = _client_reply_objects(candidate, client_name, query, profile)
+            cmake_identity = _index_cmake_identity(candidate, profile)
+        index_name = candidate_name
+        index = candidate
+        break
+    if index is None:
+        raise ConcurrentReplyUpdate(
+            f"{profile}: no captured File API index contains the exact client response"
+        )
+
+    codemodel_file = (
+        client_files["codemodel"]
+        if client_name
+        else _reply_object(index, "codemodel", 2, profile)
+    )
     if not codemodel_file:
         raise ReplyValidationError(f"{profile}: CMake File API index has no codemodel-v2 reply")
     codemodel = _require_mapping(
@@ -1811,7 +2445,7 @@ def _extract_reply_core(
         if field_name in paths and not isinstance(paths[field_name], str):
             raise ReplyValidationError(f"{profile}: codemodel path {field_name!r} must be a string")
 
-    cache_file = _reply_object(index, "cache", 2, profile)
+    cache_file = client_files["cache"] if client_name else _reply_object(index, "cache", 2, profile)
     if not cache_file:
         raise ReplyValidationError(
             f"{profile}: CMake File API reply has no cache-v2 object; evidence cannot be bound to a configuration"
@@ -1847,7 +2481,12 @@ def _extract_reply_core(
                     f"{profile} target {target_file!r}",
                 )
 
-    evidence = parse_codemodel_targets(profile, codemodel, target_documents)
+    try:
+        evidence = parse_codemodel_targets(
+            profile, codemodel, target_documents, snapshot.build_directory
+        )
+    except InventoryError as error:
+        raise ReplyValidationError(str(error)) from error
     evidence.update(
         {
             "evidenceDirectory": _normalize_directory(str(snapshot.build_directory)),
@@ -1865,6 +2504,8 @@ def _extract_reply_core(
                     if isinstance(configuration, dict)
                 }
             ),
+            "queryClient": client_name,
+            "cmakeProducer": cmake_identity,
         }
     )
     records = snapshot.consumed_records()
@@ -1874,42 +2515,214 @@ def _extract_reply_core(
     return evidence, snapshot, records
 
 
+def _extract_reply_core(
+    build_dir: Path,
+    profile: str,
+    *,
+    selected_index: str = "",
+    client_name: str = "",
+    query: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], _ReplySnapshot, list[dict[str, Any]]] | None:
+    """Read one coherent reply, restarting only onto CMake's newest index."""
+    last_error: ConcurrentReplyUpdate | None = None
+    for attempt in range(_MAX_CAPTURE_RESTARTS):
+        try:
+            return _extract_reply_core_once(
+                build_dir,
+                profile,
+                selected_index=selected_index,
+                client_name=client_name,
+                query=query,
+            )
+        except ConcurrentReplyUpdate as error:
+            last_error = error
+            # A provenance record names one immutable index.  Moving it to a
+            # later index would mix transactions; only an in-flight capture may
+            # restart from CMake's newest matching index.
+            if selected_index or attempt + 1 >= _MAX_CAPTURE_RESTARTS:
+                raise
+    assert last_error is not None
+    raise last_error
+
+
+def _provenance_path(build_dir: Path, profile: str) -> Path:
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", profile):
+        raise ReplyValidationError(f"invalid provenance profile name {profile!r}")
+    return _absolute_directory(build_dir) / ".cmake" / "api" / "v1" / "provenance" / (
+        f"{profile}-{_PROVENANCE_FILE}"
+    )
+
+
+def _load_provenance_document(build_dir: Path, profile: str) -> dict[str, Any] | None:
+    path = _provenance_path(build_dir, profile)
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise ReplyValidationError(f"cannot inspect {profile} provenance record: {error}") from error
+    return _require_mapping(
+        _read_bounded_json_file(path, _MAX_PROVENANCE_BYTES, f"{profile} provenance"),
+        f"{profile} provenance record",
+    )
+
+
+def _provenance_selection(
+    record: dict[str, Any], profile: str
+) -> tuple[str, str, dict[str, Any]]:
+    if record.get("schemaVersion") != _PROVENANCE_SCHEMA:
+        raise ReplyValidationError(f"{profile}: unsupported provenance schemaVersion")
+    if record.get("producer") != _PROVENANCE_PRODUCER or record.get("profile") != profile:
+        raise ReplyValidationError(f"{profile}: provenance record has an unknown producer or profile")
+    transaction = _require_mapping(record.get("transaction"), f"{profile} transaction")
+    query = _require_mapping(transaction.get("query"), f"{profile} transaction query")
+    client_name = transaction.get("queryClient")
+    run_id = transaction.get("runId")
+    if (
+        not isinstance(run_id, str)
+        or not re.fullmatch(r"[0-9a-f]{32}", run_id)
+        or client_name != _CAPTURE_CLIENT_PREFIX + run_id
+    ):
+        raise ReplyValidationError(f"{profile}: provenance transaction has invalid client identity")
+    if query != _capture_query(profile, run_id):
+        raise ReplyValidationError(
+            f"{profile}: provenance transaction does not contain the exact owned client query"
+        )
+    query_payload = (json.dumps(query, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
+    if transaction.get("querySha256") != hashlib.sha256(query_payload).hexdigest():
+        raise ReplyValidationError(f"{profile}: provenance transaction query digest differs")
+    reply = _require_mapping(record.get("reply"), f"{profile} provenance reply")
+    index_name = _reply_filename(reply.get("index"), f"{profile} provenance reply index")
+    return index_name, str(client_name), query
+
+
 def _load_producer_provenance(
-    snapshot: _ReplySnapshot,
+    record: dict[str, Any] | None,
     profile: str,
     evidence: dict[str, Any],
     records: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    if _PROVENANCE_FILE not in snapshot.files:
+    if record is None:
         return {"state": "missing", "recordFile": _PROVENANCE_FILE}
-    record = _require_mapping(
-        snapshot.read_json(_PROVENANCE_FILE, _MAX_PROVENANCE_BYTES, f"{profile} provenance"),
-        f"{profile} provenance record",
-    )
-    required = {"schemaVersion", "producer", "profile", "evidenceDirectory", "repository", "reply"}
+    required = {
+        "schemaVersion", "producer", "profile", "evidenceDirectory",
+        "transaction", "observed", "reply",
+    }
     if set(record) != required:
         raise ReplyValidationError(
             f"{profile}: provenance record fields must be exactly {sorted(required)}"
         )
-    if record.get("schemaVersion") != _PROVENANCE_SCHEMA:
-        raise ReplyValidationError(f"{profile}: unsupported provenance schemaVersion")
-    if record.get("producer") != _PROVENANCE_PRODUCER:
-        raise ReplyValidationError(f"{profile}: provenance record has an unknown producer")
-    if record.get("profile") != profile:
-        raise ReplyValidationError(f"{profile}: provenance record is bound to another profile")
+    index_name, client_name, query = _provenance_selection(record, profile)
     if _normalize_directory(record.get("evidenceDirectory")) != evidence["evidenceDirectory"]:
         raise ReplyValidationError(f"{profile}: provenance record names another build directory")
 
-    repository = _require_mapping(record.get("repository"), f"{profile} provenance repository")
-    if set(repository) != {"root", "commit", "clean"}:
-        raise ReplyValidationError(f"{profile}: provenance repository record has invalid fields")
-    root = _normalize_directory(repository.get("root"))
-    commit = repository.get("commit")
-    clean = repository.get("clean")
-    if not root or not isinstance(commit, str) or not re.fullmatch(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}", commit):
-        raise ReplyValidationError(f"{profile}: provenance repository identity is invalid")
-    if type(clean) is not bool:
-        raise ReplyValidationError(f"{profile}: provenance repository clean flag must be boolean")
+    transaction = _require_mapping(record.get("transaction"), f"{profile} transaction")
+    transaction_required = {
+        "runId", "queryClient", "querySha256", "query", "profile", "preset",
+        "configuration", "sourceDirectory", "buildDirectory", "configure",
+        "repositoryBefore", "repositoryAfter",
+    }
+    if set(transaction) != transaction_required:
+        raise ReplyValidationError(f"{profile}: provenance transaction fields are incomplete")
+    if transaction.get("profile") != profile or transaction.get("queryClient") != client_name:
+        raise ReplyValidationError(f"{profile}: provenance transaction profile/client differs")
+    profile_data = load_stable_profile()
+    profile_config = next(
+        (item for item in profile_data["buildConfigurations"] if item.get("id") == profile),
+        None,
+    )
+    if profile_config is None:
+        raise ReplyValidationError(f"{profile}: provenance transaction names an unknown profile")
+    expected_preset = str(profile_config.get("preset", ""))
+    expected_configuration = str(profile_config.get("configuration", ""))
+    if (
+        transaction.get("preset") != expected_preset
+        or transaction.get("configuration") != expected_configuration
+    ):
+        raise ReplyValidationError(f"{profile}: provenance transaction preset/configuration differs")
+    configure = _require_mapping(transaction.get("configure"), f"{profile} configure transaction")
+    configure_required = {"executable", "executableIdentity", "version", "argv", "cwd", "exitCode"}
+    if set(configure) != configure_required or configure.get("exitCode") != 0:
+        raise ReplyValidationError(f"{profile}: configure transaction is incomplete or unsuccessful")
+    argv = configure.get("argv")
+    if (
+        not isinstance(argv, list)
+        or not argv
+        or any(not isinstance(item, str) or not item for item in argv)
+        or _normalize_directory(argv[0]) != _normalize_directory(configure.get("executable"))
+    ):
+        raise ReplyValidationError(f"{profile}: configure argv does not bind its executable")
+    if expected_preset:
+        expected_argv = [configure.get("executable"), "--preset", expected_preset]
+    else:
+        expected_argv = [
+            configure.get("executable"),
+            "-S",
+            transaction.get("sourceDirectory"),
+            "-B",
+            transaction.get("buildDirectory"),
+        ]
+    if argv != expected_argv:
+        raise ReplyValidationError(f"{profile}: configure argv is not the canonical profile invocation")
+    executable_identity = _require_mapping(
+        configure.get("executableIdentity"), f"{profile} CMake executable identity"
+    )
+    if set(executable_identity) != {"bytes", "sha256"}:
+        raise ReplyValidationError(f"{profile}: CMake executable identity fields are invalid")
+    if type(executable_identity.get("bytes")) is not int or not re.fullmatch(
+        r"[0-9a-f]{64}", str(executable_identity.get("sha256", ""))
+    ):
+        raise ReplyValidationError(f"{profile}: CMake executable identity is invalid")
+
+    before = _require_mapping(transaction.get("repositoryBefore"), f"{profile} pre-configure repository")
+    after = _require_mapping(transaction.get("repositoryAfter"), f"{profile} post-configure repository")
+    repository_fields = {"root", "commit", "clean", "untrackedPolicy", "statusSha256"}
+    if set(before) != repository_fields or set(after) != repository_fields or before != after:
+        raise ReplyValidationError(f"{profile}: repository identity changed across configure")
+    root = _normalize_directory(before.get("root"))
+    commit = before.get("commit")
+    if (
+        not root
+        or not isinstance(commit, str)
+        or not re.fullmatch(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}", commit)
+        or before.get("clean") is not True
+        or before.get("untrackedPolicy") != "all-nonignored"
+        or before.get("statusSha256") != hashlib.sha256(b"").hexdigest()
+    ):
+        raise ReplyValidationError(f"{profile}: configure did not bind an exact clean repository state")
+
+    observed = _require_mapping(record.get("observed"), f"{profile} observed configure state")
+    observed_fields = {
+        "sourceDirectory", "buildDirectory", "preset", "configuration", "generator",
+        "architecture", "toolset", "cacheVariables", "cmakeProducer",
+    }
+    if set(observed) != observed_fields:
+        raise ReplyValidationError(f"{profile}: observed configure fields are incomplete")
+    if (
+        observed.get("preset") != expected_preset
+        or observed.get("configuration") != expected_configuration
+    ):
+        raise ReplyValidationError(f"{profile}: observed preset/configuration differs")
+    for field_name in (
+        "sourceDirectory", "buildDirectory", "generator", "architecture", "toolset",
+        "cacheVariables", "cmakeProducer",
+    ):
+        if observed.get(field_name) != evidence.get(field_name):
+            raise ReplyValidationError(
+                f"{profile}: observed {field_name} differs from the selected client reply"
+            )
+    if transaction.get("sourceDirectory") != observed.get("sourceDirectory") or (
+        transaction.get("buildDirectory") != observed.get("buildDirectory")
+    ):
+        raise ReplyValidationError(f"{profile}: configured paths differ from the transaction")
+    cmake_producer = _require_mapping(observed.get("cmakeProducer"), f"{profile} CMake producer")
+    if (
+        _normalize_directory(cmake_producer.get("executable"))
+        != _normalize_directory(configure.get("executable"))
+        or cmake_producer.get("version") != configure.get("version")
+        or cmake_producer.get("generator") != observed.get("generator")
+    ):
+        raise ReplyValidationError(f"{profile}: CMake index identity differs from invoked CMake")
 
     reply = _require_mapping(record.get("reply"), f"{profile} provenance reply")
     if set(reply) != {"index", "files", "digest"}:
@@ -1924,31 +2737,35 @@ def _load_producer_provenance(
         name = _reply_filename(file_record.get("name"), f"{profile} provenance reply file {offset} name")
         size = file_record.get("bytes")
         digest = file_record.get("sha256")
-        if name == _PROVENANCE_FILE or name in seen:
-            raise ReplyValidationError(f"{profile}: provenance reply file list is recursive or duplicated")
+        if name in seen:
+            raise ReplyValidationError(f"{profile}: provenance reply file list is duplicated")
         if type(size) is not int or size < 0 or size > _MAX_REPLY_FILE_BYTES:
             raise ReplyValidationError(f"{profile}: provenance reply file {name!r} has invalid size")
         if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
             raise ReplyValidationError(f"{profile}: provenance reply file {name!r} has invalid digest")
         seen.add(name)
         normalized_files.append({"name": name, "bytes": size, "sha256": digest})
-    if normalized_files != records:
-        raise ReplyValidationError(f"{profile}: CMake reply files do not match their producer provenance")
     digest = _reply_records_digest(records)
-    if reply.get("index") != evidence["replyIndex"] or reply.get("digest") != digest:
-        raise ReplyValidationError(f"{profile}: CMake reply index/digest does not match producer provenance")
+    if normalized_files != records or reply.get("digest") != digest or index_name != evidence["replyIndex"]:
+        raise ReplyValidationError(f"{profile}: selected reply files differ from configure provenance")
 
-    record_digest = snapshot.records[_PROVENANCE_FILE]["sha256"]
     return {
         "state": "verified",
-        "recordFile": _PROVENANCE_FILE,
-        "recordSha256": record_digest,
+        "recordFile": _provenance_path(Path(evidence["evidenceDirectory"]), profile).name,
+        "recordSha256": hashlib.sha256(
+            (json.dumps(record, indent=2, sort_keys=False) + "\n").encode("utf-8")
+        ).hexdigest(),
         "producer": _PROVENANCE_PRODUCER,
         "profile": profile,
         "repositoryRoot": root,
-        "sourceCommit": commit.lower(),
-        "sourceClean": clean,
+        "sourceCommit": str(commit).lower(),
+        "sourceClean": True,
+        "untrackedPolicy": before["untrackedPolicy"],
         "replyDigest": digest,
+        "queryClient": client_name,
+        "configureArgv": argv,
+        "cmakeExecutable": configure["executable"],
+        "cmakeVersion": configure["version"],
     }
 
 
@@ -1962,8 +2779,19 @@ def extract_codemodel_targets(
     comes exclusively from ``capture_provenance.py``'s producer record.
     """
     del ignored_caller_commit
+    snapshot: _ReplySnapshot | None = None
     try:
-        core = _extract_reply_core(build_dir, profile)
+        provenance_record = _load_provenance_document(build_dir, profile)
+        selection: tuple[str, str, dict[str, Any]] | None = None
+        if provenance_record is not None:
+            selection = _provenance_selection(provenance_record, profile)
+        core = _extract_reply_core(
+            build_dir,
+            profile,
+            selected_index=selection[0] if selection else "",
+            client_name=selection[1] if selection else "",
+            query=selection[2] if selection else None,
+        )
         if core is None:
             return {
                 "profile": profile,
@@ -1973,7 +2801,7 @@ def extract_codemodel_targets(
             }
         evidence, snapshot, records = core
         evidence["producerProvenance"] = _load_producer_provenance(
-            snapshot, profile, evidence, records
+            provenance_record, profile, evidence, records
         )
         snapshot.assert_stable()
         return evidence
@@ -1985,6 +2813,9 @@ def extract_codemodel_targets(
             "targets": [],
             "rejection": str(error),
         }
+    finally:
+        if snapshot is not None:
+            snapshot.close()
 
 
 def _capture_material_errors(evidence: dict[str, Any], profile: str) -> list[str]:
@@ -2031,124 +2862,343 @@ def _capture_material_errors(evidence: dict[str, Any], profile: str) -> list[str
     return sorted(set(errors))
 
 
-def _write_provenance_record(snapshot: _ReplySnapshot, payload: bytes) -> Path:
-    snapshot.assert_stable()
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=".spark-ci120-provenance-", suffix=".tmp", dir=snapshot.directory
-    )
-    temporary = Path(temporary_name)
-    destination = snapshot.directory / _PROVENANCE_FILE
+def _ensure_safe_directory(path: Path, trust_root: Path, label: str) -> Path:
+    """Create missing descendants while refusing links/reparses at every level."""
+    target = _absolute_directory(path)
+    root = _absolute_directory(trust_root)
+    root_state = _validate_directory_chain(root, f"{label} trust root")
+    if root_state is None:
+        raise InventoryError(f"{label} trust root does not exist")
     try:
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(payload)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, destination)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
+        common = os.path.commonpath((os.fspath(root), os.fspath(target)))
+    except ValueError as error:
+        raise InventoryError(f"{label} is on another volume from its trust root") from error
+    if os.path.normcase(common) != os.path.normcase(os.fspath(root)):
+        raise InventoryError(f"{label} escapes its trust root")
+    current = root
+    for component in target.relative_to(root).parts:
+        current /= component
+        try:
+            metadata = os.lstat(current)
+        except FileNotFoundError:
+            try:
+                os.mkdir(current)
+            except FileExistsError:
+                pass
+            metadata = os.lstat(current)
+        _validate_directory(metadata, f"{label} component {current}")
+    final = _validate_directory_chain(target, label)
+    if final is None:
+        raise InventoryError(f"{label} could not be created")
+    return final[0]
 
-    label = "written CI-120 provenance record"
-    try:
-        metadata = os.lstat(destination)
-    except OSError as error:
-        raise InventoryError(f"cannot inspect {label}: {error}") from error
-    _validate_regular_file(metadata, label)
-    if metadata.st_size != len(payload):
-        raise InventoryError(f"{label} has an unexpected size")
 
+def _capture_query(profile: str, run_id: str) -> dict[str, Any]:
+    return {
+        "requests": [
+            {"kind": "codemodel", "version": 2, "client": {"runId": run_id}},
+            {"kind": "cache", "version": 2, "client": {"runId": run_id}},
+        ],
+        "client": {"producer": _PROVENANCE_PRODUCER, "profile": profile, "runId": run_id},
+    }
+
+
+def _resolve_cmake_executable(value: str | Path) -> Path:
+    text = os.fspath(value)
+    located = shutil.which(text) if not Path(text).is_absolute() else text
+    if not located:
+        raise InventoryError(f"CMake executable {text!r} was not found")
+    path = Path(located).resolve(strict=True)
+    if _validate_directory_chain(path.parent, "CMake executable parent") is None:
+        raise InventoryError("CMake executable parent does not exist")
+    metadata = os.lstat(path)
+    _validate_regular_file(metadata, "CMake executable")
+    return path
+
+
+def _executable_identity(path: Path) -> dict[str, Any]:
+    maximum = 256 * 1024 * 1024
+    metadata = os.lstat(path)
+    if metadata.st_size > maximum:
+        raise InventoryError("CMake executable exceeds the 256 MiB identity bound")
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
-    try:
-        descriptor = os.open(destination, flags)
-    except OSError as error:
-        raise InventoryError(f"cannot open {label} without following links: {error}") from error
+    descriptor = os.open(path, flags)
     try:
         opened = os.fstat(descriptor)
-        _validate_regular_file(opened, f"opened {label}")
-        link_count = _opened_link_count(descriptor, opened)
-        if link_count != 1:
-            raise InventoryError(f"opened {label} has {link_count} hard links; exactly one is required")
-        if _stat_token(opened) != _stat_token(metadata):
-            raise InventoryError(f"{label} was replaced between inspection and open")
-        observed = b""
-        remaining = len(payload)
-        chunks: list[bytes] = []
+        _validate_regular_file(opened, "opened CMake executable")
+        if _identity_token(opened) != _identity_token(metadata):
+            raise InventoryError("CMake executable changed while it was opened")
+        digest = hashlib.sha256()
+        remaining = opened.st_size
         while remaining:
             chunk = os.read(descriptor, min(remaining, 1024 * 1024))
             if not chunk:
-                raise InventoryError(f"{label} was truncated during verification")
-            chunks.append(chunk)
+                raise InventoryError("CMake executable was truncated while hashing")
+            digest.update(chunk)
             remaining -= len(chunk)
         if os.read(descriptor, 1):
-            raise InventoryError(f"{label} grew during verification")
-        observed = b"".join(chunks)
-        if _stat_token(os.fstat(descriptor)) != _stat_token(metadata):
-            raise InventoryError(f"{label} changed during verification")
+            raise InventoryError("CMake executable grew while hashing")
     finally:
         os.close(descriptor)
+    return {"bytes": int(metadata.st_size), "sha256": digest.hexdigest()}
 
+
+def _capture_plan(
+    build_dir: Path, profile: str, cmake_executable: Path
+) -> tuple[dict[str, Any], Path, Path, list[str]]:
+    profile_data = load_stable_profile()
+    config = next(
+        (item for item in profile_data["buildConfigurations"] if item["id"] == profile),
+        None,
+    )
+    if config is None:
+        raise InventoryError(f"unknown capture profile {profile!r}")
+    source_dir = _absolute_directory(REPO_ROOT)
+    supplied_build = _absolute_directory(build_dir)
+    preset_name = str(config.get("preset", ""))
+    if preset_name:
+        preset = resolve_configure_preset(extract_cmake_presets(), preset_name)
+        binary = str(preset.get("resolvedBinaryDir", ""))
+        if not binary:
+            raise InventoryError(f"capture preset {preset_name!r} has no binaryDir")
+        expected_build = _absolute_directory(Path(binary.replace("${sourceDir}", str(source_dir))))
+        argv = [str(cmake_executable), "--preset", preset_name]
+    else:
+        source_dir = _absolute_directory(REPO_ROOT / str(config.get("sourceDirectory", "")))
+        expected_build = _absolute_directory(REPO_ROOT / str(config.get("buildDirectory", "")))
+        argv = [str(cmake_executable), "-S", str(source_dir), "-B", str(expected_build)]
+    if os.path.normcase(os.fspath(expected_build)) != os.path.normcase(os.fspath(supplied_build)):
+        raise InventoryError(
+            f"{profile}: capture build directory is {supplied_build}, expected {expected_build}"
+        )
+    return config, source_dir, expected_build, argv
+
+
+def _existing_index_identities(build_dir: Path, profile: str) -> dict[str, str]:
+    snapshot = _snapshot_reply_directory(build_dir, profile)
+    if snapshot is None:
+        return {}
     try:
-        after = os.lstat(destination)
-    except OSError as error:
-        raise InventoryError(f"cannot re-inspect {label}: {error}") from error
-    if _stat_token(after) != _stat_token(metadata):
-        raise InventoryError(f"{label} was replaced after it was written")
-    if observed != payload:
-        raise InventoryError(f"{label} does not contain the generated payload")
-    return destination
+        indices = sorted(
+            name
+            for name in snapshot.entry_names
+            if name.startswith("index-") and name.endswith(".json")
+        )
+        if len(indices) > _MAX_REPLY_INDICES:
+            raise ReplyValidationError(
+                f"{profile}: CMake File API reply has {len(indices)} indices, "
+                f"above the {_MAX_REPLY_INDICES} bound"
+            )
+        result: dict[str, str] = {}
+        for name in indices:
+            payload = snapshot.read_bytes(name, _MAX_INDEX_BYTES, f"{profile} existing index")
+            result[name] = hashlib.sha256(payload).hexdigest()
+        snapshot.assert_stable()
+        return result
+    finally:
+        snapshot.close()
+
+
+def capture_codemodel_transaction(
+    build_dir: Path,
+    profile: str,
+    *,
+    cmake_executable: str | Path = "cmake",
+) -> Path:
+    """Own one query/configure/reply transaction and publish its provenance."""
+    executable = _resolve_cmake_executable(cmake_executable)
+    config, source_dir, build_directory, argv = _capture_plan(build_dir, profile, executable)
+    _validate_directory_chain(source_dir, f"{profile} source directory")
+    repository_before = _repository_provenance(REPO_ROOT)
+    if repository_before["clean"] is not True:
+        raise InventoryError(f"{profile}: source repository must be exactly clean before configure")
+
+    build_directory = _ensure_safe_directory(
+        build_directory, REPO_ROOT, f"{profile} build directory"
+    )
+    existing_indices = _existing_index_identities(build_directory, profile)
+    run_id = uuid.uuid4().hex
+    client_name = _CAPTURE_CLIENT_PREFIX + run_id
+    query = _capture_query(profile, run_id)
+    query_payload = (json.dumps(query, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
+    query_root = _ensure_safe_directory(
+        build_directory / ".cmake" / "api" / "v1" / "query",
+        build_directory,
+        f"{profile} query root",
+    )
+    client_directory = query_root / client_name
+    try:
+        os.mkdir(client_directory)
+    except FileExistsError as error:
+        raise InventoryError(f"{profile}: unique File API client already exists") from error
+    _validate_directory_chain(client_directory, f"{profile} File API client")
+    query_path = client_directory / "query.json"
+    reply_snapshot: _ReplySnapshot | None = None
+    try:
+        _write_atomic(query_path, query_payload)
+        executable_identity = _executable_identity(executable)
+        version_result = subprocess.run(
+            [str(executable), "--version"],
+            cwd=source_dir,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
+        )
+        version_line = (version_result.stdout or "").splitlines()
+        if version_result.returncode or not version_line or not version_line[0].startswith("cmake version "):
+            raise InventoryError("cannot bind the invoked CMake version")
+        cmake_version = version_line[0].removeprefix("cmake version ").strip()
+        if _executable_identity(executable) != executable_identity:
+            raise InventoryError(f"{profile}: CMake executable changed while querying its version")
+        completed = subprocess.run(argv, cwd=source_dir, check=False)
+        if completed.returncode:
+            raise InventoryError(f"{profile}: CMake configure failed with exit {completed.returncode}")
+        if _executable_identity(executable) != executable_identity:
+            raise InventoryError(f"{profile}: CMake executable changed across configure")
+        core = _extract_reply_core(
+            build_directory,
+            profile,
+            client_name=client_name,
+            query=query,
+        )
+        if core is None:
+            raise InventoryError(f"{profile}: CMake produced no File API reply")
+        evidence, reply_snapshot, records = core
+        if evidence["replyIndex"] in existing_indices:
+            raise InventoryError(
+                f"{profile}: selected File API index was not newly generated by this configure"
+            )
+        missing = _capture_material_errors(evidence, profile)
+        if missing:
+            raise InventoryError(
+                f"{profile}: configure reply lacks material fields: {', '.join(missing)}"
+            )
+        producer = evidence.get("cmakeProducer", {})
+        if (
+            _normalize_directory(producer.get("executable")) != _normalize_directory(str(executable))
+            or producer.get("version") != cmake_version
+        ):
+            raise InventoryError(f"{profile}: selected index came from another CMake executable/version")
+        repository_after = _repository_provenance(REPO_ROOT)
+        if repository_after != repository_before:
+            raise InventoryError(f"{profile}: repository state changed across configure")
+
+        observed = {
+            "sourceDirectory": evidence["sourceDirectory"],
+            "buildDirectory": evidence["buildDirectory"],
+            "preset": str(config.get("preset", "")),
+            "configuration": str(config.get("configuration", "")),
+            "generator": evidence["generator"],
+            "architecture": evidence["architecture"],
+            "toolset": evidence["toolset"],
+            "cacheVariables": evidence["cacheVariables"],
+            "cmakeProducer": producer,
+        }
+        record = {
+            "schemaVersion": _PROVENANCE_SCHEMA,
+            "producer": _PROVENANCE_PRODUCER,
+            "profile": profile,
+            "evidenceDirectory": evidence["evidenceDirectory"],
+            "transaction": {
+                "runId": run_id,
+                "queryClient": client_name,
+                "querySha256": hashlib.sha256(query_payload).hexdigest(),
+                "query": query,
+                "profile": profile,
+                "preset": str(config.get("preset", "")),
+                "configuration": str(config.get("configuration", "")),
+                "sourceDirectory": evidence["sourceDirectory"],
+                "buildDirectory": evidence["buildDirectory"],
+                "configure": {
+                    "executable": _normalize_directory(str(executable)),
+                    "executableIdentity": executable_identity,
+                    "version": cmake_version,
+                    "argv": [_normalize_directory(str(executable)), *argv[1:]],
+                    "cwd": _normalize_directory(str(source_dir)),
+                    "exitCode": 0,
+                },
+                "repositoryBefore": repository_before,
+                "repositoryAfter": repository_after,
+            },
+            "observed": observed,
+            "reply": {
+                "index": evidence["replyIndex"],
+                "files": records,
+                "digest": _reply_records_digest(records),
+            },
+        }
+        payload = (json.dumps(record, indent=2, sort_keys=False) + "\n").encode("utf-8")
+        if len(payload) > _MAX_PROVENANCE_BYTES:
+            raise InventoryError("generated CI-120 provenance record exceeds its size bound")
+        # Complete the read transaction before making our own metadata change
+        # beneath .cmake/api/v1.
+        reply_snapshot.assert_stable()
+        reply_snapshot.close()
+        provenance_parent = _ensure_safe_directory(
+            _provenance_path(build_directory, profile).parent,
+            build_directory,
+            f"{profile} provenance directory",
+        )
+        destination = provenance_parent / _provenance_path(build_directory, profile).name
+        _write_atomic(destination, payload)
+        # Re-read through the same strict path before reporting success.
+        _load_provenance_document(build_directory, profile)
+        return destination
+    finally:
+        if reply_snapshot is not None:
+            reply_snapshot.close()
+        # This exact random client directory is owned by this invocation.
+        try:
+            query_path.unlink(missing_ok=True)
+            client_directory.rmdir()
+        except OSError:
+            pass
 
 
 def capture_codemodel_provenance(build_dir: Path, profile: str) -> Path:
-    """Capture commit identity and exact reply-file digests after CMake configures."""
-    core = _extract_reply_core(build_dir, profile)
-    if core is None:
-        raise InventoryError(f"{profile}: cannot capture provenance without a File API reply")
-    evidence, snapshot, records = core
-    missing = _capture_material_errors(evidence, profile)
-    if missing:
-        raise InventoryError(
-            f"{profile}: cannot capture provenance; reply lacks material fields: {', '.join(missing)}"
-        )
-    repository = _repository_provenance()
-    record = {
-        "schemaVersion": _PROVENANCE_SCHEMA,
-        "producer": _PROVENANCE_PRODUCER,
-        "profile": profile,
-        "evidenceDirectory": evidence["evidenceDirectory"],
-        "repository": repository,
-        "reply": {
-            "index": evidence["replyIndex"],
-            "files": records,
-            "digest": _reply_records_digest(records),
-        },
-    }
-    payload = (json.dumps(record, indent=2, sort_keys=False) + "\n").encode("utf-8")
-    if len(payload) > _MAX_PROVENANCE_BYTES:
-        raise InventoryError("generated CI-120 provenance record exceeds its size bound")
-    return _write_provenance_record(snapshot, payload)
+    """Removed post-hoc signer retained only as an explicit fail-closed API."""
+    del build_dir, profile
+    raise InventoryError(
+        "post-hoc provenance capture is forbidden; use capture_codemodel_transaction() "
+        "so this tool owns the File API query and CMake configure"
+    )
 
 
-def _repository_provenance() -> dict[str, Any]:
+def _repository_provenance(root: Path = REPO_ROOT) -> dict[str, Any]:
     """The commit and cleanliness the inventory is being generated against."""
 
-    def git(*arguments: str) -> tuple[int, str]:
+    repository_root = _absolute_directory(root)
+
+    def git_text(*arguments: str) -> tuple[int, str]:
         completed = subprocess.run(
-            ["git", "-C", str(REPO_ROOT), *arguments],
+            ["git", "-C", str(repository_root), *arguments],
             capture_output=True,
             text=True,
             encoding="utf-8",
         )
         return completed.returncode, completed.stdout.strip()
 
-    head_code, head = git("rev-parse", "HEAD")
-    status_code, status = git("status", "--porcelain", "--untracked-files=no")
+    head_code, head = git_text("rev-parse", "HEAD")
+    status_result = subprocess.run(
+        [
+            "git", "-C", str(repository_root), "status", "--porcelain=v1", "-z",
+            "--untracked-files=all",
+        ],
+        capture_output=True,
+    )
+    status_code = status_result.returncode
+    status = status_result.stdout
     if head_code != 0 or status_code != 0:
         raise InventoryError("git provenance is unavailable; evidence cannot be bound to a commit")
     return {
-        "root": _normalize_directory(str(REPO_ROOT)),
+        "root": _normalize_directory(str(repository_root)),
         "commit": head,
         "clean": not status,
+        "untrackedPolicy": "all-nonignored",
+        "statusSha256": hashlib.sha256(status).hexdigest(),
     }
 
 
@@ -2226,9 +3276,87 @@ def _parse_codemodel_args(values: list[str]) -> dict[str, Path]:
 
 def _write_atomic(path: Path, payload: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_bytes(payload)
-    temporary.replace(path)
+    parent_state = _validate_directory_chain(path.parent, f"output parent for {path.name}")
+    if parent_state is None:
+        raise InventoryError(f"output parent for {path.name} does not exist")
+    parent, _ = parent_state
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=parent
+    )
+    temporary = Path(temporary_name)
+    temporary_identity: tuple[int, ...] | None = None
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+
+        temporary_metadata = os.lstat(temporary)
+        _validate_regular_file(temporary_metadata, f"temporary output for {path.name}")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        verify_descriptor = os.open(temporary, flags)
+        try:
+            opened = os.fstat(verify_descriptor)
+            _validate_regular_file(opened, f"opened temporary output for {path.name}")
+            if _opened_link_count(verify_descriptor, opened) != 1:
+                raise InventoryError(f"temporary output for {path.name} has multiple hard links")
+            if _identity_token(opened) != _identity_token(temporary_metadata):
+                raise InventoryError(f"temporary output for {path.name} changed before publication")
+            temporary_identity = _identity_token(opened)
+            opened_token = _stat_token(opened)
+            observed = b""
+            while len(observed) < len(payload):
+                chunk = os.read(verify_descriptor, len(payload) - len(observed))
+                if not chunk:
+                    break
+                observed += chunk
+            if observed != payload or os.read(verify_descriptor, 1):
+                raise InventoryError(f"temporary output for {path.name} has unexpected content")
+            if _stat_token(os.fstat(verify_descriptor)) != opened_token:
+                raise InventoryError(f"temporary output for {path.name} changed during verification")
+        finally:
+            os.close(verify_descriptor)
+
+        parent_token = _directory_token(parent, f"output parent for {path.name}")
+        os.replace(temporary, path)
+
+        published_metadata = os.lstat(path)
+        _validate_regular_file(published_metadata, f"published output {path.name}")
+        published_descriptor = os.open(path, flags)
+        try:
+            opened = os.fstat(published_descriptor)
+            _validate_regular_file(opened, f"opened published output {path.name}")
+            if _opened_link_count(published_descriptor, opened) != 1:
+                raise InventoryError(f"published output {path.name} has multiple hard links")
+            if _identity_token(opened) != _identity_token(published_metadata):
+                raise InventoryError(f"published output {path.name} changed while reopening")
+            if temporary_identity is None or _identity_token(opened) != temporary_identity:
+                raise InventoryError(
+                    f"published output {path.name} is not the verified temporary file"
+                )
+            opened_token = _stat_token(opened)
+            observed = b""
+            while len(observed) < len(payload):
+                chunk = os.read(published_descriptor, len(payload) - len(observed))
+                if not chunk:
+                    break
+                observed += chunk
+            if observed != payload or os.read(published_descriptor, 1):
+                raise InventoryError(f"published output {path.name} does not match generated bytes")
+            if _stat_token(os.fstat(published_descriptor)) != opened_token:
+                raise InventoryError(f"published output {path.name} changed during verification")
+        finally:
+            os.close(published_descriptor)
+        if _directory_token(parent, f"output parent for {path.name}") != parent_token:
+            # Replacing one child changes the directory mutation timestamp.  A
+            # different identity, rather than the timestamp component, is the
+            # unsafe event after publication.
+            after = os.lstat(parent)
+            if _directory_stat_token(after)[:3] != parent_token[:3]:
+                raise InventoryError(f"output parent for {path.name} was replaced during publication")
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def render_internal_error(error: Exception) -> bytes:

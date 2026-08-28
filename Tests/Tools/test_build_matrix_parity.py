@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 from contextlib import contextmanager
+import hashlib
 import json
 import os
 import subprocess
@@ -367,7 +368,12 @@ class WorkflowParserTests(unittest.TestCase):
         )
         self.assertEqual(len(data), 2)
         self.assertEqual(data[0]["job"], "duplicate")
-        self.assertEqual(data[0], data[1])
+        self.assertEqual([entry["commandIndex"] for entry in data], [0, 1])
+        without_position = [
+            {key: value for key, value in entry.items() if key != "commandIndex"}
+            for entry in data
+        ]
+        self.assertEqual(without_position[0], without_position[1])
 
     def test_unparsed_configure_looking_command_fails_closed(self) -> None:
         with self.assertRaisesRegex(inventory.InventoryError, "unparsed"):
@@ -423,23 +429,116 @@ class PresetAndCodemodelTests(unittest.TestCase):
         self.assertTrue(any("windows-validation" in finding.message for finding in findings))
 
     def test_codemodel_available_evidence_extracts_exact_kind(self) -> None:
+        build_directory = Path("C:/synthetic-build")
         evidence = inventory.parse_codemodel_targets(
             "windows-shipping",
             {
                 "configurations": [
                     {
                         "name": "MinSizeRel",
-                        "targets": [{"name": "SparkEngine", "jsonFile": "target.json"}],
+                        "targets": [
+                            {
+                                "name": "SparkEngine",
+                                "id": "SparkEngine::@synthetic",
+                                "jsonFile": "target.json",
+                            }
+                        ],
                     }
                 ]
             },
-            {"target.json": {"name": "SparkEngine", "type": "EXECUTABLE"}},
+            {
+                "target.json": {
+                    "name": "SparkEngine",
+                    "id": "SparkEngine::@synthetic",
+                    "type": "EXECUTABLE",
+                    "nameOnDisk": "SparkEngine.exe",
+                    "artifacts": [{"path": "bin/MinSizeRel/SparkEngine.exe"}],
+                }
+            },
+            build_directory,
         )
         self.assertEqual(evidence["status"], "available")
         self.assertEqual(
             evidence["targets"],
-            [{"target": "SparkEngine", "kind": "executable", "configuration": "MinSizeRel"}],
+            [
+                {
+                    "target": "SparkEngine",
+                    "id": "SparkEngine::@synthetic",
+                    "kind": "executable",
+                    "configuration": "MinSizeRel",
+                    "artifactState": "declared-not-built",
+                    "nameOnDisk": "SparkEngine.exe",
+                    "artifacts": [
+                        (build_directory / "bin/MinSizeRel/SparkEngine.exe").as_posix()
+                    ],
+                }
+            ],
         )
+
+    def test_windows_product_name_must_match_cmake_target_type(self) -> None:
+        with self.assertRaisesRegex(inventory.InventoryError, "inconsistent with STATIC_LIBRARY"):
+            inventory.parse_codemodel_targets(
+                "windows-shipping",
+                {
+                    "configurations": [
+                        {
+                            "name": "MinSizeRel",
+                            "targets": [
+                                {
+                                    "name": "SparkEngine",
+                                    "id": "SparkEngine::@synthetic",
+                                    "jsonFile": "target.json",
+                                }
+                            ],
+                        }
+                    ]
+                },
+                {
+                    "target.json": {
+                        "name": "SparkEngine",
+                        "id": "SparkEngine::@synthetic",
+                        "type": "STATIC_LIBRARY",
+                        "nameOnDisk": "SparkEngine.exe",
+                        "artifacts": [{"path": "bin/MinSizeRel/SparkEngine.exe"}],
+                    }
+                },
+                Path("C:/synthetic-build"),
+            )
+
+    def test_one_codemodel_id_cannot_identify_two_targets(self) -> None:
+        shared_id = "shared::@synthetic"
+        with self.assertRaisesRegex(inventory.InventoryError, "identifies multiple targets"):
+            inventory.parse_codemodel_targets(
+                "windows-shipping",
+                {
+                    "configurations": [
+                        {
+                            "name": "MinSizeRel",
+                            "targets": [
+                                {"name": "One", "id": shared_id, "jsonFile": "one.json"},
+                                {"name": "Two", "id": shared_id, "jsonFile": "two.json"},
+                            ],
+                        }
+                    ]
+                },
+                {
+                    "one.json": {
+                        "name": "One",
+                        "id": shared_id,
+                        "type": "EXECUTABLE",
+                        "nameOnDisk": "One.exe",
+                        "artifacts": [{"path": "bin/MinSizeRel/One.exe"}],
+                    },
+                    "two.json": {
+                        "name": "Two",
+                        "id": shared_id,
+                        "type": "EXECUTABLE",
+                        "nameOnDisk": "Two.exe",
+                        "artifacts": [{"path": "bin/MinSizeRel/Two.exe"}],
+                    },
+                },
+                Path("C:/synthetic-build"),
+            )
 
     def test_absent_codemodel_is_explicit_and_blocking(self) -> None:
         missing = TEST_TEMP_ROOT / f".ci120-nonexistent-{uuid.uuid4().hex}"
@@ -688,6 +787,112 @@ class WorkflowWeakeningTests(unittest.TestCase):
         self.assertEqual(build["targets"], ["all"])
         self.assertTrue(build["buildsAllTargets"])
 
+    def test_skipped_advisory_build_cannot_satisfy_a_profile(self) -> None:
+        data = copy.deepcopy(inventory.build_inventory())
+        data["profile"]["buildConfigurations"] = [
+            entry
+            for entry in data["profile"]["buildConfigurations"]
+            if entry["id"] == "windows-shipping"
+        ]
+        data["profile"]["buildProducts"] = [
+            entry
+            for entry in data["profile"]["buildProducts"]
+            if entry["buildProfile"] == "windows-shipping"
+        ]
+        data["workflow"] = inventory.workflow_tool.build_workflow_record(
+            """name: probe
+on: push
+jobs:
+  ship:
+    runs-on: windows-latest
+    steps:
+      - name: Configure
+        run: cmake --preset windows-shipping
+      - name: Never build
+        if: false
+        continue-on-error: true
+        run: cmake --build build/windows-shipping --config MinSizeRel
+""",
+            "probe.yml",
+        )
+        categories = finding_categories(check_parity.check_workflow_semantics(data))
+        self.assertIn("workflow-configuration-not-built", categories)
+
+    def test_unresolved_matrix_cannot_satisfy_a_profile(self) -> None:
+        data = copy.deepcopy(inventory.build_inventory())
+        data["profile"]["buildConfigurations"] = [
+            entry
+            for entry in data["profile"]["buildConfigurations"]
+            if entry["id"] == "windows-shipping"
+        ]
+        data["profile"]["buildProducts"] = [
+            entry
+            for entry in data["profile"]["buildProducts"]
+            if entry["buildProfile"] == "windows-shipping"
+        ]
+        data["workflow"] = inventory.workflow_tool.build_workflow_record(
+            """name: probe
+on:
+  push:
+    branches: [Working]
+jobs:
+  ship:
+    runs-on: windows-latest
+    strategy:
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Configure
+        run: cmake --preset windows-shipping
+      - name: Build
+        run: cmake --build build/windows-shipping --config MinSizeRel
+""",
+            "probe.yml",
+        )
+        categories = finding_categories(check_parity.check_workflow_semantics(data))
+        self.assertIn("workflow-matrix-unresolved", categories)
+        self.assertIn("workflow-configuration-not-built", categories)
+
+    def test_manual_only_workflow_cannot_be_a_required_gate(self) -> None:
+        data = copy.deepcopy(inventory.build_inventory())
+        data["workflow"] = inventory.workflow_tool.build_workflow_record(
+            """name: probe
+on: workflow_dispatch
+jobs:
+  ship:
+    runs-on: windows-latest
+    steps:
+      - name: Configure
+        run: cmake --preset windows-shipping
+      - name: Build
+        run: cmake --build build/windows-shipping --config MinSizeRel
+""",
+            "probe.yml",
+        )
+        categories = finding_categories(check_parity.check_workflow_semantics(data))
+        self.assertIn("workflow-working-branch-unreachable", categories)
+
+    def test_closed_only_pull_request_trigger_cannot_be_a_required_gate(self) -> None:
+        data = copy.deepcopy(inventory.build_inventory())
+        data["workflow"] = inventory.workflow_tool.build_workflow_record(
+            """name: probe
+on:
+  pull_request:
+    branches: [Working]
+    types: [closed]
+jobs:
+  ship:
+    runs-on: windows-latest
+    steps:
+      - name: Configure
+        run: cmake --preset windows-shipping
+      - name: Build
+        run: cmake --build build/windows-shipping --config MinSizeRel
+""",
+            "probe.yml",
+        )
+        categories = finding_categories(check_parity.check_workflow_semantics(data))
+        self.assertIn("workflow-working-branch-unreachable", categories)
+
 
 class ShellFormTests(unittest.TestCase):
     """Supported shell forms must be parsed, and confused forms must not pass."""
@@ -804,8 +1009,24 @@ def write_codemodel_reply(
     target_refs = []
     for index, (name, kind) in enumerate(targets):
         target_file = f"target-{index}.json"
-        write_json(reply / target_file, {"name": name, "type": kind})
-        target_refs.append({"name": name, "jsonFile": target_file})
+        target_id = f"{name}::@synthetic-{index}"
+        suffix = {
+            "EXECUTABLE": ".exe",
+            "STATIC_LIBRARY": ".lib",
+            "SHARED_LIBRARY": ".dll",
+            "MODULE_LIBRARY": ".dll",
+        }.get(kind, "")
+        name_on_disk = f"{name}{suffix}"
+        target_document: dict[str, Any] = {"name": name, "id": target_id, "type": kind}
+        if suffix:
+            target_document.update(
+                {
+                    "nameOnDisk": name_on_disk,
+                    "artifacts": [{"path": f"bin/{configuration}/{name_on_disk}"}],
+                }
+            )
+        write_json(reply / target_file, target_document)
+        target_refs.append({"name": name, "id": target_id, "jsonFile": target_file})
     write_json(
         reply / "codemodel-v2.json",
         {
@@ -827,13 +1048,110 @@ def write_codemodel_reply(
     write_json(
         reply / "index-0001.json",
         {
+            "cmake": {
+                "version": {"string": "9.9.9"},
+                "paths": {"cmake": "C:/synthetic/cmake.exe"},
+                "generator": {
+                    "name": generator,
+                    "platform": architecture,
+                    "multiConfig": True,
+                },
+            },
             "objects": [
                 {"kind": "codemodel", "version": {"major": 2}, "jsonFile": "codemodel-v2.json"},
                 {"kind": "cache", "version": {"major": 2}, "jsonFile": "cache-v2.json"},
-            ]
+            ],
+            "reply": {},
         },
     )
     return root
+
+
+def write_synthetic_transaction_provenance(
+    root: Path,
+    profile: str,
+    *,
+    repository_root: str,
+    commit: str = "0" * 40,
+) -> None:
+    """Complete a synthetic fixture with the v2 client mirror and transaction record."""
+    run_id = "1" * 32
+    client_name = inventory._CAPTURE_CLIENT_PREFIX + run_id
+    query = inventory._capture_query(profile, run_id)
+    reply = root / ".cmake" / "api" / "v1" / "reply"
+    index_path = reply / "index-0001.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    objects = {item["kind"]: item for item in index["objects"]}
+    index["reply"] = {
+        client_name: {
+            "query.json": {
+                "client": query["client"],
+                "requests": query["requests"],
+                "responses": [objects[request["kind"]] for request in query["requests"]],
+            }
+        }
+    }
+    write_json(index_path, index)
+    evidence, _, records = inventory._extract_reply_core(
+        root, profile, client_name=client_name, query=query
+    )
+    repository = {
+        "root": repository_root,
+        "commit": commit,
+        "clean": True,
+        "untrackedPolicy": "all-nonignored",
+        "statusSha256": hashlib.sha256(b"").hexdigest(),
+    }
+    executable = evidence["cmakeProducer"]["executable"]
+    configuration = evidence["configurations"][0]
+    record = {
+        "schemaVersion": inventory._PROVENANCE_SCHEMA,
+        "producer": inventory._PROVENANCE_PRODUCER,
+        "profile": profile,
+        "evidenceDirectory": evidence["evidenceDirectory"],
+        "transaction": {
+            "runId": run_id,
+            "queryClient": client_name,
+            "querySha256": hashlib.sha256(
+                (json.dumps(query, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
+            ).hexdigest(),
+            "query": query,
+            "profile": profile,
+            "preset": profile,
+            "configuration": configuration,
+            "sourceDirectory": evidence["sourceDirectory"],
+            "buildDirectory": evidence["buildDirectory"],
+            "configure": {
+                "executable": executable,
+                "executableIdentity": {"bytes": 1, "sha256": "a" * 64},
+                "version": evidence["cmakeProducer"]["version"],
+                "argv": [executable, "--preset", profile],
+                "cwd": repository_root,
+                "exitCode": 0,
+            },
+            "repositoryBefore": repository,
+            "repositoryAfter": copy.deepcopy(repository),
+        },
+        "observed": {
+            "sourceDirectory": evidence["sourceDirectory"],
+            "buildDirectory": evidence["buildDirectory"],
+            "preset": profile,
+            "configuration": configuration,
+            "generator": evidence["generator"],
+            "architecture": evidence["architecture"],
+            "toolset": evidence["toolset"],
+            "cacheVariables": evidence["cacheVariables"],
+            "cmakeProducer": evidence["cmakeProducer"],
+        },
+        "reply": {
+            "index": evidence["replyIndex"],
+            "files": records,
+            "digest": inventory._reply_records_digest(records),
+        },
+    }
+    provenance_path = inventory._provenance_path(root, profile)
+    provenance_path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(provenance_path, record)
 
 
 class CodemodelProvenanceTests(unittest.TestCase):
@@ -880,16 +1198,11 @@ class CodemodelProvenanceTests(unittest.TestCase):
         defaults.update(kwargs)
         write_codemodel_reply(directory, **defaults)
         if capture:
-            with mock.patch.object(
-                inventory,
-                "_repository_provenance",
-                return_value={
-                    "root": Path(REPO_ROOT).as_posix(),
-                    "commit": "0" * 40,
-                    "clean": True,
-                },
-            ):
-                inventory.capture_codemodel_provenance(directory, "windows-shipping")
+            write_synthetic_transaction_provenance(
+                directory,
+                "windows-shipping",
+                repository_root=Path(REPO_ROOT).as_posix(),
+            )
         return inventory.extract_codemodel_targets(directory, "windows-shipping", "0" * 40)
 
     def categories(self, data: dict[str, Any]) -> set[str]:
@@ -904,9 +1217,149 @@ class CodemodelProvenanceTests(unittest.TestCase):
         self.assertEqual(evidence["configurations"], ["MinSizeRel"])
         self.assertEqual(evidence["producerProvenance"]["state"], "verified")
         self.assertEqual(evidence["targets"], [
-            {"target": "SparkEngine", "kind": "executable", "configuration": "MinSizeRel"}
+            {
+                "target": "SparkEngine",
+                "id": "SparkEngine::@synthetic-0",
+                "kind": "executable",
+                "configuration": "MinSizeRel",
+                "artifactState": "declared-not-built",
+                "nameOnDisk": "SparkEngine.exe",
+                "artifacts": [(Path(evidence["buildDirectory"]) / "bin/MinSizeRel/SparkEngine.exe").as_posix()],
+            }
         ])
         self.assertNotIn("codemodel-source-mismatch", self.categories(self.bound_data(evidence)))
+
+    def test_capture_owns_query_configure_and_new_matching_index(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            trust_root = Path(raw)
+            source = trust_root / "source"
+            build = source / "build" / "windows-shipping"
+            source.mkdir()
+            executable = trust_root / "cmake.exe"
+            executable.write_bytes(b"synthetic-cmake")
+            repository = {
+                "root": source.as_posix(),
+                "commit": "0" * 40,
+                "clean": True,
+                "untrackedPolicy": "all-nonignored",
+                "statusSha256": hashlib.sha256(b"").hexdigest(),
+            }
+            config = {
+                "id": "windows-shipping",
+                "preset": "windows-shipping",
+                "configuration": "MinSizeRel",
+            }
+            configure_calls: list[list[str]] = []
+
+            def fake_run(arguments: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                if arguments[1:] == ["--version"]:
+                    return subprocess.CompletedProcess(arguments, 0, "cmake version 9.9.9\n", "")
+                configure_calls.append(list(arguments))
+                write_codemodel_reply(
+                    build,
+                    source_dir=source.as_posix(),
+                    build_dir=build.as_posix(),
+                    cache=self.shipping_cache,
+                )
+                query_path = next(
+                    (build / ".cmake" / "api" / "v1" / "query").glob("client-*/query.json")
+                )
+                query = json.loads(query_path.read_text(encoding="utf-8"))
+                client_name = query_path.parent.name
+                index_path = build / ".cmake" / "api" / "v1" / "reply" / "index-0001.json"
+                index = json.loads(index_path.read_text(encoding="utf-8"))
+                index["cmake"]["paths"]["cmake"] = executable.as_posix()
+                objects = {item["kind"]: item for item in index["objects"]}
+                index["reply"] = {
+                    client_name: {
+                        "query.json": {
+                            "client": query["client"],
+                            "requests": query["requests"],
+                            "responses": [objects[item["kind"]] for item in query["requests"]],
+                        }
+                    }
+                }
+                write_json(index_path, index)
+                return subprocess.CompletedProcess(arguments, 0, "", "")
+
+            with (
+                mock.patch.object(inventory, "REPO_ROOT", source),
+                mock.patch.object(
+                    inventory,
+                    "_capture_plan",
+                    return_value=(
+                        config,
+                        source,
+                        build,
+                        [executable.as_posix(), "--preset", "windows-shipping"],
+                    ),
+                ),
+                mock.patch.object(inventory, "_repository_provenance", return_value=repository),
+                mock.patch.object(inventory, "_capture_material_errors", return_value=[]),
+                mock.patch.object(inventory.subprocess, "run", side_effect=fake_run),
+            ):
+                record_path = inventory.capture_codemodel_transaction(
+                    build, "windows-shipping", cmake_executable=executable
+                )
+                evidence = inventory.extract_codemodel_targets(build, "windows-shipping")
+
+            self.assertTrue(record_path.is_file())
+            self.assertEqual(
+                configure_calls,
+                [[executable.as_posix(), "--preset", "windows-shipping"]],
+            )
+            self.assertEqual(evidence["status"], "available")
+            self.assertEqual(evidence["producerProvenance"]["state"], "verified")
+            self.assertFalse(
+                any((build / ".cmake" / "api" / "v1" / "query").glob("client-*/query.json"))
+            )
+
+    def test_capture_rejects_cmake_replacement_during_version_query(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            trust_root = Path(raw)
+            source = trust_root / "source"
+            build = source / "build" / "windows-shipping"
+            source.mkdir()
+            executable = trust_root / "cmake.exe"
+            executable.write_bytes(b"first-cmake")
+            repository = {
+                "root": source.as_posix(),
+                "commit": "0" * 40,
+                "clean": True,
+                "untrackedPolicy": "all-nonignored",
+                "statusSha256": hashlib.sha256(b"").hexdigest(),
+            }
+            config = {
+                "id": "windows-shipping",
+                "preset": "windows-shipping",
+                "configuration": "MinSizeRel",
+            }
+
+            def fake_run(arguments: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                if arguments[1:] == ["--version"]:
+                    executable.write_bytes(b"other-cmake")
+                    return subprocess.CompletedProcess(arguments, 0, "cmake version 9.9.9\n", "")
+                raise AssertionError("configure must not run after executable replacement")
+
+            with (
+                mock.patch.object(inventory, "REPO_ROOT", source),
+                mock.patch.object(
+                    inventory,
+                    "_capture_plan",
+                    return_value=(
+                        config,
+                        source,
+                        build,
+                        [executable.as_posix(), "--preset", "windows-shipping"],
+                    ),
+                ),
+                mock.patch.object(inventory, "_repository_provenance", return_value=repository),
+                mock.patch.object(inventory.subprocess, "run", side_effect=fake_run),
+            ):
+                with self.assertRaisesRegex(inventory.InventoryError, "changed while querying"):
+                    inventory.capture_codemodel_transaction(
+                        build, "windows-shipping", cmake_executable=executable
+                    )
 
     def test_reply_without_cache_object_is_refused(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
@@ -948,7 +1401,12 @@ class CodemodelProvenanceTests(unittest.TestCase):
     def test_wrong_configuration_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             evidence = self.shipping_evidence(Path(raw), configuration="Debug")
-        self.assertIn("codemodel-configuration-missing", self.categories(self.bound_data(evidence)))
+        self.assertEqual(evidence["status"], "invalid")
+        self.assertIn("preset/configuration", evidence["rejection"])
+        self.assertIn(
+            "codemodel-provenance-unavailable",
+            self.categories(self.bound_data(evidence)),
+        )
 
     def test_fabricated_target_with_no_declaration_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
@@ -1085,32 +1543,26 @@ class CodemodelReplyBoundaryTests(unittest.TestCase):
         }
         data["configuredTargetEvidence"] = [evidence]
         categories = finding_categories(check_parity.check_codemodel_provenance(data))
-        self.assertEqual(evidence["status"], "available")
+        self.assertEqual(evidence["status"], "invalid")
         self.assertNotIn("assertedSourceCommit", evidence)
-        self.assertTrue(
-            {
-                "codemodel-provenance-missing",
-                "codemodel-material-field-missing",
-                "codemodel-cache-missing",
-            }.issubset(categories)
-        )
+        self.assertIn("no valid id", evidence["rejection"])
+        self.assertEqual(categories, {"codemodel-provenance-unavailable"})
 
     def test_reply_change_after_capture_invalidates_provenance(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             root = self.write_complete(Path(raw))
-            with mock.patch.object(
-                inventory,
-                "_repository_provenance",
-                return_value={
-                    "root": Path(REPO_ROOT).as_posix(), "commit": "0" * 40, "clean": True
-                },
-            ):
-                inventory.capture_codemodel_provenance(root, "windows-shipping")
+            write_synthetic_transaction_provenance(
+                root, "windows-shipping", repository_root=Path(REPO_ROOT).as_posix()
+            )
             reply = root / ".cmake" / "api" / "v1" / "reply"
             write_json(reply / "target-0.json", {"name": "SparkEngine", "type": "STATIC_LIBRARY"})
             evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
         self.assertEqual(evidence["status"], "invalid")
-        self.assertIn("producer provenance", evidence["rejection"])
+        self.assertRegex(evidence["rejection"], "content changed|provenance|target")
+
+    def test_posthoc_capture_is_explicitly_forbidden(self) -> None:
+        with self.assertRaisesRegex(inventory.InventoryError, "post-hoc provenance capture is forbidden"):
+            inventory.capture_codemodel_provenance(Path("unused"), "windows-shipping")
 
     def test_hardlinked_reply_file_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
@@ -1180,6 +1632,12 @@ class CodemodelReplyBoundaryTests(unittest.TestCase):
         self.assertEqual(shape_evidence["status"], "invalid")
         self.assertIn("JSON array", shape_evidence["rejection"])
 
+    def test_json_numeric_overflow_and_lone_surrogate_are_rejected(self) -> None:
+        with self.assertRaisesRegex(inventory.ReplyValidationError, "non-finite"):
+            inventory._decode_bounded_json(b'{"value":1e999}', "probe")
+        with self.assertRaisesRegex(inventory.ReplyValidationError, "invalid Unicode"):
+            inventory._decode_bounded_json(b'{"value":"\\ud800"}', "probe")
+
     def test_reply_directory_is_enumerated_once(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             root = self.write_complete(Path(raw))
@@ -1209,6 +1667,90 @@ class CodemodelReplyBoundaryTests(unittest.TestCase):
                 evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
         self.assertEqual(evidence["status"], "invalid")
         self.assertRegex(evidence["rejection"], "replaced|changed")
+
+    def test_same_size_reply_rewrite_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            directory = Path(raw)
+            path = directory / "x.json"
+            path.write_bytes(b'{"v":"AAAA"}')
+            metadata = os.lstat(path)
+            snapshot = inventory._ReplySnapshot(
+                directory,
+                directory,
+                inventory._directory_stat_token(os.lstat(directory)),
+                {
+                    "x.json": inventory._ReplyFile(
+                        path,
+                        inventory._stat_token(metadata),
+                        metadata.st_size,
+                    )
+                },
+                {"x.json"},
+            )
+            path.write_bytes(b'{"v":"BBBB"}')
+            with self.assertRaisesRegex(inventory.ReplyValidationError, "changed"):
+                snapshot.read_json("x.json", 100, "probe")
+
+    def test_random_atomic_temp_ignores_predictable_hardlink(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            directory = Path(raw)
+            baseline = directory / "baseline.json"
+            output = directory / "report.json"
+            predictable = directory / "report.json.tmp"
+            baseline.write_bytes(b"old")
+            try:
+                os.link(baseline, predictable)
+            except OSError as error:
+                self.skipTest(f"hard links unavailable: {error}")
+            inventory._write_atomic(output, b"new")
+            self.assertEqual(baseline.read_bytes(), b"old")
+            self.assertEqual(output.read_bytes(), b"new")
+            self.assertFalse(os.path.samefile(baseline, output))
+
+    def test_atomic_publication_rejects_same_content_file_substitution(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            directory = Path(raw)
+            output = directory / "report.json"
+            original_replace = inventory.os.replace
+            substituted = False
+
+            def substituting_replace(source: Any, destination: Any) -> None:
+                nonlocal substituted
+                original_replace(source, destination)
+                if not substituted:
+                    substituted = True
+                    impostor = directory / "impostor.json"
+                    impostor.write_bytes(b"new")
+                    original_replace(impostor, destination)
+
+            with mock.patch.object(inventory.os, "replace", side_effect=substituting_replace):
+                with self.assertRaisesRegex(inventory.InventoryError, "verified temporary file"):
+                    inventory._write_atomic(output, b"new")
+
+    @unittest.skipUnless(os.name == "nt", "junction probe is Windows-specific")
+    def test_ancestor_junction_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = Path(raw)
+            outside = root / "outside"
+            (outside / "build").mkdir(parents=True)
+            junction = root / "trusted-root"
+            completed = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(junction), str(outside)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if completed.returncode != 0:
+                self.skipTest(completed.stderr.strip() or completed.stdout.strip())
+            try:
+                with self.assertRaisesRegex(inventory.ReplyValidationError, "reparse"):
+                    inventory._validate_directory_chain(junction / "build", "probe")
+            finally:
+                subprocess.run(
+                    ["cmd", "/c", "rmdir", str(junction)],
+                    capture_output=True,
+                    check=True,
+                )
 
 
 class PresetSemanticsTests(unittest.TestCase):
