@@ -350,11 +350,19 @@ function testWorkflowShape() {
     const reporter = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'codeql-report.yml'), 'utf8');
     const combined = `${scanner}\n${reporter}`;
     const actionUses = [...combined.matchAll(/^\s*uses:\s*([^\s#]+)/gm)].map(match => match[1]);
+    const cCppBuildMode = scanner.match(
+        /^[ \t]*-[ \t]*language:[ \t]*c-cpp[ \t]*\r?\n[ \t]*build-mode:[ \t]*([^\s#]+)/mi,
+    );
 
     assert(!/^\s*(?:-\s*)?run:\s*/m.test(scanner), 'the source scanner must not execute repository code');
     assert(!scanner.includes('pull-requests: write'));
     assert(!scanner.includes('issues: write'));
-    assert(scanner.includes('build-mode: none'));
+    assert(cCppBuildMode, 'the C/C++ scanner matrix row must declare a build mode');
+    assert.strictEqual(
+        cCppBuildMode[1].toLowerCase(),
+        'none',
+        'the C/C++ scanner must use build-mode none; manual/autobuild are forbidden',
+    );
     assert(scanner.includes('config: |'));
     assert(!scanner.includes('config-file:'));
     assert(scanner.includes('archive: false'));
