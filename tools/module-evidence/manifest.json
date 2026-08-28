@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "stable-v1",
-  "generatedAt": "2026-08-28T07:01:00Z",
-  "commitSHA": "d34bd6b0885fdaab640726db32ab274fd4e22815",
+  "schemaVersion": "stable-v2",
   "profiles": [
     {
       "id": "stable-v1",
-      "includedModules": ["SparkGameFPS"],
+      "includedModules": [
+        "SparkGameFPS"
+      ],
       "excludedModules": [
         "SparkGame",
         "SparkGameARPG",
@@ -24,303 +24,215 @@
     {
       "name": "SparkGameFPS",
       "cmakeTarget": "SparkGameFPS",
-      "sharedLibrary": {"windows": "SparkGameFPS.dll", "linux": "libSparkGameFPS.so"},
+      "sharedLibrary": {
+        "windows": "SparkGameFPS.dll",
+        "linux": "libSparkGameFPS.so"
+      },
       "sourceDirectory": "GameModules/SparkGameFPS/Source",
       "moduleKind": "Game",
-      "lifecyclePhases": [
-        "SparkGetModuleCompatibility",
-        "CreateModule",
-        "GetModuleInfo",
-        "OnLoad",
-        "OnUpdate",
-        "OnFixedUpdate",
-        "OnRender",
-        "OnImGui",
-        "OnResize",
-        "OnPause",
-        "OnResume",
-        "CanUnload",
-        "OnUnload",
-        "DestroyModule"
-      ],
-      "profileApplicability": {"stable-v1": "required"},
+      "profileApplicability": {
+        "stable-v1": "required"
+      },
       "dependencies": [],
       "packageSmokeOwner": "MOD-310",
       "evidenceBindings": [
-        {"type": "junit-xml", "artifactPattern": "build/SparkTests-junit.xml"},
-        {"type": "sanitizer-report", "artifactPattern": "build/asan-ubsan-lsan-results.txt"},
-        {"type": "lifecycle-log", "artifactPattern": "build/module-lifecycle-SparkGameFPS.log"}
+        {
+          "type": "cmake-target-index",
+          "artifactPattern": "build/module-evidence/module-targets.json"
+        },
+        {
+          "type": "lifecycle-log",
+          "artifactPattern": "build/module-evidence/module-lifecycle.json"
+        },
+        {
+          "type": "junit-xml",
+          "artifactPattern": "build/SparkTests-junit.xml"
+        },
+        {
+          "type": "package-smoke-log",
+          "artifactPattern": "build/module-evidence/package-smoke.log"
+        }
       ]
     },
     {
       "name": "SparkGame",
       "cmakeTarget": "SparkGame",
-      "sharedLibrary": {"windows": "SparkGame.dll", "linux": "libSparkGame.so"},
+      "sharedLibrary": {
+        "windows": "SparkGame.dll",
+        "linux": "libSparkGame.so"
+      },
       "sourceDirectory": "GameModules/SparkGame/Source",
       "moduleKind": "Game",
-      "lifecyclePhases": [
-        "SparkGetModuleCompatibility",
-        "CreateModule",
-        "GetModuleInfo",
-        "OnLoad",
-        "OnUpdate",
-        "OnFixedUpdate",
-        "OnRender",
-        "OnImGui",
-        "OnResize",
-        "OnPause",
-        "OnResume",
-        "CanUnload",
-        "OnUnload",
-        "DestroyModule"
-      ],
-      "profileApplicability": {"stable-v1": "outside"},
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
       "dependencies": [],
       "evidenceBindings": [],
-      "experimentalSeparation": {"trackedUnder": "RDY-015"}
+      "experimentalSeparation": {
+        "trackedUnder": "RDY-015"
+      }
     },
     {
       "name": "SparkGameARPG",
       "cmakeTarget": "SparkGameARPG",
-      "sharedLibrary": {"windows": "SparkGameARPG.dll", "linux": "libSparkGameARPG.so"},
+      "sharedLibrary": {
+        "windows": "SparkGameARPG.dll",
+        "linux": "libSparkGameARPG.so"
+      },
       "sourceDirectory": "GameModules/SparkGameARPG/Source",
       "moduleKind": "Game",
-      "lifecyclePhases": [
-        "SparkGetModuleCompatibility",
-        "CreateModule",
-        "GetModuleInfo",
-        "OnLoad",
-        "OnUpdate",
-        "OnFixedUpdate",
-        "OnRender",
-        "OnImGui",
-        "OnResize",
-        "OnPause",
-        "OnResume",
-        "CanUnload",
-        "OnUnload",
-        "DestroyModule"
-      ],
-      "profileApplicability": {"stable-v1": "outside"},
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
       "dependencies": [],
       "evidenceBindings": [],
-      "experimentalSeparation": {"trackedUnder": "RDY-015"}
+      "experimentalSeparation": {
+        "trackedUnder": "RDY-015"
+      }
     },
     {
       "name": "SparkGameMMO",
       "cmakeTarget": "SparkGameMMO",
-      "sharedLibrary": {"windows": "SparkGameMMO.dll", "linux": "libSparkGameMMO.so"},
+      "sharedLibrary": {
+        "windows": "SparkGameMMO.dll",
+        "linux": "libSparkGameMMO.so"
+      },
       "sourceDirectory": "GameModules/SparkGameMMO/Source",
       "moduleKind": "Game",
-      "lifecyclePhases": [
-        "SparkGetModuleCompatibility",
-        "CreateModule",
-        "GetModuleInfo",
-        "OnLoad",
-        "OnUpdate",
-        "OnFixedUpdate",
-        "OnRender",
-        "OnImGui",
-        "OnResize",
-        "OnPause",
-        "OnResume",
-        "CanUnload",
-        "OnUnload",
-        "DestroyModule"
-      ],
-      "profileApplicability": {"stable-v1": "outside"},
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
       "dependencies": [],
       "evidenceBindings": [],
-      "experimentalSeparation": {"trackedUnder": "RDY-015"}
+      "experimentalSeparation": {
+        "trackedUnder": "RDY-015"
+      }
     },
     {
       "name": "SparkGameMMOFPS",
       "cmakeTarget": "SparkGameMMOFPS",
-      "sharedLibrary": {"windows": "SparkGameMMOFPS.dll", "linux": "libSparkGameMMOFPS.so"},
+      "sharedLibrary": {
+        "windows": "SparkGameMMOFPS.dll",
+        "linux": "libSparkGameMMOFPS.so"
+      },
       "sourceDirectory": "GameModules/SparkGameMMOFPS/Source",
       "moduleKind": "Game",
-      "lifecyclePhases": [
-        "SparkGetModuleCompatibility",
-        "CreateModule",
-        "GetModuleInfo",
-        "OnLoad",
-        "OnUpdate",
-        "OnFixedUpdate",
-        "OnRender",
-        "OnImGui",
-        "OnResize",
-        "OnPause",
-        "OnResume",
-        "CanUnload",
-        "OnUnload",
-        "DestroyModule"
-      ],
-      "profileApplicability": {"stable-v1": "outside"},
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
       "dependencies": [],
       "evidenceBindings": [],
-      "experimentalSeparation": {"trackedUnder": "RDY-015"}
+      "experimentalSeparation": {
+        "trackedUnder": "RDY-015"
+      }
     },
     {
       "name": "SparkGameOpenWorld",
       "cmakeTarget": "SparkGameOpenWorld",
-      "sharedLibrary": {"windows": "SparkGameOpenWorld.dll", "linux": "libSparkGameOpenWorld.so"},
+      "sharedLibrary": {
+        "windows": "SparkGameOpenWorld.dll",
+        "linux": "libSparkGameOpenWorld.so"
+      },
       "sourceDirectory": "GameModules/SparkGameOpenWorld/Source",
       "moduleKind": "Game",
-      "lifecyclePhases": [
-        "SparkGetModuleCompatibility",
-        "CreateModule",
-        "GetModuleInfo",
-        "OnLoad",
-        "OnUpdate",
-        "OnFixedUpdate",
-        "OnRender",
-        "OnImGui",
-        "OnResize",
-        "OnPause",
-        "OnResume",
-        "CanUnload",
-        "OnUnload",
-        "DestroyModule"
-      ],
-      "profileApplicability": {"stable-v1": "outside"},
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
       "dependencies": [],
       "evidenceBindings": [],
-      "experimentalSeparation": {"trackedUnder": "RDY-015"}
+      "experimentalSeparation": {
+        "trackedUnder": "RDY-015"
+      }
     },
     {
       "name": "SparkGamePlatformer",
       "cmakeTarget": "SparkGamePlatformer",
-      "sharedLibrary": {"windows": "SparkGamePlatformer.dll", "linux": "libSparkGamePlatformer.so"},
+      "sharedLibrary": {
+        "windows": "SparkGamePlatformer.dll",
+        "linux": "libSparkGamePlatformer.so"
+      },
       "sourceDirectory": "GameModules/SparkGamePlatformer/Source",
       "moduleKind": "Game",
-      "lifecyclePhases": [
-        "SparkGetModuleCompatibility",
-        "CreateModule",
-        "GetModuleInfo",
-        "OnLoad",
-        "OnUpdate",
-        "OnFixedUpdate",
-        "OnRender",
-        "OnImGui",
-        "OnResize",
-        "OnPause",
-        "OnResume",
-        "CanUnload",
-        "OnUnload",
-        "DestroyModule"
-      ],
-      "profileApplicability": {"stable-v1": "outside"},
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
       "dependencies": [],
       "evidenceBindings": [],
-      "experimentalSeparation": {"trackedUnder": "RDY-015"}
+      "experimentalSeparation": {
+        "trackedUnder": "RDY-015"
+      }
     },
     {
       "name": "SparkGameRPG",
       "cmakeTarget": "SparkGameRPG",
-      "sharedLibrary": {"windows": "SparkGameRPG.dll", "linux": "libSparkGameRPG.so"},
+      "sharedLibrary": {
+        "windows": "SparkGameRPG.dll",
+        "linux": "libSparkGameRPG.so"
+      },
       "sourceDirectory": "GameModules/SparkGameRPG/Source",
       "moduleKind": "Game",
-      "lifecyclePhases": [
-        "SparkGetModuleCompatibility",
-        "CreateModule",
-        "GetModuleInfo",
-        "OnLoad",
-        "OnUpdate",
-        "OnFixedUpdate",
-        "OnRender",
-        "OnImGui",
-        "OnResize",
-        "OnPause",
-        "OnResume",
-        "CanUnload",
-        "OnUnload",
-        "DestroyModule"
-      ],
-      "profileApplicability": {"stable-v1": "outside"},
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
       "dependencies": [],
       "evidenceBindings": [],
-      "experimentalSeparation": {"trackedUnder": "RDY-015"}
+      "experimentalSeparation": {
+        "trackedUnder": "RDY-015"
+      }
     },
     {
       "name": "SparkGameRTS",
       "cmakeTarget": "SparkGameRTS",
-      "sharedLibrary": {"windows": "SparkGameRTS.dll", "linux": "libSparkGameRTS.so"},
+      "sharedLibrary": {
+        "windows": "SparkGameRTS.dll",
+        "linux": "libSparkGameRTS.so"
+      },
       "sourceDirectory": "GameModules/SparkGameRTS/Source",
       "moduleKind": "Game",
-      "lifecyclePhases": [
-        "SparkGetModuleCompatibility",
-        "CreateModule",
-        "GetModuleInfo",
-        "OnLoad",
-        "OnUpdate",
-        "OnFixedUpdate",
-        "OnRender",
-        "OnImGui",
-        "OnResize",
-        "OnPause",
-        "OnResume",
-        "CanUnload",
-        "OnUnload",
-        "DestroyModule"
-      ],
-      "profileApplicability": {"stable-v1": "outside"},
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
       "dependencies": [],
       "evidenceBindings": [],
-      "experimentalSeparation": {"trackedUnder": "RDY-015"}
+      "experimentalSeparation": {
+        "trackedUnder": "RDY-015"
+      }
     },
     {
       "name": "SparkGameRacing",
       "cmakeTarget": "SparkGameRacing",
-      "sharedLibrary": {"windows": "SparkGameRacing.dll", "linux": "libSparkGameRacing.so"},
+      "sharedLibrary": {
+        "windows": "SparkGameRacing.dll",
+        "linux": "libSparkGameRacing.so"
+      },
       "sourceDirectory": "GameModules/SparkGameRacing/Source",
       "moduleKind": "Game",
-      "lifecyclePhases": [
-        "SparkGetModuleCompatibility",
-        "CreateModule",
-        "GetModuleInfo",
-        "OnLoad",
-        "OnUpdate",
-        "OnFixedUpdate",
-        "OnRender",
-        "OnImGui",
-        "OnResize",
-        "OnPause",
-        "OnResume",
-        "CanUnload",
-        "OnUnload",
-        "DestroyModule"
-      ],
-      "profileApplicability": {"stable-v1": "outside"},
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
       "dependencies": [],
       "evidenceBindings": [],
-      "experimentalSeparation": {"trackedUnder": "RDY-015"}
+      "experimentalSeparation": {
+        "trackedUnder": "RDY-015"
+      }
     },
     {
       "name": "SparkGameVisualScript",
       "cmakeTarget": "SparkGameVisualScript",
-      "sharedLibrary": {"windows": "SparkGameVisualScript.dll", "linux": "libSparkGameVisualScript.so"},
+      "sharedLibrary": {
+        "windows": "SparkGameVisualScript.dll",
+        "linux": "libSparkGameVisualScript.so"
+      },
       "sourceDirectory": "GameModules/SparkGameVisualScript/Source",
       "moduleKind": "Game",
-      "lifecyclePhases": [
-        "SparkGetModuleCompatibility",
-        "CreateModule",
-        "GetModuleInfo",
-        "OnLoad",
-        "OnUpdate",
-        "OnFixedUpdate",
-        "OnRender",
-        "OnImGui",
-        "OnResize",
-        "OnPause",
-        "OnResume",
-        "CanUnload",
-        "OnUnload",
-        "DestroyModule"
-      ],
-      "profileApplicability": {"stable-v1": "outside"},
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
       "dependencies": [],
       "evidenceBindings": [],
-      "experimentalSeparation": {"trackedUnder": "RDY-015"}
+      "experimentalSeparation": {
+        "trackedUnder": "RDY-015"
+      }
     }
   ]
 }

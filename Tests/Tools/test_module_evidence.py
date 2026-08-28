@@ -1,562 +1,1377 @@
 #!/usr/bin/env python3
-"""Adversarial tests for the RDY-010 module evidence manifest and validator.
+"""Adversarial tests for the RDY-010 module evidence validator.
 
-Tests operate on deep-copied manifest data.  No repository file is modified.
+Every case identified `B01`..`B36` is a bypass shape that an independent
+hostile probe demonstrated the previous validator accepted — 36 of 36 hostile
+manifests validated clean while 60 unit tests passed.  Each is pinned here as
+a rejection test, so the false-green cannot return silently.
 
-Rejection categories tested:
-  - Copied mirror models (sourceDirectory pointing elsewhere)
-  - Test-only source substitutions (test paths as source)
-  - Missing lifecycle phases
-  - Ambiguous/duplicate module identities (name, target, library)
-  - Repository-only paths (absolute, home-dir)
-  - Stale commit bindings (malformed SHA)
-  - Unsupported profile promotion (outside module in included list)
-  - Schema version mismatch
-  - Unknown keys (fail-closed)
-  - Invalid shared library naming
-  - Experimental separation violations
-  - Evidence binding validation
+The suite deliberately opens with `TestGoldenPath`: a validator that rejects
+everything would satisfy every rejection test in this file while being just as
+useless as one that accepts everything.  The golden tests prove the validator
+still says yes to a fully evidenced, fully truthful manifest.
+
+No repository file is modified.  Fixtures are built in temporary directories.
 """
 
 from __future__ import annotations
 
 import copy
 import json
+import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "module-evidence"))
 
+import lifecycle as lifecycle_mod  # noqa: E402
+import paths as paths_mod  # noqa: E402
+import provenance  # noqa: E402
+import strict_json  # noqa: E402
+import targets as targets_mod  # noqa: E402
+from schema import EVIDENCE_PRODUCERS, expected_library_names  # noqa: E402
 from validate_manifest import ManifestValidator, load_manifest  # noqa: E402
 
-
-def _load_valid() -> dict[str, Any]:
-    return load_manifest(REPO_ROOT / "tools" / "module-evidence" / "manifest.json")
-
-
-def _validate(manifest: dict[str, Any]) -> list[str]:
-    return ManifestValidator(manifest, REPO_ROOT).validate()
+INCLUDED = "SparkGameFPS"
+DECOY = "SparkGameDecoy"
+PROFILE = "stable-v1"
 
 
-def _make_minimal_valid() -> dict[str, Any]:
-    """Build a minimal valid manifest for mutation testing."""
+# --------------------------------------------------------------------------
+# Fixture construction
+# --------------------------------------------------------------------------
+def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        capture_output=True, text=True, check=True, timeout=60,
+    )
+
+
+def build_fake_repo(root: Path) -> str:
+    """A minimal repository with the shape the validator reads.
+
+    Returns the HEAD commit SHA.  A real git repository is used because the
+    revision and source-tree bindings are verified through git; stubbing them
+    would test the stub rather than the binding.
+    """
+    for module in (INCLUDED, DECOY):
+        src = root / "GameModules" / module / "Source"
+        src.mkdir(parents=True, exist_ok=True)
+        (src / "Main.cpp").write_text(
+            f"// {module} entry point\nextern \"C\" void CreateModule() {{}}\n",
+            encoding="utf-8",
+        )
+        # add_library appears only inside a comment: text that looks like a
+        # target declaration but declares nothing.
+        (root / "GameModules" / module / "CMakeLists.txt").write_text(
+            f"# add_library({module} SHARED Source/Main.cpp)\n"
+            f"message(STATUS \"nothing is built here\")\n",
+            encoding="utf-8",
+        )
+
+    site = root / "docs" / "site"
+    site.mkdir(parents=True, exist_ok=True)
+    (site / "readiness.json").write_text(
+        json.dumps({"releaseProfiles": [{"id": PROFILE, "name": "Stable v1"}]}),
+        encoding="utf-8",
+    )
+    items = root / "docs" / "readiness" / "work-items"
+    items.mkdir(parents=True, exist_ok=True)
+    (items / "00-truth.json").write_text(
+        json.dumps({"workItems": [
+            {"id": "MOD-310"}, {"id": "RDY-015"}, {"id": "RDY-010"},
+        ]}),
+        encoding="utf-8",
+    )
+
+    # Artifacts a producer would have written.  They are build outputs, so they
+    # live outside version control; the validator requires them to exist.
+    for etype in ("junit-xml", "package-smoke-log"):
+        artifact = root / EVIDENCE_PRODUCERS[etype]["artifact"]
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text("produced\n", encoding="utf-8")
+
+    _git(root, "init", "-q", "-b", "main")
+    (root / ".gitignore").write_text("build/\n", encoding="utf-8")
+    _git(root, "config", "user.email", "test@example.invalid")
+    _git(root, "config", "user.name", "Test")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "fixture")
+    return _git(root, "rev-parse", "HEAD").stdout.strip()
+
+
+def module_entry(name: str, *, included: bool) -> dict[str, Any]:
+    libs = expected_library_names(name)
+    entry: dict[str, Any] = {
+        "name": name,
+        "cmakeTarget": name,
+        "sharedLibrary": {"windows": libs["windows"], "linux": libs["linux"]},
+        "sourceDirectory": f"GameModules/{name}/Source",
+        "moduleKind": "Game",
+        "profileApplicability": {PROFILE: "required" if included else "outside"},
+        "dependencies": [],
+    }
+    if included:
+        entry["packageSmokeOwner"] = "MOD-310"
+        entry["evidenceBindings"] = [
+            {"type": t, "artifactPattern": EVIDENCE_PRODUCERS[t]["artifact"]}
+            for t in ("cmake-target-index", "lifecycle-log", "junit-xml",
+                      "package-smoke-log")
+        ]
+    else:
+        entry["evidenceBindings"] = []
+        entry["experimentalSeparation"] = {"trackedUnder": "RDY-015"}
+    return entry
+
+
+def base_manifest(*, with_decoy: bool = False) -> dict[str, Any]:
+    modules = [module_entry(INCLUDED, included=True)]
+    excluded: list[str] = []
+    if with_decoy:
+        modules.append(module_entry(DECOY, included=False))
+        excluded.append(DECOY)
     return {
-        "schemaVersion": "stable-v1",
-        "generatedAt": "2026-08-28T00:00:00Z",
-        "commitSHA": "a" * 40,
-        "profiles": [
-            {
-                "id": "stable-v1",
-                "includedModules": ["SparkGameFPS"],
-                "excludedModules": [],
-            }
-        ],
-        "modules": [
-            {
-                "name": "SparkGameFPS",
-                "cmakeTarget": "SparkGameFPS",
-                "sharedLibrary": {
-                    "windows": "SparkGameFPS.dll",
-                    "linux": "libSparkGameFPS.so",
-                },
-                "sourceDirectory": "GameModules/SparkGameFPS/Source",
-                "moduleKind": "Game",
-                "lifecyclePhases": [
-                    "SparkGetModuleCompatibility",
-                    "CreateModule",
-                    "GetModuleInfo",
-                    "OnLoad",
-                    "OnUpdate",
-                    "OnFixedUpdate",
-                    "OnRender",
-                    "OnImGui",
-                    "OnResize",
-                    "OnPause",
-                    "OnResume",
-                    "CanUnload",
-                    "OnUnload",
-                    "DestroyModule",
-                ],
-                "profileApplicability": {"stable-v1": "required"},
-            }
-        ],
+        "schemaVersion": "stable-v2",
+        "profiles": [{
+            "id": PROFILE,
+            "includedModules": [INCLUDED],
+            "excludedModules": excluded,
+        }],
+        "modules": modules,
     }
 
 
-class TestProductionManifestValid(unittest.TestCase):
-    """The checked-in manifest must pass validation."""
+def target_index(*, name: str = INCLUDED, ttype: str = "SHARED_LIBRARY",
+                 sources: list[str] | None = None,
+                 name_on_disk: str | None = None) -> dict[str, Any]:
+    if sources is None:
+        sources = [f"GameModules/{name}/Source/Main.cpp"]
+    return {
+        "schemaVersion": targets_mod.INDEX_SCHEMA_VERSION,
+        "targets": {
+            name: {
+                "name": name,
+                "type": ttype,
+                "nameOnDisk": name_on_disk or f"lib{name}.so",
+                "sources": sources,
+                "artifacts": [f"bin/lib{name}.so"],
+            }
+        },
+    }
 
-    def test_production_manifest_validates(self) -> None:
-        manifest = _load_valid()
-        errors = _validate(manifest)
-        self.assertEqual(errors, [], f"Production manifest has errors: {errors}")
 
-    def test_production_manifest_has_all_11_modules(self) -> None:
-        manifest = _load_valid()
+def lifecycle_evidence(repo: Path, sha: str, *, module: str = INCLUDED,
+                       phases: dict[str, int] | None = None,
+                       tree_sha: str | None = None) -> dict[str, Any]:
+    if tree_sha is None:
+        tree_sha, err = lifecycle_mod.source_tree_sha(
+            repo, sha, f"GameModules/{module}/Source"
+        )
+        assert tree_sha is not None, err
+    if phases is None:
+        phases = {p: 1 for p in lifecycle_mod.REQUIRED_RUNTIME_PHASES}
+        phases["OnUpdate"] = 120
+    return {
+        "schemaVersion": lifecycle_mod.LIFECYCLE_SCHEMA_VERSION,
+        "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "commitSHA": sha,
+        "records": [{
+            "module": module,
+            "sharedLibrary": expected_library_names(module)["linux"],
+            "sourceDirectory": f"GameModules/{module}/Source",
+            "sourceTreeSHA": tree_sha,
+            "runner": "ctest",
+            "phases": phases,
+        }],
+    }
+
+
+class FixtureCase(unittest.TestCase):
+    """Base class owning one temporary repository for the whole class."""
+
+    repo: Path
+    sha: str
+    _tmp: str
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._tmp = tempfile.mkdtemp(prefix="spark-rdy010-")
+        cls.repo = Path(cls._tmp) / "repo"
+        cls.repo.mkdir()
+        cls.sha = build_fake_repo(cls.repo)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls._tmp, ignore_errors=True)
+
+    def validate(self, manifest: dict[str, Any], **over: Any) -> list[str]:
+        kwargs: dict[str, Any] = {
+            "target_index": target_index(),
+            "lifecycle_evidence": lifecycle_evidence(self.repo, self.sha),
+            "expected_sha": self.sha,
+        }
+        kwargs.update(over)
+        return ManifestValidator(manifest, self.repo, **kwargs).validate()
+
+    def assertRejected(self, manifest: dict[str, Any], case: str,
+                       **over: Any) -> list[str]:
+        errors = self.validate(manifest, **over)
+        self.assertNotEqual(
+            errors, [],
+            f"[{case}] hostile manifest was ACCEPTED — this is a false-green",
+        )
+        return errors
+
+    def assertAccepted(self, manifest: dict[str, Any], **over: Any) -> None:
+        errors = self.validate(manifest, **over)
+        self.assertEqual(errors, [], f"truthful manifest was rejected: {errors}")
+
+
+# --------------------------------------------------------------------------
+# Golden path — the validator must still say yes to the truth
+# --------------------------------------------------------------------------
+class TestGoldenPath(FixtureCase):
+    """Guards against a validator that passes every rejection test by
+    rejecting everything."""
+
+    def test_fully_evidenced_manifest_is_accepted(self) -> None:
+        self.assertAccepted(base_manifest())
+
+    def test_manifest_with_experimental_module_is_accepted(self) -> None:
+        self.assertAccepted(base_manifest(with_decoy=True))
+
+    def test_shipped_manifest_passes_the_declarative_layer(self) -> None:
+        """The checked-in manifest must at least be internally consistent."""
+        manifest = load_manifest(
+            REPO_ROOT / "tools" / "module-evidence" / "manifest.json"
+        )
+        errors = ManifestValidator(manifest, REPO_ROOT, policy_only=True).validate()
+        self.assertEqual(errors, [], f"shipped manifest has policy errors: {errors}")
+
+    def test_shipped_manifest_declares_all_eleven_modules(self) -> None:
+        manifest = load_manifest(
+            REPO_ROOT / "tools" / "module-evidence" / "manifest.json"
+        )
         self.assertEqual(len(manifest["modules"]), 11)
 
-    def test_production_manifest_stable_v1_includes_fps(self) -> None:
-        manifest = _load_valid()
-        profile = manifest["profiles"][0]
-        self.assertEqual(profile["id"], "stable-v1")
-        self.assertIn("SparkGameFPS", profile["includedModules"])
-
-    def test_production_manifest_excludes_experimentals_from_stable(self) -> None:
-        manifest = _load_valid()
-        profile = manifest["profiles"][0]
-        excluded = set(profile["excludedModules"])
-        for mod in manifest["modules"]:
-            if mod["name"] != "SparkGameFPS":
-                self.assertIn(mod["name"], excluded)
-
-
-class TestSchemaVersionReject(unittest.TestCase):
-    """Wrong or missing schema version must fail."""
-
-    def test_wrong_schema_version(self) -> None:
-        m = _make_minimal_valid()
-        m["schemaVersion"] = "unstable-v2"
-        errors = _validate(m)
-        self.assertTrue(any("schemaVersion" in e for e in errors))
-
-    def test_missing_schema_version(self) -> None:
-        m = _make_minimal_valid()
-        del m["schemaVersion"]
-        errors = _validate(m)
-        self.assertTrue(any("missing required top-level" in e for e in errors))
-
-    def test_numeric_schema_version(self) -> None:
-        m = _make_minimal_valid()
-        m["schemaVersion"] = 1
-        errors = _validate(m)
-        self.assertTrue(any("schemaVersion" in e for e in errors))
-
-
-class TestCommitSHAReject(unittest.TestCase):
-    """Stale or malformed commit SHA must fail."""
-
-    def test_short_sha(self) -> None:
-        m = _make_minimal_valid()
-        m["commitSHA"] = "abc123"
-        errors = _validate(m)
-        self.assertTrue(any("commitSHA" in e for e in errors))
-
-    def test_uppercase_sha(self) -> None:
-        m = _make_minimal_valid()
-        m["commitSHA"] = "A" * 40
-        errors = _validate(m)
-        self.assertTrue(any("commitSHA" in e for e in errors))
-
-    def test_null_sha(self) -> None:
-        m = _make_minimal_valid()
-        m["commitSHA"] = None
-        errors = _validate(m)
-        self.assertTrue(any("commitSHA" in e for e in errors))
-
-    def test_empty_sha(self) -> None:
-        m = _make_minimal_valid()
-        m["commitSHA"] = ""
-        errors = _validate(m)
-        self.assertTrue(any("commitSHA" in e for e in errors))
-
-
-class TestUnknownKeysReject(unittest.TestCase):
-    """Unknown keys at any level must fail (fail-closed)."""
-
-    def test_unknown_top_level_key(self) -> None:
-        m = _make_minimal_valid()
-        m["extraField"] = "surprise"
-        errors = _validate(m)
-        self.assertTrue(any("unknown top-level" in e for e in errors))
-
-    def test_unknown_module_key(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["hackField"] = True
-        errors = _validate(m)
-        self.assertTrue(any("unknown keys" in e for e in errors))
-
-
-class TestDuplicateIdentityReject(unittest.TestCase):
-    """Duplicate module names, targets, or library filenames must fail."""
-
-    def test_duplicate_module_name(self) -> None:
-        m = _make_minimal_valid()
-        dupe = copy.deepcopy(m["modules"][0])
-        dupe["cmakeTarget"] = "SparkGameFPS2"
-        dupe["sharedLibrary"] = {"windows": "SparkGameFPS2.dll"}
-        m["modules"].append(dupe)
-        errors = _validate(m)
-        self.assertTrue(any("duplicate module name" in e for e in errors))
-
-    def test_duplicate_cmake_target(self) -> None:
-        m = _make_minimal_valid()
-        dupe = copy.deepcopy(m["modules"][0])
-        dupe["name"] = "SparkGameFPS2"
-        dupe["sharedLibrary"] = {"windows": "SparkGameFPS2.dll"}
-        dupe["sourceDirectory"] = "GameModules/SparkGameFPS/Source"
-        m["modules"].append(dupe)
-        errors = _validate(m)
-        self.assertTrue(any("duplicate cmakeTarget" in e for e in errors))
-
-    def test_duplicate_shared_library(self) -> None:
-        m = _make_minimal_valid()
-        dupe = copy.deepcopy(m["modules"][0])
-        dupe["name"] = "SparkGameFPS2"
-        dupe["cmakeTarget"] = "SparkGameFPS2"
-        m["modules"].append(dupe)
-        errors = _validate(m)
-        self.assertTrue(any("duplicate sharedLibrary" in e for e in errors))
-
-
-class TestMissingLifecyclePhasesReject(unittest.TestCase):
-    """Missing required lifecycle phases must fail."""
-
-    def test_missing_onload(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["lifecyclePhases"].remove("OnLoad")
-        errors = _validate(m)
-        self.assertTrue(any("missing required lifecyclePhases" in e for e in errors))
-        self.assertTrue(any("OnLoad" in e for e in errors))
-
-    def test_missing_create_module(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["lifecyclePhases"].remove("CreateModule")
-        errors = _validate(m)
-        self.assertTrue(any("CreateModule" in e for e in errors))
-
-    def test_missing_compatibility(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["lifecyclePhases"].remove("SparkGetModuleCompatibility")
-        errors = _validate(m)
-        self.assertTrue(any("SparkGetModuleCompatibility" in e for e in errors))
-
-    def test_duplicate_lifecycle_phase(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["lifecyclePhases"].append("OnLoad")
-        errors = _validate(m)
-        self.assertTrue(any("duplicate lifecyclePhases" in e for e in errors))
-
-    def test_unknown_lifecycle_phase(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["lifecyclePhases"].append("OnMagic")
-        errors = _validate(m)
-        self.assertTrue(any("unknown lifecyclePhases" in e for e in errors))
-
-
-class TestSourceDirectoryReject(unittest.TestCase):
-    """Invalid source directories must fail."""
-
-    def test_absolute_path(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sourceDirectory"] = "/home/user/SparkGameFPS/Source"
-        errors = _validate(m)
-        self.assertTrue(any("repository-relative" in e for e in errors))
-
-    def test_windows_absolute_path(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sourceDirectory"] = "C:\\Users\\dev\\GameModules"
-        errors = _validate(m)
-        self.assertTrue(any("repository-relative" in e for e in errors))
-
-    def test_home_dir_reference(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sourceDirectory"] = "~/GameModules/SparkGameFPS/Source"
-        errors = _validate(m)
-        self.assertTrue(any("user-home" in e for e in errors))
-
-    def test_test_path_substitution(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sourceDirectory"] = "Tests/GameModules/SparkGameFPS"
-        errors = _validate(m)
-        self.assertTrue(any("test path" in e for e in errors))
-
-    def test_nonexistent_directory(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sourceDirectory"] = "GameModules/SparkGameFPS/DoesNotExist"
-        errors = _validate(m)
-        self.assertTrue(any("does not exist" in e for e in errors))
-
-
-class TestSharedLibraryReject(unittest.TestCase):
-    """Invalid shared library names must fail."""
-
-    def test_wrong_windows_extension(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sharedLibrary"]["windows"] = "SparkGameFPS.so"
-        errors = _validate(m)
-        self.assertTrue(any("does not match" in e for e in errors))
-
-    def test_wrong_linux_prefix(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sharedLibrary"]["linux"] = "SparkGameFPS.so"
-        errors = _validate(m)
-        self.assertTrue(any("does not match" in e for e in errors))
-
-    def test_unknown_platform(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sharedLibrary"]["haiku"] = "libSparkGameFPS.so"
-        errors = _validate(m)
-        self.assertTrue(any("unknown sharedLibrary platform" in e for e in errors))
-
-    def test_empty_library_dict(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sharedLibrary"] = {}
-        errors = _validate(m)
-        self.assertTrue(any("at least one platform" in e for e in errors))
-
-
-class TestProfileApplicabilityReject(unittest.TestCase):
-    """Invalid profile applicability values must fail."""
-
-    def test_invalid_applicability(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["profileApplicability"]["stable-v1"] = "promoted"
-        errors = _validate(m)
-        self.assertTrue(any("profileApplicability" in e for e in errors))
-
-    def test_empty_applicability(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["profileApplicability"] = {}
-        errors = _validate(m)
-        self.assertTrue(any("at least one profile" in e for e in errors))
-
-    def test_outside_in_included(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["profileApplicability"]["stable-v1"] = "outside"
-        errors = _validate(m)
-        self.assertTrue(any("'outside' but is included" in e for e in errors))
-
-
-class TestModuleKindReject(unittest.TestCase):
-    """Invalid module kinds must fail."""
-
-    def test_invalid_kind(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["moduleKind"] = "Plugin"
-        errors = _validate(m)
-        self.assertTrue(any("moduleKind" in e for e in errors))
-
-    def test_empty_kind(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["moduleKind"] = ""
-        errors = _validate(m)
-        self.assertTrue(any("moduleKind" in e for e in errors))
-
-
-class TestExperimentalSeparationReject(unittest.TestCase):
-    """Experimental module in stable profile must fail."""
-
-    def test_experimental_in_required(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["experimentalSeparation"] = {"trackedUnder": "RDY-015"}
-        m["modules"][0]["profileApplicability"]["stable-v1"] = "required"
-        errors = _validate(m)
-        self.assertTrue(any("experimentalSeparation" in e for e in errors))
-
-    def test_experimental_in_shared(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["experimentalSeparation"] = {"trackedUnder": "RDY-015"}
-        m["modules"][0]["profileApplicability"]["stable-v1"] = "shared"
-        errors = _validate(m)
-        self.assertTrue(any("experimentalSeparation" in e for e in errors))
-
-    def test_experimental_outside_is_ok(self) -> None:
-        m = _make_minimal_valid()
-        extra_mod = copy.deepcopy(m["modules"][0])
-        extra_mod["name"] = "SparkGame"
-        extra_mod["cmakeTarget"] = "SparkGame"
-        extra_mod["sharedLibrary"] = {"windows": "SparkGame.dll"}
-        extra_mod["sourceDirectory"] = "GameModules/SparkGame/Source"
-        extra_mod["profileApplicability"] = {"stable-v1": "outside"}
-        extra_mod["experimentalSeparation"] = {"trackedUnder": "RDY-015"}
-        m["modules"].append(extra_mod)
-        errors = _validate(m)
-        exp_errors = [e for e in errors if "experimentalSeparation" in e]
-        self.assertEqual(exp_errors, [])
-
-    def test_missing_tracker(self) -> None:
-        m = _make_minimal_valid()
-        extra_mod = copy.deepcopy(m["modules"][0])
-        extra_mod["name"] = "SparkGame"
-        extra_mod["cmakeTarget"] = "SparkGame"
-        extra_mod["sharedLibrary"] = {"windows": "SparkGame.dll"}
-        extra_mod["sourceDirectory"] = "GameModules/SparkGame/Source"
-        extra_mod["profileApplicability"] = {"stable-v1": "outside"}
-        extra_mod["experimentalSeparation"] = {"trackedUnder": ""}
-        m["modules"].append(extra_mod)
-        errors = _validate(m)
-        self.assertTrue(any("trackedUnder" in e for e in errors))
-
-
-class TestEvidenceBindingsReject(unittest.TestCase):
-    """Invalid evidence bindings must fail."""
-
-    def test_unknown_evidence_type(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["evidenceBindings"] = [
-            {"type": "magic-sauce", "artifactPattern": "build/magic.xml"}
-        ]
-        errors = _validate(m)
-        self.assertTrue(any("type must be one of" in e for e in errors))
-
-    def test_absolute_artifact_path(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["evidenceBindings"] = [
-            {"type": "junit-xml", "artifactPattern": "/tmp/results.xml"}
-        ]
-        errors = _validate(m)
-        self.assertTrue(any("must be relative" in e for e in errors))
-
-    def test_dotdot_traversal_artifact(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["evidenceBindings"] = [
-            {"type": "junit-xml", "artifactPattern": "../../etc/shadow"}
-        ]
-        errors = _validate(m)
-        self.assertTrue(any("traversal" in e for e in errors))
-
-    def test_dotdot_nested_traversal_artifact(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["evidenceBindings"] = [
-            {"type": "junit-xml", "artifactPattern": "build/../../.git/config"}
-        ]
-        errors = _validate(m)
-        self.assertTrue(any("traversal" in e for e in errors))
-
-    def test_backslash_absolute_artifact(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["evidenceBindings"] = [
-            {"type": "junit-xml", "artifactPattern": "\\\\server\\share\\results.xml"}
-        ]
-        errors = _validate(m)
-        self.assertTrue(any("must be relative" in e for e in errors))
-
-    def test_missing_artifact_pattern(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["evidenceBindings"] = [{"type": "junit-xml"}]
-        errors = _validate(m)
-        self.assertTrue(any("artifactPattern" in e for e in errors))
-
-
-class TestCrossReferenceReject(unittest.TestCase):
-    """Profile referencing non-existent module must fail."""
-
-    def test_included_unknown_module(self) -> None:
-        m = _make_minimal_valid()
-        m["profiles"][0]["includedModules"].append("SparkGamePhantom")
-        errors = _validate(m)
-        self.assertTrue(any("unknown module" in e for e in errors))
-
-    def test_excluded_unknown_module(self) -> None:
-        m = _make_minimal_valid()
-        m["profiles"][0]["excludedModules"].append("SparkGamePhantom")
-        errors = _validate(m)
-        self.assertTrue(any("unknown module" in e for e in errors))
-
-    def test_module_in_both_included_and_excluded(self) -> None:
-        m = _make_minimal_valid()
-        m["profiles"][0]["excludedModules"].append("SparkGameFPS")
-        errors = _validate(m)
-        self.assertTrue(any("both included and excluded" in e for e in errors))
-
-
-class TestSourceDirectoryTraversalReject(unittest.TestCase):
-    """Dotdot traversal and non-GameModules source trees must be caught."""
-
-    def test_dotdot_traversal(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sourceDirectory"] = "GameModules/../SparkEngine/Source"
-        errors = _validate(m)
-        self.assertTrue(any("traversal" in e for e in errors))
-
-    def test_dotdot_backslash(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sourceDirectory"] = "GameModules\\..\\SparkEngine\\Source"
-        errors = _validate(m)
-        self.assertTrue(any("traversal" in e for e in errors))
-
-    def test_non_gamemodules_source(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sourceDirectory"] = "SparkEngine/Source"
-        errors = _validate(m)
-        self.assertTrue(any("GameModules/" in e for e in errors))
-
-    def test_non_gamemodules_editor(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sourceDirectory"] = "SparkEditor/Source"
-        errors = _validate(m)
-        self.assertTrue(any("GameModules/" in e for e in errors))
-
-
-class TestCopiedMirrorModelReject(unittest.TestCase):
-    """Source directory pointing to a different module's tree must be caught."""
-
-    def test_source_mismatch_is_flagged_as_mirror(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["sourceDirectory"] = "GameModules/SparkGame/Source"
-        errors = _validate(m)
+    def test_shipped_manifest_blocks_without_runtime_evidence(self) -> None:
+        """RDY-010's own manifest must not validate while evidence is absent."""
+        manifest = load_manifest(
+            REPO_ROOT / "tools" / "module-evidence" / "manifest.json"
+        )
+        errors = ManifestValidator(manifest, REPO_ROOT).validate()
         self.assertTrue(
-            any("mirror" in e.lower() for e in errors),
-            f"Expected copied mirror model error, got: {errors}",
+            any("unavailable" in e for e in errors),
+            f"expected a blocking unavailable-evidence error, got {errors}",
         )
 
 
-class TestModuleNameReject(unittest.TestCase):
-    """Module names must be alphanumeric PascalCase."""
+# --------------------------------------------------------------------------
+# B01-B02 — target and source proof must be authoritative, not textual
+# --------------------------------------------------------------------------
+class TestTargetProof(FixtureCase):
 
-    def test_hyphenated_name(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["name"] = "Spark-Game-FPS"
-        errors = _validate(m)
-        self.assertTrue(any("alphanumeric PascalCase" in e for e in errors))
+    def test_B01_comment_only_add_library_is_not_a_target(self) -> None:
+        """The fixture's CMakeLists declares the target only in a comment."""
+        errors = self.assertRejected(base_manifest(), "B01", target_index=None,
+                                     target_error="no codemodel")
+        self.assertTrue(any("target evidence is unavailable" in e.lower()
+                            or "unavailable" in e for e in errors))
 
-    def test_empty_name(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["name"] = ""
-        errors = _validate(m)
-        self.assertTrue(any("non-empty string" in e for e in errors))
+    def test_B01b_target_absent_from_codemodel_is_rejected(self) -> None:
+        self.assertRejected(base_manifest(), "B01b",
+                            target_index=target_index(name="SomethingElse"))
 
-    def test_numeric_start(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["name"] = "123Game"
-        errors = _validate(m)
-        self.assertTrue(any("alphanumeric" in e for e in errors))
+    def test_B02_target_with_zero_sources_is_rejected(self) -> None:
+        self.assertRejected(base_manifest(), "B02",
+                            target_index=target_index(sources=[]))
+
+    def test_B02b_sources_outside_declared_tree_are_rejected(self) -> None:
+        self.assertRejected(
+            base_manifest(), "B02b",
+            target_index=target_index(sources=["SparkEngine/Source/Other.cpp"]),
+        )
+
+    def test_target_of_wrong_type_is_rejected(self) -> None:
+        self.assertRejected(base_manifest(), "B01c",
+                            target_index=target_index(ttype="STATIC_LIBRARY"))
+
+    def test_target_index_naming_a_foreign_library_is_rejected(self) -> None:
+        self.assertRejected(base_manifest(), "B01d",
+                            target_index=target_index(name_on_disk="libOther.so"))
+
+    def test_toolchain_variant_library_names_are_accepted(self) -> None:
+        """MinGW emits libX.dll, MSVC X.dll, GCC libX.so — all legitimate."""
+        for on_disk in (f"lib{INCLUDED}.so", f"lib{INCLUDED}.dll",
+                        f"{INCLUDED}.dll", f"lib{INCLUDED}.dylib"):
+            with self.subTest(nameOnDisk=on_disk):
+                self.assertAccepted(
+                    base_manifest(),
+                    target_index=target_index(name_on_disk=on_disk),
+                )
+
+    def test_unconfigured_tree_raises_rather_than_returning_empty(self) -> None:
+        with self.assertRaises(targets_mod.TargetEvidenceUnavailable):
+            targets_mod.load_target_index(self.repo / "nope" / "targets.json")
+
+    def test_codemodel_with_no_targets_raises(self) -> None:
+        reply = self.repo / "emptyreply"
+        reply.mkdir(exist_ok=True)
+        with self.assertRaises(targets_mod.TargetEvidenceUnavailable):
+            targets_mod.extract_from_reply(reply)
 
 
-class TestProfileReject(unittest.TestCase):
-    """Profile-level validation."""
+# --------------------------------------------------------------------------
+# B03-B09 — exact lexical and canonical source paths
+# --------------------------------------------------------------------------
+class TestSourceDirectoryExactness(FixtureCase):
 
-    def test_no_profiles(self) -> None:
-        m = _make_minimal_valid()
-        m["profiles"] = []
-        errors = _validate(m)
-        self.assertTrue(any("at least one profile" in e for e in errors))
+    def _with_source(self, value: str) -> dict[str, Any]:
+        m = base_manifest()
+        m["modules"][0]["sourceDirectory"] = value
+        return m
 
-    def test_duplicate_profile_id(self) -> None:
-        m = _make_minimal_valid()
+    def test_B03_module_root_is_not_the_source_tree(self) -> None:
+        self.assertRejected(self._with_source(f"GameModules/{INCLUDED}"), "B03")
+
+    def test_B04_source_subdirectory_is_rejected(self) -> None:
+        self.assertRejected(
+            self._with_source(f"GameModules/{INCLUDED}/Source/Core"), "B04")
+
+    def test_B05_dot_segment_is_rejected(self) -> None:
+        self.assertRejected(
+            self._with_source(f"GameModules/{INCLUDED}/./Source"), "B05")
+
+    def test_B06_empty_segment_is_rejected(self) -> None:
+        self.assertRejected(
+            self._with_source(f"GameModules//{INCLUDED}/Source"), "B06")
+
+    def test_B07_case_aliased_source_is_rejected(self) -> None:
+        self.assertRejected(
+            self._with_source(f"GameModules/{INCLUDED}/source"), "B07")
+
+    def test_B07b_case_aliased_root_is_rejected(self) -> None:
+        self.assertRejected(
+            self._with_source(f"gamemodules/{INCLUDED}/Source"), "B07b")
+
+    def test_B08_trailing_slash_is_rejected(self) -> None:
+        self.assertRejected(
+            self._with_source(f"GameModules/{INCLUDED}/Source/"), "B08")
+
+    def test_B09_reparse_point_source_is_rejected(self) -> None:
+        link = self.repo / "GameModules" / INCLUDED / "Linked"
+        target = self.repo / "GameModules" / DECOY / "Source"
+        made = False
+        if not link.exists():
+            try:
+                os.symlink(str(target), str(link), target_is_directory=True)
+                made = True
+            except (OSError, NotImplementedError):
+                if sys.platform == "win32":
+                    rc = subprocess.run(
+                        ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+                        capture_output=True, text=True, check=False,
+                    )
+                    made = rc.returncode == 0
+        if not (made or link.exists()):
+            self.skipTest("this OS/account cannot create symlinks or junctions")
+        self.assertTrue(
+            paths_mod._is_reparse_point(link),
+            "fixture link was not detected as a reparse point",
+        )
+        # Even under its exact expected name, a reparse point is not source.
+        errors = paths_mod.check_on_disk(
+            f"GameModules/{INCLUDED}/Linked", self.repo)
+        self.assertNotEqual(errors, [], "[B09] reparse point was ACCEPTED")
+
+    def test_traversal_escape_is_rejected(self) -> None:
+        self.assertRejected(
+            self._with_source(f"GameModules/{INCLUDED}/Source/../../{DECOY}/Source"),
+            "B03b")
+
+    def test_sibling_module_source_is_rejected(self) -> None:
+        self.assertRejected(
+            self._with_source(f"GameModules/{DECOY}/Source"), "B03c")
+
+    def test_absolute_and_home_paths_are_rejected(self) -> None:
+        for value in ("/etc/passwd", "C:/Windows", "~/evil", "$HOME/evil",
+                      "%USERPROFILE%/evil", "\\\\server\\share"):
+            with self.subTest(path=value):
+                self.assertRejected(self._with_source(value), "B03d")
+
+    def test_alternate_data_stream_is_rejected(self) -> None:
+        self.assertRejected(
+            self._with_source(f"GameModules/{INCLUDED}/Source:hidden"), "B03e")
+
+    def test_short_name_alias_is_rejected(self) -> None:
+        self.assertRejected(
+            self._with_source(f"GAMEMO~1/{INCLUDED}/Source"), "B03f")
+
+    def test_reserved_device_name_is_rejected(self) -> None:
+        self.assertRejected(self._with_source(f"GameModules/{INCLUDED}/NUL"),
+                            "B03g")
+
+    def test_nonexistent_directory_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["name"] = "SparkGameGhost"
+        m["modules"][0]["cmakeTarget"] = "SparkGameGhost"
+        m["modules"][0]["sharedLibrary"] = {
+            "windows": "SparkGameGhost.dll", "linux": "libSparkGameGhost.so"}
+        m["modules"][0]["sourceDirectory"] = "GameModules/SparkGameGhost/Source"
+        m["profiles"][0]["includedModules"] = ["SparkGameGhost"]
+        self.assertRejected(m, "B03h")
+
+
+# --------------------------------------------------------------------------
+# B10 — declared phases are not runtime proof
+# --------------------------------------------------------------------------
+class TestLifecycleIsRuntimeProof(FixtureCase):
+
+    def test_B10_declared_phase_list_is_not_accepted_as_evidence(self) -> None:
+        """The schema no longer even has a lifecyclePhases key to declare."""
+        m = base_manifest()
+        m["modules"][0]["lifecyclePhases"] = [
+            "SparkGetModuleCompatibility", "CreateModule", "GetModuleInfo",
+            "OnLoad", "OnUpdate", "OnUnload", "DestroyModule",
+        ]
+        errors = self.assertRejected(m, "B10")
+        self.assertTrue(any("unknown keys" in e and "lifecyclePhases" in e
+                            for e in errors), errors)
+
+    def test_missing_lifecycle_evidence_blocks(self) -> None:
+        errors = self.assertRejected(
+            base_manifest(), "B10b",
+            lifecycle_evidence=None, lifecycle_error="not found")
+        self.assertTrue(any("lifecycle evidence is unavailable" in e for e in errors))
+
+    def test_zero_count_phase_did_not_run(self) -> None:
+        phases = {p: 1 for p in lifecycle_mod.REQUIRED_RUNTIME_PHASES}
+        phases["OnUpdate"] = 0
+        self.assertRejected(
+            base_manifest(), "B10c",
+            lifecycle_evidence=lifecycle_evidence(self.repo, self.sha, phases=phases))
+
+    def test_each_required_phase_is_individually_required(self) -> None:
+        for phase in lifecycle_mod.REQUIRED_RUNTIME_PHASES:
+            with self.subTest(phase=phase):
+                phases = {p: 1 for p in lifecycle_mod.REQUIRED_RUNTIME_PHASES}
+                del phases[phase]
+                self.assertRejected(
+                    base_manifest(), f"B10-{phase}",
+                    lifecycle_evidence=lifecycle_evidence(
+                        self.repo, self.sha, phases=phases))
+
+    def test_evidence_for_a_different_source_tree_is_rejected(self) -> None:
+        self.assertRejected(
+            base_manifest(), "B10d",
+            lifecycle_evidence=lifecycle_evidence(
+                self.repo, self.sha, tree_sha="0" * 40))
+
+    def test_evidence_for_a_different_module_is_rejected(self) -> None:
+        self.assertRejected(
+            base_manifest(), "B10e",
+            lifecycle_evidence=lifecycle_evidence(self.repo, self.sha, module=DECOY))
+
+    def test_unknown_runner_is_rejected(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        ev["records"][0]["runner"] = "trust-me"
+        self.assertRejected(base_manifest(), "B10f", lifecycle_evidence=ev)
+
+    def test_unknown_phase_name_is_rejected(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        ev["records"][0]["phases"]["OnMagic"] = 1
+        self.assertRejected(base_manifest(), "B10g", lifecycle_evidence=ev)
+
+    def test_lifecycle_record_with_unknown_keys_is_rejected(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        ev["records"][0]["backdoor"] = "accepted"
+        self.assertRejected(base_manifest(), "B10h", lifecycle_evidence=ev)
+
+    def test_boolean_phase_count_is_rejected(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        ev["records"][0]["phases"]["OnUpdate"] = True
+        self.assertRejected(base_manifest(), "B10i", lifecycle_evidence=ev)
+
+    def test_empty_records_raises_rather_than_passing(self) -> None:
+        path = self.repo / "lc.json"
+        path.write_text(json.dumps({
+            "schemaVersion": lifecycle_mod.LIFECYCLE_SCHEMA_VERSION,
+            "records": [],
+        }), encoding="utf-8")
+        with self.assertRaises(lifecycle_mod.LifecycleEvidenceUnavailable):
+            lifecycle_mod.load_lifecycle_evidence(path)
+
+    def test_source_tree_sha_changes_when_source_changes(self) -> None:
+        """The binding must actually discriminate."""
+        first, err = lifecycle_mod.source_tree_sha(
+            self.repo, self.sha, f"GameModules/{INCLUDED}/Source")
+        self.assertIsNone(err)
+        (self.repo / "GameModules" / INCLUDED / "Source" / "Extra.cpp").write_text(
+            "// changed\n", encoding="utf-8")
+        _git(self.repo, "add", "-A")
+        _git(self.repo, "commit", "-q", "-m", "change source")
+        new_sha = _git(self.repo, "rev-parse", "HEAD").stdout.strip()
+        second, err = lifecycle_mod.source_tree_sha(
+            self.repo, new_sha, f"GameModules/{INCLUDED}/Source")
+        self.assertIsNone(err)
+        self.assertNotEqual(first, second)
+        # Restore so later tests in this class see the original tree.
+        _git(self.repo, "reset", "-q", "--hard", self.sha)
+
+
+# --------------------------------------------------------------------------
+# B11-B17 — evidence bindings must name real producers
+# --------------------------------------------------------------------------
+class TestEvidenceBindings(FixtureCase):
+
+    def test_B11_binding_to_a_never_produced_artifact_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["evidenceBindings"][2]["artifactPattern"] = \
+            "build/never-produced.xml"
+        errors = self.assertRejected(m, "B11")
+        self.assertTrue(any("producer" in e for e in errors), errors)
+
+    def test_B12_included_module_with_no_bindings_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["evidenceBindings"] = []
+        self.assertRejected(m, "B12")
+
+    def test_B12b_each_required_evidence_type_is_individually_required(self) -> None:
+        for i in range(4):
+            with self.subTest(dropped=i):
+                m = base_manifest()
+                del m["modules"][0]["evidenceBindings"][i]
+                self.assertRejected(m, f"B12b-{i}")
+
+    def test_B13_included_module_without_package_smoke_owner_is_rejected(self) -> None:
+        m = base_manifest()
+        del m["modules"][0]["packageSmokeOwner"]
+        self.assertRejected(m, "B13")
+
+    def test_B14_invented_package_smoke_owner_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["packageSmokeOwner"] = "TOTALLY-FAKE-999"
+        self.assertRejected(m, "B14")
+
+    def test_B14b_well_formed_but_unknown_owner_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["packageSmokeOwner"] = "ZZZ-999"
+        errors = self.assertRejected(m, "B14b")
+        self.assertTrue(any("not a readiness work item" in e for e in errors), errors)
+
+    def test_B15_currently_unproduced_lifecycle_log_path_is_rejected(self) -> None:
+        """The historical binding to build/module-lifecycle-<mod>.log."""
+        m = base_manifest()
+        m["modules"][0]["evidenceBindings"][1]["artifactPattern"] = \
+            f"build/module-lifecycle-{INCLUDED}.log"
+        self.assertRejected(m, "B15")
+
+    def test_B16_binding_with_unknown_keys_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["evidenceBindings"][0]["backdoor"] = "accepted"
+        self.assertRejected(m, "B16")
+
+    def test_B17_duplicate_binding_type_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["evidenceBindings"].append(
+            copy.deepcopy(m["modules"][0]["evidenceBindings"][0]))
+        self.assertRejected(m, "B17")
+
+    def test_unknown_evidence_type_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["evidenceBindings"][0]["type"] = "vibes"
+        self.assertRejected(m, "B11b")
+
+    def test_glob_artifact_pattern_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["evidenceBindings"][0]["artifactPattern"] = "build/*.json"
+        self.assertRejected(m, "B11c")
+
+    def test_traversal_artifact_pattern_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["evidenceBindings"][0]["artifactPattern"] = \
+            "build/../../etc/shadow"
+        self.assertRejected(m, "B11d")
+
+    def test_every_evidence_type_names_a_producer(self) -> None:
+        for etype, producer in EVIDENCE_PRODUCERS.items():
+            with self.subTest(type=etype):
+                for key in ("producer", "definedIn", "artifact", "ciJob"):
+                    self.assertTrue(producer.get(key),
+                                    f"{etype} declares no {key}")
+
+
+# --------------------------------------------------------------------------
+# B18-B21 — strict, duplicate-aware, bounded JSON
+# --------------------------------------------------------------------------
+class TestStrictJSON(unittest.TestCase):
+
+    def test_B18_duplicate_property_is_rejected(self) -> None:
+        with self.assertRaises(strict_json.StrictJSONError):
+            strict_json.loads('{"schemaVersion":"evil","schemaVersion":"stable-v2"}')
+
+    def test_B18b_duplicate_property_in_nested_object_is_rejected(self) -> None:
+        with self.assertRaises(strict_json.StrictJSONError):
+            strict_json.loads('{"a":{"b":1,"b":2}}')
+
+    def test_B18c_duplicate_property_inside_array_element_is_rejected(self) -> None:
+        with self.assertRaises(strict_json.StrictJSONError):
+            strict_json.loads('{"a":[{"b":1,"b":2}]}')
+
+    def test_B19_nan_and_infinity_literals_are_rejected(self) -> None:
+        for literal in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(literal=literal):
+                with self.assertRaises(strict_json.StrictJSONError):
+                    strict_json.loads('{"a":%s}' % literal)
+
+    def test_B19b_overflowing_float_is_rejected(self) -> None:
+        with self.assertRaises(strict_json.StrictJSONError):
+            strict_json.loads('{"a":1e400}')
+
+    def test_depth_limit_is_enforced(self) -> None:
+        with self.assertRaises(strict_json.StrictJSONError):
+            strict_json.loads("[" * 40 + "]" * 40)
+
+    def test_document_size_limit_is_enforced(self) -> None:
+        with self.assertRaises(strict_json.StrictJSONError):
+            strict_json.loads('{"a":"' + "x" * (600 * 1024) + '"}')
+
+    def test_container_item_limit_is_enforced(self) -> None:
+        with self.assertRaises(strict_json.StrictJSONError):
+            strict_json.loads(json.dumps({"a": list(range(1000))}))
+
+    def test_string_length_limit_is_enforced(self) -> None:
+        with self.assertRaises(strict_json.StrictJSONError):
+            strict_json.loads(json.dumps({"a": "x" * 600}))
+
+    def test_node_count_limit_is_enforced(self) -> None:
+        limits = strict_json.Limits(total_nodes=10)
+        with self.assertRaises(strict_json.StrictJSONError):
+            strict_json.loads(json.dumps({"a": list(range(50))}), limits=limits)
+
+    def test_valid_document_is_accepted(self) -> None:
+        self.assertEqual(strict_json.loads('{"a":[1,2,{"b":"x"}]}'),
+                         {"a": [1, 2, {"b": "x"}]})
+
+    def test_contract_limits_still_reject_duplicates(self) -> None:
+        with self.assertRaises(strict_json.StrictJSONError):
+            strict_json.loads('{"a":1,"a":2}', limits=strict_json.CONTRACT_LIMITS)
+
+    def test_readiness_contract_parses_under_contract_limits(self) -> None:
+        """The relaxed limits must actually admit the real contract."""
+        document = strict_json.load_file(
+            REPO_ROOT / "docs" / "site" / "readiness.json",
+            limits=strict_json.CONTRACT_LIMITS,
+        )
+        self.assertIn("releaseProfiles", document)
+
+
+class TestNestedUnknownKeys(FixtureCase):
+
+    def test_B20_profile_with_unknown_keys_is_rejected(self) -> None:
+        m = base_manifest()
+        m["profiles"][0]["backdoor"] = "accepted"
+        self.assertRejected(m, "B20")
+
+    def test_B21_experimental_separation_unknown_keys_are_rejected(self) -> None:
+        m = base_manifest(with_decoy=True)
+        m["modules"][1]["experimentalSeparation"]["backdoor"] = "accepted"
+        self.assertRejected(m, "B21")
+
+    def test_top_level_unknown_keys_are_rejected(self) -> None:
+        m = base_manifest()
+        m["backdoor"] = "accepted"
+        self.assertRejected(m, "B20b")
+
+    def test_module_unknown_keys_are_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["backdoor"] = "accepted"
+        self.assertRejected(m, "B20c")
+
+    def test_self_attested_revision_keys_are_rejected(self) -> None:
+        """A committed manifest may not claim its own commit or time."""
+        for key, value in (("commitSHA", "a" * 40),
+                           ("generatedAt", "2026-08-28T00:00:00Z")):
+            with self.subTest(key=key):
+                m = base_manifest()
+                m[key] = value
+                self.assertRejected(m, f"B33-{key}")
+
+    def test_unknown_shared_library_platform_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["sharedLibrary"]["haiku"] = "libX.so"
+        self.assertRejected(m, "B20d")
+
+
+# --------------------------------------------------------------------------
+# B22-B27 — the profile partition
+# --------------------------------------------------------------------------
+class TestProfilePartition(FixtureCase):
+
+    def test_B22_unclassified_module_is_rejected(self) -> None:
+        m = base_manifest(with_decoy=True)
+        m["profiles"][0]["excludedModules"] = []
+        errors = self.assertRejected(m, "B22")
+        self.assertTrue(any("neither included nor excluded" in e for e in errors))
+
+    def test_B23_duplicate_in_included_list_is_rejected(self) -> None:
+        m = base_manifest()
+        m["profiles"][0]["includedModules"] = [INCLUDED, INCLUDED]
+        self.assertRejected(m, "B23")
+
+    def test_B23b_duplicate_in_excluded_list_is_rejected(self) -> None:
+        m = base_manifest(with_decoy=True)
+        m["profiles"][0]["excludedModules"] = [DECOY, DECOY]
+        self.assertRejected(m, "B23b")
+
+    def test_B24_empty_included_list_is_rejected(self) -> None:
+        m = base_manifest()
+        m["profiles"][0]["includedModules"] = []
+        m["profiles"][0]["excludedModules"] = [INCLUDED]
+        m["modules"][0]["profileApplicability"] = {PROFILE: "outside"}
+        m["modules"][0]["experimentalSeparation"] = {"trackedUnder": "RDY-015"}
+        errors = self.assertRejected(m, "B24")
+        self.assertTrue(any("empty" in e for e in errors), errors)
+
+    def test_B25_empty_profile_id_is_rejected(self) -> None:
+        m = base_manifest()
+        m["profiles"][0]["id"] = ""
+        m["modules"][0]["profileApplicability"] = {"": "required"}
+        self.assertRejected(m, "B25")
+
+    def test_B25b_unknown_profile_id_is_rejected(self) -> None:
+        m = base_manifest()
+        m["profiles"][0]["id"] = "invented-profile"
+        m["modules"][0]["profileApplicability"] = {"invented-profile": "required"}
+        errors = self.assertRejected(m, "B25b")
+        self.assertTrue(any("readiness.json" in e for e in errors), errors)
+
+    def test_B26_extra_profile_applicability_key_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["profileApplicability"]["invented-profile"] = "required"
+        self.assertRejected(m, "B26")
+
+    def test_B27_missing_profile_applicability_key_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["profileApplicability"] = {"invented-profile": "required"}
+        self.assertRejected(m, "B27")
+
+    def test_empty_profile_applicability_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["profileApplicability"] = {}
+        self.assertRejected(m, "B27b")
+
+    def test_module_in_both_lists_is_rejected(self) -> None:
+        m = base_manifest()
+        m["profiles"][0]["excludedModules"] = [INCLUDED]
+        self.assertRejected(m, "B22b")
+
+    def test_reference_to_undeclared_module_is_rejected(self) -> None:
+        m = base_manifest()
+        m["profiles"][0]["excludedModules"] = ["SparkGamePhantom"]
+        self.assertRejected(m, "B22c")
+
+    def test_duplicate_profile_ids_are_rejected(self) -> None:
+        m = base_manifest()
         m["profiles"].append(copy.deepcopy(m["profiles"][0]))
-        errors = _validate(m)
-        self.assertTrue(any("duplicate profile id" in e for e in errors))
+        self.assertRejected(m, "B25c")
+
+    def test_no_profiles_is_rejected(self) -> None:
+        m = base_manifest()
+        m["profiles"] = []
+        self.assertRejected(m, "B24b")
+
+    def test_included_module_declaring_itself_outside_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["profileApplicability"] = {PROFILE: "outside"}
+        self.assertRejected(m, "B22d")
+
+    def test_excluded_module_declaring_itself_required_is_rejected(self) -> None:
+        m = base_manifest(with_decoy=True)
+        m["modules"][1]["profileApplicability"] = {PROFILE: "required"}
+        self.assertRejected(m, "B22e")
 
 
-class TestDependencyReject(unittest.TestCase):
-    """Dependency validation."""
+# --------------------------------------------------------------------------
+# B28-B32 — cross-referenced identities
+# --------------------------------------------------------------------------
+class TestCrossReferences(FixtureCase):
 
-    def test_empty_dependency_string(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["dependencies"] = [""]
-        errors = _validate(m)
-        self.assertTrue(any("non-empty string" in e for e in errors))
+    def test_B28_dependency_on_unknown_module_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["dependencies"] = ["NoSuchModule"]
+        self.assertRejected(m, "B28")
 
-    def test_non_string_dependency(self) -> None:
-        m = _make_minimal_valid()
-        m["modules"][0]["dependencies"] = [42]
-        errors = _validate(m)
-        self.assertTrue(any("non-empty string" in e for e in errors))
+    def test_B29_duplicate_dependencies_are_rejected(self) -> None:
+        m = base_manifest(with_decoy=True)
+        m["modules"][0]["dependencies"] = [DECOY, DECOY]
+        self.assertRejected(m, "B29")
+
+    def test_B29b_self_dependency_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["dependencies"] = [INCLUDED]
+        self.assertRejected(m, "B29b")
+
+    def test_B30_unrelated_dll_identity_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["sharedLibrary"]["windows"] = "Completely-Unrelated.dll"
+        errors = self.assertRejected(m, "B30")
+        self.assertTrue(any("may not claim a library identity" in e for e in errors))
+
+    def test_B30b_wrong_platform_convention_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["sharedLibrary"]["linux"] = f"{INCLUDED}.so"
+        self.assertRejected(m, "B30b")
+
+    def test_B31_windows_case_colliding_libraries_are_rejected(self) -> None:
+        """SparkGameFPS.dll and SparkGameFps.dll are one file on Windows.
+
+        Both modules here are individually well formed — each name matches the
+        naming rules and each library follows the platform convention — so
+        only the collision check can catch them.  The assertion names that
+        specific error rather than accepting any failure, because the
+        case-variant directory does not exist on a case-insensitive host and
+        would otherwise mask the collision behind a path error.
+        """
+        variant = "SparkGameFps"
+        m = base_manifest(with_decoy=True)
+        m["modules"][1]["name"] = variant
+        m["modules"][1]["cmakeTarget"] = variant
+        m["modules"][1]["sharedLibrary"] = {
+            "windows": expected_library_names(variant)["windows"],
+            "linux": expected_library_names(variant)["linux"],
+        }
+        m["modules"][1]["sourceDirectory"] = f"GameModules/{variant}/Source"
+        m["profiles"][0]["excludedModules"] = [variant]
+        errors = self.assertRejected(m, "B31")
+        self.assertTrue(
+            any("same file" in e for e in errors),
+            f"[B31] case-colliding library identities were not detected: {errors}",
+        )
+
+    def test_B31b_case_colliding_module_names_are_rejected(self) -> None:
+        variant = "SparkGameFps"
+        m = base_manifest(with_decoy=True)
+        m["modules"][1]["name"] = variant
+        m["modules"][1]["cmakeTarget"] = variant
+        m["modules"][1]["sharedLibrary"] = {
+            "windows": expected_library_names(variant)["windows"],
+            "linux": expected_library_names(variant)["linux"],
+        }
+        m["modules"][1]["sourceDirectory"] = f"GameModules/{variant}/Source"
+        m["profiles"][0]["excludedModules"] = [variant]
+        errors = self.assertRejected(m, "B31b")
+        self.assertTrue(
+            any("module name" in e and "collides" in e for e in errors),
+            f"[B31b] case-colliding module names were not detected: {errors}",
+        )
+
+    def test_B32_invented_tracker_is_rejected(self) -> None:
+        m = base_manifest(with_decoy=True)
+        m["modules"][1]["experimentalSeparation"]["trackedUnder"] = "NOT-A-TRACKER-42"
+        self.assertRejected(m, "B32")
+
+    def test_B32b_well_formed_unknown_tracker_is_rejected(self) -> None:
+        m = base_manifest(with_decoy=True)
+        m["modules"][1]["experimentalSeparation"]["trackedUnder"] = "ZZZ-999"
+        self.assertRejected(m, "B32b")
+
+    def test_B32c_outside_module_without_tracker_is_rejected(self) -> None:
+        m = base_manifest(with_decoy=True)
+        del m["modules"][1]["experimentalSeparation"]
+        self.assertRejected(m, "B32c")
+
+    def test_cmake_target_differing_from_name_is_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"][0]["cmakeTarget"] = "SomethingElse"
+        self.assertRejected(m, "B30c")
+
+    def test_duplicate_module_names_are_rejected(self) -> None:
+        m = base_manifest()
+        m["modules"].append(copy.deepcopy(m["modules"][0]))
+        self.assertRejected(m, "B31c")
+
+    def test_experimental_module_required_in_profile_is_rejected(self) -> None:
+        m = base_manifest(with_decoy=True)
+        m["modules"][1]["profileApplicability"] = {PROFILE: "shared"}
+        m["profiles"][0]["includedModules"] = [INCLUDED, DECOY]
+        m["profiles"][0]["excludedModules"] = []
+        self.assertRejected(m, "B32d")
+
+
+# --------------------------------------------------------------------------
+# B33-B36 — revision and time provenance
+# --------------------------------------------------------------------------
+class TestProvenance(FixtureCase):
+
+    def test_B33_arbitrary_hex_sha_is_not_a_revision(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        ev["commitSHA"] = "a" * 40
+        errors = self.assertRejected(base_manifest(), "B33",
+                                     lifecycle_evidence=ev, expected_sha="a" * 40)
+        self.assertTrue(any("not an object in this repository" in e for e in errors),
+                        errors)
+
+    def test_B34_real_but_unrelated_sha_is_rejected(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        ev["commitSHA"] = "0" * 39 + "1"
+        self.assertRejected(base_manifest(), "B34", lifecycle_evidence=ev)
+
+    def test_B34b_evidence_from_a_different_commit_is_rejected(self) -> None:
+        """Shape-valid, object-valid, but not the revision under test."""
+        (self.repo / "unrelated.txt").write_text("x", encoding="utf-8")
+        _git(self.repo, "add", "-A")
+        _git(self.repo, "commit", "-q", "-m", "second")
+        other = _git(self.repo, "rev-parse", "HEAD").stdout.strip()
+        try:
+            ev = lifecycle_evidence(self.repo, self.sha)
+            ev["commitSHA"] = other
+            errors = self.assertRejected(base_manifest(), "B34b",
+                                         lifecycle_evidence=ev)
+            self.assertTrue(any("stale evidence" in e for e in errors), errors)
+        finally:
+            _git(self.repo, "reset", "-q", "--hard", self.sha)
+
+    def test_B35_null_generated_at_is_rejected(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        ev["generatedAt"] = None
+        errors = self.assertRejected(base_manifest(), "B35", lifecycle_evidence=ev)
+        self.assertTrue(any("null" in e for e in errors), errors)
+
+    def test_B36_non_timestamp_generated_at_is_rejected(self) -> None:
+        for value in ("whenever", "2026-08-28", "2026-08-28T00:00:00",
+                      "not-a-date", "", "2026-13-45T99:99:99Z"):
+            with self.subTest(value=value):
+                ev = lifecycle_evidence(self.repo, self.sha)
+                ev["generatedAt"] = value
+                self.assertRejected(base_manifest(), "B36",
+                                    lifecycle_evidence=ev)
+
+    def test_naive_timestamp_without_offset_is_rejected(self) -> None:
+        self.assertNotEqual(
+            provenance.check_rfc3339("2026-08-28T00:00:00", "t"), [])
+
+    def test_far_future_timestamp_is_rejected(self) -> None:
+        self.assertNotEqual(
+            provenance.check_rfc3339("2099-01-01T00:00:00Z", "t"), [])
+
+    def test_prehistoric_timestamp_is_rejected(self) -> None:
+        self.assertNotEqual(
+            provenance.check_rfc3339("1999-01-01T00:00:00Z", "t"), [])
+
+    def test_valid_rfc3339_forms_are_accepted(self) -> None:
+        for value in ("2026-08-28T07:01:00Z", "2026-08-28T07:01:00+00:00",
+                      "2026-08-28T07:01:00.123Z", "2026-08-28T07:01:00-05:00"):
+            with self.subTest(value=value):
+                self.assertEqual(provenance.check_rfc3339(value, "t"), [])
+
+    def test_missing_expected_sha_blocks(self) -> None:
+        errors = self.assertRejected(base_manifest(), "B33b", expected_sha=None)
+        self.assertTrue(any("revision under test" in e for e in errors), errors)
+
+    def test_head_sha_resolves_in_a_real_checkout(self) -> None:
+        sha, err = provenance.resolve_head_sha(self.repo)
+        self.assertIsNone(err)
+        self.assertEqual(sha, self.sha)
+
+    def test_sha_shape_rejects_non_hex_and_short_values(self) -> None:
+        for value in ("", "abc", "A" * 40, "g" * 40, None, 12345, "a" * 41):
+            with self.subTest(value=value):
+                self.assertNotEqual(provenance.check_sha_shape(value, "s"), [])
+
+
+# --------------------------------------------------------------------------
+# Registry integrity and the shipped contract
+# --------------------------------------------------------------------------
+class TestRegistryIntegrity(FixtureCase):
+
+    def test_unreadable_profile_registry_blocks(self) -> None:
+        (self.repo / "docs" / "site" / "readiness.json").unlink()
+        try:
+            errors = self.assertRejected(base_manifest(), "REG1")
+            self.assertTrue(any("release profile registry unavailable" in e
+                                for e in errors), errors)
+        finally:
+            (self.repo / "docs" / "site" / "readiness.json").write_text(
+                json.dumps({"releaseProfiles": [{"id": PROFILE}]}), encoding="utf-8")
+
+    def test_unreadable_work_item_registry_blocks(self) -> None:
+        path = self.repo / "docs" / "readiness" / "work-items" / "00-truth.json"
+        saved = path.read_text(encoding="utf-8")
+        path.unlink()
+        try:
+            errors = self.assertRejected(base_manifest(), "REG2")
+            self.assertTrue(any("work item registry unavailable" in e
+                                for e in errors), errors)
+        finally:
+            path.write_text(saved, encoding="utf-8")
+
+    def test_shipped_owner_and_tracker_exist_in_the_real_contract(self) -> None:
+        from schema import load_known_work_item_ids
+        ids, err = load_known_work_item_ids(REPO_ROOT)
+        self.assertIsNone(err, f"real work item registry unreadable: {err}")
+        manifest = load_manifest(
+            REPO_ROOT / "tools" / "module-evidence" / "manifest.json")
+        for module in manifest["modules"]:
+            owner = module.get("packageSmokeOwner")
+            if owner is not None:
+                self.assertIn(owner, ids, f"{module['name']} owner {owner}")
+            sep = module.get("experimentalSeparation")
+            if sep:
+                self.assertIn(sep["trackedUnder"], ids)
+
+    def test_shipped_profile_exists_in_the_real_contract(self) -> None:
+        from schema import load_known_profile_ids
+        ids, err = load_known_profile_ids(REPO_ROOT)
+        self.assertIsNone(err)
+        manifest = load_manifest(
+            REPO_ROOT / "tools" / "module-evidence" / "manifest.json")
+        for profile in manifest["profiles"]:
+            self.assertIn(profile["id"], ids)
+
+    def test_shipped_source_directories_exist_with_exact_case(self) -> None:
+        manifest = load_manifest(
+            REPO_ROOT / "tools" / "module-evidence" / "manifest.json")
+        for module in manifest["modules"]:
+            with self.subTest(module=module["name"]):
+                self.assertEqual(
+                    paths_mod.check_source_directory(
+                        module["sourceDirectory"], module["name"], REPO_ROOT),
+                    [])
+
+    def test_manifest_is_not_an_object_is_rejected(self) -> None:
+        self.assertNotEqual(ManifestValidator([], self.repo).validate(), [])
+
+    def test_wrong_schema_version_is_rejected(self) -> None:
+        m = base_manifest()
+        m["schemaVersion"] = "stable-v1"
+        self.assertRejected(m, "SV1")
+
+    def test_module_count_and_collection_bounds(self) -> None:
+        m = base_manifest()
+        m["modules"] = [module_entry(INCLUDED, included=True)] * 200
+        self.assertRejected(m, "BND1")
+
+
+# --------------------------------------------------------------------------
+# CMake File API — parsed from a real reply, and from a real configure
+# --------------------------------------------------------------------------
+class TestEvidenceGapLedger(FixtureCase):
+    """The one softening in the validator, and the ratchet that bounds it."""
+
+    def _ledger(self, gaps: list[dict[str, Any]]) -> Path:
+        path = self.repo / "gaps.json"
+        path.write_text(json.dumps(
+            {"schemaVersion": "evidence-gaps-v1", "gaps": gaps}), encoding="utf-8")
+        return path
+
+    def _load(self, gaps: list[dict[str, Any]]) -> dict[str, str]:
+        from validate_manifest import load_declared_gaps
+        return load_declared_gaps(self._ledger(gaps),
+                                  {"RDY-010", "RDY-015", "MOD-310"})
+
+    def _valid_gap(self, etype: str = "lifecycle-log") -> dict[str, Any]:
+        return {
+            "evidenceType": etype,
+            "trackedUnder": "RDY-010",
+            "reason": "x" * 60,
+        }
+
+    def test_declared_gap_downgrades_absence_to_a_warning(self) -> None:
+        v = ManifestValidator(
+            base_manifest(), self.repo,
+            target_index=target_index(),
+            lifecycle_evidence=None, lifecycle_error="absent",
+            expected_sha=self.sha,
+            declared_gaps={"lifecycle-log": "RDY-010"},
+        )
+        self.assertEqual(v.validate(), [])
+        self.assertTrue(any("lifecycle-log" in w for w in v.warnings), v.warnings)
+
+    def test_undeclared_gap_is_still_a_hard_failure(self) -> None:
+        v = ManifestValidator(
+            base_manifest(), self.repo,
+            target_index=None, target_error="absent",
+            lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
+            expected_sha=self.sha,
+            declared_gaps={"lifecycle-log": "RDY-010"},
+        )
+        self.assertNotEqual(v.validate(), [])
+
+    def test_ratchet_declared_gap_whose_evidence_appeared_fails(self) -> None:
+        """The ledger may only shrink."""
+        v = ManifestValidator(
+            base_manifest(), self.repo,
+            target_index=target_index(),
+            lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
+            expected_sha=self.sha,
+            declared_gaps={"lifecycle-log": "RDY-010"},
+        )
+        errors = v.validate()
+        self.assertTrue(any("evidence is now available" in e for e in errors),
+                        errors)
+
+    def test_missing_artifact_evidence_is_rejected(self) -> None:
+        artifact = self.repo / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
+        saved = artifact.read_text(encoding="utf-8")
+        artifact.unlink()
+        try:
+            errors = self.assertRejected(base_manifest(), "ART1")
+            self.assertTrue(any("was not produced" in e for e in errors), errors)
+        finally:
+            artifact.write_text(saved, encoding="utf-8")
+
+    def test_ledger_rejects_unknown_evidence_type(self) -> None:
+        from validate_manifest import ManifestError
+        with self.assertRaises(ManifestError):
+            self._load([{**self._valid_gap(), "evidenceType": "vibes"}])
+
+    def test_ledger_rejects_untracked_gap(self) -> None:
+        from validate_manifest import ManifestError
+        with self.assertRaises(ManifestError):
+            self._load([{**self._valid_gap(), "trackedUnder": "ZZZ-999"}])
+
+    def test_ledger_rejects_malformed_tracker(self) -> None:
+        from validate_manifest import ManifestError
+        with self.assertRaises(ManifestError):
+            self._load([{**self._valid_gap(), "trackedUnder": "whatever"}])
+
+    def test_ledger_rejects_unexplained_gap(self) -> None:
+        from validate_manifest import ManifestError
+        with self.assertRaises(ManifestError):
+            self._load([{**self._valid_gap(), "reason": "because"}])
+
+    def test_ledger_rejects_duplicate_and_unknown_keys(self) -> None:
+        from validate_manifest import ManifestError
+        with self.assertRaises(ManifestError):
+            self._load([self._valid_gap(), self._valid_gap()])
+        with self.assertRaises(ManifestError):
+            self._load([{**self._valid_gap(), "backdoor": "accepted"}])
+
+    def test_ledger_rejects_wrong_schema_version(self) -> None:
+        from validate_manifest import ManifestError, load_declared_gaps
+        path = self.repo / "bad-gaps.json"
+        path.write_text(json.dumps({"schemaVersion": "v9", "gaps": []}),
+                        encoding="utf-8")
+        with self.assertRaises(ManifestError):
+            load_declared_gaps(path, {"RDY-010"})
+
+    def test_valid_ledger_loads(self) -> None:
+        self.assertEqual(self._load([self._valid_gap()]),
+                         {"lifecycle-log": "RDY-010"})
+
+    def test_shipped_ledger_is_valid_and_nonempty(self) -> None:
+        from schema import load_known_work_item_ids
+        from validate_manifest import load_declared_gaps
+        ids, err = load_known_work_item_ids(REPO_ROOT)
+        self.assertIsNone(err)
+        gaps = load_declared_gaps(
+            REPO_ROOT / "tools" / "module-evidence" / "evidence-gaps.json", ids)
+        self.assertNotEqual(gaps, {},
+                            "an empty ledger would mean RDY-010 is closeable")
+        self.assertIn("lifecycle-log", gaps)
+
+
+class TestCIWiring(unittest.TestCase):
+    """The gate is only a gate if CI actually runs it, blockingly.
+
+    Parsed as text rather than YAML so the check needs no dependency the CI
+    runner does not already have.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workflow = (REPO_ROOT / ".github" / "workflows" / "build.yml").read_text(
+            encoding="utf-8")
+
+    def _job_block(self, name: str) -> str:
+        start = self.workflow.index(f"\n  {name}:\n")
+        rest = self.workflow[start + 1:]
+        lines = rest.split("\n")
+        out = [lines[0]]
+        for line in lines[1:]:
+            if line and not line.startswith("   ") and not line.startswith("  #"):
+                if line.startswith("  ") and line.rstrip().endswith(":"):
+                    break
+            out.append(line)
+        return "\n".join(out)
+
+    def test_module_evidence_job_exists(self) -> None:
+        self.assertIn("\n  module-evidence:\n", self.workflow)
+
+    def test_module_evidence_is_a_required_gate(self) -> None:
+        gate = self.workflow[self.workflow.index("\n  required-ci-gate:\n"):]
+        needs = gate[gate.index("needs:"):gate.index("runs-on:")]
+        self.assertIn("- module-evidence", needs,
+                      "module-evidence is not in required-ci-gate needs")
+
+    def test_module_evidence_is_not_continue_on_error(self) -> None:
+        self.assertNotIn("continue-on-error", self._job_block("module-evidence"))
+
+    def test_module_evidence_runs_a_real_configure(self) -> None:
+        block = self._job_block("module-evidence")
+        self.assertIn("collect_targets.py", block)
+        self.assertIn("-DBUILD_GAME_MODULES=ON", block)
+
+    def test_module_evidence_gate_is_not_policy_only(self) -> None:
+        """A --policy-only run must never be the release gate."""
+        block = self._job_block("module-evidence")
+        self.assertIn("--allow-declared-gaps", block)
+        self.assertNotIn("--policy-only", block)
+
+    def test_module_evidence_binds_the_revision_under_test(self) -> None:
+        self.assertIn("--expected-sha", self._job_block("module-evidence"))
+
+    def test_gate_consumes_really_produced_junit_evidence(self) -> None:
+        block = self._job_block("module-evidence")
+        self.assertIn("download-artifact", block)
+        self.assertIn("test-results-linux-gcc-Release", block)
+
+    def test_every_gap_tracker_is_a_real_work_item(self) -> None:
+        from schema import load_known_work_item_ids
+        ids, err = load_known_work_item_ids(REPO_ROOT)
+        self.assertIsNone(err)
+        gaps = json.loads(
+            (REPO_ROOT / "tools" / "module-evidence" / "evidence-gaps.json")
+            .read_text(encoding="utf-8"))["gaps"]
+        for gap in gaps:
+            with self.subTest(gap=gap["evidenceType"]):
+                self.assertIn(gap["trackedUnder"], ids)
+
+    def test_action_pins_are_shared_with_the_rest_of_the_workflow(self) -> None:
+        """A pin used once is a pin nobody reviewed."""
+        import re
+        block = self._job_block("module-evidence")
+        for action, pin in re.findall(r"uses: (actions/[\w-]+)@([a-f0-9]{40})", block):
+            with self.subTest(action=action):
+                self.assertGreaterEqual(
+                    self.workflow.count(f"{action}@{pin}"), 2,
+                    f"{action}@{pin} appears only in the module-evidence job; "
+                    f"reuse the pin the rest of the workflow already uses",
+                )
+
+
+class TestCMakeFileAPI(unittest.TestCase):
+    """The File API is the authority for target existence; prove it is read
+    correctly, and that a configure actually discriminates."""
+
+    def test_extract_from_reply_reads_a_recorded_codemodel(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="spark-reply-") as tmp:
+            reply = Path(tmp)
+            (reply / "target-X.json").write_text(json.dumps({
+                "name": "SparkGameFPS", "type": "SHARED_LIBRARY",
+                "nameOnDisk": "libSparkGameFPS.so",
+                "paths": {"source": "GameModules/SparkGameFPS"},
+                "sources": [{"path": "GameModules/SparkGameFPS/Source/Main.cpp"}],
+                "artifacts": [{"path": "bin/libSparkGameFPS.so"}],
+            }), encoding="utf-8")
+            (reply / "codemodel-v2-abc.json").write_text(json.dumps({
+                "configurations": [{
+                    "name": "Release",
+                    "targets": [{"name": "SparkGameFPS", "jsonFile": "target-X.json"}],
+                }]
+            }), encoding="utf-8")
+            (reply / "index-1.json").write_text(json.dumps({
+                "reply": {targets_mod.CLIENT_NAME: {"query.json": {
+                    "responses": [{"kind": "codemodel",
+                                   "jsonFile": "codemodel-v2-abc.json"}]
+                }}}
+            }), encoding="utf-8")
+            index = targets_mod.extract_from_reply(reply)
+        self.assertEqual(index["SparkGameFPS"]["type"], "SHARED_LIBRARY")
+        self.assertEqual(index["SparkGameFPS"]["sources"],
+                         ["GameModules/SparkGameFPS/Source/Main.cpp"])
+
+    def test_query_error_in_reply_raises(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="spark-reply-") as tmp:
+            reply = Path(tmp)
+            (reply / "index-1.json").write_text(json.dumps({
+                "reply": {targets_mod.CLIENT_NAME: {
+                    "query.json": {"error": "unknown request kind"}}}
+            }), encoding="utf-8")
+            with self.assertRaises(targets_mod.TargetEvidenceUnavailable):
+                targets_mod.extract_from_reply(reply)
+
+    def test_undecorate_library_name_handles_every_toolchain(self) -> None:
+        for filename, expected in (
+            ("libSparkGameFPS.so", "SparkGameFPS"),
+            ("libSparkGameFPS.dll", "SparkGameFPS"),
+            ("SparkGameFPS.dll", "SparkGameFPS"),
+            ("libSparkGameFPS.dylib", "SparkGameFPS"),
+        ):
+            with self.subTest(filename=filename):
+                self.assertEqual(targets_mod.undecorate_library_name(filename),
+                                 expected)
+
+    @unittest.skipIf(shutil.which("cmake") is None, "cmake is not on PATH")
+    def test_real_configure_discriminates_a_declared_target(self) -> None:
+        """A configure must report the target only when it is really created.
+
+        This is the property a regex over CMakeLists.txt cannot have: the
+        control project declares its target through a helper function, so the
+        string `add_library(` never appears in the file that declares it.
+        """
+        with tempfile.TemporaryDirectory(prefix="spark-cmake-") as tmp:
+            src = Path(tmp) / "src"
+            src.mkdir()
+            (src / "a.cpp").write_text("int spark_probe() { return 0; }\n",
+                                       encoding="utf-8")
+            (src / "CMakeLists.txt").write_text(
+                "cmake_minimum_required(VERSION 3.25)\n"
+                "project(SparkProbe CXX)\n"
+                "function(spark_add_game_module name)\n"
+                "  add_library(${name} SHARED ${ARGN})\n"
+                "endfunction()\n"
+                "option(MAKE_IT \"\" ON)\n"
+                "if(MAKE_IT)\n"
+                "  spark_add_game_module(ProbeModule a.cpp)\n"
+                "endif()\n"
+                "# add_library(GhostModule SHARED a.cpp)\n",
+                encoding="utf-8",
+            )
+            text = (src / "CMakeLists.txt").read_text(encoding="utf-8")
+            self.assertNotIn("add_library(ProbeModule", text,
+                             "fixture must not declare the target literally")
+            self.assertIn("# add_library(GhostModule", text)
+
+            for make_it, expect_target in ((True, True), (False, False)):
+                build = Path(tmp) / f"build-{make_it}"
+                build.mkdir()
+                targets_mod.write_query(build)
+                proc = subprocess.run(
+                    ["cmake", "-S", str(src), "-B", str(build),
+                     f"-DMAKE_IT={'ON' if make_it else 'OFF'}"],
+                    capture_output=True, text=True, timeout=600, check=False,
+                )
+                if proc.returncode != 0:
+                    self.skipTest(
+                        f"cmake configure failed in this environment: "
+                        f"{proc.stderr[-400:]}"
+                    )
+                reply = build / ".cmake" / "api" / "v1" / "reply"
+                if expect_target:
+                    index = targets_mod.extract_from_reply(reply)
+                    self.assertIn("ProbeModule", index)
+                    self.assertEqual(index["ProbeModule"]["type"], "SHARED_LIBRARY")
+                    self.assertTrue(index["ProbeModule"]["sources"])
+                    self.assertNotIn(
+                        "GhostModule", index,
+                        "a commented-out add_library must not yield a target",
+                    )
+                else:
+                    index = targets_mod.extract_from_reply(reply)
+                    self.assertNotIn(
+                        "ProbeModule", index,
+                        "target reported despite not being created",
+                    )
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(verbosity=2)
