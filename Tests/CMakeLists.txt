@@ -1115,6 +1115,7 @@ add_test(NAME SparkSaveCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --qu
 set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=SaveMigration_"
     LABELS "compatibility;save;unit"
+    RUN_SERIAL TRUE
     TIMEOUT 30)
 add_test(
     NAME SparkTemplateAssets

@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runtime packages now include complete deterministic third-party license notices rather than dependency metadata alone
 
 ### Fixed
-- Failed world restores now leave the live ECS world and caller-owned custom state unchanged when a component is unknown or a deserializer throws
+- Failed world restores now leave the live ECS world and caller-owned custom state unchanged for unknown components, deserializer exceptions, and malformed required fields; successful restores retain registry-bound observers and retire stale entity subscriptions
 - Editor module discovery, project paths, UTF-8 handling, long-path launches, and fail-closed module loading
 - Transactional CLI packaging and validated packaged-project launches
 - Template module manifests no longer advertise an ignored `loadOrder` field

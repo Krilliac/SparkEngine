@@ -1340,7 +1340,7 @@
         "AtomicWrite_*"
       ],
       "requiredCiJobs": [
-        "compatibility-fixtures"
+        "build-windows-vs2022"
       ],
       "performanceBudgets": [
         "Migration time/memory budgets for representative projects"

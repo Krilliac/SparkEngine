@@ -2035,7 +2035,7 @@ ctest --test-dir build/linux-shipping -L compatibility --output-on-failure
 **Automated evidence**
 
 - Test selectors: `SaveMigration_*`, `SceneMigration_*`, `AssetMigration_*`, `AtomicWrite_*`
-- Required CI jobs: `compatibility-fixtures`
+- Required CI jobs: `build-windows-vs2022`
 - Performance / reliability budgets:
   - Migration time/memory budgets for representative projects
 

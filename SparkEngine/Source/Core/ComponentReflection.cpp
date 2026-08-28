@@ -26,6 +26,8 @@ using Spark::CameraDrawMaskComponent;
 using Spark::CollisionMaskComponent;
 using Spark::VisibilityMaskComponent;
 
+#include <charconv>
+#include <cmath>
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -36,6 +38,37 @@ using Spark::VisibilityMaskComponent;
 
 namespace Spark
 {
+    namespace
+    {
+        template <typename Integer> bool ParseIntegerExact(const std::string& value, Integer& result)
+        {
+            const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), result);
+            return error == std::errc{} && end == value.data() + value.size();
+        }
+
+        template <typename Floating> bool ParseFloatingExact(const std::string& value, Floating& result)
+        {
+            try
+            {
+                size_t consumed = 0;
+                if constexpr (std::is_same_v<Floating, float>)
+                    result = std::stof(value, &consumed);
+                else
+                    result = std::stod(value, &consumed);
+                return consumed == value.size() && std::isfinite(result);
+            }
+            catch (...)
+            {
+                return false;
+            }
+        }
+
+        bool StreamFinished(std::istringstream& stream)
+        {
+            stream >> std::ws;
+            return stream.eof();
+        }
+    } // namespace
 
     bool SetFieldFromString(void* component, const FieldInfo& field, const std::string& value)
     {
@@ -47,54 +80,49 @@ namespace Spark
         {
         case FieldType::Bool:
         {
-            bool v = (value == "true" || value == "1" || value == "yes");
+            bool v = false;
+            if (value == "true" || value == "1" || value == "yes")
+                v = true;
+            else if (value != "false" && value != "0" && value != "no")
+                return false;
             std::memcpy(dst, &v, sizeof(bool));
             return true;
         }
         case FieldType::Int:
         {
-            try
+            int v = 0;
+            if (ParseIntegerExact(value, v))
             {
-                int v = std::stoi(value);
                 std::memcpy(dst, &v, sizeof(int));
                 return true;
             }
-            catch (...)
-            {
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse int from '%s'",
-                                value.c_str());
-                return false;
-            }
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse int from '%s'",
+                            value.c_str());
+            return false;
         }
         case FieldType::Float:
         {
-            try
+            float v = 0.0f;
+            if (ParseFloatingExact(value, v))
             {
-                float v = std::stof(value);
                 std::memcpy(dst, &v, sizeof(float));
                 return true;
             }
-            catch (...)
-            {
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse float from '%s'",
-                                value.c_str());
-                return false;
-            }
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse float from '%s'",
+                            value.c_str());
+            return false;
         }
         case FieldType::Double:
         {
-            try
+            double v = 0.0;
+            if (ParseFloatingExact(value, v))
             {
-                double v = std::stod(value);
                 std::memcpy(dst, &v, sizeof(double));
                 return true;
             }
-            catch (...)
-            {
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse double from '%s'",
-                                value.c_str());
-                return false;
-            }
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse double from '%s'",
+                            value.c_str());
+            return false;
         }
         case FieldType::String:
         {
@@ -107,8 +135,8 @@ namespace Spark
             // Parse "x,y" format
             float x = 0, y = 0;
             std::istringstream ss(value);
-            char delim;
-            if (ss >> x >> delim >> y)
+            char delim = '\0';
+            if (ss >> x >> delim >> y && delim == ',' && StreamFinished(ss) && std::isfinite(x) && std::isfinite(y))
             {
                 std::memcpy(dst, &x, sizeof(float));
                 std::memcpy(dst + sizeof(float), &y, sizeof(float));
@@ -123,8 +151,11 @@ namespace Spark
             // Parse "x,y,z" format
             float x = 0, y = 0, z = 0;
             std::istringstream ss(value);
-            char delim;
-            if (ss >> x >> delim >> y >> delim >> z)
+            char firstDelimiter = '\0';
+            char secondDelimiter = '\0';
+            if (ss >> x >> firstDelimiter >> y >> secondDelimiter >> z && firstDelimiter == ',' &&
+                secondDelimiter == ',' && StreamFinished(ss) && std::isfinite(x) && std::isfinite(y) &&
+                std::isfinite(z))
             {
                 std::memcpy(dst, &x, sizeof(float));
                 std::memcpy(dst + sizeof(float), &y, sizeof(float));
@@ -140,8 +171,12 @@ namespace Spark
             // Parse "x,y,z,w" format
             float x = 0, y = 0, z = 0, w = 0;
             std::istringstream ss(value);
-            char delim;
-            if (ss >> x >> delim >> y >> delim >> z >> delim >> w)
+            char firstDelimiter = '\0';
+            char secondDelimiter = '\0';
+            char thirdDelimiter = '\0';
+            if (ss >> x >> firstDelimiter >> y >> secondDelimiter >> z >> thirdDelimiter >> w &&
+                firstDelimiter == ',' && secondDelimiter == ',' && thirdDelimiter == ',' && StreamFinished(ss) &&
+                std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(w))
             {
                 std::memcpy(dst, &x, sizeof(float));
                 std::memcpy(dst + sizeof(float), &y, sizeof(float));
@@ -159,18 +194,15 @@ namespace Spark
             // type, so MSVC stores them as `int`. Round-trip via the underlying int
             // so scene reload preserves the selected value (previously fell through
             // to `default:` and silently dropped the write).
-            try
+            int v = 0;
+            if (ParseIntegerExact(value, v))
             {
-                int v = std::stoi(value);
                 std::memcpy(dst, &v, sizeof(int));
                 return true;
             }
-            catch (...)
-            {
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse enum int from '%s'",
-                                value.c_str());
-                return false;
-            }
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse enum int from '%s'",
+                            value.c_str());
+            return false;
         }
         default:
             SPARK_LOG_WARN(Spark::LogCategory::Core, "SetFieldFromString: unsupported field type %d for '%s'",
@@ -260,6 +292,22 @@ namespace Spark
 // ID is passed as uint32_t and reinterpret-cast to EntityID (entt::entity).
 // ============================================================================
 
+namespace
+{
+    template <typename Type> void PrepareComponentStorage(void* world)
+    {
+        (void)static_cast<World*>(world)->GetRegistry().storage<Type>();
+    }
+
+    template <typename Type> void SwapComponentStorageContents(void* destinationWorld, void* sourceWorld) noexcept
+    {
+        using PayloadStorage = entt::basic_storage<Type>;
+        auto& destination = static_cast<World*>(destinationWorld)->GetRegistry().storage<Type>();
+        auto& source = static_cast<World*>(sourceWorld)->GetRegistry().storage<Type>();
+        static_cast<PayloadStorage&>(destination).swap(static_cast<PayloadStorage&>(source));
+    }
+} // namespace
+
 #define SPARK_REGISTER_COMPONENT(Type)                                                                                 \
     {                                                                                                                  \
         Spark::ComponentOps ops;                                                                                       \
@@ -270,6 +318,8 @@ namespace Spark
         { static_cast<World*>(w)->RemoveComponent<Type>(static_cast<EntityID>(e)); };                                  \
         ops.getRaw = [](void* w, uint32_t e) -> void*                                                                  \
         { return static_cast<World*>(w)->GetComponent<Type>(static_cast<EntityID>(e)); };                              \
+        ops.prepareStorage = &PrepareComponentStorage<Type>;                                                           \
+        ops.swapStorageContents = &SwapComponentStorageContents<Type>;                                                 \
         Spark::ComponentFactory::Get().Register(#Type, ops);                                                           \
     }
 
@@ -1014,6 +1064,7 @@ namespace
             // Gameplay
             SPARK_REGISTER_COMPONENT(ActiveComponent)
             SPARK_REGISTER_COMPONENT(HealthComponent)
+            SPARK_REGISTER_COMPONENT(TagComponent)
             SPARK_REGISTER_COMPONENT(WeatherComponent)
             SPARK_REGISTER_COMPONENT(InventoryTag)
             SPARK_REGISTER_COMPONENT(QuestTrackerTag)

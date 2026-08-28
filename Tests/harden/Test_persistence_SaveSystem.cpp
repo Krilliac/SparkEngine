@@ -10,6 +10,7 @@
 #include "TestFramework.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/ECS/Components.h"
+#include "Engine/ECS/ReactiveSystem.h"
 #include "Utils/LocalFileCache.h"
 
 #include <cstdint>
@@ -18,6 +19,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -105,6 +107,35 @@ namespace
         return true;
     }
 
+    bool ReplaceLengthPrefixedString(std::vector<char>& bytes, const std::string& from, const std::string& to)
+    {
+        if (to.size() > std::numeric_limits<uint16_t>::max())
+            return false;
+
+        auto match = bytes.begin();
+        while ((match = std::search(match, bytes.end(), from.begin(), from.end())) != bytes.end())
+        {
+            const size_t offset = static_cast<size_t>(std::distance(bytes.begin(), match));
+            if (offset >= sizeof(uint16_t))
+            {
+                const auto low = static_cast<uint8_t>(bytes[offset - 2]);
+                const auto high = static_cast<uint8_t>(bytes[offset - 1]);
+                if (static_cast<uint16_t>(low | (high << 8)) == from.size())
+                {
+                    const auto replacementLength = static_cast<uint16_t>(to.size());
+                    bytes[offset - 2] = static_cast<char>(replacementLength & 0xFFu);
+                    bytes[offset - 1] = static_cast<char>((replacementLength >> 8u) & 0xFFu);
+                    bytes.erase(bytes.begin() + static_cast<std::ptrdiff_t>(offset),
+                                bytes.begin() + static_cast<std::ptrdiff_t>(offset + from.size()));
+                    bytes.insert(bytes.begin() + static_cast<std::ptrdiff_t>(offset), to.begin(), to.end());
+                    return true;
+                }
+            }
+            ++match;
+        }
+        return false;
+    }
+
     bool WriteBytes(const std::filesystem::path& path, const std::vector<char>& bytes)
     {
         std::ofstream output(path, std::ios::binary | std::ios::trunc);
@@ -130,7 +161,7 @@ namespace
         return version;
     }
 
-    bool WorldContainsNamedEntity(World& world, const std::string& name)
+    EntityID FindNamedEntity(World& world, const std::string& name)
     {
         auto&& entities = world.GetRegistry().storage<entt::entity>();
         for (auto&& [entity] : entities.each())
@@ -138,11 +169,21 @@ namespace
             if (const NameComponent* component = world.GetComponent<NameComponent>(entity);
                 component && component->name == name)
             {
-                return true;
+                return entity;
             }
         }
-        return false;
+        return entt::null;
     }
+
+    bool WorldContainsNamedEntity(World& world, const std::string& name)
+    {
+        return FindNamedEntity(world, name) != entt::null;
+    }
+
+    struct SaveLoadLifecycleProbeEvent
+    {
+        int value = 0;
+    };
 } // namespace
 
 TEST(ComponentSerializerRegistry_UnregisterDestroysOwnedCallbacks)
@@ -192,7 +233,7 @@ TEST(SaveSystem_GetSaveMetadata_ParsesHeader)
     std::filesystem::remove_all(dir);
 }
 
-TEST(SaveSystem_GetSaveMetadata_RejectsNewerVersion)
+TEST(SaveMigration_OnDiskRejectsFutureVersion)
 {
     const std::string dir = MakeTempSaveDir("newer");
     SaveSystem& ss = SaveSystem::GetInstance();
@@ -207,7 +248,7 @@ TEST(SaveSystem_GetSaveMetadata_RejectsNewerVersion)
     std::filesystem::remove_all(dir);
 }
 
-TEST(SaveSystem_GetSaveMetadata_RejectsVersionZeroTransactionally)
+TEST(SaveMigration_OnDiskRejectsRetiredVersionTransactionally)
 {
     const std::string dir = MakeTempSaveDir("version_zero");
     SaveSystem& ss = SaveSystem::GetInstance();
@@ -473,6 +514,150 @@ TEST(SaveMigration_CurrentWriterPersistsScreenshotPathAsVersion2)
     std::filesystem::remove_all(dir);
 }
 
+TEST(SaveMigration_SuccessfulLoadPreservesObserversAndRetiresEntitySubscriptions)
+{
+    const std::string dir = MakeTempSaveDir("lifecycle_commit");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("loaded-renderable");
+    auto& sourceRenderer = source.AddComponent<MeshRenderer>(sourceEntity);
+    sourceRenderer.meshPath = "Meshes/loaded.mesh";
+    sourceRenderer.materialPath = "Materials/loaded.mat";
+    sourceRenderer.emissive = 0.375f;
+    SaveMetadata metadata;
+    metadata.saveName = "Lifecycle-aware restore";
+    EXPECT_TRUE(saveSystem.Save("lifecycle", source, metadata, {{"loaded", "state"}}));
+
+    World liveWorld;
+    Spark::ECS::MaterialChangeReactiveSystem reactiveSystem;
+    reactiveSystem.Connect(liveWorld.GetRegistry());
+    const EntityID retiredEntity = liveWorld.CreateEntity("retired-renderable");
+    liveWorld.AddComponent<MeshRenderer>(retiredEntity);
+    reactiveSystem.Update(liveWorld, 0.0f);
+    EXPECT_EQ(reactiveSystem.GetPendingChangeCount(), 0u);
+
+    int staleDeliveries = 0;
+    auto staleHandle = Spark::EntityEventBus::Global().Subscribe<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(retiredEntity),
+        [&](const SaveLoadLifecycleProbeEvent&) { ++staleDeliveries; });
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(retiredEntity)),
+              1u);
+
+    entt::registry* const liveRegistry = &liveWorld.GetRegistry();
+    std::unordered_map<std::string, std::string> customState;
+    EXPECT_TRUE(saveSystem.Load("lifecycle", liveWorld, customState));
+    EXPECT_EQ(&liveWorld.GetRegistry(), liveRegistry);
+    EXPECT_EQ(customState.at("loaded"), std::string("state"));
+
+    const EntityID loadedEntity = FindNamedEntity(liveWorld, "loaded-renderable");
+    ASSERT_TRUE(loadedEntity != entt::null);
+    EXPECT_EQ(static_cast<uint32_t>(loadedEntity), static_cast<uint32_t>(retiredEntity));
+    EXPECT_EQ(Spark::EntityEventBus::Global().HandlerCount<SaveLoadLifecycleProbeEvent>(
+                  static_cast<Spark::EventEntityID>(loadedEntity)),
+              0u);
+    Spark::EntityEventBus::Global().Publish<SaveLoadLifecycleProbeEvent>(
+        static_cast<Spark::EventEntityID>(loadedEntity), {1});
+    EXPECT_EQ(staleDeliveries, 0);
+
+    // The old MeshRenderer destruction reached the pre-existing observer, and
+    // the same observer remains connected to the live pool after replacement.
+    EXPECT_EQ(reactiveSystem.GetPendingChangeCount(), 1u);
+    reactiveSystem.Update(liveWorld, 0.0f);
+    liveWorld.GetRegistry().patch<MeshRenderer>(loadedEntity, [](MeshRenderer& renderer) { renderer.visible = false; });
+    EXPECT_EQ(reactiveSystem.GetPendingChangeCount(), 1u);
+    reactiveSystem.Update(liveWorld, 0.0f);
+    EXPECT_EQ(reactiveSystem.GetPendingChangeCount(), 0u);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_HandWrittenComponentSemanticFailuresRollbackWorldAndCustomState)
+{
+    const std::string dir = MakeTempSaveDir("strict_handwritten");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("strict-transform-source");
+    auto& sourceTransform = source.AddComponent<Transform>(sourceEntity);
+    sourceTransform.position.x = 12.5f;
+    SaveMetadata metadata;
+    metadata.saveName = "Strict hand-written component";
+    EXPECT_TRUE(saveSystem.Save("strict-transform", source, metadata, {{"candidate", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "strict-transform.spark_save";
+    const std::vector<char> original = ReadBytes(path);
+    ASSERT_TRUE(!original.empty());
+
+    for (int failureCase = 0; failureCase < 3; ++failureCase)
+    {
+        std::vector<char> malformed = original;
+        if (failureCase == 0)
+            ASSERT_TRUE(ReplaceLengthPrefixedString(malformed, "px", "qx"));
+        else if (failureCase == 1)
+            ASSERT_TRUE(ReplaceLengthPrefixedString(malformed, "12.500000", "not-float"));
+        else
+            ASSERT_TRUE(ReplaceLengthPrefixedString(malformed, "12.500000",
+                                                    std::string(std::numeric_limits<uint16_t>::max(), '9')));
+        ASSERT_TRUE(WriteBytes(path, malformed));
+
+        World liveWorld;
+        const EntityID sentinel = liveWorld.CreateEntity("handwritten-live-sentinel");
+        auto& sentinelTransform = liveWorld.AddComponent<Transform>(sentinel);
+        sentinelTransform.position = {444.0f, 555.0f, 666.0f};
+        std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+
+        EXPECT_FALSE(saveSystem.Load("strict-transform", liveWorld, customState));
+        EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+        EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "handwritten-live-sentinel"));
+        EXPECT_NEAR(liveWorld.GetComponent<Transform>(sentinel)->position.x, 444.0f, 0.0001f);
+        EXPECT_EQ(customState.size(), 1u);
+        EXPECT_EQ(customState.at("live"), std::string("sentinel"));
+    }
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_ReflectedSetFieldFailureRollsBackWorldAndCustomState)
+{
+    const std::string dir = MakeTempSaveDir("strict_reflected");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("strict-reflected-source");
+    auto& sourceRenderer = source.AddComponent<MeshRenderer>(sourceEntity);
+    sourceRenderer.meshPath = "Meshes/reflected.mesh";
+    sourceRenderer.materialPath = "Materials/reflected.mat";
+    sourceRenderer.emissive = 0.625f;
+    SaveMetadata metadata;
+    metadata.saveName = "Strict reflected component";
+    EXPECT_TRUE(saveSystem.Save("strict-reflected", source, metadata, {{"candidate", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "strict-reflected.spark_save";
+    std::vector<char> malformed = ReadBytes(path);
+    ASSERT_TRUE(ReplaceLengthPrefixedString(malformed, "0.625000", "badfloat"));
+    ASSERT_TRUE(WriteBytes(path, malformed));
+
+    World liveWorld;
+    const EntityID sentinel = liveWorld.CreateEntity("reflected-live-sentinel");
+    auto& sentinelTransform = liveWorld.AddComponent<Transform>(sentinel);
+    sentinelTransform.position.x = 777.0f;
+    std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
+
+    EXPECT_FALSE(saveSystem.Load("strict-reflected", liveWorld, customState));
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "reflected-live-sentinel"));
+    EXPECT_NEAR(liveWorld.GetComponent<Transform>(sentinel)->position.x, 777.0f, 0.0001f);
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("live"), std::string("sentinel"));
+
+    std::filesystem::remove_all(dir);
+}
+
 TEST(SaveMigration_V1ToV2InMemoryStepIsExactIdempotentAndTransactional)
 {
     SaveData legacy;
@@ -509,7 +694,7 @@ TEST(SaveMigration_ImmutableV1FixtureLoadsWithoutRewritingSourceOrSlot)
                              "SaveSystem" / "v1-screenshotless.spark_save.hex";
     const std::string fixtureBefore = ReadTextFile(fixturePath);
     const std::vector<char> legacyBytes = DecodeHexFixture(fixtureBefore);
-    ASSERT_EQ(legacyBytes.size(), static_cast<size_t>(154));
+    ASSERT_EQ(legacyBytes.size(), static_cast<size_t>(284));
 
     const std::string dir = MakeTempSaveDir("v1_fixture");
     const auto slotPath = std::filesystem::path(dir) / "legacy-v1.spark_save";
@@ -524,20 +709,43 @@ TEST(SaveMigration_ImmutableV1FixtureLoadsWithoutRewritingSourceOrSlot)
     EXPECT_EQ(metadata.version, kCurrentSaveVersion);
     EXPECT_EQ(metadata.saveName, std::string("Legacy screenshotless save"));
     EXPECT_EQ(metadata.sceneName, std::string("LegacyScene"));
+    EXPECT_EQ(metadata.playerClass, std::string("Ranger"));
     EXPECT_EQ(metadata.screenshotPath, std::string());
+    EXPECT_EQ(metadata.timestamp, uint64_t{1700000000});
+    EXPECT_NEAR(metadata.playTime, 42.5f, 0.0001f);
+    EXPECT_NEAR(metadata.playerHealth, 75.0f, 0.0001f);
+    EXPECT_NEAR(metadata.playerArmor, 25.0f, 0.0001f);
+    EXPECT_NEAR(metadata.playerPosition.x, 1.0f, 0.0001f);
+    EXPECT_NEAR(metadata.playerPosition.y, 2.0f, 0.0001f);
+    EXPECT_NEAR(metadata.playerPosition.z, 3.0f, 0.0001f);
+    EXPECT_EQ(metadata.playerKills, 4u);
+    EXPECT_EQ(metadata.playerDeaths, 1u);
 
     World loadedWorld;
     loadedWorld.CreateEntity("must-be-replaced-only-on-success");
     std::unordered_map<std::string, std::string> customState = {{"sentinel", "replace-on-success"}};
     EXPECT_TRUE(saveSystem.Load("legacy-v1", loadedWorld, customState));
     EXPECT_EQ(loadedWorld.GetEntityCount(), 1u);
-    EXPECT_TRUE(WorldContainsNamedEntity(loadedWorld, "legacy-player"));
+    const EntityID legacyPlayer = FindNamedEntity(loadedWorld, "legacy-player");
+    ASSERT_TRUE(legacyPlayer != entt::null);
+    const Transform* transform = loadedWorld.GetComponent<Transform>(legacyPlayer);
+    ASSERT_TRUE(transform != nullptr);
+    EXPECT_NEAR(transform->position.x, 12.5f, 0.0001f);
+    EXPECT_NEAR(transform->position.y, -3.25f, 0.0001f);
+    EXPECT_NEAR(transform->position.z, 99.75f, 0.0001f);
+    EXPECT_NEAR(transform->rotation.x, 0.125f, 0.0001f);
+    EXPECT_NEAR(transform->rotation.y, 1.5f, 0.0001f);
+    EXPECT_NEAR(transform->rotation.z, -2.25f, 0.0001f);
+    EXPECT_NEAR(transform->scale.x, 2.0f, 0.0001f);
+    EXPECT_NEAR(transform->scale.y, 0.5f, 0.0001f);
+    EXPECT_NEAR(transform->scale.z, 3.75f, 0.0001f);
     EXPECT_EQ(customState.size(), 1u);
     EXPECT_EQ(customState.at("legacy.key"), std::string("legacy-value"));
 
     // Migration is in memory only: neither the checked-in fixture nor the copied
     // N-1 slot is rewritten as a side effect of reading it.
     EXPECT_EQ(ReadHeaderVersion(slotPath), kOldestSupportedSaveVersion);
+    EXPECT_TRUE(ReadBytes(slotPath) == legacyBytes);
     EXPECT_EQ(ReadTextFile(fixturePath), fixtureBefore);
 
     std::filesystem::remove_all(dir);

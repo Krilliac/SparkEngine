@@ -51,6 +51,9 @@
  *       [](const void* comp) -> SerializedComponent { ... },
  *       [](World& world, EntityID e, const SerializedComponent& d) { ... });
  * @endcode
+ * Custom types that can appear in loaded snapshots also require matching
+ * ComponentFactory storage-transaction operations; built-in registrations add
+ * these automatically.
  *
  * ## Save slot naming
  *
@@ -116,8 +119,9 @@ namespace Spark
  *
  * ### Built-in registration
  * All Spark Engine built-in components are registered by `RegisterBuiltins()`,
- * which is called automatically during SaveSystem::Initialize(). Game code only
- * needs to call `Register()` for custom component types.
+ * which is called automatically during SaveSystem::Initialize(). Game code must
+ * pair `Register()` for a custom loadable component with ComponentFactory
+ * operations that include `prepareStorage` and `swapStorageContents`.
  *
  * ### Thread safety
  * Register() should be called during single-threaded initialization. Subsequent
@@ -310,8 +314,9 @@ namespace Spark
  * ### Error handling
  * All public save/load methods return `bool` indicating success. On failure an error
  * message is logged. Load() builds a fresh candidate World and commits it only after
- * every component has restored successfully, so failed loads leave the caller's World
- * and custom-state output unchanged.
+ * every component has restored successfully, so validation/deserialization failures
+ * leave the caller's World and custom-state output unchanged. The commit preserves the
+ * live registry's signal objects while retiring old entity lifecycle state.
  *
  * ### Thread safety
  * SaveSystem is **not thread-safe**. Call all methods from the main game thread.
@@ -552,9 +557,10 @@ namespace Spark
         /**
      * @brief Restore world state from a SaveData without reading from disk.
      *
-     * Reconstructs all entities and components in a fresh candidate World, then
-     * replaces `world` only after the candidate is complete. Unknown component types,
-     * unsupported versions, and deserializer exceptions fail without changing world.
+     * Reconstructs all entities and components in a fresh candidate World, then retires
+     * old entities and swaps validated storage payloads into the existing live registry.
+     * Unknown component types, unsupported versions, and deserializer exceptions fail
+     * without changing world.
      * Pair with SerializeWorld() for in-memory snapshot/restore patterns.
      *
      * @param data   SaveData snapshot (e.g. from a previous SerializeWorld() call).

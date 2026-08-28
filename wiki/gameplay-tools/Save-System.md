@@ -161,14 +161,21 @@ after the replacement succeeds.
 3. migrate the parsed `SaveData` in memory;
 4. run the optional custom-state validator;
 5. restore every entity into a fresh candidate `World`;
-6. replace the live `World` and `outCustomState` only after complete success.
+6. stage a copy of `customState` and all required live/candidate component pools;
+7. retire live entities through `World::DestroyEntity`, which removes hierarchy
+   links, fires destroy observers, and clears per-entity event subscriptions;
+8. exchange only the validated component/entity storage payloads and then the
+   staged custom-state map with non-throwing swaps.
 
-An unknown component type or any standard/unknown exception from a registered
-deserializer fails the candidate restore. The live world and custom-state output
-remain unchanged.
+An unknown component type, a missing/malformed/oversized required built-in value,
+a failed reflected-field conversion, or any standard/unknown exception from a
+registered deserializer fails the candidate restore. The live world and
+custom-state output remain unchanged.
 
-A successful load replaces the World's registry. Callers must not retain raw
-entity/component pointers across a successful load.
+A successful load preserves the live EnTT registry and its registry-bound signal
+observers. Incoming entity identifiers are installed only after subscriptions
+for retired/colliding identifiers have been removed. Entity/component pointers
+and entity-lifetime assumptions remain invalid across a successful load.
 
 ## Custom component registration
 
@@ -189,9 +196,14 @@ registry.Register(
     });
 ```
 
-Deserializers should validate all required properties and throw on malformed
-input. The SaveSystem catches the exception while the component is being restored
-into the candidate world, preventing a partial live-world update.
+Custom component types must also register matching `ComponentFactory` operations,
+including the transactional `prepareStorage` and `swapStorageContents` callbacks;
+the engine's `SPARK_REGISTER_COMPONENT` registrations are the reference pattern.
+Without those operations, loading the custom component fails closed before the
+live world is retired. Deserializers must validate all required properties and
+throw on malformed input. The SaveSystem catches the exception while the
+component is being restored into the candidate world, preventing a partial
+live-world update.
 
 ## Compatibility evidence
 
@@ -199,9 +211,11 @@ The immutable v1 source fixture is:
 
 `Tests/Fixtures/Compatibility/SaveSystem/v1-screenshotless.spark_save.hex`
 
-The test decodes the fixture into a temporary slot; it never rewrites the source
-fixture. Focused compatibility tests use the `SaveMigration_` selector and are
-registered with CTest labels `compatibility;save;unit`:
+The fixture was emitted through the pre-v2 writer path with a non-default
+`Transform`; the test asserts every serialized metadata/Transform field and
+byte-for-byte immutability of both the source fixture and copied slot. Focused
+compatibility tests use the `SaveMigration_` selector and are registered with
+CTest labels `compatibility;save;unit`:
 
 ```bash
 ctest --test-dir build -C Release -L compatibility --output-on-failure
@@ -213,15 +227,20 @@ The compatibility-labeled coverage proves:
 - exact, idempotent v1-to-v2 in-memory migration;
 - immutable v1 read compatibility without source or slot rewrite;
 - future/retired version rejection;
+- successful lifecycle commit with registry-observer retention and stale
+  entity-subscription removal;
+- fail-closed missing, malformed, oversized, and reflected component values;
 - unknown-component rollback;
 - throwing-deserializer rollback for both World and custom state.
 
 The same production-linked SaveSystem test file also retains the malformed-tail,
 oversize-file, custom-state, and atomic slot-replacement regressions.
 
-SAVE-230 remains broader than this save-format slice. Scene, prefab, asset,
-editor-state, per-module schema, installed-build, and exact-SHA CI evidence remain
-separate release gates.
+SAVE-230 remains broader than this save-format slice. Rollback/backup acceptance
+remains explicitly open, as do scene, prefab, asset, editor-state, per-module
+schema, installed-build, and exact-SHA CI evidence. The ordinary build workflows
+run this CTest serially with the rest of the suite; no dedicated compatibility
+CI job is claimed.
 
 ## Threading
 

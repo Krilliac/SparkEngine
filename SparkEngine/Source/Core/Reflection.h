@@ -295,11 +295,15 @@ namespace Spark
         using HasFn = bool (*)(void* world, uint32_t entity);
         using RemoveFn = void (*)(void* world, uint32_t entity);
         using GetRawFn = void* (*)(void* world, uint32_t entity);
+        using PrepareStorageFn = void (*)(void* world);
+        using SwapStorageContentsFn = void (*)(void* destinationWorld, void* sourceWorld) noexcept;
 
-        AddFn add = nullptr;       ///< Add a default-constructed component.
-        HasFn has = nullptr;       ///< Check if entity has the component.
-        RemoveFn remove = nullptr; ///< Remove the component.
-        GetRawFn getRaw = nullptr; ///< Get a raw pointer to the component data.
+        AddFn add = nullptr;                                 ///< Add a default-constructed component.
+        HasFn has = nullptr;                                 ///< Check if entity has the component.
+        RemoveFn remove = nullptr;                           ///< Remove the component.
+        GetRawFn getRaw = nullptr;                           ///< Get a raw pointer to the component data.
+        PrepareStorageFn prepareStorage = nullptr;           ///< Materialize the component pool before a transaction.
+        SwapStorageContentsFn swapStorageContents = nullptr; ///< Exchange pool payloads without moving EnTT signals.
     };
 
     /**
@@ -392,6 +396,13 @@ namespace Spark
 
         /** @brief Check if a type name is registered. */
         bool IsRegistered(const std::string& typeName) const { return m_ops.count(typeName) > 0; }
+
+        /** @brief Get the complete type-erased operation set, or nullptr if the type is unknown. */
+        const ComponentOps* GetOperations(const std::string& typeName) const
+        {
+            const auto it = m_ops.find(typeName);
+            return it == m_ops.end() ? nullptr : &it->second;
+        }
 
         /** @brief Get all registered component type names. */
         std::vector<std::string> GetRegisteredNames() const

@@ -10,13 +10,17 @@
 #include "../../Utils/Validate.h"
 #include "Utils/LocalFileCache.h"
 #include <cstring>
+#include <charconv>
+#include <cmath>
 #include <fstream>
 #include <sstream>
 #include <filesystem>
 #include <algorithm>
 #include <cerrno>
 #include <limits>
+#include <stdexcept>
 #include <system_error>
+#include <unordered_set>
 
 #if defined(_WIN32)
 #define NOMINMAX
@@ -240,69 +244,60 @@ namespace Spark
     }
 
     // ============================================================================
-    // Safe deserialization helpers — reject malformed save data instead of crashing
+    // Strict deserialization helpers — a malformed required field invalidates the snapshot
     // ============================================================================
 
     // Must match the writer's limit (rejectIfTooLong in WriteToFile): every string on the wire
     // carries a uint16 length prefix, so anything the writer accepts must load back cleanly.
     static constexpr size_t kMaxPropertyLen = std::numeric_limits<uint16_t>::max();
 
-    static float SafeGetFloat(const std::unordered_map<std::string, std::string>& props, const std::string& key,
-                              float def)
+    static const std::string& RequireString(const std::unordered_map<std::string, std::string>& props,
+                                            const std::string& key)
     {
-        auto it = props.find(key);
-        if (it == props.end() || it->second.size() > kMaxPropertyLen)
-            return def;
-        try
-        {
-            return std::stof(it->second);
-        }
-        catch (const std::exception& e)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system error (SafeGetFloat): %s", e.what());
-            return def;
-        }
-        catch (...)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: unknown exception in SafeGetFloat");
-            return def;
-        }
-    }
-
-    static uint32_t SafeGetUint32(const std::unordered_map<std::string, std::string>& props, const std::string& key,
-                                  uint32_t def)
-    {
-        auto it = props.find(key);
-        if (it == props.end() || it->second.size() > kMaxPropertyLen)
-            return def;
-        try
-        {
-            return static_cast<uint32_t>(std::stoul(it->second));
-        }
-        catch (const std::exception& e)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system error (SafeGetUint32): %s", e.what());
-            return def;
-        }
-        catch (...)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: unknown exception in SafeGetUint32");
-            return def;
-        }
-    }
-
-    static std::string SafeGetString(const std::unordered_map<std::string, std::string>& props, const std::string& key)
-    {
-        auto it = props.find(key);
+        const auto it = props.find(key);
         if (it == props.end())
-            return "";
+            throw std::runtime_error("missing required save property '" + key + "'");
         if (it->second.size() > kMaxPropertyLen)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: truncated property '%s' from %zu to %zu bytes",
-                           key.c_str(), it->second.size(), kMaxPropertyLen);
-            return it->second.substr(0, kMaxPropertyLen);
-        }
+            throw std::runtime_error("save property '" + key + "' exceeds the uint16 wire limit");
         return it->second;
+    }
+
+    static float RequireFloat(const std::unordered_map<std::string, std::string>& props, const std::string& key)
+    {
+        const std::string& value = RequireString(props, key);
+        try
+        {
+            size_t consumed = 0;
+            const float parsed = std::stof(value, &consumed);
+            if (consumed != value.size() || !std::isfinite(parsed))
+                throw std::invalid_argument("not a finite, complete float");
+            return parsed;
+        }
+        catch (const std::exception&)
+        {
+            throw std::runtime_error("save property '" + key + "' is not a valid finite float");
+        }
+    }
+
+    template <typename Integer>
+    static Integer RequireInteger(const std::unordered_map<std::string, std::string>& props, const std::string& key)
+    {
+        const std::string& value = RequireString(props, key);
+        Integer parsed{};
+        const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), parsed);
+        if (error != std::errc{} || end != value.data() + value.size())
+            throw std::runtime_error("save property '" + key + "' is not a valid integer");
+        return parsed;
+    }
+
+    static bool RequireBool(const std::unordered_map<std::string, std::string>& props, const std::string& key)
+    {
+        const std::string& value = RequireString(props, key);
+        if (value == "1")
+            return true;
+        if (value == "0")
+            return false;
+        throw std::runtime_error("save property '" + key + "' is not encoded as 0 or 1");
     }
 
     // ============================================================================
@@ -333,9 +328,9 @@ namespace Spark
             {
                 auto& t = world.AddComponent<Transform>(entity);
                 auto& p = data.properties;
-                t.position = {SafeGetFloat(p, "px", 0), SafeGetFloat(p, "py", 0), SafeGetFloat(p, "pz", 0)};
-                t.rotation = {SafeGetFloat(p, "rx", 0), SafeGetFloat(p, "ry", 0), SafeGetFloat(p, "rz", 0)};
-                t.scale = {SafeGetFloat(p, "sx", 1), SafeGetFloat(p, "sy", 1), SafeGetFloat(p, "sz", 1)};
+                t.position = {RequireFloat(p, "px"), RequireFloat(p, "py"), RequireFloat(p, "pz")};
+                t.rotation = {RequireFloat(p, "rx"), RequireFloat(p, "ry"), RequireFloat(p, "rz")};
+                t.scale = {RequireFloat(p, "sx"), RequireFloat(p, "sy"), RequireFloat(p, "sz")};
             });
 
         // MeshRenderer — handled by RegisterReflectedSerializers() (field names match)
@@ -359,11 +354,11 @@ namespace Spark
             {
                 auto& s = world.AddComponent<Script>(entity);
                 auto& p = data.properties;
-                s.scriptPath = SafeGetString(p, "scriptPath");
-                s.className = SafeGetString(p, "className");
-                s.moduleName = SafeGetString(p, "moduleName");
-                s.enabled = SafeGetString(p, "enabled") != "0";
-                s.started = SafeGetString(p, "started") == "1";
+                s.scriptPath = RequireString(p, "scriptPath");
+                s.className = RequireString(p, "className");
+                s.moduleName = RequireString(p, "moduleName");
+                s.enabled = RequireBool(p, "enabled");
+                s.started = RequireBool(p, "started");
             });
 
         reg.Register(
@@ -388,10 +383,10 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& tc = world.AddComponent<TagComponent>(entity);
-                auto it = data.properties.find("tags");
-                if (it != data.properties.end() && !it->second.empty())
+                const std::string& tags = RequireString(data.properties, "tags");
+                if (!tags.empty())
                 {
-                    std::istringstream iss(it->second);
+                    std::istringstream iss(tags);
                     std::string tag;
                     while (std::getline(iss, tag, ','))
                     {
@@ -432,15 +427,15 @@ namespace Spark
             {
                 auto& rb = world.AddComponent<RigidBodyComponent>(entity);
                 auto& p = data.properties;
-                rb.type = static_cast<RigidBodyComponent::Type>(static_cast<int>(SafeGetFloat(p, "type", 2)));
-                rb.mass = SafeGetFloat(p, "mass", 1.0f);
-                rb.friction = SafeGetFloat(p, "friction", 0.5f);
-                rb.restitution = SafeGetFloat(p, "restitution", 0.1f);
-                rb.linearDamping = SafeGetFloat(p, "linearDamping", 0.1f);
-                rb.angularDamping = SafeGetFloat(p, "angularDamping", 0.1f);
-                rb.isTrigger = SafeGetString(p, "isTrigger") == "1";
-                rb.linearVelocity = {SafeGetFloat(p, "lvx", 0), SafeGetFloat(p, "lvy", 0), SafeGetFloat(p, "lvz", 0)};
-                rb.angularVelocity = {SafeGetFloat(p, "avx", 0), SafeGetFloat(p, "avy", 0), SafeGetFloat(p, "avz", 0)};
+                rb.type = static_cast<RigidBodyComponent::Type>(RequireInteger<int>(p, "type"));
+                rb.mass = RequireFloat(p, "mass");
+                rb.friction = RequireFloat(p, "friction");
+                rb.restitution = RequireFloat(p, "restitution");
+                rb.linearDamping = RequireFloat(p, "linearDamping");
+                rb.angularDamping = RequireFloat(p, "angularDamping");
+                rb.isTrigger = RequireBool(p, "isTrigger");
+                rb.linearVelocity = {RequireFloat(p, "lvx"), RequireFloat(p, "lvy"), RequireFloat(p, "lvz")};
+                rb.angularVelocity = {RequireFloat(p, "avx"), RequireFloat(p, "avy"), RequireFloat(p, "avz")};
                 rb.physicsBodyHandle = nullptr;
             });
 
@@ -466,12 +461,11 @@ namespace Spark
             {
                 auto& col = world.AddComponent<ColliderComponent>(entity);
                 auto& p = data.properties;
-                col.shape = static_cast<ColliderComponent::Shape>(static_cast<int>(SafeGetFloat(p, "shape", 0)));
-                col.halfExtents = {SafeGetFloat(p, "hex", 0.5f), SafeGetFloat(p, "hey", 0.5f),
-                                   SafeGetFloat(p, "hez", 0.5f)};
-                col.radius = SafeGetFloat(p, "radius", 0.5f);
-                col.height = SafeGetFloat(p, "height", 1.0f);
-                col.offset = {SafeGetFloat(p, "ox", 0), SafeGetFloat(p, "oy", 0), SafeGetFloat(p, "oz", 0)};
+                col.shape = static_cast<ColliderComponent::Shape>(RequireInteger<int>(p, "shape"));
+                col.halfExtents = {RequireFloat(p, "hex"), RequireFloat(p, "hey"), RequireFloat(p, "hez")};
+                col.radius = RequireFloat(p, "radius");
+                col.height = RequireFloat(p, "height");
+                col.offset = {RequireFloat(p, "ox"), RequireFloat(p, "oy"), RequireFloat(p, "oz")};
             });
     }
 
@@ -493,9 +487,9 @@ namespace Spark
             {
                 auto& h = world.AddComponent<HealthComponent>(entity);
                 auto& p = data.properties;
-                h.health = SafeGetFloat(p, "health", 100.0f);
-                h.maxHealth = SafeGetFloat(p, "maxHealth", 100.0f);
-                h.isDead = SafeGetString(p, "isDead") == "1";
+                h.health = RequireFloat(p, "health");
+                h.maxHealth = RequireFloat(p, "maxHealth");
+                h.isDead = RequireBool(p, "isDead");
             });
 
         reg.Register(
@@ -518,11 +512,11 @@ namespace Spark
             {
                 auto& l = world.AddComponent<LightComponent>(entity);
                 auto& p = data.properties;
-                l.type = static_cast<LightComponent::Type>(static_cast<int>(SafeGetFloat(p, "type", 1)));
-                l.color = {SafeGetFloat(p, "cr", 1), SafeGetFloat(p, "cg", 1), SafeGetFloat(p, "cb", 1)};
-                l.intensity = SafeGetFloat(p, "intensity", 1.0f);
-                l.range = SafeGetFloat(p, "range", 10.0f);
-                l.castShadows = SafeGetString(p, "castShadows") == "1";
+                l.type = static_cast<LightComponent::Type>(RequireInteger<int>(p, "type"));
+                l.color = {RequireFloat(p, "cr"), RequireFloat(p, "cg"), RequireFloat(p, "cb")};
+                l.intensity = RequireFloat(p, "intensity");
+                l.range = RequireFloat(p, "range");
+                l.castShadows = RequireBool(p, "castShadows");
             });
 
         // AudioSourceComponent — handled by RegisterReflectedSerializers()
@@ -552,15 +546,15 @@ namespace Spark
             {
                 auto& pe = world.AddComponent<ParticleEmitterComponent>(entity);
                 auto& p = data.properties;
-                pe.effectName = SafeGetString(p, "effectName");
-                pe.autoPlay = SafeGetString(p, "autoPlay") != "0";
-                pe.isPlaying = SafeGetString(p, "isPlaying") == "1";
-                pe.emissionRate = SafeGetFloat(p, "emissionRate", 10.0f);
-                pe.lifetime = SafeGetFloat(p, "lifetime", 1.0f);
-                pe.startColor = {SafeGetFloat(p, "scr", 1), SafeGetFloat(p, "scg", 1), SafeGetFloat(p, "scb", 1),
-                                 SafeGetFloat(p, "sca", 1)};
-                pe.startSize = SafeGetFloat(p, "startSize", 0.1f);
-                pe.startSpeed = SafeGetFloat(p, "startSpeed", 1.0f);
+                pe.effectName = RequireString(p, "effectName");
+                pe.autoPlay = RequireBool(p, "autoPlay");
+                pe.isPlaying = RequireBool(p, "isPlaying");
+                pe.emissionRate = RequireFloat(p, "emissionRate");
+                pe.lifetime = RequireFloat(p, "lifetime");
+                pe.startColor = {RequireFloat(p, "scr"), RequireFloat(p, "scg"), RequireFloat(p, "scb"),
+                                 RequireFloat(p, "sca")};
+                pe.startSize = RequireFloat(p, "startSize");
+                pe.startSpeed = RequireFloat(p, "startSpeed");
                 pe.emitterHandle = nullptr;
             });
 
@@ -591,13 +585,13 @@ namespace Spark
             {
                 auto& ac = world.AddComponent<AnimationController>(entity);
                 auto& p = data.properties;
-                ac.currentAnimation = SafeGetString(p, "currentAnimation");
-                ac.defaultAnimation = SafeGetString(p, "defaultAnimation");
-                ac.playbackSpeed = SafeGetFloat(p, "playbackSpeed", 1.0f);
-                ac.currentTime = SafeGetFloat(p, "currentTime", 0.0f);
-                ac.playing = SafeGetString(p, "playing") != "0";
-                ac.loop = SafeGetString(p, "loop") != "0";
-                std::string animList = SafeGetString(p, "availableAnimations");
+                ac.currentAnimation = RequireString(p, "currentAnimation");
+                ac.defaultAnimation = RequireString(p, "defaultAnimation");
+                ac.playbackSpeed = RequireFloat(p, "playbackSpeed");
+                ac.currentTime = RequireFloat(p, "currentTime");
+                ac.playing = RequireBool(p, "playing");
+                ac.loop = RequireBool(p, "loop");
+                std::string animList = RequireString(p, "availableAnimations");
                 if (!animList.empty())
                 {
                     std::istringstream iss(animList);
@@ -629,11 +623,11 @@ namespace Spark
             {
                 auto& ni = world.AddComponent<NetworkIdentity>(entity);
                 auto& p = data.properties;
-                ni.networkID = SafeGetUint32(p, "networkID", 0);
-                ni.ownerClientID = SafeGetUint32(p, "ownerClientID", 0);
-                ni.isLocalAuthority = SafeGetString(p, "isLocalAuthority") == "1";
-                ni.replicateTransform = SafeGetString(p, "replicateTransform") != "0";
-                ni.replicateHealth = SafeGetString(p, "replicateHealth") != "0";
+                ni.networkID = RequireInteger<uint32_t>(p, "networkID");
+                ni.ownerClientID = RequireInteger<uint32_t>(p, "ownerClientID");
+                ni.isLocalAuthority = RequireBool(p, "isLocalAuthority");
+                ni.replicateTransform = RequireBool(p, "replicateTransform");
+                ni.replicateHealth = RequireBool(p, "replicateHealth");
             });
     }
 
@@ -690,19 +684,21 @@ namespace Spark
                     void* raw = f.GetComponentRaw(capturedName, &world, entityId);
                     if (!raw)
                     {
-                        SPARK_LOG_WARN(Spark::LogCategory::Save,
-                                       "Deserialize: GetComponentRaw returned null for '%s' on entity %u — skipping "
-                                       "property restore",
-                                       capturedName.c_str(), entityId);
-                        return;
+                        throw std::runtime_error("reflected component '" + capturedName +
+                                                 "' could not be retrieved after construction");
                     }
                     for (const auto& field : capturedFields)
                     {
-                        auto it = data.properties.find(field.fieldName);
-                        if (it != data.properties.end())
-                        {
-                            Spark::SetFieldFromString(raw, field, it->second);
-                        }
+                        const auto it = data.properties.find(field.fieldName);
+                        if (it == data.properties.end())
+                            throw std::runtime_error("reflected component '" + capturedName +
+                                                     "' is missing required field '" + field.fieldName + "'");
+                        if (it->second.size() > kMaxPropertyLen)
+                            throw std::runtime_error("reflected field '" + capturedName + "." + field.fieldName +
+                                                     "' exceeds the uint16 wire limit");
+                        if (!Spark::SetFieldFromString(raw, field, it->second))
+                            throw std::runtime_error("reflected field '" + capturedName + "." + field.fieldName +
+                                                     "' has an invalid serialized value");
                     }
                 });
         }
@@ -795,9 +791,31 @@ namespace Spark
             EventBus::Global().Publish<LoadCompleteEvent>({slotName, false});
             return false;
         }
-        bool ok = DeserializeWorld(data, world);
-        if (ok)
-            outCustomState = data.customState;
+        bool ok = false;
+        try
+        {
+            // Copy caller-visible side data before the World commit. The final
+            // map exchange is noexcept for std::allocator-backed unordered_map.
+            auto stagedCustomState = data.customState;
+            ok = DeserializeWorld(data, world);
+            if (ok)
+            {
+                static_assert(noexcept(outCustomState.swap(stagedCustomState)));
+                outCustomState.swap(stagedCustomState);
+            }
+        }
+        catch (const std::exception& error)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Save,
+                           "Load: failed while staging transactional state: %s; caller custom state was not changed",
+                           error.what());
+        }
+        catch (...)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Save,
+                           "Load: unknown failure while staging transactional state; caller custom state was not "
+                           "changed");
+        }
         EventBus::Global().Publish<LoadCompleteEvent>({slotName, ok});
         return ok;
     }
@@ -989,7 +1007,11 @@ namespace Spark
         }
 
         const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
+        const auto& componentFactory = Spark::ComponentFactory::Get();
         World candidateWorld;
+        std::vector<Spark::ComponentOps::SwapStorageContentsFn> stagedStorageSwaps;
+        std::vector<EntityID> liveEntities;
+        std::vector<EntityID> incomingEntities;
         try
         {
             for (const auto& serializedEntity : migratedData.entities)
@@ -1010,6 +1032,42 @@ namespace Spark
                     serializerRegistry.Deserialize(component.typeName, candidateWorld, entity, component);
                 }
             }
+
+            // Resolve and materialize every component pool before touching the
+            // live world. The stored callbacks swap only basic_storage payloads,
+            // leaving the live EnTT signal mixins (and their observers) in place.
+            std::unordered_set<std::string> stagedTypes;
+            auto stageComponentType = [&](const std::string& typeName)
+            {
+                if (!stagedTypes.insert(typeName).second)
+                    return;
+
+                const Spark::ComponentOps* operations = componentFactory.GetOperations(typeName);
+                if (!operations || !operations->prepareStorage || !operations->swapStorageContents)
+                    throw std::runtime_error("component '" + typeName +
+                                             "' has no transactional storage operations registered");
+
+                operations->prepareStorage(&world);
+                operations->prepareStorage(&candidateWorld);
+                stagedStorageSwaps.push_back(operations->swapStorageContents);
+            };
+
+            stageComponentType("NameComponent");
+            for (const auto& serializedEntity : migratedData.entities)
+            {
+                for (const auto& component : serializedEntity.components)
+                    stageComponentType(component.typeName);
+            }
+
+            auto&& currentStorage = world.GetRegistry().storage<entt::entity>();
+            liveEntities.reserve(world.GetEntityCount());
+            for (auto&& [entity] : currentStorage.each())
+                liveEntities.push_back(entity);
+
+            auto&& incomingStorage = candidateWorld.GetRegistry().storage<entt::entity>();
+            incomingEntities.reserve(candidateWorld.GetEntityCount());
+            for (auto&& [entity] : incomingStorage.each())
+                incomingEntities.push_back(entity);
         }
         catch (const std::exception& error)
         {
@@ -1026,9 +1084,38 @@ namespace Spark
             return false;
         }
 
-        // The only mutation of the caller's World is the final move after the
-        // complete candidate has passed every version and component check.
-        world = std::move(candidateWorld);
+        try
+        {
+            // Use the World's lifecycle path so hierarchy links, EnTT destroy
+            // observers, and per-entity event subscriptions are retired before
+            // incoming identifiers can be reused.
+            for (const EntityID entity : liveEntities)
+                world.DestroyEntity(entity);
+            for (const EntityID entity : incomingEntities)
+                Spark::EntityEventBus::Global().RemoveEntity(static_cast<Spark::EventEntityID>(entity));
+
+            // All allocations and type lookups are complete. These exchanges
+            // are noexcept and intentionally avoid registry move-assignment,
+            // which would transplant signal objects away from live observers.
+            for (const auto swapStorageContents : stagedStorageSwaps)
+                swapStorageContents(&world, &candidateWorld);
+
+            using EntityPayloadStorage = entt::basic_storage<entt::entity>;
+            auto& destinationEntities = world.GetRegistry().storage<entt::entity>();
+            auto& sourceEntities = candidateWorld.GetRegistry().storage<entt::entity>();
+            static_cast<EntityPayloadStorage&>(destinationEntities)
+                .swap(static_cast<EntityPayloadStorage&>(sourceEntities));
+        }
+        catch (const std::exception& error)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Save, "DeserializeWorld: lifecycle commit failed: %s", error.what());
+            return false;
+        }
+        catch (...)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Save, "DeserializeWorld: lifecycle commit failed unexpectedly");
+            return false;
+        }
         return true;
     }
 
