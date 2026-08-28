@@ -64,6 +64,14 @@ for logfile in "$@"; do
     grep -E '\[ *WARN *\]' "$clean_file" 2>/dev/null \
         >> "$tmp_warnings" 2>/dev/null || true
 
+    # ── Sanitizer process failures ───────────────────────────────
+    # The sanitizer runtime can return its configured non-zero status without
+    # leaving a parseable report in the combined console stream. Preserve the
+    # runner's authoritative footer so the consolidated report cannot claim
+    # zero errors for a failed sanitizer process.
+    grep -E '^effective_exit_code=[1-9][0-9]*$' "$clean_file" 2>/dev/null \
+        >> "$tmp_errors" 2>/dev/null || true
+
     # ── Compile/link errors ──────────────────────────────────────
     {
         grep -E ':\s*error\s*(C[0-9]+)?:' "$clean_file" 2>/dev/null || true

@@ -313,7 +313,7 @@ jobs:
 
     - name: Run Tests under ASan + UBSan + LSan
       env:
-        ASAN_OPTIONS: detect_leaks=1:halt_on_error=0:print_stats=1:check_initialization_order=1
+        ASAN_OPTIONS: detect_leaks=1:halt_on_error=0:print_stats=1:check_initialization_order=1:log_path=${{ github.workspace }}/build/asan-runtime
         UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=0
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/Tests/lsan_suppressions.txt
       run: |
@@ -328,7 +328,7 @@ jobs:
         .github/scripts/extract-errors.sh \
           "build-linux-asan" \
           error-summary.json \
-          cmake-build.log build/asan-console.txt
+          cmake-build.log build/asan-console.txt build/asan-runtime.*
 
     - name: Upload error summary
       if: failure()
@@ -346,6 +346,7 @@ jobs:
         path: |
           build/asan-ubsan-lsan-results.txt
           build/asan-console.txt
+          build/asan-runtime.*
         if-no-files-found: error
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
@@ -409,7 +410,7 @@ jobs:
 
     - name: Run Tests under TSan
       env:
-        TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:suppressions=${{ github.workspace }}/Tests/tsan_suppressions.txt
+        TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:print_suppressions=1:suppressions=${{ github.workspace }}/Tests/tsan_suppressions.txt:log_path=${{ github.workspace }}/build/tsan-runtime
       run: |
         bash .github/scripts/run-sanitizer-tests.sh \
           build/tsan-results.txt \
@@ -422,7 +423,7 @@ jobs:
         .github/scripts/extract-errors.sh \
           "build-linux-tsan" \
           error-summary.json \
-          cmake-build.log build/tsan-console.txt
+          cmake-build.log build/tsan-console.txt build/tsan-runtime.*
 
     - name: Upload error summary
       if: failure()
@@ -440,6 +441,7 @@ jobs:
         path: |
           build/tsan-results.txt
           build/tsan-console.txt
+          build/tsan-runtime.*
         if-no-files-found: error
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 

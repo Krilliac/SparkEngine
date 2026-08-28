@@ -36,6 +36,18 @@
 #include <random>
 #include <sstream>
 
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#define SPARK_TEST_SANITIZER_BUILD 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer) || __has_feature(memory_sanitizer)
+#define SPARK_TEST_SANITIZER_BUILD 1
+#else
+#define SPARK_TEST_SANITIZER_BUILD 0
+#endif
+#else
+#define SPARK_TEST_SANITIZER_BUILD 0
+#endif
+
 #ifdef _WIN32
 #include <windows.h>
 #include <dbghelp.h>
@@ -230,6 +242,7 @@ static void InstallCrashHandlers()
     SetUnhandledExceptionFilter(CrashExceptionFilter);
 }
 #else
+#if !SPARK_TEST_SANITIZER_BUILD
 static void CrashSignalHandler(int sig)
 {
     const char* sigName = "UNKNOWN";
@@ -295,6 +308,13 @@ static void InstallCrashHandlers()
     signal(SIGBUS, CrashSignalHandler);
     signal(SIGILL, CrashSignalHandler);
 }
+#else
+static void InstallCrashHandlers()
+{
+    // ASan, TSan, and MSan install their own POSIX signal handlers. Replacing
+    // them here can discard the sanitizer's primary diagnostic on a crash.
+}
+#endif
 #endif
 
 // ============================================================================
@@ -319,9 +339,19 @@ struct TestOutput
     void Print(const std::string& msg, bool isError = false)
     {
         if (!quiet || isError)
+        {
             std::cout << msg;
+#if SPARK_TEST_SANITIZER_BUILD
+            std::cout.flush();
+#endif
+        }
         if (hasFile && (!errorsOnly || isError))
+        {
             file << msg;
+#if SPARK_TEST_SANITIZER_BUILD
+            file.flush();
+#endif
+        }
     }
 
     // Summary lines — always written to file regardless of errors-only mode
@@ -330,6 +360,11 @@ struct TestOutput
         std::cout << msg;
         if (hasFile)
             file << msg;
+#if SPARK_TEST_SANITIZER_BUILD
+        std::cout.flush();
+        if (hasFile)
+            file.flush();
+#endif
     }
 };
 
