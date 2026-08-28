@@ -1,6 +1,11 @@
 {
   "schemaVersion": 1,
   "lanes": {
+    "linux-asan": {
+      "minimumRecorded": 6600,
+      "minimumExecuted": 6600,
+      "maximumSkipped": 25
+    },
     "linux-clang-Debug": {
       "minimumRecorded": 6600,
       "minimumExecuted": 6600,
@@ -17,6 +22,11 @@
       "maximumSkipped": 25
     },
     "linux-gcc-Release": {
+      "minimumRecorded": 6600,
+      "minimumExecuted": 6600,
+      "maximumSkipped": 25
+    },
+    "linux-tsan": {
       "minimumRecorded": 6600,
       "minimumExecuted": 6600,
       "maximumSkipped": 25

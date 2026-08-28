@@ -262,6 +262,9 @@ jobs:
   # ===========================================================================
   build-linux-asan:
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      SANITIZER_EVIDENCE_DIR: ${{ runner.temp }}/spark-sanitizer-asan-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-build-linux-asan
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -317,15 +320,44 @@ jobs:
 
     - name: Run Tests under ASan + UBSan + LSan
       env:
-        ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:print_stats=1:check_initialization_order=1:log_path=${{ github.workspace }}/build/asan-runtime
+        ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:print_stats=1:check_initialization_order=1
         UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/Tests/lsan_suppressions.txt
       run: |
         bash .github/scripts/run-sanitizer-tests.sh \
-          --runtime-log-prefix build/asan-runtime \
-          build/asan-ubsan-lsan-results.txt \
-          build/asan-console.txt \
-          -- build/bin/SparkTests --output-file build/asan-ubsan-lsan-results.txt
+          --evidence-root "${{ runner.temp }}" \
+          --sanitizer asan \
+          --expected-sha "${{ github.sha }}" \
+          --run-id "${{ github.run_id }}" \
+          --run-attempt "${{ github.run_attempt }}" \
+          --job "${{ github.job }}" \
+          --expected-selector all \
+          --minimum-tests 6600 \
+          --timeout-seconds 900 \
+          --runtime-env ASAN_OPTIONS \
+          -- build/bin/SparkTests --warn-is-error --shuffle 123
+
+    - name: Summarize ASan exact-commit test evidence
+      run: |
+        python3 .github/scripts/summarize-test-results.py \
+          "$SANITIZER_EVIDENCE_DIR/junit.xml" \
+          --min-tests 6600 \
+          --title "SparkTests — Linux ASan/UBSan/LSan" \
+          --json "$SANITIZER_EVIDENCE_DIR/test-stats-linux-asan.json"
+
+    - name: Verify published ASan exact-commit evidence
+      run: |
+        python3 .github/scripts/verify-sanitizer-evidence.py verify-published \
+          --evidence-dir "$SANITIZER_EVIDENCE_DIR" \
+          --stats "$SANITIZER_EVIDENCE_DIR/test-stats-linux-asan.json" \
+          --sanitizer asan \
+          --lane linux-asan \
+          --expected-sha "${{ github.sha }}" \
+          --run-id "${{ github.run_id }}" \
+          --run-attempt "${{ github.run_attempt }}" \
+          --job build-linux-asan \
+          --minimum-tests 6600 \
+          --timeout-seconds 900
 
     - name: Extract error summary
       if: failure()
@@ -333,7 +365,11 @@ jobs:
         .github/scripts/extract-errors.sh \
           "build-linux-asan" \
           error-summary.json \
-          cmake-build.log build/asan-console.txt build/asan-runtime.*
+          cmake-build.log \
+          "$SANITIZER_EVIDENCE_DIR/console.txt" \
+          "$SANITIZER_EVIDENCE_DIR/process-footer.txt" \
+          "$SANITIZER_EVIDENCE_DIR/metadata.json" \
+          "$SANITIZER_EVIDENCE_DIR"/runtime/sanitizer.*
 
     - name: Upload error summary
       if: failure()
@@ -348,10 +384,15 @@ jobs:
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: sanitizer-report-asan-ubsan-lsan
-        path: |
-          build/asan-ubsan-lsan-results.txt
-          build/asan-console.txt
-          build/asan-runtime.*
+        path: ${{ env.SANITIZER_EVIDENCE_DIR }}
+        if-no-files-found: error
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+    - name: Upload ASan exact-commit test evidence
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: test-results-linux-asan
+        path: ${{ env.SANITIZER_EVIDENCE_DIR }}
         if-no-files-found: error
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
@@ -360,6 +401,9 @@ jobs:
   # ===========================================================================
   build-linux-tsan:
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      SANITIZER_EVIDENCE_DIR: ${{ runner.temp }}/spark-sanitizer-tsan-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-build-linux-tsan
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -415,13 +459,42 @@ jobs:
 
     - name: Run Tests under TSan
       env:
-        TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:print_suppressions=1:suppressions=${{ github.workspace }}/Tests/tsan_suppressions.txt:log_path=${{ github.workspace }}/build/tsan-runtime
+        TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:print_suppressions=1:suppressions=${{ github.workspace }}/Tests/tsan_suppressions.txt
       run: |
         bash .github/scripts/run-sanitizer-tests.sh \
-          --runtime-log-prefix build/tsan-runtime \
-          build/tsan-results.txt \
-          build/tsan-console.txt \
-          -- build/bin/SparkTests --output-file build/tsan-results.txt
+          --evidence-root "${{ runner.temp }}" \
+          --sanitizer tsan \
+          --expected-sha "${{ github.sha }}" \
+          --run-id "${{ github.run_id }}" \
+          --run-attempt "${{ github.run_attempt }}" \
+          --job "${{ github.job }}" \
+          --expected-selector all \
+          --minimum-tests 6600 \
+          --timeout-seconds 900 \
+          --runtime-env TSAN_OPTIONS \
+          -- build/bin/SparkTests --warn-is-error --shuffle 123
+
+    - name: Summarize TSan exact-commit test evidence
+      run: |
+        python3 .github/scripts/summarize-test-results.py \
+          "$SANITIZER_EVIDENCE_DIR/junit.xml" \
+          --min-tests 6600 \
+          --title "SparkTests — Linux TSan" \
+          --json "$SANITIZER_EVIDENCE_DIR/test-stats-linux-tsan.json"
+
+    - name: Verify published TSan exact-commit evidence
+      run: |
+        python3 .github/scripts/verify-sanitizer-evidence.py verify-published \
+          --evidence-dir "$SANITIZER_EVIDENCE_DIR" \
+          --stats "$SANITIZER_EVIDENCE_DIR/test-stats-linux-tsan.json" \
+          --sanitizer tsan \
+          --lane linux-tsan \
+          --expected-sha "${{ github.sha }}" \
+          --run-id "${{ github.run_id }}" \
+          --run-attempt "${{ github.run_attempt }}" \
+          --job build-linux-tsan \
+          --minimum-tests 6600 \
+          --timeout-seconds 900
 
     - name: Extract error summary
       if: failure()
@@ -429,7 +502,11 @@ jobs:
         .github/scripts/extract-errors.sh \
           "build-linux-tsan" \
           error-summary.json \
-          cmake-build.log build/tsan-console.txt build/tsan-runtime.*
+          cmake-build.log \
+          "$SANITIZER_EVIDENCE_DIR/console.txt" \
+          "$SANITIZER_EVIDENCE_DIR/process-footer.txt" \
+          "$SANITIZER_EVIDENCE_DIR/metadata.json" \
+          "$SANITIZER_EVIDENCE_DIR"/runtime/sanitizer.*
 
     - name: Upload error summary
       if: failure()
@@ -444,10 +521,15 @@ jobs:
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: sanitizer-report-tsan
-        path: |
-          build/tsan-results.txt
-          build/tsan-console.txt
-          build/tsan-runtime.*
+        path: ${{ env.SANITIZER_EVIDENCE_DIR }}
+        if-no-files-found: error
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+    - name: Upload TSan exact-commit test evidence
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: test-results-linux-tsan
+        path: ${{ env.SANITIZER_EVIDENCE_DIR }}
         if-no-files-found: error
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
@@ -463,6 +545,9 @@ jobs:
   build-linux-msan:
     runs-on: ubuntu-24.04
     continue-on-error: true
+    timeout-minutes: 90
+    env:
+      SANITIZER_EVIDENCE_DIR: ${{ runner.temp }}/spark-sanitizer-msan-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-build-linux-msan
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -522,9 +607,17 @@ jobs:
         MSAN_OPTIONS: halt_on_error=0:print_stats=1
       run: |
         bash .github/scripts/run-sanitizer-tests.sh \
-          build/msan-results.txt \
-          build/msan-console.txt \
-          -- build/bin/SparkTests --output-file build/msan-results.txt
+          --evidence-root "${{ runner.temp }}" \
+          --sanitizer msan \
+          --expected-sha "${{ github.sha }}" \
+          --run-id "${{ github.run_id }}" \
+          --run-attempt "${{ github.run_attempt }}" \
+          --job "${{ github.job }}" \
+          --expected-selector all \
+          --minimum-tests 6600 \
+          --timeout-seconds 900 \
+          --runtime-env MSAN_OPTIONS \
+          -- build/bin/SparkTests --warn-is-error --shuffle 123
 
     - name: Extract error summary
       if: failure()
@@ -532,7 +625,11 @@ jobs:
         .github/scripts/extract-errors.sh \
           "build-linux-msan" \
           error-summary.json \
-          cmake-build.log build/msan-console.txt
+          cmake-build.log \
+          "$SANITIZER_EVIDENCE_DIR/console.txt" \
+          "$SANITIZER_EVIDENCE_DIR/process-footer.txt" \
+          "$SANITIZER_EVIDENCE_DIR/metadata.json" \
+          "$SANITIZER_EVIDENCE_DIR"/runtime/sanitizer.*
 
     - name: Upload error summary
       if: failure()
@@ -547,9 +644,7 @@ jobs:
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: sanitizer-report-msan
-        path: |
-          build/msan-results.txt
-          build/msan-console.txt
+        path: ${{ env.SANITIZER_EVIDENCE_DIR }}
         if-no-files-found: error
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
@@ -1778,6 +1873,8 @@ jobs:
     if: always()
     needs:
       - validate-ci-tools
+      - build-linux-asan
+      - build-linux-tsan
       - build-windows-vs2022
       - build-linux-gcc
       - build-linux-clang
@@ -1789,11 +1886,38 @@ jobs:
 
       - name: Download primary-lane test evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        continue-on-error: true
         with:
           pattern: test-results-*
           path: ci-test-results
           merge-multiple: false
+
+      - name: Verify downloaded ASan evidence identity
+        run: |
+          python3 .github/scripts/verify-sanitizer-evidence.py verify-published \
+            --evidence-dir "${{ github.workspace }}/ci-test-results/test-results-linux-asan" \
+            --stats "${{ github.workspace }}/ci-test-results/test-results-linux-asan/test-stats-linux-asan.json" \
+            --sanitizer asan \
+            --lane linux-asan \
+            --expected-sha "${{ github.sha }}" \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
+            --job build-linux-asan \
+            --minimum-tests 6600 \
+            --timeout-seconds 900
+
+      - name: Verify downloaded TSan evidence identity
+        run: |
+          python3 .github/scripts/verify-sanitizer-evidence.py verify-published \
+            --evidence-dir "${{ github.workspace }}/ci-test-results/test-results-linux-tsan" \
+            --stats "${{ github.workspace }}/ci-test-results/test-results-linux-tsan/test-stats-linux-tsan.json" \
+            --sanitizer tsan \
+            --lane linux-tsan \
+            --expected-sha "${{ github.sha }}" \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
+            --job build-linux-tsan \
+            --minimum-tests 6600 \
+            --timeout-seconds 900
 
       - name: Collect deterministic repository metrics
         run: python3 docs/codebase-metrics.py > repository-metrics.json
@@ -1806,6 +1930,8 @@ jobs:
             --ratchet .github/test-count-ratchet.json \
             --minimum-tests 5000 \
             --commit "${{ github.sha }}" \
+            --expected-lane linux-asan \
+            --expected-lane linux-tsan \
             --expected-lane windows-vs2022-release \
             --expected-lane linux-gcc-Debug \
             --expected-lane linux-gcc-Release \
