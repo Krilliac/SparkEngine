@@ -11083,7 +11083,7 @@
 | `GetEngineRuntime` | function | SparkEngine | [SparkEngineWindowsHeadless.cpp:L205](../../SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp#L205) |  |
 | `GetEngineState` | function | SparkEditor | [SparkEngineIntegration.h:L422](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L422) | Get current engine state |
 | `GetEngineSystemInfo` | function | SparkEditor | [EngineInterface.h:L304](../../SparkEditor/Source/Communication/EngineInterface.h#L304) | Get engine system information |
-| `GetEngineVersion` | function | SparkEngine | [EngineContext.h:L474](../../SparkEngine/Source/Core/EngineContext.h#L474) | Get the number of registered subsystem entries |
+| `GetEngineVersion` | function | SparkEngine | [EngineContext.h:L485](../../SparkEngine/Source/Core/EngineContext.h#L485) | Get the number of registered subsystem entries |
 | `GetEngineVersion` | function | SparkSDK | [IEngineContext.h:L292](../../SparkSDK/Include/Spark/IEngineContext.h#L292) | Get the packed engine version (0xMMmmpp) |
 | `GetEngineVersion` | function | SparkSDK | [Version.h:L30](../../SparkSDK/Include/Spark/Version.h#L30) | Get the packed engine version at runtime |
 | `GetEngineVersion` | function | Tests | [TestGameModuleMMO.cpp:L48](../../Tests/TestGameModuleMMO.cpp#L48) |  |
@@ -11563,7 +11563,7 @@
 | `GetInitializedGameModuleName` | function | SparkEngine | [ModuleManager.h:L126](../../SparkEngine/Source/Core/ModuleManager.h#L126) | Name of the initialized Game-kind module, or empty when none is usable. |
 | `GetInitializedModuleCount` | function | SparkEngine | [ModuleManager.h:L222](../../SparkEngine/Source/Core/ModuleManager.h#L222) | Get the number of modules whose OnLoad completed successfully. |
 | `GetInitialResourceState` | function | SparkEngine | [D3D12Device.h:L194](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L194) |  |
-| `GetInitOrder` | function | SparkEngine | [EngineContext.h:L467](../../SparkEngine/Source/Core/EngineContext.h#L467) | Get the computed initialization order (for debugging/testing) |
+| `GetInitOrder` | function | SparkEngine | [EngineContext.h:L478](../../SparkEngine/Source/Core/EngineContext.h#L478) | Get the computed initialization order (for debugging/testing) |
 | `GetInitOrder` | function | Tests | [TestEngineContext.cpp:L144](../../Tests/TestEngineContext.cpp#L144) |  |
 | `GetInjectionData` | function | SparkEngine | [GameImGuiLayer.cpp:L115](../../SparkEngine/Source/Core/GameImGuiLayer.cpp#L115) |  |
 | `GetInjectionData` | function | SparkEngine | [GameImGuiLayer.cpp:L169](../../SparkEngine/Source/Core/GameImGuiLayer.cpp#L169) |  |
@@ -13167,7 +13167,7 @@
 | `GetScriptInstance` | function | SparkEngine | [AngelScriptEngine.h:L460](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h#L460) | Look up a script instance by entity ID |
 | `GetScriptInstance` | function | Tests | [TestAngelScriptEngine.cpp:L135](../../Tests/TestAngelScriptEngine.cpp#L135) |  |
 | `GetScrollOffset` | function | SparkEngine | [InGameConsole.h:L296](../../SparkEngine/Source/Utils/InGameConsole.h#L296) | Get the scroll offset for the output |
-| `GetSDKVersion` | function | SparkEngine | [EngineContext.h:L475](../../SparkEngine/Source/Core/EngineContext.h#L475) | Get the number of registered subsystem entries |
+| `GetSDKVersion` | function | SparkEngine | [EngineContext.h:L486](../../SparkEngine/Source/Core/EngineContext.h#L486) | Get the number of registered subsystem entries |
 | `GetSDKVersion` | function | SparkSDK | [IEngineContext.h:L295](../../SparkSDK/Include/Spark/IEngineContext.h#L295) | Get the SDK ABI version |
 | `GetSDKVersion` | function | SparkSDK | [Version.h:L36](../../SparkSDK/Include/Spark/Version.h#L36) | Get the SDK ABI version at runtime |
 | `GetSDKVersion` | function | Tests | [TestGameModuleMMO.cpp:L49](../../Tests/TestGameModuleMMO.cpp#L49) |  |
@@ -13560,7 +13560,7 @@
 | `GetSubmeshes` | function | SparkEngine | [Mesh.h:L186](../../SparkEngine/Source/Graphics/Mesh.h#L186) | Per-material submesh ranges (populated by LoadFromFile for OBJ meshes) |
 | `GetSubmittedCount` | function | SparkEngine | [SceneRenderer.h:L145](../../SparkEngine/Source/Graphics/SceneRenderer.h#L145) | Get total submitted count this frame. |
 | `GetSubscriberCount` | function | Tests | [TestEventSystem.cpp:L58](../../Tests/TestEventSystem.cpp#L58) |  |
-| `GetSubsystemCount` | function | SparkEngine | [EngineContext.h:L472](../../SparkEngine/Source/Core/EngineContext.h#L472) | Get the number of registered subsystem entries |
+| `GetSubsystemCount` | function | SparkEngine | [EngineContext.h:L483](../../SparkEngine/Source/Core/EngineContext.h#L483) | Get the number of registered subsystem entries |
 | `GetSubsystemCount` | function | SparkEngine | [FreezeSystem.h:L294](../../SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h#L294) |  |
 | `GetSubsystemCount` | function | Tests | [TestEngineContext.cpp:L145](../../Tests/TestEngineContext.cpp#L145) |  |
 | `GetSubsystemFlags` | function | SparkEngine | [PlayModeTypes.h:L104](../../SparkEngine/Source/Engine/Editor/PlayModeTypes.h#L104) | Build subsystem flags from legacy bool fields. |
@@ -13594,7 +13594,7 @@
 | `GetSwapChain` | function | SparkEngine | [GraphicsEngine.h:L623](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L623) | Get the DXGI swap chain |
 | `GetSwapChain` | function | SparkEngine | [RHIBridge.h:L114](../../SparkEngine/Source/Graphics/RHI/RHIBridge.h#L114) |  |
 | `GetSwapChain` | function | SparkEngine | [RenderDevice.h:L114](../../SparkEngine/Source/Graphics/RenderDevice.h#L114) |  |
-| `GetSystem` | function | SparkEngine | [EngineContext.h:L363](../../SparkEngine/Source/Core/EngineContext.h#L363) | Retrieve a previously registered subsystem by type |
+| `GetSystem` | function | SparkEngine | [EngineContext.h:L370](../../SparkEngine/Source/Core/EngineContext.h#L370) | Retrieve a previously registered subsystem by type |
 | `GetSystem` | function | SparkEngine | [ECSystems.h:L804](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h#L804) |  |
 | `GetSystem` | function | SparkEngine | [ECSystems.h:L814](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h#L814) |  |
 | `GetSystem` | function | SparkEngine | [PhaseSystemManager.h:L145](../../SparkEngine/Source/Engine/ECS/Systems/PhaseSystemManager.h#L145) | Find a system by its name (searches both phased and flat lists). |
@@ -13603,7 +13603,7 @@
 | `GetSystem` | function | Tests | [TestECSystemsReal.cpp:L94](../../Tests/TestECSystemsReal.cpp#L94) |  |
 | `GetSystem` | function | Tests | [TestEngineContext.cpp:L67](../../Tests/TestEngineContext.cpp#L67) |  |
 | `GetSystemAccentColor` | function | SparkEditor | [EditorTheme.h:L300](../../SparkEditor/Source/Core/EditorTheme.h#L300) |  |
-| `GetSystemChecked` | function | SparkEngine | [EngineContext.h:L384](../../SparkEngine/Source/Core/EngineContext.h#L384) |  |
+| `GetSystemChecked` | function | SparkEngine | [EngineContext.h:L391](../../SparkEngine/Source/Core/EngineContext.h#L391) |  |
 | `GetSystemCount` | function | SparkEngine | [ECSystems.h:L828](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h#L828) | Return the total number of registered systems (enabled and disabled). |
 | `GetSystemCount` | function | SparkEngine | [PhaseSystemManager.h:L184](../../SparkEngine/Source/Engine/ECS/Systems/PhaseSystemManager.h#L184) | Return the total number of registered systems (phased + flat). |
 | `GetSystemCount` | function | Tests | [TestECSystemOrdering.cpp:L248](../../Tests/TestECSystemOrdering.cpp#L248) |  |
@@ -16205,7 +16205,7 @@
 | `Initialize` | function | Tests | [TestVRSystem.cpp:L72](../../Tests/TestVRSystem.cpp#L72) |  |
 | `Initialize` | function | Tests | [TestWaterRenderer.cpp:L38](../../Tests/TestWaterRenderer.cpp#L38) |  |
 | `InitializeAll` | function | SparkEditor | [EditorPluginManager.h:L152](../../SparkEditor/Source/Core/EditorPluginManager.h#L152) | Initialize all registered plugins |
-| `InitializeAll` | function | SparkEngine | [EngineContext.h:L453](../../SparkEngine/Source/Core/EngineContext.h#L453) | Initialize all registered subsystems in topological (dependency) order |
+| `InitializeAll` | function | SparkEngine | [EngineContext.h:L464](../../SparkEngine/Source/Core/EngineContext.h#L464) | Initialize all registered subsystems in topological (dependency) order |
 | `InitializeAll` | function | SparkEngine | [ModuleManager.h:L132](../../SparkEngine/Source/Core/ModuleManager.h#L132) | Initialize all loaded modules (sorted by loadOrder) |
 | `InitializeAll` | function | SparkEngine | [PluginRegistry.h:L50](../../SparkEngine/Source/Core/PluginRegistry.h#L50) | Initialize all registered plugins (calls each initFn) |
 | `InitializeAll` | function | SparkSDK | [IEngineContext.h:L321](../../SparkSDK/Include/Spark/IEngineContext.h#L321) | Initialize all registered subsystems in dependency order |
@@ -18857,8 +18857,8 @@
 | `lock` | function | SparkEngine | [DynamicPluginHost.cpp:L728](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L728) |  |
 | `lock` | function | SparkEngine | [DynamicPluginHost.cpp:L739](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L739) |  |
 | `lock` | function | SparkEngine | [DynamicPluginHost.cpp:L744](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L744) |  |
-| `lock` | function | SparkEngine | [EngineContext.h:L354](../../SparkEngine/Source/Core/EngineContext.h#L354) |  |
-| `lock` | function | SparkEngine | [EngineContext.h:L365](../../SparkEngine/Source/Core/EngineContext.h#L365) | Retrieve a previously registered subsystem by type |
+| `lock` | function | SparkEngine | [EngineContext.h:L355](../../SparkEngine/Source/Core/EngineContext.h#L355) |  |
+| `lock` | function | SparkEngine | [EngineContext.h:L372](../../SparkEngine/Source/Core/EngineContext.h#L372) | Retrieve a previously registered subsystem by type |
 | `lock` | function | SparkEngine | [FaultIsolation.cpp:L26](../../SparkEngine/Source/Core/FaultIsolation.cpp#L26) |  |
 | `lock` | function | SparkEngine | [FaultIsolation.cpp:L85](../../SparkEngine/Source/Core/FaultIsolation.cpp#L85) |  |
 | `lock` | function | SparkEngine | [FaultIsolation.cpp:L138](../../SparkEngine/Source/Core/FaultIsolation.cpp#L138) |  |
@@ -25958,13 +25958,13 @@
 | `RegisterStateChangeCallback` | function | SparkEditor | [EditorPanel.h:L233](../../SparkEditor/Source/Core/EditorPanel.h#L233) | Register a callback for when panel state changes |
 | `RegisterStateProvider` | function | SparkEngine | [FrameInspector.h:L317](../../SparkEngine/Source/Utils/FrameInspector.h#L317) | Register a state provider for snapshots |
 | `RegisterStateValidationRules` | function | GameModules | [SparkGameMMO.h:L76](../../GameModules/SparkGameMMO/Source/Core/SparkGameMMO.h#L76) |  |
-| `RegisterSubsystem` | function | SparkEngine | [EngineContext.h:L419](../../SparkEngine/Source/Core/EngineContext.h#L419) |  |
+| `RegisterSubsystem` | function | SparkEngine | [EngineContext.h:L426](../../SparkEngine/Source/Core/EngineContext.h#L426) |  |
 | `RegisterSubsystem` | function | SparkEngine | [FreezeSystem.h:L229](../../SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h#L229) | Register a subsystem for save state participation. |
 | `RegisterSubsystem` | function | Tests | [TestEngineContext.cpp:L79](../../Tests/TestEngineContext.cpp#L79) |  |
 | `RegisterSubsystemConsoleCommands` | function | SparkEngine | [SubsystemConsoleCommands.cpp:L677](../../SparkEngine/Source/Core/SubsystemConsoleCommands.cpp#L677) |  |
 | `RegisterSubsystemConsoleCommands` | function | SparkEngine | [SubsystemConsoleCommands.h:L22](../../SparkEngine/Source/Core/SubsystemConsoleCommands.h#L22) | Register console commands for all engine subsystems |
 | `RegisterSurfaceMapping` | function | SparkEngine | [DecalSystem.h:L139](../../SparkEngine/Source/Graphics/DecalSystem.h#L139) |  |
-| `RegisterSystem` | function | SparkEngine | [EngineContext.h:L351](../../SparkEngine/Source/Core/EngineContext.h#L351) | Register an arbitrary subsystem by type |
+| `RegisterSystem` | function | SparkEngine | [EngineContext.h:L353](../../SparkEngine/Source/Core/EngineContext.h#L353) | Register an arbitrary subsystem by type |
 | `RegisterSystem` | function | Tests | [TestEngineContext.cpp:L65](../../Tests/TestEngineContext.cpp#L65) |  |
 | `RegisterTable` | function | SparkEngine | [LootAndCraftingSystem.h:L116](../../SparkEngine/Source/Engine/Crafting/LootAndCraftingSystem.h#L116) | Register a loot table by name |
 | `RegisterTable` | function | SparkEngine | [DataTableSystem.h:L705](../../SparkEngine/Source/Engine/DataTable/DataTableSystem.h#L705) | Register a pre-built table under a name. |
@@ -31656,7 +31656,7 @@
 | `Shutdown` | function | Tests | [TestWaterRenderer.cpp:L45](../../Tests/TestWaterRenderer.cpp#L45) |  |
 | `ShutdownAIAndWorldSystems` | function | SparkEngine | [GameplayLifecycleShared.cpp:L1180](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp#L1180) |  |
 | `ShutdownAll` | function | SparkEditor | [EditorPluginManager.h:L157](../../SparkEditor/Source/Core/EditorPluginManager.h#L157) | Shutdown all plugins in reverse registration order |
-| `ShutdownAll` | function | SparkEngine | [EngineContext.h:L461](../../SparkEngine/Source/Core/EngineContext.h#L461) | Shut down all initialized subsystems in reverse dependency order |
+| `ShutdownAll` | function | SparkEngine | [EngineContext.h:L472](../../SparkEngine/Source/Core/EngineContext.h#L472) | Shut down all initialized subsystems in reverse dependency order |
 | `ShutdownAll` | function | SparkEngine | [ModuleManager.h:L174](../../SparkEngine/Source/Core/ModuleManager.h#L174) | Shut down modules in reverse load order. |
 | `ShutdownAll` | function | SparkEngine | [PluginRegistry.h:L57](../../SparkEngine/Source/Core/PluginRegistry.h#L57) | Shut down all registered plugins in reverse-registration order |
 | `ShutdownAll` | function | SparkSDK | [IEngineContext.h:L329](../../SparkSDK/Include/Spark/IEngineContext.h#L329) | Shut down all subsystems in reverse dependency order |
@@ -36146,7 +36146,7 @@
 | `ToNSString` | function | SparkEngine | [MetalDevice.mm:L28](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.mm#L28) |  |
 | `tooLong` | function | Tests | [TestDaemonCodexFixes.cpp:L130](../../Tests/TestDaemonCodexFixes.cpp#L130) |  |
 | `TopologicalSort` | function | SparkEngine | [EngineBootstrap.h:L181](../../SparkEngine/Source/Core/EngineBootstrap.h#L181) | Topological sort via Kahn's algorithm |
-| `TopologicalSort` | function | SparkEngine | [EngineContext.h:L483](../../SparkEngine/Source/Core/EngineContext.h#L483) | Perform topological sort of subsystem entries |
+| `TopologicalSort` | function | SparkEngine | [EngineContext.h:L494](../../SparkEngine/Source/Core/EngineContext.h#L494) | Perform topological sort of subsystem entries |
 | `TopologicalSort` | function | SparkEngine | [RenderGraph.h:L867](../../SparkEngine/Source/Graphics/RenderGraph.h#L867) | Topological sort of non-culled passes based on data dependencies. |
 | `TopologicalSort` | function | SparkEngine | [ShaderGraphCompiler.h:L145](../../SparkEngine/Source/Graphics/ShaderGraph/ShaderGraphCompiler.h#L145) |  |
 | `TopologicalSort` | function | Tests | [TestEngineContext.cpp:L148](../../Tests/TestEngineContext.cpp#L148) |  |
