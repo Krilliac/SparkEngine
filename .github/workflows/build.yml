@@ -317,9 +317,11 @@ jobs:
   build-linux-asan:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    env:
-      SANITIZER_EVIDENCE_DIR: ${{ runner.temp }}/spark-sanitizer-asan-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-build-linux-asan
     steps:
+    - name: Define ASan evidence directory
+      shell: bash
+      run: echo "SANITIZER_EVIDENCE_DIR=${RUNNER_TEMP}/spark-sanitizer-asan-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-build-linux-asan" >> "$GITHUB_ENV"
+
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
@@ -456,9 +458,11 @@ jobs:
   build-linux-tsan:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    env:
-      SANITIZER_EVIDENCE_DIR: ${{ runner.temp }}/spark-sanitizer-tsan-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-build-linux-tsan
     steps:
+    - name: Define TSan evidence directory
+      shell: bash
+      run: echo "SANITIZER_EVIDENCE_DIR=${RUNNER_TEMP}/spark-sanitizer-tsan-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-build-linux-tsan" >> "$GITHUB_ENV"
+
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
@@ -600,9 +604,11 @@ jobs:
     runs-on: ubuntu-24.04
     continue-on-error: true
     timeout-minutes: 90
-    env:
-      SANITIZER_EVIDENCE_DIR: ${{ runner.temp }}/spark-sanitizer-msan-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-build-linux-msan
     steps:
+    - name: Define MSan evidence directory
+      shell: bash
+      run: echo "SANITIZER_EVIDENCE_DIR=${RUNNER_TEMP}/spark-sanitizer-msan-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-build-linux-msan" >> "$GITHUB_ENV"
+
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
