@@ -3,6 +3,8 @@
 #include "Utils/Telemetry.h"
 
 #include <atomic>
+#include <chrono>
+#include <filesystem>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -12,7 +14,7 @@ namespace
     class CountingTelemetryBackend final : public Spark::ITelemetryBackend
     {
       public:
-        bool Send(const std::vector<Spark::TelemetryEvent>& events) override
+        Spark::TelemetryDeliveryResult Send(const std::vector<Spark::TelemetryEvent>& events) override
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             m_batches++;
@@ -26,7 +28,7 @@ namespace
                 previous = event.sequence;
             }
 
-            return true;
+            return Spark::TelemetryDeliveryResult::Delivered;
         }
 
         std::string_view GetBackendName() const override { return "Counting"; }
@@ -190,10 +192,16 @@ TEST(Telemetry_SetConsent_True_AllowsRecording)
 TEST(Telemetry_FlushEvents_EmptiesQueue_WithBackend)
 {
     auto& telemetry = Spark::TelemetrySystem::GetInstance();
+    static std::atomic<uint64_t> sequence{0};
+    const auto exportPath = std::filesystem::temp_directory_path() /
+                            ("spark-telemetry-export-" + std::to_string(++sequence) + "-" +
+                             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directories(exportPath);
+
     Spark::TelemetryConfig cfg;
     cfg.enabled = true;
     cfg.consentGiven = true;
-    cfg.localExportPath = "/tmp/spark_telemetry_test";
+    cfg.localExportPath = exportPath.string();
     telemetry.Initialize(cfg);
 
     telemetry.RecordEvent("event_a");
@@ -204,6 +212,8 @@ TEST(Telemetry_FlushEvents_EmptiesQueue_WithBackend)
     EXPECT_EQ(telemetry.GetQueueSize(), 0u);
 
     telemetry.Shutdown();
+    std::error_code cleanupError;
+    std::filesystem::remove_all(exportPath, cleanupError);
 }
 
 TEST(Telemetry_FlushEvents_NoBackend_QueueRetained)

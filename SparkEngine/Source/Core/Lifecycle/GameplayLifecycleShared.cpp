@@ -616,11 +616,14 @@ namespace Spark::Core::Lifecycle
         // sent unless a game opts in (privacy-first). Games can
         // re-initialize with a concrete TelemetryConfig when the
         // user accepts data collection.
+        if (!ctx->GetTelemetryService())
         {
             Spark::TelemetryConfig telemetryCfg;
             telemetryCfg.enabled = false;
             telemetryCfg.consentGiven = false;
-            Spark::TelemetrySystem::GetInstance().Initialize(telemetryCfg);
+            auto& telemetry = Spark::TelemetrySystem::GetInstance();
+            telemetry.Initialize(telemetryCfg);
+            ctx->SetTelemetryService(&telemetry);
         }
 
         // Phase FF Theme 3D: Cache performance debugger — tracks
@@ -1033,13 +1036,15 @@ namespace Spark::Core::Lifecycle
                 [dt]() { SPARK_GUARDED_UPDATE("Tween", "Core", { Spark::TweenSystem::GetInstance().Update(dt); }); });
 
             auto futCinematic = jobs.Submit(
-                [dt]() {
+                [dt]()
+                {
                     SPARK_GUARDED_UPDATE("Cinematic", "Core",
                                          { Spark::Cinematic::SequencerManager::GetInstance().Update(dt); });
                 });
 
             auto futReplay = jobs.Submit(
-                [dt]() {
+                [dt]()
+                {
                     SPARK_GUARDED_UPDATE("Replay", "Core", { Spark::ReplaySystem::GetInstance().UpdatePlayback(dt); });
                 });
 
@@ -1140,6 +1145,8 @@ namespace Spark::Core::Lifecycle
         SPARK_GUARDED_UPDATE("EventResponse", "Core",
                              { Spark::Gameplay::EventResponseSystem::GetInstance().Update(dt); });
         SPARK_GUARDED_UPDATE("InGameConsole", "Core", { Spark::InGameConsole::GetInstance().Update(dt); });
+        if (auto* telemetry = ctx->GetTelemetryService())
+            SPARK_GUARDED_UPDATE("Telemetry", "Core", { telemetry->Update(dt); });
 
         UpdateNonECSSystems(ctx, dt);
 
@@ -1292,7 +1299,17 @@ namespace Spark::Core::Lifecycle
         Spark::Net::DatablockRegistry::Get().Clear();
         // Phase FF Theme 3D additions:
         Spark::CacheDebugger::GetInstance().Reset();
-        Spark::TelemetrySystem::GetInstance().Shutdown();
+        if (ctx && ctx->GetTelemetryService())
+        {
+            ctx->GetTelemetryService()->Shutdown();
+            ctx->SetTelemetryService(nullptr);
+        }
+        else
+        {
+            auto& telemetry = Spark::TelemetrySystem::GetInstance();
+            if (telemetry.IsInitialized())
+                telemetry.Shutdown();
+        }
         // Phase EE Theme 3D additions (released first — they hold no
         // GPU handles so the order relative to render-loop teardown
         // does not matter). EntityPresetManager has no explicit

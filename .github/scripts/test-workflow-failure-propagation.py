@@ -13,6 +13,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "build.yml"
 RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
 TEST_COUNT_RATCHET = REPO_ROOT / ".github" / "test-count-ratchet.json"
+TESTS_CMAKE = REPO_ROOT / "Tests" / "CMakeLists.txt"
+TELEMETRY_EXPECTED_COUNT = 7
 
 
 def step_blocks(workflow: str) -> list[tuple[str, str]]:
@@ -164,6 +166,35 @@ def exact_field(block: str, field: str, value: str, *, indent: int = 4) -> bool:
     )
     matches = pattern.findall(block)
     return len(matches) == 1 and matches[0] == value
+
+
+def telemetry_ctest_contract_errors(cmake: str) -> list[str]:
+    """Validate the exact executable selector behind the required telemetry job."""
+
+    errors: list[str] = []
+    marker = "add_test(NAME TelemetrySpool"
+    if cmake.count(marker) != 1:
+        return ["Tests/CMakeLists.txt must register TelemetrySpool exactly once"]
+
+    start = cmake.index(marker)
+    end = cmake.find("\nadd_test(", start + len(marker))
+    if end == -1:
+        end = len(cmake)
+    block = cmake[start:end]
+
+    expected_command = "add_test(NAME TelemetrySpool COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)"
+    expected_environment = (
+        'ENVIRONMENT "SPARK_TEST_NAME=Telemetry_SpoolRecovery;'
+        f'SPARK_TEST_EXPECT_COUNT={TELEMETRY_EXPECTED_COUNT}"'
+    )
+    for fragment in (expected_command, expected_environment, 'LABELS "telemetry-integration"', "TIMEOUT 30"):
+        if block.count(fragment) != 1:
+            errors.append(f"TelemetrySpool CTest is missing/duplicating {fragment}")
+    if "--quiet" in block:
+        errors.append("TelemetrySpool CTest must not suppress selected-test evidence")
+    if cmake.count("TestTelemetrySpool.cpp") != 1:
+        errors.append("SparkTests must compile TestTelemetrySpool.cpp exactly once")
+    return errors
 
 
 def versioned_publication_gate_errors(workflow: str) -> list[str]:
@@ -328,6 +359,62 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 errors.append(f"{verify_name} duplicates or ambiguously overrides its timeout")
 
     try:
+        telemetry = yaml_section(workflow, "telemetry-integration", indent=2)
+    except AssertionError as exc:
+        errors.append(str(exc))
+        telemetry = ""
+    if telemetry:
+        if not exact_field(telemetry, "runs-on", "ubuntu-24.04"):
+            errors.append("telemetry-integration must run on ubuntu-24.04")
+        if not exact_field(telemetry, "timeout-minutes", "30"):
+            errors.append("telemetry-integration must have exactly timeout-minutes: 30")
+        if re.search(r"(?m)^    ['\"]?(?:if|continue-on-error|strategy)['\"]?:", telemetry):
+            errors.append("telemetry-integration has a bypassing job-level directive")
+
+        required_steps = (
+            (
+                "Configure Linux Shipping telemetry tests",
+                ("set -o pipefail", "cmake --preset linux-shipping -DBUILD_TESTS=ON"),
+            ),
+            (
+                "Build telemetry integration target",
+                ("set -o pipefail", "cmake --build --preset linux-shipping --target SparkTests"),
+            ),
+            (
+                "Run telemetry spool integration test",
+                (
+                    "set -o pipefail",
+                    "ctest --test-dir build/linux-shipping",
+                    "--output-on-failure",
+                    "--no-tests=error",
+                    "-R '^TelemetrySpool$'",
+                ),
+            ),
+        )
+        for step_name, fragments in required_steps:
+            try:
+                step = named_step(telemetry, step_name)
+            except AssertionError as exc:
+                errors.append(str(exc))
+                continue
+            if re.search(r"(?m)^\s+['\"]?(?:if|continue-on-error)['\"]?:", step):
+                errors.append(f"{step_name} has a conditional/error bypass")
+            if re.search(r"\|\|\s*true\b", step):
+                errors.append(f"{step_name} suppresses failure")
+            for fragment in fragments:
+                if step.count(fragment) != 1:
+                    errors.append(f"{step_name} is missing/duplicating {fragment}")
+
+        try:
+            error_upload = named_step(telemetry, "Upload telemetry integration error summary")
+        except AssertionError as exc:
+            errors.append(str(exc))
+        else:
+            for fragment in ("if: failure()", "name: ci-errors-telemetry-integration"):
+                if error_upload.count(fragment) != 1:
+                    errors.append(f"telemetry integration error upload is missing/duplicating {fragment}")
+
+    try:
         aggregate = yaml_section(workflow, "aggregate-test-stats", indent=2)
     except AssertionError as exc:
         errors.append(str(exc))
@@ -375,6 +462,15 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 errors.append(f"aggregate-test-stats must need {dependency} exactly once")
 
     try:
+        report = yaml_section(workflow, "report-ci-errors", indent=2)
+    except AssertionError as exc:
+        errors.append(str(exc))
+        report = ""
+    if report:
+        if len(re.findall(r"(?m)^      - telemetry-integration$", report)) != 1:
+            errors.append("report-ci-errors must need telemetry-integration exactly once")
+
+    try:
         gate = yaml_section(workflow, "required-ci-gate", indent=2)
     except AssertionError as exc:
         errors.append(str(exc))
@@ -382,9 +478,25 @@ def required_workflow_errors(workflow: str) -> list[str]:
     if gate:
         if not exact_field(gate, "if", "always()"):
             errors.append("required-ci-gate must run under exact if: always()")
-        for dependency in ("build-linux-asan", "build-linux-tsan", "aggregate-test-stats"):
+        for dependency in ("build-linux-asan", "build-linux-tsan", "telemetry-integration", "aggregate-test-stats"):
             if len(re.findall(rf"(?m)^      - {dependency}$", gate)) != 1:
                 errors.append(f"required-ci-gate must need {dependency} exactly once")
+        try:
+            verifier = named_step(gate, "Verify every required job succeeded")
+        except AssertionError as exc:
+            errors.append(str(exc))
+        else:
+            if re.search(r"(?m)^\s+['\"]?(?:if|continue-on-error)['\"]?:", verifier):
+                errors.append("required-ci-gate verifier has a conditional/error bypass")
+            if verifier.count("env:") != 1 or verifier.count("NEEDS_JSON: ${{ toJSON(needs) }}") != 1:
+                errors.append("required-ci-gate verifier must consume exact needs JSON once")
+            if not exact_field(
+                verifier,
+                "run",
+                "python3 .github/scripts/verify-required-jobs.py",
+                indent=8,
+            ):
+                errors.append("required-ci-gate verifier must run the exact required-job script")
     return errors
 
 
@@ -393,9 +505,33 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.build = BUILD_WORKFLOW.read_text(encoding="utf-8")
         cls.release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        cls.tests_cmake = TESTS_CMAKE.read_text(encoding="utf-8")
 
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
         self.assertEqual(required_workflow_errors(self.build), [])
+
+    def test_telemetry_ctest_selector_is_fail_closed(self) -> None:
+        self.assertEqual(telemetry_ctest_contract_errors(self.tests_cmake), [])
+
+    def test_telemetry_ctest_selector_rejects_hostile_mutations(self) -> None:
+        mutations = {
+            "missing source": self.tests_cmake.replace("    TestTelemetrySpool.cpp\n", "", 1),
+            "warning downgrade": self.tests_cmake.replace(" --warn-is-error)", ")", 1),
+            "selector widened": self.tests_cmake.replace(
+                "SPARK_TEST_NAME=Telemetry_SpoolRecovery",
+                "SPARK_TEST_NAME=Telemetry_",
+                1,
+            ),
+            "selected count reduced": self.tests_cmake.replace(
+                f"SPARK_TEST_EXPECT_COUNT={TELEMETRY_EXPECTED_COUNT}",
+                f"SPARK_TEST_EXPECT_COUNT={TELEMETRY_EXPECTED_COUNT - 1}",
+                1,
+            ),
+        }
+        for label, mutated in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, self.tests_cmake, "mutation fixture did not alter CMake")
+                self.assertTrue(telemetry_ctest_contract_errors(mutated), label)
 
     def test_required_workflow_semantics_reject_hostile_mutations(self) -> None:
         mutations: dict[str, str] = {}
@@ -427,6 +563,55 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         mutations["matrix bypass"] = self.build.replace(
             "build-linux-asan:\n    runs-on: ubuntu-24.04",
             "build-linux-asan:\n    strategy:\n      matrix:\n        enabled: [false]\n    runs-on: ubuntu-24.04",
+            1,
+        )
+        mutations["missing telemetry job"] = self.build.replace(
+            "  telemetry-integration:",
+            "  telemetry-integration-disabled:",
+            1,
+        )
+        mutations["optional telemetry job"] = self.build.replace(
+            "  telemetry-integration:\n    name: \"Telemetry Integration\"",
+            "  telemetry-integration:\n    name: \"Telemetry Integration\"\n    continue-on-error: true",
+            1,
+        )
+        mutations["telemetry zero-test bypass"] = self.build.replace(
+            "ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \\\n"
+            "          -R '^TelemetrySpool$'",
+            "ctest --test-dir build/linux-shipping --output-on-failure \\\n"
+            "          -R '^TelemetrySpool$'",
+            1,
+        )
+        mutations["telemetry selector drift"] = self.build.replace(
+            "-R '^TelemetrySpool$'",
+            "-R 'Telemetry'",
+            1,
+        )
+        mutations["telemetry report dependency removed"] = self.build.replace(
+            "      - build-linux-tsan\n      - telemetry-integration\n      - build-linux-msan",
+            "      - build-linux-tsan\n      - build-linux-msan",
+            1,
+        )
+        mutations["telemetry gate dependency removed"] = self.build.replace(
+            "      - build-linux-tsan\n      - telemetry-integration\n      - build-windows-vs2022",
+            "      - build-linux-tsan\n      - build-windows-vs2022",
+            1,
+        )
+        mutations["required gate verifier removed"] = self.build.replace(
+            "      - name: Verify every required job succeeded",
+            "      - name: Required job summary only",
+            1,
+        )
+        mutations["required gate verifier bypassed"] = self.build.replace(
+            "        run: python3 .github/scripts/verify-required-jobs.py",
+            "        run: 'true'",
+            1,
+        )
+        mutations["required gate needs evidence removed"] = self.build.replace(
+            "          NEEDS_JSON: ${{ toJSON(needs) }}\n"
+            "        run: python3 .github/scripts/verify-required-jobs.py",
+            "          NEEDS_JSON: '{}'\n"
+            "        run: python3 .github/scripts/verify-required-jobs.py",
             1,
         )
         mutations["path filter"] = self.build.replace(

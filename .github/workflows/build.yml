@@ -592,6 +592,56 @@ jobs:
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
+  # OPS-100A durable telemetry delivery — focused Linux Shipping integration
+  # ===========================================================================
+  telemetry-integration:
+    name: "Telemetry Integration"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev
+
+    - name: Configure Linux Shipping telemetry tests
+      run: |
+        set -o pipefail
+        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee telemetry-configure.log
+
+    - name: Build telemetry integration target
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee telemetry-build.log
+
+    - name: Run telemetry spool integration test
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -R '^TelemetrySpool$' 2>&1 | tee telemetry-tests.log
+
+    - name: Extract telemetry integration error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "telemetry-integration" \
+          error-summary.json \
+          telemetry-configure.log telemetry-build.log telemetry-tests.log
+
+    - name: Upload telemetry integration error summary
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ci-errors-telemetry-integration
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
+  # ===========================================================================
   # Linux Build — Clang with MemorySanitizer
   # MSan requires ALL code (including stdlib) to be MSan-instrumented. The
   # system libc++ on ubuntu-24.04 is NOT instrumented, which causes false
@@ -2115,6 +2165,7 @@ jobs:
       - check-thirdparty-manifest
       - build-linux-asan
       - build-linux-tsan
+      - telemetry-integration
       - build-linux-msan
       - build-windows-vs2022
       - build-windows-vs2026
@@ -2280,6 +2331,7 @@ jobs:
       - check-thirdparty-manifest
       - build-linux-asan
       - build-linux-tsan
+      - telemetry-integration
       - build-windows-vs2022
       - build-windows-shipping
       - build-linux-gcc

@@ -361,6 +361,7 @@ add_executable(SparkTests
     TestAccessibility.cpp
     TestPlatformInput.cpp
     TestTelemetry.cpp
+    TestTelemetrySpool.cpp
     TestBenchmarkFramework.cpp
     TestUILayoutExtensions.cpp
     TestAchievementSystem.cpp
@@ -1115,6 +1116,13 @@ add_test(NAME SparkSaveCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --qu
 set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=SaveMigration_"
     LABELS "compatibility;save;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 30)
+
+add_test(NAME TelemetrySpool COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(TelemetrySpool PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=Telemetry_SpoolRecovery;SPARK_TEST_EXPECT_COUNT=7"
+    LABELS "telemetry-integration"
     RUN_SERIAL TRUE
     TIMEOUT 30)
 

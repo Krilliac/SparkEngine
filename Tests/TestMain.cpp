@@ -20,6 +20,7 @@
  *   SPARK_TEST_LIMIT=N     Stop after N tests
  *   SPARK_TEST_FILE=name   Filter tests by source file
  *   SPARK_TEST_NAME=name   Filter tests by test name
+ *   SPARK_TEST_EXPECT_COUNT=N Fail unless exactly N tests execute
  *   SPARK_TEST_EXCLUDE=pat Exclude tests whose name contains pat (comma-separated)
  */
 
@@ -28,10 +29,12 @@
 #include "Utils/Logger.h"
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <numeric>
 #include <random>
 #include <sstream>
@@ -502,6 +505,7 @@ static void PrintUsage(const char* argv0)
               << "  SPARK_TEST_LIMIT=N     Stop after N tests\n"
               << "  SPARK_TEST_FILE=name   Filter tests by source file\n"
               << "  SPARK_TEST_NAME=name   Filter tests by test name\n"
+              << "  SPARK_TEST_EXPECT_COUNT=N Fail unless exactly N tests execute\n"
               << "  SPARK_TEST_EXCLUDE=pat Exclude tests whose name contains pat (comma-separated)\n";
 }
 
@@ -644,6 +648,19 @@ int main(int argc, char** argv)
         testLimit = std::min(testLimit, std::atoi(limitEnv));
     const char* fileFilter = std::getenv("SPARK_TEST_FILE");
     const char* nameFilter = std::getenv("SPARK_TEST_NAME");
+    const char* expectedCountText = std::getenv("SPARK_TEST_EXPECT_COUNT");
+    int expectedTestCount = 0;
+    bool expectedCountValid = expectedCountText == nullptr;
+    if (expectedCountText != nullptr)
+    {
+        const char* end = expectedCountText + std::strlen(expectedCountText);
+        unsigned long long parsed = 0;
+        const auto result = std::from_chars(expectedCountText, end, parsed);
+        expectedCountValid = result.ec == std::errc{} && result.ptr == end && parsed > 0 &&
+                             parsed <= static_cast<unsigned long long>((std::numeric_limits<int>::max)());
+        if (expectedCountValid)
+            expectedTestCount = static_cast<int>(parsed);
+    }
 
     // Parse comma-separated exclude patterns
     std::vector<std::string> excludePatterns;
@@ -907,6 +924,9 @@ int main(int argc, char** argv)
 
     auto suiteEnd = std::chrono::steady_clock::now();
     double totalMs = std::chrono::duration<double, std::milli>(suiteEnd - suiteStart).count();
+    const bool filteredSelectionEmpty = ranCount == 0 && (fileFilter != nullptr || nameFilter != nullptr);
+    const bool expectedSelectionMismatch =
+        expectedCountText != nullptr && (!expectedCountValid || ranCount != expectedTestCount);
 
     // Restore original stderr
     if (origCerrBuf)
@@ -922,6 +942,16 @@ int main(int argc, char** argv)
     out.PrintSummary("Assertions: " + std::to_string(g_assertionsPassed) + " passed, " +
                      std::to_string(g_assertionsFailed) + " failed\n");
     out.PrintSummary("Duration:   " + FormatDuration(totalMs) + "\n");
+    if (filteredSelectionEmpty)
+        out.PrintSummary("Error:      No tests matched the requested file/name filter\n");
+    if (expectedSelectionMismatch)
+    {
+        if (!expectedCountValid)
+            out.PrintSummary("Error:      SPARK_TEST_EXPECT_COUNT must be a positive decimal integer\n");
+        else
+            out.PrintSummary("Error:      Expected " + std::to_string(expectedTestCount) + " selected tests, ran " +
+                             std::to_string(ranCount) + "\n");
+    }
     if (warned > 0)
     {
         out.PrintSummary("Warnings:   " + std::to_string(warned) +
@@ -960,5 +990,5 @@ int main(int argc, char** argv)
         out.PrintSummary("JUnit XML written to: " + junitXmlPath + "\n");
     }
 
-    return (failed > 0) ? EXIT_FAILURE : EXIT_SUCCESS;
+    return (failed > 0 || filteredSelectionEmpty || expectedSelectionMismatch) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
