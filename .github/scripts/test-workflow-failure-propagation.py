@@ -254,6 +254,60 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
     return errors
 
 
+def release_run_timestamp_errors(workflow: str) -> list[str]:
+    """Require release metadata to use the authenticated workflow-run record."""
+
+    errors: list[str] = []
+    if "github.run_started_at" in workflow:
+        errors.append("release metadata must not use the undefined github.run_started_at context")
+
+    step_name = "Resolve workflow run start time"
+    try:
+        timestamp_step = named_step(workflow, step_name)
+    except AssertionError as error:
+        return [*errors, str(error)]
+
+    required_fragments = (
+        "id: run-start",
+        "GH_TOKEN: ${{ github.token }}",
+        "GITHUB_REPOSITORY: ${{ github.repository }}",
+        "GITHUB_RUN_ID: ${{ github.run_id }}",
+        "set -euo pipefail",
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"',
+        "--jq '.run_started_at // empty'",
+        '[[ ! "$RUN_STARTED_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T',
+        "exit 1",
+        "printf 'started_at=%s\\n' \"$RUN_STARTED_AT\" >> \"$GITHUB_OUTPUT\"",
+    )
+    for fragment in required_fragments:
+        if timestamp_step.count(fragment) != 1:
+            errors.append(f"release run timestamp step is missing/duplicating {fragment}")
+    if re.search(
+        r'''(?mx)^\s+(?:continue-on-error|'continue-on-error'|"continue-on-error")\s*:''',
+        timestamp_step,
+    ):
+        errors.append("release run timestamp lookup must not continue on error")
+
+    output_reference = "${{ steps.run-start.outputs.started_at }}"
+    if workflow.count(output_reference) != 2:
+        errors.append("stable and nightly release bodies must use the exact run timestamp output")
+
+    ordered_step_names = [name for name, _block in step_blocks(workflow)]
+    try:
+        timestamp_position = ordered_step_names.index(step_name)
+        stable_position = ordered_step_names.index(
+            "Stage new or interrupted stable versioned release as draft"
+        )
+        nightly_position = ordered_step_names.index("Stage nightly rolling release as draft")
+    except ValueError as error:
+        errors.append(f"release timestamp ordering is incomplete: {error}")
+    else:
+        if timestamp_position >= stable_position or timestamp_position >= nightly_position:
+            errors.append("release run timestamp must be resolved before either release body is staged")
+
+    return errors
+
+
 def required_workflow_errors(workflow: str) -> list[str]:
     """Conservatively parse the fail-closed sanitizer/aggregation YAML contract."""
 
@@ -715,6 +769,47 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_versioned_publication_requires_ready_release_profile(self) -> None:
         self.assertEqual(versioned_publication_gate_errors(self.release), [])
+
+    def test_release_timestamp_uses_authenticated_workflow_run_record(self) -> None:
+        self.assertEqual(release_run_timestamp_errors(self.release), [])
+
+    def test_release_timestamp_contract_rejects_hostile_mutations(self) -> None:
+        timestamp = named_step(self.release, "Resolve workflow run start time")
+        mutations = {
+            "undefined context": self.release.replace(
+                "${{ steps.run-start.outputs.started_at }}",
+                "${{ github.run_started_at }}",
+                1,
+            ),
+            "missing token": self.release.replace(
+                timestamp,
+                timestamp.replace(
+                    "        GH_TOKEN: ${{ github.token }}",
+                    "        GH_TOKEN:",
+                    1,
+                ),
+                1,
+            ),
+            "wrong endpoint": self.release.replace(
+                'repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}',
+                'repos/${GITHUB_REPOSITORY}/commits/${GITHUB_RUN_ID}',
+                1,
+            ),
+            "suppressed failure": self.release.replace(
+                timestamp,
+                timestamp.replace("          exit 1\n", "", 1),
+                1,
+            ),
+            "continue on error": self.release.replace(
+                "      id: run-start\n",
+                "      id: run-start\n      continue-on-error: true\n",
+                1,
+            ),
+        }
+        for label, mutated in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, self.release, "mutation fixture did not alter YAML")
+                self.assertTrue(release_run_timestamp_errors(mutated), label)
 
     def test_versioned_publication_gate_rejects_hostile_mutations(self) -> None:
         readiness = named_step(

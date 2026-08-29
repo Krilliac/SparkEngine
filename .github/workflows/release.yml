@@ -980,6 +980,21 @@ jobs:
           --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
           --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
 
+    - name: Resolve workflow run start time
+      id: run-start
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        RUN_STARTED_AT="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq '.run_started_at // empty')"
+        if [[ ! "$RUN_STARTED_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]; then
+          echo "Workflow run API returned an invalid run_started_at value." >&2
+          exit 1
+        fi
+        printf 'started_at=%s\n' "$RUN_STARTED_AT" >> "$GITHUB_OUTPUT"
+
     - name: Stage new or interrupted stable versioned release as draft
       id: stable-stage
       if: needs.prepare.outputs.is_versioned == 'true' && (steps.release-freeze.outputs.target_exists != 'true' || steps.release-freeze.outputs.target_is_draft == 'true')
@@ -992,7 +1007,7 @@ jobs:
           ## SparkEngine ${{ needs.prepare.outputs.version }} — Stable Release${{ steps.suffix.outputs.label }}
 
           Built from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
-          Built on: ${{ github.run_started_at }}
+          Built on: ${{ steps.run-start.outputs.started_at }}
 
           > **Stable releases** are manually published and thoroughly tested. For the latest development builds, see the [nightly release](https://github.com/${{ github.repository }}/releases/tag/nightly).
 
@@ -1018,7 +1033,7 @@ jobs:
           ## Nightly Build${{ steps.suffix.outputs.label }}
 
           Built from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
-          Built on: ${{ github.run_started_at }}
+          Built on: ${{ steps.run-start.outputs.started_at }}
           Branch: `${{ github.ref_name }}`
 
           > **Nightly builds** are published automatically on every commit. All CI checks pass before publishing. For a stable, manually-verified release see the [latest stable release](https://github.com/${{ github.repository }}/releases/latest).
