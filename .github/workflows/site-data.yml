@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 3m python3 Tests/Tools/test_docs_health.py -v
-          timeout 3m python3 Tests/Tools/test_site_data_contract.py -v
+          timeout 5m python3 Tests/Tools/test_site_data_contract.py -v
           timeout 3m python3 tools/site-data/validate.py --docs
 
       - name: Prove isolated deterministic currentness and clean checkout

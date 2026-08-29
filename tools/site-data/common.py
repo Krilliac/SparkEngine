@@ -101,6 +101,11 @@ def _identity(metadata: os.stat_result) -> tuple[int, int, int]:
     return (int(metadata.st_dev), int(metadata.st_ino), int(metadata.st_size))
 
 
+def _directory_identity(metadata: os.stat_result) -> tuple[int, int]:
+    """Return the stable identity fields that distinguish a directory entry."""
+    return (int(metadata.st_dev), int(metadata.st_ino))
+
+
 def _mutation_token(metadata: os.stat_result) -> tuple[int, ...]:
     return (
         int(metadata.st_dev),
@@ -344,7 +349,7 @@ def sha256_bytes(value: bytes) -> str:
 def write_bytes_atomic(path: Path, value: bytes) -> None:
     absolute = Path(os.path.abspath(os.fspath(path)))
     parent = _ensure_directory(absolute.parent, f"output parent for {absolute.name}")
-    parent_identity = _identity(os.lstat(parent))
+    parent_identity = _directory_identity(os.lstat(parent))
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{absolute.name}.", suffix=".tmp", dir=parent
     )
@@ -359,7 +364,7 @@ def write_bytes_atomic(path: Path, value: bytes) -> None:
             temporary_path, len(value), f"temporary output for {absolute.name}"
         ) != value:
             raise SiteDataError(f"temporary output for {absolute.name} differs before publication")
-        if _identity(os.lstat(parent)) != parent_identity:
+        if _directory_identity(os.lstat(parent)) != parent_identity:
             raise SiteDataError(f"output parent for {absolute.name} was replaced before publication")
         os.replace(temporary_path, absolute)
         if _identity(os.lstat(absolute)) != temporary_identity:
@@ -370,7 +375,7 @@ def write_bytes_atomic(path: Path, value: bytes) -> None:
             absolute, len(value), f"published output {absolute.name}"
         ) != value:
             raise SiteDataError(f"published output {absolute.name} differs after publication")
-        if _identity(os.lstat(parent)) != parent_identity:
+        if _directory_identity(os.lstat(parent)) != parent_identity:
             raise SiteDataError(f"output parent for {absolute.name} was replaced during publication")
     finally:
         temporary_path.unlink(missing_ok=True)

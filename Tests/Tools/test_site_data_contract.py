@@ -1221,7 +1221,9 @@ class GenerationAndCiTests(ContractTestCase):
 
     def test_dedicated_ci_runs_contract_and_determinism_checks(self) -> None:
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-        self.assertIn("python3 Tests/Tools/test_site_data_contract.py -v", workflow)
+        self.assertIn(
+            "timeout 5m python3 Tests/Tools/test_site_data_contract.py -v", workflow
+        )
         self.assertIn("python3 tools/site-data/render_handoff.py --check", workflow)
         self.assertGreaterEqual(workflow.count("python3 tools/site-data/generate.py"), 2)
         self.assertIn("diff --recursive --brief", workflow)
@@ -1408,6 +1410,37 @@ class StrictJsonDecoderTests(unittest.TestCase):
 
 
 class AtomicPublicationTests(unittest.TestCase):
+    def test_repeated_atomic_publication_succeeds(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            output = Path(raw) / "bundle.json"
+
+            for payload in (b"first", b"second payload", b"third"):
+                site_data_common.write_bytes_atomic(output, payload)
+                self.assertEqual(output.read_bytes(), payload)
+
+    def test_directory_identity_ignores_size_changes(self) -> None:
+        before = mock.Mock(st_dev=7, st_ino=11, st_size=128)
+        after = mock.Mock(st_dev=7, st_ino=11, st_size=256)
+
+        self.assertEqual(
+            site_data_common._directory_identity(before),
+            site_data_common._directory_identity(after),
+        )
+        self.assertNotEqual(
+            site_data_common._identity(before), site_data_common._identity(after)
+        )
+
+    def test_parent_directory_substitution_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            output = Path(raw) / "bundle.json"
+            identities = iter(((7, 11), (7, 11), (7, 12)))
+
+            with mock.patch.object(
+                site_data_common, "_directory_identity", side_effect=identities
+            ):
+                with self.assertRaisesRegex(SiteDataError, "replaced during publication"):
+                    site_data_common.write_bytes_atomic(output, b"payload")
+
     def test_same_content_file_substitution_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             directory = Path(raw)

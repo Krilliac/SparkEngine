@@ -461,7 +461,7 @@ class PresetAndCodemodelTests(unittest.TestCase):
         self.assertTrue(any("windows-validation" in finding.message for finding in findings))
 
     def test_codemodel_available_evidence_extracts_exact_kind(self) -> None:
-        build_directory = Path("C:/synthetic-build")
+        build_directory = (TEST_TEMP_ROOT / "synthetic-build").resolve()
         evidence = inventory.parse_codemodel_targets(
             "windows-shipping",
             {

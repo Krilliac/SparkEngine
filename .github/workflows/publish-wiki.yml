@@ -50,6 +50,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Generate exact-commit API documentation
+        env:
+          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          timeout 5m bash docs/generate-api-docs.sh generate
+
       - name: Build and validate GitHub Wiki tree
         run: |
           set -euo pipefail
