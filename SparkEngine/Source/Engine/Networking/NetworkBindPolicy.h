@@ -183,6 +183,21 @@ namespace Spark::Net
         [[nodiscard]] constexpr NetworkPeerScope PeerScope() const noexcept { return m_peerScope; }
         [[nodiscard]] constexpr NetworkEndpointPolicyError Error() const noexcept { return m_error; }
 
+        /**
+         * @brief Host-order bind address for a UDP discovery receive socket.
+         *
+         * A private-LAN beacon is addressed to the subnet's directed-broadcast
+         * address, so constraining the listener to the interface's unicast
+         * address can prevent delivery. The receive socket therefore listens
+         * on the discovery port across local IPv4 interfaces in PrivateLan
+         * mode. This is not peer authorization: callers must still apply
+         * AllowsPeerAddress() before parsing any received datagram.
+         */
+        [[nodiscard]] constexpr uint32_t DiscoveryReceiveBindAddress() const noexcept
+        {
+            return m_peerScope == NetworkPeerScope::PrivateLan ? 0u : m_bindAddress;
+        }
+
         /** @brief Whether a host-order IPv4 peer can cross this endpoint boundary. */
         [[nodiscard]] constexpr bool AllowsPeerAddress(uint32_t address) const noexcept
         {

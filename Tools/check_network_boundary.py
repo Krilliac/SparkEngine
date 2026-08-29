@@ -342,11 +342,16 @@ RAW_SOCKET_ALLOWLIST = (
         "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryScan.cpp",
         "TFLanDiscovery::StartScanning",
         (("socket", 1), ("bind", 1)),
-        (r"m_endpointPolicy\.IsValid\s*\(", r"::socket\s*\(", r"m_endpointPolicy\.BindAddress\s*\(", r"bind\s*\("),
+        (
+            r"m_endpointPolicy\.IsValid\s*\(",
+            r"::socket\s*\(",
+            r"m_endpointPolicy\.DiscoveryReceiveBindAddress\s*\(",
+            r"bind\s*\(",
+        ),
         address_rules=(
             SocketAddressRule(
                 "bind", 1, "reinterpret_cast<const sockaddr*>(&bindAddr)", "bindAddr",
-                r"htonl\(m_endpointPolicy\.BindAddress\(\)\)",
+                r"htonl\(m_endpointPolicy\.DiscoveryReceiveBindAddress\(\)\)",
             ),
         ),
     ),
@@ -497,7 +502,7 @@ RAW_SOCKET_ALLOWLIST = (
         (
             r"endpointPolicy\.IsValid\s*\(",
             r"::socket\s*\(",
-            r"endpointPolicy\.BindAddress\s*\(",
+            r"endpointPolicy\.DiscoveryReceiveBindAddress\s*\(",
             r"::bind\s*\(",
             r"recvfrom\s*\(",
             r"endpointPolicy\.AllowsPeerAddress\s*\(",
@@ -505,7 +510,7 @@ RAW_SOCKET_ALLOWLIST = (
         address_rules=(
             SocketAddressRule(
                 "bind", 1, "reinterpret_cast<const sockaddr*>(&bindAddr)", "bindAddr",
-                r"htonl\(endpointPolicy\.BindAddress\(\)\)",
+                r"htonl\(endpointPolicy\.DiscoveryReceiveBindAddress\(\)\)",
             ),
         ),
     ),

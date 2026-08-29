@@ -947,7 +947,7 @@ namespace Spark::Net
         sockaddr_in bindAddr{};
         bindAddr.sin_family = AF_INET;
         bindAddr.sin_port = htons(broadcastPort);
-        bindAddr.sin_addr.s_addr = htonl(endpointPolicy.BindAddress());
+        bindAddr.sin_addr.s_addr = htonl(endpointPolicy.DiscoveryReceiveBindAddress());
 
         if (::bind(listenSocket, reinterpret_cast<const sockaddr*>(&bindAddr), sizeof(bindAddr)) == SOCKET_ERROR)
         {

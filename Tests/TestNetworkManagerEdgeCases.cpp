@@ -139,6 +139,31 @@ TEST(NetworkBindPolicy_RequiresCanonicalLoopbackOrExactRfc1918SubnetHost)
     EXPECT_FALSE(IsIPv4LoopbackAddress("127.000.0.1"));
 }
 
+TEST(NetworkBindPolicy_DiscoveryReceiveBindSupportsDirectedBroadcast)
+{
+    const NetworkEndpointPolicy loopbackPolicy = NetworkEndpointPolicy::Loopback();
+    const NetworkEndpointPolicy privatePolicy = ResolveNetworkEndpointPolicy("192.168.50.10/24");
+
+    ASSERT_TRUE(loopbackPolicy.IsValid());
+    ASSERT_TRUE(privatePolicy.IsValid());
+    EXPECT_EQ(loopbackPolicy.DiscoveryReceiveBindAddress(), loopbackPolicy.BindAddress());
+    EXPECT_EQ(privatePolicy.DiscoveryReceiveBindAddress(), uint32_t{0});
+    EXPECT_NE(privatePolicy.DiscoveryReceiveBindAddress(), privatePolicy.BindAddress());
+}
+
+TEST(NetworkBindPolicy_DiscoveryReceiveStillRestrictsSourcesToCapturedSubnet)
+{
+    const NetworkEndpointPolicy privatePolicy = ResolveNetworkEndpointPolicy("192.168.50.10/24");
+
+    ASSERT_TRUE(privatePolicy.IsValid());
+    EXPECT_TRUE(privatePolicy.AllowsPeerAddress(0xC0A83214u));
+    EXPECT_FALSE(privatePolicy.AllowsPeerAddress(privatePolicy.NetworkAddress()));
+    EXPECT_FALSE(privatePolicy.AllowsPeerAddress(privatePolicy.BroadcastAddress()));
+    EXPECT_FALSE(privatePolicy.AllowsPeerAddress(0xC0A83314u));
+    EXPECT_FALSE(privatePolicy.AllowsPeerAddress(0x7F000001u));
+    EXPECT_FALSE(privatePolicy.AllowsPeerAddress(0xCB007101u));
+}
+
 static void ResetNM()
 {
     auto& nm = NetworkManager::GetInstance();

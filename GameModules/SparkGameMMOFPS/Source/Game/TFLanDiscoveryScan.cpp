@@ -75,7 +75,7 @@ namespace Terrafront
         sockaddr_in bindAddr{};
         bindAddr.sin_family = AF_INET;
         bindAddr.sin_port = htons(kTFLanBeaconPort);
-        bindAddr.sin_addr.s_addr = htonl(m_endpointPolicy.BindAddress());
+        bindAddr.sin_addr.s_addr = htonl(m_endpointPolicy.DiscoveryReceiveBindAddress());
         if (bind(s, reinterpret_cast<const sockaddr*>(&bindAddr), sizeof(bindAddr)) != 0 || !SetNonBlocking(s))
         {
             SPARK_LOG_WARN(Spark::LogCategory::Game,
