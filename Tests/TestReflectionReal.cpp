@@ -9,6 +9,7 @@
 #include "Core/ReflectionSerializer.h"
 
 #include <cstring>
+#include <utility>
 
 namespace
 {
@@ -35,6 +36,57 @@ namespace
         int mode = 0;
         std::string name = "default";
     };
+
+    enum class ReflAttrMetadataFixture
+    {
+        Properties,
+        SerializedFilter,
+        Binary,
+        HealthOnly
+    };
+
+    Spark::TypeInfo& RebuildReflAttrTestMetadata(ReflAttrMetadataFixture fixture)
+    {
+        auto& registry = Spark::TypeRegistry::Get();
+        auto& info = registry.RegisterType(::GetTypeId<ReflAttr_TestStruct>(), "ReflAttr_TestStruct",
+                                           sizeof(ReflAttr_TestStruct), alignof(ReflAttr_TestStruct));
+        info.fields.clear();
+
+        const auto addField =
+            [&info](const char* fieldName, Spark::FieldType type, size_t offset, size_t size, bool serialized = true)
+        {
+            Spark::FieldInfo field;
+            field.fieldName = fieldName;
+            field.type = type;
+            field.offset = offset;
+            field.size = size;
+            field.serialized = serialized;
+            info.fields.push_back(std::move(field));
+        };
+
+        switch (fixture)
+        {
+        case ReflAttrMetadataFixture::Properties:
+            addField("health", Spark::FieldType::Float, offsetof(ReflAttr_TestStruct, health), sizeof(float));
+            addField("active", Spark::FieldType::Bool, offsetof(ReflAttr_TestStruct, active), sizeof(bool));
+            addField("name", Spark::FieldType::String, offsetof(ReflAttr_TestStruct, name), sizeof(std::string));
+            break;
+        case ReflAttrMetadataFixture::SerializedFilter:
+            addField("health", Spark::FieldType::Float, offsetof(ReflAttr_TestStruct, health), sizeof(float));
+            addField("maxHealth", Spark::FieldType::Float, offsetof(ReflAttr_TestStruct, maxHealth), sizeof(float),
+                     false);
+            break;
+        case ReflAttrMetadataFixture::Binary:
+            addField("health", Spark::FieldType::Float, offsetof(ReflAttr_TestStruct, health), sizeof(float));
+            addField("mode", Spark::FieldType::Int, offsetof(ReflAttr_TestStruct, mode), sizeof(int));
+            break;
+        case ReflAttrMetadataFixture::HealthOnly:
+            addField("health", Spark::FieldType::Float, offsetof(ReflAttr_TestStruct, health), sizeof(float));
+            break;
+        }
+
+        return info;
+    }
 
     // Test struct for Vector2 tests
     struct ReflVec2_TestStruct
@@ -298,32 +350,7 @@ TEST(ReflectionReal_Vector3_RoundTrip)
 
 TEST(ReflectionSerializer_SerializeToProperties)
 {
-    // Register a test type
-    auto& reg = Spark::TypeRegistry::Get();
-    auto& info = reg.RegisterType(::GetTypeId<ReflAttr_TestStruct>(), "ReflAttr_TestStruct",
-                                  sizeof(ReflAttr_TestStruct), alignof(ReflAttr_TestStruct));
-    info.fields.clear();
-
-    Spark::FieldInfo healthField;
-    healthField.fieldName = "health";
-    healthField.type = Spark::FieldType::Float;
-    healthField.offset = offsetof(ReflAttr_TestStruct, health);
-    healthField.size = sizeof(float);
-    info.fields.push_back(healthField);
-
-    Spark::FieldInfo activeField;
-    activeField.fieldName = "active";
-    activeField.type = Spark::FieldType::Bool;
-    activeField.offset = offsetof(ReflAttr_TestStruct, active);
-    activeField.size = sizeof(bool);
-    info.fields.push_back(activeField);
-
-    Spark::FieldInfo nameField;
-    nameField.fieldName = "name";
-    nameField.type = Spark::FieldType::String;
-    nameField.offset = offsetof(ReflAttr_TestStruct, name);
-    nameField.size = sizeof(std::string);
-    info.fields.push_back(nameField);
+    auto& info = RebuildReflAttrTestMetadata(ReflAttrMetadataFixture::Properties);
 
     ReflAttr_TestStruct s;
     s.health = 75.0f;
@@ -341,6 +368,7 @@ TEST(ReflectionSerializer_SerializeToProperties)
 
 TEST(ReflectionSerializer_DeserializeFromProperties)
 {
+    RebuildReflAttrTestMetadata(ReflAttrMetadataFixture::Properties);
     auto& reg = Spark::TypeRegistry::Get();
     const auto* info = reg.FindTypeByName("ReflAttr_TestStruct");
     EXPECT_TRUE(info != nullptr);
@@ -365,6 +393,7 @@ TEST(ReflectionSerializer_DeserializeFromProperties)
 
 TEST(ReflectionSerializer_RoundTrip)
 {
+    RebuildReflAttrTestMetadata(ReflAttrMetadataFixture::Properties);
     auto& reg = Spark::TypeRegistry::Get();
     const auto* info = reg.FindTypeByName("ReflAttr_TestStruct");
     EXPECT_TRUE(info != nullptr);
@@ -390,26 +419,7 @@ TEST(ReflectionSerializer_RoundTrip)
 
 TEST(ReflectionSerializer_SerializedFalseSkipped)
 {
-    auto& reg = Spark::TypeRegistry::Get();
-    auto& info = reg.RegisterType(::GetTypeId<ReflAttr_TestStruct>(), "ReflAttr_TestStruct",
-                                  sizeof(ReflAttr_TestStruct), alignof(ReflAttr_TestStruct));
-    info.fields.clear();
-
-    Spark::FieldInfo f1;
-    f1.fieldName = "health";
-    f1.type = Spark::FieldType::Float;
-    f1.offset = offsetof(ReflAttr_TestStruct, health);
-    f1.size = sizeof(float);
-    f1.serialized = true;
-    info.fields.push_back(f1);
-
-    Spark::FieldInfo f2;
-    f2.fieldName = "maxHealth";
-    f2.type = Spark::FieldType::Float;
-    f2.offset = offsetof(ReflAttr_TestStruct, maxHealth);
-    f2.size = sizeof(float);
-    f2.serialized = false; // should be skipped
-    info.fields.push_back(f2);
+    auto& info = RebuildReflAttrTestMetadata(ReflAttrMetadataFixture::SerializedFilter);
 
     ReflAttr_TestStruct s;
     s.health = 50.0f;
@@ -423,24 +433,7 @@ TEST(ReflectionSerializer_SerializedFalseSkipped)
 
 TEST(ReflectionSerializer_BinaryRoundTrip)
 {
-    auto& reg = Spark::TypeRegistry::Get();
-    auto& info = reg.RegisterType(::GetTypeId<ReflAttr_TestStruct>(), "ReflAttr_TestStruct",
-                                  sizeof(ReflAttr_TestStruct), alignof(ReflAttr_TestStruct));
-    info.fields.clear();
-
-    Spark::FieldInfo f1;
-    f1.fieldName = "health";
-    f1.type = Spark::FieldType::Float;
-    f1.offset = offsetof(ReflAttr_TestStruct, health);
-    f1.size = sizeof(float);
-    info.fields.push_back(f1);
-
-    Spark::FieldInfo f2;
-    f2.fieldName = "mode";
-    f2.type = Spark::FieldType::Int;
-    f2.offset = offsetof(ReflAttr_TestStruct, mode);
-    f2.size = sizeof(int);
-    info.fields.push_back(f2);
+    auto& info = RebuildReflAttrTestMetadata(ReflAttrMetadataFixture::Binary);
 
     ReflAttr_TestStruct original;
     original.health = 99.9f;
@@ -461,17 +454,7 @@ TEST(ReflectionSerializer_BinaryRoundTrip)
 
 TEST(ReflectionSerializer_SerializeByName)
 {
-    auto& reg = Spark::TypeRegistry::Get();
-    auto& info = reg.RegisterType(::GetTypeId<ReflAttr_TestStruct>(), "ReflAttr_TestStruct",
-                                  sizeof(ReflAttr_TestStruct), alignof(ReflAttr_TestStruct));
-    info.fields.clear();
-
-    Spark::FieldInfo f;
-    f.fieldName = "health";
-    f.type = Spark::FieldType::Float;
-    f.offset = offsetof(ReflAttr_TestStruct, health);
-    f.size = sizeof(float);
-    info.fields.push_back(f);
+    RebuildReflAttrTestMetadata(ReflAttrMetadataFixture::HealthOnly);
 
     ReflAttr_TestStruct s;
     s.health = 33.3f;
