@@ -218,7 +218,12 @@ function harness(data) {
                     Object.hasOwn(state.normalizedPaginatePageOverrides, field)
                     ? state.normalizedPaginatePageOverrides[field]
                     : field ? response.data[field] : undefined;
-                yield field ? { ...response, data: clone(override) } : response;
+                const normalizedPage = field ? clone(override) : undefined;
+                if (Array.isArray(normalizedPage) && state.includeNormalizedPaginationMetadata) {
+                    normalizedPage.total_count = normalizedPage.length;
+                    normalizedPage.total_commits = undefined;
+                }
+                yield field ? { ...response, data: normalizedPage } : response;
             }
         };
     }
@@ -564,6 +569,7 @@ async function main() {
 
         const normalizedPaginationData = fixture();
         normalizedPaginationData.useNormalizedPaginateIterator = true;
+        normalizedPaginationData.includeNormalizedPaginationMetadata = true;
         const normalizedPagination = await preflightAndReport(
             root, normalizedPaginationData, normalizedPaginationData, writeArtifacts(root));
         assert.strictEqual(normalizedPagination.summary.status, 'complete',
@@ -1151,6 +1157,25 @@ async function main() {
         assert(rejectedDirectWorkflowRunsRootArray.summary.evidenceErrors.some(error =>
             error.includes("API response field 'workflow_runs' is not an array")));
         assertNoMutation(rejectedDirectWorkflowRunsRootArray);
+
+        const malformedNormalizedWorkflowRunsPage = fixture();
+        malformedNormalizedWorkflowRunsPage.useNormalizedPaginateIterator = true;
+        malformedNormalizedWorkflowRunsPage.normalizedPaginatePageOverrides = {
+            workflow_runs: { unexpected: [] }
+        };
+        const malformedWorkflowRunsPreflight = await runPreflight(root, malformedNormalizedWorkflowRunsPage);
+        assert.strictEqual(malformedWorkflowRunsPreflight.observed.outputs.authorized, 'true');
+        const rejectedMalformedNormalizedWorkflowRunsPage = await runTrustedReport(
+            root,
+            malformedNormalizedWorkflowRunsPage,
+            malformedWorkflowRunsPreflight.observed.outputs['artifact-manifest'],
+            writeArtifacts(root)
+        );
+        assert.strictEqual(rejectedMalformedNormalizedWorkflowRunsPage.summary.status, 'incomplete');
+        assert.strictEqual(rejectedMalformedNormalizedWorkflowRunsPage.summary.mutation.reason, 'api-error');
+        assert(rejectedMalformedNormalizedWorkflowRunsPage.summary.evidenceErrors.some(error =>
+            error.includes("API response field 'workflow_runs' is not an array")));
+        assertNoMutation(rejectedMalformedNormalizedWorkflowRunsPage);
 
         const spoofData = fixture();
         spoofData.comments = [{
