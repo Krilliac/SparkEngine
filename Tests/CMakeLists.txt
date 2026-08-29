@@ -1397,6 +1397,16 @@ if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND
         TIMEOUT 45)
 endif()
 
+add_test(
+    NAME NullRHIWindowsLifecycleParserContract
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_HEADLESS_NULLRHI_PARSER_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkHeadlessNullRHILifecycle.cmake
+)
+set_tests_properties(NullRHIWindowsLifecycleParserContract PROPERTIES
+    LABELS "nullrhi-headless;stable-v1;unit"
+    TIMEOUT 10)
+
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     if(NOT TARGET SparkEngine OR NOT TARGET SparkGameFPS)
         message(FATAL_ERROR
@@ -1419,6 +1429,24 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     )
     set_tests_properties(ModuleProfileLifecycle_SparkGameFPS_D3D11 PROPERTIES
         LABELS "module-profile;stable-v1;d3d11;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+
+    # Source-tree precursor for HEAD-220. It proves the production Windows
+    # host, actual NullRHIDevice, and real SparkGameFPS DLL complete a bounded
+    # no-render lifecycle. Packaged clean-layout and soak certification remain
+    # separate required work and are not claimed by this test.
+    add_test(
+        NAME NullRHI_Windows_FPSLifecycle
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGameFPS>"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            -DSPARK_RHI_BACKEND=null
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkHeadlessNullRHILifecycle.cmake
+    )
+    set_tests_properties(NullRHI_Windows_FPSLifecycle PROPERTIES
+        LABELS "nullrhi-headless;stable-v1;integration;source-tree"
         RUN_SERIAL TRUE
         TIMEOUT 120)
 endif()

@@ -38,6 +38,7 @@
 #include "FaultIsolation.h"
 #include "FixedTimestepAccumulator.h"
 #include "GameplaySystemLifecycle.h"
+#include "Graphics/RHI/RHIBridge.h"
 #include "ModuleHotReload.h"
 #include "ModuleManager.h"
 #include "WindowsCommandLine.h"
@@ -94,7 +95,22 @@ static BOOL WINAPI HeadlessCtrlHandler(DWORD ctrlType)
  */
 static void AllocHeadlessConsole()
 {
-    if (AllocConsole())
+    const auto isRedirected = [](DWORD stream)
+    {
+        const HANDLE handle = GetStdHandle(stream);
+        if (handle == nullptr || handle == INVALID_HANDLE_VALUE)
+            return false;
+        const DWORD type = GetFileType(handle);
+        return type == FILE_TYPE_PIPE || type == FILE_TYPE_DISK;
+    };
+
+    // A GUI-subsystem executable launched by CTest/PowerShell can inherit
+    // valid pipe/file handles without being attached to a console. AllocConsole
+    // succeeds in that situation, but rebinding stdout/stderr to CONOUT$ severs
+    // the caller's capture and makes a healthy run look evidence-free. Preserve
+    // either redirected stream; an interactive launch with no usable handles
+    // still receives a new console.
+    if (!isRedirected(STD_OUTPUT_HANDLE) && !isRedirected(STD_ERROR_HANDLE) && AllocConsole())
     {
         FILE* fp = nullptr;
         freopen_s(&fp, "CONOUT$", "w", stdout);
@@ -114,15 +130,34 @@ static void AllocHeadlessConsole()
  */
 static bool InitHeadlessEngineContext()
 {
-    GetEngineRuntime().timer = std::make_unique<Timer>();
-    GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
-    EngineContext::SetOwned(std::make_unique<EngineContext>(nullptr, nullptr, GetEngineRuntime().timer.get(),
-                                                            GetEngineRuntime().eventBus.get()));
+    auto& runtime = GetEngineRuntime();
+
+    // A headless launch is an explicit NullRHI runtime, not merely a launch
+    // that happened to skip GraphicsEngine construction. Owning RHIBridge in
+    // EngineRuntime gives the no-render device the same bounded startup and
+    // teardown lifetime as the other core services without exposing a fake
+    // GraphicsEngine to game modules.
+    runtime.headlessRhiBridge = std::make_unique<Spark::RHI::RHIBridge>();
+    if (!runtime.headlessRhiBridge->Initialize(nullptr, 1, 1, Spark::RHI::GraphicsBackend::None, false) ||
+        !runtime.headlessRhiBridge->IsHeadless() ||
+        runtime.headlessRhiBridge->GetActiveBackend() != Spark::RHI::GraphicsBackend::None)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Windows headless startup could not establish NullRHI");
+        runtime.headlessRhiBridge.reset();
+        return false;
+    }
+
+    runtime.timer = std::make_unique<Timer>();
+    runtime.eventBus = std::make_unique<Spark::EventBus>();
+    EngineContext::SetOwned(
+        std::make_unique<EngineContext>(nullptr, nullptr, runtime.timer.get(), runtime.eventBus.get()));
 
     auto* ctx = EngineContext::Get();
     if (!ctx)
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — headless init aborted");
+        runtime.headlessRhiBridge->Shutdown();
+        runtime.headlessRhiBridge.reset();
         return false;
     }
 
@@ -297,6 +332,7 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
 
     int frameCount = 0;
+    int nullRhiFrameCount = 0;
     bool quitPosted = false;
 
     while (true)
@@ -332,6 +368,9 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
 
         Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
+        if (GetEngineRuntime().headlessRhiBridge)
+            GetEngineRuntime().headlessRhiBridge->BeginFrame();
+
         SPARK_GUARDED_UPDATE("Modules", "Core", {
             if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules())
             {
@@ -362,6 +401,11 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         });
 
         RunDueScriptedCommands(frameCount);
+        if (GetEngineRuntime().headlessRhiBridge)
+        {
+            GetEngineRuntime().headlessRhiBridge->EndFrame();
+            ++nullRhiFrameCount;
+        }
         ++frameCount;
 
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
@@ -395,6 +439,24 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     g_weatherSystem.reset();
     console.LogInfo("Headless server shutting down...");
     ShutdownEngineAfterPreflight();
+
+    // Publish machine-readable records only after ordinary teardown has
+    // destroyed the ModuleManager and NullRHI bridge. This proves the complete
+    // source-host lifetime and cannot be mistaken for packaged certification.
+    const ModuleManager::LifecycleEvidence evidence = ModuleManager::GetLastTeardownLifecycleEvidence();
+    const bool nullRhiShutdown = !GetEngineRuntime().headlessRhiBridge;
+    std::fprintf(stdout, "SPARK_HEADLESS_RHI backend=null initialized=1 frames=%d shutdown=%d\n", nullRhiFrameCount,
+                 nullRhiShutdown ? 1 : 0);
+    std::fprintf(
+        stdout,
+        "SPARK_HEADLESS_LIFECYCLE initialized=%llu updated=%llu fixed=%llu rendered=%llu unloaded=%llu "
+        "faults=%llu\n",
+        static_cast<unsigned long long>(evidence.initialized), static_cast<unsigned long long>(evidence.updated),
+        static_cast<unsigned long long>(evidence.fixedUpdated), static_cast<unsigned long long>(evidence.rendered),
+        static_cast<unsigned long long>(evidence.unloaded), static_cast<unsigned long long>(evidence.faults));
+    std::fflush(stdout);
+    if (!nullRhiShutdown && exitCode == 0)
+        exitCode = 3;
 
     // Only free the console if we successfully allocated one in
     // AllocHeadlessConsole. Calling FreeConsole on an inherited console

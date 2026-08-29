@@ -35,6 +35,7 @@
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/GraphicsConsoleCommands.h"
+#include "Graphics/RHI/RHIBridge.h"
 #include "Input/InputManager.h"
 #include "Audio/AudioEngine.h"
 #include "Audio/AudioBackendFactory.h"
@@ -372,6 +373,15 @@ void ShutdownEngineAfterPreflight()
     rt.audioBackend.reset();
     rt.audioEngine.reset();
     ShutdownPhysics(); // no-op when the module branch above already ran it
+
+    // The Windows headless host owns a real NullRHI bridge without exposing a
+    // renderer through EngineContext. Keep it alive until game-module teardown
+    // has completed, then release it before the remaining core services.
+    if (rt.headlessRhiBridge)
+    {
+        rt.headlessRhiBridge->Shutdown();
+        rt.headlessRhiBridge.reset();
+    }
 
     // Shut down the job system after all subsystems that submit jobs
     Spark::JobSystem::Get().Shutdown();

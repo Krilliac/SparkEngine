@@ -98,6 +98,32 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
     SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, context, false);
     m_context = context;
 
+    if (context->IsHeadless())
+    {
+        // The stable-v1 headless source gate intentionally exposes no
+        // GraphicsEngine or InputManager. Still require the real CPU-only
+        // services the FPS module needs to participate in a bounded server
+        // lifecycle; a bare OnLoad success with an unusable context would be
+        // misleading evidence.
+        if (context->GetGraphics() != nullptr || context->GetInput() != nullptr || context->GetWorld() == nullptr ||
+            context->GetTimer() == nullptr || context->GetEventBus() == nullptr ||
+            context->GetSaveSystem() == nullptr || context->GetFileCache() == nullptr ||
+            context->GetAssetRegistry() == nullptr)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "SparkGameFPS headless context is missing required CPU-only services or exposes a "
+                            "render/input path");
+            m_context = nullptr;
+            return false;
+        }
+
+        m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Game,
+                       "SparkGameFPS module initialized for the no-render headless lifecycle");
+        Spark::SimpleConsole::GetInstance().LogSuccess("SparkGameFPS module initialized for headless source execution");
+        return true;
+    }
+
     // Delegate to the shared Initialize logic using the context's subsystems
     if (!Initialize(context->GetGraphics(), context->GetInput()))
         return false;

@@ -18,6 +18,7 @@
 #include "Audio/IAudioBackend.h"
 #include "Engine/Gameplay/WeaponManager.h"
 #include "Graphics/GraphicsEngine.h"
+#include "Graphics/RHI/RHIBridge.h"
 #include "Input/InputManager.h"
 #include "Utils/LocalFileCache.h"
 #include "Utils/Timer.h"

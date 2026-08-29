@@ -34,6 +34,10 @@ namespace Spark
     class EventBus;
     class LocalFileCache;
     class ModuleHotReloadManager;
+    namespace RHI
+    {
+        class RHIBridge;
+    }
     namespace Audio
     {
         class IAudioBackend;
@@ -69,6 +73,7 @@ struct EngineRuntime
     std::unique_ptr<Spark::ModuleHotReloadManager> moduleHotReload;
     std::unique_ptr<Spark::LocalFileCache> fileCache;
     std::unique_ptr<Spark::AssetRegistry> assetRegistry;
+    std::unique_ptr<Spark::RHI::RHIBridge> headlessRhiBridge;
 #ifdef SPARK_JOLT_PHYSICS_AVAILABLE
     std::unique_ptr<PhysicsSystem> physics;
 #endif
