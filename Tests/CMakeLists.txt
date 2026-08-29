@@ -1359,6 +1359,17 @@ foreach(_remote_admin_selector IN ITEMS
         TIMEOUT 30)
 endforeach()
 
+foreach(_remote_debug_epoch_selector IN ITEMS
+        RemoteDebug_ResponseEpochStartListening
+        RemoteDebug_ResponseEpochStopListening)
+    add_test(NAME ${_remote_debug_epoch_selector} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(${_remote_debug_epoch_selector} PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=${_remote_debug_epoch_selector};SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "remote-admin;security;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 30)
+endforeach()
+
 add_test(
     NAME ModuleProfileLifecycleParserContract
     COMMAND ${CMAKE_COMMAND}

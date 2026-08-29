@@ -244,6 +244,19 @@ namespace Spark::RemoteDebug
     /** @brief Command handler callback: receives a command, returns a response */
     using CommandHandler = std::function<RemoteCommand(const RemoteCommand&)>;
 
+    /**
+     * @brief Optional synchronization seam for deterministic epoch-race tests.
+     *
+     * The callbacks receive no command, response, principal, session, or
+     * mutator access. Production leaves this unset, preserving the normal
+     * blocking-lock path. Test callbacks must not call back into the server.
+     */
+    struct RemoteDebugResponseEpochTestSeam
+    {
+        std::function<void()> beforeResponseEnqueue;
+        std::function<void(bool acquired)> onEpochTransitionTryLock;
+    };
+
     /** @brief Owns logical server state and dispatches authenticated incoming commands. */
     class RemoteDebugServer
     {
@@ -260,7 +273,7 @@ namespace Spark::RemoteDebug
             // principal cannot become valid again after reset. Drop both queues
             // before revocation so no prior-epoch request or response can cross
             // the new authority boundary.
-            std::unique_lock executionLock(m_executionMutex);
+            auto executionLock = AcquireEpochTransitionLease();
             m_session.Reset();
             m_accessControl.RevokeAll();
             m_session.SetPort(port);
@@ -279,7 +292,7 @@ namespace Spark::RemoteDebug
             // record. Taking the exclusive lease here means that when this
             // function returns no protected handler can subsequently execute
             // with a principal revoked by this call.
-            std::unique_lock executionLock(m_executionMutex);
+            auto executionLock = AcquireEpochTransitionLease();
             m_session.Reset();
             m_accessControl.RevokeAll();
         }
@@ -300,7 +313,12 @@ namespace Spark::RemoteDebug
 
                 RemoteCommand resp = ProcessCommandWithPrincipalUnderLease(cmd, principal);
                 if (!resp.type.empty())
+                {
+                    const auto testSeam = GetResponseEpochTestSeam();
+                    if (testSeam && testSeam->beforeResponseEnqueue)
+                        testSeam->beforeResponseEnqueue();
                     m_session.EnqueueSend(resp);
+                }
             }
         }
 
@@ -356,8 +374,42 @@ namespace Spark::RemoteDebug
             return m_accessControl.GetAuditEvents();
         }
 
+        /**
+         * @brief Install or clear the data-free deterministic test seam.
+         * @note Configure only from local test code; callbacks must not re-enter this server.
+         */
+        void SetResponseEpochTestSeam(std::shared_ptr<const RemoteDebugResponseEpochTestSeam> seam)
+        {
+            std::lock_guard lock(m_testSeamMutex);
+            m_responseEpochTestSeam = std::move(seam);
+        }
+
       private:
         friend class RemoteDebugSystem;
+
+        [[nodiscard]] std::shared_ptr<const RemoteDebugResponseEpochTestSeam> GetResponseEpochTestSeam() const
+        {
+            std::lock_guard lock(m_testSeamMutex);
+            return m_responseEpochTestSeam;
+        }
+
+        [[nodiscard]] std::unique_lock<std::shared_mutex> AcquireEpochTransitionLease()
+        {
+            std::unique_lock executionLock(m_executionMutex, std::defer_lock);
+            const auto testSeam = GetResponseEpochTestSeam();
+            if (testSeam && testSeam->onEpochTransitionTryLock)
+            {
+                const bool acquired = executionLock.try_lock();
+                testSeam->onEpochTransitionTryLock(acquired);
+                if (!acquired)
+                    executionLock.lock();
+            }
+            else
+            {
+                executionLock.lock();
+            }
+            return executionLock;
+        }
 
         /**
          * @brief Mint the sole built-in local capability.
@@ -492,6 +544,8 @@ namespace Spark::RemoteDebug
 
         RemoteSession m_session;
         mutable std::shared_mutex m_executionMutex;
+        mutable std::mutex m_testSeamMutex;
+        std::shared_ptr<const RemoteDebugResponseEpochTestSeam> m_responseEpochTestSeam;
         std::unordered_map<std::string, CommandHandler> m_handlers;
         std::unordered_map<std::string, RemoteDebugCapability> m_handlerCapabilities;
         RemoteDebugAccessControl m_accessControl;

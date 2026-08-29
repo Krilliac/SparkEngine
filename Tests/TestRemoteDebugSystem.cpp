@@ -406,125 +406,142 @@ TEST(RemoteDebugSystem_AuditRecordsDispositionWithoutPayloadsOrGrants)
     sys.Shutdown();
 }
 
-TEST(RemoteDebugSystem_AuthorityTransitionDropsAllowedResponseAcrossEpoch)
+namespace
 {
-    using namespace Spark::RemoteDebug;
-    auto& sys = RemoteDebugSystem::GetInstance();
-    sys.Initialize();
-    sys.EnableLoopback();
-
-    auto* client = sys.GetClient();
-    auto* server = sys.GetServer();
-    ASSERT_TRUE(client != nullptr);
-    ASSERT_TRUE(server != nullptr);
-
-    std::mutex gateMutex;
-    std::condition_variable handlerEntered;
-    std::condition_variable releaseHandler;
-    std::condition_variable transitionAttempted;
-    bool handlerIsWaiting = false;
-    bool permitEffect = false;
-    bool transitionIsCalling = false;
-    std::atomic_uint32_t effectCount{0};
-    std::atomic_bool transitionReturned{false};
-    std::atomic_bool effectBeforeTransitionReturned{false};
-
-    struct QueuePrimed
+    enum class ResponseEpochTransition
     {
+        StartListening,
+        StopListening
     };
-    server->RegisterCommandHandler("prime_authenticated_queue", RemoteDebugCapability::Inspect,
-                                   [](const RemoteCommand&) -> RemoteCommand { throw QueuePrimed{}; });
 
-    server->RegisterCommandHandler("slow_inspect", RemoteDebugCapability::Inspect,
-                                   [&](const RemoteCommand& command)
-                                   {
+    void VerifyAllowedResponseCannotCrossEpoch(ResponseEpochTransition transition)
+    {
+        using namespace Spark::RemoteDebug;
+        auto& system = RemoteDebugSystem::GetInstance();
+        system.Initialize();
+        system.EnableLoopback();
+
+        auto* client = system.GetClient();
+        auto* server = system.GetServer();
+        ASSERT_TRUE(client != nullptr);
+        ASSERT_TRUE(server != nullptr);
+
+        struct QueuePrimed
+        {
+        };
+        server->RegisterCommandHandler("prime_authenticated_queue", RemoteDebugCapability::Inspect,
+                                       [](const RemoteCommand&) -> RemoteCommand { throw QueuePrimed{}; });
+
+        std::atomic_uint32_t effectCount{0};
+        server->RegisterCommandHandler("epoch_response_probe", RemoteDebugCapability::Inspect,
+                                       [&](const RemoteCommand& command)
                                        {
-                                           std::lock_guard lock(gateMutex);
-                                           handlerIsWaiting = true;
-                                       }
-                                       handlerEntered.notify_one();
+                                           ++effectCount;
+                                           return RemoteCommand{"epoch_response_ok", "", command.requestId, 0.0f};
+                                       });
 
-                                       std::unique_lock lock(gateMutex);
-                                       releaseHandler.wait(lock, [&] { return permitEffect; });
-                                       effectBeforeTransitionReturned.store(
-                                           !transitionReturned.load(std::memory_order_acquire),
-                                           std::memory_order_release);
-                                       ++effectCount;
-                                       return RemoteCommand{"slow_inspect_ok", "", command.requestId, 0.0f};
-                                   });
+        // Prime one authenticated request without allowing RemoteDebugSystem to
+        // run its post-dispatch response pump. The target request remains in the
+        // server queue with its original valid principal.
+        client->SendCommand({"prime_authenticated_queue", "", 1, 0.0f});
+        client->SendCommand({"epoch_response_probe", "", 2, 0.0f});
+        bool queuePrimed = false;
+        try
+        {
+            system.Update(0.016f);
+        }
+        catch (const QueuePrimed&)
+        {
+            queuePrimed = true;
+        }
+        ASSERT_TRUE(queuePrimed);
 
-    // Pump two authenticated commands into the server queue, then deliberately
-    // abort dispatch of the first. This leaves the second command queued with
-    // its valid old-epoch principal and lets the test call server.Update()
-    // directly, without the system's response pump obscuring queue ownership.
-    client->SendCommand({"prime_authenticated_queue", "", 1, 0.0f});
-    client->SendCommand({"slow_inspect", "", 2, 0.0f});
-    bool queuePrimed = false;
-    try
-    {
-        sys.Update(0.016f);
-    }
-    catch (const QueuePrimed&)
-    {
-        queuePrimed = true;
-    }
-    ASSERT_TRUE(queuePrimed);
+        std::mutex barrierMutex;
+        std::condition_variable responseAtBarrier;
+        std::condition_variable releaseResponse;
+        std::condition_variable transitionTriedLock;
+        bool responseReady = false;
+        bool allowResponseEnqueue = false;
+        bool transitionTryObserved = false;
+        bool transitionTryAcquired = true;
 
-    std::thread updateThread([server] { server->Update(); });
-    {
-        std::unique_lock lock(gateMutex);
-        handlerEntered.wait(lock, [&] { return handlerIsWaiting; });
-    }
+        auto testSeam = std::make_shared<RemoteDebugResponseEpochTestSeam>();
+        testSeam->beforeResponseEnqueue = [&]
+        {
+            std::unique_lock lock(barrierMutex);
+            responseReady = true;
+            responseAtBarrier.notify_one();
+            releaseResponse.wait(lock, [&] { return allowResponseEnqueue; });
+        };
+        testSeam->onEpochTransitionTryLock = [&](bool acquired)
+        {
+            std::lock_guard lock(barrierMutex);
+            transitionTryAcquired = acquired;
+            transitionTryObserved = true;
+            transitionTriedLock.notify_one();
+        };
+        server->SetResponseEpochTestSeam(testSeam);
 
-    std::thread transitionThread([&]
-                                 {
+        std::thread updateThread([server] { server->Update(); });
+        {
+            std::unique_lock lock(barrierMutex);
+            responseAtBarrier.wait(lock, [&] { return responseReady; });
+        }
+
+        std::atomic_bool transitionReturned{false};
+        std::thread transitionThread([&]
                                      {
-                                         std::lock_guard lock(gateMutex);
-                                         transitionIsCalling = true;
-                                     }
-                                     transitionAttempted.notify_one();
-                                     server->StartListening(0);
-                                     transitionReturned.store(true, std::memory_order_release);
-                                 });
-    {
-        std::unique_lock lock(gateMutex);
-        transitionAttempted.wait(lock, [&] { return transitionIsCalling; });
+                                         if (transition == ResponseEpochTransition::StartListening)
+                                             server->StartListening(0);
+                                         else
+                                             server->StopListening();
+                                         transitionReturned.store(true, std::memory_order_release);
+                                     });
+        {
+            std::unique_lock lock(barrierMutex);
+            transitionTriedLock.wait(lock, [&] { return transitionTryObserved; });
+            EXPECT_FALSE(transitionTryAcquired);
+            EXPECT_FALSE(transitionReturned.load(std::memory_order_acquire));
+            allowResponseEnqueue = true;
+        }
+        releaseResponse.notify_one();
+
+        updateThread.join();
+        transitionThread.join();
+        server->SetResponseEpochTestSeam({});
+
+        EXPECT_TRUE(transitionReturned.load(std::memory_order_acquire));
+        EXPECT_EQ(static_cast<uint32_t>(1), effectCount.load());
+        EXPECT_TRUE(AuditEndsWith(*server, RemoteDebugAuditDecision::Allowed));
+
+        RemoteCommand staleResponse;
+        EXPECT_FALSE(server->GetSession().DequeuePendingSend(staleResponse));
+        EXPECT_TRUE(client->PollResponses().empty());
+
+        // Prove the empty queues are an epoch boundary, not blanket response loss.
+        system.EnableLoopback();
+        client->SendCommand({"epoch_response_probe", "", 1, 0.0f});
+        system.Update(0.016f);
+        const auto responses = client->PollResponses();
+        EXPECT_EQ(static_cast<size_t>(1), responses.size());
+        if (!responses.empty())
+        {
+            EXPECT_EQ(static_cast<uint32_t>(1), responses.front().requestId);
+            EXPECT_EQ(std::string("epoch_response_ok"), responses.front().type);
+        }
+        EXPECT_EQ(static_cast<uint32_t>(2), effectCount.load());
+        system.Shutdown();
     }
-    for (int attempt = 0; attempt < 1024 && !transitionReturned.load(std::memory_order_acquire); ++attempt)
-        std::this_thread::yield();
-    EXPECT_FALSE(transitionReturned.load(std::memory_order_acquire));
+}
 
-    {
-        std::lock_guard lock(gateMutex);
-        permitEffect = true;
-    }
-    releaseHandler.notify_one();
-    updateThread.join();
-    transitionThread.join();
+TEST(RemoteDebug_ResponseEpochStartListening)
+{
+    VerifyAllowedResponseCannotCrossEpoch(ResponseEpochTransition::StartListening);
+}
 
-    EXPECT_EQ(static_cast<uint32_t>(1), effectCount.load());
-    EXPECT_TRUE(effectBeforeTransitionReturned.load(std::memory_order_acquire));
-    EXPECT_TRUE(transitionReturned.load(std::memory_order_acquire));
-    EXPECT_TRUE(AuditEndsWith(*server, RemoteDebugAuditDecision::Allowed));
-
-    RemoteCommand staleResponse;
-    EXPECT_FALSE(server->GetSession().DequeuePendingSend(staleResponse));
-    EXPECT_TRUE(client->PollResponses().empty());
-
-    // A newly issued principal may execute the same handler, proving absence of
-    // the old response rather than a blanket failure to deliver any response.
-    sys.EnableLoopback();
-    client->SendCommand({"slow_inspect", "", 1, 0.0f});
-    sys.Update(0.016f);
-    const auto responses = client->PollResponses();
-    EXPECT_EQ(static_cast<size_t>(1), responses.size());
-    if (!responses.empty())
-    {
-        EXPECT_EQ(static_cast<uint32_t>(1), responses.front().requestId);
-        EXPECT_EQ(std::string("slow_inspect_ok"), responses.front().type);
-    }
-    EXPECT_EQ(static_cast<uint32_t>(2), effectCount.load());
-    sys.Shutdown();
+TEST(RemoteDebug_ResponseEpochStopListening)
+{
+    VerifyAllowedResponseCannotCrossEpoch(ResponseEpochTransition::StopListening);
 }
 
 // ============================================================================
