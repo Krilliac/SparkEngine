@@ -287,11 +287,18 @@ namespace Spark::RemoteDebug
         /** @brief Process queued commands and send responses (call per frame) */
         void Update()
         {
-            RemoteCommand cmd;
-            RemoteDebugPrincipal principal;
-            while (m_session.DequeueReceivedWithPrincipal(cmd, principal))
+            for (;;)
             {
-                RemoteCommand resp = ProcessCommandWithPrincipal(cmd, principal);
+                // One lease spans dequeue through response enqueue. An authority
+                // epoch transition therefore either precedes this entire command
+                // or follows its queued response and clears it during Reset().
+                std::shared_lock executionLock(m_executionMutex);
+                RemoteCommand cmd;
+                RemoteDebugPrincipal principal;
+                if (!m_session.DequeueReceivedWithPrincipal(cmd, principal))
+                    return;
+
+                RemoteCommand resp = ProcessCommandWithPrincipalUnderLease(cmd, principal);
                 if (!resp.type.empty())
                     m_session.EnqueueSend(resp);
             }
@@ -307,7 +314,8 @@ namespace Spark::RemoteDebug
             // This public entry point deliberately has no authenticated
             // principal. Keeping it for source compatibility must not turn a
             // direct call into a bypass around the server-owned dispatch path.
-            return ProcessCommandWithPrincipal(cmd, RemoteDebugPrincipal{});
+            std::shared_lock executionLock(m_executionMutex);
+            return ProcessCommandWithPrincipalUnderLease(cmd, RemoteDebugPrincipal{});
         }
 
         /** @brief Queue a response for the connected editor */
@@ -385,14 +393,12 @@ namespace Spark::RemoteDebug
             return {"error", R"({"error":"access_denied"})", cmd.requestId, 0.0f};
         }
 
-        [[nodiscard]] RemoteCommand ProcessCommandWithPrincipal(const RemoteCommand& cmd,
-                                                                   const RemoteDebugPrincipal& principal)
+        [[nodiscard]] RemoteCommand ProcessCommandWithPrincipalUnderLease(const RemoteCommand& cmd,
+                                                                          const RemoteDebugPrincipal& principal)
         {
-            // This shared lease covers the complete authorization -> handler ->
-            // audit sequence. StopListening/StartListening take it exclusively,
-            // so revocation cannot race a previously authorized side effect or
-            // turn a completed effect into a misleading denial audit event.
-            std::shared_lock executionLock(m_executionMutex);
+            // The caller owns the shared execution lease. Keeping acquisition at
+            // the public/queue boundaries prevents recursive shared_mutex locking
+            // while preserving direct-call denial and atomic queued dispatch.
             const auto handlerIt = m_handlers.find(cmd.type);
             if (handlerIt == m_handlers.end())
             {

@@ -406,7 +406,7 @@ TEST(RemoteDebugSystem_AuditRecordsDispositionWithoutPayloadsOrGrants)
     sys.Shutdown();
 }
 
-TEST(RemoteDebugSystem_StopListeningWaitsForProtectedEffect)
+TEST(RemoteDebugSystem_AuthorityTransitionDropsAllowedResponseAcrossEpoch)
 {
     using namespace Spark::RemoteDebug;
     auto& sys = RemoteDebugSystem::GetInstance();
@@ -421,13 +421,19 @@ TEST(RemoteDebugSystem_StopListeningWaitsForProtectedEffect)
     std::mutex gateMutex;
     std::condition_variable handlerEntered;
     std::condition_variable releaseHandler;
-    std::condition_variable stopAttempted;
+    std::condition_variable transitionAttempted;
     bool handlerIsWaiting = false;
     bool permitEffect = false;
-    bool stopIsCalling = false;
+    bool transitionIsCalling = false;
     std::atomic_uint32_t effectCount{0};
-    std::atomic_bool stopReturned{false};
-    std::atomic_bool effectBeforeStopReturned{false};
+    std::atomic_bool transitionReturned{false};
+    std::atomic_bool effectBeforeTransitionReturned{false};
+
+    struct QueuePrimed
+    {
+    };
+    server->RegisterCommandHandler("prime_authenticated_queue", RemoteDebugCapability::Inspect,
+                                   [](const RemoteCommand&) -> RemoteCommand { throw QueuePrimed{}; });
 
     server->RegisterCommandHandler("slow_inspect", RemoteDebugCapability::Inspect,
                                    [&](const RemoteCommand& command)
@@ -440,36 +446,53 @@ TEST(RemoteDebugSystem_StopListeningWaitsForProtectedEffect)
 
                                        std::unique_lock lock(gateMutex);
                                        releaseHandler.wait(lock, [&] { return permitEffect; });
-                                       effectBeforeStopReturned.store(!stopReturned.load(std::memory_order_acquire),
-                                                                      std::memory_order_release);
+                                       effectBeforeTransitionReturned.store(
+                                           !transitionReturned.load(std::memory_order_acquire),
+                                           std::memory_order_release);
                                        ++effectCount;
                                        return RemoteCommand{"slow_inspect_ok", "", command.requestId, 0.0f};
                                    });
 
-    client->SendCommand({"slow_inspect", "", 1, 0.0f});
-    std::thread updateThread([&sys] { sys.Update(0.016f); });
+    // Pump two authenticated commands into the server queue, then deliberately
+    // abort dispatch of the first. This leaves the second command queued with
+    // its valid old-epoch principal and lets the test call server.Update()
+    // directly, without the system's response pump obscuring queue ownership.
+    client->SendCommand({"prime_authenticated_queue", "", 1, 0.0f});
+    client->SendCommand({"slow_inspect", "", 2, 0.0f});
+    bool queuePrimed = false;
+    try
+    {
+        sys.Update(0.016f);
+    }
+    catch (const QueuePrimed&)
+    {
+        queuePrimed = true;
+    }
+    ASSERT_TRUE(queuePrimed);
+
+    std::thread updateThread([server] { server->Update(); });
     {
         std::unique_lock lock(gateMutex);
         handlerEntered.wait(lock, [&] { return handlerIsWaiting; });
     }
 
-    std::thread stopThread([&]
-                           {
-                               {
-                                   std::lock_guard lock(gateMutex);
-                                   stopIsCalling = true;
-                               }
-                               stopAttempted.notify_one();
-                               server->StopListening();
-                               stopReturned.store(true, std::memory_order_release);
-                           });
+    std::thread transitionThread([&]
+                                 {
+                                     {
+                                         std::lock_guard lock(gateMutex);
+                                         transitionIsCalling = true;
+                                     }
+                                     transitionAttempted.notify_one();
+                                     server->StartListening(0);
+                                     transitionReturned.store(true, std::memory_order_release);
+                                 });
     {
         std::unique_lock lock(gateMutex);
-        stopAttempted.wait(lock, [&] { return stopIsCalling; });
+        transitionAttempted.wait(lock, [&] { return transitionIsCalling; });
     }
-    for (int attempt = 0; attempt < 1024 && !stopReturned.load(std::memory_order_acquire); ++attempt)
+    for (int attempt = 0; attempt < 1024 && !transitionReturned.load(std::memory_order_acquire); ++attempt)
         std::this_thread::yield();
-    EXPECT_FALSE(stopReturned.load(std::memory_order_acquire));
+    EXPECT_FALSE(transitionReturned.load(std::memory_order_acquire));
 
     {
         std::lock_guard lock(gateMutex);
@@ -477,25 +500,30 @@ TEST(RemoteDebugSystem_StopListeningWaitsForProtectedEffect)
     }
     releaseHandler.notify_one();
     updateThread.join();
-    stopThread.join();
+    transitionThread.join();
 
     EXPECT_EQ(static_cast<uint32_t>(1), effectCount.load());
-    EXPECT_TRUE(effectBeforeStopReturned.load(std::memory_order_acquire));
-    EXPECT_TRUE(stopReturned.load(std::memory_order_acquire));
+    EXPECT_TRUE(effectBeforeTransitionReturned.load(std::memory_order_acquire));
+    EXPECT_TRUE(transitionReturned.load(std::memory_order_acquire));
     EXPECT_TRUE(AuditEndsWith(*server, RemoteDebugAuditDecision::Allowed));
 
-    // A stale loopback token may remain in client plumbing after StopListening,
-    // but the revoked server grant makes this second attempt fail before the
-    // protected handler can run.
-    client->SendCommand({"slow_inspect", "", 2, 0.0f});
+    RemoteCommand staleResponse;
+    EXPECT_FALSE(server->GetSession().DequeuePendingSend(staleResponse));
+    EXPECT_TRUE(client->PollResponses().empty());
+
+    // A newly issued principal may execute the same handler, proving absence of
+    // the old response rather than a blanket failure to deliver any response.
+    sys.EnableLoopback();
+    client->SendCommand({"slow_inspect", "", 1, 0.0f});
     sys.Update(0.016f);
     const auto responses = client->PollResponses();
-    bool sawDeniedResponse = false;
-    for (const auto& response : responses)
-        sawDeniedResponse = sawDeniedResponse || IsAccessDenied(response);
-    EXPECT_TRUE(sawDeniedResponse);
-    EXPECT_EQ(static_cast<uint32_t>(1), effectCount.load());
-    EXPECT_TRUE(AuditEndsWith(*server, RemoteDebugAuditDecision::InvalidPrincipalDenied));
+    EXPECT_EQ(static_cast<size_t>(1), responses.size());
+    if (!responses.empty())
+    {
+        EXPECT_EQ(static_cast<uint32_t>(1), responses.front().requestId);
+        EXPECT_EQ(std::string("slow_inspect_ok"), responses.front().type);
+    }
+    EXPECT_EQ(static_cast<uint32_t>(2), effectCount.load());
     sys.Shutdown();
 }
 
