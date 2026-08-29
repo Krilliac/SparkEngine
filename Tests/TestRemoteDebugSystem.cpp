@@ -49,6 +49,18 @@ namespace Spark::RemoteDebug
         {
             session.EnqueueReceivedWithPrincipal(command, principal);
         };
+
+        template <typename Session>
+        static constexpr bool kCanQueueOutbound = requires(Session& session, const RemoteCommand& command)
+        {
+            session.EnqueueSend(command);
+        };
+
+        template <typename Session>
+        static constexpr bool kCanForgeConnectedState = requires(Session& session)
+        {
+            session.SetState(SessionState::Connected);
+        };
     };
 } // namespace Spark::RemoteDebug
 
@@ -60,6 +72,10 @@ static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::
                   kCanDispatchWithPrincipal<Spark::RemoteDebug::RemoteDebugServer>);
 static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::
                   kCanQueueWithPrincipal<Spark::RemoteDebug::RemoteSession>);
+static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::
+                  kCanQueueOutbound<Spark::RemoteDebug::RemoteSession>);
+static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::
+                  kCanForgeConnectedState<Spark::RemoteDebug::RemoteSession>);
 
 namespace
 {
@@ -157,76 +173,84 @@ TEST(RemoteDebugSystem_UnknownCommandReturnsError)
 // Server-owned authorization boundary
 // ============================================================================
 
-TEST(RemoteDebugSystem_RawDirectDispatchFailsClosed)
+TEST(RemoteAdmin_AnonymousDenied)
 {
-    Spark::RemoteDebug::RemoteDebugServer server;
+    using namespace Spark::RemoteDebug;
+    RemoteDebugServer server;
     server.StartListening(0);
 
-    bool handlerCalled = false;
-    server.RegisterCommandHandler("direct_probe", [&](const Spark::RemoteDebug::RemoteCommand& command)
+    bool directHandlerCalled = false;
+    server.RegisterCommandHandler("direct_probe", [&](const RemoteCommand& command)
                                   {
-                                      handlerCalled = true;
-                                      return Spark::RemoteDebug::RemoteCommand{"direct_ok", "", command.requestId, 0.0f};
+                                      directHandlerCalled = true;
+                                      return RemoteCommand{"direct_ok", "", command.requestId, 0.0f};
                                   });
 
-    const Spark::RemoteDebug::RemoteCommand command{"direct_probe", "payload", 1, 0.0f};
+    const RemoteCommand command{"direct_probe", "payload", 1, 0.0f};
     const auto response = server.ProcessCommand(command);
-    EXPECT_FALSE(handlerCalled);
+    EXPECT_FALSE(directHandlerCalled);
     EXPECT_EQ(std::string("error"), response.type);
     EXPECT_STR_CONTAINS(response.payload, "access_denied");
-    EXPECT_TRUE(AuditEndsWith(server, Spark::RemoteDebug::RemoteDebugAuditDecision::AnonymousDenied));
-}
+    EXPECT_TRUE(AuditEndsWith(server, RemoteDebugAuditDecision::AnonymousDenied));
 
-TEST(RemoteDebugSystem_RawQueueAndCopiedCommandFailClosed)
-{
-    Spark::RemoteDebug::RemoteDebugServer server;
-    server.StartListening(0);
-
-    bool handlerCalled = false;
-    server.RegisterCommandHandler("queue_probe", [&](const Spark::RemoteDebug::RemoteCommand& command)
+    bool queueHandlerCalled = false;
+    server.RegisterCommandHandler("queue_probe", [&](const RemoteCommand& queued)
                                   {
-                                      handlerCalled = true;
-                                      return Spark::RemoteDebug::RemoteCommand{"queue_ok", "", command.requestId, 0.0f};
+                                      queueHandlerCalled = true;
+                                      return RemoteCommand{"queue_ok", "", queued.requestId, 0.0f};
                                   });
 
-    const Spark::RemoteDebug::RemoteCommand original{"queue_probe", "payload", 7, 0.0f};
-    const Spark::RemoteDebug::RemoteCommand copied = original;
+    const RemoteCommand original{"queue_probe", "payload", 7, 0.0f};
+    const RemoteCommand copied = original;
     server.GetSession().EnqueueReceived(original);
     server.Update();
 
-    Spark::RemoteDebug::RemoteCommand queuedResponse;
+    RemoteCommand queuedResponse;
     ASSERT_TRUE(server.GetSession().DequeuePendingSend(queuedResponse));
-    EXPECT_FALSE(handlerCalled);
+    EXPECT_FALSE(queueHandlerCalled);
     EXPECT_EQ(std::string("error"), queuedResponse.type);
     EXPECT_STR_CONTAINS(queuedResponse.payload, "access_denied");
 
     const auto copiedResponse = server.ProcessCommand(copied);
-    EXPECT_FALSE(handlerCalled);
+    EXPECT_FALSE(queueHandlerCalled);
     EXPECT_EQ(std::string("error"), copiedResponse.type);
     EXPECT_STR_CONTAINS(copiedResponse.payload, "access_denied");
-    EXPECT_TRUE(AuditEndsWith(server, Spark::RemoteDebug::RemoteDebugAuditDecision::AnonymousDenied));
+    EXPECT_TRUE(AuditEndsWith(server, RemoteDebugAuditDecision::AnonymousDenied));
+
+    auto& system = RemoteDebugSystem::GetInstance();
+    system.Initialize();
+    bool preAuthenticationHandlerCalled = false;
+    system.GetServer()->RegisterCommandHandler("preauth_probe", RemoteDebugCapability::Inspect,
+                                               [&](const RemoteCommand& queued)
+                                               {
+                                                   preAuthenticationHandlerCalled = true;
+                                                   return RemoteCommand{"preauth_ok", "", queued.requestId, 0.0f};
+                                               });
+    system.GetClient()->SendCommand({"preauth_probe", "", 1, 0.0f});
+    system.EnableLoopback();
+    system.Update(0.016f);
+    EXPECT_FALSE(preAuthenticationHandlerCalled);
+    EXPECT_TRUE(system.GetClient()->PollResponses().empty());
+    system.Shutdown();
 }
 
-TEST(RemoteDebugSystem_RolePolicyIsLeastPrivilege)
+TEST(RemoteAdmin_RoleMatrix)
 {
     using namespace Spark::RemoteDebug;
     EXPECT_TRUE(HasRemoteDebugCapability(CapabilitiesForRemoteDebugRole(RemoteDebugRole::Observer),
-                                          RemoteDebugCapability::Inspect));
+                                         RemoteDebugCapability::Inspect));
     EXPECT_FALSE(HasRemoteDebugCapability(CapabilitiesForRemoteDebugRole(RemoteDebugRole::Observer),
-                                           RemoteDebugCapability::ModifyProperties));
-    EXPECT_FALSE(HasRemoteDebugCapability(CapabilitiesForRemoteDebugRole(RemoteDebugRole::Observer),
-                                           RemoteDebugCapability::ExecuteConsole));
-    EXPECT_TRUE(HasRemoteDebugCapability(CapabilitiesForRemoteDebugRole(RemoteDebugRole::Operator),
                                           RemoteDebugCapability::ModifyProperties));
-    EXPECT_FALSE(HasRemoteDebugCapability(CapabilitiesForRemoteDebugRole(RemoteDebugRole::Operator),
-                                           RemoteDebugCapability::ExecuteConsole));
-    EXPECT_TRUE(HasRemoteDebugCapability(CapabilitiesForRemoteDebugRole(RemoteDebugRole::Administrator),
+    EXPECT_FALSE(HasRemoteDebugCapability(CapabilitiesForRemoteDebugRole(RemoteDebugRole::Observer),
                                           RemoteDebugCapability::ExecuteConsole));
-}
+    EXPECT_TRUE(HasRemoteDebugCapability(CapabilitiesForRemoteDebugRole(RemoteDebugRole::Operator),
+                                         RemoteDebugCapability::ModifyProperties));
+    EXPECT_FALSE(HasRemoteDebugCapability(CapabilitiesForRemoteDebugRole(RemoteDebugRole::Operator),
+                                          RemoteDebugCapability::ExecuteConsole));
+    EXPECT_TRUE(HasRemoteDebugCapability(CapabilitiesForRemoteDebugRole(RemoteDebugRole::Administrator),
+                                         RemoteDebugCapability::ExecuteConsole));
 
-TEST(RemoteDebugSystem_PublicLoopbackIsObserverOnly)
-{
-    auto& sys = Spark::RemoteDebug::RemoteDebugSystem::GetInstance();
+    auto& sys = RemoteDebugSystem::GetInstance();
     sys.Initialize();
     sys.EnableLoopback();
 
@@ -235,14 +259,24 @@ TEST(RemoteDebugSystem_PublicLoopbackIsObserverOnly)
     ASSERT_TRUE(client != nullptr);
     ASSERT_TRUE(server != nullptr);
 
+    bool defaultCapabilityHandlerCalled = false;
+    server->RegisterCommandHandler("default_capability_probe", RemoteDebugCapability::None,
+                                   [&](const RemoteCommand& command)
+                                   {
+                                       defaultCapabilityHandlerCalled = true;
+                                       return RemoteCommand{"default_capability_ok", "", command.requestId, 0.0f};
+                                   });
+
     const uint32_t inspectId = client->GetProperty("player.health");
     const uint32_t mutationId = client->SetProperty("player.health", "100");
     const uint32_t consoleId = client->ExecuteConsoleCommand("quit");
+    constexpr uint32_t defaultCapabilityId = 4;
+    client->SendCommand({"default_capability_probe", "", defaultCapabilityId, 0.0f});
     sys.Update(0.016f);
 
     const auto responses = client->PollResponses();
-    EXPECT_EQ(static_cast<size_t>(3), responses.size());
-    if (responses.size() == 3)
+    EXPECT_EQ(static_cast<size_t>(4), responses.size());
+    if (responses.size() == 4)
     {
         EXPECT_EQ(std::string("property_value"), responses[0].type);
         EXPECT_EQ(inspectId, responses[0].requestId);
@@ -250,13 +284,16 @@ TEST(RemoteDebugSystem_PublicLoopbackIsObserverOnly)
         EXPECT_EQ(mutationId, responses[1].requestId);
         EXPECT_TRUE(IsAccessDenied(responses[2]));
         EXPECT_EQ(consoleId, responses[2].requestId);
+        EXPECT_TRUE(IsAccessDenied(responses[3]));
+        EXPECT_EQ(defaultCapabilityId, responses[3].requestId);
     }
+    EXPECT_FALSE(defaultCapabilityHandlerCalled);
     EXPECT_TRUE(AuditEndsWith(*server, Spark::RemoteDebug::RemoteDebugAuditDecision::AuthorizationDenied));
 
     sys.Shutdown();
 }
 
-TEST(RemoteDebugSystem_PublicLoopbackReplayAndRateLimitFailClosed)
+TEST(RemoteAdmin_ReplayDenied)
 {
     using namespace Spark::RemoteDebug;
     auto& sys = RemoteDebugSystem::GetInstance();
@@ -279,12 +316,48 @@ TEST(RemoteDebugSystem_PublicLoopbackReplayAndRateLimitFailClosed)
         EXPECT_TRUE(IsAccessDenied(replayResponses[1]));
     }
     EXPECT_TRUE(AuditEndsWith(*server, RemoteDebugAuditDecision::ReplayDenied));
-    sys.Shutdown();
 
-    sys.Initialize();
+    std::atomic_uint32_t crossEpochEffects{0};
+    server->RegisterCommandHandler("cross_epoch_probe", RemoteDebugCapability::Inspect,
+                                   [&](const RemoteCommand& command)
+                                   {
+                                       ++crossEpochEffects;
+                                       return RemoteCommand{"cross_epoch_ok", "", command.requestId, 0.0f};
+                                   });
+    client->SendCommand({"cross_epoch_probe", "", 2, 0.0f});
+
+    // A new authority epoch must discard the pending old-epoch command rather
+    // than attaching the freshly minted principal in PumpLoopback.
     sys.EnableLoopback();
     client = sys.GetClient();
     server = sys.GetServer();
+    ASSERT_TRUE(client != nullptr);
+    ASSERT_TRUE(server != nullptr);
+    sys.Update(0.016f);
+    EXPECT_EQ(static_cast<uint32_t>(0), crossEpochEffects.load());
+    EXPECT_TRUE(client->PollResponses().empty());
+
+    // The same request identifier is valid in the new grant only when submitted
+    // after the new connected epoch is established.
+    client->SendCommand({"cross_epoch_probe", "", 1, 0.0f});
+    sys.Update(0.016f);
+    const auto currentEpochResponses = client->PollResponses();
+    EXPECT_EQ(static_cast<uint32_t>(1), crossEpochEffects.load());
+    EXPECT_EQ(static_cast<size_t>(1), currentEpochResponses.size());
+    if (!currentEpochResponses.empty())
+        EXPECT_EQ(std::string("cross_epoch_ok"), currentEpochResponses.front().type);
+    sys.Shutdown();
+}
+
+TEST(RemoteAdmin_RateLimited)
+{
+    using namespace Spark::RemoteDebug;
+    auto& sys = RemoteDebugSystem::GetInstance();
+    sys.Initialize();
+    sys.EnableLoopback();
+
+    auto* client = sys.GetClient();
+    auto* server = sys.GetServer();
     ASSERT_TRUE(client != nullptr);
     ASSERT_TRUE(server != nullptr);
     for (uint32_t requestId = 1; requestId <= RemoteDebugAccessControl::kMaxRequestsPerWindow + 1; ++requestId)

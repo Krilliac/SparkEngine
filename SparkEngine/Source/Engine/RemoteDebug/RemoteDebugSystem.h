@@ -69,11 +69,6 @@ namespace Spark::RemoteDebug
             std::lock_guard lk(m_mtx);
             return m_state;
         } ///< @brief Current state
-        void SetState(SessionState s)
-        {
-            std::lock_guard lk(m_mtx);
-            m_state = s;
-        } ///< @brief Set state
 
         void SetAddress(const std::string& a) { m_address = a; }    ///< @brief Set target address
         const std::string& GetAddress() const { return m_address; } ///< @brief Get target address
@@ -86,13 +81,6 @@ namespace Spark::RemoteDebug
         void AddUptime(float dt) { m_uptime += dt; } ///< @brief Accumulate uptime
         float GetPing() const { return m_pingMs; }   ///< @brief Smoothed RTT (ms)
         void SetPing(float ms) { m_pingMs = ms; }    ///< @brief Update ping
-
-        /** @brief Queue a command for sending (thread-safe) */
-        void EnqueueSend(const RemoteCommand& c)
-        {
-            std::lock_guard lk(m_mtx);
-            m_sendQ.push(c);
-        }
 
         /** @brief Drain one pending send; returns false if empty */
         bool DequeuePendingSend(RemoteCommand& out)
@@ -148,7 +136,31 @@ namespace Spark::RemoteDebug
 
       private:
         friend class RemoteDebugServer;
+        friend class RemoteDebugClient;
         friend class RemoteDebugSystem;
+
+        void SetState(SessionState s)
+        {
+            std::lock_guard lk(m_mtx);
+            m_state = s;
+        }
+
+        /** @brief Queue a server response inside the current session epoch. */
+        void EnqueueSend(const RemoteCommand& c)
+        {
+            std::lock_guard lk(m_mtx);
+            m_sendQ.push(c);
+        }
+
+        /** @brief Queue a client command only inside an established connection epoch. */
+        [[nodiscard]] bool EnqueueSendIfConnected(const RemoteCommand& c)
+        {
+            std::lock_guard lk(m_mtx);
+            if (m_state != SessionState::Connected)
+                return false;
+            m_sendQ.push(c);
+            return true;
+        }
 
         struct InboundCommand
         {
@@ -245,8 +257,11 @@ namespace Spark::RemoteDebug
         {
             // A restart starts a new authority epoch. Preserve the monotonically
             // increasing grant id in the access-control object so a stale copied
-            // principal cannot become valid again after reset.
+            // principal cannot become valid again after reset. Drop both queues
+            // before revocation so no prior-epoch request or response can cross
+            // the new authority boundary.
             std::unique_lock executionLock(m_executionMutex);
+            m_session.Reset();
             m_accessControl.RevokeAll();
             m_session.SetPort(port);
             m_session.SetState(SessionState::Listening);
@@ -493,6 +508,10 @@ namespace Spark::RemoteDebug
      */
         bool Connect(const std::string& address, uint16_t port = 9090)
         {
+            // A new target starts a new connection epoch. Commands and replies
+            // queued for a previous target must never inherit the next target's
+            // eventual authenticated connection.
+            m_session.Reset();
             m_session.SetAddress(address);
             m_session.SetPort(port);
             m_session.SetName("Editor@" + address);
@@ -503,8 +522,8 @@ namespace Spark::RemoteDebug
         /** @brief Disconnect from the game instance */
         void Disconnect() { m_session.Reset(); }
 
-        /** @brief Send a command to the connected game */
-        void SendCommand(const RemoteCommand& cmd) { m_session.EnqueueSend(cmd); }
+        /** @brief Send a command only after the client enters a connected epoch. */
+        void SendCommand(const RemoteCommand& cmd) { (void)m_session.EnqueueSendIfConnected(cmd); }
 
         /** @brief Drain all received responses since the last poll */
         std::vector<RemoteCommand> PollResponses()
@@ -685,6 +704,12 @@ namespace Spark::RemoteDebug
         {
             if (!m_initialized || !m_server || !m_client)
                 return;
+            // Close the previous client epoch before revoking or minting server
+            // authority. EnqueueSendIfConnected rejects concurrent/pre-auth
+            // commands until the new observer principal is ready.
+            m_loopbackEnabled = false;
+            m_loopbackPrincipal.reset();
+            m_client->Disconnect();
             m_server->StartListening(0);
             // Public loopback is intentionally observation-only. It is retained
             // for local tests and inspection but cannot acquire console or
