@@ -26,6 +26,10 @@ rollback, and release gates.
 include additional runtime diagnostics. The bootstrap installer clones and builds
 the selected engine revision locally.
 
+[![Windows Release Installer](https://img.shields.io/badge/Download-Windows_Release_Installer-2ea44f?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Release-Installer.exe)
+[![Windows Release ZIP](https://img.shields.io/badge/Download-Windows_Release_ZIP-0969da?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Release.zip)
+[![Windows Debug Installer](https://img.shields.io/badge/Download-Windows_Debug_Installer-8a2be2?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Debug-Installer.exe)
+[![Windows Debug ZIP](https://img.shields.io/badge/Download-Windows_Debug_ZIP-6f42c1?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Debug.zip)
 [![Bootstrap Installer](https://img.shields.io/badge/Download-Windows_Bootstrap_Installer-f97316?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkInstaller-Windows-x64.exe)
 
 [Current rolling artifacts and checksums](https://github.com/Krilliac/SparkEngine/releases/tag/nightly) ·
@@ -203,7 +207,7 @@ Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine
 
 ## Quality Assurance
 
-**Tests:** 6,952 test definitions across 575 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 6,963 test definitions across 576 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
 
 ```bash
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
@@ -373,7 +377,7 @@ SparkEngine/
 ├── SparkEditor/Source/    65 *Panel.h classes, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 in-tree module directories
-├── Tests/                 6,952 test definitions, 575 files
+├── Tests/                 6,963 test definitions, 576 files
 ├── wiki/                  198 Markdown pages excluding _Sidebar.md (inventory only)
 └── docs/                  API reference, guides
 ```

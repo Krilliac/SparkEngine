@@ -963,6 +963,21 @@ jobs:
       with:
         subject-path: ${{ steps.assets.outputs.files }}
 
+    - name: Resolve workflow run start time
+      id: run-start
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        RUN_STARTED_AT="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq '.run_started_at // empty')"
+        if [[ ! "$RUN_STARTED_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]; then
+          echo "Workflow run API returned an invalid run_started_at value." >&2
+          exit 1
+        fi
+        printf 'started_at=%s\n' "$RUN_STARTED_AT" >> "$GITHUB_OUTPUT"
+
     - name: Reverify frozen asset counts immediately before staging
       id: release-freeze
       env:
@@ -979,21 +994,6 @@ jobs:
           --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
           --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
           --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
-
-    - name: Resolve workflow run start time
-      id: run-start
-      env:
-        GH_TOKEN: ${{ github.token }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-        GITHUB_RUN_ID: ${{ github.run_id }}
-      run: |
-        set -euo pipefail
-        RUN_STARTED_AT="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq '.run_started_at // empty')"
-        if [[ ! "$RUN_STARTED_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]; then
-          echo "Workflow run API returned an invalid run_started_at value." >&2
-          exit 1
-        fi
-        printf 'started_at=%s\n' "$RUN_STARTED_AT" >> "$GITHUB_OUTPUT"
 
     - name: Stage new or interrupted stable versioned release as draft
       id: stable-stage

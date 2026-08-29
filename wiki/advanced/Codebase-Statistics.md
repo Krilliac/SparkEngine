@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-28.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-29.
 This source inventory is not readiness evidence. The `stable-v1` Windows 11
 x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
@@ -10,26 +10,26 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 311771 |
+| **SparkEngine/Source** | 313745 |
 | **SparkEditor/Source** | 109363 |
 | **GameModules** | 143040 |
 | **External services** | 11178 |
 | **Asset pipeline** | 2399 |
-| **Tests** | 169319 |
+| **Tests** | 170761 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~760520** |
+| **Total C++ (excl. ThirdParty)** | **~763936** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1050 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1533 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1051 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1535 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 575 |
+| Test-bearing implementation files (.cpp/.mm) | 576 |
 | Wiki pages (.md) | 198 |
 
 ### Largest Top-Level Source Section
@@ -42,10 +42,10 @@ Graphics contains 119471 lines, or 38% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 119471 | 38.3% |
-| Engine (all subsystems) | 87626 | 28.1% |
-| Utils | 42446 | 13.6% |
-| Core | 29651 | 9.5% |
+| Graphics | 119471 | 38.0% |
+| Engine (all subsystems) | 87626 | 27.9% |
+| Utils | 44097 | 14.0% |
+| Core | 29974 | 9.5% |
 | Physics | 10814 | 3.4% |
 | Audio | 6090 | 1.9% |
 | Input | 3953 | 1.2% |
@@ -109,8 +109,8 @@ It does not measure registration, runtime use, support, or readiness.
 
 | Metric | Count |
 |--------|------:|
-| Test files | 575 |
-| TEST() definitions | 6952 |
+| Test files | 576 |
+| TEST() definitions | 6963 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -172,6 +172,7 @@ inventory is implementation evidence, not support certification.
 | File | Lines |
 |------|------:|
 | `RenderGraph.h` | 1427 |
+| `Telemetry.h` | 1390 |
 | `GraphicsEngine.h` | 1260 |
 | `JsonUtils.h` | 1087 |
 | `EngineSettings.h` | 1080 |
@@ -180,7 +181,6 @@ inventory is implementation evidence, not support certification.
 | `PhysicsTypes.h` | 828 |
 | `MeshClusterSystem.h` | 824 |
 | `SVGRenderer.h` | 803 |
-| `DataTableSystem.h` | 800 |
 
 ### SparkEditor .cpp Files (by line count)
 
