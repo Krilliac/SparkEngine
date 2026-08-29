@@ -1697,7 +1697,7 @@
 | `Arrive` | function | Tests | [TestSteeringBehaviors.cpp:L94](../../Tests/TestSteeringBehaviors.cpp#L94) |  |
 | `arrowA` | function | SparkEditor | [SceneViewPanel.cpp:L959](../../SparkEditor/Source/Panels/SceneViewPanel.cpp#L959) |  |
 | `arrowB` | function | SparkEditor | [SceneViewPanel.cpp:L961](../../SparkEditor/Source/Panels/SceneViewPanel.cpp#L961) |  |
-| `Artifact` | function | Tests | [TestTelemetrySpool.cpp:L41](../../Tests/TestTelemetrySpool.cpp#L41) |  |
+| `Artifact` | function | Tests | [TestTelemetrySpool.cpp:L46](../../Tests/TestTelemetrySpool.cpp#L46) |  |
 | `ArtifactIdentity` | struct | SparkCrashReporter | [CrashReporterApp.h:L29](../../SparkCrashReporter/src/CrashReporterApp.h#L29) |  |
 | `ArtifactNameInPinnedRoot` | function | SparkEngine | [CrashHandler.cpp:L198](../../SparkEngine/Source/Utils/CrashHandler.cpp#L198) |  |
 | `ArtifactNameInRoot` | function | SparkCrashReporter | [CrashReporterApp.cpp:L676](../../SparkCrashReporter/src/CrashReporterApp.cpp#L676) |  |
@@ -2436,7 +2436,7 @@
 | `Backend_Shutdown` | function | SparkLauncher | [LauncherBackend.h:L13](../../SparkLauncher/src/LauncherBackend.h#L13) |  |
 | `Backend_Shutdown` | function | SparkLauncher | [LauncherBackendLinux.cpp:L107](../../SparkLauncher/src/LauncherBackendLinux.cpp#L107) |  |
 | `Backend_Shutdown` | function | SparkLauncher | [LauncherBackendWindows.cpp:L165](../../SparkLauncher/src/LauncherBackendWindows.cpp#L165) |  |
-| `BackendState` | struct | Tests | [TestTelemetrySpool.cpp:L54](../../Tests/TestTelemetrySpool.cpp#L54) |  |
+| `BackendState` | struct | Tests | [TestTelemetrySpool.cpp:L59](../../Tests/TestTelemetrySpool.cpp#L59) |  |
 | `BackgroundLoadingFunction` | function | SparkEditor | [LevelStreamingSystem.h:L366](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L366) | Background loading thread function |
 | `BackgroundLoadState` | enum | SparkEditor | [LevelStreamingEnums.h:L138](../../SparkEditor/Source/Enums/LevelStreamingEnums.h#L138) | Background loading states |
 | `backL` | function | GameModules | [TFMinimap.cpp:L265](../../GameModules/SparkGameMMOFPS/Source/UI/TFMinimap.cpp#L265) |  |
@@ -2766,7 +2766,7 @@
 | `Blob` | function | Tests | [TestDaemonLRU.cpp:L44](../../Tests/TestDaemonLRU.cpp#L44) |  |
 | `BlobDraw` | struct | GameModules | [TFBlobShadows.h:L91](../../GameModules/SparkGameMMOFPS/Source/Game/TFBlobShadows.h#L91) |  |
 | `Blocked` | function | GameModules | [TFSocialSystem.h:L99](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L99) |  |
-| `blockedCarryoverSpool` | function | Tests | [TestTelemetrySpool.cpp:L621](../../Tests/TestTelemetrySpool.cpp#L621) |  |
+| `blockedCarryoverSpool` | function | Tests | [TestTelemetrySpool.cpp:L626](../../Tests/TestTelemetrySpool.cpp#L626) |  |
 | `BlockedMoveCount` | function | GameModules | [TFWorldCollision.h:L152](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.h#L152) |  |
 | `BlockedMovesNow` | function | GameModules | [TFChaosHarness.h:L87](../../GameModules/SparkGameMMOFPS/Source/Game/TFChaosHarness.h#L87) |  |
 | `blocker` | function | Tests | [TestTFOnboarding.cpp:L518](../../Tests/TestTFOnboarding.cpp#L518) |  |
@@ -3288,9 +3288,9 @@
 | `byte_size` | function | SparkEngine | [AlignedHeapArray.h:L99](../../SparkEngine/Source/Utils/AlignedHeapArray.h#L99) |  |
 | `byte_size` | function | SparkEngine | [AlignedHeapArray.h:L190](../../SparkEngine/Source/Utils/AlignedHeapArray.h#L190) |  |
 | `ByteBuffer` | class | Tests | [TestCrossSystemIntegration.cpp:L168](../../Tests/TestCrossSystemIntegration.cpp#L168) |  |
-| `byteCapSpool` | function | Tests | [TestTelemetrySpool.cpp:L451](../../Tests/TestTelemetrySpool.cpp#L451) |  |
+| `byteCapSpool` | function | Tests | [TestTelemetrySpool.cpp:L456](../../Tests/TestTelemetrySpool.cpp#L456) |  |
 | `bytecodeAsString` | function | Tests | [TestGLSLPipelineIntegration.cpp:L107](../../Tests/TestGLSLPipelineIntegration.cpp#L107) |  |
-| `byteMergeSpool` | function | Tests | [TestTelemetrySpool.cpp:L553](../../Tests/TestTelemetrySpool.cpp#L553) |  |
+| `byteMergeSpool` | function | Tests | [TestTelemetrySpool.cpp:L558](../../Tests/TestTelemetrySpool.cpp#L558) |  |
 | `bytes` | function | SparkDaemon | [OrchestrationJournal.cpp:L120](../../SparkDaemon/src/OrchestrationJournal.cpp#L120) |  |
 | `bytes` | function | SparkEngine | [StartupSplash.cpp:L497](../../SparkEngine/Source/Core/StartupSplash.cpp#L497) |  |
 | `bytes` | function | SparkEngine | [LocalFileCache.h:L116](../../SparkEngine/Source/Utils/LocalFileCache.h#L116) |  |
@@ -3410,7 +3410,7 @@
 | `CallbackHandle` | alias | Tests | [TestScheduledCallback.cpp:L13](../../Tests/TestScheduledCallback.cpp#L13) |  |
 | `CallbackSink` | class | SparkEngine | [Logger.h:L354](../../SparkEngine/Source/Utils/Logger.h#L354) | Calls a user-provided callback for each log message |
 | `CallbackSink` | function | SparkEngine | [Logger.h:L359](../../SparkEngine/Source/Utils/Logger.h#L359) | Calls a user-provided callback for each log message |
-| `CallCount` | function | Tests | [TestTelemetrySpool.cpp:L63](../../Tests/TestTelemetrySpool.cpp#L63) |  |
+| `CallCount` | function | Tests | [TestTelemetrySpool.cpp:L68](../../Tests/TestTelemetrySpool.cpp#L68) |  |
 | `CallEnter` | function | SparkEngine | [StateMachine.h:L269](../../SparkEngine/Source/Utils/StateMachine.h#L269) |  |
 | `CallExit` | function | SparkEngine | [StateMachine.h:L283](../../SparkEngine/Source/Utils/StateMachine.h#L283) |  |
 | `CallOnCollision` | function | SparkEngine | [AngelScriptEngine.h:L194](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h#L194) | Call the script's OnCollision(EntityID) method for an entity |
@@ -3584,7 +3584,7 @@
 | `Capture` | function | SparkEngine | [StackTrace.h:L106](../../SparkEngine/Source/Utils/StackTrace.h#L106) | Capture the current call stack |
 | `capture` | function | Tests | [TestMetalRayTracingLive.mm:L290](../../Tests/TestMetalRayTracingLive.mm#L290) |  |
 | `capture` | function | Tests | [TestMetalRayTracingLive.mm:L334](../../Tests/TestMetalRayTracingLive.mm#L334) |  |
-| `Capture` | function | Tests | [TestTelemetrySpool.cpp:L56](../../Tests/TestTelemetrySpool.cpp#L56) |  |
+| `Capture` | function | Tests | [TestTelemetrySpool.cpp:L61](../../Tests/TestTelemetrySpool.cpp#L61) |  |
 | `CaptureAuthoredScene` | function | Templates | [GameModule.h:L256](../../Templates/PlatformerKit/Source/GameModule.h#L256) |  |
 | `CaptureAuthoredScene` | function | Templates | [GameModule.h:L270](../../Templates/RPGStarter/Source/GameModule.h#L270) |  |
 | `CaptureDocumentSnapshot` | function | SparkEditor | [EditorUI.h:L199](../../SparkEditor/Source/Core/EditorUI.h#L199) |  |
@@ -9650,14 +9650,14 @@
 | `EventBus` | class | SparkServer | [ServerApplication.h:L27](../../SparkServer/src/ServerApplication.h#L27) |  |
 | `EventBus` | class | Tests | [TestEventSystem.cpp:L19](../../Tests/TestEventSystem.cpp#L19) |  |
 | `EventCallback` | alias | SparkEngine | [Sequencer.h:L254](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L254) |  |
-| `eventCapSpool` | function | Tests | [TestTelemetrySpool.cpp:L349](../../Tests/TestTelemetrySpool.cpp#L349) |  |
+| `eventCapSpool` | function | Tests | [TestTelemetrySpool.cpp:L354](../../Tests/TestTelemetrySpool.cpp#L354) |  |
 | `EventCategory` | enum | SparkEditor | [EventMonitorPanel.h:L36](../../SparkEditor/Source/Panels/EventMonitorPanel.h#L36) |  |
 | `EventCount` | function | SparkEngine | [ChromeTracing.h:L142](../../SparkEngine/Source/Utils/ChromeTracing.h#L142) |  |
 | `EventCue` | struct | SparkEngine | [Sequencer.h:L106](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L106) |  |
 | `EventCue` | struct | Tests | [TestSequencer.cpp:L72](../../Tests/TestSequencer.cpp#L72) |  |
 | `EventEntityID` | alias | SparkEngine | [EntityEventBus.h:L46](../../SparkEngine/Source/Utils/EntityEventBus.h#L46) | Entity identifier for event addressing (matches EnTT entity or network ID) |
 | `EventEntry` | struct | SparkEditor | [EventMonitorPanel.h:L47](../../SparkEditor/Source/Panels/EventMonitorPanel.h#L47) |  |
-| `eventMergeSpool` | function | Tests | [TestTelemetrySpool.cpp:L475](../../Tests/TestTelemetrySpool.cpp#L475) |  |
+| `eventMergeSpool` | function | Tests | [TestTelemetrySpool.cpp:L480](../../Tests/TestTelemetrySpool.cpp#L480) |  |
 | `EventMethod` | struct | SparkEngine | [VisualScriptCompiler.cpp:L849](../../SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.cpp#L849) |  |
 | `EventMonitorPanel` | class | SparkEditor | [EventMonitorPanel.h:L24](../../SparkEditor/Source/Panels/EventMonitorPanel.h#L24) | Panel for monitoring the engine's EventBus in real-time |
 | `EventMonitorPanel::GetCategoryColor` | method | SparkEditor | [EventMonitorPanel.cpp:L162](../../SparkEditor/Source/Panels/EventMonitorPanel.cpp#L162) |  |
@@ -9705,7 +9705,7 @@
 | `EventResponseSystem::UnsubscribeFromEvents` | method | SparkEngine | [EventResponseSystem.cpp:L210](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L210) |  |
 | `EventResponseSystem::Update` | method | SparkEngine | [EventResponseSystem.cpp:L56](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L56) |  |
 | `Events` | function | GameModules | [SparkGameMMOFPS.h:L60](../../GameModules/SparkGameMMOFPS/Source/Core/SparkGameMMOFPS.h#L60) |  |
-| `Events` | function | Tests | [TestTelemetrySpool.cpp:L69](../../Tests/TestTelemetrySpool.cpp#L69) |  |
+| `Events` | function | Tests | [TestTelemetrySpool.cpp:L74](../../Tests/TestTelemetrySpool.cpp#L74) |  |
 | `EventSerializedSize` | function | SparkEngine | [TelemetrySpool.cpp:L66](../../SparkEngine/Source/Utils/TelemetrySpool.cpp#L66) |  |
 | `EventState` | enum | GameModules | [OpenWorldEnums.h:L180](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L180) | Event lifecycle state |
 | `EventTrack` | class | SparkEngine | [Sequencer.h:L209](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L209) |  |
@@ -9867,7 +9867,7 @@
 | `executionPosition` | function | SparkEngine | [RenderGraph.h:L728](../../SparkEngine/Source/Graphics/RenderGraph.h#L728) |  |
 | `executor` | function | Tests | [TestSparkConsoleConcurrency.cpp:L66](../../Tests/TestSparkConsoleConcurrency.cpp#L66) |  |
 | `exePath` | function | SparkEngine | [SparkEngineMacOS.cpp:L94](../../SparkEngine/Source/Core/SparkEngineMacOS.cpp#L94) |  |
-| `ExerciseRejectedArtifact` | function | Tests | [TestTelemetrySpool.cpp:L154](../../Tests/TestTelemetrySpool.cpp#L154) |  |
+| `ExerciseRejectedArtifact` | function | Tests | [TestTelemetrySpool.cpp:L159](../../Tests/TestTelemetrySpool.cpp#L159) |  |
 | `existing` | struct | SparkDaemon | [DaemonServer.cpp:L386](../../SparkDaemon/src/DaemonServer.cpp#L386) |  |
 | `existing` | struct | SparkGateway | [GatewayAreaControl.cpp:L284](../../SparkGateway/src/GatewayAreaControl.cpp#L284) |  |
 | `ExistingDefaultAudio` | function | SparkEngine | [StartupSplash.cpp:L375](../../SparkEngine/Source/Core/StartupSplash.cpp#L375) |  |
@@ -10888,7 +10888,7 @@
 | `firstShutdown` | function | Tests | [Test_tests_enginecontext_real.cpp:L592](../../Tests/harden/Test_tests_enginecontext_real.cpp#L592) |  |
 | `firstThread` | function | Tests | [TestDaemonFoundation.cpp:L188](../../Tests/TestDaemonFoundation.cpp#L188) |  |
 | `FitsQueueByteBudget` | function | SparkEngine | [Telemetry.h:L902](../../SparkEngine/Source/Utils/Telemetry.h#L902) |  |
-| `FixedResultTelemetryBackend` | class | Tests | [TestTelemetrySpool.cpp:L80](../../Tests/TestTelemetrySpool.cpp#L80) |  |
+| `FixedResultTelemetryBackend` | class | Tests | [TestTelemetrySpool.cpp:L85](../../Tests/TestTelemetrySpool.cpp#L85) |  |
 | `FixedStep` | class | Tests | [TestExtendedSystems.cpp:L371](../../Tests/TestExtendedSystems.cpp#L371) |  |
 | `FixedStepProbe` | struct | Tests | [TestTFFixedStep.cpp:L14](../../Tests/TestTFFixedStep.cpp#L14) |  |
 | `FixedTimestepAccumulator` | class | SparkEngine | [FixedTimestepAccumulator.h:L32](../../SparkEngine/Source/Core/FixedTimestepAccumulator.h#L32) | Singleton fixed-timestep accumulator for the main loop |
@@ -12434,7 +12434,7 @@
 | `GetBackendName` | function | SparkEngine | [Telemetry.h:L139](../../SparkEngine/Source/Utils/Telemetry.h#L139) | Human-readable backend name. |
 | `GetBackendName` | function | SparkEngine | [Telemetry.h:L217](../../SparkEngine/Source/Utils/Telemetry.h#L217) |  |
 | `GetBackendName` | function | Tests | [TestTelemetry.cpp:L34](../../Tests/TestTelemetry.cpp#L34) |  |
-| `GetBackendName` | function | Tests | [TestTelemetrySpool.cpp:L94](../../Tests/TestTelemetrySpool.cpp#L94) |  |
+| `GetBackendName` | function | Tests | [TestTelemetrySpool.cpp:L99](../../Tests/TestTelemetrySpool.cpp#L99) |  |
 | `GetBackendType` | function | SparkEngine | [D3D11Device.h:L310](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L310) |  |
 | `GetBackendType` | function | SparkEngine | [D3D12Device.h:L125](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L125) |  |
 | `GetBackendType` | function | SparkEngine | [MetalDevice.h:L493](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L493) |  |
@@ -19237,7 +19237,7 @@
 | `input` | function | Tests | [TestSecureRandom.cpp:L37](../../Tests/TestSecureRandom.cpp#L37) |  |
 | `input` | function | Tests | [TestTFOnboarding.cpp:L235](../../Tests/TestTFOnboarding.cpp#L235) |  |
 | `input` | function | Tests | [TestTFSocialStore.cpp:L36](../../Tests/TestTFSocialStore.cpp#L36) |  |
-| `input` | function | Tests | [TestTelemetrySpool.cpp:L135](../../Tests/TestTelemetrySpool.cpp#L135) |  |
+| `input` | function | Tests | [TestTelemetrySpool.cpp:L140](../../Tests/TestTelemetrySpool.cpp#L140) |  |
 | `input` | function | Tests | [TestUILayoutExtensions.cpp:L174](../../Tests/TestUILayoutExtensions.cpp#L174) |  |
 | `input` | function | Tests | [TestUILayoutExtensions.cpp:L181](../../Tests/TestUILayoutExtensions.cpp#L181) |  |
 | `input` | function | Tests | [TestUILayoutExtensions.cpp:L189](../../Tests/TestUILayoutExtensions.cpp#L189) |  |
@@ -23011,9 +23011,9 @@
 | `lock` | function | Tests | [TestRemoteDebugSystem.cpp:L394](../../Tests/TestRemoteDebugSystem.cpp#L394) |  |
 | `lock` | function | Tests | [TestRemoteDebugSystem.cpp:L402](../../Tests/TestRemoteDebugSystem.cpp#L402) |  |
 | `lock` | function | Tests | [TestTelemetry.cpp:L19](../../Tests/TestTelemetry.cpp#L19) |  |
-| `lock` | function | Tests | [TestTelemetrySpool.cpp:L58](../../Tests/TestTelemetrySpool.cpp#L58) |  |
-| `lock` | function | Tests | [TestTelemetrySpool.cpp:L65](../../Tests/TestTelemetrySpool.cpp#L65) |  |
-| `lock` | function | Tests | [TestTelemetrySpool.cpp:L71](../../Tests/TestTelemetrySpool.cpp#L71) |  |
+| `lock` | function | Tests | [TestTelemetrySpool.cpp:L63](../../Tests/TestTelemetrySpool.cpp#L63) |  |
+| `lock` | function | Tests | [TestTelemetrySpool.cpp:L70](../../Tests/TestTelemetrySpool.cpp#L70) |  |
+| `lock` | function | Tests | [TestTelemetrySpool.cpp:L76](../../Tests/TestTelemetrySpool.cpp#L76) |  |
 | `lock` | function | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L178](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L178) |  |
 | `lock` | function | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L183](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L183) |  |
 | `lock` | function | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L194](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L194) |  |
@@ -23471,7 +23471,7 @@
 | `MakeSource` | function | Tests | [TestShaderCrossCompilerPhaseW.cpp:L42](../../Tests/TestShaderCrossCompilerPhaseW.cpp#L42) |  |
 | `MakeSource` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L46](../../Tests/TestShaderDiskCachePhaseV.cpp#L46) |  |
 | `MakeSpecies` | function | Tests | [TestFoliageSystem.cpp:L20](../../Tests/TestFoliageSystem.cpp#L20) |  |
-| `MakeSpoolConfig` | function | Tests | [TestTelemetrySpool.cpp:L119](../../Tests/TestTelemetrySpool.cpp#L119) |  |
+| `MakeSpoolConfig` | function | Tests | [TestTelemetrySpool.cpp:L124](../../Tests/TestTelemetrySpool.cpp#L124) |  |
 | `MakeStagePath` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L200](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L200) |  |
 | `MakeStraightChainLocals` | function | Tests | [Test_tests_inversekinematics.cpp:L76](../../Tests/harden/Test_tests_inversekinematics.cpp#L76) |  |
 | `MakeString` | function | GameModules | [MMOPersistenceSystem.cpp:L39](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp#L39) |  |
@@ -23502,7 +23502,7 @@
 | `MakeVolume` | function | Tests | [TestFoliageSystem.cpp:L38](../../Tests/TestFoliageSystem.cpp#L38) |  |
 | `MakeWallDepth` | function | Tests | [TestGTAOEffect.cpp:L36](../../Tests/TestGTAOEffect.cpp#L36) |  |
 | `MakeWindowLayoutFile` | function | Tests | [TestEditorWindowManager.cpp:L232](../../Tests/TestEditorWindowManager.cpp#L232) |  |
-| `malformed` | function | Tests | [TestTelemetrySpool.cpp:L807](../../Tests/TestTelemetrySpool.cpp#L807) |  |
+| `malformed` | function | Tests | [TestTelemetrySpool.cpp:L812](../../Tests/TestTelemetrySpool.cpp#L812) |  |
 | `ManagedArea` | struct | SparkEngine | [SeamlessAreaManagerTypes.h:L68](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManagerTypes.h#L68) | Runtime state for a managed area |
 | `ManagedArea` | struct | Tests | [TestSeamlessAreaManager.cpp:L41](../../Tests/TestSeamlessAreaManager.cpp#L41) |  |
 | `ManagedTimer` | struct | SparkEngine | [TimerManager.h:L66](../../SparkEngine/Source/Utils/TimerManager.h#L66) | A single managed timer |
@@ -25598,7 +25598,7 @@
 | `NON_MOVING` | function | SparkEngine | [PhysicsSystem.cpp:L68](../../SparkEngine/Source/Physics/PhysicsSystem.cpp#L68) |  |
 | `NonNull` | function | SparkEngine | [NonNull.h:L46](../../SparkEngine/Source/Core/NonNull.h#L46) |  |
 | `NonNull` | function | SparkEngine | [NonNull.h:L71](../../SparkEngine/Source/Core/NonNull.h#L71) |  |
-| `nonRegular` | function | Tests | [TestTelemetrySpool.cpp:L823](../../Tests/TestTelemetrySpool.cpp#L823) |  |
+| `nonRegular` | function | Tests | [TestTelemetrySpool.cpp:L828](../../Tests/TestTelemetrySpool.cpp#L828) |  |
 | `Norm3` | function | GameModules | [TFDayNight.cpp:L41](../../GameModules/SparkGameMMOFPS/Source/World/TFDayNight.cpp#L41) |  |
 | `NormalCone` | struct | SparkEngine | [MeshClusterSystem.h:L72](../../SparkEngine/Source/Graphics/MeshClusterSystem.h#L72) | Cone bounding all triangle normals within a cluster |
 | `Normalize` | function | SparkEngine | [HRTFProcessor.cpp:L38](../../SparkEngine/Source/Audio/HRTFProcessor.cpp#L38) |  |
@@ -26558,11 +26558,11 @@
 | `output` | function | Tests | [TestTFSocialStore.cpp:L87](../../Tests/TestTFSocialStore.cpp#L87) |  |
 | `output` | function | Tests | [TestTFSocialStore.cpp:L151](../../Tests/TestTFSocialStore.cpp#L151) |  |
 | `output` | function | Tests | [TestTFSocialStore.cpp:L180](../../Tests/TestTFSocialStore.cpp#L180) |  |
-| `output` | function | Tests | [TestTelemetrySpool.cpp:L46](../../Tests/TestTelemetrySpool.cpp#L46) |  |
-| `output` | function | Tests | [TestTelemetrySpool.cpp:L777](../../Tests/TestTelemetrySpool.cpp#L777) |  |
-| `output` | function | Tests | [TestTelemetrySpool.cpp:L826](../../Tests/TestTelemetrySpool.cpp#L826) |  |
-| `output` | function | Tests | [TestTelemetrySpool.cpp:L842](../../Tests/TestTelemetrySpool.cpp#L842) |  |
-| `output` | function | Tests | [TestTelemetrySpool.cpp:L866](../../Tests/TestTelemetrySpool.cpp#L866) |  |
+| `output` | function | Tests | [TestTelemetrySpool.cpp:L51](../../Tests/TestTelemetrySpool.cpp#L51) |  |
+| `output` | function | Tests | [TestTelemetrySpool.cpp:L782](../../Tests/TestTelemetrySpool.cpp#L782) |  |
+| `output` | function | Tests | [TestTelemetrySpool.cpp:L831](../../Tests/TestTelemetrySpool.cpp#L831) |  |
+| `output` | function | Tests | [TestTelemetrySpool.cpp:L847](../../Tests/TestTelemetrySpool.cpp#L847) |  |
+| `output` | function | Tests | [TestTelemetrySpool.cpp:L871](../../Tests/TestTelemetrySpool.cpp#L871) |  |
 | `output` | function | Tests | [TestWorldBasicRender.cpp:L61](../../Tests/TestWorldBasicRender.cpp#L61) |  |
 | `output` | function | Tests | [Test_persistence_SaveSystem.cpp:L143](../../Tests/harden/Test_persistence_SaveSystem.cpp#L143) |  |
 | `output` | function | Tests | [Test_persistence_SaveSystem.cpp:L608](../../Tests/harden/Test_persistence_SaveSystem.cpp#L608) |  |
@@ -26594,8 +26594,8 @@
 | `OverlaySection` | enum | SparkEngine | [DebugOverlay.h:L49](../../SparkEngine/Source/Utils/DebugOverlay.h#L49) | Sections that can be individually toggled in the overlay |
 | `OverlayStat` | struct | SparkEngine | [DebugOverlay.h:L78](../../SparkEngine/Source/Utils/DebugOverlay.h#L78) | Real-time stat entry for the overlay |
 | `oversized` | function | Tests | [TestEngineInterfaceProtocol.cpp:L100](../../Tests/TestEngineInterfaceProtocol.cpp#L100) |  |
-| `oversized` | function | Tests | [TestTelemetrySpool.cpp:L814](../../Tests/TestTelemetrySpool.cpp#L814) |  |
-| `oversizedBytes` | function | Tests | [TestTelemetrySpool.cpp:L815](../../Tests/TestTelemetrySpool.cpp#L815) |  |
+| `oversized` | function | Tests | [TestTelemetrySpool.cpp:L819](../../Tests/TestTelemetrySpool.cpp#L819) |  |
+| `oversizedBytes` | function | Tests | [TestTelemetrySpool.cpp:L820](../../Tests/TestTelemetrySpool.cpp#L820) |  |
 | `oversizedKey` | function | Tests | [Test_persistence_SaveSystem.cpp:L1035](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1035) |  |
 | `oversizedLog` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L531](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L531) |  |
 | `OWDynamicEventSystem` | class | GameModules | [SparkGameOpenWorld.h:L28](../../GameModules/SparkGameOpenWorld/Source/Core/SparkGameOpenWorld.h#L28) |  |
@@ -29493,14 +29493,14 @@
 | `queue` | function | Tests | [TestUtilsStress.cpp:L187](../../Tests/TestUtilsStress.cpp#L187) |  |
 | `QueueAudioCue` | function | SparkEngine | [Sequencer.h:L381](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L381) |  |
 | `QueueBatchNotification` | function | SparkEditor | [AdvancedAssetPipeline.h:L474](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L474) | Process next job in queue |
-| `queueByteCapSpool` | function | Tests | [TestTelemetrySpool.cpp:L422](../../Tests/TestTelemetrySpool.cpp#L422) |  |
+| `queueByteCapSpool` | function | Tests | [TestTelemetrySpool.cpp:L427](../../Tests/TestTelemetrySpool.cpp#L427) |  |
 | `QueueChange` | function | SparkEngine | [FileWatcher.h:L427](../../SparkEngine/Source/Utils/FileWatcher/FileWatcher.h#L427) |  |
 | `QueueCommand` | function | GameModules | [RTSCommandSystem.h:L59](../../GameModules/SparkGameRTS/Source/Command/RTSCommandSystem.h#L59) |  |
 | `QueueConstraintResult` | struct | SparkEngine | [Telemetry.h:L828](../../SparkEngine/Source/Utils/Telemetry.h#L828) |  |
 | `QueuedEventBus` | class | SparkEngine | [EventSystem.h:L307](../../SparkEngine/Source/Engine/Events/EventSystem.h#L307) |  |
 | `QueueEvent` | function | SparkEngine | [EventSystem.h:L323](../../SparkEngine/Source/Engine/Events/EventSystem.h#L323) | Queue an event for deferred dispatch at Normal priority. Thread-safe. |
 | `QueueEvent` | function | SparkEngine | [EventSystem.h:L331](../../SparkEngine/Source/Engine/Events/EventSystem.h#L331) | Queue an event for deferred dispatch at a specific priority. Thread-safe. |
-| `queueEventCapSpool` | function | Tests | [TestTelemetrySpool.cpp:L387](../../Tests/TestTelemetrySpool.cpp#L387) |  |
+| `queueEventCapSpool` | function | Tests | [TestTelemetrySpool.cpp:L392](../../Tests/TestTelemetrySpool.cpp#L392) |  |
 | `queueFamilies` | function | SparkEngine | [VulkanDevice.cpp:L663](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L663) |  |
 | `QueueFamilyIndices` | struct | SparkEngine | [VulkanDevice.h:L95](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L95) |  |
 | `QueueFor` | function | SparkEngine | [EventSystem.h:L384](../../SparkEngine/Source/Engine/Events/EventSystem.h#L384) | Number of events currently waiting in a specific priority tier. |
@@ -30016,7 +30016,7 @@
 | `ReadFile` | function | SparkEngine | [GLTFStaticMeshLoader.cpp:L59](../../SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp#L59) |  |
 | `ReadFile` | function | SparkInstaller | [InstallState.cpp:L48](../../SparkInstaller/src/InstallState.cpp#L48) |  |
 | `ReadFile` | function | Tests | [TestSparkPak.cpp:L208](../../Tests/TestSparkPak.cpp#L208) |  |
-| `ReadFile` | function | Tests | [TestTelemetrySpool.cpp:L133](../../Tests/TestTelemetrySpool.cpp#L133) |  |
+| `ReadFile` | function | Tests | [TestTelemetrySpool.cpp:L138](../../Tests/TestTelemetrySpool.cpp#L138) |  |
 | `ReadFileBounded` | function | SparkDaemon | [OrchestrationJournal.cpp:L90](../../SparkDaemon/src/OrchestrationJournal.cpp#L90) |  |
 | `ReadFileContents` | function | SparkEngine | [ShaderCompilationLinuxInternal.h:L37](../../SparkEngine/Source/Graphics/ShaderCompilationLinuxInternal.h#L37) |  |
 | `ReadFileContents` | function | SparkEngine | [ShaderHotReload.cpp:L206](../../SparkEngine/Source/Graphics/ShaderHotReload.cpp#L206) |  |
@@ -30086,7 +30086,7 @@
 | `ReadRequiredUInt` | function | SparkEngine | [DynamicPluginHost.cpp:L364](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L364) |  |
 | `ReadSigned` | function | SparkEditor | [SceneComponentCodec.h:L65](../../SparkEditor/Source/SceneSystem/SceneComponentCodec.h#L65) |  |
 | `ReadSmallFile` | function | SparkLauncher | [LauncherApp.cpp:L29](../../SparkLauncher/src/LauncherApp.cpp#L29) |  |
-| `ReadSpoolEventCount` | function | Tests | [TestTelemetrySpool.cpp:L139](../../Tests/TestTelemetrySpool.cpp#L139) |  |
+| `ReadSpoolEventCount` | function | Tests | [TestTelemetrySpool.cpp:L144](../../Tests/TestTelemetrySpool.cpp#L144) |  |
 | `ReadState` | struct | SparkEngine | [CrashReportUploader.cpp:L919](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L919) |  |
 | `ReadStateFile` | function | SparkDaemon | [OrchestratorIdentity.cpp:L90](../../SparkDaemon/src/OrchestratorIdentity.cpp#L90) |  |
 | `ReadStateFile` | function | SparkDaemon | [OrchestratorIdentity.cpp:L167](../../SparkDaemon/src/OrchestratorIdentity.cpp#L167) |  |
@@ -30358,7 +30358,7 @@
 | `RedeployFacts` | struct | Tests | [TestTFRedeployRules.cpp:L77](../../Tests/TestTFRedeployRules.cpp#L77) |  |
 | `RedeployPending` | function | GameModules | [TFMapScreen.h:L78](../../GameModules/SparkGameMMOFPS/Source/UI/TFMapScreen.h#L78) |  |
 | `RedeployTarget` | function | GameModules | [TFMapScreen.h:L80](../../GameModules/SparkGameMMOFPS/Source/UI/TFMapScreen.h#L80) |  |
-| `redirected` | function | Tests | [TestTelemetrySpool.cpp:L861](../../Tests/TestTelemetrySpool.cpp#L861) |  |
+| `redirected` | function | Tests | [TestTelemetrySpool.cpp:L866](../../Tests/TestTelemetrySpool.cpp#L866) |  |
 | `RedirectProtocolPolicy` | function | SparkBuild | [DownloadSecurity.cpp:L151](../../SparkBuild/src/DownloadSecurity.cpp#L151) |  |
 | `Redo` | function | SparkEditor | [CommandHistory.h:L142](../../SparkEditor/Source/CommandHistory.h#L142) | Redo the most recently undone command. |
 | `Redo` | function | SparkEditor | [UndoRedoManager.h:L70](../../SparkEditor/Source/UndoRedo/UndoRedoManager.h#L70) | Redo the most recently undone command |
@@ -32334,13 +32334,13 @@
 | `Reset` | function | Tests | [TestNetBuffer.cpp:L157](../../Tests/TestNetBuffer.cpp#L157) |  |
 | `Reset` | function | Tests | [TestNetworkEncryption.cpp:L168](../../Tests/TestNetworkEncryption.cpp#L168) |  |
 | `Reset` | function | Tests | [TestPerformanceStats.cpp:L134](../../Tests/TestPerformanceStats.cpp#L134) |  |
-| `reset` | function | Tests | [TestTelemetrySpool.cpp:L181](../../Tests/TestTelemetrySpool.cpp#L181) |  |
-| `reset` | function | Tests | [TestTelemetrySpool.cpp:L263](../../Tests/TestTelemetrySpool.cpp#L263) |  |
-| `reset` | function | Tests | [TestTelemetrySpool.cpp:L309](../../Tests/TestTelemetrySpool.cpp#L309) |  |
-| `reset` | function | Tests | [TestTelemetrySpool.cpp:L348](../../Tests/TestTelemetrySpool.cpp#L348) |  |
-| `reset` | function | Tests | [TestTelemetrySpool.cpp:L773](../../Tests/TestTelemetrySpool.cpp#L773) |  |
-| `reset` | function | Tests | [TestTelemetrySpool.cpp:L805](../../Tests/TestTelemetrySpool.cpp#L805) |  |
-| `reset` | function | Tests | [TestTelemetrySpool.cpp:L838](../../Tests/TestTelemetrySpool.cpp#L838) |  |
+| `reset` | function | Tests | [TestTelemetrySpool.cpp:L186](../../Tests/TestTelemetrySpool.cpp#L186) |  |
+| `reset` | function | Tests | [TestTelemetrySpool.cpp:L268](../../Tests/TestTelemetrySpool.cpp#L268) |  |
+| `reset` | function | Tests | [TestTelemetrySpool.cpp:L314](../../Tests/TestTelemetrySpool.cpp#L314) |  |
+| `reset` | function | Tests | [TestTelemetrySpool.cpp:L353](../../Tests/TestTelemetrySpool.cpp#L353) |  |
+| `reset` | function | Tests | [TestTelemetrySpool.cpp:L778](../../Tests/TestTelemetrySpool.cpp#L778) |  |
+| `reset` | function | Tests | [TestTelemetrySpool.cpp:L810](../../Tests/TestTelemetrySpool.cpp#L810) |  |
+| `reset` | function | Tests | [TestTelemetrySpool.cpp:L843](../../Tests/TestTelemetrySpool.cpp#L843) |  |
 | `ResetAbilitySystem` | function | Tests | [TestAbilitySystemReal.cpp:L11](../../Tests/TestAbilitySystemReal.cpp#L11) | Real-class tests for Spark::Gameplay::AbilitySystem (registration/query API) |
 | `ResetAchievements` | function | Tests | [TestAchievementSystemReal.cpp:L11](../../Tests/TestAchievementSystemReal.cpp#L11) | Real-class tests for Spark::Gameplay::AchievementSystem |
 | `ResetAdventure` | function | Templates | [GameModule.h:L188](../../Templates/ThirdPersonStarter/Source/GameModule.h#L188) |  |
@@ -33016,7 +33016,7 @@
 | `Root` | function | GameModules | [TFSavePaths.h:L183](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L183) |  |
 | `root` | function | SparkEditor | [BuildPipeline.cpp:L1437](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L1437) |  |
 | `Root` | function | Tests | [TestCoverageScripting.cpp:L42](../../Tests/TestCoverageScripting.cpp#L42) |  |
-| `Root` | function | Tests | [TestTelemetrySpool.cpp:L40](../../Tests/TestTelemetrySpool.cpp#L40) |  |
+| `Root` | function | Tests | [TestTelemetrySpool.cpp:L45](../../Tests/TestTelemetrySpool.cpp#L45) |  |
 | `rootUtf8` | function | Tests | [TestTFDataTables.cpp:L588](../../Tests/TestTFDataTables.cpp#L588) |  |
 | `Roster` | function | GameModules | [TFSocialSystem.h:L101](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L101) |  |
 | `RosterFactionOf` | function | GameModules | [TFSocialSystem.h:L92](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L92) |  |
@@ -34406,7 +34406,7 @@
 | `Send` | function | SparkGateway | [GatewayAreaControl.cpp:L661](../../SparkGateway/src/GatewayAreaControl.cpp#L661) |  |
 | `Send` | function | Tests | [TestReliableChannel.cpp:L481](../../Tests/TestReliableChannel.cpp#L481) |  |
 | `Send` | function | Tests | [TestTelemetry.cpp:L17](../../Tests/TestTelemetry.cpp#L17) |  |
-| `Send` | function | Tests | [TestTelemetrySpool.cpp:L88](../../Tests/TestTelemetrySpool.cpp#L88) |  |
+| `Send` | function | Tests | [TestTelemetrySpool.cpp:L93](../../Tests/TestTelemetrySpool.cpp#L93) |  |
 | `SendAckPacket` | function | SparkEngine | [NetworkManager.h:L826](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L826) |  |
 | `sendAll` | function | SparkEditor | [CollaborativeEditSession.cpp:L290](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L290) |  |
 | `SendAll` | function | SparkEditor | [LiveEditBridge.cpp:L68](../../SparkEditor/Source/Communication/LiveEditBridge.cpp#L68) |  |
@@ -38582,10 +38582,10 @@
 | `SplitFace` | function | SparkEngine | [CSGSystem.h:L678](../../SparkEngine/Source/Engine/LevelDesign/CSGSystem.h#L678) | Split a face by a plane into front and back portions |
 | `SplitLines` | function | Tests | [TestSceneSerializer.cpp:L206](../../Tests/TestSceneSerializer.cpp#L206) |  |
 | `SplitScheme` | function | GameModules | [TFAccountSystem.cpp:L59](../../GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp#L59) |  |
-| `spool` | function | Tests | [TestTelemetrySpool.cpp:L182](../../Tests/TestTelemetrySpool.cpp#L182) |  |
-| `spool` | function | Tests | [TestTelemetrySpool.cpp:L264](../../Tests/TestTelemetrySpool.cpp#L264) |  |
-| `spool` | function | Tests | [TestTelemetrySpool.cpp:L310](../../Tests/TestTelemetrySpool.cpp#L310) |  |
-| `spool` | function | Tests | [TestTelemetrySpool.cpp:L774](../../Tests/TestTelemetrySpool.cpp#L774) |  |
+| `spool` | function | Tests | [TestTelemetrySpool.cpp:L187](../../Tests/TestTelemetrySpool.cpp#L187) |  |
+| `spool` | function | Tests | [TestTelemetrySpool.cpp:L269](../../Tests/TestTelemetrySpool.cpp#L269) |  |
+| `spool` | function | Tests | [TestTelemetrySpool.cpp:L315](../../Tests/TestTelemetrySpool.cpp#L315) |  |
+| `spool` | function | Tests | [TestTelemetrySpool.cpp:L779](../../Tests/TestTelemetrySpool.cpp#L779) |  |
 | `SpreadConfig` | struct | SparkEngine | [WeaponManager.h:L84](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L84) | Spread configuration for bullet deviation |
 | `SpreadConfig` | struct | Tests | [TestWeaponMechanics.cpp:L59](../../Tests/TestWeaponMechanics.cpp#L59) |  |
 | `SpreadConfig` | struct | Tests | [TestWeaponSystem.cpp:L54](../../Tests/TestWeaponSystem.cpp#L54) |  |
@@ -38712,7 +38712,7 @@
 | `StageName` | function | SparkEngine | [ShaderDiskCache.h:L96](../../SparkEngine/Source/Graphics/ShaderDiskCache.h#L96) | Count of daemon misses/errors since initialization (test/diagnostic). |
 | `StageSiblingSharedLibraries` | function | SparkEngine | [ModuleManager.cpp:L410](../../SparkEngine/Source/Core/ModuleManager.cpp#L410) |  |
 | `StageToString` | function | SparkShaderCompiler | [main.cpp:L145](../../SparkShaderCompiler/src/main.cpp#L145) |  |
-| `Staging` | function | Tests | [TestTelemetrySpool.cpp:L42](../../Tests/TestTelemetrySpool.cpp#L42) |  |
+| `Staging` | function | Tests | [TestTelemetrySpool.cpp:L47](../../Tests/TestTelemetrySpool.cpp#L47) |  |
 | `stale` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L250](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L250) |  |
 | `staleContents` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L251](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L251) |  |
 | `StandaloneCollaborationClient` | class | SparkEditor | [CollaborativeEditSession.h:L63](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L63) |  |
@@ -39451,7 +39451,7 @@
 | `std::string` | method | Tests | [TestGatewayAreaControl.cpp:L38](../../Tests/TestGatewayAreaControl.cpp#L38) |  |
 | `std::string` | method | Tests | [TestSceneSerializerReal.cpp:L307](../../Tests/TestSceneSerializerReal.cpp#L307) |  |
 | `std::string` | method | Tests | [TestServiceTopologyController.cpp:L72](../../Tests/TestServiceTopologyController.cpp#L72) |  |
-| `std::string` | method | Tests | [TestTelemetrySpool.cpp:L136](../../Tests/TestTelemetrySpool.cpp#L136) |  |
+| `std::string` | method | Tests | [TestTelemetrySpool.cpp:L141](../../Tests/TestTelemetrySpool.cpp#L141) |  |
 | `std::string` | method | Tests | [TestTimeOfDaySystem.cpp:L107](../../Tests/TestTimeOfDaySystem.cpp#L107) |  |
 | `std::string_view` | method | SparkInstaller | [GitContractTests.cpp:L71](../../SparkInstaller/tests/GitContractTests.cpp#L71) |  |
 | `std::strtof` | method | SparkEditor | [VisualScriptPanel.cpp:L1333](../../SparkEditor/Source/Panels/VisualScriptPanel.cpp#L1333) |  |
@@ -40092,7 +40092,7 @@
 | `SwitchSlot` | function | GameModules | [TFWeaponSystem.h:L178](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystem.h#L178) |  |
 | `swprintf_s` | macro | SparkEngine | [PlatformTypes.h:L245](../../SparkEngine/Source/Core/PlatformTypes.h#L245) |  |
 | `sym` | function | SparkEngine | [CrashHandler.cpp:L1606](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1606) |  |
-| `symlinked` | function | Tests | [TestTelemetrySpool.cpp:L839](../../Tests/TestTelemetrySpool.cpp#L839) |  |
+| `symlinked` | function | Tests | [TestTelemetrySpool.cpp:L844](../../Tests/TestTelemetrySpool.cpp#L844) |  |
 | `SymStackTrace` | function | SparkEngine | [CrashHandler.cpp:L818](../../SparkEngine/Source/Utils/CrashHandler.cpp#L818) |  |
 | `SymStackTrace` | function | SparkEngine | [CrashHandler.cpp:L1121](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1121) |  |
 | `SymStackTrace` | function | SparkEngine | [CrashHandler.cpp:L1327](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1327) |  |
@@ -40275,8 +40275,8 @@
 | `TelemetryDeliveryStats` | struct | SparkEngine | [Telemetry.h:L103](../../SparkEngine/Source/Utils/Telemetry.h#L103) | Thread-safe snapshot of current and cumulative delivery accounting. |
 | `TelemetryEvent` | struct | SparkEngine | [Telemetry.h:L62](../../SparkEngine/Source/Utils/Telemetry.h#L62) | A single telemetry data point. |
 | `TelemetryEvent` | struct | SparkEngine | [TelemetrySpool.h:L15](../../SparkEngine/Source/Utils/TelemetrySpool.h#L15) |  |
-| `TelemetryReset` | class | Tests | [TestTelemetrySpool.cpp:L101](../../Tests/TestTelemetrySpool.cpp#L101) |  |
-| `TelemetryReset` | function | Tests | [TestTelemetrySpool.cpp:L104](../../Tests/TestTelemetrySpool.cpp#L104) |  |
+| `TelemetryReset` | class | Tests | [TestTelemetrySpool.cpp:L106](../../Tests/TestTelemetrySpool.cpp#L106) |  |
+| `TelemetryReset` | function | Tests | [TestTelemetrySpool.cpp:L109](../../Tests/TestTelemetrySpool.cpp#L109) |  |
 | `TelemetrySpool` | class | SparkEngine | [TelemetrySpool.h:L35](../../SparkEngine/Source/Utils/TelemetrySpool.h#L35) | Game-thread-only persistence for pending telemetry events. |
 | `TelemetrySpool::Clear` | method | SparkEngine | [TelemetrySpool.cpp:L700](../../SparkEngine/Source/Utils/TelemetrySpool.cpp#L700) |  |
 | `TelemetrySpool::Configure` | method | SparkEngine | [TelemetrySpool.cpp:L545](../../SparkEngine/Source/Utils/TelemetrySpool.cpp#L545) |  |
@@ -43059,7 +43059,7 @@
 | `TonemapSettings` | struct | SparkEngine | [TonemapColorGrading.h:L51](../../SparkEngine/Source/Graphics/TonemapColorGrading.h#L51) |  |
 | `ToNlohmann` | function | SparkEngine | [JsonUtils.h:L763](../../SparkEngine/Source/Utils/JsonUtils.h#L763) |  |
 | `ToNSString` | function | SparkEngine | [MetalDevice.mm:L28](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.mm#L28) |  |
-| `tooLargeEventName` | function | Tests | [TestTelemetrySpool.cpp:L429](../../Tests/TestTelemetrySpool.cpp#L429) |  |
+| `tooLargeEventName` | function | Tests | [TestTelemetrySpool.cpp:L434](../../Tests/TestTelemetrySpool.cpp#L434) |  |
 | `tooLong` | function | Tests | [TestDaemonCodexFixes.cpp:L130](../../Tests/TestDaemonCodexFixes.cpp#L130) |  |
 | `TooltipPosition` | enum | SparkEditor | [TutorialSystem.h:L65](../../SparkEditor/Source/Core/TutorialSystem.h#L65) | Position of a tooltip relative to its target panel. |
 | `TopDownStarterModule` | class | Templates | [GameModule.h:L27](../../Templates/TopDownStarter/Source/GameModule.h#L27) |  |
@@ -46394,7 +46394,7 @@
 | `Write` | function | Tests | [TestCoverageScripting.cpp:L44](../../Tests/TestCoverageScripting.cpp#L44) |  |
 | `Write` | function | Tests | [TestSparkPak.cpp:L69](../../Tests/TestSparkPak.cpp#L69) |  |
 | `WriteAllAsyncSignalSafe` | function | SparkEditor | [EditorCrashHandler.cpp:L66](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L66) |  |
-| `WriteArtifact` | function | Tests | [TestTelemetrySpool.cpp:L44](../../Tests/TestTelemetrySpool.cpp#L44) |  |
+| `WriteArtifact` | function | Tests | [TestTelemetrySpool.cpp:L49](../../Tests/TestTelemetrySpool.cpp#L49) |  |
 | `WriteAt` | function | Tests | [TestFBXImporter.cpp:L20](../../Tests/TestFBXImporter.cpp#L20) |  |
 | `WriteAuth` | function | SparkDaemon | [CollaborationProtocol.h:L85](../../SparkDaemon/src/CollaborationProtocol.h#L85) |  |
 | `WriteBackResults` | function | SparkEngine | [ParallelPerception.h:L224](../../SparkEngine/Source/Engine/AI/ParallelPerception.h#L224) | Write updated perception data back into ECS components. |

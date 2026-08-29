@@ -26,8 +26,13 @@ namespace
         {
             static std::atomic<uint64_t> sequence{0};
             const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-            m_root = fs::temp_directory_path() / (std::string("spark-telemetry-") + tag + "-" +
-                                                  std::to_string(++sequence) + "-" + std::to_string(stamp));
+            // macOS exposes its temporary directory through /var, which is a
+            // system symlink to /private/var. Resolve that trusted platform
+            // alias before constructing fixtures so the tests still exercise
+            // only the explicit hostile symlinks created below.
+            const fs::path tempRoot = fs::canonical(fs::temp_directory_path());
+            m_root = tempRoot / (std::string("spark-telemetry-") + tag + "-" +
+                                 std::to_string(++sequence) + "-" + std::to_string(stamp));
             fs::create_directories(m_root);
         }
 

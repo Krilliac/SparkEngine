@@ -815,7 +815,7 @@ jobs:
         set -euo pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
           --output-on-failure --no-tests=error --parallel 2 \
-          --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log
+          --output-junit ctest-junit.xml 2>&1 | tee test-results.log
         python -c 'import sys, xml.etree.ElementTree as ET; root=ET.parse("build/ctest-junit.xml").getroot(); count=sum(node.tag.rsplit("}", 1)[-1] == "testcase" and node.get("name") == "ModuleProfileLifecycle_SparkGameFPS_D3D11" for node in root.iter()); sys.exit(0 if count == 1 else f"expected exactly one ModuleProfileLifecycle_SparkGameFPS_D3D11 testcase; found {count}")'
 
     - name: Validate and summarize test statistics
@@ -1025,7 +1025,7 @@ jobs:
       run: >-
         ctest --test-dir build -C ${{ matrix.config }}
         --output-on-failure --no-tests=error --parallel 2
-        --output-junit build/ctest-junit.xml
+        --output-junit ctest-junit.xml
 
     - name: Validate and summarize test statistics
       if: always() && matrix.config == 'Release'
@@ -1126,7 +1126,7 @@ jobs:
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
           --output-on-failure --no-tests=error --parallel 2 \
-          --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log
+          --output-junit ctest-junit.xml 2>&1 | tee test-results.log
 
     - name: Validate and summarize test statistics
       if: always()
@@ -1276,7 +1276,7 @@ jobs:
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
           --output-on-failure --no-tests=error --parallel 2 \
-          --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log
+          --output-junit ctest-junit.xml 2>&1 | tee test-results.log
 
     - name: Validate and summarize test statistics
       if: always()
@@ -1537,7 +1537,7 @@ jobs:
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
           --output-on-failure --no-tests=error --parallel 2 \
-          --output-junit build/ctest-junit.xml 2>&1 | tee test-results.log
+          --output-junit ctest-junit.xml 2>&1 | tee test-results.log
 
     - name: Validate and summarize test statistics
       if: always() && matrix.config == 'Release'

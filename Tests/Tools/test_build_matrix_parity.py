@@ -843,7 +843,8 @@ class WorkflowEnforcementTests(unittest.TestCase):
         self.assertIn("-DBUILD_GAME_MODULES=ON", run_steps["Configure CMake (VS 2022 / v143)"])
         release_tests = run_steps["Run Tests"]
         self.assertIn("set -euo pipefail", release_tests)
-        self.assertIn("--output-junit build/ctest-junit.xml", release_tests)
+        self.assertIn("--output-junit ctest-junit.xml", release_tests)
+        self.assertNotIn("--output-junit build/ctest-junit.xml", release_tests)
         self.assertIn("ModuleProfileLifecycle_SparkGameFPS_D3D11", release_tests)
         self.assertIn("count == 1", release_tests)
 

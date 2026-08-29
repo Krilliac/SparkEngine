@@ -376,7 +376,7 @@
 | `AxisIntersectResult` | struct | Tests | [TestGizmoMath.cpp:L69](../../Tests/TestGizmoMath.cpp#L69) |  |
 | `AxisTest` | struct | SparkEditor | [GizmoSystem.cpp:L598](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L598) |  |
 | `AxisTest` | struct | SparkEditor | [GizmoSystem.cpp:L693](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L693) |  |
-| `BackendState` | struct | Tests | [TestTelemetrySpool.cpp:L54](../../Tests/TestTelemetrySpool.cpp#L54) |  |
+| `BackendState` | struct | Tests | [TestTelemetrySpool.cpp:L59](../../Tests/TestTelemetrySpool.cpp#L59) |  |
 | `BakeLight` | struct | SparkEngine | [LightmapBaker.h:L85](../../SparkEngine/Source/Graphics/LightmapBaker.h#L85) | A light source for baking |
 | `BakeMesh` | struct | SparkEngine | [LightmapBaker.h:L76](../../SparkEngine/Source/Graphics/LightmapBaker.h#L76) | A mesh contributed to the bake |
 | `BakeResult` | struct | SparkEngine | [LightmapBaker.h:L106](../../SparkEngine/Source/Graphics/LightmapBaker.h#L106) | Result of a lightmap bake operation |
@@ -1392,7 +1392,7 @@
 | `FileWatcher` | class | SparkEngine | [FileWatcher.h:L95](../../SparkEngine/Source/Utils/FileWatcher/FileWatcher.h#L95) | File and directory change notification system |
 | `FilmGrainSettings` | struct | SparkEngine | [PostProcessingTypes.h:L142](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L142) | Film grain effect settings |
 | `FilmGrainSettings` | struct | Tests | [TestPostProcessingPipeline.cpp:L63](../../Tests/TestPostProcessingPipeline.cpp#L63) |  |
-| `FixedResultTelemetryBackend` | class | Tests | [TestTelemetrySpool.cpp:L80](../../Tests/TestTelemetrySpool.cpp#L80) |  |
+| `FixedResultTelemetryBackend` | class | Tests | [TestTelemetrySpool.cpp:L85](../../Tests/TestTelemetrySpool.cpp#L85) |  |
 | `FixedStep` | class | Tests | [TestExtendedSystems.cpp:L371](../../Tests/TestExtendedSystems.cpp#L371) |  |
 | `FixedStepProbe` | struct | Tests | [TestTFFixedStep.cpp:L14](../../Tests/TestTFFixedStep.cpp#L14) |  |
 | `FixedTimestepAccumulator` | class | SparkEngine | [FixedTimestepAccumulator.h:L32](../../SparkEngine/Source/Core/FixedTimestepAccumulator.h#L32) | Singleton fixed-timestep accumulator for the main loop |
@@ -4160,7 +4160,7 @@
 | `TelemetryDeliveryStats` | struct | SparkEngine | [Telemetry.h:L103](../../SparkEngine/Source/Utils/Telemetry.h#L103) | Thread-safe snapshot of current and cumulative delivery accounting. |
 | `TelemetryEvent` | struct | SparkEngine | [Telemetry.h:L62](../../SparkEngine/Source/Utils/Telemetry.h#L62) | A single telemetry data point. |
 | `TelemetryEvent` | struct | SparkEngine | [TelemetrySpool.h:L15](../../SparkEngine/Source/Utils/TelemetrySpool.h#L15) |  |
-| `TelemetryReset` | class | Tests | [TestTelemetrySpool.cpp:L101](../../Tests/TestTelemetrySpool.cpp#L101) |  |
+| `TelemetryReset` | class | Tests | [TestTelemetrySpool.cpp:L106](../../Tests/TestTelemetrySpool.cpp#L106) |  |
 | `TelemetrySpool` | class | SparkEngine | [TelemetrySpool.h:L35](../../SparkEngine/Source/Utils/TelemetrySpool.h#L35) | Game-thread-only persistence for pending telemetry events. |
 | `TelemetrySystem` | class | SparkEngine | [Telemetry.h:L283](../../SparkEngine/Source/Utils/Telemetry.h#L283) | Singleton managing event recording, batching, and backend dispatch. |
 | `TeleporterObject` | class | GameModules | [InteractiveObject.h:L310](../../GameModules/SparkGameFPS/Source/Game/InteractiveObject.h#L310) | Teleporter that moves the player to a destination |
