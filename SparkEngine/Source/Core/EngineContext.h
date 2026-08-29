@@ -116,6 +116,16 @@ struct TypeIdHash
  */
 class EngineContext : public Spark::IEngineContext
 {
+  private:
+    enum class LifecycleState : uint8_t
+    {
+        Idle,
+        Initializing,
+        Initialized,
+        ShuttingDown,
+        Failed
+    };
+
   public:
     EngineContext() = default;
     EngineContext(GraphicsEngine* graphics, InputManager* input, Timer* timer, Spark::EventBus* eventBus = nullptr);
@@ -350,16 +360,32 @@ class EngineContext : public Spark::IEngineContext
      * of truth for all subsystem pointers. Works with incomplete
      * (forward-declared) types.
      */
-    template <typename T> void RegisterSystem(T* system)
+    template <typename T> bool RegisterSystem(T* system)
     {
-        std::unique_lock<std::shared_mutex> lock(m_systemsMutex);
         const TypeId typeId = GetTypeId<T>();
+        std::unique_lock<std::recursive_mutex> lifecycleLock(m_lifecycleMutex, std::try_to_lock);
+        if (!lifecycleLock.owns_lock())
+        {
+            std::fprintf(stderr, "[EngineContext] Refusing registry mutation during a lifecycle transition\n");
+            return false;
+        }
+
+        if (m_lifecycleState.load(std::memory_order_acquire) != LifecycleState::Idle &&
+            IsLifecycleSubsystemType(typeId))
+        {
+            std::fprintf(stderr,
+                         "[EngineContext] Refusing lifecycle-managed registry mutation outside the idle state\n");
+            return false;
+        }
+
+        std::unique_lock<std::shared_mutex> lock(m_systemsMutex);
         if (system == nullptr)
         {
             m_systems.erase(typeId);
-            return;
+            return true;
         }
         m_systems[typeId] = static_cast<void*>(system);
+        return true;
     }
 
     /**
@@ -369,8 +395,15 @@ class EngineContext : public Spark::IEngineContext
      */
     template <typename T> T* GetSystem() const
     {
+        const TypeId typeId = GetTypeId<T>();
+        if (m_lifecycleState.load(std::memory_order_acquire) == LifecycleState::Failed &&
+            IsLifecycleSubsystemType(typeId))
+        {
+            return nullptr;
+        }
+
         std::shared_lock<std::shared_mutex> lock(m_systemsMutex);
-        auto it = m_systems.find(GetTypeId<T>());
+        auto it = m_systems.find(typeId);
         if (it != m_systems.end())
         {
             return static_cast<T*>(it->second);
@@ -420,18 +453,41 @@ class EngineContext : public Spark::IEngineContext
      * @param system    Non-owning pointer to the subsystem
      * @param deps      DependsOn<...> tag (types are extracted at compile time)
      * @param initFn    Optional initialization callback (called during InitializeAll)
-     * @param shutdownFn Optional shutdown callback (called during ShutdownAll)
+     * @param shutdownFn Optional shutdown/rollback callback. It is called during
+     *        ShutdownAll and after an init callback has begun but reports failure,
+     *        so it must tolerate a partially initialized subsystem.
+     * @return true when registration was accepted; false when lifecycle state
+     *         makes mutation unsafe or the pointer is null
      */
     template <typename T, typename... Deps>
-    void RegisterSubsystem(T* system, DependsOn<Deps...> /*deps*/, std::function<bool()> initFn = nullptr,
+    bool RegisterSubsystem(T* system, DependsOn<Deps...> /*deps*/, std::function<bool()> initFn = nullptr,
                            std::function<void()> shutdownFn = nullptr)
     {
+        std::unique_lock<std::recursive_mutex> lifecycleLock(m_lifecycleMutex, std::try_to_lock);
+        if (!lifecycleLock.owns_lock())
+        {
+            std::fprintf(stderr, "[EngineContext] Refusing lifecycle graph mutation during a transition\n");
+            return false;
+        }
+
         SPARK_EXPECTS(system != nullptr);
         if (system == nullptr)
-            return;
+            return false;
+
+        // The lifecycle graph is snapshotted as pointers into
+        // m_subsystemEntries during InitializeAll(). Mutating it from an init or
+        // shutdown callback could invalidate that snapshot or replace metadata
+        // for a live resource. Generic RegisterSystem<T>() remains available for
+        // intentionally dynamic, non-lifecycle service pointers.
+        if (m_lifecycleState.load(std::memory_order_acquire) != LifecycleState::Idle)
+        {
+            std::fprintf(stderr, "[EngineContext] Refusing lifecycle graph mutation outside the idle state\n");
+            return false;
+        }
 
         // Store in the generic registry
-        RegisterSystem<T>(system);
+        if (!RegisterSystem<T>(system))
+            return false;
 
         // Build dependency list
         std::vector<TypeId> depList;
@@ -451,6 +507,7 @@ class EngineContext : public Spark::IEngineContext
         {
             m_subsystemEntries.push_back(std::move(entry));
         }
+        return true;
     }
 
     /**
@@ -482,6 +539,12 @@ class EngineContext : public Spark::IEngineContext
      */
     size_t GetSubsystemCount() const { return m_subsystemEntries.size(); }
 
+    /** Whether cleanup failed and lifecycle-managed pointers are quarantined. */
+    bool HasLifecycleFailure() const noexcept
+    {
+        return m_lifecycleState.load(std::memory_order_acquire) == LifecycleState::Failed;
+    }
+
     uint32_t GetEngineVersion() const override;
     uint32_t GetSDKVersion() const override;
 
@@ -492,6 +555,19 @@ class EngineContext : public Spark::IEngineContext
      * @return true if sort succeeded (no cycles), false if a dependency cycle was detected
      */
     bool TopologicalSort(std::vector<SubsystemEntry*>& sorted);
+
+    /** Reverse-clean initialized entries, swallowing and reporting callback exceptions. */
+    bool CleanupInitializedSubsystemsNoexcept() noexcept;
+
+    /** Compensate the failed init attempt, then reverse-clean prior successes. */
+    bool RollbackFailedInitializationNoexcept(SubsystemEntry& failedEntry) noexcept;
+
+    /** Whether a type participates in the lifecycle graph. */
+    bool IsLifecycleSubsystemType(TypeId type) const noexcept
+    {
+        return std::any_of(m_subsystemEntries.begin(), m_subsystemEntries.end(),
+                           [type](const SubsystemEntry& entry) { return entry.type == type; });
+    }
 
     // Generic system registry (void* with TypeId key) — single source of truth.
     // Guarded by m_systemsMutex: startup is single-threaded, but module hot-reload
@@ -505,4 +581,10 @@ class EngineContext : public Spark::IEngineContext
 
     // Cached initialization order (populated by InitializeAll)
     std::vector<TypeId> m_initOrder;
+
+    // Serializes lifecycle transitions while permitting same-thread callbacks to
+    // reenter and receive an immediate state-based rejection.
+    mutable std::recursive_mutex m_lifecycleMutex;
+
+    std::atomic<LifecycleState> m_lifecycleState{LifecycleState::Idle};
 };

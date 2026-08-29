@@ -12,8 +12,24 @@
 #include "../Utils/Validate.h"
 
 #include <algorithm>
+#include <exception>
 #include <memory>
 #include <unordered_map>
+
+namespace
+{
+    template <typename Emit> void BestEffortLifecycleDiagnostic(Emit&& emit) noexcept
+    {
+        try
+        {
+            emit();
+        }
+        catch (...)
+        {
+            std::fputs("[EngineContext] lifecycle diagnostic could not be emitted\n", stderr);
+        }
+    }
+} // namespace
 
 // Global engine context - defined here (in SparkEngineLib) so that all
 // consumers of the static library (both the executable and SparkGame DLL)
@@ -185,60 +201,268 @@ bool EngineContext::TopologicalSort(std::vector<SubsystemEntry*>& sorted)
 
 bool EngineContext::InitializeAll()
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
-    SPARK_LOG_INFO(Spark::LogCategory::Core, "EngineContext::InitializeAll — %zu subsystems registered",
-                   m_subsystemEntries.size());
-
-    std::vector<SubsystemEntry*> sorted;
-    if (!TopologicalSort(sorted))
+    enum class PreparationFailure
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext: dependency cycle detected in subsystem graph");
+        None,
+        Cycle,
+        Exception
+    };
+
+    PreparationFailure preparationFailure = PreparationFailure::None;
+    std::vector<SubsystemEntry*> sorted;
+    {
+        std::unique_lock<std::recursive_mutex> lifecycleLock(m_lifecycleMutex, std::try_to_lock);
+        if (!lifecycleLock.owns_lock())
+        {
+            std::fputs("[EngineContext] InitializeAll rejected a concurrent lifecycle transition\n", stderr);
+            return false;
+        }
+
+        if (m_lifecycleState.load(std::memory_order_acquire) == LifecycleState::Initialized)
+            return true;
+        if (m_lifecycleState.load(std::memory_order_acquire) != LifecycleState::Idle)
+        {
+            std::fputs("[EngineContext] InitializeAll rejected a reentrant or failed lifecycle transition\n", stderr);
+            return false;
+        }
+
+        // Claim the transition and snapshot the graph while registration is
+        // excluded, then release the mutex before invoking logger/user code.
+        m_lifecycleState.store(LifecycleState::Initializing, std::memory_order_release);
+        try
+        {
+            if (!TopologicalSort(sorted))
+            {
+                preparationFailure = PreparationFailure::Cycle;
+            }
+            else
+            {
+                m_initOrder.clear();
+                m_initOrder.reserve(sorted.size());
+            }
+        }
+        catch (...)
+        {
+            preparationFailure = PreparationFailure::Exception;
+        }
+    }
+
+    if (preparationFailure != PreparationFailure::None)
+    {
+        BestEffortLifecycleDiagnostic(
+            [preparationFailure]
+            {
+                if (preparationFailure == PreparationFailure::Cycle)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                    "EngineContext: dependency cycle detected in subsystem graph");
+                }
+                else
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                    "EngineContext: lifecycle graph preparation threw an exception");
+                }
+            });
+        m_lifecycleState.store(LifecycleState::Idle, std::memory_order_release);
         return false;
     }
 
-    m_initOrder.clear();
+    BestEffortLifecycleDiagnostic(
+        [&]
+        {
+            SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "EngineContext::InitializeAll — %zu subsystems registered",
+                           m_subsystemEntries.size());
+        });
 
     for (auto* entry : sorted)
     {
-        if (entry->initFn)
+        try
         {
-            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "EngineContext: initializing subsystem (type=%p)", entry->type);
-            if (!entry->initFn())
+            if (entry->initFn)
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext: subsystem initialization failed (type=%p)",
-                                entry->type);
-                return false;
+                BestEffortLifecycleDiagnostic(
+                    [&]
+                    {
+                        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "EngineContext: initializing subsystem (type=%p)",
+                                        entry->type);
+                    });
+                if (!entry->initFn())
+                {
+                    const bool rollbackSucceeded = RollbackFailedInitializationNoexcept(*entry);
+                    if (!rollbackSucceeded)
+                        m_lifecycleState.store(LifecycleState::Failed, std::memory_order_release);
+                    BestEffortLifecycleDiagnostic(
+                        [&]
+                        {
+                            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                            "EngineContext: subsystem initialization failed (type=%p)", entry->type);
+                        });
+                    if (rollbackSucceeded)
+                        m_lifecycleState.store(LifecycleState::Idle, std::memory_order_release);
+                    return false;
+                }
             }
         }
+        catch (const std::exception& exception)
+        {
+            const bool rollbackSucceeded = RollbackFailedInitializationNoexcept(*entry);
+            if (!rollbackSucceeded)
+                m_lifecycleState.store(LifecycleState::Failed, std::memory_order_release);
+            BestEffortLifecycleDiagnostic(
+                [&]
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                    "EngineContext: subsystem initialization threw (type=%p): %s", entry->type,
+                                    exception.what());
+                });
+            if (rollbackSucceeded)
+                m_lifecycleState.store(LifecycleState::Idle, std::memory_order_release);
+            return false;
+        }
+        catch (...)
+        {
+            const bool rollbackSucceeded = RollbackFailedInitializationNoexcept(*entry);
+            if (!rollbackSucceeded)
+                m_lifecycleState.store(LifecycleState::Failed, std::memory_order_release);
+            BestEffortLifecycleDiagnostic(
+                [&]
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                    "EngineContext: subsystem initialization threw an unknown exception (type=%p)",
+                                    entry->type);
+                });
+            if (rollbackSucceeded)
+                m_lifecycleState.store(LifecycleState::Idle, std::memory_order_release);
+            return false;
+        }
+
         entry->initialized = true;
         m_initOrder.push_back(entry->type);
     }
 
-    SPARK_LOG_INFO(Spark::LogCategory::Core, "EngineContext::InitializeAll — all %zu subsystems initialized",
-                   m_initOrder.size());
+    BestEffortLifecycleDiagnostic(
+        [&]
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "EngineContext::InitializeAll — all %zu subsystems initialized",
+                           m_initOrder.size());
+        });
+    m_lifecycleState.store(LifecycleState::Initialized, std::memory_order_release);
     return true;
 }
 
-void EngineContext::ShutdownAll()
+bool EngineContext::CleanupInitializedSubsystemsNoexcept() noexcept
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
-    SPARK_LOG_INFO(Spark::LogCategory::Core, "EngineContext::ShutdownAll — shutting down %zu subsystems",
-                   m_initOrder.size());
-
-    // Shut down in reverse initialization order
+    bool cleanupSucceeded = true;
     for (auto it = m_initOrder.rbegin(); it != m_initOrder.rend(); ++it)
     {
         auto entryIt = std::find_if(m_subsystemEntries.begin(), m_subsystemEntries.end(),
                                     [&](const SubsystemEntry& e) { return e.type == *it; });
-        if (entryIt != m_subsystemEntries.end() && entryIt->initialized && entryIt->shutdownFn)
+        if (entryIt == m_subsystemEntries.end() || !entryIt->initialized)
+            continue;
+
+        // Clear the flag before invoking user code so a reentrant attempt cannot
+        // cause this resource to be shut down twice.
+        entryIt->initialized = false;
+        if (!entryIt->shutdownFn)
+            continue;
+
+        try
         {
             entryIt->shutdownFn();
         }
-        if (entryIt != m_subsystemEntries.end())
+        catch (const std::exception& exception)
         {
-            entryIt->initialized = false;
+            cleanupSucceeded = false;
+            BestEffortLifecycleDiagnostic(
+                [&]
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext: subsystem shutdown threw (type=%p): %s",
+                                    entryIt->type, exception.what());
+                });
+        }
+        catch (...)
+        {
+            cleanupSucceeded = false;
+            BestEffortLifecycleDiagnostic(
+                [&]
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                    "EngineContext: subsystem shutdown threw an unknown exception (type=%p)",
+                                    entryIt->type);
+                });
         }
     }
 
     m_initOrder.clear();
+    return cleanupSucceeded;
+}
+
+bool EngineContext::RollbackFailedInitializationNoexcept(SubsystemEntry& failedEntry) noexcept
+{
+    bool rollbackSucceeded = true;
+    if (failedEntry.shutdownFn)
+    {
+        try
+        {
+            failedEntry.shutdownFn();
+        }
+        catch (const std::exception& exception)
+        {
+            rollbackSucceeded = false;
+            BestEffortLifecycleDiagnostic(
+                [&]
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                    "EngineContext: failed subsystem rollback threw (type=%p): %s", failedEntry.type,
+                                    exception.what());
+                });
+        }
+        catch (...)
+        {
+            rollbackSucceeded = false;
+            BestEffortLifecycleDiagnostic(
+                [&]
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                    "EngineContext: failed subsystem rollback threw an unknown exception (type=%p)",
+                                    failedEntry.type);
+                });
+        }
+    }
+
+    return CleanupInitializedSubsystemsNoexcept() && rollbackSucceeded;
+}
+
+void EngineContext::ShutdownAll()
+{
+    {
+        std::unique_lock<std::recursive_mutex> lifecycleLock(m_lifecycleMutex, std::try_to_lock);
+        if (!lifecycleLock.owns_lock())
+        {
+            std::fputs("[EngineContext] ShutdownAll rejected a concurrent lifecycle transition\n", stderr);
+            return;
+        }
+
+        const LifecycleState state = m_lifecycleState.load(std::memory_order_acquire);
+        if (state == LifecycleState::Idle)
+            return;
+        if (state != LifecycleState::Initialized)
+        {
+            std::fputs("[EngineContext] ShutdownAll rejected a reentrant or failed lifecycle transition\n", stderr);
+            return;
+        }
+
+        m_lifecycleState.store(LifecycleState::ShuttingDown, std::memory_order_release);
+    }
+
+    BestEffortLifecycleDiagnostic(
+        [&]
+        {
+            SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "EngineContext::ShutdownAll — shutting down %zu subsystems",
+                           m_initOrder.size());
+        });
+    const bool cleanupSucceeded = CleanupInitializedSubsystemsNoexcept();
+    m_lifecycleState.store(cleanupSucceeded ? LifecycleState::Idle : LifecycleState::Failed, std::memory_order_release);
 }

@@ -1126,6 +1126,12 @@ set_tests_properties(TelemetrySpool PROPERTIES
     RUN_SERIAL TRUE
     TIMEOUT 30)
 
+add_test(NAME LifecyclePartialInit COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(LifecyclePartialInit PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=PartialInit_EngineContext;SPARK_TEST_EXPECT_COUNT=4"
+    LABELS "lifecycle;unit"
+    TIMEOUT 30)
+
 add_test(
     NAME ModuleProfileLifecycleParserContract
     COMMAND ${CMAKE_COMMAND}
