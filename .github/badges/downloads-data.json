@@ -1,5 +1,105 @@
 {
-    "total": 0,
-    "updated": "2026-08-26T07:35:55Z",
-    "snapshotRunId": "32939392089"
+    "schemaVersion": 2,
+    "initialized": true,
+    "baseTotal": 0,
+    "baseInstallerTotal": 0,
+    "total": 2,
+    "installerTotal": 2,
+    "assets": [
+        {
+            "id": 530455809,
+            "releaseId": 376952823,
+            "name": "SparkEngine-1.0.0-Windows-AMD64-Release.zip",
+            "downloadCount": 0
+        },
+        {
+            "id": 530455812,
+            "releaseId": 376952823,
+            "name": "SparkInstaller-Linux-x64",
+            "downloadCount": 0
+        },
+        {
+            "id": 530455813,
+            "releaseId": 376952823,
+            "name": "SparkInstaller-macOS-arm64",
+            "downloadCount": 0
+        },
+        {
+            "id": 530455814,
+            "releaseId": 376952823,
+            "name": "SparkEngine-1.0.0-Linux-x86_64-Debug.tar.gz",
+            "downloadCount": 0
+        },
+        {
+            "id": 530455815,
+            "releaseId": 376952823,
+            "name": "SparkEngine-1.0.0-Windows-AMD64-Debug-Runtime.msi",
+            "downloadCount": 0
+        },
+        {
+            "id": 530455816,
+            "releaseId": 376952823,
+            "name": "SparkEngine-1.0.0-Windows-AMD64-Debug.zip",
+            "downloadCount": 0
+        },
+        {
+            "id": 530455817,
+            "releaseId": 376952823,
+            "name": "SparkEngine-1.0.0-Windows-AMD64-Release-Runtime.exe",
+            "downloadCount": 0
+        },
+        {
+            "id": 530455818,
+            "releaseId": 376952823,
+            "name": "SparkEngine-1.0.0-Linux-x86_64-Debug.zip",
+            "downloadCount": 0
+        },
+        {
+            "id": 530455819,
+            "releaseId": 376952823,
+            "name": "SparkEngine-1.0.0-Linux-x86_64-Release.tar.gz",
+            "downloadCount": 0
+        },
+        {
+            "id": 530455820,
+            "releaseId": 376952823,
+            "name": "SparkInstaller-Windows-x64.exe",
+            "downloadCount": 2
+        },
+        {
+            "id": 530455821,
+            "releaseId": 376952823,
+            "name": "SparkEngine-1.0.0-Linux-x86_64-Release.zip",
+            "downloadCount": 0
+        },
+        {
+            "id": 530455822,
+            "releaseId": 376952823,
+            "name": "SparkEngine-1.0.0-Windows-AMD64-Release-Runtime.msi",
+            "downloadCount": 0
+        },
+        {
+            "id": 530455829,
+            "releaseId": 376952823,
+            "name": "SparkEngine-1.0.0-Windows-AMD64-Debug-Runtime.exe",
+            "downloadCount": 0
+        }
+    ],
+    "liveAssetIds": [
+        530455809,
+        530455812,
+        530455813,
+        530455814,
+        530455815,
+        530455816,
+        530455817,
+        530455818,
+        530455819,
+        530455820,
+        530455821,
+        530455822,
+        530455829
+    ],
+    "pending": null,
+    "updated": "2026-08-30T04:07:54Z"
 }
