@@ -7,6 +7,7 @@ import importlib.util
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -540,6 +541,69 @@ void Added() {
             "GameModules", "Templates", "Tools",
         }
         self.assertEqual(observed, expected)
+
+    def test_inventory_coverage_excludes_only_exact_reviewed_nonshipping_source(self) -> None:
+        self.assertEqual(
+            boundary.NON_SHIPPED_FIRST_PARTY_SOURCES,
+            frozenset({"tools/gvisor-wine-shim.c"}),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            shipped_root = root / "Tools"
+            shipped_root.mkdir()
+            (shipped_root / "shipped.cpp").write_text("int shipped;\n", encoding="utf-8")
+            (shipped_root / "gvisor-wine-shim.c").write_text("int uppercase;\n", encoding="utf-8")
+
+            developer_root = root / "tools"
+            try:
+                developer_root.mkdir()
+            except FileExistsError:
+                self.skipTest("filesystem cannot distinguish uppercase Tools from lowercase tools")
+            (developer_root / "gvisor-wine-shim.c").write_text("int shim;\n", encoding="utf-8")
+            (developer_root / "new-helper.c").write_text("int helper;\n", encoding="utf-8")
+            (developer_root / "GVisor-Wine-Shim.c").write_text("int case_variant;\n", encoding="utf-8")
+            nested_root = developer_root / "nested"
+            nested_root.mkdir()
+            (nested_root / "gvisor-wine-shim.c").write_text("int nested;\n", encoding="utf-8")
+
+            with mock.patch.object(boundary, "SOURCE_ROOTS", (shipped_root,)):
+                findings = boundary.scan_raw_socket_inventory(root, allowances=())
+
+        paths = {finding.path.relative_to(root).as_posix() for finding in findings}
+        self.assertNotIn("tools/gvisor-wine-shim.c", paths)
+        self.assertIn("tools/new-helper.c", paths)
+        self.assertIn("tools/GVisor-Wine-Shim.c", paths)
+        self.assertIn("tools/nested/gvisor-wine-shim.c", paths)
+        self.assertNotIn("Tools/shipped.cpp", paths)
+        self.assertNotIn("Tools/gvisor-wine-shim.c", paths)
+
+    def test_source_inventory_scans_inl_and_objective_cxx_files(self) -> None:
+        self.assertTrue({".inl", ".mm"}.issubset(boundary.SOURCE_SUFFIXES))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source_root = root / "SparkEngine" / "Source"
+            source_root.mkdir(parents=True)
+            for name in ("NetworkInline.inl", "NetworkMetal.mm"):
+                (source_root / name).write_text(
+                    "void Added() { (void)::socket(AF_INET, SOCK_DGRAM, 0); }\n",
+                    encoding="utf-8",
+                )
+
+            with mock.patch.object(boundary, "SOURCE_ROOTS", (source_root,)):
+                findings = boundary.scan_raw_socket_inventory(root, allowances=())
+
+        paths = {
+            finding.path.relative_to(root).as_posix()
+            for finding in findings
+            if "unreviewed raw socket site" in finding.message
+        }
+        self.assertEqual(
+            paths,
+            {
+                "SparkEngine/Source/NetworkInline.inl",
+                "SparkEngine/Source/NetworkMetal.mm",
+            },
+        )
 
 
 if __name__ == "__main__":

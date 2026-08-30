@@ -810,7 +810,7 @@ done
 if [[ "$SYMLINK_SUPPORTED" -eq 1 ]]; then
     run_case symlink-runtime
     expect_status 70 "$CASE_STATUS" "symlink-runtime is a verification failure"
-    expect_contains "$CASE_DIR/metadata.json" "must not be a symlink" "runtime symlink rejection is explicit"
+    expect_contains "$CASE_DIR/metadata.json" "path ancestry contains a symlink, junction, or reparse point" "runtime symlink rejection is explicit"
 else
     skip "runtime symlink probe unavailable on this filesystem"
 fi

@@ -94,6 +94,14 @@ namespace Spark::Graphics
 
     namespace NoiseDetail
     {
+        /// @brief Defined arithmetic right shift for a 32-bit two's-complement bit pattern
+        template <uint32_t Shift> inline constexpr uint32_t ArithmeticShiftRight(uint32_t value)
+        {
+            static_assert(Shift > 0u && Shift < 32u);
+            const uint32_t signMask = 0u - (value >> 31u);
+            return (value >> Shift) | (signMask << (32u - Shift));
+        }
+
         /// @brief Fast floor for noise coordinate hashing
         inline int FastFloor(float x)
         {
@@ -102,24 +110,25 @@ namespace Spark::Graphics
         }
 
         /// @brief Hash function for noise lattice coordinates
-        inline int Hash(int x, int y, int seed)
+        /// @note Unsigned wraparound is intentional and preserves the legacy bit pattern without signed-overflow UB.
+        inline uint32_t Hash(int x, int y, int seed)
         {
-            int h = seed;
-            h ^= x * 0x27d4eb2d;
-            h ^= y * 0x1b56c4e9;
-            h ^= h >> 13;
-            h *= 0x5bd1e995;
-            h ^= h >> 15;
+            uint32_t h = static_cast<uint32_t>(seed);
+            h ^= static_cast<uint32_t>(x) * 0x27d4eb2du;
+            h ^= static_cast<uint32_t>(y) * 0x1b56c4e9u;
+            h ^= ArithmeticShiftRight<13u>(h);
+            h *= 0x5bd1e995u;
+            h ^= ArithmeticShiftRight<15u>(h);
             return h;
         }
 
         /// @brief 2D gradient from hash
-        inline void Gradient2D(int hash, float& gx, float& gy)
+        inline void Gradient2D(uint32_t hash, float& gx, float& gy)
         {
             static constexpr float gradients[][2] = {{1.0f, 0.0f},      {0.0f, 1.0f},      {-1.0f, 0.0f},
                                                      {0.0f, -1.0f},     {0.707f, 0.707f},  {-0.707f, 0.707f},
                                                      {0.707f, -0.707f}, {-0.707f, -0.707f}};
-            int idx = (hash & 0x7FFFFFFF) % 8;
+            uint32_t idx = hash % 8u;
             gx = gradients[idx][0];
             gy = gradients[idx][1];
         }
@@ -373,7 +382,7 @@ namespace Spark::Graphics
                     int cy = yi + dy;
 
                     // Pseudo-random feature point within cell
-                    int h = NoiseDetail::Hash(cx, cy, m_seed);
+                    uint32_t h = NoiseDetail::Hash(cx, cy, m_seed);
                     float fx = cx + (h & 0xFF) / 255.0f;
                     float fy = cy + ((h >> 8) & 0xFF) / 255.0f;
 

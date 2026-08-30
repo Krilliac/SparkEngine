@@ -40,6 +40,7 @@
 #include "../../Core/Platform.h"
 #include "../../Utils/Hash.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -184,11 +185,14 @@ namespace Spark::Security
         /// Register a named branch guard (called automatically by macros)
         void RegisterBranchGuard(uint64_t id, std::string_view name);
 
-        /// Record that a branch was taken with the given path ID
-        void RecordBranchExecution(uint64_t id, uint32_t pathTaken);
+        /// Record that a branch was taken and return its lifecycle generation
+        uint64_t RecordBranchExecution(uint64_t id, uint32_t pathTaken);
 
         /// Verify that the branch was executed since the last verify call
         void VerifyBranchExecuted(uint64_t id);
+
+        /// Verify evidence recorded in a specific lifecycle generation
+        void VerifyBranchExecuted(uint64_t id, uint64_t recordedGeneration);
 
         /// Check if a specific branch guard has been bypassed
         [[nodiscard]] bool WasBranchBypassed(uint64_t id) const;
@@ -226,6 +230,7 @@ namespace Spark::Security
 
         // Branch guards
         std::unordered_map<uint64_t, BranchGuardEntry> m_branchGuards;
+        uint64_t m_branchGuardGeneration = 1;
 
         // Violations
         std::vector<Violation> m_violations;
@@ -239,10 +244,16 @@ namespace Spark::Security
         // Callback
         ViolationCallback m_violationCallback;
 
-        // Thread safety for branch guards (may be called from multiple threads)
+        // Serializes complete initialize/shutdown transactions. Console
+        // registration deliberately happens under this mutex, but never while
+        // m_mutex is held, so console dispatch cannot form a lock cycle.
+        mutable std::mutex m_lifecycleMutex;
+
+        // Thread safety for branch guards and integrity state (may be called
+        // from multiple threads).
         mutable std::mutex m_mutex;
 
-        bool m_initialized = false;
+        std::atomic<bool> m_initialized{false};
     };
 
 } // namespace Spark::Security
@@ -258,25 +269,29 @@ namespace Spark::Security
  * The macro registers the guard (once) and records that the true-path executed.
  */
 #define SPARK_BRANCH_GUARD_BEGIN(name)                                                                                 \
-    do                                                                                                                 \
     {                                                                                                                  \
-        constexpr uint64_t _sparkBranchId##__LINE__ = Spark::FNV1a64(name);                                            \
-        static const bool _sparkBranchReg##__LINE__ = []                                                               \
+        do                                                                                                             \
         {                                                                                                              \
-            Spark::Security::MemoryIntegritySystem::GetInstance().RegisterBranchGuard(_sparkBranchId##__LINE__, name); \
-            return true;                                                                                               \
-        }();                                                                                                           \
-        (void)_sparkBranchReg##__LINE__;                                                                               \
-        Spark::Security::MemoryIntegritySystem::GetInstance().RecordBranchExecution(_sparkBranchId##__LINE__, 1);      \
-    } while (0);                                                                                                       \
-    {
+            constexpr uint64_t _sparkBranchId##__LINE__ = Spark::FNV1a64(name);                                        \
+            static const bool _sparkBranchReg##__LINE__ = []                                                           \
+            {                                                                                                          \
+                Spark::Security::MemoryIntegritySystem::GetInstance().RegisterBranchGuard(_sparkBranchId##__LINE__,    \
+                                                                                          name);                       \
+                return true;                                                                                           \
+            }();                                                                                                       \
+            (void)_sparkBranchReg##__LINE__;                                                                           \
+        } while (0);                                                                                                   \
+        uint64_t _sparkBranchGeneration =                                                                              \
+            Spark::Security::MemoryIntegritySystem::GetInstance().RecordBranchExecution(Spark::FNV1a64(name), 1);      \
+        {
 
 /**
  * @brief Record the else-path of a protected branch.
  * @param name  Must match the corresponding SPARK_BRANCH_GUARD_BEGIN name.
  */
 #define SPARK_BRANCH_GUARD_ELSE(name)                                                                                  \
-    Spark::Security::MemoryIntegritySystem::GetInstance().RecordBranchExecution(Spark::FNV1a64(name), 2);              \
+    _sparkBranchGeneration =                                                                                           \
+        Spark::Security::MemoryIntegritySystem::GetInstance().RecordBranchExecution(Spark::FNV1a64(name), 2);          \
     }                                                                                                                  \
     {
 
@@ -286,14 +301,15 @@ namespace Spark::Security
  */
 #define SPARK_BRANCH_GUARD_END(name)                                                                                   \
     }                                                                                                                  \
-    Spark::Security::MemoryIntegritySystem::GetInstance().VerifyBranchExecuted(Spark::FNV1a64(name));
+    Spark::Security::MemoryIntegritySystem::GetInstance().VerifyBranchExecuted(Spark::FNV1a64(name),                   \
+                                                                               _sparkBranchGeneration);                \
+    }
 
 /**
  * @brief Record that a critical code path executed (one-shot checkpoint).
  * @param name  A compile-time string literal identifying this checkpoint.
  */
 #define SPARK_INTEGRITY_CHECKPOINT(name)                                                                               \
-    do                                                                                                                 \
     {                                                                                                                  \
         constexpr uint64_t _sparkCpId = Spark::FNV1a64(name);                                                          \
         static const bool _sparkCpReg = []                                                                             \
@@ -302,12 +318,14 @@ namespace Spark::Security
             return true;                                                                                               \
         }();                                                                                                           \
         (void)_sparkCpReg;                                                                                             \
-        Spark::Security::MemoryIntegritySystem::GetInstance().RecordBranchExecution(_sparkCpId, 1);                    \
-    } while (0)
+        const uint64_t _sparkCheckpointGeneration =                                                                    \
+            Spark::Security::MemoryIntegritySystem::GetInstance().RecordBranchExecution(_sparkCpId, 1)
 
 /**
  * @brief Verify that the matching SPARK_INTEGRITY_CHECKPOINT actually ran.
  * @param name  Must match the corresponding checkpoint name.
  */
 #define SPARK_VERIFY_CHECKPOINT(name)                                                                                  \
-    Spark::Security::MemoryIntegritySystem::GetInstance().VerifyBranchExecuted(Spark::FNV1a64(name))
+    Spark::Security::MemoryIntegritySystem::GetInstance().VerifyBranchExecuted(Spark::FNV1a64(name),                   \
+                                                                               _sparkCheckpointGeneration);            \
+    }

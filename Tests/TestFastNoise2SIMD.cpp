@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -65,6 +66,17 @@ TEST(FastNoise2SIMD_NoiseGraphReportsSIMDLevel)
     SIMDLevel graphLevel = NoiseGraph::GetSIMDLevel();
     SIMDLevel directLevel = DetectBestSIMD();
     EXPECT_EQ(static_cast<int>(graphLevel), static_cast<int>(directLevel));
+}
+
+TEST(FastNoise2SIMD_HashVectorsUseDefinedUnsignedWraparound)
+{
+    using Spark::Graphics::NoiseDetail::Hash;
+
+    EXPECT_EQ(Hash(0, 0, 0), uint32_t{0x00000000u});
+    EXPECT_EQ(Hash(1, 2, 3), uint32_t{0x141ee43eu});
+    EXPECT_EQ(Hash(-1, -2, -3), uint32_t{0x00a90e16u});
+    EXPECT_EQ(Hash(2147483647, (-2147483647 - 1), 1337), uint32_t{0x71b69af6u});
+    EXPECT_EQ(Hash(-123456789, 987654321, -2024), uint32_t{0x60469bc9u});
 }
 
 // =========================================================================
@@ -170,6 +182,22 @@ TEST(FastNoise2SIMD_CellularNodeTypeIsCellular)
 {
     CellularNode node;
     EXPECT_EQ(static_cast<int>(node.GetType()), static_cast<int>(NoiseNodeType::Cellular));
+}
+
+TEST(FastNoise2SIMD_CellularGoldenValuesPreserveLegacyHashing)
+{
+    CellularNode node;
+    node.SetSeed(13);
+    node.SetFrequency(0.2f);
+    EXPECT_NEAR(node.Evaluate(5.0f, 5.0f), 0.1561257094f, 1e-6f);
+
+    node.SetSeed(-2024);
+    node.SetFrequency(0.23f);
+    EXPECT_NEAR(node.Evaluate(-6.75f, 6.125f), 0.2805069685f, 1e-6f);
+
+    node.SetSeed(0x13579BDF);
+    node.SetFrequency(0.03125f);
+    EXPECT_NEAR(node.Evaluate(123.5f, -87.25f), 0.1003850102f, 1e-6f);
 }
 
 // =========================================================================
@@ -326,6 +354,31 @@ TEST(FastNoise2SIMD_BatchEvaluateMatchesSingleEvaluate)
         float expected = node.Evaluate(inX[i], inY[i]);
         EXPECT_NEAR(out[i], expected, 1e-4f);
     }
+}
+
+TEST(FastNoise2SIMD_PerlinAndCellularBatchMatchSingleEvaluate)
+{
+    constexpr int count = 13;
+    std::vector<float> inX(count), inY(count), out(count);
+    for (int i = 0; i < count; ++i)
+    {
+        inX[i] = static_cast<float>(i - 6) * 1.125f;
+        inY[i] = static_cast<float>(7 - i) * 0.875f;
+    }
+
+    PerlinNode perlin;
+    perlin.SetSeed(-2024);
+    perlin.SetFrequency(0.17f);
+    perlin.BatchEvaluate(out.data(), inX.data(), inY.data(), count);
+    for (int i = 0; i < count; ++i)
+        EXPECT_NEAR(out[i], perlin.Evaluate(inX[i], inY[i]), 1e-6f);
+
+    CellularNode cellular;
+    cellular.SetSeed(0x13579BDF);
+    cellular.SetFrequency(0.23f);
+    cellular.BatchEvaluate(out.data(), inX.data(), inY.data(), count);
+    for (int i = 0; i < count; ++i)
+        EXPECT_NEAR(out[i], cellular.Evaluate(inX[i], inY[i]), 1e-6f);
 }
 
 TEST(FastNoise2SIMD_FBMBatchMatchesSingle)

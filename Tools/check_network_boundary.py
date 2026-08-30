@@ -41,7 +41,7 @@ SOURCE_ROOTS = (
     ROOT / "Templates",
     ROOT / "Tools",
 )
-SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
+SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm"}
 RAW_PRIMITIVE = re.compile(
     r"(?<![A-Za-z0-9_:.])(?:::)?"
     r"(WSASocketA|WSASocketW|WSASocket|WSAIoctl|WSAConnect|WSAAccept|WSASendTo|WSARecvFrom|"
@@ -767,6 +767,11 @@ NON_SHIPPED_TOP_LEVEL = {
     "shaders", "tests", "thirdparty", "wiki",
 }
 
+# Exact, reviewed first-party implementation files that support developer or CI
+# tooling but are not part of any shipped source payload.  Keep this list at
+# file granularity so future implementation files remain fail-closed.
+NON_SHIPPED_FIRST_PARTY_SOURCES = frozenset({"tools/gvisor-wine-shim.c"})
+
 
 def _inventory_coverage_findings(root: Path, roots: Sequence[Path]) -> list[Finding]:
     """Reject shipped first-party source that falls outside the explicit roots."""
@@ -777,6 +782,9 @@ def _inventory_coverage_findings(root: Path, roots: Sequence[Path]) -> list[Find
         if not child.is_dir() or child.name.lower() in NON_SHIPPED_TOP_LEVEL:
             continue
         for path in _source_files((child,)):
+            relative = path.relative_to(root).as_posix()
+            if relative in NON_SHIPPED_FIRST_PARTY_SOURCES:
+                continue
             resolved = path.resolve()
             if not any(resolved.is_relative_to(source_root) for source_root in resolved_roots):
                 findings.append(Finding(path, 1, "first-party source is outside the explicit network inventory"))

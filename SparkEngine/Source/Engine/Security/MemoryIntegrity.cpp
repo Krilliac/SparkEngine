@@ -62,34 +62,46 @@ namespace Spark::Security
 
     void MemoryIntegritySystem::Initialize()
     {
-        std::lock_guard lock(m_mutex);
+        std::lock_guard lifecycleLock(m_lifecycleMutex);
+        size_t discoveredRegionCount = 0;
 
-        if (m_initialized)
-            return;
-
-        m_regions.clear();
-        m_branchGuards.clear();
-        m_violations.clear();
-        m_scanCursor = 0;
-        m_scanCount = 0;
-        m_timeSinceLastScan = 0.0f;
-        m_lastScanDurationSec = 0.0f;
-
-        if (m_config.autoDiscoverRegions)
         {
-            AutoDiscoverCodeRegions();
+            std::lock_guard stateLock(m_mutex);
+
+            if (m_initialized.load(std::memory_order_acquire))
+                return;
+
+            m_regions.clear();
+            m_branchGuards.clear();
+            if (++m_branchGuardGeneration == 0)
+                ++m_branchGuardGeneration;
+            m_violations.clear();
+            m_scanCursor = 0;
+            m_scanCount = 0;
+            m_timeSinceLastScan = 0.0f;
+            m_lastScanDurationSec = 0.0f;
+
+            if (m_config.autoDiscoverRegions)
+            {
+                AutoDiscoverCodeRegions();
+            }
+
+            discoveredRegionCount = m_regions.size();
         }
 
+        // SimpleConsole::ExecuteCommand holds the console lifecycle lease while
+        // its permission guard acquires m_mutex. Never acquire console locks
+        // while m_mutex is held, or those two paths form a lock-order cycle.
         RegisterConsoleCommands();
 
-        m_initialized = true;
+        m_initialized.store(true, std::memory_order_release);
         SPARK_LOG_INFO(Spark::LogCategory::Core, "MemoryIntegritySystem initialized (%zu regions auto-discovered)",
-                       m_regions.size());
+                       discoveredRegionCount);
     }
 
     void MemoryIntegritySystem::Update(float dt)
     {
-        if (!m_config.enabled || !m_initialized)
+        if (!m_config.enabled || !m_initialized.load(std::memory_order_acquire))
             return;
 
         m_timeSinceLastScan += dt;
@@ -103,22 +115,32 @@ namespace Spark::Security
 
     void MemoryIntegritySystem::Shutdown()
     {
-        std::lock_guard lock(m_mutex);
+        std::lock_guard lifecycleLock(m_lifecycleMutex);
+        size_t violationCount = 0;
+        uint32_t scanCount = 0;
 
-        if (!m_initialized)
-            return;
-
-        if (!m_violations.empty())
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "MemoryIntegritySystem shutting down with %zu violations recorded",
-                           m_violations.size());
+            std::lock_guard stateLock(m_mutex);
+
+            if (!m_initialized.load(std::memory_order_acquire))
+                return;
+
+            violationCount = m_violations.size();
+            scanCount = m_scanCount;
+            m_regions.clear();
+            m_branchGuards.clear();
+            if (++m_branchGuardGeneration == 0)
+                ++m_branchGuardGeneration;
+            m_initialized.store(false, std::memory_order_release);
         }
 
-        m_regions.clear();
-        m_branchGuards.clear();
-        m_initialized = false;
+        if (violationCount != 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "MemoryIntegritySystem shutting down with %zu violations recorded",
+                           violationCount);
+        }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "MemoryIntegritySystem shut down (scanned %u times)", m_scanCount);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "MemoryIntegritySystem shut down (scanned %u times)", scanCount);
     }
 
     // =========================================================================
@@ -244,7 +266,7 @@ namespace Spark::Security
         m_branchGuards[id] = std::move(entry);
     }
 
-    void MemoryIntegritySystem::RecordBranchExecution(uint64_t id, uint32_t pathTaken)
+    uint64_t MemoryIntegritySystem::RecordBranchExecution(uint64_t id, uint32_t pathTaken)
     {
         std::lock_guard lock(m_mutex);
 
@@ -256,16 +278,28 @@ namespace Spark::Security
             entry.lastPathTaken = pathTaken;
             entry.executionCount = 1;
             m_branchGuards[id] = std::move(entry);
-            return;
+            return m_branchGuardGeneration;
         }
 
         it->second.lastPathTaken = pathTaken;
         ++it->second.executionCount;
+        return m_branchGuardGeneration;
     }
 
     void MemoryIntegritySystem::VerifyBranchExecuted(uint64_t id)
     {
+        VerifyBranchExecuted(id, 0);
+    }
+
+    void MemoryIntegritySystem::VerifyBranchExecuted(uint64_t id, uint64_t recordedGeneration)
+    {
         std::lock_guard lock(m_mutex);
+
+        // A lifecycle boundary invalidates the complete observation. Do not
+        // reinterpret evidence from an older, cleared registry as a bypass in
+        // the new generation.
+        if (recordedGeneration != 0 && recordedGeneration != m_branchGuardGeneration)
+            return;
 
         auto it = m_branchGuards.find(id);
         if (it == m_branchGuards.end())
