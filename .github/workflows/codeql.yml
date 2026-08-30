@@ -20,6 +20,12 @@ jobs:
       security-events: write
       actions: read
       contents: read
+    # CodeQL Action v4.37.9 pins CLI/bundle 2.26.4. Its buildless C/C++
+    # scanner otherwise synthesizes -std=c++17 even though SparkEngine is a
+    # C++23 project. Keep this option bound to that exact action pin; the
+    # workflow-shape tests must be updated deliberately if the pin changes.
+    env:
+      CODEQL_EXTRACTOR_CPP_OPTION_FRONTEND_OPTIONS: --c++23
     strategy:
       fail-fast: false
       matrix:

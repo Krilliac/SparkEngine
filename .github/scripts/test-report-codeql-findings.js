@@ -355,6 +355,8 @@ function testWorkflowShape() {
     const reporter = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'codeql-report.yml'), 'utf8');
     const combined = `${scanner}\n${reporter}`;
     const actionUses = [...combined.matchAll(/^\s*uses:\s*([^\s#]+)/gm)].map(match => match[1]);
+    const codeqlActionPin = 'a35ac6e6798d72df5475948b28efb89edc2e19ca';
+    const codeqlUses = actionUses.filter(action => action.startsWith('github/codeql-action/'));
     const cCppBuildMode = scanner.match(
         /^[ \t]*-[ \t]*language:[ \t]*c-cpp[ \t]*\r?\n[ \t]*build-mode:[ \t]*([^\s#]+)/mi,
     );
@@ -368,6 +370,10 @@ function testWorkflowShape() {
         'none',
         'the C/C++ scanner must use build-mode none; manual/autobuild are forbidden',
     );
+    assert(scanner.includes('CODEQL_EXTRACTOR_CPP_OPTION_FRONTEND_OPTIONS: --c++23'),
+        'buildless C/C++ extraction must override the pinned CLI default to SparkEngine C++23');
+    assert(codeqlUses.length >= 2 && codeqlUses.every(action => action.endsWith(`@${codeqlActionPin}`)),
+        'the C++23 extractor override must remain bound to the reviewed CodeQL Action 2.26.4 pin');
     assert(scanner.includes('config: |'));
     assert(!scanner.includes('config-file:'));
     assert(scanner.includes('archive: false'));

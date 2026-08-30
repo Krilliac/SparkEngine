@@ -78,6 +78,10 @@ _TARGET_KIND_MAP = {
     "OBJECT_LIBRARY": "object_library",
     "INTERFACE_LIBRARY": "interface_library",
     "UNKNOWN_LIBRARY": "unknown_library",
+    "UTILITY": "utility",
+}
+_LINKED_TARGET_KINDS = {
+    "executable", "static_library", "shared_library", "module_library",
 }
 _WINDOWS_PRODUCT_SUFFIX = {
     "EXECUTABLE": ".exe",
@@ -2318,9 +2322,7 @@ def parse_codemodel_targets(
                 raise InventoryError(f"{profile}: unsupported codemodel target type {cmake_type!r}")
             name_on_disk = target.get("nameOnDisk")
             artifacts_value = target.get("artifacts")
-            product_type = cmake_type in {
-                "EXECUTABLE", "STATIC_LIBRARY", "SHARED_LIBRARY", "MODULE_LIBRARY"
-            }
+            product_type = kind in _LINKED_TARGET_KINDS
             artifact_paths: list[str] = []
             if product_type:
                 if (
@@ -2404,6 +2406,12 @@ def parse_codemodel_targets(
                     raise InventoryError(
                         f"{profile}: target {name!r} nameOnDisk is absent from its artifact list"
                     )
+            elif cmake_type == "UTILITY" and (
+                name_on_disk is not None or artifacts_value is not None
+            ):
+                raise InventoryError(
+                    f"{profile}: utility target {name!r} declares linked artifact identity"
+                )
             key = (name, config_name)
             value: dict[str, Any] = {
                 "target": name,
@@ -3217,6 +3225,7 @@ def _capture_artifact_manifest(evidence: dict[str, Any], build_directory: Path) 
         target_id = target.get("id")
         target_name = target.get("target")
         configuration = target.get("configuration")
+        kind = target.get("kind")
         artifacts = target.get("artifacts")
         if (
             not isinstance(target_id, str)
@@ -3225,10 +3234,18 @@ def _capture_artifact_manifest(evidence: dict[str, Any], build_directory: Path) 
             or not target_name
             or not isinstance(configuration, str)
             or not configuration
+            or kind not in set(_TARGET_KIND_MAP.values())
             or not isinstance(artifacts, list)
-            or not artifacts
         ):
             raise InventoryError("configured target lacks a stable artifact identity")
+        if kind in _LINKED_TARGET_KINDS and not artifacts:
+            raise InventoryError(
+                f"linked configured target {target_name!r} lacks a stable artifact identity"
+            )
+        if kind not in _LINKED_TARGET_KINDS and artifacts:
+            raise InventoryError(
+                f"non-linked configured target {target_name!r} unexpectedly declares artifacts"
+            )
         identities = [
             _artifact_identity(Path(item), build_directory, f"{target_name} artifact {offset}")
             for offset, item in enumerate(artifacts)

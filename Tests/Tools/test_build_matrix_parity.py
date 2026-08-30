@@ -548,6 +548,75 @@ class PresetAndCodemodelTests(unittest.TestCase):
             ],
         )
 
+    def test_codemodel_utility_is_recorded_without_artifact_identity(self) -> None:
+        evidence = inventory.parse_codemodel_targets(
+            "windows-shipping",
+            {
+                "configurations": [
+                    {
+                        "name": "MinSizeRel",
+                        "targets": [
+                            {
+                                "name": "maintenance",
+                                "id": "maintenance::@synthetic",
+                                "jsonFile": "utility.json",
+                            }
+                        ],
+                    }
+                ]
+            },
+            {
+                "utility.json": {
+                    "name": "maintenance",
+                    "id": "maintenance::@synthetic",
+                    "type": "UTILITY",
+                }
+            },
+            Path("C:/synthetic-build"),
+        )
+        self.assertEqual(
+            evidence["targets"],
+            [
+                {
+                    "target": "maintenance",
+                    "id": "maintenance::@synthetic",
+                    "kind": "utility",
+                    "configuration": "MinSizeRel",
+                    "artifactState": "declared-not-built",
+                    "nameOnDisk": "",
+                    "artifacts": [],
+                }
+            ],
+        )
+
+    def test_unknown_codemodel_target_type_remains_fail_closed(self) -> None:
+        with self.assertRaisesRegex(inventory.InventoryError, "unsupported codemodel target type"):
+            inventory.parse_codemodel_targets(
+                "windows-shipping",
+                {
+                    "configurations": [
+                        {
+                            "name": "MinSizeRel",
+                            "targets": [
+                                {
+                                    "name": "future",
+                                    "id": "future::@synthetic",
+                                    "jsonFile": "future.json",
+                                }
+                            ],
+                        }
+                    ]
+                },
+                {
+                    "future.json": {
+                        "name": "future",
+                        "id": "future::@synthetic",
+                        "type": "FUTURE_TARGET",
+                    }
+                },
+                Path("C:/synthetic-build"),
+            )
+
     def test_windows_product_name_must_match_cmake_target_type(self) -> None:
         with self.assertRaisesRegex(inventory.InventoryError, "inconsistent with STATIC_LIBRARY"):
             inventory.parse_codemodel_targets(
@@ -1543,6 +1612,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                     source_dir=source.as_posix(),
                     build_dir=build.as_posix(),
                     cache=self.shipping_cache,
+                    targets=(("SparkEngine", "EXECUTABLE"), ("maintenance", "UTILITY")),
                 )
                 query_path = next(
                     (build / ".cmake" / "api" / "v1" / "query").glob("client-*/query.json")
@@ -1604,7 +1674,11 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 evidence["producerProvenance"]["artifactState"],
                 "locally-observed-post-build",
             )
-            self.assertEqual(evidence["targets"][0]["artifactState"], "locally-observed-post-build")
+            targets = {target["target"]: target for target in evidence["targets"]}
+            self.assertEqual(targets["SparkEngine"]["artifactState"], "locally-observed-post-build")
+            self.assertEqual(targets["maintenance"]["artifactState"], "locally-observed-post-build")
+            self.assertEqual(targets["maintenance"]["artifacts"], [])
+            self.assertEqual(targets["maintenance"]["artifactIdentities"], [])
             self.assertFalse(
                 any((build / ".cmake" / "api" / "v1" / "query").glob("client-*"))
             )

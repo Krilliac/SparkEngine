@@ -73,6 +73,9 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
         self.assertNotIn("config-file:", analyze)
         self.assertIn("paths-ignore:", analyze)
         self.assertIn("archive: false", analyze)
+        self.assertIn(
+            "CODEQL_EXTRACTOR_CPP_OPTION_FRONTEND_OPTIONS: --c++23", analyze
+        )
         _assert_full_sha_pins(self, text)
 
     def test_codeql_privileged_reporter_bootstraps_exact_trusted_checkout(self) -> None:
