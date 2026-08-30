@@ -4,7 +4,7 @@ SparkEngine includes a timeline-based cinematic sequencer for creating in-game c
 
 **Source:** `SparkEngine/Source/Engine/Cinematic/Sequencer.h`
 
-`ENABLE_CINEMATIC=ON`
+The sequencer is compiled as part of the engine; there is no separate CMake toggle.
 
 ## Overview
 

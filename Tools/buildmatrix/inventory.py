@@ -1157,6 +1157,23 @@ def load_stable_profile_data(data: dict[str, Any]) -> dict[str, Any]:
                     raise InventoryError(
                         f"installed-sdk-consumer must declare a safe relative {field_name}"
                     )
+            for field_name in ("generator", "architecture", "toolset", "expectedEngineVersion"):
+                value = configuration.get(field_name)
+                if not isinstance(value, str) or not value or len(value) > 128:
+                    raise InventoryError(
+                        f"installed-sdk-consumer must declare a bounded nonempty {field_name}"
+                    )
+            package_directory = configuration.get("packageDirectory")
+            if (
+                not isinstance(package_directory, str)
+                or not package_directory
+                or Path(package_directory).is_absolute()
+                or "\\" in package_directory
+                or any(part in {"", ".", ".."} for part in package_directory.split("/"))
+            ):
+                raise InventoryError("installed-sdk-consumer must declare a safe relative packageDirectory")
+            if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", configuration["expectedEngineVersion"]):
+                raise InventoryError("installed-sdk-consumer expectedEngineVersion must be semantic x.y.z")
     seen_targets: set[tuple[str, str]] = set()
     target_names: set[str] = set()
     covered: set[str] = set()
@@ -2200,6 +2217,8 @@ def _bound_cache_entries(cache: dict[str, Any], profile: str) -> dict[str, str]:
     if profile_config and profile_config.get("preset"):
         preset = resolve_configure_preset(extract_cmake_presets(), profile_config["preset"])
         material_names.update(preset.get("cacheVariables", {}))
+    elif profile_config and profile_config.get("purpose") == "installed-sdk-consumer":
+        material_names.update({"SparkEngine_DIR", "SPARK_EXPECTED_ENGINE_VERSION"})
     result: dict[str, str] = {}
     all_names: set[str] = set()
     for offset, value in enumerate(entries):
@@ -2717,17 +2736,16 @@ def _load_producer_provenance(
         or _normalize_directory(argv[0]) != _normalize_directory(configure.get("executable"))
     ):
         raise ReplyValidationError(f"{profile}: configure argv does not bind its executable")
-    if expected_preset:
-        expected_argv = [configure.get("executable"), "--preset", expected_preset]
-    else:
-        expected_argv = [
-            configure.get("executable"),
-            "-S",
-            transaction.get("sourceDirectory"),
-            "-B",
-            transaction.get("buildDirectory"),
-        ]
-    if argv != expected_argv:
+    try:
+        _, expected_source, _, expected_argv = _capture_plan(
+            Path(evidence["evidenceDirectory"]), profile, Path(str(configure.get("executable")))
+        )
+    except (InventoryError, OSError, ValueError) as error:
+        raise ReplyValidationError(f"{profile}: cannot derive canonical configure invocation: {error}") from error
+    expected_argv[0] = _normalize_directory(expected_argv[0])
+    if argv != expected_argv or _normalize_directory(configure.get("cwd")) != _normalize_directory(
+        str(expected_source)
+    ):
         raise ReplyValidationError(f"{profile}: configure argv is not the canonical profile invocation")
     executable_identity = _require_mapping(
         configure.get("executableIdentity"), f"{profile} CMake executable identity"
@@ -3252,7 +3270,22 @@ def _capture_plan(
     else:
         source_dir = _absolute_directory(REPO_ROOT / str(config.get("sourceDirectory", "")))
         expected_build = _absolute_directory(REPO_ROOT / str(config.get("buildDirectory", "")))
-        argv = [str(cmake_executable), "-S", str(source_dir), "-B", str(expected_build)]
+        package_directory = _absolute_directory(REPO_ROOT / str(config.get("packageDirectory", "")))
+        argv = [
+            str(cmake_executable),
+            "-S",
+            str(source_dir),
+            "-B",
+            str(expected_build),
+            "-G",
+            str(config.get("generator", "")),
+            "-A",
+            str(config.get("architecture", "")),
+            "-T",
+            str(config.get("toolset", "")),
+            f"-DSparkEngine_DIR={package_directory}",
+            f"-DSPARK_EXPECTED_ENGINE_VERSION={config.get('expectedEngineVersion', '')}",
+        ]
     if os.path.normcase(os.fspath(expected_build)) != os.path.normcase(os.fspath(supplied_build)):
         raise InventoryError(
             f"{profile}: capture build directory is {supplied_build}, expected {expected_build}"

@@ -6,7 +6,7 @@ SparkEngine includes heightmap terrain rendering and a procedural generation too
 
 ## Heightmap Terrain
 
-`ENABLE_TERRAIN_SYSTEM=ON`
+Terrain and procedural generation are compiled as part of the engine; they do not have separate CMake toggles.
 
 The terrain system renders large outdoor environments using heightmaps:
 
@@ -435,12 +435,9 @@ terrain.ClearHistory();  // Free modification history memory
 - Modifications are batched per frame -- multiple overlapping edits in the same frame are merged.
 - For large-scale changes, use `terrain.BeginBatch()` / `terrain.EndBatch()` to defer GPU uploads until all edits are complete.
 
-## CMake Options
+## Build availability
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `ENABLE_TERRAIN_SYSTEM` | ON | Heightmap terrain rendering |
-| `ENABLE_PROCEDURAL` | ON | Procedural generation toolkit |
+Heightmap terrain and the procedural-generation toolkit are part of the engine target. Do not pass invented `ENABLE_TERRAIN_SYSTEM` or `ENABLE_PROCEDURAL` cache values; CMake does not declare them.
 
 ---
 

@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-29.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-30.
 This source inventory is not readiness evidence. The `stable-v1` Windows 11
 x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
@@ -15,10 +15,10 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 | **GameModules** | 143040 |
 | **External services** | 11178 |
 | **Asset pipeline** | 2399 |
-| **Tests** | 170766 |
+| **Tests** | 170825 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~763941** |
+| **Total C++ (excl. ThirdParty)** | **~764040** |
 
 ### File Counts
 
@@ -110,7 +110,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 576 |
-| TEST() definitions | 6963 |
+| TEST() definitions | 6966 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics

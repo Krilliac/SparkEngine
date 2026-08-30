@@ -835,19 +835,25 @@ def parse_commands(
 
 def _ci120_option(args: list[str], name: str) -> str:
     """Read one exact long option without guessing through an opaque shell wrapper."""
-    value = ""
+    values = _ci120_options(args, name)
+    if len(values) > 1:
+        raise WorkflowError(f"CI-120 invocation repeats {name}")
+    return values[0] if values else ""
+
+
+def _ci120_options(args: list[str], name: str) -> list[str]:
+    """Read a repeatable exact long option in original command order."""
+    values: list[str] = []
     for index, argument in enumerate(args):
         if argument == name:
             if index + 1 >= len(args) or args[index + 1].startswith("-"):
                 raise WorkflowError(f"CI-120 invocation {name} lacks a value")
-            if value:
-                raise WorkflowError(f"CI-120 invocation repeats {name}")
-            value = args[index + 1]
+            values.append(args[index + 1])
         elif argument.startswith(name + "="):
-            if value or not argument[len(name) + 1 :]:
+            if not argument[len(name) + 1 :]:
                 raise WorkflowError(f"CI-120 invocation has an invalid {name}")
-            value = argument[len(name) + 1 :]
-    return value
+            values.append(argument[len(name) + 1 :])
+    return values
 
 
 def parse_ci120_invocations(
@@ -891,6 +897,7 @@ def parse_ci120_invocations(
                 # Treat it as an explicit untrusted invocation, never as proof.
                 executable = launcher in {"python", "python3", "py"}
                 tool_args = arguments[script_index + 1 :]
+                codemodels = _ci120_options(tool_args, "--codemodel")
                 records.append(
                     {
                         **context,
@@ -900,7 +907,8 @@ def parse_ci120_invocations(
                         "executable": executable,
                         "profile": _ci120_option(tool_args, "--profile"),
                         "buildDir": _ci120_option(tool_args, "--build-dir"),
-                        "codemodel": _ci120_option(tool_args, "--codemodel"),
+                        "codemodel": codemodels[0] if len(codemodels) == 1 else "",
+                        "codemodels": codemodels,
                         "inventory": _ci120_option(tool_args, "--inventory"),
                         "baseline": _ci120_option(tool_args, "--baseline"),
                         "build": "--build" in tool_args,

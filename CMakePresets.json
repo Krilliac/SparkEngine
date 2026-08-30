@@ -38,7 +38,16 @@
             "architecture": "x64",
             "toolset": "v143",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
+                "CMAKE_BUILD_TYPE": "Release",
+                "SPARK_STRICT_DEPS": "ON",
+                "BUILD_TESTS": "ON",
+                "BUILD_GAME_MODULES": "ON",
+                "ENABLE_EDITOR": "ON",
+                "ENABLE_LAUNCHER": "ON",
+                "ENABLE_SPARKBUILD": "ON",
+                "ENABLE_INSTALLER": "ON",
+                "ENABLE_ASSET_PIPELINE_TOOLS": "ON",
+                "ENABLE_AUTOMATION_HOST": "ON"
             },
             "condition": {
                 "type": "equals",
@@ -128,7 +137,7 @@
         },
         {
             "name": "windows-shipping",
-            "displayName": "Windows Shipping (max speed, no dev tools)",
+            "displayName": "Windows stable-v1 Shipping product set",
             "inherits": "default",
             "generator": "Visual Studio 17 2022",
             "architecture": "x64",
@@ -136,14 +145,31 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel",
                 "SPARK_NATIVE_ARCH": "OFF",
-                "ENABLE_EDITOR": "OFF",
+                "ENABLE_EDITOR": "ON",
                 "ENABLE_PROFILING": "OFF",
-                "ENABLE_HOT_RELOAD": "OFF",
                 "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
                 "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
                 "STRIP_DEBUG_SYMBOLS": "ON",
                 "SPARK_STRICT_DEPS": "ON",
-                "BUILD_TESTS": "OFF"
+                "BUILD_TESTS": "OFF",
+                "BUILD_GAME_MODULES": "ON",
+                "ENABLE_LAUNCHER": "ON",
+                "ENABLE_SPARKBUILD": "ON",
+                "ENABLE_INSTALLER": "ON",
+                "ENABLE_ASSET_PIPELINE_TOOLS": "ON",
+                "ENABLE_AUTOMATION_HOST": "ON",
+                "ENABLE_DXR": "OFF",
+                "ENABLE_HYBRID_RT": "OFF",
+                "ENABLE_NEURAL_RENDERING": "OFF",
+                "ENABLE_ANGELSCRIPT": "OFF",
+                "ENABLE_NETWORKING": "OFF",
+                "ENABLE_SERVER_PROCESSES": "OFF",
+                "ENABLE_VULKAN": "OFF",
+                "ENABLE_OPENGL": "OFF",
+                "ENABLE_SDL2": "OFF",
+                "ENABLE_METAL": "OFF",
+                "ENABLE_VR": "OFF",
+                "ENABLE_MOBILE": "OFF"
             },
             "condition": {
                 "type": "equals",
@@ -181,7 +207,6 @@
                 "SPARK_NATIVE_ARCH": "OFF",
                 "ENABLE_EDITOR": "OFF",
                 "ENABLE_PROFILING": "OFF",
-                "ENABLE_HOT_RELOAD": "OFF",
                 "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
                 "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
                 "STRIP_DEBUG_SYMBOLS": "ON",
@@ -315,15 +340,21 @@
             "inherits": "default",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "ENABLE_AI": "OFF",
-                "ENABLE_ANIMATION": "OFF",
                 "ENABLE_NETWORKING": "OFF",
-                "ENABLE_SAVE_SYSTEM": "OFF",
-                "ENABLE_PROCEDURAL": "OFF",
-                "ENABLE_CINEMATIC": "OFF",
-                "ENABLE_DECALS": "OFF",
-                "ENABLE_MESH_LOD": "OFF",
-                "ENABLE_DXR": "OFF"
+                "ENABLE_SERVER_PROCESSES": "OFF",
+                "ENABLE_DXR": "OFF",
+                "ENABLE_HYBRID_RT": "OFF",
+                "ENABLE_NEURAL_RENDERING": "OFF",
+                "ENABLE_ANGELSCRIPT": "OFF",
+                "ENABLE_EDITOR": "OFF",
+                "ENABLE_PROFILING": "OFF",
+                "ENABLE_LAUNCHER": "OFF",
+                "ENABLE_SPARKBUILD": "OFF",
+                "ENABLE_INSTALLER": "OFF",
+                "ENABLE_ASSET_PIPELINE_TOOLS": "OFF",
+                "ENABLE_AUTOMATION_HOST": "OFF",
+                "BUILD_GAME_MODULES": "OFF",
+                "BUILD_TESTS": "OFF"
             }
         }
     ],
@@ -353,6 +384,14 @@
         {
             "name": "linux-clang-release",
             "configurePreset": "linux-clang-release"
+        },
+        {
+            "name": "ci-linux-asan",
+            "configurePreset": "ci-linux-asan"
+        },
+        {
+            "name": "ci-linux-tsan",
+            "configurePreset": "ci-linux-tsan"
         },
         {
             "name": "windows-shipping",
@@ -395,6 +434,10 @@
         {
             "name": "linux-mingw-debug",
             "configurePreset": "linux-mingw-debug"
+        },
+        {
+            "name": "minimal",
+            "configurePreset": "minimal"
         }
     ],
     "testPresets": [

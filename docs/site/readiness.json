@@ -1841,6 +1841,11 @@
           "purpose": "installed-sdk-consumer",
           "sourceDirectory": "Tests/PackageSmoke",
           "buildDirectory": "build/installed-sdk-consumer",
+          "generator": "Visual Studio 17 2022",
+          "architecture": "x64",
+          "toolset": "v143",
+          "packageDirectory": "build/ci120-stage/lib/cmake/SparkEngine",
+          "expectedEngineVersion": "1.0.0",
           "description": "A separate configure against an installed SparkEngine package that proves public SDK headers, imports, and module linkage without source-tree include leakage."
         }
       ],

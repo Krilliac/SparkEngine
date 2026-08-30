@@ -257,7 +257,7 @@ Both `SparkEngine.exe` and `SparkConsole.exe` must exist in `build\bin\`.
 **Cause:** PhysicsSystem must run on the main thread only.
 
 **Checklist:**
-1. Verify `ENABLE_PHYSX` is ON in CMake configuration
+1. Verify the Jolt dependency configured successfully and physics initialized
 2. Check that `PhysicsSystem::Update()` is called each frame
 3. Ensure physics bodies are properly registered with the system
 4. Check console: `physics_info`
@@ -330,7 +330,7 @@ audio.SetListenerOrientation(cameraForward, cameraUp);
 ### AI Agents Not Moving
 
 **Checklist:**
-1. Verify `ENABLE_AI` is ON in CMake
+1. Verify the AI/navigation sources are present in the configured engine target
 2. Check that NavMesh is generated for the scene
 3. Verify agents have valid start/target positions on the NavMesh
 4. Run `ai_status` in console
@@ -360,7 +360,7 @@ audio.SetListenerOrientation(cameraForward, cameraUp);
 ### Skeletal Animation Not Playing
 
 **Checklist:**
-1. Verify `ENABLE_ANIMATION` is ON in CMake
+1. Verify the animation sources are present in the configured engine target
 2. Check that the animation clip is loaded and assigned
 3. Verify the skeleton bone hierarchy matches the mesh
 4. Check animation state machine transitions

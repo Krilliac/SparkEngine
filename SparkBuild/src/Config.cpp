@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <string_view>
+#include <unordered_set>
+#include <utility>
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #ifndef WIN32_LEAN_AND_MEAN
@@ -180,87 +182,73 @@ namespace SparkBuild
         // See: https://github.com/Krilliac/SparkEngine/blob/Working/CMakeLists.txt
         // ========================================================================
 
-        // Core Systems
-        config.options.push_back({"ENABLE_GRAPHICS", "Graphics Engine",
-                                  "DirectX 11 renderer (Windows) / OpenGL (Linux/macOS)", true, true,
-                                  OptionCategory::Core});
+        // Core systems
         config.options.push_back(
-            {"ENABLE_PHYSX", "Physics (Bullet)", "Bullet Physics 3D physics engine", true, true, OptionCategory::Core});
-        config.options.push_back({"ENABLE_AI", "AI & Navigation",
-                                  "Behavior trees, NavMesh pathfinding, perception system", true, true,
+            {"ENABLE_GRAPHICS", "Graphics Engine", "Build the graphics engine", true, true, OptionCategory::Core});
+        config.options.push_back({"ENABLE_RECAST", "Recast Navigation",
+                                  "Build the Recast/Detour navigation implementation", true, true,
                                   OptionCategory::Core});
-        config.options.push_back({"ENABLE_ANIMATION", "Skeletal Animation",
-                                  "Skeletal animation, IK, state machines, blending", true, true,
+        config.options.push_back({"SPARK_HEADLESS_SUPPORT", "Headless Mode",
+                                  "Enable headless/dedicated-server runtime support", true, true,
                                   OptionCategory::Core});
-        config.options.push_back({"ENABLE_SAVE_SYSTEM", "Save/Load System",
-                                  "JSON serialization with compression (miniz)", true, true, OptionCategory::Core});
-        config.options.push_back({"ENABLE_ADVANCED_INPUT", "Advanced Input", "Extended input: keyboard, mouse, gamepad",
-                                  true, true, OptionCategory::Core});
-        config.options.push_back({"ENABLE_ASSET_STREAMING", "Asset Streaming", "Runtime asset streaming and loading",
-                                  true, true, OptionCategory::Core});
+        config.options.push_back({"SPARK_DOUBLE_PRECISION_PHYSICS", "Double-Precision Physics",
+                                  "Use double-precision Jolt physics for large worlds", false, false,
+                                  OptionCategory::Core});
 
-        // Graphics Backends
-        config.options.push_back({"ENABLE_VULKAN", "Vulkan Backend",
-                                  "Vulkan graphics backend (experimental, cross-platform)", true, true,
+        // Graphics backends and rendering breadth
+        config.options.push_back({"ENABLE_VULKAN", "Vulkan Backend", "Build the experimental Vulkan backend", true,
+                                  true, OptionCategory::Graphics});
+        config.options.push_back({"ENABLE_OPENGL", "OpenGL Backend", "Build the experimental OpenGL backend", true,
+                                  true, OptionCategory::Graphics});
+        config.options.push_back({"ENABLE_SDL2", "SDL2 Windowing", "Build SDL2 windowing and input support", false,
+                                  false, OptionCategory::Graphics});
+        config.options.push_back({"ENABLE_METAL", "Metal Backend", "Build the experimental macOS Metal backend", false,
+                                  false, OptionCategory::Graphics});
+        config.options.push_back({"ENABLE_DXR", "DirectX Raytracing",
+                                  "Build DirectX Raytracing support for the D3D12 path", true, true,
                                   OptionCategory::Graphics});
-        config.options.push_back({"ENABLE_OPENGL", "OpenGL Backend",
-                                  "OpenGL 4.5 backend (experimental, cross-platform)", true, true,
-                                  OptionCategory::Graphics});
-        config.options.push_back({"ENABLE_DXR", "DirectX Raytracing", "DXR support (requires D3D12, Windows only)",
-                                  false, false, OptionCategory::Graphics});
+        config.options.push_back({"ENABLE_HYBRID_RT", "Hybrid Ray Tracing",
+                                  "Build hybrid software and hardware ray-tracing support", true, true,
+                                  OptionCategory::Rendering});
+        config.options.push_back({"ENABLE_NEURAL_RENDERING", "Neural Rendering",
+                                  "Build experimental neural-rendering features", true, true,
+                                  OptionCategory::Rendering});
 
-        // Rendering & Effects
-        config.options.push_back({"ENABLE_POST_PROCESSING", "Post-Processing", "Bloom, tone mapping, FXAA effects",
-                                  true, true, OptionCategory::Rendering});
-        config.options.push_back({"ENABLE_LIGHTING_SYSTEM", "Advanced Lighting", "PBR lighting, IBL, shadow mapping",
-                                  true, true, OptionCategory::Rendering});
-        config.options.push_back({"ENABLE_DECALS", "Decal System", "Projected decals for impacts and effects", true,
-                                  true, OptionCategory::Rendering});
-        config.options.push_back(
-            {"ENABLE_MESH_LOD", "Mesh LOD", "Mesh level-of-detail system", true, true, OptionCategory::Rendering});
-        config.options.push_back(
-            {"ENABLE_FOG_SYSTEM", "Fog System", "Fog rendering system", true, true, OptionCategory::Rendering});
-        config.options.push_back({"ENABLE_SCREEN_SPACE", "Screen-Space Effects", "Screen-space effects (SSAO, SSR)",
-                                  true, true, OptionCategory::Rendering});
-
-        // Editor & Tools
-        config.options.push_back({"ENABLE_EDITOR", "Editor", "ImGui visual editor (Windows/Linux)", true, true,
+        // Editor, build products, and validation tools
+        config.options.push_back({"ENABLE_EDITOR", "Editor", "Build the SparkEditor authoring application", true, true,
                                   OptionCategory::EditorTools});
-        config.options.push_back({"ENABLE_PROFILING", "Profiling Tools",
-                                  "Performance profiling, timers, memory tracking", true, true,
+        config.options.push_back({"ENABLE_PROFILING", "Profiling Tools", "Build profiling instrumentation", true, true,
                                   OptionCategory::EditorTools});
-        config.options.push_back({"ENABLE_PERF_STATS", "Performance Stats", "Performance statistics overlay", true,
-                                  true, OptionCategory::EditorTools});
         config.options.push_back(
-            {"BUILD_TESTS", "Unit Tests", "Build CTest unit test suite", true, true, OptionCategory::EditorTools});
+            {"BUILD_TESTS", "Unit Tests", "Build the CTest test suite", true, true, OptionCategory::EditorTools});
+        config.options.push_back({"BUILD_GAME_MODULES", "Game Modules", "Build the in-tree game modules", true, true,
+                                  OptionCategory::EditorTools});
+        config.options.push_back(
+            {"ENABLE_LAUNCHER", "Launcher", "Build SparkLauncher", true, true, OptionCategory::EditorTools});
+        config.options.push_back(
+            {"ENABLE_SPARKBUILD", "Build Configurator", "Build SparkBuild", true, true, OptionCategory::EditorTools});
+        config.options.push_back(
+            {"ENABLE_INSTALLER", "Installer", "Build SparkInstaller", true, true, OptionCategory::EditorTools});
+        config.options.push_back({"ENABLE_ASSET_PIPELINE_TOOLS", "Asset Pipeline Tools",
+                                  "Build SparkCooker and SparkWorker", true, true, OptionCategory::EditorTools});
+        config.options.push_back({"ENABLE_AUTOMATION_HOST", "Automation Host", "Build SparkAutomation", true, true,
+                                  OptionCategory::EditorTools});
+        config.options.push_back({"SPARK_SUPPRESS_THIRDPARTY_WARNINGS", "Suppress Third-Party Warnings",
+                                  "Treat third-party headers as external/system headers", true, true,
+                                  OptionCategory::EditorTools});
 
         // Scripting
-        config.options.push_back({"ENABLE_LUA", "Lua Scripting", "Lua scripting support (Sol2 bindings)", true, true,
+        config.options.push_back({"ENABLE_ANGELSCRIPT", "AngelScript",
+                                  "Build the experimental AngelScript gameplay runtime", true, true,
                                   OptionCategory::Scripting});
-        config.options.push_back({"ENABLE_HOT_RELOAD", "Hot Reload", "Game module hot-reload during development", true,
-                                  true, OptionCategory::Scripting});
 
-        // Gameplay Systems
-        config.options.push_back({"ENABLE_TERRAIN_SYSTEM", "Terrain System", "Heightmap terrain with LOD and erosion",
-                                  true, true, OptionCategory::Gameplay});
-        config.options.push_back({"ENABLE_PROCEDURAL", "Procedural Generation",
-                                  "Noise, erosion, mesh gen, WFC algorithms", true, true, OptionCategory::Gameplay});
-        config.options.push_back({"ENABLE_CINEMATIC", "Cinematic Sequencer", "Cinematic sequence and cutscene system",
-                                  true, true, OptionCategory::Gameplay});
-        config.options.push_back(
-            {"ENABLE_WEATHER", "Weather System", "Dynamic weather system", true, true, OptionCategory::Gameplay});
-        config.options.push_back({"ENABLE_INVENTORY", "Inventory System", "Item inventory management system", true,
-                                  true, OptionCategory::Gameplay});
-        config.options.push_back({"ENABLE_QUEST_SYSTEM", "Quest System", "Quest and objective tracking system", true,
-                                  true, OptionCategory::Gameplay});
-        config.options.push_back({"ENABLE_EVENT_SYSTEM", "Event System", "Publish/subscribe event bus", true, true,
-                                  OptionCategory::Gameplay});
-        config.options.push_back({"ENABLE_DAY_NIGHT", "Day/Night Cycle", "Dynamic day/night cycle system", true, true,
-                                  OptionCategory::Gameplay});
-
-        // Shipping & Deployment
-        config.options.push_back({"SPARK_HEADLESS_SUPPORT", "Headless Mode", "Headless/dedicated server mode support",
-                                  true, true, OptionCategory::Shipping});
+        // Shipping and deployment
+        config.options.push_back({"SPARK_NATIVE_ARCH", "Native CPU Tuning",
+                                  "Tune for the build machine instead of distributed CPUs", false, false,
+                                  OptionCategory::Shipping});
+        config.options.push_back({"SPARK_STRICT_DEPS", "Strict Dependencies",
+                                  "Fail configuration when a critical dependency is missing", false, false,
+                                  OptionCategory::Shipping});
         config.options.push_back({"ENABLE_CONSOLE_IN_SHIPPING", "Console in Shipping",
                                   "Include SparkConsole in Shipping builds", false, false, OptionCategory::Shipping});
         config.options.push_back({"ENABLE_DEVCOMMANDS_IN_SHIPPING", "Dev Commands in Shipping",
@@ -268,14 +256,16 @@ namespace SparkBuild
         config.options.push_back({"STRIP_DEBUG_SYMBOLS", "Strip Debug Symbols", "Strip debug symbols from binaries",
                                   false, false, OptionCategory::Shipping});
 
-        // Experimental
-        config.options.push_back({"ENABLE_NETWORKING", "Networking",
-                                  "UDP multiplayer, lag compensation (requires curl)", false, false,
+        // Experimental and out-of-profile products
+        config.options.push_back({"ENABLE_NETWORKING", "Networking", "Build UDP networking features", true, true,
                                   OptionCategory::Experimental});
-        config.options.push_back({"ENABLE_SDL2", "SDL2 Windowing", "SDL2 cross-platform windowing and input", false,
-                                  false, OptionCategory::Experimental});
-        config.options.push_back({"ENABLE_COLLABORATIVE", "Collaborative Editing", "Collaborative editing features",
-                                  true, true, OptionCategory::Experimental});
+        config.options.push_back({"ENABLE_SERVER_PROCESSES", "Server Processes",
+                                  "Build dedicated server, gateway, and orchestration processes", true, true,
+                                  OptionCategory::Experimental});
+        config.options.push_back({"ENABLE_VR", "VR/AR Framework", "Build the experimental OpenXR-ready framework",
+                                  false, false, OptionCategory::Experimental});
+        config.options.push_back({"ENABLE_MOBILE", "Mobile Framework", "Build experimental mobile platform support",
+                                  false, false, OptionCategory::Experimental});
 
         // Set platform-appropriate defaults
         config.buildPath = "build";
@@ -312,6 +302,11 @@ namespace SparkBuild
                 opt.defaultValue = false;
                 opt.currentValue = false;
             }
+            if (opt.cmakeVar == "ENABLE_METAL")
+            {
+                opt.defaultValue = true;
+                opt.currentValue = true;
+            }
         }
 #endif
     }
@@ -340,10 +335,14 @@ namespace SparkBuild
         ApplyPresetDefaults();
         for (auto& opt : config.options)
         {
-            if (opt.cmakeVar == "ENABLE_AI" || opt.cmakeVar == "ENABLE_ANIMATION" ||
-                opt.cmakeVar == "ENABLE_NETWORKING" || opt.cmakeVar == "ENABLE_SAVE_SYSTEM" ||
-                opt.cmakeVar == "ENABLE_PROCEDURAL" || opt.cmakeVar == "ENABLE_CINEMATIC" ||
-                opt.cmakeVar == "ENABLE_DECALS" || opt.cmakeVar == "ENABLE_MESH_LOD" || opt.cmakeVar == "ENABLE_DXR")
+            if (opt.cmakeVar == "ENABLE_DXR" || opt.cmakeVar == "ENABLE_HYBRID_RT" ||
+                opt.cmakeVar == "ENABLE_NEURAL_RENDERING" || opt.cmakeVar == "ENABLE_ANGELSCRIPT" ||
+                opt.cmakeVar == "ENABLE_NETWORKING" || opt.cmakeVar == "ENABLE_SERVER_PROCESSES" ||
+                opt.cmakeVar == "ENABLE_EDITOR" || opt.cmakeVar == "ENABLE_LAUNCHER" ||
+                opt.cmakeVar == "ENABLE_SPARKBUILD" || opt.cmakeVar == "ENABLE_INSTALLER" ||
+                opt.cmakeVar == "ENABLE_ASSET_PIPELINE_TOOLS" || opt.cmakeVar == "ENABLE_AUTOMATION_HOST" ||
+                opt.cmakeVar == "ENABLE_PROFILING" || opt.cmakeVar == "BUILD_GAME_MODULES" ||
+                opt.cmakeVar == "BUILD_TESTS")
             {
                 opt.currentValue = false;
             }
@@ -369,18 +368,27 @@ namespace SparkBuild
         ApplyPresetDefaults();
         for (auto& opt : config.options)
         {
-            if (opt.cmakeVar == "ENABLE_EDITOR" || opt.cmakeVar == "ENABLE_PROFILING" ||
-                opt.cmakeVar == "ENABLE_HOT_RELOAD" || opt.cmakeVar == "ENABLE_CONSOLE_IN_SHIPPING" ||
-                opt.cmakeVar == "ENABLE_DEVCOMMANDS_IN_SHIPPING" || opt.cmakeVar == "BUILD_TESTS")
+            if (opt.cmakeVar == "ENABLE_PROFILING" || opt.cmakeVar == "ENABLE_CONSOLE_IN_SHIPPING" ||
+                opt.cmakeVar == "ENABLE_DEVCOMMANDS_IN_SHIPPING" || opt.cmakeVar == "BUILD_TESTS" ||
+                opt.cmakeVar == "ENABLE_DXR" || opt.cmakeVar == "ENABLE_HYBRID_RT" ||
+                opt.cmakeVar == "ENABLE_NEURAL_RENDERING" || opt.cmakeVar == "ENABLE_ANGELSCRIPT" ||
+                opt.cmakeVar == "ENABLE_NETWORKING" || opt.cmakeVar == "ENABLE_SERVER_PROCESSES" ||
+                opt.cmakeVar == "ENABLE_VULKAN" || opt.cmakeVar == "ENABLE_OPENGL" || opt.cmakeVar == "ENABLE_SDL2" ||
+                opt.cmakeVar == "ENABLE_METAL" || opt.cmakeVar == "ENABLE_VR" || opt.cmakeVar == "ENABLE_MOBILE" ||
+                opt.cmakeVar == "SPARK_NATIVE_ARCH")
             {
                 opt.currentValue = false;
             }
-            if (opt.cmakeVar == "STRIP_DEBUG_SYMBOLS")
+            if (opt.cmakeVar == "STRIP_DEBUG_SYMBOLS" || opt.cmakeVar == "SPARK_STRICT_DEPS" ||
+                opt.cmakeVar == "ENABLE_EDITOR" || opt.cmakeVar == "BUILD_GAME_MODULES" ||
+                opt.cmakeVar == "ENABLE_LAUNCHER" || opt.cmakeVar == "ENABLE_SPARKBUILD" ||
+                opt.cmakeVar == "ENABLE_INSTALLER" || opt.cmakeVar == "ENABLE_ASSET_PIPELINE_TOOLS" ||
+                opt.cmakeVar == "ENABLE_AUTOMATION_HOST")
             {
                 opt.currentValue = true;
             }
         }
-        config.buildType = BuildType::Release;
+        config.buildType = BuildType::MinSizeRel;
     }
 
     void ConfigManager::ApplyPresetDevelopment()
@@ -390,8 +398,10 @@ namespace SparkBuild
         for (auto& opt : config.options)
         {
             if (opt.cmakeVar == "ENABLE_EDITOR" || opt.cmakeVar == "ENABLE_PROFILING" ||
-                opt.cmakeVar == "ENABLE_HOT_RELOAD" || opt.cmakeVar == "ENABLE_PERF_STATS" ||
-                opt.cmakeVar == "BUILD_TESTS")
+                opt.cmakeVar == "BUILD_TESTS" || opt.cmakeVar == "BUILD_GAME_MODULES" ||
+                opt.cmakeVar == "ENABLE_LAUNCHER" || opt.cmakeVar == "ENABLE_SPARKBUILD" ||
+                opt.cmakeVar == "ENABLE_INSTALLER" || opt.cmakeVar == "ENABLE_ASSET_PIPELINE_TOOLS" ||
+                opt.cmakeVar == "ENABLE_AUTOMATION_HOST" || opt.cmakeVar == "SPARK_NATIVE_ARCH")
             {
                 opt.currentValue = true;
             }
@@ -401,7 +411,7 @@ namespace SparkBuild
                 opt.currentValue = false;
             }
         }
-        config.buildType = BuildType::Debug;
+        config.buildType = BuildType::RelWithDebInfo;
     }
 
     static std::string Trim(const std::string& s)
@@ -419,7 +429,9 @@ namespace SparkBuild
         if (!file.is_open())
             return false;
 
+        BuildConfig parsed = config;
         std::string line, currentSection;
+        std::unordered_set<std::string> seenKeys;
         while (std::getline(file, line))
         {
             line = Trim(line);
@@ -429,77 +441,105 @@ namespace SparkBuild
             if (line[0] == '[' && line.back() == ']')
             {
                 currentSection = line.substr(1, line.size() - 2);
+                if (currentSection != "Paths" && currentSection != "Build" && currentSection != "Options")
+                    return false;
                 continue;
             }
 
             auto eq = line.find('=');
-            if (eq == std::string::npos)
-                continue;
+            if (eq == std::string::npos || currentSection.empty())
+                return false;
             std::string key = Trim(line.substr(0, eq));
             std::string val = Trim(line.substr(eq + 1));
+            if (key.empty() || !seenKeys.insert(currentSection + "\n" + key).second)
+                return false;
 
             if (currentSection == "Paths")
             {
                 if (key == "EnginePath")
-                    config.enginePath = val;
+                    parsed.enginePath = val;
                 else if (key == "BuildPath")
-                    config.buildPath = val;
+                    parsed.buildPath = val;
                 else if (key == "CMakePath")
-                    config.cmakePath = val;
+                    parsed.cmakePath = val;
+                else
+                    return false;
             }
             else if (currentSection == "Build")
             {
                 if (key == "Generator")
                 {
                     if (val == "VS2022")
-                        config.generator = Generator::VS2022;
+                        parsed.generator = Generator::VS2022;
                     else if (val == "VS2026")
-                        config.generator = Generator::VS2026;
+                        parsed.generator = Generator::VS2026;
                     else if (val == "Ninja")
-                        config.generator = Generator::Ninja;
+                        parsed.generator = Generator::Ninja;
                     else if (val == "NinjaMultiConfig")
-                        config.generator = Generator::NinjaMultiConfig;
+                        parsed.generator = Generator::NinjaMultiConfig;
                     else if (val == "UnixMakefiles")
-                        config.generator = Generator::UnixMakefiles;
+                        parsed.generator = Generator::UnixMakefiles;
                     else if (val == "Xcode")
-                        config.generator = Generator::Xcode;
+                        parsed.generator = Generator::Xcode;
+                    else
+                        return false;
                 }
                 else if (key == "BuildType")
                 {
                     if (val == "Debug")
-                        config.buildType = BuildType::Debug;
+                        parsed.buildType = BuildType::Debug;
                     else if (val == "Release")
-                        config.buildType = BuildType::Release;
+                        parsed.buildType = BuildType::Release;
                     else if (val == "RelWithDebInfo")
-                        config.buildType = BuildType::RelWithDebInfo;
+                        parsed.buildType = BuildType::RelWithDebInfo;
                     else if (val == "MinSizeRel")
-                        config.buildType = BuildType::MinSizeRel;
+                        parsed.buildType = BuildType::MinSizeRel;
+                    else
+                        return false;
                 }
                 else if (key == "MSVCToolset")
                 {
-                    config.msvcToolset = val;
+                    parsed.msvcToolset = val;
                 }
                 else if (key == "ParallelJobs")
                 {
-                    config.parallelJobs = std::atoi(val.c_str());
+                    try
+                    {
+                        size_t consumed = 0;
+                        const int jobs = std::stoi(val, &consumed);
+                        if (consumed != val.size() || jobs < 0)
+                            return false;
+                        parsed.parallelJobs = jobs;
+                    }
+                    catch (const std::exception&)
+                    {
+                        return false;
+                    }
                 }
                 else if (key == "CMakePreset")
                 {
-                    config.cmakePreset = val;
+                    parsed.cmakePreset = val;
                 }
+                else
+                    return false;
             }
             else if (currentSection == "Options")
             {
-                for (auto& opt : config.options)
+                auto option = std::find_if(parsed.options.begin(), parsed.options.end(),
+                                           [&](const BuildOption& item) { return item.cmakeVar == key; });
+                if (option == parsed.options.end())
+                    return false;
+                if (val == "1" || val == "ON" || val == "true")
+                    option->currentValue = true;
+                else if (val == "0" || val == "OFF" || val == "false")
+                    option->currentValue = false;
+                else
                 {
-                    if (opt.cmakeVar == key)
-                    {
-                        opt.currentValue = (val == "1" || val == "ON" || val == "true");
-                        break;
-                    }
+                    return false;
                 }
             }
         }
+        config = std::move(parsed);
         return true;
     }
 

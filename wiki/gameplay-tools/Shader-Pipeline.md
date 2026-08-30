@@ -881,7 +881,7 @@ The engine supports embedded shaders compiled directly into the executable, elim
 
 ## Hot Reloading
 
-When `ENABLE_HOT_RELOAD=ON`, the `Shader` class monitors loaded shader files for modifications. Call `HotReloadShaders()` periodically (e.g., once per second) to check for changes and recompile:
+The `Shader` class can monitor loaded shader files for modifications at runtime; this is not controlled by a root CMake option. Call `HotReloadShaders()` periodically (e.g., once per second) to check for changes and recompile:
 
 ```cpp
 // In editor update loop

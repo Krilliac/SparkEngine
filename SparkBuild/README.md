@@ -123,18 +123,17 @@ Execute the actual build operations:
 
 ## Build Options
 
-SparkBuild exposes 35+ CMake options organized into categories, matching the engine's CMakeLists.txt exactly:
+SparkBuild exposes the same 31 active Windows cache options as the engine root. Removed or misspelled INI options are rejected instead of being forwarded as inert CMake variables:
 
 | Category | Options |
 |----------|---------|
-| **Core Systems** | Graphics, Physics (Bullet 3), AI/NavMesh, Animation, Save/Load, Advanced Input, Asset Streaming |
-| **Graphics Backends** | Vulkan, OpenGL, DirectX Raytracing (DXR) |
-| **Rendering & Effects** | Post-Processing, Advanced Lighting, Decals, Mesh LOD, Fog System, Screen-Space Effects (SSAO/SSR) |
-| **Editor & Tools** | ImGui Editor, Profiling, Performance Stats, Unit Tests |
-| **Scripting** | Lua (Sol2), Hot Reload |
-| **Gameplay** | Terrain, Procedural Generation, Cinematics, Weather, Inventory, Quest System, Event System, Day/Night Cycle |
-| **Shipping & Deployment** | Headless Mode, Console in Shipping, Dev Commands in Shipping, Strip Debug Symbols |
-| **Experimental** | Networking, SDL2, Collaborative Editing |
+| **Core Systems** | Graphics, Recast navigation, headless support, double-precision physics |
+| **Graphics Backends** | Vulkan, OpenGL, SDL2, Metal, DirectX Raytracing (DXR) |
+| **Rendering & Effects** | Hybrid ray tracing, neural rendering |
+| **Editor & Tools** | Editor, profiling, tests, game modules, launcher, SparkBuild, installer, asset tools, automation host, third-party warning policy |
+| **Scripting** | AngelScript |
+| **Shipping & Deployment** | Native CPU tuning, strict dependencies, console/dev commands in Shipping, debug-symbol stripping |
+| **Experimental** | Networking, server processes, VR/AR, mobile |
 
 ### Presets
 
@@ -143,14 +142,16 @@ SparkBuild exposes 35+ CMake options organized into categories, matching the eng
 | All On | Enable every module |
 | All Off | Disable everything |
 | Defaults | Recommended defaults for the current platform |
-| Minimal | Defaults with AI, Animation, Networking, Save, Procedural, Cinematic, Decals, Mesh LOD, and DXR disabled |
+| Minimal | Core runtime with optional tools, modules, scripting, networking, and experimental rendering breadth disabled |
 | Linux-Friendly | SDL2 + OpenGL for best Linux compatibility |
-| Shipping | Release build with editor, profiling, hot-reload, and tests disabled; strips debug symbols |
-| Development | Debug build with all editor/profiling/testing tools enabled |
+| Shipping | MinSizeRel stable-v1 product set; keeps the editor and delivery tools, enables strict dependencies, disables out-of-profile breadth and tests, and strips debug symbols |
+| Development | RelWithDebInfo build with editor, profiling, tests, modules, delivery tools, and native CPU tuning enabled |
 
 ## Configuration File
 
 SparkBuild persists your settings to an INI file:
+
+Loading is transactional: unknown sections, keys, duplicate keys, enum values, or boolean values reject the file without partially changing the active configuration.
 
 | Platform | Location |
 |----------|----------|
@@ -171,9 +172,10 @@ ParallelJobs=8
 
 [Options]
 ENABLE_GRAPHICS=ON
-ENABLE_PHYSX=ON
-ENABLE_LUA=ON
+ENABLE_RECAST=ON
+ENABLE_ANGELSCRIPT=OFF
 ENABLE_NETWORKING=OFF
+SPARK_STRICT_DEPS=ON
 ```
 
 ## Project Structure

@@ -892,6 +892,7 @@ jobs:
   build-windows-shipping:
     name: "Windows Shipping structural configured-evidence producer"
     runs-on: windows-2022
+    timeout-minutes: 120
     permissions:
       contents: read
     steps:
@@ -903,20 +904,73 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
-    - name: Produce Windows Shipping structural provenance and build artifacts (CI-120)
+    - name: Configure and build canonical Windows Shipping lane (CI-120)
+      shell: bash
+      run: |
+        set -euo pipefail
+        cmake --preset windows-shipping 2>&1 | tee ci120-windows-shipping-configure.log
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 2>&1 | tee ci120-windows-shipping-build.log
+
+    - name: Capture Windows Shipping structural provenance (CI-120)
       shell: bash
       run: |
         set -o pipefail
         python Tools/buildmatrix/capture_provenance.py \
           --profile windows-shipping \
           --build-dir build/windows-shipping \
-          --build 2>&1 | tee ci120-producer.log
+          --build 2>&1 | tee ci120-windows-shipping-producer.log
+
+    - name: Install exact Windows Shipping SDK for the consumer profile (CI-120)
+      shell: bash
+      run: |
+        set -euo pipefail
+        cmake --install build/windows-shipping \
+          --config MinSizeRel \
+          --prefix build/ci120-stage 2>&1 | tee ci120-windows-shipping-install.log
+
+    - name: Configure and build canonical Windows validation lane (CI-120)
+      shell: bash
+      run: |
+        set -euo pipefail
+        cmake --preset windows-release 2>&1 | tee ci120-windows-validation-configure.log
+        cmake --build --preset windows-release --config Release --parallel 2>&1 | tee ci120-windows-validation-build.log
+
+    - name: Capture Windows validation structural provenance (CI-120)
+      shell: bash
+      run: |
+        set -o pipefail
+        python Tools/buildmatrix/capture_provenance.py \
+          --profile windows-validation \
+          --build-dir build/windows-release \
+          --build 2>&1 | tee ci120-windows-validation-producer.log
+
+    - name: Configure and build installed SDK consumer lane (CI-120)
+      shell: bash
+      run: |
+        set -euo pipefail
+        cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer \
+          -G "Visual Studio 17 2022" -A x64 -T v143 \
+          -DSparkEngine_DIR="${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine" \
+          -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee ci120-installed-sdk-consumer-configure.log
+        cmake --build build/installed-sdk-consumer \
+          --config Release --parallel 2>&1 | tee ci120-installed-sdk-consumer-build.log
+
+    - name: Capture installed SDK consumer structural provenance (CI-120)
+      shell: bash
+      run: |
+        set -o pipefail
+        python Tools/buildmatrix/capture_provenance.py \
+          --profile installed-sdk-consumer \
+          --build-dir build/installed-sdk-consumer \
+          --build 2>&1 | tee ci120-installed-sdk-consumer-producer.log
 
     - name: Generate configured build-matrix inventory from the structural producer (CI-120)
       shell: bash
       run: |
         python Tools/buildmatrix/inventory.py \
           --codemodel windows-shipping=build/windows-shipping \
+          --codemodel windows-validation=build/windows-release \
+          --codemodel installed-sdk-consumer=build/installed-sdk-consumer \
           --output build-matrix-inventory.json
         python -c "import json; json.load(open('build-matrix-inventory.json', encoding='utf-8'))"
 
@@ -948,16 +1002,26 @@ jobs:
       if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: ci120-untrusted-windows-shipping-${{ github.sha }}-${{ github.run_attempt }}
+        name: ci120-untrusted-stable-v1-${{ github.sha }}-${{ github.run_attempt }}
         path: |
-          ci120-producer.log
+          ci120-*.log
           build/windows-shipping/.cmake/api/v1/reply
           build/windows-shipping/.cmake/api/v1/provenance
+          build/windows-shipping/bin/MinSizeRel
+          build/windows-shipping/lib/MinSizeRel
+          build/windows-release/.cmake/api/v1/reply
+          build/windows-release/.cmake/api/v1/provenance
+          build/windows-release/bin/Release
+          build/windows-release/lib/Release
+          build/installed-sdk-consumer/.cmake/api/v1/reply
+          build/installed-sdk-consumer/.cmake/api/v1/provenance
+          build/installed-sdk-consumer/Release
           build-matrix-inventory.json
           build-matrix-parity-findings.json
           build-matrix-parity-stdout.json
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
         if-no-files-found: error
+        include-hidden-files: true
 
     - name: Enforce reviewed CI-120 findings
       if: always() && steps.ci120-parity.outputs.status != ''

@@ -755,14 +755,20 @@ def check_workflow_adoption(data: dict[str, Any]) -> list[Finding]:
     findings: list[Finding] = []
     configs = data.get("workflowCmakeConfigs", [])
     presets = data.get("cmakePresets", {})
+    canonical = data["profile"].get("buildConfigurations", [])
+    canonical_by_id = {entry.get("id"): entry for entry in canonical}
     producer_profiles = [
         entry.get("profile")
         for entry in (data.get("workflow") or {}).get("ci120Invocations", [])
         if entry.get("kind") == "producer" and entry.get("executable") and entry.get("build")
     ]
-    workflow_refs = [entry.get("preset") for entry in configs if entry.get("preset")] + producer_profiles
+    producer_presets = [
+        canonical_by_id[profile].get("preset")
+        for profile in producer_profiles
+        if profile in canonical_by_id and canonical_by_id[profile].get("preset")
+    ]
+    workflow_refs = [entry.get("preset") for entry in configs if entry.get("preset")] + producer_presets
     findings.extend(check_preset_workflow_parity(presets, workflow_refs))
-    canonical = data["profile"].get("buildConfigurations", [])
     for config in canonical:
         preset = config.get("preset")
         if preset and not any(entry.get("preset") == preset for entry in configs):
@@ -1406,7 +1412,9 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
         expected_toolchain = (
             tuple(str(preset.get(name, "")) for name in ("generator", "architecture", "toolset"))
             if preset is not None
-            else inherited_toolchain
+            else tuple(str(config.get(name, fallback)) for name, fallback in zip(
+                ("generator", "architecture", "toolset"), inherited_toolchain
+            ))
         )
         for key, expected_value in zip(("generator", "architecture", "toolset"), expected_toolchain):
             observed = str(evidence.get(key, ""))
@@ -1433,6 +1441,13 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                 {
                     name: preset_cache_value(expected)
                     for name, expected in preset.get("cacheVariables", {}).items()
+                }
+            )
+        elif config.get("purpose") == "installed-sdk-consumer" and root:
+            material_cache.update(
+                {
+                    "SparkEngine_DIR": str(Path(root) / str(config.get("packageDirectory", ""))),
+                    "SPARK_EXPECTED_ENGINE_VERSION": str(config.get("expectedEngineVersion", "")),
                 }
             )
         for name, expected_value in sorted(material_cache.items()):
@@ -1496,36 +1511,48 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
         )
 
     producer_job = jobs.get(inventory_tool._CI120_PRODUCER_JOB)
-    producer_candidates = [
-        entry for entry in invocations
-        if entry.get("kind") == "producer"
-        and entry.get("job") == inventory_tool._CI120_PRODUCER_JOB
-        and entry.get("profile") == "windows-shipping"
-        and normalized(entry.get("buildDir")) == "build/windows-shipping"
-        and entry.get("build") is True
-    ]
-    producer = next(
-        (
-            entry for entry in producer_candidates
-            if entry.get("executable") is True
-            and entry.get("launcherProvenance") == "literal"
-            and mandatory(entry)
-            and entry.get("runnerOs") == "windows"
-        ),
-        None,
-    )
-    if producer is None:
-        detail = "No canonical capture_provenance.py --build invocation was found."
-        if producer_candidates:
-            detail = "The candidate producer is conditional, advisory, wrapped, or not Windows-hosted."
-        findings.append(
-            Finding(
-                "ci120-trusted-producer-missing",
-                "error",
-                "CI-120 has no mandatory Windows Shipping provenance producer",
-                detail,
-            )
+    required_producers = {
+        "windows-shipping": "build/windows-shipping",
+        "windows-validation": "build/windows-release",
+        "installed-sdk-consumer": "build/installed-sdk-consumer",
+    }
+    trusted_producers: dict[str, dict[str, Any]] = {}
+    for profile, build_dir in required_producers.items():
+        producer_candidates = [
+            entry
+            for entry in invocations
+            if entry.get("kind") == "producer"
+            and entry.get("job") == inventory_tool._CI120_PRODUCER_JOB
+            and entry.get("profile") == profile
+            and normalized(entry.get("buildDir")) == build_dir
+            and entry.get("build") is True
+        ]
+        producer = next(
+            (
+                entry
+                for entry in producer_candidates
+                if entry.get("executable") is True
+                and entry.get("launcherProvenance") == "literal"
+                and mandatory(entry)
+                and entry.get("runnerOs") == "windows"
+            ),
+            None,
         )
+        if producer is None:
+            detail = "No canonical capture_provenance.py --build invocation was found."
+            if producer_candidates:
+                detail = "The candidate producer is conditional, advisory, wrapped, or not Windows-hosted."
+            findings.append(
+                Finding(
+                    "ci120-trusted-producer-missing",
+                    "error",
+                    f"CI-120 has no mandatory {profile!r} provenance producer",
+                    detail,
+                )
+            )
+        else:
+            trusted_producers[profile] = producer
+    if len(trusted_producers) != len(required_producers):
         return findings
     if not isinstance(producer_job, dict) or producer_job.get("gating") != "blocking":
         findings.append(
@@ -1547,12 +1574,14 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
             )
         )
 
+    producer_step = max(int(entry["stepIndex"]) for entry in trusted_producers.values())
+
     def later(kind: str, predicate: Any) -> bool:
         return any(
             entry.get("kind") == kind
-            and entry.get("job") == producer["job"]
+            and entry.get("job") == inventory_tool._CI120_PRODUCER_JOB
             and isinstance(entry.get("stepIndex"), int)
-            and entry["stepIndex"] > producer["stepIndex"]
+            and entry["stepIndex"] > producer_step
             and entry.get("executable") is True
             and entry.get("launcherProvenance") == "literal"
             and mandatory(entry)
@@ -1562,7 +1591,14 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
 
     inventory_after = later(
         "inventory",
-        lambda entry: normalized(entry.get("codemodel")) == "windows-shipping=build/windows-shipping",
+        lambda entry: {
+            normalized(value) for value in entry.get("codemodels", [])
+        }
+        == {
+            "windows-shipping=build/windows-shipping",
+            "windows-validation=build/windows-release",
+            "installed-sdk-consumer=build/installed-sdk-consumer",
+        },
     )
     parity_after = later(
         "parity",

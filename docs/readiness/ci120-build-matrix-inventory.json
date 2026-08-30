@@ -21,6 +21,11 @@
         "purpose": "installed-sdk-consumer",
         "sourceDirectory": "Tests/PackageSmoke",
         "buildDirectory": "build/installed-sdk-consumer",
+        "generator": "Visual Studio 17 2022",
+        "architecture": "x64",
+        "toolset": "v143",
+        "packageDirectory": "build/ci120-stage/lib/cmake/SparkEngine",
+        "expectedEngineVersion": "1.0.0",
         "description": "A separate configure against an installed SparkEngine package that proves public SDK headers, imports, and module linkage without source-tree include leakage."
       },
       {
@@ -1422,7 +1427,16 @@
           "rhs": "Windows"
         },
         "cacheVariables": {
-          "CMAKE_BUILD_TYPE": "Release"
+          "BUILD_GAME_MODULES": "ON",
+          "BUILD_TESTS": "ON",
+          "CMAKE_BUILD_TYPE": "Release",
+          "ENABLE_ASSET_PIPELINE_TOOLS": "ON",
+          "ENABLE_AUTOMATION_HOST": "ON",
+          "ENABLE_EDITOR": "ON",
+          "ENABLE_INSTALLER": "ON",
+          "ENABLE_LAUNCHER": "ON",
+          "ENABLE_SPARKBUILD": "ON",
+          "SPARK_STRICT_DEPS": "ON"
         }
       },
       {
@@ -1526,7 +1540,7 @@
       {
         "name": "windows-shipping",
         "hidden": false,
-        "displayName": "Windows Shipping (max speed, no dev tools)",
+        "displayName": "Windows stable-v1 Shipping product set",
         "inherits": [
           "default"
         ],
@@ -1539,13 +1553,30 @@
           "rhs": "Windows"
         },
         "cacheVariables": {
+          "BUILD_GAME_MODULES": "ON",
           "BUILD_TESTS": "OFF",
           "CMAKE_BUILD_TYPE": "MinSizeRel",
+          "ENABLE_ANGELSCRIPT": "OFF",
+          "ENABLE_ASSET_PIPELINE_TOOLS": "ON",
+          "ENABLE_AUTOMATION_HOST": "ON",
           "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
           "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
-          "ENABLE_EDITOR": "OFF",
-          "ENABLE_HOT_RELOAD": "OFF",
+          "ENABLE_DXR": "OFF",
+          "ENABLE_EDITOR": "ON",
+          "ENABLE_HYBRID_RT": "OFF",
+          "ENABLE_INSTALLER": "ON",
+          "ENABLE_LAUNCHER": "ON",
+          "ENABLE_METAL": "OFF",
+          "ENABLE_MOBILE": "OFF",
+          "ENABLE_NETWORKING": "OFF",
+          "ENABLE_NEURAL_RENDERING": "OFF",
+          "ENABLE_OPENGL": "OFF",
           "ENABLE_PROFILING": "OFF",
+          "ENABLE_SDL2": "OFF",
+          "ENABLE_SERVER_PROCESSES": "OFF",
+          "ENABLE_SPARKBUILD": "ON",
+          "ENABLE_VR": "OFF",
+          "ENABLE_VULKAN": "OFF",
           "SPARK_NATIVE_ARCH": "OFF",
           "SPARK_STRICT_DEPS": "ON",
           "STRIP_DEBUG_SYMBOLS": "ON"
@@ -1593,7 +1624,6 @@
           "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
           "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
           "ENABLE_EDITOR": "OFF",
-          "ENABLE_HOT_RELOAD": "OFF",
           "ENABLE_PROFILING": "OFF",
           "SPARK_NATIVE_ARCH": "OFF",
           "SPARK_STRICT_DEPS": "ON",
@@ -1744,16 +1774,22 @@
           "default"
         ],
         "cacheVariables": {
+          "BUILD_GAME_MODULES": "OFF",
+          "BUILD_TESTS": "OFF",
           "CMAKE_BUILD_TYPE": "Release",
-          "ENABLE_AI": "OFF",
-          "ENABLE_ANIMATION": "OFF",
-          "ENABLE_CINEMATIC": "OFF",
-          "ENABLE_DECALS": "OFF",
+          "ENABLE_ANGELSCRIPT": "OFF",
+          "ENABLE_ASSET_PIPELINE_TOOLS": "OFF",
+          "ENABLE_AUTOMATION_HOST": "OFF",
           "ENABLE_DXR": "OFF",
-          "ENABLE_MESH_LOD": "OFF",
+          "ENABLE_EDITOR": "OFF",
+          "ENABLE_HYBRID_RT": "OFF",
+          "ENABLE_INSTALLER": "OFF",
+          "ENABLE_LAUNCHER": "OFF",
           "ENABLE_NETWORKING": "OFF",
-          "ENABLE_PROCEDURAL": "OFF",
-          "ENABLE_SAVE_SYSTEM": "OFF"
+          "ENABLE_NEURAL_RENDERING": "OFF",
+          "ENABLE_PROFILING": "OFF",
+          "ENABLE_SERVER_PROCESSES": "OFF",
+          "ENABLE_SPARKBUILD": "OFF"
         }
       }
     ],
@@ -1788,6 +1824,16 @@
       {
         "name": "linux-clang-release",
         "configurePreset": "linux-clang-release",
+        "hidden": false
+      },
+      {
+        "name": "ci-linux-asan",
+        "configurePreset": "ci-linux-asan",
+        "hidden": false
+      },
+      {
+        "name": "ci-linux-tsan",
+        "configurePreset": "ci-linux-tsan",
         "hidden": false
       },
       {
@@ -1840,6 +1886,11 @@
       {
         "name": "linux-mingw-debug",
         "configurePreset": "linux-mingw-debug",
+        "hidden": false
+      },
+      {
+        "name": "minimal",
+        "configurePreset": "minimal",
         "hidden": false
       }
     ],
@@ -4779,67 +4830,49 @@
   ],
   "sparkBuildOptions": [
     {
-      "name": "BUILD_TESTS",
-      "displayName": "Unit Tests",
-      "description": "Build CTest unit test suite",
+      "name": "BUILD_GAME_MODULES",
+      "displayName": "Game Modules",
+      "description": "Build the in-tree game modules",
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 235
+      "line": 224
     },
     {
-      "name": "ENABLE_ADVANCED_INPUT",
-      "displayName": "Advanced Input",
-      "description": "Extended input: keyboard, mouse, gamepad",
+      "name": "BUILD_TESTS",
+      "displayName": "Unit Tests",
+      "description": "Build the CTest test suite",
       "default": true,
-      "category": "Core",
+      "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 197
+      "line": 223
     },
     {
-      "name": "ENABLE_AI",
-      "displayName": "AI & Navigation",
-      "description": "Behavior trees, NavMesh pathfinding, perception system",
+      "name": "ENABLE_ANGELSCRIPT",
+      "displayName": "AngelScript",
+      "description": "Build the experimental AngelScript gameplay runtime",
       "default": true,
-      "category": "Core",
+      "category": "Scripting",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 189
+      "line": 241
     },
     {
-      "name": "ENABLE_ANIMATION",
-      "displayName": "Skeletal Animation",
-      "description": "Skeletal animation, IK, state machines, blending",
+      "name": "ENABLE_ASSET_PIPELINE_TOOLS",
+      "displayName": "Asset Pipeline Tools",
+      "description": "Build SparkCooker and SparkWorker",
       "default": true,
-      "category": "Core",
+      "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 192
+      "line": 232
     },
     {
-      "name": "ENABLE_ASSET_STREAMING",
-      "displayName": "Asset Streaming",
-      "description": "Runtime asset streaming and loading",
+      "name": "ENABLE_AUTOMATION_HOST",
+      "displayName": "Automation Host",
+      "description": "Build SparkAutomation",
       "default": true,
-      "category": "Core",
+      "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 199
-    },
-    {
-      "name": "ENABLE_CINEMATIC",
-      "displayName": "Cinematic Sequencer",
-      "description": "Cinematic sequence and cutscene system",
-      "default": true,
-      "category": "Gameplay",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 248
-    },
-    {
-      "name": "ENABLE_COLLABORATIVE",
-      "displayName": "Collaborative Editing",
-      "description": "Collaborative editing features",
-      "default": true,
-      "category": "Experimental",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 277
+      "line": 234
     },
     {
       "name": "ENABLE_CONSOLE_IN_SHIPPING",
@@ -4848,25 +4881,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 264
-    },
-    {
-      "name": "ENABLE_DAY_NIGHT",
-      "displayName": "Day/Night Cycle",
-      "description": "Dynamic day/night cycle system",
-      "default": true,
-      "category": "Gameplay",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 258
-    },
-    {
-      "name": "ENABLE_DECALS",
-      "displayName": "Decal System",
-      "description": "Projected decals for impacts and effects",
-      "default": true,
-      "category": "Rendering",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 217
+      "line": 252
     },
     {
       "name": "ENABLE_DEVCOMMANDS_IN_SHIPPING",
@@ -4875,232 +4890,214 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 266
+      "line": 254
     },
     {
       "name": "ENABLE_DXR",
       "displayName": "DirectX Raytracing",
-      "description": "DXR support (requires D3D12, Windows only)",
-      "default": false,
+      "description": "Build DirectX Raytracing support for the D3D12 path",
+      "default": true,
       "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 209
+      "line": 207
     },
     {
       "name": "ENABLE_EDITOR",
       "displayName": "Editor",
-      "description": "ImGui visual editor (Windows/Linux)",
+      "description": "Build the SparkEditor authoring application",
+      "default": true,
+      "category": "EditorTools",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 218
+    },
+    {
+      "name": "ENABLE_GRAPHICS",
+      "displayName": "Graphics Engine",
+      "description": "Build the graphics engine",
+      "default": true,
+      "category": "Core",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 187
+    },
+    {
+      "name": "ENABLE_HYBRID_RT",
+      "displayName": "Hybrid Ray Tracing",
+      "description": "Build hybrid software and hardware ray-tracing support",
+      "default": true,
+      "category": "Rendering",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 210
+    },
+    {
+      "name": "ENABLE_INSTALLER",
+      "displayName": "Installer",
+      "description": "Build SparkInstaller",
+      "default": true,
+      "category": "EditorTools",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 231
+    },
+    {
+      "name": "ENABLE_LAUNCHER",
+      "displayName": "Launcher",
+      "description": "Build SparkLauncher",
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
       "line": 227
     },
     {
-      "name": "ENABLE_EVENT_SYSTEM",
-      "displayName": "Event System",
-      "description": "Publish/subscribe event bus",
-      "default": true,
-      "category": "Gameplay",
+      "name": "ENABLE_METAL",
+      "displayName": "Metal Backend",
+      "description": "Build the experimental macOS Metal backend",
+      "default": false,
+      "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 256
+      "line": 205
     },
     {
-      "name": "ENABLE_FOG_SYSTEM",
-      "displayName": "Fog System",
-      "description": "Fog rendering system",
-      "default": true,
-      "category": "Rendering",
+      "name": "ENABLE_MOBILE",
+      "displayName": "Mobile Framework",
+      "description": "Build experimental mobile platform support",
+      "default": false,
+      "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 222
-    },
-    {
-      "name": "ENABLE_GRAPHICS",
-      "displayName": "Graphics Engine",
-      "description": "DirectX 11 renderer (Windows) / OpenGL (Linux/macOS)",
-      "default": true,
-      "category": "Core",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 184
-    },
-    {
-      "name": "ENABLE_HOT_RELOAD",
-      "displayName": "Hot Reload",
-      "description": "Game module hot-reload during development",
-      "default": true,
-      "category": "Scripting",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 240
-    },
-    {
-      "name": "ENABLE_INVENTORY",
-      "displayName": "Inventory System",
-      "description": "Item inventory management system",
-      "default": true,
-      "category": "Gameplay",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 252
-    },
-    {
-      "name": "ENABLE_LIGHTING_SYSTEM",
-      "displayName": "Advanced Lighting",
-      "description": "PBR lighting, IBL, shadow mapping",
-      "default": true,
-      "category": "Rendering",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 215
-    },
-    {
-      "name": "ENABLE_LUA",
-      "displayName": "Lua Scripting",
-      "description": "Lua scripting support (Sol2 bindings)",
-      "default": true,
-      "category": "Scripting",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 238
-    },
-    {
-      "name": "ENABLE_MESH_LOD",
-      "displayName": "Mesh LOD",
-      "description": "Mesh level-of-detail system",
-      "default": true,
-      "category": "Rendering",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 220
+      "line": 267
     },
     {
       "name": "ENABLE_NETWORKING",
       "displayName": "Networking",
-      "description": "UDP multiplayer, lag compensation (requires curl)",
-      "default": false,
+      "description": "Build UDP networking features",
+      "default": true,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 272
+      "line": 260
     },
     {
-      "name": "ENABLE_OPENGL",
-      "displayName": "OpenGL Backend",
-      "description": "OpenGL 4.5 backend (experimental, cross-platform)",
-      "default": true,
-      "category": "Graphics",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 206
-    },
-    {
-      "name": "ENABLE_PERF_STATS",
-      "displayName": "Performance Stats",
-      "description": "Performance statistics overlay",
-      "default": true,
-      "category": "EditorTools",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 232
-    },
-    {
-      "name": "ENABLE_PHYSX",
-      "displayName": "Physics (Bullet)",
-      "description": "Bullet Physics 3D physics engine",
-      "default": true,
-      "category": "Core",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 188
-    },
-    {
-      "name": "ENABLE_POST_PROCESSING",
-      "displayName": "Post-Processing",
-      "description": "Bloom, tone mapping, FXAA effects",
+      "name": "ENABLE_NEURAL_RENDERING",
+      "displayName": "Neural Rendering",
+      "description": "Build experimental neural-rendering features",
       "default": true,
       "category": "Rendering",
       "file": "SparkBuild/src/Config.cpp",
       "line": 213
     },
     {
-      "name": "ENABLE_PROCEDURAL",
-      "displayName": "Procedural Generation",
-      "description": "Noise, erosion, mesh gen, WFC algorithms",
+      "name": "ENABLE_OPENGL",
+      "displayName": "OpenGL Backend",
+      "description": "Build the experimental OpenGL backend",
       "default": true,
-      "category": "Gameplay",
+      "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 246
+      "line": 201
     },
     {
       "name": "ENABLE_PROFILING",
       "displayName": "Profiling Tools",
-      "description": "Performance profiling, timers, memory tracking",
+      "description": "Build profiling instrumentation",
+      "default": true,
+      "category": "EditorTools",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 220
+    },
+    {
+      "name": "ENABLE_RECAST",
+      "displayName": "Recast Navigation",
+      "description": "Build the Recast/Detour navigation implementation",
+      "default": true,
+      "category": "Core",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 188
+    },
+    {
+      "name": "ENABLE_SDL2",
+      "displayName": "SDL2 Windowing",
+      "description": "Build SDL2 windowing and input support",
+      "default": false,
+      "category": "Graphics",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 203
+    },
+    {
+      "name": "ENABLE_SERVER_PROCESSES",
+      "displayName": "Server Processes",
+      "description": "Build dedicated server, gateway, and orchestration processes",
+      "default": true,
+      "category": "Experimental",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 262
+    },
+    {
+      "name": "ENABLE_SPARKBUILD",
+      "displayName": "Build Configurator",
+      "description": "Build SparkBuild",
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
       "line": 229
     },
     {
-      "name": "ENABLE_QUEST_SYSTEM",
-      "displayName": "Quest System",
-      "description": "Quest and objective tracking system",
-      "default": true,
-      "category": "Gameplay",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 254
-    },
-    {
-      "name": "ENABLE_SAVE_SYSTEM",
-      "displayName": "Save/Load System",
-      "description": "JSON serialization with compression (miniz)",
-      "default": true,
-      "category": "Core",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 195
-    },
-    {
-      "name": "ENABLE_SCREEN_SPACE",
-      "displayName": "Screen-Space Effects",
-      "description": "Screen-space effects (SSAO, SSR)",
-      "default": true,
-      "category": "Rendering",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 223
-    },
-    {
-      "name": "ENABLE_SDL2",
-      "displayName": "SDL2 Windowing",
-      "description": "SDL2 cross-platform windowing and input",
+      "name": "ENABLE_VR",
+      "displayName": "VR/AR Framework",
+      "description": "Build the experimental OpenXR-ready framework",
       "default": false,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 275
-    },
-    {
-      "name": "ENABLE_TERRAIN_SYSTEM",
-      "displayName": "Terrain System",
-      "description": "Heightmap terrain with LOD and erosion",
-      "default": true,
-      "category": "Gameplay",
-      "file": "SparkBuild/src/Config.cpp",
-      "line": 244
+      "line": 265
     },
     {
       "name": "ENABLE_VULKAN",
       "displayName": "Vulkan Backend",
-      "description": "Vulkan graphics backend (experimental, cross-platform)",
+      "description": "Build the experimental Vulkan backend",
       "default": true,
       "category": "Graphics",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 203
+      "line": 199
     },
     {
-      "name": "ENABLE_WEATHER",
-      "displayName": "Weather System",
-      "description": "Dynamic weather system",
-      "default": true,
-      "category": "Gameplay",
+      "name": "SPARK_DOUBLE_PRECISION_PHYSICS",
+      "displayName": "Double-Precision Physics",
+      "description": "Use double-precision Jolt physics for large worlds",
+      "default": false,
+      "category": "Core",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 251
+      "line": 194
     },
     {
       "name": "SPARK_HEADLESS_SUPPORT",
       "displayName": "Headless Mode",
-      "description": "Headless/dedicated server mode support",
+      "description": "Enable headless/dedicated-server runtime support",
       "default": true,
+      "category": "Core",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 191
+    },
+    {
+      "name": "SPARK_NATIVE_ARCH",
+      "displayName": "Native CPU Tuning",
+      "description": "Tune for the build machine instead of distributed CPUs",
+      "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 262
+      "line": 246
+    },
+    {
+      "name": "SPARK_STRICT_DEPS",
+      "displayName": "Strict Dependencies",
+      "description": "Fail configuration when a critical dependency is missing",
+      "default": false,
+      "category": "Shipping",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 249
+    },
+    {
+      "name": "SPARK_SUPPRESS_THIRDPARTY_WARNINGS",
+      "displayName": "Suppress Third-Party Warnings",
+      "description": "Treat third-party headers as external/system headers",
+      "default": true,
+      "category": "EditorTools",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 236
     },
     {
       "name": "STRIP_DEBUG_SYMBOLS",
@@ -5109,7 +5106,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 268
+      "line": 256
     }
   ],
   "workflow": {
@@ -6555,7 +6552,7 @@
         ],
         "if": "absent",
         "continueOnError": "absent",
-        "timeoutMinutes": "absent",
+        "timeoutMinutes": 120,
         "needs": [],
         "failFast": "absent",
         "maxParallel": "absent",
@@ -6566,7 +6563,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 7,
+        "stepCount": 13,
         "steps": [
           {
             "index": 0,
@@ -6594,7 +6591,7 @@
           },
           {
             "index": 2,
-            "name": "Produce Windows Shipping structural provenance and build artifacts (CI-120)",
+            "name": "Configure and build canonical Windows Shipping lane (CI-120)",
             "id": "",
             "uses": "",
             "shell": "bash",
@@ -6602,10 +6599,82 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "81cd8b5872e7e882"
+            "runDigest": "899cea6e60a36e7c"
           },
           {
             "index": 3,
+            "name": "Capture Windows Shipping structural provenance (CI-120)",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "466746f918d03942"
+          },
+          {
+            "index": 4,
+            "name": "Install exact Windows Shipping SDK for the consumer profile (CI-120)",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "b2fb4f934ded4b8f"
+          },
+          {
+            "index": 5,
+            "name": "Configure and build canonical Windows validation lane (CI-120)",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "e841205c814e7f73"
+          },
+          {
+            "index": 6,
+            "name": "Capture Windows validation structural provenance (CI-120)",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "b44ba50b774ba60b"
+          },
+          {
+            "index": 7,
+            "name": "Configure and build installed SDK consumer lane (CI-120)",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "58933227a9ac27df"
+          },
+          {
+            "index": 8,
+            "name": "Capture installed SDK consumer structural provenance (CI-120)",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "3f0866a937e282ac"
+          },
+          {
+            "index": 9,
             "name": "Generate configured build-matrix inventory from the structural producer (CI-120)",
             "id": "",
             "uses": "",
@@ -6614,10 +6683,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "30f359017d86b630"
+            "runDigest": "e3982ce2ce04dc8f"
           },
           {
-            "index": 4,
+            "index": 10,
             "name": "Compare reviewed configured-evidence findings (CI-120)",
             "id": "ci120-parity",
             "uses": "",
@@ -6629,7 +6698,7 @@
             "runDigest": "45fb3158c6cb3368"
           },
           {
-            "index": 5,
+            "index": 11,
             "name": "Upload untrusted CI-120 structural evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6641,7 +6710,7 @@
             "runDigest": ""
           },
           {
-            "index": 6,
+            "index": 12,
             "name": "Enforce reviewed CI-120 findings",
             "id": "",
             "uses": "",
@@ -8981,6 +9050,179 @@
         "commandIndex": 0
       },
       {
+        "job": "build-windows-shipping",
+        "step": "Configure and build canonical Windows Shipping lane (CI-120)",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake --preset windows-shipping 2>&1 | tee ci120-windows-shipping-configure.log",
+        "commandProvenance": "literal",
+        "options": {},
+        "preset": "windows-shipping",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Configure and build canonical Windows Shipping lane (CI-120)",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 2>&1 | tee ci120-windows-shipping-build.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "all"
+        ],
+        "configuration": "MinSizeRel",
+        "buildDir": "",
+        "preset": "windows-shipping",
+        "parallel": "2>",
+        "buildsAllTargets": true,
+        "commandIndex": 1
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Install exact Windows Shipping SDK for the consumer profile (CI-120)",
+        "stepIndex": 4,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "install",
+        "command": "cmake --install build/windows-shipping  --config MinSizeRel  --prefix build/ci120-stage 2>&1 | tee ci120-windows-shipping-install.log",
+        "commandProvenance": "literal",
+        "configuration": "MinSizeRel",
+        "prefix": "build/ci120-stage",
+        "component": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Configure and build canonical Windows validation lane (CI-120)",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake --preset windows-release 2>&1 | tee ci120-windows-validation-configure.log",
+        "commandProvenance": "literal",
+        "options": {},
+        "preset": "windows-release",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Configure and build canonical Windows validation lane (CI-120)",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build --preset windows-release --config Release --parallel 2>&1 | tee ci120-windows-validation-build.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "all"
+        ],
+        "configuration": "Release",
+        "buildDir": "",
+        "preset": "windows-release",
+        "parallel": "2>",
+        "buildsAllTargets": true,
+        "commandIndex": 1
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Configure and build installed SDK consumer lane (CI-120)",
+        "stepIndex": 7,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee ci120-installed-sdk-consumer-configure.log",
+        "commandProvenance": "literal",
+        "options": {
+          "SparkEngine_DIR": "${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine",
+          "SPARK_EXPECTED_ENGINE_VERSION": "1.0.0"
+        },
+        "sourceDir": "Tests/PackageSmoke",
+        "buildDir": "build/installed-sdk-consumer",
+        "generator": "Visual Studio 17 2022",
+        "architecture": "x64",
+        "toolset": "v143",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Configure and build installed SDK consumer lane (CI-120)",
+        "stepIndex": 7,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build/installed-sdk-consumer  --config Release --parallel 2>&1 | tee ci120-installed-sdk-consumer-build.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "all"
+        ],
+        "configuration": "Release",
+        "buildDir": "build/installed-sdk-consumer",
+        "preset": "",
+        "parallel": "2>",
+        "buildsAllTargets": true,
+        "commandIndex": 1
+      },
+      {
         "job": "build-windows-vs2026",
         "step": "Configure CMake (VS 2026 / v145)",
         "stepIndex": 4,
@@ -10378,6 +10620,76 @@
         "commandIndex": 0
       },
       {
+        "job": "build-windows-shipping",
+        "step": "Configure and build canonical Windows Shipping lane (CI-120)",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake --preset windows-shipping 2>&1 | tee ci120-windows-shipping-configure.log",
+        "commandProvenance": "literal",
+        "options": {},
+        "preset": "windows-shipping",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Configure and build canonical Windows validation lane (CI-120)",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake --preset windows-release 2>&1 | tee ci120-windows-validation-configure.log",
+        "commandProvenance": "literal",
+        "options": {},
+        "preset": "windows-release",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Configure and build installed SDK consumer lane (CI-120)",
+        "stepIndex": 7,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee ci120-installed-sdk-consumer-configure.log",
+        "commandProvenance": "literal",
+        "options": {
+          "SparkEngine_DIR": "${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine",
+          "SPARK_EXPECTED_ENGINE_VERSION": "1.0.0"
+        },
+        "sourceDir": "Tests/PackageSmoke",
+        "buildDir": "build/installed-sdk-consumer",
+        "generator": "Visual Studio 17 2022",
+        "architecture": "x64",
+        "toolset": "v143",
+        "commandIndex": 0
+      },
+      {
         "job": "build-windows-vs2026",
         "step": "Configure CMake (VS 2026 / v145)",
         "stepIndex": 4,
@@ -11024,6 +11336,87 @@
         "parallel": "2>",
         "buildsAllTargets": true,
         "commandIndex": 0
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Configure and build canonical Windows Shipping lane (CI-120)",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 2>&1 | tee ci120-windows-shipping-build.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "all"
+        ],
+        "configuration": "MinSizeRel",
+        "buildDir": "",
+        "preset": "windows-shipping",
+        "parallel": "2>",
+        "buildsAllTargets": true,
+        "commandIndex": 1
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Configure and build canonical Windows validation lane (CI-120)",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build --preset windows-release --config Release --parallel 2>&1 | tee ci120-windows-validation-build.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "all"
+        ],
+        "configuration": "Release",
+        "buildDir": "",
+        "preset": "windows-release",
+        "parallel": "2>",
+        "buildsAllTargets": true,
+        "commandIndex": 1
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Configure and build installed SDK consumer lane (CI-120)",
+        "stepIndex": 7,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build/installed-sdk-consumer  --config Release --parallel 2>&1 | tee ci120-installed-sdk-consumer-build.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "all"
+        ],
+        "configuration": "Release",
+        "buildDir": "build/installed-sdk-consumer",
+        "preset": "",
+        "parallel": "2>",
+        "buildsAllTargets": true,
+        "commandIndex": 1
       },
       {
         "job": "build-windows-vs2026",
@@ -11857,6 +12250,7 @@
         "profile": "",
         "buildDir": "",
         "codemodel": "",
+        "codemodels": [],
         "inventory": "",
         "baseline": "",
         "build": false,
@@ -11882,6 +12276,7 @@
         "profile": "",
         "buildDir": "",
         "codemodel": "",
+        "codemodels": [],
         "inventory": "build-matrix-inventory.json",
         "baseline": "docs/readiness/ci120-parity-findings.json",
         "build": false,
@@ -11889,8 +12284,8 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Produce Windows Shipping structural provenance and build artifacts (CI-120)",
-        "stepIndex": 2,
+        "step": "Capture Windows Shipping structural provenance (CI-120)",
+        "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -11907,15 +12302,68 @@
         "profile": "windows-shipping",
         "buildDir": "build/windows-shipping",
         "codemodel": "",
+        "codemodels": [],
         "inventory": "",
         "baseline": "",
         "build": true,
-        "command": "python Tools/buildmatrix/capture_provenance.py  --profile windows-shipping  --build-dir build/windows-shipping  --build 2>&1 | tee ci120-producer.log"
+        "command": "python Tools/buildmatrix/capture_provenance.py  --profile windows-shipping  --build-dir build/windows-shipping  --build 2>&1 | tee ci120-windows-shipping-producer.log"
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Capture Windows validation structural provenance (CI-120)",
+        "stepIndex": 6,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "kind": "producer",
+        "launcher": "python",
+        "launcherProvenance": "literal",
+        "executable": true,
+        "profile": "windows-validation",
+        "buildDir": "build/windows-release",
+        "codemodel": "",
+        "codemodels": [],
+        "inventory": "",
+        "baseline": "",
+        "build": true,
+        "command": "python Tools/buildmatrix/capture_provenance.py  --profile windows-validation  --build-dir build/windows-release  --build 2>&1 | tee ci120-windows-validation-producer.log"
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Capture installed SDK consumer structural provenance (CI-120)",
+        "stepIndex": 8,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "kind": "producer",
+        "launcher": "python",
+        "launcherProvenance": "literal",
+        "executable": true,
+        "profile": "installed-sdk-consumer",
+        "buildDir": "build/installed-sdk-consumer",
+        "codemodel": "",
+        "codemodels": [],
+        "inventory": "",
+        "baseline": "",
+        "build": true,
+        "command": "python Tools/buildmatrix/capture_provenance.py  --profile installed-sdk-consumer  --build-dir build/installed-sdk-consumer  --build 2>&1 | tee ci120-installed-sdk-consumer-producer.log"
       },
       {
         "job": "build-windows-shipping",
         "step": "Generate configured build-matrix inventory from the structural producer (CI-120)",
-        "stepIndex": 3,
+        "stepIndex": 9,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -11931,16 +12379,21 @@
         "executable": true,
         "profile": "",
         "buildDir": "",
-        "codemodel": "windows-shipping=build/windows-shipping",
+        "codemodel": "",
+        "codemodels": [
+          "windows-shipping=build/windows-shipping",
+          "windows-validation=build/windows-release",
+          "installed-sdk-consumer=build/installed-sdk-consumer"
+        ],
         "inventory": "",
         "baseline": "",
         "build": false,
-        "command": "python Tools/buildmatrix/inventory.py  --codemodel windows-shipping=build/windows-shipping  --output build-matrix-inventory.json"
+        "command": "python Tools/buildmatrix/inventory.py  --codemodel windows-shipping=build/windows-shipping  --codemodel windows-validation=build/windows-release  --codemodel installed-sdk-consumer=build/installed-sdk-consumer  --output build-matrix-inventory.json"
       },
       {
         "job": "build-windows-shipping",
         "step": "Compare reviewed configured-evidence findings (CI-120)",
-        "stepIndex": 4,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -11957,6 +12410,7 @@
         "profile": "",
         "buildDir": "",
         "codemodel": "",
+        "codemodels": [],
         "inventory": "build-matrix-inventory.json",
         "baseline": "docs/readiness/ci120-parity-findings.json",
         "build": false,
@@ -11967,12 +12421,12 @@
       "jobCount": 23,
       "matrixLegCount": 31,
       "pathFilteredEventCount": 0,
-      "configureCount": 21,
-      "buildCount": 20,
+      "configureCount": 24,
+      "buildCount": 23,
       "testCount": 15,
-      "ci120InvocationCount": 5,
+      "ci120InvocationCount": 7,
       "unresolvedCount": 0,
-      "buildAllTargetCount": 15,
+      "buildAllTargetCount": 18,
       "blockingJobCount": 15,
       "advisoryJobCount": 3,
       "conditionalJobCount": 5,
@@ -11982,6 +12436,7 @@
         "macos:Release",
         "macos:default",
         "windows:Debug",
+        "windows:MinSizeRel",
         "windows:Release"
       ],
       "testedOsConfigurationPairs": [
@@ -11996,7 +12451,9 @@
     }
   },
   "workflowPresets": [
-    "linux-shipping"
+    "linux-shipping",
+    "windows-release",
+    "windows-shipping"
   ],
   "workflowCmakeConfigs": [
     {
@@ -12174,6 +12631,76 @@
       },
       "fresh": true,
       "buildDir": "build",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "toolset": "v143",
+      "commandIndex": 0
+    },
+    {
+      "job": "build-windows-shipping",
+      "step": "Configure and build canonical Windows Shipping lane (CI-120)",
+      "stepIndex": 2,
+      "matrix": {},
+      "matrixResolved": true,
+      "runnerOs": "windows",
+      "shell": "bash",
+      "jobIf": "absent",
+      "jobContinueOnError": "absent",
+      "stepIf": "absent",
+      "stepContinueOnError": "absent",
+      "gating": "blocking",
+      "tool": "cmake",
+      "kind": "configure",
+      "command": "cmake --preset windows-shipping 2>&1 | tee ci120-windows-shipping-configure.log",
+      "commandProvenance": "literal",
+      "options": {},
+      "preset": "windows-shipping",
+      "commandIndex": 0
+    },
+    {
+      "job": "build-windows-shipping",
+      "step": "Configure and build canonical Windows validation lane (CI-120)",
+      "stepIndex": 5,
+      "matrix": {},
+      "matrixResolved": true,
+      "runnerOs": "windows",
+      "shell": "bash",
+      "jobIf": "absent",
+      "jobContinueOnError": "absent",
+      "stepIf": "absent",
+      "stepContinueOnError": "absent",
+      "gating": "blocking",
+      "tool": "cmake",
+      "kind": "configure",
+      "command": "cmake --preset windows-release 2>&1 | tee ci120-windows-validation-configure.log",
+      "commandProvenance": "literal",
+      "options": {},
+      "preset": "windows-release",
+      "commandIndex": 0
+    },
+    {
+      "job": "build-windows-shipping",
+      "step": "Configure and build installed SDK consumer lane (CI-120)",
+      "stepIndex": 7,
+      "matrix": {},
+      "matrixResolved": true,
+      "runnerOs": "windows",
+      "shell": "bash",
+      "jobIf": "absent",
+      "jobContinueOnError": "absent",
+      "stepIf": "absent",
+      "stepContinueOnError": "absent",
+      "gating": "blocking",
+      "tool": "cmake",
+      "kind": "configure",
+      "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee ci120-installed-sdk-consumer-configure.log",
+      "commandProvenance": "literal",
+      "options": {
+        "SparkEngine_DIR": "${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine",
+        "SPARK_EXPECTED_ENGINE_VERSION": "1.0.0"
+      },
+      "sourceDir": "Tests/PackageSmoke",
+      "buildDir": "build/installed-sdk-consumer",
       "generator": "Visual Studio 17 2022",
       "architecture": "x64",
       "toolset": "v143",

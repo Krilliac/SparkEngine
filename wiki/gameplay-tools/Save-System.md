@@ -17,7 +17,7 @@ memory and is never rewritten merely because it was loaded.
 - `SparkEngine/Source/Engine/SaveSystem/SaveSystem.h`
 - `SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp`
 
-`ENABLE_SAVE_SYSTEM=ON`
+The save system is compiled as part of the engine; there is no separate CMake toggle.
 
 ## Runtime contract
 

@@ -76,6 +76,35 @@ def temporary_paths(*names: str):
             path.unlink(missing_ok=True)
 
 
+@contextmanager
+def synthetic_capture_contract(build_directory: Path, profile: str = "windows-shipping"):
+    """Bind a temporary reply tree to an explicit test-only capture plan.
+
+    Production capture now requires the canonical repository build directory.
+    Synthetic parser tests intentionally live in isolated temporary directories,
+    so they must declare that substitution instead of weakening the production
+    path check.
+    """
+    expected_build = build_directory.resolve()
+    config = next(
+        entry
+        for entry in inventory.load_stable_profile()["buildConfigurations"]
+        if entry["id"] == profile
+    )
+
+    def plan(supplied: Path, requested_profile: str, executable: Path):
+        if requested_profile != profile or supplied.resolve() != expected_build:
+            raise inventory.InventoryError("synthetic capture plan received an unexpected profile/build directory")
+        source = REPO_ROOT.resolve()
+        preset = str(config.get("preset", ""))
+        if not preset:
+            raise inventory.InventoryError("synthetic helper currently requires a preset-backed profile")
+        return config, source, expected_build, [str(executable), "--preset", preset]
+
+    with mock.patch.object(inventory, "_capture_plan", side_effect=plan):
+        yield
+
+
 class RepositoryInventoryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -119,7 +148,7 @@ class RepositoryInventoryTests(unittest.TestCase):
 
     def test_live_configures_are_expanded_per_matrix_leg_with_owners(self) -> None:
         configs = self.data["workflowCmakeConfigs"]
-        self.assertEqual(len(configs), 21)
+        self.assertEqual(len(configs), 24)
         self.assertEqual(
             sorted({entry["job"] for entry in configs}),
             [
@@ -131,6 +160,7 @@ class RepositoryInventoryTests(unittest.TestCase):
                 "build-linux-msan",
                 "build-linux-tsan",
                 "build-macos",
+                "build-windows-shipping",
                 "build-windows-vs2022",
                 "build-windows-vs2026",
                 "clang-tidy",
@@ -187,11 +217,10 @@ class RepositoryInventoryTests(unittest.TestCase):
         self.assertGreater(report["errorCount"], 0)
         self.assertIn("configured-evidence-absent", {item["category"] for item in report["findings"]})
 
-    def test_shipping_preset_currently_disables_declared_editor(self) -> None:
+    def test_shipping_preset_enables_declared_editor(self) -> None:
         findings = check_parity.check_product_preset_activation(copy.deepcopy(self.data))
         editor = [finding for finding in findings if "SparkEditor" in finding.message]
-        self.assertEqual(len(editor), 1)
-        self.assertEqual(editor[0].severity, "error")
+        self.assertEqual(editor, [])
 
     def test_exact_checked_in_artifacts_are_valid_and_current(self) -> None:
         inventory_path = REPO_ROOT / "docs" / "readiness" / "ci120-build-matrix-inventory.json"
@@ -460,6 +489,17 @@ class PresetAndCodemodelTests(unittest.TestCase):
         ]
         findings = check_parity.check_profile_presets(mutated)
         self.assertTrue(any("windows-validation" in finding.message for finding in findings))
+
+    def test_ci120_profile_ids_are_not_misclassified_as_preset_names(self) -> None:
+        data = inventory.build_inventory()
+        findings = check_parity.check_workflow_adoption(data)
+        phantom_presets = [
+            finding.message
+            for finding in findings
+            if finding.category == "workflow-phantom-preset"
+        ]
+        self.assertFalse(any("windows-validation" in message for message in phantom_presets))
+        self.assertFalse(any("installed-sdk-consumer" in message for message in phantom_presets))
 
     def test_codemodel_available_evidence_extracts_exact_kind(self) -> None:
         build_directory = (TEST_TEMP_ROOT / "synthetic-build").resolve()
@@ -1003,6 +1043,7 @@ jobs:
             "  build-windows-shipping:\n"
             "    name: \"Windows Shipping structural configured-evidence producer\"\n"
             "    runs-on: windows-2022\n"
+            "    timeout-minutes: 120\n"
             "    permissions:\n"
             "      contents: read\n"
         )
@@ -1405,7 +1446,10 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 "windows-shipping",
                 repository_root=Path(REPO_ROOT).as_posix(),
             )
-        with mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False):
+        with (
+            synthetic_capture_contract(directory),
+            mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False),
+        ):
             return inventory.extract_codemodel_targets(directory, "windows-shipping", "0" * 40)
 
     def categories(self, data: dict[str, Any]) -> set[str]:
@@ -2062,7 +2106,10 @@ class CodemodelProvenanceTests(unittest.TestCase):
             record = json.loads(provenance.read_text(encoding="utf-8"))
             record["observed"]["toolset"] = "forged-v143"
             write_json(provenance, record)
-            with mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False):
+            with (
+                synthetic_capture_contract(root),
+                mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False),
+            ):
                 evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
         self.assertEqual(evidence["status"], "invalid")
         self.assertIn("observed toolset differs", evidence["rejection"])
@@ -2084,7 +2131,10 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 "ACTIONS_ID_TOKEN_REQUEST_URL": "https://actions.githubusercontent.com/oidc?audience=forged",
                 "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "same-job-github-oidc-token",
             })
-            with mock.patch.dict(os.environ, environment, clear=True):
+            with (
+                synthetic_capture_contract(root),
+                mock.patch.dict(os.environ, environment, clear=True),
+            ):
                 evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
         self.assertEqual(evidence["status"], "available")
         self.assertEqual(evidence["producerProvenance"]["state"], "unavailable")
@@ -2849,10 +2899,10 @@ class OrchestrationTests(unittest.TestCase):
         ):
             self.assertIn(expected, categories, f"{expected} is defined but never reaches the report")
 
-    def test_workflow_semantics_run_in_the_report(self) -> None:
+    def test_live_workflow_semantics_are_clean_in_the_report(self) -> None:
         categories = self.categories_for(copy.deepcopy(self.data))
-        self.assertIn("workflow-configuration-not-built", categories)
-        self.assertIn("workflow-shipping-runner-os", categories)
+        self.assertNotIn("workflow-configuration-not-built", categories)
+        self.assertNotIn("workflow-shipping-runner-os", categories)
 
     def test_option_resolution_and_target_resolution_run_in_the_report(self) -> None:
         categories = self.categories_for(copy.deepcopy(self.data))

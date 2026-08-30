@@ -373,12 +373,12 @@ cmake --build build --config Release
 
 ### Disable Unused Features
 
-Disable subsystems you don't use to reduce overhead:
+Disable real optional build surfaces you don't use to reduce overhead. Engine subsystems without a root `option()` are compiled as part of the engine and cannot be disabled with an invented cache variable:
 
 ```bash
 cmake -B build \
-  -DENABLE_AI=OFF \              # If your game has no AI
   -DENABLE_NETWORKING=OFF \      # If single-player only
+  -DENABLE_SERVER_PROCESSES=OFF \
   -DENABLE_PROFILING=OFF         # For shipping builds
 ```
 

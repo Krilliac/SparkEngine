@@ -4,7 +4,7 @@ SparkEngine includes dynamic time-of-day and weather systems that affect lightin
 
 **Source:** `SparkEngine/Source/Engine/World/TimeOfDaySystem.h`, `SparkEngine/Source/Graphics/WeatherSystem.h`
 
-**CMake toggles:** `ENABLE_DAY_NIGHT=ON`, `ENABLE_WEATHER=ON`
+Both systems are compiled as part of the engine; neither has a separate CMake toggle.
 
 ---
 
@@ -65,11 +65,9 @@ namespace Spark {
 }
 ```
 
-### Enabling in CMake
+### Build availability
 
-```cmake
-set(ENABLE_DAY_NIGHT ON CACHE BOOL "Enable day/night cycle system")
-```
+`TimeOfDaySystem` is part of the engine target and requires no cache option.
 
 ### Features
 
@@ -356,11 +354,9 @@ namespace Spark {
 }
 ```
 
-### Enabling in CMake
+### Build availability
 
-```cmake
-set(ENABLE_WEATHER ON CACHE BOOL "Enable weather system")
-```
+`WeatherSystem` is part of the engine target and requires no cache option.
 
 ### `WeatherType` Enum
 

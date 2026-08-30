@@ -554,7 +554,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*575 test-bearing `.cpp`/`.mm` files, 6962 source-level test definitions*
+*575 test-bearing `.cpp`/`.mm` files, 6965 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1004,7 +1004,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestShadowAtlas` | 7 |
 | `TestSkyAtmosphere` | 5 |
 | `TestSoftwareRendering` | 5 |
-| `TestSparkBuildConfig` | 4 |
+| `TestSparkBuildConfig` | 7 |
 | `TestSparkConsoleConcurrency` | 3 |
 | `TestSparkEngineCameraOwnership` | 1 |
 | `TestSparkError` | 6 |

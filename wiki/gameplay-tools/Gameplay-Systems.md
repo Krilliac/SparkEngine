@@ -331,7 +331,7 @@ Built-in HUD elements for FPS gameplay:
 
 ## Inventory System
 
-`ENABLE_INVENTORY=ON`
+The inventory system is compiled as part of the engine; there is no separate CMake toggle.
 
 Item management system:
 - Inventory slots with weight/capacity limits
@@ -361,7 +361,7 @@ inv.Equip("armor", vestItemId);
 
 ## Quest System
 
-`ENABLE_QUEST_SYSTEM=ON`
+The quest system is compiled as part of the engine; there is no separate CMake toggle.
 
 Objective tracking:
 - Quest definitions with stages

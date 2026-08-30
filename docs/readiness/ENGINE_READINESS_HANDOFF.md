@@ -884,6 +884,9 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - `docs/readiness/ci120-build-matrix-inventory.json`
 - `docs/readiness/ci120-parity-findings.json`
 - `Tools/buildmatrix/capture_provenance.py`
+- `Tools/buildmatrix/validate_pending_authority.py`
+- `Tools/buildmatrix/verify_external_evidence.py`
+- `.github/workflows/ci120-report.yml`
 
 **Entry points**
 
@@ -893,10 +896,15 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - `Tools/buildmatrix/inventory.py`
 - `Tools/buildmatrix/capture_provenance.py`
 - `Tools/buildmatrix/check_parity.py`
+- `Tools/buildmatrix/validate_pending_authority.py`
+- `Tools/buildmatrix/verify_external_evidence.py`
 - `Tools/buildmatrix/workflow.py`
 - `Tests/Tools/test_build_matrix_parity.py`
+- `Tests/Tools/test_ci120_pending_authority.py`
+- `Tests/Tools/test_ci120_external_verifier.py`
 - `docs/site/readiness.json`
 - `.github/workflows/build.yml`
+- `.github/workflows/ci120-report.yml`
 
 **Implementation scope**
 
@@ -926,10 +934,14 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 
 ```bash
 python3 Tools/buildmatrix/inventory.py --check docs/readiness/ci120-build-matrix-inventory.json
-python3 Tools/buildmatrix/capture_provenance.py --profile windows-shipping --build-dir build/windows-shipping
-python3 Tools/buildmatrix/inventory.py --codemodel windows-shipping=build/windows-shipping --output docs/readiness/ci120-build-matrix-inventory.json
+python3 Tools/buildmatrix/capture_provenance.py --profile windows-shipping --build-dir build/windows-shipping --build
+python3 Tools/buildmatrix/capture_provenance.py --profile windows-validation --build-dir build/windows-release --build
+python3 Tools/buildmatrix/capture_provenance.py --profile installed-sdk-consumer --build-dir build/installed-sdk-consumer --build
+python3 Tools/buildmatrix/inventory.py --codemodel windows-shipping=build/windows-shipping --codemodel windows-validation=build/windows-release --codemodel installed-sdk-consumer=build/installed-sdk-consumer --output build-matrix-inventory.json
 python3 Tools/buildmatrix/check_parity.py --inventory docs/readiness/ci120-build-matrix-inventory.json --baseline docs/readiness/ci120-parity-findings.json
+python3 Tools/buildmatrix/validate_pending_authority.py --inventory build-matrix-inventory.json --report build-matrix-parity-findings.json --output ci120-pending-authority.json
 python3 Tests/Tools/test_build_matrix_parity.py
+python3 -m unittest Tests.Tools.test_ci120_pending_authority Tests.Tools.test_ci120_external_verifier
 cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON
 cmake --build build/windows-shipping --config MinSizeRel --clean-first
 cmake -LAH -N build/windows-shipping
@@ -958,7 +970,7 @@ python3 tools/site-data/validate.py
 - Risks:
   - Strict mode may expose optional-dependency ambiguity
   - Configured evidence cannot be produced without a real Windows MSVC configure, so the profile stays blocked until one runs
-  - The local producer record detects reply substitution and post-build mutation but is intentionally unavailable as release authority: GitHub can sign a same-job OIDC audience chosen by the mutable producer, which proves job identity rather than CMake execution. CI-120 remains blocked until a protected external attestation verifier independently validates the captured artifact.
+  - The local producer record detects reply substitution and post-build mutation but is intentionally unavailable as release authority. The protected downstream verifier is staged while the producer remains deliberately red; CI-120 stays blocked until that verifier accepts and attests an exact source-run artifact remotely.
 - Out of scope:
   - Certifying Linux, macOS, or any other host as a stable-v1 product
 

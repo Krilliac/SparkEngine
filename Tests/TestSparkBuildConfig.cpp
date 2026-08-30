@@ -6,10 +6,38 @@
 #include "TestFramework.h"
 #include "Config.h"
 
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 using namespace SparkBuild;
+
+namespace
+{
+    std::filesystem::path WriteConfigFixture(std::string_view label, std::string_view contents)
+    {
+        const auto nonce = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+        const auto path = std::filesystem::temp_directory_path() /
+                          ("sparkbuild-config-" + std::string(label) + "-" + std::to_string(nonce) + ".ini");
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output << contents;
+        output.close();
+        return path;
+    }
+
+    bool OptionValue(const ConfigManager& manager, std::string_view name)
+    {
+        for (const auto& option : manager.config.options)
+        {
+            if (option.cmakeVar == name)
+                return option.currentValue;
+        }
+        throw std::runtime_error("missing SparkBuild option fixture");
+    }
+} // namespace
 
 TEST(SparkBuildConfig_VisualStudioToolsetIsGeneratorInput)
 {
@@ -77,4 +105,35 @@ TEST(SparkBuildConfig_AsyncCommandRejectsPlatformExpansionInput)
         rejected = true;
     }
     EXPECT_TRUE(rejected);
+}
+
+TEST(SparkBuildConfig_LoadRejectsUnknownOptionTransactionally)
+{
+    ConfigManager manager;
+    const auto path =
+        WriteConfigFixture("unknown-option", "[Options]\nENABLE_GRAPHICS=OFF\nREMOVED_OR_UNKNOWN_OPTION=ON\n");
+
+    EXPECT_FALSE(manager.Load(path.string()));
+    EXPECT_TRUE(OptionValue(manager, "ENABLE_GRAPHICS"));
+    std::filesystem::remove(path);
+}
+
+TEST(SparkBuildConfig_LoadRejectsInvalidOptionValue)
+{
+    ConfigManager manager;
+    const auto path = WriteConfigFixture("invalid-value", "[Options]\nENABLE_GRAPHICS=perhaps\n");
+
+    EXPECT_FALSE(manager.Load(path.string()));
+    EXPECT_TRUE(OptionValue(manager, "ENABLE_GRAPHICS"));
+    std::filesystem::remove(path);
+}
+
+TEST(SparkBuildConfig_LoadAcceptsKnownOptionValue)
+{
+    ConfigManager manager;
+    const auto path = WriteConfigFixture("known-option", "[Options]\nENABLE_GRAPHICS=OFF\n");
+
+    EXPECT_TRUE(manager.Load(path.string()));
+    EXPECT_FALSE(OptionValue(manager, "ENABLE_GRAPHICS"));
+    std::filesystem::remove(path);
 }

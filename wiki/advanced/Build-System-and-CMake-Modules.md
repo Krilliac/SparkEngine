@@ -163,7 +163,7 @@ blocked; Linux and MinGW/Wine rows are development paths outside the profile.
 | `ci-linux-tsan` | Ninja | GCC | Debug | ThreadSanitizer |
 | `linux-mingw-release` | Makefiles | MinGW-w64 | Release | Cross-compile the Windows D3D11 path; D3D12/DXR are excluded; run under Wine |
 | `linux-mingw-debug` | Makefiles | MinGW-w64 | Debug | Cross-compile the Windows D3D11 path; D3D12/DXR are excluded; run under Wine |
-| `minimal` | Default | Default | Release | Disables networking and DXR; several additional preset variables are currently inert because the root build declares no matching options |
+| `minimal` | Default | Default | Release | Core runtime with optional tools, modules, scripting, networking, and experimental rendering breadth disabled |
 
 ```bash
 # List available presets
@@ -192,7 +192,7 @@ python3 Tools/buildmatrix/check_parity.py \
 
 The capture step requires an exactly clean repository, derives the commit itself, creates the query before configuring, and binds the profile, source/build directories, CMake executable and version, generator, cache values, and exact index/codemodel/cache/target reply digests. Inventory rejects missing, malformed, oversized, linked, out-of-directory, changed, unbound, or post-hoc reply data. Caller-supplied commit text is not provenance, and missing material fields or expected cache values remain blocking findings.
 
-The local record detects reply substitution but is not a signed remote attestation. Protected CI still owns production of the configured evidence, and release signing/attestation remains separate release work.
+The local record detects reply substitution but cannot authorize itself. `CI-120 Trusted Verifier` runs later from the exact current `Working` default-branch workflow, binds one source run/job/artifact through the Actions API, downloads by immutable artifact ID with digest mismatch failure, reparses the File API replies as bounded data, rehashes every declared product, reconstructs the inventory and parity report with trusted code, and attests only the resulting verified receipt. During the initial rollout the producer remains deliberately red at its external-authority enforcement step; CI-120 is not promoted until a remote verifier run proves this path end to end.
 
 ## Cross-Compilation: Windows on Linux (MinGW + Wine)
 

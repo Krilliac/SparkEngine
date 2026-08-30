@@ -1397,7 +1397,7 @@
 | `WeatherCallback` | alias | SparkEngine | [WeatherSystem.h:L228](../../SparkEngine/Source/Graphics/WeatherSystem.h#L228) |  |
 | `WidgetFactoryFn` | alias | SparkEngine | [UIFactory.h:L107](../../SparkEngine/Source/Engine/UI/UIFactory.h#L107) | Widget factory function type |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkAssetPipelineCore | [AssetCooker.cpp:L15](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L15) |  |
-| `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [Config.cpp:L12](../../SparkBuild/src/Config.cpp#L12) |  |
+| `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [Config.cpp:L14](../../SparkBuild/src/Config.cpp#L14) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [Downloader.cpp:L15](../../SparkBuild/src/Downloader.cpp#L15) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [ProcessRunner.h:L12](../../SparkBuild/src/ProcessRunner.h#L12) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [SparkBuild.cpp:L17](../../SparkBuild/src/SparkBuild.cpp#L17) |  |

@@ -745,7 +745,7 @@ audio_sources        # Show active audio source count and details
 | Audio crackling | Too many sources or update not called | Reduce sources; ensure `Update(dt)` every frame |
 | Music crossfade glitch | `MusicManager::Update` not called | Call `music.Update(deltaTime)` every frame |
 | Reverb not applying | Listener outside reverb zone | Check zone radii and position |
-| Occlusion not working | Physics system unavailable | Ensure `ENABLE_PHYSX=ON` and physics initialized |
+| Occlusion not working | Physics system unavailable | Ensure the Jolt dependency configured successfully and physics initialized |
 | OpenAL not found (Linux) | Library not installed | `sudo apt install libopenal-dev` |
 | WAV loading fails | File not found or wrong format | Verify path and WAV format (PCM only) |
 | Source pool exhausted | Too many simultaneous sounds | Increase `maxSources` or prioritize sounds |
