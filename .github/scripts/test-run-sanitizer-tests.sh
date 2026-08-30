@@ -21,6 +21,12 @@ if ! "$TEST_PYTHON" -c 'import sys' >/dev/null 2>&1; then
 fi
 export TEST_PYTHON
 
+# The fixtures below deliberately use a synthetic workflow identity.  GitHub
+# Actions exports the live job identity into this process, so isolate the test
+# harness before invoking the production runner.  Individual provenance tests
+# set a conflicting value explicitly when exercising fail-closed behavior.
+unset GITHUB_SHA GITHUB_RUN_ID GITHUB_RUN_ATTEMPT GITHUB_JOB
+
 SHA="0123456789abcdef0123456789abcdef01234567"
 passed=0
 failed=0
