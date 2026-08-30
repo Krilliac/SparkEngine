@@ -2558,7 +2558,7 @@
       "target": "SparkGameMMOFPS",
       "kind": "shared_library",
       "file": "GameModules/SparkGameMMOFPS/CMakeLists.txt",
-      "line": 87,
+      "line": 97,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4001,7 +4001,7 @@
       "declarations": [
         {
           "file": "GameModules/SparkGameMMOFPS/CMakeLists.txt",
-          "line": 87,
+          "line": 97,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],

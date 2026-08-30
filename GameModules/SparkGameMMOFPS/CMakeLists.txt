@@ -22,6 +22,16 @@ else()
     set(SPARK_GAME_MMOFPS_STANDALONE FALSE)
 endif()
 
+# TERRAFRONT's authoritative simulation and lag-compensation types are part of
+# the engine networking surface.  Root profiles that deliberately disable
+# networking must not auto-discover a module that cannot exist in that product
+# set.  Standalone consumers that do not publish the option retain the existing
+# configuration path.
+if(DEFINED ENABLE_NETWORKING AND NOT ENABLE_NETWORKING)
+    message(STATUS "SparkGameMMOFPS skipped - requires ENABLE_NETWORKING=ON")
+    return()
+endif()
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)

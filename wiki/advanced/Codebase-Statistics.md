@@ -10,7 +10,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 313745 |
+| **SparkEngine/Source** | 313747 |
 | **SparkEditor/Source** | 109363 |
 | **GameModules** | 143040 |
 | **External services** | 11178 |
@@ -18,7 +18,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 | **Tests** | 170825 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~764040** |
+| **Total C++ (excl. ThirdParty)** | **~764042** |
 
 ### File Counts
 
@@ -43,7 +43,7 @@ Graphics contains 119471 lines, or 38% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 119471 | 38.0% |
-| Engine (all subsystems) | 87626 | 27.9% |
+| Engine (all subsystems) | 87628 | 27.9% |
 | Utils | 44097 | 14.0% |
 | Core | 29974 | 9.5% |
 | Physics | 10814 | 3.4% |
@@ -58,7 +58,7 @@ Graphics contains 119471 lines, or 38% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines |
 |-----------|------:|
-| Networking | 14943 |
+| Networking | 14945 |
 | AI | 13490 |
 | ECS | 8447 |
 | Gameplay | 7755 |
@@ -161,7 +161,7 @@ inventory is implementation evidence, not support certification.
 | `SaveSystem.cpp` | 2036 |
 | `VulkanDevice.cpp` | 1991 |
 | `ModuleManager.cpp` | 1848 |
-| `NetworkConnection.cpp` | 1678 |
+| `NetworkConnection.cpp` | 1680 |
 | `EngineSettings.cpp` | 1623 |
 | `PostProcessingPipeline.cpp` | 1602 |
 | `D3D12Device.cpp` | 1593 |

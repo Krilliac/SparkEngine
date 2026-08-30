@@ -32,6 +32,7 @@
 using namespace DirectX;
 namespace Spark::Net
 {
+#ifdef ENABLE_NETWORKING
     namespace
     {
         bool IsSameEndpoint(const sockaddr_in& lhs, const sockaddr_in& rhs) noexcept
@@ -45,6 +46,7 @@ namespace Spark::Net
             return address.sin_family == AF_INET && (ntohl(address.sin_addr.s_addr) & 0xFF000000u) == 0x7F000000u;
         }
     } // namespace
+#endif // ENABLE_NETWORKING
 
     // --------------------------------------------------------------------------
     // Initialize / Shutdown
