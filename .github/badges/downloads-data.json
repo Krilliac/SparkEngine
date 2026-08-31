@@ -3,8 +3,8 @@
     "initialized": true,
     "baseTotal": 0,
     "baseInstallerTotal": 0,
-    "total": 2,
-    "installerTotal": 2,
+    "total": 3,
+    "installerTotal": 3,
     "assets": [
         {
             "id": 530455809,
@@ -64,7 +64,7 @@
             "id": 530455820,
             "releaseId": 376952823,
             "name": "SparkInstaller-Windows-x64.exe",
-            "downloadCount": 2
+            "downloadCount": 3
         },
         {
             "id": 530455821,
@@ -101,5 +101,5 @@
         530455829
     ],
     "pending": null,
-    "updated": "2026-08-30T04:07:54Z"
+    "updated": "2026-08-31T22:35:06Z"
 }
