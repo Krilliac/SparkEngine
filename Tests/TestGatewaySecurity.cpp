@@ -146,8 +146,8 @@ namespace
     {
         PACL dacl = nullptr;
         PSECURITY_DESCRIPTOR descriptor = nullptr;
-        const DWORD status = GetNamedSecurityInfoW(file.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
-                                                   nullptr, nullptr, &dacl, nullptr, &descriptor);
+        const DWORD status = GetNamedSecurityInfoW(file.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr,
+                                                   nullptr, &dacl, nullptr, &descriptor);
         if (status != ERROR_SUCCESS || !descriptor || !dacl || !IsValidAcl(dacl))
         {
             if (descriptor)
@@ -488,22 +488,21 @@ TEST(GatewaySecurity_RejectsUnprotectedAcl)
 
     PSECURITY_DESCRIPTOR descriptor = nullptr;
     PACL dacl = nullptr;
-    DWORD status = GetNamedSecurityInfoW(keyFile.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
-                                         nullptr, nullptr, &dacl, nullptr, &descriptor);
+    DWORD status = GetNamedSecurityInfoW(keyFile.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr,
+                                         &dacl, nullptr, &descriptor);
     ASSERT_EQ(status, DWORD{ERROR_SUCCESS});
     ASSERT_TRUE(descriptor != nullptr);
     ASSERT_TRUE(dacl != nullptr);
 
-    status = SetNamedSecurityInfoW(
-        const_cast<LPWSTR>(keyFile.c_str()), SE_FILE_OBJECT,
-        DACL_SECURITY_INFORMATION | UNPROTECTED_DACL_SECURITY_INFORMATION,
-        nullptr, nullptr, dacl, nullptr);
+    status = SetNamedSecurityInfoW(const_cast<LPWSTR>(keyFile.c_str()), SE_FILE_OBJECT,
+                                   DACL_SECURITY_INFORMATION | UNPROTECTED_DACL_SECURITY_INFORMATION, nullptr, nullptr,
+                                   dacl, nullptr);
     LocalFree(descriptor);
     ASSERT_EQ(status, DWORD{ERROR_SUCCESS});
 
     descriptor = nullptr;
-    status = GetNamedSecurityInfoW(keyFile.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
-                                   nullptr, nullptr, nullptr, nullptr, &descriptor);
+    status = GetNamedSecurityInfoW(keyFile.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr,
+                                   nullptr, nullptr, &descriptor);
     SECURITY_DESCRIPTOR_CONTROL control{};
     DWORD revision = 0;
     const bool unprotected = status == ERROR_SUCCESS && descriptor &&

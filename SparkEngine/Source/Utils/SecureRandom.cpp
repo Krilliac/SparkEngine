@@ -124,15 +124,14 @@ namespace
         PSECURITY_DESCRIPTOR descriptor = nullptr;
         PSID owner = nullptr;
         PACL dacl = nullptr;
-        const DWORD status = GetSecurityInfo(file, SE_FILE_OBJECT,
-                                             OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
-                                             &owner, nullptr, &dacl, nullptr, &descriptor);
+        const DWORD status =
+            GetSecurityInfo(file, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION, &owner,
+                            nullptr, &dacl, nullptr, &descriptor);
         LocalAllocation descriptorAllocation{descriptor};
         if (status != ERROR_SUCCESS || !descriptor || !owner || !IsValidSid(owner) || !dacl || !IsValidAcl(dacl))
         {
-            failure = status == ERROR_SUCCESS
-                ? "private file ACL readback is incomplete"
-                : WindowsError("GetSecurityInfo", status);
+            failure = status == ERROR_SUCCESS ? "private file ACL readback is incomplete"
+                                              : WindowsError("GetSecurityInfo", status);
             return false;
         }
 
@@ -143,8 +142,7 @@ namespace
         SECURITY_DESCRIPTOR_CONTROL control{};
         DWORD revision = 0;
         if (valid && (!GetSecurityDescriptorControl(descriptor, &control, &revision) ||
-                      (control & (SE_DACL_PRESENT | SE_DACL_PROTECTED)) !=
-                          (SE_DACL_PRESENT | SE_DACL_PROTECTED)))
+                      (control & (SE_DACL_PRESENT | SE_DACL_PROTECTED)) != (SE_DACL_PRESENT | SE_DACL_PROTECTED)))
         {
             valid = false;
             failure = "private file DACL is not protected from inheritance";
@@ -377,18 +375,17 @@ namespace Spark::SecureRandom
             {
                 const DWORD dispositionError = createdFile.Discard();
                 if (dispositionError != ERROR_SUCCESS)
-                    failure += "; secure cleanup failed: " + WindowsError(
-                        "SetFileInformationByHandle(FileDispositionInfo)", dispositionError);
+                    failure += "; secure cleanup failed: " +
+                               WindowsError("SetFileInformationByHandle(FileDispositionInfo)", dispositionError);
                 SetError(error, std::move(failure));
                 return false;
             };
 
             // Defensively re-apply the owner-only DACL to the live exclusive
             // handle, then read it back before any secret bytes are written.
-            const DWORD protectStatus = SetSecurityInfo(
-                createdFile.Get(), SE_FILE_OBJECT,
-                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                nullptr, nullptr, acl, nullptr);
+            const DWORD protectStatus = SetSecurityInfo(createdFile.Get(), SE_FILE_OBJECT,
+                                                        DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                                                        nullptr, nullptr, acl, nullptr);
             std::string aclFailure;
             const bool protectedOwnerOnly =
                 protectStatus == ERROR_SUCCESS &&

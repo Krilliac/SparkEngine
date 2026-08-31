@@ -1881,7 +1881,7 @@
 | `info` | struct | SparkEngine | [CrashHandler.cpp:L403](../../SparkEngine/Source/Utils/CrashHandler.cpp#L403) |  |
 | `info` | struct | SparkEngine | [CrashHandler.cpp:L490](../../SparkEngine/Source/Utils/CrashHandler.cpp#L490) |  |
 | `info` | struct | SparkEngine | [CrashHandlerSupport.h:L260](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L260) |  |
-| `info` | struct | SparkGateway | [GatewaySecurity.cpp:L312](../../SparkGateway/src/GatewaySecurity.cpp#L312) |  |
+| `info` | struct | SparkGateway | [GatewaySecurity.cpp:L310](../../SparkGateway/src/GatewaySecurity.cpp#L310) |  |
 | `information` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L375](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L375) |  |
 | `information` | struct | SparkEditor | [ProjectManager.cpp:L682](../../SparkEditor/Source/Core/ProjectManager.cpp#L682) |  |
 | `information` | struct | SparkEngine | [DynamicPluginHost.cpp:L230](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L230) |  |

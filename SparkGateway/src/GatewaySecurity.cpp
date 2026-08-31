@@ -168,8 +168,7 @@ namespace Spark::Gateway
             SECURITY_DESCRIPTOR_CONTROL control{};
             DWORD revision = 0;
             if (!GetSecurityDescriptorControl(descriptor, &control, &revision) ||
-                (control & (SE_DACL_PRESENT | SE_DACL_PROTECTED)) !=
-                    (SE_DACL_PRESENT | SE_DACL_PROTECTED))
+                (control & (SE_DACL_PRESENT | SE_DACL_PROTECTED)) != (SE_DACL_PRESENT | SE_DACL_PROTECTED))
             {
                 error = "Gateway key ACL must be protected from inheritance";
                 return false;
@@ -194,8 +193,7 @@ namespace Spark::Gateway
                 const auto* header = static_cast<ACE_HEADER*>(rawAce);
                 constexpr BYTE inheritanceFlags = INHERITED_ACE | INHERIT_ONLY_ACE | OBJECT_INHERIT_ACE |
                                                   CONTAINER_INHERIT_ACE | NO_PROPAGATE_INHERIT_ACE;
-                if (header->AceSize < sizeof(ACCESS_ALLOWED_ACE) ||
-                    (header->AceFlags & inheritanceFlags) != 0)
+                if (header->AceSize < sizeof(ACCESS_ALLOWED_ACE) || (header->AceFlags & inheritanceFlags) != 0)
                 {
                     privateAcl = false;
                     break;

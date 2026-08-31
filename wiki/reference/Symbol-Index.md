@@ -3299,7 +3299,7 @@
 | `bytes` | function | SparkEngine | [LocalFileCache.h:L116](../../SparkEngine/Source/Utils/LocalFileCache.h#L116) |  |
 | `bytes` | function | SparkEngine | [LocalFileCache.h:L175](../../SparkEngine/Source/Utils/LocalFileCache.h#L175) |  |
 | `bytes` | function | SparkEngine | [LocalFileCache.h:L233](../../SparkEngine/Source/Utils/LocalFileCache.h#L233) |  |
-| `bytes` | function | SparkEngine | [SecureRandom.cpp:L251](../../SparkEngine/Source/Utils/SecureRandom.cpp#L251) |  |
+| `bytes` | function | SparkEngine | [SecureRandom.cpp:L249](../../SparkEngine/Source/Utils/SecureRandom.cpp#L249) |  |
 | `bytes` | function | Tests | [TestFBXImporter.cpp:L28](../../Tests/TestFBXImporter.cpp#L28) |  |
 | `ByteSwap` | function | SparkEngine | [Serializer.h:L87](../../SparkEngine/Source/Utils/Serializer.h#L87) |  |
 | `c` | function | GameModules | [TFOpticsSystem.cpp:L300](../../GameModules/SparkGameMMOFPS/Source/Game/TFOpticsSystem.cpp#L300) |  |
@@ -4995,7 +4995,7 @@
 | `ComputeFogFactor` | function | SparkEngine | [FogSystem.cpp:L100](../../SparkEngine/Source/Graphics/FogSystem.cpp#L100) |  |
 | `ComputeFogFactor` | function | SparkEngine | [FogSystem.h:L247](../../SparkEngine/Source/Graphics/FogSystem.h#L247) | Compute fog factor for a fragment at given distance from camera |
 | `ComputeForwardFromRotation` | function | SparkEngine | [ParallelPerception.h:L219](../../SparkEngine/Source/Engine/AI/ParallelPerception.h#L219) | Compute forward direction from Euler rotation angles. |
-| `ComputeGatewayMac` | function | SparkGateway | [GatewaySecurity.cpp:L390](../../SparkGateway/src/GatewaySecurity.cpp#L390) |  |
+| `ComputeGatewayMac` | function | SparkGateway | [GatewaySecurity.cpp:L388](../../SparkGateway/src/GatewaySecurity.cpp#L388) |  |
 | `ComputeGerstnerDisplacement` | function | SparkEngine | [WaterRenderer.h:L242](../../SparkEngine/Source/Graphics/WaterRenderer.h#L242) | Compute Gerstner wave displacement at a position and time. |
 | `ComputeGerstnerNormal` | function | SparkEngine | [WaterRenderer.h:L251](../../SparkEngine/Source/Graphics/WaterRenderer.h#L251) | Compute the surface normal at a position via finite differences. |
 | `ComputeGTAO` | function | SparkEngine | [GTAOEffect.h:L109](../../SparkEngine/Source/Graphics/GTAOEffect.h#L109) |  |
@@ -5718,7 +5718,7 @@
 | `ConstantTimeEqual` | function | SparkEngine | [PasswordHash.cpp:L278](../../SparkEngine/Source/Utils/PasswordHash.cpp#L278) |  |
 | `ConstantTimeEqual` | function | SparkEngine | [PasswordHash.cpp:L343](../../SparkEngine/Source/Utils/PasswordHash.cpp#L343) |  |
 | `ConstantTimeEqual` | function | SparkGateway | [GatewaySecurity.cpp:L68](../../SparkGateway/src/GatewaySecurity.cpp#L68) |  |
-| `ConstantTimeEqual` | function | SparkGateway | [GatewaySecurity.cpp:L401](../../SparkGateway/src/GatewaySecurity.cpp#L401) |  |
+| `ConstantTimeEqual` | function | SparkGateway | [GatewaySecurity.cpp:L399](../../SparkGateway/src/GatewaySecurity.cpp#L399) |  |
 | `ConstantTimeEquals` | function | GameModules | [TFCrypto.cpp:L339](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp#L339) |  |
 | `ConstantTimeEquals` | function | GameModules | [TFCrypto.cpp:L349](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp#L349) |  |
 | `ConstantTimeEquals` | function | GameModules | [TFCrypto.h:L48](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.h#L48) |  |
@@ -6304,7 +6304,7 @@
 | `CreateDevice` | function | SparkEngine | [RHIFactory.h:L44](../../SparkEngine/Source/Graphics/RHI/RHIFactory.h#L44) | Create an RHI device for the specified backend |
 | `CreateDevice` | function | SparkEngine | [RenderDevice.h:L120](../../SparkEngine/Source/Graphics/RenderDevice.h#L120) |  |
 | `CreateDeviceAndSwapChain` | function | SparkEngine | [GraphicsEngine.h:L1197](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L1197) |  |
-| `createdFile` | function | SparkEngine | [SecureRandom.cpp:L374](../../SparkEngine/Source/Utils/SecureRandom.cpp#L374) |  |
+| `createdFile` | function | SparkEngine | [SecureRandom.cpp:L372](../../SparkEngine/Source/Utils/SecureRandom.cpp#L372) |  |
 | `CreatedFileHandle` | class | SparkEngine | [SecureRandom.cpp:L65](../../SparkEngine/Source/Utils/SecureRandom.cpp#L65) |  |
 | `CreatedFileHandle` | function | SparkEngine | [SecureRandom.cpp:L68](../../SparkEngine/Source/Utils/SecureRandom.cpp#L68) |  |
 | `CreateDirectories` | function | SparkEngine | [FileUtils.h:L170](../../SparkEngine/Source/Utils/FileUtils.h#L170) |  |
@@ -6511,7 +6511,7 @@
 | `CreatePresetInventory` | function | SparkEditor | [UIDesignerSystem.h:L151](../../SparkEditor/Source/UIDesigner/UIDesignerSystem.h#L151) |  |
 | `CreatePresetMainMenu` | function | SparkEditor | [UIDesignerSystem.h:L150](../../SparkEditor/Source/UIDesigner/UIDesignerSystem.h#L150) |  |
 | `CreatePrivateCrashArtifactDirectory` | function | SparkEngine | [CrashHandlerSupport.h:L274](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L274) | Create a randomized, exclusive, owner-only crash-artifact directory. |
-| `CreatePrivateFile` | function | SparkEngine | [SecureRandom.cpp:L265](../../SparkEngine/Source/Utils/SecureRandom.cpp#L265) |  |
+| `CreatePrivateFile` | function | SparkEngine | [SecureRandom.cpp:L263](../../SparkEngine/Source/Utils/SecureRandom.cpp#L263) |  |
 | `CreateProfessionalLightTheme` | function | SparkEditor | [EditorTheme.h:L275](../../SparkEditor/Source/Core/EditorTheme.h#L275) | Create professional light theme |
 | `CreateProgressBar` | function | SparkEngine | [UISystem.h:L324](../../SparkEngine/Source/Engine/UI/UISystem.h#L324) | Set background color. |
 | `CreateProject` | function | SparkEditor | [ProjectManager.h:L121](../../SparkEditor/Source/Core/ProjectManager.h#L121) |  |
@@ -6673,7 +6673,7 @@
 | `CreateWeaponStats` | function | GameModules | [WeaponStats.cpp:L208](../../GameModules/SparkGameFPS/Source/Projectiles/WeaponStats.cpp#L208) |  |
 | `CreateWeaponStats` | function | GameModules | [WeaponStats.h:L128](../../GameModules/SparkGameFPS/Source/Projectiles/WeaponStats.h#L128) |  |
 | `CreateZeroGravityZone` | function | GameModules | [GravitySystem.h:L191](../../GameModules/SparkGameFPS/Source/Game/GravitySystem.h#L191) | Create a zero-gravity zone |
-| `credential` | function | SparkGateway | [GatewaySecurity.cpp:L430](../../SparkGateway/src/GatewaySecurity.cpp#L430) |  |
+| `credential` | function | SparkGateway | [GatewaySecurity.cpp:L428](../../SparkGateway/src/GatewaySecurity.cpp#L428) |  |
 | `critDist` | function | GameModules | [RPGCombatSystem.cpp:L122](../../GameModules/SparkGameRPG/Source/Combat/RPGCombatSystem.cpp#L122) |  |
 | `CriterionProgress` | struct | GameModules | [MMOAchievementSystem.h:L53](../../GameModules/SparkGameMMO/Source/Achievement/MMOAchievementSystem.h#L53) | Runtime criterion progress |
 | `Cross` | function | SparkEngine | [HRTFProcessor.cpp:L28](../../SparkEngine/Source/Audio/HRTFProcessor.cpp#L28) |  |
@@ -8015,8 +8015,8 @@
 | `DisbandParty` | function | GameModules | [MMOPartySystem.h:L77](../../GameModules/SparkGameMMO/Source/Party/MMOPartySystem.h#L77) |  |
 | `Discard` | function | SparkEngine | [SecureRandom.cpp:L73](../../SparkEngine/Source/Utils/SecureRandom.cpp#L73) |  |
 | `DiscardClientLifecycleTraffic` | function | SparkEngine | [NetworkManager.h:L672](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L672) |  |
-| `discardCreatedFile` | function | SparkEngine | [SecureRandom.cpp:L400](../../SparkEngine/Source/Utils/SecureRandom.cpp#L400) |  |
-| `discardCreatedFile` | function | SparkEngine | [SecureRandom.cpp:L426](../../SparkEngine/Source/Utils/SecureRandom.cpp#L426) |  |
+| `discardCreatedFile` | function | SparkEngine | [SecureRandom.cpp:L397](../../SparkEngine/Source/Utils/SecureRandom.cpp#L397) |  |
+| `discardCreatedFile` | function | SparkEngine | [SecureRandom.cpp:L423](../../SparkEngine/Source/Utils/SecureRandom.cpp#L423) |  |
 | `DiscardPacketsThroughLifecycle` | function | SparkEngine | [InstabilitySimulator.h:L136](../../SparkEngine/Source/Engine/Networking/InstabilitySimulator.h#L136) | Securely discard packets owned by a completed network lifecycle. |
 | `Disconnect` | function | GameModules | [MultiplayerSystem.h:L304](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L304) | Disconnect from the server. |
 | `Disconnect` | function | GameModules | [TFClientNet.h:L91](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.h#L91) |  |
@@ -10608,7 +10608,7 @@
 | `FileWatcher` | class | SparkEngine | [FileWatcher.h:L95](../../SparkEngine/Source/Utils/FileWatcher/FileWatcher.h#L95) | File and directory change notification system |
 | `Fill` | function | SparkEngine | [AlignedHeapArray.h:L103](../../SparkEngine/Source/Utils/AlignedHeapArray.h#L103) |  |
 | `Fill` | function | SparkEngine | [AlignedHeapArray.h:L195](../../SparkEngine/Source/Utils/AlignedHeapArray.h#L195) |  |
-| `Fill` | function | SparkEngine | [SecureRandom.cpp:L203](../../SparkEngine/Source/Utils/SecureRandom.cpp#L203) |  |
+| `Fill` | function | SparkEngine | [SecureRandom.cpp:L201](../../SparkEngine/Source/Utils/SecureRandom.cpp#L201) |  |
 | `Fill` | function | Tests | [TestMMOCredentialSecurity.cpp:L15](../../Tests/TestMMOCredentialSecurity.cpp#L15) |  |
 | `FillBeacon` | function | GameModules | [TFLanDiscovery.h:L127](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.h#L127) |  |
 | `FillGBuffer` | function | SparkEngine | [GraphicsEngine.h:L1224](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L1224) |  |
@@ -17701,7 +17701,7 @@
 | `HasPermission` | function | Tests | [TestConsoleRBAC.cpp:L35](../../Tests/TestConsoleRBAC.cpp#L35) |  |
 | `HasPermission` | function | Tests | [TestConsoleRBAC.cpp:L49](../../Tests/TestConsoleRBAC.cpp#L49) |  |
 | `HasPrivatePermissions` | function | SparkGateway | [GatewaySecurity.cpp:L149](../../SparkGateway/src/GatewaySecurity.cpp#L149) |  |
-| `HasPrivatePermissions` | function | SparkGateway | [GatewaySecurity.cpp:L285](../../SparkGateway/src/GatewaySecurity.cpp#L285) |  |
+| `HasPrivatePermissions` | function | SparkGateway | [GatewaySecurity.cpp:L283](../../SparkGateway/src/GatewaySecurity.cpp#L283) |  |
 | `HasProjectStagingResidue` | function | Tests | [TestEditorSubsystems.cpp:L837](../../Tests/TestEditorSubsystems.cpp#L837) |  |
 | `HasProtectedOwnerOnlyAcl` | function | SparkEngine | [SecureRandom.cpp:L122](../../SparkEngine/Source/Utils/SecureRandom.cpp#L122) |  |
 | `HasQuest` | function | GameModules | [QuestSystem.h:L184](../../GameModules/SparkGameFPS/Source/Game/QuestSystem.h#L184) |  |
@@ -17815,7 +17815,7 @@
 | `HexCorners` | function | GameModules | [TFUiCommon.h:L68](../../GameModules/SparkGameMMOFPS/Source/UI/TFUiCommon.h#L68) |  |
 | `HexNibble` | function | GameModules | [TFCrypto.cpp:L192](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp#L192) |  |
 | `HexNibble` | function | SparkEngine | [PasswordHash.cpp:L250](../../SparkEngine/Source/Utils/PasswordHash.cpp#L250) |  |
-| `HexToken` | function | SparkEngine | [SecureRandom.cpp:L247](../../SparkEngine/Source/Utils/SecureRandom.cpp#L247) |  |
+| `HexToken` | function | SparkEngine | [SecureRandom.cpp:L245](../../SparkEngine/Source/Utils/SecureRandom.cpp#L245) |  |
 | `HexValue` | function | SparkCrashReporter | [CrashReporterApp.cpp:L167](../../SparkCrashReporter/src/CrashReporterApp.cpp#L167) |  |
 | `hfSettings` | function | SparkEngine | [PhysicsShapeFactory.cpp:L104](../../SparkEngine/Source/Physics/PhysicsShapeFactory.cpp#L104) |  |
 | `HICON` | alias | SparkEngine | [PlatformTypes.h:L119](../../SparkEngine/Source/Core/PlatformTypes.h#L119) |  |
@@ -18551,7 +18551,7 @@
 | `info` | struct | SparkEngine | [CrashHandler.cpp:L403](../../SparkEngine/Source/Utils/CrashHandler.cpp#L403) |  |
 | `info` | struct | SparkEngine | [CrashHandler.cpp:L490](../../SparkEngine/Source/Utils/CrashHandler.cpp#L490) |  |
 | `info` | struct | SparkEngine | [CrashHandlerSupport.h:L260](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L260) |  |
-| `info` | struct | SparkGateway | [GatewaySecurity.cpp:L312](../../SparkGateway/src/GatewaySecurity.cpp#L312) |  |
+| `info` | struct | SparkGateway | [GatewaySecurity.cpp:L310](../../SparkGateway/src/GatewaySecurity.cpp#L310) |  |
 | `Info` | function | SparkSDK | [ILogger.h:L59](../../SparkSDK/Include/Spark/ILogger.h#L59) | Log an informational message |
 | `information` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L375](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L375) |  |
 | `information` | struct | SparkEditor | [ProjectManager.cpp:L682](../../SparkEditor/Source/Core/ProjectManager.cpp#L682) |  |
@@ -20780,16 +20780,16 @@
 | `key` | function | Tests | [TestGatewayAreaControl.cpp:L295](../../Tests/TestGatewayAreaControl.cpp#L295) |  |
 | `key` | function | Tests | [TestGatewayAreaControl.cpp:L321](../../Tests/TestGatewayAreaControl.cpp#L321) |  |
 | `key` | function | Tests | [TestGatewaySecurity.cpp:L379](../../Tests/TestGatewaySecurity.cpp#L379) |  |
-| `key` | function | Tests | [TestGatewaySecurity.cpp:L516](../../Tests/TestGatewaySecurity.cpp#L516) |  |
-| `key` | function | Tests | [TestGatewaySecurity.cpp:L568](../../Tests/TestGatewaySecurity.cpp#L568) |  |
+| `key` | function | Tests | [TestGatewaySecurity.cpp:L515](../../Tests/TestGatewaySecurity.cpp#L515) |  |
+| `key` | function | Tests | [TestGatewaySecurity.cpp:L567](../../Tests/TestGatewaySecurity.cpp#L567) |  |
 | `key` | function | Tests | [TestTFOnboarding.cpp:L370](../../Tests/TestTFOnboarding.cpp#L370) |  |
 | `KeyFileAuthenticator` | class | SparkGateway | [GatewaySecurity.h:L33](../../SparkGateway/src/GatewaySecurity.h#L33) |  |
 | `KeyFileAuthenticator` | function | SparkGateway | [GatewaySecurity.h:L36](../../SparkGateway/src/GatewaySecurity.h#L36) |  |
 | `KeyFileAuthenticator` | function | SparkGateway | [GatewaySecurity.h:L38](../../SparkGateway/src/GatewaySecurity.h#L38) |  |
-| `KeyFileAuthenticator::Authenticate` | method | SparkGateway | [GatewaySecurity.cpp:L426](../../SparkGateway/src/GatewaySecurity.cpp#L426) |  |
-| `KeyFileAuthenticator::CanonicalPayload` | method | SparkGateway | [GatewaySecurity.cpp:L495](../../SparkGateway/src/GatewaySecurity.cpp#L495) |  |
-| `KeyFileAuthenticator::CreateCredential` | method | SparkGateway | [GatewaySecurity.cpp:L473](../../SparkGateway/src/GatewaySecurity.cpp#L473) |  |
-| `KeyFileAuthenticator::PruneReplays` | method | SparkGateway | [GatewaySecurity.cpp:L513](../../SparkGateway/src/GatewaySecurity.cpp#L513) |  |
+| `KeyFileAuthenticator::Authenticate` | method | SparkGateway | [GatewaySecurity.cpp:L424](../../SparkGateway/src/GatewaySecurity.cpp#L424) |  |
+| `KeyFileAuthenticator::CanonicalPayload` | method | SparkGateway | [GatewaySecurity.cpp:L493](../../SparkGateway/src/GatewaySecurity.cpp#L493) |  |
+| `KeyFileAuthenticator::CreateCredential` | method | SparkGateway | [GatewaySecurity.cpp:L471](../../SparkGateway/src/GatewaySecurity.cpp#L471) |  |
+| `KeyFileAuthenticator::PruneReplays` | method | SparkGateway | [GatewaySecurity.cpp:L511](../../SparkGateway/src/GatewaySecurity.cpp#L511) |  |
 | `KeyFor` | function | GameModules | [TFKeybinds.h:L68](../../GameModules/SparkGameMMOFPS/Source/UI/TFKeybinds.h#L68) |  |
 | `Keyframe` | struct | SparkEngine | [AssetPipeline.h:L117](../../SparkEngine/Source/Graphics/AssetPipeline.h#L117) | Animation data structure |
 | `KeyHash` | struct | SparkDaemon | [AssetService.h:L91](../../SparkDaemon/src/AssetService.h#L91) |  |
@@ -20804,7 +20804,7 @@
 | `keyStream` | function | SparkEngine | [NetworkEncryption.cpp:L162](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp#L162) |  |
 | `keyStream` | function | Tests | [TestNetworkEncryption.cpp:L97](../../Tests/TestNetworkEncryption.cpp#L97) |  |
 | `keyStream` | function | Tests | [TestNetworkEncryption.cpp:L123](../../Tests/TestNetworkEncryption.cpp#L123) |  |
-| `keyText` | function | SparkGateway | [GatewaySecurity.cpp:L375](../../SparkGateway/src/GatewaySecurity.cpp#L375) |  |
+| `keyText` | function | SparkGateway | [GatewaySecurity.cpp:L373](../../SparkGateway/src/GatewaySecurity.cpp#L373) |  |
 | `keyText` | function | SparkServer | [ServerApplication.cpp:L160](../../SparkServer/src/ServerApplication.cpp#L160) |  |
 | `KeywordGroup` | struct | SparkEngine | [ShaderVariantSystem.h:L69](../../SparkEngine/Source/Graphics/ShaderVariantSystem.h#L69) | A group of mutually-exclusive keywords (only one active at a time) |
 | `KeywordType` | enum | SparkEngine | [ShaderVariantSystem.h:L45](../../SparkEngine/Source/Graphics/ShaderVariantSystem.h#L45) | How a shader keyword affects compilation |
@@ -21620,7 +21620,7 @@
 | `LoadPresetsFromDirectory` | function | SparkEngine | [EntityPresetManager.h:L97](../../SparkEngine/Source/Engine/ECS/EntityPresetManager.h#L97) | Load custom presets from a JSON directory |
 | `LoadPriority` | enum | SparkEngine | [DirectStorageLoader.h:L33](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L33) | Load request priority |
 | `LoadPriority` | enum | Tests | [TestDirectStorageLoader.cpp:L13](../../Tests/TestDirectStorageLoader.cpp#L13) |  |
-| `LoadPrivateGatewayKey` | function | SparkGateway | [GatewaySecurity.cpp:L351](../../SparkGateway/src/GatewaySecurity.cpp#L351) |  |
+| `LoadPrivateGatewayKey` | function | SparkGateway | [GatewaySecurity.cpp:L349](../../SparkGateway/src/GatewaySecurity.cpp#L349) |  |
 | `LoadProgress` | function | GameModules | [PlatformerEngineSystems.h:L62](../../GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.h#L62) | Load platformer progress from the given slot. |
 | `LoadProjectFile` | function | SparkEditor | [ProjectManager.h:L185](../../SparkEditor/Source/Core/ProjectManager.h#L185) |  |
 | `LoadProjectScene` | function | SparkEditor | [ProjectManager.h:L131](../../SparkEditor/Source/Core/ProjectManager.h#L131) | Read and deserialize a contained scene from one verified file handle. |
@@ -22992,7 +22992,7 @@
 | `lock` | function | SparkGateway | [GatewayCoordinator.cpp:L271](../../SparkGateway/src/GatewayCoordinator.cpp#L271) |  |
 | `lock` | function | SparkGateway | [GatewayCoordinator.cpp:L280](../../SparkGateway/src/GatewayCoordinator.cpp#L280) |  |
 | `lock` | function | SparkGateway | [GatewayCoordinator.cpp:L292](../../SparkGateway/src/GatewayCoordinator.cpp#L292) |  |
-| `lock` | function | SparkGateway | [GatewaySecurity.cpp:L465](../../SparkGateway/src/GatewaySecurity.cpp#L465) |  |
+| `lock` | function | SparkGateway | [GatewaySecurity.cpp:L463](../../SparkGateway/src/GatewaySecurity.cpp#L463) |  |
 | `lock` | function | SparkInstaller | [WizardGui.cpp:L47](../../SparkInstaller/src/gui/WizardGui.cpp#L47) |  |
 | `lock` | function | SparkInstaller | [WizardGui.cpp:L201](../../SparkInstaller/src/gui/WizardGui.cpp#L201) |  |
 | `lock` | function | SparkServer | [ServerApplication.cpp:L721](../../SparkServer/src/ServerApplication.cpp#L721) |  |
@@ -30184,8 +30184,8 @@
 | `ReadUnsigned` | function | SparkEditor | [SceneComponentCodec.h:L66](../../SparkEditor/Source/SceneSystem/SceneComponentCodec.h#L66) |  |
 | `ReadUntilEof` | function | SparkEngine | [ProcessLinux.cpp:L128](../../SparkEngine/Source/Utils/ProcessLinux.cpp#L128) |  |
 | `ReadUntilEof` | function | SparkEngine | [ProcessWin32Internal.h:L113](../../SparkEngine/Source/Utils/ProcessWin32Internal.h#L113) |  |
-| `ReadValidatedPrivateFile` | function | SparkGateway | [GatewaySecurity.cpp:L229](../../SparkGateway/src/GatewaySecurity.cpp#L229) |  |
-| `ReadValidatedPrivateFile` | function | SparkGateway | [GatewaySecurity.cpp:L300](../../SparkGateway/src/GatewaySecurity.cpp#L300) |  |
+| `ReadValidatedPrivateFile` | function | SparkGateway | [GatewaySecurity.cpp:L227](../../SparkGateway/src/GatewaySecurity.cpp#L227) |  |
+| `ReadValidatedPrivateFile` | function | SparkGateway | [GatewaySecurity.cpp:L298](../../SparkGateway/src/GatewaySecurity.cpp#L298) |  |
 | `ReadVec16` | function | SparkEngine | [NetQuantize.cpp:L38](../../SparkEngine/Source/Engine/Networking/NetQuantize.cpp#L38) |  |
 | `ReadVec16` | function | SparkEngine | [NetQuantize.h:L41](../../SparkEngine/Source/Engine/Networking/NetQuantize.h#L41) | Read a 16-bit-per-component bounded position from @p buf (consumes 6 bytes). |
 | `ReadVector3` | function | SparkEngine | [NetworkManager.h:L211](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L211) |  |
@@ -43051,8 +43051,8 @@
 | `ToInt` | function | SparkEngine | [EnumUtils.h:L75](../../SparkEngine/Source/Enums/EnumUtils.h#L75) | Get the underlying integer value |
 | `ToInt` | function | SparkEngine | [EnumUtils.h:L141](../../SparkEngine/Source/Enums/EnumUtils.h#L141) |  |
 | `Token` | alias | SparkEngine | [NetworkSecurity.h:L51](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L51) |  |
-| `token` | function | SparkEngine | [SecureRandom.cpp:L256](../../SparkEngine/Source/Utils/SecureRandom.cpp#L256) |  |
-| `tokenBuffer` | function | SparkEngine | [SecureRandom.cpp:L304](../../SparkEngine/Source/Utils/SecureRandom.cpp#L304) |  |
+| `token` | function | SparkEngine | [SecureRandom.cpp:L254](../../SparkEngine/Source/Utils/SecureRandom.cpp#L254) |  |
+| `tokenBuffer` | function | SparkEngine | [SecureRandom.cpp:L302](../../SparkEngine/Source/Utils/SecureRandom.cpp#L302) |  |
 | `TokenEntry` | struct | SparkEngine | [NetworkSecurity.h:L179](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L179) | Enable or disable prototype XOR obfuscation in legacy callers. |
 | `Tokenize` | function | SparkConsole | [CommandParser.h:L36](../../SparkConsole/src/CommandParser.h#L36) | Split a command line into tokens, respecting quoted strings. |
 | `Tokenize` | function | SparkEditor | [EditorAutomation.h:L448](../../SparkEditor/Source/Panels/EditorAutomation.h#L448) |  |
@@ -45269,7 +45269,7 @@
 | `VERIFY_MSG` | macro | SparkEngine | [Assert.h:L327](../../SparkEngine/Source/Utils/Assert.h#L327) | VERIFY with a printf-style diagnostic message |
 | `VerifyBranchExecuted` | function | SparkEngine | [MemoryIntegrity.h:L192](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L192) |  |
 | `VerifyBranchExecuted` | function | SparkEngine | [MemoryIntegrity.h:L195](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L195) |  |
-| `VerifyGatewayMac` | function | SparkGateway | [GatewaySecurity.cpp:L397](../../SparkGateway/src/GatewaySecurity.cpp#L397) |  |
+| `VerifyGatewayMac` | function | SparkGateway | [GatewaySecurity.cpp:L395](../../SparkGateway/src/GatewaySecurity.cpp#L395) |  |
 | `VerifyPassword` | function | GameModules | [TFAccountSystem.h:L56](../../GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.h#L56) |  |
 | `VerifySha256` | function | SparkBuild | [DownloadSecurity.cpp:L184](../../SparkBuild/src/DownloadSecurity.cpp#L184) |  |
 | `version` | function | Tests | [TestConsoleVariables.cpp:L340](../../Tests/TestConsoleVariables.cpp#L340) |  |

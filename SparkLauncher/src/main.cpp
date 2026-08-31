@@ -18,7 +18,7 @@ namespace
 #error "SPARK_LAUNCHER_VERSION must be supplied by the build system"
 #endif
     constexpr const char* kVersion = "SparkLauncher " SPARK_LAUNCHER_VERSION;
-}
+} // namespace
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN

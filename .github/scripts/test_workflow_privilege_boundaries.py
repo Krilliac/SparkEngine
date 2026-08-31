@@ -10,7 +10,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT / "Tools"))
 
 from buildmatrix.workflow import parse_workflow_yaml  # noqa: E402
 
@@ -67,6 +67,14 @@ def _assert_full_sha_pins(test: unittest.TestCase, text: str) -> None:
 
 
 class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
+    def test_buildmatrix_import_uses_repository_directory_case(self) -> None:
+        expected_tools_root = str(ROOT / "Tools")
+        self.assertEqual(
+            sys.path[0],
+            expected_tools_root,
+            "buildmatrix import path must preserve the case-sensitive Tools directory name",
+        )
+
     def test_dependabot_version_updates_cannot_open_pull_requests(self) -> None:
         document = parse_workflow_yaml(DEPENDABOT.read_text(encoding="utf-8"))
         updates = document.get("updates")

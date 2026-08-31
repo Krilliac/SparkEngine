@@ -1347,8 +1347,8 @@ TEST(SaveMigration_OneEntityTransientCandidateAllocationFailsBeforeLiveStoragePr
             g_transientCandidateGhost = ghost;
             world.DestroyEntity(ghost);
         });
-    ComponentFactory::Get().Register(
-        "TransientOneTx", MakeProbeComponentOps<TransientCandidateProbe>(&CountTransientCandidatePrepare));
+    ComponentFactory::Get().Register("TransientOneTx",
+                                     MakeProbeComponentOps<TransientCandidateProbe>(&CountTransientCandidatePrepare));
     g_transientCandidatePrepareCalls = 0;
     g_transientCandidateGhost = entt::null;
 
@@ -1433,8 +1433,8 @@ TEST(SaveMigration_TwoEntityTransientCandidateAllocationFailsBeforeLiveStoragePr
             g_transientCandidateGhost = ghost;
             world.DestroyEntity(ghost);
         });
-    ComponentFactory::Get().Register(
-        "TransientTwoTx", MakeProbeComponentOps<TransientCandidateProbe>(&CountTransientCandidatePrepare));
+    ComponentFactory::Get().Register("TransientTwoTx",
+                                     MakeProbeComponentOps<TransientCandidateProbe>(&CountTransientCandidatePrepare));
     g_transientCandidatePrepareCalls = 0;
     g_transientCandidateGhost = entt::null;
 
