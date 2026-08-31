@@ -16,9 +16,6 @@ name: Codacy Security Scan
 on:
   push:
     branches: [ "Working" ]
-  pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ "Working" ]
   schedule:
     - cron: '41 5 * * 3'
 
@@ -30,7 +27,10 @@ jobs:
     permissions:
       contents: read # for actions/checkout to fetch code
     name: Codacy Security Scan
-    runs-on: ubuntu-latest
+    # The CLI delegates to nested analyzer containers through the host Docker
+    # socket, so this job must execute only trusted Working/scheduled source.
+    # Pull requests retain the isolated CodeQL and build-analysis lanes.
+    runs-on: ubuntu-24.04
     # The C++ corpus is large enough that cppcheck can exceed the classic CLI's
     # 15-minute per-tool default. Leave headroom for SARIF generation/upload.
     timeout-minutes: 90
@@ -41,7 +41,7 @@ jobs:
         with:
           # The scanner receives no repository credential. This also prevents
           # a transitive analyzer process from recovering checkout's token.
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Validate Codacy SARIF tooling and workflow boundaries
@@ -57,7 +57,7 @@ jobs:
           # runtime. Execute the immutable image directly and do not expose a
           # Codacy project token to the scanner or its nested tool container.
           CODACY_ANALYSIS_CLI_IMAGE: codacy/codacy-analysis-cli@sha256:339e0103e28804f9d76aff34503e505440e5d5b42f5dd70dae73b592ea87826a
-          CODACY_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CODACY_COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           if test "$(git rev-parse HEAD)" != "$CODACY_COMMIT_SHA"; then

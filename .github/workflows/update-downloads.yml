@@ -6,7 +6,6 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
   contents: write
 
 concurrency:
@@ -17,16 +16,70 @@ jobs:
   update-badges:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
+    - name: Checkout trusted workflow source
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         ref: Working
+        persist-credentials: false
+
+    - name: Resolve exact trusted source
+      id: source
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        LOCAL_SOURCE="$(git rev-parse HEAD)"
+        REMOTE_SOURCE="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin refs/heads/Working | awk 'NR == 1 { print $1 }')"
+        if test -z "$REMOTE_SOURCE" || test "$LOCAL_SOURCE" != "$REMOTE_SOURCE"; then
+          echo "Trusted workflow checkout is not the current Working head." >&2
+          exit 1
+        fi
+        echo "commit=$LOCAL_SOURCE" >> "$GITHUB_OUTPUT"
+
+    - name: Checkout badge-state seed
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: Working
+        path: badge-repository
+        persist-credentials: false
+
+    - name: Load durable download-counter state tag
+      id: badge-state
+      working-directory: badge-repository
+      env:
+        GH_TOKEN: ${{ github.token }}
+        STATE_REF: refs/tags/generated-release-counters
+      run: |
+        set -euo pipefail
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test -n "$REMOTE_OBJECT"; then
+          git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+            fetch --force --no-tags origin "+${STATE_REF}:${STATE_REF}"
+          git checkout --detach "$STATE_REF"
+          if test "$(git rev-parse HEAD)" != "$(git rev-parse "${STATE_REF}^{commit}")"; then
+            echo "Generated counter state tag did not resolve to its fetched commit." >&2
+            exit 1
+          fi
+        else
+          git checkout --detach "$(git rev-parse HEAD)"
+        fi
+        echo "remote_object=$REMOTE_OBJECT" >> "$GITHUB_OUTPUT"
+        echo "state_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
     - name: Refresh download count badges
       id: badge-commit
+      working-directory: badge-repository
       env:
         GH_TOKEN: ${{ github.token }}
         REPO: ${{ github.repository }}
+        STATE_REF: refs/tags/generated-release-counters
+        EXPECTED_REMOTE_OBJECT: ${{ steps.badge-state.outputs.remote_object }}
+        EXPECTED_STATE_COMMIT: ${{ steps.badge-state.outputs.state_commit }}
+        TRUSTED_SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
       run: |
         set -euo pipefail
         echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -132,10 +185,10 @@ jobs:
         # Reconcile the durable per-asset ledger before computing channel
         # badges. This keeps lifetime and installer totals current between
         # releases and fails closed while an interrupted publication is pending.
-        python3 .github/scripts/prepare-download-badges.py refresh \
+        python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" refresh \
           --repository "$REPO" \
-          --data-file .github/badges/downloads-data.json \
-          --badge-directory .github/badges
+          --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json" \
+          --badge-directory "$GITHUB_WORKSPACE/badge-repository/.github/badges"
 
         # Fetch the total count for a release endpoint. Only a verified 404
         # means the release does not exist and may legitimately publish zero.
@@ -155,6 +208,29 @@ jobs:
             echo "$label release is absent (HTTP 404); using a genuine zero." >&2
             printf -v "$output_variable" '0'
             return 0
+          fi
+
+          if test "$label" = "nightly"; then
+            if ! jq -e '
+                type == "object" and
+                .tag_name == "nightly" and
+                .draft == false and
+                .prerelease == true
+              ' "$body" >/dev/null; then
+              echo "GitHub API returned a non-published or non-prerelease nightly payload; preserving existing badges." >&2
+              return 1
+            fi
+          elif test "$label" = "stable"; then
+            if ! jq -e '
+                type == "object" and
+                .draft == false and
+                .prerelease == false and
+                (.tag_name | type) == "string" and
+                (.tag_name | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))
+              ' "$body" >/dev/null; then
+              echo "GitHub API latest release is not a published stable vMAJOR.MINOR.PATCH release; preserving existing badges." >&2
+              return 1
+            fi
           fi
 
           if ! count="$(jq -er '
@@ -220,14 +296,24 @@ jobs:
         mv "$NIGHTLY_CANDIDATE" "$NIGHTLY_BADGE"
         mv "$STABLE_CANDIDATE" "$STABLE_BADGE"
 
-        # Only the run that still owns the exact Working head may advance it.
-        REMOTE_HEAD="$(git ls-remote --heads origin refs/heads/Working | awk '{print $1}')"
-        if test -z "$REMOTE_HEAD" || test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
-          echo "Working advanced while badge data was generated; the newer run owns the update."
-          exit 0
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        if test "$(git rev-parse HEAD)" != "$EXPECTED_STATE_COMMIT"; then
+          echo "Badge checkout no longer points to the loaded counter-state commit." >&2
+          exit 1
+        fi
+        REMOTE_SOURCE="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin refs/heads/Working | awk 'NR == 1 { print $1 }')"
+        if test "$REMOTE_SOURCE" != "$TRUSTED_SOURCE_COMMIT"; then
+          echo "Working advanced while badge data was generated; refusing to publish stale state." >&2
+          exit 1
+        fi
+        REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$REMOTE_OBJECT" != "$EXPECTED_REMOTE_OBJECT"; then
+          echo "Generated counter state advanced while badge data was generated; refusing stale state." >&2
+          exit 1
         fi
 
-        # Commit if changed.
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git add -- \
@@ -237,28 +323,15 @@ jobs:
           .github/badges/nightly-downloads.json \
           .github/badges/stable-downloads.json
         git diff --cached --quiet && echo "No changes" && exit 0
-        git commit -m "chore: refresh download badges (nightly: $NIGHTLY_DL, stable: $STABLE_DL) [skip ci]"
-        git push origin "HEAD:refs/heads/Working"
-        echo "changed=true" >> "$GITHUB_OUTPUT"
-
-    # GITHUB_TOKEN pushes do not trigger ordinary push workflows. Dispatching
-    # Build explicitly ensures every generated Working head receives the same
-    # proof and exact-head site publication as a human-authored commit.
-    - name: Dispatch exact-head build after badge commit
-      if: steps.badge-commit.outputs.changed == 'true'
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        set -euo pipefail
-        REMOTE_HEAD="$(git ls-remote --heads origin refs/heads/Working | awk '{print $1}')"
-        if test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
-          echo "Working advanced after this badge push; the newer head owns the build."
-          exit 0
+        git commit -s -m "chore: refresh download badges (nightly: $NIGHTLY_DL, stable: $STABLE_DL) [skip ci]"
+        FINAL_COMMIT="$(git rev-parse HEAD)"
+        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+          --force-with-lease="${STATE_REF}:${EXPECTED_REMOTE_OBJECT}" origin \
+          "HEAD:${STATE_REF}"
+        PUBLISHED_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$PUBLISHED_OBJECT" != "$FINAL_COMMIT"; then
+          echo "Generated counter state tag does not point to the refreshed badge commit." >&2
+          exit 1
         fi
-        for attempt in 1 2 3 4 5; do
-          if gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref Working; then
-            exit 0
-          fi
-          test "$attempt" -lt 5 || exit 1
-          sleep "$((attempt * 2))"
-        done
+        echo "changed=true" >> "$GITHUB_OUTPUT"

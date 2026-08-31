@@ -9,21 +9,21 @@ name: "CI-120 Trusted Verifier"
 on:
   workflow_run:
     workflows: ["Build SparkEngine"]
-    types: [completed]
+    types: [in_progress, completed]
 
 jobs:
-  verify:
-    name: "Verify and attest CI-120 evidence"
+  invalidate-running:
+    name: "Invalidate prior CI-120 status for a running source attempt"
+    if: github.event.action == 'in_progress'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     concurrency:
-      group: ci120-trusted-verifier-${{ github.event.workflow_run.head_sha }}
-      cancel-in-progress: true
+      group: ci120-trusted-source-${{ github.event.workflow_run.head_sha }}
+      cancel-in-progress: false
     permissions:
       actions: read
-      attestations: write
       contents: read
-      id-token: write
+      statuses: write
     steps:
     - name: Checkout trusted default-branch verifier
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,6 +40,7 @@ jobs:
       run: echo "sha=$(git -C trusted-verifier rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
     - name: Attest exact default-branch verifier before execution
+      id: trusted-attestation
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
         TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
@@ -62,8 +63,89 @@ jobs:
             throw new Error('Verifier checkout, executing workflow, and current Working default branch are not exact.');
           }
 
+    - name: Mark exact source CI-120 status pending
+      if: steps.trusted-attestation.outcome == 'success'
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        CI120_STATUS_MODE: pending
+        TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
+        TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
+        TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      with:
+        script: |
+          const status = require('./trusted-verifier/.github/scripts/ci120-commit-status.js');
+          await status({ github, context, core });
+
+  verify:
+    name: "Verify and attest CI-120 evidence"
+    if: github.event.action == 'completed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: ci120-trusted-source-${{ github.event.workflow_run.head_sha }}
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      attestations: write
+      contents: read
+      id-token: write
+      statuses: write
+    steps:
+    - name: Checkout trusted default-branch verifier
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ${{ github.repository }}
+        ref: ${{ github.event.repository.default_branch }}
+        path: trusted-verifier
+        persist-credentials: false
+        fetch-depth: 1
+
+    - name: Resolve trusted verifier commit
+      id: trusted-checkout
+      shell: bash
+      run: echo "sha=$(git -C trusted-verifier rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+    - name: Attest exact default-branch verifier before execution
+      id: trusted-attestation
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
+        TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
+        TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      with:
+        script: |
+          const sha = /^[0-9a-f]{40}$/i;
+          const repository = (await github.rest.repos.get(context.repo)).data;
+          const checkoutSha = process.env.TRUSTED_CHECKOUT_SHA;
+          const workflowSha = process.env.TRUSTED_WORKFLOW_SHA;
+          const expectedRef = `${repository.full_name}/.github/workflows/ci120-report.yml@refs/heads/${repository.default_branch}`;
+          const defaultCommit = (await github.rest.repos.getCommit({
+            ...context.repo, ref: repository.default_branch
+          })).data;
+          if (repository.default_branch !== 'Working' || !sha.test(checkoutSha || '') ||
+              !sha.test(workflowSha || '') || checkoutSha.toLowerCase() !== workflowSha.toLowerCase() ||
+              checkoutSha.toLowerCase() !== String(defaultCommit.sha || '').toLowerCase() ||
+              process.env.TRUSTED_WORKFLOW_REF !== expectedRef) {
+            throw new Error('Verifier checkout, executing workflow, and current Working default branch are not exact.');
+          }
+
+    - name: Mark exact source CI-120 status pending
+      id: pending-status
+      if: steps.trusted-attestation.outcome == 'success'
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        CI120_STATUS_MODE: pending
+        TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
+        TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
+        TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      with:
+        script: |
+          const status = require('./trusted-verifier/.github/scripts/ci120-commit-status.js');
+          await status({ github, context, core });
+
     - name: Test trusted CI-120 verifier
       id: verifier-tests
+      if: steps.trusted-attestation.outcome == 'success' && steps.pending-status.outcome == 'success'
       shell: bash
       working-directory: trusted-verifier
       run: |
@@ -84,6 +166,7 @@ jobs:
       with:
         script: |
           const fs = require('fs');
+          const status = require('./trusted-verifier/.github/scripts/ci120-commit-status.js');
           const shaPattern = /^[0-9a-f]{40}$/i;
           const digestPattern = /^sha256:[0-9a-f]{64}$/i;
           const sourceName = 'Build SparkEngine';
@@ -117,12 +200,29 @@ jobs:
           if (repository.id !== eventRepository.id ||
               repository.full_name !== `${context.repo.owner}/${context.repo.repo}` ||
               repository.default_branch !== 'Working' || checkoutSha !== workflowSha ||
-              checkoutSha !== sourceSha || checkoutSha !== String(defaultCommit.sha || '').toLowerCase()) {
-            throw new Error('Source run, verifier workflow, checkout, repository, and default branch are not exact.');
+              checkoutSha !== String(defaultCommit.sha || '').toLowerCase()) {
+            throw new Error('Verifier workflow, checkout, repository, and current default branch are not exact.');
           }
           const expectedVerifierRef = `${repository.full_name}/.github/workflows/ci120-report.yml@refs/heads/Working`;
           if (process.env.TRUSTED_WORKFLOW_REF !== expectedVerifierRef) {
             throw new Error('Executing verifier workflow ref is not the protected Working workflow.');
+          }
+          const [sourceWorkflowResponse, trustedWorkflowResponse] = await Promise.all([
+            github.rest.repos.getContent({
+              ...context.repo, path: sourcePath, ref: sourceSha
+            }),
+            github.rest.repos.getContent({
+              ...context.repo, path: sourcePath, ref: checkoutSha
+            })
+          ]);
+          const sourceWorkflow = sourceWorkflowResponse.data;
+          const trustedWorkflow = trustedWorkflowResponse.data;
+          if (!sourceWorkflow || !trustedWorkflow || Array.isArray(sourceWorkflow) ||
+              Array.isArray(trustedWorkflow) || sourceWorkflow.type !== 'file' ||
+              trustedWorkflow.type !== 'file' || !shaPattern.test(sourceWorkflow.sha || '') ||
+              !shaPattern.test(trustedWorkflow.sha || '') ||
+              sourceWorkflow.sha.toLowerCase() !== trustedWorkflow.sha.toLowerCase()) {
+            throw new Error('Source Build workflow is not byte-identical to the current trusted workflow.');
           }
 
           const run = (await github.rest.actions.getWorkflowRun({
@@ -130,7 +230,7 @@ jobs:
           })).data;
           if (run.id !== eventRun.id || run.run_attempt !== eventRun.run_attempt ||
               run.workflow_id !== eventRun.workflow_id || run.name !== sourceName ||
-              normalizePath(run.path) !== sourcePath || run.event !== 'push' ||
+              normalizePath(run.path) !== sourcePath || !['push', 'workflow_dispatch'].includes(run.event) ||
               run.status !== 'completed' || run.conclusion !== 'failure' ||
               run.head_branch !== 'Working' || String(run.head_sha || '').toLowerCase() !== sourceSha ||
               run.repository?.id !== repository.id || run.repository?.full_name !== repository.full_name ||
@@ -138,78 +238,12 @@ jobs:
             throw new Error('Actions API source run is not the exact staged fail-closed default-branch build.');
           }
 
-          const jobsResponse = await github.rest.actions.listJobsForWorkflowRunAttempt({
-            ...context.repo,
-            run_id: run.id,
-            attempt_number: run.run_attempt,
-            per_page: 100,
-            page: 1
+          const authorization = await status.authorizeSourceJobArtifact({
+            github, context, run, repository, sourceSha
           });
-          const jobs = jobsResponse.data?.jobs;
-          if (!Array.isArray(jobs) || jobsResponse.data.total_count > 100) {
-            throw new Error('Source job inventory is malformed or exceeds the bound.');
-          }
-          const sourceJobs = jobs.filter(job => job?.name === sourceJobName);
-          if (sourceJobs.length !== 1) {
-            throw new Error('Expected exactly one CI-120 source job.');
-          }
-          const sourceJob = sourceJobs[0];
-          if (!Number.isInteger(sourceJob.id) || sourceJob.id < 1 || sourceJob.status !== 'completed' ||
-              sourceJob.conclusion !== 'failure' || !Array.isArray(sourceJob.steps)) {
-            throw new Error('CI-120 source job is not the exact completed fail-closed job.');
-          }
-          const requiredSuccessfulSteps = [
-            'Checkout repository',
-            'Setup MSVC',
-            'Configure and build canonical Windows Shipping lane (CI-120)',
-            'Capture Windows Shipping structural provenance (CI-120)',
-            'Install exact Windows Shipping SDK for the consumer profile (CI-120)',
-            'Configure and build canonical Windows validation lane (CI-120)',
-            'Capture Windows validation structural provenance (CI-120)',
-            'Configure and build installed SDK consumer lane (CI-120)',
-            'Capture installed SDK consumer structural provenance (CI-120)',
-            'Generate configured build-matrix inventory from the structural producer (CI-120)',
-            'Compare reviewed configured-evidence findings (CI-120)',
-            'Upload untrusted CI-120 structural evidence'
-          ];
-          const named = name => sourceJob.steps.filter(step => step?.name === name);
-          for (const name of requiredSuccessfulSteps) {
-            const matches = named(name);
-            if (matches.length !== 1 || matches[0].status !== 'completed' || matches[0].conclusion !== 'success') {
-              throw new Error(`Required CI-120 source step did not succeed exactly once: ${name}`);
-            }
-          }
-          const finalSteps = named(finalStepName);
-          if (finalSteps.length !== 1 || finalSteps[0].status !== 'completed' ||
-              finalSteps[0].conclusion !== 'failure') {
-            throw new Error('CI-120 did not fail only at its documented external-authority enforcement step.');
-          }
-          const unexpectedFailures = sourceJob.steps.filter(
-            step => step?.conclusion === 'failure' && step?.name !== finalStepName
-          );
-          if (unexpectedFailures.length) {
-            throw new Error('CI-120 source job has an unexpected failed step.');
-          }
-
-          const artifactsResponse = await github.rest.actions.listWorkflowRunArtifacts({
-            ...context.repo, run_id: run.id, per_page: 100, page: 1
-          });
-          const artifacts = artifactsResponse.data?.artifacts;
-          if (!Array.isArray(artifacts) || artifactsResponse.data.total_count > 100) {
-            throw new Error('Source artifact inventory is malformed or exceeds the bound.');
-          }
-          const expectedArtifactName = `ci120-untrusted-stable-v1-${sourceSha}-${run.run_attempt}`;
-          const candidates = artifacts.filter(artifact => artifact?.name === expectedArtifactName);
-          if (candidates.length !== 1) {
-            throw new Error('Expected exactly one exact-attempt CI-120 source artifact.');
-          }
-          const artifact = candidates[0];
-          if (!Number.isInteger(artifact.id) || artifact.id < 1 || artifact.expired !== false ||
-              !Number.isInteger(artifact.size_in_bytes) || artifact.size_in_bytes < 1 ||
-              artifact.size_in_bytes > 4 * 1024 * 1024 * 1024 ||
-              !digestPattern.test(artifact.digest || '')) {
-            throw new Error('CI-120 artifact identity, retention, size, or API digest is invalid.');
-          }
+          const sourceJob = authorization.sourceJob;
+          const finalStep = authorization.finalStep;
+          const artifact = authorization.artifact;
 
           const metadata = {
             schemaVersion: 1,
@@ -233,7 +267,7 @@ jobs:
               jobName: sourceJob.name,
               jobConclusion: sourceJob.conclusion,
               finalStepName,
-              finalStepConclusion: finalSteps[0].conclusion
+              finalStepConclusion: finalStep.conclusion
             },
             artifact: {
               id: artifact.id,
@@ -245,7 +279,9 @@ jobs:
               repository: repository.full_name,
               checkoutSha,
               workflowSha,
-              workflowRef: process.env.TRUSTED_WORKFLOW_REF
+              workflowRef: process.env.TRUSTED_WORKFLOW_REF,
+              sourceWorkflowBlobSha: sourceWorkflow.sha.toLowerCase(),
+              trustedWorkflowBlobSha: trustedWorkflow.sha.toLowerCase()
             }
           };
           fs.writeFileSync(process.env.SOURCE_METADATA_PATH, JSON.stringify(metadata, null, 2) + '\n', {
@@ -289,14 +325,38 @@ jobs:
         subject-path: ${{ runner.temp }}/ci120-trusted-receipt.json
 
     - name: Upload trusted CI-120 receipt
+      id: upload-receipt
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: ci120-trusted-receipt-${{ github.event.workflow_run.head_sha }}-${{ github.event.workflow_run.run_attempt }}
+        name: ci120-trusted-receipt-${{ github.event.workflow_run.head_sha }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}-${{ github.run_attempt }}
         path: |
           ${{ runner.temp }}/ci120-trusted-receipt.json
           ${{ runner.temp }}/ci120-source-metadata.json
         retention-days: 30
         if-no-files-found: error
+
+    - name: Publish exact source CI-120 status
+      id: final-status
+      if: always() && steps.trusted-attestation.outcome == 'success' && steps.pending-status.outcome == 'success' && steps.verifier-tests.outcome == 'success'
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        CI120_STATUS_MODE: final
+        TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
+        TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
+        TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        VERIFIER_TEST_OUTCOME: ${{ steps.verifier-tests.outcome }}
+        PREFLIGHT_OUTCOME: ${{ steps.preflight.outcome }}
+        DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+        VERIFY_EVIDENCE_OUTCOME: ${{ steps.verify-evidence.outcome }}
+        ATTEST_RECEIPT_OUTCOME: ${{ steps.attest-receipt.outcome }}
+        UPLOAD_RECEIPT_OUTCOME: ${{ steps.upload-receipt.outcome }}
+        SOURCE_METADATA_PATH: ${{ runner.temp }}/ci120-source-metadata.json
+        RECEIPT_PATH: ${{ runner.temp }}/ci120-trusted-receipt.json
+        STATUS_RECORD_PATH: ${{ runner.temp }}/ci120-trusted-status.json
+      with:
+        script: |
+          const status = require('./trusted-verifier/.github/scripts/ci120-commit-status.js');
+          await status({ github, context, core });
 
     - name: Upload verifier rejection diagnostics
       if: failure()
@@ -306,5 +366,6 @@ jobs:
         path: |
           ${{ runner.temp }}/ci120-trusted-receipt.json
           ${{ runner.temp }}/ci120-source-metadata.json
+          ${{ runner.temp }}/ci120-trusted-status.json
         retention-days: 7
         if-no-files-found: warn

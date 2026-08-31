@@ -9,6 +9,8 @@ const SOURCE_WORKFLOW_NAME = 'Codacy Security Scan';
 const SOURCE_WORKFLOW_PATH = '.github/workflows/codacy.yml';
 const REPORTER_WORKFLOW_PATH = '.github/workflows/codacy-report.yml';
 const ARTIFACT_NAME = 'results.sarif';
+const SOURCE_JOB_NAME = 'Codacy Security Scan';
+const ARTIFACT_UPLOAD_STEP = 'Publish normalized SARIF artifact';
 const TRUSTED_PATHS = Object.freeze([
     REPORTER_WORKFLOW_PATH,
     '.github/scripts/authorize-codacy-sarif.js',
@@ -21,10 +23,20 @@ const SHA_PATTERN = /^[0-9a-f]{40}$/i;
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/i;
 const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
 const MAX_LIST_ITEMS = 100;
+const MAX_LIST_PAGES = MAX_LIST_ITEMS;
 
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const normalizeSha = value => SHA_PATTERN.test(value || '') ? value.toLowerCase() : null;
 const workflowPath = value => typeof value === 'string' ? value.split('@')[0] : '';
+
+function timestamp(value, label) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value)) {
+        throw new Error(`${label} is not an exact UTC timestamp.`);
+    }
+    const parsed = Date.parse(value);
+    if (!Number.isFinite(parsed)) throw new Error(`${label} is not an exact UTC timestamp.`);
+    return parsed;
+}
 
 function readEvent() {
     const eventPath = process.env.WORKFLOW_RUN_EVENT_PATH || process.env.GITHUB_EVENT_PATH;
@@ -45,14 +57,64 @@ function splitRepository(value) {
     return pieces.length === 2 && pieces.every(Boolean) ? pieces : null;
 }
 
-async function listOneBounded(method, request, field, label) {
+function responseItems(response, field, normalized = false) {
+    const items = normalized && Array.isArray(response?.data)
+        ? response.data : field ? response?.data?.[field] : response?.data;
+    if (!Array.isArray(items)) throw new Error(`${field || 'root'} ${field ? 'field' : 'response'} is not an array.`);
+    return items;
+}
+
+async function listBounded(github, method, request, field, label) {
+    const items = [];
+    const requireExactTotal = Boolean(field);
+    let exactTotal = null;
+    const observeTotal = response => {
+        if (!requireExactTotal) return;
+        const total = response?.data?.total_count;
+        if (!Number.isSafeInteger(total) || total < 0 || total > MAX_LIST_ITEMS) {
+            throw new Error(`${label} total_count is invalid or exceeds ${MAX_LIST_ITEMS} items.`);
+        }
+        if (exactTotal === null) exactTotal = total;
+        else if (exactTotal !== total) throw new Error(`${label} total_count changed between pages.`);
+    };
+    const finish = () => {
+        if (requireExactTotal && exactTotal !== items.length) {
+            throw new Error(`${label} total_count does not match the returned inventory.`);
+        }
+        return items;
+    };
+
+    if (typeof github.paginate?.iterator === 'function') {
+        let pageCount = 0;
+        for await (const response of github.paginate.iterator(
+            method, { ...request, per_page: MAX_LIST_ITEMS }
+        )) {
+            pageCount += 1;
+            if (pageCount > MAX_LIST_PAGES) {
+                throw new Error(`${label} pagination did not terminate within its bound.`);
+            }
+            const page = responseItems(response, field, true);
+            observeTotal(response);
+            if (page.length === 0 && (pageCount > 1 || requireExactTotal && items.length < exactTotal)) {
+                throw new Error(`${label} pagination made no progress before completion.`);
+            }
+            if (items.length + page.length > MAX_LIST_ITEMS ||
+                requireExactTotal && items.length + page.length > exactTotal) {
+                throw new Error(`${label} exceeds its declared or ${MAX_LIST_ITEMS}-item authorization limit.`);
+            }
+            items.push(...page);
+        }
+        return finish();
+    }
+
     const response = await method({ ...request, per_page: MAX_LIST_ITEMS, page: 1 });
-    const items = field ? response?.data?.[field] : response?.data;
-    if (!Array.isArray(items)) throw new Error(`${label} response is not an array.`);
+    const page = responseItems(response, field);
+    observeTotal(response);
+    items.push(...page);
     if (items.length > MAX_LIST_ITEMS || String(response?.headers?.link || '').includes('rel="next"')) {
         throw new Error(`${label} exceeds the ${MAX_LIST_ITEMS}-item authorization limit.`);
     }
-    return items;
+    return finish();
 }
 
 async function attestFile(github, owner, repo, path, trustedSha, defaultBranch, errors) {
@@ -118,7 +180,7 @@ async function resolvePull(github, owner, repo, repository, eventRun, run, error
         return null;
     }
     try {
-        const candidates = await listOneBounded(github.rest.pulls.list, {
+        const candidates = await listBounded(github, github.rest.pulls.list, {
             owner, repo, state: 'open', head: `${source[0]}:${run.head_branch}`
         }, null, 'pull-request candidate list');
         const exact = candidates.filter(pull => pullMatches(pull, repository, run));
@@ -131,12 +193,56 @@ async function resolvePull(github, owner, repo, repository, eventRun, run, error
     return null;
 }
 
+async function attestLatestSourceRun(github, owner, repo, repository, run) {
+    const runs = await listBounded(github, github.rest.actions.listWorkflowRuns, {
+        owner, repo, workflow_id: run.workflow_id, head_sha: run.head_sha
+    }, 'workflow_runs', 'same-head workflow-run list');
+    const runIds = new Set();
+    const executions = new Set();
+    for (const candidate of runs) {
+        if (!isObject(candidate) || !Number.isInteger(candidate.id) || candidate.id < 1 ||
+            !Number.isInteger(candidate.run_number) || candidate.run_number < 1 ||
+            !Number.isInteger(candidate.run_attempt) || candidate.run_attempt < 1 ||
+            candidate.workflow_id !== run.workflow_id || candidate.name !== SOURCE_WORKFLOW_NAME ||
+            workflowPath(candidate.path) !== SOURCE_WORKFLOW_PATH ||
+            !['pull_request', 'push', 'schedule'].includes(candidate.event) ||
+            normalizeSha(candidate.head_sha) !== normalizeSha(run.head_sha) ||
+            !repositoryMatches(candidate.repository, owner, repo, repository?.id)) {
+            throw new Error('same-head workflow-run inventory contains a malformed or mismatched run.');
+        }
+        const execution = `${candidate.run_number}:${candidate.run_attempt}`;
+        if (runIds.has(candidate.id) || executions.has(execution)) {
+            throw new Error('same-head workflow-run inventory contains a duplicate run identity.');
+        }
+        runIds.add(candidate.id);
+        executions.add(execution);
+    }
+    const current = runs.filter(candidate => exactRunMatches(candidate, run));
+    if (current.length !== 1) {
+        throw new Error('Exact source workflow run is absent or duplicated in the same-head run inventory.');
+    }
+    if (runs.some(candidate => candidate.workflow_id === run.workflow_id &&
+        normalizeSha(candidate.head_sha) === normalizeSha(run.head_sha) &&
+        (candidate.run_number > run.run_number ||
+            (candidate.run_number === run.run_number && candidate.run_attempt > run.run_attempt)))) {
+        throw new Error('A newer source workflow run or attempt exists for this exact head.');
+    }
+    return runs;
+}
+
 function artifactManifest(artifact) {
     return {
         id: artifact?.id ?? null,
+        nodeId: artifact?.node_id ?? null,
         name: artifact?.name ?? null,
         size: artifact?.size_in_bytes ?? null,
         digest: artifact?.digest ?? null,
+        expired: artifact?.expired ?? null,
+        createdAt: artifact?.created_at ?? null,
+        updatedAt: artifact?.updated_at ?? null,
+        expiresAt: artifact?.expires_at ?? null,
+        url: artifact?.url ?? null,
+        archiveDownloadUrl: artifact?.archive_download_url ?? null,
         workflowRun: isObject(artifact?.workflow_run) ? {
             id: artifact.workflow_run.id ?? null,
             repositoryId: artifact.workflow_run.repository_id ?? null,
@@ -157,6 +263,7 @@ async function inspect(args) {
     let run = null;
     let pull = null;
     let artifact = null;
+    let sourceJob = null;
     let uploadRef = '';
     let uploadSha = '';
 
@@ -261,19 +368,7 @@ async function inspect(args) {
 
     if (run) {
         try {
-            const runs = await listOneBounded(github.rest.actions.listWorkflowRuns, {
-                owner, repo, workflow_id: run.workflow_id, event: run.event, head_sha: run.head_sha
-            }, 'workflow_runs', 'same-head workflow-run list');
-            const current = runs.find(candidate => candidate.id === run.id &&
-                candidate.workflow_id === run.workflow_id && candidate.run_number === run.run_number &&
-                candidate.run_attempt === run.run_attempt && normalizeSha(candidate.head_sha) === normalizeSha(run.head_sha));
-            if (!current) errors.push('Exact source workflow run is absent from the same-head run inventory.');
-            if (runs.some(candidate => candidate.workflow_id === run.workflow_id &&
-                normalizeSha(candidate.head_sha) === normalizeSha(run.head_sha) &&
-                (candidate.run_number > run.run_number ||
-                    (candidate.run_number === run.run_number && candidate.run_attempt > run.run_attempt)))) {
-                errors.push('A newer source workflow run or attempt exists for this exact head.');
-            }
+            await attestLatestSourceRun(github, owner, repo, repository, run);
         } catch (error) {
             errors.push(`Could not attest latest source workflow run: ${error.message}`);
         }
@@ -299,17 +394,68 @@ async function inspect(args) {
 
     if (run && repository) {
         try {
-            const artifacts = await listOneBounded(github.rest.actions.listWorkflowRunArtifacts, {
+            const jobs = await listBounded(github, github.rest.actions.listJobsForWorkflowRunAttempt, {
+                owner, repo, run_id: run.id, attempt_number: run.run_attempt
+            }, 'jobs', 'exact source-attempt job inventory');
+            const jobIds = new Set();
+            for (const job of jobs) {
+                if (!isObject(job) || !Number.isInteger(job.id) || job.id < 1 || jobIds.has(job.id) ||
+                    typeof job.name !== 'string' || !job.name || job.run_id !== run.id ||
+                    job.run_attempt !== run.run_attempt || normalizeSha(job.head_sha) !== normalizeSha(run.head_sha) ||
+                    job.workflow_name !== SOURCE_WORKFLOW_NAME || job.head_branch !== run.head_branch ||
+                    job.run_url !== `https://api.github.com/repos/${repository.full_name}/actions/runs/${run.id}`) {
+                    throw new Error('exact source-attempt job inventory contains a malformed, duplicate, or mismatched job.');
+                }
+                jobIds.add(job.id);
+            }
+            const matches = jobs.filter(job => job.name === SOURCE_JOB_NAME);
+            if (matches.length !== 1 || matches[0].status !== 'completed' || matches[0].conclusion !== 'success') {
+                throw new Error(`Expected exactly one successful '${SOURCE_JOB_NAME}' source job.`);
+            }
+            sourceJob = matches[0];
+            const runStarted = timestamp(run.run_started_at, 'source run_started_at');
+            const runUpdated = timestamp(run.updated_at, 'source updated_at');
+            const jobStarted = timestamp(sourceJob.started_at, 'source job started_at');
+            const jobCompleted = timestamp(sourceJob.completed_at, 'source job completed_at');
+            if (!(runStarted <= jobStarted && jobStarted <= jobCompleted && jobCompleted <= runUpdated)) {
+                throw new Error('Source job is outside the exact source-run execution window.');
+            }
+            if (!Array.isArray(sourceJob.steps) || sourceJob.steps.some(step => !isObject(step))) {
+                throw new Error('Source job step inventory is malformed.');
+            }
+            const uploadSteps = sourceJob.steps.filter(step => step.name === ARTIFACT_UPLOAD_STEP);
+            if (uploadSteps.length !== 1 || uploadSteps[0].status !== 'completed' ||
+                uploadSteps[0].conclusion !== 'success') {
+                throw new Error(`Expected one successful '${ARTIFACT_UPLOAD_STEP}' source step.`);
+            }
+            const uploadStarted = timestamp(uploadSteps[0].started_at, 'artifact upload step started_at');
+            const uploadCompleted = timestamp(uploadSteps[0].completed_at, 'artifact upload step completed_at');
+            if (!(jobStarted <= uploadStarted && uploadStarted <= uploadCompleted && uploadCompleted <= jobCompleted)) {
+                throw new Error('Artifact upload step is outside the exact source-job execution window.');
+            }
+        } catch (error) {
+            errors.push(`Could not verify exact source-attempt job: ${error.message}`);
+            sourceJob = null;
+        }
+    }
+
+    if (run && repository) {
+        try {
+            const artifacts = await listBounded(github, github.rest.actions.listWorkflowRunArtifacts, {
                 owner, repo, run_id: run.id
             }, 'artifacts', 'source artifact inventory');
             if (artifacts.length !== 1 || artifacts[0]?.name !== ARTIFACT_NAME) {
                 errors.push(`Expected exactly one '${ARTIFACT_NAME}' artifact.`);
             } else {
                 artifact = artifacts[0];
-                if (!Number.isInteger(artifact.id) || artifact.id < 1 || artifact.expired ||
+                const artifactId = artifact.id;
+                const expectedUrl = `https://api.github.com/repos/${repository.full_name}/actions/artifacts/${artifactId}`;
+                if (!Number.isInteger(artifactId) || artifactId < 1 ||
+                    typeof artifact.node_id !== 'string' || !artifact.node_id || artifact.expired !== false ||
                     !Number.isInteger(artifact.size_in_bytes) || artifact.size_in_bytes < 1 ||
                     artifact.size_in_bytes > MAX_ARTIFACT_BYTES ||
-                    !DIGEST_PATTERN.test(artifact.digest || '')) {
+                    !DIGEST_PATTERN.test(artifact.digest || '') || artifact.url !== expectedUrl ||
+                    artifact.archive_download_url !== `${expectedUrl}/zip`) {
                     errors.push(`Artifact '${ARTIFACT_NAME}' has invalid immutable metadata.`);
                 }
                 const provenance = artifact.workflow_run;
@@ -320,6 +466,24 @@ async function inspect(args) {
                     normalizeSha(provenance.head_sha) !== normalizeSha(run.head_sha)) {
                     errors.push(`Artifact '${ARTIFACT_NAME}' is not tied to the exact repository, run, and head.`);
                 }
+                try {
+                    const created = timestamp(artifact.created_at, 'artifact created_at');
+                    const updated = timestamp(artifact.updated_at, 'artifact updated_at');
+                    const expires = timestamp(artifact.expires_at, 'artifact expires_at');
+                    const runStarted = timestamp(run.run_started_at, 'source run_started_at');
+                    const runUpdated = timestamp(run.updated_at, 'source updated_at');
+                    if (!sourceJob) throw new Error('exact source upload step is unavailable.');
+                    const uploadStep = sourceJob.steps.find(step => step.name === ARTIFACT_UPLOAD_STEP);
+                    const uploadStarted = timestamp(uploadStep.started_at, 'artifact upload step started_at');
+                    const uploadCompleted = timestamp(uploadStep.completed_at, 'artifact upload step completed_at');
+                    if (!(runStarted <= created && created <= updated && updated <= runUpdated &&
+                        uploadStarted - 1000 <= created && updated <= uploadCompleted + 1000 &&
+                        expires > updated)) {
+                        throw new Error('artifact is outside the exact upload/run window or already past its immutable lifetime.');
+                    }
+                } catch (error) {
+                    errors.push(`Artifact '${ARTIFACT_NAME}' timing is invalid: ${error.message}`);
+                }
             }
         } catch (error) {
             errors.push(`Could not inspect source artifact: ${error.message}`);
@@ -328,7 +492,7 @@ async function inspect(args) {
 
     if (!uploadRef || !normalizeSha(uploadSha)) errors.push('Upload ref/SHA provenance is unresolved.');
     return {
-        errors: [...new Set(errors)], event, eventRun, repository, run, pull, artifact,
+        errors: [...new Set(errors)], event, eventRun, repository, run, pull, artifact, sourceJob,
         manifest: artifactManifest(artifact), uploadRef, uploadSha
     };
 }
@@ -375,6 +539,20 @@ async function authorize(args) {
         }
     } else if (mode !== 'trusted-preflight') {
         errors.push(`Unsupported reporter mode '${mode || 'unset'}'.`);
+    }
+
+    if (mode === 'trusted-final' && errors.length === 0) {
+        try {
+            await attestLatestSourceRun(
+                args.github,
+                args.context.repo.owner,
+                args.context.repo.repo,
+                inspection.repository,
+                inspection.run
+            );
+        } catch (error) {
+            errors.push(`Could not reattest latest source workflow run: ${error.message}`);
+        }
     }
 
     const authorized = errors.length === 0;

@@ -173,6 +173,13 @@ def _iter_cmake_commands(text: str, source: str) -> Iterable[dict[str, Any]]:
                     quoted = False
                 index += 1
                 continue
+            if char == "\\":
+                # CMake permits a backslash escape in an unquoted argument.
+                # The escaped character is literal syntax, so an escaped quote,
+                # parenthesis, or comment marker must not affect command
+                # boundary scanning.
+                index += 2 if index + 1 < length else 1
+                continue
             if char == '"':
                 quoted = True
                 index += 1
@@ -1585,7 +1592,7 @@ class _HeldDirectory:
                     raise ReplyValidationError(f"held {label} is not a non-reparse directory")
                 after = os.lstat(path)
                 _validate_directory(after, label)
-                if _directory_stat_token(after) != path_token:
+                if _directory_stat_token(after)[:3] != path_token[:3]:
                     raise ReplyValidationError(f"{label} changed while its handle was acquired")
                 return cls(path, path_token, handle_token, native_handle=handle_value)
             except Exception:
@@ -1601,9 +1608,9 @@ class _HeldDirectory:
             if _identity_token(opened)[:2] != _identity_token(before)[:2]:
                 raise ReplyValidationError(f"{label} changed while its handle was acquired")
             after = os.lstat(path)
-            if _directory_stat_token(after) != path_token:
+            if _directory_stat_token(after)[:3] != path_token[:3]:
                 raise ReplyValidationError(f"{label} changed while its handle was acquired")
-            return cls(path, path_token, _directory_stat_token(opened), descriptor=descriptor)
+            return cls(path, path_token, _directory_stat_token(opened)[:3], descriptor=descriptor)
         except Exception:
             os.close(descriptor)
             raise
@@ -1614,9 +1621,9 @@ class _HeldDirectory:
                 raise ConcurrentReplyUpdate(f"held {label} identity changed")
         elif self.descriptor != -1:
             opened = os.fstat(self.descriptor)
-            if _directory_stat_token(opened) != self.handle_token:
+            if _directory_stat_token(opened)[:3] != self.handle_token:
                 raise ConcurrentReplyUpdate(f"held {label} identity changed")
-        if _directory_token(self.path, label) != self.path_token:
+        if _directory_token(self.path, label)[:3] != self.path_token[:3]:
             raise ConcurrentReplyUpdate(f"{label} changed while replies were read")
 
     def close(self) -> None:
@@ -1828,16 +1835,27 @@ class _ReplySnapshot:
     payloads: dict[str, bytes] = field(default_factory=dict)
     records: dict[str, dict[str, Any]] = field(default_factory=dict)
     consumed_bytes: int = 0
+    require_directory_quiescence: bool = True
 
     def assert_stable(self) -> None:
         for held in self.directory_holds:
             held.assert_stable(f"CMake File API ancestor {held.path}")
         for path, token in self.ancestor_tokens:
-            if _directory_token(path, f"CMake File API ancestor {path}") != token:
+            if _directory_token(path, f"CMake File API ancestor {path}")[:3] != token[:3]:
                 raise ConcurrentReplyUpdate(
                     f"CMake File API ancestor {path} changed while replies were read"
                 )
-        if _directory_token(self.directory, "CMake File API reply directory") != self.directory_token:
+        observed_directory_token = _directory_token(
+            self.directory, "CMake File API reply directory"
+        )
+        if self.require_directory_quiescence:
+            directory_changed = observed_directory_token != self.directory_token
+        else:
+            # A standalone JSON file does not own its parent directory. Sibling
+            # activity is unrelated, but replacing or changing the kind of the
+            # parent would invalidate the path identity used for the open.
+            directory_changed = observed_directory_token[:3] != self.directory_token[:3]
+        if directory_changed:
             raise ConcurrentReplyUpdate("CMake File API reply directory changed while it was being read")
 
     def close(self) -> None:
@@ -1986,7 +2004,14 @@ def _read_bounded_json_file(path: Path, maximum: int, label: str) -> Any:
         raise InventoryError(f"{label} is {metadata.st_size} bytes, above the {maximum} bound")
     name = _reply_filename(absolute.name, label)
     reply_file = _ReplyFile(absolute, _stat_token(metadata), metadata.st_size)
-    snapshot = _ReplySnapshot(parent, parent, parent_token, {name: reply_file}, {name})
+    snapshot = _ReplySnapshot(
+        parent,
+        parent,
+        parent_token,
+        {name: reply_file},
+        {name},
+        require_directory_quiescence=False,
+    )
     return snapshot.read_json(name, maximum, label)
 
 
@@ -2253,13 +2278,22 @@ def parse_codemodel_targets(
     configurations = codemodel.get("configurations")
     if not isinstance(configurations, list) or len(configurations) > _MAX_CONFIGURATIONS:
         raise InventoryError(f"{profile}: codemodel configurations are missing or above the bound")
-    targets: dict[tuple[str, str], dict[str, str]] = {}
+    targets: dict[tuple[str, str], dict[str, Any]] = {}
     seen_configurations: set[str] = set()
-    id_bindings: dict[str, tuple[str, str]] = {}
+    id_bindings: dict[tuple[str, str], tuple[str, str]] = {}
+    id_semantics: dict[str, tuple[str, str, bool]] = {}
+    logical_targets: set[tuple[str, str]] = set()
     profile_data = load_stable_profile()
-    known_profile = any(
-        item.get("id") == profile for item in profile_data.get("buildConfigurations", [])
+    profile_config = next(
+        (item for item in profile_data.get("buildConfigurations", []) if item.get("id") == profile),
+        None,
     )
+    known_profile = profile_config is not None
+    if profile_config is None:
+        raise InventoryError(f"{profile}: no stable-v1 build configuration is declared")
+    expected_configuration = str(profile_config.get("configuration", ""))
+    if not expected_configuration:
+        raise InventoryError(f"{profile}: stable-v1 codemodel configuration is empty")
     supported_hosts = profile_data.get("supportedHosts", [])
     windows_only = (
         known_profile
@@ -2297,12 +2331,12 @@ def parse_codemodel_targets(
                 )
             except ReplyValidationError as error:
                 raise InventoryError(str(error)) from error
-            binding = (name, target_file)
-            previous_binding = id_bindings.setdefault(reference_id, binding)
-            if previous_binding != binding:
+            binding_key = (config_name, reference_id)
+            if binding_key in id_bindings:
                 raise InventoryError(
-                    f"{profile}: codemodel target id {reference_id!r} identifies multiple targets"
+                    f"{profile}: codemodel configuration {config_name!r} repeats target id {reference_id!r}"
                 )
+            id_bindings[binding_key] = (name, target_file)
             target = target_documents.get(target_file)
             if target is None:
                 raise InventoryError(f"{profile}: codemodel target reply {target_file!r} is missing")
@@ -2320,6 +2354,18 @@ def parse_codemodel_targets(
             kind = _TARGET_KIND_MAP.get(cmake_type)
             if not kind:
                 raise InventoryError(f"{profile}: unsupported codemodel target type {cmake_type!r}")
+            generator_marker_present = "isGeneratorProvided" in target
+            generator_provided = target.get("isGeneratorProvided") is True
+            if generator_marker_present and not generator_provided:
+                raise InventoryError(
+                    f"{profile}: codemodel target {name!r} has an invalid isGeneratorProvided marker"
+                )
+            semantics = (name, cmake_type, generator_provided)
+            previous_semantics = id_semantics.setdefault(reference_id, semantics)
+            if previous_semantics != semantics:
+                raise InventoryError(
+                    f"{profile}: codemodel target id {reference_id!r} identifies inconsistent targets"
+                )
             name_on_disk = target.get("nameOnDisk")
             artifacts_value = target.get("artifacts")
             product_type = kind in _LINKED_TARGET_KINDS
@@ -2407,12 +2453,27 @@ def parse_codemodel_targets(
                         f"{profile}: target {name!r} nameOnDisk is absent from its artifact list"
                     )
             elif cmake_type == "UTILITY" and (
-                name_on_disk is not None or artifacts_value is not None
+                "nameOnDisk" in target or "artifacts" in target
             ):
                 raise InventoryError(
                     f"{profile}: utility target {name!r} declares linked artifact identity"
                 )
+            if generator_provided:
+                if kind != "utility":
+                    raise InventoryError(
+                        f"{profile}: generator-provided target {name!r} is not a utility"
+                    )
+                # Generator plumbing remains cryptographically bound in the
+                # consumed raw reply and replyDigest, but is not a configured
+                # product. Omitting it prevents directory-scoped ALL_BUILD
+                # aggregates and ZERO_CHECK from fabricating product identity.
+                continue
             key = (name, config_name)
+            if key in logical_targets:
+                raise InventoryError(f"{profile}: duplicate codemodel target {key}")
+            logical_targets.add(key)
+            if config_name != expected_configuration:
+                continue
             value: dict[str, Any] = {
                 "target": name,
                 "id": reference_id,
@@ -2422,9 +2483,11 @@ def parse_codemodel_targets(
                 "nameOnDisk": name_on_disk if isinstance(name_on_disk, str) else "",
                 "artifacts": sorted(artifact_paths),
             }
-            if key in targets:
-                raise InventoryError(f"{profile}: duplicate codemodel target {key}")
             targets[key] = value
+    if expected_configuration not in seen_configurations:
+        raise InventoryError(
+            f"{profile}: codemodel omits canonical configuration {expected_configuration!r}"
+        )
     return {
         "profile": profile,
         "status": "available",

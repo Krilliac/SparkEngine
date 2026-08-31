@@ -4,6 +4,10 @@
 
 namespace SparkInstaller
 {
+#ifndef SPARK_INSTALLER_VERSION
+#error "SPARK_INSTALLER_VERSION must be supplied by the build system"
+#endif
+
     class Installer
     {
       public:
@@ -13,5 +17,5 @@ namespace SparkInstaller
         static int Run(InstallerContext& ctx);
     };
 
-    constexpr const char* kInstallerVersion = "1.0.0";
+    inline constexpr const char* kInstallerVersion = SPARK_INSTALLER_VERSION;
 } // namespace SparkInstaller

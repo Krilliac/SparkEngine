@@ -52,7 +52,7 @@ jobs:
         fetch-depth: 1
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@a35ac6e6798d72df5475948b28efb89edc2e19ca # v4.37.9
+      uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
@@ -64,12 +64,37 @@ jobs:
             - "ThirdParty/**"
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@a35ac6e6798d72df5475948b28efb89edc2e19ca # v4.37.9
+      uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
       with:
         category: "/language:${{ matrix.language }}"
-        output: sarif-results
+        output: ${{ runner.temp }}/codeql-sarif
         upload: always
         upload-database: false
+
+    # Direct-file artifacts use the uploaded file name as the artifact name.
+    # Rename the scanner output in trusted workflow code so a failed-job-only
+    # rerun cannot reuse a successful language artifact from an older attempt.
+    - name: Bind raw CodeQL SARIF to exact source attempt
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        SARIF_ROOT: ${{ runner.temp }}/codeql-sarif
+        SOURCE_SARIF: ${{ runner.temp }}/codeql-sarif/${{ matrix.artifact-file }}
+        EXACT_SARIF: ${{ runner.temp }}/codeql-sarif/codeql-${{ matrix.language }}-attempt-${{ github.run_attempt }}.sarif
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          const root = path.resolve(process.env.SARIF_ROOT || '');
+          const source = path.resolve(process.env.SOURCE_SARIF || '');
+          const target = path.resolve(process.env.EXACT_SARIF || '');
+          if (!root || path.dirname(source) !== root || path.dirname(target) !== root || source === target) {
+            throw new Error('CodeQL SARIF paths are not exact trusted-runner files.');
+          }
+          const stat = fs.lstatSync(source);
+          if (!stat.isFile() || stat.isSymbolicLink() || fs.existsSync(target)) {
+            throw new Error('CodeQL SARIF source is not one new regular file.');
+          }
+          fs.renameSync(source, target);
 
     - name: Upload raw CodeQL SARIF
       if: always()
@@ -78,7 +103,7 @@ jobs:
         # Direct single-file artifacts avoid compressed-archive expansion in
         # the privileged reporter. With archive:false the file name is the
         # immutable artifact name and the name input is intentionally omitted.
-        path: sarif-results/${{ matrix.artifact-file }}
+        path: ${{ runner.temp }}/codeql-sarif/codeql-${{ matrix.language }}-attempt-${{ github.run_attempt }}.sarif
         archive: false
         retention-days: 7
         if-no-files-found: error

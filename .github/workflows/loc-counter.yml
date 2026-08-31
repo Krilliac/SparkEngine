@@ -2,7 +2,7 @@ name: Lines of Code Counter
 
 on:
   push:
-    branches: [ main, master, develop, Working ]
+    branches: [ Working ]
     paths:
       - '**.cpp'
       - '**.h'
@@ -20,7 +20,6 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
   contents: write
 
 concurrency:
@@ -31,10 +30,59 @@ jobs:
   count-loc:
     runs-on: ubuntu-24.04
     steps:
-    - name: Checkout repository
+    - name: Checkout trusted workflow source
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
+        ref: Working
         persist-credentials: false
+
+    - name: Resolve exact trusted source
+      id: source
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        LOCAL_SOURCE="$(git rev-parse HEAD)"
+        REMOTE_SOURCE="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin refs/heads/Working | awk 'NR == 1 { print $1 }')"
+        if test -z "$REMOTE_SOURCE" || test "$LOCAL_SOURCE" != "$REMOTE_SOURCE"; then
+          echo "Trusted metrics checkout is not the current Working head." >&2
+          exit 1
+        fi
+        echo "commit=$LOCAL_SOURCE" >> "$GITHUB_OUTPUT"
+
+    - name: Checkout repository-metrics state seed
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: Working
+        path: metrics-repository
+        persist-credentials: false
+
+    - name: Load durable repository-metrics state tag
+      id: metrics-state
+      working-directory: metrics-repository
+      env:
+        GH_TOKEN: ${{ github.token }}
+        STATE_REF: refs/tags/generated-repository-metrics
+      run: |
+        set -euo pipefail
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test -n "$REMOTE_OBJECT"; then
+          git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+            fetch --force --no-tags origin "+${STATE_REF}:${STATE_REF}"
+          git checkout --detach "$STATE_REF"
+          if test "$(git rev-parse HEAD)" != "$(git rev-parse "${STATE_REF}^{commit}")"; then
+            echo "Generated metrics state tag did not resolve to its fetched commit." >&2
+            exit 1
+          fi
+        else
+          git checkout --detach "$(git rev-parse HEAD)"
+        fi
+        echo "remote_object=$REMOTE_OBJECT" >> "$GITHUB_OUTPUT"
+        echo "state_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
     - name: Test source inventory and registration guards
       run: |
@@ -85,12 +133,12 @@ jobs:
         echo "" >> "$GITHUB_STEP_SUMMARY"
         echo "**$FILE_COUNT source files**" >> "$GITHUB_STEP_SUMMARY"
 
-    - name: Refresh generated repository and wiki stats
+    - name: Verify generated repository and wiki stats
       run: |
         set -euo pipefail
-        bash docs/update-readme-badges.sh update
-        bash docs/update-codebase-stats.sh generate
-        bash docs/sync-wiki.sh sync
+        bash docs/update-readme-badges.sh check
+        bash docs/update-codebase-stats.sh check
+        bash docs/sync-wiki.sh check
 
     - name: Prove generated metrics are deterministic
       run: |
@@ -106,7 +154,7 @@ jobs:
     - name: Upload exact-commit repository metrics
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: repository-metrics-${{ github.sha }}
+        name: repository-metrics-${{ steps.source.outputs.commit }}
         path: |
           repository-metrics.json
           .github/badges/tests.json
@@ -116,57 +164,68 @@ jobs:
         retention-days: 14
         if-no-files-found: error
 
-    - name: Commit badge data
+    - name: Publish exact-source metrics state tag
       id: badge-commit
+      working-directory: metrics-repository
       env:
         GH_TOKEN: ${{ github.token }}
+        STATE_REF: refs/tags/generated-repository-metrics
+        EXPECTED_REMOTE_OBJECT: ${{ steps.metrics-state.outputs.remote_object }}
+        EXPECTED_STATE_COMMIT: ${{ steps.metrics-state.outputs.state_commit }}
+        TRUSTED_SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
       run: |
         set -euo pipefail
-        echo "changed=false" >> "$GITHUB_OUTPUT"
-        REMOTE_HEAD="$(git ls-remote --heads origin "$GITHUB_REF" | awk '{print $1}')"
-        if test "$REMOTE_HEAD" != "$GITHUB_SHA"; then
-          echo "Working advanced while badge data was generated; the newer run owns the update."
-          exit 0
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        if test "$(git rev-parse HEAD)" != "$EXPECTED_STATE_COMMIT"; then
+          echo "Metrics checkout no longer points to the loaded state commit." >&2
+          exit 1
         fi
+        REMOTE_SOURCE="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin refs/heads/Working | awk 'NR == 1 { print $1 }')"
+        if test "$REMOTE_SOURCE" != "$TRUSTED_SOURCE_COMMIT"; then
+          echo "Working advanced while metrics were generated; refusing to publish stale state." >&2
+          exit 1
+        fi
+        REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$REMOTE_OBJECT" != "$EXPECTED_REMOTE_OBJECT"; then
+          echo "Generated metrics state advanced while this run was preparing; refusing stale state." >&2
+          exit 1
+        fi
+
+        mkdir -p .github/badges
+        for badge in tests.json loc.json files.json loc-breakdown.json; do
+          cp "$GITHUB_WORKSPACE/.github/badges/$badge" ".github/badges/$badge"
+        done
+        jq -n \
+          --arg repository "$GITHUB_REPOSITORY" \
+          --arg commit "$TRUSTED_SOURCE_COMMIT" \
+          --arg run_id "$GITHUB_RUN_ID" \
+          --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+          '{schemaVersion: 1, source: {repository: $repository, ref: "refs/heads/Working", commit: $commit}, producer: {workflow: ".github/workflows/loc-counter.yml", runId: $run_id, runAttempt: $run_attempt}}' \
+          > .github/badges/repository-metrics-source.json
+        jq -e --arg commit "$TRUSTED_SOURCE_COMMIT" \
+          '.schemaVersion == 1 and .source.commit == $commit and .source.ref == "refs/heads/Working"' \
+          .github/badges/repository-metrics-source.json >/dev/null
+
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add -- README.md .github/copilot-instructions.md .github/prompts/copilot-instructions.md \
-          .github/prompts/build-test.prompt.md .github/badges/tests.json .github/badges/loc.json .github/badges/files.json \
-          .github/badges/loc-breakdown.json wiki/Home.md wiki/advanced/Testing.md \
-          wiki/advanced/Codebase-Statistics.md \
-          wiki/subsystems/Entity-Component-System.md wiki/gameplay-tools/SparkEditor.md
-        git diff --cached --quiet && echo "No changes to commit" && exit 0
-        git commit -m "chore: refresh generated repository metrics"
-        git push \
-          "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-          "HEAD:refs/heads/${GITHUB_REF_NAME}"
+        git add -- \
+          .github/badges/tests.json \
+          .github/badges/loc.json \
+          .github/badges/files.json \
+          .github/badges/loc-breakdown.json \
+          .github/badges/repository-metrics-source.json
+        git diff --cached --quiet && echo "No metrics state changes" && exit 0
+        git commit -s -m "chore: publish repository metrics for ${TRUSTED_SOURCE_COMMIT:0:12} [skip ci]"
+        FINAL_COMMIT="$(git rev-parse HEAD)"
+        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+          --force-with-lease="${STATE_REF}:${EXPECTED_REMOTE_OBJECT}" origin \
+          "HEAD:${STATE_REF}"
+        PUBLISHED_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$PUBLISHED_OBJECT" != "$FINAL_COMMIT"; then
+          echo "Generated metrics state tag does not point to this run's commit." >&2
+          exit 1
+        fi
         echo "changed=true" >> "$GITHUB_OUTPUT"
-
-    # Pushes made with GITHUB_TOKEN intentionally do not trigger ordinary
-    # push workflows. Explicit workflow_dispatch is the supported exception,
-    # so prove the generated-badge commit and publish its canonical wiki rather
-    # than leaving Working ahead of either repository-driven workflow.
-    - name: Dispatch exact-head workflows after badge commit
-      if: steps.badge-commit.outputs.changed == 'true'
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        set -euo pipefail
-        dispatch_exact_head() {
-          local workflow="$1"
-          for attempt in 1 2 3 4 5; do
-            REMOTE_HEAD="$(git ls-remote --exit-code --heads origin "$GITHUB_REF" | awk '{print $1}')"
-            if test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
-              echo "Working advanced after this badge push; the newer head owns $workflow."
-              return 0
-            fi
-            if gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"; then
-              return 0
-            fi
-            test "$attempt" -lt 5 || return 1
-            sleep "$((attempt * 2))"
-          done
-        }
-
-        dispatch_exact_head build.yml
-        dispatch_exact_head publish-wiki.yml

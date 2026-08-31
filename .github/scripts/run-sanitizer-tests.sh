@@ -263,9 +263,11 @@ timeout --signal=TERM --kill-after=15s "${timeout_seconds}s" \
             set +C
         }
         trap on_wrapper_timeout TERM
-        # Bash reports -f in 1024-byte blocks: cap every child-created regular
-        # file (JUnit, report, and sanitizer logs) at 16 MiB while it is written.
-        ulimit -f 16384
+        # Bash reports -f in 1024-byte blocks. Keep the hard limit unchanged so
+        # tests that deliberately construct oversized sparse fixtures can raise
+        # and restore their own soft limit. Cooperative child output defaults
+        # to a 16 MiB write cap; the bounded verifier remains authoritative.
+        ulimit -S -f 16384
         "$@" &
         child_pid=$!
         wait "$child_pid"
@@ -288,9 +290,16 @@ capture_status="${pipeline_status[1]}"
 
 scan() {
     local pattern="$1"
+    local include_runtime="${2:-0}"
     local scan_files=()
     [[ -f "$console_path" && ! -L "$console_path" ]] && scan_files+=("$console_path")
     [[ -f "$report_path" && ! -L "$report_path" ]] && scan_files+=("$report_path")
+    if [[ "$include_runtime" == "1" ]]; then
+        local runtime_file
+        for runtime_file in "$runtime_dir"/sanitizer.*; do
+            [[ -f "$runtime_file" && ! -L "$runtime_file" ]] && scan_files+=("$runtime_file")
+        done
+    fi
     (( ${#scan_files[@]} > 0 )) || {
         printf '2'
         return 0
@@ -302,7 +311,7 @@ scan() {
     printf '%s' "$status"
 }
 
-signature_scan_status="$(scan 'ERROR:[[:space:]]*(Address|Leak|Thread|Memory)Sanitizer:|WARNING:[[:space:]]*(Thread|Memory)Sanitizer:|AddressSanitizer:DEADLYSIGNAL|runtime error:')"
+signature_scan_status="$(scan 'ERROR:[[:space:]]*(Address|Leak|Thread|Memory)Sanitizer:|WARNING:[[:space:]]*(Thread|Memory)Sanitizer:|SUMMARY:[[:space:]]*(Address|Leak|Thread|Memory)Sanitizer:|AddressSanitizer:DEADLYSIGNAL|runtime error:' 1)"
 warning_scan_status="$(scan '^\[[[:space:]]*WARN[[:space:]]*\]|Known flaky|::warning title=Flaky test:')"
 failure_scan_status="$(scan '^\[[[:space:]]*FAILED[[:space:]]*\]|^Tests:.*[1-9][0-9]* failed|^Assertions:.*[1-9][0-9]* failed')"
 crash_scan_status="$(scan 'Segmentation fault|core dumped|AddressSanitizer:DEADLYSIGNAL|terminate called|uncaught exception|(^|[[:space:]])Aborted([[:space:]]|$)')"

@@ -335,6 +335,13 @@ class CMakeParserTests(unittest.TestCase):
         self.assertIn(":1", findings[0].detail)
         self.assertIn(":2", findings[0].detail)
 
+    def test_escaped_literal_quotes_do_not_hide_command_terminator(self) -> None:
+        declarations = self.parse_options(
+            'target_compile_definitions(app PRIVATE VERSION=\\"${PROJECT_VERSION}\\")\n'
+            'option(AFTER_ESCAPED_QUOTES "still visible" ON)\n'
+        )
+        self.assertEqual([entry["name"] for entry in declarations], ["AFTER_ESCAPED_QUOTES"])
+
 
 WORKFLOW_ENVELOPE = """name: synthetic
 on:
@@ -589,6 +596,259 @@ class PresetAndCodemodelTests(unittest.TestCase):
             ],
         )
 
+    def test_multiconfig_generator_utilities_are_validated_then_omitted(self) -> None:
+        build_directory = (TEST_TEMP_ROOT / "synthetic-multiconfig").resolve()
+        configurations = ["Debug", "Release", "MinSizeRel", "RelWithDebInfo"]
+        target_documents: dict[str, dict[str, Any]] = {}
+        codemodel_configurations: list[dict[str, Any]] = []
+        product_id = "SparkEngine::@synthetic"
+        generator_ids = ("ALL_BUILD::@root", "ALL_BUILD::@subdir", "ZERO_CHECK::@root")
+        for configuration in configurations:
+            references: list[dict[str, str]] = []
+            product_file = f"SparkEngine-{configuration}.json"
+            target_documents[product_file] = {
+                "name": "SparkEngine",
+                "id": product_id,
+                "type": "EXECUTABLE",
+                "nameOnDisk": "SparkEngine.exe",
+                "artifacts": [{"path": f"bin/{configuration}/SparkEngine.exe"}],
+            }
+            references.append({"name": "SparkEngine", "id": product_id, "jsonFile": product_file})
+            for offset, generator_id in enumerate(generator_ids):
+                name = "ZERO_CHECK" if generator_id.startswith("ZERO_CHECK") else "ALL_BUILD"
+                target_file = f"generator-{offset}-{configuration}.json"
+                target_documents[target_file] = {
+                    "name": name,
+                    "id": generator_id,
+                    "type": "UTILITY",
+                    "isGeneratorProvided": True,
+                    "sources": [],
+                }
+                references.append({"name": name, "id": generator_id, "jsonFile": target_file})
+            codemodel_configurations.append({"name": configuration, "targets": references})
+
+        evidence = inventory.parse_codemodel_targets(
+            "windows-shipping",
+            {"configurations": codemodel_configurations},
+            target_documents,
+            build_directory,
+        )
+        self.assertEqual(len(evidence["targets"]), 1)
+        self.assertEqual(evidence["targets"][0]["target"], "SparkEngine")
+        self.assertEqual(evidence["targets"][0]["configuration"], "MinSizeRel")
+        self.assertEqual(
+            evidence["targets"][0]["artifacts"],
+            [(build_directory / "bin/MinSizeRel/SparkEngine.exe").as_posix()],
+        )
+
+    def test_generator_classification_is_name_independent(self) -> None:
+        evidence = inventory.parse_codemodel_targets(
+            "windows-shipping",
+            {
+                "configurations": [{
+                    "name": "MinSizeRel",
+                    "targets": [
+                        {
+                            "name": "CMAKE_PLUMBING",
+                            "id": "CMAKE_PLUMBING::@synthetic",
+                            "jsonFile": "generated.json",
+                        },
+                        {
+                            "name": "ALL_BUILD",
+                            "id": "ALL_BUILD::@user",
+                            "jsonFile": "user.json",
+                        },
+                    ],
+                }]
+            },
+            {
+                "generated.json": {
+                    "name": "CMAKE_PLUMBING",
+                    "id": "CMAKE_PLUMBING::@synthetic",
+                    "type": "UTILITY",
+                    "isGeneratorProvided": True,
+                },
+                "user.json": {
+                    "name": "ALL_BUILD",
+                    "id": "ALL_BUILD::@user",
+                    "type": "UTILITY",
+                },
+            },
+            (TEST_TEMP_ROOT / "synthetic-name-independence").resolve(),
+        )
+        self.assertEqual([target["target"] for target in evidence["targets"]], ["ALL_BUILD"])
+
+    def test_noncanonical_configuration_target_is_still_validated(self) -> None:
+        with self.assertRaisesRegex(inventory.InventoryError, "unsupported codemodel target type"):
+            inventory.parse_codemodel_targets(
+                "windows-shipping",
+                {
+                    "configurations": [
+                        {
+                            "name": "MinSizeRel",
+                            "targets": [{
+                                "name": "SparkEngine",
+                                "id": "SparkEngine::@synthetic",
+                                "jsonFile": "shipping.json",
+                            }],
+                        },
+                        {
+                            "name": "Debug",
+                            "targets": [{
+                                "name": "DebugOnly",
+                                "id": "DebugOnly::@synthetic",
+                                "jsonFile": "debug.json",
+                            }],
+                        },
+                    ]
+                },
+                {
+                    "shipping.json": {
+                        "name": "SparkEngine",
+                        "id": "SparkEngine::@synthetic",
+                        "type": "EXECUTABLE",
+                        "nameOnDisk": "SparkEngine.exe",
+                        "artifacts": [{"path": "bin/MinSizeRel/SparkEngine.exe"}],
+                    },
+                    "debug.json": {
+                        "name": "DebugOnly",
+                        "id": "DebugOnly::@synthetic",
+                        "type": "FUTURE_TARGET",
+                    },
+                },
+                (TEST_TEMP_ROOT / "synthetic-noncanonical").resolve(),
+            )
+
+    def test_cross_config_target_type_and_generator_classification_must_be_stable(self) -> None:
+        shared_id = "stable::@synthetic"
+        base_documents = {
+            "shipping.json": {
+                "name": "Stable",
+                "id": shared_id,
+                "type": "EXECUTABLE",
+                "nameOnDisk": "Stable.exe",
+                "artifacts": [{"path": "bin/MinSizeRel/Stable.exe"}],
+            },
+            "debug.json": {
+                "name": "Stable",
+                "id": shared_id,
+                "type": "STATIC_LIBRARY",
+                "nameOnDisk": "Stable.lib",
+                "artifacts": [{"path": "bin/Debug/Stable.lib"}],
+            },
+        }
+        codemodel = {
+            "configurations": [
+                {
+                    "name": "MinSizeRel",
+                    "targets": [{"name": "Stable", "id": shared_id, "jsonFile": "shipping.json"}],
+                },
+                {
+                    "name": "Debug",
+                    "targets": [{"name": "Stable", "id": shared_id, "jsonFile": "debug.json"}],
+                },
+            ]
+        }
+        with self.assertRaisesRegex(inventory.InventoryError, "identifies inconsistent targets"):
+            inventory.parse_codemodel_targets(
+                "windows-shipping",
+                codemodel,
+                base_documents,
+                (TEST_TEMP_ROOT / "synthetic-semantics").resolve(),
+            )
+
+        generator_documents = copy.deepcopy(base_documents)
+        generator_documents["debug.json"] = {
+            "name": "Stable",
+            "id": shared_id,
+            "type": "UTILITY",
+            "isGeneratorProvided": True,
+        }
+        with self.assertRaisesRegex(inventory.InventoryError, "identifies inconsistent targets"):
+            inventory.parse_codemodel_targets(
+                "windows-shipping",
+                codemodel,
+                generator_documents,
+                (TEST_TEMP_ROOT / "synthetic-semantics").resolve(),
+            )
+
+    def test_generator_marker_and_linked_identity_fields_fail_closed(self) -> None:
+        reference = {
+            "name": "ALL_BUILD",
+            "id": "ALL_BUILD::@synthetic",
+            "jsonFile": "generator.json",
+        }
+        codemodel = {"configurations": [{"name": "MinSizeRel", "targets": [reference]}]}
+        for marker in (None, False, 1, "yes"):
+            with self.subTest(marker=marker):
+                with self.assertRaisesRegex(inventory.InventoryError, "invalid isGeneratorProvided"):
+                    inventory.parse_codemodel_targets(
+                        "windows-shipping",
+                        codemodel,
+                        {
+                            "generator.json": {
+                                "name": "ALL_BUILD",
+                                "id": "ALL_BUILD::@synthetic",
+                                "type": "UTILITY",
+                                "isGeneratorProvided": marker,
+                            }
+                        },
+                        Path("C:/synthetic-build"),
+                    )
+
+        for field in ("nameOnDisk", "artifacts"):
+            with self.subTest(field=field):
+                document = {
+                    "name": "ALL_BUILD",
+                    "id": "ALL_BUILD::@synthetic",
+                    "type": "UTILITY",
+                    "isGeneratorProvided": True,
+                    field: None,
+                }
+                with self.assertRaisesRegex(inventory.InventoryError, "linked artifact identity"):
+                    inventory.parse_codemodel_targets(
+                        "windows-shipping",
+                        codemodel,
+                        {"generator.json": document},
+                        Path("C:/synthetic-build"),
+                    )
+
+    def test_generator_provided_product_is_rejected(self) -> None:
+        with self.assertRaisesRegex(inventory.InventoryError, "not a utility"):
+            inventory.parse_codemodel_targets(
+                "windows-shipping",
+                {
+                    "configurations": [{
+                        "name": "MinSizeRel",
+                        "targets": [{
+                            "name": "SparkEngine",
+                            "id": "SparkEngine::@synthetic",
+                            "jsonFile": "target.json",
+                        }],
+                    }]
+                },
+                {
+                    "target.json": {
+                        "name": "SparkEngine",
+                        "id": "SparkEngine::@synthetic",
+                        "type": "EXECUTABLE",
+                        "isGeneratorProvided": True,
+                        "nameOnDisk": "SparkEngine.exe",
+                        "artifacts": [{"path": "bin/MinSizeRel/SparkEngine.exe"}],
+                    }
+                },
+                Path("C:/synthetic-build"),
+            )
+
+    def test_missing_canonical_codemodel_configuration_is_rejected(self) -> None:
+        with self.assertRaisesRegex(inventory.InventoryError, "omits canonical configuration"):
+            inventory.parse_codemodel_targets(
+                "windows-shipping",
+                {"configurations": [{"name": "Debug", "targets": []}]},
+                {},
+                Path("C:/synthetic-build"),
+            )
+
     def test_unknown_codemodel_target_type_remains_fail_closed(self) -> None:
         with self.assertRaisesRegex(inventory.InventoryError, "unsupported codemodel target type"):
             inventory.parse_codemodel_targets(
@@ -649,18 +909,19 @@ class PresetAndCodemodelTests(unittest.TestCase):
 
     def test_one_codemodel_id_cannot_identify_two_targets(self) -> None:
         shared_id = "shared::@synthetic"
-        with self.assertRaisesRegex(inventory.InventoryError, "identifies multiple targets"):
+        with self.assertRaisesRegex(inventory.InventoryError, "identifies inconsistent targets"):
             inventory.parse_codemodel_targets(
                 "windows-shipping",
                 {
                     "configurations": [
                         {
                             "name": "MinSizeRel",
-                            "targets": [
-                                {"name": "One", "id": shared_id, "jsonFile": "one.json"},
-                                {"name": "Two", "id": shared_id, "jsonFile": "two.json"},
-                            ],
-                        }
+                            "targets": [{"name": "One", "id": shared_id, "jsonFile": "one.json"}],
+                        },
+                        {
+                            "name": "Debug",
+                            "targets": [{"name": "Two", "id": shared_id, "jsonFile": "two.json"}],
+                        },
                     ]
                 },
                 {
@@ -677,6 +938,39 @@ class PresetAndCodemodelTests(unittest.TestCase):
                         "type": "EXECUTABLE",
                         "nameOnDisk": "Two.exe",
                         "artifacts": [{"path": "bin/MinSizeRel/Two.exe"}],
+                    },
+                },
+                Path("C:/synthetic-build"),
+            )
+
+    def test_one_configuration_cannot_repeat_a_target_id(self) -> None:
+        shared_id = "shared::@synthetic"
+        with self.assertRaisesRegex(inventory.InventoryError, "repeats target id"):
+            inventory.parse_codemodel_targets(
+                "windows-shipping",
+                {
+                    "configurations": [{
+                        "name": "MinSizeRel",
+                        "targets": [
+                            {"name": "One", "id": shared_id, "jsonFile": "one.json"},
+                            {"name": "One", "id": shared_id, "jsonFile": "duplicate.json"},
+                        ],
+                    }]
+                },
+                {
+                    "one.json": {
+                        "name": "One",
+                        "id": shared_id,
+                        "type": "EXECUTABLE",
+                        "nameOnDisk": "One.exe",
+                        "artifacts": [{"path": "bin/MinSizeRel/One.exe"}],
+                    },
+                    "duplicate.json": {
+                        "name": "One",
+                        "id": shared_id,
+                        "type": "EXECUTABLE",
+                        "nameOnDisk": "One.exe",
+                        "artifacts": [{"path": "bin/MinSizeRel/One.exe"}],
                     },
                 },
                 Path("C:/synthetic-build"),
@@ -1124,6 +1418,45 @@ jobs:
         data["workflow"] = record
         categories = finding_categories(check_parity.check_ci120_producer_chain(data))
         self.assertIn("ci120-producer-same-job-oidc-forbidden", categories)
+
+    def test_ci120_configured_producer_uses_pending_authority_validator(self) -> None:
+        record = workflow_record(LIVE_WORKFLOW)
+        producer_invocations = [
+            item
+            for item in record["ci120Invocations"]
+            if item["job"] == inventory._CI120_PRODUCER_JOB
+        ]
+        parity = [item for item in producer_invocations if item["kind"] == "parity"]
+        pending = [item for item in producer_invocations if item["kind"] == "pending-authority"]
+
+        self.assertEqual(len(parity), 1)
+        self.assertEqual(parity[0]["inventory"], "build-matrix-inventory.json")
+        self.assertEqual(parity[0]["baseline"], "")
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0]["inventory"], "build-matrix-inventory.json")
+        self.assertEqual(pending[0]["report"], "build-matrix-parity-findings.json")
+        self.assertEqual(pending[0]["output"], "build-matrix-pending-receipt.json")
+
+        data = copy.deepcopy(inventory.build_inventory())
+        data["workflow"] = record
+        categories = finding_categories(check_parity.check_ci120_producer_chain(data))
+        self.assertNotIn("ci120-producer-validator-disconnected", categories)
+
+    def test_ci120_missing_pending_authority_validator_is_blocking(self) -> None:
+        command = (
+            "        python Tools/buildmatrix/validate_pending_authority.py \\\n"
+            "          --inventory build-matrix-inventory.json \\\n"
+            "          --report build-matrix-parity-findings.json \\\n"
+            "          --output build-matrix-pending-receipt.json \\\n"
+            "          > build-matrix-pending-receipt-stdout.json\n"
+        )
+        self.assertIn(command, LIVE_WORKFLOW)
+        mutated = LIVE_WORKFLOW.replace(command, "", 1)
+        record = self.assert_weakening_is_visible(mutated, "pending-authority validator removed")
+        data = copy.deepcopy(inventory.build_inventory())
+        data["workflow"] = record
+        categories = finding_categories(check_parity.check_ci120_producer_chain(data))
+        self.assertIn("ci120-producer-validator-disconnected", categories)
 
     def test_unresolved_matrix_cannot_satisfy_a_profile(self) -> None:
         data = copy.deepcopy(inventory.build_inventory())
@@ -2125,13 +2458,10 @@ class CodemodelProvenanceTests(unittest.TestCase):
 
     def test_wrong_configuration_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
-            evidence = self.shipping_evidence(Path(raw), configuration="Debug")
-        self.assertEqual(evidence["status"], "invalid")
-        self.assertIn("preset/configuration", evidence["rejection"])
-        self.assertIn(
-            "codemodel-provenance-unavailable",
-            self.categories(self.bound_data(evidence)),
-        )
+            with self.assertRaisesRegex(
+                inventory.ReplyValidationError, "omits canonical configuration"
+            ):
+                self.shipping_evidence(Path(raw), configuration="Debug")
 
     def test_fabricated_target_with_no_declaration_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
@@ -2351,7 +2681,10 @@ class CodemodelReplyBoundaryTests(unittest.TestCase):
             write_json(reply / "target-0.json", {"name": "SparkEngine", "type": "STATIC_LIBRARY"})
             evidence = inventory.extract_codemodel_targets(root, "windows-shipping")
         self.assertEqual(evidence["status"], "invalid")
-        self.assertRegex(evidence["rejection"], "content changed|provenance|target")
+        self.assertRegex(
+            evidence["rejection"],
+            "content changed|provenance|target|changed while replies were read",
+        )
 
     def test_posthoc_capture_is_explicitly_forbidden(self) -> None:
         with self.assertRaisesRegex(inventory.InventoryError, "post-hoc provenance capture is forbidden"):
@@ -2439,6 +2772,36 @@ class CodemodelReplyBoundaryTests(unittest.TestCase):
         self.assertEqual(evidence["status"], "available")
         self.assertEqual(scandir.call_count, 1)
 
+    def test_reply_snapshot_ignores_unrelated_ancestor_sibling_activity(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            snapshot = inventory._snapshot_reply_directory(root, "windows-shipping")
+            self.assertIsNotNone(snapshot)
+            assert snapshot is not None
+            sibling = Path(raw).parent / f".ci120-unrelated-{uuid.uuid4().hex}"
+            try:
+                sibling.write_text("unrelated", encoding="utf-8")
+                snapshot.assert_stable()
+            finally:
+                sibling.unlink(missing_ok=True)
+                snapshot.close()
+
+    def test_reply_snapshot_rejects_reply_directory_membership_change(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            root = self.write_complete(Path(raw))
+            snapshot = inventory._snapshot_reply_directory(root, "windows-shipping")
+            self.assertIsNotNone(snapshot)
+            assert snapshot is not None
+            reply = root / ".cmake" / "api" / "v1" / "reply"
+            try:
+                write_json(reply / "unexpected.json", {"unexpected": True})
+                with self.assertRaisesRegex(
+                    inventory.ConcurrentReplyUpdate, "reply directory changed"
+                ):
+                    snapshot.assert_stable()
+            finally:
+                snapshot.close()
+
     def test_file_replacement_between_snapshot_and_open_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             root = self.write_complete(Path(raw))
@@ -2483,6 +2846,51 @@ class CodemodelReplyBoundaryTests(unittest.TestCase):
             path.write_bytes(b'{"v":"BBBB"}')
             with self.assertRaisesRegex(inventory.ReplyValidationError, "changed"):
                 snapshot.read_json("x.json", 100, "probe")
+
+    def test_standalone_json_read_ignores_unrelated_parent_sibling_activity(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            directory = Path(raw)
+            path = directory / "inventory.json"
+            write_json(path, {"schemaVersion": 3})
+            original_read = inventory.os.read
+            mutated = False
+
+            def create_sibling_then_read(descriptor: int, size: int) -> bytes:
+                nonlocal mutated
+                if not mutated:
+                    mutated = True
+                    (directory / "unrelated.tmp").write_text("unrelated", encoding="utf-8")
+                return original_read(descriptor, size)
+
+            with mock.patch.object(inventory.os, "read", side_effect=create_sibling_then_read):
+                decoded = inventory._read_bounded_json_file(path, 1024, "inventory")
+        self.assertTrue(mutated)
+        self.assertEqual(decoded, {"schemaVersion": 3})
+
+    def test_standalone_json_read_still_requires_parent_directory_identity(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            directory = Path(raw)
+            token = inventory._directory_stat_token(os.lstat(directory))
+            snapshot = inventory._ReplySnapshot(
+                directory,
+                directory,
+                token,
+                {},
+                set(),
+                require_directory_quiescence=False,
+            )
+            timestamp_only_change = (*token[:3], token[3] + 1, token[4] + 1, token[5])
+            with mock.patch.object(
+                inventory, "_directory_token", return_value=timestamp_only_change
+            ):
+                snapshot.assert_stable()
+
+            replaced_parent = (token[0], token[1] + 1, *token[2:])
+            with mock.patch.object(inventory, "_directory_token", return_value=replaced_parent):
+                with self.assertRaisesRegex(
+                    inventory.ConcurrentReplyUpdate, "reply directory changed"
+                ):
+                    snapshot.assert_stable()
 
     def test_random_atomic_temp_ignores_predictable_hardlink(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:

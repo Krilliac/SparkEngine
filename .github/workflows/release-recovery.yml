@@ -1,0 +1,122 @@
+name: Recover Failed Release Publication
+
+on:
+  workflow_run:
+    workflows: ["Publish Builds"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  recover:
+    if: github.event.workflow_run.conclusion != 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    concurrency:
+      group: sparkengine-publication-global
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted recovery controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: Working
+          persist-credentials: false
+
+      - name: Capture trusted checkout identity
+        id: trusted-checkout
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Validate failed source run and trusted recovery controller
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
+          TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
+          TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const eventRepository = context.payload.repository;
+            const repository = (await github.rest.repos.get(context.repo)).data;
+            const defaultCommit = (await github.rest.repos.getCommit({
+              ...context.repo, ref: 'Working'
+            })).data;
+            const checkoutSha = String(process.env.TRUSTED_CHECKOUT_SHA || '').toLowerCase();
+            const workflowSha = String(process.env.TRUSTED_WORKFLOW_SHA || '').toLowerCase();
+            const expectedRef = `${repository.full_name}/.github/workflows/release-recovery.yml@refs/heads/Working`;
+            const normalizePath = value => String(value || '')
+              .split('@', 1)[0].replace(/\\/g, '/').replace(/^\.\//, '');
+
+            if (!run || !eventRepository || !Number.isInteger(run.id) || run.id < 1 ||
+                !Number.isInteger(run.run_attempt) || run.run_attempt < 1 ||
+                !/^[0-9a-f]{40}$/i.test(run.head_sha || '')) {
+              throw new Error('Release recovery event has malformed source-run identity.');
+            }
+            if (repository.id !== eventRepository.id ||
+                repository.full_name !== `${context.repo.owner}/${context.repo.repo}` ||
+                repository.default_branch !== 'Working' ||
+                checkoutSha !== workflowSha ||
+                checkoutSha !== String(defaultCommit.sha || '').toLowerCase() ||
+                process.env.TRUSTED_WORKFLOW_REF !== expectedRef) {
+              throw new Error('Release recovery controller is not the exact current Working workflow.');
+            }
+            if (run.name !== 'Publish Builds' ||
+                normalizePath(run.path) !== '.github/workflows/release.yml' ||
+                !['schedule', 'repository_dispatch'].includes(run.event) ||
+                run.status !== 'completed' || run.conclusion === 'success' ||
+                run.head_branch !== 'Working' ||
+                run.repository?.id !== repository.id ||
+                run.repository?.full_name !== repository.full_name ||
+                run.head_repository?.id !== repository.id ||
+                run.head_repository?.full_name !== repository.full_name) {
+              throw new Error('Recovery source is not an exact failed default-branch release run.');
+            }
+
+      - name: Load durable staged publication state
+        id: state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATE_REF: refs/tags/generated-release-counters
+        run: |
+          set -euo pipefail
+          AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+            ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+          if [[ -z "$REMOTE_OBJECT" ]]; then
+            echo "No durable release-counter state exists; there is no staged publication to recover."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+            fetch --force --no-tags origin "+${STATE_REF}:${STATE_REF}"
+          FETCHED_OBJECT="$(git rev-parse "$STATE_REF")"
+          if [[ "$FETCHED_OBJECT" != "$REMOTE_OBJECT" ]]; then
+            echo "Durable release-counter state changed while recovery loaded it." >&2
+            exit 1
+          fi
+          git cat-file -e "${STATE_REF}^{commit}"
+          git show "${STATE_REF}:.github/badges/downloads-data.json" \
+            > "$RUNNER_TEMP/downloads-data.json"
+          echo "found=true" >> "$GITHUB_OUTPUT"
+
+      - name: Redraft exact interrupted publication
+        if: steps.state.outputs.found == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          python3 -I "$GITHUB_WORKSPACE/.github/scripts/recover_release_publication.py" \
+            --repository "$GITHUB_REPOSITORY" \
+            --state-file "$RUNNER_TEMP/downloads-data.json" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --source-sha "$SOURCE_SHA" \
+            --attempts 5

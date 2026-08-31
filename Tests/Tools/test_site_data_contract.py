@@ -25,6 +25,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "site-data"))
 
 import common as site_data_common  # noqa: E402
 from common import SiteDataError, load_contract  # noqa: E402
+import exact_evidence  # noqa: E402
 import render_handoff  # noqa: E402
 import validate as site_data_validate  # noqa: E402
 
@@ -1235,6 +1236,379 @@ class GenerationAndCiTests(ContractTestCase):
         self.assertEqual(selectors, implemented)
 
 
+class ExactEvidenceManifestTests(unittest.TestCase):
+    """Durable site/release provenance is complete, canonical, and replay-bound."""
+
+    VALUES = {
+        "GITHUB_REPOSITORY": "Krilliac/SparkEngine",
+        "EXACT_SOURCE_COMMIT": "1" * 40,
+        "EXACT_BUILD_RUN_ID": "101",
+        "EXACT_BUILD_RUN_ATTEMPT": "2",
+        "EXACT_BUILD_RUN_URL": "https://github.com/Krilliac/SparkEngine/actions/runs/101",
+        "EXACT_BUILD_EVENT": "workflow_dispatch",
+        "EXACT_BUILD_CI120_PRODUCER_JOB_ID": "401",
+        "EXACT_BUILD_REQUIRED_GATE_JOB_ID": "402",
+        "EXACT_BUILD_JOB_INVENTORY_DIGEST": "sha256:" + "5" * 64,
+        "EXACT_CI120_SOURCE_ARTIFACT_ID": "204",
+        "EXACT_CI120_SOURCE_ARTIFACT_DIGEST": "sha256:" + "6" * 64,
+        "EXACT_CI120_SOURCE_ARTIFACT_BYTES": "4096",
+        "EXACT_CI120_STATUS_ID": "201",
+        "EXACT_CI120_STATUS_TARGET_URL": "https://github.com/Krilliac/SparkEngine/actions/runs/202/attempts/3",
+        "EXACT_CI120_STATUS_CREATED_AT": "2026-08-30T01:00:02Z",
+        "EXACT_CI120_STATUS_UPDATED_AT": "2026-08-30T01:00:03Z",
+        "EXACT_CI120_VERIFIER_RUN_ID": "202",
+        "EXACT_CI120_VERIFIER_RUN_ATTEMPT": "3",
+        "EXACT_CI120_VERIFIER_RUN_URL": "https://github.com/Krilliac/SparkEngine/actions/runs/202",
+        "EXACT_VERIFIER_COMMIT": "2" * 40,
+        "EXACT_CI120_TRUSTED_VERIFIER_JOB_ID": "403",
+        "EXACT_CI120_VERIFIER_JOB_INVENTORY_DIGEST": "sha256:" + "7" * 64,
+        "EXACT_CI120_STATUS_PUBLISH_STEP_STARTED_AT": "2026-08-30T01:00:00Z",
+        "EXACT_CI120_STATUS_PUBLISH_STEP_COMPLETED_AT": "2026-08-30T01:00:05Z",
+        "EXACT_CI120_RECEIPT_ARTIFACT_ID": "203",
+        "EXACT_CI120_RECEIPT_ARTIFACT_DIGEST": "sha256:" + "3" * 64,
+        "EXACT_CI120_RECEIPT_ARTIFACT_BYTES": "1024",
+        "EXACT_CODEQL_RUN_ID": "301",
+        "EXACT_CODEQL_RUN_ATTEMPT": "4",
+        "EXACT_CODEQL_RUN_URL": "https://github.com/Krilliac/SparkEngine/actions/runs/301",
+        "EXACT_CODEQL_ACTIONS_SOURCE_JOB_ID": "404",
+        "EXACT_CODEQL_C_CPP_SOURCE_JOB_ID": "405",
+        "EXACT_CODEQL_PYTHON_SOURCE_JOB_ID": "406",
+        "EXACT_CODEQL_SOURCE_JOB_INVENTORY_DIGEST": "sha256:" + "8" * 64,
+        "EXACT_CODEQL_ACTIONS_SOURCE_ARTIFACT_ID": "305",
+        "EXACT_CODEQL_ACTIONS_SOURCE_ARTIFACT_DIGEST": "sha256:" + "9" * 64,
+        "EXACT_CODEQL_ACTIONS_SOURCE_ARTIFACT_BYTES": "2048",
+        "EXACT_CODEQL_C_CPP_SOURCE_ARTIFACT_ID": "306",
+        "EXACT_CODEQL_C_CPP_SOURCE_ARTIFACT_DIGEST": "sha256:" + "a" * 64,
+        "EXACT_CODEQL_C_CPP_SOURCE_ARTIFACT_BYTES": "3072",
+        "EXACT_CODEQL_PYTHON_SOURCE_ARTIFACT_ID": "307",
+        "EXACT_CODEQL_PYTHON_SOURCE_ARTIFACT_DIGEST": "sha256:" + "b" * 64,
+        "EXACT_CODEQL_PYTHON_SOURCE_ARTIFACT_BYTES": "4096",
+        "EXACT_CODEQL_STATUS_ID": "302",
+        "EXACT_CODEQL_STATUS_TARGET_URL": "https://github.com/Krilliac/SparkEngine/actions/runs/303/attempts/5",
+        "EXACT_CODEQL_STATUS_CREATED_AT": "2026-08-30T02:00:02Z",
+        "EXACT_CODEQL_STATUS_UPDATED_AT": "2026-08-30T02:00:03Z",
+        "EXACT_CODEQL_REPORTER_RUN_ID": "303",
+        "EXACT_CODEQL_REPORTER_RUN_ATTEMPT": "5",
+        "EXACT_CODEQL_REPORTER_RUN_URL": "https://github.com/Krilliac/SparkEngine/actions/runs/303",
+        "EXACT_CODEQL_TRUSTED_REPORTER_JOB_ID": "407",
+        "EXACT_CODEQL_REPORTER_JOB_INVENTORY_DIGEST": "sha256:" + "c" * 64,
+        "EXACT_CODEQL_STATUS_PUBLISH_STEP_STARTED_AT": "2026-08-30T02:00:00Z",
+        "EXACT_CODEQL_STATUS_PUBLISH_STEP_COMPLETED_AT": "2026-08-30T02:00:05Z",
+        "EXACT_CODEQL_SUMMARY_ARTIFACT_ID": "304",
+        "EXACT_CODEQL_SUMMARY_ARTIFACT_DIGEST": "sha256:" + "4" * 64,
+        "EXACT_CODEQL_SUMMARY_ARTIFACT_BYTES": "512",
+    }
+
+    def test_manifest_round_trip_is_canonical_and_source_bound(self) -> None:
+        manifest = exact_evidence.build_manifest(self.VALUES)
+        self.assertEqual(exact_evidence.validate_manifest(manifest), manifest)
+        self.assertEqual(manifest["sourceCommit"], self.VALUES["EXACT_SOURCE_COMMIT"])
+        self.assertEqual(manifest["schemaVersion"], 2)
+        self.assertEqual(manifest["build"]["event"], "workflow_dispatch")
+        self.assertEqual(manifest["build"]["ci120SourceArtifact"]["id"], 204)
+        self.assertEqual(manifest["ci120"]["statusId"], 201)
+        self.assertEqual(manifest["ci120"]["verifierJobId"], 403)
+        self.assertEqual(manifest["codeql"]["statusId"], 302)
+        self.assertEqual(
+            [item["language"] for item in manifest["codeql"]["sourceJobs"]],
+            ["actions", "c-cpp", "python"],
+        )
+        self.assertEqual(
+            manifest["ci120"]["receiptArtifact"]["name"],
+            f"ci120-trusted-receipt-{'1' * 40}-101-2-3",
+        )
+        self.assertEqual(
+            manifest["codeql"]["summaryArtifact"]["name"],
+            f"codeql-trusted-summary-{'1' * 40}-301-4-5",
+        )
+        self.assertEqual(
+            exact_evidence.canonical_bytes(manifest),
+            exact_evidence.canonical_bytes(exact_evidence.build_manifest(dict(self.VALUES))),
+        )
+
+    def test_every_gate_field_is_required_and_changes_canonical_bytes(self) -> None:
+        baseline = exact_evidence.canonical_bytes(
+            exact_evidence.build_manifest(self.VALUES)
+        )
+        for field in self.VALUES:
+            missing = dict(self.VALUES)
+            missing.pop(field)
+            with self.subTest(field=field, mode="missing"):
+                with self.assertRaises(exact_evidence.ExactEvidenceError):
+                    exact_evidence.build_manifest(missing)
+
+            mutated = dict(self.VALUES)
+            if field == "GITHUB_REPOSITORY":
+                replacement = "Krilliac/SparkEngineFork"
+                for url_field in (
+                    "EXACT_BUILD_RUN_URL",
+                    "EXACT_CI120_VERIFIER_RUN_URL",
+                    "EXACT_CODEQL_RUN_URL",
+                    "EXACT_CODEQL_REPORTER_RUN_URL",
+                ):
+                    prefix, suffix = mutated[url_field].split(
+                        "Krilliac/SparkEngine", maxsplit=1
+                    )
+                    mutated[url_field] = prefix + replacement + suffix
+                for url_field in (
+                    "EXACT_CI120_STATUS_TARGET_URL",
+                    "EXACT_CODEQL_STATUS_TARGET_URL",
+                ):
+                    prefix, suffix = mutated[url_field].split(
+                        "Krilliac/SparkEngine", maxsplit=1
+                    )
+                    mutated[url_field] = prefix + replacement + suffix
+            elif field in {"EXACT_SOURCE_COMMIT", "EXACT_VERIFIER_COMMIT"}:
+                replacement = "a" * 40
+            elif field.endswith("_DIGEST"):
+                replacement = "sha256:" + "d" * 64
+            elif field in {
+                "EXACT_BUILD_RUN_URL",
+                "EXACT_CI120_VERIFIER_RUN_URL",
+                "EXACT_CODEQL_RUN_URL",
+                "EXACT_CODEQL_REPORTER_RUN_URL",
+                "EXACT_CI120_STATUS_TARGET_URL",
+                "EXACT_CODEQL_STATUS_TARGET_URL",
+            }:
+                run_id_field = field.removesuffix("_URL") + "_ID"
+                # URL replacements are exercised through their run IDs below;
+                # a mismatched direct URL must fail rather than silently normalize.
+                hostile = dict(self.VALUES)
+                hostile[field] = self.VALUES[field] + "/unexpected"
+                with self.subTest(field=field, mode="mismatched-url"):
+                    with self.assertRaises(exact_evidence.ExactEvidenceError):
+                        exact_evidence.build_manifest(hostile)
+                continue
+            elif field.endswith("_AT"):
+                timestamp_replacements = {
+                    "EXACT_CI120_STATUS_CREATED_AT": "2026-08-30T01:00:01Z",
+                    "EXACT_CI120_STATUS_UPDATED_AT": "2026-08-30T01:00:04Z",
+                    "EXACT_CI120_STATUS_PUBLISH_STEP_STARTED_AT": "2026-08-30T00:59:59Z",
+                    "EXACT_CI120_STATUS_PUBLISH_STEP_COMPLETED_AT": "2026-08-30T01:00:06Z",
+                    "EXACT_CODEQL_STATUS_CREATED_AT": "2026-08-30T02:00:01Z",
+                    "EXACT_CODEQL_STATUS_UPDATED_AT": "2026-08-30T02:00:04Z",
+                    "EXACT_CODEQL_STATUS_PUBLISH_STEP_STARTED_AT": "2026-08-30T01:59:59Z",
+                    "EXACT_CODEQL_STATUS_PUBLISH_STEP_COMPLETED_AT": "2026-08-30T02:00:06Z",
+                }
+                replacement = timestamp_replacements[field]
+            elif field == "EXACT_BUILD_EVENT":
+                replacement = "push"
+            else:
+                replacement = str(int(self.VALUES[field]) + 1000)
+            mutated[field] = replacement
+            run_url_for_id = {
+                "EXACT_BUILD_RUN_ID": "EXACT_BUILD_RUN_URL",
+                "EXACT_CI120_VERIFIER_RUN_ID": "EXACT_CI120_VERIFIER_RUN_URL",
+                "EXACT_CODEQL_RUN_ID": "EXACT_CODEQL_RUN_URL",
+                "EXACT_CODEQL_REPORTER_RUN_ID": "EXACT_CODEQL_REPORTER_RUN_URL",
+            }
+            if field in run_url_for_id:
+                mutated[run_url_for_id[field]] = (
+                    f"https://github.com/{mutated['GITHUB_REPOSITORY']}/actions/runs/{replacement}"
+                )
+            status_target_for_id = {
+                "EXACT_CI120_VERIFIER_RUN_ID": "EXACT_CI120_STATUS_TARGET_URL",
+                "EXACT_CODEQL_REPORTER_RUN_ID": "EXACT_CODEQL_STATUS_TARGET_URL",
+            }
+            if field in status_target_for_id:
+                attempt_field = field.removesuffix("_ID") + "_ATTEMPT"
+                mutated[status_target_for_id[field]] = (
+                    f"https://github.com/{mutated['GITHUB_REPOSITORY']}/actions/runs/"
+                    f"{replacement}/attempts/{mutated[attempt_field]}"
+                )
+            status_target_for_attempt = {
+                "EXACT_CI120_VERIFIER_RUN_ATTEMPT": (
+                    "EXACT_CI120_VERIFIER_RUN_ID",
+                    "EXACT_CI120_STATUS_TARGET_URL",
+                ),
+                "EXACT_CODEQL_REPORTER_RUN_ATTEMPT": (
+                    "EXACT_CODEQL_REPORTER_RUN_ID",
+                    "EXACT_CODEQL_STATUS_TARGET_URL",
+                ),
+            }
+            if field in status_target_for_attempt:
+                run_id_field, target_field = status_target_for_attempt[field]
+                mutated[target_field] = (
+                    f"https://github.com/{mutated['GITHUB_REPOSITORY']}/actions/runs/"
+                    f"{mutated[run_id_field]}/attempts/{replacement}"
+                )
+            with self.subTest(field=field):
+                changed = exact_evidence.canonical_bytes(
+                    exact_evidence.build_manifest(mutated)
+                )
+                self.assertNotEqual(changed, baseline)
+
+    def test_gate_output_parser_rejects_partial_duplicate_and_unknown_fields(self) -> None:
+        inverse = {value: key for key, value in exact_evidence.ENV_FROM_GATE_KEY.items()}
+        lines = [
+            f"{inverse[environment]}={self.VALUES[environment]}"
+            for environment in exact_evidence.ENV_FROM_GATE_KEY.values()
+        ]
+        with tempfile.TemporaryDirectory() as raw:
+            def temporary_payload(payload: str) -> Path:
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    newline="\n",
+                    dir=raw,
+                    delete=False,
+                ) as stream:
+                    stream.write(payload)
+                    return Path(stream.name)
+
+            path = temporary_payload("\n".join(lines) + "\n")
+            values = exact_evidence.values_from_gate_output(
+                path,
+                repository=self.VALUES["GITHUB_REPOSITORY"],
+                source_commit=self.VALUES["EXACT_SOURCE_COMMIT"],
+            )
+            self.assertEqual(exact_evidence.build_manifest(values), exact_evidence.build_manifest(self.VALUES))
+
+            hostile_payloads = (
+                "\n".join(lines[:-1]) + "\n",
+                "\n".join([*lines, lines[0]]) + "\n",
+                "\n".join([*lines, "unknown=value"]) + "\n",
+            )
+            for payload in hostile_payloads:
+                with self.subTest(payload=payload[-40:]):
+                    path = temporary_payload(payload)
+                    with self.assertRaises(exact_evidence.ExactEvidenceError):
+                        exact_evidence.parse_gate_output(path)
+
+    def test_self_contained_validation_rejects_extra_or_fabricated_fields(self) -> None:
+        manifest = exact_evidence.build_manifest(self.VALUES)
+        mutations = []
+        extra = copy.deepcopy(manifest)
+        extra["untrusted"] = True
+        mutations.append(extra)
+        renamed = copy.deepcopy(manifest)
+        renamed["codeql"]["summaryArtifact"]["name"] = "summary.json"
+        mutations.append(renamed)
+        inconsistent = copy.deepcopy(manifest)
+        inconsistent["codeql"]["reporterCommit"] = "a" * 40
+        mutations.append(inconsistent)
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                with self.assertRaises(exact_evidence.ExactEvidenceError):
+                    exact_evidence.validate_manifest(mutation)
+
+    def test_semantic_order_identity_and_status_windows_fail_closed(self) -> None:
+        manifest = exact_evidence.build_manifest(self.VALUES)
+        mutations = []
+
+        reordered_jobs = copy.deepcopy(manifest)
+        reordered_jobs["codeql"]["sourceJobs"][0:2] = reversed(
+            reordered_jobs["codeql"]["sourceJobs"][0:2]
+        )
+        mutations.append(reordered_jobs)
+
+        reordered_artifacts = copy.deepcopy(manifest)
+        reordered_artifacts["codeql"]["sourceArtifacts"][1:3] = reversed(
+            reordered_artifacts["codeql"]["sourceArtifacts"][1:3]
+        )
+        mutations.append(reordered_artifacts)
+
+        duplicate_artifact_id = copy.deepcopy(manifest)
+        duplicate_artifact_id["codeql"]["sourceArtifacts"][1]["id"] = (
+            duplicate_artifact_id["codeql"]["sourceArtifacts"][0]["id"]
+        )
+        mutations.append(duplicate_artifact_id)
+
+        duplicate_build_job_id = copy.deepcopy(manifest)
+        duplicate_build_job_id["build"]["requiredGateJobId"] = (
+            duplicate_build_job_id["build"]["ci120ProducerJobId"]
+        )
+        mutations.append(duplicate_build_job_id)
+
+        cross_workflow_job_id = copy.deepcopy(manifest)
+        cross_workflow_job_id["codeql"]["reporterJobId"] = (
+            cross_workflow_job_id["ci120"]["verifierJobId"]
+        )
+        mutations.append(cross_workflow_job_id)
+
+        duplicate_status_id = copy.deepcopy(manifest)
+        duplicate_status_id["codeql"]["statusId"] = duplicate_status_id["ci120"]["statusId"]
+        mutations.append(duplicate_status_id)
+
+        duplicate_run_id = copy.deepcopy(manifest)
+        duplicate_run_id["codeql"]["reporterRunId"] = duplicate_run_id["ci120"][
+            "verifierRunId"
+        ]
+        duplicate_run_id["codeql"]["reporterRunUrl"] = duplicate_run_id["ci120"][
+            "verifierRunUrl"
+        ]
+        duplicate_run_id["codeql"]["statusTargetUrl"] = (
+            f"{duplicate_run_id['ci120']['verifierRunUrl']}/attempts/"
+            f"{duplicate_run_id['codeql']['reporterRunAttempt']}"
+        )
+        mutations.append(duplicate_run_id)
+
+        outside_publish_step = copy.deepcopy(manifest)
+        outside_publish_step["ci120"]["statusCreatedAt"] = "2026-08-30T00:59:58Z"
+        mutations.append(outside_publish_step)
+
+        noncanonical_timestamp = copy.deepcopy(manifest)
+        noncanonical_timestamp["codeql"]["statusUpdatedAt"] = (
+            "2026-08-29T21:00:03-05:00"
+        )
+        mutations.append(noncanonical_timestamp)
+
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                with self.assertRaises(exact_evidence.ExactEvidenceError):
+                    exact_evidence.validate_manifest(mutation)
+
+    def test_status_target_and_timestamp_boundaries_are_exact(self) -> None:
+        boundary = dict(self.VALUES)
+        boundary["EXACT_CI120_STATUS_CREATED_AT"] = "2026-08-30T00:59:59Z"
+        boundary["EXACT_CI120_STATUS_UPDATED_AT"] = "2026-08-30T01:00:06Z"
+        exact_evidence.build_manifest(boundary)
+
+        for field, replacement in (
+            ("EXACT_CI120_STATUS_CREATED_AT", "2026-08-30T00:59:58Z"),
+            ("EXACT_CI120_STATUS_UPDATED_AT", "2026-08-30T01:00:07Z"),
+            ("EXACT_CI120_STATUS_CREATED_AT", "2026-08-29T20:00:02-05:00"),
+            (
+                "EXACT_CODEQL_STATUS_TARGET_URL",
+                "https://github.com/Krilliac/SparkEngine/actions/runs/303/attempts/4",
+            ),
+        ):
+            hostile = dict(self.VALUES)
+            hostile[field] = replacement
+            with self.subTest(field=field, replacement=replacement):
+                with self.assertRaises(exact_evidence.ExactEvidenceError):
+                    exact_evidence.build_manifest(hostile)
+
+    def test_verify_manifest_rejects_valid_in_window_timestamp_replay(self) -> None:
+        replayed = dict(self.VALUES)
+        replayed["EXACT_CI120_STATUS_CREATED_AT"] = "2026-08-30T01:00:01Z"
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "SparkEngine-Exact-CI-Evidence.json"
+            written = exact_evidence.write_manifest(path, replayed)
+            self.assertEqual(exact_evidence.validate_manifest(written), written)
+            with self.assertRaisesRegex(
+                exact_evidence.ExactEvidenceError, "differs from the verified gate outputs"
+            ):
+                exact_evidence.verify_manifest(path, self.VALUES)
+
+    def test_manifest_loader_rejects_duplicate_json_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                newline="\n",
+                suffix=".json",
+                dir=raw,
+                delete=False,
+            ) as stream:
+                stream.write('{"schemaVersion": 2, "schemaVersion": 2}\n')
+                path = Path(stream.name)
+            with self.assertRaisesRegex(
+                exact_evidence.ExactEvidenceError, "duplicate key"
+            ):
+                exact_evidence.load_manifest(path)
+
+
 
 class BuildMatrixEvidenceTests(ContractTestCase):
     """The CI-120 evidence pair must fail closed on absence and fabrication.
@@ -1428,6 +1802,41 @@ class AtomicPublicationTests(unittest.TestCase):
         )
         self.assertNotEqual(
             site_data_common._identity(before), site_data_common._identity(after)
+        )
+
+    def test_directory_chain_token_ignores_unrelated_child_churn(self) -> None:
+        before = mock.Mock(
+            st_dev=7,
+            st_ino=11,
+            st_mode=0o40755,
+            st_mtime_ns=100,
+            st_ctime_ns=200,
+            st_file_attributes=0,
+        )
+        after = mock.Mock(
+            st_dev=7,
+            st_ino=11,
+            st_mode=0o40755,
+            st_mtime_ns=300,
+            st_ctime_ns=400,
+            st_file_attributes=0,
+        )
+        replacement = mock.Mock(
+            st_dev=7,
+            st_ino=12,
+            st_mode=0o40755,
+            st_mtime_ns=300,
+            st_ctime_ns=400,
+            st_file_attributes=0,
+        )
+
+        self.assertEqual(
+            site_data_common._directory_token(before),
+            site_data_common._directory_token(after),
+        )
+        self.assertNotEqual(
+            site_data_common._directory_token(before),
+            site_data_common._directory_token(replacement),
         )
 
     def test_parent_directory_substitution_is_rejected(self) -> None:

@@ -4734,7 +4734,7 @@ The existing site checks in a 22 MB generated snapshot and hardcodes capabilitie
 **Implementation scope**
 
 - Generate exact-SHA content/readiness/metrics/handoff/docs/search/page bundle
-- Publish to dedicated site-data branch after exact tested Working SHA
+- Publish to the moving site-data tag after exact tested Working SHA
 - Publish blocked state after failed CI instead of leaving previous commit current
 - Use hash-addressed snapshots and switch latest last
 - Retain current plus two previous snapshots

@@ -1603,14 +1603,23 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
     parity_after = later(
         "parity",
         lambda entry: normalized(entry.get("inventory")) == "build-matrix-inventory.json"
-        and normalized(entry.get("baseline")) == "docs/readiness/ci120-parity-findings.json",
+        and normalized(entry.get("baseline")) == ""
+        and normalized(entry.get("output")) == "build-matrix-parity-findings.json",
     )
-    if not inventory_after or not parity_after:
+    pending_after = later(
+        "pending-authority",
+        lambda entry: normalized(entry.get("inventory")) == "build-matrix-inventory.json"
+        and normalized(entry.get("report")) == "build-matrix-parity-findings.json"
+        and normalized(entry.get("output")) == "build-matrix-pending-receipt.json",
+    )
+    if not inventory_after or not parity_after or not pending_after:
         missing = []
         if not inventory_after:
             missing.append("inventory")
         if not parity_after:
             missing.append("parity validator")
+        if not pending_after:
+            missing.append("pending-authority validator")
         findings.append(
             Finding(
                 "ci120-producer-validator-disconnected",

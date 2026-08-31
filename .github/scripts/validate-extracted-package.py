@@ -202,6 +202,7 @@ class _ArchiveMemberTracker:
         self.total_expanded_bytes = 0
         self.destinations: dict[str, tuple[str, str]] = {}
         self.required_directories: dict[str, str] = {}
+        self.top_level_entries: dict[str, tuple[str, str]] = {}
 
     def add(self, name: str, kind: str, size: int) -> str:
         self.member_count += 1
@@ -233,6 +234,15 @@ class _ArchiveMemberTracker:
             )
 
         components = destination.split("/")
+        top_level_name = components[0]
+        top_level_kind = "directory" if len(components) > 1 else kind
+        top_level_folded = top_level_name.casefold()
+        previous_top_level = self.top_level_entries.get(top_level_folded)
+        if previous_top_level is None:
+            self.top_level_entries[top_level_folded] = (
+                top_level_name,
+                top_level_kind,
+            )
         for index in range(1, len(components)):
             ancestor = "/".join(components[:index])
             ancestor_folded = ancestor.casefold()
@@ -270,6 +280,15 @@ class _ArchiveMemberTracker:
 
         self.destinations[folded] = (destination, kind)
         return destination
+
+    def require_single_package_root(self) -> None:
+        entries = tuple(self.top_level_entries.values())
+        if len(entries) != 1 or entries[0][1] != "directory":
+            inventory = sorted(entry[0] for entry in entries)
+            raise ValidationError(
+                "Archive must contain exactly one top-level package directory; "
+                f"found {inventory}"
+            )
 
 
 def _zip_member_kind(member: zipfile.ZipInfo) -> str:
@@ -443,6 +462,7 @@ def validate_archive(archive_path: Path) -> None:
         if expected_format == "ZIP"
         else _validate_tar_gz_archive(archive_path)
     )
+    tracker.require_single_package_root()
     print(
         f"Archive member preflight passed: {tracker.member_count} members, "
         f"expanded={_format_bytes(tracker.total_expanded_bytes)}, archive={archive_path}"
@@ -541,6 +561,13 @@ def validate_package(package_root: Path, stage_root: Path | None, archive: Path 
             raise ValidationError(f"Portable archive does not exist: {archive}")
         archive = archive.resolve(strict=True)
         _check_file_limit(archive, archive.stat().st_size)
+        extraction_entries = tuple(package_root.parent.iterdir())
+        if len(extraction_entries) != 1 or extraction_entries[0] != package_root:
+            inventory = sorted(entry.name for entry in extraction_entries)
+            raise ValidationError(
+                "Extracted archive must contain exactly one top-level package directory; "
+                f"found {inventory}"
+            )
 
     template_root = package_root / "share" / "SparkEngine" / "templates"
     _validate_package_hygiene(package_root)

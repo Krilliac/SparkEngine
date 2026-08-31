@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -12,6 +15,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "build.yml"
 RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
+RELEASE_RECOVERY_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-recovery.yml"
+LOC_COUNTER_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "loc-counter.yml"
+SITE_DATA_PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "site-data-publish.yml"
 TEST_COUNT_RATCHET = REPO_ROOT / ".github" / "test-count-ratchet.json"
 TESTS_CMAKE = REPO_ROOT / "Tests" / "CMakeLists.txt"
 TELEMETRY_EXPECTED_COUNT = 7
@@ -234,7 +240,7 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
             workflow,
             "Verify exact source commit passed Required CI Gate",
         )
-        badge_checkout = named_step(workflow, "Checkout canonical badge branch")
+        badge_checkout = named_step(workflow, "Checkout badge-state seed")
     except AssertionError as error:
         errors.append(str(error))
     else:
@@ -243,7 +249,7 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
             "Verify exact source commit passed Required CI Gate"
         )
         profile_gate_position = ordered_step_names.index(step_name)
-        badge_checkout_position = ordered_step_names.index("Checkout canonical badge branch")
+        badge_checkout_position = ordered_step_names.index("Checkout badge-state seed")
         if profile_gate_position != required_ci_position + 1:
             errors.append(
                 "stable-v1 publication gate must run immediately after Required CI"
@@ -308,6 +314,119 @@ def release_run_timestamp_errors(workflow: str) -> list[str]:
     return errors
 
 
+def standard_test_evidence_errors(workflow: str) -> list[str]:
+    """Reject stale or partial primary-lane test evidence."""
+
+    errors: list[str] = []
+    job_names = (
+        "build-windows-vs2022",
+        "build-windows-vs2026",
+        "build-linux-gcc",
+        "build-linux-clang",
+        "build-macos",
+    )
+    expected_conditions = {
+        "build-windows-vs2022": "always() && matrix.config == 'Release'",
+        "build-windows-vs2026": "always() && matrix.config == 'Release'",
+        "build-linux-gcc": "always()",
+        "build-linux-clang": "always()",
+        "build-macos": "always() && matrix.config == 'Release'",
+    }
+    scrub_fragments = (
+        "rm -f",
+        "build/SparkTests-junit.xml",
+        "build/SparkTests.log",
+        "build/SparkTests-output.log",
+        "build/ctest-junit.xml",
+        "build/*-process-smoke.log",
+        "build/*-process-smoke.json",
+        "build/*-process-smoke.xml",
+    )
+    summary_checks = (
+        "test -s build/SparkTests-junit.xml",
+        "test -s build/SparkTests.log",
+        "test -s build/SparkTests-output.log",
+        "test -s build/ctest-junit.xml",
+    )
+    upload_paths = (
+        "build/SparkTests-junit.xml",
+        "build/SparkTests.log",
+        "build/SparkTests-output.log",
+        "build/ctest-junit.xml",
+    )
+
+    for job_name in job_names:
+        try:
+            job = yaml_section(workflow, job_name, indent=2)
+        except AssertionError as error:
+            errors.append(str(error))
+            continue
+
+        ordered_names = [name for name, _block in step_blocks(job)]
+        required_names = (
+            "Restore build directory",
+            "Scrub restored test evidence",
+            "Validate and summarize test statistics",
+            "Upload machine-readable test results",
+        )
+        try:
+            positions = {name: ordered_names.index(name) for name in required_names}
+        except ValueError as error:
+            errors.append(f"{job_name} test-evidence steps are incomplete: {error}")
+            continue
+        if positions["Scrub restored test evidence"] != positions["Restore build directory"] + 1:
+            errors.append(f"{job_name} must scrub test evidence immediately after cache restore")
+        if not (
+            positions["Scrub restored test evidence"]
+            < positions["Validate and summarize test statistics"]
+            < positions["Upload machine-readable test results"]
+        ):
+            errors.append(f"{job_name} test-evidence steps are out of order")
+
+        try:
+            scrub = named_step(job, "Scrub restored test evidence")
+            summary = named_step(job, "Validate and summarize test statistics")
+            upload = named_step(job, "Upload machine-readable test results")
+        except AssertionError as error:
+            errors.append(str(error))
+            continue
+
+        if not exact_field(scrub, "if", "always()", indent=6):
+            errors.append(f"{job_name} test-evidence scrub must run under exact if: always()")
+        if re.search(r"(?m)^\s+['\"]?continue-on-error['\"]?:", scrub):
+            errors.append(f"{job_name} test-evidence scrub suppresses failure")
+        for fragment in scrub_fragments:
+            if scrub.count(fragment) != 1:
+                errors.append(f"{job_name} test-evidence scrub is missing/duplicating {fragment}")
+
+        summarizer_position = summary.find("summarize-test-results.py")
+        if summarizer_position < 0:
+            errors.append(f"{job_name} test statistics summarizer is missing")
+        for command in summary_checks:
+            if summary.count(command) != 1:
+                errors.append(f"{job_name} summary is missing/duplicating {command}")
+            elif summary.find(command) > summarizer_position:
+                errors.append(f"{job_name} validates {command} after statistics are generated")
+
+        expected_condition = expected_conditions[job_name]
+        if not exact_field(summary, "if", expected_condition, indent=6):
+            errors.append(
+                f"{job_name} summary must run under exact if: {expected_condition}"
+            )
+        if not exact_field(upload, "if", expected_condition, indent=6):
+            errors.append(
+                f"{job_name} test-evidence upload must run under exact if: {expected_condition}"
+            )
+
+        for path in upload_paths:
+            if upload.count(path) != 1:
+                errors.append(f"{job_name} upload is missing/duplicating {path}")
+        if upload.count("if-no-files-found: error") != 1:
+            errors.append(f"{job_name} test-evidence upload must fail when no files exist")
+
+    return errors
+
+
 def required_workflow_errors(workflow: str) -> list[str]:
     """Conservatively parse the fail-closed sanitizer/aggregation YAML contract."""
 
@@ -332,6 +451,28 @@ def required_workflow_errors(workflow: str) -> list[str]:
             errors.append("push evidence must not be cancelled by workflow concurrency")
         if "|| github.sha }}" not in concurrency:
             errors.append("workflow concurrency group is not bound to the pushed SHA")
+
+    errors.extend(standard_test_evidence_errors(workflow))
+
+    try:
+        validation = yaml_section(workflow, "validate-ci-tools", indent=2)
+        wrapper_harness = named_step(
+            validation, "Test granular SparkTests wrapper failure recovery"
+        )
+    except AssertionError as error:
+        errors.append(str(error))
+    else:
+        if re.search(
+            r"(?m)^\s+['\"]?(?:if|continue-on-error)['\"]?:", wrapper_harness
+        ):
+            errors.append("SparkTests wrapper recovery harness is conditional or suppresses failure")
+        if not exact_field(
+            wrapper_harness,
+            "run",
+            "python3 .github/scripts/test-run-spark-tests.py",
+            indent=6,
+        ):
+            errors.append("SparkTests wrapper recovery harness command is not exact")
 
     for sanitizer, run_name, verify_name in (
         ("asan", "Run Tests under ASan + UBSan + LSan", "Verify published ASan exact-commit evidence"),
@@ -506,6 +647,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 '--expected-sha "${{ github.sha }}"',
                 '--run-id "${{ github.run_id }}"',
                 '--run-attempt "${{ github.run_attempt }}"',
+                "--allow-prior-attempt",
             ):
                 if block.count(fragment) != 1:
                     errors.append(f"{step_name} is missing/duplicating {fragment}")
@@ -532,9 +674,22 @@ def required_workflow_errors(workflow: str) -> list[str]:
     if gate:
         if not exact_field(gate, "if", "always()"):
             errors.append("required-ci-gate must run under exact if: always()")
-        for dependency in ("build-linux-asan", "build-linux-tsan", "telemetry-integration", "aggregate-test-stats"):
-            if len(re.findall(rf"(?m)^      - {dependency}$", gate)) != 1:
-                errors.append(f"required-ci-gate must need {dependency} exactly once")
+        expected_dependencies = [
+            "validate-ci-tools", "check-format", "validate-prompts", "check-thirdparty-manifest",
+            "build-linux-asan", "build-linux-tsan", "telemetry-integration",
+            "build-windows-vs2022", "build-windows-shipping", "build-linux-gcc",
+            "build-linux-clang", "coverage", "clang-tidy", "todo-count",
+            "build-installer", "aggregate-test-stats",
+        ]
+        needs_match = re.search(
+            r"(?ms)^    needs:\n(?P<body>(?:      - [a-z0-9-]+\n)+)", gate
+        )
+        actual_dependencies = (
+            re.findall(r"(?m)^      - ([a-z0-9-]+)$", needs_match.group("body"))
+            if needs_match else []
+        )
+        if actual_dependencies != expected_dependencies:
+            errors.append("required-ci-gate must preserve the exact ordered 16-job dependency inventory")
         try:
             verifier = named_step(gate, "Verify every required job succeeded")
         except AssertionError as exc:
@@ -542,8 +697,15 @@ def required_workflow_errors(workflow: str) -> list[str]:
         else:
             if re.search(r"(?m)^\s+['\"]?(?:if|continue-on-error)['\"]?:", verifier):
                 errors.append("required-ci-gate verifier has a conditional/error bypass")
-            if verifier.count("env:") != 1 or verifier.count("NEEDS_JSON: ${{ toJSON(needs) }}") != 1:
-                errors.append("required-ci-gate verifier must consume exact needs JSON once")
+            required_environment = (
+                "NEEDS_JSON: ${{ toJSON(needs) }}",
+                "EXPECTED_REQUIRED_JOBS_JSON: '[\"validate-ci-tools\",\"check-format\",\"validate-prompts\",\"check-thirdparty-manifest\",\"build-linux-asan\",\"build-linux-tsan\",\"telemetry-integration\",\"build-windows-vs2022\",\"build-windows-shipping\",\"build-linux-gcc\",\"build-linux-clang\",\"coverage\",\"clang-tidy\",\"todo-count\",\"build-installer\",\"aggregate-test-stats\"]'",
+                "DEFERRED_REQUIRED_FAILURES_JSON: '{\"build-windows-shipping\":\"failure\"}'",
+            )
+            if verifier.count("env:") != 1 or any(
+                verifier.count(fragment) != 1 for fragment in required_environment
+            ):
+                errors.append("required-ci-gate verifier must consume the exact needs and deferred-failure policy once")
             if not exact_field(
                 verifier,
                 "run",
@@ -559,10 +721,79 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.build = BUILD_WORKFLOW.read_text(encoding="utf-8")
         cls.release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        cls.loc_counter = LOC_COUNTER_WORKFLOW.read_text(encoding="utf-8")
+        cls.site_data_publish = SITE_DATA_PUBLISH_WORKFLOW.read_text(encoding="utf-8")
         cls.tests_cmake = TESTS_CMAKE.read_text(encoding="utf-8")
 
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
         self.assertEqual(required_workflow_errors(self.build), [])
+
+    def test_release_artifact_builders_use_explicit_runner_images(self) -> None:
+        for workflow in (self.build, self.release):
+            self.assertNotIn("windows-latest", workflow)
+            self.assertNotIn("macos-latest", workflow)
+        self.assertIn("runs-on: windows-2025-vs2026", self.build)
+        self.assertIn("- os: windows-2022", self.build)
+        self.assertIn("- os: macos-15", self.build)
+        self.assertIn("- os: windows-2022", self.release)
+        self.assertIn("- os: macos-15", self.release)
+
+    def test_standard_test_evidence_rejects_scrub_removal_or_reordering(self) -> None:
+        vs2022 = yaml_section(self.build, "build-windows-vs2022", indent=2)
+        scrub = named_step(vs2022, "Scrub restored test evidence")
+        configure = named_step(vs2022, "Configure CMake (VS 2022 / v143)")
+        removed = self.build.replace(scrub, "", 1)
+        moved = self.build.replace(scrub, "", 1).replace(
+            configure,
+            f"{configure}\n{scrub}",
+            1,
+        )
+        for label, mutated in (("removed", removed), ("moved", moved)):
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, self.build, "mutation fixture did not alter YAML")
+                self.assertTrue(standard_test_evidence_errors(mutated), label)
+
+    def test_standard_test_evidence_rejects_missing_per_file_postcondition(self) -> None:
+        mutated = self.build.replace("        test -s build/SparkTests.log\n", "", 1)
+        self.assertNotEqual(mutated, self.build, "mutation fixture did not alter YAML")
+        self.assertTrue(standard_test_evidence_errors(mutated))
+
+    def test_standard_test_evidence_scrub_must_run_after_failed_restore(self) -> None:
+        mutated = self.build.replace(
+            "    - name: Scrub restored test evidence\n      if: always()\n",
+            "    - name: Scrub restored test evidence\n",
+            1,
+        )
+        self.assertNotEqual(mutated, self.build, "mutation fixture did not alter YAML")
+        self.assertTrue(standard_test_evidence_errors(mutated))
+
+    def test_standard_test_evidence_summary_and_upload_must_run_after_failure(self) -> None:
+        vs2022 = yaml_section(self.build, "build-windows-vs2022", indent=2)
+        summary = named_step(vs2022, "Validate and summarize test statistics")
+        upload = named_step(vs2022, "Upload machine-readable test results")
+        mutations = {
+            "summary": self.build.replace(
+                summary,
+                summary.replace("if: always()", "if: success()", 1),
+                1,
+            ),
+            "upload": self.build.replace(
+                upload,
+                upload.replace("if: always()", "if: success()", 1),
+                1,
+            ),
+        }
+        for label, mutated in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, self.build, "mutation fixture did not alter YAML")
+                self.assertTrue(standard_test_evidence_errors(mutated), label)
+
+    def test_required_workflow_rejects_removed_wrapper_recovery_harness(self) -> None:
+        validation = yaml_section(self.build, "validate-ci-tools", indent=2)
+        harness = named_step(validation, "Test granular SparkTests wrapper failure recovery")
+        mutated = self.build.replace(harness, "", 1)
+        self.assertNotEqual(mutated, self.build, "mutation fixture did not alter YAML")
+        self.assertTrue(required_workflow_errors(mutated))
 
     def test_telemetry_ctest_selector_is_fail_closed(self) -> None:
         self.assertEqual(telemetry_ctest_contract_errors(self.tests_cmake), [])
@@ -663,9 +894,9 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         )
         mutations["required gate needs evidence removed"] = self.build.replace(
             "          NEEDS_JSON: ${{ toJSON(needs) }}\n"
-            "        run: python3 .github/scripts/verify-required-jobs.py",
+            "          EXPECTED_REQUIRED_JOBS_JSON:",
             "          NEEDS_JSON: '{}'\n"
-            "        run: python3 .github/scripts/verify-required-jobs.py",
+            "          EXPECTED_REQUIRED_JOBS_JSON:",
             1,
         )
         mutations["path filter"] = self.build.replace(
@@ -816,7 +1047,9 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             self.release,
             "Verify stable-v1 is ready for versioned publication",
         )
-        tag_binding = named_step(self.release, "Bind release tag to workflow commit")
+        tag_binding = named_step(
+            self.release, "Bind stable release tag to workflow commit"
+        )
         gate_after_tag_binding = self.release.replace(readiness, "", 1).replace(
             tag_binding,
             f"{tag_binding}\n{readiness}",
@@ -963,6 +1196,189 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def test_generated_documentation_runs_for_direct_pushes(self) -> None:
         block = named_step(self.build, "Verify all generated documentation and statistics")
         self.assertNotRegex(block, r"(?m)^\s+if:")
+
+    def test_generated_metrics_publish_only_to_the_moving_state_tag(self) -> None:
+        self.assertIn("STATE_REF: refs/tags/generated-repository-metrics", self.loc_counter)
+        self.assertIn('"HEAD:${STATE_REF}"', self.loc_counter)
+        self.assertIn("--force-with-lease=\"${STATE_REF}:${EXPECTED_REMOTE_OBJECT}\"", self.loc_counter)
+        self.assertNotIn('"HEAD:refs/heads/Working"', self.loc_counter)
+        self.assertNotIn("gh workflow run", self.loc_counter)
+        self.assertIn("repository-metrics-source.json", self.loc_counter)
+
+    def test_site_data_accepts_only_exact_staged_build_and_writes_a_tag(self) -> None:
+        self.assertEqual(self.site_data_publish.count("--staged-build-only"), 1)
+        self.assertEqual(
+            self.site_data_publish.count("verify-exact-required-gate.py"), 4
+        )
+        self.assertIn("Wait for trusted exact-commit CI evidence", self.site_data_publish)
+        self.assertIn("SOURCE_RUN_ATTEMPT", self.site_data_publish)
+        self.assertIn("STATE_REF: refs/tags/site-data", self.site_data_publish)
+        self.assertIn('"HEAD:${STATE_REF}"', self.site_data_publish)
+        self.assertIn(
+            '--force-with-lease="${STATE_REF}:${EXPECTED_SITE_OBJECT}"',
+            self.site_data_publish,
+        )
+        self.assertNotIn("HEAD:site-data", self.site_data_publish)
+        self.assertNotIn("switch --create site-data", self.site_data_publish)
+        self.assertEqual(
+            self.site_data_publish.count("      statuses: read"),
+            2,
+            "both site-data jobs that invoke the exact gate need status read permission",
+        )
+        self.assertIn("id: exact-gate", self.site_data_publish)
+        self.assertEqual(
+            self.site_data_publish.count("exact_evidence.py write"), 1
+        )
+        self.assertEqual(
+            self.site_data_publish.count("--exact-evidence-file"), 2
+        )
+        self.assertEqual(
+            self.site_data_publish.count("--require-exact-evidence"), 3
+        )
+        self.assertIn("EXACT_CI120_STATUS_ID: ${{ steps.exact-gate.outputs.ci120_status_id }}", self.site_data_publish)
+        self.assertIn("EXACT_CODEQL_STATUS_ID: ${{ steps.exact-gate.outputs.codeql_status_id }}", self.site_data_publish)
+        publish_step = named_step(
+            self.site_data_publish,
+            "Recheck exact staged evidence, commit, and publish the site-data tag",
+        )
+        final_gate = publish_step.rindex("verify-exact-required-gate.py")
+        exact_compare = publish_step.index("verify-gate-output", final_gate)
+        state_compare = publish_step.index("REMOTE_OBJECT_NOW=", exact_compare)
+        tag_push = publish_step.index('"HEAD:${STATE_REF}"', state_compare)
+        self.assertLess(final_gate, exact_compare)
+        self.assertLess(exact_compare, state_compare)
+        self.assertLess(state_compare, tag_push)
+        self.assertNotIn("continue-on-error", publish_step)
+        self.assertNotIn("|| true", publish_step)
+
+    def test_release_controller_cannot_run_from_a_caller_selected_ref(self) -> None:
+        header = self.release[: self.release.index("permissions:")]
+        self.assertIn("repository_dispatch:", header)
+        self.assertNotIn("workflow_dispatch:", header)
+        self.assertNotIn("  push:", header)
+        controller = named_step(self.release, "Attest current trusted release controller")
+        self.assertIn('EVENT_REF" != "refs/heads/Working', controller)
+        self.assertIn('LOCAL_SHA" != "$WORKFLOW_SHA', controller)
+        self.assertIn('LOCAL_SHA" != "$REMOTE_SHA', controller)
+
+    def test_release_concurrency_uses_only_supported_github_schema(self) -> None:
+        release_job = self.release[self.release.index("  release:\n") :]
+        concurrency = release_job[
+            release_job.index("    concurrency:\n") : release_job.index("\n    steps:\n")
+        ]
+        self.assertIn("      group: sparkengine-publication-global", concurrency)
+        self.assertIn("      cancel-in-progress: false", concurrency)
+        self.assertNotIn("queue:", concurrency)
+
+    def test_all_workflow_concurrency_uses_supported_github_schema(self) -> None:
+        offenders = []
+        for path in sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml")):
+            if re.search(r"(?m)^\s+queue:\s*", path.read_text(encoding="utf-8")):
+                offenders.append(path.name)
+        self.assertEqual(offenders, [])
+
+    def test_versioned_release_cannot_publish_debug_without_release(self) -> None:
+        matrix = named_step(self.release, "Determine build configurations")
+        self.assertIn(
+            'if [[ "$IS_VERSIONED" == "true" && "$REQUESTED_CONFIGS" == "debug" ]]',
+            matrix,
+        )
+        self.assertIn("versioned releases must include Release artifacts", matrix)
+
+    def test_release_binaries_bind_and_verify_the_requested_cmake_version(self) -> None:
+        installer_cmake = (REPO_ROOT / "SparkInstaller" / "CMakeLists.txt").read_text(encoding="utf-8")
+        launcher_cmake = (REPO_ROOT / "SparkLauncher" / "CMakeLists.txt").read_text(encoding="utf-8")
+        installer_header = (REPO_ROOT / "SparkInstaller" / "src" / "Installer.h").read_text(encoding="utf-8")
+        launcher_main = (REPO_ROOT / "SparkLauncher" / "src" / "main.cpp").read_text(encoding="utf-8")
+        launch_step = named_step(self.release, "Launch staged executable")
+
+        self.assertIn('SPARK_INSTALLER_VERSION=\\"${PROJECT_VERSION}\\"', installer_cmake)
+        self.assertIn('SPARK_LAUNCHER_VERSION=\\"${PROJECT_VERSION}\\"', launcher_cmake)
+        self.assertIn("SPARK_INSTALLER_VERSION", installer_header)
+        self.assertNotIn('kInstallerVersion = "1.0.0"', installer_header)
+        self.assertIn("SPARK_LAUNCHER_VERSION", launcher_main)
+        self.assertNotIn('SparkLauncher 1.0.0', launcher_main)
+        self.assertIn('EXPECTED_VERSION: ${{ needs.prepare.outputs.cmake_version }}', launch_step)
+        self.assertIn('EXPECTED_PLATFORM: ${{ matrix.platform_name }}', launch_step)
+
+        command_match = re.search(
+            r'(?m)^\s+((?=[^\n]*grep)(?=[^\n]*installer-version[.]txt)[^\n]+)$',
+            launch_step,
+        )
+        self.assertIsNotNone(command_match, "staged installer version gate is missing")
+        command = command_match.group(1).replace("installer-version.txt", "-")
+        if os.name == "nt":
+            bash = Path(os.environ["ProgramFiles"]) / "Git" / "bin" / "bash.exe"
+        else:
+            bash = Path(shutil.which("bash") or "")
+        self.assertTrue(bash.is_file(), f"bash is unavailable: {bash}")
+        environment = dict(os.environ)
+        environment.update(EXPECTED_VERSION="7.8.9", EXPECTED_PLATFORM="Linux")
+        for displayed, expected_status in (
+            ("SparkInstaller 7.8.9 (Linux)\n", 0),
+            ("SparkInstaller 7.8.9 (Linux)\r\n", 0),
+            ("SparkInstaller 7x8y9 (Linux)\n", 1),
+            ("SparkInstaller 7.8.9 (Windows)\n", 1),
+        ):
+            with self.subTest(displayed=displayed.rstrip()):
+                completed = subprocess.run(
+                    [str(bash), "-c", command],
+                    input=displayed,
+                    text=True,
+                    env=environment,
+                    check=False,
+                    capture_output=True,
+                )
+                self.assertEqual(completed.returncode, expected_status)
+
+        self.assertIn(
+            'SPARK_EXPECTED_VERSION_OUTPUT=SparkInstaller ${PROJECT_VERSION} (${_sparkinstaller_platform})',
+            installer_cmake,
+        )
+        self.assertIn(
+            'SPARK_EXPECTED_VERSION_OUTPUT=SparkLauncher ${PROJECT_VERSION}',
+            launcher_cmake,
+        )
+        self.assertIn(
+            'add_test(NAME SparkInstallerVersion\n        COMMAND "${CMAKE_COMMAND}"',
+            installer_cmake,
+        )
+        for cmake_file in (installer_cmake, launcher_cmake):
+            self.assertIn(
+                'if(NOT _spark_version_output STREQUAL "${SPARK_EXPECTED_VERSION_OUTPUT}\\n")',
+                cmake_file,
+            )
+
+    def test_late_release_failure_redrafts_the_exact_durable_release(self) -> None:
+        recovery = named_step(self.release, "Recover incomplete public release")
+        self.assertIn("      if: failure()", recovery)
+        self.assertIn("recover_release_publication.py", recovery)
+        self.assertIn(
+            'STATE_FILE="$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"',
+            recovery,
+        )
+        self.assertIn('--state-file "$STATE_FILE"', recovery)
+        self.assertIn('--run-id "$GITHUB_RUN_ID"', recovery)
+        self.assertIn('--run-attempt "$GITHUB_RUN_ATTEMPT"', recovery)
+        self.assertIn('--source-sha "$GITHUB_SHA"', recovery)
+        self.assertNotIn("--release-id", recovery)
+        self.assertNotIn("steps.release-freeze.outputs.target_release_id", recovery)
+
+    def test_failed_or_cancelled_release_has_independent_durable_recovery(self) -> None:
+        recovery = RELEASE_RECOVERY_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("workflow_run:", recovery)
+        self.assertIn('workflows: ["Publish Builds"]', recovery)
+        self.assertIn("types: [completed]", recovery)
+        self.assertIn("github.event.workflow_run.conclusion != 'success'", recovery)
+        self.assertIn("contents: write", recovery)
+        self.assertIn("ref: Working", recovery)
+        self.assertIn("persist-credentials: false", recovery)
+        self.assertIn("refs/tags/generated-release-counters", recovery)
+        self.assertIn("recover_release_publication.py", recovery)
+        self.assertIn('--state-file "$RUNNER_TEMP/downloads-data.json"', recovery)
+        self.assertIn('--run-id "$SOURCE_RUN_ID"', recovery)
+        self.assertIn('--run-attempt "$SOURCE_RUN_ATTEMPT"', recovery)
+        self.assertIn('--source-sha "$SOURCE_SHA"', recovery)
 
 
 if __name__ == "__main__":

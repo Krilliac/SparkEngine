@@ -554,7 +554,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*575 test-bearing `.cpp`/`.mm` files, 6965 source-level test definitions*
+*575 test-bearing `.cpp`/`.mm` files, 6973 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -748,7 +748,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFPSComponents` | 23 |
 | `TestFPSGameplayIntegration` | 17 |
 | `TestFPSMultiplayer` | 11 |
-| `TestFastNoise2SIMD` | 29 |
+| `TestFastNoise2SIMD` | 32 |
 | `TestFaultIsolation` | 14 |
 | `TestFaultIsolationReal` | 8 |
 | `TestFileUtils` | 17 |
@@ -797,7 +797,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameplayTags` | 14 |
 | `TestGameplayTagsReal` | 7 |
 | `TestGatewayAreaControl` | 10 |
-| `TestGatewaySecurity` | 12 |
+| `TestGatewaySecurity` | 13 |
 | `TestGizmoMath` | 3 |
 | `TestGoldenImageTest` | 14 |
 | `TestGraphicsEngine` | 14 |
@@ -853,7 +853,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMathUtils` | 11 |
 | `TestMathUtilsExtendedPhaseGG` | 5 |
 | `TestMemoryDebugger` | 16 |
-| `TestMemoryIntegrity` | 16 |
+| `TestMemoryIntegrity` | 20 |
 | `TestMemoryMonitor` | 11 |
 | `TestMeshLOD` | 8 |
 | `TestMeshOptimizer` | 15 |

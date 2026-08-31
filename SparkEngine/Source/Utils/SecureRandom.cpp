@@ -5,6 +5,7 @@
 #include "SecureRandom.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <limits>
@@ -48,9 +49,151 @@ namespace
     }
 
 #if defined(_WIN32)
+    constexpr DWORD PrivateFileRights = FILE_GENERIC_READ | FILE_GENERIC_WRITE | DELETE | WRITE_DAC;
+
+    struct LocalAllocation
+    {
+        HLOCAL value = nullptr;
+
+        ~LocalAllocation()
+        {
+            if (value)
+                LocalFree(value);
+        }
+    };
+
+    class CreatedFileHandle
+    {
+      public:
+        explicit CreatedFileHandle(HANDLE handle) noexcept : m_handle(handle) {}
+        ~CreatedFileHandle() { (void)Discard(); }
+
+        HANDLE Get() const noexcept { return m_handle; }
+
+        DWORD Discard() noexcept
+        {
+            if (m_handle == INVALID_HANDLE_VALUE)
+                return ERROR_SUCCESS;
+            FILE_DISPOSITION_INFO disposition{TRUE};
+            DWORD status = ERROR_SUCCESS;
+            if (!SetFileInformationByHandle(m_handle, FileDispositionInfo, &disposition, sizeof(disposition)))
+            {
+                status = GetLastError();
+                LARGE_INTEGER beginning{};
+                if (SetFilePointerEx(m_handle, beginning, nullptr, FILE_BEGIN) && SetEndOfFile(m_handle))
+                    (void)FlushFileBuffers(m_handle);
+            }
+            CloseHandle(m_handle);
+            m_handle = INVALID_HANDLE_VALUE;
+            return status;
+        }
+
+        void PreserveAndClose() noexcept
+        {
+            if (m_handle != INVALID_HANDLE_VALUE)
+                CloseHandle(m_handle);
+            m_handle = INVALID_HANDLE_VALUE;
+        }
+
+      private:
+        HANDLE m_handle = INVALID_HANDLE_VALUE;
+    };
+
     std::string WindowsError(const char* operation, DWORD code)
     {
         return std::string(operation) + " failed with Windows error " + std::to_string(code);
+    }
+
+    bool BoundedAllowedAceTrustee(const ACCESS_ALLOWED_ACE* ace, PSID& trustee)
+    {
+        constexpr size_t sidOffset = offsetof(ACCESS_ALLOWED_ACE, SidStart);
+        const size_t aceBytes = ace->Header.AceSize;
+        const size_t minimumSidBytes = GetSidLengthRequired(0);
+        if (aceBytes < sidOffset + minimumSidBytes)
+            return false;
+        const auto* sid = reinterpret_cast<const SID*>(&ace->SidStart);
+        const size_t sidBytes = GetSidLengthRequired(sid->SubAuthorityCount);
+        if (sidBytes > aceBytes - sidOffset)
+            return false;
+        trustee = const_cast<SID*>(sid);
+        return IsValidSid(trustee) != FALSE && GetLengthSid(trustee) == sidBytes;
+    }
+
+    bool HasProtectedOwnerOnlyAcl(HANDLE file, PSID expectedOwner, std::string& failure)
+    {
+        PSECURITY_DESCRIPTOR descriptor = nullptr;
+        PSID owner = nullptr;
+        PACL dacl = nullptr;
+        const DWORD status = GetSecurityInfo(file, SE_FILE_OBJECT,
+                                             OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                                             &owner, nullptr, &dacl, nullptr, &descriptor);
+        LocalAllocation descriptorAllocation{descriptor};
+        if (status != ERROR_SUCCESS || !descriptor || !owner || !IsValidSid(owner) || !dacl || !IsValidAcl(dacl))
+        {
+            failure = status == ERROR_SUCCESS
+                ? "private file ACL readback is incomplete"
+                : WindowsError("GetSecurityInfo", status);
+            return false;
+        }
+
+        bool valid = EqualSid(owner, expectedOwner) != FALSE;
+        if (!valid)
+            failure = "private file owner changed during creation";
+
+        SECURITY_DESCRIPTOR_CONTROL control{};
+        DWORD revision = 0;
+        if (valid && (!GetSecurityDescriptorControl(descriptor, &control, &revision) ||
+                      (control & (SE_DACL_PRESENT | SE_DACL_PROTECTED)) !=
+                          (SE_DACL_PRESENT | SE_DACL_PROTECTED)))
+        {
+            valid = false;
+            failure = "private file DACL is not protected from inheritance";
+        }
+
+        ACL_SIZE_INFORMATION information{};
+        if (valid && !GetAclInformation(dacl, &information, sizeof(information), AclSizeInformation))
+        {
+            valid = false;
+            failure = WindowsError("GetAclInformation", GetLastError());
+        }
+
+        if (valid && information.AceCount != 1)
+        {
+            valid = false;
+            failure = "private file DACL is not the canonical single-owner ACL";
+        }
+
+        for (DWORD index = 0; valid && index < information.AceCount; ++index)
+        {
+            void* rawAce = nullptr;
+            if (!GetAce(dacl, index, &rawAce))
+            {
+                valid = false;
+                failure = WindowsError("GetAce", GetLastError());
+                break;
+            }
+            const auto* header = static_cast<const ACE_HEADER*>(rawAce);
+            constexpr BYTE inheritanceFlags = INHERITED_ACE | INHERIT_ONLY_ACE | OBJECT_INHERIT_ACE |
+                                              CONTAINER_INHERIT_ACE | NO_PROPAGATE_INHERIT_ACE;
+            if (header->AceType != ACCESS_ALLOWED_ACE_TYPE || header->AceSize < sizeof(ACCESS_ALLOWED_ACE) ||
+                (header->AceFlags & inheritanceFlags) != 0)
+            {
+                valid = false;
+                failure = "private file DACL contains a non-canonical ACE";
+                break;
+            }
+            const auto* ace = static_cast<const ACCESS_ALLOWED_ACE*>(rawAce);
+            PSID trustee = nullptr;
+            if (!BoundedAllowedAceTrustee(ace, trustee) || !EqualSid(owner, trustee) ||
+                (ace->Mask & PrivateFileRights) != PrivateFileRights)
+            {
+                valid = false;
+                failure = "private file DACL does not grant the canonical owner rights";
+                break;
+            }
+        }
+
+        return valid;
     }
 #endif
 } // namespace
@@ -169,8 +312,13 @@ namespace Spark::SecureRandom
             CloseHandle(token);
 
             const auto* tokenUser = reinterpret_cast<const TOKEN_USER*>(tokenBuffer.data());
+            if (!tokenUser->User.Sid || !IsValidSid(tokenUser->User.Sid))
+            {
+                SetError(error, "current process user SID is invalid");
+                return false;
+            }
             EXPLICIT_ACCESSW access{};
-            access.grfAccessPermissions = GENERIC_READ | GENERIC_WRITE | DELETE | READ_CONTROL | WRITE_DAC;
+            access.grfAccessPermissions = PrivateFileRights;
             access.grfAccessMode = SET_ACCESS;
             access.grfInheritance = NO_INHERITANCE;
             access.Trustee.TrusteeForm = TRUSTEE_IS_SID;
@@ -184,33 +332,30 @@ namespace Spark::SecureRandom
                 SetError(error, WindowsError("SetEntriesInAclW", aclResult));
                 return false;
             }
+            LocalAllocation aclAllocation{acl};
 
             SECURITY_DESCRIPTOR descriptor{};
             if (!InitializeSecurityDescriptor(&descriptor, SECURITY_DESCRIPTOR_REVISION))
             {
                 const DWORD code = GetLastError();
-                LocalFree(acl);
                 SetError(error, WindowsError("InitializeSecurityDescriptor", code));
                 return false;
             }
             if (!SetSecurityDescriptorOwner(&descriptor, tokenUser->User.Sid, FALSE))
             {
                 const DWORD code = GetLastError();
-                LocalFree(acl);
                 SetError(error, WindowsError("SetSecurityDescriptorOwner", code));
                 return false;
             }
             if (!SetSecurityDescriptorDacl(&descriptor, TRUE, acl, FALSE))
             {
                 const DWORD code = GetLastError();
-                LocalFree(acl);
                 SetError(error, WindowsError("SetSecurityDescriptorDacl", code));
                 return false;
             }
             if (!SetSecurityDescriptorControl(&descriptor, SE_DACL_PROTECTED, SE_DACL_PROTECTED))
             {
                 const DWORD code = GetLastError();
-                LocalFree(acl);
                 SetError(error, WindowsError("SetSecurityDescriptorControl", code));
                 return false;
             }
@@ -219,39 +364,68 @@ namespace Spark::SecureRandom
             attributes.nLength = sizeof(attributes);
             attributes.lpSecurityDescriptor = &descriptor;
             const HANDLE file =
-                CreateFileW(path.c_str(), GENERIC_WRITE, 0, &attributes, CREATE_NEW,
+                CreateFileW(path.c_str(), GENERIC_WRITE | READ_CONTROL | WRITE_DAC | DELETE, 0, &attributes, CREATE_NEW,
                             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-            LocalFree(acl);
             if (file == INVALID_HANDLE_VALUE)
             {
                 SetError(error, WindowsError("CreateFileW", GetLastError()));
                 return false;
             }
+            CreatedFileHandle createdFile(file);
+
+            const auto discardCreatedFile = [&](std::string failure)
+            {
+                const DWORD dispositionError = createdFile.Discard();
+                if (dispositionError != ERROR_SUCCESS)
+                    failure += "; secure cleanup failed: " + WindowsError(
+                        "SetFileInformationByHandle(FileDispositionInfo)", dispositionError);
+                SetError(error, std::move(failure));
+                return false;
+            };
+
+            // Defensively re-apply the owner-only DACL to the live exclusive
+            // handle, then read it back before any secret bytes are written.
+            const DWORD protectStatus = SetSecurityInfo(
+                createdFile.Get(), SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                nullptr, nullptr, acl, nullptr);
+            std::string aclFailure;
+            const bool protectedOwnerOnly =
+                protectStatus == ERROR_SUCCESS &&
+                HasProtectedOwnerOnlyAcl(createdFile.Get(), tokenUser->User.Sid, aclFailure);
+            if (!protectedOwnerOnly)
+            {
+                if (protectStatus != ERROR_SUCCESS)
+                    aclFailure = WindowsError("SetSecurityInfo", protectStatus);
+                return discardCreatedFile(std::move(aclFailure));
+            }
 
             bool success = true;
+            std::string writeFailure;
             size_t written = 0;
             while (written < contents.size())
             {
                 const DWORD chunk = static_cast<DWORD>(
                     std::min(contents.size() - written, static_cast<size_t>((std::numeric_limits<DWORD>::max)())));
                 DWORD chunkWritten = 0;
-                if (!WriteFile(file, contents.data() + written, chunk, &chunkWritten, nullptr) || chunkWritten == 0)
+                if (!WriteFile(createdFile.Get(), contents.data() + written, chunk, &chunkWritten, nullptr) ||
+                    chunkWritten == 0)
                 {
-                    SetError(error, WindowsError("WriteFile", GetLastError()));
+                    writeFailure = WindowsError("WriteFile", GetLastError());
                     success = false;
                     break;
                 }
                 written += chunkWritten;
             }
-            if (success && !FlushFileBuffers(file))
+            if (success && !FlushFileBuffers(createdFile.Get()))
             {
-                SetError(error, WindowsError("FlushFileBuffers", GetLastError()));
+                writeFailure = WindowsError("FlushFileBuffers", GetLastError());
                 success = false;
             }
-            CloseHandle(file);
             if (!success)
-                DeleteFileW(path.c_str());
-            return success;
+                return discardCreatedFile(std::move(writeFailure));
+            createdFile.PreserveAndClose();
+            return true;
 #elif defined(__APPLE__) || defined(__linux__)
             const int descriptor = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
             if (descriptor < 0)

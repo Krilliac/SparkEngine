@@ -25,6 +25,7 @@ from common import (
     load_json,
     read_bytes_stable,
 )
+from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
 
 
 IMPLEMENTATION_STATES = {"absent", "stub", "partial", "functional", "complete"}
@@ -2050,7 +2051,7 @@ def validate_contract(
     return contract
 
 
-def validate_published_bundle(root: Path) -> None:
+def validate_published_bundle(root: Path, *, require_exact_evidence: bool = False) -> None:
     root = root.resolve()
     latest_path = root / "latest.json"
     errors: list[str] = []
@@ -2113,10 +2114,26 @@ def validate_published_bundle(root: Path) -> None:
             errors.append("bundleVersion differs between latest and bundle")
         if bundle.get("source", {}).get("commit") != source_commit:
             errors.append("source commit differs between latest and bundle")
-        if latest.get("publication", {}).get("evidenceCommit") != source_commit:
+        publication = latest.get("publication", {})
+        if bundle.get("publication") != publication:
+            errors.append("publication metadata differs between latest and bundle")
+        if publication.get("evidenceCommit") != source_commit:
             errors.append("publication evidenceCommit differs from source commit")
-        if latest.get("publication", {}).get("state") == "current" and latest.get("publication", {}).get("conclusion") != "success":
+        if publication.get("state") == "current" and publication.get("conclusion") != "success":
             errors.append("current publication does not have a successful conclusion")
+        exact_evidence = publication.get("exactEvidence")
+        if exact_evidence is None:
+            if require_exact_evidence:
+                errors.append("current publication has no durable exact CI evidence")
+        elif not isinstance(exact_evidence, dict):
+            errors.append("publication exactEvidence is not an object")
+        else:
+            try:
+                validate_exact_evidence_manifest(exact_evidence)
+            except ExactEvidenceError as error:
+                errors.append(f"publication exactEvidence is invalid: {error}")
+            if exact_evidence.get("sourceCommit") != source_commit:
+                errors.append("publication exactEvidence sourceCommit differs from source commit")
 
         documents = bundle.get("docs", {}).get("documents", [])
         slugs = [document.get("slug") for document in documents]
@@ -2155,6 +2172,23 @@ def validate_published_bundle(root: Path) -> None:
             if bundle.get("docs", {}).get("searchPath") != search_pointer.get("path") or bundle.get("docs", {}).get("searchSha256") != search_pointer.get("sha256") or bundle.get("docs", {}).get("searchBytes") != search_pointer.get("bytes"):
                 errors.append("bundle docs search pointer differs from latest")
 
+    exact_pointer = latest.get("files", {}).get("exactCiEvidence")
+    if exact_pointer is None:
+        if require_exact_evidence:
+            errors.append("latest files have no durable exact CI evidence pointer")
+    else:
+        _, exact_bytes = verified(exact_pointer, "exact CI evidence", 32 * 1024)
+        if exact_bytes is not None:
+            try:
+                exact_payload = decode_json_bytes(
+                    exact_bytes, "exact CI evidence JSON", 32 * 1024
+                )
+            except SiteDataError as error:
+                errors.append(f"exact CI evidence JSON is invalid: {error}")
+            else:
+                if exact_payload != latest.get("publication", {}).get("exactEvidence"):
+                    errors.append("exact CI evidence file differs from publication metadata")
+
     for label, pointer in latest.get("files", {}).items():
         if label == "bundle":
             continue
@@ -2173,6 +2207,11 @@ def main() -> int:
     parser.add_argument("--docs", action="store_true")
     parser.add_argument("--capability")
     parser.add_argument("--published", type=Path, help="also verify hashes, identities, and size budgets in generated output")
+    parser.add_argument(
+        "--require-exact-evidence",
+        action="store_true",
+        help="require a canonical durable CI-120 and CodeQL evidence manifest in published output",
+    )
     args = parser.parse_args()
     try:
         contract = validate_contract(
@@ -2184,7 +2223,9 @@ def main() -> int:
             capability=args.capability,
         )
         if args.published:
-            validate_published_bundle(args.published)
+            validate_published_bundle(
+                args.published, require_exact_evidence=args.require_exact_evidence
+            )
     except SiteDataError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

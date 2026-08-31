@@ -17,7 +17,7 @@
 | `AchievementCategory` | enum | GameModules | [MMOEnums.h:L179](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L179) | Achievement categories |
 | `AchievementCategory` | enum | SparkEngine | [GameSystemEnums.h:L248](../../SparkEngine/Source/Enums/GameSystemEnums.h#L248) | Achievement/trophy categories |
 | `AchievementType` | enum | SparkEngine | [AchievementSystem.h:L64](../../SparkEngine/Source/Engine/Gameplay/AchievementSystem.h#L64) | Achievement unlock behaviour type. |
-| `AclFixtureResult` | enum | Tests | [TestGatewaySecurity.cpp:L41](../../Tests/TestGatewaySecurity.cpp#L41) |  |
+| `AclFixtureResult` | enum | Tests | [TestGatewaySecurity.cpp:L42](../../Tests/TestGatewaySecurity.cpp#L42) |  |
 | `Action` | enum | GameModules | [TFKeybinds.h:L37](../../GameModules/SparkGameMMOFPS/Source/UI/TFKeybinds.h#L37) |  |
 | `ActionType` | enum | SparkEngine | [EventResponseSystem.h:L69](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h#L69) | Types of actions that a rule can execute |
 | `ActionType` | enum | SparkEngine | [InputActionSystem.h:L53](../../SparkEngine/Source/Input/InputActionSystem.h#L53) | Type of input action |
@@ -156,7 +156,7 @@
 | `ColumnType` | enum | SparkEngine | [DataTableSystem.h:L27](../../SparkEngine/Source/Engine/DataTable/DataTableSystem.h#L27) | Supported column value types. |
 | `CombatAction` | enum | GameModules | [RPGEnums.h:L105](../../GameModules/SparkGameRPG/Source/Enums/RPGEnums.h#L105) | Actions available during combat |
 | `CombatIntensity` | enum | SparkEngine | [MusicManager.h:L137](../../SparkEngine/Source/Audio/MusicManager.h#L137) |  |
-| `CombineOp` | enum | SparkEngine | [FastNoise2SIMD.h:L588](../../SparkEngine/Source/Graphics/FastNoise2SIMD.h#L588) | Operation used by CombinerNode to merge two child noise outputs |
+| `CombineOp` | enum | SparkEngine | [FastNoise2SIMD.h:L597](../../SparkEngine/Source/Graphics/FastNoise2SIMD.h#L597) | Operation used by CombinerNode to merge two child noise outputs |
 | `CommandPermission` | enum | SparkEngine | [SparkConsole.h:L58](../../SparkEngine/Source/Utils/SparkConsole.h#L58) | Convert display string to severity enum (returns Info on unknown) |
 | `ComparisonFunction` | enum | SparkEngine | [GraphicsEnums.h:L89](../../SparkEngine/Source/Enums/GraphicsEnums.h#L89) | Comparison functions |
 | `ComponentType` | enum | SparkEditor | [SceneSystemEnums.h:L21](../../SparkEditor/Source/Enums/SceneSystemEnums.h#L21) | Component type enumeration |
@@ -517,7 +517,7 @@
 | `NodeStatus` | enum | Tests | [TestAIStress.cpp:L20](../../Tests/TestAIStress.cpp#L20) |  |
 | `NodeType` | enum | SparkEditor | [DialogueEditorPanel.h:L35](../../SparkEditor/Source/Panels/DialogueEditorPanel.h#L35) |  |
 | `NodeType` | enum | Tests | [TestShaderGraphCompiler.cpp:L17](../../Tests/TestShaderGraphCompiler.cpp#L17) |  |
-| `NoiseNodeType` | enum | SparkEngine | [FastNoise2SIMD.h:L145](../../SparkEngine/Source/Graphics/FastNoise2SIMD.h#L145) | Node type identifier |
+| `NoiseNodeType` | enum | SparkEngine | [FastNoise2SIMD.h:L154](../../SparkEngine/Source/Graphics/FastNoise2SIMD.h#L154) | Node type identifier |
 | `NoiseType` | enum | SparkEngine | [FastNoiseLite.h:L45](../../SparkEngine/Source/Graphics/FastNoiseLite.h#L45) |  |
 | `NPCBehavior` | enum | GameModules | [RPGEnums.h:L92](../../GameModules/SparkGameRPG/Source/Enums/RPGEnums.h#L92) | NPC behavioral states |
 | `NPCDisposition` | enum | GameModules | [RPGEnums.h:L131](../../GameModules/SparkGameRPG/Source/Enums/RPGEnums.h#L131) | NPC disposition toward the player |
@@ -917,8 +917,8 @@
 | `VehicleType` | enum | SparkEngine | [AdvancedPlacementComponents.h:L280](../../SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h#L280) | Configures vehicle physics simulation on an entity. |
 | `VehicleType` | enum | SparkEngine | [GameSystemEnums.h:L309](../../SparkEngine/Source/Enums/GameSystemEnums.h#L309) | Vehicle types |
 | `VideoState` | enum | SparkEngine | [VideoPlayer.h:L52](../../SparkEngine/Source/Engine/Cinematic/VideoPlayer.h#L52) | Playback state of a video |
-| `ViolationSeverity` | enum | SparkEngine | [MemoryIntegrity.h:L68](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L68) | Severity of an integrity violation |
-| `ViolationType` | enum | SparkEngine | [MemoryIntegrity.h:L59](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L59) | Type of integrity violation detected |
+| `ViolationSeverity` | enum | SparkEngine | [MemoryIntegrity.h:L69](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L69) | Severity of an integrity violation |
+| `ViolationType` | enum | SparkEngine | [MemoryIntegrity.h:L60](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L60) | Type of integrity violation detected |
 | `VolumeParameterType` | enum | SparkEngine | [VolumeSystem.h:L45](../../SparkEngine/Source/Graphics/VolumeSystem.h#L45) | Parameter categories that volumes can override |
 | `VRAMPressureLevel` | enum | SparkEngine | [VRAMBudgetMonitor.h:L27](../../SparkEngine/Source/Graphics/VRAMBudgetMonitor.h#L27) | Coarse memory-pressure classification used by subsystems to |
 | `VRSMode` | enum | SparkEngine | [GraphicsEngineTypes.h:L40](../../SparkEngine/Source/Graphics/GraphicsEngineTypes.h#L40) | Variable Rate Shading mode |

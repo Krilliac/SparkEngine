@@ -5,12 +5,8 @@ on:
     workflows: ["Build SparkEngine"]
     branches: [Working]
     types: [completed]
-  workflow_dispatch:
-    inputs:
-      evidence_run_id:
-        description: Successful Build SparkEngine run ID to validate and publish
-        required: true
-        type: string
+  repository_dispatch:
+    types: [publish-site-data]
 
 concurrency:
   group: sparkengine-site-data-publish
@@ -20,21 +16,63 @@ permissions:
   contents: read
 
 env:
-  REQUESTED_EVIDENCE_RUN_ID: ${{ github.event.workflow_run.id || inputs.evidence_run_id }}
+  REQUESTED_EVIDENCE_RUN_ID: ${{ github.event.workflow_run.id || github.event.client_payload.evidence_run_id }}
+  REQUESTED_EVIDENCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt || github.event.client_payload.evidence_run_attempt }}
 
 jobs:
   site-data-prepare:
     name: Prove and prepare exact-commit site data
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 35
     permissions:
       actions: read
       contents: read
+      statuses: read
     outputs:
       publish: ${{ steps.final-head.outputs.publish }}
-      evidence_conclusion: ${{ steps.normalize_evidence.outputs.conclusion }}
+      evidence_conclusion: ${{ steps.staged-build.outputs.conclusion }}
       source_commit: ${{ steps.resolve_evidence.outputs.source_commit }}
+      evidence_run_id: ${{ steps.staged-build.outputs.run_id }}
+      evidence_run_attempt: ${{ steps.staged-build.outputs.run_attempt }}
+      site_state_object: ${{ steps.site-state.outputs.remote_object }}
     steps:
+      - name: Attest current trusted site-data controller
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "workflow_run" && "$EVENT_NAME" != "repository_dispatch" ]]; then
+            echo "Untrusted site-data event: $EVENT_NAME" >&2
+            exit 1
+          fi
+          if test "$EVENT_REF" != "refs/heads/Working"; then
+            echo "Site-data controller must execute from refs/heads/Working; got $EVENT_REF" >&2
+            exit 1
+          fi
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/site-data-publish.yml@refs/heads/Working"
+          if test "$WORKFLOW_REF" != "$EXPECTED_WORKFLOW_REF"; then
+            echo "Site-data workflow ref is not the trusted Working workflow." >&2
+            exit 1
+          fi
+          WORKING_FILE="$RUNNER_TEMP/site-data-working.json"
+          curl --fail-with-body --silent --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/Working" \
+            --output "$WORKING_FILE"
+          CURRENT_WORKING="$(python3 -I -c 'import json, re, sys; value = json.load(open(sys.argv[1], encoding="utf-8")).get("sha", ""); assert re.fullmatch(r"[0-9a-f]{40}", value); print(value)' "$WORKING_FILE")"
+          if test "$WORKFLOW_SHA" != "$CURRENT_WORKING"; then
+            echo "Site-data workflow file is not from the exact current Working commit." >&2
+            exit 1
+          fi
+
       - name: Resolve and validate build evidence
         id: resolve_evidence
         env:
@@ -43,6 +81,9 @@ jobs:
           set -euo pipefail
           case "$REQUESTED_EVIDENCE_RUN_ID" in
             ''|*[!0-9]*) echo "Invalid evidence run ID: $REQUESTED_EVIDENCE_RUN_ID" >&2; exit 1 ;;
+          esac
+          case "$REQUESTED_EVIDENCE_RUN_ATTEMPT" in
+            ''|*[!0-9]*) echo "Invalid evidence run attempt: $REQUESTED_EVIDENCE_RUN_ATTEMPT" >&2; exit 1 ;;
           esac
           RUN_FILE="$RUNNER_TEMP/build-evidence-run.json"
           curl --fail-with-body --silent --show-error \
@@ -63,16 +104,20 @@ jobs:
               run = json.load(stream)
 
           requested_id = int(os.environ["REQUESTED_EVIDENCE_RUN_ID"])
+          requested_attempt = int(os.environ["REQUESTED_EVIDENCE_RUN_ATTEMPT"])
           assert run.get("id") == requested_id
+          assert run.get("run_attempt") == requested_attempt
           assert run.get("name") == "Build SparkEngine"
           assert run.get("path") == ".github/workflows/build.yml"
           assert run.get("head_branch") == "Working"
+          assert run.get("event") in {"push", "workflow_dispatch"}
           assert run.get("status") == "completed"
-          assert run.get("conclusion") in {"success", "failure", "cancelled", "timed_out"}
+          assert run.get("conclusion") == "failure"
           assert isinstance(run.get("run_attempt"), int) and run["run_attempt"] >= 1
           source_commit = run.get("head_sha", "")
           assert re.fullmatch(r"[0-9a-f]{40}", source_commit)
           assert run.get("repository", {}).get("full_name") == os.environ["GITHUB_REPOSITORY"]
+          assert run.get("head_repository", {}).get("full_name") == os.environ["GITHUB_REPOSITORY"]
 
           values = {
               "SOURCE_COMMIT": source_commit,
@@ -90,89 +135,6 @@ jobs:
               stream.write(f"source_commit={source_commit}\n")
           print(f"Validated {run['name']} run {run['id']} at {source_commit}")
           PY
-
-      - name: Normalize evidence across every build job
-        id: normalize_evidence
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          JOBS_FILE="$RUNNER_TEMP/build-evidence-jobs.tsv"
-          NON_PASSING_FILE="$RUNNER_TEMP/build-evidence-non-passing.tsv"
-          : > "$JOBS_FILE"
-          case "$EVIDENCE_RUN_ATTEMPT" in
-            ''|*[!0-9]*) echo "Invalid workflow attempt: $EVIDENCE_RUN_ATTEMPT" >&2; exit 1 ;;
-          esac
-          test "$EVIDENCE_RUN_ATTEMPT" -ge 1
-
-          PAGE=1
-          EXPECTED_JOB_COUNT=""
-          while true; do
-            PAGE_FILE="$RUNNER_TEMP/build-evidence-jobs-${PAGE}.json"
-            curl --fail-with-body --silent --show-error \
-              --retry 3 \
-              --retry-all-errors \
-              --header "Accept: application/vnd.github+json" \
-              --header "Authorization: Bearer ${GITHUB_TOKEN}" \
-              --header "X-GitHub-Api-Version: 2022-11-28" \
-              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}/attempts/${EVIDENCE_RUN_ATTEMPT}/jobs?per_page=100&page=${PAGE}" \
-              --output "$PAGE_FILE"
-
-            PAGE_METADATA="$(python3 -I -c 'import json, os, sys; payload = json.load(open(sys.argv[1], encoding="utf-8")); jobs = payload.get("jobs"); total = payload.get("total_count"); assert isinstance(jobs, list) and isinstance(total, int) and total >= 0; expected_run = int(os.environ["EVIDENCE_RUN_ID"]); expected_sha = os.environ["SOURCE_COMMIT"]; assert all(isinstance(job, dict) and isinstance(job.get("id"), int) and job["id"] > 0 and job.get("run_id") == expected_run and job.get("head_sha") == expected_sha and isinstance(job.get("name"), str) and job["name"] for job in jobs); print(f"{total}\t{len(jobs)}")' \
-              "$PAGE_FILE")"
-            PAGE_TOTAL_COUNT="${PAGE_METADATA%%$'\t'*}"
-            PAGE_JOB_COUNT="${PAGE_METADATA#*$'\t'}"
-            if test "$PAGE" -eq 1; then
-              EXPECTED_JOB_COUNT="$PAGE_TOTAL_COUNT"
-            else
-              test "$PAGE_TOTAL_COUNT" -eq "$EXPECTED_JOB_COUNT"
-            fi
-
-            if test "$PAGE_JOB_COUNT" -eq 0; then
-              break
-            fi
-
-            python3 -I -c 'import json, sys; field = lambda value: str(value or "").replace("\\", "\\\\").replace("\t", "\\t").replace("\r", "\\r").replace("\n", "\\n"); payload = json.load(open(sys.argv[1], encoding="utf-8")); [print("\t".join(field(job.get(key)) for key in ("id", "name", "status", "conclusion"))) for job in payload["jobs"]]' \
-              "$PAGE_FILE" >> "$JOBS_FILE"
-
-            if test "$PAGE_JOB_COUNT" -lt 100; then
-              break
-            fi
-            PAGE="$((PAGE + 1))"
-            test "$PAGE" -le 100
-          done
-
-          JOB_COUNT="$(wc -l < "$JOBS_FILE" | tr -d '[:space:]')"
-          UNIQUE_JOB_COUNT="$(cut -f 1 "$JOBS_FILE" | LC_ALL=C sort -u | wc -l | tr -d '[:space:]')"
-          test "$JOB_COUNT" -eq "$EXPECTED_JOB_COUNT"
-          test "$UNIQUE_JOB_COUNT" -eq "$JOB_COUNT"
-          awk -F '\t' \
-            '$3 != "completed" || ($4 != "success" && $4 != "skipped") { print }' \
-            "$JOBS_FILE" > "$NON_PASSING_FILE"
-
-          NORMALIZED_CONCLUSION="failure"
-          if test "$EVIDENCE_RUN_ATTEMPT" -eq 1 \
-            && test "$JOB_COUNT" -gt 0 \
-            && test "$REPORTED_EVIDENCE_CONCLUSION" = "success" \
-            && test ! -s "$NON_PASSING_FILE"; then
-            NORMALIZED_CONCLUSION="success"
-          else
-            echo "::warning::The build evidence is not fully passing (workflow=${REPORTED_EVIDENCE_CONCLUSION})."
-            if test "$EVIDENCE_RUN_ATTEMPT" -ne 1; then
-              echo "::warning::A rerun cannot promote site evidence because a partial rerun does not prove the complete job roster. Push a new commit for a full run."
-            fi
-            if test "$JOB_COUNT" -eq 0; then
-              echo "::warning::The build was cancelled before any jobs materialized; publishing blocked evidence."
-            fi
-            while IFS=$'\t' read -r JOB_ID JOB_NAME JOB_STATUS JOB_CONCLUSION; do
-              printf 'Non-passing job %s: %s (%s/%s)\n' \
-                "$JOB_ID" "$JOB_NAME" "$JOB_STATUS" "${JOB_CONCLUSION:-missing}"
-            done < "$NON_PASSING_FILE"
-          fi
-
-          printf 'Evaluated %s jobs; normalized conclusion: %s\n' \
-            "$JOB_COUNT" "$NORMALIZED_CONCLUSION"
-          printf 'conclusion=%s\n' "$NORMALIZED_CONCLUSION" >> "$GITHUB_OUTPUT"
 
       # Always check out the protected publication branch itself. The evidence
       # run's SHA is validated against that checkout immediately below before
@@ -199,10 +161,68 @@ jobs:
             echo "Skipping superseded commit $SOURCE_COMMIT"
           fi
 
+      - name: Verify exact staged Build job and attempt evidence
+        id: staged-build
+        if: steps.initial-head.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ steps.resolve_evidence.outputs.source_commit }}
+          SOURCE_RUN_ID: ${{ env.REQUESTED_EVIDENCE_RUN_ID }}
+          SOURCE_RUN_ATTEMPT: ${{ env.REQUESTED_EVIDENCE_RUN_ATTEMPT }}
+        run: python3 .github/scripts/verify-exact-required-gate.py --staged-build-only
+
+      - name: Wait for trusted exact-commit CI evidence
+        id: exact-gate
+        if: steps.initial-head.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ steps.resolve_evidence.outputs.source_commit }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            if python3 .github/scripts/verify-exact-required-gate.py; then
+              exit 0
+            fi
+            if test "$attempt" -eq 60; then
+              echo "Trusted exact-commit CI evidence did not converge within 20 minutes." >&2
+              exit 1
+            fi
+            sleep 20
+          done
+
+      - name: Write durable exact CI evidence manifest
+        if: steps.initial-head.outputs.publish == 'true'
+        env:
+          EXACT_SOURCE_COMMIT: ${{ steps.resolve_evidence.outputs.source_commit }}
+          EXACT_BUILD_RUN_ID: ${{ steps.exact-gate.outputs.run_id }}
+          EXACT_BUILD_RUN_ATTEMPT: ${{ steps.exact-gate.outputs.run_attempt }}
+          EXACT_BUILD_RUN_URL: ${{ steps.exact-gate.outputs.run_url }}
+          EXACT_BUILD_EVENT: ${{ steps.exact-gate.outputs.event }}
+          EXACT_CI120_STATUS_ID: ${{ steps.exact-gate.outputs.ci120_status_id }}
+          EXACT_CI120_VERIFIER_RUN_ID: ${{ steps.exact-gate.outputs.verifier_run_id }}
+          EXACT_CI120_VERIFIER_RUN_ATTEMPT: ${{ steps.exact-gate.outputs.verifier_run_attempt }}
+          EXACT_CI120_VERIFIER_RUN_URL: ${{ steps.exact-gate.outputs.verifier_run_url }}
+          EXACT_VERIFIER_COMMIT: ${{ steps.exact-gate.outputs.verifier_sha }}
+          EXACT_CI120_RECEIPT_ARTIFACT_ID: ${{ steps.exact-gate.outputs.receipt_artifact_id }}
+          EXACT_CI120_RECEIPT_ARTIFACT_DIGEST: ${{ steps.exact-gate.outputs.receipt_artifact_digest }}
+          EXACT_CODEQL_RUN_ID: ${{ steps.exact-gate.outputs.codeql_run_id }}
+          EXACT_CODEQL_RUN_ATTEMPT: ${{ steps.exact-gate.outputs.codeql_run_attempt }}
+          EXACT_CODEQL_RUN_URL: ${{ steps.exact-gate.outputs.codeql_run_url }}
+          EXACT_CODEQL_STATUS_ID: ${{ steps.exact-gate.outputs.codeql_status_id }}
+          EXACT_CODEQL_REPORTER_RUN_ID: ${{ steps.exact-gate.outputs.codeql_reporter_run_id }}
+          EXACT_CODEQL_REPORTER_RUN_ATTEMPT: ${{ steps.exact-gate.outputs.codeql_reporter_run_attempt }}
+          EXACT_CODEQL_REPORTER_RUN_URL: ${{ steps.exact-gate.outputs.codeql_reporter_run_url }}
+          EXACT_CODEQL_SUMMARY_ARTIFACT_ID: ${{ steps.exact-gate.outputs.codeql_summary_artifact_id }}
+          EXACT_CODEQL_SUMMARY_ARTIFACT_DIGEST: ${{ steps.exact-gate.outputs.codeql_summary_artifact_digest }}
+        run: |
+          set -euo pipefail
+          python3 tools/site-data/exact_evidence.py write \
+            --output "$RUNNER_TEMP/exact-ci-evidence.json"
+
       - name: Repeat the complete repository proof
         if: steps.initial-head.outputs.publish == 'true'
         env:
-          NORMALIZED_EVIDENCE_CONCLUSION: ${{ steps.normalize_evidence.outputs.conclusion }}
+          NORMALIZED_EVIDENCE_CONCLUSION: ${{ steps.staged-build.outputs.conclusion }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
@@ -220,29 +240,41 @@ jobs:
               --committed-at "$COMMITTED_AT" \
               --evidence-commit "$SOURCE_COMMIT" \
               --ci-conclusion "$NORMALIZED_EVIDENCE_CONCLUSION" \
+              --exact-evidence-file "$RUNNER_TEMP/exact-ci-evidence.json" \
               --workflow-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}/attempts/${EVIDENCE_RUN_ATTEMPT}"
-            python3 tools/site-data/validate.py --published "$OUTPUT"
+            python3 tools/site-data/validate.py \
+              --published "$OUTPUT" \
+              --require-exact-evidence
           done
           diff --recursive --brief \
             "$RUNNER_TEMP/.site-data-proof-a" \
             "$RUNNER_TEMP/.site-data-proof-b"
 
-      - name: Seed publication payload from the current public site-data branch
+      - name: Seed publication payload from the current public site-data tag
+        id: site-state
         if: steps.initial-head.outputs.publish == 'true'
         env:
           PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-payload
+          STATE_REF: refs/tags/site-data
         run: |
           set -euo pipefail
           mkdir -p "$PUBLISH_DIR"
-          if git ls-remote --exit-code --heads origin site-data >/dev/null 2>&1; then
-            git fetch --no-tags origin site-data:refs/remotes/origin/site-data
-            git archive refs/remotes/origin/site-data | tar -x -C "$PUBLISH_DIR"
+          REMOTE_OBJECT="$(git ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+          if test -n "$REMOTE_OBJECT"; then
+            git fetch --force --no-tags origin "+${STATE_REF}:${STATE_REF}"
+            git archive "${STATE_REF}^{commit}" | tar -x -C "$PUBLISH_DIR"
+          elif git ls-remote --exit-code --refs origin refs/heads/site-data >/dev/null 2>&1; then
+            # One-time migration seed. Once the tag exists, the legacy branch
+            # is never read again and can be deleted after content verification.
+            git fetch --no-tags origin refs/heads/site-data:refs/remotes/origin/site-data-legacy
+            git archive refs/remotes/origin/site-data-legacy | tar -x -C "$PUBLISH_DIR"
           fi
+          echo "remote_object=$REMOTE_OBJECT" >> "$GITHUB_OUTPUT"
 
       - name: Generate and validate the retained publication payload
         if: steps.initial-head.outputs.publish == 'true'
         env:
-          NORMALIZED_EVIDENCE_CONCLUSION: ${{ steps.normalize_evidence.outputs.conclusion }}
+          NORMALIZED_EVIDENCE_CONCLUSION: ${{ steps.staged-build.outputs.conclusion }}
           PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-payload
         run: |
           set -euo pipefail
@@ -256,8 +288,11 @@ jobs:
             --committed-at "$COMMITTED_AT" \
             --evidence-commit "$SOURCE_COMMIT" \
             --ci-conclusion "$NORMALIZED_EVIDENCE_CONCLUSION" \
+            --exact-evidence-file "$RUNNER_TEMP/exact-ci-evidence.json" \
             --workflow-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}/attempts/${EVIDENCE_RUN_ATTEMPT}"
-          python3 tools/site-data/validate.py --published "$PUBLISH_DIR"
+          python3 tools/site-data/validate.py \
+            --published "$PUBLISH_DIR" \
+            --require-exact-evidence
 
       - name: Recheck Working immediately before handing off the payload
         id: final-head
@@ -289,29 +324,66 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
+      actions: read
       contents: write
+      statuses: read
     env:
       EVIDENCE_CONCLUSION: ${{ needs.site-data-prepare.outputs.evidence_conclusion }}
       SOURCE_COMMIT: ${{ needs.site-data-prepare.outputs.source_commit }}
+      EVIDENCE_RUN_ID: ${{ needs.site-data-prepare.outputs.evidence_run_id }}
+      EVIDENCE_RUN_ATTEMPT: ${{ needs.site-data-prepare.outputs.evidence_run_attempt }}
+      EXPECTED_SITE_OBJECT: ${{ needs.site-data-prepare.outputs.site_state_object }}
     steps:
+      - name: Checkout trusted current publisher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: Working
+          path: trusted-source
+          persist-credentials: false
+
       - name: Download the proven publication payload
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: sparkengine-site-data-publication-${{ env.SOURCE_COMMIT }}
           path: ${{ runner.temp }}/sparkengine-site-data-payload
 
-      - name: Recheck Working, commit, recheck again, and publish
+      - name: Recheck exact staged evidence, commit, and publish the site-data tag
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PAYLOAD_DIR: ${{ runner.temp }}/sparkengine-site-data-payload
           PUBLISH_REPO: ${{ runner.temp }}/sparkengine-site-data-repository
+          STATE_REF: refs/tags/site-data
         run: |
           set -euo pipefail
           test -f "$PAYLOAD_DIR/latest.json"
           test -d "$PAYLOAD_DIR/snapshots/$SOURCE_COMMIT"
           test ! -e "$PAYLOAD_DIR/.git"
-          python3 -I -c 'import json, sys; payload = json.load(open(sys.argv[1], encoding="utf-8")); conclusion = sys.argv[2]; assert payload["publication"]["conclusion"] == conclusion; assert payload["publication"]["state"] == ("current" if conclusion == "success" else "blocked")' \
-            "$PAYLOAD_DIR/latest.json" "$EVIDENCE_CONCLUSION"
+          python3 "$GITHUB_WORKSPACE/trusted-source/tools/site-data/validate.py" \
+            --published "$PAYLOAD_DIR" \
+            --require-exact-evidence
+          EXPECTED_WORKFLOW_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}/attempts/${EVIDENCE_RUN_ATTEMPT}"
+          python3 -I - "$PAYLOAD_DIR/latest.json" "$EVIDENCE_CONCLUSION" "$SOURCE_COMMIT" "$EXPECTED_WORKFLOW_URL" <<'PY'
+          import json
+          import sys
+
+          payload = json.load(open(sys.argv[1], encoding="utf-8"))
+          conclusion, source_commit, workflow_url = sys.argv[2:]
+          assert conclusion == "success"
+          assert payload["source"]["commit"] == source_commit
+          assert payload["publication"]["evidenceCommit"] == source_commit
+          assert payload["publication"]["conclusion"] == conclusion
+          assert payload["publication"]["state"] == "current"
+          assert payload["publication"]["workflowUrl"] == workflow_url
+          assert payload["publication"]["exactEvidence"]["sourceCommit"] == source_commit
+          PY
+
+          if test "$(git -C "$GITHUB_WORKSPACE/trusted-source" rev-parse HEAD)" != "$SOURCE_COMMIT"; then
+            echo "Trusted publisher checkout is not the exact source commit." >&2
+            exit 1
+          fi
+          GH_TOKEN="$GITHUB_TOKEN" \
+          TARGET_SHA="$SOURCE_COMMIT" \
+            python3 "$GITHUB_WORKSPACE/trusted-source/.github/scripts/verify-exact-required-gate.py"
 
           git init "$PUBLISH_REPO"
           git -C "$PUBLISH_REPO" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
@@ -321,12 +393,17 @@ jobs:
             exit 0
           fi
 
-          if git -C "$PUBLISH_REPO" ls-remote --exit-code --heads origin site-data >/dev/null 2>&1; then
-            git -C "$PUBLISH_REPO" fetch --no-tags origin site-data:refs/remotes/origin/site-data
-            git -C "$PUBLISH_REPO" switch --create site-data refs/remotes/origin/site-data
+          REMOTE_OBJECT="$(git -C "$PUBLISH_REPO" ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+          if test "$REMOTE_OBJECT" != "$EXPECTED_SITE_OBJECT"; then
+            echo "Site-data state advanced after payload preparation; refusing stale publication." >&2
+            exit 1
+          fi
+          if test -n "$REMOTE_OBJECT"; then
+            git -C "$PUBLISH_REPO" fetch --force --no-tags origin "+${STATE_REF}:${STATE_REF}"
+            git -C "$PUBLISH_REPO" checkout --detach "$STATE_REF"
             git -C "$PUBLISH_REPO" rm -r --force .
           else
-            git -C "$PUBLISH_REPO" switch --orphan site-data
+            git -C "$PUBLISH_REPO" switch --orphan site-data-state
           fi
           cp -a "$PAYLOAD_DIR"/. "$PUBLISH_REPO"/
 
@@ -337,15 +414,39 @@ jobs:
             echo "site-data already matches $SOURCE_COMMIT"
             exit 0
           fi
-          git -C "$PUBLISH_REPO" commit -m "site-data: publish ${SOURCE_COMMIT:0:12} (${EVIDENCE_CONCLUSION})"
+          git -C "$PUBLISH_REPO" commit -s -m "site-data: publish ${SOURCE_COMMIT:0:12} (${EVIDENCE_CONCLUSION})"
+          FINAL_COMMIT="$(git -C "$PUBLISH_REPO" rev-parse HEAD)"
 
-          # Minimize the unavoidable cross-ref race: compare after the commit
-          # exists and immediately before the only write-capable operation.
           git -C "$PUBLISH_REPO" fetch --no-tags origin Working:refs/remotes/origin/Working
           if test "$SOURCE_COMMIT" != "$(git -C "$PUBLISH_REPO" rev-parse refs/remotes/origin/Working)"; then
             echo "Skipping superseded commit $SOURCE_COMMIT"
             exit 0
           fi
-          git -C "$PUBLISH_REPO" remote set-url origin \
-            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git -C "$PUBLISH_REPO" push origin HEAD:site-data
+          FINAL_GATE_OUTPUT="$RUNNER_TEMP/site-data-final-exact-gate.out"
+          : > "$FINAL_GATE_OUTPUT"
+          GITHUB_OUTPUT="$FINAL_GATE_OUTPUT" \
+          GH_TOKEN="$GITHUB_TOKEN" \
+          TARGET_SHA="$SOURCE_COMMIT" \
+            python3 "$GITHUB_WORKSPACE/trusted-source/.github/scripts/verify-exact-required-gate.py"
+          python3 "$GITHUB_WORKSPACE/trusted-source/tools/site-data/exact_evidence.py" \
+            verify-gate-output \
+            --manifest "$PAYLOAD_DIR/snapshots/$SOURCE_COMMIT/exact-ci-evidence.json" \
+            --gate-output "$FINAL_GATE_OUTPUT" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-commit "$SOURCE_COMMIT"
+          REMOTE_OBJECT_NOW="$(git -C "$PUBLISH_REPO" ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+          if test "$REMOTE_OBJECT_NOW" != "$EXPECTED_SITE_OBJECT"; then
+            echo "Site-data state advanced immediately before publication." >&2
+            exit 1
+          fi
+
+          AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git -C "$PUBLISH_REPO" -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+            --force-with-lease="${STATE_REF}:${EXPECTED_SITE_OBJECT}" origin \
+            "HEAD:${STATE_REF}"
+          PUBLISHED_OBJECT="$(git -C "$PUBLISH_REPO" -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+            ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+          if test "$PUBLISHED_OBJECT" != "$FINAL_COMMIT"; then
+            echo "Site-data tag does not point to this run's exact publication commit." >&2
+            exit 1
+          fi

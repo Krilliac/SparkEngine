@@ -25,7 +25,9 @@ jobs:
     timeout-minutes: 5
     # Only run on reviews/comments from known Codex bot accounts.
     # Extend this list if OpenAI adds new bot identities.
-    if: ${{ false }}
+    # No GitHub event can have this sentinel name. Keeping the disabled state
+    # event-bound avoids an actionlint constant-condition exception.
+    if: ${{ github.event_name == '__disabled__' }}
     steps:
       - name: Apply Codex suggestion blocks to PR branch
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9

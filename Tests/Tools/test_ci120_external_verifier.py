@@ -67,6 +67,8 @@ def source_metadata(commit: str = COMMIT) -> dict[str, Any]:
             "checkoutSha": commit,
             "workflowSha": commit,
             "workflowRef": "Krilliac/SparkEngine/.github/workflows/ci120-report.yml@refs/heads/Working",
+            "sourceWorkflowBlobSha": "d" * 40,
+            "trustedWorkflowBlobSha": "d" * 40,
         },
     }
 
@@ -83,28 +85,45 @@ def shipping_fixture(artifact_root: Path) -> tuple[dict[str, Any], Path]:
     artifact.write_bytes(b"synthetic-spark-engine-product")
 
     target_id = "SparkEngine::@synthetic-0"
-    write_json(
-        reply / "target-0.json",
-        {
-            "name": "SparkEngine",
-            "id": target_id,
-            "type": "EXECUTABLE",
-            "nameOnDisk": "SparkEngine.exe",
-            "artifacts": [{"path": "bin/MinSizeRel/SparkEngine.exe"}],
-        },
+    configurations: list[dict[str, Any]] = []
+    generator_targets = (
+        ("ALL_BUILD", "ALL_BUILD::@root"),
+        ("ALL_BUILD", "ALL_BUILD::@subdir"),
+        ("ZERO_CHECK", "ZERO_CHECK::@root"),
     )
+    for configuration in ("Debug", "Release", "MinSizeRel", "RelWithDebInfo"):
+        references: list[dict[str, str]] = []
+        product_file = f"target-SparkEngine-{configuration}.json"
+        write_json(
+            reply / product_file,
+            {
+                "name": "SparkEngine",
+                "id": target_id,
+                "type": "EXECUTABLE",
+                "nameOnDisk": "SparkEngine.exe",
+                "artifacts": [{"path": f"bin/{configuration}/SparkEngine.exe"}],
+            },
+        )
+        references.append({"name": "SparkEngine", "id": target_id, "jsonFile": product_file})
+        for offset, (name, generator_id) in enumerate(generator_targets):
+            target_file = f"target-generator-{offset}-{configuration}.json"
+            write_json(
+                reply / target_file,
+                {
+                    "name": name,
+                    "id": generator_id,
+                    "type": "UTILITY",
+                    "isGeneratorProvided": True,
+                    "sources": [],
+                },
+            )
+            references.append({"name": name, "id": generator_id, "jsonFile": target_file})
+        configurations.append({"name": configuration, "targets": references})
     write_json(
         reply / "codemodel-v2.json",
         {
             "paths": {"source": REPOSITORY_ROOT, "build": recorded_build},
-            "configurations": [
-                {
-                    "name": "MinSizeRel",
-                    "targets": [
-                        {"name": "SparkEngine", "id": target_id, "jsonFile": "target-0.json"}
-                    ],
-                }
-            ],
+            "configurations": configurations,
         },
     )
     resolved = inventory.resolve_configure_preset(
@@ -298,6 +317,18 @@ class SourceMetadataTests(unittest.TestCase):
     def test_exact_staged_source_metadata_is_accepted(self) -> None:
         self.assertEqual(verifier.validate_source_metadata(source_metadata())["source"]["headSha"], COMMIT)
 
+    def test_historical_source_is_accepted_when_trusted_workflow_blob_matches(self) -> None:
+        metadata = source_metadata()
+        metadata["verifier"]["checkoutSha"] = "8" * 40
+        metadata["verifier"]["workflowSha"] = "8" * 40
+        self.assertEqual(verifier.validate_source_metadata(metadata)["source"]["headSha"], COMMIT)
+
+    def test_changed_source_workflow_blob_is_rejected(self) -> None:
+        metadata = source_metadata()
+        metadata["verifier"]["sourceWorkflowBlobSha"] = "7" * 40
+        with self.assertRaisesRegex(verifier.ExternalEvidenceError, "not exact"):
+            verifier.validate_source_metadata(metadata)
+
     def test_stale_trusted_checkout_is_rejected(self) -> None:
         metadata = source_metadata()
         metadata["verifier"]["checkoutSha"] = "9" * 40
@@ -334,6 +365,31 @@ class RawProfileEvidenceTests(unittest.TestCase):
         self.assertEqual(reconstructed, producer_evidence)
         self.assertEqual(receipt["targetCount"], 1)
         self.assertEqual(receipt["artifactCount"], 1)
+        self.assertEqual(
+            reconstructed["configurations"],
+            ["Debug", "MinSizeRel", "RelWithDebInfo", "Release"],
+        )
+        self.assertEqual(reconstructed["replyFileCount"], 19)
+
+    def test_noncanonical_configuration_document_tampering_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            producer_evidence, _ = shipping_fixture(root)
+            target_path = (
+                root
+                / "build"
+                / "windows-shipping"
+                / ".cmake"
+                / "api"
+                / "v1"
+                / "reply"
+                / "target-SparkEngine-Debug.json"
+            )
+            target = json.loads(target_path.read_text(encoding="utf-8"))
+            target["name"] = "TamperedDebugTarget"
+            write_json(target_path, target)
+            with self.assertRaisesRegex(verifier.ExternalEvidenceError, "disagrees with target document"):
+                verifier._verify_profile(root, "windows-shipping", producer_evidence, source_metadata())
 
     def test_post_upload_product_tampering_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

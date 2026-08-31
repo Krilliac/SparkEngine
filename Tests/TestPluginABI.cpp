@@ -776,7 +776,10 @@ TEST(DynamicPluginHost_ValidatesMetadataAndSha256BeforeMapping)
 
 TEST(DynamicPluginHost_LoadsQueriesTicksAndUnloadsRealNativePlugin)
 {
-    const std::filesystem::path pluginPath = SPARK_TEST_VALID_PLUGIN_PATH;
+    std::error_code pathError;
+    const std::filesystem::path pluginPath =
+        std::filesystem::absolute(std::filesystem::path(SPARK_TEST_VALID_PLUGIN_PATH), pathError);
+    EXPECT_FALSE(static_cast<bool>(pathError));
     EXPECT_TRUE(pluginPath.is_absolute());
     EXPECT_TRUE(std::filesystem::is_regular_file(pluginPath));
     EXPECT_TRUE(std::filesystem::is_regular_file(pluginPath.string() + ".sparkplugin.json"));

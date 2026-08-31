@@ -14,7 +14,10 @@
 
 namespace
 {
-    constexpr const char* kVersion = "SparkLauncher 1.0.0";
+#ifndef SPARK_LAUNCHER_VERSION
+#error "SPARK_LAUNCHER_VERSION must be supplied by the build system"
+#endif
+    constexpr const char* kVersion = "SparkLauncher " SPARK_LAUNCHER_VERSION;
 }
 
 #ifdef _WIN32

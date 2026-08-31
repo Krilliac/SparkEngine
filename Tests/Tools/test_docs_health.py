@@ -679,7 +679,7 @@ class RepositoryEvidenceTests(unittest.TestCase):
         self.assertEqual([], errors)
         gateway = REPO_ROOT / "Tests" / "TestGatewaySecurity.cpp"
         actual_loc = len(gateway.read_text(encoding="utf-8").splitlines())
-        self.assertEqual(475, actual_loc)
+        self.assertEqual(577, actual_loc)
         tree = (REPO_ROOT / "wiki" / "reference" / "File-Tree.md").read_text(encoding="utf-8")
         self.assertIn(
             f"(../../Tests/TestGatewaySecurity.cpp) - {actual_loc} LOC",

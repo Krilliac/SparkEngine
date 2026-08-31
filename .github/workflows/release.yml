@@ -1,27 +1,14 @@
 name: Publish Builds
 
 on:
-  push:
-    branches: [ 'release/**' ]
-    tags: [ 'v*' ]
   schedule:
     # Nightly at 04:00 UTC — after the day's merges settle
     - cron: '0 4 * * *'
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: 'Release tag (e.g. v1.0.0). Leave empty for rolling "latest" release.'
-        required: false
-        type: string
-      build_configs:
-        description: 'Which build configurations to publish'
-        required: true
-        default: 'both'
-        type: choice
-        options:
-          - both
-          - release
-          - debug
+  # repository_dispatch always executes the workflow from the current default
+  # branch. Its client_payload is treated only as bounded release metadata, so
+  # a caller cannot select a historical workflow file with write permission.
+  repository_dispatch:
+    types: [publish-builds]
 
 permissions:
   contents: read
@@ -42,14 +29,43 @@ jobs:
     steps:
     - name: Checkout release metadata source
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: Working
+        persist-credentials: false
+
+    - name: Attest current trusted release controller
+      env:
+        GH_TOKEN: ${{ github.token }}
+        EVENT_NAME: ${{ github.event_name }}
+        EVENT_REF: ${{ github.ref }}
+        EVENT_SHA: ${{ github.sha }}
+        WORKFLOW_SHA: ${{ github.workflow_sha }}
+      run: |
+        set -euo pipefail
+        if [[ "$EVENT_NAME" != "schedule" && "$EVENT_NAME" != "repository_dispatch" ]]; then
+          echo "Untrusted release event: $EVENT_NAME" >&2
+          exit 1
+        fi
+        if test "$EVENT_REF" != "refs/heads/Working"; then
+          echo "Release controller must execute from refs/heads/Working; got $EVENT_REF" >&2
+          exit 1
+        fi
+        LOCAL_SHA="$(git rev-parse HEAD)"
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        REMOTE_SHA="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin refs/heads/Working | awk 'NR == 1 { print $1 }')"
+        if test "$LOCAL_SHA" != "$EVENT_SHA" \
+          || test "$LOCAL_SHA" != "$WORKFLOW_SHA" \
+          || test "$LOCAL_SHA" != "$REMOTE_SHA"; then
+          echo "Release controller is not the exact current Working workflow commit." >&2
+          exit 1
+        fi
 
     - name: Compute release metadata
       id: meta
       env:
         EVENT_NAME: ${{ github.event_name }}
-        INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
-        REF_NAME: ${{ github.ref_name }}
-        REF_TYPE: ${{ github.ref_type }}
+        INPUT_RELEASE_TAG: ${{ github.event.client_payload.release_tag || '' }}
       run: |
         set -euo pipefail
         DEFAULT_VERSION=$(sed -nE 's/^set\(SPARK_ENGINE_VERSION "([0-9]+\.[0-9]+\.[0-9]+)" CACHE.*/\1/p' CMakeLists.txt | head -n 1)
@@ -58,10 +74,8 @@ jobs:
           exit 1
         fi
 
-        if [[ "$EVENT_NAME" == "workflow_dispatch" && -n "$INPUT_RELEASE_TAG" ]]; then
+        if [[ "$EVENT_NAME" == "repository_dispatch" && -n "$INPUT_RELEASE_TAG" ]]; then
           TAG="$INPUT_RELEASE_TAG"
-        elif [[ "$REF_TYPE" == "tag" ]]; then
-          TAG="$REF_NAME"
         else
           TAG=""
         fi
@@ -87,11 +101,19 @@ jobs:
       env:
         EVENT_NAME: ${{ github.event_name }}
         IS_VERSIONED: ${{ steps.meta.outputs.is_versioned }}
-        REQUESTED_CONFIGS: ${{ inputs.build_configs || 'both' }}
+        REQUESTED_CONFIGS: ${{ github.event.client_payload.build_configs || 'both' }}
       run: |
         # Every rolling nightly publishes both configurations so direct Debug
         # and Release links always identify assets from one exact source SHA.
         # Only versioned releases may honor an explicit single-config choice.
+        if [[ ! "$REQUESTED_CONFIGS" =~ ^(both|release|debug)$ ]]; then
+          echo "build_configs must be one of both, release, or debug; got: $REQUESTED_CONFIGS" >&2
+          exit 1
+        fi
+        if [[ "$IS_VERSIONED" == "true" && "$REQUESTED_CONFIGS" == "debug" ]]; then
+          echo "versioned releases must include Release artifacts; debug-only publication is forbidden" >&2
+          exit 1
+        fi
         if [[ "$IS_VERSIONED" == "false" ]]; then
           BUILD_CONFIGS="both"
         else
@@ -511,12 +533,15 @@ jobs:
           - os: ubuntu-24.04
             artifact_name: SparkInstaller-Linux-x64
             bin_name: SparkInstaller
-          - os: windows-latest
+            platform_name: Linux
+          - os: windows-2022
             artifact_name: SparkInstaller-Windows-x64.exe
             bin_name: SparkInstaller.exe
-          - os: macos-latest
+            platform_name: Windows
+          - os: macos-15
             artifact_name: SparkInstaller-macOS-arm64
             bin_name: SparkInstaller
+            platform_name: macOS
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -561,11 +586,14 @@ jobs:
 
       - name: Launch staged executable
         shell: bash
+        env:
+          EXPECTED_VERSION: ${{ needs.prepare.outputs.cmake_version }}
+          EXPECTED_PLATFORM: ${{ matrix.platform_name }}
         run: |
           set -o pipefail
           "./staging/${{ matrix.artifact_name }}" --version | tee installer-version.txt
           "./staging/${{ matrix.artifact_name }}" --help | tee installer-help.txt
-          grep -Fq "SparkInstaller" installer-version.txt
+          grep -Fqx -- "SparkInstaller ${EXPECTED_VERSION} (${EXPECTED_PLATFORM})" installer-version.txt
           grep -Fq "Usage:" installer-help.txt
 
       - name: Upload installer binary
@@ -582,10 +610,11 @@ jobs:
     needs: [prepare, build-windows, build-linux, build-macos, build-installer]
     runs-on: ubuntu-latest
     permissions:
-      actions: write
+      actions: read
       attestations: write
       contents: write
       id-token: write
+      statuses: read
     concurrency:
       group: sparkengine-publication-global
       cancel-in-progress: false
@@ -610,15 +639,103 @@ jobs:
       shell: bash
       run: python3 tools/site-data/validate.py --require-ready
 
-    # Counters are repository-global/default-branch state, not tag state. A
-    # separate checkout keeps release tags immutable and preserves the exact
-    # source checkout used by the release metadata below.
-    - name: Checkout canonical badge branch
+    - name: Freeze durable exact CI evidence release asset
+      env:
+        EXACT_SOURCE_COMMIT: ${{ github.sha }}
+        EXACT_BUILD_RUN_ID: ${{ steps.required-ci.outputs.run_id }}
+        EXACT_BUILD_RUN_ATTEMPT: ${{ steps.required-ci.outputs.run_attempt }}
+        EXACT_BUILD_RUN_URL: ${{ steps.required-ci.outputs.run_url }}
+        EXACT_BUILD_EVENT: ${{ steps.required-ci.outputs.event }}
+        EXACT_BUILD_CI120_PRODUCER_JOB_ID: ${{ steps.required-ci.outputs.build_ci120_producer_job_id }}
+        EXACT_BUILD_REQUIRED_GATE_JOB_ID: ${{ steps.required-ci.outputs.build_required_gate_job_id }}
+        EXACT_BUILD_JOB_INVENTORY_DIGEST: ${{ steps.required-ci.outputs.build_job_inventory_digest }}
+        EXACT_CI120_SOURCE_ARTIFACT_ID: ${{ steps.required-ci.outputs.ci120_source_artifact_id }}
+        EXACT_CI120_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci.outputs.ci120_source_artifact_digest }}
+        EXACT_CI120_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci.outputs.ci120_source_artifact_bytes }}
+        EXACT_CI120_STATUS_ID: ${{ steps.required-ci.outputs.ci120_status_id }}
+        EXACT_CI120_STATUS_TARGET_URL: ${{ steps.required-ci.outputs.ci120_status_target_url }}
+        EXACT_CI120_STATUS_CREATED_AT: ${{ steps.required-ci.outputs.ci120_status_created_at }}
+        EXACT_CI120_STATUS_UPDATED_AT: ${{ steps.required-ci.outputs.ci120_status_updated_at }}
+        EXACT_CI120_VERIFIER_RUN_ID: ${{ steps.required-ci.outputs.verifier_run_id }}
+        EXACT_CI120_VERIFIER_RUN_ATTEMPT: ${{ steps.required-ci.outputs.verifier_run_attempt }}
+        EXACT_CI120_VERIFIER_RUN_URL: ${{ steps.required-ci.outputs.verifier_run_url }}
+        EXACT_VERIFIER_COMMIT: ${{ steps.required-ci.outputs.verifier_sha }}
+        EXACT_CI120_TRUSTED_VERIFIER_JOB_ID: ${{ steps.required-ci.outputs.ci120_trusted_verifier_job_id }}
+        EXACT_CI120_VERIFIER_JOB_INVENTORY_DIGEST: ${{ steps.required-ci.outputs.ci120_verifier_job_inventory_digest }}
+        EXACT_CI120_STATUS_PUBLISH_STEP_STARTED_AT: ${{ steps.required-ci.outputs.ci120_status_publish_step_started_at }}
+        EXACT_CI120_STATUS_PUBLISH_STEP_COMPLETED_AT: ${{ steps.required-ci.outputs.ci120_status_publish_step_completed_at }}
+        EXACT_CI120_RECEIPT_ARTIFACT_ID: ${{ steps.required-ci.outputs.receipt_artifact_id }}
+        EXACT_CI120_RECEIPT_ARTIFACT_DIGEST: ${{ steps.required-ci.outputs.receipt_artifact_digest }}
+        EXACT_CI120_RECEIPT_ARTIFACT_BYTES: ${{ steps.required-ci.outputs.receipt_artifact_bytes }}
+        EXACT_CODEQL_RUN_ID: ${{ steps.required-ci.outputs.codeql_run_id }}
+        EXACT_CODEQL_RUN_ATTEMPT: ${{ steps.required-ci.outputs.codeql_run_attempt }}
+        EXACT_CODEQL_RUN_URL: ${{ steps.required-ci.outputs.codeql_run_url }}
+        EXACT_CODEQL_ACTIONS_SOURCE_JOB_ID: ${{ steps.required-ci.outputs.codeql_actions_source_job_id }}
+        EXACT_CODEQL_C_CPP_SOURCE_JOB_ID: ${{ steps.required-ci.outputs.codeql_c_cpp_source_job_id }}
+        EXACT_CODEQL_PYTHON_SOURCE_JOB_ID: ${{ steps.required-ci.outputs.codeql_python_source_job_id }}
+        EXACT_CODEQL_SOURCE_JOB_INVENTORY_DIGEST: ${{ steps.required-ci.outputs.codeql_source_job_inventory_digest }}
+        EXACT_CODEQL_ACTIONS_SOURCE_ARTIFACT_ID: ${{ steps.required-ci.outputs.codeql_actions_source_artifact_id }}
+        EXACT_CODEQL_ACTIONS_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci.outputs.codeql_actions_source_artifact_digest }}
+        EXACT_CODEQL_ACTIONS_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci.outputs.codeql_actions_source_artifact_bytes }}
+        EXACT_CODEQL_C_CPP_SOURCE_ARTIFACT_ID: ${{ steps.required-ci.outputs.codeql_c_cpp_source_artifact_id }}
+        EXACT_CODEQL_C_CPP_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci.outputs.codeql_c_cpp_source_artifact_digest }}
+        EXACT_CODEQL_C_CPP_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci.outputs.codeql_c_cpp_source_artifact_bytes }}
+        EXACT_CODEQL_PYTHON_SOURCE_ARTIFACT_ID: ${{ steps.required-ci.outputs.codeql_python_source_artifact_id }}
+        EXACT_CODEQL_PYTHON_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci.outputs.codeql_python_source_artifact_digest }}
+        EXACT_CODEQL_PYTHON_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci.outputs.codeql_python_source_artifact_bytes }}
+        EXACT_CODEQL_STATUS_ID: ${{ steps.required-ci.outputs.codeql_status_id }}
+        EXACT_CODEQL_STATUS_TARGET_URL: ${{ steps.required-ci.outputs.codeql_status_target_url }}
+        EXACT_CODEQL_STATUS_CREATED_AT: ${{ steps.required-ci.outputs.codeql_status_created_at }}
+        EXACT_CODEQL_STATUS_UPDATED_AT: ${{ steps.required-ci.outputs.codeql_status_updated_at }}
+        EXACT_CODEQL_REPORTER_RUN_ID: ${{ steps.required-ci.outputs.codeql_reporter_run_id }}
+        EXACT_CODEQL_REPORTER_RUN_ATTEMPT: ${{ steps.required-ci.outputs.codeql_reporter_run_attempt }}
+        EXACT_CODEQL_REPORTER_RUN_URL: ${{ steps.required-ci.outputs.codeql_reporter_run_url }}
+        EXACT_CODEQL_TRUSTED_REPORTER_JOB_ID: ${{ steps.required-ci.outputs.codeql_trusted_reporter_job_id }}
+        EXACT_CODEQL_REPORTER_JOB_INVENTORY_DIGEST: ${{ steps.required-ci.outputs.codeql_reporter_job_inventory_digest }}
+        EXACT_CODEQL_STATUS_PUBLISH_STEP_STARTED_AT: ${{ steps.required-ci.outputs.codeql_status_publish_step_started_at }}
+        EXACT_CODEQL_STATUS_PUBLISH_STEP_COMPLETED_AT: ${{ steps.required-ci.outputs.codeql_status_publish_step_completed_at }}
+        EXACT_CODEQL_SUMMARY_ARTIFACT_ID: ${{ steps.required-ci.outputs.codeql_summary_artifact_id }}
+        EXACT_CODEQL_SUMMARY_ARTIFACT_DIGEST: ${{ steps.required-ci.outputs.codeql_summary_artifact_digest }}
+        EXACT_CODEQL_SUMMARY_ARTIFACT_BYTES: ${{ steps.required-ci.outputs.codeql_summary_artifact_bytes }}
+      run: |
+        set -euo pipefail
+        python3 tools/site-data/exact_evidence.py write \
+          --output "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json"
+
+    # Download counters are durable generated state on one moving tag. Keeping
+    # them off Working lets branch protection stay strict and leaves the source
+    # commit unchanged throughout exact-CI revalidation.
+    - name: Checkout badge-state seed
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         ref: Working
         path: badge-repository
         persist-credentials: false
+
+    - name: Load durable download-counter state tag
+      id: badge-state
+      working-directory: badge-repository
+      env:
+        GH_TOKEN: ${{ github.token }}
+        STATE_REF: refs/tags/generated-release-counters
+      run: |
+        set -euo pipefail
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test -n "$REMOTE_OBJECT"; then
+          git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+            fetch --force --no-tags origin "+${STATE_REF}:${STATE_REF}"
+          git checkout --detach "$STATE_REF"
+          if test "$(git rev-parse HEAD)" != "$(git rev-parse "${STATE_REF}^{commit}")"; then
+            echo "Generated counter state tag did not resolve to its fetched commit." >&2
+            exit 1
+          fi
+        else
+          git checkout --detach "$(git rev-parse HEAD)"
+        fi
+        echo "remote_object=$REMOTE_OBJECT" >> "$GITHUB_OUTPUT"
+        echo "state_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
     - name: Resolve short commit SHA
       id: sha
@@ -630,7 +747,7 @@ jobs:
         path: release-assets
 
     - name: Generate SPDX software bill of materials
-      uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+      uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
       with:
         path: release-assets
         format: spdx-json
@@ -708,6 +825,8 @@ jobs:
             note="Bootstrap installer (clone + build engine)"
           elif [[ "$artifact" == *.spdx.json ]]; then
             note="SPDX software bill of materials"
+          elif [[ "$artifact" == "SparkEngine-Exact-CI-Evidence.json" ]]; then
+            note="Exact CI-120 and CodeQL evidence manifest"
           elif [[ "$artifact" == *"-Windows-"* ]]; then
             note="Windows package"
           elif [[ "$artifact" == *"-Linux-"* ]]; then
@@ -716,13 +835,20 @@ jobs:
 
           size_bytes=$(stat --format='%s' "$artifact")
           size_human=$(numfmt --to=iec-i --suffix=B "$size_bytes")
-          sha256sum "$artifact" >> SHA256SUMS
+          # The exact-CI manifest is independently digest-bound by the durable
+          # ledger and the terminal GitHub asset check. Keeping it out of
+          # SHA256SUMS avoids a transitive checksum mutation when an interrupted
+          # stable draft resumes with fresher exact-run evidence.
+          if [[ "$artifact" != "SparkEngine-Exact-CI-Evidence.json" ]]; then
+            sha256sum "$artifact" >> SHA256SUMS
+          fi
           FILES="${FILES}${artifact}"$'\n'
           TABLE="${TABLE}"$'\n'"| \`${artifact}\` | ${size_human} | ${note} |"
         done < <(
           find . -maxdepth 1 -type f \
             \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \
-               -o -name "SparkInstaller-*" -o -name "*.spdx.json" \) -print0 | sort -z
+               -o -name "SparkInstaller-*" -o -name "*.spdx.json" \
+               -o -name "SparkEngine-Exact-CI-Evidence.json" \) -print0 | sort -z
         )
 
         if [ ! -s SHA256SUMS ]; then
@@ -742,7 +868,7 @@ jobs:
           echo
           echo "$TABLE"
           echo
-          echo 'Every collected artifact passed an immediate `sha256sum --check SHA256SUMS` round trip.'
+          echo 'Every distributable artifact passed an immediate `sha256sum --check SHA256SUMS` round trip. The exact-CI manifest is separately bound to its GitHub asset digest and revalidated immediately before publication.'
         } >> "$GITHUB_STEP_SUMMARY"
 
         # Write multiline outputs
@@ -773,44 +899,85 @@ jobs:
           exit 1
         fi
 
+        INSPECT_ARGS=()
+        if [[ "$IS_VERSIONED" == "true" ]]; then
+          INSPECT_ARGS+=(--allow-exact-ci-evidence-replacement)
+          INSPECT_ARGS+=(--allow-stable-draft-recovery-candidates)
+        fi
         python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" inspect \
           --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
-          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt"
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+          "${INSPECT_ARGS[@]}"
 
-    - name: Hide and verify existing nightly release
-      if: needs.prepare.outputs.is_versioned == 'false' && steps.release-inspect.outputs.target_exists == 'true'
+    - name: Revalidate exact CI evidence before first release mutation
+      id: required-ci-mutation
       env:
         GH_TOKEN: ${{ github.token }}
-        RELEASE_ID: ${{ steps.release-inspect.outputs.target_release_id }}
-        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        TARGET_SHA: ${{ github.sha }}
+      run: python3 .github/scripts/verify-exact-required-gate.py
+
+    - name: Verify frozen exact CI evidence before first release mutation
+      env:
+        EXACT_SOURCE_COMMIT: ${{ github.sha }}
+        EXACT_BUILD_RUN_ID: ${{ steps.required-ci-mutation.outputs.run_id }}
+        EXACT_BUILD_RUN_ATTEMPT: ${{ steps.required-ci-mutation.outputs.run_attempt }}
+        EXACT_BUILD_RUN_URL: ${{ steps.required-ci-mutation.outputs.run_url }}
+        EXACT_BUILD_EVENT: ${{ steps.required-ci-mutation.outputs.event }}
+        EXACT_BUILD_CI120_PRODUCER_JOB_ID: ${{ steps.required-ci-mutation.outputs.build_ci120_producer_job_id }}
+        EXACT_BUILD_REQUIRED_GATE_JOB_ID: ${{ steps.required-ci-mutation.outputs.build_required_gate_job_id }}
+        EXACT_BUILD_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-mutation.outputs.build_job_inventory_digest }}
+        EXACT_CI120_SOURCE_ARTIFACT_ID: ${{ steps.required-ci-mutation.outputs.ci120_source_artifact_id }}
+        EXACT_CI120_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci-mutation.outputs.ci120_source_artifact_digest }}
+        EXACT_CI120_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci-mutation.outputs.ci120_source_artifact_bytes }}
+        EXACT_CI120_STATUS_ID: ${{ steps.required-ci-mutation.outputs.ci120_status_id }}
+        EXACT_CI120_STATUS_TARGET_URL: ${{ steps.required-ci-mutation.outputs.ci120_status_target_url }}
+        EXACT_CI120_STATUS_CREATED_AT: ${{ steps.required-ci-mutation.outputs.ci120_status_created_at }}
+        EXACT_CI120_STATUS_UPDATED_AT: ${{ steps.required-ci-mutation.outputs.ci120_status_updated_at }}
+        EXACT_CI120_VERIFIER_RUN_ID: ${{ steps.required-ci-mutation.outputs.verifier_run_id }}
+        EXACT_CI120_VERIFIER_RUN_ATTEMPT: ${{ steps.required-ci-mutation.outputs.verifier_run_attempt }}
+        EXACT_CI120_VERIFIER_RUN_URL: ${{ steps.required-ci-mutation.outputs.verifier_run_url }}
+        EXACT_VERIFIER_COMMIT: ${{ steps.required-ci-mutation.outputs.verifier_sha }}
+        EXACT_CI120_TRUSTED_VERIFIER_JOB_ID: ${{ steps.required-ci-mutation.outputs.ci120_trusted_verifier_job_id }}
+        EXACT_CI120_VERIFIER_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-mutation.outputs.ci120_verifier_job_inventory_digest }}
+        EXACT_CI120_STATUS_PUBLISH_STEP_STARTED_AT: ${{ steps.required-ci-mutation.outputs.ci120_status_publish_step_started_at }}
+        EXACT_CI120_STATUS_PUBLISH_STEP_COMPLETED_AT: ${{ steps.required-ci-mutation.outputs.ci120_status_publish_step_completed_at }}
+        EXACT_CI120_RECEIPT_ARTIFACT_ID: ${{ steps.required-ci-mutation.outputs.receipt_artifact_id }}
+        EXACT_CI120_RECEIPT_ARTIFACT_DIGEST: ${{ steps.required-ci-mutation.outputs.receipt_artifact_digest }}
+        EXACT_CI120_RECEIPT_ARTIFACT_BYTES: ${{ steps.required-ci-mutation.outputs.receipt_artifact_bytes }}
+        EXACT_CODEQL_RUN_ID: ${{ steps.required-ci-mutation.outputs.codeql_run_id }}
+        EXACT_CODEQL_RUN_ATTEMPT: ${{ steps.required-ci-mutation.outputs.codeql_run_attempt }}
+        EXACT_CODEQL_RUN_URL: ${{ steps.required-ci-mutation.outputs.codeql_run_url }}
+        EXACT_CODEQL_ACTIONS_SOURCE_JOB_ID: ${{ steps.required-ci-mutation.outputs.codeql_actions_source_job_id }}
+        EXACT_CODEQL_C_CPP_SOURCE_JOB_ID: ${{ steps.required-ci-mutation.outputs.codeql_c_cpp_source_job_id }}
+        EXACT_CODEQL_PYTHON_SOURCE_JOB_ID: ${{ steps.required-ci-mutation.outputs.codeql_python_source_job_id }}
+        EXACT_CODEQL_SOURCE_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-mutation.outputs.codeql_source_job_inventory_digest }}
+        EXACT_CODEQL_ACTIONS_SOURCE_ARTIFACT_ID: ${{ steps.required-ci-mutation.outputs.codeql_actions_source_artifact_id }}
+        EXACT_CODEQL_ACTIONS_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci-mutation.outputs.codeql_actions_source_artifact_digest }}
+        EXACT_CODEQL_ACTIONS_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci-mutation.outputs.codeql_actions_source_artifact_bytes }}
+        EXACT_CODEQL_C_CPP_SOURCE_ARTIFACT_ID: ${{ steps.required-ci-mutation.outputs.codeql_c_cpp_source_artifact_id }}
+        EXACT_CODEQL_C_CPP_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci-mutation.outputs.codeql_c_cpp_source_artifact_digest }}
+        EXACT_CODEQL_C_CPP_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci-mutation.outputs.codeql_c_cpp_source_artifact_bytes }}
+        EXACT_CODEQL_PYTHON_SOURCE_ARTIFACT_ID: ${{ steps.required-ci-mutation.outputs.codeql_python_source_artifact_id }}
+        EXACT_CODEQL_PYTHON_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci-mutation.outputs.codeql_python_source_artifact_digest }}
+        EXACT_CODEQL_PYTHON_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci-mutation.outputs.codeql_python_source_artifact_bytes }}
+        EXACT_CODEQL_STATUS_ID: ${{ steps.required-ci-mutation.outputs.codeql_status_id }}
+        EXACT_CODEQL_STATUS_TARGET_URL: ${{ steps.required-ci-mutation.outputs.codeql_status_target_url }}
+        EXACT_CODEQL_STATUS_CREATED_AT: ${{ steps.required-ci-mutation.outputs.codeql_status_created_at }}
+        EXACT_CODEQL_STATUS_UPDATED_AT: ${{ steps.required-ci-mutation.outputs.codeql_status_updated_at }}
+        EXACT_CODEQL_REPORTER_RUN_ID: ${{ steps.required-ci-mutation.outputs.codeql_reporter_run_id }}
+        EXACT_CODEQL_REPORTER_RUN_ATTEMPT: ${{ steps.required-ci-mutation.outputs.codeql_reporter_run_attempt }}
+        EXACT_CODEQL_REPORTER_RUN_URL: ${{ steps.required-ci-mutation.outputs.codeql_reporter_run_url }}
+        EXACT_CODEQL_TRUSTED_REPORTER_JOB_ID: ${{ steps.required-ci-mutation.outputs.codeql_trusted_reporter_job_id }}
+        EXACT_CODEQL_REPORTER_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-mutation.outputs.codeql_reporter_job_inventory_digest }}
+        EXACT_CODEQL_STATUS_PUBLISH_STEP_STARTED_AT: ${{ steps.required-ci-mutation.outputs.codeql_status_publish_step_started_at }}
+        EXACT_CODEQL_STATUS_PUBLISH_STEP_COMPLETED_AT: ${{ steps.required-ci-mutation.outputs.codeql_status_publish_step_completed_at }}
+        EXACT_CODEQL_SUMMARY_ARTIFACT_ID: ${{ steps.required-ci-mutation.outputs.codeql_summary_artifact_id }}
+        EXACT_CODEQL_SUMMARY_ARTIFACT_DIGEST: ${{ steps.required-ci-mutation.outputs.codeql_summary_artifact_digest }}
+        EXACT_CODEQL_SUMMARY_ARTIFACT_BYTES: ${{ steps.required-ci-mutation.outputs.codeql_summary_artifact_bytes }}
       run: |
         set -euo pipefail
-        if [[ ! "$RELEASE_ID" =~ ^[1-9][0-9]*$ ]]; then
-          echo "Existing nightly release ID is invalid." >&2
-          exit 1
-        fi
-        if [[ "$RELEASE_TAG" != "nightly" ]]; then
-          echo "Refusing to hide non-nightly release: $RELEASE_TAG" >&2
-          exit 1
-        fi
-
-        VERIFIED_RELEASE="$(mktemp)"
-        trap 'rm -f "$VERIFIED_RELEASE"' EXIT
-        gh api --method PATCH \
-          "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
-          -F draft=true >/dev/null
-        gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$VERIFIED_RELEASE"
-        if ! jq -e \
-            --argjson release_id "$RELEASE_ID" \
-            --arg release_tag "$RELEASE_TAG" \
-            'type == "object" and
-             .id == $release_id and
-             .tag_name == $release_tag and
-             .draft == true' \
-            "$VERIFIED_RELEASE" >/dev/null; then
-          echo "Existing nightly release was not verifiably hidden; refusing all tag and asset mutation." >&2
-          exit 1
-        fi
+        python3 tools/site-data/exact_evidence.py verify \
+          --manifest "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json"
 
     - name: Prepare durable pending download-counter state
       id: badge-prepare
@@ -829,23 +996,37 @@ jobs:
           exit 1
         fi
 
+        PREPARE_ARGS=()
+        if [[ "$IS_VERSIONED" == "true" ]]; then
+          PREPARE_ARGS+=(--allow-exact-ci-evidence-replacement)
+        fi
         python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" prepare \
           --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json" \
-          --badge-directory "$GITHUB_WORKSPACE/badge-repository/.github/badges"
+          --badge-directory "$GITHUB_WORKSPACE/badge-repository/.github/badges" \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+          "${PREPARE_ARGS[@]}"
 
     - name: Commit durable pending download-counter state
       id: badge-pending-commit
       working-directory: badge-repository
       env:
         GH_TOKEN: ${{ github.token }}
+        STATE_REF: refs/tags/generated-release-counters
+        EXPECTED_REMOTE_OBJECT: ${{ steps.badge-state.outputs.remote_object }}
+        EXPECTED_STATE_COMMIT: ${{ steps.badge-state.outputs.state_commit }}
       run: |
         set -euo pipefail
         AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
         INITIAL_HEAD="$(git rev-parse HEAD)"
-        REMOTE_HEAD="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
-          ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
-        if test "$REMOTE_HEAD" != "$INITIAL_HEAD"; then
-          echo "Working advanced before pending counter state could be committed; rerun this release." >&2
+        if test "$INITIAL_HEAD" != "$EXPECTED_STATE_COMMIT"; then
+          echo "Badge checkout no longer points to the loaded counter-state commit." >&2
+          exit 1
+        fi
+        REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$REMOTE_OBJECT" != "$EXPECTED_REMOTE_OBJECT"; then
+          echo "Generated counter state advanced before pending state could be committed; rerun this release." >&2
           exit 1
         fi
 
@@ -863,16 +1044,456 @@ jobs:
         git commit -s -m "chore: prepare download counters (lifetime: ${{ steps.badge-prepare.outputs.new_total }}, installer: ${{ steps.badge-prepare.outputs.installer_total }}, operation: ${{ steps.badge-prepare.outputs.operation_id }}) [skip ci]"
         PENDING_COMMIT="$(git rev-parse HEAD)"
         git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
-          --force-with-lease="refs/heads/Working:${REMOTE_HEAD}" origin \
-          "HEAD:refs/heads/Working"
+          --force-with-lease="${STATE_REF}:${EXPECTED_REMOTE_OBJECT}" origin \
+          "HEAD:${STATE_REF}"
 
-        PUBLISHED_HEAD="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
-          ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
-        if test "$PUBLISHED_HEAD" != "$PENDING_COMMIT"; then
-          echo "Working does not point to the durable pending commit after push." >&2
+        PUBLISHED_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$PUBLISHED_OBJECT" != "$PENDING_COMMIT"; then
+          echo "Generated counter state tag does not point to the durable pending commit after push." >&2
           exit 1
         fi
         echo "pending_commit=$PENDING_COMMIT" >> "$GITHUB_OUTPUT"
+
+    - name: Reverify exact public nightly snapshot before hiding
+      if: needs.prepare.outputs.is_versioned == 'false' && steps.release-inspect.outputs.target_exists == 'true' && steps.release-inspect.outputs.target_is_draft == 'false'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        GITHUB_SHA: ${{ github.sha }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" pre-hide-preflight \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+          --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
+
+    - name: Hide and verify existing nightly release
+      if: needs.prepare.outputs.is_versioned == 'false' && steps.release-inspect.outputs.target_exists == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_ID: ${{ steps.release-inspect.outputs.target_release_id }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        TARGET_WAS_DRAFT: ${{ steps.release-inspect.outputs.target_is_draft }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$RELEASE_ID" =~ ^[1-9][0-9]*$ ]]; then
+          echo "Existing nightly release ID is invalid." >&2
+          exit 1
+        fi
+        if [[ "$RELEASE_TAG" != "nightly" ]]; then
+          echo "Refusing to hide non-nightly release: $RELEASE_TAG" >&2
+          exit 1
+        fi
+
+        CURRENT_RELEASE="$(mktemp)"
+        VERIFIED_RELEASE="$(mktemp)"
+        trap 'rm -f "$CURRENT_RELEASE" "$VERIFIED_RELEASE"' EXIT
+        gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$CURRENT_RELEASE"
+        if ! jq -e \
+            --argjson release_id "$RELEASE_ID" \
+            --arg release_tag "$RELEASE_TAG" \
+            'type == "object" and
+             .id == $release_id and
+             .tag_name == $release_tag and
+             (.draft | type) == "boolean" and
+             .prerelease == true and
+             .immutable == false' \
+            "$CURRENT_RELEASE" >/dev/null; then
+          echo "Existing nightly release changed after inspection; refusing to hide it." >&2
+          exit 1
+        fi
+        if [[ "$TARGET_WAS_DRAFT" == "true" ]]; then
+          if ! jq -e '.draft == true' "$CURRENT_RELEASE" >/dev/null; then
+            echo "Existing nightly visibility changed after its durable draft snapshot." >&2
+            exit 1
+          fi
+          cp "$CURRENT_RELEASE" "$VERIFIED_RELEASE"
+        elif [[ "$TARGET_WAS_DRAFT" == "false" ]]; then
+          if ! jq -e '.draft == false' "$CURRENT_RELEASE" >/dev/null; then
+            echo "Existing nightly visibility changed after its durable public snapshot." >&2
+            exit 1
+          fi
+          gh api --method PATCH \
+            "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=true \
+            -F prerelease=true \
+            -f make_latest=false >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$VERIFIED_RELEASE"
+        else
+          echo "Existing nightly durable visibility snapshot is invalid." >&2
+          exit 1
+        fi
+        if ! jq -e \
+            --argjson release_id "$RELEASE_ID" \
+            --arg release_tag "$RELEASE_TAG" \
+            'type == "object" and
+             .id == $release_id and
+             .tag_name == $release_tag and
+             .draft == true and
+             .prerelease == true and
+             .immutable == false' \
+            "$VERIFIED_RELEASE" >/dev/null; then
+          echo "Existing nightly release was not verifiably hidden; refusing all tag and asset mutation." >&2
+          exit 1
+        fi
+
+    - name: Preflight durable stable-draft failed-upload cleanup
+      id: draft-cleanup
+      if: needs.prepare.outputs.is_versioned == 'true' && steps.badge-prepare.outputs.cleanup_required == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        GITHUB_SHA: ${{ github.sha }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" cleanup-preflight \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+          --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
+
+    - name: Delete only durably authorized failed stable-draft uploads
+      if: steps.draft-cleanup.outputs.cleanup_required == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_ID: ${{ steps.draft-cleanup.outputs.target_release_id }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        CLEANUP_ASSETS: ${{ steps.draft-cleanup.outputs.cleanup_assets }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$RELEASE_ID" =~ ^[1-9][0-9]*$ ]]; then
+          echo "Durably authorized stable-draft cleanup release ID is invalid." >&2
+          exit 1
+        fi
+        if ! jq -e \
+            'type == "array" and length <= 100 and
+             ([.[].assetId] | length == (unique | length)) and
+             ([.[].name] | length == (unique | length))' \
+            <<< "$CLEANUP_ASSETS" >/dev/null; then
+          echo "Durably authorized stable-draft cleanup plan is invalid." >&2
+          exit 1
+        fi
+
+        while IFS= read -r candidate; do
+          ASSET_ID="$(jq -er '.assetId | select(type == "number" and floor == . and . > 0)' <<< "$candidate")"
+          ASSET_NAME="$(jq -er '.name | select(type == "string" and test("^[^/\\r\\n]+$"))' <<< "$candidate")"
+          ASSET_STATE="$(jq -er '.state | select(. == "starter" or . == "uploaded")' <<< "$candidate")"
+          ASSET_DIGEST="$(jq -er 'if .digest == null then "" elif (.digest | type == "string" and test("^sha256:[0-9a-f]{64}$")) then .digest else error("invalid digest") end' <<< "$candidate")"
+          DOWNLOAD_COUNT="$(jq -er '.downloadCount | select(type == "number" and floor == . and . >= 0)' <<< "$candidate")"
+          if [[ "$ASSET_STATE" == "starter" && -n "$ASSET_DIGEST" ]]; then
+            echo "A starter cleanup candidate unexpectedly has a digest." >&2
+            exit 1
+          fi
+
+          ASSET_RECORD="$RUNNER_TEMP/stable-draft-cleanup-asset-${ASSET_ID}.json"
+          RELEASE_RECORD="$RUNNER_TEMP/stable-draft-cleanup-release-${ASSET_ID}.json"
+          RECHECK_OUTPUT="$RUNNER_TEMP/stable-draft-cleanup-recheck-${ASSET_ID}.out"
+          rm -f "$RECHECK_OUTPUT"
+          GITHUB_OUTPUT="$RECHECK_OUTPUT" \
+            python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" cleanup-preflight \
+              --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+              --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+              --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
+          RECHECK_RELEASE_ID="$(sed -n 's/^target_release_id=//p' "$RECHECK_OUTPUT")"
+          RECHECK_ASSETS="$(sed -n 's/^cleanup_assets=//p' "$RECHECK_OUTPUT")"
+          if [[ "$RECHECK_RELEASE_ID" != "$RELEASE_ID" ]] || \
+             ! jq -e --argjson candidate "$candidate" \
+               'type == "array" and any(.[]; . == $candidate)' \
+               <<< "$RECHECK_ASSETS" >/dev/null; then
+            echo "Stable-draft cleanup authorization changed before deletion." >&2
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID" > "$ASSET_RECORD"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$RELEASE_RECORD"
+          jq -e \
+            --argjson asset_id "$ASSET_ID" \
+            --arg asset_name "$ASSET_NAME" \
+            --arg asset_digest "$ASSET_DIGEST" \
+            --arg asset_state "$ASSET_STATE" \
+            --argjson download_count "$DOWNLOAD_COUNT" \
+            'type == "object" and
+             .id == $asset_id and
+             .name == $asset_name and
+             .state == $asset_state and
+             (if $asset_digest == "" then .digest == null else .digest == $asset_digest end) and
+             .download_count == $download_count' \
+            "$ASSET_RECORD" >/dev/null
+          jq -e \
+            --argjson release_id "$RELEASE_ID" \
+            --arg release_tag "$RELEASE_TAG" \
+            --arg upload_template "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets{?name,label}" \
+            'type == "object" and
+             .id == $release_id and
+             .tag_name == $release_tag and
+             .draft == true and
+             .prerelease == false and
+             .upload_url == $upload_template' \
+            "$RELEASE_RECORD" >/dev/null
+          # These bound reads are the final operations before the exact-ID delete.
+          gh api --method DELETE \
+            "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID"
+        done < <(jq -c '.[]' <<< "$CLEANUP_ASSETS")
+
+    - name: Accept stable-draft cleanup into the durable pending ledger
+      if: steps.draft-cleanup.outputs.cleanup_required == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        GITHUB_SHA: ${{ github.sha }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" cleanup-accept \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+          --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json" \
+          --badge-directory "$GITHUB_WORKSPACE/badge-repository/.github/badges"
+
+    - name: Commit accepted stable-draft cleanup state
+      id: badge-cleanup-commit
+      if: steps.draft-cleanup.outputs.cleanup_required == 'true'
+      working-directory: badge-repository
+      env:
+        GH_TOKEN: ${{ github.token }}
+        STATE_REF: refs/tags/generated-release-counters
+        EXPECTED_PENDING: ${{ steps.badge-pending-commit.outputs.pending_commit }}
+      run: |
+        set -euo pipefail
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        if test "$(git rev-parse HEAD)" != "$EXPECTED_PENDING"; then
+          echo "Badge checkout no longer points to the durable cleanup intent." >&2
+          exit 1
+        fi
+        REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$REMOTE_OBJECT" != "$EXPECTED_PENDING"; then
+          echo "Generated counter state advanced during stable-draft cleanup." >&2
+          exit 1
+        fi
+        git add -- \
+          .github/badges/downloads-data.json \
+          .github/badges/downloads.json \
+          .github/badges/installer-downloads.json
+        if git diff --cached --quiet; then
+          echo "Stable-draft cleanup acceptance produced no durable ledger change." >&2
+          exit 1
+        fi
+        git commit -s -m "chore: accept stable-draft failed-upload cleanup [skip ci]"
+        ACCEPTED_COMMIT="$(git rev-parse HEAD)"
+        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+          --force-with-lease="${STATE_REF}:${EXPECTED_PENDING}" origin \
+          "HEAD:${STATE_REF}"
+        PUBLISHED_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$PUBLISHED_OBJECT" != "$ACCEPTED_COMMIT"; then
+          echo "Generated counter tag does not contain the accepted stable-draft cleanup." >&2
+          exit 1
+        fi
+        echo "pending_commit=$ACCEPTED_COMMIT" >> "$GITHUB_OUTPUT"
+
+    - name: Preflight durable exact CI evidence replacement
+      id: evidence-replacement
+      if: needs.prepare.outputs.is_versioned == 'true' && steps.badge-prepare.outputs.replacement_required == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        GITHUB_SHA: ${{ github.sha }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" replacement-preflight \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+          --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
+
+    - name: Delete only the durably authorized stable-draft evidence asset
+      if: steps.evidence-replacement.outputs.delete_required == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_ID: ${{ steps.evidence-replacement.outputs.target_release_id }}
+        DELETE_EVIDENCE_ASSET_ID: ${{ steps.evidence-replacement.outputs.delete_evidence_asset_id }}
+        DELETE_EVIDENCE_ASSET_DIGEST: ${{ steps.evidence-replacement.outputs.delete_evidence_asset_digest }}
+        DELETE_EVIDENCE_ASSET_STATE: ${{ steps.evidence-replacement.outputs.delete_evidence_asset_state }}
+        DELETE_EVIDENCE_DOWNLOAD_COUNT: ${{ steps.evidence-replacement.outputs.delete_evidence_download_count }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$RELEASE_ID" =~ ^[1-9][0-9]*$ || ! "$DELETE_EVIDENCE_ASSET_ID" =~ ^[1-9][0-9]*$ ]]; then
+          echo "Durably authorized evidence replacement IDs are invalid." >&2
+          exit 1
+        fi
+        if [[ "$DELETE_EVIDENCE_ASSET_STATE" != "uploaded" && "$DELETE_EVIDENCE_ASSET_STATE" != "starter" ]]; then
+          echo "Durably authorized evidence cleanup state is invalid." >&2
+          exit 1
+        fi
+        if [[ ! "$DELETE_EVIDENCE_DOWNLOAD_COUNT" =~ ^(0|[1-9][0-9]*)$ ]]; then
+          echo "Durably authorized evidence cleanup count is invalid." >&2
+          exit 1
+        fi
+        if [[ "$DELETE_EVIDENCE_ASSET_STATE" == "uploaded" && -n "$DELETE_EVIDENCE_ASSET_DIGEST" && ! "$DELETE_EVIDENCE_ASSET_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+          echo "Durably authorized uploaded evidence cleanup digest is invalid." >&2
+          exit 1
+        fi
+        if [[ "$DELETE_EVIDENCE_ASSET_STATE" == "starter" && -n "$DELETE_EVIDENCE_ASSET_DIGEST" ]]; then
+          echo "Durably authorized starter evidence cleanup unexpectedly has a digest." >&2
+          exit 1
+        fi
+        RELEASE_RECORD="$RUNNER_TEMP/stable-draft-before-evidence-delete.json"
+        ASSET_RECORD="$RUNNER_TEMP/evidence-asset-before-delete.json"
+        gh api "repos/$GITHUB_REPOSITORY/releases/assets/$DELETE_EVIDENCE_ASSET_ID" > "$ASSET_RECORD"
+        gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$RELEASE_RECORD"
+        jq -e \
+          --argjson asset_id "$DELETE_EVIDENCE_ASSET_ID" \
+          --arg asset_name "SparkEngine-Exact-CI-Evidence.json" \
+          --arg asset_digest "$DELETE_EVIDENCE_ASSET_DIGEST" \
+          --arg asset_state "$DELETE_EVIDENCE_ASSET_STATE" \
+          --argjson download_count "$DELETE_EVIDENCE_DOWNLOAD_COUNT" \
+          'type == "object" and
+           .id == $asset_id and
+           .name == $asset_name and
+           .state == $asset_state and
+           (if $asset_digest == "" then .digest == null else .digest == $asset_digest end) and
+           .download_count == $download_count' \
+          "$ASSET_RECORD" >/dev/null
+        jq -e \
+          --argjson release_id "$RELEASE_ID" \
+          --arg release_tag "$RELEASE_TAG" \
+          --arg upload_template "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets{?name,label}" \
+          'type == "object" and
+           .id == $release_id and
+           .tag_name == $release_tag and
+           .draft == true and
+           .prerelease == false and
+           .upload_url == $upload_template' \
+          "$RELEASE_RECORD" >/dev/null
+        # GitHub exposes no atomic compare-and-delete primitive. These exact
+        # asset and release reads deliberately make the unavoidable TOCTOU
+        # window the single API call immediately preceding the bound-ID delete.
+        gh api --method DELETE \
+          "repos/$GITHUB_REPOSITORY/releases/assets/$DELETE_EVIDENCE_ASSET_ID"
+
+    - name: Upload only the replacement stable-draft evidence asset
+      if: steps.evidence-replacement.outputs.upload_required == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_ID: ${{ steps.evidence-replacement.outputs.target_release_id }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$RELEASE_ID" =~ ^[1-9][0-9]*$ ]]; then
+          echo "Durably authorized evidence upload release ID is invalid." >&2
+          exit 1
+        fi
+        RELEASE_RECORD="$RUNNER_TEMP/stable-draft-before-evidence-upload.json"
+        UPLOAD_RECORD="$RUNNER_TEMP/evidence-asset-upload-result.json"
+        EVIDENCE_PATH="$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json"
+        test -f "$EVIDENCE_PATH"
+        gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$RELEASE_RECORD"
+        jq -e \
+          --argjson release_id "$RELEASE_ID" \
+          --arg release_tag "$RELEASE_TAG" \
+          --arg upload_template "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets{?name,label}" \
+          'type == "object" and
+           .id == $release_id and
+           .tag_name == $release_tag and
+           .draft == true and
+           .prerelease == false and
+           .upload_url == $upload_template' \
+          "$RELEASE_RECORD" >/dev/null
+        EXPECTED_SIZE="$(stat --format='%s' "$EVIDENCE_PATH")"
+        EXPECTED_DIGEST="sha256:$(sha256sum "$EVIDENCE_PATH" | awk '{print $1}')"
+        gh api --method POST \
+          -H "Content-Type: application/json" \
+          --input "$EVIDENCE_PATH" \
+          "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=SparkEngine-Exact-CI-Evidence.json" \
+          > "$UPLOAD_RECORD"
+        jq -e \
+          --arg asset_name "SparkEngine-Exact-CI-Evidence.json" \
+          --arg asset_digest "$EXPECTED_DIGEST" \
+          --argjson asset_size "$EXPECTED_SIZE" \
+          'type == "object" and
+           .name == $asset_name and
+           .state == "uploaded" and
+           .digest == $asset_digest and
+           .size == $asset_size and
+           .uploader.id == 41898282 and
+           .uploader.login == "github-actions[bot]"' \
+          "$UPLOAD_RECORD" >/dev/null
+
+    - name: Accept replacement evidence asset into the durable pending ledger
+      if: steps.evidence-replacement.outputs.replacement_required == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        GITHUB_SHA: ${{ github.sha }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" replacement-accept \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+          --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json" \
+          --badge-directory "$GITHUB_WORKSPACE/badge-repository/.github/badges"
+
+    - name: Commit accepted exact CI evidence replacement state
+      id: badge-replacement-commit
+      if: steps.evidence-replacement.outputs.replacement_required == 'true'
+      working-directory: badge-repository
+      env:
+        GH_TOKEN: ${{ github.token }}
+        STATE_REF: refs/tags/generated-release-counters
+        EXPECTED_PENDING: ${{ steps.badge-cleanup-commit.outputs.pending_commit || steps.badge-pending-commit.outputs.pending_commit }}
+      run: |
+        set -euo pipefail
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        if test "$(git rev-parse HEAD)" != "$EXPECTED_PENDING"; then
+          echo "Badge checkout no longer points to the durable replacement intent." >&2
+          exit 1
+        fi
+        REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$REMOTE_OBJECT" != "$EXPECTED_PENDING"; then
+          echo "Generated counter state advanced during evidence replacement." >&2
+          exit 1
+        fi
+        git add -- \
+          .github/badges/downloads-data.json \
+          .github/badges/downloads.json \
+          .github/badges/installer-downloads.json
+        if git diff --cached --quiet; then
+          echo "Evidence replacement acceptance produced no durable ledger change." >&2
+          exit 1
+        fi
+        git commit -s -m "chore: accept stable-draft exact CI evidence replacement [skip ci]"
+        ACCEPTED_COMMIT="$(git rev-parse HEAD)"
+        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+          --force-with-lease="${STATE_REF}:${EXPECTED_PENDING}" origin \
+          "HEAD:${STATE_REF}"
+        PUBLISHED_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$PUBLISHED_OBJECT" != "$ACCEPTED_COMMIT"; then
+          echo "Generated counter tag does not contain the accepted evidence replacement." >&2
+          exit 1
+        fi
+        echo "pending_commit=$ACCEPTED_COMMIT" >> "$GITHUB_OUTPUT"
 
     - name: Verify compatible existing release assets before publication
       id: release-preflight
@@ -907,10 +1528,10 @@ jobs:
           echo "label=" >> "$GITHUB_OUTPUT"
         fi
 
-    - name: Bind release tag to workflow commit
+    - name: Bind stable release tag to workflow commit
+      if: needs.prepare.outputs.is_versioned == 'true'
       env:
         GH_TOKEN: ${{ github.token }}
-        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
         RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         TARGET_SHA: ${{ github.sha }}
       run: |
@@ -921,29 +1542,17 @@ jobs:
         REMOTE_TAG_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
           ls-remote --refs origin "refs/tags/${RELEASE_TAG}" | awk 'NR == 1 { print $1 }')"
 
-        if [[ "$IS_VERSIONED" == "true" ]]; then
-          if [[ -n "$REMOTE_TAG_OBJECT" ]]; then
-            git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
-              fetch --force --no-tags origin \
-              "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
-          else
-            # A manual versioned release may introduce a new immutable tag.
-            # A normal push fails if another writer creates it between the
-            # remote lookup and this push; stable tags are never force-moved.
-            git tag "$RELEASE_TAG" "$TARGET_COMMIT"
-            git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push origin \
-              "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
-          fi
+        if [[ -n "$REMOTE_TAG_OBJECT" ]]; then
+          git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+            fetch --force --no-tags origin \
+            "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
         else
-          if [[ "$RELEASE_TAG" != "nightly" ]]; then
-            echo "Refusing to force-move non-nightly tag: $RELEASE_TAG" >&2
-            exit 1
-          fi
-
-          git tag --force nightly "$TARGET_COMMIT"
-          git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
-            --force-with-lease="refs/tags/nightly:${REMOTE_TAG_OBJECT}" origin \
-            "refs/tags/nightly:refs/tags/nightly"
+          # A manual versioned release may introduce a new immutable tag.
+          # A normal push fails if another writer creates it between the
+          # remote lookup and this push; stable tags are never force-moved.
+          git tag "$RELEASE_TAG" "$TARGET_COMMIT"
+          git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push origin \
+            "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
         fi
 
         # Re-read the remote ref after any create/move and prove the tag peels
@@ -1039,7 +1648,7 @@ jobs:
           > **Nightly builds** are published automatically on every commit. All CI checks pass before publishing. For a stable, manually-verified release see the [latest stable release](https://github.com/${{ github.repository }}/releases/latest).
 
           ${{ steps.assets.outputs.table }}
-        prerelease: false
+        prerelease: true
         draft: true
         make_latest: false
         fail_on_unmatched_files: true
@@ -1083,20 +1692,21 @@ jobs:
       working-directory: badge-repository
       env:
         GH_TOKEN: ${{ github.token }}
+        STATE_REF: refs/tags/generated-release-counters
       run: |
         set -euo pipefail
         AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-        EXPECTED_PENDING="${{ steps.badge-pending-commit.outputs.pending_commit }}"
+        EXPECTED_PENDING="${{ steps.badge-replacement-commit.outputs.pending_commit || steps.badge-cleanup-commit.outputs.pending_commit || steps.badge-pending-commit.outputs.pending_commit }}"
         LOCAL_PENDING="$(git rev-parse HEAD)"
         if test "$LOCAL_PENDING" != "$EXPECTED_PENDING"; then
           echo "Badge checkout no longer points to this run's pending commit." >&2
           exit 1
         fi
 
-        REMOTE_HEAD="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
-          ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
-        if test "$REMOTE_HEAD" != "$EXPECTED_PENDING"; then
-          echo "Working advanced after the pending counter commit; refusing to checkpoint stale state." >&2
+        REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$REMOTE_OBJECT" != "$EXPECTED_PENDING"; then
+          echo "Generated counter state advanced after the pending commit; refusing to checkpoint stale state." >&2
           exit 1
         fi
 
@@ -1109,16 +1719,47 @@ jobs:
         git commit -s -m "chore: checkpoint staged download counters (lifetime: ${{ steps.badge-stage.outputs.new_total }}, installer: ${{ steps.badge-stage.outputs.installer_total }}) [skip ci]"
         STAGED_COMMIT="$(git rev-parse HEAD)"
         git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
-          --force-with-lease="refs/heads/Working:${EXPECTED_PENDING}" origin \
-          "HEAD:refs/heads/Working"
+          --force-with-lease="${STATE_REF}:${EXPECTED_PENDING}" origin \
+          "HEAD:${STATE_REF}"
 
-        PUBLISHED_HEAD="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
-          ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
-        if test "$PUBLISHED_HEAD" != "$STAGED_COMMIT"; then
-          echo "Working does not point to the staged counter checkpoint after push." >&2
+        PUBLISHED_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$PUBLISHED_OBJECT" != "$STAGED_COMMIT"; then
+          echo "Generated counter state tag does not point to the staged checkpoint after push." >&2
           exit 1
         fi
         echo "staged_commit=$STAGED_COMMIT" >> "$GITHUB_OUTPUT"
+
+    - name: Bind nightly tag to workflow commit
+      if: needs.prepare.outputs.is_versioned == 'false'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        TARGET_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        if [[ "$RELEASE_TAG" != "nightly" ]]; then
+          echo "Refusing to force-move non-nightly tag: $RELEASE_TAG" >&2
+          exit 1
+        fi
+
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        TARGET_COMMIT="$(git rev-parse "${TARGET_SHA}^{commit}")"
+        REMOTE_TAG_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin refs/tags/nightly | awk 'NR == 1 { print $1 }')"
+        git tag --force nightly "$TARGET_COMMIT"
+        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+          --force-with-lease="refs/tags/nightly:${REMOTE_TAG_OBJECT}" origin \
+          refs/tags/nightly:refs/tags/nightly
+        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          fetch --force --no-tags origin \
+          +refs/tags/nightly:refs/tags/nightly
+        BOUND_COMMIT="$(git rev-parse refs/tags/nightly^{commit})"
+        if [[ "$BOUND_COMMIT" != "$TARGET_COMMIT" ]]; then
+          echo "Release tag nightly resolves to ${BOUND_COMMIT}, expected ${TARGET_COMMIT}." >&2
+          exit 1
+        fi
+        echo "Release tag nightly is bound to ${BOUND_COMMIT}."
 
     - name: Verify release tag immediately before publication
       env:
@@ -1138,31 +1779,331 @@ jobs:
           exit 1
         fi
 
+    - name: Revalidate exact CI evidence immediately before publication
+      id: required-ci-final
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TARGET_SHA: ${{ github.sha }}
+      run: python3 .github/scripts/verify-exact-required-gate.py
+
+    - name: Verify frozen exact CI evidence manifest immediately before publication
+      env:
+        EXACT_SOURCE_COMMIT: ${{ github.sha }}
+        EXACT_BUILD_RUN_ID: ${{ steps.required-ci-final.outputs.run_id }}
+        EXACT_BUILD_RUN_ATTEMPT: ${{ steps.required-ci-final.outputs.run_attempt }}
+        EXACT_BUILD_RUN_URL: ${{ steps.required-ci-final.outputs.run_url }}
+        EXACT_BUILD_EVENT: ${{ steps.required-ci-final.outputs.event }}
+        EXACT_BUILD_CI120_PRODUCER_JOB_ID: ${{ steps.required-ci-final.outputs.build_ci120_producer_job_id }}
+        EXACT_BUILD_REQUIRED_GATE_JOB_ID: ${{ steps.required-ci-final.outputs.build_required_gate_job_id }}
+        EXACT_BUILD_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-final.outputs.build_job_inventory_digest }}
+        EXACT_CI120_SOURCE_ARTIFACT_ID: ${{ steps.required-ci-final.outputs.ci120_source_artifact_id }}
+        EXACT_CI120_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci-final.outputs.ci120_source_artifact_digest }}
+        EXACT_CI120_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci-final.outputs.ci120_source_artifact_bytes }}
+        EXACT_CI120_STATUS_ID: ${{ steps.required-ci-final.outputs.ci120_status_id }}
+        EXACT_CI120_STATUS_TARGET_URL: ${{ steps.required-ci-final.outputs.ci120_status_target_url }}
+        EXACT_CI120_STATUS_CREATED_AT: ${{ steps.required-ci-final.outputs.ci120_status_created_at }}
+        EXACT_CI120_STATUS_UPDATED_AT: ${{ steps.required-ci-final.outputs.ci120_status_updated_at }}
+        EXACT_CI120_VERIFIER_RUN_ID: ${{ steps.required-ci-final.outputs.verifier_run_id }}
+        EXACT_CI120_VERIFIER_RUN_ATTEMPT: ${{ steps.required-ci-final.outputs.verifier_run_attempt }}
+        EXACT_CI120_VERIFIER_RUN_URL: ${{ steps.required-ci-final.outputs.verifier_run_url }}
+        EXACT_VERIFIER_COMMIT: ${{ steps.required-ci-final.outputs.verifier_sha }}
+        EXACT_CI120_TRUSTED_VERIFIER_JOB_ID: ${{ steps.required-ci-final.outputs.ci120_trusted_verifier_job_id }}
+        EXACT_CI120_VERIFIER_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-final.outputs.ci120_verifier_job_inventory_digest }}
+        EXACT_CI120_STATUS_PUBLISH_STEP_STARTED_AT: ${{ steps.required-ci-final.outputs.ci120_status_publish_step_started_at }}
+        EXACT_CI120_STATUS_PUBLISH_STEP_COMPLETED_AT: ${{ steps.required-ci-final.outputs.ci120_status_publish_step_completed_at }}
+        EXACT_CI120_RECEIPT_ARTIFACT_ID: ${{ steps.required-ci-final.outputs.receipt_artifact_id }}
+        EXACT_CI120_RECEIPT_ARTIFACT_DIGEST: ${{ steps.required-ci-final.outputs.receipt_artifact_digest }}
+        EXACT_CI120_RECEIPT_ARTIFACT_BYTES: ${{ steps.required-ci-final.outputs.receipt_artifact_bytes }}
+        EXACT_CODEQL_RUN_ID: ${{ steps.required-ci-final.outputs.codeql_run_id }}
+        EXACT_CODEQL_RUN_ATTEMPT: ${{ steps.required-ci-final.outputs.codeql_run_attempt }}
+        EXACT_CODEQL_RUN_URL: ${{ steps.required-ci-final.outputs.codeql_run_url }}
+        EXACT_CODEQL_ACTIONS_SOURCE_JOB_ID: ${{ steps.required-ci-final.outputs.codeql_actions_source_job_id }}
+        EXACT_CODEQL_C_CPP_SOURCE_JOB_ID: ${{ steps.required-ci-final.outputs.codeql_c_cpp_source_job_id }}
+        EXACT_CODEQL_PYTHON_SOURCE_JOB_ID: ${{ steps.required-ci-final.outputs.codeql_python_source_job_id }}
+        EXACT_CODEQL_SOURCE_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-final.outputs.codeql_source_job_inventory_digest }}
+        EXACT_CODEQL_ACTIONS_SOURCE_ARTIFACT_ID: ${{ steps.required-ci-final.outputs.codeql_actions_source_artifact_id }}
+        EXACT_CODEQL_ACTIONS_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci-final.outputs.codeql_actions_source_artifact_digest }}
+        EXACT_CODEQL_ACTIONS_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci-final.outputs.codeql_actions_source_artifact_bytes }}
+        EXACT_CODEQL_C_CPP_SOURCE_ARTIFACT_ID: ${{ steps.required-ci-final.outputs.codeql_c_cpp_source_artifact_id }}
+        EXACT_CODEQL_C_CPP_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci-final.outputs.codeql_c_cpp_source_artifact_digest }}
+        EXACT_CODEQL_C_CPP_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci-final.outputs.codeql_c_cpp_source_artifact_bytes }}
+        EXACT_CODEQL_PYTHON_SOURCE_ARTIFACT_ID: ${{ steps.required-ci-final.outputs.codeql_python_source_artifact_id }}
+        EXACT_CODEQL_PYTHON_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci-final.outputs.codeql_python_source_artifact_digest }}
+        EXACT_CODEQL_PYTHON_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci-final.outputs.codeql_python_source_artifact_bytes }}
+        EXACT_CODEQL_STATUS_ID: ${{ steps.required-ci-final.outputs.codeql_status_id }}
+        EXACT_CODEQL_STATUS_TARGET_URL: ${{ steps.required-ci-final.outputs.codeql_status_target_url }}
+        EXACT_CODEQL_STATUS_CREATED_AT: ${{ steps.required-ci-final.outputs.codeql_status_created_at }}
+        EXACT_CODEQL_STATUS_UPDATED_AT: ${{ steps.required-ci-final.outputs.codeql_status_updated_at }}
+        EXACT_CODEQL_REPORTER_RUN_ID: ${{ steps.required-ci-final.outputs.codeql_reporter_run_id }}
+        EXACT_CODEQL_REPORTER_RUN_ATTEMPT: ${{ steps.required-ci-final.outputs.codeql_reporter_run_attempt }}
+        EXACT_CODEQL_REPORTER_RUN_URL: ${{ steps.required-ci-final.outputs.codeql_reporter_run_url }}
+        EXACT_CODEQL_TRUSTED_REPORTER_JOB_ID: ${{ steps.required-ci-final.outputs.codeql_trusted_reporter_job_id }}
+        EXACT_CODEQL_REPORTER_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-final.outputs.codeql_reporter_job_inventory_digest }}
+        EXACT_CODEQL_STATUS_PUBLISH_STEP_STARTED_AT: ${{ steps.required-ci-final.outputs.codeql_status_publish_step_started_at }}
+        EXACT_CODEQL_STATUS_PUBLISH_STEP_COMPLETED_AT: ${{ steps.required-ci-final.outputs.codeql_status_publish_step_completed_at }}
+        EXACT_CODEQL_SUMMARY_ARTIFACT_ID: ${{ steps.required-ci-final.outputs.codeql_summary_artifact_id }}
+        EXACT_CODEQL_SUMMARY_ARTIFACT_DIGEST: ${{ steps.required-ci-final.outputs.codeql_summary_artifact_digest }}
+        EXACT_CODEQL_SUMMARY_ARTIFACT_BYTES: ${{ steps.required-ci-final.outputs.codeql_summary_artifact_bytes }}
+      run: |
+        set -euo pipefail
+        python3 tools/site-data/exact_evidence.py verify \
+          --manifest "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json"
+
+    - name: Reverify complete staged release against durable checkpoint before publication
+      if: needs.prepare.outputs.is_versioned == 'false' || (needs.prepare.outputs.is_versioned == 'true' && (steps.release-freeze.outputs.target_exists != 'true' || steps.release-freeze.outputs.target_is_draft == 'true'))
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        GITHUB_SHA: ${{ github.sha }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" publish-preflight \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+          --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
+
+    - name: Verify complete staged release immediately before publication
+      if: needs.prepare.outputs.is_versioned == 'false' || (needs.prepare.outputs.is_versioned == 'true' && (steps.release-freeze.outputs.target_exists != 'true' || steps.release-freeze.outputs.target_is_draft == 'true'))
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_ID: ${{ steps.stable-stage.outputs.id || steps.nightly-stage.outputs.id || steps.release-freeze.outputs.target_release_id }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$RELEASE_ID" =~ ^[1-9][0-9]*$ ]]; then
+          echo "Staged release ID is invalid before publication." >&2
+          exit 1
+        fi
+        RELEASE_RECORD="$RUNNER_TEMP/release-before-publication.json"
+        RELEASE_ASSETS="$RUNNER_TEMP/release-assets-before-publication.json"
+        gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$RELEASE_RECORD"
+        gh api --paginate --slurp \
+          "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" \
+          > "$RELEASE_ASSETS"
+        python3 -I "$GITHUB_WORKSPACE/.github/scripts/verify_release_asset_boundary.py" \
+          --release-json "$RELEASE_RECORD" \
+          --assets-json "$RELEASE_ASSETS" \
+          --ledger-json "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json" \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+          --asset-directory "$GITHUB_WORKSPACE" \
+          --release-id "$RELEASE_ID" \
+          --release-tag "$RELEASE_TAG" \
+          --is-versioned "$IS_VERSIONED" \
+          --expected-draft true
+
     - name: Publish complete stable versioned release
       if: needs.prepare.outputs.is_versioned == 'true' && (steps.release-freeze.outputs.target_exists != 'true' || steps.release-freeze.outputs.target_is_draft == 'true')
       env:
         GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        GITHUB_SHA: ${{ github.sha }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        EXPECTED_STAGED_COMMIT: ${{ steps.badge-staged-commit.outputs.staged_commit }}
+        STATE_REF: refs/tags/generated-release-counters
         RELEASE_ID: ${{ steps.stable-stage.outputs.id || steps.release-freeze.outputs.target_release_id }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        TARGET_SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
         test -n "$RELEASE_ID"
+        PUBLISHED_RELEASE="$RUNNER_TEMP/published-stable-release.json"
+        FINAL_GATE_OUTPUT="$RUNNER_TEMP/final-stable-exact-gate.out"
+        rm -f "$FINAL_GATE_OUTPUT"
+        GITHUB_OUTPUT="$FINAL_GATE_OUTPUT" \
+          python3 "$GITHUB_WORKSPACE/.github/scripts/verify-exact-required-gate.py"
+        python3 "$GITHUB_WORKSPACE/tools/site-data/exact_evidence.py" verify-gate-output \
+          --manifest "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json" \
+          --gate-output "$FINAL_GATE_OUTPUT" \
+          --repository "$GITHUB_REPOSITORY" \
+          --source-commit "$TARGET_SHA"
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        TARGET_COMMIT="$(git rev-parse "${TARGET_SHA}^{commit}")"
+        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          fetch --force --no-tags origin \
+          "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+        REMOTE_COMMIT="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+        if [[ "$REMOTE_COMMIT" != "$TARGET_COMMIT" ]]; then
+          echo "Release tag ${RELEASE_TAG} drifted to ${REMOTE_COMMIT} at the publication boundary; expected ${TARGET_COMMIT}." >&2
+          exit 1
+        fi
+        python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" publish-preflight \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+          --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
+        LOCAL_STAGED_COMMIT="$(git -C "$GITHUB_WORKSPACE/badge-repository" rev-parse HEAD)"
+        REMOTE_STAGED_COMMIT="$(git -C "$GITHUB_WORKSPACE/badge-repository" \
+          -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        CURRENT_WORKING_SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/Working" --jq '.sha')"
+        if [[ "$LOCAL_STAGED_COMMIT" != "$EXPECTED_STAGED_COMMIT" || \
+              "$REMOTE_STAGED_COMMIT" != "$EXPECTED_STAGED_COMMIT" ]]; then
+          echo "Generated release-counter state drifted at the publication boundary." >&2
+          exit 1
+        fi
+        if [[ "$CURRENT_WORKING_SHA" != "$TARGET_SHA" ]]; then
+          echo "Working advanced to ${CURRENT_WORKING_SHA} at the publication boundary; expected ${TARGET_SHA}." >&2
+          exit 1
+        fi
+        FINAL_REPLAY_OUTPUT="$RUNNER_TEMP/final-stable-exact-replay.out"
+        rm -f "$FINAL_REPLAY_OUTPUT"
+        GITHUB_OUTPUT="$FINAL_REPLAY_OUTPUT" \
+          python3 "$GITHUB_WORKSPACE/.github/scripts/verify-exact-required-gate.py"
+        python3 "$GITHUB_WORKSPACE/tools/site-data/exact_evidence.py" verify-gate-output \
+          --manifest "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json" \
+          --gate-output "$FINAL_REPLAY_OUTPUT" \
+          --repository "$GITHUB_REPOSITORY" \
+          --source-commit "$TARGET_SHA"
+        bash "$GITHUB_WORKSPACE/.github/scripts/verify-release-publication-boundary.sh" \
+          publish-preflight
+        publication_attempted=false
+        redraft_failed_publication() {
+          local failure_status="$?"
+          trap - ERR
+          if [[ "$publication_attempted" != "true" ]]; then
+            return "$failure_status"
+          fi
+          if ! python3 -I "$GITHUB_WORKSPACE/.github/scripts/recover_release_publication.py" \
+              --repository "$GITHUB_REPOSITORY" \
+              --release-id "$RELEASE_ID" \
+              --release-tag "$RELEASE_TAG" \
+              --expected-prerelease false \
+              --attempts 3; then
+            echo "::error::Could not verify release ${RELEASE_ID} was returned to draft; inspect https://github.com/${GITHUB_REPOSITORY}/releases immediately." >&2
+          fi
+          return "$failure_status"
+        }
+        trap redraft_failed_publication ERR
+        publication_attempted=true
         gh api --method PATCH \
           "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
           -F draft=false \
-          -f make_latest=true >/dev/null
+          -F prerelease=false \
+          -f make_latest=true > "$PUBLISHED_RELEASE"
+        jq -e \
+          --argjson release_id "$RELEASE_ID" \
+          --arg release_tag "$RELEASE_TAG" \
+          'type == "object" and
+           .id == $release_id and
+           .tag_name == $release_tag and
+           .draft == false and
+           .prerelease == false' \
+          "$PUBLISHED_RELEASE" >/dev/null
+        bash "$GITHUB_WORKSPACE/.github/scripts/verify-release-publication-boundary.sh" \
+          post-publish-preflight
+        publication_attempted=false
+        trap - ERR
 
     - name: Publish complete nightly rolling release
       if: needs.prepare.outputs.is_versioned == 'false'
       env:
         GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        GITHUB_SHA: ${{ github.sha }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        EXPECTED_STAGED_COMMIT: ${{ steps.badge-staged-commit.outputs.staged_commit }}
+        STATE_REF: refs/tags/generated-release-counters
         RELEASE_ID: ${{ steps.nightly-stage.outputs.id }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        TARGET_SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
         test -n "$RELEASE_ID"
+        PUBLISHED_RELEASE="$RUNNER_TEMP/published-nightly-release.json"
+        FINAL_GATE_OUTPUT="$RUNNER_TEMP/final-nightly-exact-gate.out"
+        rm -f "$FINAL_GATE_OUTPUT"
+        GITHUB_OUTPUT="$FINAL_GATE_OUTPUT" \
+          python3 "$GITHUB_WORKSPACE/.github/scripts/verify-exact-required-gate.py"
+        python3 "$GITHUB_WORKSPACE/tools/site-data/exact_evidence.py" verify-gate-output \
+          --manifest "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json" \
+          --gate-output "$FINAL_GATE_OUTPUT" \
+          --repository "$GITHUB_REPOSITORY" \
+          --source-commit "$TARGET_SHA"
+        AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        TARGET_COMMIT="$(git rev-parse "${TARGET_SHA}^{commit}")"
+        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          fetch --force --no-tags origin \
+          "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+        REMOTE_COMMIT="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+        if [[ "$REMOTE_COMMIT" != "$TARGET_COMMIT" ]]; then
+          echo "Release tag ${RELEASE_TAG} drifted to ${REMOTE_COMMIT} at the publication boundary; expected ${TARGET_COMMIT}." >&2
+          exit 1
+        fi
+        python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-download-badges.py" publish-preflight \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
+          --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
+        LOCAL_STAGED_COMMIT="$(git -C "$GITHUB_WORKSPACE/badge-repository" rev-parse HEAD)"
+        REMOTE_STAGED_COMMIT="$(git -C "$GITHUB_WORKSPACE/badge-repository" \
+          -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        CURRENT_WORKING_SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/Working" --jq '.sha')"
+        if [[ "$LOCAL_STAGED_COMMIT" != "$EXPECTED_STAGED_COMMIT" || \
+              "$REMOTE_STAGED_COMMIT" != "$EXPECTED_STAGED_COMMIT" ]]; then
+          echo "Generated release-counter state drifted at the publication boundary." >&2
+          exit 1
+        fi
+        if [[ "$CURRENT_WORKING_SHA" != "$TARGET_SHA" ]]; then
+          echo "Working advanced to ${CURRENT_WORKING_SHA} at the publication boundary; expected ${TARGET_SHA}." >&2
+          exit 1
+        fi
+        FINAL_REPLAY_OUTPUT="$RUNNER_TEMP/final-nightly-exact-replay.out"
+        rm -f "$FINAL_REPLAY_OUTPUT"
+        GITHUB_OUTPUT="$FINAL_REPLAY_OUTPUT" \
+          python3 "$GITHUB_WORKSPACE/.github/scripts/verify-exact-required-gate.py"
+        python3 "$GITHUB_WORKSPACE/tools/site-data/exact_evidence.py" verify-gate-output \
+          --manifest "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json" \
+          --gate-output "$FINAL_REPLAY_OUTPUT" \
+          --repository "$GITHUB_REPOSITORY" \
+          --source-commit "$TARGET_SHA"
+        bash "$GITHUB_WORKSPACE/.github/scripts/verify-release-publication-boundary.sh" \
+          publish-preflight
+        publication_attempted=false
+        redraft_failed_publication() {
+          local failure_status="$?"
+          trap - ERR
+          if [[ "$publication_attempted" != "true" ]]; then
+            return "$failure_status"
+          fi
+          if ! python3 -I "$GITHUB_WORKSPACE/.github/scripts/recover_release_publication.py" \
+              --repository "$GITHUB_REPOSITORY" \
+              --release-id "$RELEASE_ID" \
+              --release-tag "$RELEASE_TAG" \
+              --expected-prerelease true \
+              --attempts 3; then
+            echo "::error::Could not verify release ${RELEASE_ID} was returned to draft; inspect https://github.com/${GITHUB_REPOSITORY}/releases immediately." >&2
+          fi
+          return "$failure_status"
+        }
+        trap redraft_failed_publication ERR
+        publication_attempted=true
         gh api --method PATCH \
           "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
           -F draft=false \
-          -f make_latest=false >/dev/null
+          -F prerelease=true \
+          -f make_latest=false > "$PUBLISHED_RELEASE"
+        jq -e \
+          --argjson release_id "$RELEASE_ID" \
+          --arg release_tag "$RELEASE_TAG" \
+          'type == "object" and
+           .id == $release_id and
+           .tag_name == $release_tag and
+           .draft == false and
+           .prerelease == true' \
+          "$PUBLISHED_RELEASE" >/dev/null
+        bash "$GITHUB_WORKSPACE/.github/scripts/verify-release-publication-boundary.sh" \
+          post-publish-preflight
+        publication_attempted=false
+        trap - ERR
 
     - name: Verify release tag immediately after publication
       env:
@@ -1216,6 +2157,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        STATE_REF: refs/tags/generated-release-counters
       run: |
         set -euo pipefail
         AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
@@ -1226,10 +2168,10 @@ jobs:
           exit 1
         fi
 
-        REMOTE_HEAD="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
-          ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
-        if test "$REMOTE_HEAD" != "$EXPECTED_STAGED"; then
-          echo "Working advanced after the staged counter checkpoint; refusing to commit stale completed state." >&2
+        REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$REMOTE_OBJECT" != "$EXPECTED_STAGED"; then
+          echo "Generated counter state advanced after the staged checkpoint; refusing to commit stale completed state." >&2
           exit 1
         fi
 
@@ -1251,25 +2193,25 @@ jobs:
         git commit -s -m "chore: complete download counters (lifetime: ${{ steps.badge-complete.outputs.new_total }}, installer: ${{ steps.badge-complete.outputs.installer_total }}) [skip ci]"
         FINAL_COMMIT="$(git rev-parse HEAD)"
         git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
-          --force-with-lease="refs/heads/Working:${EXPECTED_STAGED}" origin \
-          "HEAD:refs/heads/Working"
+          --force-with-lease="${STATE_REF}:${EXPECTED_STAGED}" origin \
+          "HEAD:${STATE_REF}"
 
-        PUBLISHED_HEAD="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
-          ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
-        if test "$PUBLISHED_HEAD" != "$FINAL_COMMIT"; then
-          echo "Working does not point to the completed counter commit after push." >&2
+        PUBLISHED_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$PUBLISHED_OBJECT" != "$FINAL_COMMIT"; then
+          echo "Generated counter state tag does not point to the completed counter commit after push." >&2
           exit 1
         fi
         echo "changed=true" >> "$GITHUB_OUTPUT"
         echo "final_commit=$FINAL_COMMIT" >> "$GITHUB_OUTPUT"
 
-    # GITHUB_TOKEN pushes do not trigger ordinary push workflows, so explicitly
-    # prove and publish the generated Working head.
-    - name: Dispatch exact-head build after Working badge commit
+    - name: Verify generated counter tag and unchanged Working
       if: steps.badge-final-commit.outputs.changed == 'true'
       working-directory: badge-repository
       env:
         GH_TOKEN: ${{ github.token }}
+        TRUSTED_WORKING_SHA: ${{ steps.required-ci-final.outputs.verifier_sha }}
+        STATE_REF: refs/tags/generated-release-counters
       run: |
         set -euo pipefail
         AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
@@ -1278,16 +2220,35 @@ jobs:
           echo "Badge checkout no longer points to this run's finalized commit." >&2
           exit 1
         fi
-        REMOTE_HEAD="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
-          ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
-        if test "$REMOTE_HEAD" != "$FINAL_COMMIT"; then
-          echo "Working advanced after this counter push; the newer head owns the build."
+        PUBLISHED_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
+        if test "$PUBLISHED_OBJECT" != "$FINAL_COMMIT"; then
+          echo "Generated counter state tag advanced after this release." >&2
+          exit 1
+        fi
+        WORKING_HEAD="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+          ls-remote --refs origin refs/heads/Working | awk 'NR == 1 { print $1 }')"
+        if test "$WORKING_HEAD" != "$TRUSTED_WORKING_SHA"; then
+          echo "Working advanced after the final exact-CI revalidation." >&2
+          exit 1
+        fi
+
+    - name: Recover incomplete public release
+      if: failure()
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        STATE_FILE="$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
+        if ! test -f "$STATE_FILE"; then
+          echo "No durable staged ledger is available; there is no release object to recover."
           exit 0
         fi
-        for attempt in 1 2 3 4 5; do
-          if gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref Working; then
-            exit 0
-          fi
-          test "$attempt" -lt 5 || exit 1
-          sleep "$((attempt * 2))"
-        done
+        python3 -I "$GITHUB_WORKSPACE/.github/scripts/recover_release_publication.py" \
+          --repository "$GITHUB_REPOSITORY" \
+          --state-file "$STATE_FILE" \
+          --run-id "$GITHUB_RUN_ID" \
+          --run-attempt "$GITHUB_RUN_ATTEMPT" \
+          --source-sha "$GITHUB_SHA" \
+          --attempts 5

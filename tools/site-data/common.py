@@ -118,12 +118,11 @@ def _mutation_token(metadata: os.stat_result) -> tuple[int, ...]:
 
 
 def _directory_token(metadata: os.stat_result) -> tuple[int, ...]:
+    """Bind a directory entry without treating ordinary child churn as replacement."""
     return (
         int(metadata.st_dev),
         int(metadata.st_ino),
         int(metadata.st_mode),
-        int(getattr(metadata, "st_mtime_ns", int(metadata.st_mtime * 1_000_000_000))),
-        int(getattr(metadata, "st_ctime_ns", int(metadata.st_ctime * 1_000_000_000))),
         int(getattr(metadata, "st_file_attributes", 0)),
     )
 

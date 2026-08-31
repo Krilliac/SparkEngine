@@ -42,15 +42,23 @@ QUIESCENCE_SECONDS = 0.05
 SANITIZER_PATTERNS = {
     "asan": re.compile(
         r"(?:ERROR:[ \t]*(?:Address|Leak)Sanitizer:|"
+        r"SUMMARY:[ \t]*(?:Address|Leak)Sanitizer:|"
         r"AddressSanitizer:DEADLYSIGNAL|runtime error:)",
         re.IGNORECASE,
     ),
-    "tsan": re.compile(r"(?:WARNING|ERROR):[ \t]*ThreadSanitizer:", re.IGNORECASE),
-    "msan": re.compile(r"(?:WARNING|ERROR):[ \t]*MemorySanitizer:", re.IGNORECASE),
+    "tsan": re.compile(
+        r"(?:(?:WARNING|ERROR):[ \t]*ThreadSanitizer:|SUMMARY:[ \t]*ThreadSanitizer:)",
+        re.IGNORECASE,
+    ),
+    "msan": re.compile(
+        r"(?:(?:WARNING|ERROR):[ \t]*MemorySanitizer:|SUMMARY:[ \t]*MemorySanitizer:)",
+        re.IGNORECASE,
+    ),
 }
 ANY_SANITIZER_PATTERN = re.compile(
     r"(?:ERROR:[ \t]*(?:Address|Leak|Thread|Memory)Sanitizer:|"
     r"WARNING:[ \t]*(?:Thread|Memory)Sanitizer:|"
+    r"SUMMARY:[ \t]*(?:Address|Leak|Thread|Memory)Sanitizer:|"
     r"AddressSanitizer:DEADLYSIGNAL|runtime error:)",
     re.IGNORECASE,
 )
@@ -1302,6 +1310,11 @@ def published_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--run-attempt", required=True)
+    parser.add_argument(
+        "--allow-prior-attempt",
+        action="store_true",
+        help="accept evidence from an earlier successful attempt of the same exact workflow run",
+    )
     parser.add_argument("--job", required=True)
     parser.add_argument("--minimum-tests", required=True, type=int)
     parser.add_argument("--timeout-seconds", required=True, type=int)
@@ -1329,6 +1342,7 @@ def published_main(argv: list[str]) -> int:
     run_attempt_number = (
         int(args.run_attempt) if re.fullmatch(r"[1-9][0-9]{0,9}", args.run_attempt) else None
     )
+    producer_attempt_number = run_attempt_number
 
     if not args.evidence_dir.is_absolute():
         errors.append("published evidence directory must be absolute")
@@ -1496,15 +1510,30 @@ def published_main(argv: list[str]) -> int:
             label="metadata.provenance",
             errors=errors,
         )
-        expected_origin = (
-            f"spark-sanitizer-{args.sanitizer}-{args.expected_sha}-{args.run_id}-"
-            f"{args.run_attempt}-{args.job}"
-        )
         if provenance is not None:
+            recorded_attempt = provenance.get("runAttempt")
+            if args.allow_prior_attempt:
+                if (
+                    not isinstance(recorded_attempt, int)
+                    or isinstance(recorded_attempt, bool)
+                    or recorded_attempt < 1
+                    or run_attempt_number is None
+                    or recorded_attempt > run_attempt_number
+                ):
+                    errors.append(
+                        "metadata provenance runAttempt is not a prior/current exact-run attempt"
+                    )
+                else:
+                    producer_attempt_number = recorded_attempt
+            elif not exact_json_value(recorded_attempt, run_attempt_number):
+                errors.append("metadata provenance runAttempt does not match external identity")
+            expected_origin = (
+                f"spark-sanitizer-{args.sanitizer}-{args.expected_sha}-{args.run_id}-"
+                f"{producer_attempt_number}-{args.job}"
+            )
             expected_provenance = {
                 "commitSha": args.expected_sha,
                 "runId": run_id_number,
-                "runAttempt": run_attempt_number,
                 "job": args.job,
                 "sanitizer": args.sanitizer,
                 "lane": args.lane,
@@ -1692,7 +1721,7 @@ def published_main(argv: list[str]) -> int:
     footer_expected = {
         "commit_sha": args.expected_sha,
         "run_id": args.run_id,
-        "run_attempt": args.run_attempt,
+        "run_attempt": str(producer_attempt_number),
         "job": args.job,
         "sanitizer": args.sanitizer,
         "expected_selector": "all",
@@ -1918,7 +1947,15 @@ def main() -> int:
         errors.append("console/report terminal Results fields do not match JUnit evidence")
 
     union_text = console_text + "\n" + report_text
-    signature_present = bool(ANY_SANITIZER_PATTERN.search(union_text))
+    runtime_inspection = inspect_runtime_logs(
+        args.runtime_dir,
+        sanitizer=args.sanitizer,
+        started_ns=args.started_ns,
+        errors=errors,
+    )
+    runtime_logs = runtime_inspection.results
+    runtime_finding = bool(runtime_logs)
+    signature_present = bool(ANY_SANITIZER_PATTERN.search(union_text)) or runtime_finding
     warning_present = bool(WARNING_PATTERN.search(union_text)) or bool(
         junit.get("knownFlakyWarnings", 0)
     )
@@ -1934,7 +1971,7 @@ def main() -> int:
 
     verify_scan(
         args.signature_scan_status,
-        bool(ANY_SANITIZER_PATTERN.search(union_text)),
+        signature_present,
         name="sanitizer signature",
         errors=errors,
     )
@@ -1963,15 +2000,7 @@ def main() -> int:
         errors=errors,
     )
 
-    runtime_inspection = inspect_runtime_logs(
-        args.runtime_dir,
-        sanitizer=args.sanitizer,
-        started_ns=args.started_ns,
-        errors=errors,
-    )
-    runtime_logs = runtime_inspection.results
-    runtime_finding = bool(runtime_logs)
-    sanitizer_finding = signature_present or runtime_finding
+    sanitizer_finding = signature_present
     timeout_marker, timeout_observation = marker_state(
         args.timeout_marker,
         evidence_dir=evidence_dir,

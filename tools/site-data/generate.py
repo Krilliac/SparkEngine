@@ -43,6 +43,11 @@ from common import (
 )
 from render_handoff import render_handoff
 from validate import validate_contract
+from exact_evidence import (
+    ExactEvidenceError,
+    load_manifest as load_exact_evidence_manifest,
+    validate_manifest as validate_exact_evidence_manifest,
+)
 
 
 TOOLS_ROOT = Path(__file__).resolve().parents[1]
@@ -863,6 +868,18 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
         raise SiteDataError(
             f"evidence commit {args.evidence_commit} does not match checked-out commit {source['commit']}"
         )
+    exact_evidence: dict[str, Any] | None = None
+    if args.exact_evidence_file is not None:
+        try:
+            exact_evidence = validate_exact_evidence_manifest(
+                load_exact_evidence_manifest(args.exact_evidence_file)
+            )
+        except ExactEvidenceError as error:
+            raise SiteDataError(f"exact CI evidence is invalid: {error}") from error
+        if exact_evidence["sourceCommit"] != source["commit"]:
+            raise SiteDataError(
+                "exact CI evidence sourceCommit does not match the checked-out source commit"
+            )
 
     regenerate_api_docs(source["commit"], source["committedAt"])
 
@@ -967,6 +984,8 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
         "workflowUrl": args.workflow_url,
         "conclusion": conclusion,
     }
+    if exact_evidence is not None:
+        publication["exactEvidence"] = exact_evidence
     bundle = {
         "schemaVersion": SCHEMA_VERSION,
         "bundleVersion": source["commit"],
@@ -987,6 +1006,13 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
     }
 
     split_files: dict[str, dict[str, Any]] = {"docsIndex": docs_index_info, "docsSearch": search_info}
+    if exact_evidence is not None:
+        exact_evidence_path = snapshot_root / "exact-ci-evidence.json"
+        split_files["exactCiEvidence"] = pointer(
+            output,
+            exact_evidence_path,
+            write_json(exact_evidence_path, exact_evidence),
+        )
     split_values = {
         "site": bundle["site"],
         "readiness": {
@@ -1047,7 +1073,7 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
     write_text(output / ".nojekyll", "")
     write_text(
         output / "README.md",
-        "# SparkEngine site data\n\nGenerated exact-commit website data. Do not edit this branch by hand; update the repository contracts and let the publication workflow rebuild it.\n",
+        "# SparkEngine site data\n\nGenerated exact-commit website data. Do not edit this moving tag by hand; update the repository contracts and let the publication workflow rebuild it.\n",
     )
     enforce_publication_budgets(output, bundle_path, page_root)
     prune_snapshots(output, source["commit"], max(1, args.retain))
@@ -1075,6 +1101,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--evidence-commit")
     parser.add_argument("--workflow-url")
     parser.add_argument("--ci-conclusion")
+    parser.add_argument(
+        "--exact-evidence-file",
+        type=Path,
+        help="validated exact CI-120 and CodeQL evidence manifest to retain in the snapshot",
+    )
     parser.add_argument("--skip-doc-health", action="store_true")
     return parser.parse_args()
 

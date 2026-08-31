@@ -1313,7 +1313,7 @@
       "description": "Build SparkInstaller focused regression tests",
       "default": "${_sparkinstaller_tests_default}",
       "file": "SparkInstaller/CMakeLists.txt",
-      "line": 121,
+      "line": 124,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2698,10 +2698,10 @@
       "target": "SparkInstallerGitTests",
       "kind": "executable",
       "file": "SparkInstaller/CMakeLists.txt",
-      "line": 127,
+      "line": 130,
       "conditionFrames": [
         {
-          "id": "SparkInstaller/CMakeLists.txt:125",
+          "id": "SparkInstaller/CMakeLists.txt:128",
           "branch": 0,
           "branches": [
             "SPARKINSTALLER_BUILD_TESTS"
@@ -4237,7 +4237,7 @@
       "declarations": [
         {
           "file": "SparkInstaller/CMakeLists.txt",
-          "line": 127,
+          "line": 130,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5180,7 +5180,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 21,
+        "stepCount": 25,
         "steps": [
           {
             "index": 0,
@@ -5244,6 +5244,18 @@
           },
           {
             "index": 5,
+            "name": "Test CI-120 exact-source status gate",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "0708b7a46377c352"
+          },
+          {
+            "index": 6,
             "name": "Test crash-consistent release download counters",
             "id": "",
             "uses": "",
@@ -5255,7 +5267,31 @@
             "runDigest": "660224552d6751a4"
           },
           {
-            "index": 6,
+            "index": 7,
+            "name": "Test exact release asset publication boundary",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "c1cda3d75fd3d19c"
+          },
+          {
+            "index": 8,
+            "name": "Test release publication recovery",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "b5a4aee105620528"
+          },
+          {
+            "index": 9,
             "name": "Test extracted portable-package validation",
             "id": "",
             "uses": "",
@@ -5267,7 +5303,7 @@
             "runDigest": "3cede89fce1f5dba"
           },
           {
-            "index": 7,
+            "index": 10,
             "name": "Test coverage evidence semantics",
             "id": "",
             "uses": "",
@@ -5279,7 +5315,7 @@
             "runDigest": "b870b844a6e610de"
           },
           {
-            "index": 8,
+            "index": 11,
             "name": "Test sanitizer pipeline exit propagation",
             "id": "",
             "uses": "",
@@ -5291,7 +5327,7 @@
             "runDigest": "e9e9310a91486157"
           },
           {
-            "index": 9,
+            "index": 12,
             "name": "Test workflow failure-propagation contract",
             "id": "",
             "uses": "",
@@ -5303,7 +5339,19 @@
             "runDigest": "f7233b3f14c1a94a"
           },
           {
-            "index": 10,
+            "index": 13,
+            "name": "Test granular SparkTests wrapper failure recovery",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "326ef3bd02bde17a"
+          },
+          {
+            "index": 14,
             "name": "Test Spark CLI",
             "id": "",
             "uses": "",
@@ -5315,7 +5363,7 @@
             "runDigest": "409c9f97b4a909ab"
           },
           {
-            "index": 11,
+            "index": 15,
             "name": "Verify every test source is registered",
             "id": "",
             "uses": "",
@@ -5327,7 +5375,7 @@
             "runDigest": "9fe30e7f317c7cb2"
           },
           {
-            "index": 12,
+            "index": 16,
             "name": "Validate model and template asset contracts",
             "id": "",
             "uses": "",
@@ -5339,7 +5387,7 @@
             "runDigest": "518945017eec4a52"
           },
           {
-            "index": 13,
+            "index": 17,
             "name": "Test build-matrix inventory and parity (CI-120)",
             "id": "",
             "uses": "",
@@ -5351,7 +5399,7 @@
             "runDigest": "c0f9a3a90d8ff03f"
           },
           {
-            "index": 14,
+            "index": 18,
             "name": "Generate and compare deterministic build-matrix inventory (CI-120)",
             "id": "",
             "uses": "",
@@ -5363,7 +5411,7 @@
             "runDigest": "9933d7d42888b1f0"
           },
           {
-            "index": 15,
+            "index": 19,
             "name": "Compare reviewed build-matrix findings (CI-120)",
             "id": "ci120-parity",
             "uses": "",
@@ -5375,7 +5423,7 @@
             "runDigest": "90ea701f7b089f94"
           },
           {
-            "index": 16,
+            "index": 20,
             "name": "Upload deterministic CI-120 evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -5387,7 +5435,7 @@
             "runDigest": ""
           },
           {
-            "index": 17,
+            "index": 21,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -5399,7 +5447,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 18,
+            "index": 22,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -5414,7 +5462,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 19,
+            "index": 23,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -5426,7 +5474,7 @@
             "runDigest": ""
           },
           {
-            "index": 20,
+            "index": 24,
             "name": "Enforce reviewed CI-120 findings",
             "id": "",
             "uses": "",
@@ -6366,7 +6414,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 14,
+        "stepCount": 15,
         "steps": [
           {
             "index": 0,
@@ -6418,6 +6466,18 @@
           },
           {
             "index": 4,
+            "name": "Scrub restored test evidence",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "43049608474d5e1a"
+          },
+          {
+            "index": 5,
             "name": "Configure CMake (VS 2022 / v143)",
             "id": "",
             "uses": "",
@@ -6429,7 +6489,7 @@
             "runDigest": "0171433a63de724b"
           },
           {
-            "index": 5,
+            "index": 6,
             "name": "Build",
             "id": "",
             "uses": "",
@@ -6441,7 +6501,7 @@
             "runDigest": "07847ccc2fa9f873"
           },
           {
-            "index": 6,
+            "index": 7,
             "name": "Print sccache stats",
             "id": "",
             "uses": "",
@@ -6453,7 +6513,7 @@
             "runDigest": "2b1295ec22d45c69"
           },
           {
-            "index": 7,
+            "index": 8,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -6465,7 +6525,7 @@
             "runDigest": "5db485c42c212495"
           },
           {
-            "index": 8,
+            "index": 9,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -6474,10 +6534,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "a812cfc212d6d7b3"
+            "runDigest": "b1b34131f7e8f56d"
           },
           {
-            "index": 9,
+            "index": 10,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6489,7 +6549,7 @@
             "runDigest": ""
           },
           {
-            "index": 10,
+            "index": 11,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -6501,7 +6561,7 @@
             "runDigest": "fe715c78b7a4aa4e"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6513,7 +6573,7 @@
             "runDigest": ""
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Package build output",
             "id": "",
             "uses": "",
@@ -6525,7 +6585,7 @@
             "runDigest": "7b34a4169ceb6e5e"
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6695,7 +6755,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "45fb3158c6cb3368"
+            "runDigest": "a5e2ccef84f5911c"
           },
           {
             "index": 11,
@@ -6728,9 +6788,9 @@
       {
         "id": "build-windows-vs2026",
         "name": "",
-        "runsOn": "windows-latest",
+        "runsOn": "windows-2025-vs2026",
         "runnerLabels": [
-          "windows-latest"
+          "windows-2025-vs2026"
         ],
         "runnerOsClasses": [
           "windows"
@@ -6755,7 +6815,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 10,
+        "stepCount": 11,
         "steps": [
           {
             "index": 0,
@@ -6795,6 +6855,18 @@
           },
           {
             "index": 3,
+            "name": "Scrub restored test evidence",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "43049608474d5e1a"
+          },
+          {
+            "index": 4,
             "name": "Require Visual Studio 2026",
             "id": "",
             "uses": "",
@@ -6806,7 +6878,7 @@
             "runDigest": "c4aa88494eff4d37"
           },
           {
-            "index": 4,
+            "index": 5,
             "name": "Configure CMake (VS 2026 / v145)",
             "id": "",
             "uses": "",
@@ -6818,7 +6890,7 @@
             "runDigest": "7ed636ceab33624d"
           },
           {
-            "index": 5,
+            "index": 6,
             "name": "Build",
             "id": "",
             "uses": "",
@@ -6830,7 +6902,7 @@
             "runDigest": "d69ad68ffbba1551"
           },
           {
-            "index": 6,
+            "index": 7,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -6842,7 +6914,7 @@
             "runDigest": "d3c4368b3410f79a"
           },
           {
-            "index": 7,
+            "index": 8,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -6851,10 +6923,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "dc1a1e319e7ef57c"
+            "runDigest": "45fef95257927cb9"
           },
           {
-            "index": 8,
+            "index": 9,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6866,7 +6938,7 @@
             "runDigest": ""
           },
           {
-            "index": 9,
+            "index": 10,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6911,7 +6983,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 16,
+        "stepCount": 17,
         "steps": [
           {
             "index": 0,
@@ -6963,6 +7035,18 @@
           },
           {
             "index": 4,
+            "name": "Scrub restored test evidence",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "43049608474d5e1a"
+          },
+          {
+            "index": 5,
             "name": "Configure CMake",
             "id": "",
             "uses": "",
@@ -6974,7 +7058,7 @@
             "runDigest": "d7fbe87e13cca6bf"
           },
           {
-            "index": 5,
+            "index": 6,
             "name": "Build all targets",
             "id": "",
             "uses": "",
@@ -6986,7 +7070,7 @@
             "runDigest": "8cbb4339854162af"
           },
           {
-            "index": 6,
+            "index": 7,
             "name": "Print ccache stats",
             "id": "",
             "uses": "",
@@ -6998,7 +7082,7 @@
             "runDigest": "09e0dc05b951a397"
           },
           {
-            "index": 7,
+            "index": 8,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -7010,7 +7094,7 @@
             "runDigest": "5cb377af7e1d2af2"
           },
           {
-            "index": 8,
+            "index": 9,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -7019,10 +7103,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "3f396c47d8389df1"
+            "runDigest": "83b15fdd037d4be1"
           },
           {
-            "index": 9,
+            "index": 10,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7034,7 +7118,7 @@
             "runDigest": ""
           },
           {
-            "index": 10,
+            "index": 11,
             "name": "Assert Vulkan preset is enabled (Release gate)",
             "id": "",
             "uses": "",
@@ -7046,7 +7130,7 @@
             "runDigest": "4057c17ae774e6c1"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Assert Vulkan shader compile parity test ran (Release gate)",
             "id": "",
             "uses": "",
@@ -7058,7 +7142,7 @@
             "runDigest": "e568db7ded40b153"
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -7070,7 +7154,7 @@
             "runDigest": "216085f38b450ddc"
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7082,7 +7166,7 @@
             "runDigest": ""
           },
           {
-            "index": 14,
+            "index": 15,
             "name": "Package build output",
             "id": "",
             "uses": "",
@@ -7094,7 +7178,7 @@
             "runDigest": "d59243a20fca28e4"
           },
           {
-            "index": 15,
+            "index": 16,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7139,7 +7223,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 14,
+        "stepCount": 15,
         "steps": [
           {
             "index": 0,
@@ -7191,6 +7275,18 @@
           },
           {
             "index": 4,
+            "name": "Scrub restored test evidence",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "43049608474d5e1a"
+          },
+          {
+            "index": 5,
             "name": "Configure CMake",
             "id": "",
             "uses": "",
@@ -7202,7 +7298,7 @@
             "runDigest": "1baed3b647e547ec"
           },
           {
-            "index": 5,
+            "index": 6,
             "name": "Build all targets",
             "id": "",
             "uses": "",
@@ -7214,7 +7310,7 @@
             "runDigest": "6195c3469d437ffe"
           },
           {
-            "index": 6,
+            "index": 7,
             "name": "Print ccache stats",
             "id": "",
             "uses": "",
@@ -7226,7 +7322,7 @@
             "runDigest": "09e0dc05b951a397"
           },
           {
-            "index": 7,
+            "index": 8,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -7238,7 +7334,7 @@
             "runDigest": "5cb377af7e1d2af2"
           },
           {
-            "index": 8,
+            "index": 9,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -7247,10 +7343,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "0d2fba7af5354726"
+            "runDigest": "265042f5b0dd2b99"
           },
           {
-            "index": 9,
+            "index": 10,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7262,7 +7358,7 @@
             "runDigest": ""
           },
           {
-            "index": 10,
+            "index": 11,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -7274,7 +7370,7 @@
             "runDigest": "984ed60049c216ad"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7286,7 +7382,7 @@
             "runDigest": ""
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Package build output",
             "id": "",
             "uses": "",
@@ -7298,7 +7394,7 @@
             "runDigest": "acd32232d5e9c245"
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7492,9 +7588,9 @@
       {
         "id": "build-macos",
         "name": "",
-        "runsOn": "macos-latest",
+        "runsOn": "macos-15",
         "runnerLabels": [
-          "macos-latest"
+          "macos-15"
         ],
         "runnerOsClasses": [
           "macos"
@@ -7526,7 +7622,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 14,
+        "stepCount": 15,
         "steps": [
           {
             "index": 0,
@@ -7578,6 +7674,18 @@
           },
           {
             "index": 4,
+            "name": "Scrub restored test evidence",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "43049608474d5e1a"
+          },
+          {
+            "index": 5,
             "name": "Configure CMake",
             "id": "",
             "uses": "",
@@ -7589,7 +7697,7 @@
             "runDigest": "211182e865938cf5"
           },
           {
-            "index": 5,
+            "index": 6,
             "name": "Build",
             "id": "",
             "uses": "",
@@ -7601,7 +7709,7 @@
             "runDigest": "c8211cc80ad2edc9"
           },
           {
-            "index": 6,
+            "index": 7,
             "name": "Print ccache stats",
             "id": "",
             "uses": "",
@@ -7613,7 +7721,7 @@
             "runDigest": "09e0dc05b951a397"
           },
           {
-            "index": 7,
+            "index": 8,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -7625,7 +7733,7 @@
             "runDigest": "5cb377af7e1d2af2"
           },
           {
-            "index": 8,
+            "index": 9,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -7634,10 +7742,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "66652137c977a3c1"
+            "runDigest": "8703b3c1f150085a"
           },
           {
-            "index": 9,
+            "index": 10,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7649,7 +7757,7 @@
             "runDigest": ""
           },
           {
-            "index": 10,
+            "index": 11,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -7661,7 +7769,7 @@
             "runDigest": "fc31090331ccd461"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7673,7 +7781,7 @@
             "runDigest": ""
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Upload Golden Image Diffs",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7685,7 +7793,7 @@
             "runDigest": ""
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -8204,7 +8312,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "5d0b4b998325a9a8"
+            "runDigest": "bf95a6c86592831b"
           },
           {
             "index": 3,
@@ -8216,7 +8324,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "82ebb27627176769"
+            "runDigest": "6f18a9fbd8740c36"
           },
           {
             "index": 4,
@@ -8429,9 +8537,9 @@
         "name": "Installer (${{ matrix.os }})",
         "runsOn": "${{ matrix.os }}",
         "runnerLabels": [
-          "macos-latest",
+          "macos-15",
           "ubuntu-24.04",
-          "windows-latest"
+          "windows-2022"
         ],
         "runnerOsClasses": [
           "linux",
@@ -8452,12 +8560,12 @@
             "bin_name": "SparkInstaller"
           },
           {
-            "os": "windows-latest",
+            "os": "windows-2022",
             "artifact": "SparkInstaller-Windows-x64",
             "bin_name": "SparkInstaller.exe"
           },
           {
-            "os": "macos-latest",
+            "os": "macos-15",
             "artifact": "SparkInstaller-macOS-arm64",
             "bin_name": "SparkInstaller"
           }
@@ -8619,6 +8727,8 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [
+              "DEFERRED_REQUIRED_FAILURES_JSON",
+              "EXPECTED_REQUIRED_JOBS_JSON",
               "NEEDS_JSON"
             ],
             "runDigest": "eb386ea75b2903a9"
@@ -8884,7 +8994,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Configure CMake (VS 2022 / v143)",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Debug"
         },
@@ -8914,7 +9024,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Debug"
         },
@@ -8943,7 +9053,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Debug"
         },
@@ -8968,7 +9078,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Configure CMake (VS 2022 / v143)",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Release"
         },
@@ -8998,7 +9108,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Release"
         },
@@ -9027,7 +9137,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Release"
         },
@@ -9225,7 +9335,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Configure CMake (VS 2026 / v145)",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Debug"
         },
@@ -9253,7 +9363,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Debug"
         },
@@ -9282,7 +9392,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {
           "config": "Debug"
         },
@@ -9307,7 +9417,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Configure CMake (VS 2026 / v145)",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Release"
         },
@@ -9335,7 +9445,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Release"
         },
@@ -9364,7 +9474,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {
           "config": "Release"
         },
@@ -9389,7 +9499,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Debug"
         },
@@ -9419,7 +9529,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Build all targets",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Debug"
         },
@@ -9448,7 +9558,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Debug"
         },
@@ -9473,7 +9583,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Release"
         },
@@ -9503,7 +9613,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Build all targets",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Release"
         },
@@ -9532,7 +9642,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Release"
         },
@@ -9557,7 +9667,7 @@
       {
         "job": "build-linux-clang",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Debug"
         },
@@ -9591,7 +9701,7 @@
       {
         "job": "build-linux-clang",
         "step": "Build all targets",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Debug"
         },
@@ -9620,7 +9730,7 @@
       {
         "job": "build-linux-clang",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Debug"
         },
@@ -9645,7 +9755,7 @@
       {
         "job": "build-linux-clang",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Release"
         },
@@ -9679,7 +9789,7 @@
       {
         "job": "build-linux-clang",
         "step": "Build all targets",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Release"
         },
@@ -9708,7 +9818,7 @@
       {
         "job": "build-linux-clang",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Release"
         },
@@ -9790,7 +9900,7 @@
       {
         "job": "build-macos",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "backend": "OpenGL",
           "config": "Debug",
@@ -9827,7 +9937,7 @@
       {
         "job": "build-macos",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "backend": "OpenGL",
           "config": "Debug",
@@ -9858,7 +9968,7 @@
       {
         "job": "build-macos",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "backend": "OpenGL",
           "config": "Debug",
@@ -9885,7 +9995,7 @@
       {
         "job": "build-macos",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "backend": "OpenGL",
           "config": "Release",
@@ -9922,7 +10032,7 @@
       {
         "job": "build-macos",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "backend": "OpenGL",
           "config": "Release",
@@ -9953,7 +10063,7 @@
       {
         "job": "build-macos",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "backend": "OpenGL",
           "config": "Release",
@@ -9980,7 +10090,7 @@
       {
         "job": "build-macos",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "backend": "Metal",
           "config": "Release",
@@ -10017,7 +10127,7 @@
       {
         "job": "build-macos",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "backend": "Metal",
           "config": "Release",
@@ -10048,7 +10158,7 @@
       {
         "job": "build-macos",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "backend": "Metal",
           "config": "Release",
@@ -10261,7 +10371,7 @@
         "matrix": {
           "artifact": "SparkInstaller-Windows-x64",
           "bin_name": "SparkInstaller.exe",
-          "os": "windows-latest"
+          "os": "windows-2022"
         },
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -10291,7 +10401,7 @@
         "matrix": {
           "artifact": "SparkInstaller-Windows-x64",
           "bin_name": "SparkInstaller.exe",
-          "os": "windows-latest"
+          "os": "windows-2022"
         },
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -10325,7 +10435,7 @@
         "matrix": {
           "artifact": "SparkInstaller-Windows-x64",
           "bin_name": "SparkInstaller.exe",
-          "os": "windows-latest"
+          "os": "windows-2022"
         },
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -10352,7 +10462,7 @@
         "matrix": {
           "artifact": "SparkInstaller-macOS-arm64",
           "bin_name": "SparkInstaller",
-          "os": "macos-latest"
+          "os": "macos-15"
         },
         "matrixResolved": true,
         "runnerOs": "macos",
@@ -10382,7 +10492,7 @@
         "matrix": {
           "artifact": "SparkInstaller-macOS-arm64",
           "bin_name": "SparkInstaller",
-          "os": "macos-latest"
+          "os": "macos-15"
         },
         "matrixResolved": true,
         "runnerOs": "macos",
@@ -10416,7 +10526,7 @@
         "matrix": {
           "artifact": "SparkInstaller-macOS-arm64",
           "bin_name": "SparkInstaller",
-          "os": "macos-latest"
+          "os": "macos-15"
         },
         "matrixResolved": true,
         "runnerOs": "macos",
@@ -10562,7 +10672,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Configure CMake (VS 2022 / v143)",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Debug"
         },
@@ -10592,7 +10702,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Configure CMake (VS 2022 / v143)",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Release"
         },
@@ -10692,7 +10802,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Configure CMake (VS 2026 / v145)",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Debug"
         },
@@ -10720,7 +10830,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Configure CMake (VS 2026 / v145)",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Release"
         },
@@ -10748,7 +10858,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Debug"
         },
@@ -10778,7 +10888,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Release"
         },
@@ -10808,7 +10918,7 @@
       {
         "job": "build-linux-clang",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Debug"
         },
@@ -10842,7 +10952,7 @@
       {
         "job": "build-linux-clang",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "config": "Release"
         },
@@ -10906,7 +11016,7 @@
       {
         "job": "build-macos",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "backend": "OpenGL",
           "config": "Debug",
@@ -10943,7 +11053,7 @@
       {
         "job": "build-macos",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "backend": "OpenGL",
           "config": "Release",
@@ -10980,7 +11090,7 @@
       {
         "job": "build-macos",
         "step": "Configure CMake",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {
           "backend": "Metal",
           "config": "Release",
@@ -11115,7 +11225,7 @@
         "matrix": {
           "artifact": "SparkInstaller-Windows-x64",
           "bin_name": "SparkInstaller.exe",
-          "os": "windows-latest"
+          "os": "windows-2022"
         },
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -11145,7 +11255,7 @@
         "matrix": {
           "artifact": "SparkInstaller-macOS-arm64",
           "bin_name": "SparkInstaller",
-          "os": "macos-latest"
+          "os": "macos-15"
         },
         "matrixResolved": true,
         "runnerOs": "macos",
@@ -11282,7 +11392,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Debug"
         },
@@ -11311,7 +11421,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Release"
         },
@@ -11421,7 +11531,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Debug"
         },
@@ -11450,7 +11560,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Release"
         },
@@ -11479,7 +11589,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Build all targets",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Debug"
         },
@@ -11508,7 +11618,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Build all targets",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Release"
         },
@@ -11537,7 +11647,7 @@
       {
         "job": "build-linux-clang",
         "step": "Build all targets",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Debug"
         },
@@ -11566,7 +11676,7 @@
       {
         "job": "build-linux-clang",
         "step": "Build all targets",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Release"
         },
@@ -11622,7 +11732,7 @@
       {
         "job": "build-macos",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "backend": "OpenGL",
           "config": "Debug",
@@ -11653,7 +11763,7 @@
       {
         "job": "build-macos",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "backend": "OpenGL",
           "config": "Release",
@@ -11684,7 +11794,7 @@
       {
         "job": "build-macos",
         "step": "Build",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "backend": "Metal",
           "config": "Release",
@@ -11780,7 +11890,7 @@
         "matrix": {
           "artifact": "SparkInstaller-Windows-x64",
           "bin_name": "SparkInstaller.exe",
-          "os": "windows-latest"
+          "os": "windows-2022"
         },
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -11814,7 +11924,7 @@
         "matrix": {
           "artifact": "SparkInstaller-macOS-arm64",
           "bin_name": "SparkInstaller",
-          "os": "macos-latest"
+          "os": "macos-15"
         },
         "matrixResolved": true,
         "runnerOs": "macos",
@@ -11869,7 +11979,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Debug"
         },
@@ -11894,7 +12004,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Release"
         },
@@ -11919,7 +12029,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {
           "config": "Debug"
         },
@@ -11944,7 +12054,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {
           "config": "Release"
         },
@@ -11969,7 +12079,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Debug"
         },
@@ -11994,7 +12104,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Release"
         },
@@ -12019,7 +12129,7 @@
       {
         "job": "build-linux-clang",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Debug"
         },
@@ -12044,7 +12154,7 @@
       {
         "job": "build-linux-clang",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Release"
         },
@@ -12069,7 +12179,7 @@
       {
         "job": "build-macos",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "backend": "OpenGL",
           "config": "Debug",
@@ -12096,7 +12206,7 @@
       {
         "job": "build-macos",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "backend": "OpenGL",
           "config": "Release",
@@ -12123,7 +12233,7 @@
       {
         "job": "build-macos",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "backend": "Metal",
           "config": "Release",
@@ -12181,7 +12291,7 @@
         "matrix": {
           "artifact": "SparkInstaller-Windows-x64",
           "bin_name": "SparkInstaller.exe",
-          "os": "windows-latest"
+          "os": "windows-2022"
         },
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -12208,7 +12318,7 @@
         "matrix": {
           "artifact": "SparkInstaller-macOS-arm64",
           "bin_name": "SparkInstaller",
-          "os": "macos-latest"
+          "os": "macos-15"
         },
         "matrixResolved": true,
         "runnerOs": "macos",
@@ -12233,7 +12343,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare deterministic build-matrix inventory (CI-120)",
-        "stepIndex": 14,
+        "stepIndex": 18,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -12253,13 +12363,15 @@
         "codemodels": [],
         "inventory": "",
         "baseline": "",
+        "report": "",
+        "output": "build-matrix-inventory.json",
         "build": false,
         "command": "python3 Tools/buildmatrix/inventory.py  --output build-matrix-inventory.json  --check docs/readiness/ci120-build-matrix-inventory.json"
       },
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings (CI-120)",
-        "stepIndex": 15,
+        "stepIndex": 19,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -12279,6 +12391,8 @@
         "codemodels": [],
         "inventory": "build-matrix-inventory.json",
         "baseline": "docs/readiness/ci120-parity-findings.json",
+        "report": "",
+        "output": "build-matrix-parity-findings.json",
         "build": false,
         "command": "python3 Tools/buildmatrix/check_parity.py  --inventory build-matrix-inventory.json  --baseline docs/readiness/ci120-parity-findings.json  --output build-matrix-parity-findings.json  > build-matrix-parity-stdout.json"
       },
@@ -12305,6 +12419,8 @@
         "codemodels": [],
         "inventory": "",
         "baseline": "",
+        "report": "",
+        "output": "",
         "build": true,
         "command": "python Tools/buildmatrix/capture_provenance.py  --profile windows-shipping  --build-dir build/windows-shipping  --build 2>&1 | tee ci120-windows-shipping-producer.log"
       },
@@ -12331,6 +12447,8 @@
         "codemodels": [],
         "inventory": "",
         "baseline": "",
+        "report": "",
+        "output": "",
         "build": true,
         "command": "python Tools/buildmatrix/capture_provenance.py  --profile windows-validation  --build-dir build/windows-release  --build 2>&1 | tee ci120-windows-validation-producer.log"
       },
@@ -12357,6 +12475,8 @@
         "codemodels": [],
         "inventory": "",
         "baseline": "",
+        "report": "",
+        "output": "",
         "build": true,
         "command": "python Tools/buildmatrix/capture_provenance.py  --profile installed-sdk-consumer  --build-dir build/installed-sdk-consumer  --build 2>&1 | tee ci120-installed-sdk-consumer-producer.log"
       },
@@ -12387,6 +12507,8 @@
         ],
         "inventory": "",
         "baseline": "",
+        "report": "",
+        "output": "build-matrix-inventory.json",
         "build": false,
         "command": "python Tools/buildmatrix/inventory.py  --codemodel windows-shipping=build/windows-shipping  --codemodel windows-validation=build/windows-release  --codemodel installed-sdk-consumer=build/installed-sdk-consumer  --output build-matrix-inventory.json"
       },
@@ -12412,9 +12534,39 @@
         "codemodel": "",
         "codemodels": [],
         "inventory": "build-matrix-inventory.json",
-        "baseline": "docs/readiness/ci120-parity-findings.json",
+        "baseline": "",
+        "report": "",
+        "output": "build-matrix-parity-findings.json",
         "build": false,
-        "command": "python Tools/buildmatrix/check_parity.py  --inventory build-matrix-inventory.json  --baseline docs/readiness/ci120-parity-findings.json  --output build-matrix-parity-findings.json  > build-matrix-parity-stdout.json"
+        "command": "python Tools/buildmatrix/check_parity.py  --inventory build-matrix-inventory.json  --output build-matrix-parity-findings.json  > build-matrix-parity-stdout.json"
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Compare reviewed configured-evidence findings (CI-120)",
+        "stepIndex": 10,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "kind": "pending-authority",
+        "launcher": "python",
+        "launcherProvenance": "literal",
+        "executable": true,
+        "profile": "",
+        "buildDir": "",
+        "codemodel": "",
+        "codemodels": [],
+        "inventory": "build-matrix-inventory.json",
+        "baseline": "",
+        "report": "build-matrix-parity-findings.json",
+        "output": "build-matrix-pending-receipt.json",
+        "build": false,
+        "command": "python Tools/buildmatrix/validate_pending_authority.py  --inventory build-matrix-inventory.json  --report build-matrix-parity-findings.json  --output build-matrix-pending-receipt.json  > build-matrix-pending-receipt-stdout.json"
       }
     ],
     "summary": {
@@ -12424,7 +12576,7 @@
       "configureCount": 24,
       "buildCount": 23,
       "testCount": 15,
-      "ci120InvocationCount": 7,
+      "ci120InvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 18,
       "blockingJobCount": 15,
@@ -12579,7 +12731,7 @@
     {
       "job": "build-windows-vs2022",
       "step": "Configure CMake (VS 2022 / v143)",
-      "stepIndex": 4,
+      "stepIndex": 5,
       "matrix": {
         "config": "Debug"
       },
@@ -12609,7 +12761,7 @@
     {
       "job": "build-windows-vs2022",
       "step": "Configure CMake (VS 2022 / v143)",
-      "stepIndex": 4,
+      "stepIndex": 5,
       "matrix": {
         "config": "Release"
       },
@@ -12709,7 +12861,7 @@
     {
       "job": "build-windows-vs2026",
       "step": "Configure CMake (VS 2026 / v145)",
-      "stepIndex": 4,
+      "stepIndex": 5,
       "matrix": {
         "config": "Debug"
       },
@@ -12737,7 +12889,7 @@
     {
       "job": "build-windows-vs2026",
       "step": "Configure CMake (VS 2026 / v145)",
-      "stepIndex": 4,
+      "stepIndex": 5,
       "matrix": {
         "config": "Release"
       },
@@ -12765,7 +12917,7 @@
     {
       "job": "build-linux-gcc",
       "step": "Configure CMake",
-      "stepIndex": 4,
+      "stepIndex": 5,
       "matrix": {
         "config": "Debug"
       },
@@ -12795,7 +12947,7 @@
     {
       "job": "build-linux-gcc",
       "step": "Configure CMake",
-      "stepIndex": 4,
+      "stepIndex": 5,
       "matrix": {
         "config": "Release"
       },
@@ -12825,7 +12977,7 @@
     {
       "job": "build-linux-clang",
       "step": "Configure CMake",
-      "stepIndex": 4,
+      "stepIndex": 5,
       "matrix": {
         "config": "Debug"
       },
@@ -12859,7 +13011,7 @@
     {
       "job": "build-linux-clang",
       "step": "Configure CMake",
-      "stepIndex": 4,
+      "stepIndex": 5,
       "matrix": {
         "config": "Release"
       },
@@ -12923,7 +13075,7 @@
     {
       "job": "build-macos",
       "step": "Configure CMake",
-      "stepIndex": 4,
+      "stepIndex": 5,
       "matrix": {
         "backend": "OpenGL",
         "config": "Debug",
@@ -12960,7 +13112,7 @@
     {
       "job": "build-macos",
       "step": "Configure CMake",
-      "stepIndex": 4,
+      "stepIndex": 5,
       "matrix": {
         "backend": "OpenGL",
         "config": "Release",
@@ -12997,7 +13149,7 @@
     {
       "job": "build-macos",
       "step": "Configure CMake",
-      "stepIndex": 4,
+      "stepIndex": 5,
       "matrix": {
         "backend": "Metal",
         "config": "Release",
@@ -13132,7 +13284,7 @@
       "matrix": {
         "artifact": "SparkInstaller-Windows-x64",
         "bin_name": "SparkInstaller.exe",
-        "os": "windows-latest"
+        "os": "windows-2022"
       },
       "matrixResolved": true,
       "runnerOs": "windows",
@@ -13162,7 +13314,7 @@
       "matrix": {
         "artifact": "SparkInstaller-macOS-arm64",
         "bin_name": "SparkInstaller",
-        "os": "macos-latest"
+        "os": "macos-15"
       },
       "matrixResolved": true,
       "runnerOs": "macos",

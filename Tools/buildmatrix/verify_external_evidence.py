@@ -204,7 +204,7 @@ def validate_source_metadata(document: dict[str, Any]) -> dict[str, Any]:
     if (
         source.get("workflowName") != SOURCE_WORKFLOW_NAME
         or source.get("workflowPath") != SOURCE_WORKFLOW_PATH
-        or source.get("event") != "push"
+        or source.get("event") not in {"push", "workflow_dispatch"}
         or source.get("conclusion") != "failure"
         or source.get("headBranch") != "Working"
         or source.get("jobName") != SOURCE_JOB_NAME
@@ -226,17 +226,32 @@ def validate_source_metadata(document: dict[str, Any]) -> dict[str, Any]:
     _hex_digest(artifact.get("digest"), "source artifact API digest", prefix=True)
 
     verifier = _mapping(document.get("verifier"), "metadata verifier")
-    _exact_fields(verifier, {"repository", "checkoutSha", "workflowSha", "workflowRef"}, "metadata verifier")
+    _exact_fields(
+        verifier,
+        {
+            "repository", "checkoutSha", "workflowSha", "workflowRef",
+            "sourceWorkflowBlobSha", "trustedWorkflowBlobSha",
+        },
+        "metadata verifier",
+    )
     checkout_sha = _full_sha(verifier.get("checkoutSha"), "trusted checkout SHA")
     workflow_sha = _full_sha(verifier.get("workflowSha"), "trusted workflow SHA")
+    source_workflow_blob_sha = _full_sha(
+        verifier.get("sourceWorkflowBlobSha"), "source workflow blob SHA"
+    )
+    trusted_workflow_blob_sha = _full_sha(
+        verifier.get("trustedWorkflowBlobSha"), "trusted workflow blob SHA"
+    )
     expected_ref = f"{repository['fullName']}/{VERIFIER_WORKFLOW_PATH}@refs/heads/Working"
     if (
         verifier.get("repository") != repository["fullName"]
         or checkout_sha != workflow_sha
-        or checkout_sha != source_sha
+        or source_workflow_blob_sha != trusted_workflow_blob_sha
         or verifier.get("workflowRef") != expected_ref
     ):
-        raise ExternalEvidenceError("source, trusted checkout, verifier workflow, and default branch are not exact")
+        raise ExternalEvidenceError(
+            "trusted verifier identity or byte-identical source workflow attestation is not exact"
+        )
     return document
 
 
@@ -747,6 +762,8 @@ def verify_external_evidence(
             "workflowRef": verifier["workflowRef"],
             "workflowSha": verifier["workflowSha"],
             "checkoutSha": verifier["checkoutSha"],
+            "sourceWorkflowBlobSha": verifier["sourceWorkflowBlobSha"],
+            "trustedWorkflowBlobSha": verifier["trustedWorkflowBlobSha"],
         },
         "inputArtifact": {
             "id": artifact["id"],

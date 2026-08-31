@@ -13,6 +13,7 @@
 
 #include <array>
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <vector>
@@ -139,6 +140,58 @@ namespace
         if (status != ERROR_SUCCESS)
             return AclFixtureError("SetNamedSecurityInfoW", status, error);
         return AclFixtureResult::Ready;
+    }
+
+    bool HasInheritedWorldReadAce(const std::filesystem::path& file)
+    {
+        PACL dacl = nullptr;
+        PSECURITY_DESCRIPTOR descriptor = nullptr;
+        const DWORD status = GetNamedSecurityInfoW(file.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
+                                                   nullptr, nullptr, &dacl, nullptr, &descriptor);
+        if (status != ERROR_SUCCESS || !descriptor || !dacl || !IsValidAcl(dacl))
+        {
+            if (descriptor)
+                LocalFree(descriptor);
+            return false;
+        }
+
+        std::array<unsigned char, SECURITY_MAX_SID_SIZE> worldSid{};
+        DWORD worldSidSize = static_cast<DWORD>(worldSid.size());
+        if (!CreateWellKnownSid(WinWorldSid, nullptr, worldSid.data(), &worldSidSize))
+        {
+            LocalFree(descriptor);
+            return false;
+        }
+
+        ACL_SIZE_INFORMATION information{};
+        bool found = false;
+        if (GetAclInformation(dacl, &information, sizeof(information), AclSizeInformation))
+        {
+            GENERIC_MAPPING fileMapping{FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE, FILE_ALL_ACCESS};
+            for (DWORD index = 0; index < information.AceCount && !found; ++index)
+            {
+                void* rawAce = nullptr;
+                if (!GetAce(dacl, index, &rawAce))
+                    break;
+                const auto* header = static_cast<const ACE_HEADER*>(rawAce);
+                constexpr size_t sidOffset = offsetof(ACCESS_ALLOWED_ACE, SidStart);
+                if (header->AceType != ACCESS_ALLOWED_ACE_TYPE || (header->AceFlags & INHERITED_ACE) == 0 ||
+                    header->AceSize < sidOffset + GetSidLengthRequired(0))
+                    continue;
+                const auto* ace = static_cast<const ACCESS_ALLOWED_ACE*>(rawAce);
+                const auto* trustee = reinterpret_cast<const SID*>(&ace->SidStart);
+                const size_t sidBytes = GetSidLengthRequired(trustee->SubAuthorityCount);
+                if (sidBytes > header->AceSize - sidOffset || !IsValidSid(const_cast<SID*>(trustee)) ||
+                    GetLengthSid(const_cast<SID*>(trustee)) != sidBytes ||
+                    !EqualSid(const_cast<SID*>(trustee), worldSid.data()))
+                    continue;
+                DWORD mappedMask = ace->Mask;
+                MapGenericMask(&mappedMask, &fileMapping);
+                found = (mappedMask & FILE_GENERIC_READ) == FILE_GENERIC_READ;
+            }
+        }
+        LocalFree(descriptor);
+        return found;
     }
 
     AclFixtureResult AssignAlternateOwnerOnlyAcl(const std::filesystem::path& file, std::string& error)
@@ -387,13 +440,17 @@ TEST(GatewaySecurity_GeneratedKeyRemainsPrivateUnderInheritableParentAcl)
         std::filesystem::remove_all(root, filesystemError);
         return;
     }
+    EXPECT_TRUE(HasInheritedWorldReadAce(inheritedProbeFile));
 
     std::vector<uint8_t> inheritedKey;
     error.clear();
     EXPECT_FALSE(LoadPrivateGatewayKey(inheritedProbeFile, inheritedKey, error));
-    EXPECT_EQ(error, std::string("Gateway key ACL must grant read access only to its owner"));
+    EXPECT_EQ(error, std::string("Gateway key ACL must be protected from inheritance"));
 
+    error.clear();
     const bool created = Spark::SecureRandom::CreatePrivateFile(keyFile, token + "\n", &error);
+    if (!created)
+        std::cerr << "  FAIL: protected key creation failed: " << error << '\n';
     EXPECT_TRUE(created);
     if (created)
     {
@@ -418,6 +475,51 @@ TEST(GatewaySecurity_GeneratedKeyRemainsPrivateUnderInheritableParentAcl)
         EXPECT_EQ(key.size(), token.size() / 2);
     }
 
+    std::filesystem::remove_all(root, filesystemError);
+}
+
+TEST(GatewaySecurity_RejectsUnprotectedAcl)
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / Spark::SecureRandom::HexToken(12);
+    const std::filesystem::path keyFile = root / "gateway.key";
+    const std::string token = Spark::SecureRandom::HexToken(32);
+    std::string error;
+    ASSERT_TRUE(Spark::SecureRandom::CreatePrivateFile(keyFile, token + "\n", &error));
+
+    PSECURITY_DESCRIPTOR descriptor = nullptr;
+    PACL dacl = nullptr;
+    DWORD status = GetNamedSecurityInfoW(keyFile.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
+                                         nullptr, nullptr, &dacl, nullptr, &descriptor);
+    ASSERT_EQ(status, DWORD{ERROR_SUCCESS});
+    ASSERT_TRUE(descriptor != nullptr);
+    ASSERT_TRUE(dacl != nullptr);
+
+    status = SetNamedSecurityInfoW(
+        const_cast<LPWSTR>(keyFile.c_str()), SE_FILE_OBJECT,
+        DACL_SECURITY_INFORMATION | UNPROTECTED_DACL_SECURITY_INFORMATION,
+        nullptr, nullptr, dacl, nullptr);
+    LocalFree(descriptor);
+    ASSERT_EQ(status, DWORD{ERROR_SUCCESS});
+
+    descriptor = nullptr;
+    status = GetNamedSecurityInfoW(keyFile.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
+                                   nullptr, nullptr, nullptr, nullptr, &descriptor);
+    SECURITY_DESCRIPTOR_CONTROL control{};
+    DWORD revision = 0;
+    const bool unprotected = status == ERROR_SUCCESS && descriptor &&
+                             GetSecurityDescriptorControl(descriptor, &control, &revision) &&
+                             (control & SE_DACL_PROTECTED) == 0;
+    EXPECT_TRUE(unprotected);
+    if (descriptor)
+        LocalFree(descriptor);
+
+    std::vector<uint8_t> key(64, 0xa5);
+    error.clear();
+    EXPECT_FALSE(LoadPrivateGatewayKey(keyFile, key, error));
+    EXPECT_TRUE(key.empty());
+    EXPECT_EQ(error, std::string("Gateway key ACL must be protected from inheritance"));
+
+    std::error_code filesystemError;
     std::filesystem::remove_all(root, filesystemError);
 }
 

@@ -28,10 +28,54 @@
 #include <unordered_map>
 #include <vector>
 
+#if !defined(_WIN32)
+#include <sys/resource.h>
+#endif
+
 using namespace Spark;
 
 namespace
 {
+#if !defined(_WIN32)
+    class ScopedMinimumFileSizeLimit
+    {
+      public:
+        explicit ScopedMinimumFileSizeLimit(uint64_t minimumBytes) noexcept
+        {
+            if (getrlimit(RLIMIT_FSIZE, &m_original) != 0)
+                return;
+            const rlim_t minimum = static_cast<rlim_t>(minimumBytes);
+            if (m_original.rlim_cur == RLIM_INFINITY || m_original.rlim_cur >= minimum)
+            {
+                m_ready = true;
+                return;
+            }
+            if (m_original.rlim_max != RLIM_INFINITY && m_original.rlim_max < minimum)
+                return;
+            rlimit raised = m_original;
+            raised.rlim_cur = minimum;
+            if (setrlimit(RLIMIT_FSIZE, &raised) == 0)
+            {
+                m_changed = true;
+                m_ready = true;
+            }
+        }
+
+        ~ScopedMinimumFileSizeLimit()
+        {
+            if (m_changed)
+                (void)setrlimit(RLIMIT_FSIZE, &m_original);
+        }
+
+        bool Ready() const noexcept { return m_ready; }
+
+      private:
+        rlimit m_original{};
+        bool m_changed = false;
+        bool m_ready = false;
+    };
+#endif
+
     // Write a minimal but format-correct save file (header + metadata block only; zero
     // entities are not required because GetSaveMetadata stops after the metadata block).
     void WriteSaveHeader(const std::string& path, uint32_t version, const std::string& metaStr)
@@ -608,7 +652,14 @@ TEST(SaveSystem_Load_RejectsOversizedFileBeforeCacheRead)
         std::ofstream output(path, std::ios::binary | std::ios::trunc);
         output.write("SPRK", 4);
     }
-    std::filesystem::resize_file(path, 512ull * 1024ull * 1024ull + 1ull);
+    constexpr uint64_t oversizedBytes = 512ull * 1024ull * 1024ull + 1ull;
+    {
+#if !defined(_WIN32)
+        ScopedMinimumFileSizeLimit fileSizeLimit(oversizedBytes);
+        ASSERT_TRUE(fileSizeLimit.Ready());
+#endif
+        std::filesystem::resize_file(path, oversizedBytes);
+    }
 
     World target;
     target.CreateEntity("sentinel");

@@ -211,6 +211,12 @@ XML
     signature)
         write_clean "ERROR: AddressSanitizer: heap-buffer-overflow"
         ;;
+    summary-signature)
+        write_clean "SUMMARY: AddressSanitizer: heap-buffer-overflow"
+        ;;
+    plain-sanitizer-prose)
+        write_clean "ThreadSanitizer instrumentation enabled"
+        ;;
     report-signature)
         write_clean
         printf 'ERROR: AddressSanitizer: report-only heap-buffer-overflow\n' >> "$report"
@@ -245,6 +251,26 @@ XML
         write_clean
         "$TEST_PYTHON" -c 'import sys; open(sys.argv[1], "ab").write(b"x" * (17 * 1024 * 1024))' "$report"
         ;;
+    soft-limit-lift)
+        "$TEST_PYTHON" - "${SPARK_TEST_SPARSE_PATH:?}" <<'PY'
+import pathlib
+import resource
+import sys
+
+target = 512 * 1024 * 1024 + 1
+original = resource.getrlimit(resource.RLIMIT_FSIZE)
+soft, hard = original
+assert hard == resource.RLIM_INFINITY or hard >= target, original
+resource.setrlimit(resource.RLIMIT_FSIZE, (target, hard))
+try:
+    with pathlib.Path(sys.argv[1]).open("wb") as output:
+        output.truncate(target)
+finally:
+    resource.setrlimit(resource.RLIMIT_FSIZE, original)
+assert resource.getrlimit(resource.RLIMIT_FSIZE) == original
+PY
+        write_clean
+        ;;
     arbitrary-entry)
         write_clean
         printf 'untrusted\n' > "$(dirname "$report")/sanitizer.999"
@@ -263,6 +289,11 @@ XML
         write_clean
         prefix="$(runtime_prefix)"
         printf 'WARNING: ThreadSanitizer: data race\n' > "${prefix}.$$"
+        ;;
+    runtime-msan-summary)
+        write_clean
+        prefix="$(runtime_prefix)"
+        printf 'SUMMARY: MemorySanitizer: use-of-uninitialized-value\n' > "${prefix}.$$"
         ;;
     empty-runtime)
         write_clean
@@ -708,6 +739,7 @@ run_case() {
     counter=$((counter + 1))
     CASE_RUN="$counter"
     CASE_DIR="$(case_dir "$sanitizer" "$CASE_RUN")"
+    CASE_SPARSE_PATH="$TMP_ROOT/sparse-$CASE_RUN"
     local runtime_env
     case "$sanitizer" in
         asan) runtime_env=ASAN_OPTIONS ;;
@@ -717,7 +749,7 @@ run_case() {
     local command=("$FAKE_TEST" --shuffle 123)
     [[ "$sanitizer" == "msan" ]] || command+=(--warn-is-error)
     set +e
-    FAKE_MODE="$mode" bash "$RUNNER" \
+    SPARK_TEST_SPARSE_PATH="$CASE_SPARSE_PATH" FAKE_MODE="$mode" bash "$RUNNER" \
         --evidence-root "$TMP_ROOT" \
         --sanitizer "$sanitizer" \
         --expected-sha "$SHA" \
@@ -794,13 +826,24 @@ expect_contains "$CASE_DIR/metadata.json" '"crash": true' "crash signal recorded
 run_case signature
 expect_status 1 "$CASE_STATUS" "sanitizer signature overrides exit zero"
 expect_contains "$CASE_DIR/metadata.json" '"classification": "sanitizer-finding"' "console sanitizer classification"
+run_case summary-signature
+expect_status 1 "$CASE_STATUS" "summary-only sanitizer signature overrides exit zero"
+run_case plain-sanitizer-prose
+expect_status 0 "$CASE_STATUS" "plain sanitizer prose is not a finding"
 run_case runtime
 expect_status 1 "$CASE_STATUS" "parseable private ASan runtime log overrides exit zero"
 expect_contains "$CASE_DIR/metadata.json" '"runtimeEvidence": true' "runtime evidence recorded"
+expect_contains "$CASE_DIR/metadata.json" '"sanitizerSignature": true' "runtime sanitizer signature is recorded"
+expect_contains "$CASE_DIR/metadata.json" '"sanitizerSignature": 0' "runtime signature scanner agrees"
 expect_contains "$CASE_DIR/metadata.json" '"sha256":' "runtime evidence content hash is recorded"
 expect_contains "$CASE_DIR/metadata.json" '"pid":' "runtime evidence filename provenance is recorded"
 run_case runtime-tsan tsan
 expect_status 1 "$CASE_STATUS" "parseable private TSan runtime log overrides exit zero"
+expect_contains "$CASE_DIR/metadata.json" '"sanitizerSignature": true' "TSan runtime signature is recorded"
+run_case runtime-msan-summary msan
+expect_status 1 "$CASE_STATUS" "summary-only private MSan runtime log overrides exit zero"
+expect_contains "$CASE_DIR/metadata.json" '"sanitizerSignature": true' "MSan summary signature is recorded"
+expect_contains "$CASE_DIR/metadata.json" '"sanitizerSignature": 0' "MSan summary scanner agrees"
 
 # Runtime evidence is bounded, fresh, regular, and parseable.
 for mode in empty-runtime bad-runtime arbitrary-runtime-name stale-runtime oversized-runtime many-runtime; do
@@ -923,6 +966,15 @@ else
     fail "report write-time cap"
 fi
 
+if [[ "$(uname -s)" =~ ^(MINGW|MSYS) ]]; then
+    skip "POSIX soft file-size limit lifting unavailable in Git Bash"
+else
+    run_case soft-limit-lift
+    expect_status 0 "$CASE_STATUS" "oversized sparse fixture may lift and restore the soft limit"
+    sparse_size="$(wc -c < "$CASE_SPARSE_PATH")"
+    [[ "$sparse_size" -eq 536870913 ]] && pass "soft-limit fixture matches the 512 MiB regression boundary" || fail "soft-limit fixture size"
+fi
+
 # Provenance, required policy, selector, and timeout controls are enforced.
 set +e
 GITHUB_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bash "$RUNNER" \
@@ -1029,6 +1081,25 @@ verify_published() {
 
 verify_published
 expect_status 0 "$PUBLISHED_STATUS" "published clean artifact is independently verified"
+set +e
+"$TEST_PYTHON" "$VERIFIER" verify-published \
+    --evidence-dir "$published_dir" \
+    --stats "$published_dir/test-stats-linux-asan.json" \
+    --sanitizer asan --lane linux-asan \
+    --expected-sha "$SHA" --run-id "$published_run" --run-attempt 2 \
+    --allow-prior-attempt \
+    --job build-linux-asan --minimum-tests 1 --timeout-seconds 10 >/dev/null 2>&1
+prior_attempt_status=$?
+"$TEST_PYTHON" "$VERIFIER" verify-published \
+    --evidence-dir "$published_dir" \
+    --stats "$published_dir/test-stats-linux-asan.json" \
+    --sanitizer asan --lane linux-asan \
+    --expected-sha "$SHA" --run-id "$published_run" --run-attempt 2 \
+    --job build-linux-asan --minimum-tests 1 --timeout-seconds 10 >/dev/null 2>&1
+strict_attempt_status=$?
+set -e
+expect_status 0 "$prior_attempt_status" "aggregate verifier accepts a prior successful attempt of the same exact run"
+expect_status 70 "$strict_attempt_status" "strict verifier rejects prior-attempt evidence without explicit recovery mode"
 rmdir "$published_dir/runtime"
 verify_published
 expect_status 0 "$PUBLISHED_STATUS" "published evidence tolerates dropped empty runtime directory"

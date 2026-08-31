@@ -369,6 +369,13 @@ struct TestOutput
             file.flush();
 #endif
     }
+
+    void Flush()
+    {
+        std::cout.flush();
+        if (hasFile)
+            file.flush();
+    }
 };
 
 // ============================================================================
@@ -724,6 +731,9 @@ int main(int argc, char** argv)
         }
 
         out.Print("[ RUN    ] " + g_currentTest + "\n");
+        // Preserve the active test name if a non-sanitizer lane hangs or the
+        // process terminates before the framework can write its final JUnit.
+        out.Flush();
 
         auto testStart = std::chrono::steady_clock::now();
 

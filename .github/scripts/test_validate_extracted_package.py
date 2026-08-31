@@ -53,6 +53,29 @@ class ArchiveMemberPreflightTests(unittest.TestCase):
                         MODULE.validate_archive(archive)
                     self.assertIn("Archive member preflight passed", output.getvalue())
 
+    def test_rejects_sibling_top_level_file_or_directory_in_archives(self) -> None:
+        fixtures = {
+            "sibling-file": (
+                ("SparkEngine/bin/engine", b"binary"),
+                ("rogue.txt", b"rogue"),
+            ),
+            "sibling-directory": (
+                ("SparkEngine/bin/engine", b"binary"),
+                ("Rogue/payload.txt", b"rogue"),
+            ),
+        }
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temporary:
+            root = Path(temporary)
+            for label, entries in fixtures.items():
+                archives = (root / f"{label}.zip", root / f"{label}.tar.gz")
+                self._write_zip(archives[0], entries)
+                self._write_tar_gz(archives[1], entries)
+                for archive in archives:
+                    with self.subTest(label=label, archive=archive.name), self.assertRaisesRegex(
+                        MODULE.ValidationError, "exactly one top-level package directory"
+                    ):
+                        MODULE.validate_archive(archive)
+
     def test_preflight_archive_cli_mode(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as temporary:
             archive = Path(temporary) / "package.zip"
@@ -227,17 +250,48 @@ class ExtractedPackageValidationTests(unittest.TestCase):
     def test_clean_package_and_matching_stage_pass(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as temporary:
             root = Path(temporary)
-            package = self._package(root)
+            package = self._package(root / "extracted")
             stage = root / "stage"
             (stage / "lib").mkdir(parents=True)
             (stage / "lib" / "SparkEngineLib.lib").write_bytes(b"library")
+            archive = root / "package.zip"
+            archive.write_bytes(b"archive")
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
-                MODULE.validate_package(package, stage, None)
+                MODULE.validate_package(package, stage, archive)
 
             self.assertIn("staged/extracted SHA-256 match", output.getvalue())
             self.assertIn("headroom below 2 GiB", output.getvalue())
+
+    def test_rejects_any_sibling_outside_selected_extracted_package(self) -> None:
+        for sibling_kind in ("file", "directory", "link-like"):
+            with self.subTest(sibling_kind=sibling_kind), tempfile.TemporaryDirectory(
+                dir=Path.cwd()
+            ) as temporary:
+                root = Path(temporary)
+                extraction_root = root / "extracted"
+                package = self._package(extraction_root)
+                sibling = extraction_root / "rogue"
+                if sibling_kind == "directory":
+                    sibling.mkdir()
+                else:
+                    sibling.write_text("rogue", encoding="utf-8")
+                archive = root / "package.zip"
+                archive.write_bytes(b"archive")
+
+                original_is_link_like = MODULE._is_link_like
+
+                def classify(path: Path) -> bool:
+                    return (
+                        sibling_kind == "link-like" and path == sibling
+                    ) or original_is_link_like(path)
+
+                with mock.patch.object(MODULE, "_is_link_like", side_effect=classify):
+                    with self.assertRaisesRegex(
+                        MODULE.ValidationError, "exactly one top-level package directory"
+                    ):
+                        MODULE.validate_package(package, None, archive)
 
     def test_rejects_template_build_and_runtime_debris(self) -> None:
         for relative in (

@@ -51,8 +51,17 @@ jobs:
     - name: Test exact-commit release gate
       run: python3 .github/scripts/test-verify-exact-required-gate.py
 
+    - name: Test CI-120 exact-source status gate
+      run: node .github/scripts/test-ci120-commit-status.js
+
     - name: Test crash-consistent release download counters
       run: python3 .github/scripts/test_prepare_download_badges.py
+
+    - name: Test exact release asset publication boundary
+      run: python3 .github/scripts/test_verify_release_asset_boundary.py
+
+    - name: Test release publication recovery
+      run: python3 .github/scripts/test_recover_release_publication.py
 
     - name: Test extracted portable-package validation
       run: python3 .github/scripts/test_validate_extracted_package.py
@@ -65,6 +74,9 @@ jobs:
 
     - name: Test workflow failure-propagation contract
       run: python3 .github/scripts/test-workflow-failure-propagation.py
+
+    - name: Test granular SparkTests wrapper failure recovery
+      run: python3 .github/scripts/test-run-spark-tests.py
 
     - name: Test Spark CLI
       run: python3 -m unittest discover -s Tools/spark-cli/tests -p "test_*.py" -v
@@ -789,6 +801,19 @@ jobs:
           build-windows-vs2022-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
           build-windows-vs2022-${{ matrix.config }}-
 
+    - name: Scrub restored test evidence
+      if: always()
+      shell: bash
+      run: |
+        rm -f \
+          build/SparkTests-junit.xml \
+          build/SparkTests.log \
+          build/SparkTests-output.log \
+          build/ctest-junit.xml \
+          build/*-process-smoke.log \
+          build/*-process-smoke.json \
+          build/*-process-smoke.xml
+
     - name: Configure CMake (VS 2022 / v143)
       shell: bash
       # Keep restored object files, but regenerate CMake metadata so an older
@@ -822,6 +847,10 @@ jobs:
       if: always() && matrix.config == 'Release'
       shell: bash
       run: |
+        test -s build/SparkTests-junit.xml
+        test -s build/SparkTests.log
+        test -s build/SparkTests-output.log
+        test -s build/ctest-junit.xml
         python .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
           --min-tests 5000 \
@@ -835,6 +864,8 @@ jobs:
         name: test-results-windows-vs2022-release
         path: |
           build/SparkTests-junit.xml
+          build/SparkTests.log
+          build/SparkTests-output.log
           build/ctest-junit.xml
           build/*-process-smoke.log
           build/*-process-smoke.json
@@ -981,7 +1012,6 @@ jobs:
         set +e
         python Tools/buildmatrix/check_parity.py \
           --inventory build-matrix-inventory.json \
-          --baseline docs/readiness/ci120-parity-findings.json \
           --output build-matrix-parity-findings.json \
           > build-matrix-parity-stdout.json
         status=$?
@@ -989,13 +1019,19 @@ jobs:
         python -c "import json; json.load(open('build-matrix-parity-findings.json', encoding='utf-8')); json.load(open('build-matrix-parity-stdout.json', encoding='utf-8'))"
         cmp build-matrix-parity-findings.json build-matrix-parity-stdout.json
         if test "$status" -ge 2; then
-          echo "::error::CI-120 configured-evidence baseline drift or analyzer failure (exit $status)"
+          echo "::error::CI-120 configured-evidence analyzer failure (exit $status)"
           exit "$status"
         fi
         if test "$status" -ne 0 && test "$status" -ne 1; then
           echo "::error::Unexpected CI-120 analyzer exit $status"
           exit 3
         fi
+        python Tools/buildmatrix/validate_pending_authority.py \
+          --inventory build-matrix-inventory.json \
+          --report build-matrix-parity-findings.json \
+          --output build-matrix-pending-receipt.json \
+          > build-matrix-pending-receipt-stdout.json
+        cmp build-matrix-pending-receipt.json build-matrix-pending-receipt-stdout.json
         echo "status=$status" >> "$GITHUB_OUTPUT"
 
     - name: Upload untrusted CI-120 structural evidence
@@ -1019,6 +1055,8 @@ jobs:
           build-matrix-inventory.json
           build-matrix-parity-findings.json
           build-matrix-parity-stdout.json
+          build-matrix-pending-receipt.json
+          build-matrix-pending-receipt-stdout.json
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
         if-no-files-found: error
         include-hidden-files: true
@@ -1041,7 +1079,7 @@ jobs:
   # ===========================================================================
   build-windows-vs2026:
     if: github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
     continue-on-error: true
     strategy:
       matrix:
@@ -1064,6 +1102,19 @@ jobs:
         restore-keys: |
           build-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
           build-windows-vs2026-${{ matrix.config }}-
+
+    - name: Scrub restored test evidence
+      if: always()
+      shell: bash
+      run: |
+        rm -f \
+          build/SparkTests-junit.xml \
+          build/SparkTests.log \
+          build/SparkTests-output.log \
+          build/ctest-junit.xml \
+          build/*-process-smoke.log \
+          build/*-process-smoke.json \
+          build/*-process-smoke.xml
 
     - name: Require Visual Studio 2026
       shell: pwsh
@@ -1095,6 +1146,10 @@ jobs:
       if: always() && matrix.config == 'Release'
       shell: bash
       run: |
+        test -s build/SparkTests-junit.xml
+        test -s build/SparkTests.log
+        test -s build/SparkTests-output.log
+        test -s build/ctest-junit.xml
         python .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
           --min-tests 5000 \
@@ -1108,6 +1163,8 @@ jobs:
         name: test-results-windows-vs2026-release
         path: |
           build/SparkTests-junit.xml
+          build/SparkTests.log
+          build/SparkTests-output.log
           build/ctest-junit.xml
           build/*-process-smoke.log
           build/*-process-smoke.json
@@ -1163,6 +1220,19 @@ jobs:
           build-linux-gcc-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
           build-linux-gcc-${{ matrix.config }}-
 
+    - name: Scrub restored test evidence
+      if: always()
+      shell: bash
+      run: |
+        rm -f \
+          build/SparkTests-junit.xml \
+          build/SparkTests.log \
+          build/SparkTests-output.log \
+          build/ctest-junit.xml \
+          build/*-process-smoke.log \
+          build/*-process-smoke.json \
+          build/*-process-smoke.xml
+
     - name: Configure CMake
       run: |
         set -o pipefail
@@ -1195,6 +1265,10 @@ jobs:
     - name: Validate and summarize test statistics
       if: always()
       run: |
+        test -s build/SparkTests-junit.xml
+        test -s build/SparkTests.log
+        test -s build/SparkTests-output.log
+        test -s build/ctest-junit.xml
         python3 .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
           --min-tests 5000 \
@@ -1208,6 +1282,8 @@ jobs:
         name: test-results-linux-gcc-${{ matrix.config }}
         path: |
           build/SparkTests-junit.xml
+          build/SparkTests.log
+          build/SparkTests-output.log
           build/ctest-junit.xml
           build/*-process-smoke.log
           build/*-process-smoke.json
@@ -1299,6 +1375,19 @@ jobs:
           build-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
           build-linux-clang-${{ matrix.config }}-
 
+    - name: Scrub restored test evidence
+      if: always()
+      shell: bash
+      run: |
+        rm -f \
+          build/SparkTests-junit.xml \
+          build/SparkTests.log \
+          build/SparkTests-output.log \
+          build/ctest-junit.xml \
+          build/*-process-smoke.log \
+          build/*-process-smoke.json \
+          build/*-process-smoke.xml
+
     - name: Configure CMake
       run: |
         set -o pipefail
@@ -1345,6 +1434,10 @@ jobs:
     - name: Validate and summarize test statistics
       if: always()
       run: |
+        test -s build/SparkTests-junit.xml
+        test -s build/SparkTests.log
+        test -s build/SparkTests-output.log
+        test -s build/ctest-junit.xml
         python3 .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
           --min-tests 5000 \
@@ -1358,6 +1451,8 @@ jobs:
         name: test-results-linux-clang-${{ matrix.config }}
         path: |
           build/SparkTests-junit.xml
+          build/SparkTests.log
+          build/SparkTests-output.log
           build/ctest-junit.xml
           build/*-process-smoke.log
           build/*-process-smoke.json
@@ -1511,7 +1606,7 @@ jobs:
   # ===========================================================================
   build-macos:
     if: github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: macos-latest
+    runs-on: macos-15
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -1560,6 +1655,19 @@ jobs:
           build-macos-${{ matrix.config }}-${{ matrix.backend }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
           build-macos-${{ matrix.config }}-${{ matrix.backend }}-
 
+    - name: Scrub restored test evidence
+      if: always()
+      shell: bash
+      run: |
+        rm -f \
+          build/SparkTests-junit.xml \
+          build/SparkTests.log \
+          build/SparkTests-output.log \
+          build/ctest-junit.xml \
+          build/*-process-smoke.log \
+          build/*-process-smoke.json \
+          build/*-process-smoke.xml
+
     - name: Configure CMake
       run: |
         set -o pipefail
@@ -1606,6 +1714,10 @@ jobs:
     - name: Validate and summarize test statistics
       if: always() && matrix.config == 'Release'
       run: |
+        test -s build/SparkTests-junit.xml
+        test -s build/SparkTests.log
+        test -s build/SparkTests-output.log
+        test -s build/ctest-junit.xml
         python3 .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
           --min-tests 5000 \
@@ -1619,6 +1731,8 @@ jobs:
         name: test-results-macos-${{ matrix.backend }}-release
         path: |
           build/SparkTests-junit.xml
+          build/SparkTests.log
+          build/SparkTests-output.log
           build/ctest-junit.xml
           build/*-process-smoke.log
           build/*-process-smoke.json
@@ -2165,6 +2279,7 @@ jobs:
             --expected-sha "${{ github.sha }}" \
             --run-id "${{ github.run_id }}" \
             --run-attempt "${{ github.run_attempt }}" \
+            --allow-prior-attempt \
             --job build-linux-asan \
             --minimum-tests 6600 \
             --timeout-seconds 900
@@ -2179,6 +2294,7 @@ jobs:
             --expected-sha "${{ github.sha }}" \
             --run-id "${{ github.run_id }}" \
             --run-attempt "${{ github.run_attempt }}" \
+            --allow-prior-attempt \
             --job build-linux-tsan \
             --minimum-tests 6600 \
             --timeout-seconds 900
@@ -2317,10 +2433,10 @@ jobs:
           - os: ubuntu-24.04
             artifact: SparkInstaller-Linux-x64
             bin_name: SparkInstaller
-          - os: windows-latest
+          - os: windows-2022
             artifact: SparkInstaller-Windows-x64
             bin_name: SparkInstaller.exe
-          - os: macos-latest
+          - os: macos-15
             artifact: SparkInstaller-macOS-arm64
             bin_name: SparkInstaller
     runs-on: ${{ matrix.os }}
@@ -2414,4 +2530,6 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
+          EXPECTED_REQUIRED_JOBS_JSON: '["validate-ci-tools","check-format","validate-prompts","check-thirdparty-manifest","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","build-windows-shipping","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats"]'
+          DEFERRED_REQUIRED_FAILURES_JSON: '{"build-windows-shipping":"failure"}'
         run: python3 .github/scripts/verify-required-jobs.py

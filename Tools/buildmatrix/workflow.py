@@ -874,6 +874,7 @@ def parse_ci120_invocations(
         "tools/buildmatrix/capture_provenance.py": "producer",
         "tools/buildmatrix/inventory.py": "inventory",
         "tools/buildmatrix/check_parity.py": "parity",
+        "tools/buildmatrix/validate_pending_authority.py": "pending-authority",
     }
     for line in logical_shell_lines(script, shell):
         resolved_line = _substitute_env(_substitute_matrix(line, combination), env)
@@ -911,6 +912,8 @@ def parse_ci120_invocations(
                         "codemodels": codemodels,
                         "inventory": _ci120_option(tool_args, "--inventory"),
                         "baseline": _ci120_option(tool_args, "--baseline"),
+                        "report": _ci120_option(tool_args, "--report"),
+                        "output": _ci120_option(tool_args, "--output"),
                         "build": "--build" in tool_args,
                         "command": resolved_line,
                     }

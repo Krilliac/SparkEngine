@@ -43,6 +43,8 @@ function fixture() {
         conclusion: 'success',
         head_sha: SOURCE_SHA,
         head_branch: 'hostile-sarif',
+        run_started_at: '2026-08-01T01:00:00Z',
+        updated_at: '2026-08-01T01:10:00Z',
         repository,
         head_repository: headRepository,
         pull_requests: [pullReference]
@@ -55,10 +57,16 @@ function fixture() {
     };
     const artifact = {
         id: ARTIFACT_ID,
+        node_id: 'artifact-node-5005',
         name: 'results.sarif',
         size_in_bytes: 4096,
         expired: false,
         digest: DIGEST,
+        created_at: '2026-08-01T01:08:00Z',
+        updated_at: '2026-08-01T01:08:01Z',
+        expires_at: '2026-08-02T01:08:01Z',
+        url: `https://api.github.com/repos/Krilliac/SparkEngine/actions/artifacts/${ARTIFACT_ID}`,
+        archive_download_url: `https://api.github.com/repos/Krilliac/SparkEngine/actions/artifacts/${ARTIFACT_ID}/zip`,
         workflow_run: {
             id: RUN_ID,
             repository_id: REPOSITORY_ID,
@@ -67,6 +75,28 @@ function fixture() {
             head_sha: SOURCE_SHA
         }
     };
+    const job = {
+        id: 6006,
+        run_id: RUN_ID,
+        run_attempt: 1,
+        head_sha: SOURCE_SHA,
+        workflow_name: 'Codacy Security Scan',
+        head_branch: run.head_branch,
+        run_url: `https://api.github.com/repos/Krilliac/SparkEngine/actions/runs/${RUN_ID}`,
+        name: 'Codacy Security Scan',
+        status: 'completed',
+        conclusion: 'success',
+        started_at: '2026-08-01T01:01:00Z',
+        completed_at: '2026-08-01T01:09:00Z',
+        steps: [{
+            number: 5,
+            name: 'Publish normalized SARIF artifact',
+            status: 'completed',
+            conclusion: 'success',
+            started_at: '2026-08-01T01:07:00Z',
+            completed_at: '2026-08-01T01:08:30Z'
+        }]
+    };
     return {
         repository,
         run,
@@ -74,6 +104,7 @@ function fixture() {
         pull,
         pulls: [pull],
         artifacts: [artifact],
+        jobs: [job],
         runs: [run],
         defaultCommitSha: TRUSTED_SHA,
         sourceWorkflowBlob: SOURCE_WORKFLOW_BLOB,
@@ -104,7 +135,7 @@ async function withEnvironment(values, action) {
 
 function harness(data) {
     const state = clone(data);
-    const observed = { outputs: {}, failed: [], info: [], getContent: [] };
+    const observed = { outputs: {}, failed: [], info: [], getContent: [], listRunRequests: [] };
     const github = {
         rest: {
             repos: {
@@ -122,19 +153,61 @@ function harness(data) {
             },
             actions: {
                 async getWorkflowRun() { return { data: clone(state.run) }; },
-                async listWorkflowRuns() {
-                    return { data: { workflow_runs: clone(state.runs) }, headers: {} };
+                async listWorkflowRuns(request) {
+                    observed.listRunRequests.push(clone(request));
+                    const responseIndex = observed.listRunRequests.length - 1;
+                    const staged = state.runInventoryResponses;
+                    const inventory = Array.isArray(staged) && staged.length
+                        ? staged[Math.min(responseIndex, staged.length - 1)] : state.runs;
+                    const runs = request.event
+                        ? inventory.filter(run => run.event === request.event) : inventory;
+                    return { data: {
+                        total_count: state.runsTotalCount ?? runs.length,
+                        workflow_runs: clone(runs)
+                    }, headers: state.runsNextLink ? { link: '<next>; rel="next"' } : {} };
                 },
                 async listWorkflowRunArtifacts() {
-                    return { data: { artifacts: clone(state.artifacts) }, headers: {} };
+                    return { data: {
+                        total_count: state.artifactsTotalCount ?? state.artifacts.length,
+                        artifacts: clone(state.artifacts)
+                    }, headers: {} };
+                },
+                async listJobsForWorkflowRunAttempt() {
+                    return { data: {
+                        total_count: state.jobsTotalCount ?? state.jobs.length,
+                        jobs: clone(state.jobs)
+                    }, headers: {} };
                 }
             },
             pulls: {
                 async get() { return { data: clone(state.pull) }; },
                 async list() { return { data: clone(state.pulls), headers: {} }; }
             }
+        },
+        paginate: {
+            async *iterator(method, request) {
+                const response = await method(request);
+                if (Array.isArray(response.data)) {
+                    yield response;
+                    return;
+                }
+                const field = Array.isArray(response.data.workflow_runs) ? 'workflow_runs' :
+                    Array.isArray(response.data.artifacts) ? 'artifacts' : 'jobs';
+                if (state.normalizedPages?.[field]) {
+                    for (const page of state.normalizedPages[field]) {
+                        const normalizedPage = clone(page.items);
+                        normalizedPage.total_count = page.total_count;
+                        yield { ...response, data: normalizedPage };
+                    }
+                    return;
+                }
+                const normalized = clone(response.data[field]);
+                normalized.total_count = response.data.total_count;
+                yield { ...response, data: normalized };
+            }
         }
     };
+    if (state.useDirectListFallback) delete github.paginate;
     const core = {
         setOutput(name, value) { observed.outputs[name] = String(value); },
         setFailed(message) { observed.failed.push(message); },
@@ -171,10 +244,76 @@ async function main() {
         assert(clean.runtime.observed.getContent.some(request =>
             request.owner === 'contributor' && request.repo === 'SparkEngine' &&
             request.path === '.github/workflows/codacy.yml' && request.ref === SOURCE_SHA));
+        for (const [shape, useDirectListFallback] of [['normalized', false], ['direct', true]]) {
+            for (const inventory of ['jobs', 'runs', 'artifacts']) {
+                const truncated = fixture();
+                truncated.useDirectListFallback = useDirectListFallback;
+                truncated[`${inventory}TotalCount`] = truncated[inventory].length + 1;
+                const rejected = await run(root, truncated);
+                assert.strictEqual(rejected.result.authorized, false,
+                    `${shape} truncated ${inventory} inventory must fail preflight closed`);
+                assert.strictEqual(rejected.runtime.observed.outputs['artifact-id'], '',
+                    `${shape} truncated ${inventory} inventory must expose no downloadable artifact`);
+                assert.strictEqual(rejected.runtime.observed.outputs['upload-sha'], '',
+                    `${shape} truncated ${inventory} inventory must expose no privileged upload target`);
+                assert(rejected.runtime.observed.failed.some(message => message.includes('total_count')),
+                    `${shape} truncated ${inventory} inventory must report exact-count failure`);
+            }
+        }
+
+        assert.strictEqual(clean.runtime.observed.listRunRequests[0].event, undefined,
+            'same-SHA freshness must span every source event type');
+
+        const newerCrossEvent = fixture();
+        newerCrossEvent.runs.push({
+            ...clone(newerCrossEvent.run), id: RUN_ID + 1, run_number: 51, event: 'schedule'
+        });
+        assert.strictEqual((await run(root, newerCrossEvent)).result.authorized, false,
+            'a newer same-SHA run from another source event must suppress stale authorization');
+
+        const changedPageCount = fixture();
+        changedPageCount.normalizedPages = { workflow_runs: [
+            { total_count: 2, items: [changedPageCount.run] },
+            { total_count: 1, items: [{ ...clone(changedPageCount.run), id: RUN_ID + 1, run_number: 51 }] }
+        ] };
+        assert.strictEqual((await run(root, changedPageCount)).result.authorized, false,
+            'Octokit-normalized total_count drift between pages must fail closed');
+
+        const noProgress = fixture();
+        noProgress.normalizedPages = { workflow_runs: [{ total_count: 1, items: [] }] };
+        assert.strictEqual((await run(root, noProgress)).result.authorized, false,
+            'Octokit-normalized pagination must reject an incomplete empty page');
+
+        const linkedDirect = fixture();
+        linkedDirect.useDirectListFallback = true;
+        linkedDirect.runsNextLink = true;
+        assert.strictEqual((await run(root, linkedDirect)).result.authorized, false,
+            'direct single-page authorization must reject a next-page link');
+
+        const mismatchedRunInventory = fixture();
+        mismatchedRunInventory.runs[0].path = '.github/workflows/attacker.yml';
+        assert.strictEqual((await run(root, mismatchedRunInventory)).result.authorized, false,
+            'the selected inventory run must bind the exact trusted source workflow');
+
+        const mismatchedJob = fixture();
+        mismatchedJob.jobs[0].run_attempt = 2;
+        assert.strictEqual((await run(root, mismatchedJob)).result.authorized, false,
+            'the source job must bind the exact run attempt');
+
+        const replayedArtifact = fixture();
+        replayedArtifact.artifacts[0].created_at = '2026-08-01T01:00:30Z';
+        replayedArtifact.artifacts[0].updated_at = '2026-08-01T01:00:31Z';
+        assert.strictEqual((await run(root, replayedArtifact)).result.authorized, false,
+            'an artifact created before the exact-attempt upload step must fail closed');
+
+        const malformedArtifact = fixture();
+        malformedArtifact.artifacts[0].node_id = '';
+        assert.strictEqual((await run(root, malformedArtifact)).result.authorized, false,
+            'artifact immutable identity fields must be non-empty and exact');
 
         const finalRuntime = harness(cleanData);
         const finalEventPath = writeEvent(root, cleanData.event);
-        const final = await withEnvironment({
+        const finalValues = {
             REPORT_MODE: 'trusted-final',
             REPORTER_TEST_OUTCOME: 'success',
             TRUSTED_CHECKOUT_SHA: TRUSTED_SHA,
@@ -186,8 +325,51 @@ async function main() {
             PREFLIGHT_UPLOAD_SHA: SOURCE_SHA,
             DOWNLOAD_OUTCOME: 'success',
             SARIF_VALIDATION_OUTCOME: 'success'
-        }, () => authorize(finalRuntime));
+        };
+        const final = await withEnvironment(finalValues, () => authorize(finalRuntime));
         assert.strictEqual(final.authorized, true);
+
+        const temporalRace = fixture();
+        const newerAtFinalBoundary = {
+            ...clone(temporalRace.run), id: RUN_ID + 200, run_number: 51
+        };
+        temporalRace.runInventoryResponses = [
+            [clone(temporalRace.run)],
+            [newerAtFinalBoundary, clone(temporalRace.run)]
+        ];
+        const temporalRuntime = harness(temporalRace);
+        const temporalValues = {
+            ...finalValues,
+            WORKFLOW_RUN_EVENT_PATH: writeEvent(root, temporalRace.event)
+        };
+        const rejectedTemporalRace = await withEnvironment(
+            temporalValues, () => authorize(temporalRuntime));
+        assert.strictEqual(rejectedTemporalRace.authorized, false,
+            'a newer same-SHA execution at the final authorization boundary must fail closed');
+        assert.strictEqual(temporalRuntime.observed.outputs['authorized'], 'false');
+        assert.strictEqual(temporalRuntime.observed.outputs['artifact-id'], '');
+        assert.strictEqual(temporalRuntime.observed.outputs['upload-sha'], '');
+        assert.strictEqual(temporalRuntime.observed.listRunRequests.length, 2,
+            'final authorization must perform an immediate second same-SHA inventory');
+
+        for (const [shape, useDirectListFallback] of [['normalized', false], ['direct', true]]) {
+            for (const inventory of ['jobs', 'runs', 'artifacts']) {
+                const truncated = fixture();
+                truncated.useDirectListFallback = useDirectListFallback;
+                truncated[`${inventory}TotalCount`] = truncated[inventory].length + 1;
+                const runtime = harness(truncated);
+                const values = {
+                    ...finalValues,
+                    WORKFLOW_RUN_EVENT_PATH: writeEvent(root, truncated.event)
+                };
+                const rejected = await withEnvironment(values, () => authorize(runtime));
+                assert.strictEqual(rejected.authorized, false,
+                    `${shape} truncated ${inventory} inventory must fail final authorization closed`);
+                assert.strictEqual(runtime.observed.outputs['authorized'], 'false');
+                assert.strictEqual(runtime.observed.outputs['artifact-id'], '');
+                assert.strictEqual(runtime.observed.outputs['upload-sha'], '');
+            }
+        }
 
         const sourceDrift = fixture();
         sourceDrift.sourceWorkflowBlob = '7'.repeat(40);
@@ -219,6 +401,7 @@ async function main() {
         push.run.pull_requests = [];
         push.event.workflow_run = clone(push.run);
         push.runs = [push.run];
+        push.jobs[0].head_branch = 'Working';
         push.artifacts[0].workflow_run.head_repository_id = REPOSITORY_ID;
         push.artifacts[0].workflow_run.head_branch = 'Working';
         const pushResult = await run(root, push);

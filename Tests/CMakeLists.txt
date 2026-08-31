@@ -1109,6 +1109,7 @@ add_test(
         -DSPARK_TEST_EXECUTABLE=$<TARGET_FILE:SparkTests>
         -DSPARK_JUNIT_REPORT=${CMAKE_BINARY_DIR}/SparkTests-junit.xml
         -DSPARK_TEST_LOG=${CMAKE_BINARY_DIR}/SparkTests.log
+        -DSPARK_TEST_OUTPUT=${CMAKE_BINARY_DIR}/SparkTests-output.log
         -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
 )
 set_tests_properties(SparkEngineTests PROPERTIES TIMEOUT 210)
@@ -1203,6 +1204,13 @@ set_tests_properties(SparkPackageModuleSidecarValidatorTests PROPERTIES
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME SparkRunSparkTestsHarness
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test-run-spark-tests.py)
+    set_tests_properties(SparkRunSparkTestsHarness PROPERTIES
+        LABELS "ci;test-evidence;unit"
+        TIMEOUT 30)
+
     add_test(
         NAME SparkNetworkBoundaryStatic
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/check_network_boundary.py)

@@ -19,6 +19,7 @@
 #include <bit>
 #include <cerrno>
 #include <charconv>
+#include <cstddef>
 
 namespace Spark::Gateway
 {
@@ -93,6 +94,21 @@ namespace Spark::Gateway
         }
 
 #ifdef _WIN32
+        bool BoundedAllowedAceTrustee(const ACCESS_ALLOWED_ACE* ace, PSID& trustee)
+        {
+            constexpr size_t sidOffset = offsetof(ACCESS_ALLOWED_ACE, SidStart);
+            const size_t aceBytes = ace->Header.AceSize;
+            const size_t minimumSidBytes = GetSidLengthRequired(0);
+            if (aceBytes < sidOffset + minimumSidBytes)
+                return false;
+            const auto* sid = reinterpret_cast<const SID*>(&ace->SidStart);
+            const size_t sidBytes = GetSidLengthRequired(sid->SubAuthorityCount);
+            if (sidBytes > aceBytes - sidOffset)
+                return false;
+            trustee = const_cast<SID*>(sid);
+            return IsValidSid(trustee) != FALSE && GetLengthSid(trustee) == sidBytes;
+        }
+
         bool OwnerMatchesCurrentProcessUser(PSID owner, std::string& error)
         {
             HANDLE token = nullptr;
@@ -144,15 +160,29 @@ namespace Spark::Gateway
                     if (descriptor)
                         LocalFree(descriptor);
                 });
-            if (status != ERROR_SUCCESS || !owner || !IsValidSid(owner) || !dacl)
+            if (status != ERROR_SUCCESS || !owner || !IsValidSid(owner) || !dacl || !IsValidAcl(dacl))
             {
                 error = "Cannot inspect gateway key ACL";
+                return false;
+            }
+            SECURITY_DESCRIPTOR_CONTROL control{};
+            DWORD revision = 0;
+            if (!GetSecurityDescriptorControl(descriptor, &control, &revision) ||
+                (control & (SE_DACL_PRESENT | SE_DACL_PROTECTED)) !=
+                    (SE_DACL_PRESENT | SE_DACL_PROTECTED))
+            {
+                error = "Gateway key ACL must be protected from inheritance";
                 return false;
             }
             if (!OwnerMatchesCurrentProcessUser(owner, error))
                 return false;
             ACL_SIZE_INFORMATION information{};
             bool privateAcl = GetAclInformation(dacl, &information, sizeof(information), AclSizeInformation) != FALSE;
+            bool ownerAllowAce = false;
+            DWORD ownerAllowedMask = 0;
+            GENERIC_MAPPING fileMapping{FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE, FILE_ALL_ACCESS};
+            if (privateAcl && information.AceCount == 0)
+                privateAcl = false;
             for (DWORD index = 0; privateAcl && index < information.AceCount; ++index)
             {
                 void* rawAce = nullptr;
@@ -162,6 +192,14 @@ namespace Spark::Gateway
                     break;
                 }
                 const auto* header = static_cast<ACE_HEADER*>(rawAce);
+                constexpr BYTE inheritanceFlags = INHERITED_ACE | INHERIT_ONLY_ACE | OBJECT_INHERIT_ACE |
+                                                  CONTAINER_INHERIT_ACE | NO_PROPAGATE_INHERIT_ACE;
+                if (header->AceSize < sizeof(ACCESS_ALLOWED_ACE) ||
+                    (header->AceFlags & inheritanceFlags) != 0)
+                {
+                    privateAcl = false;
+                    break;
+                }
                 if (header->AceType == ACCESS_DENIED_ACE_TYPE)
                     continue;
                 if (header->AceType != ACCESS_ALLOWED_ACE_TYPE)
@@ -170,10 +208,19 @@ namespace Spark::Gateway
                     break;
                 }
                 const auto* ace = static_cast<ACCESS_ALLOWED_ACE*>(rawAce);
-                const PSID trustee = const_cast<DWORD*>(&ace->SidStart);
-                if (!EqualSid(owner, trustee))
+                PSID trustee = nullptr;
+                if (!BoundedAllowedAceTrustee(ace, trustee) || !EqualSid(owner, trustee))
                     privateAcl = false;
+                else
+                {
+                    ownerAllowAce = true;
+                    DWORD mappedMask = ace->Mask;
+                    MapGenericMask(&mappedMask, &fileMapping);
+                    ownerAllowedMask |= mappedMask;
+                }
             }
+            if (privateAcl && (!ownerAllowAce || (ownerAllowedMask & FILE_GENERIC_READ) != FILE_GENERIC_READ))
+                privateAcl = false;
             if (!privateAcl)
                 error = "Gateway key ACL must grant read access only to its owner";
             return privateAcl;

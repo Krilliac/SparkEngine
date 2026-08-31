@@ -65,6 +65,9 @@ if(INSTALLER_GUI_AVAILABLE)
 endif()
 
 add_executable(SparkInstaller ${INSTALLER_SOURCES})
+target_compile_definitions(SparkInstaller PRIVATE
+    SPARK_INSTALLER_VERSION=\"${PROJECT_VERSION}\"
+)
 
 spark_target_windows_version_info(SparkInstaller)
 
@@ -141,4 +144,47 @@ if(SPARKINSTALLER_BUILD_TESTS)
     endif()
     add_test(NAME SparkInstallerGitTests COMMAND SparkInstallerGitTests)
     set_tests_properties(SparkInstallerGitTests PROPERTIES TIMEOUT 15)
+    if(WIN32)
+        set(_sparkinstaller_platform "Windows")
+    elseif(APPLE)
+        set(_sparkinstaller_platform "macOS")
+    elseif(UNIX)
+        set(_sparkinstaller_platform "Linux")
+    else()
+        message(FATAL_ERROR "SparkInstaller version test has no platform identity")
+    endif()
+    set(_sparkinstaller_version_test_script
+        "${CMAKE_CURRENT_BINARY_DIR}/VerifySparkInstallerVersion.cmake")
+    file(GENERATE OUTPUT "${_sparkinstaller_version_test_script}" CONTENT [=[
+foreach(_spark_required IN ITEMS
+        SPARK_VERSION_EXECUTABLE SPARK_EXPECTED_VERSION_OUTPUT)
+    if(NOT DEFINED ${_spark_required} OR "${${_spark_required}}" STREQUAL "")
+        message(FATAL_ERROR "${_spark_required} is required")
+    endif()
+endforeach()
+execute_process(
+    COMMAND "${SPARK_VERSION_EXECUTABLE}" --version
+    RESULT_VARIABLE _spark_version_result
+    OUTPUT_VARIABLE _spark_version_output
+    ERROR_VARIABLE _spark_version_error)
+if(NOT _spark_version_result EQUAL 0)
+    message(FATAL_ERROR
+        "Version command failed (${_spark_version_result}): ${_spark_version_error}")
+endif()
+string(REPLACE "\r\n" "\n" _spark_version_output "${_spark_version_output}")
+if(NOT _spark_version_output STREQUAL "${SPARK_EXPECTED_VERSION_OUTPUT}\n")
+    message(FATAL_ERROR
+        "Version output mismatch:\n"
+        "  expected: '${SPARK_EXPECTED_VERSION_OUTPUT}\\n'\n"
+        "  actual: '${_spark_version_output}'")
+endif()
+]=])
+    add_test(NAME SparkInstallerVersion
+        COMMAND "${CMAKE_COMMAND}"
+            "-DSPARK_VERSION_EXECUTABLE=$<TARGET_FILE:SparkInstaller>"
+            "-DSPARK_EXPECTED_VERSION_OUTPUT=SparkInstaller ${PROJECT_VERSION} (${_sparkinstaller_platform})"
+            -P "${_sparkinstaller_version_test_script}")
+    set_tests_properties(SparkInstallerVersion PROPERTIES TIMEOUT 15)
+    unset(_sparkinstaller_version_test_script)
+    unset(_sparkinstaller_platform)
 endif()

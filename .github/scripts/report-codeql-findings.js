@@ -11,11 +11,23 @@ const path = require('path');
 const COMMENT_MARKER = '<!-- spark-codeql-report -->';
 const SOURCE_WORKFLOW_NAME = 'CodeQL Advanced';
 const SOURCE_WORKFLOW_PATH = '.github/workflows/codeql.yml';
-const ARTIFACT_FILES = Object.freeze({
-    actions: 'actions.sarif',
-    'c-cpp': 'cpp.sarif',
-    python: 'python.sarif'
+const TRUSTED_STATUS_CONTEXT = 'CodeQL Trusted / Exact Source';
+const TRUSTED_STATUS_EVENTS = Object.freeze(['pull_request', 'push', 'workflow_dispatch']);
+const TRUSTED_STATUS_STATES = Object.freeze(['pending', 'success', 'failure']);
+const MAX_FINALIZER_SUMMARY_BYTES = 2 * 1024 * 1024;
+const SUPPORTED_LANGUAGES = Object.freeze({ actions: true, 'c-cpp': true, python: true });
+const SOURCE_JOB_NAMES = Object.freeze({
+    actions: 'Analyze (actions)',
+    'c-cpp': 'Analyze (c-cpp)',
+    python: 'Analyze (python)'
 });
+const SOURCE_REQUIRED_STEPS = Object.freeze([
+    'Checkout repository',
+    'Initialize CodeQL',
+    'Perform CodeQL Analysis',
+    'Bind raw CodeQL SARIF to exact source attempt',
+    'Upload raw CodeQL SARIF'
+]);
 const SCHEMA_VERSION = 2;
 const LANGUAGE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9+._-]*$/;
 const SHA_PATTERN = /^[0-9a-f]{40}$/i;
@@ -33,6 +45,7 @@ const MAX_NOTIFICATIONS_PER_RUN = 10000;
 const MAX_TOOL_EXTENSIONS_PER_RUN = 100;
 const MAX_NOTIFICATION_DESCRIPTORS_PER_RUN = 10000;
 const MAX_ARTIFACTS = 100;
+const MAX_SOURCE_JOBS = 20;
 const MAX_SAME_COMMIT_RUNS = 1000;
 const MAX_PULL_REQUEST_CANDIDATES = 100;
 const MAX_COMMENT_PAGES = 5;
@@ -92,7 +105,7 @@ function parseExpectedLanguages() {
     }
     if (!Array.isArray(parsed) || parsed.length === 0 ||
         parsed.some(language => typeof language !== 'string' || !LANGUAGE_PATTERN.test(language) ||
-            !Object.hasOwn(ARTIFACT_FILES, language))) {
+            !Object.hasOwn(SUPPORTED_LANGUAGES, language))) {
         throw new Error('EXPECTED_LANGUAGES must be a non-empty JSON array of supported safe language names.');
     }
     if (new Set(parsed).size !== parsed.length) {
@@ -112,25 +125,62 @@ function responseItems(response, field, allowNormalizedRootArray = false) {
     return value;
 }
 
-async function paginateBounded(github, method, request, field, maxItems, label) {
+async function paginateBounded(
+    github, method, request, field, maxItems, label, requireExactTotalCount = false
+) {
     const perPage = Math.min(100, maxItems);
+    const maxPages = Math.ceil(maxItems / perPage);
     const items = [];
-
-    if (typeof github.paginate?.iterator === 'function') {
-        for await (const response of github.paginate.iterator(method, { ...request, per_page: perPage })) {
-            const page = responseItems(response, field, true);
-            if (items.length + page.length > maxItems) throw new Error(`${label} exceeds the ${maxItems}-item limit`);
-            items.push(...page);
+    let exactTotalCount = null;
+    const observeTotalCount = response => {
+        if (!requireExactTotalCount) return;
+        const totalCount = response?.data?.total_count;
+        if (!Number.isSafeInteger(totalCount) || totalCount < 0 || totalCount > maxItems) {
+            throw new Error(`${label} total_count is invalid or exceeds the ${maxItems}-item limit`);
+        }
+        if (exactTotalCount === null) exactTotalCount = totalCount;
+        else if (exactTotalCount !== totalCount) {
+            throw new Error(`${label} total_count changed between API pages`);
+        }
+    };
+    const exactItems = () => {
+        if (requireExactTotalCount && exactTotalCount !== items.length) {
+            throw new Error(
+                `${label} total_count ${exactTotalCount} does not match ${items.length} returned item(s)`
+            );
         }
         return items;
+    };
+
+    if (typeof github.paginate?.iterator === 'function') {
+        let pageCount = 0;
+        for await (const response of github.paginate.iterator(method, { ...request, per_page: perPage })) {
+            pageCount += 1;
+            if (pageCount > maxPages) {
+                throw new Error(`${label} pagination exceeded its ${maxPages}-page bound`);
+            }
+            const page = responseItems(response, field, true);
+            observeTotalCount(response);
+            if (page.length === 0 && (pageCount > 1 ||
+                requireExactTotalCount && items.length < exactTotalCount)) {
+                throw new Error(`${label} pagination made no progress before completion`);
+            }
+            if (items.length + page.length > maxItems ||
+                requireExactTotalCount && items.length + page.length > exactTotalCount) {
+                throw new Error(`${label} exceeds its declared or ${maxItems}-item limit`);
+            }
+            items.push(...page);
+        }
+        return exactItems();
     }
 
     for (let pageNumber = 1; items.length < maxItems; pageNumber += 1) {
         const response = await method({ ...request, per_page: perPage, page: pageNumber });
         const page = responseItems(response, field);
+        observeTotalCount(response);
         if (items.length + page.length > maxItems) throw new Error(`${label} exceeds the ${maxItems}-item limit`);
         items.push(...page);
-        if (page.length < perPage || !response?.headers?.link?.includes('rel="next"')) return items;
+        if (page.length < perPage || !response?.headers?.link?.includes('rel="next"')) return exactItems();
     }
     throw new Error(`${label} exceeds the ${maxItems}-item limit`);
 }
@@ -143,9 +193,15 @@ function artifactLabel(value) {
     return typeof value === 'string' && value ? value : '<invalid-artifact-name>';
 }
 
+function exactAttemptArtifactName(language, attempt) {
+    if (!Object.hasOwn(SUPPORTED_LANGUAGES, language) ||
+        !Number.isSafeInteger(attempt) || attempt < 1) return null;
+    return `codeql-${language}-attempt-${attempt}.sarif`;
+}
+
 function artifactManifest(inspection) {
     return inspection.expectedLanguages.map(language => {
-        const name = ARTIFACT_FILES[language];
+        const name = exactAttemptArtifactName(language, inspection.run?.run_attempt);
         const artifact = inspection.artifacts.find(candidate => candidate?.name === name);
         return {
             language,
@@ -243,7 +299,7 @@ function finalizeInspection(values) {
     return inspection;
 }
 
-async function inspectSourceRun({ github, context }) {
+async function inspectSourceRun({ github, context }, options = {}) {
     const owner = context.repo.owner;
     const repo = context.repo.repo;
     const identityErrors = [];
@@ -253,6 +309,7 @@ async function inspectSourceRun({ github, context }) {
     let eventRun = null;
     let run = null;
     let repository = null;
+    let sourceJobs = [];
     let artifacts = [];
     let expectedLanguages = [];
     let pullRequest = { number: null, sourceHead: null };
@@ -267,8 +324,11 @@ async function inspectSourceRun({ github, context }) {
         identityErrors.push(`Could not read workflow_run event: ${error.message}`);
     }
 
+    const allowInProgress = options.allowInProgress === true;
     if (event) {
-        if (event.action !== 'completed') identityErrors.push(`Unexpected workflow_run action '${event.action || 'unknown'}'.`);
+        if (event.action !== 'completed' && !(allowInProgress && event.action === 'in_progress')) {
+            identityErrors.push(`Unexpected workflow_run action '${event.action || 'unknown'}'.`);
+        }
         validateRepository(event.repository, owner, repo, null, 'Event repository', identityErrors);
     }
     if (!isObject(eventRun) || !Number.isInteger(eventRun.id) || eventRun.id < 1) {
@@ -280,7 +340,10 @@ async function inspectSourceRun({ github, context }) {
         if (eventRun.name !== SOURCE_WORKFLOW_NAME) identityErrors.push(`Unexpected source workflow name '${eventRun.name || 'unknown'}'.`);
         if (workflowPath(eventRun.path) !== SOURCE_WORKFLOW_PATH) identityErrors.push(`Unexpected source workflow path '${eventRun.path || 'unknown'}'.`);
         if (!SHA_PATTERN.test(eventRun.head_sha || '')) identityErrors.push('The event source run has an invalid head SHA.');
-        if (eventRun.status !== 'completed') identityErrors.push(`Unexpected event source status '${eventRun.status || 'unknown'}'.`);
+        if (eventRun.status !== 'completed' &&
+            !(allowInProgress && event?.action === 'in_progress' && eventRun.status === 'in_progress')) {
+            identityErrors.push(`Unexpected event source status '${eventRun.status || 'unknown'}'.`);
+        }
         if (!['pull_request', 'push', 'schedule', 'workflow_dispatch'].includes(eventRun.event)) {
             identityErrors.push(`Unsupported event source type '${eventRun.event || 'unknown'}'.`);
         }
@@ -329,7 +392,10 @@ async function inspectSourceRun({ github, context }) {
         if (run.name !== SOURCE_WORKFLOW_NAME || workflowPath(run.path) !== SOURCE_WORKFLOW_PATH) {
             identityErrors.push('API source workflow identity is not the trusted scanner workflow.');
         }
-        if (run.status !== 'completed') evidenceErrors.push(`Source workflow status is '${run.status || 'unknown'}', not completed.`);
+        if (run.status !== 'completed' &&
+            !(allowInProgress && event?.action === 'in_progress' && run.status === 'in_progress')) {
+            evidenceErrors.push(`Source workflow status is '${run.status || 'unknown'}', not accepted.`);
+        }
         if (run.status !== eventRun.status || run.event !== eventRun.event ||
             run.head_branch !== eventRun.head_branch) {
             identityErrors.push('API source workflow metadata does not match the completed event.');
@@ -382,23 +448,47 @@ async function inspectSourceRun({ github, context }) {
     // workflow through a huge artifact inventory or unrelated PR lookups.
     if (identityErrors.length) {
         return finalizeInspection({
-            owner, repo, event, eventRun, run, repository, expectedLanguages, artifacts, pullRequest,
+            owner, repo, event, eventRun, run, repository, expectedLanguages, sourceJobs, artifacts, pullRequest,
             identityErrors, evidenceErrors, staleReasons
         });
+    }
+
+    const attemptWindow = isObject(run) && run.status === 'completed'
+        ? sourceAttemptWindow(run, evidenceErrors) : null;
+    if (isObject(run) && run.status === 'completed') {
+        try {
+            sourceJobs = await paginateBounded(
+                github,
+                github.rest.actions.listJobsForWorkflowRunAttempt,
+                { owner, repo, run_id: run.id, attempt_number: run.run_attempt },
+                'jobs',
+                MAX_SOURCE_JOBS,
+                'exact source-attempt job inventory',
+                true
+            );
+            validateSourceAttemptJobs(
+                sourceJobs, run, expectedLanguages, owner, repo, attemptWindow, evidenceErrors
+            );
+        } catch (error) {
+            evidenceErrors.push(`Could not verify exact source-attempt jobs: ${error.message}`);
+            sourceJobs = [];
+        }
     }
 
     if (isObject(run)) {
         try {
             artifacts = await paginateBounded(github, github.rest.actions.listWorkflowRunArtifacts, {
                 owner, repo, run_id: run.id
-            }, 'artifacts', MAX_ARTIFACTS, 'source artifact inventory');
+            }, 'artifacts', MAX_ARTIFACTS, 'source artifact inventory', true);
         } catch (error) {
             evidenceErrors.push(`Could not list source-run artifacts: ${error.message}`);
             artifacts = [];
         }
     }
 
-    const expectedNames = expectedLanguages.map(language => ARTIFACT_FILES[language]);
+    const expectedNames = expectedLanguages.map(
+        language => exactAttemptArtifactName(language, run?.run_attempt)
+    );
     const artifactCounts = new Map();
     let totalArtifactBytes = 0;
     for (const artifact of artifacts) {
@@ -412,6 +502,13 @@ async function inspectSourceRun({ github, context }) {
             evidenceErrors.push(`Artifact '${name}' has an invalid or excessive size.`);
         } else totalArtifactBytes += artifact.size_in_bytes;
         if (!DIGEST_PATTERN.test(artifact?.digest || '')) evidenceErrors.push(`Artifact '${name}' has no valid SHA-256 digest.`);
+        const artifactCreated = Date.parse(artifact?.created_at || '');
+        const artifactUpdated = Date.parse(artifact?.updated_at || '');
+        if (!attemptWindow || !Number.isFinite(artifactCreated) || !Number.isFinite(artifactUpdated) ||
+            artifactCreated < attemptWindow.started || artifactUpdated < artifactCreated ||
+            artifactUpdated > attemptWindow.updated) {
+            evidenceErrors.push(`Artifact '${name}' was not created in the exact current source attempt.`);
+        }
         const provenance = artifact?.workflow_run;
         if (!isObject(provenance) || provenance.id !== run?.id ||
             provenance.repository_id !== repository?.id ||
@@ -432,7 +529,7 @@ async function inspectSourceRun({ github, context }) {
     }
 
     return finalizeInspection({
-        owner, repo, event, eventRun, run, repository, expectedLanguages, artifacts, pullRequest,
+        owner, repo, event, eventRun, run, repository, expectedLanguages, sourceJobs, artifacts, pullRequest,
         identityErrors, evidenceErrors, staleReasons
     });
 }
@@ -675,7 +772,13 @@ function parseSarif(filePath, language) {
             if (invocation.executionSuccessful !== true) {
                 throw new Error(`run ${runIndex} invocation ${invocationIndex} did not complete successfully`);
             }
-            for (const field of ['toolExecutionNotifications', 'configurationNotifications']) {
+            if (Object.prototype.hasOwnProperty.call(invocation, 'configurationNotifications')) {
+                throw new Error(
+                    `run ${runIndex} invocation ${invocationIndex} uses unexpected legacy ` +
+                    'configurationNotifications; expected toolConfigurationNotifications'
+                );
+            }
+            for (const field of ['toolExecutionNotifications', 'toolConfigurationNotifications']) {
                 const notifications = invocation[field] === undefined ? [] : invocation[field];
                 if (!Array.isArray(notifications)) {
                     throw new Error(`run ${runIndex} invocation ${invocationIndex} has malformed ${field}`);
@@ -763,7 +866,7 @@ function parseSarif(filePath, language) {
     return { findings, rawResults, bytes: stat.size };
 }
 
-function parseDownloadedArtifacts(artifactRoot, expectedLanguages) {
+function parseDownloadedArtifacts(artifactRoot, expectedLanguages, sourceAttempt) {
     const errors = [];
     const findings = [];
     const completedLanguages = [];
@@ -788,7 +891,9 @@ function parseDownloadedArtifacts(artifactRoot, expectedLanguages) {
         } else files.set(entry.name, entryPath);
     }
 
-    const expectedNames = new Set(expectedLanguages.map(language => ARTIFACT_FILES[language]));
+    const expectedNames = new Set(expectedLanguages.map(
+        language => exactAttemptArtifactName(language, sourceAttempt)
+    ));
     for (const name of files.keys()) {
         if (!expectedNames.has(name)) {
             unexpectedArtifacts.push(name);
@@ -797,7 +902,7 @@ function parseDownloadedArtifacts(artifactRoot, expectedLanguages) {
     }
 
     for (const language of expectedLanguages) {
-        const name = ARTIFACT_FILES[language];
+        const name = exactAttemptArtifactName(language, sourceAttempt);
         const file = files.get(name);
         if (!file) {
             missingLanguages.push(language);
@@ -883,6 +988,14 @@ function buildSummary(inspection, parsed, evidenceErrors, status) {
         findings,
         evidenceErrors: unique(evidenceErrors),
         staleReasons: [...inspection.staleReasons],
+        commitStatus: {
+            context: TRUSTED_STATUS_CONTEXT,
+            targetSha: SHA_PATTERN.test(run.head_sha || '') ? run.head_sha.toLowerCase() : null,
+            state: null,
+            targetUrl: null,
+            performed: false,
+            reason: 'pending'
+        },
         mutation: { target: inspection.pullRequest.number ? 'pull-request-comment' : 'job-summary', performed: false, reason: 'pending' },
         jobSummary: { performed: false },
         errors: findings.filter(finding => finding.level === 'error')
@@ -1007,6 +1120,10 @@ function reportBody(summary) {
     }
     const footer = [];
     if (summary.source.analysisCommit) footer.push('', `**Analyzed commit:** \`${summary.source.analysisCommit}\``);
+    if (summary.commitStatus?.performed) {
+        footer.push('', `**Trusted status:** \`${summary.commitStatus.context}\` = ` +
+            `\`${summary.commitStatus.state}\` on \`${summary.commitStatus.targetSha}\``);
+    }
     footer.push('', `*Updated: ${summary.generatedAt} — this comment is updated in-place.*`);
     return finishComment(lines, footer);
 }
@@ -1056,7 +1173,484 @@ async function writeJobSummary(core, summary) {
 function markStale(summary, reasons) {
     if (summary.status === 'complete') summary.status = 'stale';
     summary.staleReasons = unique([...summary.staleReasons, ...reasons]);
-    summary.mutation = { target: 'pull-request-comment', performed: false, reason: 'stale-source-run' };
+    if (summary.mutation.target === 'pull-request-comment') {
+        summary.mutation = { target: 'pull-request-comment', performed: false, reason: 'stale-source-run' };
+    }
+}
+
+function sourceAttemptWindow(run, errors) {
+    const started = Date.parse(run?.run_started_at || '');
+    const updated = Date.parse(run?.updated_at || '');
+    if (!Number.isFinite(started) || !Number.isFinite(updated) || updated < started) {
+        errors.push('The source workflow has no exact current-attempt time window.');
+        return null;
+    }
+    return { started, updated };
+}
+
+function validateSourceAttemptJobs(jobs, run, expectedLanguages, owner, repo, window, errors) {
+    if (!Array.isArray(jobs)) {
+        errors.push('The exact source-attempt job inventory is malformed.');
+        return;
+    }
+    const expectedNames = new Set(expectedLanguages.map(language => SOURCE_JOB_NAMES[language]));
+    const seenIds = new Set();
+    const seenNames = new Set();
+    const expectedRunUrl = `https://api.github.com/repos/${owner}/${repo}/actions/runs/${run.id}`;
+    for (const job of jobs) {
+        const name = typeof job?.name === 'string' ? job.name : '';
+        if (!isObject(job) || !Number.isSafeInteger(job.id) || job.id < 1 || !name ||
+            seenIds.has(job.id) || seenNames.has(name)) {
+            errors.push('The exact source-attempt job inventory contains a duplicate or invalid job.');
+            continue;
+        }
+        seenIds.add(job.id);
+        seenNames.add(name);
+        if (!expectedNames.has(name)) {
+            errors.push(`Unexpected exact source-attempt job '${name}'.`);
+        }
+        if (job.run_id !== run.id || job.run_attempt !== run.run_attempt ||
+            normalizedSha(job.head_sha) !== normalizedSha(run.head_sha) ||
+            job.workflow_name !== SOURCE_WORKFLOW_NAME || job.head_branch !== run.head_branch ||
+            job.run_url !== expectedRunUrl) {
+            errors.push(`Source job '${name || '<unnamed>'}' is not bound to the exact workflow attempt.`);
+        }
+        if (job.status !== 'completed' || job.conclusion !== 'success') {
+            errors.push(`Source job '${name || '<unnamed>'}' did not complete successfully.`);
+        }
+        const jobStarted = Date.parse(job.started_at || '');
+        const jobCompleted = Date.parse(job.completed_at || '');
+        if (!window || !Number.isFinite(jobStarted) || !Number.isFinite(jobCompleted) ||
+            jobStarted < window.started || jobCompleted < jobStarted || jobCompleted > window.updated) {
+            errors.push(`Source job '${name || '<unnamed>'}' was not executed in the exact current attempt.`);
+        }
+        if (!Array.isArray(job.steps) || job.steps.some(step => !isObject(step))) {
+            errors.push(`Source job '${name || '<unnamed>'}' has a malformed step inventory.`);
+            continue;
+        }
+        const stepNames = new Set();
+        for (const step of job.steps) {
+            const stepName = typeof step.name === 'string' ? step.name : '';
+            if (!stepName || stepNames.has(stepName)) {
+                errors.push(`Source job '${name || '<unnamed>'}' contains a duplicate or unnamed step.`);
+            } else {
+                stepNames.add(stepName);
+            }
+            if (step.status !== 'completed' || step.conclusion !== 'success') {
+                errors.push(`Source job '${name || '<unnamed>'}' has a non-success step '${stepName || '<unnamed>'}'.`);
+            }
+        }
+        for (const required of SOURCE_REQUIRED_STEPS) {
+            const matches = job.steps.filter(step => step.name === required);
+            if (matches.length !== 1 || matches[0].status !== 'completed' || matches[0].conclusion !== 'success') {
+                errors.push(`Source job '${name || '<unnamed>'}' did not complete required step '${required}' exactly once.`);
+            }
+        }
+    }
+    if (seenNames.size !== expectedNames.size ||
+        [...expectedNames].some(name => !seenNames.has(name))) {
+        errors.push('The exact source attempt does not contain all three required CodeQL analysis jobs.');
+    }
+}
+
+function exactRepository(candidate, expected) {
+    return isObject(candidate) && isObject(expected) &&
+        Number.isInteger(candidate.id) && candidate.id === expected.id &&
+        candidate.full_name === expected.full_name;
+}
+
+function exactReporterRunTargetUrl(args, inspection) {
+    const reporterRunId = Number(args.context?.runId);
+    const reporterAttempt = Number(args.context?.runAttempt);
+    if (!Number.isSafeInteger(reporterRunId) || reporterRunId < 1 ||
+        !Number.isSafeInteger(reporterAttempt) || reporterAttempt < 1) {
+        throw new Error('The trusted reporter run id and attempt are not exact positive integers.');
+    }
+    return `https://github.com/${inspection.owner}/${inspection.repo}/actions/runs/` +
+        `${reporterRunId}/attempts/${reporterAttempt}`;
+}
+
+function trustedStatusDescription(state, inspection) {
+    const sourceRunId = inspection.run?.id;
+    const sourceAttempt = inspection.run?.run_attempt;
+    if (!Number.isSafeInteger(sourceRunId) || sourceRunId < 1 ||
+        !Number.isSafeInteger(sourceAttempt) || sourceAttempt < 1) {
+        throw new Error('The trusted source run id and attempt are not exact positive integers.');
+    }
+    if (state === 'pending') {
+        return `Trusted CodeQL validation running for CodeQL run ${sourceRunId}, attempt ${sourceAttempt}.`;
+    }
+    if (state === 'success') {
+        return `Trusted CodeQL verified for CodeQL run ${sourceRunId}, attempt ${sourceAttempt}.`;
+    }
+    return `Trusted CodeQL failed for CodeQL run ${sourceRunId}, attempt ${sourceAttempt}.`;
+}
+
+function sameCommitInventoryReasons(sameCommitRuns, run, targetSha) {
+    const reasons = [];
+    const seenRunIds = new Set();
+    const seenExecutions = new Set();
+    for (const candidate of sameCommitRuns) {
+        const execution = `${candidate?.run_number}:${candidate?.run_attempt}`;
+        if (!isObject(candidate) || !Number.isInteger(candidate.id) || candidate.id < 1 ||
+            !Number.isInteger(candidate.workflow_id) || candidate.workflow_id !== run.workflow_id ||
+            !Number.isInteger(candidate.run_number) || candidate.run_number < 1 ||
+            !Number.isInteger(candidate.run_attempt) || candidate.run_attempt < 1 ||
+            ![...TRUSTED_STATUS_EVENTS, 'schedule'].includes(candidate.event) ||
+            normalizedSha(candidate.head_sha) !== targetSha ||
+            seenRunIds.has(candidate.id) || seenExecutions.has(execution)) {
+            reasons.push('The same-commit workflow inventory is malformed or not exact.');
+            break;
+        }
+        seenRunIds.add(candidate.id);
+        seenExecutions.add(execution);
+        if (!TRUSTED_STATUS_EVENTS.includes(candidate.event)) continue;
+        if (candidate.run_number > run.run_number ||
+            (candidate.run_number === run.run_number && candidate.run_attempt > run.run_attempt)) {
+            reasons.push('A newer source workflow run or attempt exists for the analyzed commit.');
+        }
+    }
+    if (!seenRunIds.has(run.id)) {
+        reasons.push('The exact source workflow run is missing from the same-commit inventory.');
+    }
+    return unique(reasons);
+}
+
+async function revalidateCommitStatusTarget(args, inspection, state) {
+    const { github } = args;
+    const reasons = [];
+    const run = inspection.run;
+    const eventRun = inspection.eventRun;
+    const repository = inspection.repository;
+    const targetSha = normalizedSha(run?.head_sha);
+    const eventEligible = TRUSTED_STATUS_EVENTS.includes(run?.event);
+    const lifecycleAccepted = inspection.event?.action === 'completed' && run?.status === 'completed' ||
+        state === 'pending' && inspection.event?.action === 'in_progress' && run?.status === 'in_progress';
+
+    if (!inspection.trustedSource || !isObject(run) || !isObject(eventRun) || !isObject(repository) ||
+        !eventEligible || !targetSha || !lifecycleAccepted || inspection.staleReasons.length) {
+        reasons.push('The source run is not an eligible, trusted, current commit-status target.');
+        reasons.push(...inspection.staleReasons);
+        return { authorized: false, reasons: unique(reasons), targetSha, targetUrl: null };
+    }
+
+    const latestRun = (await github.rest.actions.getWorkflowRun({
+        owner: inspection.owner, repo: inspection.repo, run_id: run.id
+    })).data;
+    if (!isObject(latestRun) || latestRun.id !== run.id || latestRun.workflow_id !== run.workflow_id ||
+        latestRun.run_number !== run.run_number || latestRun.run_attempt !== run.run_attempt ||
+        latestRun.run_attempt !== eventRun.run_attempt || latestRun.name !== SOURCE_WORKFLOW_NAME ||
+        workflowPath(latestRun.path) !== SOURCE_WORKFLOW_PATH || latestRun.event !== run.event ||
+        latestRun.head_branch !== run.head_branch || normalizedSha(latestRun.head_sha) !== targetSha ||
+        latestRun.status !== run.status || latestRun.status !== eventRun.status ||
+        latestRun.conclusion !== run.conclusion ||
+        latestRun.conclusion !== eventRun.conclusion ||
+        !exactRepository(latestRun.repository, repository) ||
+        !exactRepository(latestRun.head_repository, run.head_repository)) {
+        reasons.push('The source workflow changed immediately before commit-status mutation.');
+    }
+
+    const sameCommitRuns = await paginateBounded(github, github.rest.actions.listWorkflowRuns, {
+        owner: inspection.owner,
+        repo: inspection.repo,
+        workflow_id: run.workflow_id,
+        head_sha: targetSha
+    }, 'workflow_runs', MAX_SAME_COMMIT_RUNS, 'same-commit workflow runs', true);
+    reasons.push(...sameCommitInventoryReasons(sameCommitRuns, run, targetSha));
+
+    const commit = (await github.rest.repos.getCommit({
+        owner: inspection.owner, repo: inspection.repo, ref: targetSha
+    })).data;
+    if (!isObject(commit) || normalizedSha(commit.sha) !== targetSha) {
+        reasons.push('The base repository cannot resolve the exact analyzed commit.');
+    }
+
+    if (run.event === 'pull_request') {
+        if (!inspection.pullRequest.number || normalizedSha(inspection.pullRequest.sourceHead) !== targetSha) {
+            reasons.push('The source pull-request target is unresolved or no longer exact.');
+        } else {
+            const pull = (await github.rest.pulls.get({
+                owner: inspection.owner, repo: inspection.repo,
+                pull_number: inspection.pullRequest.number
+            })).data;
+            if (!isObject(pull) || pull.number !== inspection.pullRequest.number || pull.state !== 'open' ||
+                !exactRepository(pull.base?.repo, repository) ||
+                !exactRepository(pull.head?.repo, run.head_repository) ||
+                normalizedSha(pull.head?.sha) !== targetSha) {
+                reasons.push('The pull-request head changed immediately before commit-status mutation.');
+            }
+        }
+    } else if (!exactRepository(run.head_repository, repository)) {
+        reasons.push('A push or workflow-dispatch status target must belong to the base repository.');
+    }
+
+    return {
+        authorized: reasons.length === 0,
+        reasons: unique(reasons),
+        targetSha,
+        targetUrl: exactReporterRunTargetUrl(args, inspection)
+    };
+}
+
+async function publishCommitStatus(args, inspection, state) {
+    if (!TRUSTED_STATUS_STATES.includes(state)) {
+        throw new Error(`Unsupported trusted status state '${state}'.`);
+    }
+    const target = await revalidateCommitStatusTarget(args, inspection, state);
+    if (!target.authorized) {
+        return {
+            context: TRUSTED_STATUS_CONTEXT,
+            targetSha: target.targetSha,
+            state: null,
+            targetUrl: target.targetUrl,
+            performed: false,
+            reason: 'stale-or-untrusted-source',
+            staleReasons: target.reasons
+        };
+    }
+    const immediateRun = (await args.github.rest.actions.getWorkflowRun({
+        owner: inspection.owner, repo: inspection.repo, run_id: inspection.run.id
+    })).data;
+    if (!isObject(immediateRun) || immediateRun.id !== inspection.run.id ||
+        immediateRun.workflow_id !== inspection.run.workflow_id ||
+        immediateRun.run_number !== inspection.run.run_number ||
+        immediateRun.run_attempt !== inspection.run.run_attempt ||
+        immediateRun.event !== inspection.run.event ||
+        immediateRun.head_branch !== inspection.run.head_branch ||
+        normalizedSha(immediateRun.head_sha) !== target.targetSha ||
+        immediateRun.status !== inspection.run.status ||
+        immediateRun.conclusion !== inspection.run.conclusion ||
+        !exactRepository(immediateRun.repository, inspection.repository) ||
+        !exactRepository(immediateRun.head_repository, inspection.run.head_repository)) {
+        return {
+            context: TRUSTED_STATUS_CONTEXT,
+            targetSha: target.targetSha,
+            state: null,
+            targetUrl: target.targetUrl,
+            performed: false,
+            reason: 'stale-or-untrusted-source',
+            staleReasons: ['The source workflow changed in the final commit-status mutation window.']
+        };
+    }
+    const immediateRuns = await paginateBounded(
+        args.github,
+        args.github.rest.actions.listWorkflowRuns,
+        {
+            owner: inspection.owner,
+            repo: inspection.repo,
+            workflow_id: inspection.run.workflow_id,
+            head_sha: target.targetSha
+        },
+        'workflow_runs',
+        MAX_SAME_COMMIT_RUNS,
+        'same-commit workflow runs',
+        true
+    );
+    const immediateReasons = sameCommitInventoryReasons(
+        immediateRuns, inspection.run, target.targetSha);
+    if (immediateReasons.length) {
+        return {
+            context: TRUSTED_STATUS_CONTEXT,
+            targetSha: target.targetSha,
+            state: null,
+            targetUrl: target.targetUrl,
+            performed: false,
+            reason: 'stale-or-untrusted-source',
+            staleReasons: immediateReasons
+        };
+    }
+    await args.github.rest.repos.createCommitStatus({
+        owner: inspection.owner,
+        repo: inspection.repo,
+        sha: target.targetSha,
+        state,
+        target_url: target.targetUrl,
+        description: trustedStatusDescription(state, inspection),
+        context: TRUSTED_STATUS_CONTEXT
+    });
+    return {
+        context: TRUSTED_STATUS_CONTEXT,
+        targetSha: target.targetSha,
+        state,
+        targetUrl: target.targetUrl,
+        performed: true,
+        reason: 'published'
+    };
+}
+
+async function trustedStatusPending(args) {
+    const inspection = await inspectSourceRun(args, { allowInProgress: true });
+    args.core.setOutput('status-event-eligible',
+        TRUSTED_STATUS_EVENTS.includes(inspection.run?.event) ? 'true' : 'false');
+    if (!TRUSTED_STATUS_EVENTS.includes(inspection.run?.event) && inspection.trustedSource &&
+        inspection.staleReasons.length === 0) {
+        args.core.setOutput('status-published', 'false');
+        args.core.setOutput('status-target-sha', '');
+        args.core.info(`No trusted commit status is required for '${inspection.run?.event || 'unknown'}'.`);
+        return { inspection, performed: false, reason: 'event-not-applicable' };
+    }
+    if (!inspection.trustedSource || inspection.staleReasons.length) {
+        const errors = [...inspection.identityErrors, ...inspection.staleReasons];
+        args.core.setOutput('status-published', 'false');
+        args.core.setOutput('status-target-sha', '');
+        args.core.setFailed(`CodeQL pending status target is not trusted and current: ${errors.join(' ')}`);
+        return { inspection, performed: false, reason: 'untrusted-or-stale-source' };
+    }
+    try {
+        const result = await publishCommitStatus(args, inspection, 'pending');
+        args.core.setOutput('status-published', result.performed ? 'true' : 'false');
+        args.core.setOutput('status-target-sha', result.performed ? result.targetSha : '');
+        if (!result.performed) {
+            args.core.setFailed(`CodeQL pending status was not published: ${result.staleReasons.join(' ')}`);
+        } else {
+            args.core.info(`Published '${TRUSTED_STATUS_CONTEXT}' pending for ${result.targetSha}.`);
+        }
+        return { inspection, ...result };
+    } catch (error) {
+        args.core.setOutput('status-published', 'false');
+        args.core.setOutput('status-target-sha', '');
+        args.core.setFailed(`CodeQL pending status API failed: ${error.message}`);
+        return { inspection, performed: false, reason: 'api-error', error: error.message };
+    }
+}
+
+function exactStringArray(candidate, expected) {
+    return Array.isArray(candidate) && candidate.length === expected.length &&
+        candidate.every((value, index) => value === expected[index]);
+}
+
+function canonicalArtifactManifest(candidate) {
+    if (!Array.isArray(candidate) || candidate.some(entry => !isObject(entry))) return null;
+    const ordered = [...candidate].sort((left, right) => Number(left.id || 0) - Number(right.id || 0));
+    return JSON.stringify(ordered);
+}
+
+function expectedSummaryArtifactName(args, inspection) {
+    const sourceSha = normalizedSha(inspection.run?.head_sha);
+    const sourceRunId = inspection.run?.id;
+    const sourceAttempt = inspection.run?.run_attempt;
+    const reporterAttempt = Number(args.context?.runAttempt);
+    if (!sourceSha || !Number.isSafeInteger(sourceRunId) || sourceRunId < 1 ||
+        !Number.isSafeInteger(sourceAttempt) || sourceAttempt < 1 ||
+        !Number.isSafeInteger(reporterAttempt) || reporterAttempt < 1) {
+        throw new Error('The source SHA/run/attempt or reporter attempt is not exact for the summary artifact.');
+    }
+    return `codeql-trusted-summary-${sourceSha}-${sourceRunId}-${sourceAttempt}-${reporterAttempt}`;
+}
+
+function readFinalizerSummary() {
+    const summaryPath = process.env.SUMMARY_PATH || '';
+    if (!summaryPath) throw new Error('SUMMARY_PATH is required for trusted status finalization.');
+    const stat = fs.lstatSync(summaryPath);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 2 || stat.size > MAX_FINALIZER_SUMMARY_BYTES) {
+        throw new Error('The trusted summary is not one bounded regular file.');
+    }
+    const parsed = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+    if (!isObject(parsed)) throw new Error('The trusted summary root must be an object.');
+    return parsed;
+}
+
+function finalizerEvidenceErrors(args, inspection, summary) {
+    const errors = [];
+    const source = summary?.source;
+    const run = inspection.run;
+    if (!isObject(summary) || summary.schemaVersion !== SCHEMA_VERSION ||
+        summary.kind !== 'codeql-trusted-workflow-run' || !isObject(source) || !isObject(run)) {
+        errors.push('The trusted summary schema or source identity is malformed.');
+        return errors;
+    }
+    if (source.repository !== `${inspection.owner}/${inspection.repo}` ||
+        source.workflowName !== SOURCE_WORKFLOW_NAME || source.workflowPath !== SOURCE_WORKFLOW_PATH ||
+        source.workflowId !== run.workflow_id || source.runId !== run.id ||
+        source.runNumber !== run.run_number || source.runAttempt !== run.run_attempt ||
+        source.event !== run.event || source.conclusion !== run.conclusion ||
+        normalizedSha(source.analysisCommit) !== normalizedSha(run.head_sha) ||
+        source.headRepository !== run.head_repository?.full_name ||
+        source.headRepositoryId !== run.head_repository?.id || source.headBranch !== run.head_branch) {
+        errors.push('The trusted summary does not bind the exact completed source workflow run.');
+    }
+    if (summary.status !== 'complete' || !exactStringArray(summary.expectedLanguages, inspection.expectedLanguages) ||
+        !exactStringArray(summary.completedLanguages, inspection.expectedLanguages) ||
+        !exactStringArray(summary.missingLanguages, []) || !exactStringArray(summary.invalidLanguages, []) ||
+        !exactStringArray(summary.unexpectedArtifacts, []) || !exactStringArray(summary.evidenceErrors, []) ||
+        (summary.staleReasons?.length || 0) !== 0) {
+        errors.push('The trusted summary does not record complete, current evidence for every language.');
+    }
+    if (canonicalArtifactManifest(summary.artifactEvidence) !==
+        canonicalArtifactManifest(inspection.artifactManifest)) {
+        errors.push('The trusted summary artifact manifest changed before status finalization.');
+    }
+    if (!isObject(summary.commitStatus) || summary.commitStatus.context !== TRUSTED_STATUS_CONTEXT ||
+        normalizedSha(summary.commitStatus.targetSha) !== normalizedSha(run.head_sha) ||
+        summary.commitStatus.targetUrl !== exactReporterRunTargetUrl(args, inspection) ||
+        summary.commitStatus.state !== null || summary.commitStatus.performed !== false ||
+        summary.commitStatus.reason !== 'deferred-until-summary-upload') {
+        errors.push('The trusted summary did not keep final commit status deferred through upload.');
+    }
+
+    const requiredOutcomes = {
+        REPORTER_TEST_OUTCOME: 'reporter tests',
+        PREFLIGHT_OUTCOME: 'source preflight',
+        DOWNLOAD_OUTCOME: 'artifact download',
+        REPORT_OUTCOME: 'trusted report',
+        UPLOAD_OUTCOME: 'summary upload'
+    };
+    for (const [key, label] of Object.entries(requiredOutcomes)) {
+        if ((process.env[key] || '').trim() !== 'success') errors.push(`${label} did not succeed before finalization.`);
+    }
+
+    const expectedName = expectedSummaryArtifactName(args, inspection);
+    const artifactId = Number(process.env.SUMMARY_ARTIFACT_ID);
+    const artifactDigest = (process.env.SUMMARY_ARTIFACT_DIGEST || '').trim();
+    if (process.env.SUMMARY_ARTIFACT_NAME !== expectedName ||
+        !Number.isSafeInteger(artifactId) || artifactId < 1 ||
+        !/^(?:sha256:)?[0-9a-f]{64}$/i.test(artifactDigest)) {
+        errors.push('The durable summary artifact outputs are missing or not exact.');
+    }
+    errors.push(...inspection.identityErrors, ...inspection.evidenceErrors, ...inspection.staleReasons);
+    return unique(errors);
+}
+
+async function trustedStatusFinalize(args) {
+    const core = args.core;
+    const inspection = await inspectSourceRun(args);
+    core.setOutput('status-event-eligible',
+        TRUSTED_STATUS_EVENTS.includes(inspection.run?.event) ? 'true' : 'false');
+    if (!TRUSTED_STATUS_EVENTS.includes(inspection.run?.event)) {
+        core.setOutput('status-published', 'false');
+        core.info(`No trusted commit status is required for '${inspection.run?.event || 'unknown'}'.`);
+        return { inspection, performed: false, reason: 'event-not-applicable' };
+    }
+
+    let summary = null;
+    const errors = [];
+    try {
+        summary = readFinalizerSummary();
+        errors.push(...finalizerEvidenceErrors(args, inspection, summary));
+    } catch (error) {
+        errors.push(`Trusted summary finalization failed: ${error.message}`);
+    }
+    const desiredState = errors.length === 0 ? 'success' : 'failure';
+    try {
+        const result = await publishCommitStatus(args, inspection, desiredState);
+        core.setOutput('status-published', result.performed ? 'true' : 'false');
+        core.setOutput('status-target-sha', result.performed ? result.targetSha : '');
+        core.setOutput('status-state', result.performed ? desiredState : '');
+        if (!result.performed) {
+            core.setFailed(`CodeQL final status was not published: ${(result.staleReasons || []).join(' ')}`);
+        } else if (errors.length) {
+            core.setFailed(`CodeQL trusted finalization failed closed: ${errors.join(' ')}`);
+        } else {
+            core.info(`Published '${TRUSTED_STATUS_CONTEXT}' success after durable summary upload.`);
+        }
+        return { inspection, summary, errors, ...result };
+    } catch (error) {
+        core.setOutput('status-published', 'false');
+        core.setOutput('status-target-sha', '');
+        core.setOutput('status-state', '');
+        core.setFailed(`CodeQL final status API failed: ${error.message}`);
+        return { inspection, summary, errors, performed: false, reason: 'api-error', error: error.message };
+    }
 }
 
 async function preflight(args) {
@@ -1096,7 +1690,11 @@ async function trustedReport(args) {
         missingLanguages: [...inspection.expectedLanguages], unexpectedArtifacts: [], rawResults: 0
     };
     if (downloadOutcome === 'success') {
-        parsed = parseDownloadedArtifacts(process.env.ARTIFACT_DIR || '', inspection.expectedLanguages);
+        parsed = parseDownloadedArtifacts(
+            process.env.ARTIFACT_DIR || '',
+            inspection.expectedLanguages,
+            inspection.run?.run_attempt
+        );
         evidenceErrors.push(...parsed.errors);
     }
 
@@ -1106,8 +1704,47 @@ async function trustedReport(args) {
 
     const reporterTestsPassed = (process.env.REPORTER_TEST_OUTCOME || '').trim() === 'success';
     const isPullRequest = inspection.run?.event === 'pull_request';
+    const statusEligible = TRUSTED_STATUS_EVENTS.includes(inspection.run?.event);
+    if (!statusEligible) {
+        summary.commitStatus.reason = 'event-not-applicable';
+    } else if (!inspection.trustedSource || !reporterTestsPassed) {
+        summary.commitStatus.reason = 'untrusted-or-unresolved-source';
+    } else if (inspection.staleReasons.length) {
+        summary.commitStatus.reason = 'stale-source-run';
+        markStale(summary, inspection.staleReasons);
+    } else {
+        try {
+            // Revalidate the exact source now, but deliberately defer the final
+            // mutation until the summary has been durably uploaded. This keeps
+            // stale source evidence out of both the report and final status.
+            const target = await revalidateCommitStatusTarget(args, inspection,
+                summary.status === 'complete' ? 'success' : 'failure');
+            if (!target.authorized) {
+                summary.commitStatus.reason = 'stale-or-untrusted-source';
+                markStale(summary, target.reasons);
+            } else {
+                summary.commitStatus.targetUrl = target.targetUrl;
+                summary.commitStatus.reason = 'deferred-until-summary-upload';
+            }
+        } catch (error) {
+            summary.status = 'incomplete';
+            summary.evidenceErrors = unique([
+                ...summary.evidenceErrors,
+                `Trusted source revalidation failed: ${error.message}`
+            ]);
+            summary.commitStatus.reason = 'api-error';
+            core.setFailed(`Trusted CodeQL source revalidation failed: ${error.message}`);
+        }
+    }
+
     if (!isPullRequest) {
         if (summary.status === 'incomplete') core.setFailed('CodeQL trusted evidence is incomplete.');
+        await writeJobSummary(core, summary);
+        writeSummary(summary, core);
+        return summary;
+    }
+
+    if (summary.commitStatus.reason === 'stale-or-untrusted-source') {
         await writeJobSummary(core, summary);
         writeSummary(summary, core);
         return summary;
@@ -1163,11 +1800,28 @@ async function trustedReport(args) {
             owner: inspection.owner,
             repo: inspection.repo,
             workflow_id: inspection.run.workflow_id,
-            event: inspection.run.event,
             head_sha: inspection.run.head_sha
-        }, 'workflow_runs', MAX_SAME_COMMIT_RUNS, 'same-commit workflow runs');
-        if (sameCommitRuns.some(candidate => candidate.id !== inspection.run.id &&
-            Number.isInteger(candidate.run_number) && candidate.run_number > inspection.run.run_number)) {
+        }, 'workflow_runs', MAX_SAME_COMMIT_RUNS, 'same-commit workflow runs', true);
+        const reportRunIds = new Set();
+        const reportExecutions = new Set();
+        for (const candidate of sameCommitRuns) {
+            const execution = `${candidate?.run_number}:${candidate?.run_attempt}`;
+            if (!isObject(candidate) || !Number.isInteger(candidate.id) || candidate.id < 1 ||
+                candidate.workflow_id !== inspection.run.workflow_id ||
+                !Number.isInteger(candidate.run_number) || candidate.run_number < 1 ||
+                !Number.isInteger(candidate.run_attempt) || candidate.run_attempt < 1 ||
+                ![...TRUSTED_STATUS_EVENTS, 'schedule'].includes(candidate.event) ||
+                normalizedSha(candidate.head_sha) !== normalizedSha(inspection.run.head_sha) ||
+                reportRunIds.has(candidate.id) || reportExecutions.has(execution)) {
+                throw new Error('The same-commit workflow inventory is malformed or not exact.');
+            }
+            reportRunIds.add(candidate.id);
+            reportExecutions.add(execution);
+        }
+        if (sameCommitRuns.some(candidate => TRUSTED_STATUS_EVENTS.includes(candidate.event) &&
+            (candidate.run_number > inspection.run.run_number ||
+                (candidate.run_number === inspection.run.run_number &&
+                    candidate.run_attempt > inspection.run.run_attempt)))) {
             markStale(summary, ['A newer source workflow run exists for the analyzed commit.']);
             if (summary.status === 'incomplete') core.setFailed('CodeQL trusted evidence is incomplete.');
             await writeJobSummary(core, summary);
@@ -1233,6 +1887,8 @@ async function trustedReport(args) {
 
 module.exports = async args => {
     const mode = (process.env.REPORT_MODE || '').trim();
+    if (mode === 'trusted-status-pending') return trustedStatusPending(args);
+    if (mode === 'trusted-status-finalize') return trustedStatusFinalize(args);
     if (mode === 'trusted-preflight') return preflight(args);
     if (mode === 'trusted-report') return trustedReport(args);
     throw new Error(`Untrusted REPORT_MODE '${mode || '<empty>'}' is not permitted.`);

@@ -637,7 +637,7 @@
 | `LayerEvalFunc` | alias | SparkEngine | [CpuNeuralInference.cpp:L32](../../SparkEngine/Source/Graphics/Neural/CpuNeuralInference.cpp#L32) |  |
 | `LightBakeProgressCallback` | alias | SparkEditor | [LightingTools.h:L229](../../SparkEditor/Source/Lighting/LightingTools.h#L229) | Light baking progress callback |
 | `LightChangedCallback` | alias | SparkEditor | [LightingTools.h:L234](../../SparkEditor/Source/Lighting/LightingTools.h#L234) | Light changed callback |
-| `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L985](../../Tests/harden/Test_persistence_SaveSystem.cpp#L985) |  |
+| `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L1036](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1036) |  |
 | `List` | alias | Tests | [TestTypeTraits.cpp:L102](../../Tests/TestTypeTraits.cpp#L102) |  |
 | `List` | alias | Tests | [TestTypeTraits.cpp:L114](../../Tests/TestTypeTraits.cpp#L114) |  |
 | `LoadCompletionCallback` | alias | SparkEngine | [DirectStorageLoader.h:L66](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L66) | Callback invoked when a load completes |
@@ -717,7 +717,7 @@
 | `NOMINMAX` | macro | SparkEngine | [GameImGuiLayer.h:L31](../../SparkEngine/Source/Core/GameImGuiLayer.h#L31) |  |
 | `NOMINMAX` | macro | SparkEngine | [SaveSystem.cpp:L26](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L26) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashHandlerSupport.h:L22](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L22) |  |
-| `NOMINMAX` | macro | SparkEngine | [SecureRandom.cpp:L16](../../SparkEngine/Source/Utils/SecureRandom.cpp#L16) |  |
+| `NOMINMAX` | macro | SparkEngine | [SecureRandom.cpp:L17](../../SparkEngine/Source/Utils/SecureRandom.cpp#L17) |  |
 | `NOMINMAX` | macro | SparkEngine | [TelemetrySpool.cpp:L20](../../SparkEngine/Source/Utils/TelemetrySpool.cpp#L20) |  |
 | `NOMINMAX` | macro | SparkSDK | [ModuleDllMain.h:L38](../../SparkSDK/Include/Spark/ModuleDllMain.h#L38) |  |
 | `NotifyCallback` | alias | SparkEngine | [AnimNotify.h:L142](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L142) | Manages animation notifies across all clips |
@@ -752,7 +752,7 @@
 | `PasswordBuffer` | alias | Tests | [TestMMOCredentialSecurity.cpp:L13](../../Tests/TestMMOCredentialSecurity.cpp#L13) |  |
 | `PawnInfo` | alias | GameModules | [TFPlayerSystem.h:L42](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystem.h#L42) |  |
 | `PayloadStorage` | alias | SparkEngine | [ComponentReflection.cpp:L304](../../SparkEngine/Source/Core/ComponentReflection.cpp#L304) |  |
-| `PayloadStorage` | alias | Tests | [Test_persistence_SaveSystem.cpp:L371](../../Tests/harden/Test_persistence_SaveSystem.cpp#L371) |  |
+| `PayloadStorage` | alias | Tests | [Test_persistence_SaveSystem.cpp:L415](../../Tests/harden/Test_persistence_SaveSystem.cpp#L415) |  |
 | `pclose` | macro | SparkEditor | [VersionControlRender.cpp:L16](../../SparkEditor/Source/VersionControl/VersionControlRender.cpp#L16) |  |
 | `PeerConnectedCallback` | alias | SparkEditor | [CollaborativeEditSession.h:L159](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L159) |  |
 | `PeerDisconnectedCallback` | alias | SparkEditor | [CollaborativeEditSession.h:L160](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L160) |  |
@@ -892,9 +892,9 @@
 | `SPARK_ASSET_STALL_UPDATE` | macro | SparkEngine | [AssetStallDetector.h:L151](../../SparkEngine/Source/Utils/AssetStallDetector.h#L151) |  |
 | `SPARK_BOUNDS_CHECK` | macro | SparkEngine | [SparkError.h:L299](../../SparkEngine/Source/Utils/SparkError.h#L299) |  |
 | `SPARK_BOUNDS_CHECK_MSG` | macro | SparkEngine | [SparkError.h:L306](../../SparkEngine/Source/Utils/SparkError.h#L306) |  |
-| `SPARK_BRANCH_GUARD_BEGIN` | macro | SparkEngine | [MemoryIntegrity.h:L260](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L260) | Begin a protected branch scope. Place before the if/switch. |
-| `SPARK_BRANCH_GUARD_ELSE` | macro | SparkEngine | [MemoryIntegrity.h:L278](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L278) | Record the else-path of a protected branch. |
-| `SPARK_BRANCH_GUARD_END` | macro | SparkEngine | [MemoryIntegrity.h:L287](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L287) | End a protected branch scope and verify it executed. |
+| `SPARK_BRANCH_GUARD_BEGIN` | macro | SparkEngine | [MemoryIntegrity.h:L271](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L271) | Begin a protected branch scope. Place before the if/switch. |
+| `SPARK_BRANCH_GUARD_ELSE` | macro | SparkEngine | [MemoryIntegrity.h:L292](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L292) | Record the else-path of a protected branch. |
+| `SPARK_BRANCH_GUARD_END` | macro | SparkEngine | [MemoryIntegrity.h:L302](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L302) | End a protected branch scope and verify it executed. |
 | `SPARK_CACHE_EVICT` | macro | SparkEngine | [CacheDebugger.h:L385](../../SparkEngine/Source/Utils/CacheDebugger.h#L385) | Record a cache eviction |
 | `SPARK_CACHE_EVICT` | macro | SparkEngine | [CacheDebugger.h:L398](../../SparkEngine/Source/Utils/CacheDebugger.h#L398) | Print cache performance summary |
 | `SPARK_CACHE_HIT` | macro | SparkEngine | [CacheDebugger.h:L379](../../SparkEngine/Source/Utils/CacheDebugger.h#L379) | Record a cache hit |
@@ -1054,7 +1054,7 @@
 | `SPARK_IMPORT` | macro | SparkEngine | [SparkExport.h:L19](../../SparkEngine/Source/Core/SparkExport.h#L19) |  |
 | `SPARK_IMPORT` | macro | SparkSDK | [SparkExport.h:L14](../../SparkSDK/Include/Spark/SparkExport.h#L14) |  |
 | `SPARK_IMPORT` | macro | SparkSDK | [SparkExport.h:L17](../../SparkSDK/Include/Spark/SparkExport.h#L17) |  |
-| `SPARK_INTEGRITY_CHECKPOINT` | macro | SparkEngine | [MemoryIntegrity.h:L295](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L295) | Record that a critical code path executed (one-shot checkpoint). |
+| `SPARK_INTEGRITY_CHECKPOINT` | macro | SparkEngine | [MemoryIntegrity.h:L312](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L312) | Record that a critical code path executed (one-shot checkpoint). |
 | `SPARK_INVARIANT` | macro | SparkEngine | [Contracts.h:L52](../../SparkEngine/Source/Core/Contracts.h#L52) |  |
 | `SPARK_INVARIANT` | macro | SparkEngine | [Contracts.h:L60](../../SparkEngine/Source/Core/Contracts.h#L60) |  |
 | `SPARK_INVARIANT` | macro | SparkEngine | [Contracts.h:L67](../../SparkEngine/Source/Core/Contracts.h#L67) |  |
@@ -1243,7 +1243,7 @@
 | `SPARK_VALIDATE_RANGE` | macro | SparkEngine | [Validate.h:L235](../../SparkEngine/Source/Utils/Validate.h#L235) | Range guard: logs error and returns if val is outside [minVal, maxVal] |
 | `SPARK_VALIDATE_RET` | macro | SparkEngine | [Validate.h:L190](../../SparkEngine/Source/Utils/Validate.h#L190) | Soft validation that returns a specific value on failure |
 | `SPARK_VERIFY` | macro | SparkEngine | [SparkError.h:L273](../../SparkEngine/Source/Utils/SparkError.h#L273) |  |
-| `SPARK_VERIFY_CHECKPOINT` | macro | SparkEngine | [MemoryIntegrity.h:L312](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L312) | Verify that the matching SPARK_INTEGRITY_CHECKPOINT actually ran. |
+| `SPARK_VERIFY_CHECKPOINT` | macro | SparkEngine | [MemoryIntegrity.h:L328](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L328) | Verify that the matching SPARK_INTEGRITY_CHECKPOINT actually ran. |
 | `SPARK_VERIFY_MSG` | macro | SparkEngine | [SparkError.h:L284](../../SparkEngine/Source/Utils/SparkError.h#L284) |  |
 | `SPARK_VOLUME_BLEND` | macro | SparkEngine | [VolumeSystem.h:L213](../../SparkEngine/Source/Graphics/VolumeSystem.h#L213) |  |
 | `SPARK_WARN_IF` | macro | SparkEngine | [Validate.h:L503](../../SparkEngine/Source/Utils/Validate.h#L503) | Log a warning if condition is true (does not return or abort) |
@@ -1341,7 +1341,7 @@
 | `VERIFY_HR` | macro | SparkEngine | [Assert.h:L335](../../SparkEngine/Source/Utils/Assert.h#L335) | HRESULT check active in ALL builds |
 | `VERIFY_MSG` | macro | SparkEngine | [Assert.h:L327](../../SparkEngine/Source/Utils/Assert.h#L327) | VERIFY with a printf-style diagnostic message |
 | `VideoHandle` | alias | SparkEngine | [VideoPlayer.h:L44](../../SparkEngine/Source/Engine/Cinematic/VideoPlayer.h#L44) | Opaque handle to a loaded video |
-| `ViolationCallback` | alias | SparkEngine | [MemoryIntegrity.h:L141](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L141) | Callback invoked on each violation (game code decides the response) |
+| `ViolationCallback` | alias | SparkEngine | [MemoryIntegrity.h:L142](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L142) | Callback invoked on each violation (game code decides the response) |
 | `VK_BACK` | macro | SparkEngine | [PlatformTypes.h:L133](../../SparkEngine/Source/Core/PlatformTypes.h#L133) |  |
 | `VK_CAPITAL` | macro | SparkEngine | [PlatformTypes.h:L140](../../SparkEngine/Source/Core/PlatformTypes.h#L140) |  |
 | `VK_CONTROL` | macro | SparkEngine | [PlatformTypes.h:L137](../../SparkEngine/Source/Core/PlatformTypes.h#L137) |  |
@@ -1423,7 +1423,7 @@
 | `WIN32_LEAN_AND_MEAN` | macro | SparkInstaller | [main.cpp:L16](../../SparkInstaller/src/main.cpp#L16) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkLauncher | [LauncherPaths.cpp:L9](../../SparkLauncher/src/LauncherPaths.cpp#L9) | SparkLauncher executable and template path discovery. |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkLauncher | [LauncherProcess.cpp:L18](../../SparkLauncher/src/LauncherProcess.cpp#L18) |  |
-| `WIN32_LEAN_AND_MEAN` | macro | SparkLauncher | [main.cpp:L21](../../SparkLauncher/src/main.cpp#L21) |  |
+| `WIN32_LEAN_AND_MEAN` | macro | SparkLauncher | [main.cpp:L24](../../SparkLauncher/src/main.cpp#L24) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkSDK | [ModuleDllMain.h:L35](../../SparkSDK/Include/Spark/ModuleDllMain.h#L35) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | Tests | [TestGatewayAreaControl.cpp:L2](../../Tests/TestGatewayAreaControl.cpp#L2) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | Tests | [TestGatewaySecurity.cpp:L4](../../Tests/TestGatewaySecurity.cpp#L4) | HMAC admission and replay tests. |
