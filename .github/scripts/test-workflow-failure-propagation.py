@@ -1306,6 +1306,11 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             launch_step,
         )
         self.assertIsNotNone(command_match, "staged installer version gate is missing")
+        self.assertIn(
+            "sed $'s/\\r$//' installer-version.txt |",
+            command_match.group(1),
+            "staged installer version gate must normalize only a trailing CR before exact comparison",
+        )
         command = command_match.group(1).replace("installer-version.txt", "-")
         if os.name == "nt":
             bash = Path(os.environ["ProgramFiles"]) / "Git" / "bin" / "bash.exe"

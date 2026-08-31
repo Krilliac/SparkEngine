@@ -593,7 +593,7 @@ jobs:
           set -o pipefail
           "./staging/${{ matrix.artifact_name }}" --version | tee installer-version.txt
           "./staging/${{ matrix.artifact_name }}" --help | tee installer-help.txt
-          grep -Fqx -- "SparkInstaller ${EXPECTED_VERSION} (${EXPECTED_PLATFORM})" installer-version.txt
+          sed $'s/\r$//' installer-version.txt | grep -Fqx -- "SparkInstaller ${EXPECTED_VERSION} (${EXPECTED_PLATFORM})"
           grep -Fq "Usage:" installer-help.txt
 
       - name: Upload installer binary
