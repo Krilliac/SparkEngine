@@ -402,8 +402,8 @@ namespace Spark
         return m_serializers.erase(typeName) != 0;
     }
 
-    ComponentSerializerRegistry::RegistrationHandle
-    ComponentSerializerRegistry::TakeRegistration(const std::string& typeName)
+    ComponentSerializerRegistry::RegistrationHandle ComponentSerializerRegistry::TakeRegistration(
+        const std::string& typeName)
     {
         return RegistrationHandle(m_serializers.extract(typeName));
     }

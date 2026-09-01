@@ -692,7 +692,6 @@ TEST(ModuleABI_SparkGameShutdownReleasesHostRegistryCallbacksBeforeUnload)
 
     manager.UnloadAll();
     EXPECT_EQ(manager.GetModuleCount(), size_t{0});
-
 }
 #endif
 

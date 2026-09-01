@@ -22,7 +22,8 @@ TRUSTED_CI_AGGREGATE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "trusted-c
 README = REPO_ROOT / "README.md"
 TEST_COUNT_RATCHET = REPO_ROOT / ".github" / "test-count-ratchet.json"
 TESTS_CMAKE = REPO_ROOT / "Tests" / "CMakeLists.txt"
-TELEMETRY_EXPECTED_COUNT = 7
+TEST_TELEMETRY_SPOOL = REPO_ROOT / "Tests" / "TestTelemetrySpool.cpp"
+TELEMETRY_EXPECTED_COUNT = 8
 
 
 def step_blocks(workflow: str) -> list[tuple[str, str]]:
@@ -771,6 +772,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         cls.site_data_publish = SITE_DATA_PUBLISH_WORKFLOW.read_text(encoding="utf-8")
         cls.readme = README.read_text(encoding="utf-8")
         cls.tests_cmake = TESTS_CMAKE.read_text(encoding="utf-8")
+        cls.test_telemetry_spool = TEST_TELEMETRY_SPOOL.read_text(encoding="utf-8")
 
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
         self.assertEqual(required_workflow_errors(self.build), [])
@@ -854,6 +856,12 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_telemetry_ctest_selector_is_fail_closed(self) -> None:
         self.assertEqual(telemetry_ctest_contract_errors(self.tests_cmake), [])
+        selected_tests = re.findall(
+            r"^TEST\(Telemetry_SpoolRecovery(?:_[A-Za-z0-9_]+)?\)\s*$",
+            self.test_telemetry_spool,
+            flags=re.MULTILINE,
+        )
+        self.assertEqual(len(selected_tests), TELEMETRY_EXPECTED_COUNT)
 
     def test_telemetry_ctest_selector_rejects_hostile_mutations(self) -> None:
         mutations = {

@@ -1123,7 +1123,7 @@ set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
 
 add_test(NAME TelemetrySpool COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(TelemetrySpool PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME=Telemetry_SpoolRecovery;SPARK_TEST_EXPECT_COUNT=7"
+    ENVIRONMENT "SPARK_TEST_NAME=Telemetry_SpoolRecovery;SPARK_TEST_EXPECT_COUNT=8"
     LABELS "telemetry-integration"
     RUN_SERIAL TRUE
     TIMEOUT 30)

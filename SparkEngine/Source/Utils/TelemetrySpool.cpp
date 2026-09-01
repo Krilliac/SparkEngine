@@ -408,7 +408,9 @@ namespace Spark::TelemetryDetail
             if (file < 0)
                 return errno == ELOOP ? TelemetrySpoolResult::Rejected : TelemetrySpoolResult::IoFailure;
 
-            struct stat information{};
+            struct stat information
+            {
+            };
             if (fstat(file, &information) != 0 || !S_ISREG(information.st_mode) || information.st_nlink != 1 ||
                 information.st_size < static_cast<off_t>(kHeaderBytes) ||
                 static_cast<uint64_t>(information.st_size) > maximumBytes)
@@ -564,10 +566,11 @@ namespace Spark::TelemetryDetail
             }
         } handles;
 
-        const auto openDirectory = [&handles](const std::filesystem::path& path, bool isRoot) {
-            HANDLE handle = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                        nullptr, OPEN_EXISTING,
-                                        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+        const auto openDirectory = [&handles](const std::filesystem::path& path, bool isRoot)
+        {
+            HANDLE handle =
+                CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                            OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
             if (handle == INVALID_HANDLE_VALUE)
             {
                 const DWORD error = GetLastError();

@@ -31,8 +31,8 @@ namespace
             // alias before constructing fixtures so the tests still exercise
             // only the explicit hostile symlinks created below.
             const fs::path tempRoot = fs::canonical(fs::temp_directory_path());
-            m_root = tempRoot / (std::string("spark-telemetry-") + tag + "-" +
-                                 std::to_string(++sequence) + "-" + std::to_string(stamp));
+            m_root = tempRoot / (std::string("spark-telemetry-") + tag + "-" + std::to_string(++sequence) + "-" +
+                                 std::to_string(stamp));
             fs::create_directories(m_root);
         }
 
@@ -987,17 +987,18 @@ TEST(Telemetry_SpoolRecovery_DisappearedRejectedArtifactCleanupDoesNotPoisonNext
 
         EXPECT_TRUE(Spark::TelemetryDetail::TelemetrySpool::InspectDeferredCleanupDirectory("relative-spool") ==
                     Spark::TelemetryDetail::TelemetrySpoolResult::Rejected);
-        EXPECT_TRUE(Spark::TelemetryDetail::TelemetrySpool::InspectDeferredCleanupDirectory(redirected.Root().string()) ==
-                    Spark::TelemetryDetail::TelemetrySpoolResult::Success);
-        EXPECT_TRUE(Spark::TelemetryDetail::TelemetrySpool::InspectDeferredCleanupDirectory(rejectedDirectory.string()) ==
-                    Spark::TelemetryDetail::TelemetrySpoolResult::NotFound);
+        EXPECT_TRUE(Spark::TelemetryDetail::TelemetrySpool::InspectDeferredCleanupDirectory(
+                        redirected.Root().string()) == Spark::TelemetryDetail::TelemetrySpoolResult::Success);
+        EXPECT_TRUE(Spark::TelemetryDetail::TelemetrySpool::InspectDeferredCleanupDirectory(
+                        rejectedDirectory.string()) == Spark::TelemetryDetail::TelemetrySpoolResult::NotFound);
         const fs::path regularAncestor = redirected.Root() / "caller-owned-file";
         {
             std::ofstream output(regularAncestor);
             output << "preserve-me";
         }
         EXPECT_TRUE(Spark::TelemetryDetail::TelemetrySpool::InspectDeferredCleanupDirectory(
-                        (regularAncestor / "child").string()) == Spark::TelemetryDetail::TelemetrySpoolResult::Rejected);
+                        (regularAncestor / "child").string()) ==
+                    Spark::TelemetryDetail::TelemetrySpoolResult::Rejected);
 
         telemetry.Initialize(MakeSpoolConfig(rejectedDirectory));
         EXPECT_GT(telemetry.GetDeliveryStats().spoolRejectedOperations, 0u);

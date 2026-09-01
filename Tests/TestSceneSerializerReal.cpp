@@ -37,8 +37,7 @@ namespace
             const auto processId = static_cast<uint64_t>(::getpid());
 #endif
             m_path = std::filesystem::temp_directory_path() /
-                     ("spark_scene_serializer_" + std::to_string(processId) + "_" + std::to_string(nonce) +
-                      extension);
+                     ("spark_scene_serializer_" + std::to_string(processId) + "_" + std::to_string(nonce) + extension);
         }
 
         ~TemporarySceneFile()
@@ -528,8 +527,8 @@ TEST(SceneSerializerReal_ComponentPayloadsOwnLongStringsAndRoundTripAsNamedField
     SceneFile scene;
     SceneObject object;
     object.id = 1;
-    object.componentTypes = {ComponentType::MESH_RENDERER, ComponentType::COLLIDER, ComponentType::AUDIO_SOURCE,
-                             ComponentType::SPRITE_RENDERER, ComponentType::TILEMAP, ComponentType::PARALLAX_BG};
+    object.componentTypes = {ComponentType::MESH_RENDERER,   ComponentType::COLLIDER, ComponentType::AUDIO_SOURCE,
+                             ComponentType::SPRITE_RENDERER, ComponentType::TILEMAP,  ComponentType::PARALLAX_BG};
     scene.objects.push_back(object);
 
     const auto add = [&](ComponentType type, const auto& value)
@@ -759,7 +758,8 @@ TEST(SceneSerializerReal_WrongCustomAndLegacyRawPayloadsFailClosed)
     TemporarySceneFile inputFile(".sparkscene");
     {
         std::ofstream output(inputFile.Path(), std::ios::binary | std::ios::trunc);
-        output << R"({"version":1,"objectCount":1,"componentCount":1,"objects":[{"id":1,"componentTypes":["MeshRenderer"]}],"components":[{"type":"MeshRenderer","objectID":1,"data":"deadbeef"}]})";
+        output
+            << R"({"version":1,"objectCount":1,"componentCount":1,"objects":[{"id":1,"componentTypes":["MeshRenderer"]}],"components":[{"type":"MeshRenderer","objectID":1,"data":"deadbeef"}]})";
     }
     SceneFile live;
     live.header.timestamp = 42;

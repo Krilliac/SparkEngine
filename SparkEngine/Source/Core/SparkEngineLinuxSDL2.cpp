@@ -137,7 +137,6 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     // Complete debug/gameplay/daemon initialization and publish EngineStartEvent
     // only after modules and their host callbacks are live.
     InitConsole();
-
 }
 
 /**
