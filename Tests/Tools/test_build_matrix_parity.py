@@ -555,6 +555,116 @@ class PresetAndCodemodelTests(unittest.TestCase):
             ],
         )
 
+    def test_codemodel_rejects_two_targets_claiming_one_artifact(self) -> None:
+        build_directory = (TEST_TEMP_ROOT / "synthetic-shared-artifact").resolve()
+        codemodel = {
+            "configurations": [{
+                "name": "MinSizeRel",
+                "targets": [
+                    {"name": "First", "id": "First::@synthetic", "jsonFile": "first.json"},
+                    {"name": "Second", "id": "Second::@synthetic", "jsonFile": "second.json"},
+                ],
+            }]
+        }
+        for second_path in (
+            "bin/MinSizeRel/shared.exe",
+            "BIN/MINSIZEREL/SHARED.EXE",
+        ):
+            with self.subTest(second_path=second_path):
+                target_documents = {
+                    "first.json": {
+                        "name": "First",
+                        "id": "First::@synthetic",
+                        "type": "EXECUTABLE",
+                        "nameOnDisk": "shared.exe",
+                        "artifacts": [{"path": "bin/MinSizeRel/shared.exe"}],
+                    },
+                    "second.json": {
+                        "name": "Second",
+                        "id": "Second::@synthetic",
+                        "type": "EXECUTABLE",
+                        "nameOnDisk": "shared.exe",
+                        "artifacts": [{"path": second_path}],
+                    },
+                }
+
+                with self.assertRaisesRegex(inventory.InventoryError, "claimed by multiple targets"):
+                    inventory.parse_codemodel_targets(
+                        "windows-shipping", codemodel, target_documents, build_directory
+                    )
+
+    def test_codemodel_allows_one_path_in_distinct_configurations(self) -> None:
+        build_directory = (TEST_TEMP_ROOT / "synthetic-multiconfig-shared-path").resolve()
+        codemodel = {
+            "configurations": [
+                {
+                    "name": "Debug",
+                    "targets": [{
+                        "name": "DebugOwner",
+                        "id": "DebugOwner::@synthetic",
+                        "jsonFile": "debug.json",
+                    }],
+                },
+                {
+                    "name": "MinSizeRel",
+                    "targets": [{
+                        "name": "ShippingOwner",
+                        "id": "ShippingOwner::@synthetic",
+                        "jsonFile": "shipping.json",
+                    }],
+                },
+            ]
+        }
+        documents = {
+            name: {
+                "name": target,
+                "id": f"{target}::@synthetic",
+                "type": "EXECUTABLE",
+                "nameOnDisk": "shared.exe",
+                "artifacts": [{"path": "bin/shared.exe"}],
+            }
+            for name, target in (
+                ("debug.json", "DebugOwner"),
+                ("shipping.json", "ShippingOwner"),
+            )
+        }
+
+        evidence = inventory.parse_codemodel_targets(
+            "windows-shipping", codemodel, documents, build_directory
+        )
+
+        self.assertEqual([item["target"] for item in evidence["targets"]], ["ShippingOwner"])
+
+    def test_codemodel_rejects_case_variant_duplicate_within_one_target(self) -> None:
+        build_directory = (TEST_TEMP_ROOT / "synthetic-case-duplicate").resolve()
+        codemodel = {
+            "configurations": [{
+                "name": "MinSizeRel",
+                "targets": [{
+                    "name": "SparkEngine",
+                    "id": "SparkEngine::@synthetic",
+                    "jsonFile": "target.json",
+                }],
+            }]
+        }
+        target = {
+            "target.json": {
+                "name": "SparkEngine",
+                "id": "SparkEngine::@synthetic",
+                "type": "EXECUTABLE",
+                "nameOnDisk": "SparkEngine.exe",
+                "artifacts": [
+                    {"path": "bin/MinSizeRel/SparkEngine.exe"},
+                    {"path": "BIN/MINSIZEREL/SPARKENGINE.EXE"},
+                ],
+            }
+        }
+
+        with self.assertRaisesRegex(inventory.InventoryError, "repeats artifact"):
+            inventory.parse_codemodel_targets(
+                "windows-shipping", codemodel, target, build_directory
+            )
+
     def test_codemodel_utility_is_recorded_without_artifact_identity(self) -> None:
         evidence = inventory.parse_codemodel_targets(
             "windows-shipping",
@@ -2046,6 +2156,21 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 }],
             )
 
+            inventory._apply_verified_artifact_manifest(evidence, manifest)
+
+            self.assertEqual(
+                evidence["targets"][0]["artifacts"],
+                [inventory._normalize_directory(str(product))],
+            )
+            self.assertEqual(
+                evidence["targets"][0]["artifactIdentities"],
+                manifest[0]["artifactIdentities"],
+            )
+            self.assertEqual(
+                evidence["targets"][0]["artifactState"],
+                "locally-observed-post-build",
+            )
+
     def test_capture_rejects_missing_non_pdb_artifact(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             build = Path(raw)
@@ -2063,6 +2188,97 @@ class CodemodelProvenanceTests(unittest.TestCase):
 
             with self.assertRaises(inventory.InventoryError):
                 inventory._capture_artifact_manifest(evidence, build)
+
+    def test_verified_manifest_rejects_duplicate_artifact_identity_paths(self) -> None:
+        evidence = {
+            "targets": [{
+                "id": "SparkEngine::@synthetic",
+                "target": "SparkEngine",
+                "configuration": "MinSizeRel",
+                "artifacts": ["C:/build/SparkEngine.exe", "C:/build/SparkEngine.pdb"],
+            }]
+        }
+        duplicate = {"path": "C:/build/SparkEngine.exe", "bytes": 1, "sha256": "a" * 64}
+        manifest = [{
+            "id": "SparkEngine::@synthetic",
+            "target": "SparkEngine",
+            "configuration": "MinSizeRel",
+            "artifactIdentities": [duplicate, copy.deepcopy(duplicate)],
+        }]
+
+        with self.assertRaisesRegex(inventory.InventoryError, "repeats an artifact"):
+            inventory._apply_verified_artifact_manifest(evidence, manifest)
+
+    def test_verified_manifest_rejects_cross_target_artifact_alias(self) -> None:
+        for second_path in ("C:/build/shared.exe", "c:\\BUILD\\SHARED.EXE"):
+            with self.subTest(second_path=second_path):
+                evidence = {
+                    "targets": [
+                        {"id": "First::@synthetic", "target": "First", "configuration": "MinSizeRel"},
+                        {"id": "Second::@synthetic", "target": "Second", "configuration": "MinSizeRel"},
+                    ]
+                }
+                manifest = [
+                    {
+                        "id": "First::@synthetic",
+                        "target": "First",
+                        "configuration": "MinSizeRel",
+                        "artifactIdentities": [{
+                            "path": "C:/build/shared.exe", "bytes": 1, "sha256": "a" * 64,
+                        }],
+                    },
+                    {
+                        "id": "Second::@synthetic",
+                        "target": "Second",
+                        "configuration": "MinSizeRel",
+                        "artifactIdentities": [{
+                            "path": second_path, "bytes": 1, "sha256": "a" * 64,
+                        }],
+                    },
+                ]
+
+                with self.assertRaisesRegex(inventory.InventoryError, "claimed by multiple targets"):
+                    inventory._apply_verified_artifact_manifest(evidence, manifest)
+
+    def test_parity_rejects_cross_target_artifact_alias(self) -> None:
+        data = copy.deepcopy(self.data)
+        shipping = next(
+            item
+            for item in data["profile"]["buildConfigurations"]
+            if item["id"] == "windows-shipping"
+        )
+        data["profile"]["buildConfigurations"] = [shipping]
+        data["profile"]["buildProducts"] = [
+            {
+                "target": target,
+                "kind": "executable",
+                "buildProfile": "windows-shipping",
+                "applicability": "required",
+            }
+            for target in ("First", "Second")
+        ]
+        shared_path = "C:/build/shared.exe"
+        data["configuredTargetEvidence"] = [{
+            "profile": "windows-shipping",
+            "status": "available",
+            "buildDirectory": "C:/build",
+            "targets": [
+                {
+                    "target": target,
+                    "id": f"{target}::@synthetic",
+                    "kind": "executable",
+                    "configuration": "MinSizeRel",
+                    "artifactState": "declared-not-built",
+                    "nameOnDisk": "shared.exe",
+                    "artifacts": [shared_path],
+                }
+                for target in ("First", "Second")
+            ],
+        }]
+
+        findings = check_parity.check_configured_targets(data)
+        aliases = [item for item in findings if item.category == "configured-target-artifact-alias"]
+        self.assertEqual(len(aliases), 1)
 
     def test_capture_matches_windows_primary_product_case_insensitively(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
@@ -2587,6 +2803,36 @@ class CodemodelProvenanceTests(unittest.TestCase):
         self.assertEqual(len(invented), 1)
         self.assertIn("TotallyInvented", invented[0].message)
         self.assertEqual(invented[0].severity, "error")
+
+    def test_required_external_target_references_corroborate_real_dependencies(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(
+                Path(raw),
+                targets=(
+                    ("SparkEngine", "EXECUTABLE"),
+                    ("Jolt", "STATIC_LIBRARY"),
+                    ("TotallyInvented", "STATIC_LIBRARY"),
+                ),
+            )
+        data = self.bound_data(evidence)
+        data["cmakeTargetDeclarations"].append({
+            "target": "TotallyInvented",
+            "kind": "required_reference",
+            "file": "CMakeLists.txt",
+            "line": 1,
+            "conditionFrames": [{
+                "id": "CMakeLists.txt:1",
+                "branch": 0,
+                "branches": ["FALSE"],
+            }],
+            "definitionScope": [],
+            "origin": "required-target-reference",
+            "resolved": True,
+        })
+        findings = check_parity.check_codemodel_provenance(data)
+        undeclared = [item for item in findings if item.category == "configured-target-undeclared"]
+        self.assertEqual(len(undeclared), 1)
+        self.assertIn("TotallyInvented", undeclared[0].message)
 
     def test_caller_asserted_commit_cannot_replace_producer_provenance(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
@@ -3305,6 +3551,121 @@ class TargetInventoryTests(unittest.TestCase):
             self.assertIn(name, self.targets)
             self.assertTrue(self.targets[name]["buildable"])
             self.assertIn("wrapper-call", self.targets[name]["origins"])
+
+    def test_required_external_targets_are_corroborated_without_becoming_products(self) -> None:
+        for target in ("Jolt", "angelscript"):
+            with self.subTest(target=target):
+                self.assertIn(target, self.targets)
+                self.assertFalse(self.targets[target]["buildable"])
+                self.assertEqual(
+                    self.targets[target]["origins"], ["required-target-reference"]
+                )
+                admitted_profiles = {
+                    profile
+                    for profile in (
+                        "installed-sdk-consumer",
+                        "windows-shipping",
+                        "windows-validation",
+                    )
+                    if target in inventory.reviewed_required_target_references(
+                        self.declarations,
+                        profile,
+                        {
+                            "ENABLE_ANGELSCRIPT": "ON",
+                            "SPARK_STRICT_DEPS": "ON",
+                        },
+                    )
+                }
+                expected_profiles = (
+                    {"windows-shipping", "windows-validation"}
+                    if target == "Jolt"
+                    else {"windows-validation"}
+                )
+                self.assertEqual(admitted_profiles, expected_profiles)
+                mutations = {
+                    "line": lambda record: record.__setitem__("line", record["line"] + 1),
+                    "file": lambda record: record.__setitem__("file", "cmake/Hostile.cmake"),
+                    "conditionFrames": lambda record: record.__setitem__("conditionFrames", []),
+                    "origin": lambda record: record.__setitem__("origin", "declaration"),
+                    "resolved": lambda record: record.__setitem__("resolved", False),
+                    "definitionScope": lambda record: record.__setitem__(
+                        "definitionScope", ["hostile_wrapper"]
+                    ),
+                }
+                for field, mutate in mutations.items():
+                    with self.subTest(target=target, mutated_field=field):
+                        tampered = copy.deepcopy(self.declarations)
+                        reference = next(
+                            item
+                            for item in tampered
+                            if item.get("target") == target
+                            and item.get("origin") == "required-target-reference"
+                        )
+                        mutate(reference)
+                        self.assertNotIn(
+                            target,
+                            inventory.reviewed_required_target_references(
+                                tampered,
+                                next(iter(expected_profiles)),
+                                {
+                                    "ENABLE_ANGELSCRIPT": "ON",
+                                    "SPARK_STRICT_DEPS": "ON",
+                                },
+                            ),
+                        )
+                if target == "angelscript":
+                    self.assertNotIn(
+                        target,
+                        inventory.reviewed_required_target_references(
+                            self.declarations,
+                            "windows-validation",
+                            {
+                                "ENABLE_ANGELSCRIPT": "OFF",
+                                "SPARK_STRICT_DEPS": "ON",
+                            },
+                        ),
+                    )
+                else:
+                    self.assertNotIn(
+                        target,
+                        inventory.reviewed_required_target_references(
+                            self.declarations,
+                            "windows-shipping",
+                            {
+                                "ENABLE_ANGELSCRIPT": "OFF",
+                                "SPARK_STRICT_DEPS": "OFF",
+                            },
+                        ),
+                    )
+                products = [{
+                    "target": target,
+                    "kind": "static_library",
+                    "buildProfile": "windows-shipping",
+                    "applicability": "required",
+                }]
+                findings = check_parity.check_stable_v1_targets(
+                    list(self.targets.values()), products
+                )
+                self.assertEqual(
+                    [item.category for item in findings], ["missing-target"]
+                )
+
+    def test_unreviewed_third_party_cmake_inputs_are_not_admitted(self) -> None:
+        tracked = "\n".join((
+            "CMakeLists.txt",
+            "ThirdParty/Hostile/CMakeLists.txt",
+            "ThirdParty/Physics/JoltPhysics/Jolt/Jolt.cmake",
+        )) + "\n"
+        completed = subprocess.CompletedProcess(
+            ["git", "ls-files"], 0, stdout=tracked, stderr=""
+        )
+        with mock.patch.object(inventory.subprocess, "run", return_value=completed):
+            paths = inventory._git_ls_files("*CMakeLists.txt", "*.cmake")
+        relative = {path.relative_to(inventory.REPO_ROOT).as_posix() for path in paths}
+
+        self.assertIn("CMakeLists.txt", relative)
+        self.assertNotIn("ThirdParty/Physics/JoltPhysics/Jolt/Jolt.cmake", relative)
+        self.assertNotIn("ThirdParty/Hostile/CMakeLists.txt", relative)
 
     def test_imported_target_is_not_a_build_product(self) -> None:
         self.assertIn("OpenGL::GL", self.targets)

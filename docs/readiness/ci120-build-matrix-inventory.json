@@ -1981,6 +1981,38 @@
       "resolved": true
     },
     {
+      "target": "Jolt",
+      "kind": "required_reference",
+      "file": "CMakeLists.txt",
+      "line": 1558,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:1464",
+          "branch": 0,
+          "branches": [
+            "JOLT_FOUND"
+          ]
+        },
+        {
+          "id": "CMakeLists.txt:1556",
+          "branch": 0,
+          "branches": [
+            "SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"
+          ]
+        },
+        {
+          "id": "CMakeLists.txt:1557",
+          "branch": 0,
+          "branches": [
+            "MSVC"
+          ]
+        }
+      ],
+      "definitionScope": [],
+      "origin": "required-target-reference",
+      "resolved": true
+    },
+    {
       "target": "MMOStarter",
       "kind": "shared_library",
       "file": "Templates/MMOStarter/CMakeLists.txt",
@@ -2942,6 +2974,24 @@
       "resolved": true
     },
     {
+      "target": "angelscript",
+      "kind": "required_reference",
+      "file": "CMakeLists.txt",
+      "line": 913,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:883",
+          "branch": 0,
+          "branches": [
+            "ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE"
+          ]
+        }
+      ],
+      "definitionScope": [],
+      "origin": "required-target-reference",
+      "resolved": true
+    },
+    {
       "target": "cgltf",
       "kind": "static_library",
       "file": "CMakeLists.txt",
@@ -3294,6 +3344,24 @@
           "line": 20,
           "kind": "shared_library",
           "origin": "wrapper-call",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "Jolt",
+      "kind": "required_reference",
+      "buildable": false,
+      "origins": [
+        "required-target-reference"
+      ],
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 1558,
+          "kind": "required_reference",
+          "origin": "required-target-reference",
           "definitionScope": [],
           "resolved": true
         }
@@ -4578,6 +4646,24 @@
           "line": 690,
           "kind": "interface_library",
           "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "angelscript",
+      "kind": "required_reference",
+      "buildable": false,
+      "origins": [
+        "required-target-reference"
+      ],
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 913,
+          "kind": "required_reference",
+          "origin": "required-target-reference",
           "definitionScope": [],
           "resolved": true
         }

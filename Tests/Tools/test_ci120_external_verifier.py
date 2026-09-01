@@ -73,7 +73,7 @@ def source_metadata(commit: str = COMMIT) -> dict[str, Any]:
     }
 
 
-def shipping_fixture(artifact_root: Path) -> tuple[dict[str, Any], Path]:
+def shipping_fixture(artifact_root: Path, *, include_pdb: bool = False) -> tuple[dict[str, Any], Path]:
     """Create one real reply/provenance/product tree with recorded Windows paths."""
     profile = "windows-shipping"
     build = artifact_root / "build" / "windows-shipping"
@@ -83,6 +83,8 @@ def shipping_fixture(artifact_root: Path) -> tuple[dict[str, Any], Path]:
     artifact = build / "bin" / "MinSizeRel" / "SparkEngine.exe"
     artifact.parent.mkdir(parents=True)
     artifact.write_bytes(b"synthetic-spark-engine-product")
+    if include_pdb:
+        artifact.with_suffix(".pdb").write_bytes(b"synthetic-debug-symbols")
 
     target_id = "SparkEngine::@synthetic-0"
     configurations: list[dict[str, Any]] = []
@@ -257,9 +259,7 @@ def shipping_fixture(artifact_root: Path) -> tuple[dict[str, Any], Path]:
     record_payload = record_path.read_bytes()
     portable = copy.deepcopy(evidence)
     verifier._portable_evidence_paths(portable, build, recorded_build)
-    identities = claimed_manifest[0]["artifactIdentities"]
-    portable["targets"][0]["artifactState"] = "locally-observed-post-build"
-    portable["targets"][0]["artifactIdentities"] = identities
+    inventory._apply_verified_artifact_manifest(portable, claimed_manifest)
     portable["producerProvenance"] = {
         "state": "unavailable",
         "authority": inventory._CI120_EXTERNAL_AUTHORITY,
@@ -369,13 +369,32 @@ class RawProfileEvidenceTests(unittest.TestCase):
         target = reconstructed["targets"][0]
         self.assertEqual(
             [Path(path).name for path in target["artifacts"]],
-            ["SparkEngine.exe", "SparkEngine.pdb"],
+            ["SparkEngine.exe"],
         )
         self.assertEqual(
             [Path(row["path"]).name for row in target["artifactIdentities"]],
             ["SparkEngine.exe"],
         )
         self.assertEqual(receipt["artifactCount"], 1)
+
+    def test_present_optional_pdb_is_retained_and_hashed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            producer_evidence, _ = shipping_fixture(root, include_pdb=True)
+            reconstructed, receipt = verifier._verify_profile(
+                root, "windows-shipping", producer_evidence, source_metadata()
+            )
+
+        target = reconstructed["targets"][0]
+        self.assertEqual(
+            [Path(path).name for path in target["artifacts"]],
+            ["SparkEngine.exe", "SparkEngine.pdb"],
+        )
+        self.assertEqual(
+            [Path(row["path"]).name for row in target["artifactIdentities"]],
+            ["SparkEngine.exe", "SparkEngine.pdb"],
+        )
+        self.assertEqual(receipt["artifactCount"], 2)
 
     def test_absent_primary_product_is_rejected_when_optional_pdb_is_also_absent(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -616,16 +616,12 @@ def _verify_profile(
     )
     if portable_manifest != claimed_manifest:
         raise ExternalEvidenceError(f"{profile}: downloaded product identities differ from producer provenance")
-    identities_by_target = {
-        (entry["id"], entry["configuration"], entry["target"]): entry["artifactIdentities"]
-        for entry in claimed_manifest
-    }
-    for target in portable_evidence.get("targets", []):
-        key = (target["id"], target["configuration"], target["target"])
-        if key not in identities_by_target:
-            raise ExternalEvidenceError(f"{profile}: a configured target has no artifact identity")
-        target["artifactState"] = "locally-observed-post-build"
-        target["artifactIdentities"] = identities_by_target[key]
+    try:
+        inventory._apply_verified_artifact_manifest(portable_evidence, claimed_manifest)
+    except inventory.InventoryError as error:
+        raise ExternalEvidenceError(
+            f"{profile}: configured targets do not match the verified artifact manifest: {error}"
+        ) from error
 
     provenance_summary = {
         "state": "unavailable",

@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import math
+import ntpath
 import os
 import re
 import shutil
@@ -941,6 +942,58 @@ _LIBRARY_TYPE_KEYWORDS = {
 }
 # Keywords that mean "this is not a build product of this project".
 _NON_BUILD_TARGET_KEYWORDS = {"IMPORTED", "ALIAS"}
+_REQUIRED_TARGET_REFERENCE_COMMANDS = {
+    "target_compile_definitions",
+    "target_compile_features",
+    "target_compile_options",
+    "target_include_directories",
+    "target_link_directories",
+    "target_link_options",
+    "target_precompile_headers",
+    "target_sources",
+}
+_REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
+    "Jolt": {
+        "profiles": frozenset({"windows-shipping", "windows-validation"}),
+        "record": {
+            "target": "Jolt",
+            "kind": "required_reference",
+            "file": "CMakeLists.txt",
+            "line": 1558,
+            "conditionFrames": [
+                {"id": "CMakeLists.txt:1464", "branch": 0, "branches": ["JOLT_FOUND"]},
+                {
+                    "id": "CMakeLists.txt:1556",
+                    "branch": 0,
+                    "branches": ["SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"],
+                },
+                {"id": "CMakeLists.txt:1557", "branch": 0, "branches": ["MSVC"]},
+            ],
+            "definitionScope": [],
+            "origin": "required-target-reference",
+            "resolved": True,
+        },
+    },
+    "angelscript": {
+        "profiles": frozenset({"windows-validation"}),
+        "record": {
+            "target": "angelscript",
+            "kind": "required_reference",
+            "file": "CMakeLists.txt",
+            "line": 913,
+            "conditionFrames": [
+                {
+                    "id": "CMakeLists.txt:883",
+                    "branch": 0,
+                    "branches": ["ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE"],
+                }
+            ],
+            "definitionScope": [],
+            "origin": "required-target-reference",
+            "resolved": True,
+        },
+    },
+}
 
 
 def _wrapper_definitions(commands: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -993,9 +1046,22 @@ def extract_cmake_targets(paths: Iterable[Path] | None = None) -> list[dict[str,
 
     wrappers = _wrapper_definitions(parsed)
     declarations: list[dict[str, Any]] = []
+    required_references: list[dict[str, Any]] = []
     for command in parsed:
         name = command["name"]
         scope = command.get("definitionScope") or []
+        if name in _REQUIRED_TARGET_REFERENCE_COMMANDS and not scope:
+            args = _tokenize_cmake_arguments(command["body"])
+            if args and args[0] in _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS:
+                required_references.append(
+                    _target_record(
+                        args[0],
+                        "required_reference",
+                        command,
+                        scope,
+                        origin="required-target-reference",
+                    )
+                )
         if name in wrappers and not scope:
             args = _tokenize_cmake_arguments(command["body"])
             if not args:
@@ -1032,7 +1098,50 @@ def extract_cmake_targets(paths: Iterable[Path] | None = None) -> list[dict[str,
             )
             continue
         declarations.append(_target_record(target, _classify_target(name, args), command, scope, origin=origin))
+    declared_targets = {
+        item["target"]
+        for item in declarations
+        if item.get("resolved", True)
+        and not item.get("definitionScope")
+        and item.get("origin") not in {"non-build", "required-target-reference"}
+    }
+    admitted_references: set[str] = set()
+    for reference in sorted(
+        required_references, key=lambda item: (item["target"], item["file"], item["line"])
+    ):
+        target = reference["target"]
+        if target in declared_targets or target in admitted_references:
+            continue
+        declarations.append(reference)
+        admitted_references.add(target)
     return sorted(declarations, key=lambda item: (item["target"], item["file"], item["line"]))
+
+
+def reviewed_required_target_references(
+    declarations: list[dict[str, Any]],
+    profile: str,
+    cache_variables: dict[str, Any],
+) -> set[str]:
+    """Return exact reviewed dependency bindings for one configured profile."""
+    reviewed: set[str] = set()
+    for declaration in declarations:
+        if not isinstance(declaration, dict):
+            continue
+        target = declaration.get("target")
+        contract = _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS.get(str(target))
+        if contract is None or profile not in contract["profiles"]:
+            continue
+        if target == "Jolt" and str(
+            cache_variables.get("SPARK_STRICT_DEPS", "")
+        ).upper() != "ON":
+            continue
+        if target == "angelscript" and str(
+            cache_variables.get("ENABLE_ANGELSCRIPT", "")
+        ).upper() != "ON":
+            continue
+        if declaration == contract["record"]:
+            reviewed.add(str(target))
+    return reviewed
 
 
 def _target_record(
@@ -1071,7 +1180,7 @@ def aggregate_cmake_targets(declarations: list[dict[str, Any]]) -> list[dict[str
             for item in group
             if item.get("resolved", True)
             and not item.get("definitionScope")
-            and item.get("origin") != "non-build"
+            and item.get("origin") not in {"non-build", "required-target-reference"}
         ]
         kinds = sorted({item["kind"] for item in (buildable or group)})
         result.append(
@@ -1358,6 +1467,11 @@ def _normalize_directory(value: Any) -> str:
     if not isinstance(value, str) or not value:
         return ""
     return Path(value).as_posix().rstrip("/")
+
+
+def _windows_artifact_key(value: str) -> str:
+    """Return a host-independent Windows path key for artifact ownership."""
+    return ntpath.normcase(ntpath.normpath(value.replace("/", "\\")))
 
 
 def _github_actions_context() -> dict[str, str] | None:
@@ -2287,6 +2401,7 @@ def parse_codemodel_targets(
     id_bindings: dict[tuple[str, str], tuple[str, str]] = {}
     id_semantics: dict[str, tuple[str, str, bool]] = {}
     logical_targets: set[tuple[str, str]] = set()
+    artifact_owners: dict[tuple[str, str], tuple[str, str]] = {}
     profile_data = load_stable_profile()
     profile_config = next(
         (item for item in profile_data.get("buildConfigurations", []) if item.get("id") == profile),
@@ -2442,12 +2557,23 @@ def parse_codemodel_targets(
                             f"{profile}: target {name!r} artifact {artifact_path!r} escapes the build directory"
                         )
                     normalized_artifact = _normalize_directory(str(absolute_artifact))
-                    artifact_key = os.path.normcase(normalized_artifact)
+                    artifact_key = _windows_artifact_key(normalized_artifact)
                     if artifact_key in seen_artifacts:
                         raise InventoryError(
                             f"{profile}: target {name!r} repeats artifact {artifact_path!r}"
                         )
                     seen_artifacts.add(artifact_key)
+                    ownership_key = (
+                        config_name,
+                        _windows_artifact_key(normalized_artifact),
+                    )
+                    owner = (reference_id, name)
+                    previous_owner = artifact_owners.get(ownership_key)
+                    if previous_owner is not None and previous_owner != owner:
+                        raise InventoryError(
+                            f"{profile}: artifact {artifact_path!r} is claimed by multiple targets"
+                        )
+                    artifact_owners[ownership_key] = owner
                     artifact_paths.append(normalized_artifact)
                 if not any(
                     Path(path).name.casefold() == name_on_disk.casefold()
@@ -2947,14 +3073,7 @@ def _load_producer_provenance(
             raise ReplyValidationError(f"{profile}: built artifact identity is unavailable: {error}") from error
         if claimed_targets != actual_targets:
             raise ReplyValidationError(f"{profile}: post-build artifact identities differ from producer record")
-        identities_by_target = {
-            (item["id"], item["configuration"], item["target"]): item["artifactIdentities"]
-            for item in actual_targets
-        }
-        for target in evidence.get("targets", []):
-            key = (target["id"], target["configuration"], target["target"])
-            target["artifactState"] = "locally-observed-post-build"
-            target["artifactIdentities"] = identities_by_target[key]
+        _apply_verified_artifact_manifest(evidence, actual_targets)
 
     return {
         # A local receipt may be internally consistent, but nothing in this
@@ -3288,6 +3407,7 @@ def _artifact_identity(path: Path, build_directory: Path, label: str) -> dict[st
 def _capture_artifact_manifest(evidence: dict[str, Any], build_directory: Path) -> list[dict[str, Any]]:
     """Capture immutable post-build identities for every configured target artifact."""
     manifest: list[dict[str, Any]] = []
+    artifact_owners: dict[tuple[str, str], tuple[str, str, str]] = {}
     for target in evidence.get("targets", []):
         if not isinstance(target, dict):
             raise InventoryError("configured target evidence is malformed")
@@ -3336,6 +3456,23 @@ def _capture_artifact_manifest(evidence: dict[str, Any], build_directory: Path) 
             raise InventoryError(
                 f"linked configured target {target_name!r} lacks its observed nameOnDisk product"
             )
+        identity_keys = [_windows_artifact_key(identity["path"]) for identity in identities]
+        if len(identity_keys) != len(set(identity_keys)):
+            raise InventoryError(
+                f"configured target {target_name!r} repeats a case-insensitive artifact path"
+            )
+        owner = (target_id, configuration, target_name)
+        for identity in identities:
+            ownership_key = (
+                configuration,
+                _windows_artifact_key(identity["path"]),
+            )
+            previous_owner = artifact_owners.get(ownership_key)
+            if previous_owner is not None and previous_owner != owner:
+                raise InventoryError(
+                    f"artifact {identity['path']!r} is claimed by multiple targets"
+                )
+            artifact_owners[ownership_key] = owner
         manifest.append(
             {
                 "id": target_id,
@@ -3345,6 +3482,70 @@ def _capture_artifact_manifest(evidence: dict[str, Any], build_directory: Path) 
             }
         )
     return sorted(manifest, key=lambda item: (item["id"], item["configuration"], item["target"]))
+
+
+def _apply_verified_artifact_manifest(
+    evidence: dict[str, Any], manifest: list[dict[str, Any]]
+) -> None:
+    """Expose only artifacts whose immutable identities were actually observed."""
+    identities_by_target: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    logical_manifest_targets: set[tuple[str, str]] = set()
+    artifact_owners: dict[tuple[str, str], tuple[str, str, str]] = {}
+    for item in manifest:
+        key = (item["id"], item["configuration"], item["target"])
+        if key in identities_by_target:
+            raise InventoryError(f"verified artifact manifest repeats target {item['target']!r}")
+        logical_key = (item["target"], item["configuration"])
+        if logical_key in logical_manifest_targets:
+            raise InventoryError(
+                f"verified artifact manifest repeats logical target {item['target']!r}"
+            )
+        logical_manifest_targets.add(logical_key)
+        identities = item.get("artifactIdentities")
+        if not isinstance(identities, list):
+            raise InventoryError(
+                f"verified artifact manifest has invalid identities for {item['target']!r}"
+            )
+        paths = [identity.get("path") for identity in identities if isinstance(identity, dict)]
+        if len(paths) != len(identities) or any(
+            not isinstance(path, str) or not path for path in paths
+        ):
+            raise InventoryError(
+                f"verified artifact manifest has an invalid artifact for {item['target']!r}"
+            )
+        normalized_keys = [_windows_artifact_key(path) for path in paths]
+        if len(normalized_keys) != len(set(normalized_keys)):
+            raise InventoryError(f"verified artifact manifest repeats an artifact for {item['target']!r}")
+        for path, path_key in zip(paths, normalized_keys, strict=True):
+            ownership_key = (item["configuration"], path_key)
+            previous_owner = artifact_owners.get(ownership_key)
+            if previous_owner is not None and previous_owner != key:
+                raise InventoryError(f"artifact {path!r} is claimed by multiple targets")
+            artifact_owners[ownership_key] = key
+        identities_by_target[key] = identities
+
+    evidence_targets = evidence.get("targets", [])
+    if not isinstance(evidence_targets, list):
+        raise InventoryError("configured target evidence must be an array")
+    evidence_keys: list[tuple[str, str, str]] = []
+    logical_evidence_targets: set[tuple[str, str]] = set()
+    for target in evidence_targets:
+        if not isinstance(target, dict):
+            raise InventoryError("configured target evidence is malformed")
+        key = (target["id"], target["configuration"], target["target"])
+        logical_key = (target["target"], target["configuration"])
+        if key in evidence_keys or logical_key in logical_evidence_targets:
+            raise InventoryError(f"configured target evidence repeats target {target['target']!r}")
+        evidence_keys.append(key)
+        logical_evidence_targets.add(logical_key)
+    if set(evidence_keys) != set(identities_by_target):
+        raise InventoryError("configured targets differ from the verified artifact manifest")
+
+    for target, key in zip(evidence_targets, evidence_keys, strict=True):
+        identities = identities_by_target[key]
+        target["artifactState"] = "locally-observed-post-build"
+        target["artifacts"] = [identity["path"] for identity in identities]
+        target["artifactIdentities"] = identities
 
 
 def _capture_plan(

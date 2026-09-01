@@ -621,11 +621,49 @@ def check_configured_targets(data: dict[str, Any]) -> list[Finding]:
             continue
         configured: dict[tuple[str, str], dict[str, Any]] = {}
         duplicate_keys: set[tuple[str, str]] = set()
+        artifact_owners: dict[tuple[str, str], tuple[str, str, str]] = {}
+        reported_aliases: set[tuple[str, str]] = set()
         for entry in evidence.get("targets", []):
             key = (str(entry.get("target")), str(entry.get("configuration", "")))
             if key in configured:
                 duplicate_keys.add(key)
             configured[key] = entry
+            owner = (
+                str(entry.get("id", "")),
+                str(entry.get("configuration", "")),
+                str(entry.get("target", "")),
+            )
+            artifacts = entry.get("artifacts")
+            if not isinstance(artifacts, list):
+                continue
+            for artifact in artifacts:
+                if not isinstance(artifact, str) or not artifact:
+                    continue
+                ownership_key = (
+                    owner[1],
+                    inventory_tool._windows_artifact_key(artifact),
+                )
+                previous_owner = artifact_owners.get(ownership_key)
+                if previous_owner is not None and ownership_key not in reported_aliases:
+                    if previous_owner != owner:
+                        message = (
+                            f"Configured targets '{previous_owner[2]}' and '{owner[2]}' "
+                            "claim the same artifact path"
+                        )
+                    else:
+                        message = (
+                            f"Configured target '{owner[2]}' repeats the same artifact path"
+                        )
+                    findings.append(
+                        Finding(
+                            "configured-target-artifact-alias",
+                            "error",
+                            message,
+                            artifact,
+                        )
+                    )
+                    reported_aliases.add(ownership_key)
+                artifact_owners[ownership_key] = owner
         for target, configuration in sorted(duplicate_keys):
             findings.append(
                 Finding(
@@ -718,7 +756,21 @@ def check_configured_targets(data: dict[str, Any]) -> list[Finding]:
                         "externally-attested-post-build",
                     }:
                         identities = entry.get("artifactIdentities")
-                        if not isinstance(identities, list) or len(identities) != len(artifacts):
+                        identity_paths = (
+                            [identity.get("path") for identity in identities]
+                            if isinstance(identities, list)
+                            and all(isinstance(identity, dict) for identity in identities)
+                            else []
+                        )
+                        if (
+                            not isinstance(identities, list)
+                            or len(identities) != len(artifacts)
+                            or not all(isinstance(path, str) and path for path in artifacts)
+                            or not all(isinstance(path, str) and path for path in identity_paths)
+                            or len(set(artifacts)) != len(artifacts)
+                            or len(set(identity_paths)) != len(identity_paths)
+                            or set(identity_paths) != set(artifacts)
+                        ):
                             artifact_problem = "post-build artifact claim lacks one identity per artifact"
                         elif any(
                             not isinstance(identity, dict)
@@ -1149,6 +1201,12 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                 )
             continue
         identifier = str(evidence.get("profile"))
+        evidence_cache = evidence.get("cacheVariables")
+        if not isinstance(evidence_cache, dict):
+            evidence_cache = {}
+        corroborated = declared | inventory_tool.reviewed_required_target_references(
+            data.get("cmakeTargetDeclarations", []), identifier, evidence_cache
+        )
         config = configs.get(identifier, {})
         root = str(repository.get("root", ""))
 
@@ -1471,7 +1529,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
 
         for entry in evidence.get("targets", []):
             name = str(entry.get("target"))
-            if declared and name not in declared:
+            if corroborated and name not in corroborated:
                 findings.append(
                     Finding(
                         "configured-target-undeclared",
