@@ -18,6 +18,27 @@ Templates/*/Assets/**/*.mtl text eol=lf
 # rewrite these on checkout and make the comparison fail for no real reason.
 docs/readiness/*.json text eol=lf
 docs/site/readiness.json text eol=lf
+# Generated documentation is compared byte-for-byte with fresh output.
+# Keep every tracked manifest output LF-stable on Windows checkouts too.
+README.md text eol=lf
+CLAUDE.md text eol=lf
+.github/copilot-instructions.md text eol=lf
+.github/prompts/copilot-instructions.md text eol=lf
+.github/prompts/build-test.prompt.md text eol=lf
+.github/badges/*.json text eol=lf
+wiki/Home.md text eol=lf
+wiki/advanced/Testing.md text eol=lf
+wiki/advanced/Codebase-Statistics.md text eol=lf
+wiki/gameplay-tools/SparkEditor.md text eol=lf
+wiki/subsystems/Entity-Component-System.md text eol=lf
+wiki/reference/Symbol-Index.md text eol=lf
+wiki/reference/Function-Index.md text eol=lf
+wiki/reference/Class-Index.md text eol=lf
+wiki/reference/Enum-Index.md text eol=lf
+wiki/reference/Macro-Index.md text eol=lf
+wiki/reference/File-Tree.md text eol=lf
+wiki/reference/Class-Hierarchy.md text eol=lf
+wiki/getting-started/Engine-Architecture-Flowchart.md text eol=lf
 
 ###############################################################################
 # Set default behavior for command prompt diff.
