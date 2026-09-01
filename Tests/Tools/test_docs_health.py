@@ -253,6 +253,44 @@ class DocsGenerationHostileTests(unittest.TestCase):
         self.assertNotIn("SPARK_FILE_TREE_OUTPUT", environment)
         self.assertNotIn("SPARK_WIKI_DIR", environment)
 
+    def test_currentness_pins_generation_date_to_source_commit_utc_day(self) -> None:
+        environments: list[dict[str, str]] = []
+
+        def completed_process(
+            _command: list[str],
+            *,
+            cwd: Path,
+            environment: dict[str, str],
+            timeout: float,
+            label: str,
+        ) -> SimpleNamespace:
+            del cwd, timeout, label
+            environments.append(dict(environment))
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory(prefix="docs-date-provenance-") as directory:
+            root = Path(directory)
+            with (
+                mock.patch.dict(os.environ, {"GENERATED_DATE": "2099-12-31"}, clear=False),
+                mock.patch.object(docs_currentness, "find_bash", return_value="bash"),
+                mock.patch.object(
+                    docs_currentness,
+                    "run_bounded_process",
+                    side_effect=completed_process,
+                ),
+            ):
+                docs_currentness.run_snapshot(
+                    root,
+                    root / ".tracked",
+                    EXACT_SHA,
+                    "2026-08-31T19:31:59-05:00",
+                )
+
+        self.assertEqual(
+            [environment.get("GENERATED_DATE") for environment in environments],
+            ["2026-09-01", "2026-09-01", "2026-09-01"],
+        )
+
     def test_bounded_process_timeout_terminates_descendants_promptly(self) -> None:
         child = (
             "import subprocess,sys,time; "

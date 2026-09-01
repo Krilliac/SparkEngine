@@ -18,6 +18,7 @@ RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
 RELEASE_RECOVERY_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-recovery.yml"
 LOC_COUNTER_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "loc-counter.yml"
 SITE_DATA_PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "site-data-publish.yml"
+README = REPO_ROOT / "README.md"
 TEST_COUNT_RATCHET = REPO_ROOT / ".github" / "test-count-ratchet.json"
 TESTS_CMAKE = REPO_ROOT / "Tests" / "CMakeLists.txt"
 TELEMETRY_EXPECTED_COUNT = 7
@@ -723,6 +724,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         cls.release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         cls.loc_counter = LOC_COUNTER_WORKFLOW.read_text(encoding="utf-8")
         cls.site_data_publish = SITE_DATA_PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+        cls.readme = README.read_text(encoding="utf-8")
         cls.tests_cmake = TESTS_CMAKE.read_text(encoding="utf-8")
 
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
@@ -1204,6 +1206,18 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertNotIn('"HEAD:refs/heads/Working"', self.loc_counter)
         self.assertNotIn("gh workflow run", self.loc_counter)
         self.assertIn("repository-metrics-source.json", self.loc_counter)
+
+    def test_readme_ci_badge_tracks_trusted_exact_source_status(self) -> None:
+        self.assertIn(
+            "https://img.shields.io/github/checks-status/Krilliac/SparkEngine/Working"
+            "?style=flat-square&label=CI",
+            self.readme,
+        )
+        self.assertNotIn(
+            "https://img.shields.io/github/actions/workflow/status/"
+            "Krilliac/SparkEngine/build.yml",
+            self.readme,
+        )
 
     def test_site_data_accepts_only_exact_staged_build_and_writes_a_tag(self) -> None:
         self.assertEqual(self.site_data_publish.count("--staged-build-only"), 1)

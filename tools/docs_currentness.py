@@ -53,6 +53,7 @@ OUTPUT_OVERRIDE_ENVIRONMENT = (
     "SPARK_DOC_HEALTH_OUTPUT",
     "SPARK_DOC_HEALTH_INNER",
     "SPARK_DOC_BASH",
+    "GENERATED_DATE",
 )
 
 
@@ -158,6 +159,16 @@ def exact_identity(source_sha: str | None, committed_at: str | None) -> tuple[st
     if timestamp != actual_timestamp:
         raise CurrentnessError("source committed-at timestamp does not match checked-out HEAD")
     return sha, timestamp
+
+
+def source_commit_utc_date(committed_at: str) -> str:
+    try:
+        parsed = datetime.fromisoformat(committed_at.replace("Z", "+00:00"))
+    except (AttributeError, ValueError) as exc:
+        raise CurrentnessError("source committed-at timestamp must be RFC 3339") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise CurrentnessError("source committed-at timestamp must include an offset")
+    return parsed.astimezone(timezone.utc).date().isoformat()
 
 
 def tracked_inventory() -> tuple[list[str], dict[str, str]]:
@@ -268,6 +279,7 @@ def run_snapshot(root: Path, tracked_manifest: Path, sha: str, committed_at: str
         "SPARK_DOC_TRACKED_PATHS": str(tracked_manifest),
         "SPARKENGINE_DOC_SOURCE_SHA": sha,
         "SPARKENGINE_DOC_SOURCE_COMMITTED_AT": committed_at,
+        "GENERATED_DATE": source_commit_utc_date(committed_at),
         "SPARK_DOC_HEALTH_OUTPUT": str(root / "docs" / ".health.json"),
         "SPARK_DOC_HEALTH_INNER": "1",
     })

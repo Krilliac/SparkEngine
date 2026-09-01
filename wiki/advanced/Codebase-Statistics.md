@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-08-31.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-01.
 This source inventory is not readiness evidence. The `stable-v1` Windows 11
 x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
