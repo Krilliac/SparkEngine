@@ -5,9 +5,16 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import io
+import json
+import os
+import shlex
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 from typing import Any
 
@@ -118,6 +125,147 @@ def valid_documents() -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 class PendingAuthorityTests(unittest.TestCase):
+    def test_cli_stdout_bytes_match_atomic_output_when_text_newlines_translate(self) -> None:
+        inventory_document, report = valid_documents()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            inventory_path = root / "inventory.json"
+            report_path = root / "report.json"
+            output_path = root / "receipt.json"
+            inventory_path.write_text(json.dumps(inventory_document), encoding="utf-8")
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            raw_stdout = io.BytesIO()
+            translated_stdout = io.TextIOWrapper(raw_stdout, encoding="utf-8", newline="\r\n")
+
+            with mock.patch.object(sys, "stdout", translated_stdout):
+                status = pending.main(
+                    [
+                        "--inventory",
+                        str(inventory_path),
+                        "--report",
+                        str(report_path),
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+                translated_stdout.flush()
+
+            self.assertEqual(status, 0)
+            self.assertEqual(raw_stdout.getvalue(), output_path.read_bytes())
+
+    def test_cli_stdout_bytes_match_atomic_output_through_git_bash_redirect(self) -> None:
+        if os.name != "nt":
+            self.skipTest("Windows Git Bash redirection contract")
+        bash = shutil.which("bash")
+        if bash is None:
+            git = shutil.which("git")
+            if git is not None:
+                candidates = (
+                    Path(git).resolve().parent.parent / "bin" / "bash.exe",
+                    Path(git).resolve().parent.parent.parent / "bin" / "bash.exe",
+                )
+                bash = next((str(candidate) for candidate in candidates if candidate.is_file()), None)
+        if bash is None:
+            self.skipTest("Git Bash is unavailable")
+
+        inventory_document, report = valid_documents()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            inventory_path = root / "inventory.json"
+            report_path = root / "report.json"
+            output_path = root / "receipt.json"
+            stdout_path = root / "stdout.json"
+            inventory_path.write_text(json.dumps(inventory_document), encoding="utf-8")
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            command = " ".join(
+                shlex.quote(Path(value).as_posix())
+                for value in (
+                    sys.executable,
+                    REPO_ROOT / "Tools" / "buildmatrix" / "validate_pending_authority.py",
+                    "--inventory",
+                    inventory_path,
+                    "--report",
+                    report_path,
+                    "--output",
+                    output_path,
+                )
+            )
+            command = f"{command} > {shlex.quote(stdout_path.as_posix())}"
+
+            completed = subprocess.run(
+                [bash, "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", command],
+                cwd=REPO_ROOT,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr.decode("utf-8"))
+            self.assertEqual(stdout_path.read_bytes(), output_path.read_bytes())
+
+    def test_cli_stdout_bytes_match_atomic_output_on_this_platform(self) -> None:
+        inventory_document, report = valid_documents()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            inventory_path = root / "inventory.json"
+            report_path = root / "report.json"
+            output_path = root / "receipt.json"
+            inventory_path.write_text(json.dumps(inventory_document), encoding="utf-8")
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "Tools" / "buildmatrix" / "validate_pending_authority.py"),
+                    "--inventory",
+                    str(inventory_path),
+                    "--report",
+                    str(report_path),
+                    "--output",
+                    str(output_path),
+                ],
+                cwd=REPO_ROOT,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr.decode("utf-8"))
+            self.assertEqual(completed.stdout, output_path.read_bytes())
+
+    def test_cli_rejection_stdout_bytes_match_atomic_output_on_this_platform(self) -> None:
+        _, report = valid_documents()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            inventory_path = root / "inventory.json"
+            report_path = root / "report.json"
+            output_path = root / "receipt.json"
+            inventory_path.write_text(
+                '{"schemaVersion": 3, "schemaVersion": 3}\n', encoding="utf-8"
+            )
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "Tools" / "buildmatrix" / "validate_pending_authority.py"),
+                    "--inventory",
+                    str(inventory_path),
+                    "--report",
+                    str(report_path),
+                    "--output",
+                    str(output_path),
+                ],
+                cwd=REPO_ROOT,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            self.assertEqual(completed.returncode, 1)
+            self.assertEqual(completed.stdout, output_path.read_bytes())
+            self.assertIn(b"CI-120 PENDING STATE REJECTED", completed.stderr)
+
     def test_duplicate_json_keys_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / "duplicate.json"

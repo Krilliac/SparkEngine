@@ -290,9 +290,13 @@ def build_pending_receipt(
     }
 
 
+def _json_bytes(value: dict[str, Any]) -> bytes:
+    return (json.dumps(value, indent=2, sort_keys=False) + "\n").encode("utf-8")
+
+
 def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = (json.dumps(value, indent=2, sort_keys=False) + "\n").encode("utf-8")
+    payload = _json_bytes(value)
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
         with os.fdopen(descriptor, "wb") as stream:
@@ -306,6 +310,11 @@ def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
         except FileNotFoundError:
             pass
         raise
+
+
+def _write_json_stdout(value: dict[str, Any]) -> None:
+    sys.stdout.buffer.write(_json_bytes(value))
+    sys.stdout.buffer.flush()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -326,7 +335,7 @@ def main(argv: list[str] | None = None) -> int:
             report_sha256=report_digest,
         )
         _write_json_atomic(args.output, receipt)
-        print(json.dumps(receipt, indent=2))
+        _write_json_stdout(receipt)
         return 0
     except (OSError, PendingAuthorityError, ValueError, TypeError) as error:
         rejection = {"schemaVersion": 1, "state": "rejected", "reason": str(error)}
@@ -334,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
             _write_json_atomic(args.output, rejection)
         except OSError:
             pass
-        print(json.dumps(rejection, indent=2))
+        _write_json_stdout(rejection)
         print(f"CI-120 PENDING STATE REJECTED: {error}", file=sys.stderr)
         return 1
 
