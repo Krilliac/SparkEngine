@@ -554,7 +554,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*576 test-bearing `.cpp`/`.mm` files, 6986 source-level test definitions*
+*576 test-bearing `.cpp`/`.mm` files, 6987 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -929,7 +929,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestPostProcessingPipelinePhaseK` | 11 |
 | `TestPostProcessingPipelinePhaseN` | 7 |
 | `TestPrefabManager` | 4 |
-| `TestProceduralGenerator` | 13 |
+| `TestProceduralGenerator` | 14 |
 | `TestProcess` | 20 |
 | `TestProcessDrawListLinux` | 9 |
 | `TestProfiler` | 19 |
