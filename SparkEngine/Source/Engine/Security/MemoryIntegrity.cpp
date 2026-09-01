@@ -115,12 +115,17 @@ namespace Spark::Security
 
     void MemoryIntegritySystem::Shutdown()
     {
+        // The retired target must outlive both locks so a target destructor may
+        // safely re-enter the lifecycle API.
+        ViolationCallback retiredCallback;
         std::lock_guard lifecycleLock(m_lifecycleMutex);
         size_t violationCount = 0;
         uint32_t scanCount = 0;
 
         {
             std::lock_guard stateLock(m_mutex);
+
+            retiredCallback.swap(m_violationCallback);
 
             if (!m_initialized.load(std::memory_order_acquire))
                 return;
@@ -356,8 +361,12 @@ namespace Spark::Security
 
     void MemoryIntegritySystem::SetViolationCallback(ViolationCallback callback)
     {
-        std::lock_guard lock(m_mutex);
-        m_violationCallback = std::move(callback);
+        ViolationCallback retiredCallback;
+        {
+            std::lock_guard lock(m_mutex);
+            retiredCallback.swap(m_violationCallback);
+            m_violationCallback.swap(callback);
+        }
     }
 
     // =========================================================================

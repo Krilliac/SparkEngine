@@ -487,6 +487,7 @@ add_executable(SparkTests
     TestCrashReportUploader.cpp
     # Security
     TestMemoryIntegrity.cpp
+    TestMemoryIntegrityLifecycle.cpp
     # Online Services, DataTable, MovieRender, Selection, RemoteDebug, HLOD, Crafting
     TestOnlineServices.cpp
     TestDataTableSystem.cpp
