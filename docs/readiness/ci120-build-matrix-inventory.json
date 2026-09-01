@@ -5180,7 +5180,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 25,
+        "stepCount": 24,
         "steps": [
           {
             "index": 0,
@@ -5472,18 +5472,6 @@
             "hasRun": false,
             "env": [],
             "runDigest": ""
-          },
-          {
-            "index": 24,
-            "name": "Enforce reviewed CI-120 findings",
-            "id": "",
-            "uses": "",
-            "shell": "",
-            "if": "always() && steps.ci120-parity.outputs.status != ''",
-            "continueOnError": "absent",
-            "hasRun": true,
-            "env": [],
-            "runDigest": "8cc046808f7e7c7c"
           }
         ],
         "envNames": [],

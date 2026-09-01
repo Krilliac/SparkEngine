@@ -730,6 +730,16 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
         self.assertEqual(required_workflow_errors(self.build), [])
 
+    def test_static_ci120_baseline_does_not_duplicate_producer_enforcement(self) -> None:
+        static_validation = yaml_section(self.build, "validate-ci-tools", indent=2)
+        structural_producer = yaml_section(self.build, "build-windows-shipping", indent=2)
+        enforcement_name = "- name: Enforce reviewed CI-120 findings"
+
+        self.assertNotIn(enforcement_name, static_validation)
+        self.assertEqual(structural_producer.count(enforcement_name), 1)
+        self.assertIn("Compare reviewed build-matrix findings (CI-120)", static_validation)
+        self.assertIn("Upload deterministic CI-120 evidence", static_validation)
+
     def test_release_artifact_builders_use_explicit_runner_images(self) -> None:
         for workflow in (self.build, self.release):
             self.assertNotIn("windows-latest", workflow)

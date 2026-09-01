@@ -174,15 +174,6 @@ jobs:
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: error
 
-    - name: Enforce reviewed CI-120 findings
-      if: always() && steps.ci120-parity.outputs.status != ''
-      run: |
-        status="${{ steps.ci120-parity.outputs.status }}"
-        if test "$status" -ne 0; then
-          echo "::error::CI-120 remains blocked by the reviewed configuration findings artifact."
-          exit 1
-        fi
-
   # ===========================================================================
   # Code Quality — clang-format enforcement
   # ===========================================================================
