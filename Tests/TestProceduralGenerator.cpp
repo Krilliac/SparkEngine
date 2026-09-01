@@ -53,6 +53,22 @@ TEST(ProceduralGenerator_Heightmap_NormalizedRange)
     gen.Shutdown();
 }
 
+TEST(ProceduralGenerator_Heightmap_SingleSampleSeed42IsDefinedAndDeterministic)
+{
+    auto& gen = Spark::Procedural::ProceduralGenerator::GetInstance();
+
+    gen.Initialize(42);
+    const auto first = gen.GenerateHeightmap(1, 1);
+    gen.Initialize(42);
+    const auto second = gen.GenerateHeightmap(1, 1);
+    gen.Shutdown();
+
+    ASSERT_EQ(first.size(), size_t{1});
+    ASSERT_EQ(second.size(), size_t{1});
+    EXPECT_TRUE(std::isfinite(first[0]));
+    EXPECT_EQ(first[0], second[0]);
+}
+
 TEST(ProceduralGenerator_Heightmap_Deterministic)
 {
     auto& gen = Spark::Procedural::ProceduralGenerator::GetInstance();

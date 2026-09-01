@@ -526,8 +526,8 @@ namespace Spark::Procedural
             // Hash-based value noise with cosine interpolation
             auto hash = [](int ix, int iy) -> float
             {
-                uint32_t h = static_cast<uint32_t>(ix * 374761393 + iy * 668265263);
-                h = (h ^ (h >> 13)) * 1274126177;
+                uint32_t h = static_cast<uint32_t>(ix) * 374761393u + static_cast<uint32_t>(iy) * 668265263u;
+                h = (h ^ (h >> 13)) * 1274126177u;
                 h = h ^ (h >> 16);
                 return static_cast<float>(h & 0x7FFFFFFF) / static_cast<float>(0x7FFFFFFF);
             };
