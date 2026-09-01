@@ -133,8 +133,10 @@ jobs:
               throw new Error('Exact-name abandoned-check inventory contains an unauthenticated check.');
             }
             if (check.status !== 'in_progress') continue;
-            const run = (await github.rest.actions.getWorkflowRun({
-              ...context.repo, run_id: runId
+            const run = (await github.rest.actions.getWorkflowRunAttempt({
+              ...context.repo,
+              run_id: runId,
+              attempt_number: runAttempt
             })).data;
             const normalizedPath = String(run.path || '').split('@', 1)[0];
             if (run.id !== runId || run.run_attempt !== runAttempt ||

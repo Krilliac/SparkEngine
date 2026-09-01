@@ -1313,7 +1313,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             reaper,
         )
         self.assertIn("check.status !== 'in_progress'", reaper)
-        self.assertIn("getWorkflowRun", reaper)
+        self.assertIn("getWorkflowRunAttempt", reaper)
         self.assertIn("conclusion: 'neutral'", reaper)
         neutralizer = named_step(aggregate, "Neutralize superseded exact-source badge check")
         self.assertIn("conclusion: 'neutral'", neutralizer)
