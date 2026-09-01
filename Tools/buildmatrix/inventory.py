@@ -95,6 +95,10 @@ class InventoryError(RuntimeError):
     """The inventory cannot safely interpret an authoritative input."""
 
 
+class _MissingArtifactError(InventoryError):
+    """A declared artifact was absent at its initial no-follow inspection."""
+
+
 class ReplyValidationError(InventoryError):
     """A supplied CMake File API reply is unsafe, malformed, or unstable."""
 
@@ -3235,6 +3239,8 @@ def _artifact_identity(path: Path, build_directory: Path, label: str) -> dict[st
         raise InventoryError(f"{label} parent does not exist")
     try:
         metadata = os.lstat(artifact)
+    except FileNotFoundError as error:
+        raise _MissingArtifactError(f"cannot inspect {label}: {error}") from error
     except OSError as error:
         raise InventoryError(f"cannot inspect {label}: {error}") from error
     _validate_regular_file(metadata, label)
@@ -3289,6 +3295,7 @@ def _capture_artifact_manifest(evidence: dict[str, Any], build_directory: Path) 
         target_name = target.get("target")
         configuration = target.get("configuration")
         kind = target.get("kind")
+        name_on_disk = target.get("nameOnDisk")
         artifacts = target.get("artifacts")
         if (
             not isinstance(target_id, str)
@@ -3299,6 +3306,7 @@ def _capture_artifact_manifest(evidence: dict[str, Any], build_directory: Path) 
             or not configuration
             or kind not in set(_TARGET_KIND_MAP.values())
             or not isinstance(artifacts, list)
+            or (kind in _LINKED_TARGET_KINDS and (not isinstance(name_on_disk, str) or not name_on_disk))
         ):
             raise InventoryError("configured target lacks a stable artifact identity")
         if kind in _LINKED_TARGET_KINDS and not artifacts:
@@ -3309,13 +3317,25 @@ def _capture_artifact_manifest(evidence: dict[str, Any], build_directory: Path) 
             raise InventoryError(
                 f"non-linked configured target {target_name!r} unexpectedly declares artifacts"
             )
-        identities = [
-            _artifact_identity(Path(item), build_directory, f"{target_name} artifact {offset}")
-            for offset, item in enumerate(artifacts)
-            if isinstance(item, str) and item
-        ]
-        if len(identities) != len(artifacts):
+        if any(not isinstance(item, str) or not item for item in artifacts):
             raise InventoryError(f"configured target {target_name!r} has an invalid artifact path")
+        identities: list[dict[str, Any]] = []
+        for offset, item in enumerate(artifacts):
+            try:
+                identities.append(
+                    _artifact_identity(Path(item), build_directory, f"{target_name} artifact {offset}")
+                )
+            except _MissingArtifactError:
+                if kind not in _LINKED_TARGET_KINDS or Path(item).suffix.casefold() != ".pdb":
+                    raise
+        primary_observed = any(
+            Path(identity["path"]).name.casefold() == name_on_disk.casefold()
+            for identity in identities
+        )
+        if kind in _LINKED_TARGET_KINDS and not primary_observed:
+            raise InventoryError(
+                f"linked configured target {target_name!r} lacks its observed nameOnDisk product"
+            )
         manifest.append(
             {
                 "id": target_id,

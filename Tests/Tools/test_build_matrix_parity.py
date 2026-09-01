@@ -2016,6 +2016,120 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 any((build / ".cmake" / "api" / "v1" / "query").glob("client-*"))
             )
 
+    def test_capture_omits_absent_optional_pdb_after_hashing_linked_product(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            build = Path(raw)
+            product = build / "bin" / "SparkEngine.dll"
+            pdb = build / "bin" / "SparkEngine.pdb"
+            product.parent.mkdir()
+            product.write_bytes(b"linked-product")
+            evidence = {
+                "targets": [{
+                    "id": "SparkEngine::@synthetic",
+                    "target": "SparkEngine",
+                    "configuration": "MinSizeRel",
+                    "kind": "shared_library",
+                    "nameOnDisk": product.name,
+                    "artifacts": [product.as_posix(), pdb.as_posix()],
+                }]
+            }
+
+            manifest = inventory._capture_artifact_manifest(evidence, build)
+
+            self.assertEqual(evidence["targets"][0]["artifacts"], [product.as_posix(), pdb.as_posix()])
+            self.assertEqual(
+                manifest[0]["artifactIdentities"],
+                [{
+                    "path": inventory._normalize_directory(str(product)),
+                    "bytes": len(b"linked-product"),
+                    "sha256": hashlib.sha256(b"linked-product").hexdigest(),
+                }],
+            )
+
+    def test_capture_rejects_missing_non_pdb_artifact(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            build = Path(raw)
+            missing = build / "bin" / "SparkEngine.dll"
+            evidence = {
+                "targets": [{
+                    "id": "SparkEngine::@synthetic",
+                    "target": "SparkEngine",
+                    "configuration": "MinSizeRel",
+                    "kind": "shared_library",
+                    "nameOnDisk": missing.name,
+                    "artifacts": [missing.as_posix()],
+                }]
+            }
+
+            with self.assertRaises(inventory.InventoryError):
+                inventory._capture_artifact_manifest(evidence, build)
+
+    def test_capture_matches_windows_primary_product_case_insensitively(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            build = Path(raw)
+            product = build / "bin" / "SparkEngine.DLL"
+            pdb = build / "bin" / "SparkEngine.pdb"
+            product.parent.mkdir()
+            product.write_bytes(b"linked-product")
+            evidence = {
+                "targets": [{
+                    "id": "SparkEngine::@synthetic",
+                    "target": "SparkEngine",
+                    "configuration": "MinSizeRel",
+                    "kind": "shared_library",
+                    "nameOnDisk": "sparkengine.dll",
+                    "artifacts": [product.as_posix(), pdb.as_posix()],
+                }]
+            }
+
+            manifest = inventory._capture_artifact_manifest(evidence, build)
+
+            self.assertEqual(len(manifest[0]["artifactIdentities"]), 1)
+
+    def test_capture_rejects_missing_primary_even_when_import_library_exists(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            build = Path(raw)
+            product = build / "bin" / "SparkEngine.dll"
+            import_library = build / "lib" / "SparkEngine.lib"
+            pdb = build / "bin" / "SparkEngine.pdb"
+            import_library.parent.mkdir()
+            import_library.write_bytes(b"import-library")
+            evidence = {
+                "targets": [{
+                    "id": "SparkEngine::@synthetic",
+                    "target": "SparkEngine",
+                    "configuration": "MinSizeRel",
+                    "kind": "shared_library",
+                    "nameOnDisk": product.name,
+                    "artifacts": [product.as_posix(), import_library.as_posix(), pdb.as_posix()],
+                }]
+            }
+
+            with self.assertRaises(inventory.InventoryError):
+                inventory._capture_artifact_manifest(evidence, build)
+
+    def test_capture_does_not_treat_existing_invalid_pdb_as_optional(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            build = Path(raw)
+            product = build / "bin" / "SparkEngine.dll"
+            invalid_pdb = build / "bin" / "SparkEngine.pdb"
+            product.parent.mkdir()
+            product.write_bytes(b"linked-product")
+            invalid_pdb.mkdir()
+            evidence = {
+                "targets": [{
+                    "id": "SparkEngine::@synthetic",
+                    "target": "SparkEngine",
+                    "configuration": "MinSizeRel",
+                    "kind": "shared_library",
+                    "nameOnDisk": product.name,
+                    "artifacts": [product.as_posix(), invalid_pdb.as_posix()],
+                }]
+            }
+
+            with self.assertRaises(inventory.InventoryError):
+                inventory._capture_artifact_manifest(evidence, build)
+
     def test_owned_query_cleanup_retries_one_transient_deletion_denial(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             client_directory = Path(raw) / "client-spark-ci120-test"

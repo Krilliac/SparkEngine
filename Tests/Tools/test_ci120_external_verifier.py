@@ -101,7 +101,10 @@ def shipping_fixture(artifact_root: Path) -> tuple[dict[str, Any], Path]:
                 "id": target_id,
                 "type": "EXECUTABLE",
                 "nameOnDisk": "SparkEngine.exe",
-                "artifacts": [{"path": f"bin/{configuration}/SparkEngine.exe"}],
+                "artifacts": [
+                    {"path": f"bin/{configuration}/SparkEngine.exe"},
+                    {"path": f"bin/{configuration}/SparkEngine.pdb"},
+                ],
             },
         )
         references.append({"name": "SparkEngine", "id": target_id, "jsonFile": product_file})
@@ -355,6 +358,33 @@ class SourceMetadataTests(unittest.TestCase):
 
 
 class RawProfileEvidenceTests(unittest.TestCase):
+    def test_absent_optional_pdb_is_accepted_only_with_hashed_primary_product(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            producer_evidence, _ = shipping_fixture(root)
+            reconstructed, receipt = verifier._verify_profile(
+                root, "windows-shipping", producer_evidence, source_metadata()
+            )
+
+        target = reconstructed["targets"][0]
+        self.assertEqual(
+            [Path(path).name for path in target["artifacts"]],
+            ["SparkEngine.exe", "SparkEngine.pdb"],
+        )
+        self.assertEqual(
+            [Path(row["path"]).name for row in target["artifactIdentities"]],
+            ["SparkEngine.exe"],
+        )
+        self.assertEqual(receipt["artifactCount"], 1)
+
+    def test_absent_primary_product_is_rejected_when_optional_pdb_is_also_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            producer_evidence, artifact = shipping_fixture(root)
+            artifact.unlink()
+            with self.assertRaisesRegex(verifier.ExternalEvidenceError, "cannot inspect"):
+                verifier._verify_profile(root, "windows-shipping", producer_evidence, source_metadata())
+
     def test_fresh_raw_reply_record_and_product_are_reconstructed(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
