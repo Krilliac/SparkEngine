@@ -2026,7 +2026,7 @@
 | `ITelemetryBackend` | class | SparkEngine | [Telemetry.h:L126](../../SparkEngine/Source/Utils/Telemetry.h#L126) | Abstract interface for telemetry output destinations. |
 | `ITelemetryService` | class | SparkSDK | [ServiceInterfaces.h:L26](../../SparkSDK/Include/Spark/ServiceInterfaces.h#L26) | Thin runtime interface for telemetry lifecycle orchestration. |
 | `Item` | struct | GameModules | [TFTransparentPass.h:L91](../../GameModules/SparkGameMMOFPS/Source/Game/TFTransparentPass.h#L91) |  |
-| `Item` | struct | Tests | [TestSceneSnapshotSerializer.cpp:L280](../../Tests/TestSceneSnapshotSerializer.cpp#L280) |  |
+| `Item` | struct | Tests | [TestSceneSnapshotSerializer.cpp:L279](../../Tests/TestSceneSnapshotSerializer.cpp#L279) |  |
 | `ItemComparison` | struct | GameModules | [RPGInventorySystem.h:L65](../../GameModules/SparkGameRPG/Source/Inventory/RPGInventorySystem.h#L65) | Result of comparing two equipment items |
 | `ItemData` | struct | GameModules | [ARPGLootSystem.h:L35](../../GameModules/SparkGameARPG/Source/Loot/ARPGLootSystem.h#L35) | A generated item with base stats and random affixes |
 | `ItemDef` | struct | GameModules | [InventorySystem.h:L81](../../GameModules/SparkGameFPS/Source/Game/InventorySystem.h#L81) | Immutable definition of an item type (shared across all instances) |

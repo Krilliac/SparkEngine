@@ -20668,7 +20668,7 @@
 | `ITelemetryService` | class | SparkSDK | [ServiceInterfaces.h:L26](../../SparkSDK/Include/Spark/ServiceInterfaces.h#L26) | Thin runtime interface for telemetry lifecycle orchestration. |
 | `Item` | struct | GameModules | [TFTransparentPass.h:L91](../../GameModules/SparkGameMMOFPS/Source/Game/TFTransparentPass.h#L91) |  |
 | `item` | function | SparkServer | [ServerApplication.cpp:L73](../../SparkServer/src/ServerApplication.cpp#L73) |  |
-| `Item` | struct | Tests | [TestSceneSnapshotSerializer.cpp:L280](../../Tests/TestSceneSnapshotSerializer.cpp#L280) |  |
+| `Item` | struct | Tests | [TestSceneSnapshotSerializer.cpp:L279](../../Tests/TestSceneSnapshotSerializer.cpp#L279) |  |
 | `ItemCategory` | enum | GameModules | [InventorySystem.h:L61](../../GameModules/SparkGameFPS/Source/Game/InventorySystem.h#L61) | Item category for filtering and UI grouping |
 | `ItemCategory` | enum | GameModules | [MMOEnums.h:L165](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L165) | Item categories for inventory filtering |
 | `ItemComparison` | struct | GameModules | [RPGInventorySystem.h:L65](../../GameModules/SparkGameRPG/Source/Inventory/RPGInventorySystem.h#L65) | Result of comparing two equipment items |
@@ -20886,7 +20886,7 @@
 | `LanBroadcastSocketFactory` | alias | SparkEngine | [DedicatedServer.h:L189](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L189) | Immutable state consumed by one LAN broadcast iteration. |
 | `LanServers` | function | GameModules | [TFLoginFlow.h:L102](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoginFlow.h#L102) |  |
 | `LapRecord` | struct | Tests | [TestSparkGameRacing.cpp:L14](../../Tests/TestSparkGameRacing.cpp#L14) |  |
-| `large` | function | Tests | [TestCompressionUtils.cpp:L73](../../Tests/TestCompressionUtils.cpp#L73) |  |
+| `large` | function | Tests | [TestCompressionUtils.cpp:L74](../../Tests/TestCompressionUtils.cpp#L74) |  |
 | `largeStr` | function | Tests | [TestNetworkStress.cpp:L875](../../Tests/TestNetworkStress.cpp#L875) |  |
 | `LastAuthError` | function | GameModules | [TFClientNet.h:L120](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.h#L120) |  |
 | `LastCharOpError` | function | GameModules | [TFClientNet.h:L122](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.h#L122) |  |
@@ -26485,7 +26485,7 @@
 | `Order` | function | SparkEngine | [UpdateStage.cpp:L10](../../SparkEngine/Source/Core/Lifecycle/UpdateStage.cpp#L10) |  |
 | `OrderedBuffer` | struct | Tests | [TestReliableChannel.cpp:L78](../../Tests/TestReliableChannel.cpp#L78) |  |
 | `OrderTrackingSystem` | class | Tests | [TestSystemManagerIntegration.cpp:L24](../../Tests/TestSystemManagerIntegration.cpp#L24) |  |
-| `original` | function | Tests | [TestCompressionUtils.cpp:L49](../../Tests/TestCompressionUtils.cpp#L49) |  |
+| `original` | function | Tests | [TestCompressionUtils.cpp:L50](../../Tests/TestCompressionUtils.cpp#L50) |  |
 | `original` | function | Tests | [TestRenderGraph.cpp:L31](../../Tests/TestRenderGraph.cpp#L31) |  |
 | `original` | function | Tests | [TestReplicationFields.cpp:L239](../../Tests/TestReplicationFields.cpp#L239) |  |
 | `original` | function | Tests | [TestReplicationFields.cpp:L251](../../Tests/TestReplicationFields.cpp#L251) |  |
@@ -40759,7 +40759,7 @@
 | `TestConsentArchiveAllowlistAndReporterResolution` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L257](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L257) |  |
 | `TestCrashHandler` | function | SparkEditor | [EditorCrashHandler.h:L122](../../SparkEditor/Source/Core/EditorCrashHandler.h#L122) |  |
 | `TestDecalComponent` | struct | Tests | [TestFPSComponents.cpp:L16](../../Tests/TestFPSComponents.cpp#L16) |  |
-| `TestDecompress` | function | Tests | [TestCompressionUtils.cpp:L34](../../Tests/TestCompressionUtils.cpp#L34) |  |
+| `TestDecompress` | function | Tests | [TestCompressionUtils.cpp:L35](../../Tests/TestCompressionUtils.cpp#L35) |  |
 | `TestDialogueExtension` | class | Tests | [TestGameplaySystemExtension.cpp:L49](../../Tests/TestGameplaySystemExtension.cpp#L49) |  |
 | `TestDialogueExtension` | function | Tests | [TestGameplaySystemExtension.cpp:L52](../../Tests/TestGameplaySystemExtension.cpp#L52) |  |
 | `TestDirtyRect` | struct | Tests | [TestDirtyRectTracker.cpp:L14](../../Tests/TestDirtyRectTracker.cpp#L14) |  |
