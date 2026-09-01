@@ -51,8 +51,12 @@ TEST(AIDebugRendererReal_SingletonStable)
 TEST(AIDebugRendererReal_DefaultDisabled)
 {
     auto& renderer = AIDebugRenderer::GetInstance();
-    // Default state: disabled
+    renderer.Shutdown();
+    renderer.Initialize();
+    // A freshly initialized renderer defaults to disabled regardless of prior
+    // process-global singleton state left by another test or lifecycle.
     EXPECT_FALSE(renderer.IsEnabled());
+    renderer.Shutdown();
 }
 
 TEST(AIDebugRendererReal_EnableDisable)

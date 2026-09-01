@@ -93,6 +93,7 @@
 #include <functional>
 #include <chrono>
 #include <cstdint>
+#include <utility>
 
 namespace Spark
 {
@@ -170,6 +171,37 @@ namespace Spark
      */
         using DeserializeFunc = std::function<void(World& world, EntityID entity, const SerializedComponent& data)>;
 
+      private:
+        struct Registration
+        {
+            SerializeFunc serialize;
+            DeserializeFunc deserialize;
+        };
+
+        using RegistrationMap = std::unordered_map<std::string, Registration>;
+
+      public:
+        /**
+         * Opaque, allocation-preserving ownership of one removed registration.
+         * @note Game-thread only. Destroy or restore a nonempty handle before
+         * unloading the module that owns either callback target.
+         */
+        class RegistrationHandle
+        {
+          public:
+            RegistrationHandle() = default;
+            RegistrationHandle(RegistrationHandle&&) noexcept = default;
+            RegistrationHandle& operator=(RegistrationHandle&&) noexcept = default;
+            RegistrationHandle(const RegistrationHandle&) = delete;
+            RegistrationHandle& operator=(const RegistrationHandle&) = delete;
+            [[nodiscard]] bool HasValue() const noexcept { return !m_node.empty(); }
+
+          private:
+            friend class ComponentSerializerRegistry;
+            explicit RegistrationHandle(RegistrationMap::node_type node) : m_node(std::move(node)) {}
+            RegistrationMap::node_type m_node;
+        };
+
         /**
      * @brief Access the singleton instance of the registry.
      *
@@ -209,6 +241,17 @@ namespace Spark
          * @note [game thread] Call during single-threaded module teardown.
          */
         bool Unregister(const std::string& typeName);
+
+        /** @note Game-thread only. Remove and return one exact registration. */
+        RegistrationHandle TakeRegistration(const std::string& typeName);
+
+        /**
+         * Restore a registration previously returned by TakeRegistration().
+         * The destination key must be absent. On collision/failure, returns
+         * false and leaves the caller's handle owning the prior registration.
+         * @note Game-thread only.
+         */
+        [[nodiscard]] bool RestoreRegistration(RegistrationHandle&& registration) noexcept;
 
         /**
      * @brief Check whether a serializer is registered for the given type name.
@@ -272,22 +315,11 @@ namespace Spark
         ComponentSerializerRegistry() = default;
 
         /**
-     * @brief Internal storage node pairing a serializer with its deserializer.
-     */
-        struct Entry
-        {
-            /** @brief Function that converts component data to string properties. */
-            SerializeFunc serialize;
-            /** @brief Function that restores a component from string properties. */
-            DeserializeFunc deserialize;
-        };
-
-        /**
      * @brief Map from component type name to its registered Entry.
      *
      * Keyed by the same `typeName` string used in SerializedComponent::typeName.
      */
-        std::unordered_map<std::string, Entry> m_serializers;
+        RegistrationMap m_serializers;
     };
 
     // ============================================================================

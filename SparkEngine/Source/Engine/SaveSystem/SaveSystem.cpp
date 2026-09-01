@@ -402,6 +402,37 @@ namespace Spark
         return m_serializers.erase(typeName) != 0;
     }
 
+    ComponentSerializerRegistry::RegistrationHandle
+    ComponentSerializerRegistry::TakeRegistration(const std::string& typeName)
+    {
+        return RegistrationHandle(m_serializers.extract(typeName));
+    }
+
+    bool ComponentSerializerRegistry::RestoreRegistration(RegistrationHandle&& registration) noexcept
+    {
+        if (!registration.HasValue())
+            return true;
+        try
+        {
+            // extract() preserves the allocation and erasure does not shrink the
+            // bucket array, so reinserting the same node normally cannot allocate.
+            // Keep the API non-throwing for scope-guard recovery regardless.
+            auto result = m_serializers.insert(std::move(registration.m_node));
+            if (!result.inserted)
+            {
+                registration.m_node = std::move(result.node);
+                return false;
+            }
+            return true;
+        }
+        catch (...)
+        {
+            // Catastrophic allocator/hash failures must not terminate stack
+            // unwinding. The handle still owns and safely destroys its callbacks.
+            return false;
+        }
+    }
+
     bool ComponentSerializerRegistry::HasSerializer(const std::string& typeName) const
     {
         return m_serializers.contains(typeName);

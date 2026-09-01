@@ -135,23 +135,26 @@ static bool g_loadTestInit = false;
 
 static void InitLoadTestEngine()
 {
-    if (g_loadTestInit)
+    static Spark::EventBus eventBus;
+    static World world;
+    static std::unique_ptr<PhysicsSystem> physics;
+
+    auto* currentContext = EngineContext::Get();
+    if (g_loadTestInit && currentContext != nullptr && currentContext->GetEventBus() == &eventBus &&
+        currentContext->GetWorld() == &world && currentContext->GetPhysics() == physics.get())
         return;
 
     if (!EngineContext::Get())
         EngineContext::SetOwned(std::make_unique<EngineContext>());
     auto* ctx = EngineContext::Get();
 
-    static Spark::EventBus eventBus;
     ctx->SetEventBus(&eventBus);
 
-    static World world;
     ctx->SetWorld(&world);
 
     // PhysicsSystem must be heap-allocated and explicitly shutdown before the
     // SimpleConsole singleton is destroyed (PhysicsSystem::~PhysicsSystem logs).
     // Using unique_ptr with an atexit handler that calls Shutdown() then releases.
-    static std::unique_ptr<PhysicsSystem> physics;
     if (!physics)
     {
         physics = std::make_unique<PhysicsSystem>();
@@ -345,6 +348,27 @@ static void HeavyFrame(float dt, int frameIdx, World& world, Spark::EventBus& bu
 // ============================================================================
 // TEST: Full load test — 3000 frames with resource sampling
 // ============================================================================
+
+TEST(LoadTest_InitRebindsSubsystemsAfterEngineContextReplacement)
+{
+    g_loadTestInit = false;
+    EngineContext::SetOwned(std::make_unique<EngineContext>());
+    InitLoadTestEngine();
+
+    auto* originalEventBus = EngineContext::Get()->GetEventBus();
+    auto* originalPhysics = EngineContext::Get()->GetPhysics();
+    ASSERT_TRUE(originalEventBus != nullptr);
+    ASSERT_TRUE(originalPhysics != nullptr);
+
+    EngineContext::SetOwned(std::make_unique<EngineContext>());
+    ASSERT_TRUE(EngineContext::Get()->GetEventBus() == nullptr);
+    ASSERT_TRUE(EngineContext::Get()->GetPhysics() == nullptr);
+
+    InitLoadTestEngine();
+
+    EXPECT_EQ(EngineContext::Get()->GetEventBus(), originalEventBus);
+    EXPECT_EQ(EngineContext::Get()->GetPhysics(), originalPhysics);
+}
 
 TEST(LoadTest_FullEngine_3000Frames)
 {

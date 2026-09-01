@@ -64,11 +64,15 @@ FAKE_RUNNER = textwrap.dedent(
         write_junit(failed=True)
         raise SystemExit(7)
     if mode == "abrupt":
-        write_framework("[ RUN    ] AbruptSynthetic\\nFRAMEWORK_BEFORE_ABRUPT\\n")
+        framework = output.open("w", encoding="utf-8")
+        framework.write("[ RUN    ] AbruptSynthetic\\nFRAMEWORK_BEFORE_ABRUPT\\n")
+        print("[ RUN    ] AbruptSynthetic", flush=True)
         print("RAW_BEFORE_ABRUPT", flush=True)
         os._exit(23)
     if mode == "timeout":
-        write_framework("[ RUN    ] HungSynthetic\\nFRAMEWORK_BEFORE_TIMEOUT\\n")
+        framework = output.open("w", encoding="utf-8")
+        framework.write("[ RUN    ] HungSynthetic\\nFRAMEWORK_BEFORE_TIMEOUT\\n")
+        print("[ RUN    ] HungSynthetic", flush=True)
         print("RAW_BEFORE_TIMEOUT", flush=True)
         time.sleep(30)
         raise SystemExit(99)
@@ -107,13 +111,34 @@ def wrapper_contract_errors(wrapper: str, test_main: str) -> list[str]:
     launch = wrapper.find("execute_process(")
     if cleanup < 0 or executable_check < 0 or launch < 0 or not cleanup < executable_check < launch:
         errors.append("evidence cleanup must precede executable validation and launch")
-    if test_main.count('out.Print("[ RUN    ] " + g_currentTest + "\\n");') != 1:
+    if test_main.count('out.PrintProgress("[ RUN    ] " + g_currentTest + "\\n");') != 1:
         errors.append("TestMain active-test marker is missing or duplicated")
-    marker = test_main.find('out.Print("[ RUN    ] " + g_currentTest + "\\n");')
-    flush = test_main.find("out.Flush();", marker)
+    marker = test_main.find('out.PrintProgress("[ RUN    ] " + g_currentTest + "\\n");')
     test_call = test_main.find("test->func();", marker)
-    if marker < 0 or flush < marker or test_call < flush:
+    if marker < 0 or test_call < marker:
         errors.append("TestMain must flush the active-test marker before invoking the test")
+    output_start = test_main.find("struct TestOutput")
+    output_end = test_main.find("// ============================================================================\n// JUnit XML", output_start)
+    output_contract = test_main[output_start:output_end]
+    if output_start < 0 or output_end < 0:
+        errors.append("TestMain TestOutput contract is missing")
+    else:
+        if output_contract.count("void PrintProgress(") != 1:
+            errors.append("TestOutput must define exactly one progress-only printer")
+        progress_start = output_contract.find("void PrintProgress(")
+        progress_end = output_contract.find("\n    }", progress_start)
+        progress_body = output_contract[progress_start:progress_end]
+        stdout_write = progress_body.find("std::cout << msg;")
+        stdout_flush = progress_body.find("std::cout.flush();")
+        report_write = progress_body.find("file << msg;")
+        if not 0 <= stdout_write < stdout_flush < report_write:
+            errors.append("TestOutput progress must write and flush stdout before buffering the report")
+        if "quiet" in progress_body[:stdout_flush] or "errorsOnly" in progress_body[:stdout_flush]:
+            errors.append("TestOutput progress stdout must not be suppressed by output modes")
+        if output_contract.count("std::cout.flush();") != 1:
+            errors.append("TestOutput must flush stdout exactly once")
+        if "file.flush();" in output_contract:
+            errors.append("TestOutput must not flush the framework report per test")
     return errors
 
 
@@ -181,6 +206,15 @@ class RunSparkTestsHarness(unittest.TestCase):
         self.assertEqual(wrapper_contract_errors(self.wrapper_text, self.test_main_text), [])
 
     def test_contract_rejects_channel_cleanup_timeout_and_flush_mutations(self) -> None:
+        def mutate_progress(old: str, new: str) -> str:
+            start = self.test_main_text.find("void PrintProgress(")
+            self.assertGreaterEqual(start, 0)
+            prefix = self.test_main_text[:start]
+            progress_and_tail = self.test_main_text[start:]
+            mutated_tail = progress_and_tail.replace(old, new, 1)
+            self.assertNotEqual(mutated_tail, progress_and_tail)
+            return prefix + mutated_tail
+
         mutations = {
             "cleanup": self.wrapper_text.replace(
                 'file(REMOVE "${SPARK_JUNIT_REPORT}" "${SPARK_TEST_LOG}" "${SPARK_TEST_OUTPUT}")\n',
@@ -208,8 +242,32 @@ class RunSparkTestsHarness(unittest.TestCase):
             with self.subTest(mutation=label):
                 self.assertNotEqual(mutated, self.wrapper_text)
                 self.assertTrue(wrapper_contract_errors(mutated, self.test_main_text))
-        unflushed = self.test_main_text.replace("        out.Flush();\n", "", 1)
+        unflushed = self.test_main_text.replace(
+            '        out.PrintProgress("[ RUN    ] " + g_currentTest + "\\n");\n',
+            '        out.Print("[ RUN    ] " + g_currentTest + "\\n");\n',
+            1,
+        )
+        self.assertNotEqual(unflushed, self.test_main_text)
         self.assertTrue(wrapper_contract_errors(self.wrapper_text, unflushed))
+        report_flushed = self.test_main_text.replace(
+            "        std::cout.flush();\n",
+            "        std::cout.flush();\n        file.flush();\n",
+            1,
+        )
+        self.assertNotEqual(report_flushed, self.test_main_text)
+        self.assertTrue(wrapper_contract_errors(self.wrapper_text, report_flushed))
+        no_stdout_marker = mutate_progress("        std::cout << msg;\n", "")
+        self.assertTrue(wrapper_contract_errors(self.wrapper_text, no_stdout_marker))
+        flush_before_marker = mutate_progress(
+            "        std::cout << msg;\n        std::cout.flush();\n",
+            "        std::cout.flush();\n        std::cout << msg;\n",
+        )
+        self.assertTrue(wrapper_contract_errors(self.wrapper_text, flush_before_marker))
+        quiet_marker = mutate_progress(
+            "        std::cout << msg;\n",
+            "        if (!quiet)\n            std::cout << msg;\n",
+        )
+        self.assertTrue(wrapper_contract_errors(self.wrapper_text, quiet_marker))
 
     def test_success_keeps_distinct_complete_evidence(self) -> None:
         completed, paths = self.run_case("success")
@@ -234,7 +292,11 @@ class RunSparkTestsHarness(unittest.TestCase):
                 self.assertNotEqual(completed.returncode, 0)
                 self.assertFalse(paths["junit"].exists())
                 self.assertIn("RAW_", paths["raw"].read_text(encoding="utf-8"))
-                self.assertIn("[ RUN    ]", paths["framework"].read_text(encoding="utf-8"))
+                active_test = "AbruptSynthetic" if mode == "abrupt" else "HungSynthetic"
+                combined = completed.stdout + completed.stderr
+                self.assertIn(active_test, paths["raw"].read_text(encoding="utf-8"))
+                self.assertIn(active_test, combined)
+                self.assertEqual(paths["framework"].stat().st_size, 0)
 
     def test_missing_executable_scrubs_all_stale_evidence(self) -> None:
         completed, paths = self.run_case("success", missing_executable=True)

@@ -542,6 +542,117 @@ namespace Spark::TelemetryDetail
         }
     } // namespace
 
+    TelemetrySpoolResult TelemetrySpool::InspectDeferredCleanupDirectory(std::string_view directory)
+    {
+        std::filesystem::path candidate{std::string(directory)};
+        if (candidate.empty() || !candidate.is_absolute())
+            return TelemetrySpoolResult::Rejected;
+        candidate = candidate.lexically_normal();
+
+        const auto root = candidate.root_path();
+        if (root.empty())
+            return TelemetrySpoolResult::Rejected;
+
+#ifdef _WIN32
+        struct HandleSet final
+        {
+            std::vector<HANDLE> values;
+            ~HandleSet()
+            {
+                for (HANDLE value : values)
+                    CloseHandle(value);
+            }
+        } handles;
+
+        const auto openDirectory = [&handles](const std::filesystem::path& path, bool isRoot) {
+            HANDLE handle = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                        nullptr, OPEN_EXISTING,
+                                        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+            if (handle == INVALID_HANDLE_VALUE)
+            {
+                const DWORD error = GetLastError();
+                if (!isRoot && (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND))
+                    return TelemetrySpoolResult::NotFound;
+                return TelemetrySpoolResult::IoFailure;
+            }
+
+            FILE_ATTRIBUTE_TAG_INFO attributes{};
+            if (!GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &attributes, sizeof(attributes)))
+            {
+                CloseHandle(handle);
+                return TelemetrySpoolResult::IoFailure;
+            }
+            if ((attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
+                (attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+            {
+                CloseHandle(handle);
+                return TelemetrySpoolResult::Rejected;
+            }
+            handles.values.push_back(handle);
+            return TelemetrySpoolResult::Success;
+        };
+
+        std::filesystem::path current = root;
+        auto components = candidate.relative_path();
+        auto component = components.begin();
+
+        // A UNC server name is not itself an openable directory. Pin the
+        // \\server\share anchor as the root so an offline/missing share remains
+        // an I/O failure rather than terminal absence.
+        const auto rootName = candidate.root_name().native();
+        if (rootName.size() >= 2 && rootName[0] == L'\\' && rootName[1] == L'\\')
+        {
+            if (component == components.end())
+                return TelemetrySpoolResult::Rejected;
+            current /= *component;
+            ++component;
+        }
+
+        auto result = openDirectory(current, true);
+        if (result != TelemetrySpoolResult::Success)
+            return result;
+        for (; component != components.end(); ++component)
+        {
+            current /= *component;
+            result = openDirectory(current, false);
+            if (result != TelemetrySpoolResult::Success)
+                return result;
+        }
+        return TelemetrySpoolResult::Success;
+#else
+        struct DescriptorSet final
+        {
+            std::vector<int> values;
+            ~DescriptorSet()
+            {
+                for (int value : values)
+                    ::close(value);
+            }
+        } descriptors;
+
+        int current = ::open(root.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+        if (current < 0)
+            return TelemetrySpoolResult::IoFailure;
+        descriptors.values.push_back(current);
+
+        for (const auto& component : candidate.relative_path())
+        {
+            const int next = ::openat(current, component.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+            if (next < 0)
+            {
+                if (errno == ENOENT)
+                    return TelemetrySpoolResult::NotFound;
+                if (errno == ELOOP || errno == ENOTDIR)
+                    return TelemetrySpoolResult::Rejected;
+                return TelemetrySpoolResult::IoFailure;
+            }
+            descriptors.values.push_back(next);
+            current = next;
+        }
+        return TelemetrySpoolResult::Success;
+#endif
+    }
+
     TelemetrySpoolResult TelemetrySpool::Configure(std::string_view directory, uint64_t maxBytes, uint32_t maxEvents)
     {
         m_directory.clear();

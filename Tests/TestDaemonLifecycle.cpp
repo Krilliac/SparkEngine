@@ -165,15 +165,19 @@ namespace
 TEST(DaemonLifecycle_DisabledByDefaultDoesNothing)
 {
     DaemonCVarGuard cvars(/*enable*/ false, /*socketPath*/ "");
+    auto& diskCache = Spark::Graphics::GetShaderDiskCache();
+    const uint64_t initialDaemonHits = diskCache.GetDaemonHits();
+    const uint64_t initialDaemonMisses = diskCache.GetDaemonMisses();
 
     // Ensure the cache's daemon pointer is cleared up front.
     Spark::Daemon::ShutdownDaemonLifecycle();
-    EXPECT_EQ(Spark::Graphics::GetShaderDiskCache().GetDaemonHits(), 0u);
 
     Spark::Daemon::InitializeDaemonLifecycle();
 
     // No connection attempted → connection singleton still empty.
     EXPECT_FALSE(Spark::Daemon::DaemonConnection::Instance().IsConnected());
+    EXPECT_EQ(diskCache.GetDaemonHits(), initialDaemonHits);
+    EXPECT_EQ(diskCache.GetDaemonMisses(), initialDaemonMisses);
 
     Spark::Daemon::ShutdownDaemonLifecycle();
 }

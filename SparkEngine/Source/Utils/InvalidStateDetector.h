@@ -28,6 +28,7 @@
 
 #include "../Core/Platform.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -152,6 +153,11 @@ namespace Spark
          */
         void ClearRules();
 
+        [[nodiscard]] bool HasRule(const std::string& name) const
+        {
+            return std::any_of(m_rules.begin(), m_rules.end(),
+                               [&](const StateValidationRule& rule) { return rule.name == name; });
+        }
         [[nodiscard]] uint32_t GetRuleCount() const { return static_cast<uint32_t>(m_rules.size()); }
 
         // -- Query --

@@ -608,10 +608,49 @@ TEST(ModuleABI_AllValidationRuleOwnersReleaseCallbacksBeforeUnload)
 #if !defined(_WIN32) && defined(SPARK_TEST_SPARK_GAME_MODULE_PATH)
 TEST(ModuleABI_SparkGameShutdownReleasesHostRegistryCallbacksBeforeUnload)
 {
+    auto& console = Spark::SimpleConsole::GetInstance();
+    const std::string hostSentinel = "__spark_module_abi_unrelated_host_command__";
+    const bool consoleWasInitialized = console.IsInitialized();
+    struct ConsoleStateGuard final
+    {
+        Spark::SimpleConsole& console;
+        const std::string& sentinel;
+        bool restoreUninitialized;
+        bool sentinelRegistered = false;
+        ~ConsoleStateGuard()
+        {
+            if (sentinelRegistered)
+                console.UnregisterCommand(sentinel);
+            if (restoreUninitialized)
+                console.Shutdown();
+        }
+    } consoleState{console, hostSentinel, !consoleWasInitialized};
+    if (!consoleWasInitialized)
+        ASSERT_TRUE(console.Initialize());
+    ASSERT_FALSE(console.HasCommand(hostSentinel));
+    ASSERT_FALSE(console.HasCommand("showcase_status"));
+    ASSERT_FALSE(console.HasCommand("showcase_weather"));
+    ASSERT_FALSE(console.HasCommand("showcase_save"));
+    ASSERT_FALSE(console.HasCommand("showcase_load"));
+    ASSERT_FALSE(console.HasCommand("showcase_spawn"));
+    console.RegisterCommand(hostSentinel, [](const std::vector<std::string>&) { return std::string("host"); });
+    consoleState.sentinelRegistered = true;
+    ASSERT_TRUE(console.HasCommand(hostSentinel));
+
     auto& serializers = Spark::ComponentSerializerRegistry::GetInstance();
     auto& detector = Spark::InvalidStateDetector::GetInstance();
-    serializers.Unregister("TagComponent");
-    detector.RemoveRule("Base.HealthInvariant");
+    auto priorTagRegistration = serializers.TakeRegistration("TagComponent");
+    struct SerializerStateGuard final
+    {
+        Spark::ComponentSerializerRegistry& serializers;
+        Spark::ComponentSerializerRegistry::RegistrationHandle prior;
+        ~SerializerStateGuard()
+        {
+            serializers.Unregister("TagComponent");
+            (void)serializers.RestoreRegistration(std::move(prior));
+        }
+    } serializerState{serializers, std::move(priorTagRegistration)};
+    ASSERT_FALSE(detector.HasRule("Base.HealthInvariant"));
     const uint32_t initialRuleCount = detector.GetRuleCount();
 
     // GameplayShowcase intentionally registers serializers only when the host
@@ -620,33 +659,40 @@ TEST(ModuleABI_SparkGameShutdownReleasesHostRegistryCallbacksBeforeUnload)
     auto& saveSystem = Spark::SaveSystem::GetInstance();
     NullEngineContext context(&saveSystem);
     ModuleManager manager;
+    struct ModuleManagerGuard final
+    {
+        ModuleManager& manager;
+        ~ModuleManagerGuard()
+        {
+            manager.ShutdownAllAfterPreflight();
+            manager.UnloadAll();
+        }
+    } managerGuard{manager};
     ASSERT_TRUE(manager.LoadModule(SPARK_TEST_SPARK_GAME_MODULE_PATH));
     manager.InitializeAll(&context);
 
     ASSERT_TRUE(manager.GetModule("Spark Default - Engine Showcase") != nullptr);
     EXPECT_TRUE(serializers.HasSerializer("TagComponent"));
     EXPECT_EQ(detector.GetRuleCount(), initialRuleCount + 1);
-    EXPECT_TRUE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_status"));
-    EXPECT_TRUE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_weather"));
-    EXPECT_TRUE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_save"));
-    EXPECT_TRUE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_load"));
-    EXPECT_TRUE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_spawn"));
+    EXPECT_TRUE(console.HasCommand("showcase_status"));
+    EXPECT_TRUE(console.HasCommand("showcase_weather"));
+    EXPECT_TRUE(console.HasCommand("showcase_save"));
+    EXPECT_TRUE(console.HasCommand("showcase_load"));
+    EXPECT_TRUE(console.HasCommand("showcase_spawn"));
 
     manager.ShutdownAllAfterPreflight();
     EXPECT_FALSE(serializers.HasSerializer("TagComponent"));
     EXPECT_EQ(detector.GetRuleCount(), initialRuleCount);
-    EXPECT_FALSE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_status"));
-    EXPECT_FALSE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_weather"));
-    EXPECT_FALSE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_save"));
-    EXPECT_FALSE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_load"));
-    EXPECT_FALSE(Spark::SimpleConsole::GetInstance().HasCommand("showcase_spawn"));
+    EXPECT_FALSE(console.HasCommand("showcase_status"));
+    EXPECT_FALSE(console.HasCommand("showcase_weather"));
+    EXPECT_FALSE(console.HasCommand("showcase_save"));
+    EXPECT_FALSE(console.HasCommand("showcase_load"));
+    EXPECT_FALSE(console.HasCommand("showcase_spawn"));
+    EXPECT_TRUE(console.HasCommand(hostSentinel));
 
     manager.UnloadAll();
     EXPECT_EQ(manager.GetModuleCount(), size_t{0});
 
-    // Restore the process-global core serializer state for later tests in the
-    // same native test executable.
-    serializers.RegisterBuiltins();
 }
 #endif
 

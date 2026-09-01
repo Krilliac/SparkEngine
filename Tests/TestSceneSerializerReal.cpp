@@ -17,6 +17,12 @@
 #include <locale>
 #include <string>
 
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace
 {
     class TemporarySceneFile
@@ -25,8 +31,14 @@ namespace
         explicit TemporarySceneFile(const std::string& extension)
         {
             const auto nonce = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+#ifdef _WIN32
+            const auto processId = static_cast<uint64_t>(::_getpid());
+#else
+            const auto processId = static_cast<uint64_t>(::getpid());
+#endif
             m_path = std::filesystem::temp_directory_path() /
-                     ("spark_scene_serializer_" + std::to_string(nonce) + extension);
+                     ("spark_scene_serializer_" + std::to_string(processId) + "_" + std::to_string(nonce) +
+                      extension);
         }
 
         ~TemporarySceneFile()
@@ -595,10 +607,10 @@ TEST(SceneSerializerReal_AllBuiltInPayloadCodecsDefaultAndRoundTrip)
 
     TemporarySceneFile file(".sparkscene");
     SceneSerializer serializer;
-    EXPECT_TRUE(serializer.SaveScene(scene, file.Path().string(), SerializationFormat::JSON).success);
+    ASSERT_TRUE(serializer.SaveScene(scene, file.Path().string(), SerializationFormat::JSON).success);
     SceneFile loaded;
-    EXPECT_TRUE(serializer.LoadScene(file.Path().string(), loaded).success);
-    EXPECT_EQ(loaded.components.size(), types.size());
+    ASSERT_TRUE(serializer.LoadScene(file.Path().string(), loaded).success);
+    ASSERT_EQ(loaded.components.size(), types.size());
     for (size_t index = 0; index < types.size(); ++index)
     {
         EXPECT_EQ(static_cast<uint32_t>(loaded.components[index].type), static_cast<uint32_t>(types[index]));

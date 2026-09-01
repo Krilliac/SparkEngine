@@ -293,6 +293,52 @@ assert.throws(() => contract.validateCreatedStatus(forgedCreator, {
     assert.strictEqual(published.state, 'success');
     assert.deepStrictEqual(successfulCalls.map(request => request.state), ['success']);
 
+    const failureCalls = [];
+    const publishedFailure = await contract.publishValidatedTerminalStatus({
+        createStatus: async request => {
+            failureCalls.push(request);
+            return { data: {
+                id: 803,
+                state: request.state,
+                context: request.context,
+                target_url: request.target_url,
+                creator: creator()
+            } };
+        },
+        request: { owner: 'Krilliac', repo: 'SparkEngine', sha: SHA },
+        state: 'failure',
+        context: CONTEXT,
+        targetUrl: OWN_TARGET,
+        failureDescription: 'failed',
+        pendingDescription: 'uncertain'
+    });
+    assert.strictEqual(publishedFailure.state, 'failure');
+    assert.strictEqual(failureCalls[0].description, 'failed');
+    assert.deepStrictEqual(failureCalls.map(request => request.state), ['failure']);
+
+    const malformedFailureCalls = [];
+    await assert.rejects(() => contract.publishValidatedTerminalStatus({
+        createStatus: async request => {
+            malformedFailureCalls.push(request);
+            if (request.state === 'failure') {
+                return { data: { id: 804, state: 'failure', context: CONTEXT,
+                    target_url: OWN_TARGET } };
+            }
+            return { data: { id: 805, state: 'pending', context: CONTEXT,
+                target_url: OWN_TARGET, creator: creator() } };
+        },
+        request: { owner: 'Krilliac', repo: 'SparkEngine', sha: SHA },
+        state: 'failure',
+        context: CONTEXT,
+        targetUrl: OWN_TARGET,
+        failureDescription: 'failed',
+        pendingDescription: 'uncertain'
+    }));
+    assert.deepStrictEqual(
+        malformedFailureCalls.map(request => request.state),
+        ['failure', 'pending']
+    );
+
     const malformedCalls = [];
     await assert.rejects(() => contract.publishValidatedTerminalStatus({
         createStatus: async request => {

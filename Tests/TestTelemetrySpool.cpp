@@ -121,6 +121,23 @@ namespace
         Spark::TelemetrySystem& m_telemetry;
     };
 
+    class WorkingDirectoryGuard final
+    {
+      public:
+        explicit WorkingDirectoryGuard(const fs::path& replacement) : m_previous(fs::current_path())
+        {
+            fs::current_path(replacement);
+        }
+        ~WorkingDirectoryGuard()
+        {
+            std::error_code ignored;
+            fs::current_path(m_previous, ignored);
+        }
+
+      private:
+        fs::path m_previous;
+    };
+
     Spark::TelemetryConfig MakeSpoolConfig(const fs::path& directory)
     {
         Spark::TelemetryConfig config;
@@ -919,7 +936,10 @@ TEST(Telemetry_SpoolRecovery_SymlinkRejection)
 #endif
     }
 
-    telemetry.Initialize(MakeSpoolConfig(finalLeaf));
+    {
+        WorkingDirectoryGuard cwd(redirected.Root());
+        telemetry.Initialize(MakeSpoolConfig(fs::path("parent-link") / "new-spool"));
+    }
     state = std::make_shared<BackendState>();
     telemetry.RegisterBackend(
         std::make_unique<FixedResultTelemetryBackend>(Spark::TelemetryDeliveryResult::Delivered, state));
@@ -941,4 +961,56 @@ TEST(Telemetry_SpoolRecovery_SymlinkRejection)
     telemetry.Shutdown();
     EXPECT_FALSE(fs::exists(externalDirectory / "new-spool"));
     EXPECT_EQ(ReadFile(externalDirectory / "caller-owned.txt"), std::string("preserve-me"));
+
+    // A missing leaf below a live symlink must not be treated as safely gone.
+    // The unresolved consent-revocation cleanup remains a privacy fence for the
+    // next session until the hostile path itself disappears.
+    Spark::TelemetryConfig unspooled;
+    unspooled.enabled = true;
+    unspooled.consentGiven = true;
+    telemetry.Initialize(unspooled);
+    telemetry.RecordEvent("symlink.parent.cleanup-fence");
+    EXPECT_EQ(telemetry.GetDeliveryStats().queuedEvents, 0u);
+    telemetry.SetConsent(false);
+    telemetry.Shutdown();
+}
+
+TEST(Telemetry_SpoolRecovery_DisappearedRejectedArtifactCleanupDoesNotPoisonNextSession)
+{
+    auto& telemetry = Spark::TelemetrySystem::GetInstance();
+    TelemetryReset reset(telemetry);
+    fs::path rejectedDirectory;
+
+    {
+        TempTelemetrySpool redirected("disappeared-rejected-cleanup");
+        rejectedDirectory = redirected.Root() / "missing-parent" / "new-spool";
+
+        EXPECT_TRUE(Spark::TelemetryDetail::TelemetrySpool::InspectDeferredCleanupDirectory("relative-spool") ==
+                    Spark::TelemetryDetail::TelemetrySpoolResult::Rejected);
+        EXPECT_TRUE(Spark::TelemetryDetail::TelemetrySpool::InspectDeferredCleanupDirectory(redirected.Root().string()) ==
+                    Spark::TelemetryDetail::TelemetrySpoolResult::Success);
+        EXPECT_TRUE(Spark::TelemetryDetail::TelemetrySpool::InspectDeferredCleanupDirectory(rejectedDirectory.string()) ==
+                    Spark::TelemetryDetail::TelemetrySpoolResult::NotFound);
+        const fs::path regularAncestor = redirected.Root() / "caller-owned-file";
+        {
+            std::ofstream output(regularAncestor);
+            output << "preserve-me";
+        }
+        EXPECT_TRUE(Spark::TelemetryDetail::TelemetrySpool::InspectDeferredCleanupDirectory(
+                        (regularAncestor / "child").string()) == Spark::TelemetryDetail::TelemetrySpoolResult::Rejected);
+
+        telemetry.Initialize(MakeSpoolConfig(rejectedDirectory));
+        EXPECT_GT(telemetry.GetDeliveryStats().spoolRejectedOperations, 0u);
+        telemetry.SetConsent(false);
+        telemetry.Shutdown();
+    }
+    EXPECT_FALSE(fs::exists(rejectedDirectory));
+
+    Spark::TelemetryConfig unspooled;
+    unspooled.enabled = true;
+    unspooled.consentGiven = true;
+    telemetry.Initialize(unspooled);
+    telemetry.RecordEvent("unspooled.after-disappeared-cleanup");
+
+    EXPECT_EQ(telemetry.GetQueueSize(), 1u);
 }

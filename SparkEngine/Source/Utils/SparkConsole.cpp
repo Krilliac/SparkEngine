@@ -208,6 +208,12 @@ namespace Spark
         return true;
     }
 
+    bool SimpleConsole::IsInitialized() const
+    {
+        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
+        return m_initialized.load(std::memory_order_acquire);
+    }
+
     void SimpleConsole::Shutdown()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Core);

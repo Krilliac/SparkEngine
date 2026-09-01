@@ -120,6 +120,7 @@ namespace Spark
         static void SetGlobalInstance(SimpleConsole* instance);
 
         bool Initialize();
+        [[nodiscard]] bool IsInitialized() const;
         void Shutdown();
         void Update();
 

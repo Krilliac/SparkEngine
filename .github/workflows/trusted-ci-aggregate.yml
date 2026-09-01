@@ -1,6 +1,6 @@
-# This workflow owns the single exact-name check run used by the README badge.
-# The check is pending before evidence is read and succeeds only after the
-# existing publication gate authenticates both CI-120 and CodeQL evidence.
+# The README uses this workflow's native badge. Every non-terminal evaluation
+# therefore fails closed; the workflow succeeds only after the publication gate
+# authenticates terminal CI-120 and CodeQL evidence for current Working.
 name: "Trusted Exact-Source CI"
 
 on:
@@ -531,6 +531,7 @@ jobs:
               'Superseded trusted-CI evaluation',
               'Reporter evidence returned to pending before check finalization.'
             );
+            core.setFailed('Reporter evidence returned to pending before check finalization.');
             return;
           }
           const outcomes = [
@@ -691,6 +692,13 @@ jobs:
             throw error;
           }
 
+    - name: Keep workflow badge fail-closed until exact evidence is terminal
+      if: always() && steps.terminal-publication-readiness.outputs.ready != 'true'
+      shell: bash
+      run: |
+        echo "::error::Trusted exact-source evidence is not terminal for current Working."
+        exit 1
+
     - name: Finalize exact aggregate status
       if: always() && steps.aggregate-status.outputs.status-id != '' && steps.terminal-publication-readiness.outputs.ready == 'true'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -796,7 +804,7 @@ jobs:
               'Reporter evidence returned to pending before aggregate publication.',
               true
             );
-            core.notice('Reporter evidence returned to pending before aggregate publication.');
+            core.setFailed('Reporter evidence returned to pending before aggregate publication.');
             return;
           }
           const ownsPendingLease = statusContract.hasCurrentPendingLease({
@@ -812,11 +820,68 @@ jobs:
               'A newer reporter pending sentinel superseded this aggregate publication.',
               true
             );
-            core.notice('A newer reporter pending sentinel superseded this aggregate publication.');
+            core.setFailed('A newer reporter pending sentinel superseded this aggregate publication.');
             return;
           }
 
           if (state !== 'success') {
+            statusContract.validateLatestPendingStatus({
+              combined: combinedResponse.data,
+              listed: listedResponse.data,
+              context: contextName,
+              targetSha,
+              ownPendingId: pendingId,
+              ownPendingTargetUrl: pendingTargetUrl,
+              authorizedTargetUrls: [pendingTargetUrl],
+            });
+            const failureTargetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT}`;
+            const failureDescription =
+              `Trusted exact-source evidence failed for ${targetSha.slice(0, 12)}.`;
+            const publishedFailure = await statusContract.publishValidatedTerminalStatus({
+              createStatus: request => github.rest.repos.createCommitStatus(request),
+              request: {...context.repo, sha: targetSha},
+              state: 'failure',
+              context: contextName,
+              targetUrl: failureTargetUrl,
+              failureDescription,
+              pendingDescription: `Trusted exact-source aggregate publication is uncertain for ${targetSha.slice(0, 12)}.`,
+            });
+            const [postFailureCombined, postFailureListedResponse] = await Promise.all([
+              github.rest.repos.getCombinedStatusForRef({
+                ...context.repo, ref: targetSha, per_page: 100,
+              }),
+              github.rest.repos.listCommitStatusesForRef({
+                ...context.repo, ref: targetSha, per_page: 100,
+              }),
+            ]);
+            const failureReportersRemainTerminal = statusContract.hasTerminalReporterSet({
+              combined: postFailureCombined.data,
+              listed: postFailureListedResponse.data,
+              targetSha,
+              contexts: [
+                'CI-120 Trusted / Exact Source',
+                'CodeQL Trusted / Exact Source',
+              ],
+            });
+            const postFailureMatches = postFailureCombined.data.statuses.filter(
+              status => status.context === contextName
+            );
+            const postFailureListed = postFailureListedResponse.data.find(
+              status => status.id === publishedFailure.id
+            );
+            if (!failureReportersRemainTerminal || postFailureMatches.length !== 1 ||
+                postFailureMatches[0].id !== publishedFailure.id ||
+                postFailureMatches[0].state !== 'failure' ||
+                postFailureMatches[0].target_url !== failureTargetUrl ||
+                postFailureMatches[0].description !== failureDescription ||
+                !postFailureListed || postFailureListed.context !== contextName ||
+                postFailureListed.state !== 'failure' ||
+                postFailureListed.target_url !== failureTargetUrl ||
+                postFailureListed.description !== failureDescription ||
+                postFailureListed.creator?.login !== 'github-actions[bot]' ||
+                postFailureListed.creator?.id !== 41898282) {
+              throw new Error('Post-publication aggregate failure identity changed.');
+            }
             await neutralizePublishedCheck(
               'Aggregate evaluation did not produce validated success.',
               false

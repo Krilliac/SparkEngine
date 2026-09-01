@@ -117,6 +117,7 @@ TEST(AIDebugRendererPhaseDD_ConsoleStatusReturnsString)
     r.SetEnabled(true);
     const auto status = r.Console_GetStatus();
     EXPECT_TRUE(!status.empty());
+    r.SetEnabled(false);
 }
 
 TEST(AIDebugRendererPhaseDD_UpdateWhenDisabledIsSafe)

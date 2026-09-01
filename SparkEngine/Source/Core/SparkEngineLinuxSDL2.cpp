@@ -102,6 +102,10 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     // Engine context, physics, core subsystems, gameplay subsystems
     InitLinuxCoreSubsystems(/*registerGameplay=*/true);
 
+    // Prime only the host command registry before module OnLoad callbacks.
+    // Full InitConsole publishes EngineStartEvent and must remain after modules.
+    Spark::SimpleConsole::GetInstance().Initialize();
+
     // Modules, audio, console commands
     InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/true);
 
@@ -130,9 +134,10 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
     Assert::RegisterConsoleCommands();
 
-    // Initialize console, debug, and gameplay systems in one call
-    // (also publishes EngineStartEvent when complete)
+    // Complete debug/gameplay/daemon initialization and publish EngineStartEvent
+    // only after modules and their host callbacks are live.
     InitConsole();
+
 }
 
 /**

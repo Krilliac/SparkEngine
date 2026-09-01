@@ -215,10 +215,14 @@ async function publishValidatedTerminalStatus({
     context,
     targetUrl,
     successDescription,
+    failureDescription,
     pendingDescription
 }) {
+    const terminalDescription = state === 'success'
+        ? successDescription : failureDescription;
     if (typeof createStatus !== 'function' || !isObject(request) ||
-        state !== 'success') {
+        !['failure', 'success'].includes(state) ||
+        typeof terminalDescription !== 'string' || !terminalDescription) {
         throw new Error('Terminal aggregate status publication inputs are invalid.');
     }
     try {
@@ -226,7 +230,7 @@ async function publishValidatedTerminalStatus({
             ...request,
             state,
             target_url: targetUrl,
-            description: successDescription,
+            description: terminalDescription,
             context
         });
         return validateCreatedStatus(response?.data, { state, context, targetUrl });
@@ -245,7 +249,7 @@ async function publishValidatedTerminalStatus({
         } catch (recoveryError) {
             throw new AggregateError(
                 [error, recoveryError],
-                'Terminal aggregate success was uncertain and its pending override also failed.'
+                'Terminal aggregate status was uncertain and its pending override also failed.'
             );
         }
         throw error;

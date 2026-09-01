@@ -146,6 +146,50 @@ def named_step(workflow: str, name: str) -> str:
     return matches[0]
 
 
+def aggregate_failure_terminalization_errors(workflow: str) -> list[str]:
+    """Require authenticated failure publication before the aggregate action fails."""
+
+    try:
+        finalize = named_step(workflow, "Finalize exact aggregate status")
+    except AssertionError as error:
+        return [str(error)]
+
+    failure_start = finalize.find("if (state !== 'success') {")
+    failure_end = finalize.find("\n          const exactEvidence", failure_start)
+    if failure_start < 0 or failure_end < 0:
+        return ["aggregate failure branch is missing or unbounded"]
+    failure = finalize[failure_start:failure_end]
+    required = {
+        "pending identity validation": "statusContract.validateLatestPendingStatus({",
+        "authenticated failure publication": "state: 'failure'",
+        "failure description": "failureDescription,",
+        "post-publication combined inventory": "getCombinedStatusForRef({",
+        "post-publication listed inventory": "listCommitStatusesForRef({",
+        "exact published failure id": "postFailureMatches[0].id !== publishedFailure.id",
+        "exact published failure state": "postFailureMatches[0].state !== 'failure'",
+        "listed failure state": "postFailureListed.state !== 'failure'",
+        "authenticated bot login": "postFailureListed.creator?.login !== 'github-actions[bot]'",
+        "authenticated bot id": "postFailureListed.creator?.id !== 41898282",
+        "post-publication rejection": "Post-publication aggregate failure identity changed.",
+        "action failure": "core.setFailed(`Trusted exact-source aggregate status failed:",
+    }
+    errors = [label for label, marker in required.items() if failure.count(marker) != 1]
+    if errors:
+        return errors
+
+    ordered = [
+        "statusContract.validateLatestPendingStatus({",
+        "const publishedFailure = await statusContract.publishValidatedTerminalStatus({",
+        "const [postFailureCombined, postFailureListedResponse] = await Promise.all([",
+        "Post-publication aggregate failure identity changed.",
+        "core.setFailed(`Trusted exact-source aggregate status failed:",
+    ]
+    positions = [failure.index(marker) for marker in ordered]
+    if positions != sorted(positions) or len(set(positions)) != len(positions):
+        errors.append("aggregate failure publication is not authenticated and verified before failure")
+    return errors
+
+
 def yaml_section(workflow: str, key: str, *, indent: int) -> str:
     """Return one mapping entry using indentation, rejecting duplicate keys."""
 
@@ -1226,8 +1270,8 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def test_readme_ci_badge_tracks_fail_closed_aggregate_workflow(self) -> None:
         self.assertIn("[![Trusted exact-source CI]", self.readme)
         self.assertIn(
-            "https://img.shields.io/github/checks-status/Krilliac/SparkEngine/Working"
-            "?style=flat-square&label=CI",
+            "https://github.com/Krilliac/SparkEngine/actions/workflows/"
+            "trusted-ci-aggregate.yml/badge.svg?branch=Working",
             self.readme,
         )
         self.assertIn(
@@ -1237,8 +1281,8 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         )
         self.assertNotIn("[![Current commit checks]", self.readme)
         self.assertNotIn("github/check-runs", self.readme)
+        self.assertNotIn("github/checks-status", self.readme)
         self.assertNotIn("github/check-suites", self.readme)
-        self.assertNotIn("trusted-ci-aggregate.yml/badge.svg", self.readme)
 
     def test_trusted_aggregate_commit_status_live_response_shapes(self) -> None:
         result = subprocess.run(
@@ -1334,6 +1378,10 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "steps.terminal-publication-readiness.outputs.ready == 'true'",
             finalize_badge,
         )
+        badge_reporter_race = finalize_badge[
+            finalize_badge.index("if (!liveTerminal)") : finalize_badge.index("const outcomes")
+        ]
+        self.assertIn("core.setFailed", badge_reporter_race)
         self.assertIn(
             "current.status === 'completed' && current.conclusion === 'neutral'",
             finalize_badge,
@@ -1350,8 +1398,25 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("conclusion,", aggregate)
         self.assertIn("if (!ownsPendingLease)", finalize_status)
         self.assertIn("if (state !== 'success')", finalize_status)
+        self.assertEqual(aggregate_failure_terminalization_errors(aggregate), [])
+        reporter_race = finalize_status[
+            finalize_status.index("if (!liveTerminal)") : finalize_status.index("if (!ownsPendingLease)")
+        ]
+        self.assertIn("core.setFailed", reporter_race)
+        superseded_race = finalize_status[
+            finalize_status.index("if (!ownsPendingLease)") : finalize_status.index("if (state !== 'success')")
+        ]
+        self.assertIn("core.setFailed", superseded_race)
         self.assertIn("state: 'success'", finalize_status)
         self.assertIn("pendingDescription", finalize_status)
+        pending_badge = named_step(
+            aggregate, "Keep workflow badge fail-closed until exact evidence is terminal"
+        )
+        self.assertIn(
+            "if: always() && steps.terminal-publication-readiness.outputs.ready != 'true'",
+            pending_badge,
+        )
+        self.assertIn("exit 1", pending_badge)
         self.assertIn("neutralizePublishedCheck", finalize_status)
         self.assertIn("CHECK_ID", finalize_status)
         self.assertIn(
@@ -1365,7 +1430,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("Post-publication aggregate success identity changed", finalize_status)
         self.assertIn("publishedAggregate.id", finalize_status)
         self.assertIn("aggregate was superseded after publication", finalize_status)
-        self.assertNotIn("state: 'failure'", finalize_status)
+        self.assertIn("state: 'failure'", finalize_status)
         self.assertIn("per_page: 100", aggregate)
         self.assertIn("prior.status === 'completed'", aggregate)
         self.assertIn("['success', 'neutral'].includes(prior.conclusion)", aggregate)
@@ -1383,6 +1448,45 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("currentBadge.conclusion !== null", aggregate)
         self.assertNotIn("continue-on-error", aggregate)
         self.assertNotIn("|| true", aggregate)
+
+    def test_trusted_aggregate_failure_terminalization_rejects_hostile_mutations(self) -> None:
+        aggregate = TRUSTED_CI_AGGREGATE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertEqual(aggregate_failure_terminalization_errors(aggregate), [])
+        mutations = {
+            "pending identity validation removed": aggregate.replace(
+                "statusContract.validateLatestPendingStatus({",
+                "statusContract.hasCurrentPendingLease({",
+                1,
+            ),
+            "failure changed to pending": aggregate.replace(
+                "state: 'failure'", "state: 'pending'", 1
+            ),
+            "published identity detached": aggregate.replace(
+                "postFailureMatches[0].id !== publishedFailure.id",
+                "postFailureMatches[0].id < 1",
+                1,
+            ),
+            "bot identity weakened": aggregate.replace(
+                "postFailureListed.creator?.id !== 41898282",
+                "!postFailureListed.creator",
+                1,
+            ),
+            "post-verification rejection removed": aggregate.replace(
+                "throw new Error('Post-publication aggregate failure identity changed.');",
+                "core.notice('Aggregate failure identity changed.');",
+                1,
+            ),
+            "action fails before publish": aggregate.replace(
+                "const publishedFailure = await statusContract.publishValidatedTerminalStatus({",
+                "core.setFailed(`Trusted exact-source aggregate status failed: ${outcomes.join(', ')}; Working exact: ${workingIsExact}.`);\n"
+                "            const publishedFailure = await statusContract.publishValidatedTerminalStatus({",
+                1,
+            ),
+        }
+        for label, mutated in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, aggregate, "mutation fixture did not alter YAML")
+                self.assertTrue(aggregate_failure_terminalization_errors(mutated), label)
 
     def test_site_data_accepts_only_exact_staged_build_and_writes_a_tag(self) -> None:
         self.assertEqual(self.site_data_publish.count("--staged-build-only"), 1)

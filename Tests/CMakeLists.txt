@@ -1144,6 +1144,23 @@ set_tests_properties(ModuleProfileLifecycleParserContract PROPERTIES
     LABELS "module-profile;stable-v1;d3d11;unit"
     TIMEOUT 10)
 
+if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND
+   TARGET SparkEngine AND TARGET SparkGame)
+    add_dependencies(SparkTests SparkEngine SparkGame)
+    add_test(
+        NAME LinuxSDLConsoleBeforeModules
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGame>"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkLinuxSDLConsoleStartup.cmake
+    )
+    set_tests_properties(LinuxSDLConsoleBeforeModules PROPERTIES
+        LABELS "lifecycle;module;linux;sdl2;integration;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 45)
+endif()
+
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     if(NOT TARGET SparkEngine OR NOT TARGET SparkGameFPS)
         message(FATAL_ERROR

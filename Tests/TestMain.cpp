@@ -344,16 +344,10 @@ struct TestOutput
         if (!quiet || isError)
         {
             std::cout << msg;
-#if SPARK_TEST_SANITIZER_BUILD
-            std::cout.flush();
-#endif
         }
         if (hasFile && (!errorsOnly || isError))
         {
             file << msg;
-#if SPARK_TEST_SANITIZER_BUILD
-            file.flush();
-#endif
         }
     }
 
@@ -363,18 +357,16 @@ struct TestOutput
         std::cout << msg;
         if (hasFile)
             file << msg;
-#if SPARK_TEST_SANITIZER_BUILD
-        std::cout.flush();
-        if (hasFile)
-            file.flush();
-#endif
     }
 
-    void Flush()
+    // Active-test progress must survive --quiet and abrupt termination without
+    // forcing the much larger framework report to disk after every test.
+    void PrintProgress(const std::string& msg)
     {
+        std::cout << msg;
         std::cout.flush();
-        if (hasFile)
-            file.flush();
+        if (hasFile && !errorsOnly)
+            file << msg;
     }
 };
 
@@ -730,10 +722,9 @@ int main(int argc, char** argv)
             cerrCapture.clear();
         }
 
-        out.Print("[ RUN    ] " + g_currentTest + "\n");
-        // Preserve the active test name if a non-sanitizer lane hangs or the
-        // process terminates before the framework can write its final JUnit.
-        out.Flush();
+        // Preserve the active test name even under --quiet if any lane hangs or
+        // terminates before the framework can write its final JUnit.
+        out.PrintProgress("[ RUN    ] " + g_currentTest + "\n");
 
         auto testStart = std::chrono::steady_clock::now();
 

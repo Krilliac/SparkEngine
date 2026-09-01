@@ -320,6 +320,17 @@ namespace Spark
             }
             PreserveActiveCleanupForReinitialize_GameThread();
             m_config = config;
+            if (!m_config.spoolDirectory.empty())
+            {
+                // Bind relative configuration to the caller's current working
+                // directory now. Deferred consent-revocation cleanup must keep
+                // this exact identity even if a later session changes CWD.
+                std::error_code absoluteError;
+                auto stableDirectory =
+                    std::filesystem::absolute(std::filesystem::path(m_config.spoolDirectory), absoluteError);
+                if (!absoluteError && !stableDirectory.empty())
+                    m_config.spoolDirectory = stableDirectory.lexically_normal().string();
+            }
             if (m_config.batchSize == 0)
                 m_config.batchSize = 1;
             if (m_config.flushIntervalSeconds <= 0.0f)
@@ -1138,6 +1149,17 @@ namespace Spark
             {
                 if (!purge->spool.IsConfigured())
                 {
+                    // Clear() already treats a vanished configured directory as
+                    // terminal success. Preserve that contract for a deferred
+                    // cleanup whose original path was rejected before the spool
+                    // could become configured: there is no artifact left to purge.
+                    if (TelemetryDetail::TelemetrySpool::InspectDeferredCleanupDirectory(purge->directory) ==
+                        TelemetryDetail::TelemetrySpoolResult::NotFound)
+                    {
+                        purge = m_deferredSpoolPurges.erase(purge);
+                        continue;
+                    }
+
                     const uint64_t purgeBytes = (std::max)(purge->maxBytes, static_cast<uint64_t>(16));
                     const uint32_t purgeEvents =
                         (std::min)((std::max)(purge->maxEvents, 1u), static_cast<uint32_t>(100000));

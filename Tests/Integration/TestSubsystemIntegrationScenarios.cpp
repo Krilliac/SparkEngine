@@ -33,6 +33,9 @@ namespace
     {
         Spark::EventBus eventBus;
         PhysicsSystem physics;
+        EngineContext* boundContext = nullptr;
+        Spark::EventBus* previousEventBus = nullptr;
+        PhysicsSystem* previousPhysics = nullptr;
 
         bool InitializePhysicsAndEcs()
         {
@@ -42,6 +45,9 @@ namespace
             }
 
             auto* context = EngineContext::Get();
+            boundContext = context;
+            previousEventBus = context->GetEventBus();
+            previousPhysics = context->GetPhysics();
             context->SetEventBus(&eventBus);
 
             if (FAILED(physics.Initialize()))
@@ -53,7 +59,17 @@ namespace
             return true;
         }
 
-        ~SubsystemHarness() { physics.Shutdown(); }
+        ~SubsystemHarness()
+        {
+            if (boundContext != nullptr && EngineContext::Get() == boundContext)
+            {
+                if (boundContext->GetEventBus() == &eventBus)
+                    boundContext->SetEventBus(previousEventBus);
+                if (boundContext->GetPhysics() == &physics)
+                    boundContext->SetPhysics(previousPhysics);
+            }
+            physics.Shutdown();
+        }
     };
 
     struct PerObjectConstants
@@ -289,6 +305,26 @@ namespace
         return positions;
     }
 } // namespace
+
+TEST(Integration_SubsystemHarness_RestoresEngineContextBindingsOnDestruction)
+{
+    if (!EngineContext::Get())
+        EngineContext::SetOwned(std::make_unique<EngineContext>());
+
+    auto* context = EngineContext::Get();
+    auto* originalEventBus = context->GetEventBus();
+    auto* originalPhysics = context->GetPhysics();
+
+    {
+        SubsystemHarness harness;
+        EXPECT_TRUE(harness.InitializePhysicsAndEcs());
+        EXPECT_EQ(context->GetEventBus(), &harness.eventBus);
+        EXPECT_EQ(context->GetPhysics(), &harness.physics);
+    }
+
+    EXPECT_EQ(context->GetEventBus(), originalEventBus);
+    EXPECT_EQ(context->GetPhysics(), originalPhysics);
+}
 
 TEST(Integration_ECSPhysics_TransformSyncAfterSimulationTicks)
 {

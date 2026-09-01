@@ -42,6 +42,13 @@ namespace Spark
             [[nodiscard]] bool IsConfigured() const { return !m_directory.empty(); }
 
             /**
+             * Classify a deferred cleanup path without following symlinks or
+             * reparse points. NotFound is returned only when every existing
+             * ancestor is a real directory and the next component is absent.
+             */
+            [[nodiscard]] static TelemetrySpoolResult InspectDeferredCleanupDirectory(std::string_view directory);
+
+            /**
              * Keep the oldest representable events within the configured
              * format and capacity limits.
              * @return Number of events removed from @p events.
