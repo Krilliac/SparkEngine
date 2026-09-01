@@ -427,17 +427,17 @@
 | `LineCap` | enum | SparkEngine | [SVGRenderer.h:L89](../../SparkEngine/Source/Graphics/SVGRenderer.h#L89) |  |
 | `LineJoin` | enum | SparkEngine | [SVGRenderer.h:L96](../../SparkEngine/Source/Graphics/SVGRenderer.h#L96) |  |
 | `LoadDestination` | enum | SparkEngine | [DirectStorageLoader.h:L42](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L42) | Destination for loaded data |
-| `LoadDestination` | enum | Tests | [TestDirectStorageLoader.cpp:L21](../../Tests/TestDirectStorageLoader.cpp#L21) |  |
+| `LoadDestination` | enum | Tests | [TestDirectStorageLoader.cpp:L26](../../Tests/TestDirectStorageLoader.cpp#L26) |  |
 | `LoadingPriority` | enum | SparkEditor | [LevelStreamingEnums.h:L32](../../SparkEditor/Source/Enums/LevelStreamingEnums.h#L32) | Loading priority levels |
 | `LoadingPriority` | enum | SparkEngine | [AssetPipeline.h:L66](../../SparkEngine/Source/Graphics/AssetPipeline.h#L66) | Asset loading priority |
 | `LoadingPriority` | enum | Tests | [TestAssetPipelineCache.cpp:L40](../../Tests/TestAssetPipelineCache.cpp#L40) |  |
 | `LoadingState` | enum | SparkEngine | [LoadingScreen.h:L68](../../SparkEngine/Source/Engine/Loading/LoadingScreen.h#L68) | Current state of the loading process. |
 | `LoadPriority` | enum | SparkEngine | [DirectStorageLoader.h:L33](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L33) | Load request priority |
-| `LoadPriority` | enum | Tests | [TestDirectStorageLoader.cpp:L13](../../Tests/TestDirectStorageLoader.cpp#L13) |  |
+| `LoadPriority` | enum | Tests | [TestDirectStorageLoader.cpp:L18](../../Tests/TestDirectStorageLoader.cpp#L18) |  |
 | `LoadResult` | enum | GameModules | [TFDatabase.h:L124](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L124) |  |
 | `LoadResult` | enum | GameModules | [TFOutfitStore.h:L144](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.h#L144) |  |
 | `LoadStatus` | enum | SparkEngine | [DirectStorageLoader.h:L50](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L50) | Completion status for async loads |
-| `LoadStatus` | enum | Tests | [TestDirectStorageLoader.cpp:L28](../../Tests/TestDirectStorageLoader.cpp#L28) |  |
+| `LoadStatus` | enum | Tests | [TestDirectStorageLoader.cpp:L33](../../Tests/TestDirectStorageLoader.cpp#L33) |  |
 | `LockAxis` | enum | SparkEngine | [PlacementComponents.h:L326](../../SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h#L326) |  |
 | `LODLevel` | enum | SparkEditor | [LevelStreamingTypes.h:L42](../../SparkEditor/Source/LevelStreaming/LevelStreamingTypes.h#L42) | Level of detail settings |
 | `LODQualityTier` | enum | SparkEditor | [AssetPipelineTypes.h:L53](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L53) |  |

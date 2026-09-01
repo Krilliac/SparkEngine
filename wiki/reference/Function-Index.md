@@ -2676,7 +2676,7 @@
 | `Cancel` | function | SparkEngine | [TweenSystem.h:L161](../../SparkEngine/Source/Engine/Tween/TweenSystem.h#L161) |  |
 | `Cancel` | function | SparkEngine | [ScheduledCallback.h:L95](../../SparkEngine/Source/Utils/ScheduledCallback.h#L95) | Cancel a scheduled callback. |
 | `Cancel` | function | Tests | [TestCoroutineScheduler.cpp:L70](../../Tests/TestCoroutineScheduler.cpp#L70) |  |
-| `Cancel` | function | Tests | [TestDirectStorageLoader.cpp:L83](../../Tests/TestDirectStorageLoader.cpp#L83) |  |
+| `Cancel` | function | Tests | [TestDirectStorageLoader.cpp:L88](../../Tests/TestDirectStorageLoader.cpp#L88) |  |
 | `Cancel` | function | Tests | [TestScheduledCallback.cpp:L29](../../Tests/TestScheduledCallback.cpp#L29) |  |
 | `Cancel` | function | Tests | [TestScriptHookManager.cpp:L35](../../Tests/TestScriptHookManager.cpp#L35) |  |
 | `CancelAll` | function | SparkEngine | [CancellationToken.h:L66](../../SparkEngine/Source/Engine/Coroutine/CancellationToken.h#L66) | Call when entity is about to be destroyed |
@@ -3845,7 +3845,7 @@
 | `CompleteQuest` | function | SparkEngine | [QuestSystem.h:L189](../../SparkEngine/Source/Engine/Gameplay/QuestSystem.h#L189) | Mark a quest as completed (call after verifying IsQuestComplete) |
 | `CompleteReload` | function | Tests | [TestWeaponMechanics.cpp:L184](../../Tests/TestWeaponMechanics.cpp#L184) |  |
 | `CompleteRender` | function | SparkEngine | [MovieRenderPipeline.h:L412](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L412) |  |
-| `CompleteRequest` | function | Tests | [TestDirectStorageLoader.cpp:L97](../../Tests/TestDirectStorageLoader.cpp#L97) |  |
+| `CompleteRequest` | function | Tests | [TestDirectStorageLoader.cpp:L102](../../Tests/TestDirectStorageLoader.cpp#L102) |  |
 | `CompleteStep` | function | GameModules | [TFTutorial.h:L118](../../GameModules/SparkGameMMOFPS/Source/Game/TFTutorial.h#L118) |  |
 | `Component::GetData` | method | SparkEditor | [SceneFileTypes.h:L1115](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L1115) |  |
 | `Component::GetData` | method | SparkEditor | [SceneFileTypes.h:L1120](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L1120) |  |
@@ -6419,15 +6419,15 @@
 | `Direction` | function | SparkEngine | [MathUtils.h:L301](../../SparkEngine/Source/Utils/MathUtils.h#L301) |  |
 | `DirectionalEffectiveDistance` | function | SparkEngine | [SeamlessAreaManager.h:L191](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.h#L191) | Compute a distance biased by alignment with the player's movement direction. |
 | `DirectiveIndexOfId` | function | GameModules | [TFDirectivePanel.cpp:L45](../../GameModules/SparkGameMMOFPS/Source/UI/TFDirectivePanel.cpp#L45) |  |
-| `DirectStorageLoader::Cancel` | method | SparkEngine | [DirectStorageLoader.cpp:L158](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L158) |  |
-| `DirectStorageLoader::Console_GetStatus` | method | SparkEngine | [DirectStorageLoader.cpp:L320](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L320) |  |
-| `DirectStorageLoader::FallbackAsyncLoad` | method | SparkEngine | [DirectStorageLoader.cpp:L227](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L227) |  |
+| `DirectStorageLoader::Cancel` | method | SparkEngine | [DirectStorageLoader.cpp:L160](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L160) |  |
+| `DirectStorageLoader::Console_GetStatus` | method | SparkEngine | [DirectStorageLoader.cpp:L327](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L327) |  |
+| `DirectStorageLoader::FallbackAsyncLoad` | method | SparkEngine | [DirectStorageLoader.cpp:L234](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L234) |  |
 | `DirectStorageLoader::Flush` | method | SparkEngine | [DirectStorageLoader.cpp:L111](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L111) |  |
-| `DirectStorageLoader::GetLoadedData` | method | SparkEngine | [DirectStorageLoader.cpp:L194](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L194) |  |
-| `DirectStorageLoader::GetStatus` | method | SparkEngine | [DirectStorageLoader.cpp:L182](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L182) |  |
+| `DirectStorageLoader::GetLoadedData` | method | SparkEngine | [DirectStorageLoader.cpp:L197](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L197) |  |
+| `DirectStorageLoader::GetStatus` | method | SparkEngine | [DirectStorageLoader.cpp:L185](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L185) |  |
 | `DirectStorageLoader::Initialize` | method | SparkEngine | [DirectStorageLoader.cpp:L36](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L36) |  |
 | `DirectStorageLoader::ProcessCompletions` | method | SparkEngine | [DirectStorageLoader.cpp:L128](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L128) |  |
-| `DirectStorageLoader::ReleaseLoadedData` | method | SparkEngine | [DirectStorageLoader.cpp:L212](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L212) |  |
+| `DirectStorageLoader::ReleaseLoadedData` | method | SparkEngine | [DirectStorageLoader.cpp:L215](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L215) |  |
 | `DirectStorageLoader::Shutdown` | method | SparkEngine | [DirectStorageLoader.cpp:L72](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L72) |  |
 | `DirectStorageLoader::Submit` | method | SparkEngine | [DirectStorageLoader.cpp:L87](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L87) |  |
 | `DirectX::XMMatrixIdentity` | method | GameModules | [TFSecondaryMotion.cpp:L196](../../GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.cpp#L196) |  |
@@ -8471,7 +8471,7 @@
 | `file` | function | SparkEngine | [SaveSystem.cpp:L1497](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1497) |  |
 | `file` | function | SparkEngine | [SaveSystem.cpp:L1665](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1665) |  |
 | `file` | function | SparkEngine | [SaveSystem.cpp:L1950](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1950) |  |
-| `file` | function | SparkEngine | [DirectStorageLoader.cpp:L234](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L234) |  |
+| `file` | function | SparkEngine | [DirectStorageLoader.cpp:L241](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L241) |  |
 | `file` | function | SparkEngine | [SceneManifest.h:L130](../../SparkEngine/Source/Engine/Streaming/SceneManifest.h#L130) | Parse a manifest from a .sparkscene file |
 | `file` | function | SparkEngine | [AssetMetadataLinux.cpp:L180](../../SparkEngine/Source/Graphics/AssetMetadataLinux.cpp#L180) |  |
 | `file` | function | SparkEngine | [AssetMetadataWindows.cpp:L148](../../SparkEngine/Source/Graphics/AssetMetadataWindows.cpp#L148) |  |
@@ -13553,7 +13553,7 @@
 | `GetStats` | function | SparkEngine | [SparkConsole.h:L165](../../SparkEngine/Source/Utils/SparkConsole.h#L165) |  |
 | `GetStats` | function | Tests | [TestAsyncComputeScheduler.cpp:L67](../../Tests/TestAsyncComputeScheduler.cpp#L67) |  |
 | `GetStats` | function | Tests | [TestDedicatedServerRuntime.cpp:L79](../../Tests/TestDedicatedServerRuntime.cpp#L79) |  |
-| `GetStats` | function | Tests | [TestDirectStorageLoader.cpp:L111](../../Tests/TestDirectStorageLoader.cpp#L111) |  |
+| `GetStats` | function | Tests | [TestDirectStorageLoader.cpp:L116](../../Tests/TestDirectStorageLoader.cpp#L116) |  |
 | `GetStats` | function | Tests | [TestNetworkManagerOrchestration.cpp:L334](../../Tests/TestNetworkManagerOrchestration.cpp#L334) |  |
 | `GetStats` | function | Tests | [TestNullRHIDevice.cpp:L44](../../Tests/TestNullRHIDevice.cpp#L44) |  |
 | `GetStats` | function | Tests | [TestPortalCulling.cpp:L183](../../Tests/TestPortalCulling.cpp#L183) |  |
@@ -13564,7 +13564,7 @@
 | `GetStatus` | function | SparkEngine | [BehaviorTreeTypes.h:L253](../../SparkEngine/Source/Engine/AI/BehaviorTreeTypes.h#L253) | Retrieve the status produced during the most recent Tick() call. |
 | `GetStatus` | function | SparkEngine | [DirectStorageLoader.h:L151](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L151) | Check the status of a request |
 | `GetStatus` | function | Tests | [TestAssetStallDetector.cpp:L99](../../Tests/TestAssetStallDetector.cpp#L99) |  |
-| `GetStatus` | function | Tests | [TestDirectStorageLoader.cpp:L73](../../Tests/TestDirectStorageLoader.cpp#L73) |  |
+| `GetStatus` | function | Tests | [TestDirectStorageLoader.cpp:L78](../../Tests/TestDirectStorageLoader.cpp#L78) |  |
 | `GetStatus` | function | Tests | [TestFreezeDetector.cpp:L103](../../Tests/TestFreezeDetector.cpp#L103) |  |
 | `GetStatus` | function | Tests | [TestGPUResourceLeakDetector.cpp:L131](../../Tests/TestGPUResourceLeakDetector.cpp#L131) |  |
 | `GetStatus` | function | Tests | [TestHitchDetector.cpp:L155](../../Tests/TestHitchDetector.cpp#L155) |  |
@@ -17560,7 +17560,7 @@
 | `IsValid` | function | SparkEngine | [Shader.h:L383](../../SparkEngine/Source/Graphics/Shader.h#L383) | Check if shaders are valid and ready for rendering |
 | `IsValid` | function | SparkEngine | [OpaqueHandle.h:L38](../../SparkEngine/Source/Utils/OpaqueHandle.h#L38) | Returns true if the handle points to a valid object. |
 | `IsValid` | function | SparkEngine | [UUID.h:L69](../../SparkEngine/Source/Utils/UUID.h#L69) |  |
-| `IsValid` | function | Tests | [TestDirectStorageLoader.cpp:L39](../../Tests/TestDirectStorageLoader.cpp#L39) |  |
+| `IsValid` | function | Tests | [TestDirectStorageLoader.cpp:L44](../../Tests/TestDirectStorageLoader.cpp#L44) |  |
 | `IsValid` | function | Tests | [TestExtendedSystems.cpp:L774](../../Tests/TestExtendedSystems.cpp#L774) |  |
 | `IsValid` | function | Tests | [TestNetBuffer.cpp:L154](../../Tests/TestNetBuffer.cpp#L154) |  |
 | `IsValid` | function | Tests | [TestPerceptionSystemMath.cpp:L73](../../Tests/TestPerceptionSystemMath.cpp#L73) |  |
@@ -19227,12 +19227,12 @@
 | `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L89](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L89) |  |
 | `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L113](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L113) |  |
 | `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L130](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L130) |  |
-| `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L160](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L160) |  |
-| `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L184](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L184) |  |
-| `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L196](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L196) |  |
-| `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L214](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L214) |  |
-| `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L304](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L304) |  |
-| `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L322](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L322) |  |
+| `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L162](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L162) |  |
+| `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L187](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L187) |  |
+| `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L199](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L199) |  |
+| `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L217](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L217) |  |
+| `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L311](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L311) |  |
+| `lock` | function | SparkEngine | [DirectStorageLoader.cpp:L329](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L329) |  |
 | `lock` | function | SparkEngine | [SeamlessAreaManager.cpp:L81](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.cpp#L81) |  |
 | `lock` | function | SparkEngine | [SeamlessAreaManager.cpp:L198](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.cpp#L198) |  |
 | `lock` | function | SparkEngine | [SeamlessAreaManager.cpp:L241](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.cpp#L241) |  |
@@ -33028,7 +33028,7 @@
 | `std::format` | method | SparkEngine | [MemoryIntegrity.cpp:L401](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp#L401) |  |
 | `std::format` | method | SparkEngine | [MemoryIntegrity.cpp:L402](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp#L402) |  |
 | `std::format` | method | SparkEngine | [MemoryIntegrity.cpp:L457](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp#L457) |  |
-| `std::format` | method | SparkEngine | [DirectStorageLoader.cpp:L324](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L324) |  |
+| `std::format` | method | SparkEngine | [DirectStorageLoader.cpp:L331](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L331) |  |
 | `std::format` | method | SparkEngine | [GPUClusterCulling.cpp:L30](../../SparkEngine/Source/Graphics/GPUClusterCulling.cpp#L30) |  |
 | `std::format` | method | SparkEngine | [MeshShaderPipeline.cpp:L298](../../SparkEngine/Source/Graphics/MeshShaderPipeline.cpp#L298) |  |
 | `std::format` | method | SparkEngine | [Assert.cpp:L291](../../SparkEngine/Source/Utils/Assert.cpp#L291) |  |
@@ -33848,7 +33848,7 @@
 | `Submit` | function | SparkEngine | [DebugDraw.h:L437](../../SparkEngine/Source/Utils/DebugDraw.h#L437) |  |
 | `Submit` | function | SparkEngine | [JobSystem.h:L123](../../SparkEngine/Source/Utils/JobSystem.h#L123) | Submit a callable job and return a future for its result |
 | `Submit` | function | Tests | [TestAsyncComputeScheduler.cpp:L43](../../Tests/TestAsyncComputeScheduler.cpp#L43) |  |
-| `Submit` | function | Tests | [TestDirectStorageLoader.cpp:L64](../../Tests/TestDirectStorageLoader.cpp#L64) |  |
+| `Submit` | function | Tests | [TestDirectStorageLoader.cpp:L69](../../Tests/TestDirectStorageLoader.cpp#L69) |  |
 | `Submit` | function | Tests | [TestJobSystem.cpp:L40](../../Tests/TestJobSystem.cpp#L40) |  |
 | `SubmitChat` | function | Templates | [GameModule.h:L196](../../Templates/MMOStarter/Source/GameModule.h#L196) |  |
 | `SubmitComputeWork` | function | SparkEngine | [AsyncComputeScheduler.h:L141](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.h#L141) | Submit a compute work item to the pending queue. |
@@ -36124,7 +36124,7 @@
 | `ThreadAffinity` | function | SparkEngine | [LifecycleStage.h:L36](../../SparkEngine/Source/Core/Lifecycle/LifecycleStage.h#L36) |  |
 | `ThreadAffinity` | function | SparkEngine | [ShutdownStage.cpp:L11](../../SparkEngine/Source/Core/Lifecycle/ShutdownStage.cpp#L11) |  |
 | `ThreadAffinity` | function | SparkEngine | [UpdateStage.cpp:L11](../../SparkEngine/Source/Core/Lifecycle/UpdateStage.cpp#L11) |  |
-| `threadLock` | function | SparkEngine | [DirectStorageLoader.cpp:L316](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L316) |  |
+| `threadLock` | function | SparkEngine | [DirectStorageLoader.cpp:L323](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L323) |  |
 | `ThreadSafeQueue` | function | SparkEngine | [ThreadSafeQueue.h:L57](../../SparkEngine/Source/Utils/ThreadSafeQueue.h#L57) | Construct a queue with an optional maximum size. |
 | `ThreadSafeRandomEngine` | function | SparkEngine | [RandomEngine.h:L220](../../SparkEngine/Source/Utils/RandomEngine.h#L220) |  |
 | `ThreadStacks` | function | SparkEngine | [CrashHandler.cpp:L820](../../SparkEngine/Source/Utils/CrashHandler.cpp#L820) |  |
@@ -38839,7 +38839,7 @@
 | `WndProc` | function | SparkEngine | [SparkEngineWindowsWin32.cpp:L407](../../SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp#L407) |  |
 | `WndProc` | function | SparkInstaller | [BackendWindows.cpp:L49](../../SparkInstaller/src/gui/BackendWindows.cpp#L49) |  |
 | `WndProc` | function | SparkLauncher | [LauncherBackendWindows.cpp:L56](../../SparkLauncher/src/LauncherBackendWindows.cpp#L56) |  |
-| `worker` | function | SparkEngine | [DirectStorageLoader.cpp:L229](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L229) |  |
+| `worker` | function | SparkEngine | [DirectStorageLoader.cpp:L236](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L236) |  |
 | `Worker` | function | Tests | [TestJobSystem.cpp:L56](../../Tests/TestJobSystem.cpp#L56) |  |
 | `worker` | function | Tests | [TestSequencerAudioWiring.cpp:L108](../../Tests/TestSequencerAudioWiring.cpp#L108) |  |
 | `worker` | function | Tests | [TestWorldBasicRender.cpp:L723](../../Tests/TestWorldBasicRender.cpp#L723) |  |
