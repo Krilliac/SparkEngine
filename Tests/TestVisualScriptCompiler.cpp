@@ -3,6 +3,7 @@
 
 #include "TestFramework.h"
 #include <algorithm>
+#include <cstring>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -653,6 +654,49 @@ TEST(VisualScriptDemo_ShippedScriptsUseBootstrapAPIOnly)
 }
 
 #ifdef SPARK_ANGELSCRIPT_SUPPORT
+static_assert(SPARK_ANGELSCRIPT_PACKED_POINTER_OPERAND == 1);
+static_assert(alignof(AS_NAMESPACE_QUALIFIER asPWORD_UNALIGNED) == 1);
+
+namespace
+{
+    class AngelScriptMemoryByteCodeStream final : public asIBinaryStream
+    {
+      public:
+        int Write(const void* source, asUINT size) override
+        {
+            const auto* first = static_cast<const asBYTE*>(source);
+            bytes.insert(bytes.end(), first, first + size);
+            return 0;
+        }
+
+        int Read(void* destination, asUINT size) override
+        {
+            if (readOffset + size > bytes.size())
+                return -1;
+            std::memcpy(destination, bytes.data() + readOffset, size);
+            readOffset += size;
+            return 0;
+        }
+
+        std::vector<asBYTE> bytes;
+        size_t readOffset = 0;
+    };
+} // namespace
+
+TEST(VisualScriptDemo_AngelScriptPointerBytecodeOperandSupportsPackedStorage)
+{
+    alignas(asPWORD) asDWORD bytecode[AS_PTR_SIZE + 1] = {};
+#if AS_PTR_SIZE == 2
+    const asPWORD expected = static_cast<asPWORD>(0x123456789abcdef0ull);
+#else
+    const asPWORD expected = static_cast<asPWORD>(0x12345678u);
+#endif
+
+    asBC_PTRARG(bytecode) = expected;
+
+    EXPECT_EQ(asBC_PTRARG(bytecode), expected);
+}
+
 TEST(VisualScriptDemo_AngelScriptCoreAndRequiredAddonsAreLinked)
 {
     asIScriptEngine* engine = asCreateScriptEngine();
@@ -670,6 +714,42 @@ TEST(VisualScriptDemo_AngelScriptCoreAndRequiredAddonsAreLinked)
                 "smoke", "class Smoke { array<string> values; void Start() { values.insertLast(\"ready\"); } }") >= 0);
         EXPECT_TRUE(builder.BuildModule() >= 0);
     }
+    engine->ShutDownAndRelease();
+}
+
+TEST(VisualScriptDemo_AngelScriptPackedBytecodeRoundTripsObjectPointers)
+{
+    asIScriptEngine* engine = asCreateScriptEngine();
+    EXPECT_TRUE(engine != nullptr);
+    if (!engine)
+        return;
+
+    RegisterStdString(engine);
+    RegisterScriptArray(engine, true);
+
+    CScriptBuilder builder;
+    EXPECT_TRUE(builder.StartNewModule(engine, "PackedBytecodeSource") >= 0);
+    EXPECT_TRUE(builder.AddSectionFromMemory(
+                    "packed-bytecode",
+                    "class Persisted { array<string> values; Persisted() { values.insertLast(\"ready\"); } } "
+                    "Persisted@ CreatePersisted() { return Persisted(); }") >= 0);
+    EXPECT_TRUE(builder.BuildModule() >= 0);
+
+    AngelScriptMemoryByteCodeStream stream;
+    asIScriptModule* source = engine->GetModule("PackedBytecodeSource", asGM_ONLY_IF_EXISTS);
+    EXPECT_TRUE(source != nullptr);
+    if (source)
+        EXPECT_TRUE(source->SaveByteCode(&stream) >= 0);
+    EXPECT_TRUE(!stream.bytes.empty());
+
+    asIScriptModule* restored = engine->GetModule("PackedBytecodeRestored", asGM_ALWAYS_CREATE);
+    EXPECT_TRUE(restored != nullptr);
+    if (restored && !stream.bytes.empty())
+    {
+        EXPECT_TRUE(restored->LoadByteCode(&stream) >= 0);
+        EXPECT_TRUE(restored->GetFunctionByDecl("Persisted@ CreatePersisted()") != nullptr);
+    }
+
     engine->ShutDownAndRelease();
 }
 #endif

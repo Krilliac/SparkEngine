@@ -994,7 +994,9 @@ TEST(SaveMigration_OnDiskRejectsDuplicateRecordsWithoutMutation)
 
 TEST(SaveMigration_InMemoryRejectsDuplicateAndExplicitNameComponentsBeforeLifecycle)
 {
+    const std::string dir = MakeTempSaveDir("in_memory_duplicate");
     SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
     World source;
     const EntityID sourceEntity = source.CreateEntity("memory-duplicate-source");
     source.AddComponent<Transform>(sourceEntity).position.x = 33.0f;
@@ -1029,6 +1031,8 @@ TEST(SaveMigration_InMemoryRejectsDuplicateAndExplicitNameComponentsBeforeLifecy
             static_cast<Spark::EventEntityID>(sentinel), {1});
         EXPECT_EQ(deliveries, 1);
     }
+
+    std::filesystem::remove_all(dir);
 }
 
 TEST(SaveMigration_DiskAndMemoryUseSharedRepresentationBoundaries)

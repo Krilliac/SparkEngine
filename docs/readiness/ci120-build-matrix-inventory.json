@@ -1946,10 +1946,10 @@
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1587,
+      "line": 1628,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1573",
+          "id": "CMakeLists.txt:1614",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -1984,24 +1984,24 @@
       "target": "Jolt",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1558,
+      "line": 1599,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1464",
+          "id": "CMakeLists.txt:1505",
           "branch": 0,
           "branches": [
             "JOLT_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:1556",
+          "id": "CMakeLists.txt:1597",
           "branch": 0,
           "branches": [
             "SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"
           ]
         },
         {
-          "id": "CMakeLists.txt:1557",
+          "id": "CMakeLists.txt:1598",
           "branch": 0,
           "branches": [
             "MSVC"
@@ -2095,10 +2095,10 @@
       "target": "Recast",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1575,
+      "line": 1616,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1573",
+          "id": "CMakeLists.txt:1614",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2475,10 +2475,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1330,
+      "line": 1371,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1329",
+          "id": "CMakeLists.txt:1370",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -2493,10 +2493,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1332,
+      "line": 1373,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1329",
+          "id": "CMakeLists.txt:1370",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -2512,10 +2512,10 @@
       "target": "SparkEngineInterface",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 1313,
+      "line": 1354,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1312",
+          "id": "CMakeLists.txt:1353",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -2530,7 +2530,7 @@
       "target": "SparkEngineLib",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1286,
+      "line": 1327,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2977,10 +2977,10 @@
       "target": "angelscript",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 913,
+      "line": 951,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:883",
+          "id": "CMakeLists.txt:893",
           "branch": 0,
           "branches": [
             "ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE"
@@ -3013,17 +3013,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2107,
+      "line": 2156,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2102",
+          "id": "CMakeLists.txt:2151",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2106",
+          "id": "CMakeLists.txt:2155",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -3305,7 +3305,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1587,
+          "line": 1628,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3359,7 +3359,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1558,
+          "line": 1599,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -3467,7 +3467,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1575,
+          "line": 1616,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3917,7 +3917,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1330,
+          "line": 1371,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -3925,7 +3925,7 @@
         },
         {
           "file": "CMakeLists.txt",
-          "line": 1332,
+          "line": 1373,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -3943,7 +3943,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1313,
+          "line": 1354,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3961,7 +3961,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1286,
+          "line": 1327,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4661,7 +4661,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 913,
+          "line": 951,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -4697,7 +4697,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2107,
+          "line": 2156,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6793,7 +6793,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "58933227a9ac27df"
+            "runDigest": "7a7c77c827930ca5"
           },
           {
             "index": 8,
@@ -9405,6 +9405,29 @@
         "parallel": "2>",
         "buildsAllTargets": true,
         "commandIndex": 1
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Configure and build installed SDK consumer lane (CI-120)",
+        "stepIndex": 7,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build/installed-sdk-consumer -C Release  --output-on-failure --no-tests=error 2>&1 | tee ci120-installed-sdk-consumer-test.log",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build/installed-sdk-consumer",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 2
       },
       {
         "job": "build-windows-vs2026",
@@ -12101,6 +12124,29 @@
         "commandIndex": 0
       },
       {
+        "job": "build-windows-shipping",
+        "step": "Configure and build installed SDK consumer lane (CI-120)",
+        "stepIndex": 7,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build/installed-sdk-consumer -C Release  --output-on-failure --no-tests=error 2>&1 | tee ci120-installed-sdk-consumer-test.log",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build/installed-sdk-consumer",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 2
+      },
+      {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
         "stepIndex": 7,
@@ -12649,7 +12695,7 @@
       "pathFilteredEventCount": 0,
       "configureCount": 24,
       "buildCount": 23,
-      "testCount": 15,
+      "testCount": 16,
       "ci120InvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 18,

@@ -864,11 +864,21 @@ endif()
 set(SPARK_ANGELSCRIPT_SDK_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/sdk")
 set(SPARK_ANGELSCRIPT_CORE_DIR "${SPARK_ANGELSCRIPT_SDK_DIR}/angelscript")
 set(SPARK_ANGELSCRIPT_ADDON_DIR "${SPARK_ANGELSCRIPT_SDK_DIR}/add_on")
+set(SPARK_ANGELSCRIPT_PATCH_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/patches")
+set(SPARK_ANGELSCRIPT_PATCH_FILE "${SPARK_ANGELSCRIPT_PATCH_DIR}/angelscript-packed-bytecode.patch")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${SPARK_ANGELSCRIPT_PATCH_FILE}"
+    "${SPARK_ANGELSCRIPT_CORE_DIR}/include/angelscript.h"
+    "${SPARK_ANGELSCRIPT_CORE_DIR}/source/as_restore.cpp"
+    "${SPARK_ANGELSCRIPT_CORE_DIR}/source/as_scriptengine.cpp")
 set(SPARK_ANGELSCRIPT_AVAILABLE FALSE)
 set(_SPARK_ANGELSCRIPT_REQUIRED_FILES
     "${SPARK_ANGELSCRIPT_CORE_DIR}/include/angelscript.h"
     "${SPARK_ANGELSCRIPT_CORE_DIR}/source/as_scriptengine.cpp"
     "${SPARK_ANGELSCRIPT_CORE_DIR}/projects/cmake/CMakeLists.txt"
+    "${SPARK_ANGELSCRIPT_PATCH_DIR}/angelscript.h"
+    "${SPARK_ANGELSCRIPT_PATCH_DIR}/AngelScriptPackedBytecode.h"
+    "${SPARK_ANGELSCRIPT_PATCH_FILE}"
     "${SPARK_ANGELSCRIPT_ADDON_DIR}/scriptarray/scriptarray.cpp"
     "${SPARK_ANGELSCRIPT_ADDON_DIR}/scriptbuilder/scriptbuilder.cpp"
     "${SPARK_ANGELSCRIPT_ADDON_DIR}/scriptstdstring/scriptstdstring.cpp"
@@ -883,6 +893,34 @@ endforeach()
 if(ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE)
     set(AS_DISABLE_INSTALL ON CACHE BOOL "Disable AngelScript's standalone install rules" FORCE)
 
+    # Keep the pinned submodule byte-for-byte immutable. Apply the bounded,
+    # reviewable packed-bytecode alignment fix to a fresh build-tree copy so
+    # every core translation unit and relative include sees identical sources.
+    set(SPARK_ANGELSCRIPT_PATCHED_CORE_DIR "${CMAKE_BINARY_DIR}/ThirdParty/AngelScriptPatched")
+    file(REMOVE_RECURSE "${SPARK_ANGELSCRIPT_PATCHED_CORE_DIR}")
+    file(COPY "${SPARK_ANGELSCRIPT_CORE_DIR}/" DESTINATION "${SPARK_ANGELSCRIPT_PATCHED_CORE_DIR}")
+    find_package(Git REQUIRED)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E env "GIT_CEILING_DIRECTORIES=${CMAKE_BINARY_DIR}"
+                "${GIT_EXECUTABLE}" apply --check --whitespace=error-all "${SPARK_ANGELSCRIPT_PATCH_FILE}"
+        WORKING_DIRECTORY "${SPARK_ANGELSCRIPT_PATCHED_CORE_DIR}"
+        RESULT_VARIABLE _spark_angelscript_patch_check
+        ERROR_VARIABLE _spark_angelscript_patch_check_error)
+    if(NOT _spark_angelscript_patch_check EQUAL 0)
+        message(FATAL_ERROR
+            "AngelScript packed-bytecode patch no longer applies to the pinned source: "
+            "${_spark_angelscript_patch_check_error}")
+    endif()
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E env "GIT_CEILING_DIRECTORIES=${CMAKE_BINARY_DIR}"
+                "${GIT_EXECUTABLE}" apply --whitespace=error-all "${SPARK_ANGELSCRIPT_PATCH_FILE}"
+        WORKING_DIRECTORY "${SPARK_ANGELSCRIPT_PATCHED_CORE_DIR}"
+        RESULT_VARIABLE _spark_angelscript_patch_result
+        ERROR_VARIABLE _spark_angelscript_patch_error)
+    if(NOT _spark_angelscript_patch_result EQUAL 0)
+        message(FATAL_ERROR "Failed to apply AngelScript packed-bytecode patch: ${_spark_angelscript_patch_error}")
+    endif()
+
     # AngelScript's MSVC x64 backend enables MASM. Directory-wide C/C++ options
     # such as /permissive-, /GL, and /favor are otherwise inherited by ml64 and
     # make its assembly step fail. Configure the dependency in a clean option
@@ -890,7 +928,7 @@ if(ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE)
     get_property(_spark_parent_compile_options DIRECTORY PROPERTY COMPILE_OPTIONS)
     set_property(DIRECTORY PROPERTY COMPILE_OPTIONS "")
     add_subdirectory(
-        "${SPARK_ANGELSCRIPT_CORE_DIR}/projects/cmake"
+        "${SPARK_ANGELSCRIPT_PATCHED_CORE_DIR}/projects/cmake"
         "${CMAKE_BINARY_DIR}/ThirdParty/AngelScript"
         EXCLUDE_FROM_ALL
     )
@@ -919,6 +957,12 @@ if(ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE)
         $<BUILD_INTERFACE:${SPARK_ANGELSCRIPT_ADDON_DIR}>
         $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty>
     )
+    target_include_directories(angelscript BEFORE PUBLIC
+        $<BUILD_INTERFACE:${SPARK_ANGELSCRIPT_PATCH_DIR}>
+    )
+    target_compile_definitions(angelscript PUBLIC
+        $<BUILD_INTERFACE:SPARK_ANGELSCRIPT_BUILD_TREE=1>
+    )
     set_target_properties(angelscript PROPERTIES FOLDER "ThirdParty")
     if(SPARK_SUPPRESS_THIRDPARTY_WARNINGS)
         if(MSVC)
@@ -928,10 +972,7 @@ if(ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE)
         endif()
     endif()
 
-    list(APPEND THIRDPARTY_INCLUDE_DIRS
-        "${SPARK_ANGELSCRIPT_CORE_DIR}/include"
-        "${SPARK_ANGELSCRIPT_ADDON_DIR}"
-    )
+    list(APPEND THIRDPARTY_INCLUDE_DIRS "${SPARK_ANGELSCRIPT_ADDON_DIR}")
     set(SPARK_ANGELSCRIPT_AVAILABLE TRUE)
     message(STATUS "AngelScript: enabled (core + scriptarray + scriptbuilder + scriptstdstring)")
 elseif(ENABLE_ANGELSCRIPT)
@@ -2023,6 +2064,14 @@ if(MSVC)
         $<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=1>
     )
 endif()
+if(SPARK_ANGELSCRIPT_AVAILABLE)
+    target_include_directories(SparkEngineLib BEFORE PUBLIC
+        $<BUILD_INTERFACE:${SPARK_ANGELSCRIPT_PATCH_DIR}>
+    )
+    target_compile_definitions(SparkEngineLib PUBLIC
+        $<BUILD_INTERFACE:SPARK_ANGELSCRIPT_BUILD_TREE=1>
+    )
+endif()
 foreach(_tp_dir ${THIRDPARTY_INCLUDE_DIRS})
     target_include_directories(SparkEngineLib PUBLIC
         $<BUILD_INTERFACE:${_tp_dir}>
@@ -2506,6 +2555,21 @@ foreach(dir ${THIRDPARTY_INCLUDE_DIRS})
             INCLUDE_REGEXES "\\.(h|hpp)$")
     endif()
 endforeach()
+if(SPARK_ANGELSCRIPT_AVAILABLE)
+    # Keep the immutable upstream header at a non-colliding path and expose the
+    # compatibility wrapper as the SDK's public <angelscript.h> entry point.
+    _spark_install_tracked_source_directory(
+        "${SPARK_ANGELSCRIPT_CORE_DIR}/include"
+        include/SparkEngine/ThirdParty/angelscript_upstream
+        ${SPARK_INSTALL_COMPONENT_SDK}
+        INCLUDE_REGEXES "\\.h$")
+    _spark_install_tracked_source_directory(
+        "${SPARK_ANGELSCRIPT_PATCH_DIR}"
+        include/SparkEngine/ThirdParty
+        ${SPARK_INSTALL_COMPONENT_SDK}
+        INCLUDE_REGEXES "\\.h$"
+    )
+endif()
 
 install(EXPORT SparkEngineTargets
     FILE SparkEngineTargets.cmake

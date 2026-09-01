@@ -57,8 +57,13 @@ namespace Spark
 
         void Initialize()
         {
+            m_history = {};
             m_historyIndex = 0;
             m_frameCount = 0;
+            m_cpuStart = {};
+            m_cpuEnd = {};
+            m_currentGpuMs = 0.0;
+            m_currentPresentMs = 0.0;
         }
 
         void Shutdown() { m_frameCount = 0; }

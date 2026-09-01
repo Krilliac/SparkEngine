@@ -567,7 +567,7 @@
 | `PhysicsBodyType` | enum | Tests | [TestPhysicsStress.cpp:L46](../../Tests/TestPhysicsStress.cpp#L46) |  |
 | `PhysicsVehicleType` | enum | SparkEngine | [PhysicsTypes.h:L703](../../SparkEngine/Source/Physics/PhysicsTypes.h#L703) | Vehicle type enumeration. |
 | `PinKind` | enum | SparkEngine | [VisualScriptGraphTypes.h:L30](../../SparkEngine/Source/Engine/Scripting/VisualScriptGraphTypes.h#L30) | Data type of a visual script pin |
-| `PinKind` | enum | Tests | [TestVisualScriptCompiler.cpp:L55](../../Tests/TestVisualScriptCompiler.cpp#L55) |  |
+| `PinKind` | enum | Tests | [TestVisualScriptCompiler.cpp:L56](../../Tests/TestVisualScriptCompiler.cpp#L56) |  |
 | `PinType` | enum | Tests | [TestShaderGraphCompiler.cpp:L203](../../Tests/TestShaderGraphCompiler.cpp#L203) |  |
 | `PipeMode` | enum | SparkEngine | [Process.h:L38](../../SparkEngine/Source/Utils/Process.h#L38) |  |
 | `PixelFormat` | enum | SparkEngine | [RHITypes.h:L47](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L47) |  |
@@ -699,7 +699,7 @@
 | `ScriptContext` | enum | Tests | [TestAngelScriptEngine.cpp:L20](../../Tests/TestAngelScriptEngine.cpp#L20) |  |
 | `ScriptContext` | enum | Tests | [Test_scripting_hardening.cpp:L102](../../Tests/harden/Test_scripting_hardening.cpp#L102) |  |
 | `ScriptNodeType` | enum | SparkEngine | [VisualScriptNodeTypes.h:L25](../../SparkEngine/Source/Engine/Scripting/VisualScriptNodeTypes.h#L25) | Types of nodes in a visual script graph |
-| `ScriptNodeType` | enum | Tests | [TestVisualScriptCompiler.cpp:L40](../../Tests/TestVisualScriptCompiler.cpp#L40) |  |
+| `ScriptNodeType` | enum | Tests | [TestVisualScriptCompiler.cpp:L41](../../Tests/TestVisualScriptCompiler.cpp#L41) |  |
 | `ScriptSecurityLevel` | enum | SparkEngine | [ScriptSandbox.h:L35](../../SparkEngine/Source/Engine/Scripting/ScriptSandbox.h#L35) | Security level for script execution |
 | `SDFPrimitiveType` | enum | SparkEngine | [HybridRTTypes.h:L28](../../SparkEngine/Source/Graphics/HybridRT/HybridRTTypes.h#L28) |  |
 | `SearchFilter` | enum | SparkEditor | [SearchPanel.h:L47](../../SparkEditor/Source/Panels/SearchPanel.h#L47) | Search filter type selection |

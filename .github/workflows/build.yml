@@ -976,6 +976,8 @@ jobs:
           -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee ci120-installed-sdk-consumer-configure.log
         cmake --build build/installed-sdk-consumer \
           --config Release --parallel 2>&1 | tee ci120-installed-sdk-consumer-build.log
+        ctest --test-dir build/installed-sdk-consumer -C Release \
+          --output-on-failure --no-tests=error 2>&1 | tee ci120-installed-sdk-consumer-test.log
 
     - name: Capture installed SDK consumer structural provenance (CI-120)
       shell: bash

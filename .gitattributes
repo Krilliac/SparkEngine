@@ -18,6 +18,9 @@ Templates/*/Assets/**/*.mtl text eol=lf
 # rewrite these on checkout and make the comparison fail for no real reason.
 docs/readiness/*.json text eol=lf
 docs/site/readiness.json text eol=lf
+# Unified-diff context markers intentionally contain leading spaces before
+# upstream tab indentation. Git-apply separately enforces target whitespace.
+ThirdParty/Scripting/patches/angelscript-packed-bytecode.patch text eol=lf -whitespace
 # Generated documentation is compared byte-for-byte with fresh output.
 # Keep every tracked manifest output LF-stable on Windows checkouts too.
 README.md text eol=lf

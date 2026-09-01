@@ -1207,6 +1207,17 @@ class WorkflowEnforcementTests(unittest.TestCase):
         self.assertIn("actions/upload-artifact", text)
         self.assertIn("Enforce reviewed CI-120 findings", text)
 
+    def test_ci120_installed_sdk_consumer_executes_its_runtime_smoke(self) -> None:
+        text = (REPO_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+        start = text.index("- name: Configure and build installed SDK consumer lane (CI-120)")
+        end = text.index("- name: Capture installed SDK consumer structural provenance (CI-120)", start)
+        step = text[start:end].replace("\\\n          ", "")
+        self.assertIn(
+            "ctest --test-dir build/installed-sdk-consumer -C Release "
+            "--output-on-failure --no-tests=error",
+            step,
+        )
+
     def test_all_executable_ctest_invocations_fail_closed(self) -> None:
         ctest_word = re.compile(
             r"(?<![A-Za-z0-9_.-])ctest(?:\.exe)?(?=$|[\s()\"';&|])",

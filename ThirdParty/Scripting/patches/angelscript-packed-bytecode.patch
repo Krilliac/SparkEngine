@@ -1,0 +1,183 @@
+diff --git a/include/angelscript.h b/include/angelscript.h
+index dbfe0d21..69833fc7 100644
+--- a/include/angelscript.h
++++ b/include/angelscript.h
+@@ -2012,7 +2012,14 @@ const asSBCInfo asBCInfo[256] =
+ #define asBC_INTARG(x)    (*(int*)(((asDWORD*)x)+1))
+ #define asBC_QWORDARG(x)  (*(asQWORD*)(((asDWORD*)x)+1))
+ #define asBC_FLOATARG(x)  (*(float*)(((asDWORD*)x)+1))
+-#define asBC_PTRARG(x)    (*(asPWORD*)(((asDWORD*)x)+1))
++#if defined(_MSC_VER)
++#pragma pack(push, 1)
++struct asPWORD_UNALIGNED { asPWORD value; };
++#pragma pack(pop)
++#else
++struct __attribute__((packed, may_alias)) asPWORD_UNALIGNED { asPWORD value; };
++#endif
++#define asBC_PTRARG(x)    (((asPWORD_UNALIGNED*)(((asDWORD*)x)+1))->value)
+ #define asBC_WORDARG0(x)  (*(((asWORD*)x)+1))
+ #define asBC_WORDARG1(x)  (*(((asWORD*)x)+2))
+ #define asBC_SWORDARG0(x) (*(((short*)x)+1))
+diff --git a/source/as_restore.cpp b/source/as_restore.cpp
+index 60caf371..175ee0ac 100644
+--- a/source/as_restore.cpp
++++ b/source/as_restore.cpp
+@@ -2916,8 +2916,8 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
+ 			c == asBC_OBJTYPE )
+ 		{
+ 			// Translate the index to the true object type
+-			asPWORD *ot = (asPWORD*)&bc[n+1];
+-			*(asCObjectType**)ot = CastToObjectType(FindType(int(*ot)));
++			const asPWORD ot = asBC_PTRARG(&bc[n]);
++			asBC_PTRARG(&bc[n]) = (asPWORD)CastToObjectType(FindType(int(ot)));
+ 		}
+ 		else if( c == asBC_TYPEID ||
+ 			     c == asBC_Cast )
+@@ -3008,14 +3008,14 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
+ 		else if( c == asBC_FuncPtr )
+ 		{
+ 			// Translate the index to the func pointer
+-			asPWORD *fid = (asPWORD*)&bc[n+1];
++			asPWORD fid = asBC_PTRARG(&bc[n]);
+-			*fid = (asPWORD)FindFunction(int(*fid));
++			asBC_PTRARG(&bc[n]) = (asPWORD)FindFunction(int(fid));
+ 		}
+ 		else if( c == asBC_ALLOC )
+ 		{
+ 			// Translate the index to the true object type
+-			asPWORD *arg = (asPWORD*)&bc[n+1];
+-			*(asCObjectType**)arg = CastToObjectType(FindType(int(*arg)));
++			const asPWORD arg = asBC_PTRARG(&bc[n]);
++			asBC_PTRARG(&bc[n]) = (asPWORD)CastToObjectType(FindType(int(arg)));
+ 
+ 			// The constructor function id must be translated, unless it is zero
+ 			int *fid = (int*)&bc[n+1+AS_PTR_SIZE];
+@@ -3068,11 +3068,11 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
+ 				 c == asBC_SetG4    )
+ 		{
+ 			// Translate the index to pointer
+-			asPWORD *index = (asPWORD*)&bc[n + 1];
++			asPWORD index = asBC_PTRARG(&bc[n]);
+-			if ((*index & 1))
++			if ((index & 1))
+ 			{
+-				if ((asUINT(*index)>>1) < usedGlobalProperties.GetLength())
+-					*(void**)index = usedGlobalProperties[asUINT(*index)>>1];
++				if ((asUINT(index)>>1) < usedGlobalProperties.GetLength())
++					asBC_PTRARG(&bc[n]) = (asPWORD)usedGlobalProperties[asUINT(index)>>1];
+ 				else
+ 				{
+ 					Error(TXT_INVALID_BYTECODE_d);
+@@ -3085,7 +3085,7 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
+ 				asASSERT(c == asBC_PGA || c == asBC_PshGPtr);
+ 
+-				if ((asUINT(*index)>>1) < usedStringConstants.GetLength())
+-					*(void**)index = usedStringConstants[asUINT(*index)>>1];
++				if ((asUINT(index)>>1) < usedStringConstants.GetLength())
++					asBC_PTRARG(&bc[n]) = (asPWORD)usedStringConstants[asUINT(index)>>1];
+ 				else
+ 				{
+ 					Error(TXT_INVALID_BYTECODE_d);
+@@ -3138,10 +3138,10 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
+ 		else if( c == asBC_FREE )
+ 		{
+ 			// Translate the index to the true object type
+-			asPWORD *pot = (asPWORD*)&bc[n+1];
+-			*(asCObjectType**)pot = CastToObjectType(FindType(int(*pot)));
++			const asPWORD pot = asBC_PTRARG(&bc[n]);
++			asCObjectType *ot = CastToObjectType(FindType(int(pot)));
++			asBC_PTRARG(&bc[n]) = (asPWORD)ot;
+ 
+-			asCObjectType *ot = *(asCObjectType**)pot;
+ 			if( ot && (ot->flags & asOBJ_LIST_PATTERN) )
+ 			{
+ 				if( listAdjusters.GetLength() == 0 )
+@@ -5172,8 +5172,8 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+ 		if( c == asBC_ALLOC ) // PTR_DW_ARG
+ 		{
+ 			// Translate the object type
+-			asCObjectType *ot = *(asCObjectType**)(tmpBC+1);
+-			*(asPWORD*)(tmpBC+1) = FindTypeInfoIdx(ot);
++			asCObjectType *ot = (asCObjectType*)asBC_PTRARG(tmpBC);
++			asBC_PTRARG(tmpBC) = FindTypeInfoIdx(ot);
+ 
+ 			// Translate the constructor func id, unless it is 0
+ 			if( *(int*)&tmpBC[1+AS_PTR_SIZE] != 0 )
+@@ -5187,12 +5187,12 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+ 				 c == asBC_OBJTYPE )  // PTR_ARG
+ 		{
+ 			// Translate object type pointers into indices
+-			*(asPWORD*)(tmpBC+1) = FindTypeInfoIdx(*(asCObjectType**)(tmpBC+1));
++			asBC_PTRARG(tmpBC) = FindTypeInfoIdx((asCObjectType*)asBC_PTRARG(tmpBC));
+ 		}
+ 		else if( c == asBC_JitEntry ) // PTR_ARG
+ 		{
+ 			// We don't store the JIT argument
+-			*(asPWORD*)(tmpBC+1) = 0;
++			asBC_PTRARG(tmpBC) = 0;
+ 		}
+ 		else if( c == asBC_TYPEID || // DW_ARG
+ 			     c == asBC_Cast )    // DW_ARG
+@@ -5252,7 +5252,7 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+ 		else if( c == asBC_FuncPtr ) // PTR_ARG
+ 		{
+ 			// Translate the function pointer
+-			*(asPWORD*)(tmpBC+1) = FindFunctionIndex(*(asCScriptFunction**)(tmpBC+1));
++			asBC_PTRARG(tmpBC) = FindFunctionIndex((asCScriptFunction*)asBC_PTRARG(tmpBC));
+ 		}
+ 		else if( c == asBC_CALLBND ) // DW_ARG
+ 		{
+@@ -5277,12 +5277,12 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+ 				 c == asBC_SetG4    )  // PTR_DW_ARG
+ 		{
+ 			// Check if the address is a global property or a string constant
+-			void *ptr = *(void**)(tmpBC + 1);
++			void *ptr = (void*)asBC_PTRARG(tmpBC);
+ 			if (engine->varAddressMap.MoveTo(0, ptr))
+ 			{
+ 				// Translate global variable pointers into indices
+ 				// Flag the first bit to signal global property
+-				*(asPWORD*)(tmpBC + 1) = (FindGlobalPropPtrIndex(*(void**)(tmpBC + 1)) << 1) + 1;
++				asBC_PTRARG(tmpBC) = (FindGlobalPropPtrIndex((void*)asBC_PTRARG(tmpBC)) << 1) + 1;
+ 			}
+ 			else
+ 			{
+@@ -5291,7 +5291,7 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+ 
+ 				// Translate string constants into indices
+ 				// Leave the first bit clear to signal string constant
+-				*(asPWORD*)(tmpBC + 1) = FindStringConstantIndex(*(void**)(tmpBC + 1)) << 1;
++				asBC_PTRARG(tmpBC) = FindStringConstantIndex((void*)asBC_PTRARG(tmpBC)) << 1;
+ 			}
+ 		}
+ 		else if( c == asBC_JMP    ||	// DW_ARG
+@@ -5338,8 +5338,8 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+ 		else if( c == asBC_FREE ) // wW_PTR_ARG
+ 		{
+ 			// Translate object type pointers into indices
+-			asCObjectType *ot = *(asCObjectType**)(tmpBC+1);
+-			*(asPWORD*)(tmpBC+1) = FindTypeInfoIdx(ot);
++			asCObjectType *ot = (asCObjectType*)asBC_PTRARG(tmpBC);
++			asBC_PTRARG(tmpBC) = FindTypeInfoIdx(ot);
+ 
+ 			// Pop and destroy the list adjuster helper that was created with asBC_AllocMem
+ 			if( ot && (ot->flags & asOBJ_LIST_PATTERN) )
+diff --git a/source/as_scriptengine.cpp b/source/as_scriptengine.cpp
+index 9169d405..36759aeb 100644
+--- a/source/as_scriptengine.cpp
++++ b/source/as_scriptengine.cpp
+@@ -4180,12 +4180,12 @@ asCScriptFunction *asCScriptEngine::GenerateFactoryStubForTemplateObjectInstance
+ 	if( ep.includeJitInstructions )
+ 	{
+ 		*(asBYTE*)bc = asBC_JitEntry;
+-		*(asPWORD*)(bc+1) = 0;
++		asBC_PTRARG(bc) = 0;
+ 		bc += asBCTypeSize[asBCInfo[asBC_JitEntry].type];
+ 	}
+ 
+ 	*(asBYTE*)bc = asBC_OBJTYPE;
+-	*(asPWORD*)(bc+1) = (asPWORD)ot;
++	asBC_PTRARG(bc) = (asPWORD)ot;
+ 	bc += asBCTypeSize[asBCInfo[asBC_OBJTYPE].type];
+ 	if( templateType->flags & asOBJ_VALUE )
+ 	{

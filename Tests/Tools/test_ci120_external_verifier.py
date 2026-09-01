@@ -315,7 +315,19 @@ class SourceMetadataTests(unittest.TestCase):
         upload_end = producer_text.index("- name: Enforce reviewed CI-120 findings", upload_start)
         upload_step = producer_text[upload_start:upload_end]
         self.assertIn("build/windows-shipping/.cmake/api/v1/reply", upload_step)
+        self.assertIn("build-matrix-pending-receipt.json", upload_step)
+        self.assertIn("build-matrix-pending-receipt-stdout.json", upload_step)
         self.assertIn("include-hidden-files: true", upload_step)
+
+    def test_pending_receipt_artifact_names_are_exactly_bounded(self) -> None:
+        self.assertTrue(verifier._allowed_artifact_path("build-matrix-pending-receipt.json"))
+        self.assertTrue(verifier._allowed_artifact_path("build-matrix-pending-receipt-stdout.json"))
+        for relative in (
+            "build-matrix-pending-receipt.json.bak",
+            "Build-Matrix-Pending-Receipt.json",
+            "nested/build-matrix-pending-receipt.json",
+        ):
+            self.assertFalse(verifier._allowed_artifact_path(relative))
 
     def test_exact_staged_source_metadata_is_accepted(self) -> None:
         self.assertEqual(verifier.validate_source_metadata(source_metadata())["source"]["headSha"], COMMIT)
@@ -456,6 +468,48 @@ class RawProfileEvidenceTests(unittest.TestCase):
             replay["artifact"]["name"] = f"ci120-untrusted-stable-v1-{'9' * 40}-1"
             with self.assertRaisesRegex(verifier.ExternalEvidenceError, "repository identity"):
                 verifier._verify_profile(root, "windows-shipping", producer_evidence, replay)
+
+
+class PendingReceiptHandoffTests(unittest.TestCase):
+    def write_receipts(self, root: Path, file_payload: bytes, stdout_payload: bytes) -> None:
+        (root / "build-matrix-pending-receipt.json").write_bytes(file_payload)
+        (root / "build-matrix-pending-receipt-stdout.json").write_bytes(stdout_payload)
+
+    def test_exact_canonical_receipt_and_stdout_are_accepted(self) -> None:
+        receipt = {"kind": "spark-ci120-pending-authority", "state": "pending-external-attestation"}
+        payload = verifier.pending._json_bytes(receipt)
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.write_receipts(root, payload, payload)
+            verifier._verify_pending_receipt_handoff(root, receipt)
+
+    def test_file_and_stdout_byte_mismatch_is_rejected(self) -> None:
+        receipt = {"kind": "spark-ci120-pending-authority", "state": "pending-external-attestation"}
+        payload = verifier.pending._json_bytes(receipt)
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.write_receipts(root, payload, payload + b" ")
+            with self.assertRaisesRegex(verifier.ExternalEvidenceError, "file and stdout"):
+                verifier._verify_pending_receipt_handoff(root, receipt)
+
+    def test_semantically_equal_noncanonical_receipt_is_rejected(self) -> None:
+        receipt = {"kind": "spark-ci120-pending-authority", "state": "pending-external-attestation"}
+        noncanonical = json.dumps(receipt, separators=(",", ":")).encode("utf-8")
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.write_receipts(root, noncanonical, noncanonical)
+            with self.assertRaisesRegex(verifier.ExternalEvidenceError, "canonical"):
+                verifier._verify_pending_receipt_handoff(root, receipt)
+
+    def test_receipt_semantic_mismatch_is_rejected(self) -> None:
+        expected = {"kind": "spark-ci120-pending-authority", "state": "pending-external-attestation"}
+        tampered = {**expected, "state": "verified"}
+        payload = verifier.pending._json_bytes(tampered)
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.write_receipts(root, payload, payload)
+            with self.assertRaisesRegex(verifier.ExternalEvidenceError, "reconstruction"):
+                verifier._verify_pending_receipt_handoff(root, expected)
 
 
 if __name__ == "__main__":

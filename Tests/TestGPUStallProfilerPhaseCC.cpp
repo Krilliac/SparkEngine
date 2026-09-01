@@ -122,11 +122,16 @@ TEST(GPUStallProfilerPhaseCC_UnknownOnZeroFrame)
 {
     ResetProfiler();
     auto& p = Spark::GPUStallProfiler::GetInstance();
-    // No BeginCPUWork — recording 0 CPU + 0 GPU should classify as Unknown.
-    p.BeginCPUWork();
-    p.EndCPUWork();
-    p.RecordGPUFrameTime(0.0);
+    // Seed pending values, then prove Initialize clears them and establishes
+    // an exact zero-duration CPU sample without relying on clock-read latency.
+    p.RecordGPUFrameTime(5.0);
+    p.RecordPresentTime(2.0);
+    p.Initialize();
     p.EndFrame();
+    const auto& last = p.GetLastFrame();
+    EXPECT_NEAR(last.cpuFrameMs, 0.0, 0.0);
+    EXPECT_NEAR(last.gpuFrameMs, 0.0, 0.0);
+    EXPECT_NEAR(last.presentMs, 0.0, 0.0);
     EXPECT_EQ(static_cast<int>(p.GetCurrentBottleneck()), static_cast<int>(Spark::FrameBottleneck::Unknown));
 }
 

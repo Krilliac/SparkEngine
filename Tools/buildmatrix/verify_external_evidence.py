@@ -34,6 +34,7 @@ SOURCE_JOB_NAME = "Windows Shipping structural configured-evidence producer"
 SOURCE_FINAL_STEP = "Enforce reviewed CI-120 findings"
 VERIFIER_WORKFLOW_PATH = ".github/workflows/ci120-report.yml"
 MAX_METADATA_BYTES = 1024 * 1024
+MAX_PENDING_RECEIPT_BYTES = 1024 * 1024
 MAX_FILE_COUNT = 100_000
 MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024
 MAX_SINGLE_FILE_BYTES = 2 * 1024 * 1024 * 1024
@@ -260,6 +261,8 @@ def _allowed_artifact_path(relative: str) -> bool:
         "build-matrix-inventory.json",
         "build-matrix-parity-findings.json",
         "build-matrix-parity-stdout.json",
+        "build-matrix-pending-receipt.json",
+        "build-matrix-pending-receipt-stdout.json",
     }:
         return True
     if re.fullmatch(r"ci120-[A-Za-z0-9_.-]+\.log", relative):
@@ -667,6 +670,28 @@ def _verify_profile(
     return portable_evidence, profile_receipt
 
 
+def _verify_pending_receipt_handoff(
+    artifact_root: Path,
+    reconstructed_receipt: dict[str, Any],
+) -> None:
+    receipt, receipt_payload = _read_json_payload(
+        artifact_root / "build-matrix-pending-receipt.json",
+        MAX_PENDING_RECEIPT_BYTES,
+        "producer pending receipt",
+    )
+    stdout_receipt, stdout_payload = _read_json_payload(
+        artifact_root / "build-matrix-pending-receipt-stdout.json",
+        MAX_PENDING_RECEIPT_BYTES,
+        "producer pending receipt stdout",
+    )
+    if receipt_payload != stdout_payload or receipt != stdout_receipt:
+        raise ExternalEvidenceError("producer pending receipt file and stdout payload differ")
+    if receipt != reconstructed_receipt:
+        raise ExternalEvidenceError("producer pending receipt differs from trusted reconstruction")
+    if receipt_payload != pending._json_bytes(reconstructed_receipt):
+        raise ExternalEvidenceError("producer pending receipt is not canonical JSON")
+
+
 def verify_external_evidence(
     artifact_root: Path,
     source_metadata: dict[str, Any],
@@ -727,6 +752,7 @@ def verify_external_evidence(
         inventory_sha256=inventory_digest,
         report_sha256=report_digest,
     )
+    _verify_pending_receipt_handoff(artifact_root, pending_receipt)
     source = metadata["source"]
     artifact = metadata["artifact"]
     verifier = metadata["verifier"]
