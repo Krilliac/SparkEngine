@@ -3,8 +3,8 @@
     "initialized": true,
     "baseTotal": 0,
     "baseInstallerTotal": 0,
-    "total": 21,
-    "installerTotal": 14,
+    "total": 37,
+    "installerTotal": 24,
     "assets": [
         {
             "id": 530455809,
@@ -82,7 +82,7 @@
             "id": 530455820,
             "releaseId": 376952823,
             "name": "SparkInstaller-Windows-x64.exe",
-            "downloadCount": 8,
+            "downloadCount": 12,
             "digest": "sha256:d4e5881aef2f019a10e35252b8e2b686b8b640044a45ad712fb582f47941fde7",
             "state": "uploaded"
         },
@@ -114,7 +114,7 @@
             "id": 538826338,
             "releaseId": 376952823,
             "name": "SparkEngine-Windows-x64-Release-Installer.exe",
-            "downloadCount": 2,
+            "downloadCount": 5,
             "digest": "sha256:ce0db59259ba56a4f9e538bc754180ab6aa10711366be6c5f8f51ba2654c0419",
             "state": "uploaded"
         },
@@ -122,7 +122,7 @@
             "id": 538827113,
             "releaseId": 376952823,
             "name": "SparkEngine-Windows-x64-Release.zip",
-            "downloadCount": 2,
+            "downloadCount": 5,
             "digest": "sha256:16a1ea8c8b44837f933b52bde9356fb610d578f89c563d5a6da4cc5f5d4b57f3",
             "state": "uploaded"
         },
@@ -130,7 +130,7 @@
             "id": 538846445,
             "releaseId": 376952823,
             "name": "SparkEngine-Windows-x64-Debug-Installer.exe",
-            "downloadCount": 2,
+            "downloadCount": 5,
             "digest": "sha256:e5478a7bd53b90ba0df54004c9dd4c715ded2613833dcd4397f998745d2bf158",
             "state": "uploaded"
         },
@@ -138,7 +138,7 @@
             "id": 538847551,
             "releaseId": 376952823,
             "name": "SparkEngine-Windows-x64-Debug.zip",
-            "downloadCount": 2,
+            "downloadCount": 5,
             "digest": "sha256:0c4731b7e28425d9937714787767a5ea0f2c61191bd3e79790b5ab2827f8297e",
             "state": "uploaded"
         }
@@ -163,5 +163,5 @@
         538847551
     ],
     "pending": null,
-    "updated": "2026-09-01T05:53:39Z"
+    "updated": "2026-09-01T11:15:05Z"
 }
