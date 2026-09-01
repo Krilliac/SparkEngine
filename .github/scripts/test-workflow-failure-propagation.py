@@ -1219,11 +1219,14 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("repository-metrics-source.json", self.loc_counter)
 
     def test_readme_ci_badge_tracks_fail_closed_aggregate_workflow(self) -> None:
+        self.assertIn("[![Current commit checks]", self.readme)
         self.assertIn(
             "https://img.shields.io/github/check-suites/Krilliac/SparkEngine/Working"
             "?style=flat-square&label=CI",
             self.readme,
         )
+        self.assertIn("https://github.com/Krilliac/SparkEngine/actions?query=branch%3AWorking", self.readme)
+        self.assertNotIn("[![Trusted exact-source CI]", self.readme)
         self.assertNotIn("github/check-runs", self.readme)
         self.assertNotIn("github/checks-status", self.readme)
         self.assertNotIn("trusted-ci-aggregate.yml/badge.svg", self.readme)
