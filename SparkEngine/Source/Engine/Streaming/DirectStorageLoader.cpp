@@ -94,7 +94,7 @@ namespace Spark::Streaming
         if (m_nextHandleId == 0)
             m_nextHandleId = 1;
         internal->handle = {newId};
-        internal->status = LoadStatus::Pending;
+        internal->status.store(LoadStatus::Pending, std::memory_order_relaxed);
 
         m_pendingQueue.push(internal);
         m_stats.totalRequests++;
@@ -116,7 +116,7 @@ namespace Spark::Streaming
         {
             auto req = m_pendingQueue.front();
             m_pendingQueue.pop();
-            req->status = LoadStatus::InProgress;
+            req->status.store(LoadStatus::InProgress, std::memory_order_relaxed);
             m_activeRequests.push_back(req);
 
             // DirectStorage path would submit to IDStorageQueue here.
@@ -132,19 +132,21 @@ namespace Spark::Streaming
         for (auto it = m_activeRequests.begin(); it != m_activeRequests.end();)
         {
             auto& req = *it;
-            if (req->status == LoadStatus::Completed || req->status == LoadStatus::Failed)
+            LoadStatus completionStatus = req->status.load(std::memory_order_acquire);
+            if (completionStatus == LoadStatus::Completed || completionStatus == LoadStatus::Failed)
             {
                 m_stats.pendingRequests--;
                 if (req->cancelled.load())
                 {
-                    req->status = LoadStatus::Failed;
+                    completionStatus = LoadStatus::Failed;
+                    req->status.store(completionStatus, std::memory_order_relaxed);
                 }
-                if (req->status == LoadStatus::Failed)
+                if (completionStatus == LoadStatus::Failed)
                     m_stats.failedRequests++;
 
                 if (req->request.callback && !req->cancelled.load())
                 {
-                    req->request.callback(req->handle, req->status);
+                    req->request.callback(req->handle, completionStatus);
                 }
                 it = m_activeRequests.erase(it);
             }
@@ -163,13 +165,14 @@ namespace Spark::Streaming
         {
             if (req->handle.id == handle.id)
             {
-                if (req->status == LoadStatus::Pending)
+                const LoadStatus status = req->status.load(std::memory_order_relaxed);
+                if (status == LoadStatus::Pending)
                 {
-                    req->status = LoadStatus::Failed;
+                    req->status.store(LoadStatus::Failed, std::memory_order_relaxed);
                     req->cancelled.store(true);
                     return true;
                 }
-                if (req->status == LoadStatus::InProgress)
+                if (status == LoadStatus::InProgress)
                 {
                     req->cancelled.store(true);
                     return true;
@@ -186,7 +189,7 @@ namespace Spark::Streaming
         for (const auto& req : m_activeRequests)
         {
             if (req->handle.id == handle.id)
-                return req->status;
+                return req->status.load(std::memory_order_acquire);
         }
         return LoadStatus::Failed;
     }
@@ -197,7 +200,7 @@ namespace Spark::Streaming
 
         for (const auto& req : m_activeRequests)
         {
-            if (req->handle.id == handle.id && req->status == LoadStatus::Completed)
+            if (req->handle.id == handle.id && req->status.load(std::memory_order_acquire) == LoadStatus::Completed)
             {
                 if (outSize)
                     *outSize = req->cpuData.size();
@@ -217,6 +220,10 @@ namespace Spark::Streaming
         {
             if ((*it)->handle.id == handle.id)
             {
+                if ((*it)->status.load(std::memory_order_acquire) == LoadStatus::InProgress)
+                {
+                    return;
+                }
                 (*it)->cpuData.clear();
                 (*it)->cpuData.shrink_to_fit();
                 return;
@@ -242,7 +249,7 @@ namespace Spark::Streaming
                     // not-yet-shipped files (see OpenWorld showcase).
                     SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Failed to open file for async load: %s",
                                     req->request.filePath.c_str());
-                    req->status = LoadStatus::Failed;
+                    req->status.store(LoadStatus::Failed, std::memory_order_release);
                     return;
                 }
 
@@ -251,7 +258,7 @@ namespace Spark::Streaming
                 {
                     SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "tellg() failed for async load: %s",
                                     req->request.filePath.c_str());
-                    req->status = LoadStatus::Failed;
+                    req->status.store(LoadStatus::Failed, std::memory_order_release);
                     return;
                 }
                 uint64_t fileSize = static_cast<uint64_t>(rawSize);
@@ -265,7 +272,7 @@ namespace Spark::Streaming
                                    "DirectStorageLoader: offset %llu past end of '%s' (size=%llu)",
                                    static_cast<unsigned long long>(readOffset), req->request.filePath.c_str(),
                                    static_cast<unsigned long long>(fileSize));
-                    req->status = LoadStatus::Failed;
+                    req->status.store(LoadStatus::Failed, std::memory_order_release);
                     return;
                 }
 
@@ -281,7 +288,7 @@ namespace Spark::Streaming
                                    req->request.filePath.c_str(), static_cast<unsigned long long>(readOffset),
                                    static_cast<unsigned long long>(readSize),
                                    static_cast<unsigned long long>(fileSize));
-                    req->status = LoadStatus::Failed;
+                    req->status.store(LoadStatus::Failed, std::memory_order_release);
                     return;
                 }
 
@@ -293,7 +300,7 @@ namespace Spark::Streaming
                 if (!file.good() && !file.eof())
                 {
                     SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Read error on file: %s", req->request.filePath.c_str());
-                    req->status = LoadStatus::Failed;
+                    req->status.store(LoadStatus::Failed, std::memory_order_release);
                     return;
                 }
 
@@ -311,7 +318,7 @@ namespace Spark::Streaming
                     }
                 }
 
-                req->status = LoadStatus::Completed;
+                req->status.store(LoadStatus::Completed, std::memory_order_release);
             });
         std::lock_guard threadLock(m_threadsMutex);
         m_backgroundThreads.push_back(std::move(worker));

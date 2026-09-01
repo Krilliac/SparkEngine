@@ -176,7 +176,7 @@ namespace Spark::Streaming
         {
             LoadRequest request;
             LoadRequestHandle handle;
-            LoadStatus status = LoadStatus::Pending;
+            std::atomic<LoadStatus> status{LoadStatus::Pending};
             std::vector<uint8_t> cpuData;
             std::atomic<bool> cancelled{false};
         };

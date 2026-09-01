@@ -2,9 +2,14 @@
 // Validates request management, priority, and status tracking
 
 #include "TestFramework.h"
+#include "Engine/Streaming/DirectStorageLoader.h"
 
+#include <atomic>
+#include <chrono>
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace
@@ -231,4 +236,43 @@ TEST(DirectStorage_FallbackPath_NoDirectStorage)
 {
     TestLoader loader;
     EXPECT_FALSE(loader.GetStats().usingDirectStorage);
+}
+
+TEST(DirectStorage_RealFallbackFailurePublicationIsSynchronized)
+{
+    auto& loader = Spark::Streaming::DirectStorageLoader::GetInstance();
+    ASSERT_TRUE(loader.Initialize());
+
+    struct CompletionState
+    {
+        std::atomic<uint32_t> callbackCount{0};
+        std::atomic<Spark::Streaming::LoadStatus> status{Spark::Streaming::LoadStatus::Pending};
+    };
+    auto state = std::make_shared<CompletionState>();
+
+    Spark::Streaming::LoadRequest request;
+    request.filePath = "";
+    request.callback = [state](Spark::Streaming::LoadRequestHandle, Spark::Streaming::LoadStatus status)
+    {
+        state->status.store(status, std::memory_order_relaxed);
+        state->callbackCount.fetch_add(1, std::memory_order_release);
+    };
+
+    const auto handle = loader.Submit(request);
+    ASSERT_TRUE(handle.IsValid());
+    loader.Flush();
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (state->callbackCount.load(std::memory_order_acquire) == 0 && std::chrono::steady_clock::now() < deadline)
+    {
+        loader.ProcessCompletions();
+        std::this_thread::yield();
+    }
+
+    EXPECT_EQ(state->callbackCount.load(std::memory_order_acquire), 1u);
+    EXPECT_EQ(static_cast<uint8_t>(state->status.load(std::memory_order_relaxed)),
+              static_cast<uint8_t>(Spark::Streaming::LoadStatus::Failed));
+
+    loader.ProcessCompletions();
+    EXPECT_EQ(state->callbackCount.load(std::memory_order_acquire), 1u);
 }
