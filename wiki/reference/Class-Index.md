@@ -707,7 +707,7 @@
 | `CombatEncounter` | struct | GameModules | [RPGCombatSystem.h:L65](../../GameModules/SparkGameRPG/Source/Combat/RPGCombatSystem.h#L65) | Represents an active combat encounter |
 | `CombinerNode` | class | SparkEngine | [FastNoise2SIMD.h:L611](../../SparkEngine/Source/Graphics/FastNoise2SIMD.h#L611) | Combines two child noise nodes with a configurable operation |
 | `ComboState` | struct | GameModules | [RPGCombatSystem.h:L41](../../GameModules/SparkGameRPG/Source/Combat/RPGCombatSystem.h#L41) | Tracks an active combo chain |
-| `CommaDecimalPoint` | class | Tests | [TestSceneSerializerReal.cpp:L57](../../Tests/TestSceneSerializerReal.cpp#L57) |  |
+| `CommaDecimalPoint` | class | Tests | [TestSceneSerializerReal.cpp:L56](../../Tests/TestSceneSerializerReal.cpp#L56) |  |
 | `CommandHistory` | class | SparkEditor | [CommandHistory.h:L102](../../SparkEditor/Source/CommandHistory.h#L102) | Manages the undo/redo stacks and executes commands. |
 | `CommandHistory` | class | Tests | [TestCommandHistory.cpp:L30](../../Tests/TestCommandHistory.cpp#L30) |  |
 | `CommandHistoryAdapterCommand` | class | SparkEditor | [CommandHistory.h:L225](../../SparkEditor/Source/CommandHistory.h#L225) | Runtime guard for mutation paths that bypass command dispatch. |
@@ -1041,7 +1041,7 @@
 | `DescriptorAllocation` | struct | SparkEngine | [D3D12Types.h:L70](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L70) | Manages a contiguous ID3D12DescriptorHeap with free-list allocation. |
 | `DescriptorCloser` | struct | SparkEditor | [ProjectManager.cpp:L676](../../SparkEditor/Source/Core/ProjectManager.cpp#L676) |  |
 | `DescriptorHeapAllocator` | class | SparkEngine | [D3D12Types.h:L81](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L81) |  |
-| `DescriptorSet` | struct | SparkEngine | [TelemetrySpool.cpp:L623](../../SparkEngine/Source/Utils/TelemetrySpool.cpp#L623) |  |
+| `DescriptorSet` | struct | SparkEngine | [TelemetrySpool.cpp:L626](../../SparkEngine/Source/Utils/TelemetrySpool.cpp#L626) |  |
 | `DesignerScreen` | struct | SparkEditor | [UIDesignerSystem.h:L100](../../SparkEditor/Source/UIDesigner/UIDesignerSystem.h#L100) | A complete UI screen/layout |
 | `DesignerStyle` | struct | SparkEditor | [UIDesignerSystem.h:L87](../../SparkEditor/Source/UIDesigner/UIDesignerSystem.h#L87) | A UI style definition |
 | `DesignerWidget` | struct | SparkEditor | [UIDesignerSystem.h:L69](../../SparkEditor/Source/UIDesigner/UIDesignerSystem.h#L69) | A widget instance in the UI tree |
@@ -1601,7 +1601,7 @@
 | `GLDevice` | class | SparkEngine | [OpenGLDevice.h:L113](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L113) |  |
 | `GLDevice` | class | SparkEngine | [OpenGLDevice.h:L368](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L368) |  |
 | `GlobalIlluminationSettings` | struct | SparkEditor | [LightingTools.h:L123](../../SparkEditor/Source/Lighting/LightingTools.h#L123) | Global illumination settings |
-| `GlobalLocaleGuard` | class | Tests | [TestSceneSerializerReal.cpp:L63](../../Tests/TestSceneSerializerReal.cpp#L63) |  |
+| `GlobalLocaleGuard` | class | Tests | [TestSceneSerializerReal.cpp:L62](../../Tests/TestSceneSerializerReal.cpp#L62) |  |
 | `GLPipelineState` | class | SparkEngine | [OpenGLDevice.h:L236](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L236) |  |
 | `GLSampler` | class | SparkEngine | [OpenGLDevice.h:L212](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L212) |  |
 | `GLShader` | class | SparkEngine | [OpenGLDevice.h:L185](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L185) |  |
@@ -1719,7 +1719,7 @@
 | `HandleAllocator` | class | Tests | [TestVersionedHandle.cpp:L19](../../Tests/TestVersionedHandle.cpp#L19) |  |
 | `HandleCloser` | struct | SparkEditor | [ProjectManager.cpp:L612](../../SparkEditor/Source/Core/ProjectManager.cpp#L612) |  |
 | `HandlerEntry` | struct | Tests | [TestCrossSystemIntegration.cpp:L154](../../Tests/TestCrossSystemIntegration.cpp#L154) |  |
-| `HandleSet` | struct | SparkEngine | [TelemetrySpool.cpp:L557](../../SparkEngine/Source/Utils/TelemetrySpool.cpp#L557) |  |
+| `HandleSet` | struct | SparkEngine | [TelemetrySpool.cpp:L559](../../SparkEngine/Source/Utils/TelemetrySpool.cpp#L559) |  |
 | `HandoffCommand` | struct | SparkGateway | [GatewayCoordinator.h:L60](../../SparkGateway/src/GatewayCoordinator.h#L60) |  |
 | `HashGridLevelStats` | struct | SparkEngine | [NeuralRadianceCache.h:L77](../../SparkEngine/Source/Graphics/Neural/NeuralRadianceCache.h#L77) | Per-level hash grid statistics. |
 | `HazardInstance` | struct | GameModules | [PlatformerHazardSystem.h:L31](../../GameModules/SparkGamePlatformer/Source/Hazard/PlatformerHazardSystem.h#L31) | A single hazard instance placed in a level |
