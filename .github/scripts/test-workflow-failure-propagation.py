@@ -1219,16 +1219,20 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("repository-metrics-source.json", self.loc_counter)
 
     def test_readme_ci_badge_tracks_fail_closed_aggregate_workflow(self) -> None:
-        self.assertIn("[![Current commit checks]", self.readme)
+        self.assertIn("[![Trusted exact-source CI]", self.readme)
         self.assertIn(
-            "https://img.shields.io/github/check-suites/Krilliac/SparkEngine/Working"
+            "https://img.shields.io/github/checks-status/Krilliac/SparkEngine/Working"
             "?style=flat-square&label=CI",
             self.readme,
         )
-        self.assertIn("https://github.com/Krilliac/SparkEngine/actions?query=branch%3AWorking", self.readme)
-        self.assertNotIn("[![Trusted exact-source CI]", self.readme)
+        self.assertIn(
+            "https://github.com/Krilliac/SparkEngine/actions/workflows/"
+            "trusted-ci-aggregate.yml?query=branch%3AWorking",
+            self.readme,
+        )
+        self.assertNotIn("[![Current commit checks]", self.readme)
         self.assertNotIn("github/check-runs", self.readme)
-        self.assertNotIn("github/checks-status", self.readme)
+        self.assertNotIn("github/check-suites", self.readme)
         self.assertNotIn("trusted-ci-aggregate.yml/badge.svg", self.readme)
 
     def test_trusted_ci_badge_workflow_is_exact_and_fail_closed(self) -> None:
@@ -1251,9 +1255,9 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertEqual(aggregate.count("group: trusted-ci-aggregate"), 1)
         self.assertEqual(aggregate.count("actions: read"), 1)
         self.assertEqual(aggregate.count("contents: read"), 1)
-        self.assertEqual(aggregate.count("statuses: read"), 1)
+        self.assertEqual(aggregate.count("statuses: write"), 1)
         self.assertEqual(aggregate.count("checks: write"), 1)
-        self.assertNotRegex(aggregate, r"(?m)^\s+(?:actions|contents|statuses): write\s*$")
+        self.assertNotRegex(aggregate, r"(?m)^\s+(?:actions|contents): write\s*$")
         self.assertIn("ref: Working", aggregate)
         self.assertIn("persist-credentials: false", aggregate)
         self.assertIn("github.workflow_sha", aggregate)
@@ -1265,6 +1269,15 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("Create pending exact-source badge check", aggregate)
         self.assertIn("Finalize exact-source badge check", aggregate)
         self.assertIn("Trusted Exact-Source CI Aggregate", aggregate)
+        self.assertIn("Mark exact aggregate status pending", aggregate)
+        self.assertIn("Finalize exact aggregate status", aggregate)
+        self.assertIn("Trusted Exact-Source CI / Aggregate", aggregate)
+        finalize_status = named_step(aggregate, "Finalize exact aggregate status")
+        self.assertIn(
+            "if: always() && steps.aggregate-status.outputs.status-id != '' && "
+            "(github.event_name != 'workflow_run' || github.event.action == 'completed')",
+            finalize_status,
+        )
         self.assertIn("conclusion: 'neutral'", aggregate)
         self.assertIn("exactSuccess && workingIsExact ? 'success' : 'failure'", aggregate)
         self.assertIn("conclusion,", aggregate)

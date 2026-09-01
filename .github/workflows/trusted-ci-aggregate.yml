@@ -16,7 +16,7 @@ permissions:
   actions: read
   checks: write
   contents: read
-  statuses: read
+  statuses: write
 
 jobs:
   exact-source:
@@ -64,6 +64,34 @@ jobs:
               process.env.TRUSTED_WORKFLOW_REF !== expectedRef) {
             throw new Error('Aggregate workflow, checkout, and current Working source are not exact.');
           }
+
+    - name: Mark exact aggregate status pending
+      id: aggregate-status
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+      with:
+        script: |
+          const contextName = 'Trusted Exact-Source CI / Aggregate';
+          const targetSha = String(process.env.TARGET_SHA || '').toLowerCase();
+          const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT}`;
+          const response = await github.rest.repos.createCommitStatus({
+            ...context.repo,
+            sha: targetSha,
+            state: 'pending',
+            target_url: targetUrl,
+            description: `Trusted exact-source aggregate is evaluating ${targetSha.slice(0, 12)}.`,
+            context: contextName,
+          });
+          const status = response.data;
+          if (!Number.isInteger(status?.id) || status.id < 1 || status.state !== 'pending' ||
+              status.context !== contextName || status.target_url !== targetUrl ||
+              String(status.sha || '').toLowerCase() !== targetSha ||
+              status.creator?.login !== 'github-actions[bot]' || status.creator?.id !== 41898282) {
+            throw new Error('GitHub did not create the exact pending aggregate status.');
+          }
+          core.setOutput('status-id', String(status.id));
+          core.setOutput('target-url', targetUrl);
 
     - name: Create pending exact-source badge check
       id: badge-check
@@ -208,6 +236,7 @@ jobs:
         test -s "$FINAL_STDOUT"
 
     - name: Finalize exact-source badge check
+      id: finalize-badge
       if: always() && steps.badge-check.outputs.check-id != ''
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
@@ -369,4 +398,111 @@ jobs:
           });
           if (conclusion !== 'success') {
             core.setFailed('Trusted exact-source CI aggregate did not pass.');
+          }
+
+    - name: Finalize exact aggregate status
+      if: always() && steps.aggregate-status.outputs.status-id != '' && (github.event_name != 'workflow_run' || github.event.action == 'completed')
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+        PENDING_STATUS_ID: ${{ steps.aggregate-status.outputs.status-id }}
+        PENDING_TARGET_URL: ${{ steps.aggregate-status.outputs.target-url }}
+        FINAL_GATE_OUTPUT: ${{ runner.temp }}/trusted-ci-final-gate.env
+        ATTESTATION_OUTCOME: ${{ steps.trusted-attestation.outcome }}
+        PENDING_OUTCOME: ${{ steps.aggregate-status.outcome }}
+        CREATE_OUTCOME: ${{ steps.badge-check.outcome }}
+        EXACT_GATE_OUTCOME: ${{ steps.exact-gate.outcome }}
+        WRITE_RECEIPT_OUTCOME: ${{ steps.write-receipt.outcome }}
+        TERMINAL_SOURCE_OUTCOME: ${{ steps.terminal-source.outcome }}
+        UPLOAD_RECEIPT_OUTCOME: ${{ steps.upload-receipt.outcome }}
+        TERMINAL_GATE_OUTCOME: ${{ steps.terminal-gate.outcome }}
+        BADGE_FINALIZE_OUTCOME: ${{ steps.finalize-badge.outcome }}
+      with:
+        script: |
+          const contextName = 'Trusted Exact-Source CI / Aggregate';
+          const targetSha = String(process.env.TARGET_SHA || '').toLowerCase();
+          const pendingId = Number(process.env.PENDING_STATUS_ID);
+          const pendingTargetUrl = process.env.PENDING_TARGET_URL;
+          const outcomes = [
+            process.env.ATTESTATION_OUTCOME,
+            process.env.PENDING_OUTCOME,
+            process.env.CREATE_OUTCOME,
+            process.env.EXACT_GATE_OUTCOME,
+            process.env.WRITE_RECEIPT_OUTCOME,
+            process.env.TERMINAL_SOURCE_OUTCOME,
+            process.env.UPLOAD_RECEIPT_OUTCOME,
+            process.env.TERMINAL_GATE_OUTCOME,
+            process.env.BADGE_FINALIZE_OUTCOME,
+          ];
+          const currentWorking = (await github.rest.repos.getCommit({
+            ...context.repo, ref: 'Working'
+          })).data;
+          const workingIsExact = String(currentWorking.sha || '').toLowerCase() === targetSha;
+          let state = outcomes.every(outcome => outcome === 'success') && workingIsExact
+            ? 'success' : 'failure';
+
+          if (state === 'success') {
+            const fs = require('fs');
+            const exactEvidence = {};
+            for (const line of fs.readFileSync(process.env.FINAL_GATE_OUTPUT, 'utf8').split(/\r?\n/)) {
+              if (!line) continue;
+              const separator = line.indexOf('=');
+              const key = separator < 0 ? '' : line.slice(0, separator);
+              const value = separator < 0 ? '' : line.slice(separator + 1);
+              if (!key || Object.hasOwn(exactEvidence, key)) {
+                throw new Error('Terminal exact gate output is malformed or duplicated.');
+              }
+              exactEvidence[key] = value;
+            }
+            const authorizedPendingTargets = new Set([
+              pendingTargetUrl,
+              exactEvidence.ci120_status_target_url,
+              exactEvidence.codeql_status_target_url,
+            ]);
+            const response = await github.rest.repos.getCombinedStatusForRef({
+              ...context.repo,
+              ref: targetSha,
+              per_page: 100,
+            });
+            const statuses = response.data?.statuses;
+            const total = response.data?.total_count;
+            const aggregate = Array.isArray(statuses)
+              ? statuses.filter(status => status.context === contextName) : [];
+            const ownPendingIsExact = aggregate[0]?.target_url === pendingTargetUrl
+              ? aggregate[0]?.id === pendingId : true;
+            const descriptionIsExact = aggregate[0]?.description ===
+                `Trusted exact-source aggregate is evaluating ${targetSha.slice(0, 12)}.` ||
+              aggregate[0]?.description ===
+                `Trusted exact-source aggregate is awaiting both reporters for ${targetSha.slice(0, 12)}.`;
+            if (!Number.isInteger(total) || !Array.isArray(statuses) || total !== statuses.length ||
+                statuses.length > 100 || aggregate.length < 1 || !ownPendingIsExact ||
+                aggregate[0].state !== 'pending' ||
+                !authorizedPendingTargets.has(aggregate[0].target_url) || !descriptionIsExact ||
+                String(aggregate[0].sha || '').toLowerCase() !== targetSha ||
+                aggregate[0].creator?.login !== 'github-actions[bot]' ||
+                aggregate[0].creator?.id !== 41898282) {
+              throw new Error('The pending aggregate status is incomplete, stale, or unauthenticated.');
+            }
+          }
+
+          const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT}`;
+          const response = await github.rest.repos.createCommitStatus({
+            ...context.repo,
+            sha: targetSha,
+            state,
+            target_url: targetUrl,
+            description: state === 'success'
+              ? `Trusted exact-source evidence passed for ${targetSha.slice(0, 12)}.`
+              : `Trusted exact-source evidence is incomplete for ${targetSha.slice(0, 12)}.`,
+            context: contextName,
+          });
+          const status = response.data;
+          if (!Number.isInteger(status?.id) || status.id < 1 || status.state !== state ||
+              status.context !== contextName || status.target_url !== targetUrl ||
+              String(status.sha || '').toLowerCase() !== targetSha ||
+              status.creator?.login !== 'github-actions[bot]' || status.creator?.id !== 41898282) {
+            throw new Error('GitHub did not create the exact terminal aggregate status.');
+          }
+          if (state !== 'success') {
+            core.setFailed(`Trusted exact-source aggregate status failed: ${outcomes.join(', ')}; Working exact: ${workingIsExact}.`);
           }

@@ -12,6 +12,7 @@ const COMMENT_MARKER = '<!-- spark-codeql-report -->';
 const SOURCE_WORKFLOW_NAME = 'CodeQL Advanced';
 const SOURCE_WORKFLOW_PATH = '.github/workflows/codeql.yml';
 const TRUSTED_STATUS_CONTEXT = 'CodeQL Trusted / Exact Source';
+const AGGREGATE_STATUS_CONTEXT = 'Trusted Exact-Source CI / Aggregate';
 const TRUSTED_STATUS_EVENTS = Object.freeze(['pull_request', 'push', 'workflow_dispatch']);
 const TRUSTED_STATUS_STATES = Object.freeze(['pending', 'success', 'failure']);
 const MAX_FINALIZER_SUMMARY_BYTES = 2 * 1024 * 1024;
@@ -1459,6 +1460,15 @@ async function publishCommitStatus(args, inspection, state) {
             staleReasons: immediateReasons
         };
     }
+    await args.github.rest.repos.createCommitStatus({
+        owner: inspection.owner,
+        repo: inspection.repo,
+        sha: target.targetSha,
+        state: 'pending',
+        target_url: target.targetUrl,
+        description: `Trusted exact-source aggregate is awaiting both reporters for ${target.targetSha.slice(0, 12)}.`,
+        context: AGGREGATE_STATUS_CONTEXT
+    });
     await args.github.rest.repos.createCommitStatus({
         owner: inspection.owner,
         repo: inspection.repo,

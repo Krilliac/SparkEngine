@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const STATUS_CONTEXT = 'CI-120 Trusted / Exact Source';
+const AGGREGATE_STATUS_CONTEXT = 'Trusted Exact-Source CI / Aggregate';
 const SOURCE_WORKFLOW_NAME = 'Build SparkEngine';
 const SOURCE_WORKFLOW_PATH = '.github/workflows/build.yml';
 const VERIFIER_WORKFLOW_PATH = '.github/workflows/ci120-report.yml';
@@ -405,6 +406,15 @@ async function publishStatus(args, mode, state) {
     const targetUrl = reporterTargetUrl(inspection);
     const description = `${DESCRIPTION_PREFIXES[state]} for Build run ${inspection.eventRun.id}, ` +
         `attempt ${inspection.eventRun.run_attempt}.`;
+    await args.github.rest.repos.createCommitStatus({
+        owner: inspection.owner,
+        repo: inspection.repo,
+        sha: inspection.sourceSha,
+        state: 'pending',
+        target_url: targetUrl,
+        description: `Trusted exact-source aggregate is awaiting both reporters for ${inspection.sourceSha.slice(0, 12)}.`,
+        context: AGGREGATE_STATUS_CONTEXT
+    });
     await args.github.rest.repos.createCommitStatus({
         owner: inspection.owner,
         repo: inspection.repo,

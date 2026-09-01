@@ -4,7 +4,7 @@ A C++23 open-source 3D game engine with multiple graphics backends behind a shar
 
 > 🌐 **Website now live:** [sparkengine.dev](https://sparkengine.dev/)
 
-[![Current commit checks](https://img.shields.io/github/check-suites/Krilliac/SparkEngine/Working?style=flat-square&label=CI)](https://github.com/Krilliac/SparkEngine/actions?query=branch%3AWorking)
+[![Trusted exact-source CI](https://img.shields.io/github/checks-status/Krilliac/SparkEngine/Working?style=flat-square&label=CI)](https://github.com/Krilliac/SparkEngine/actions/workflows/trusted-ci-aggregate.yml?query=branch%3AWorking)
 [![Test definitions](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Ftests.json&style=flat-square)](Tests)
 [![C++ lines of code](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Floc.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
 [![Source files](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Ffiles.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
@@ -207,7 +207,7 @@ Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine
 
 ## Quality Assurance
 
-**Tests:** 6,974 test definitions across 576 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 6,983 test definitions across 577 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
 
 ```bash
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
@@ -377,7 +377,7 @@ SparkEngine/
 ├── SparkEditor/Source/    65 *Panel.h classes, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 in-tree module directories
-├── Tests/                 6,974 test definitions, 576 files
+├── Tests/                 6,983 test definitions, 577 files
 ├── wiki/                  198 Markdown pages excluding _Sidebar.md (inventory only)
 └── docs/                  API reference, guides
 ```

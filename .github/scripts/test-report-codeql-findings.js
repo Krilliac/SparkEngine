@@ -699,8 +699,17 @@ async function main() {
         assert.strictEqual(pending.observed.outputs['status-event-eligible'], 'true');
         assert.strictEqual(pending.observed.outputs['status-published'], 'true');
         assert.strictEqual(pending.observed.outputs['status-target-sha'], SOURCE_HEAD_SHA);
-        assert.strictEqual(pending.observed.commitStatuses.length, 1);
+        assert.strictEqual(pending.observed.commitStatuses.length, 2);
         assert.deepStrictEqual(pending.observed.commitStatuses[0], {
+            owner: 'Krilliac',
+            repo: 'SparkEngine',
+            sha: SOURCE_HEAD_SHA,
+            state: 'pending',
+            target_url: `https://github.com/Krilliac/SparkEngine/actions/runs/${REPORTER_RUN_ID}/attempts/${REPORTER_RUN_ATTEMPT}`,
+            description: `Trusted exact-source aggregate is awaiting both reporters for ${SOURCE_HEAD_SHA.slice(0, 12)}.`,
+            context: 'Trusted Exact-Source CI / Aggregate'
+        });
+        assert.deepStrictEqual(pending.observed.commitStatuses[1], {
             owner: 'Krilliac',
             repo: 'SparkEngine',
             sha: SOURCE_HEAD_SHA,
@@ -718,8 +727,10 @@ async function main() {
         runningData.workflowRuns = [clone(runningData.run)];
         const runningPending = await runPending(root, runningData);
         assert.strictEqual(runningPending.observed.failed.length, 0);
-        assert.strictEqual(runningPending.observed.commitStatuses.length, 1);
-        assert.strictEqual(runningPending.observed.commitStatuses[0].state, 'pending');
+        assert.strictEqual(runningPending.observed.commitStatuses.length, 2);
+        assert.strictEqual(runningPending.observed.commitStatuses[0].context,
+            'Trusted Exact-Source CI / Aggregate');
+        assert.strictEqual(runningPending.observed.commitStatuses[1].state, 'pending');
 
         const completedDuringMutation = clone(runningData.run);
         completedDuringMutation.status = 'completed';
@@ -1005,8 +1016,18 @@ async function main() {
         assert.strictEqual(clean.summary.artifactEvidence.length, 3);
         assert.strictEqual(clean.runtime.observed.createdComments.length, 1);
         assert(clean.runtime.observed.createdComments[0].body.includes('valid SARIF and no findings'));
-        assert.strictEqual(clean.runtime.observed.commitStatuses.length, 1);
+        assert.strictEqual(clean.runtime.observed.commitStatuses.length, 2);
         assert.deepStrictEqual(clean.runtime.observed.commitStatuses[0], {
+            owner: 'Krilliac',
+            repo: 'SparkEngine',
+            sha: SOURCE_HEAD_SHA,
+            state: 'pending',
+            target_url:
+                `https://github.com/Krilliac/SparkEngine/actions/runs/${REPORTER_RUN_ID}/attempts/${REPORTER_RUN_ATTEMPT}`,
+            description: `Trusted exact-source aggregate is awaiting both reporters for ${SOURCE_HEAD_SHA.slice(0, 12)}.`,
+            context: 'Trusted Exact-Source CI / Aggregate'
+        });
+        assert.deepStrictEqual(clean.runtime.observed.commitStatuses[1], {
             owner: 'Krilliac',
             repo: 'SparkEngine',
             sha: SOURCE_HEAD_SHA,
@@ -1057,7 +1078,7 @@ async function main() {
             const outputFailure = await preflightAndReport(
                 root, outputFailureData, outputFailureData, writeArtifacts(root), outputMutation);
             assert.strictEqual(outputFailure.finalization.state, 'failure');
-            assert.strictEqual(outputFailure.runtime.observed.commitStatuses.length, 1);
+            assert.strictEqual(outputFailure.runtime.observed.commitStatuses.length, 2);
             assert(outputFailure.finalization.errors.some(error =>
                 error.includes('durable summary artifact outputs')));
         }
@@ -1121,7 +1142,7 @@ async function main() {
         reporterAttempt.runtime.context.runAttempt = REPORTER_RUN_ATTEMPT + 1;
         await runFinalize(root, reporterAttemptData, reporterAttempt);
         assert.strictEqual(reporterAttempt.finalization.state, 'failure');
-        assert.strictEqual(reporterAttempt.runtime.observed.commitStatuses.length, 1);
+        assert.strictEqual(reporterAttempt.runtime.observed.commitStatuses.length, 2);
         assert.strictEqual(
             reporterAttempt.runtime.observed.commitStatuses[0].target_url,
             `https://github.com/Krilliac/SparkEngine/actions/runs/${REPORTER_RUN_ID}/attempts/${REPORTER_RUN_ATTEMPT + 1}`
@@ -1686,8 +1707,10 @@ async function main() {
         assert(missing.summary.evidenceErrors.some(error =>
             error.includes("'codeql-python-attempt-1.sarif' is missing")));
         assert(missing.runtime.observed.failed.length >= 1);
-        assert.strictEqual(missing.runtime.observed.commitStatuses.length, 1);
-        assert.deepStrictEqual(missing.runtime.observed.commitStatuses[0], {
+        assert.strictEqual(missing.runtime.observed.commitStatuses.length, 2);
+        assert.strictEqual(missing.runtime.observed.commitStatuses[0].context,
+            'Trusted Exact-Source CI / Aggregate');
+        assert.deepStrictEqual(missing.runtime.observed.commitStatuses[1], {
             owner: 'Krilliac',
             repo: 'SparkEngine',
             sha: SOURCE_HEAD_SHA,
@@ -1971,6 +1994,9 @@ async function main() {
         assert.strictEqual(statusApiError.summary.commitStatus.reason, 'deferred-until-summary-upload');
         assert.strictEqual(statusApiError.finalization.reason, 'api-error');
         assert.strictEqual(statusApiError.finalization.error, 'simulated status outage');
+        assert.strictEqual(statusApiError.runtime.observed.commitStatuses.length, 1);
+        assert.strictEqual(statusApiError.runtime.observed.commitStatuses[0].context,
+            'Trusted Exact-Source CI / Aggregate');
         assert(statusApiError.runtime.observed.failed.some(message => message.includes('final status API failed')));
 
         const pushData = fixture();
@@ -1988,8 +2014,11 @@ async function main() {
         });
         const push = await preflightAndReport(root, pushData, pushData, writeArtifacts(root));
         assert.strictEqual(push.summary.status, 'complete');
-        assert.strictEqual(push.runtime.observed.commitStatuses.length, 1);
-        assert.strictEqual(push.runtime.observed.commitStatuses[0].state, 'success');
+        assert.strictEqual(push.runtime.observed.commitStatuses.length, 2);
+        assert.strictEqual(push.runtime.observed.commitStatuses[0].state, 'pending');
+        assert.strictEqual(push.runtime.observed.commitStatuses[0].context,
+            'Trusted Exact-Source CI / Aggregate');
+        assert.strictEqual(push.runtime.observed.commitStatuses[1].state, 'success');
         assert.strictEqual(push.runtime.observed.createdComments.length, 0);
         assert.strictEqual(push.runtime.observed.updatedComments.length, 0);
         assert(push.runtime.observed.jobSummary.includes('valid SARIF and no findings'));

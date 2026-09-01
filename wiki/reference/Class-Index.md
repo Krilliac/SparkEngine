@@ -1004,7 +1004,7 @@
 | `DecalSystem` | class | SparkEngine | [ECSystems.h:L525](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h#L525) |  |
 | `DecalSystem` | class | SparkEngine | [DecalSystem.h:L113](../../SparkEngine/Source/Graphics/DecalSystem.h#L113) |  |
 | `DecalSystemTest` | class | Tests | [TestECSystemSpecialized.cpp:L162](../../Tests/TestECSystemSpecialized.cpp#L162) |  |
-| `DecodedRequest` | struct | SparkGateway | [GatewayAreaControl.cpp:L531](../../SparkGateway/src/GatewayAreaControl.cpp#L531) |  |
+| `DecodedRequest` | struct | SparkGateway | [GatewayAreaControl.cpp:L574](../../SparkGateway/src/GatewayAreaControl.cpp#L574) |  |
 | `DecorCollidePart` | struct | GameModules | [TFRegionDecor.h:L117](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionDecor.h#L117) |  |
 | `DecorInstanceGroup` | struct | GameModules | [TFRegionDecor.h:L207](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionDecor.h#L207) |  |
 | `DecorLayoutEditorPanel` | class | SparkEditor | [DecorLayoutEditorPanel.h:L39](../../SparkEditor/Source/Panels/DecorLayoutEditorPanel.h#L39) | Visual editor for Assets/MMOFPS/Data/decor.json (DATA only, no live world). |
@@ -1331,7 +1331,7 @@
 | `ExactChild` | struct | SparkBuild | [ProcessRunnerTests.cpp:L28](../../SparkBuild/tests/ProcessRunnerTests.cpp#L28) |  |
 | `ExclusiveFileLock` | class | GameModules | [TFSavePaths.h:L43](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L43) |  |
 | `existing` | struct | SparkDaemon | [DaemonServer.cpp:L386](../../SparkDaemon/src/DaemonServer.cpp#L386) |  |
-| `existing` | struct | SparkGateway | [GatewayAreaControl.cpp:L284](../../SparkGateway/src/GatewayAreaControl.cpp#L284) |  |
+| `existing` | struct | SparkGateway | [GatewayAreaControl.cpp:L286](../../SparkGateway/src/GatewayAreaControl.cpp#L286) |  |
 | `ExplorationSaveState` | struct | GameModules | [OWExplorationSystem.h:L61](../../GameModules/SparkGameOpenWorld/Source/Exploration/OWExplorationSystem.h#L61) | Mutable discovery state stored in an OpenWorld save. |
 | `ExponentialFogSettings` | struct | SparkEngine | [FogSystem.h:L89](../../SparkEngine/Source/Graphics/FogSystem.h#L89) |  |
 | `ExposureVolumeComponent` | struct | SparkEngine | [VolumeSystem.h:L92](../../SparkEngine/Source/Graphics/VolumeSystem.h#L92) | Exposure/auto-exposure volume parameters |
@@ -1350,13 +1350,13 @@
 | `FakeBuffer` | struct | Tests | [TestRHIHandlePoolPhaseX.cpp:L42](../../Tests/TestRHIHandlePoolPhaseX.cpp#L42) |  |
 | `FakeBuffer` | class | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L49](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L49) |  |
 | `FakeConsole` | struct | Tests | [Test_scripting_hardening.cpp:L260](../../Tests/harden/Test_scripting_hardening.cpp#L260) |  |
-| `FakeDatabase` | struct | Tests | [TestTFOnboarding.cpp:L943](../../Tests/TestTFOnboarding.cpp#L943) |  |
-| `FakeDatabase` | struct | Tests | [TestTFOnboarding.cpp:L992](../../Tests/TestTFOnboarding.cpp#L992) |  |
+| `FakeDatabase` | struct | Tests | [TestTFOnboarding.cpp:L949](../../Tests/TestTFOnboarding.cpp#L949) |  |
+| `FakeDatabase` | struct | Tests | [TestTFOnboarding.cpp:L998](../../Tests/TestTFOnboarding.cpp#L998) |  |
 | `FakeDevice` | class | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L76](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L76) |  |
 | `FakeMaterialData` | struct | Tests | [TestPersistentMaterialCB.cpp:L31](../../Tests/TestPersistentMaterialCB.cpp#L31) |  |
-| `FakeProgression` | struct | Tests | [TestTFOnboarding.cpp:L934](../../Tests/TestTFOnboarding.cpp#L934) |  |
-| `FakeProgression` | struct | Tests | [TestTFOnboarding.cpp:L988](../../Tests/TestTFOnboarding.cpp#L988) |  |
-| `FakeStore` | struct | Tests | [TestTFOnboarding.cpp:L962](../../Tests/TestTFOnboarding.cpp#L962) |  |
+| `FakeProgression` | struct | Tests | [TestTFOnboarding.cpp:L940](../../Tests/TestTFOnboarding.cpp#L940) |  |
+| `FakeProgression` | struct | Tests | [TestTFOnboarding.cpp:L994](../../Tests/TestTFOnboarding.cpp#L994) |  |
+| `FakeStore` | struct | Tests | [TestTFOnboarding.cpp:L968](../../Tests/TestTFOnboarding.cpp#L968) |  |
 | `FastNoiseLite` | class | SparkEngine | [FastNoiseLite.h:L38](../../SparkEngine/Source/Graphics/FastNoiseLite.h#L38) | Fast portable noise generator |
 | `FastTravelPoint` | struct | GameModules | [OWPlayerSystem.h:L54](../../GameModules/SparkGameOpenWorld/Source/Player/OWPlayerSystem.h#L54) | A fast travel destination the player has unlocked |
 | `FaultRecord` | struct | Tests | [TestFaultIsolation.cpp:L19](../../Tests/TestFaultIsolation.cpp#L19) |  |
@@ -2144,7 +2144,7 @@
 | `LineRendererData` | struct | SparkEngine | [LineTrailRenderer.h:L48](../../SparkEngine/Source/Graphics/LineTrailRenderer.h#L48) | Renders a polyline from world-space points as a camera-facing strip. |
 | `LinuxRHIState` | struct | SparkEngine | [GraphicsEngineRHI.h:L21](../../SparkEngine/Source/Graphics/GraphicsEngineRHI.h#L21) |  |
 | `ListenerState` | struct | Tests | [TestAudioEngine.cpp:L28](../../Tests/TestAudioEngine.cpp#L28) |  |
-| `listenerStatus` | struct | SparkGateway | [GatewayAreaControl.cpp:L332](../../SparkGateway/src/GatewayAreaControl.cpp#L332) |  |
+| `listenerStatus` | struct | SparkGateway | [GatewayAreaControl.cpp:L330](../../SparkGateway/src/GatewayAreaControl.cpp#L330) |  |
 | `LiveEditBridge` | class | SparkEditor | [LiveEditBridge.h:L55](../../SparkEditor/Source/Communication/LiveEditBridge.h#L55) |  |
 | `LiveEditRecord` | struct | SparkEngine | [PlayModeTypes.h:L140](../../SparkEngine/Source/Engine/Editor/PlayModeTypes.h#L140) | Tracks a single property change made during play mode. |
 | `LiveMetalDevice` | struct | Tests | [TestMetalRayTracingLive.mm:L47](../../Tests/TestMetalRayTracingLive.mm#L47) |  |
@@ -3268,7 +3268,7 @@
 | `RconDispatcher` | class | Tests | [TestDedicatedServer.cpp:L121](../../Tests/TestDedicatedServer.cpp#L121) |  |
 | `Reader` | class | SparkDaemon | [BoundedWireCodec.h:L64](../../SparkDaemon/src/BoundedWireCodec.h#L64) |  |
 | `Reader` | struct | SparkEditor | [CollaborativeEditSession.cpp:L132](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L132) |  |
-| `ReadOnlyAdmissionBuffer` | class | SparkGateway | [GatewayAreaControl.cpp:L1062](../../SparkGateway/src/GatewayAreaControl.cpp#L1062) |  |
+| `ReadOnlyAdmissionBuffer` | class | SparkGateway | [GatewayAreaControl.cpp:L1110](../../SparkGateway/src/GatewayAreaControl.cpp#L1110) |  |
 | `ReadState` | struct | SparkEngine | [CrashReportUploader.cpp:L919](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L919) |  |
 | `ReboundNotification` | struct | SparkEngine | [SaveSystem.cpp:L1207](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1207) |  |
 | `Rec` | struct | GameModules | [TFDeployableSystem.h:L155](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystem.h#L155) |  |

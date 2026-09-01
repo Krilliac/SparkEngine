@@ -554,7 +554,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*575 test-bearing `.cpp`/`.mm` files, 6973 source-level test definitions*
+*576 test-bearing `.cpp`/`.mm` files, 6982 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -796,7 +796,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameplaySystemExtension` | 6 |
 | `TestGameplayTags` | 14 |
 | `TestGameplayTagsReal` | 7 |
-| `TestGatewayAreaControl` | 10 |
+| `TestGatewayAreaControl` | 12 |
 | `TestGatewaySecurity` | 13 |
 | `TestGizmoMath` | 3 |
 | `TestGoldenImageTest` | 14 |
@@ -854,6 +854,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMathUtilsExtendedPhaseGG` | 5 |
 | `TestMemoryDebugger` | 16 |
 | `TestMemoryIntegrity` | 20 |
+| `TestMemoryIntegrityLifecycle` | 4 |
 | `TestMemoryMonitor` | 11 |
 | `TestMeshLOD` | 8 |
 | `TestMeshOptimizer` | 15 |
@@ -1057,7 +1058,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestTemplatesCompile` | 43 |
 | `TestTemporalEffects` | 11 |
 | `TestTerrainRenderer` | 5 |
-| `TestTextureCompressor` | 9 |
+| `TestTextureCompressor` | 12 |
 | `TestTextureCompressorPhaseGG` | 6 |
 | `TestTextureZombiePool` | 6 |
 | `TestThirdPartyIntegration` | 22 |
