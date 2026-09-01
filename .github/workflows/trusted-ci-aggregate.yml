@@ -12,10 +12,6 @@ on:
   schedule:
   - cron: "17 * * * *"
 
-concurrency:
-  group: trusted-ci-aggregate
-  cancel-in-progress: false
-
 permissions:
   actions: read
   checks: write
@@ -25,6 +21,9 @@ permissions:
 jobs:
   exact-source:
     name: "Require exact CI-120 and CodeQL evidence"
+    concurrency:
+      group: trusted-ci-aggregate
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
