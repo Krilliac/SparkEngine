@@ -554,11 +554,11 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*576 test-bearing `.cpp`/`.mm` files, 6982 source-level test definitions*
+*576 test-bearing `.cpp`/`.mm` files, 6985 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
-| `TestSubsystemIntegrationScenarios` | 4 |
+| `TestSubsystemIntegrationScenarios` | 5 |
 | `TestAIBehaviorTree` | 16 |
 | `TestAIBudgetLimiter` | 6 |
 | `TestAIDebugRenderer` | 7 |
@@ -726,7 +726,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEngineDiagnostics` | 4 |
 | `TestEngineInterfaceProtocol` | 4 |
 | `TestEngineLifecycle` | 22 |
-| `TestEngineLoadTest` | 21 |
+| `TestEngineLoadTest` | 22 |
 | `TestEngineMonitor` | 10 |
 | `TestEngineSettingsEdgeCases` | 45 |
 | `TestEngineSettingsParser` | 27 |
@@ -1054,7 +1054,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestTacticalPointSystem` | 4 |
 | `TestTelemetry` | 15 |
 | `TestTelemetryPhaseFF` | 7 |
-| `TestTelemetrySpool` | 7 |
+| `TestTelemetrySpool` | 8 |
 | `TestTemplatesCompile` | 43 |
 | `TestTemporalEffects` | 11 |
 | `TestTerrainRenderer` | 5 |

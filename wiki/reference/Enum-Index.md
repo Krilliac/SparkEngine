@@ -775,7 +775,7 @@
 | `State` | enum | Tests | [TestFPSComponents.cpp:L211](../../Tests/TestFPSComponents.cpp#L211) |  |
 | `State` | enum | Tests | [TestServerMockClient.cpp:L332](../../Tests/TestServerMockClient.cpp#L332) |  |
 | `State` | enum | Tests | [TestStateMachine.cpp:L9](../../Tests/TestStateMachine.cpp#L9) |  |
-| `StateViolationSeverity` | enum | SparkEngine | [InvalidStateDetector.h:L47](../../SparkEngine/Source/Utils/InvalidStateDetector.h#L47) |  |
+| `StateViolationSeverity` | enum | SparkEngine | [InvalidStateDetector.h:L48](../../SparkEngine/Source/Utils/InvalidStateDetector.h#L48) |  |
 | `StencilOperation` | enum | SparkEngine | [GraphicsEnums.h:L104](../../SparkEngine/Source/Enums/GraphicsEnums.h#L104) | Stencil operations |
 | `Step` | enum | GameModules | [TFTutorial.h:L76](../../GameModules/SparkGameMMOFPS/Source/Game/TFTutorial.h#L76) |  |
 | `StoreLoadStatus` | enum | GameModules | [TFSocialSystem.h:L143](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L143) |  |

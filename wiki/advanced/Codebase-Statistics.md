@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 314036 |
+| **SparkEngine/Source** | 314257 |
 | **SparkEditor/Source** | 109363 |
 | **GameModules** | 143040 |
 | **External services** | 11271 |
 | **Asset pipeline** | 2399 |
-| **Tests** | 171539 |
+| **Tests** | 171729 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~765145** |
+| **Total C++ (excl. ThirdParty)** | **~765556** |
 
 ### File Counts
 
@@ -43,9 +43,9 @@ Graphics contains 119528 lines, or 38% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 119528 | 38.0% |
-| Engine (all subsystems) | 87689 | 27.9% |
-| Utils | 44268 | 14.0% |
-| Core | 29974 | 9.5% |
+| Engine (all subsystems) | 87752 | 27.9% |
+| Utils | 44421 | 14.1% |
+| Core | 29979 | 9.5% |
 | Physics | 10814 | 3.4% |
 | Audio | 6090 | 1.9% |
 | Input | 3953 | 1.2% |
@@ -64,7 +64,7 @@ Graphics contains 119528 lines, or 38% of `SparkEngine/Source`. This is a source
 | Gameplay | 7755 |
 | Animation | 6705 |
 | Scripting | 5093 |
-| SaveSystem | 3471 |
+| SaveSystem | 3534 |
 | UI | 2522 |
 | Streaming | 2009 |
 | Editor | 1737 |
@@ -110,7 +110,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 577 |
-| TEST() definitions | 6983 |
+| TEST() definitions | 6986 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -158,7 +158,7 @@ inventory is implementation evidence, not support certification.
 |------|------:|
 | `OpenGLDevice.cpp` | 2160 |
 | `CrashHandler.cpp` | 2093 |
-| `SaveSystem.cpp` | 2036 |
+| `SaveSystem.cpp` | 2067 |
 | `VulkanDevice.cpp` | 1991 |
 | `ModuleManager.cpp` | 1848 |
 | `NetworkConnection.cpp` | 1680 |
@@ -172,7 +172,7 @@ inventory is implementation evidence, not support certification.
 | File | Lines |
 |------|------:|
 | `RenderGraph.h` | 1427 |
-| `Telemetry.h` | 1390 |
+| `Telemetry.h` | 1412 |
 | `GraphicsEngine.h` | 1260 |
 | `JsonUtils.h` | 1087 |
 | `EngineSettings.h` | 1080 |
