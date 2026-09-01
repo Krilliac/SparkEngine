@@ -56,13 +56,15 @@ namespace Spark::Graphics
 
     float Decal::GetCurrentOpacity() const
     {
-        if (!active)
+        if (!active || !std::isfinite(opacity) || !std::isfinite(age) || !std::isfinite(fadeTimer))
             return 0.0f;
+        const float baseOpacity = std::clamp(opacity, 0.0f, 1.0f);
         if (age < fadeTimer)
-            return opacity;
-        float fadeProgress = (age - fadeTimer) / fadeDuration;
-        fadeProgress = (std::min)(1.0f, fadeProgress);
-        return opacity * (1.0f - fadeProgress);
+            return baseOpacity;
+        if (!std::isfinite(fadeDuration) || fadeDuration <= 0.0f)
+            return 0.0f;
+        const float fadeProgress = std::clamp((age - fadeTimer) / fadeDuration, 0.0f, 1.0f);
+        return baseOpacity * (1.0f - fadeProgress);
     }
 
     // ============================================================================

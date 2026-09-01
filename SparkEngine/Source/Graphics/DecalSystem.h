@@ -75,19 +75,19 @@ namespace Spark::Graphics
 
     struct Decal
     {
-        XMFLOAT3 position;
-        XMFLOAT3 normal;      ///< Surface normal at hit point
-        XMFLOAT3 tangent;     ///< Tangent direction (for alignment)
-        XMFLOAT3 halfExtents; ///< Size of the decal OBB
-        float rotation;       ///< Random rotation around normal (radians)
-        float opacity;
-        float fadeTimer;    ///< Time remaining before fade starts
-        float fadeDuration; ///< How long to fade out
-        float age;          ///< Time since spawn
-        DecalType type;
-        SurfaceType surface;
-        const DecalMaterial* material;
-        bool active;
+        XMFLOAT3 position{};
+        XMFLOAT3 normal{0.0f, 1.0f, 0.0f};  ///< Surface normal at hit point
+        XMFLOAT3 tangent{1.0f, 0.0f, 0.0f}; ///< Tangent direction (for alignment)
+        XMFLOAT3 halfExtents{};             ///< Size of the decal OBB
+        float rotation = 0.0f;              ///< Random rotation around normal (radians)
+        float opacity = 1.0f;
+        float fadeTimer = 0.0f;    ///< Time remaining before fade starts
+        float fadeDuration = 0.0f; ///< How long to fade out
+        float age = 0.0f;          ///< Time since spawn
+        DecalType type = DecalType::Custom;
+        SurfaceType surface = SurfaceType::Default;
+        const DecalMaterial* material = nullptr;
+        bool active = false;
 
         XMMATRIX GetWorldMatrix() const;
         float GetCurrentOpacity() const;

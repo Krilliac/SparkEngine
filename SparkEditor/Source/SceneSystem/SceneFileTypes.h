@@ -112,7 +112,7 @@ namespace SparkEditor
  */
     struct Light
     {
-        enum Type
+        enum Type : int
         {
             DIRECTIONAL = 0,
             POINT = 1,
@@ -135,7 +135,7 @@ namespace SparkEditor
  */
     struct Camera
     {
-        enum ProjectionType
+        enum ProjectionType : int
         {
             PERSPECTIVE = 0,
             ORTHOGRAPHIC = 1
@@ -157,7 +157,7 @@ namespace SparkEditor
  */
     struct RigidBody
     {
-        enum BodyType
+        enum BodyType : int
         {
             STATIC = 0,
             KINEMATIC = 1,
@@ -185,7 +185,7 @@ namespace SparkEditor
  */
     struct Collider
     {
-        enum ColliderType
+        enum ColliderType : int
         {
             BOX = 0,
             SPHERE = 1,
@@ -1077,7 +1077,7 @@ namespace SparkEditor
     struct EnvironmentSettings
     {
         // Sky settings
-        enum SkyType
+        enum SkyType : int
         {
             SOLID_COLOR = 0,
             GRADIENT = 1,

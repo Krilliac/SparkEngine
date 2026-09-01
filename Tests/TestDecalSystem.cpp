@@ -2,6 +2,7 @@
 
 #include "TestFramework.h"
 #include "Graphics/DecalSystem.h"
+#include <limits>
 
 using namespace Spark::Graphics;
 
@@ -78,11 +79,43 @@ TEST(DecalSystem_ConsoleStatus)
 
 TEST(DecalSystem_DecalGetCurrentOpacity)
 {
-    Decal d;
+    Decal d{};
     d.opacity = 0.8f;
     d.active = true;
-    // Opacity may be affected by fade logic, just ensure it's valid
-    float opacity = d.GetCurrentOpacity();
-    EXPECT_GE(opacity, 0.0f);
-    EXPECT_LE(opacity, 1.0f);
+    d.fadeTimer = 2.0f;
+    d.fadeDuration = 4.0f;
+
+    d.age = 1.0f;
+    EXPECT_EQ(d.GetCurrentOpacity(), 0.8f);
+    d.age = 2.0f;
+    EXPECT_EQ(d.GetCurrentOpacity(), 0.8f);
+    d.age = 4.0f;
+    EXPECT_EQ(d.GetCurrentOpacity(), 0.4f);
+    d.age = 6.0f;
+    EXPECT_EQ(d.GetCurrentOpacity(), 0.0f);
+
+    d.active = false;
+    EXPECT_EQ(d.GetCurrentOpacity(), 0.0f);
+
+    d.active = true;
+    d.age = 0.0f;
+    d.fadeTimer = 0.0f;
+    d.fadeDuration = 0.0f;
+    EXPECT_EQ(d.GetCurrentOpacity(), 0.0f);
+    d.age = 1.0f;
+    d.fadeDuration = -1.0f;
+    EXPECT_EQ(d.GetCurrentOpacity(), 0.0f);
+    d.fadeDuration = std::numeric_limits<float>::infinity();
+    EXPECT_EQ(d.GetCurrentOpacity(), 0.0f);
+
+    d.fadeTimer = 2.0f;
+    d.fadeDuration = 4.0f;
+    d.age = 1.0f;
+    d.opacity = 2.0f;
+    EXPECT_EQ(d.GetCurrentOpacity(), 1.0f);
+    d.opacity = -1.0f;
+    EXPECT_EQ(d.GetCurrentOpacity(), 0.0f);
+    d.opacity = 0.8f;
+    d.age = std::numeric_limits<float>::quiet_NaN();
+    EXPECT_EQ(d.GetCurrentOpacity(), 0.0f);
 }
