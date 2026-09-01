@@ -1,0 +1,374 @@
+# This workflow owns the single exact-name check run used by the README badge.
+# The check is pending before evidence is read and succeeds only after the
+# existing publication gate authenticates both CI-120 and CodeQL evidence.
+name: "Trusted Exact-Source CI"
+
+on:
+  push:
+    branches: [Working]
+  workflow_run:
+    workflows: ["CI-120 Trusted Verifier", "CodeQL Trusted Reporter"]
+    types: [in_progress, completed]
+  schedule:
+  - cron: "17 * * * *"
+
+concurrency:
+  group: trusted-ci-aggregate
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  checks: write
+  contents: read
+  statuses: read
+
+jobs:
+  exact-source:
+    name: "Require exact CI-120 and CodeQL evidence"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Checkout current trusted Working source
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ${{ github.repository }}
+        ref: Working
+        path: trusted-source
+        persist-credentials: false
+        fetch-depth: 1
+
+    - name: Resolve trusted source commit
+      id: trusted-source
+      shell: bash
+      run: echo "sha=$(git -C trusted-source rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+    - name: Attest executing workflow and current Working source
+      id: trusted-attestation
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        TRUSTED_SOURCE_SHA: ${{ steps.trusted-source.outputs.sha }}
+        TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
+        TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      with:
+        script: |
+          const sha = /^[0-9a-f]{40}$/i;
+          const repository = (await github.rest.repos.get(context.repo)).data;
+          const currentWorking = (await github.rest.repos.getCommit({
+            ...context.repo, ref: 'Working'
+          })).data;
+          const checkoutSha = String(process.env.TRUSTED_SOURCE_SHA || '').toLowerCase();
+          const workflowSha = String(process.env.TRUSTED_WORKFLOW_SHA || '').toLowerCase();
+          const expectedRef = `${repository.full_name}/.github/workflows/trusted-ci-aggregate.yml@refs/heads/Working`;
+          if (repository.default_branch !== 'Working' || !sha.test(checkoutSha) ||
+              !sha.test(workflowSha) || checkoutSha !== workflowSha ||
+              checkoutSha !== String(currentWorking.sha || '').toLowerCase() ||
+              process.env.TRUSTED_WORKFLOW_REF !== expectedRef) {
+            throw new Error('Aggregate workflow, checkout, and current Working source are not exact.');
+          }
+
+    - name: Create pending exact-source badge check
+      id: badge-check
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+      with:
+        script: |
+          const name = 'Trusted Exact-Source CI Aggregate';
+          const targetSha = String(process.env.TARGET_SHA || '').toLowerCase();
+          const detailsUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          const externalId = `sparkengine-trusted-ci:${context.repo.owner}/${context.repo.repo}:${targetSha}:${context.runId}:${process.env.GITHUB_RUN_ATTEMPT}`;
+          const response = await github.rest.checks.create({
+            ...context.repo,
+            name,
+            head_sha: targetSha,
+            status: 'in_progress',
+            started_at: new Date().toISOString(),
+            details_url: detailsUrl,
+            external_id: externalId,
+            output: {
+              title: 'Trusted exact-source evidence is pending',
+              summary: 'CI-120 and CodeQL evidence must both pass the exact-source publication gate.'
+            }
+          });
+          const check = response.data;
+          if (!Number.isInteger(check?.id) || check.id < 1 || check.name !== name ||
+              String(check.head_sha || '').toLowerCase() !== targetSha ||
+              check.status !== 'in_progress' || check.external_id !== externalId ||
+              check.details_url !== detailsUrl || check.app?.slug !== 'github-actions') {
+            throw new Error('GitHub did not create the exact pending badge check.');
+          }
+          core.setOutput('check-id', String(check.id));
+
+    - name: Verify both trusted exact-source evidence chains
+      id: exact-gate
+      if: github.event_name != 'workflow_run' || github.event.action == 'completed'
+      shell: bash
+      working-directory: trusted-source
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+      run: |
+        set -euo pipefail
+        EXACT_OUTPUT="${RUNNER_TEMP}/trusted-ci-exact-gate.env"
+        EXACT_STDOUT="${RUNNER_TEMP}/trusted-ci-exact-gate.txt"
+        : > "$EXACT_OUTPUT"
+        GITHUB_OUTPUT="$EXACT_OUTPUT" \
+          python3 .github/scripts/verify-exact-required-gate.py | tee "$EXACT_STDOUT"
+        test -s "$EXACT_OUTPUT"
+        test -s "$EXACT_STDOUT"
+
+    - name: Write exact trusted-CI receipt
+      id: write-receipt
+      if: steps.exact-gate.outcome == 'success'
+      shell: python
+      env:
+        TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+      run: |
+        import json
+        import os
+        from pathlib import Path
+
+        runner_temp = Path(os.environ["RUNNER_TEMP"])
+        evidence_path = runner_temp / "trusted-ci-exact-gate.env"
+        receipt_path = runner_temp / "trusted-ci-aggregate-receipt.json"
+        evidence = {}
+        for line in evidence_path.read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition("=")
+            if not separator or not key or key in evidence or "\r" in value or "\n" in value:
+                raise SystemExit("exact gate emitted malformed or duplicate evidence")
+            evidence[key] = value
+        required = {
+            "run_id", "run_attempt", "ci120_status_id", "verifier_run_id",
+            "receipt_artifact_id", "codeql_run_id", "codeql_run_attempt",
+            "codeql_status_id", "codeql_reporter_run_id",
+            "codeql_summary_artifact_id",
+        }
+        if not required.issubset(evidence):
+            raise SystemExit("exact gate receipt is missing required provenance")
+        receipt = {
+            "schemaVersion": 1,
+            "repository": os.environ["GITHUB_REPOSITORY"],
+            "workingSha": os.environ["TARGET_SHA"].lower(),
+            "aggregator": {
+                "runId": int(os.environ["GITHUB_RUN_ID"]),
+                "runAttempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+                "workflowRef": os.environ["GITHUB_WORKFLOW_REF"],
+                "workflowSha": os.environ["GITHUB_WORKFLOW_SHA"].lower(),
+            },
+            "exactGate": evidence,
+        }
+        receipt_path.write_text(
+            json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+    - name: Terminally revalidate current Working source
+      id: terminal-source
+      if: steps.write-receipt.outcome == 'success'
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+      with:
+        script: |
+          const currentWorking = (await github.rest.repos.getCommit({
+            ...context.repo, ref: 'Working'
+          })).data;
+          if (String(currentWorking.sha || '').toLowerCase() !==
+              String(process.env.TARGET_SHA || '').toLowerCase()) {
+            throw new Error('Working advanced while trusted-CI evidence was being aggregated.');
+          }
+
+    - name: Upload exact trusted-CI receipt
+      id: upload-receipt
+      if: steps.terminal-source.outcome == 'success'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: trusted-ci-aggregate-${{ steps.trusted-source.outputs.sha }}-${{ github.run_attempt }}
+        path: |
+          ${{ runner.temp }}/trusted-ci-aggregate-receipt.json
+          ${{ runner.temp }}/trusted-ci-exact-gate.txt
+        retention-days: 30
+        if-no-files-found: error
+
+    - name: Terminally reverify both exact evidence chains
+      id: terminal-gate
+      if: steps.upload-receipt.outcome == 'success'
+      shell: bash
+      working-directory: trusted-source
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+      run: |
+        set -euo pipefail
+        FINAL_OUTPUT="${RUNNER_TEMP}/trusted-ci-final-gate.env"
+        FINAL_STDOUT="${RUNNER_TEMP}/trusted-ci-final-gate.txt"
+        : > "$FINAL_OUTPUT"
+        GITHUB_OUTPUT="$FINAL_OUTPUT" \
+          python3 .github/scripts/verify-exact-required-gate.py | tee "$FINAL_STDOUT"
+        cmp "${RUNNER_TEMP}/trusted-ci-exact-gate.env" "$FINAL_OUTPUT"
+        test -s "$FINAL_STDOUT"
+
+    - name: Finalize exact-source badge check
+      if: always() && steps.badge-check.outputs.check-id != ''
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+        CHECK_ID: ${{ steps.badge-check.outputs.check-id }}
+        FINAL_GATE_OUTPUT: ${{ runner.temp }}/trusted-ci-final-gate.env
+        ATTESTATION_OUTCOME: ${{ steps.trusted-attestation.outcome }}
+        CREATE_OUTCOME: ${{ steps.badge-check.outcome }}
+        EXACT_GATE_OUTCOME: ${{ steps.exact-gate.outcome }}
+        WRITE_RECEIPT_OUTCOME: ${{ steps.write-receipt.outcome }}
+        TERMINAL_SOURCE_OUTCOME: ${{ steps.terminal-source.outcome }}
+        UPLOAD_RECEIPT_OUTCOME: ${{ steps.upload-receipt.outcome }}
+        TERMINAL_GATE_OUTCOME: ${{ steps.terminal-gate.outcome }}
+      with:
+        script: |
+          const fs = require('fs');
+          const name = 'Trusted Exact-Source CI Aggregate';
+          const targetSha = String(process.env.TARGET_SHA || '').toLowerCase();
+          const prefix = `sparkengine-trusted-ci:${context.repo.owner}/${context.repo.repo}:${targetSha}:`;
+          const detailsPrefix = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/`;
+          const expectedExternalId = `${prefix}${context.runId}:${process.env.GITHUB_RUN_ATTEMPT}`;
+          const expectedDetailsUrl = `${detailsPrefix}${context.runId}`;
+          const checkId = Number(process.env.CHECK_ID);
+          const outcomes = [
+            process.env.ATTESTATION_OUTCOME,
+            process.env.CREATE_OUTCOME,
+            process.env.EXACT_GATE_OUTCOME,
+            process.env.WRITE_RECEIPT_OUTCOME,
+            process.env.TERMINAL_SOURCE_OUTCOME,
+            process.env.UPLOAD_RECEIPT_OUTCOME,
+            process.env.TERMINAL_GATE_OUTCOME,
+          ];
+          const exactSuccess = outcomes.every(outcome => outcome === 'success');
+          const currentWorking = (await github.rest.repos.getCommit({
+            ...context.repo, ref: 'Working'
+          })).data;
+          const workingIsExact = String(currentWorking.sha || '').toLowerCase() === targetSha;
+          const conclusion = exactSuccess && workingIsExact ? 'success' : 'failure';
+
+          if (conclusion === 'success') {
+            const exactCheckResponse = await github.rest.checks.listForRef({
+              ...context.repo,
+              ref: targetSha,
+              check_name: name,
+              filter: 'all',
+              per_page: 100,
+            });
+            const exactChecks = exactCheckResponse.data?.check_runs;
+            if (!Array.isArray(exactChecks) || exactChecks.length < 1 || exactChecks.length > 100) {
+              throw new Error('Bounded exact-name check inventory is malformed.');
+            }
+            const current = exactChecks.filter(check => check.id === checkId);
+            const foreign = exactChecks.filter(check =>
+              check.name !== name ||
+              String(check.head_sha || '').toLowerCase() !== targetSha ||
+              !String(check.external_id || '').startsWith(prefix) ||
+              !String(check.details_url || '').startsWith(detailsPrefix) ||
+              check.app?.slug !== 'github-actions'
+            );
+            if (current.length !== 1 || foreign.length !== 0) {
+              throw new Error('Current pending badge check is not uniquely authenticated.');
+            }
+            for (const prior of exactChecks) {
+              if (prior.id === checkId ||
+                  (prior.status === 'completed' &&
+                   ['success', 'neutral'].includes(prior.conclusion))) {
+                continue;
+              }
+              await github.rest.checks.update({
+                ...context.repo,
+                check_run_id: prior.id,
+                status: 'completed',
+                conclusion: 'neutral',
+                completed_at: new Date().toISOString(),
+                output: {
+                  title: 'Superseded trusted-CI evaluation',
+                  summary: `Superseded by aggregate check ${checkId} for the same exact source.`
+                }
+              });
+            }
+
+            const finalEvidence = {};
+            for (const line of fs.readFileSync(process.env.FINAL_GATE_OUTPUT, 'utf8').split(/\r?\n/)) {
+              if (!line) continue;
+              const separator = line.indexOf('=');
+              const key = separator < 0 ? '' : line.slice(0, separator);
+              const value = separator < 0 ? '' : line.slice(separator + 1);
+              if (!key || Object.hasOwn(finalEvidence, key)) {
+                throw new Error('Terminal exact gate output is malformed or duplicated.');
+              }
+              finalEvidence[key] = value;
+            }
+            const requiredStatuses = new Map([
+              ['CI-120 Trusted / Exact Source', {
+                id: Number(finalEvidence.ci120_status_id),
+                targetUrl: finalEvidence.ci120_status_target_url,
+              }],
+              ['CodeQL Trusted / Exact Source', {
+                id: Number(finalEvidence.codeql_status_id),
+                targetUrl: finalEvidence.codeql_status_target_url,
+              }],
+            ]);
+            if ([...requiredStatuses.values()].some(expected =>
+              !Number.isInteger(expected.id) || expected.id < 1 || !expected.targetUrl)) {
+              throw new Error('Terminal exact gate did not emit both trusted status identities.');
+            }
+            const [finalWorkingResponse, currentBadgeResponse, statusesResponse] = await Promise.all([
+              github.rest.repos.getCommit({...context.repo, ref: 'Working'}),
+              github.rest.checks.get({...context.repo, check_run_id: checkId}),
+              github.rest.repos.listCommitStatusesForRef({
+                ...context.repo,
+                ref: targetSha,
+                per_page: 100,
+              }),
+            ]);
+            const finalWorking = finalWorkingResponse.data;
+            if (String(finalWorking.sha || '').toLowerCase() !== targetSha) {
+              throw new Error('Working advanced before the aggregate check could be finalized.');
+            }
+            const currentBadge = currentBadgeResponse.data;
+            if (currentBadge.id !== checkId || currentBadge.name !== name ||
+                currentBadge.status !== 'in_progress' ||
+                currentBadge.conclusion !== null ||
+                String(currentBadge.head_sha || '').toLowerCase() !== targetSha ||
+                currentBadge.external_id !== expectedExternalId ||
+                currentBadge.details_url !== expectedDetailsUrl ||
+                currentBadge.app?.slug !== 'github-actions') {
+              throw new Error('Current badge check changed before terminal success publication.');
+            }
+            const statuses = statusesResponse.data;
+            if (!Array.isArray(statuses) || statuses.length < 2 || statuses.length > 100) {
+              throw new Error('Terminal commit-status inventory is malformed or unbounded.');
+            }
+            for (const [statusContext, expected] of requiredStatuses) {
+              const matches = statuses.filter(status => status.context === statusContext);
+              const actual = matches[0];
+              if (!actual || actual.id !== expected.id || actual.state !== 'success' ||
+                  actual.target_url !== expected.targetUrl || actual.creator?.login !== 'github-actions[bot]' ||
+                  actual.creator?.id !== 41898282) {
+                throw new Error(`Trusted status ${statusContext} changed after terminal verification.`);
+              }
+            }
+          }
+
+          await github.rest.checks.update({
+            ...context.repo,
+            check_run_id: checkId,
+            status: 'completed',
+            conclusion,
+            completed_at: new Date().toISOString(),
+            output: {
+              title: conclusion === 'success'
+                ? 'Trusted exact-source evidence passed'
+                : 'Trusted exact-source evidence is incomplete or failed',
+              summary: conclusion === 'success'
+                ? 'Both CI-120 and CodeQL evidence chains passed the exact-source publication gate.'
+                : `Fail-closed aggregate outcomes: ${outcomes.join(', ')}; Working exact: ${workingIsExact}.`
+            }
+          });
+          if (conclusion !== 'success') {
+            core.setFailed('Trusted exact-source CI aggregate did not pass.');
+          }

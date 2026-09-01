@@ -18,6 +18,7 @@ RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
 RELEASE_RECOVERY_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-recovery.yml"
 LOC_COUNTER_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "loc-counter.yml"
 SITE_DATA_PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "site-data-publish.yml"
+TRUSTED_CI_AGGREGATE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "trusted-ci-aggregate.yml"
 README = REPO_ROOT / "README.md"
 TEST_COUNT_RATCHET = REPO_ROOT / ".github" / "test-count-ratchet.json"
 TESTS_CMAKE = REPO_ROOT / "Tests" / "CMakeLists.txt"
@@ -1217,17 +1218,63 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertNotIn("gh workflow run", self.loc_counter)
         self.assertIn("repository-metrics-source.json", self.loc_counter)
 
-    def test_readme_ci_badge_tracks_trusted_exact_source_status(self) -> None:
+    def test_readme_ci_badge_tracks_fail_closed_aggregate_workflow(self) -> None:
         self.assertIn(
-            "https://img.shields.io/github/checks-status/Krilliac/SparkEngine/Working"
-            "?style=flat-square&label=CI",
+            "https://img.shields.io/github/check-runs/Krilliac/SparkEngine/Working"
+            "?nameFilter=Trusted%20Exact-Source%20CI%20Aggregate"
+            "&style=flat-square&label=CI",
             self.readme,
         )
-        self.assertNotIn(
-            "https://img.shields.io/github/actions/workflow/status/"
-            "Krilliac/SparkEngine/build.yml",
-            self.readme,
+        self.assertNotIn("github/checks-status", self.readme)
+        self.assertNotIn("trusted-ci-aggregate.yml/badge.svg", self.readme)
+
+    def test_trusted_ci_badge_workflow_is_exact_and_fail_closed(self) -> None:
+        aggregate = TRUSTED_CI_AGGREGATE_WORKFLOW.read_text(encoding="utf-8")
+        header = aggregate[: aggregate.index("jobs:")]
+        self.assertIn('name: "Trusted Exact-Source CI"', aggregate)
+        self.assertIn("push:\n    branches: [Working]", header)
+        self.assertIn(
+            'workflows: ["CI-120 Trusted Verifier", "CodeQL Trusted Reporter"]',
+            header,
         )
+        self.assertIn("types: [in_progress, completed]", header)
+        self.assertNotIn("workflow_dispatch:", header)
+        self.assertIn("schedule:", header)
+        self.assertIn("group: trusted-ci-aggregate", header)
+        self.assertIn("cancel-in-progress: false", header)
+        self.assertEqual(aggregate.count("actions: read"), 1)
+        self.assertEqual(aggregate.count("contents: read"), 1)
+        self.assertEqual(aggregate.count("statuses: read"), 1)
+        self.assertEqual(aggregate.count("checks: write"), 1)
+        self.assertNotRegex(aggregate, r"(?m)^\s+(?:actions|contents|statuses): write\s*$")
+        self.assertIn("ref: Working", aggregate)
+        self.assertIn("persist-credentials: false", aggregate)
+        self.assertIn("github.workflow_sha", aggregate)
+        self.assertIn("refs/heads/Working", aggregate)
+        self.assertIn("verify-exact-required-gate.py", aggregate)
+        self.assertIn("TARGET_SHA", aggregate)
+        self.assertIn("GH_TOKEN", aggregate)
+        self.assertIn("Upload exact trusted-CI receipt", aggregate)
+        self.assertIn("Create pending exact-source badge check", aggregate)
+        self.assertIn("Finalize exact-source badge check", aggregate)
+        self.assertIn("Trusted Exact-Source CI Aggregate", aggregate)
+        self.assertIn("conclusion: 'neutral'", aggregate)
+        self.assertIn("exactSuccess && workingIsExact ? 'success' : 'failure'", aggregate)
+        self.assertIn("conclusion,", aggregate)
+        self.assertIn("per_page: 100", aggregate)
+        self.assertIn("prior.status === 'completed'", aggregate)
+        self.assertIn("['success', 'neutral'].includes(prior.conclusion)", aggregate)
+        self.assertIn("github.event.action == 'completed'", aggregate)
+        self.assertIn("app?.slug !== 'github-actions'", aggregate)
+        self.assertIn("details_url", aggregate)
+        self.assertIn("trusted-ci-final-gate.env", aggregate)
+        self.assertIn("listCommitStatusesForRef", aggregate)
+        self.assertIn("ci120_status_id", aggregate)
+        self.assertIn("codeql_status_id", aggregate)
+        self.assertIn("currentBadge.status !== 'in_progress'", aggregate)
+        self.assertIn("currentBadge.conclusion !== null", aggregate)
+        self.assertNotIn("continue-on-error", aggregate)
+        self.assertNotIn("|| true", aggregate)
 
     def test_site_data_accepts_only_exact_staged_build_and_writes_a_tag(self) -> None:
         self.assertEqual(self.site_data_publish.count("--staged-build-only"), 1)

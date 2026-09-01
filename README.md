@@ -4,7 +4,7 @@ A C++23 open-source 3D game engine with multiple graphics backends behind a shar
 
 > 🌐 **Website now live:** [sparkengine.dev](https://sparkengine.dev/)
 
-[![Trusted exact-source CI](https://img.shields.io/github/checks-status/Krilliac/SparkEngine/Working?style=flat-square&label=CI)](https://github.com/Krilliac/SparkEngine/actions)
+[![Trusted exact-source CI](https://img.shields.io/github/check-runs/Krilliac/SparkEngine/Working?nameFilter=Trusted%20Exact-Source%20CI%20Aggregate&style=flat-square&label=CI)](https://github.com/Krilliac/SparkEngine/actions/workflows/trusted-ci-aggregate.yml)
 [![Test definitions](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Ftests.json&style=flat-square)](Tests)
 [![C++ lines of code](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Floc.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
 [![Source files](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Ffiles.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
