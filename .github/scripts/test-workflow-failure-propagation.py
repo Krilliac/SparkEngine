@@ -1312,8 +1312,11 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "if: always() && steps.trusted-attestation.outcome == 'success'",
             reaper,
         )
-        self.assertIn("check.status !== 'in_progress'", reaper)
+        self.assertIn("check.status === 'in_progress'", reaper)
+        self.assertIn("isCompletedSuccess", reaper)
+        self.assertIn("run.conclusion === 'success'", reaper)
         self.assertIn("getWorkflowRunAttempt", reaper)
+        self.assertIn("attempt_number: runAttempt", reaper)
         self.assertIn("conclusion: 'neutral'", reaper)
         neutralizer = named_step(aggregate, "Neutralize superseded exact-source badge check")
         self.assertIn("conclusion: 'neutral'", neutralizer)
@@ -1326,6 +1329,11 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "steps.terminal-publication-readiness.outputs.ready == 'true'",
             finalize_badge,
         )
+        self.assertIn(
+            "current.status === 'completed' && current.conclusion === 'neutral'",
+            finalize_badge,
+        )
+        self.assertNotIn("if (current.status === 'completed') return", finalize_badge)
         finalize_status = named_step(aggregate, "Finalize exact aggregate status")
         self.assertIn(
             "if: always() && steps.aggregate-status.outputs.status-id != '' && "
@@ -1339,6 +1347,19 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("if (state !== 'success')", finalize_status)
         self.assertIn("state: 'success'", finalize_status)
         self.assertIn("pendingDescription", finalize_status)
+        self.assertIn("neutralizePublishedCheck", finalize_status)
+        self.assertIn("CHECK_ID", finalize_status)
+        self.assertIn(
+            "current.status === 'completed' && current.conclusion === 'neutral'",
+            finalize_status,
+        )
+        self.assertIn("catch (error)", finalize_status)
+        self.assertIn("Aggregate evaluation or publication was uncertain", finalize_status)
+        self.assertIn("aggregateSuccessPublished = true", finalize_status)
+        self.assertIn("Post-publication reporter identity changed", finalize_status)
+        self.assertIn("Post-publication aggregate success identity changed", finalize_status)
+        self.assertIn("publishedAggregate.id", finalize_status)
+        self.assertIn("aggregate was superseded after publication", finalize_status)
         self.assertNotIn("state: 'failure'", finalize_status)
         self.assertIn("per_page: 100", aggregate)
         self.assertIn("prior.status === 'completed'", aggregate)

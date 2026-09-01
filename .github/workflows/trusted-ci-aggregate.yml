@@ -132,7 +132,10 @@ jobs:
                 check.app?.slug !== 'github-actions') {
               throw new Error('Exact-name abandoned-check inventory contains an unauthenticated check.');
             }
-            if (check.status !== 'in_progress') continue;
+            const isInProgress = check.status === 'in_progress';
+            const isCompletedSuccess = check.status === 'completed' &&
+              check.conclusion === 'success';
+            if (!isInProgress && !isCompletedSuccess) continue;
             const run = (await github.rest.actions.getWorkflowRunAttempt({
               ...context.repo,
               run_id: runId,
@@ -150,6 +153,7 @@ jobs:
                 run.head_repository?.full_name !== repository.full_name) {
               throw new Error('Abandoned check does not belong to an exact completed aggregate run.');
             }
+            if (isCompletedSuccess && run.conclusion === 'success') continue;
             const updated = (await github.rest.checks.update({
               ...context.repo,
               check_run_id: check.id,
@@ -158,7 +162,9 @@ jobs:
               completed_at: new Date().toISOString(),
               output: {
                 title: 'Abandoned trusted-CI evaluation reaped',
-                summary: 'A later serialized aggregate run safely neutralized this incomplete check.'
+                summary: isCompletedSuccess
+                  ? 'The owning aggregate run did not complete successfully, so its check was neutralized.'
+                  : 'A later serialized aggregate run safely neutralized this incomplete check.'
               }
             })).data;
             if (updated.id !== check.id || updated.status !== 'completed' ||
@@ -484,8 +490,9 @@ jobs:
                 current.details_url !== expectedDetailsUrl || current.app?.slug !== 'github-actions') {
               throw new Error('Current badge check cannot be safely neutralized.');
             }
-            if (current.status === 'completed') return;
-            if (current.status !== 'in_progress' || current.conclusion !== null) {
+            if (current.status === 'completed' && current.conclusion === 'neutral') return;
+            if (!['in_progress', 'completed'].includes(current.status) ||
+                (current.status === 'in_progress' && current.conclusion !== null)) {
               throw new Error('Current badge check is not in a neutralizable state.');
             }
             const updated = (await github.rest.checks.update({
@@ -689,6 +696,7 @@ jobs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
         TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+        CHECK_ID: ${{ steps.badge-check.outputs.check-id }}
         PENDING_STATUS_ID: ${{ steps.aggregate-status.outputs.status-id }}
         PENDING_TARGET_URL: ${{ steps.aggregate-status.outputs.target-url }}
         FINAL_GATE_OUTPUT: ${{ runner.temp }}/trusted-ci-final-gate.env
@@ -706,8 +714,48 @@ jobs:
           const statusContract = require('./trusted-source/.github/scripts/trusted-ci-aggregate-status.js');
           const contextName = 'Trusted Exact-Source CI / Aggregate';
           const targetSha = String(process.env.TARGET_SHA || '').toLowerCase();
+          const checkId = Number(process.env.CHECK_ID);
           const pendingId = Number(process.env.PENDING_STATUS_ID);
           const pendingTargetUrl = process.env.PENDING_TARGET_URL;
+          const checkName = 'Trusted Exact-Source CI Aggregate';
+          const checkExternalId = `sparkengine-trusted-ci:${context.repo.owner}/${context.repo.repo}:${targetSha}:${context.runId}:${process.env.GITHUB_RUN_ATTEMPT}`;
+          const checkDetailsUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/runs/${checkId}`;
+          let aggregateSuccessPublished = false;
+          const neutralizePublishedCheck = async (summary, neutralizeFailure) => {
+            if (!Number.isInteger(checkId) || checkId < 1) return;
+            const current = (await github.rest.checks.get({
+              ...context.repo, check_run_id: checkId
+            })).data;
+            if (current.id !== checkId || current.name !== checkName ||
+                String(current.head_sha || '').toLowerCase() !== targetSha ||
+                current.external_id !== checkExternalId ||
+                current.details_url !== checkDetailsUrl || current.app?.slug !== 'github-actions') {
+              throw new Error('Published badge check cannot be safely neutralized.');
+            }
+            if (current.status === 'completed' && current.conclusion === 'neutral') return;
+            if (current.status === 'completed' && current.conclusion === 'failure' &&
+                !neutralizeFailure) return;
+            if (!['in_progress', 'completed'].includes(current.status) ||
+                (current.status === 'in_progress' && current.conclusion !== null)) {
+              throw new Error('Published badge check is not in a neutralizable state.');
+            }
+            const updated = (await github.rest.checks.update({
+              ...context.repo,
+              check_run_id: checkId,
+              status: 'completed',
+              conclusion: 'neutral',
+              completed_at: new Date().toISOString(),
+              output: {
+                title: 'Superseded trusted-CI publication',
+                summary,
+              }
+            })).data;
+            if (updated.id !== checkId || updated.status !== 'completed' ||
+                updated.conclusion !== 'neutral') {
+              throw new Error('GitHub did not neutralize the published badge check.');
+            }
+          };
+          try {
           const outcomes = [
             process.env.ATTESTATION_OUTCOME,
             process.env.PENDING_OUTCOME,
@@ -744,6 +792,10 @@ jobs:
             ],
           });
           if (!liveTerminal) {
+            await neutralizePublishedCheck(
+              'Reporter evidence returned to pending before aggregate publication.',
+              true
+            );
             core.notice('Reporter evidence returned to pending before aggregate publication.');
             return;
           }
@@ -756,18 +808,26 @@ jobs:
             ownPendingTargetUrl: pendingTargetUrl,
           });
           if (!ownsPendingLease) {
+            await neutralizePublishedCheck(
+              'A newer reporter pending sentinel superseded this aggregate publication.',
+              true
+            );
             core.notice('A newer reporter pending sentinel superseded this aggregate publication.');
             return;
           }
 
           if (state !== 'success') {
+            await neutralizePublishedCheck(
+              'Aggregate evaluation did not produce validated success.',
+              false
+            );
             core.setFailed(`Trusted exact-source aggregate status failed: ${outcomes.join(', ')}; Working exact: ${workingIsExact}.`);
             return;
           }
 
+          const exactEvidence = {};
           if (state === 'success') {
             const fs = require('fs');
-            const exactEvidence = {};
             for (const line of fs.readFileSync(process.env.FINAL_GATE_OUTPUT, 'utf8').split(/\r?\n/)) {
               if (!line) continue;
               const separator = line.indexOf('=');
@@ -795,7 +855,7 @@ jobs:
           }
 
           const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT}`;
-          await statusContract.publishValidatedTerminalStatus({
+          const publishedAggregate = await statusContract.publishValidatedTerminalStatus({
             createStatus: request => github.rest.repos.createCommitStatus(request),
             request: {...context.repo, sha: targetSha},
             state: 'success',
@@ -804,3 +864,103 @@ jobs:
             successDescription: `Trusted exact-source evidence passed for ${targetSha.slice(0, 12)}.`,
             pendingDescription: `Trusted exact-source aggregate publication is uncertain for ${targetSha.slice(0, 12)}.`,
           });
+          aggregateSuccessPublished = true;
+          const [postCombined, postListed] = await Promise.all([
+            github.rest.repos.getCombinedStatusForRef({
+              ...context.repo, ref: targetSha, per_page: 100,
+            }),
+            github.rest.repos.listCommitStatusesForRef({
+              ...context.repo, ref: targetSha, per_page: 100,
+            }),
+          ]);
+          statusContract.hasTerminalReporterSet({
+            combined: postCombined.data,
+            listed: postListed.data,
+            targetSha,
+            contexts: [
+              'CI-120 Trusted / Exact Source',
+              'CodeQL Trusted / Exact Source',
+            ],
+          });
+          const postAggregateMatches = postCombined.data.statuses.filter(
+            status => status.context === contextName
+          );
+          const postAggregateListed = postListed.data.find(
+            status => status.id === publishedAggregate.id
+          );
+          const expectedAggregateDescription =
+            `Trusted exact-source evidence passed for ${targetSha.slice(0, 12)}.`;
+          if (postAggregateMatches.length !== 1 ||
+              postAggregateMatches[0].id !== publishedAggregate.id ||
+              postAggregateMatches[0].state !== 'success' ||
+              postAggregateMatches[0].target_url !== targetUrl ||
+              postAggregateMatches[0].description !== expectedAggregateDescription ||
+              !postAggregateListed || postAggregateListed.context !== contextName ||
+              postAggregateListed.state !== 'success' ||
+              postAggregateListed.target_url !== targetUrl ||
+              postAggregateListed.description !== expectedAggregateDescription ||
+              postAggregateListed.creator?.login !== 'github-actions[bot]' ||
+              postAggregateListed.creator?.id !== 41898282) {
+            throw new Error('Post-publication aggregate success identity changed.');
+          }
+          const postExpected = new Map([
+            ['CI-120 Trusted / Exact Source', {
+              id: Number(exactEvidence.ci120_status_id),
+              targetUrl: exactEvidence.ci120_status_target_url,
+            }],
+            ['CodeQL Trusted / Exact Source', {
+              id: Number(exactEvidence.codeql_status_id),
+              targetUrl: exactEvidence.codeql_status_target_url,
+            }],
+          ]);
+          for (const [reporterContext, expected] of postExpected) {
+            const combinedMatches = postCombined.data.statuses.filter(
+              status => status.context === reporterContext
+            );
+            const listedMatch = postListed.data.find(status => status.id === expected.id);
+            if (combinedMatches.length !== 1 || combinedMatches[0].id !== expected.id ||
+                combinedMatches[0].state !== 'success' ||
+                combinedMatches[0].target_url !== expected.targetUrl || !listedMatch ||
+                listedMatch.context !== reporterContext || listedMatch.state !== 'success' ||
+                listedMatch.target_url !== expected.targetUrl ||
+                listedMatch.creator?.login !== 'github-actions[bot]' ||
+                listedMatch.creator?.id !== 41898282) {
+              throw new Error(`Post-publication reporter identity changed for ${reporterContext}.`);
+            }
+          }
+          } catch (error) {
+            const recoveryErrors = [];
+            if (aggregateSuccessPublished) {
+              try {
+                const recoveryTargetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT}`;
+                const recovery = await github.rest.repos.createCommitStatus({
+                  ...context.repo,
+                  sha: targetSha,
+                  state: 'pending',
+                  target_url: recoveryTargetUrl,
+                  description: `Trusted exact-source aggregate was superseded after publication for ${targetSha.slice(0, 12)}.`,
+                  context: contextName,
+                });
+                statusContract.validateCreatedStatus(recovery.data, {
+                  state: 'pending', context: contextName, targetUrl: recoveryTargetUrl
+                });
+              } catch (recoveryError) {
+                recoveryErrors.push(recoveryError);
+              }
+            }
+            try {
+              await neutralizePublishedCheck(
+                'Aggregate evaluation or publication was uncertain and failed closed.',
+                false
+              );
+            } catch (recoveryError) {
+              recoveryErrors.push(recoveryError);
+            }
+            if (recoveryErrors.length) {
+              throw new AggregateError(
+                [error, ...recoveryErrors],
+                'Aggregate publication failed and one or more compensations also failed.'
+              );
+            }
+            throw error;
+          }
