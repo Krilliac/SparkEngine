@@ -1220,12 +1220,11 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_readme_ci_badge_tracks_fail_closed_aggregate_workflow(self) -> None:
         self.assertIn(
-            "https://img.shields.io/github/check-runs/Krilliac/SparkEngine/Working"
-            "?nameFilter=Require%20exact%20CI-120%20and%20CodeQL%20evidence"
-            "&style=flat-square&label=CI",
+            "https://img.shields.io/github/check-suites/Krilliac/SparkEngine/Working"
+            "?style=flat-square&label=CI",
             self.readme,
         )
-        self.assertNotIn("nameFilter=Trusted%20Exact-Source%20CI%20Aggregate", self.readme)
+        self.assertNotIn("github/check-runs", self.readme)
         self.assertNotIn("github/checks-status", self.readme)
         self.assertNotIn("trusted-ci-aggregate.yml/badge.svg", self.readme)
 
