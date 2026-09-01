@@ -9,11 +9,13 @@
 #include "Utils/Validate.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cerrno>
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <limits>
 
 namespace Spark::Graphics
 {
@@ -144,54 +146,100 @@ namespace Spark::Graphics
 
     void TextureCompressor::CompressBlockBC7(const uint8_t* block4x4, uint8_t* output)
     {
-        // BC7 Mode 6: 2 RGBA endpoints, 4-bit indices, partition 0
-        // This is a simplified implementation for the most common mode
-
-        // Find min/max RGBA
-        uint8_t minC[4] = {255, 255, 255, 255};
-        uint8_t maxC[4] = {0, 0, 0, 0};
-        for (int i = 0; i < 16; ++i)
+        constexpr std::array<uint8_t, 16> weights = {0, 4, 9, 13, 17, 21, 26, 30, 34, 38, 43, 47, 51, 55, 60, 64};
+        uint8_t sourceEndpoints[2][4] = {{255, 255, 255, 255}, {0, 0, 0, 0}};
+        for (uint32_t texel = 0; texel < 16; ++texel)
         {
-            for (int c = 0; c < 4; ++c)
+            for (uint32_t channel = 0; channel < 4; ++channel)
             {
-                minC[c] = std::min(minC[c], block4x4[i * 4 + c]);
-                maxC[c] = std::max(maxC[c], block4x4[i * 4 + c]);
+                sourceEndpoints[0][channel] = std::min(sourceEndpoints[0][channel], block4x4[texel * 4 + channel]);
+                sourceEndpoints[1][channel] = std::max(sourceEndpoints[1][channel], block4x4[texel * 4 + channel]);
             }
         }
 
-        // Zero-fill output (16 bytes)
+        uint8_t endpoints[2][4]{};
+        uint8_t pbits[2]{};
+        for (uint32_t endpoint = 0; endpoint < 2; ++endpoint)
+        {
+            uint32_t bestError = std::numeric_limits<uint32_t>::max();
+            for (uint32_t pbit = 0; pbit < 2; ++pbit)
+            {
+                uint8_t candidate[4]{};
+                uint32_t error = 0;
+                for (uint32_t channel = 0; channel < 4; ++channel)
+                {
+                    const int source = sourceEndpoints[endpoint][channel];
+                    const int quantized = std::clamp((source - static_cast<int>(pbit) + 1) / 2, 0, 127);
+                    candidate[channel] = static_cast<uint8_t>(quantized);
+                    const int reconstructed = (quantized << 1) | static_cast<int>(pbit);
+                    const int delta = source - reconstructed;
+                    error += static_cast<uint32_t>(delta * delta);
+                }
+                if (error < bestError)
+                {
+                    bestError = error;
+                    pbits[endpoint] = static_cast<uint8_t>(pbit);
+                    std::copy(candidate, candidate + 4, endpoints[endpoint]);
+                }
+            }
+        }
+
+        std::array<uint8_t, 16> indices{};
+        for (uint32_t texel = 0; texel < 16; ++texel)
+        {
+            uint32_t bestError = std::numeric_limits<uint32_t>::max();
+            for (uint32_t index = 0; index < weights.size(); ++index)
+            {
+                uint32_t error = 0;
+                for (uint32_t channel = 0; channel < 4; ++channel)
+                {
+                    const uint32_t endpoint0 = (static_cast<uint32_t>(endpoints[0][channel]) << 1) | pbits[0];
+                    const uint32_t endpoint1 = (static_cast<uint32_t>(endpoints[1][channel]) << 1) | pbits[1];
+                    const uint32_t reconstructed =
+                        ((64u - weights[index]) * endpoint0 + weights[index] * endpoint1 + 32u) >> 6;
+                    const int delta = static_cast<int>(block4x4[texel * 4 + channel]) - static_cast<int>(reconstructed);
+                    error += static_cast<uint32_t>(delta * delta);
+                }
+                if (error < bestError)
+                {
+                    bestError = error;
+                    indices[texel] = static_cast<uint8_t>(index);
+                }
+            }
+        }
+
+        // Mode 6 stores the anchor index in three bits. Reverse the endpoint
+        // direction when necessary so texel zero remains representable.
+        if (indices[0] >= 8)
+        {
+            for (uint32_t channel = 0; channel < 4; ++channel)
+                std::swap(endpoints[0][channel], endpoints[1][channel]);
+            std::swap(pbits[0], pbits[1]);
+            for (auto& index : indices)
+                index = static_cast<uint8_t>(15 - index);
+        }
+
         std::memset(output, 0, 16);
-
-        // Mode 6: bit 6 set
-        output[0] = 0x40;
-
-        // Pack endpoints (7 bits per channel, 2 endpoints)
-        // Simplified: store quantized endpoints in bytes 1-8
-        for (int c = 0; c < 4; ++c)
+        uint32_t bitPosition = 0;
+        const auto writeBits = [&](uint32_t value, uint32_t bitCount)
         {
-            output[1 + c] = maxC[c];
-            output[5 + c] = minC[c];
-        }
-
-        // Assign 4-bit indices
-        for (int i = 0; i < 16; ++i)
-        {
-            float dist = 0.0f;
-            float range = 0.0f;
-            for (int c = 0; c < 4; ++c)
+            for (uint32_t bit = 0; bit < bitCount; ++bit, ++bitPosition)
             {
-                float d = static_cast<float>(block4x4[i * 4 + c]) - static_cast<float>(minC[c]);
-                float r = static_cast<float>(maxC[c]) - static_cast<float>(minC[c]);
-                dist += d;
-                range += r;
+                output[bitPosition / 8] |= static_cast<uint8_t>(((value >> bit) & 1u) << (bitPosition % 8));
             }
-            uint8_t idx = (range > 0) ? static_cast<uint8_t>(std::clamp(dist / range * 15.0f, 0.0f, 15.0f)) : 0;
-            int byteIdx = 9 + (i / 2);
-            if (i % 2 == 0)
-                output[byteIdx] |= (idx & 0x0F);
-            else
-                output[byteIdx] |= ((idx & 0x0F) << 4);
+        };
+
+        writeBits(0x40, 7); // Mode 6 one-hot selector.
+        for (uint32_t channel = 0; channel < 4; ++channel)
+        {
+            writeBits(endpoints[0][channel], 7);
+            writeBits(endpoints[1][channel], 7);
         }
+        writeBits(pbits[0], 1);
+        writeBits(pbits[1], 1);
+        writeBits(indices[0], 3);
+        for (uint32_t texel = 1; texel < indices.size(); ++texel)
+            writeBits(indices[texel], 4);
     }
 
     std::vector<uint8_t> TextureCompressor::GenerateMipLevel(const uint8_t* src, uint32_t srcW, uint32_t srcH)
