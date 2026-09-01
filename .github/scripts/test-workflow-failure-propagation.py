@@ -1218,6 +1218,11 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertNotIn("gh workflow run", self.loc_counter)
         self.assertIn("repository-metrics-source.json", self.loc_counter)
 
+    def test_generated_metrics_have_a_dedicated_publication_queue(self) -> None:
+        self.assertIn("  group: sparkengine-repository-metrics-publication", self.loc_counter)
+        self.assertIn("  cancel-in-progress: false", self.loc_counter)
+        self.assertNotIn("  group: sparkengine-publication-global", self.loc_counter)
+
     def test_readme_ci_badge_tracks_fail_closed_aggregate_workflow(self) -> None:
         self.assertIn("[![Trusted exact-source CI]", self.readme)
         self.assertIn(

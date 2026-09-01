@@ -23,7 +23,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: sparkengine-publication-global
+  group: sparkengine-repository-metrics-publication
   cancel-in-progress: false
 
 jobs:
