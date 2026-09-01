@@ -559,8 +559,8 @@ async function main() {
             sha: SHA,
             state: 'pending',
             target_url: `https://github.com/Krilliac/SparkEngine/actions/runs/${REPORTER_RUN_ID}/attempts/2`,
-            description: `Trusted exact-source aggregate is awaiting both reporters for ${SHA.slice(0, 12)}.`,
-            context: 'Trusted Exact-Source CI / Aggregate'
+            description: `Trusted CI-120 verification running for Build run ${RUN_ID}, attempt 1.`,
+            context: 'CI-120 Trusted / Exact Source'
         });
         assert.deepStrictEqual(pending.runtime.observed.statuses[1], {
             owner: 'Krilliac',
@@ -568,8 +568,8 @@ async function main() {
             sha: SHA,
             state: 'pending',
             target_url: `https://github.com/Krilliac/SparkEngine/actions/runs/${REPORTER_RUN_ID}/attempts/2`,
-            description: `Trusted CI-120 verification running for Build run ${RUN_ID}, attempt 1.`,
-            context: 'CI-120 Trusted / Exact Source'
+            description: `Trusted exact-source aggregate is awaiting both reporters for ${SHA.slice(0, 12)}.`,
+            context: 'Trusted Exact-Source CI / Aggregate'
         });
         assert.strictEqual(pending.runtime.observed.listRunRequests[0].event, undefined,
             'same-SHA suppression must span push and workflow_dispatch events');
@@ -666,19 +666,21 @@ async function main() {
         const successEnv = finalEnvironment(root);
         const success = await runMode(fixture('completed'), 'final', successEnv);
         assert.strictEqual(success.runtime.observed.failed.length, 0);
-        assert.strictEqual(success.runtime.observed.statuses.length, 2);
+        assert.strictEqual(success.runtime.observed.statuses.length, 3);
         assert.deepStrictEqual(success.runtime.observed.statuses[0], {
             owner: 'Krilliac',
             repo: 'SparkEngine',
             sha: SHA,
             state: 'pending',
             target_url: `https://github.com/Krilliac/SparkEngine/actions/runs/${REPORTER_RUN_ID}/attempts/2`,
-            description: `Trusted exact-source aggregate is awaiting both reporters for ${SHA.slice(0, 12)}.`,
-            context: 'Trusted Exact-Source CI / Aggregate'
+            description: `Trusted CI-120 verification running for Build run ${RUN_ID}, attempt 1.`,
+            context: 'CI-120 Trusted / Exact Source'
         });
-        assert.strictEqual(success.runtime.observed.statuses[1].state, 'success');
-        assert.strictEqual(success.runtime.observed.statuses[1].sha, SHA);
-        assert.strictEqual(success.runtime.observed.statuses[1].description,
+        assert.strictEqual(success.runtime.observed.statuses[1].context,
+            'Trusted Exact-Source CI / Aggregate');
+        assert.strictEqual(success.runtime.observed.statuses[2].state, 'success');
+        assert.strictEqual(success.runtime.observed.statuses[2].sha, SHA);
+        assert.strictEqual(success.runtime.observed.statuses[2].description,
             `Trusted CI-120 verified for Build run ${RUN_ID}, attempt 1.`);
         assert.strictEqual(success.result.evidenceState, 'verified');
         assert(fs.existsSync(successEnv.STATUS_RECORD_PATH));
@@ -691,7 +693,9 @@ async function main() {
         };
         const failedOutcome = await runMode(fixture('completed'), 'final', failedOutcomeEnv);
         assert.strictEqual(failedOutcome.runtime.observed.statuses[0].state, 'pending');
-        assert.strictEqual(failedOutcome.runtime.observed.statuses[1].state, 'failure');
+        assert.strictEqual(failedOutcome.runtime.observed.statuses[1].context,
+            'Trusted Exact-Source CI / Aggregate');
+        assert.strictEqual(failedOutcome.runtime.observed.statuses[2].state, 'failure');
         assert.strictEqual(failedOutcome.result.evidenceState, 'incomplete');
         assert(failedOutcome.runtime.observed.failed.some(message => message.includes('artifact download')));
 
@@ -701,7 +705,7 @@ async function main() {
         const badReceiptResult = await runMode(
             fixture('completed'), 'final', finalEnvironment(root, badReceiptMetadata, badReceipt));
         assert.strictEqual(badReceiptResult.runtime.observed.statuses[0].state, 'pending');
-        assert.strictEqual(badReceiptResult.runtime.observed.statuses[1].state, 'failure');
+        assert.strictEqual(badReceiptResult.runtime.observed.statuses[2].state, 'failure');
         assert(badReceiptResult.result.evidenceErrors.some(error => error.includes('does not bind')));
 
         const receiptMutations = [
@@ -725,7 +729,7 @@ async function main() {
             const rejected = await runMode(
                 fixture('completed'), 'final', finalEnvironment(root, metadata, receipt));
             assert.strictEqual(
-                rejected.runtime.observed.statuses[1].state,
+                rejected.runtime.observed.statuses[2].state,
                 'failure',
                 `final success must reject receipt mutation: ${label}`
             );
@@ -739,7 +743,7 @@ async function main() {
         assert.strictEqual(apiError.result.commitStatus.reason, 'api-error');
         assert.strictEqual(apiError.runtime.observed.statuses.length, 1);
         assert.strictEqual(apiError.runtime.observed.statuses[0].context,
-            'Trusted Exact-Source CI / Aggregate');
+            'CI-120 Trusted / Exact Source');
         assert(apiError.runtime.observed.failed.some(message => message.includes('status API failed')));
 
         console.log('ci120 exact-source commit status scenarios passed');

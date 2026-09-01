@@ -412,18 +412,30 @@ async function publishStatus(args, mode, state) {
         sha: inspection.sourceSha,
         state: 'pending',
         target_url: targetUrl,
-        description: `Trusted exact-source aggregate is awaiting both reporters for ${inspection.sourceSha.slice(0, 12)}.`,
-        context: AGGREGATE_STATUS_CONTEXT
+        description: `${DESCRIPTION_PREFIXES.pending} for Build run ${inspection.eventRun.id}, ` +
+            `attempt ${inspection.eventRun.run_attempt}.`,
+        context: STATUS_CONTEXT
     });
     await args.github.rest.repos.createCommitStatus({
         owner: inspection.owner,
         repo: inspection.repo,
         sha: inspection.sourceSha,
-        state,
+        state: 'pending',
         target_url: targetUrl,
-        description,
-        context: STATUS_CONTEXT
+        description: `Trusted exact-source aggregate is awaiting both reporters for ${inspection.sourceSha.slice(0, 12)}.`,
+        context: AGGREGATE_STATUS_CONTEXT
     });
+    if (state !== 'pending') {
+        await args.github.rest.repos.createCommitStatus({
+            owner: inspection.owner,
+            repo: inspection.repo,
+            sha: inspection.sourceSha,
+            state,
+            target_url: targetUrl,
+            description,
+            context: STATUS_CONTEXT
+        });
+    }
     return { performed: true, reason: 'published', targetSha: inspection.sourceSha,
         state, targetUrl, context: STATUS_CONTEXT };
 }

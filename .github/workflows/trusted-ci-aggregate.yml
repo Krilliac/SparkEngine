@@ -91,8 +91,133 @@ jobs:
           core.setOutput('status-id', String(status.id));
           core.setOutput('target-url', targetUrl);
 
+    - name: Reap abandoned exact-source badge checks
+      if: always() && steps.trusted-attestation.outcome == 'success' && steps.trusted-source.outputs.sha != ''
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+      with:
+        script: |
+          const name = 'Trusted Exact-Source CI Aggregate';
+          const targetSha = String(process.env.TARGET_SHA || '').toLowerCase();
+          const prefix = `sparkengine-trusted-ci:${context.repo.owner}/${context.repo.repo}:${targetSha}:`;
+          const detailsPrefix = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/runs/`;
+          const [response, repositoryResponse] = await Promise.all([
+            github.rest.checks.listForRef({
+              ...context.repo,
+              ref: targetSha,
+              check_name: name,
+              filter: 'all',
+              per_page: 100,
+            }),
+            github.rest.repos.get(context.repo),
+          ]);
+          const repository = repositoryResponse.data;
+          const checks = response.data?.check_runs;
+          if (!Array.isArray(checks) || !Number.isInteger(response.data?.total_count) ||
+              checks.length !== response.data.total_count || checks.length > 100) {
+            throw new Error('Bounded abandoned-check inventory is malformed or incomplete.');
+          }
+          for (const check of checks) {
+            const externalId = String(check.external_id || '');
+            const suffix = externalId.startsWith(prefix) ? externalId.slice(prefix.length) : '';
+            const parts = suffix.split(':');
+            const runId = parts.length === 2 && /^[1-9][0-9]*$/.test(parts[0])
+              ? Number(parts[0]) : NaN;
+            const runAttempt = parts.length === 2 && /^[1-9][0-9]*$/.test(parts[1])
+              ? Number(parts[1]) : NaN;
+            if (check.name !== name || String(check.head_sha || '').toLowerCase() !== targetSha ||
+                !Number.isSafeInteger(runId) || !Number.isSafeInteger(runAttempt) ||
+                String(check.details_url || '') !== `${detailsPrefix}${check.id}` ||
+                check.app?.slug !== 'github-actions') {
+              throw new Error('Exact-name abandoned-check inventory contains an unauthenticated check.');
+            }
+            if (check.status !== 'in_progress') continue;
+            const run = (await github.rest.actions.getWorkflowRun({
+              ...context.repo, run_id: runId
+            })).data;
+            const normalizedPath = String(run.path || '').split('@', 1)[0];
+            if (run.id !== runId || run.run_attempt !== runAttempt ||
+                run.name !== 'Trusted Exact-Source CI' ||
+                normalizedPath !== '.github/workflows/trusted-ci-aggregate.yml' ||
+                run.status !== 'completed' || run.head_branch !== 'Working' ||
+                String(run.head_sha || '').toLowerCase() !== targetSha ||
+                run.repository?.id !== repository.id ||
+                run.repository?.full_name !== repository.full_name ||
+                run.head_repository?.id !== repository.id ||
+                run.head_repository?.full_name !== repository.full_name) {
+              throw new Error('Abandoned check does not belong to an exact completed aggregate run.');
+            }
+            const updated = (await github.rest.checks.update({
+              ...context.repo,
+              check_run_id: check.id,
+              status: 'completed',
+              conclusion: 'neutral',
+              completed_at: new Date().toISOString(),
+              output: {
+                title: 'Abandoned trusted-CI evaluation reaped',
+                summary: 'A later serialized aggregate run safely neutralized this incomplete check.'
+              }
+            })).data;
+            if (updated.id !== check.id || updated.status !== 'completed' ||
+                updated.conclusion !== 'neutral') {
+              throw new Error('GitHub did not terminally neutralize the abandoned check.');
+            }
+          }
+
+    - name: Detect terminal-ready exact evidence
+      id: terminal-readiness
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+      with:
+        script: |
+          const statusContract = require('./trusted-source/.github/scripts/trusted-ci-aggregate-status.js');
+          const targetSha = String(process.env.TARGET_SHA || '').toLowerCase();
+          const [combinedResponse, listedResponse, repositoryResponse] = await Promise.all([
+            github.rest.repos.getCombinedStatusForRef({
+              ...context.repo, ref: targetSha, per_page: 100,
+            }),
+            github.rest.repos.listCommitStatusesForRef({
+              ...context.repo, ref: targetSha, per_page: 100,
+            }),
+            github.rest.repos.get(context.repo),
+          ]);
+          const terminal = statusContract.hasTerminalReporterSet({
+            combined: combinedResponse.data,
+            listed: listedResponse.data,
+            targetSha,
+            contexts: [
+              'CI-120 Trusted / Exact Source',
+              'CodeQL Trusted / Exact Source',
+            ],
+          });
+          let ready = false;
+          if (terminal && context.eventName === 'schedule') {
+            ready = true;
+          } else if (terminal && context.eventName === 'workflow_run') {
+            const eventRunId = Number(context.payload.workflow_run?.id);
+            const currentRun = Number.isSafeInteger(eventRunId) && eventRunId > 0
+              ? (await github.rest.actions.getWorkflowRun({
+                  ...context.repo, run_id: eventRunId
+                })).data
+              : null;
+            ready = statusContract.isExactCompletedReporterEvent({
+              combined: combinedResponse.data,
+              targetSha,
+              repository: repositoryResponse.data,
+              serverUrl: context.serverUrl,
+              action: context.payload.action,
+              payloadRepository: context.payload.repository,
+              workflowRun: context.payload.workflow_run,
+              currentRun,
+            });
+          }
+          core.setOutput('ready', ready ? 'true' : 'false');
+
     - name: Create pending exact-source badge check
       id: badge-check
+      if: steps.terminal-readiness.outputs.ready == 'true'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
         TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
@@ -125,7 +250,7 @@ jobs:
 
     - name: Verify both trusted exact-source evidence chains
       id: exact-gate
-      if: github.event_name != 'workflow_run' || github.event.action == 'completed'
+      if: steps.terminal-readiness.outputs.ready == 'true'
       shell: bash
       working-directory: trusted-source
       env:
@@ -233,9 +358,97 @@ jobs:
         cmp "${RUNNER_TEMP}/trusted-ci-exact-gate.env" "$FINAL_OUTPUT"
         test -s "$FINAL_STDOUT"
 
+    - name: Recheck terminal-ready exact evidence
+      id: terminal-publication-readiness
+      if: always() && steps.terminal-readiness.outputs.ready == 'true'
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+      with:
+        script: |
+          const statusContract = require('./trusted-source/.github/scripts/trusted-ci-aggregate-status.js');
+          const targetSha = String(process.env.TARGET_SHA || '').toLowerCase();
+          const [combinedResponse, listedResponse, repositoryResponse] = await Promise.all([
+            github.rest.repos.getCombinedStatusForRef({
+              ...context.repo, ref: targetSha, per_page: 100,
+            }),
+            github.rest.repos.listCommitStatusesForRef({
+              ...context.repo, ref: targetSha, per_page: 100,
+            }),
+            github.rest.repos.get(context.repo),
+          ]);
+          const terminal = statusContract.hasTerminalReporterSet({
+            combined: combinedResponse.data,
+            listed: listedResponse.data,
+            targetSha,
+            contexts: [
+              'CI-120 Trusted / Exact Source',
+              'CodeQL Trusted / Exact Source',
+            ],
+          });
+          let ready = terminal && context.eventName === 'schedule';
+          if (terminal && context.eventName === 'workflow_run') {
+            const eventRunId = Number(context.payload.workflow_run?.id);
+            const currentRun = Number.isSafeInteger(eventRunId) && eventRunId > 0
+              ? (await github.rest.actions.getWorkflowRun({
+                  ...context.repo, run_id: eventRunId
+                })).data
+              : null;
+            ready = statusContract.isExactCompletedReporterEvent({
+              combined: combinedResponse.data,
+              targetSha,
+              repository: repositoryResponse.data,
+              serverUrl: context.serverUrl,
+              action: context.payload.action,
+              payloadRepository: context.payload.repository,
+              workflowRun: context.payload.workflow_run,
+              currentRun,
+            });
+          }
+          core.setOutput('ready', ready ? 'true' : 'false');
+
+    - name: Neutralize superseded exact-source badge check
+      if: always() && steps.badge-check.outputs.check-id != '' && steps.terminal-publication-readiness.outputs.ready != 'true'
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
+        CHECK_ID: ${{ steps.badge-check.outputs.check-id }}
+      with:
+        script: |
+          const name = 'Trusted Exact-Source CI Aggregate';
+          const targetSha = String(process.env.TARGET_SHA || '').toLowerCase();
+          const checkId = Number(process.env.CHECK_ID);
+          const prefix = `sparkengine-trusted-ci:${context.repo.owner}/${context.repo.repo}:${targetSha}:`;
+          const expectedExternalId = `${prefix}${context.runId}:${process.env.GITHUB_RUN_ATTEMPT}`;
+          const expectedDetailsUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/runs/${checkId}`;
+          const check = (await github.rest.checks.get({
+            ...context.repo, check_run_id: checkId
+          })).data;
+          if (check.id !== checkId || check.name !== name || check.status !== 'in_progress' ||
+              check.conclusion !== null || String(check.head_sha || '').toLowerCase() !== targetSha ||
+              check.external_id !== expectedExternalId ||
+              check.details_url !== expectedDetailsUrl || check.app?.slug !== 'github-actions') {
+            throw new Error('Superseded badge check is not the authenticated in-progress check.');
+          }
+          const updated = (await github.rest.checks.update({
+            ...context.repo,
+            check_run_id: checkId,
+            status: 'completed',
+            conclusion: 'neutral',
+            completed_at: new Date().toISOString(),
+            output: {
+              title: 'Superseded trusted-CI evaluation',
+              summary: 'Reporter evidence returned to pending before terminal publication.'
+            }
+          })).data;
+          if (updated.id !== checkId || updated.status !== 'completed' ||
+              updated.conclusion !== 'neutral') {
+            throw new Error('GitHub did not neutralize the superseded badge check.');
+          }
+
     - name: Finalize exact-source badge check
       id: finalize-badge
-      if: always() && steps.badge-check.outputs.check-id != ''
+      if: always() && steps.badge-check.outputs.check-id != '' && steps.terminal-publication-readiness.outputs.ready == 'true'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
         TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
@@ -251,6 +464,7 @@ jobs:
       with:
         script: |
           const fs = require('fs');
+          const statusContract = require('./trusted-source/.github/scripts/trusted-ci-aggregate-status.js');
           const name = 'Trusted Exact-Source CI Aggregate';
           const targetSha = String(process.env.TARGET_SHA || '').toLowerCase();
           const prefix = `sparkengine-trusted-ci:${context.repo.owner}/${context.repo.repo}:${targetSha}:`;
@@ -258,6 +472,58 @@ jobs:
           const expectedExternalId = `${prefix}${context.runId}:${process.env.GITHUB_RUN_ATTEMPT}`;
           const checkId = Number(process.env.CHECK_ID);
           const expectedDetailsUrl = `${detailsPrefix}${checkId}`;
+          const neutralizeCurrent = async (title, summary) => {
+            const current = (await github.rest.checks.get({
+              ...context.repo, check_run_id: checkId
+            })).data;
+            if (current.id !== checkId || current.name !== name ||
+                String(current.head_sha || '').toLowerCase() !== targetSha ||
+                current.external_id !== expectedExternalId ||
+                current.details_url !== expectedDetailsUrl || current.app?.slug !== 'github-actions') {
+              throw new Error('Current badge check cannot be safely neutralized.');
+            }
+            if (current.status === 'completed') return;
+            if (current.status !== 'in_progress' || current.conclusion !== null) {
+              throw new Error('Current badge check is not in a neutralizable state.');
+            }
+            const updated = (await github.rest.checks.update({
+              ...context.repo,
+              check_run_id: checkId,
+              status: 'completed',
+              conclusion: 'neutral',
+              completed_at: new Date().toISOString(),
+              output: { title, summary }
+            })).data;
+            if (updated.id !== checkId || updated.status !== 'completed' ||
+                updated.conclusion !== 'neutral') {
+              throw new Error('GitHub did not neutralize the current badge check.');
+            }
+          };
+          try {
+          const [liveCombined, liveListed] = await Promise.all([
+            github.rest.repos.getCombinedStatusForRef({
+              ...context.repo, ref: targetSha, per_page: 100,
+            }),
+            github.rest.repos.listCommitStatusesForRef({
+              ...context.repo, ref: targetSha, per_page: 100,
+            }),
+          ]);
+          const liveTerminal = statusContract.hasTerminalReporterSet({
+            combined: liveCombined.data,
+            listed: liveListed.data,
+            targetSha,
+            contexts: [
+              'CI-120 Trusted / Exact Source',
+              'CodeQL Trusted / Exact Source',
+            ],
+          });
+          if (!liveTerminal) {
+            await neutralizeCurrent(
+              'Superseded trusted-CI evaluation',
+              'Reporter evidence returned to pending before check finalization.'
+            );
+            return;
+          }
           const outcomes = [
             process.env.ATTESTATION_OUTCOME,
             process.env.CREATE_OUTCOME,
@@ -379,7 +645,7 @@ jobs:
             }
           }
 
-          await github.rest.checks.update({
+          const finalized = (await github.rest.checks.update({
             ...context.repo,
             check_run_id: checkId,
             status: 'completed',
@@ -393,13 +659,31 @@ jobs:
                 ? 'Both CI-120 and CodeQL evidence chains passed the exact-source publication gate.'
                 : `Fail-closed aggregate outcomes: ${outcomes.join(', ')}; Working exact: ${workingIsExact}.`
             }
-          });
+          })).data;
+          if (finalized.id !== checkId || finalized.status !== 'completed' ||
+              finalized.conclusion !== conclusion) {
+            throw new Error('GitHub did not terminally finalize the exact badge check.');
+          }
           if (conclusion !== 'success') {
             core.setFailed('Trusted exact-source CI aggregate did not pass.');
           }
+          } catch (error) {
+            try {
+              await neutralizeCurrent(
+                'Trusted-CI finalization was interrupted',
+                'The check was neutralized because terminal evidence could not be safely finalized.'
+              );
+            } catch (recoveryError) {
+              throw new AggregateError(
+                [error, recoveryError],
+                'Badge finalization failed and its neutral recovery also failed.'
+              );
+            }
+            throw error;
+          }
 
     - name: Finalize exact aggregate status
-      if: always() && steps.aggregate-status.outputs.status-id != '' && (github.event_name != 'workflow_run' || github.event.action == 'completed')
+      if: always() && steps.aggregate-status.outputs.status-id != '' && steps.terminal-publication-readiness.outputs.ready == 'true'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
         TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
@@ -440,6 +724,45 @@ jobs:
           let state = outcomes.every(outcome => outcome === 'success') && workingIsExact
             ? 'success' : 'failure';
 
+          const [combinedResponse, listedResponse] = await Promise.all([
+            github.rest.repos.getCombinedStatusForRef({
+              ...context.repo, ref: targetSha, per_page: 100,
+            }),
+            github.rest.repos.listCommitStatusesForRef({
+              ...context.repo, ref: targetSha, per_page: 100,
+            }),
+          ]);
+          const liveTerminal = statusContract.hasTerminalReporterSet({
+            combined: combinedResponse.data,
+            listed: listedResponse.data,
+            targetSha,
+            contexts: [
+              'CI-120 Trusted / Exact Source',
+              'CodeQL Trusted / Exact Source',
+            ],
+          });
+          if (!liveTerminal) {
+            core.notice('Reporter evidence returned to pending before aggregate publication.');
+            return;
+          }
+          const ownsPendingLease = statusContract.hasCurrentPendingLease({
+            combined: combinedResponse.data,
+            listed: listedResponse.data,
+            context: contextName,
+            targetSha,
+            ownPendingId: pendingId,
+            ownPendingTargetUrl: pendingTargetUrl,
+          });
+          if (!ownsPendingLease) {
+            core.notice('A newer reporter pending sentinel superseded this aggregate publication.');
+            return;
+          }
+
+          if (state !== 'success') {
+            core.setFailed(`Trusted exact-source aggregate status failed: ${outcomes.join(', ')}; Working exact: ${workingIsExact}.`);
+            return;
+          }
+
           if (state === 'success') {
             const fs = require('fs');
             const exactEvidence = {};
@@ -458,14 +781,6 @@ jobs:
               exactEvidence.ci120_status_target_url,
               exactEvidence.codeql_status_target_url,
             ]);
-            const [combinedResponse, listedResponse] = await Promise.all([
-              github.rest.repos.getCombinedStatusForRef({
-                ...context.repo, ref: targetSha, per_page: 100,
-              }),
-              github.rest.repos.listCommitStatusesForRef({
-                ...context.repo, ref: targetSha, per_page: 100,
-              }),
-            ]);
             statusContract.validateLatestPendingStatus({
               combined: combinedResponse.data,
               listed: listedResponse.data,
@@ -478,20 +793,12 @@ jobs:
           }
 
           const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT}`;
-          const response = await github.rest.repos.createCommitStatus({
-            ...context.repo,
-            sha: targetSha,
-            state,
-            target_url: targetUrl,
-            description: state === 'success'
-              ? `Trusted exact-source evidence passed for ${targetSha.slice(0, 12)}.`
-              : `Trusted exact-source evidence is incomplete for ${targetSha.slice(0, 12)}.`,
+          await statusContract.publishValidatedTerminalStatus({
+            createStatus: request => github.rest.repos.createCommitStatus(request),
+            request: {...context.repo, sha: targetSha},
+            state: 'success',
             context: contextName,
+            targetUrl,
+            successDescription: `Trusted exact-source evidence passed for ${targetSha.slice(0, 12)}.`,
+            pendingDescription: `Trusted exact-source aggregate publication is uncertain for ${targetSha.slice(0, 12)}.`,
           });
-          const status = response.data;
-          statusContract.validateCreatedStatus(status, {
-            state, context: contextName, targetUrl
-          });
-          if (state !== 'success') {
-            core.setFailed(`Trusted exact-source aggregate status failed: ${outcomes.join(', ')}; Working exact: ${workingIsExact}.`);
-          }
