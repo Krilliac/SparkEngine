@@ -3,86 +3,144 @@
     "initialized": true,
     "baseTotal": 0,
     "baseInstallerTotal": 0,
-    "total": 3,
-    "installerTotal": 3,
+    "total": 16,
+    "installerTotal": 11,
     "assets": [
         {
             "id": 530455809,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Windows-AMD64-Release.zip",
-            "downloadCount": 0
+            "downloadCount": 2,
+            "digest": "sha256:16a1ea8c8b44837f933b52bde9356fb610d578f89c563d5a6da4cc5f5d4b57f3",
+            "state": "uploaded"
         },
         {
             "id": 530455812,
             "releaseId": 376952823,
             "name": "SparkInstaller-Linux-x64",
-            "downloadCount": 0
+            "downloadCount": 0,
+            "digest": "sha256:6010b06fcd84a6c2b502286688c0e08c71f9d603444ef66ea1f96016207c8a47",
+            "state": "uploaded"
         },
         {
             "id": 530455813,
             "releaseId": 376952823,
             "name": "SparkInstaller-macOS-arm64",
-            "downloadCount": 0
+            "downloadCount": 0,
+            "digest": "sha256:5215a1a9c1f6e9808fe4d72d4df9a3d0f2c3fa671bb04fe63342e1b9854dc3b2",
+            "state": "uploaded"
         },
         {
             "id": 530455814,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Linux-x86_64-Debug.tar.gz",
-            "downloadCount": 0
+            "downloadCount": 0,
+            "digest": "sha256:158bcea655eb590d538740126ac82bb11cd795e07e937d9bce857e5fb3f5180c",
+            "state": "uploaded"
         },
         {
             "id": 530455815,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Windows-AMD64-Debug-Runtime.msi",
-            "downloadCount": 0
+            "downloadCount": 0,
+            "digest": "sha256:a30165ea8273a086ac59f993c6352f5f2136f228240ef7f6b5076ed6c391a880",
+            "state": "uploaded"
         },
         {
             "id": 530455816,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Windows-AMD64-Debug.zip",
-            "downloadCount": 0
+            "downloadCount": 1,
+            "digest": "sha256:0c4731b7e28425d9937714787767a5ea0f2c61191bd3e79790b5ab2827f8297e",
+            "state": "uploaded"
         },
         {
             "id": 530455817,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Windows-AMD64-Release-Runtime.exe",
-            "downloadCount": 0
+            "downloadCount": 1,
+            "digest": "sha256:ce0db59259ba56a4f9e538bc754180ab6aa10711366be6c5f8f51ba2654c0419",
+            "state": "uploaded"
         },
         {
             "id": 530455818,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Linux-x86_64-Debug.zip",
-            "downloadCount": 0
+            "downloadCount": 0,
+            "digest": "sha256:8efb05653deed700d9e69752860e80c1f2e71a728f2f937754bc601140feb743",
+            "state": "uploaded"
         },
         {
             "id": 530455819,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Linux-x86_64-Release.tar.gz",
-            "downloadCount": 0
+            "downloadCount": 0,
+            "digest": "sha256:4e2d25ee797aa2c8efc3b23729bd5354bdf4bf38c1281b009b0b7969f37f5a44",
+            "state": "uploaded"
         },
         {
             "id": 530455820,
             "releaseId": 376952823,
             "name": "SparkInstaller-Windows-x64.exe",
-            "downloadCount": 3
+            "downloadCount": 7,
+            "digest": "sha256:d4e5881aef2f019a10e35252b8e2b686b8b640044a45ad712fb582f47941fde7",
+            "state": "uploaded"
         },
         {
             "id": 530455821,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Linux-x86_64-Release.zip",
-            "downloadCount": 0
+            "downloadCount": 0,
+            "digest": "sha256:3d799d9244315974e77278f2da44c432a6d32cfe05eb75b007a7c29c974e5656",
+            "state": "uploaded"
         },
         {
             "id": 530455822,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Windows-AMD64-Release-Runtime.msi",
-            "downloadCount": 0
+            "downloadCount": 0,
+            "digest": "sha256:052394f8a28a1542a93b5570eeb8021eadcbf0eb72296958a42410a20b3af806",
+            "state": "uploaded"
         },
         {
             "id": 530455829,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Windows-AMD64-Debug-Runtime.exe",
-            "downloadCount": 0
+            "downloadCount": 1,
+            "digest": "sha256:e5478a7bd53b90ba0df54004c9dd4c715ded2613833dcd4397f998745d2bf158",
+            "state": "uploaded"
+        },
+        {
+            "id": 538826338,
+            "releaseId": 376952823,
+            "name": "SparkEngine-Windows-x64-Release-Installer.exe",
+            "downloadCount": 1,
+            "digest": "sha256:ce0db59259ba56a4f9e538bc754180ab6aa10711366be6c5f8f51ba2654c0419",
+            "state": "uploaded"
+        },
+        {
+            "id": 538827113,
+            "releaseId": 376952823,
+            "name": "SparkEngine-Windows-x64-Release.zip",
+            "downloadCount": 1,
+            "digest": "sha256:16a1ea8c8b44837f933b52bde9356fb610d578f89c563d5a6da4cc5f5d4b57f3",
+            "state": "uploaded"
+        },
+        {
+            "id": 538846445,
+            "releaseId": 376952823,
+            "name": "SparkEngine-Windows-x64-Debug-Installer.exe",
+            "downloadCount": 1,
+            "digest": "sha256:e5478a7bd53b90ba0df54004c9dd4c715ded2613833dcd4397f998745d2bf158",
+            "state": "uploaded"
+        },
+        {
+            "id": 538847551,
+            "releaseId": 376952823,
+            "name": "SparkEngine-Windows-x64-Debug.zip",
+            "downloadCount": 1,
+            "digest": "sha256:0c4731b7e28425d9937714787767a5ea0f2c61191bd3e79790b5ab2827f8297e",
+            "state": "uploaded"
         }
     ],
     "liveAssetIds": [
@@ -98,8 +156,12 @@
         530455820,
         530455821,
         530455822,
-        530455829
+        530455829,
+        538826338,
+        538827113,
+        538846445,
+        538847551
     ],
     "pending": null,
-    "updated": "2026-08-31T22:35:06Z"
+    "updated": "2026-09-01T03:22:33Z"
 }
