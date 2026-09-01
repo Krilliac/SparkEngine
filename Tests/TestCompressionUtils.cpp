@@ -27,7 +27,8 @@ namespace
         std::vector<uint8_t> output(4 + input.size());
         uint32_t size = static_cast<uint32_t>(input.size());
         std::memcpy(output.data(), &size, 4);
-        std::memcpy(output.data() + 4, input.data(), input.size());
+        if (!input.empty())
+            std::memcpy(output.data() + 4, input.data(), input.size());
         return output;
     }
 
