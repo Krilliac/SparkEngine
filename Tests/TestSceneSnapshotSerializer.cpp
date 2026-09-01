@@ -187,10 +187,9 @@ TEST(SceneSnapshotSerializer_Validate_GoodHeader)
 
 TEST(SceneSnapshotSerializer_SerializeNoComponents)
 {
-    // With no registered component serializers, serialize should still produce valid data
-    auto& registry = Spark::Editor::ComponentSerializerRegistry::Instance();
-    // Note: registry may have entries from other tests, but Serialize should still work
-    auto data = Spark::Editor::SceneSnapshotSerializer::Serialize(nullptr, 10);
+    // An empty registry has no component instances even when serializers are globally registered.
+    entt::registry registry;
+    auto data = Spark::Editor::SceneSnapshotSerializer::Serialize(&registry, 0);
 
     EXPECT_TRUE(data.size() >= 16);
     EXPECT_TRUE(Spark::Editor::SceneSnapshotSerializer::Validate(data));
