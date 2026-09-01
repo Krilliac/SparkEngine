@@ -1235,6 +1235,16 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertNotIn("github/check-suites", self.readme)
         self.assertNotIn("trusted-ci-aggregate.yml/badge.svg", self.readme)
 
+    def test_trusted_aggregate_commit_status_live_response_shapes(self) -> None:
+        result = subprocess.run(
+            ["node", ".github/scripts/test-trusted-ci-aggregate-status.js"],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_trusted_ci_badge_workflow_is_exact_and_fail_closed(self) -> None:
         aggregate = TRUSTED_CI_AGGREGATE_WORKFLOW.read_text(encoding="utf-8")
         header = aggregate[: aggregate.index("jobs:")]
@@ -1272,6 +1282,10 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("Mark exact aggregate status pending", aggregate)
         self.assertIn("Finalize exact aggregate status", aggregate)
         self.assertIn("Trusted Exact-Source CI / Aggregate", aggregate)
+        self.assertIn("trusted-ci-aggregate-status.js", aggregate)
+        self.assertIn("getCombinedStatusForRef", aggregate)
+        self.assertIn("listCommitStatusesForRef", aggregate)
+        self.assertNotIn("status.sha", aggregate)
         finalize_status = named_step(aggregate, "Finalize exact aggregate status")
         self.assertIn(
             "if: always() && steps.aggregate-status.outputs.status-id != '' && "

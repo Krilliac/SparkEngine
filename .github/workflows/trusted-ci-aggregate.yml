@@ -72,6 +72,7 @@ jobs:
         TARGET_SHA: ${{ steps.trusted-source.outputs.sha }}
       with:
         script: |
+          const statusContract = require('./trusted-source/.github/scripts/trusted-ci-aggregate-status.js');
           const contextName = 'Trusted Exact-Source CI / Aggregate';
           const targetSha = String(process.env.TARGET_SHA || '').toLowerCase();
           const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT}`;
@@ -84,12 +85,9 @@ jobs:
             context: contextName,
           });
           const status = response.data;
-          if (!Number.isInteger(status?.id) || status.id < 1 || status.state !== 'pending' ||
-              status.context !== contextName || status.target_url !== targetUrl ||
-              String(status.sha || '').toLowerCase() !== targetSha ||
-              status.creator?.login !== 'github-actions[bot]' || status.creator?.id !== 41898282) {
-            throw new Error('GitHub did not create the exact pending aggregate status.');
-          }
+          statusContract.validateCreatedStatus(status, {
+            state: 'pending', context: contextName, targetUrl
+          });
           core.setOutput('status-id', String(status.id));
           core.setOutput('target-url', targetUrl);
 
@@ -419,6 +417,7 @@ jobs:
         BADGE_FINALIZE_OUTCOME: ${{ steps.finalize-badge.outcome }}
       with:
         script: |
+          const statusContract = require('./trusted-source/.github/scripts/trusted-ci-aggregate-status.js');
           const contextName = 'Trusted Exact-Source CI / Aggregate';
           const targetSha = String(process.env.TARGET_SHA || '').toLowerCase();
           const pendingId = Number(process.env.PENDING_STATUS_ID);
@@ -459,30 +458,23 @@ jobs:
               exactEvidence.ci120_status_target_url,
               exactEvidence.codeql_status_target_url,
             ]);
-            const response = await github.rest.repos.getCombinedStatusForRef({
-              ...context.repo,
-              ref: targetSha,
-              per_page: 100,
+            const [combinedResponse, listedResponse] = await Promise.all([
+              github.rest.repos.getCombinedStatusForRef({
+                ...context.repo, ref: targetSha, per_page: 100,
+              }),
+              github.rest.repos.listCommitStatusesForRef({
+                ...context.repo, ref: targetSha, per_page: 100,
+              }),
+            ]);
+            statusContract.validateLatestPendingStatus({
+              combined: combinedResponse.data,
+              listed: listedResponse.data,
+              context: contextName,
+              targetSha,
+              ownPendingId: pendingId,
+              ownPendingTargetUrl: pendingTargetUrl,
+              authorizedTargetUrls: [...authorizedPendingTargets],
             });
-            const statuses = response.data?.statuses;
-            const total = response.data?.total_count;
-            const aggregate = Array.isArray(statuses)
-              ? statuses.filter(status => status.context === contextName) : [];
-            const ownPendingIsExact = aggregate[0]?.target_url === pendingTargetUrl
-              ? aggregate[0]?.id === pendingId : true;
-            const descriptionIsExact = aggregate[0]?.description ===
-                `Trusted exact-source aggregate is evaluating ${targetSha.slice(0, 12)}.` ||
-              aggregate[0]?.description ===
-                `Trusted exact-source aggregate is awaiting both reporters for ${targetSha.slice(0, 12)}.`;
-            if (!Number.isInteger(total) || !Array.isArray(statuses) || total !== statuses.length ||
-                statuses.length > 100 || aggregate.length < 1 || !ownPendingIsExact ||
-                aggregate[0].state !== 'pending' ||
-                !authorizedPendingTargets.has(aggregate[0].target_url) || !descriptionIsExact ||
-                String(aggregate[0].sha || '').toLowerCase() !== targetSha ||
-                aggregate[0].creator?.login !== 'github-actions[bot]' ||
-                aggregate[0].creator?.id !== 41898282) {
-              throw new Error('The pending aggregate status is incomplete, stale, or unauthenticated.');
-            }
           }
 
           const targetUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT}`;
@@ -497,12 +489,9 @@ jobs:
             context: contextName,
           });
           const status = response.data;
-          if (!Number.isInteger(status?.id) || status.id < 1 || status.state !== state ||
-              status.context !== contextName || status.target_url !== targetUrl ||
-              String(status.sha || '').toLowerCase() !== targetSha ||
-              status.creator?.login !== 'github-actions[bot]' || status.creator?.id !== 41898282) {
-            throw new Error('GitHub did not create the exact terminal aggregate status.');
-          }
+          statusContract.validateCreatedStatus(status, {
+            state, context: contextName, targetUrl
+          });
           if (state !== 'success') {
             core.setFailed(`Trusted exact-source aggregate status failed: ${outcomes.join(', ')}; Working exact: ${workingIsExact}.`);
           }
