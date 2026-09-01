@@ -445,7 +445,8 @@ TEST(TFAccountSystem_PBKDF2Scheme_StoredHashAndVerify)
 TEST(TFDatabase_CorruptFile_QuarantinedNotWiped)
 {
     namespace fs = std::filesystem;
-    const std::string path = "Saves/test_tfdb_corrupt.db";
+    const fs::path path = fs::path("Saves") / "test_tfdb_corrupt.db";
+    fs::create_directories(path.parent_path());
     fs::remove(path);
 
     // Write garbage (valid JSON, but not an object — a JSON array) where a db
@@ -457,7 +458,9 @@ TEST(TFDatabase_CorruptFile_QuarantinedNotWiped)
     const std::string garbage = "[1,2,3]";
     {
         std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        ASSERT_TRUE(out.is_open());
         out << garbage;
+        ASSERT_TRUE(out.good());
     }
 
     TFDatabase db;
@@ -693,11 +696,14 @@ TEST(TFDatabase_MissingPrimaryWithRecoveryBackupFailsClosed)
     namespace fs = std::filesystem;
     const fs::path path = fs::path("Saves") / "test_tfdb_missing_primary.db";
     const fs::path backup = fs::path(path.string() + ".corrupt-legacy.bak");
+    fs::create_directories(path.parent_path());
     fs::remove(path);
     fs::remove(backup);
     {
-        std::ofstream out(backup, std::ios::binary);
+        std::ofstream out(backup, std::ios::binary | std::ios::trunc);
+        ASSERT_TRUE(out.is_open());
         out << "corrupt legacy primary";
+        ASSERT_TRUE(out.good());
     }
 
     TFDatabase db;
