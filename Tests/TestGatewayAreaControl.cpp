@@ -16,8 +16,10 @@
 #include <cstring>
 #include <atomic>
 #include <filesystem>
+#include <fstream>
 #include <future>
 #include <memory>
+#include <thread>
 
 using namespace Spark::Gateway;
 
@@ -102,6 +104,100 @@ TEST(GatewayAreaControl_LiveLoopbackIsIdempotentAndPersistsEpochFence)
     EXPECT_TRUE(client.Prepare(next) == HandoffOperationResult::Applied);
     restarted.Stop();
     std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_RetriesTransientStateReplaceSharingViolation)
+{
+#ifndef _WIN32
+    SKIP_TEST("Windows atomic-replace sharing regression");
+#else
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-state-sharing") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    {
+        std::ofstream initial(state);
+        ASSERT_TRUE(initial.good());
+    }
+
+    const std::vector<uint8_t> key(32, 0x4e);
+    const uint16_t controlPort = UniquePort(62);
+    const std::string endpoint = "spark-area-control-" + std::to_string(controlPort);
+    LocalAreaControlService service(endpoint, key, state);
+    ASSERT_TRUE(service.Start());
+
+    HANDLE held = CreateFileW(state.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL, nullptr);
+    ASSERT_TRUE(held != INVALID_HANDLE_VALUE);
+    std::jthread releaseHeld(
+        [held]
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            CloseHandle(held);
+        });
+
+    AreaEndpoint area;
+    area.host = "127.0.0.1";
+    area.area.interServerPort = controlPort;
+    LocalAreaControlPlane client(key);
+    client.RegisterEndpoint(7, area);
+    const HandoffCommand command{"sharing-retry", 1, 7, 7};
+    EXPECT_TRUE(client.Prepare(command) == HandoffOperationResult::Applied);
+    releaseHeld.join();
+    service.Stop();
+
+    LocalAreaControlService restarted(endpoint, key, state);
+    ASSERT_TRUE(restarted.Start());
+    EXPECT_TRUE(client.Prepare(command) == HandoffOperationResult::Duplicate);
+    restarted.Stop();
+    std::filesystem::remove(state, error);
+#endif
+}
+
+TEST(GatewayAreaControl_RecoversWhenClientDisconnectsBeforeAccept)
+{
+#ifndef _WIN32
+    SKIP_TEST("Windows named-pipe recovery regression");
+#else
+    const auto state =
+        std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-preaccept-disconnect") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x5e);
+    const uint16_t controlPort = UniquePort(61);
+    const std::string endpoint = "spark-area-control-" + std::to_string(controlPort);
+    LocalAreaControlService service(endpoint, key, state);
+    ASSERT_TRUE(service.Start());
+
+    const std::wstring pipe = L"\\\\.\\pipe\\" + std::wstring(endpoint.begin(), endpoint.end());
+    for (int attempt = 0; attempt < 32; ++attempt)
+    {
+        HANDLE rawClient = INVALID_HANDLE_VALUE;
+        for (int retry = 0; retry < 50 && rawClient == INVALID_HANDLE_VALUE; ++retry)
+        {
+            rawClient = CreateFileW(pipe.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+            if (rawClient == INVALID_HANDLE_VALUE)
+            {
+                WaitNamedPipeW(pipe.c_str(), 20);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        }
+        ASSERT_TRUE(rawClient != INVALID_HANDLE_VALUE);
+        CloseHandle(rawClient);
+    }
+
+    AreaEndpoint area;
+    area.host = "127.0.0.1";
+    area.area.interServerPort = controlPort;
+    LocalAreaControlPlane client(key);
+    client.RegisterEndpoint(7, area);
+    EXPECT_TRUE(client.IsReady());
+    const HandoffCommand command{"preaccept-recovery", 1, 7, 7};
+    EXPECT_TRUE(client.Prepare(command) == HandoffOperationResult::Applied);
+    EXPECT_TRUE(client.Transfer(command) == HandoffOperationResult::Applied);
+    EXPECT_TRUE(client.Commit(command) == HandoffOperationResult::Applied);
+    service.Stop();
+    std::filesystem::remove(state, error);
+#endif
 }
 
 TEST(GatewayAreaControl_RequiresExactIPv4LoopbackHost)

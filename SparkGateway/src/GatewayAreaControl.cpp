@@ -29,6 +29,7 @@
 #include <limits>
 #include <sstream>
 #include <system_error>
+#include <thread>
 
 namespace Spark::Gateway
 {
@@ -36,6 +37,7 @@ namespace Spark::Gateway
     {
         constexpr uint16_t ResponseFlag = 0x100;
         constexpr auto LocalIoTimeout = std::chrono::seconds(2);
+        constexpr auto AtomicReplaceTimeout = std::chrono::milliseconds(1500);
 
         std::string NormalizeLocalEndpoint(std::string endpoint)
         {
@@ -281,9 +283,7 @@ namespace Spark::Gateway
                 errno = EINVAL;
                 return -1;
             }
-            struct stat existing
-            {
-            };
+            struct stat existing{};
             if (::lstat(endpoint.c_str(), &existing) == 0)
             {
                 if (!S_ISSOCK(existing.st_mode) || existing.st_uid != ::geteuid())
@@ -326,12 +326,8 @@ namespace Spark::Gateway
 
         void UnlinkOwnedEndpoint(const std::string& endpoint, int listener)
         {
-            struct stat pathStatus
-            {
-            };
-            struct stat listenerStatus
-            {
-            };
+            struct stat pathStatus{};
+            struct stat listenerStatus{};
             if (::lstat(endpoint.c_str(), &pathStatus) == 0 && ::fstat(listener, &listenerStatus) == 0 &&
                 pathStatus.st_dev == listenerStatus.st_dev && pathStatus.st_ino == listenerStatus.st_ino)
                 (void)::unlink(endpoint.c_str());
@@ -355,6 +351,23 @@ namespace Spark::Gateway
             if (!error && std::filesystem::is_symlink(targetStatus))
                 return false;
 #ifdef _WIN32
+            const auto isTransientReplaceContention = [&](DWORD moveError)
+            {
+                if (moveError == ERROR_SHARING_VIOLATION || moveError == ERROR_LOCK_VIOLATION)
+                    return true;
+                if (moveError != ERROR_ACCESS_DENIED)
+                    return false;
+                HANDLE deleteProbe = ::CreateFileW(
+                    target.c_str(), DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+                if (deleteProbe != INVALID_HANDLE_VALUE)
+                {
+                    ::CloseHandle(deleteProbe);
+                    return false;
+                }
+                const DWORD probeError = ::GetLastError();
+                return probeError == ERROR_SHARING_VIOLATION || probeError == ERROR_LOCK_VIOLATION;
+            };
             const DWORD targetAttributes = ::GetFileAttributesW(target.c_str());
             if (targetAttributes != INVALID_FILE_ATTRIBUTES && (targetAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
                 return false;
@@ -388,13 +401,43 @@ namespace Spark::Gateway
                 }
                 offset += static_cast<size_t>(count);
             }
-            wrote = wrote && ::FlushFileBuffers(file) != 0;
+            if (wrote && !::FlushFileBuffers(file))
+                wrote = false;
             ::CloseHandle(file);
-            if (!wrote ||
-                !::MoveFileExW(temporary.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            if (!wrote)
             {
                 (void)::DeleteFileW(temporary.c_str());
                 return false;
+            }
+            const auto replaceDeadline = std::chrono::steady_clock::now() + AtomicReplaceTimeout;
+            while (
+                !::MoveFileExW(temporary.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            {
+                const DWORD moveError = ::GetLastError();
+                if (!isTransientReplaceContention(moveError) || std::chrono::steady_clock::now() >= replaceDeadline)
+                {
+                    (void)::DeleteFileW(temporary.c_str());
+                    return false;
+                }
+                const DWORD currentAttributes = ::GetFileAttributesW(target.c_str());
+                if (currentAttributes != INVALID_FILE_ATTRIBUTES)
+                {
+                    if ((currentAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+                    {
+                        (void)::DeleteFileW(temporary.c_str());
+                        return false;
+                    }
+                }
+                else
+                {
+                    const DWORD attributeError = ::GetLastError();
+                    if (attributeError != ERROR_FILE_NOT_FOUND && attributeError != ERROR_PATH_NOT_FOUND)
+                    {
+                        (void)::DeleteFileW(temporary.c_str());
+                        return false;
+                    }
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
             return true;
 #else
@@ -843,7 +886,12 @@ namespace Spark::Gateway
             const bool connected = connectedCall || connectError == ERROR_PIPE_CONNECTED;
             if (!connected)
             {
-                if (connectError == ERROR_PIPE_LISTENING || connectError == ERROR_NO_DATA)
+                if (connectError == ERROR_NO_DATA)
+                {
+                    DisconnectNamedPipe(pipe);
+                    continue;
+                }
+                if (connectError == ERROR_PIPE_LISTENING)
                     std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 continue;
             }
