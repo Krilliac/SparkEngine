@@ -92,7 +92,10 @@ namespace
                 e.compSize = static_cast<uint32_t>(data.size());
                 e.origSize = static_cast<uint32_t>(data.size());
                 e.path = vpath;
-                std::fwrite(data.data(), 1, data.size(), f);
+                if (!data.empty())
+                {
+                    std::fwrite(data.data(), 1, data.size(), f);
+                }
                 toc.push_back(std::move(e));
             }
 
@@ -122,7 +125,10 @@ namespace
             hdr.tocOffset = static_cast<uint64_t>(std::ftell(f));
             hdr.tocSize = static_cast<uint32_t>(tocRaw.size());
             hdr.tocRawSize = hdr.tocSize; // uncompressed TOC
-            std::fwrite(tocRaw.data(), 1, tocRaw.size(), f);
+            if (!tocRaw.empty())
+            {
+                std::fwrite(tocRaw.data(), 1, tocRaw.size(), f);
+            }
 
             // Rewrite header
             std::fseek(f, 0, SEEK_SET);

@@ -1,28 +1,83 @@
 diff --git a/include/angelscript.h b/include/angelscript.h
-index dbfe0d21..69833fc7 100644
+index dbfe0d2..bb83cde 100644
 --- a/include/angelscript.h
 +++ b/include/angelscript.h
-@@ -2012,7 +2012,14 @@ const asSBCInfo asBCInfo[256] =
+@@ -2010,9 +2010,18 @@ const asSBCInfo asBCInfo[256] =
+ // Macros to access bytecode instruction arguments
+ #define asBC_DWORDARG(x)  (*(((asDWORD*)x)+1))
  #define asBC_INTARG(x)    (*(int*)(((asDWORD*)x)+1))
- #define asBC_QWORDARG(x)  (*(asQWORD*)(((asDWORD*)x)+1))
+-#define asBC_QWORDARG(x)  (*(asQWORD*)(((asDWORD*)x)+1))
  #define asBC_FLOATARG(x)  (*(float*)(((asDWORD*)x)+1))
 -#define asBC_PTRARG(x)    (*(asPWORD*)(((asDWORD*)x)+1))
 +#if defined(_MSC_VER)
 +#pragma pack(push, 1)
++struct asQWORD_UNALIGNED { asQWORD value; };
 +struct asPWORD_UNALIGNED { asPWORD value; };
 +#pragma pack(pop)
 +#else
++struct __attribute__((packed, may_alias)) asQWORD_UNALIGNED { asQWORD value; };
 +struct __attribute__((packed, may_alias)) asPWORD_UNALIGNED { asPWORD value; };
 +#endif
++#define asBC_QWORDARG(x)  (((asQWORD_UNALIGNED*)(((asDWORD*)x)+1))->value)
 +#define asBC_PTRARG(x)    (((asPWORD_UNALIGNED*)(((asDWORD*)x)+1))->value)
  #define asBC_WORDARG0(x)  (*(((asWORD*)x)+1))
  #define asBC_WORDARG1(x)  (*(((asWORD*)x)+2))
  #define asBC_SWORDARG0(x) (*(((short*)x)+1))
+diff --git a/source/as_bytecode.cpp b/source/as_bytecode.cpp
+index 02ce2ae..b31b886 100644
+--- a/source/as_bytecode.cpp
++++ b/source/as_bytecode.cpp
+@@ -1974,7 +1974,7 @@ void asCByteCode::Output(asDWORD *array)
+ 			case asBCTYPE_wW_QW_ARG:
+ 			case asBCTYPE_rW_QW_ARG:
+ 				*(((asWORD*)ap)+1) = instr->wArg[0];
+-				*(asQWORD*)(ap+1) = asQWORD(instr->arg);
++				asBC_QWORDARG(ap) = asQWORD(instr->arg);
+ 				break;
+ 			case asBCTYPE_W_ARG:
+ 			case asBCTYPE_rW_ARG:
 diff --git a/source/as_restore.cpp b/source/as_restore.cpp
-index 60caf371..175ee0ac 100644
+index 60caf37..c4ac9ca 100644
 --- a/source/as_restore.cpp
 +++ b/source/as_restore.cpp
-@@ -2916,8 +2916,8 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
+@@ -1084,7 +1084,8 @@ void asCReader::ReadFunctionSignature(asCScriptFunction *func, asCObjectType **p
+ 		error = true;
+ 		return;
+ 	}
+-	memset(func->inOutFlags.AddressOf(), 0, sizeof(asETypeModifiers)*func->inOutFlags.GetLength());
++	if( func->inOutFlags.GetLength() > 0 )
++		memset(func->inOutFlags.AddressOf(), 0, sizeof(asETypeModifiers)*func->inOutFlags.GetLength());
+ 	if (func->parameterTypes.GetLength() > 0)
+ 	{
+ 		count = ReadEncodedUInt();
+@@ -2659,7 +2660,7 @@ void asCReader::ReadByteCode(asCScriptFunction *func)
+ 
+ 				// Read the argument
+ 				asQWORD qw = ReadEncodedUInt64();
+-				*(asQWORD*)bc = qw;
++				memcpy(bc, &qw, sizeof(qw));
+ 				bc += 2;
+ 			}
+ 			break;
+@@ -2670,7 +2671,7 @@ void asCReader::ReadByteCode(asCScriptFunction *func)
+ 
+ 				// Read the first argument
+ 				asQWORD qw = ReadEncodedUInt64();
+-				*(asQWORD*)bc = qw;
++				memcpy(bc, &qw, sizeof(qw));
+ 				bc += 2;
+ 
+ 				// Read the second argument
+@@ -2690,7 +2691,7 @@ void asCReader::ReadByteCode(asCScriptFunction *func)
+ 
+ 				// Read the argument
+ 				asQWORD qw = ReadEncodedUInt64();
+-				*(asQWORD*)bc = qw;
++				memcpy(bc, &qw, sizeof(qw));
+ 				bc += 2;
+ 			}
+ 			break;
+@@ -2916,8 +2917,8 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
  			c == asBC_OBJTYPE )
  		{
  			// Translate the index to the true object type
@@ -33,13 +88,13 @@ index 60caf371..175ee0ac 100644
  		}
  		else if( c == asBC_TYPEID ||
  			     c == asBC_Cast )
-@@ -3008,14 +3008,14 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
+@@ -3008,14 +3009,14 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
  		else if( c == asBC_FuncPtr )
  		{
  			// Translate the index to the func pointer
 -			asPWORD *fid = (asPWORD*)&bc[n+1];
-+			asPWORD fid = asBC_PTRARG(&bc[n]);
 -			*fid = (asPWORD)FindFunction(int(*fid));
++			asPWORD fid = asBC_PTRARG(&bc[n]);
 +			asBC_PTRARG(&bc[n]) = (asPWORD)FindFunction(int(fid));
  		}
  		else if( c == asBC_ALLOC )
@@ -52,13 +107,13 @@ index 60caf371..175ee0ac 100644
  
  			// The constructor function id must be translated, unless it is zero
  			int *fid = (int*)&bc[n+1+AS_PTR_SIZE];
-@@ -3068,11 +3068,11 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
+@@ -3068,11 +3069,11 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
  				 c == asBC_SetG4    )
  		{
  			// Translate the index to pointer
 -			asPWORD *index = (asPWORD*)&bc[n + 1];
-+			asPWORD index = asBC_PTRARG(&bc[n]);
 -			if ((*index & 1))
++			asPWORD index = asBC_PTRARG(&bc[n]);
 +			if ((index & 1))
  			{
 -				if ((asUINT(*index)>>1) < usedGlobalProperties.GetLength())
@@ -68,7 +123,8 @@ index 60caf371..175ee0ac 100644
  				else
  				{
  					Error(TXT_INVALID_BYTECODE_d);
-@@ -3085,7 +3085,7 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
+@@ -3084,8 +3085,8 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
+ 				// Only PGA and PshGPtr can hold string constants
  				asASSERT(c == asBC_PGA || c == asBC_PshGPtr);
  
 -				if ((asUINT(*index)>>1) < usedStringConstants.GetLength())
@@ -78,7 +134,7 @@ index 60caf371..175ee0ac 100644
  				else
  				{
  					Error(TXT_INVALID_BYTECODE_d);
-@@ -3138,10 +3138,10 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
+@@ -3138,10 +3139,10 @@ void asCReader::TranslateFunction(asCScriptFunction *func)
  		else if( c == asBC_FREE )
  		{
  			// Translate the index to the true object type
@@ -92,7 +148,7 @@ index 60caf371..175ee0ac 100644
  			if( ot && (ot->flags & asOBJ_LIST_PATTERN) )
  			{
  				if( listAdjusters.GetLength() == 0 )
-@@ -5172,8 +5172,8 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+@@ -5172,8 +5173,8 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
  		if( c == asBC_ALLOC ) // PTR_DW_ARG
  		{
  			// Translate the object type
@@ -103,7 +159,7 @@ index 60caf371..175ee0ac 100644
  
  			// Translate the constructor func id, unless it is 0
  			if( *(int*)&tmpBC[1+AS_PTR_SIZE] != 0 )
-@@ -5187,12 +5187,12 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+@@ -5187,12 +5188,12 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
  				 c == asBC_OBJTYPE )  // PTR_ARG
  		{
  			// Translate object type pointers into indices
@@ -118,7 +174,7 @@ index 60caf371..175ee0ac 100644
  		}
  		else if( c == asBC_TYPEID || // DW_ARG
  			     c == asBC_Cast )    // DW_ARG
-@@ -5252,7 +5252,7 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+@@ -5252,7 +5253,7 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
  		else if( c == asBC_FuncPtr ) // PTR_ARG
  		{
  			// Translate the function pointer
@@ -127,7 +183,7 @@ index 60caf371..175ee0ac 100644
  		}
  		else if( c == asBC_CALLBND ) // DW_ARG
  		{
-@@ -5277,12 +5277,12 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+@@ -5277,12 +5278,12 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
  				 c == asBC_SetG4    )  // PTR_DW_ARG
  		{
  			// Check if the address is a global property or a string constant
@@ -142,7 +198,7 @@ index 60caf371..175ee0ac 100644
  			}
  			else
  			{
-@@ -5291,7 +5291,7 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+@@ -5291,7 +5292,7 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
  
  				// Translate string constants into indices
  				// Leave the first bit clear to signal string constant
@@ -151,7 +207,7 @@ index 60caf371..175ee0ac 100644
  			}
  		}
  		else if( c == asBC_JMP    ||	// DW_ARG
-@@ -5338,8 +5338,8 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+@@ -5338,8 +5339,8 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
  		else if( c == asBC_FREE ) // wW_PTR_ARG
  		{
  			// Translate object type pointers into indices
@@ -162,8 +218,35 @@ index 60caf371..175ee0ac 100644
  
  			// Pop and destroy the list adjuster helper that was created with asBC_AllocMem
  			if( ot && (ot->flags & asOBJ_LIST_PATTERN) )
+@@ -5542,7 +5543,7 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+ 				WriteData(&b, 1);
+ 
+ 				// Write the argument
+-				asQWORD qw = *(asQWORD*)&tmpBC[1];
++				asQWORD qw = asBC_QWORDARG(tmpBC);
+ 				WriteEncodedInt64(qw);
+ 			}
+ 			break;
+@@ -5553,7 +5554,7 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+ 				WriteData(&b, 1);
+ 
+ 				// Write the argument
+-				asQWORD qw = *(asQWORD*)&tmpBC[1];
++				asQWORD qw = asBC_QWORDARG(tmpBC);
+ 				WriteEncodedInt64(qw);
+ 
+ 				// Write the second argument
+@@ -5573,7 +5574,7 @@ void asCWriter::WriteByteCode(asCScriptFunction *func)
+ 				WriteEncodedInt64(w);
+ 
+ 				// Write the argument
+-				asQWORD qw = *(asQWORD*)&tmpBC[1];
++				asQWORD qw = asBC_QWORDARG(tmpBC);
+ 				WriteEncodedInt64(qw);
+ 			}
+ 			break;
 diff --git a/source/as_scriptengine.cpp b/source/as_scriptengine.cpp
-index 9169d405..36759aeb 100644
+index 9169d40..36759ae 100644
 --- a/source/as_scriptengine.cpp
 +++ b/source/as_scriptengine.cpp
 @@ -4180,12 +4180,12 @@ asCScriptFunction *asCScriptEngine::GenerateFactoryStubForTemplateObjectInstance

@@ -2045,7 +2045,7 @@
 | `big` | function | Tests | [TestAdversarialEngine.cpp:L453](../../Tests/TestAdversarialEngine.cpp#L453) |  |
 | `big` | function | Tests | [TestAdversarialEngine.cpp:L1677](../../Tests/TestAdversarialEngine.cpp#L1677) |  |
 | `big` | function | Tests | [TestNetworkStress.cpp:L384](../../Tests/TestNetworkStress.cpp#L384) |  |
-| `bigData` | function | Tests | [TestSparkPak.cpp:L408](../../Tests/TestSparkPak.cpp#L408) |  |
+| `bigData` | function | Tests | [TestSparkPak.cpp:L414](../../Tests/TestSparkPak.cpp#L414) |  |
 | `bigPayload` | function | Tests | [TestAdversarialEngine.cpp:L240](../../Tests/TestAdversarialEngine.cpp#L240) |  |
 | `binary` | function | Tests | [TestPluginABI.cpp:L362](../../Tests/TestPluginABI.cpp#L362) |  |
 | `BinaryReader` | function | SparkEngine | [Serializer.h:L228](../../SparkEngine/Source/Utils/Serializer.h#L228) | Construct a reader from a `std::vector<uint8_t>`. |
@@ -3048,7 +3048,7 @@
 | `Cleanup` | function | SparkEngine | [ProcessLinux.cpp:L51](../../SparkEngine/Source/Utils/ProcessLinux.cpp#L51) |  |
 | `Cleanup` | function | SparkEngine | [ProcessWin32Internal.h:L40](../../SparkEngine/Source/Utils/ProcessWin32Internal.h#L40) |  |
 | `Cleanup` | function | Tests | [TestSequencerAudioWiring.cpp:L78](../../Tests/TestSequencerAudioWiring.cpp#L78) |  |
-| `Cleanup` | function | Tests | [TestSparkPak.cpp:L248](../../Tests/TestSparkPak.cpp#L248) |  |
+| `Cleanup` | function | Tests | [TestSparkPak.cpp:L254](../../Tests/TestSparkPak.cpp#L254) |  |
 | `CleanupCacheTestDir` | function | Tests | [TestLocalFileCache.cpp:L14](../../Tests/TestLocalFileCache.cpp#L14) |  |
 | `CleanupDir` | function | Tests | [TestGamePackager.cpp:L18](../../Tests/TestGamePackager.cpp#L18) |  |
 | `CleanupFinished` | function | GameModules | [QuestSystem.h:L386](../../GameModules/SparkGameFPS/Source/Game/QuestSystem.h#L386) | Remove completed and failed quests from the active list |
@@ -5748,7 +5748,7 @@
 | `data` | function | Tests | [TestMaterialSystemIntegration.cpp:L158](../../Tests/TestMaterialSystemIntegration.cpp#L158) |  |
 | `data` | function | Tests | [TestMaterialSystemIntegration.cpp:L172](../../Tests/TestMaterialSystemIntegration.cpp#L172) |  |
 | `data` | function | Tests | [TestNetworkSecurity.cpp:L78](../../Tests/TestNetworkSecurity.cpp#L78) |  |
-| `data` | function | Tests | [TestSparkPak.cpp:L215](../../Tests/TestSparkPak.cpp#L215) |  |
+| `data` | function | Tests | [TestSparkPak.cpp:L221](../../Tests/TestSparkPak.cpp#L221) |  |
 | `dataFile` | function | SparkEditor | [LevelStreamingSystem.cpp:L1156](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.cpp#L1156) |  |
 | `DataTable` | function | SparkEngine | [DataTableSystem.h:L117](../../SparkEngine/Source/Engine/DataTable/DataTableSystem.h#L117) | Construct an empty table with an optional ID column name. |
 | `DayFrac` | function | GameModules | [TFDayNight.h:L118](../../GameModules/SparkGameMMOFPS/Source/World/TFDayNight.h#L118) |  |
@@ -7962,7 +7962,7 @@
 | `Exists` | function | SparkEngine | [VirtualFileSystem.h:L99](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h#L99) | Construct a provider rooted at the given directory. |
 | `Exists` | function | SparkEngine | [VirtualFileSystem.h:L159](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h#L159) | Check whether any mount contains the given file. |
 | `Exists` | function | SparkInstaller | [InstallState.h:L27](../../SparkInstaller/src/InstallState.h#L27) |  |
-| `Exists` | function | Tests | [TestSparkPak.cpp:L206](../../Tests/TestSparkPak.cpp#L206) |  |
+| `Exists` | function | Tests | [TestSparkPak.cpp:L212](../../Tests/TestSparkPak.cpp#L212) |  |
 | `ExitPlayMode` | function | SparkEngine | [PlayModeManager.h:L110](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L110) |  |
 | `ExitPosFor` | function | GameModules | [TFVehicleSystem.h:L159](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L159) |  |
 | `ExitSeat` | function | GameModules | [VehicleSystem.h:L175](../../GameModules/SparkGameFPS/Source/Game/VehicleSystem.h#L175) | Exit a specific seat |
@@ -8851,7 +8851,7 @@
 | `first` | function | Tests | [TestDenoiserInterface.cpp:L349](../../Tests/TestDenoiserInterface.cpp#L349) |  |
 | `first` | function | Tests | [TestGatewayAreaControl.cpp:L392](../../Tests/TestGatewayAreaControl.cpp#L392) |  |
 | `first` | function | Tests | [TestServiceTopologyController.cpp:L206](../../Tests/TestServiceTopologyController.cpp#L206) |  |
-| `first` | function | Tests | [TestSparkPak.cpp:L518](../../Tests/TestSparkPak.cpp#L518) |  |
+| `first` | function | Tests | [TestSparkPak.cpp:L524](../../Tests/TestSparkPak.cpp#L524) |  |
 | `first` | function | Tests | [Test_scripting_hardening.cpp:L324](../../Tests/harden/Test_scripting_hardening.cpp#L324) |  |
 | `firstInitializer` | function | Tests | [TestMemoryIntegrity.cpp:L471](../../Tests/TestMemoryIntegrity.cpp#L471) |  |
 | `firstInitializer` | function | Tests | [Test_tests_enginecontext_real.cpp:L558](../../Tests/harden/Test_tests_enginecontext_real.cpp#L558) |  |
@@ -11191,7 +11191,7 @@
 | `GetEntryCount` | function | SparkEngine | [SceneConfigDatabase.h:L130](../../SparkEngine/Source/SceneManager/SceneConfigDatabase.h#L130) |  |
 | `GetEntryCount` | function | SparkEngine | [LocalFileCache.h:L331](../../SparkEngine/Source/Utils/LocalFileCache.h#L331) | Number of entries currently in cache |
 | `GetEntryCount` | function | Tests | [TestShaderDiskCache.cpp:L39](../../Tests/TestShaderDiskCache.cpp#L39) |  |
-| `GetEntryCount` | function | Tests | [TestSparkPak.cpp:L221](../../Tests/TestSparkPak.cpp#L221) |  |
+| `GetEntryCount` | function | Tests | [TestSparkPak.cpp:L227](../../Tests/TestSparkPak.cpp#L227) |  |
 | `GetEntryPoint` | function | SparkEngine | [D3D11Device.h:L116](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L116) |  |
 | `GetEntryPoint` | function | SparkEngine | [D3D12Types.h:L299](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L299) |  |
 | `GetEntryPoint` | function | SparkEngine | [MetalDevice.h:L197](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L197) |  |
@@ -11521,7 +11521,7 @@
 | `GetHandlerCount` | function | SparkEngine | [ScriptHookManager.h:L238](../../SparkEngine/Source/Engine/Scripting/ScriptHookManager.h#L238) | Number of registered handlers for a specific hook type. |
 | `GetHandlerCount` | function | Tests | [TestScriptHookManager.cpp:L131](../../Tests/TestScriptHookManager.cpp#L131) |  |
 | `GetHazardCount` | function | GameModules | [PlatformerHazardSystem.h:L113](../../GameModules/SparkGamePlatformer/Source/Hazard/PlatformerHazardSystem.h#L113) | Total hazards placed in the current level |
-| `GetHeader` | function | Tests | [TestSparkPak.cpp:L222](../../Tests/TestSparkPak.cpp#L222) |  |
+| `GetHeader` | function | Tests | [TestSparkPak.cpp:L228](../../Tests/TestSparkPak.cpp#L228) |  |
 | `GetHeadOrientation` | function | SparkEngine | [VRSystem.h:L149](../../SparkEngine/Source/Engine/VR/VRSystem.h#L149) | Get head orientation as quaternion. |
 | `GetHeadOrientation` | function | Tests | [TestVRSystem.cpp:L111](../../Tests/TestVRSystem.cpp#L111) |  |
 | `GetHeadPosition` | function | SparkEngine | [VRSystem.h:L146](../../SparkEngine/Source/Engine/VR/VRSystem.h#L146) | Get head position in world space. |
@@ -18214,7 +18214,7 @@
 | `ListFiles` | function | SparkEngine | [VirtualFileSystem.h:L102](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h#L102) | Construct a provider rooted at the given directory. |
 | `ListFiles` | function | SparkEngine | [VirtualFileSystem.h:L168](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h#L168) | List files across all mounts, merging results (no duplicates). |
 | `ListFiles` | function | SparkEngine | [FileUtils.h:L178](../../SparkEngine/Source/Utils/FileUtils.h#L178) |  |
-| `ListFiles` | function | Tests | [TestSparkPak.cpp:L224](../../Tests/TestSparkPak.cpp#L224) |  |
+| `ListFiles` | function | Tests | [TestSparkPak.cpp:L230](../../Tests/TestSparkPak.cpp#L230) |  |
 | `ListFilesRecursive` | function | SparkEngine | [FileUtils.h:L200](../../SparkEngine/Source/Utils/FileUtils.h#L200) |  |
 | `ListReadyManifests` | function | SparkCrashReporter | [CrashReporterApp.cpp:L938](../../SparkCrashReporter/src/CrashReporterApp.cpp#L938) |  |
 | `LiveEditBridge` | function | SparkEditor | [LiveEditBridge.h:L61](../../SparkEditor/Source/Communication/LiveEditBridge.h#L61) |  |
@@ -21962,7 +21962,7 @@
 | `offset` | function | GameModules | [WaveSpawner.cpp:L253](../../GameModules/SparkGameFPS/Source/Game/WaveSpawner.cpp#L253) |  |
 | `offsetSettings` | function | SparkEngine | [PhysicsShapeFactory.cpp:L207](../../SparkEngine/Source/Physics/PhysicsShapeFactory.cpp#L207) |  |
 | `ofs` | function | SparkEngine | [ShaderDiskCache.cpp:L136](../../SparkEngine/Source/Graphics/ShaderDiskCache.cpp#L136) |  |
-| `ofs` | function | Tests | [TestSparkPak.cpp:L392](../../Tests/TestSparkPak.cpp#L392) |  |
+| `ofs` | function | Tests | [TestSparkPak.cpp:L398](../../Tests/TestSparkPak.cpp#L398) |  |
 | `Ok` | function | SparkEngine | [UDPTransport.h:L84](../../SparkEngine/Source/Engine/Networking/UDPTransport.h#L84) |  |
 | `Ok` | function | SparkEngine | [LocalFileCache.h:L106](../../SparkEngine/Source/Utils/LocalFileCache.h#L106) |  |
 | `Ok` | function | SparkEngine | [LocalFileCache.h:L120](../../SparkEngine/Source/Utils/LocalFileCache.h#L120) |  |
@@ -22417,7 +22417,7 @@
 | `Open` | function | Tests | [TestServerLiveMockClient.cpp:L52](../../Tests/TestServerLiveMockClient.cpp#L52) |  |
 | `open` | function | Tests | [TestSparkError.cpp:L62](../../Tests/TestSparkError.cpp#L62) |  |
 | `open` | function | Tests | [TestSparkError.cpp:L64](../../Tests/TestSparkError.cpp#L64) |  |
-| `Open` | function | Tests | [TestSparkPak.cpp:L157](../../Tests/TestSparkPak.cpp#L157) |  |
+| `Open` | function | Tests | [TestSparkPak.cpp:L163](../../Tests/TestSparkPak.cpp#L163) |  |
 | `OpenALAudioBackend::GetMasterVolume` | method | SparkEngine | [OpenALAudioBackend.cpp:L118](../../SparkEngine/Source/Audio/OpenALAudioBackend.cpp#L118) |  |
 | `OpenALAudioBackend::GetMusicVolume` | method | SparkEngine | [OpenALAudioBackend.cpp:L128](../../SparkEngine/Source/Audio/OpenALAudioBackend.cpp#L128) |  |
 | `OpenALAudioBackend::GetSFXVolume` | method | SparkEngine | [OpenALAudioBackend.cpp:L123](../../SparkEngine/Source/Audio/OpenALAudioBackend.cpp#L123) |  |
@@ -22571,7 +22571,7 @@
 | `out` | function | Tests | [TestShaderServiceClient.cpp:L410](../../Tests/TestShaderServiceClient.cpp#L410) |  |
 | `out` | function | Tests | [TestShaderServiceClient.cpp:L416](../../Tests/TestShaderServiceClient.cpp#L416) |  |
 | `out` | function | Tests | [TestShaderServiceClient.cpp:L421](../../Tests/TestShaderServiceClient.cpp#L421) |  |
-| `out` | function | Tests | [TestSparkPak.cpp:L503](../../Tests/TestSparkPak.cpp#L503) |  |
+| `out` | function | Tests | [TestSparkPak.cpp:L509](../../Tests/TestSparkPak.cpp#L509) |  |
 | `out` | function | Tests | [TestTFOnboarding.cpp:L460](../../Tests/TestTFOnboarding.cpp#L460) |  |
 | `out` | function | Tests | [TestTFOnboarding.cpp:L561](../../Tests/TestTFOnboarding.cpp#L561) |  |
 | `out` | function | Tests | [TestTFOnboarding.cpp:L604](../../Tests/TestTFOnboarding.cpp#L604) |  |
@@ -25380,7 +25380,7 @@
 | `ReadFile` | function | SparkEngine | [VirtualFileSystem.h:L162](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h#L162) | Read a file as binary from the highest-priority mount that contains it. |
 | `ReadFile` | function | SparkEngine | [GLTFStaticMeshLoader.cpp:L59](../../SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp#L59) |  |
 | `ReadFile` | function | SparkInstaller | [InstallState.cpp:L48](../../SparkInstaller/src/InstallState.cpp#L48) |  |
-| `ReadFile` | function | Tests | [TestSparkPak.cpp:L208](../../Tests/TestSparkPak.cpp#L208) |  |
+| `ReadFile` | function | Tests | [TestSparkPak.cpp:L214](../../Tests/TestSparkPak.cpp#L214) |  |
 | `ReadFile` | function | Tests | [TestTelemetrySpool.cpp:L155](../../Tests/TestTelemetrySpool.cpp#L155) |  |
 | `ReadFileBounded` | function | SparkDaemon | [OrchestrationJournal.cpp:L90](../../SparkDaemon/src/OrchestrationJournal.cpp#L90) |  |
 | `ReadFileContents` | function | SparkEngine | [ShaderCompilationLinuxInternal.h:L37](../../SparkEngine/Source/Graphics/ShaderCompilationLinuxInternal.h#L37) |  |
@@ -29133,7 +29133,7 @@
 | `SearchPanel::Update` | method | SparkEditor | [SearchPanel.cpp:L30](../../SparkEditor/Source/Panels/SearchPanel.cpp#L30) |  |
 | `second` | function | Tests | [TestGatewayAreaControl.cpp:L393](../../Tests/TestGatewayAreaControl.cpp#L393) |  |
 | `second` | function | Tests | [TestServiceTopologyController.cpp:L211](../../Tests/TestServiceTopologyController.cpp#L211) |  |
-| `second` | function | Tests | [TestSparkPak.cpp:L519](../../Tests/TestSparkPak.cpp#L519) |  |
+| `second` | function | Tests | [TestSparkPak.cpp:L525](../../Tests/TestSparkPak.cpp#L525) |  |
 | `second` | function | Tests | [Test_scripting_hardening.cpp:L329](../../Tests/harden/Test_scripting_hardening.cpp#L329) |  |
 | `secondClient` | function | Tests | [TestGatewayAreaControl.cpp:L85](../../Tests/TestGatewayAreaControl.cpp#L85) |  |
 | `secondInitializer` | function | Tests | [TestMemoryIntegrity.cpp:L477](../../Tests/TestMemoryIntegrity.cpp#L477) |  |
@@ -34175,7 +34175,7 @@
 | `TemporarySceneFile` | function | Tests | [TestSceneSerializerReal.cpp:L31](../../Tests/TestSceneSerializerReal.cpp#L31) |  |
 | `TemporarySibling` | function | SparkEditor | [RegionMapDataSource.cpp:L34](../../SparkEditor/Source/Panels/RegionMapDataSource.cpp#L34) |  |
 | `TempPath` | function | Tests | [TestBenchmarkFramework.cpp:L14](../../Tests/TestBenchmarkFramework.cpp#L14) | Get a cross-platform temporary file path for tests |
-| `TempPath` | function | Tests | [TestSparkPak.cpp:L241](../../Tests/TestSparkPak.cpp#L241) |  |
+| `TempPath` | function | Tests | [TestSparkPak.cpp:L247](../../Tests/TestSparkPak.cpp#L247) |  |
 | `TempScriptTree` | function | Tests | [TestCoverageScripting.cpp:L28](../../Tests/TestCoverageScripting.cpp#L28) |  |
 | `TempStorePath` | function | Tests | [TestTFOutfitStore.cpp:L31](../../Tests/TestTFOutfitStore.cpp#L31) |  |
 | `TempStorePath` | function | Tests | [TestTFSocialStore.cpp:L26](../../Tests/TestTFSocialStore.cpp#L26) |  |
@@ -36280,11 +36280,11 @@
 | `To` | function | SparkEngine | [Tween.h:L423](../../SparkEngine/Source/Utils/Tween.h#L423) | Create a tween that interpolates |
 | `ToBucket` | function | SparkEngine | [CoverSystem.h:L183](../../SparkEngine/Source/Engine/AI/CoverSystem.h#L183) |  |
 | `ToBucket` | function | SparkEngine | [TacticalPointSystem.h:L210](../../SparkEngine/Source/Engine/AI/TacticalPointSystem.h#L210) | Convert a world position to a bucket key. |
-| `toc` | function | Tests | [TestSparkPak.cpp:L481](../../Tests/TestSparkPak.cpp#L481) |  |
+| `toc` | function | Tests | [TestSparkPak.cpp:L487](../../Tests/TestSparkPak.cpp#L487) |  |
 | `tocCompressed` | function | SparkEngine | [SparkPak.cpp:L167](../../SparkEngine/Source/Core/SparkPak.cpp#L167) |  |
 | `tocCompressed` | function | SparkEngine | [SparkPakWriter.cpp:L269](../../SparkEngine/Source/Core/SparkPakWriter.cpp#L269) |  |
 | `ToCompactString` | function | SparkEngine | [StackTrace.h:L145](../../SparkEngine/Source/Utils/StackTrace.h#L145) | Get a compact single-line summary (top N frames) |
-| `tocRaw` | function | Tests | [TestSparkPak.cpp:L169](../../Tests/TestSparkPak.cpp#L169) |  |
+| `tocRaw` | function | Tests | [TestSparkPak.cpp:L175](../../Tests/TestSparkPak.cpp#L175) |  |
 | `Toggle` | function | GameModules | [Console.h:L99](../../GameModules/SparkGameFPS/Source/Game/Console.h#L99) | Toggle console visibility |
 | `Toggle` | function | GameModules | [InteractiveObject.h:L140](../../GameModules/SparkGameFPS/Source/Game/InteractiveObject.h#L140) |  |
 | `Toggle` | function | GameModules | [InteractiveObject.h:L220](../../GameModules/SparkGameFPS/Source/Game/InteractiveObject.h#L220) |  |

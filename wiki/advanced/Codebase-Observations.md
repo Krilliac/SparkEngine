@@ -128,10 +128,41 @@ Six split waves reduced the over-threshold file count from **104 to 1** (103 fil
 
 ---
 
+## Generated Docs Are Pinned to the Commit's UTC Day
+
+`docs/update-all-docs.sh check` (run by the `docs-health` and `Validate CI tooling` jobs) regenerates every declared output into two isolated roots with `SPARKENGINE_DOC_SOURCE_COMMITTED_AT` set to the commit's committer timestamp, then compares bytes against the tracked files. `wiki/advanced/Codebase-Statistics.md` embeds that date as `Updated YYYY-MM-DD`, so a commit whose committer date lands on a new UTC day is stale by construction even when no source changed (this is what turned `Working` red at `9f9215a`, a README-only change committed after 00:00 UTC). Run `bash docs/update-all-docs.sh update` and commit the regenerated statistics page on the same UTC day as the commit; the local `update-codebase-stats.sh check` passes regardless because it reuses the date already in the page. The check also refuses a dirty worktree, so run it after committing and amend if needed.
+
+---
+
+## The Installed `Spark::SparkEngineInterface` Target Needs Dependency Include Dirs
+
+On Linux/macOS, `spark_add_game_module()` links installed modules against `Spark::SparkEngineInterface` (no engine object code) rather than `Spark::SparkEngineLib`. Public engine headers still include `<SDL.h>` and `<AL/al.h>` whenever `SPARK_SDL2_AVAILABLE` / `SPARK_OPENAL_AVAILABLE` are defined, and the in-tree target inherits those directories through a `$<BUILD_INTERFACE:$<TARGET_PROPERTY:SparkEngineLib,INTERFACE_INCLUDE_DIRECTORIES>>` expression that is dropped from the export. `cmake/SparkEngineConfig.cmake.in` therefore re-attaches `$<TARGET_PROPERTY:Spark::SparkEngineLib,INTERFACE_INCLUDE_DIRECTORIES>` (transitive, so it carries `SDL2::SDL2` and `OpenAL::OpenAL`) and `find_dependency(OpenAL)` when the exporting build linked `OpenAL::OpenAL`; without both, `Publish Builds` failed on Linux (`SDL.h: No such file` while building the Blank3D template) and on macOS (`OpenAL::OpenAL` missing from the link interface). Anything that ends up in `SparkEngineLib`'s PUBLIC link interface must be re-imported by the config file.
+
+---
+
+## AngelScript Bytecode Is 32-bit Packed; 64-bit Arguments Need Unaligned Accessors
+
+AngelScript stores instruction arguments in an `asDWORD` stream, so 64-bit (`asQWORD`/pointer) arguments live at 4-byte alignment. UBSan's alignment check (`-fsanitize=undefined`, on in `build-linux-asan`) reports every `*(asQWORD*)(bc+1)` access as UB. The pinned submodule stays byte-identical; `ThirdParty/Scripting/patches/angelscript-packed-bytecode.patch` is applied to a build-tree copy at configure time and now defines packed `may_alias` accessor structs for both `asBC_PTRARG` and `asBC_QWORDARG`, and routes the compiler output (`as_bytecode.cpp`) and bytecode save/load (`as_restore.cpp`) through them or `memcpy`. Extend the patch (regenerate it with `git diff` from a scratch checkout and verify with `git apply --check --whitespace=error-all`) rather than adding `-fno-sanitize=alignment`; the manifest sync check requires touching `ThirdParty/dependencies.lock` in the same change.
+
+---
+
+## CMake 3.28 Needs `LINK_LIBRARY_OVERRIDE` for the Whole-Archive Hosts
+
+`SparkServerCore` links `$<LINK_LIBRARY:WHOLE_ARCHIVE,SparkEngineLib>` while `SparkGatewayCore` links `SparkEngineLib` plainly. CMake 3.31+ (what the GitHub runners ship) resolves that mix in favour of `WHOLE_ARCHIVE`, but CMake 3.28.3 (the Ubuntu 24.04 `apt` package, the documented minimum is 3.25) refuses to generate with "Impossible to link target ... has already occurred with the feature 'WHOLE_ARCHIVE'". `SparkServerCore`, `SparkServer`, and `SparkTests` therefore set `LINK_LIBRARY_OVERRIDE "WHOLE_ARCHIVE,SparkEngineLib"` on POSIX, which reproduces the newer resolution explicitly.
+
+---
+
+## Installed Linux Binaries Carry No RPATH (Known Gap)
+
+`cmake --install` on Linux copies the bundled `libSDL2-2.0.so.0` into `lib/` but strips the build RUNPATH, and `CMAKE_INSTALL_RPATH` is only set for Apple. The staged `bin/SparkEngine` therefore starts only where a system `libSDL2-2.0.so.0` happens to exist (true on the CI runners because `libsdl2-dev` is installed, which is why the release lane's live smoke passes). The fix is `set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../lib")` for `UNIX AND NOT APPLE` before any target is created, but note that `Tools/buildmatrix/inventory.py` pins its reviewed dependency bindings (`_REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS`) to exact `CMakeLists.txt` line numbers, so inserting lines above ~1620 also requires re-reviewing those records; append-only edits near the end of the file are safe. Locally, run the installed engine with `LD_LIBRARY_PATH=<stage>/lib` until that lands.
+
+---
+
 ## Source & Freshness
 
 - **Original observation:** `.claude/knowledge/codebase-observations.md`, last updated 2026-03-19.
 - **Re-measured against codebase 2026-06-08.**
+- **Extended 2026-09-02** with the docs-currentness, installed-SDK include, AngelScript alignment, and CMake 3.28 link-override notes from the stable-release audit.
 - Changes since the original:
   - `ENABLE_NETWORKING` default OLD `OFF` → NEW `ON` (networking now compiles in standard CI). Updated the most-common-trap framing accordingly.
   - Removed-globals list, `EngineContext`/`EngineRuntime` split, `.promptignore` scope, two `tools/` dirs, and the `head -50` partial-check note all re-verified as still accurate.

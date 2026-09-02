@@ -14,6 +14,23 @@ if(@SPARK_PACKAGE_HAS_SDL2@)
     find_dependency(SDL2 REQUIRED)
 endif()
 
+if(@SPARK_PACKAGE_HAS_OPENAL@)
+    # The exporting build linked the imported OpenAL::OpenAL target (openal-soft
+    # or the system framework via FindOpenAL). Mirror the root CMakeLists probe
+    # so Homebrew's openal-soft is preferred before the deprecated macOS
+    # framework, then re-import the target SparkEngineTargets.cmake refers to.
+    if(APPLE)
+        foreach(_spark_brew_prefix /opt/homebrew /usr/local)
+            if(EXISTS "${_spark_brew_prefix}/opt/openal-soft/include/AL/al.h")
+                list(APPEND CMAKE_PREFIX_PATH "${_spark_brew_prefix}/opt/openal-soft")
+                break()
+            endif()
+        endforeach()
+        unset(_spark_brew_prefix)
+    endif()
+    find_dependency(OpenAL REQUIRED)
+endif()
+
 if(NOT TARGET OpenGL::GL)
     find_package(OpenGL QUIET)
 endif()
@@ -42,6 +59,13 @@ if(TARGET Spark::SparkEngineInterface)
     set_property(TARGET Spark::SparkEngineInterface PROPERTY
         INTERFACE_COMPILE_DEFINITIONS
         "$<TARGET_PROPERTY:Spark::SparkEngineLib,INTERFACE_COMPILE_DEFINITIONS>")
+    # Public engine headers include <SDL.h> and <AL/al.h> whenever the matching
+    # SPARK_*_AVAILABLE definition above is set, so an installed module needs the
+    # dependency include directories carried by SparkEngineLib's link interface
+    # (SDL2::SDL2, OpenAL::OpenAL, ...) even though it links no engine objects.
+    set_property(TARGET Spark::SparkEngineInterface APPEND PROPERTY
+        INTERFACE_INCLUDE_DIRECTORIES
+        "$<TARGET_PROPERTY:Spark::SparkEngineLib,INTERFACE_INCLUDE_DIRECTORIES>")
 endif()
 
 if(WIN32)

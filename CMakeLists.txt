@@ -2628,6 +2628,12 @@ set(SPARK_PACKAGE_HAS_CURL 0)
 if(TARGET CURL::libcurl)
     set(SPARK_PACKAGE_HAS_CURL 1)
 endif()
+set(SPARK_PACKAGE_HAS_OPENAL 0)
+if(SPARK_OPENAL_AVAILABLE AND TARGET OpenAL::OpenAL)
+    # OpenAL::OpenAL is in SparkEngineLib's link interface, so installed
+    # consumers must re-import it before SparkEngineTargets.cmake is loaded.
+    set(SPARK_PACKAGE_HAS_OPENAL 1)
+endif()
 set(SPARK_PACKAGE_HAS_ANGELSCRIPT 0)
 if(SPARK_ANGELSCRIPT_AVAILABLE)
     set(SPARK_PACKAGE_HAS_ANGELSCRIPT 1)

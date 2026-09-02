@@ -1076,6 +1076,12 @@ set_target_properties(SparkTests PROPERTIES
 if(TARGET SparkServerCore)
     target_sources(SparkTests PRIVATE TestSparkServerApplication.cpp)
     target_link_libraries(SparkTests PRIVATE SparkServerCore)
+    if(NOT WIN32)
+        # SparkServerCore carries SparkEngineLib as WHOLE_ARCHIVE while other
+        # dependencies link it plainly; see SparkServer/CMakeLists.txt.
+        set_property(TARGET SparkTests PROPERTY
+            LINK_LIBRARY_OVERRIDE "WHOLE_ARCHIVE,SparkEngineLib")
+    endif()
 endif()
 if(TARGET SparkGatewayCore)
     target_sources(SparkTests PRIVATE

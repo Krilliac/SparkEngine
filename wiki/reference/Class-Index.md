@@ -1273,7 +1273,7 @@
 | `Entry` | struct | SparkEngine | [ScheduledCallback.h:L176](../../SparkEngine/Source/Utils/ScheduledCallback.h#L176) | Cancel all pending callbacks. |
 | `Entry` | struct | Tests | [TestAdversarialEngine.cpp:L1246](../../Tests/TestAdversarialEngine.cpp#L1246) |  |
 | `Entry` | struct | Tests | [TestScheduledCallback.cpp:L74](../../Tests/TestScheduledCallback.cpp#L74) |  |
-| `Entry` | struct | Tests | [TestSparkPak.cpp:L135](../../Tests/TestSparkPak.cpp#L135) |  |
+| `Entry` | struct | Tests | [TestSparkPak.cpp:L141](../../Tests/TestSparkPak.cpp#L141) |  |
 | `EntryView` | struct | GameModules | [TFSocialSystem.h:L51](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L51) |  |
 | `EnvironmentLighting` | struct | SparkEngine | [LightingSystem.h:L194](../../SparkEngine/Source/Graphics/LightingSystem.h#L194) | Environment lighting settings |
 | `EnvironmentSettings` | struct | SparkEditor | [SceneFileTypes.h:L1077](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L1077) | Environment and scene settings |
@@ -4247,7 +4247,7 @@
 | `TestObj` | struct | Tests | [TestObjectPool.cpp:L48](../../Tests/TestObjectPool.cpp#L48) |  |
 | `TestObject` | struct | Tests | [TestObjectPoolReal.cpp:L11](../../Tests/TestObjectPoolReal.cpp#L11) | Real-class tests for Spark::ObjectPool<T, ThreadSafe> |
 | `TestOutput` | struct | Tests | [TestMain.cpp:L327](../../Tests/TestMain.cpp#L327) |  |
-| `TestPakReader` | class | Tests | [TestSparkPak.cpp:L144](../../Tests/TestSparkPak.cpp#L144) |  |
+| `TestPakReader` | class | Tests | [TestSparkPak.cpp:L150](../../Tests/TestSparkPak.cpp#L150) |  |
 | `TestPakWriter` | class | Tests | [TestSparkPak.cpp:L61](../../Tests/TestSparkPak.cpp#L61) |  |
 | `TestParallaxLayer` | struct | Tests | [TestSprite2DComponents.cpp:L617](../../Tests/TestSprite2DComponents.cpp#L617) |  |
 | `TestPhysicsBody` | class | Tests | [TestPhysicsInterpolation.cpp:L92](../../Tests/TestPhysicsInterpolation.cpp#L92) |  |
@@ -4641,7 +4641,7 @@
 | `TLASInstance` | struct | SparkEngine | [MetalRayTracing.h:L73](../../SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.h#L73) | Per-instance TLAS entry (row-major 3x4 affine transform). |
 | `Toast` | struct | GameModules | [TFMedalSystem.h:L235](../../GameModules/SparkGameMMOFPS/Source/Game/TFMedalSystem.h#L235) |  |
 | `TOCEntry` | struct | Tests | [TestSparkPak.cpp:L79](../../Tests/TestSparkPak.cpp#L79) |  |
-| `TOCEntry` | struct | Tests | [TestSparkPak.cpp:L147](../../Tests/TestSparkPak.cpp#L147) |  |
+| `TOCEntry` | struct | Tests | [TestSparkPak.cpp:L153](../../Tests/TestSparkPak.cpp#L153) |  |
 | `TokenEntry` | struct | SparkEngine | [NetworkSecurity.h:L179](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L179) | Enable or disable prototype XOR obfuscation in legacy callers. |
 | `TonemapCB` | struct | SparkEngine | [TonemapColorGrading.h:L154](../../SparkEngine/Source/Graphics/TonemapColorGrading.h#L154) |  |
 | `TonemapColorGrading` | class | SparkEngine | [TonemapColorGrading.h:L113](../../SparkEngine/Source/Graphics/TonemapColorGrading.h#L113) | Combined auto-exposure, tonemapping, and color grading pass |
