@@ -10,6 +10,9 @@
 //   3. On PRs: find or create a single "CI Error Report" comment
 //   4. On push: write a job summary visible in the Actions UI
 //   5. On success (no errors), update/clear the old error comment if it exists
+//   6. Findings from advisory lanes (job-level continue-on-error, or an
+//      always()-extracted log such as clang-tidy) stay visible but never fail
+//      the report; only required-job failures and unknown jobs fail closed
 
 const COMMENT_MARKER = '<!-- spark-ci-error-report -->';
 
@@ -130,10 +133,31 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
         }
     }
 
-    // ── 3. If no errors found, clean up old comment ──────────────────
-    const hasIssues = failedNeededJobs.length > 0 || !!needsParseError || jobResults.some(
-        j => j.errors?.length > 0 || j.tests?.length > 0
+    // ── 3. Classify findings; clean up the old comment when there are none ──
+    // A lane that published an error summary although its authoritative
+    // `needs` result is success or skipped tolerated its own failure (job-level
+    // continue-on-error, or an always()-extracted advisory log). Its findings
+    // stay visible but never fail this report. A summary from a job the
+    // workflow did not hand over through `needs` is unknown and fails closed.
+    const neededJobFor = artifactJob => Object.keys(neededJobs)
+        .filter(job => artifactJob === job || artifactJob.startsWith(`${job}-`))
+        .sort((a, b) => b.length - a.length)[0] || '';
+    const isAdvisory = result => {
+        const job = neededJobFor(String(result.job || ''));
+        if (!job) return false;
+        const details = neededJobs[job];
+        const conclusion = details && typeof details.result === 'string' ? details.result : 'unknown';
+        return conclusion === 'success' || conclusion === 'skipped';
+    };
+    const hasFindings = result => result.errors?.length > 0 || result.tests?.length > 0;
+
+    const advisoryJobs = [...new Set(
+        jobResults.filter(result => hasFindings(result) && isAdvisory(result)).map(result => String(result.job))
+    )];
+    const hasBlockingIssues = failedNeededJobs.length > 0 || !!needsParseError || jobResults.some(
+        result => hasFindings(result) && !isAdvisory(result)
     );
+    const hasIssues = hasBlockingIssues || advisoryJobs.length > 0;
 
     if (!hasIssues) {
         if (isPullRequest && existingComment) {
@@ -404,13 +428,20 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
 
     const failedJobs = [...new Set([
         ...failedNeededJobs.map(({ job }) => job),
-        ...jobResults.map(result => result.job || 'unknown')
-    ])].map(job => job.replace('build-', '')).join(', ');
+        ...jobResults
+            .filter(result => hasFindings(result) && !isAdvisory(result))
+            .map(result => result.job || 'unknown')
+    ])].map(job => job.replace('build-', '')).join(', ') || 'none';
+    const advisoryLine = advisoryJobs.length > 0
+        ? `**Advisory lanes (continue-on-error):** ${advisoryJobs.map(job => job.replace('build-', '')).join(', ')}` +
+            ' — findings are informational and do not fail this report'
+        : '';
     const body = [
         COMMENT_MARKER,
-        `## :x: CI Error Report`,
+        hasBlockingIssues ? '## :x: CI Error Report' : '## :warning: CI Advisory Report',
         '',
         `**Failed jobs:** ${failedJobs}`,
+        ...(advisoryLine ? [advisoryLine] : []),
         `**Errors:** ${globalErrors.size} | **Test failures:** ${globalTests.size}` +
             (testWarningCount > 0 ? ` | **Test warnings:** ${testWarningCount}` : '') +
             ` | **Compiler warnings:** ${compilerWarningCount}`,
@@ -448,7 +479,13 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
             .write();
         core.info('Wrote error report to job summary (push event, no PR)');
 
-        // Also set the job as failed so it's visible in the Actions UI
-        core.setFailed(`CI Error Report: ${globalErrors.size} errors, ${globalTests.size} test failures`);
+        // Also set the job as failed so it's visible in the Actions UI —
+        // unless every finding came from an advisory lane.
+        if (hasBlockingIssues) {
+            core.setFailed(`CI Error Report: ${globalErrors.size} errors, ${globalTests.size} test failures`);
+        } else {
+            core.warning(`CI Error Report: advisory lanes only (${advisoryJobs.join(', ')}) — ` +
+                `${globalErrors.size} errors, ${globalTests.size} test failures are informational`);
+        }
     }
 };
