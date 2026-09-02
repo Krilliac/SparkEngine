@@ -11,7 +11,7 @@ A C++23 open-source 3D game engine with multiple graphics backends behind a shar
 [![Lifetime downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-release-counters%2F.github%2Fbadges%2Fdownloads.json&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases)
 [![Installer downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-release-counters%2F.github%2Fbadges%2Finstaller-downloads.json&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases)
 [![License: Spark Open](https://img.shields.io/badge/License-Spark_Open-blue?style=flat-square)](LICENSE)
-[![Discord](https://img.shields.io/badge/Discord-community-5865F2?style=flat-square&logo=discord)](https://discord.gg/NyX8d9UZM)
+[![Discord](https://img.shields.io/badge/Discord-community-5865F2?style=flat-square&logo=discord)](https://discord.gg/cuJv5uWA5V)
 
 ---
 
