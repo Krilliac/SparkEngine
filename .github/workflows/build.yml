@@ -381,7 +381,10 @@ jobs:
       env:
         ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:print_stats=1:check_initialization_order=1
         UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-        LSAN_OPTIONS: suppressions=${{ github.workspace }}/Tests/lsan_suppressions.txt
+        # print_suppressions=0: a matched suppression would otherwise write a
+        # "Suppressions used" summary into the private runtime log, and the
+        # evidence verifier rejects runtime logs that carry no sanitizer signature.
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/Tests/lsan_suppressions.txt:print_suppressions=0
       run: |
         bash .github/scripts/run-sanitizer-tests.sh \
           --evidence-root "${{ runner.temp }}" \

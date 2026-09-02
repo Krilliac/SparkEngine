@@ -8,3 +8,10 @@ leak:JPH::JobSystemThreadPool
 leak:AllocateImpl
 leak:PhysicsSystem::CreateBoxShape
 leak:PhysicsSystem::CreateCollisionShape
+
+# The Vulkan loader / Mesa Lavapipe ICD keeps small per-enumeration
+# allocations (realloc inside libvulkan.so.1 -> ICD) alive after the
+# VkInstance is destroyed. VulkanDevice::Shutdown() destroys both the device
+# and the instance; the remaining 128-byte blocks live in third-party code
+# below vkEnumeratePhysicalDevices, so they are not SparkEngine leaks.
+leak:vkEnumeratePhysicalDevices
