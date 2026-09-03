@@ -4,7 +4,7 @@ const BOT_LOGIN = 'github-actions[bot]';
 const BOT_ID = 41898282;
 const REPORTER_WORKFLOWS = Object.freeze({
     'Build Matrix Verifier': Object.freeze({
-        workflowId: 345629369,
+        workflowId: 349562521,
         path: '.github/workflows/build-matrix-verifier.yml',
         context: 'Build Matrix Verifier / Exact Source'
     }),
