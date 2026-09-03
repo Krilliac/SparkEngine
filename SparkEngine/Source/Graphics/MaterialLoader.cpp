@@ -58,10 +58,7 @@ namespace Spark::Graphics
             def.name = fs::path(filePath).stem().string();
         }
 
-        if (!RegisterMaterial(def))
-        {
-            return false;
-        }
+        RegisterMaterial(def);
 
         m_loadedNames.push_back(def.name);
         SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadComplete, filePath, 0.0);
@@ -189,7 +186,7 @@ namespace Spark::Graphics
         return BlendMode::Opaque;
     }
 
-    bool MaterialLoader::RegisterMaterial(const SparkMatDefinition& def)
+    void MaterialLoader::RegisterMaterial(const SparkMatDefinition& def)
     {
         // Access the global MaterialSystem to create the material.
         // MaterialSystem is expected to be initialized before loading materials.
@@ -252,7 +249,6 @@ namespace Spark::Graphics
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Registered material '%s' (metallic=%.2f, roughness=%.2f)",
                        def.name.c_str(), def.metallic, def.roughness);
         Spark::SimpleConsole::GetInstance().LogSuccess("MaterialLoader: loaded material '" + def.name + "'");
-        return true;
     }
 
 } // namespace Spark::Graphics

@@ -32,7 +32,7 @@ The site-data generator rebuilds the ignored `docs/api/` reference corpus from
 the checked-out headers and sources before collecting documentation. This keeps
 clean CI runners and local generation on the same exact-commit inputs.
 
-`.github/workflows/site-data.yml` proves deterministic generation on pull requests and pushes. After the exact `Working` commit's staged `Build SparkEngine` run completes with its sole reviewed CI-120 authority failure and a successful `Required CI Gate`, `.github/workflows/site-data-publish.yml` publishes a hash-verified current snapshot to the moving `site-data` tag. Any unrelated, cancelled, timed-out, stale, or malformed build publishes nothing. Application/layout changes still require the website's own deployment workflow.
+`.github/workflows/site-data.yml` proves deterministic generation on pull requests and pushes. After the exact `Working` commit's `Build SparkEngine` run completes successfully, including its `Required CI Gate`, `.github/workflows/site-data-publish.yml` publishes a hash-verified current snapshot to the moving `site-data` tag. Any unrelated, cancelled, timed-out, stale, or malformed build publishes nothing. Application/layout changes still require the website's own deployment workflow.
 
 ---
 
@@ -67,6 +67,8 @@ Wire formats, binary layouts, and versioned, uncertified interface specification
 - [Asset Format](specs/asset-format.md) — SparkEngine native asset binary layout.
 - [Networking Wire Format](specs/networking-wire-format.md) — UDP packet structure and serialization rules.
 - [C++ Game Module ABI Guide](specs/plugin-abi-guide.md) — Game-module DLL boundary, lifecycle, and version compatibility.
+- [Editor ECS Round-Trip Design](specs/editor-ecs-roundtrip-design.md) — Shared editor/runtime component model and scene round-trip contract.
+- [TERRAFRONT Onboarding Design](specs/terrafront-onboarding-design.md) — Login, account, character, and world-entry pipeline for the MMOFPS module.
 
 ## Plans & Roadmaps
 

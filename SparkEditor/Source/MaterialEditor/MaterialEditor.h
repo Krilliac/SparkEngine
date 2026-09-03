@@ -325,7 +325,7 @@ namespace SparkEditor
      * @brief Add node to the graph
      * @param nodeType Type of node to add
      * @param position Position in graph space
-     * @return ID of created node, or 0 if failed
+     * @return ID of the created node
      */
         uint32_t AddNode(MaterialNodeType nodeType, const XMFLOAT2& position);
 

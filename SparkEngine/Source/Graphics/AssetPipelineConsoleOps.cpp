@@ -43,7 +43,10 @@ std::string AssetPipeline::Console_GetAssetInfo(const std::string& path) const
     {
         std::lock_guard<std::mutex> lock(m_assetsMutex);
         auto it = m_assets.find(path);
-        asset = (it != m_assets.end()) ? it->second : nullptr;
+        if (it != m_assets.end())
+        {
+            asset = it->second;
+        }
     }
 
     if (!asset)

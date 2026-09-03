@@ -60,6 +60,11 @@ HRESULT Shader::CompileShaderFromFileAdvanced(const std::wstring& filename, Shad
 {
     ASSERT(!filename.empty());
     ASSERT(shaderBlob != nullptr);
+    if (!shaderBlob)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "CompileShaderFromFileAdvanced: null output blob pointer");
+        return E_INVALIDARG;
+    }
 
     std::wstring fullPath = filename;
     bool fileFound = false;

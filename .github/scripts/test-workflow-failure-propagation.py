@@ -747,7 +747,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
             required_environment = (
                 "NEEDS_JSON: ${{ toJSON(needs) }}",
                 "EXPECTED_REQUIRED_JOBS_JSON: '[\"validate-ci-tools\",\"check-format\",\"validate-prompts\",\"check-thirdparty-manifest\",\"build-linux-asan\",\"build-linux-tsan\",\"telemetry-integration\",\"build-windows-vs2022\",\"build-windows-shipping\",\"build-linux-gcc\",\"build-linux-clang\",\"coverage\",\"clang-tidy\",\"todo-count\",\"build-installer\",\"aggregate-test-stats\"]'",
-                "DEFERRED_REQUIRED_FAILURES_JSON: '{\"build-windows-shipping\":\"failure\"}'",
+                "DEFERRED_REQUIRED_FAILURES_JSON: '{}'",
             )
             if verifier.count("env:") != 1 or any(
                 verifier.count(fragment) != 1 for fragment in required_environment
@@ -777,15 +777,15 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
         self.assertEqual(required_workflow_errors(self.build), [])
 
-    def test_static_ci120_baseline_does_not_duplicate_producer_enforcement(self) -> None:
+    def test_static_build_matrix_baseline_does_not_duplicate_producer_enforcement(self) -> None:
         static_validation = yaml_section(self.build, "validate-ci-tools", indent=2)
         structural_producer = yaml_section(self.build, "build-windows-shipping", indent=2)
-        enforcement_name = "- name: Enforce reviewed CI-120 findings"
+        enforcement_name = "- name: Record build-matrix evidence"
 
         self.assertNotIn(enforcement_name, static_validation)
         self.assertEqual(structural_producer.count(enforcement_name), 1)
-        self.assertIn("Compare reviewed build-matrix findings (CI-120)", static_validation)
-        self.assertIn("Upload deterministic CI-120 evidence", static_validation)
+        self.assertIn("Compare reviewed build-matrix findings", static_validation)
+        self.assertIn("Upload deterministic build-matrix evidence", static_validation)
 
     def test_release_artifact_builders_use_explicit_runner_images(self) -> None:
         for workflow in (self.build, self.release):
@@ -1308,7 +1308,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn('name: "Trusted Exact-Source CI"', aggregate)
         self.assertIn("push:\n    branches: [Working]", header)
         self.assertIn(
-            'workflows: ["CI-120 Trusted Verifier", "CodeQL Trusted Reporter"]',
+            'workflows: ["Build Matrix Verifier", "CodeQL Trusted Reporter"]',
             header,
         )
         self.assertIn("types: [in_progress, completed]", header)
@@ -1450,7 +1450,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertNotIn("details_url: detailsUrl", aggregate)
         self.assertIn("trusted-ci-final-gate.env", aggregate)
         self.assertIn("listCommitStatusesForRef", aggregate)
-        self.assertIn("ci120_status_id", aggregate)
+        self.assertIn("build_matrix_status_id", aggregate)
         self.assertIn("codeql_status_id", aggregate)
         self.assertIn("currentBadge.status !== 'in_progress'", aggregate)
         self.assertIn("currentBadge.conclusion !== null", aggregate)
@@ -1526,7 +1526,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertEqual(
             self.site_data_publish.count("--require-exact-evidence"), 3
         )
-        self.assertIn("EXACT_CI120_STATUS_ID: ${{ steps.exact-gate.outputs.ci120_status_id }}", self.site_data_publish)
+        self.assertIn("EXACT_BUILD_MATRIX_STATUS_ID: ${{ steps.exact-gate.outputs.build_matrix_status_id }}", self.site_data_publish)
         self.assertIn("EXACT_CODEQL_STATUS_ID: ${{ steps.exact-gate.outputs.codeql_status_id }}", self.site_data_publish)
         publish_step = named_step(
             self.site_data_publish,

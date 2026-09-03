@@ -112,7 +112,7 @@ jobs:
           assert run.get("head_branch") == "Working"
           assert run.get("event") in {"push", "workflow_dispatch"}
           assert run.get("status") == "completed"
-          assert run.get("conclusion") == "failure"
+          assert run.get("conclusion") == "success"
           assert isinstance(run.get("run_attempt"), int) and run["run_attempt"] >= 1
           source_commit = run.get("head_sha", "")
           assert re.fullmatch(r"[0-9a-f]{40}", source_commit)
@@ -198,13 +198,13 @@ jobs:
           EXACT_BUILD_RUN_ATTEMPT: ${{ steps.exact-gate.outputs.run_attempt }}
           EXACT_BUILD_RUN_URL: ${{ steps.exact-gate.outputs.run_url }}
           EXACT_BUILD_EVENT: ${{ steps.exact-gate.outputs.event }}
-          EXACT_CI120_STATUS_ID: ${{ steps.exact-gate.outputs.ci120_status_id }}
-          EXACT_CI120_VERIFIER_RUN_ID: ${{ steps.exact-gate.outputs.verifier_run_id }}
-          EXACT_CI120_VERIFIER_RUN_ATTEMPT: ${{ steps.exact-gate.outputs.verifier_run_attempt }}
-          EXACT_CI120_VERIFIER_RUN_URL: ${{ steps.exact-gate.outputs.verifier_run_url }}
+          EXACT_BUILD_MATRIX_STATUS_ID: ${{ steps.exact-gate.outputs.build_matrix_status_id }}
+          EXACT_BUILD_MATRIX_VERIFIER_RUN_ID: ${{ steps.exact-gate.outputs.verifier_run_id }}
+          EXACT_BUILD_MATRIX_VERIFIER_RUN_ATTEMPT: ${{ steps.exact-gate.outputs.verifier_run_attempt }}
+          EXACT_BUILD_MATRIX_VERIFIER_RUN_URL: ${{ steps.exact-gate.outputs.verifier_run_url }}
           EXACT_VERIFIER_COMMIT: ${{ steps.exact-gate.outputs.verifier_sha }}
-          EXACT_CI120_RECEIPT_ARTIFACT_ID: ${{ steps.exact-gate.outputs.receipt_artifact_id }}
-          EXACT_CI120_RECEIPT_ARTIFACT_DIGEST: ${{ steps.exact-gate.outputs.receipt_artifact_digest }}
+          EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_ID: ${{ steps.exact-gate.outputs.receipt_artifact_id }}
+          EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_DIGEST: ${{ steps.exact-gate.outputs.receipt_artifact_digest }}
           EXACT_CODEQL_RUN_ID: ${{ steps.exact-gate.outputs.codeql_run_id }}
           EXACT_CODEQL_RUN_ATTEMPT: ${{ steps.exact-gate.outputs.codeql_run_attempt }}
           EXACT_CODEQL_RUN_URL: ${{ steps.exact-gate.outputs.codeql_run_url }}

@@ -344,20 +344,34 @@ namespace SparkEditor
 #ifdef _WIN32
         struct WinsockInit
         {
+            bool started = false;
+
             WinsockInit()
             {
-                WSADATA wsaData;
-                WSAStartup(MAKEWORD(2, 2), &wsaData);
+                WSADATA wsaData{};
+                const int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+                started = result == 0;
+                if (!started)
+                    SPARK_LOG_ERROR(Spark::LogCategory::Editor, "WSAStartup failed with error: %d", result);
             }
-            ~WinsockInit() { WSACleanup(); }
+            ~WinsockInit()
+            {
+                if (started)
+                    WSACleanup();
+            }
         };
 
-        void EnsureWinsock()
+        // False when Winsock could not be started: callers must not touch the socket API.
+        bool EnsureWinsock()
         {
             static WinsockInit init;
+            return init.started;
         }
 #else
-        void EnsureWinsock() {}
+        bool EnsureWinsock()
+        {
+            return true;
+        }
 #endif
 
         // Set socket receive/send timeout (seconds)
@@ -518,6 +532,7 @@ namespace SparkEditor
 
     CollaborativeEditSession::CollaborativeEditSession()
     {
+        // Eager start-up only: Host()/Connect() re-check and fail when Winsock is unavailable.
         EnsureWinsock();
     }
 
@@ -557,6 +572,12 @@ namespace SparkEditor
             return false;
         }
         m_endpointPolicy = endpointPolicy;
+
+        if (!EnsureWinsock())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Cannot host: Winsock is unavailable.");
+            return false;
+        }
 
         // Create TCP listen socket
         m_listenSocket = ToStoredSocket(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
@@ -657,6 +678,12 @@ namespace SparkEditor
         }
         m_endpointPolicy = endpointPolicy;
 
+        if (!EnsureWinsock())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Cannot connect: Winsock is unavailable.");
+            return false;
+        }
+
         m_clientSocket = ToStoredSocket(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
         if (!IsValidSocket(m_clientSocket))
         {
@@ -682,8 +709,7 @@ namespace SparkEditor
         addr.sin_port = htons(port);
         addr.sin_addr.s_addr = htonl(remoteAddress);
 
-        if (!ConnectWithTimeout(m_clientSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr), 5,
-                                m_endpointPolicy))
+        if (!ConnectWithTimeout(m_clientSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr), 5, m_endpointPolicy))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to connect to %s:%u (timeout 5s).", address.c_str(),
                             port);

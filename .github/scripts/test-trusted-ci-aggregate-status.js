@@ -6,7 +6,7 @@ const contract = require('./trusted-ci-aggregate-status.js');
 const SHA = 'a'.repeat(40);
 const CONTEXT = 'Trusted Exact-Source CI / Aggregate';
 const REPORTER_CONTEXTS = [
-    'CI-120 Trusted / Exact Source',
+    'Build Matrix Verifier / Exact Source',
     'CodeQL Trusted / Exact Source'
 ];
 const REPOSITORY = 'Krilliac/SparkEngine';
@@ -169,8 +169,8 @@ function completedReporterEvent() {
         workflow_id: 345629369,
         run_number: 65,
         run_attempt: 2,
-        name: 'CI-120 Trusted Verifier',
-        path: '.github/workflows/ci120-report.yml@refs/heads/Working',
+        name: 'Build Matrix Verifier',
+        path: '.github/workflows/build-matrix-verifier.yml@refs/heads/Working',
         event: 'workflow_run',
         status: 'completed',
         conclusion: 'success',

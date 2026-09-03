@@ -25,10 +25,8 @@ namespace Terrafront
 
     } // namespace
 
-    // Reused verbatim (with the (unsigned char) isalnum fix) from the
-    // compile+test-verified helper stashed at
-    // .superpowers/sdd/stash/trilobite-verified-helpers.md: 3..23 chars,
-    // alnum+single-space, no leading/trailing/consecutive spaces.
+    // Character-name rule: 3..23 chars, alphanumerics plus single spaces, no
+    // leading/trailing/consecutive spaces (isalnum on unsigned char).
     bool TFCharacterSystem::ValidateCharacterName(const std::string& name, std::string& err)
     {
         if (name.empty())

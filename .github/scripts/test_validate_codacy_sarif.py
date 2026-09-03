@@ -48,6 +48,39 @@ def write_artifact(root: Path, document: object) -> str:
 
 
 class ValidateCodacySarifTests(unittest.TestCase):
+    def test_rejects_results_the_normalizer_must_have_dropped(self) -> None:
+        for rule_id, message, uri in (
+            ("cppcheck_y2038-unsafe-call", "time is Y2038-unsafe", "SparkEngine/Source/Core/Clock.cpp"),
+            ("cppcheck_misra-config", "finding", "SparkEngine/Source/Core/Clock.cpp"),
+            ("cppcheck_syntaxError", "Code 'namespaceSpark{' is invalid C code.", "SparkEngine/Source/Core/Engine.h"),
+        ):
+            document = payload()
+            document["runs"][1]["results"][0] = {
+                "ruleId": rule_id,
+                "level": "warning",
+                "message": {"text": message},
+                "locations": [{"physicalLocation": {"artifactLocation": {"uri": uri}}}],
+            }
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                digest = write_artifact(root, document)
+                with self.assertRaises(ValueError, msg=rule_id):
+                    validator.validate_artifact(root, digest)
+
+    def test_accepts_syntax_errors_that_are_not_header_language_guesses(self) -> None:
+        document = payload()
+        document["runs"][1]["results"][0] = {
+            "ruleId": "cppcheck_syntaxError",
+            "level": "warning",
+            "message": {"text": "Code 'namespaceSpark{' is invalid C code."},
+            "locations": [{"physicalLocation": {"artifactLocation": {"uri": "SparkLauncher/src/main.cpp"}}}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            digest = write_artifact(root, document)
+            summary = validator.validate_artifact(root, digest)
+        self.assertEqual(summary["results"], 3)
+
     def test_accepts_exact_direct_tool_and_category_roster(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

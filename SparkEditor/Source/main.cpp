@@ -243,12 +243,14 @@ int main(int argc, char* argv[])
     {
 #ifdef _WIN32
         AllocConsole();
-        FILE* pCout;
-        FILE* pCerr;
-        FILE* pCin;
-        freopen_s(&pCout, "CONOUT$", "w", stdout);
-        freopen_s(&pCerr, "CONOUT$", "w", stderr);
-        freopen_s(&pCin, "CONIN$", "r", stdin);
+        FILE* consoleStream = nullptr;
+        const bool stdoutAttached = freopen_s(&consoleStream, "CONOUT$", "w", stdout) == 0;
+        const bool stderrAttached = freopen_s(&consoleStream, "CONOUT$", "w", stderr) == 0;
+        const bool stdinAttached = freopen_s(&consoleStream, "CONIN$", "r", stdin) == 0;
+        if (!stdoutAttached || !stderrAttached || !stdinAttached)
+        {
+            OutputDebugStringA("SparkEditor: could not attach all standard streams to the debug console\n");
+        }
 #endif
 
         // Make cout, wcout, cin, wcin, wcerr, cerr, wclog and clog point to console

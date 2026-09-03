@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdint>
 #include <fstream>
+#include <vector>
 
 namespace SparkBuild::DownloadSecurity
 {
@@ -164,7 +165,7 @@ namespace SparkBuild::DownloadSecurity
         }
 
         Sha256 sha;
-        std::array<uint8_t, 64 * 1024> buffer{};
+        std::vector<uint8_t> buffer(64 * 1024);
         while (file)
         {
             file.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));

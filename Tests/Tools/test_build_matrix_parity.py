@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adversarial CI-120 tests using only synthetic strings and temporary copies."""
+"""Adversarial build-matrix tests using only synthetic strings and temporary copies."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOLS_ROOT = REPO_ROOT / "Tools" / "buildmatrix"
-TEST_TEMP_ROOT = Path(os.environ.get("CI120_TEST_TMPDIR", tempfile.gettempdir()))
+TEST_TEMP_ROOT = Path(os.environ.get("BUILD_MATRIX_TEST_TMPDIR", tempfile.gettempdir()))
 sys.path.insert(0, str(TOOLS_ROOT))
 
 import check_parity  # noqa: E402
@@ -68,7 +68,7 @@ def write_json(path: Path, value: Any) -> None:
 def temporary_paths(*names: str):
     """Yield unique temporary files directly in a writable root (no tracked mutation)."""
     token = uuid.uuid4().hex
-    paths = [TEST_TEMP_ROOT / f".ci120-{token}-{name}" for name in names]
+    paths = [TEST_TEMP_ROOT / f".build-matrix-{token}-{name}" for name in names]
     try:
         yield paths
     finally:
@@ -201,7 +201,7 @@ class RepositoryInventoryTests(unittest.TestCase):
             summary["matrixLegCount"],
             sum(max(1, len(job["matrixCombinations"])) for job in workflow["jobs"]),
         )
-        self.assertEqual(summary["ci120InvocationCount"], len(workflow["ci120Invocations"]))
+        self.assertEqual(summary["buildMatrixInvocationCount"], len(workflow["buildMatrixInvocations"]))
         self.assertGreater(summary["buildCount"], 0)
         self.assertGreater(summary["testCount"], 0)
         self.assertIn("windows:Release", summary["builtOsConfigurationPairs"])
@@ -223,8 +223,8 @@ class RepositoryInventoryTests(unittest.TestCase):
         self.assertEqual(editor, [])
 
     def test_exact_checked_in_artifacts_are_valid_and_current(self) -> None:
-        inventory_path = REPO_ROOT / "docs" / "readiness" / "ci120-build-matrix-inventory.json"
-        report_path = REPO_ROOT / "docs" / "readiness" / "ci120-parity-findings.json"
+        inventory_path = REPO_ROOT / "docs" / "readiness" / "build-matrix-inventory.json"
+        report_path = REPO_ROOT / "docs" / "readiness" / "build-matrix-parity-findings.json"
         checked_inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
         checked_report = json.loads(report_path.read_text(encoding="utf-8"))
         self.assertEqual(inventory_path.read_bytes(), inventory.render_inventory(self.data))
@@ -497,7 +497,7 @@ class PresetAndCodemodelTests(unittest.TestCase):
         findings = check_parity.check_profile_presets(mutated)
         self.assertTrue(any("windows-validation" in finding.message for finding in findings))
 
-    def test_ci120_profile_ids_are_not_misclassified_as_preset_names(self) -> None:
+    def test_build_matrix_profile_ids_are_not_misclassified_as_preset_names(self) -> None:
         data = inventory.build_inventory()
         findings = check_parity.check_workflow_adoption(data)
         phantom_presets = [
@@ -1087,7 +1087,7 @@ class PresetAndCodemodelTests(unittest.TestCase):
             )
 
     def test_absent_codemodel_is_explicit_and_blocking(self) -> None:
-        missing = TEST_TEMP_ROOT / f".ci120-nonexistent-{uuid.uuid4().hex}"
+        missing = TEST_TEMP_ROOT / f".build-matrix-nonexistent-{uuid.uuid4().hex}"
         evidence = inventory.extract_codemodel_targets(missing, "windows-shipping")
         self.assertEqual(evidence["profile"], "windows-shipping")
         self.assertEqual(evidence["status"], "absent")
@@ -1202,15 +1202,15 @@ class WorkflowEnforcementTests(unittest.TestCase):
     def test_workflow_compares_uploads_and_enforces_without_or_echo(self) -> None:
         text = (REPO_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
         self.assertNotIn("check_parity.py || echo", text)
-        self.assertIn("--baseline docs/readiness/ci120-parity-findings.json", text)
-        self.assertIn("ci120-build-matrix-inventory.json", text)
+        self.assertIn("--baseline docs/readiness/build-matrix-parity-findings.json", text)
+        self.assertIn("build-matrix-inventory.json", text)
         self.assertIn("actions/upload-artifact", text)
-        self.assertIn("Enforce reviewed CI-120 findings", text)
+        self.assertIn("Record build-matrix evidence", text)
 
-    def test_ci120_installed_sdk_consumer_executes_its_runtime_smoke(self) -> None:
+    def test_build_matrix_installed_sdk_consumer_executes_its_runtime_smoke(self) -> None:
         text = (REPO_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
-        start = text.index("- name: Configure and build installed SDK consumer lane (CI-120)")
-        end = text.index("- name: Capture installed SDK consumer structural provenance (CI-120)", start)
+        start = text.index("- name: Configure and build the installed SDK consumer lane")
+        end = text.index("- name: Capture installed SDK consumer provenance", start)
         step = text[start:end].replace("\\\n          ", "")
         self.assertIn(
             "ctest --test-dir build/installed-sdk-consumer -C Release "
@@ -1342,7 +1342,7 @@ class WorkflowEnforcementTests(unittest.TestCase):
             + "\n".join(sorted(missing)),
         )
 
-    def test_ci120_work_item_remains_in_progress_and_blocking(self) -> None:
+    def test_build_matrix_work_item_remains_in_progress_and_blocking(self) -> None:
         data = json.loads(
             (REPO_ROOT / "docs" / "readiness" / "work-items" / "00-truth-ci-release.json").read_text(
                 encoding="utf-8"
@@ -1377,7 +1377,7 @@ class WorkflowEnforcementTests(unittest.TestCase):
 # ===========================================================================
 # Adversarial regressions: one test per confirmed false green.
 #
-# Each of these failed to be detected before the CI-120 repair. They exist to
+# Each of these failed to be detected before the build-matrix repair. They exist to
 # make the specific weakening visible, so re-introducing it turns a test red
 # rather than producing identical "clean" evidence.
 # ===========================================================================
@@ -1522,10 +1522,10 @@ jobs:
         categories = finding_categories(check_parity.check_workflow_semantics(data))
         self.assertIn("workflow-configuration-not-built", categories)
 
-    def test_ci120_producer_same_job_oidc_permission_is_blocking(self) -> None:
+    def test_build_matrix_producer_same_job_oidc_permission_is_blocking(self) -> None:
         needle = (
             "  build-windows-shipping:\n"
-            "    name: \"Windows Shipping structural configured-evidence producer\"\n"
+            "    name: \"Windows Shipping build matrix\"\n"
             "    runs-on: windows-2022\n"
             "    timeout-minutes: 120\n"
             "    permissions:\n"
@@ -1534,18 +1534,18 @@ jobs:
         replacement = needle + "      id-token: write\n"
         self.assertIn(needle, LIVE_WORKFLOW)
         mutated = LIVE_WORKFLOW.replace(needle, replacement, 1)
-        record = self.assert_weakening_is_visible(mutated, "CI-120 same-job OIDC permission added")
+        record = self.assert_weakening_is_visible(mutated, "build-matrix same-job OIDC permission added")
         data = copy.deepcopy(inventory.build_inventory())
         data["workflow"] = record
-        categories = finding_categories(check_parity.check_ci120_producer_chain(data))
-        self.assertIn("ci120-producer-same-job-oidc-forbidden", categories)
+        categories = finding_categories(check_parity.check_build_matrix_producer_chain(data))
+        self.assertIn("build-matrix-producer-same-job-oidc-forbidden", categories)
 
-    def test_ci120_configured_producer_uses_pending_authority_validator(self) -> None:
+    def test_build_matrix_configured_producer_uses_pending_authority_validator(self) -> None:
         record = workflow_record(LIVE_WORKFLOW)
         producer_invocations = [
             item
-            for item in record["ci120Invocations"]
-            if item["job"] == inventory._CI120_PRODUCER_JOB
+            for item in record["buildMatrixInvocations"]
+            if item["job"] == inventory._BUILD_MATRIX_PRODUCER_JOB
         ]
         parity = [item for item in producer_invocations if item["kind"] == "parity"]
         pending = [item for item in producer_invocations if item["kind"] == "pending-authority"]
@@ -1560,10 +1560,10 @@ jobs:
 
         data = copy.deepcopy(inventory.build_inventory())
         data["workflow"] = record
-        categories = finding_categories(check_parity.check_ci120_producer_chain(data))
-        self.assertNotIn("ci120-producer-validator-disconnected", categories)
+        categories = finding_categories(check_parity.check_build_matrix_producer_chain(data))
+        self.assertNotIn("build-matrix-producer-validator-disconnected", categories)
 
-    def test_ci120_missing_pending_authority_validator_is_blocking(self) -> None:
+    def test_build_matrix_missing_pending_authority_validator_is_blocking(self) -> None:
         command = (
             "        python Tools/buildmatrix/validate_pending_authority.py \\\n"
             "          --inventory build-matrix-inventory.json \\\n"
@@ -1576,8 +1576,8 @@ jobs:
         record = self.assert_weakening_is_visible(mutated, "pending-authority validator removed")
         data = copy.deepcopy(inventory.build_inventory())
         data["workflow"] = record
-        categories = finding_categories(check_parity.check_ci120_producer_chain(data))
-        self.assertIn("ci120-producer-validator-disconnected", categories)
+        categories = finding_categories(check_parity.check_build_matrix_producer_chain(data))
+        self.assertIn("build-matrix-producer-validator-disconnected", categories)
 
     def test_unresolved_matrix_cannot_satisfy_a_profile(self) -> None:
         data = copy.deepcopy(inventory.build_inventory())
@@ -1988,7 +1988,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
         self.assertEqual(evidence["producerProvenance"]["state"], "unavailable")
         self.assertEqual(
             evidence["producerProvenance"]["authority"],
-            inventory._CI120_EXTERNAL_AUTHORITY,
+            inventory._BUILD_MATRIX_EXTERNAL_AUTHORITY,
         )
         self.assertEqual(evidence["producerProvenance"]["structuralState"], "validated")
         self.assertEqual(evidence["targets"], [
@@ -2359,7 +2359,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
 
     def test_owned_query_cleanup_retries_one_transient_deletion_denial(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
-            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory = Path(raw) / "client-spark-build-matrix-test"
             client_directory.mkdir()
             query_path = client_directory / "query.json"
             query_path.write_text("{}\n", encoding="utf-8")
@@ -2391,7 +2391,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
 
     def test_owned_query_cleanup_accepts_final_denial_when_owned_paths_are_gone(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
-            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory = Path(raw) / "client-spark-build-matrix-test"
             client_directory.mkdir()
             query_path = client_directory / "query.json"
             query_path.write_text("{}\n", encoding="utf-8")
@@ -2426,7 +2426,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
 
     def test_owned_query_cleanup_removes_empty_client_when_query_is_already_absent(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
-            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory = Path(raw) / "client-spark-build-matrix-test"
             client_directory.mkdir()
             query_path = client_directory / "query.json"
 
@@ -2439,7 +2439,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
 
     def test_owned_query_cleanup_does_not_retry_non_access_error(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
-            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory = Path(raw) / "client-spark-build-matrix-test"
             client_directory.mkdir()
             query_path = client_directory / "query.json"
             query_path.write_text("{}\n", encoding="utf-8")
@@ -2471,7 +2471,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
 
     def test_owned_query_cleanup_rejects_persistent_deletion_denial(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
-            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory = Path(raw) / "client-spark-build-matrix-test"
             client_directory.mkdir()
             query_path = client_directory / "query.json"
             query_path.write_text("{}\n", encoding="utf-8")
@@ -2510,7 +2510,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
 
     def test_owned_query_cleanup_retries_one_transient_directory_deletion_denial(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
-            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory = Path(raw) / "client-spark-build-matrix-test"
             client_directory.mkdir()
             query_path = client_directory / "query.json"
             query_path.write_text("{}\n", encoding="utf-8")
@@ -2540,7 +2540,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
 
     def test_owned_query_cleanup_rejects_persistent_directory_deletion_denial(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
-            client_directory = Path(raw) / "client-spark-ci120-test"
+            client_directory = Path(raw) / "client-spark-build-matrix-test"
             client_directory.mkdir()
             query_path = client_directory / "query.json"
             query_path.write_text("{}\n", encoding="utf-8")
@@ -2565,7 +2565,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                 self.assertIsInstance(failure, inventory.InventoryError)
                 self.assertRegex(
                     str(failure),
-                    r"cannot remove owned File API query client after .* retained .*client-spark-ci120-test",
+                    r"cannot remove owned File API query client after .* retained .*client-spark-build-matrix-test",
                 )
                 self.assertIn("persistent directory deletion denial", str(failure))
                 self.assertEqual(denials, inventory._QUERY_CLEANUP_ATTEMPTS)
@@ -2915,7 +2915,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
         self.assertEqual(evidence["producerProvenance"]["state"], "unavailable")
         self.assertEqual(
             evidence["producerProvenance"]["authority"],
-            inventory._CI120_EXTERNAL_AUTHORITY,
+            inventory._BUILD_MATRIX_EXTERNAL_AUTHORITY,
         )
         categories = self.categories(self.bound_data(evidence))
         self.assertIn("codemodel-producer-authority-unavailable", categories)
@@ -3149,7 +3149,7 @@ class CodemodelReplyBoundaryTests(unittest.TestCase):
             snapshot = inventory._snapshot_reply_directory(root, "windows-shipping")
             self.assertIsNotNone(snapshot)
             assert snapshot is not None
-            sibling = Path(raw).parent / f".ci120-unrelated-{uuid.uuid4().hex}"
+            sibling = Path(raw).parent / f".build-matrix-unrelated-{uuid.uuid4().hex}"
             try:
                 sibling.write_text("unrelated", encoding="utf-8")
                 snapshot.assert_stable()

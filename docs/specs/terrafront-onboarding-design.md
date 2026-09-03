@@ -1,4 +1,4 @@
-# TERRAFRONT Onboarding (W5) — Login → Character → World Entry — Design
+# TERRAFRONT Onboarding — Login → Character → World Entry — Design
 
 Date: 2026-07-06
 Status: Approved (design). Adds the player onboarding pipeline to the TERRAFRONT MMOFPS.

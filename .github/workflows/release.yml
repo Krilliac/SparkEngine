@@ -646,27 +646,27 @@ jobs:
         EXACT_BUILD_RUN_ATTEMPT: ${{ steps.required-ci.outputs.run_attempt }}
         EXACT_BUILD_RUN_URL: ${{ steps.required-ci.outputs.run_url }}
         EXACT_BUILD_EVENT: ${{ steps.required-ci.outputs.event }}
-        EXACT_BUILD_CI120_PRODUCER_JOB_ID: ${{ steps.required-ci.outputs.build_ci120_producer_job_id }}
+        EXACT_BUILD_MATRIX_PRODUCER_JOB_ID: ${{ steps.required-ci.outputs.build_build_matrix_producer_job_id }}
         EXACT_BUILD_REQUIRED_GATE_JOB_ID: ${{ steps.required-ci.outputs.build_required_gate_job_id }}
         EXACT_BUILD_JOB_INVENTORY_DIGEST: ${{ steps.required-ci.outputs.build_job_inventory_digest }}
-        EXACT_CI120_SOURCE_ARTIFACT_ID: ${{ steps.required-ci.outputs.ci120_source_artifact_id }}
-        EXACT_CI120_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci.outputs.ci120_source_artifact_digest }}
-        EXACT_CI120_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci.outputs.ci120_source_artifact_bytes }}
-        EXACT_CI120_STATUS_ID: ${{ steps.required-ci.outputs.ci120_status_id }}
-        EXACT_CI120_STATUS_TARGET_URL: ${{ steps.required-ci.outputs.ci120_status_target_url }}
-        EXACT_CI120_STATUS_CREATED_AT: ${{ steps.required-ci.outputs.ci120_status_created_at }}
-        EXACT_CI120_STATUS_UPDATED_AT: ${{ steps.required-ci.outputs.ci120_status_updated_at }}
-        EXACT_CI120_VERIFIER_RUN_ID: ${{ steps.required-ci.outputs.verifier_run_id }}
-        EXACT_CI120_VERIFIER_RUN_ATTEMPT: ${{ steps.required-ci.outputs.verifier_run_attempt }}
-        EXACT_CI120_VERIFIER_RUN_URL: ${{ steps.required-ci.outputs.verifier_run_url }}
+        EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_ID: ${{ steps.required-ci.outputs.build_matrix_source_artifact_id }}
+        EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci.outputs.build_matrix_source_artifact_digest }}
+        EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci.outputs.build_matrix_source_artifact_bytes }}
+        EXACT_BUILD_MATRIX_STATUS_ID: ${{ steps.required-ci.outputs.build_matrix_status_id }}
+        EXACT_BUILD_MATRIX_STATUS_TARGET_URL: ${{ steps.required-ci.outputs.build_matrix_status_target_url }}
+        EXACT_BUILD_MATRIX_STATUS_CREATED_AT: ${{ steps.required-ci.outputs.build_matrix_status_created_at }}
+        EXACT_BUILD_MATRIX_STATUS_UPDATED_AT: ${{ steps.required-ci.outputs.build_matrix_status_updated_at }}
+        EXACT_BUILD_MATRIX_VERIFIER_RUN_ID: ${{ steps.required-ci.outputs.verifier_run_id }}
+        EXACT_BUILD_MATRIX_VERIFIER_RUN_ATTEMPT: ${{ steps.required-ci.outputs.verifier_run_attempt }}
+        EXACT_BUILD_MATRIX_VERIFIER_RUN_URL: ${{ steps.required-ci.outputs.verifier_run_url }}
         EXACT_VERIFIER_COMMIT: ${{ steps.required-ci.outputs.verifier_sha }}
-        EXACT_CI120_TRUSTED_VERIFIER_JOB_ID: ${{ steps.required-ci.outputs.ci120_trusted_verifier_job_id }}
-        EXACT_CI120_VERIFIER_JOB_INVENTORY_DIGEST: ${{ steps.required-ci.outputs.ci120_verifier_job_inventory_digest }}
-        EXACT_CI120_STATUS_PUBLISH_STEP_STARTED_AT: ${{ steps.required-ci.outputs.ci120_status_publish_step_started_at }}
-        EXACT_CI120_STATUS_PUBLISH_STEP_COMPLETED_AT: ${{ steps.required-ci.outputs.ci120_status_publish_step_completed_at }}
-        EXACT_CI120_RECEIPT_ARTIFACT_ID: ${{ steps.required-ci.outputs.receipt_artifact_id }}
-        EXACT_CI120_RECEIPT_ARTIFACT_DIGEST: ${{ steps.required-ci.outputs.receipt_artifact_digest }}
-        EXACT_CI120_RECEIPT_ARTIFACT_BYTES: ${{ steps.required-ci.outputs.receipt_artifact_bytes }}
+        EXACT_BUILD_MATRIX_TRUSTED_VERIFIER_JOB_ID: ${{ steps.required-ci.outputs.build_matrix_trusted_verifier_job_id }}
+        EXACT_BUILD_MATRIX_VERIFIER_JOB_INVENTORY_DIGEST: ${{ steps.required-ci.outputs.build_matrix_verifier_job_inventory_digest }}
+        EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_STARTED_AT: ${{ steps.required-ci.outputs.build_matrix_status_publish_step_started_at }}
+        EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_COMPLETED_AT: ${{ steps.required-ci.outputs.build_matrix_status_publish_step_completed_at }}
+        EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_ID: ${{ steps.required-ci.outputs.receipt_artifact_id }}
+        EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_DIGEST: ${{ steps.required-ci.outputs.receipt_artifact_digest }}
+        EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_BYTES: ${{ steps.required-ci.outputs.receipt_artifact_bytes }}
         EXACT_CODEQL_RUN_ID: ${{ steps.required-ci.outputs.codeql_run_id }}
         EXACT_CODEQL_RUN_ATTEMPT: ${{ steps.required-ci.outputs.codeql_run_attempt }}
         EXACT_CODEQL_RUN_URL: ${{ steps.required-ci.outputs.codeql_run_url }}
@@ -826,7 +826,7 @@ jobs:
           elif [[ "$artifact" == *.spdx.json ]]; then
             note="SPDX software bill of materials"
           elif [[ "$artifact" == "SparkEngine-Exact-CI-Evidence.json" ]]; then
-            note="Exact CI-120 and CodeQL evidence manifest"
+            note="Exact build-matrix and CodeQL evidence manifest"
           elif [[ "$artifact" == *"-Windows-"* ]]; then
             note="Windows package"
           elif [[ "$artifact" == *"-Linux-"* ]]; then
@@ -923,27 +923,27 @@ jobs:
         EXACT_BUILD_RUN_ATTEMPT: ${{ steps.required-ci-mutation.outputs.run_attempt }}
         EXACT_BUILD_RUN_URL: ${{ steps.required-ci-mutation.outputs.run_url }}
         EXACT_BUILD_EVENT: ${{ steps.required-ci-mutation.outputs.event }}
-        EXACT_BUILD_CI120_PRODUCER_JOB_ID: ${{ steps.required-ci-mutation.outputs.build_ci120_producer_job_id }}
+        EXACT_BUILD_MATRIX_PRODUCER_JOB_ID: ${{ steps.required-ci-mutation.outputs.build_build_matrix_producer_job_id }}
         EXACT_BUILD_REQUIRED_GATE_JOB_ID: ${{ steps.required-ci-mutation.outputs.build_required_gate_job_id }}
         EXACT_BUILD_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-mutation.outputs.build_job_inventory_digest }}
-        EXACT_CI120_SOURCE_ARTIFACT_ID: ${{ steps.required-ci-mutation.outputs.ci120_source_artifact_id }}
-        EXACT_CI120_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci-mutation.outputs.ci120_source_artifact_digest }}
-        EXACT_CI120_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci-mutation.outputs.ci120_source_artifact_bytes }}
-        EXACT_CI120_STATUS_ID: ${{ steps.required-ci-mutation.outputs.ci120_status_id }}
-        EXACT_CI120_STATUS_TARGET_URL: ${{ steps.required-ci-mutation.outputs.ci120_status_target_url }}
-        EXACT_CI120_STATUS_CREATED_AT: ${{ steps.required-ci-mutation.outputs.ci120_status_created_at }}
-        EXACT_CI120_STATUS_UPDATED_AT: ${{ steps.required-ci-mutation.outputs.ci120_status_updated_at }}
-        EXACT_CI120_VERIFIER_RUN_ID: ${{ steps.required-ci-mutation.outputs.verifier_run_id }}
-        EXACT_CI120_VERIFIER_RUN_ATTEMPT: ${{ steps.required-ci-mutation.outputs.verifier_run_attempt }}
-        EXACT_CI120_VERIFIER_RUN_URL: ${{ steps.required-ci-mutation.outputs.verifier_run_url }}
+        EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_ID: ${{ steps.required-ci-mutation.outputs.build_matrix_source_artifact_id }}
+        EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci-mutation.outputs.build_matrix_source_artifact_digest }}
+        EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci-mutation.outputs.build_matrix_source_artifact_bytes }}
+        EXACT_BUILD_MATRIX_STATUS_ID: ${{ steps.required-ci-mutation.outputs.build_matrix_status_id }}
+        EXACT_BUILD_MATRIX_STATUS_TARGET_URL: ${{ steps.required-ci-mutation.outputs.build_matrix_status_target_url }}
+        EXACT_BUILD_MATRIX_STATUS_CREATED_AT: ${{ steps.required-ci-mutation.outputs.build_matrix_status_created_at }}
+        EXACT_BUILD_MATRIX_STATUS_UPDATED_AT: ${{ steps.required-ci-mutation.outputs.build_matrix_status_updated_at }}
+        EXACT_BUILD_MATRIX_VERIFIER_RUN_ID: ${{ steps.required-ci-mutation.outputs.verifier_run_id }}
+        EXACT_BUILD_MATRIX_VERIFIER_RUN_ATTEMPT: ${{ steps.required-ci-mutation.outputs.verifier_run_attempt }}
+        EXACT_BUILD_MATRIX_VERIFIER_RUN_URL: ${{ steps.required-ci-mutation.outputs.verifier_run_url }}
         EXACT_VERIFIER_COMMIT: ${{ steps.required-ci-mutation.outputs.verifier_sha }}
-        EXACT_CI120_TRUSTED_VERIFIER_JOB_ID: ${{ steps.required-ci-mutation.outputs.ci120_trusted_verifier_job_id }}
-        EXACT_CI120_VERIFIER_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-mutation.outputs.ci120_verifier_job_inventory_digest }}
-        EXACT_CI120_STATUS_PUBLISH_STEP_STARTED_AT: ${{ steps.required-ci-mutation.outputs.ci120_status_publish_step_started_at }}
-        EXACT_CI120_STATUS_PUBLISH_STEP_COMPLETED_AT: ${{ steps.required-ci-mutation.outputs.ci120_status_publish_step_completed_at }}
-        EXACT_CI120_RECEIPT_ARTIFACT_ID: ${{ steps.required-ci-mutation.outputs.receipt_artifact_id }}
-        EXACT_CI120_RECEIPT_ARTIFACT_DIGEST: ${{ steps.required-ci-mutation.outputs.receipt_artifact_digest }}
-        EXACT_CI120_RECEIPT_ARTIFACT_BYTES: ${{ steps.required-ci-mutation.outputs.receipt_artifact_bytes }}
+        EXACT_BUILD_MATRIX_TRUSTED_VERIFIER_JOB_ID: ${{ steps.required-ci-mutation.outputs.build_matrix_trusted_verifier_job_id }}
+        EXACT_BUILD_MATRIX_VERIFIER_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-mutation.outputs.build_matrix_verifier_job_inventory_digest }}
+        EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_STARTED_AT: ${{ steps.required-ci-mutation.outputs.build_matrix_status_publish_step_started_at }}
+        EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_COMPLETED_AT: ${{ steps.required-ci-mutation.outputs.build_matrix_status_publish_step_completed_at }}
+        EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_ID: ${{ steps.required-ci-mutation.outputs.receipt_artifact_id }}
+        EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_DIGEST: ${{ steps.required-ci-mutation.outputs.receipt_artifact_digest }}
+        EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_BYTES: ${{ steps.required-ci-mutation.outputs.receipt_artifact_bytes }}
         EXACT_CODEQL_RUN_ID: ${{ steps.required-ci-mutation.outputs.codeql_run_id }}
         EXACT_CODEQL_RUN_ATTEMPT: ${{ steps.required-ci-mutation.outputs.codeql_run_attempt }}
         EXACT_CODEQL_RUN_URL: ${{ steps.required-ci-mutation.outputs.codeql_run_url }}
@@ -1793,27 +1793,27 @@ jobs:
         EXACT_BUILD_RUN_ATTEMPT: ${{ steps.required-ci-final.outputs.run_attempt }}
         EXACT_BUILD_RUN_URL: ${{ steps.required-ci-final.outputs.run_url }}
         EXACT_BUILD_EVENT: ${{ steps.required-ci-final.outputs.event }}
-        EXACT_BUILD_CI120_PRODUCER_JOB_ID: ${{ steps.required-ci-final.outputs.build_ci120_producer_job_id }}
+        EXACT_BUILD_MATRIX_PRODUCER_JOB_ID: ${{ steps.required-ci-final.outputs.build_build_matrix_producer_job_id }}
         EXACT_BUILD_REQUIRED_GATE_JOB_ID: ${{ steps.required-ci-final.outputs.build_required_gate_job_id }}
         EXACT_BUILD_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-final.outputs.build_job_inventory_digest }}
-        EXACT_CI120_SOURCE_ARTIFACT_ID: ${{ steps.required-ci-final.outputs.ci120_source_artifact_id }}
-        EXACT_CI120_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci-final.outputs.ci120_source_artifact_digest }}
-        EXACT_CI120_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci-final.outputs.ci120_source_artifact_bytes }}
-        EXACT_CI120_STATUS_ID: ${{ steps.required-ci-final.outputs.ci120_status_id }}
-        EXACT_CI120_STATUS_TARGET_URL: ${{ steps.required-ci-final.outputs.ci120_status_target_url }}
-        EXACT_CI120_STATUS_CREATED_AT: ${{ steps.required-ci-final.outputs.ci120_status_created_at }}
-        EXACT_CI120_STATUS_UPDATED_AT: ${{ steps.required-ci-final.outputs.ci120_status_updated_at }}
-        EXACT_CI120_VERIFIER_RUN_ID: ${{ steps.required-ci-final.outputs.verifier_run_id }}
-        EXACT_CI120_VERIFIER_RUN_ATTEMPT: ${{ steps.required-ci-final.outputs.verifier_run_attempt }}
-        EXACT_CI120_VERIFIER_RUN_URL: ${{ steps.required-ci-final.outputs.verifier_run_url }}
+        EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_ID: ${{ steps.required-ci-final.outputs.build_matrix_source_artifact_id }}
+        EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_DIGEST: ${{ steps.required-ci-final.outputs.build_matrix_source_artifact_digest }}
+        EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_BYTES: ${{ steps.required-ci-final.outputs.build_matrix_source_artifact_bytes }}
+        EXACT_BUILD_MATRIX_STATUS_ID: ${{ steps.required-ci-final.outputs.build_matrix_status_id }}
+        EXACT_BUILD_MATRIX_STATUS_TARGET_URL: ${{ steps.required-ci-final.outputs.build_matrix_status_target_url }}
+        EXACT_BUILD_MATRIX_STATUS_CREATED_AT: ${{ steps.required-ci-final.outputs.build_matrix_status_created_at }}
+        EXACT_BUILD_MATRIX_STATUS_UPDATED_AT: ${{ steps.required-ci-final.outputs.build_matrix_status_updated_at }}
+        EXACT_BUILD_MATRIX_VERIFIER_RUN_ID: ${{ steps.required-ci-final.outputs.verifier_run_id }}
+        EXACT_BUILD_MATRIX_VERIFIER_RUN_ATTEMPT: ${{ steps.required-ci-final.outputs.verifier_run_attempt }}
+        EXACT_BUILD_MATRIX_VERIFIER_RUN_URL: ${{ steps.required-ci-final.outputs.verifier_run_url }}
         EXACT_VERIFIER_COMMIT: ${{ steps.required-ci-final.outputs.verifier_sha }}
-        EXACT_CI120_TRUSTED_VERIFIER_JOB_ID: ${{ steps.required-ci-final.outputs.ci120_trusted_verifier_job_id }}
-        EXACT_CI120_VERIFIER_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-final.outputs.ci120_verifier_job_inventory_digest }}
-        EXACT_CI120_STATUS_PUBLISH_STEP_STARTED_AT: ${{ steps.required-ci-final.outputs.ci120_status_publish_step_started_at }}
-        EXACT_CI120_STATUS_PUBLISH_STEP_COMPLETED_AT: ${{ steps.required-ci-final.outputs.ci120_status_publish_step_completed_at }}
-        EXACT_CI120_RECEIPT_ARTIFACT_ID: ${{ steps.required-ci-final.outputs.receipt_artifact_id }}
-        EXACT_CI120_RECEIPT_ARTIFACT_DIGEST: ${{ steps.required-ci-final.outputs.receipt_artifact_digest }}
-        EXACT_CI120_RECEIPT_ARTIFACT_BYTES: ${{ steps.required-ci-final.outputs.receipt_artifact_bytes }}
+        EXACT_BUILD_MATRIX_TRUSTED_VERIFIER_JOB_ID: ${{ steps.required-ci-final.outputs.build_matrix_trusted_verifier_job_id }}
+        EXACT_BUILD_MATRIX_VERIFIER_JOB_INVENTORY_DIGEST: ${{ steps.required-ci-final.outputs.build_matrix_verifier_job_inventory_digest }}
+        EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_STARTED_AT: ${{ steps.required-ci-final.outputs.build_matrix_status_publish_step_started_at }}
+        EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_COMPLETED_AT: ${{ steps.required-ci-final.outputs.build_matrix_status_publish_step_completed_at }}
+        EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_ID: ${{ steps.required-ci-final.outputs.receipt_artifact_id }}
+        EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_DIGEST: ${{ steps.required-ci-final.outputs.receipt_artifact_digest }}
+        EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_BYTES: ${{ steps.required-ci-final.outputs.receipt_artifact_bytes }}
         EXACT_CODEQL_RUN_ID: ${{ steps.required-ci-final.outputs.codeql_run_id }}
         EXACT_CODEQL_RUN_ATTEMPT: ${{ steps.required-ci-final.outputs.codeql_run_attempt }}
         EXACT_CODEQL_RUN_URL: ${{ steps.required-ci-final.outputs.codeql_run_url }}

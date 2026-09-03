@@ -523,8 +523,7 @@ namespace Spark::Graphics
             if (node.name == "Deformer" && node.properties.size() >= 3 && node.properties[2].stringValue == "Cluster")
             {
                 FBXBoneData bone;
-                if (node.properties.size() >= 2)
-                    bone.name = node.properties[1].stringValue;
+                bone.name = node.properties[1].stringValue;
 
                 if (auto* transformNode = node.FindChild("Transform"))
                 {

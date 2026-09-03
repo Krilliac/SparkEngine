@@ -152,7 +152,7 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
 - `clang-tidy` (`continue-on-error`) — Clang Debug static analysis
 - `todo-count` — fails if TODO count exceeds threshold (20)
 - `build-installer` — builds the `SparkInstaller` target
-- `report-ci-errors` — aggregates `ci-errors-*` artifacts from failed jobs
+- `report-ci-errors` — aggregates `ci-errors-*` artifacts from failed jobs; findings from advisory lanes (job-level `continue-on-error`, e.g. `build-linux-msan`) are listed but do not fail the report. The reporter is loaded from the trusted `Working` checkout, so a change to it takes effect only after it lands there
 
 ## Notes
 

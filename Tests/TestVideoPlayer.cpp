@@ -84,7 +84,7 @@ TEST(VideoPlayer_SetVolume)
     auto handle = player.Open("test.vid");
     player.SetVolume(handle, 0.5f);
     const auto* info = player.GetVideoInfo(handle);
-    EXPECT_TRUE(info != nullptr);
+    ASSERT_TRUE(info != nullptr);
     EXPECT_NEAR(info->volume, 0.5f, 0.001f);
 
     // Clamp to [0, 1]

@@ -1,13 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const STATUS_CONTEXT = 'CI-120 Trusted / Exact Source';
+const STATUS_CONTEXT = 'Build Matrix Verifier / Exact Source';
 const AGGREGATE_STATUS_CONTEXT = 'Trusted Exact-Source CI / Aggregate';
 const SOURCE_WORKFLOW_NAME = 'Build SparkEngine';
 const SOURCE_WORKFLOW_PATH = '.github/workflows/build.yml';
-const VERIFIER_WORKFLOW_PATH = '.github/workflows/ci120-report.yml';
-const SOURCE_JOB_NAME = 'Windows Shipping structural configured-evidence producer';
-const SOURCE_FINAL_STEP = 'Enforce reviewed CI-120 findings';
+const VERIFIER_WORKFLOW_PATH = '.github/workflows/build-matrix-verifier.yml';
+const SOURCE_JOB_NAME = 'Windows Shipping build matrix';
+const SOURCE_FINAL_STEP = 'Record build-matrix evidence';
 const AUTHORITY = 'github-actions-protected-workflow-run-v1';
 const SHA_PATTERN = /^[0-9a-f]{40}$/i;
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/i;
@@ -25,9 +25,9 @@ const MAX_RUNS = 200;
 const MAX_RUN_PAGES = Math.ceil(MAX_RUNS / 100);
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
 const DESCRIPTION_PREFIXES = Object.freeze({
-    pending: 'Trusted CI-120 verification running',
-    success: 'Trusted CI-120 verified',
-    failure: 'Trusted CI-120 incomplete'
+    pending: 'Trusted build-matrix verification running',
+    success: 'Trusted build-matrix verified',
+    failure: 'Trusted build-matrix incomplete'
 });
 
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -102,11 +102,11 @@ async function authorizeSourceJobArtifact({ github, context, run, repository, so
         jobIds.add(job.id);
     }
     const sourceJobs = jobs.filter(job => job?.name === SOURCE_JOB_NAME);
-    if (sourceJobs.length !== 1) throw new Error('Expected exactly one CI-120 source job.');
+    if (sourceJobs.length !== 1) throw new Error('Expected exactly one build-matrix source job.');
     const sourceJob = sourceJobs[0];
     if (!Number.isInteger(sourceJob.id) || sourceJob.id < 1 || sourceJob.status !== 'completed' ||
-        sourceJob.conclusion !== 'failure' || !Array.isArray(sourceJob.steps)) {
-        throw new Error('CI-120 source job is not the exact completed fail-closed job.');
+        sourceJob.conclusion !== 'success' || !Array.isArray(sourceJob.steps)) {
+        throw new Error('build-matrix source job is not the exact completed successful job.');
     }
     const expectedRunUrl = `https://api.github.com/repos/${repository.full_name}/actions/runs/${run.id}`;
     if (sourceJob.run_id !== run.id || sourceJob.run_attempt !== run.run_attempt ||
@@ -118,48 +118,48 @@ async function authorizeSourceJobArtifact({ github, context, run, repository, so
     const requiredSuccessfulSteps = [
         'Checkout repository',
         'Setup MSVC',
-        'Configure and build canonical Windows Shipping lane (CI-120)',
-        'Capture Windows Shipping structural provenance (CI-120)',
-        'Install exact Windows Shipping SDK for the consumer profile (CI-120)',
-        'Configure and build canonical Windows validation lane (CI-120)',
-        'Capture Windows validation structural provenance (CI-120)',
-        'Configure and build installed SDK consumer lane (CI-120)',
-        'Capture installed SDK consumer structural provenance (CI-120)',
-        'Generate configured build-matrix inventory from the structural producer (CI-120)',
-        'Compare reviewed configured-evidence findings (CI-120)',
-        'Upload untrusted CI-120 structural evidence'
+        'Configure and build the Windows Shipping lane',
+        'Capture Windows Shipping provenance',
+        'Install the Windows Shipping SDK for the consumer profile',
+        'Configure and build the Windows validation lane',
+        'Capture Windows validation provenance',
+        'Configure and build the installed SDK consumer lane',
+        'Capture installed SDK consumer provenance',
+        'Generate the configured build-matrix inventory',
+        'Check the configured build matrix',
+        'Upload build-matrix evidence'
     ];
     const named = name => sourceJob.steps.filter(step => step?.name === name);
     for (const name of requiredSuccessfulSteps) {
         const matches = named(name);
         if (matches.length !== 1 || matches[0].status !== 'completed' || matches[0].conclusion !== 'success') {
-            throw new Error(`Required CI-120 source step did not succeed exactly once: ${name}`);
+            throw new Error(`Required build-matrix source step did not succeed exactly once: ${name}`);
         }
     }
     const finalSteps = named(SOURCE_FINAL_STEP);
     if (finalSteps.length !== 1 || finalSteps[0].status !== 'completed' ||
-        finalSteps[0].conclusion !== 'failure') {
-        throw new Error('CI-120 did not fail only at its documented external-authority enforcement step.');
+        finalSteps[0].conclusion !== 'success') {
+        throw new Error('The build-matrix producer did not complete its documented evidence-recording step.');
     }
-    if (sourceJob.steps.some(step => step?.conclusion === 'failure' && step?.name !== SOURCE_FINAL_STEP)) {
-        throw new Error('CI-120 source job has an unexpected failed step.');
+    if (sourceJob.steps.some(step => step?.conclusion === 'failure')) {
+        throw new Error('build-matrix source job has a failed step.');
     }
 
     const artifactsResponse = await github.rest.actions.listWorkflowRunArtifacts({
         ...request, per_page: 100, page: 1
     });
     const artifacts = exactSinglePageInventory(artifactsResponse, 'artifacts', 'Source artifact inventory');
-    const expectedArtifactName = `ci120-untrusted-stable-v1-${sourceSha}-${run.run_attempt}`;
+    const expectedArtifactName = `build-matrix-stable-v1-${sourceSha}-${run.run_attempt}`;
     const candidates = artifacts.filter(artifact => artifact?.name === expectedArtifactName);
-    if (candidates.length !== 1) throw new Error('Expected exactly one exact-attempt CI-120 source artifact.');
+    if (candidates.length !== 1) throw new Error('Expected exactly one exact-attempt build-matrix source artifact.');
     const artifact = candidates[0];
     if (!Number.isInteger(artifact.id) || artifact.id < 1 || artifact.expired !== false ||
         !Number.isInteger(artifact.size_in_bytes) || artifact.size_in_bytes < 1 ||
         artifact.size_in_bytes > 4 * 1024 * 1024 * 1024 || !DIGEST_PATTERN.test(artifact.digest || '')) {
-        throw new Error('CI-120 artifact identity, retention, size, or API digest is invalid.');
+        throw new Error('build-matrix artifact identity, retention, size, or API digest is invalid.');
     }
     if (!artifactWorkflowRunMatches(artifact, run, repository)) {
-        throw new Error('CI-120 artifact is not tied to the exact source run, repository, branch, and commit.');
+        throw new Error('build-matrix artifact is not tied to the exact source run, repository, branch, and commit.');
     }
     return { sourceJob, finalStep: finalSteps[0], artifact };
 }
@@ -271,10 +271,10 @@ function sameCommitInventoryReasons(runs, eventRun, sourceSha) {
             (candidate.run_number > eventRun.run_number ||
                 candidate.run_number === eventRun.run_number &&
                 candidate.run_attempt > eventRun.run_attempt)) {
-            reasons.push('A newer CI-120 source run or attempt exists for this exact commit.');
+            reasons.push('A newer build-matrix source run or attempt exists for this exact commit.');
         }
     }
-    if (!seen.has(eventRun.id)) reasons.push('The exact CI-120 source run is missing from its workflow inventory.');
+    if (!seen.has(eventRun.id)) reasons.push('The exact build-matrix source run is missing from its workflow inventory.');
     return unique(reasons);
 }
 
@@ -292,7 +292,7 @@ async function inspectSource({ github, context }, mode) {
         !STATUS_EVENTS.includes(eventRun.event) || eventRun.name !== SOURCE_WORKFLOW_NAME ||
         normalizeWorkflowPath(eventRun.path) !== SOURCE_WORKFLOW_PATH ||
         eventRun.head_branch !== 'Working' || !normalizedSha(eventRun.head_sha)) {
-        reasons.push('The workflow_run event is not an exact supported CI-120 source attempt.');
+        reasons.push('The workflow_run event is not an exact supported build-matrix source attempt.');
     }
     const sourceSha = normalizedSha(eventRun?.head_sha);
 
@@ -304,7 +304,7 @@ async function inspectSource({ github, context }, mode) {
     }
     if (!exactRepository(eventRun?.repository, repository) ||
         !exactRepository(eventRun?.head_repository, repository)) {
-        reasons.push('The CI-120 source run is not owned by the base repository.');
+        reasons.push('The build-matrix source run is not owned by the base repository.');
     }
 
     const checkoutSha = normalizedSha(process.env.TRUSTED_CHECKOUT_SHA);
@@ -347,7 +347,7 @@ async function inspectSource({ github, context }, mode) {
         reasons.push(`The source run is not in the expected '${expectedStatus}' lifecycle state.`);
     }
     if (mode === 'final' && event.action !== 'completed') {
-        reasons.push('A final CI-120 status requires a completed source event.');
+        reasons.push('A final build-matrix status requires a completed source event.');
     }
 
     let sameCommitRuns = [];
@@ -361,7 +361,7 @@ async function inspectSource({ github, context }, mode) {
     const commit = sourceSha
         ? (await github.rest.repos.getCommit({ owner, repo, ref: sourceSha })).data : null;
     if (!sourceSha || normalizedSha(commit?.sha) !== sourceSha) {
-        reasons.push('The base repository cannot resolve the exact CI-120 source commit.');
+        reasons.push('The base repository cannot resolve the exact build-matrix source commit.');
     }
 
     return { owner, repo, repository, event, eventRun, run, sourceSha, reasons: unique(reasons) };
@@ -377,7 +377,7 @@ function reporterTargetUrl(inspection) {
 }
 
 async function publishStatus(args, mode, state) {
-    if (!Object.hasOwn(DESCRIPTION_PREFIXES, state)) throw new Error(`Unsupported CI-120 status '${state}'.`);
+    if (!Object.hasOwn(DESCRIPTION_PREFIXES, state)) throw new Error(`Unsupported build-matrix status '${state}'.`);
     const inspection = await inspectSource(args, mode);
     if (inspection.reasons.length) {
         return { performed: false, reason: 'stale-or-untrusted-source', staleReasons: inspection.reasons,
@@ -388,7 +388,7 @@ async function publishStatus(args, mode, state) {
     })).data;
     if (!runMatches(immediate, inspection.run, inspection.repository)) {
         return { performed: false, reason: 'stale-or-untrusted-source',
-            staleReasons: ['The CI-120 source run changed in the final status mutation window.'],
+            staleReasons: ['The build-matrix source run changed in the final status mutation window.'],
             targetSha: inspection.sourceSha, state: null, targetUrl: null, context: STATUS_CONTEXT };
     }
     const immediateRuns = await listSameCommitRuns(args.github, {
@@ -456,30 +456,30 @@ function finalEvidenceErrors(eventRun) {
     if (errors.length) return errors;
 
     try {
-        const metadata = readBoundedJson(process.env.SOURCE_METADATA_PATH, 'CI-120 source metadata');
-        const receipt = readBoundedJson(process.env.RECEIPT_PATH, 'CI-120 trusted receipt');
+        const metadata = readBoundedJson(process.env.SOURCE_METADATA_PATH, 'build-matrix source metadata');
+        const receipt = readBoundedJson(process.env.RECEIPT_PATH, 'build-matrix trusted receipt');
         const source = receipt.source;
         const metadataSource = metadata.source;
         const verifier = receipt.verifier;
         const inputArtifact = receipt.inputArtifact;
-        if (receipt.schemaVersion !== 1 || receipt.kind !== 'spark-ci120-trusted-workflow-run' ||
+        if (receipt.schemaVersion !== 1 || receipt.kind !== 'spark-build-matrix-trusted-workflow-run' ||
             receipt.state !== 'verified' || receipt.authority !== AUTHORITY || receipt.profile !== 'stable-v1' ||
             !isObject(source) || !isObject(metadataSource) ||
             source.repository !== metadata.repository?.fullName ||
             source.workflowId !== eventRun.workflow_id || source.workflowName !== SOURCE_WORKFLOW_NAME ||
             source.workflowPath !== SOURCE_WORKFLOW_PATH || source.runId !== eventRun.id ||
             source.runNumber !== eventRun.run_number || source.runAttempt !== eventRun.run_attempt ||
-            source.event !== eventRun.event || source.conclusion !== 'failure' ||
+            source.event !== eventRun.event || source.conclusion !== 'success' ||
             source.headBranch !== 'Working' || normalizedSha(source.headSha) !== normalizedSha(eventRun.head_sha) ||
-            source.jobName !== SOURCE_JOB_NAME || source.jobConclusion !== 'failure' ||
-            source.expectedFailClosedStep !== SOURCE_FINAL_STEP) {
-            errors.push('The trusted receipt does not bind the exact expected CI-120 source execution.');
+            source.jobName !== SOURCE_JOB_NAME || source.jobConclusion !== 'success' ||
+            source.expectedFinalStep !== SOURCE_FINAL_STEP) {
+            errors.push('The trusted receipt does not bind the exact expected build-matrix source execution.');
         }
         if (metadataSource?.runId !== eventRun.id || metadataSource?.runNumber !== eventRun.run_number ||
             metadataSource?.runAttempt !== eventRun.run_attempt ||
             normalizedSha(metadataSource?.headSha) !== normalizedSha(eventRun.head_sha) ||
             metadataSource?.jobId !== source?.jobId || metadataSource?.jobName !== source?.jobName ||
-            metadataSource?.finalStepName !== SOURCE_FINAL_STEP || metadataSource?.finalStepConclusion !== 'failure') {
+            metadataSource?.finalStepName !== SOURCE_FINAL_STEP || metadataSource?.finalStepConclusion !== 'success') {
             errors.push('The source metadata and trusted receipt do not identify the same source job and attempt.');
         }
         if (!isObject(verifier) || verifier.repository !== metadata.repository?.fullName ||
@@ -520,13 +520,13 @@ async function pending(args) {
         args.core.setOutput('status-published', result.performed ? 'true' : 'false');
         args.core.setOutput('status-target-sha', result.performed ? result.targetSha : '');
         if (!result.performed) {
-            args.core.setFailed(`CI-120 pending status was not published: ${result.staleReasons.join(' ')}`);
+            args.core.setFailed(`build-matrix pending status was not published: ${result.staleReasons.join(' ')}`);
         }
         return result;
     } catch (error) {
         args.core.setOutput('status-published', 'false');
         args.core.setOutput('status-target-sha', '');
-        args.core.setFailed(`CI-120 pending status API failed: ${error.message}`);
+        args.core.setFailed(`build-matrix pending status API failed: ${error.message}`);
         return { performed: false, reason: 'api-error', error: error.message };
     }
 }
@@ -538,34 +538,34 @@ async function final(args) {
     try {
         result = await publishStatus(args, 'final', desiredState);
         if (!result.performed) {
-            args.core.setFailed(`CI-120 final status was not published: ${result.staleReasons.join(' ')}`);
+            args.core.setFailed(`build-matrix final status was not published: ${result.staleReasons.join(' ')}`);
         } else if (evidenceErrors.length) {
-            args.core.setFailed(`CI-120 trusted evidence is incomplete: ${evidenceErrors.join(' ')}`);
+            args.core.setFailed(`build-matrix trusted evidence is incomplete: ${evidenceErrors.join(' ')}`);
         }
     } catch (error) {
         result = { performed: false, reason: 'api-error', error: error.message,
             targetSha: normalizedSha(args.context.payload?.workflow_run?.head_sha),
             state: null, targetUrl: null, context: STATUS_CONTEXT };
-        args.core.setFailed(`CI-120 final status API failed: ${error.message}`);
+        args.core.setFailed(`build-matrix final status API failed: ${error.message}`);
     }
     const record = {
         schemaVersion: 1,
-        kind: 'spark-ci120-trusted-status',
+        kind: 'spark-build-matrix-trusted-status',
         generatedAt: new Date().toISOString(),
         evidenceState: evidenceErrors.length ? 'incomplete' : 'verified',
         evidenceErrors,
         commitStatus: result
     };
     try { writeRecord(record); }
-    catch (error) { args.core.setFailed(`Could not write CI-120 status record: ${error.message}`); }
+    catch (error) { args.core.setFailed(`Could not write build-matrix status record: ${error.message}`); }
     return record;
 }
 
 module.exports = async args => {
-    const mode = (process.env.CI120_STATUS_MODE || '').trim();
+    const mode = (process.env.BUILD_MATRIX_STATUS_MODE || '').trim();
     if (mode === 'pending') return pending(args);
     if (mode === 'final') return final(args);
-    throw new Error(`Unsupported CI120_STATUS_MODE '${mode || '<empty>'}'.`);
+    throw new Error(`Unsupported BUILD_MATRIX_STATUS_MODE '${mode || '<empty>'}'.`);
 };
 
 module.exports.authorizeSourceJobArtifact = authorizeSourceJobArtifact;

@@ -149,8 +149,8 @@ Configuration-surface exceptions (every omitted option remains required):
 - No Shipping-configuration artifact is signed, checksummed, attested, installed, upgraded, or rollback-tested at a single commit.
 - The first-party slice SparkGameFPS is in the profile but uncertified: its release state is blocked and it holds this profile at blocked (MOD-310).
 - SparkGameFPS builds against SparkEngineLib with the engine source tree on its include path, so the public-API-only requirement is unmet (SDK-240, MOD-310).
-- No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200, CI-120).
-- CI-120 structurally validates its local File API capture but intentionally reports producer authority unavailable: a same-job GitHub OIDC audience proves only the mutable job identity, not CMake execution. An independently verified protected external attestation is not deployed (CI-120).
+- No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200).
+- The Windows Shipping producer records its File API capture as structural evidence and reports producer authority unavailable by design: a same-job GitHub OIDC audience proves only the mutable job identity, not CMake execution. The protected Build Matrix Verifier attests that evidence from the Working checkout, and no attested receipt exists yet for a Working commit (CI-120).
 - The editor-to-cook-to-package-to-install-to-run loop has no same-commit end-to-end certification.
 - MSVC v145 and Visual Studio 2026 are an advisory continue-on-error lane, not a supported compiler line in this profile.
 - Windows 10 x64 and the Linux and macOS build floors stay documented as development minima, but this profile certifies only Windows 11 x64; headless execution is in profile only on that same host.
@@ -165,7 +165,7 @@ Configuration-surface exceptions (every omitted option remains required):
 |---|---|---|:---:|---|---|
 | `G00` Source-of-truth integrity | governance | **blocked** | yes | One validated readiness contract owns public status; All numeric claims are generated; Documentation health is current; Regeneration is deterministic and clean | `RDY-000`, `DOC-410` |
 | `G01` Fail-closed CI evidence | ci | **blocked** | yes | Required commands propagate failure; Every Working commit receives normalized evidence; Advisory lanes are not represented as support gates; JUnit and gate summaries attach to the exact SHA | `CI-100`, `CI-110` |
-| `G02` Supported build matrix | build | **blocked** | yes | Declared host/compiler configurations configure and build from clean checkout; Every shipped target and real module library is built; Shipping configuration exists and is distinct from Debug/Release; Submodule/toolchain inputs are pinned; Configured CI-120 evidence is producer-verified only by an independently verified protected external attestation; a same-job OIDC token, mutable workflow, checkout, receipt, artifact path, or hash cannot satisfy this gate | `CI-120`, `BLD-100` |
+| `G02` Supported build matrix | build | **blocked** | yes | Declared host/compiler configurations configure and build from clean checkout; Every shipped target and real module library is built; Shipping configuration exists and is distinct from Debug/Release; Submodule/toolchain inputs are pinned; Configured build-matrix evidence is producer-verified only by an independently verified protected external attestation; a same-job OIDC token, mutable workflow, checkout, receipt, artifact path, or hash cannot satisfy this gate | `CI-120`, `BLD-100` |
 | `G03` Production-source test coverage | tests | **blocked** | yes | Every in-profile real module library loads and executes in tests; No mirror-only or tautological test satisfies release; Coverage thresholds are explicit and enforced; Sanitizer and concurrency lanes fail closed; Experimental module lifecycle evidence remains owned by RDY-015 outside stable-v1 | `RDY-010`, `CI-110` |
 | `G04` Asset, cook, and package integrity | content | **blocked** | yes | Every discovered module has a validated content manifest; Zero missing or case-mismatched references in declared manifests; In-profile cooked packages launch without repository-relative dependencies; Stable package smoke covers clean Windows 11 machines; Experimental module package debt remains outside stable-v1 | `RDY-020`, `ASSET-220` |
 | `G05` Versioned Shipping artifacts | release | **blocked** | yes | Version is derived from the tag and embedded everywhere; Shipping artifacts are deterministic; Installer/uninstaller/upgrade/rollback smoke tests pass; Release notes and compatibility policy are published | `BLD-100`, `REL-100`, `INST-130`, `REL-200` |
@@ -881,12 +881,12 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - `ThirdParty/dependencies.lock`
 - `.github/workflows/build.yml`
 - `docs/site/readiness.json`
-- `docs/readiness/ci120-build-matrix-inventory.json`
-- `docs/readiness/ci120-parity-findings.json`
+- `docs/readiness/build-matrix-inventory.json`
+- `docs/readiness/build-matrix-parity-findings.json`
 - `Tools/buildmatrix/capture_provenance.py`
 - `Tools/buildmatrix/validate_pending_authority.py`
 - `Tools/buildmatrix/verify_external_evidence.py`
-- `.github/workflows/ci120-report.yml`
+- `.github/workflows/build-matrix-verifier.yml`
 
 **Entry points**
 
@@ -900,11 +900,11 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - `Tools/buildmatrix/verify_external_evidence.py`
 - `Tools/buildmatrix/workflow.py`
 - `Tests/Tools/test_build_matrix_parity.py`
-- `Tests/Tools/test_ci120_pending_authority.py`
-- `Tests/Tools/test_ci120_external_verifier.py`
+- `Tests/Tools/test_build_matrix_pending_authority.py`
+- `Tests/Tools/test_build_matrix_external_verifier.py`
 - `docs/site/readiness.json`
 - `.github/workflows/build.yml`
-- `.github/workflows/ci120-report.yml`
+- `.github/workflows/build-matrix-verifier.yml`
 
 **Implementation scope**
 
@@ -933,15 +933,15 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 **Required commands**
 
 ```bash
-python3 Tools/buildmatrix/inventory.py --check docs/readiness/ci120-build-matrix-inventory.json
+python3 Tools/buildmatrix/inventory.py --check docs/readiness/build-matrix-inventory.json
 python3 Tools/buildmatrix/capture_provenance.py --profile windows-shipping --build-dir build/windows-shipping --build
 python3 Tools/buildmatrix/capture_provenance.py --profile windows-validation --build-dir build/windows-release --build
 python3 Tools/buildmatrix/capture_provenance.py --profile installed-sdk-consumer --build-dir build/installed-sdk-consumer --build
 python3 Tools/buildmatrix/inventory.py --codemodel windows-shipping=build/windows-shipping --codemodel windows-validation=build/windows-release --codemodel installed-sdk-consumer=build/installed-sdk-consumer --output build-matrix-inventory.json
-python3 Tools/buildmatrix/check_parity.py --inventory docs/readiness/ci120-build-matrix-inventory.json --baseline docs/readiness/ci120-parity-findings.json
-python3 Tools/buildmatrix/validate_pending_authority.py --inventory build-matrix-inventory.json --report build-matrix-parity-findings.json --output ci120-pending-authority.json
+python3 Tools/buildmatrix/check_parity.py --inventory docs/readiness/build-matrix-inventory.json --baseline docs/readiness/build-matrix-parity-findings.json
+python3 Tools/buildmatrix/validate_pending_authority.py --inventory build-matrix-inventory.json --report build-matrix-parity-findings.json --output build-matrix-pending-authority.json
 python3 Tests/Tools/test_build_matrix_parity.py
-python3 -m unittest Tests.Tools.test_ci120_pending_authority Tests.Tools.test_ci120_external_verifier
+python3 -m unittest Tests.Tools.test_build_matrix_pending_authority Tests.Tools.test_build_matrix_external_verifier
 cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON
 cmake --build build/windows-shipping --config MinSizeRel --clean-first
 cmake -LAH -N build/windows-shipping
@@ -970,7 +970,7 @@ python3 tools/site-data/validate.py
 - Risks:
   - Strict mode may expose optional-dependency ambiguity
   - Configured evidence cannot be produced without a real Windows MSVC configure, so the profile stays blocked until one runs
-  - The local producer record detects reply substitution and post-build mutation but is intentionally unavailable as release authority. The protected downstream verifier is staged while the producer remains deliberately red; CI-120 stays blocked until that verifier accepts and attests an exact source-run artifact remotely.
+  - The local producer record detects reply substitution and post-build mutation but is intentionally unavailable as release authority. The producer job records that evidence and succeeds; only the protected Build Matrix Verifier attests it from the Working checkout, and CI-120 stays open until that verifier accepts and attests an exact Working source-run artifact.
 - Out of scope:
   - Certifying Linux, macOS, or any other host as a stable-v1 product
 

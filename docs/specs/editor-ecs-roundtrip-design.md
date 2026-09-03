@@ -1,4 +1,4 @@
-# SparkEditor ⇄ Engine ECS Round-Trip — Design (Sub-project 1)
+# SparkEditor ⇄ Engine ECS Round-Trip — Design
 
 Date: 2026-07-05
 Status: Approved (design). Foundation for the Unity/Unreal-style editor effort.

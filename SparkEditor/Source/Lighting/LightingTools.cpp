@@ -1145,11 +1145,7 @@ namespace SparkEditor
                 // Reduce shadow quality for distant/low-priority lights
                 if (light->priority < 5 && light->shadowQuality > ShadowQuality::Low)
                 {
-                    auto qualityVal = static_cast<uint32_t>(light->shadowQuality);
-                    if (qualityVal > 1)
-                    {
-                        light->shadowQuality = static_cast<ShadowQuality>(qualityVal - 1);
-                    }
+                    light->shadowQuality = static_cast<ShadowQuality>(static_cast<uint32_t>(light->shadowQuality) - 1);
                 }
             }
         }

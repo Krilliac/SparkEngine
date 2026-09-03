@@ -6,7 +6,10 @@
 # helper below renders that exact 40-character revision into the manifest at
 # configure/check time, avoiding a second SHA copy that Dependabot cannot edit.
 # Source archives without Git metadata retain an explicit descriptive marker.
-# Last sync: 2026-08-26 (made repository gitlinks canonical for submodule pins;
+# Last sync: 2026-09-02 (AngelScript packed-bytecode patch now also routes 64-bit
+# bytecode arguments through an unaligned accessor so the pinned submodule builds
+# cleanly under UBSan alignment checks; no source revision or URL changed).
+# Previous sync: 2026-08-26 (made repository gitlinks canonical for submodule pins;
 # Dependabot pointer-only PRs can now be validated without leaving stale SHAs).
 
 function(_spark_manifest_gitlink_revision dep_path out_var)

@@ -18,8 +18,11 @@ on:
   workflow_dispatch:
     inputs:
       source_run_id:
-        description: Failed same-workflow push run whose preserved SARIF should be repaired
-        required: true
+        description: >-
+          Failed same-workflow push run whose preserved SARIF should be repaired.
+          Leave empty to run a fresh analysis of the dispatched ref instead.
+        required: false
+        default: ''
         type: string
 
 env:
@@ -31,7 +34,9 @@ permissions:
 
 jobs:
   analyze:
-    if: github.event_name != 'workflow_dispatch'
+    # Scheduled, push, and PR events analyze their ref. A manual dispatch does
+    # too unless it names a preserved SARIF to repair (recover-sarif below).
+    if: github.event_name != 'workflow_dispatch' || inputs.source_run_id == ''
     permissions:
       contents: read # for actions/checkout to fetch code
       security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
@@ -59,6 +64,16 @@ jobs:
         # The build matrix already compiles and runs the test corpus. Keep
         # NativeRecommendedRules focused on production targets so hundreds
         # of test translation units cannot exhaust this job's 60-minute cap.
+        #
+        # C6262 defaults to a 16 KB frame, which reports ordinary fixed-size
+        # I/O and ImGui text buffers. Frames of 32 KB and above are fixed in
+        # code; the threshold keeps the warning for frames that matter on a
+        # 1 MB Windows thread stack. It travels through CMAKE_CXX_FLAGS into
+        # the compile commands the analysis action replays, because the
+        # action's additionalArgs input reassigns a const and aborts the job.
+        env:
+          CFLAGS: /analyze:stacksize 32768
+          CXXFLAGS: /analyze:stacksize 32768
         run: >-
           cmake -S . -B "${{ env.build }}"
           -G "Visual Studio 17 2022" -A x64 -T v143
@@ -77,10 +92,19 @@ jobs:
           cmakeBuildDirectory: ${{ env.build }}
           # Ruleset file that will determine what checks will be run
           ruleset: NativeRecommendedRules.ruleset
+          # Vendored code is analyzed by its upstream project, not here. Targets
+          # defined under these directories (Jolt, AngelScript) are skipped, and
+          # their headers count as external so findings inside them are not
+          # attributed to engine translation units. Vendored targets defined at
+          # the repository root (miniz, tinyexr, Recast/Detour, glad, ImGui) are
+          # dropped by the normalizer below.
+          ignoredTargetPaths: ThirdParty;build/ThirdParty
+          ignoredIncludePaths: ThirdParty;build/ThirdParty
 
       # The analyzer emits one SARIF run per translation unit (more than 1,000
-      # here), while GitHub accepts at most 20 runs per upload. Coalesce runs by
-      # tool without dropping findings, rebasing their run-relative indices.
+      # here), while GitHub accepts at most 20 runs per upload. Drop findings
+      # located in vendored code, then coalesce runs by tool without losing any
+      # other finding, rebasing their run-relative indices.
       - name: Consolidate MSVC SARIF runs into stable categories
         run: python -I .github/scripts/normalize-msvc-sarif.py "${{ steps.run-analysis.outputs.sarif }}"
 
@@ -90,19 +114,20 @@ jobs:
         with:
           sarif_file: ${{ steps.run-analysis.outputs.sarif }}
 
-      # Preserve a failed payload briefly so future schema or service-limit
-      # changes can be diagnosed without rerunning the hour-long analyzer.
-      - name: Upload failed MSVC SARIF for diagnosis
-        if: failure() && steps.run-analysis.outputs.sarif != ''
+      # Retain the normalized payload briefly so findings can be triaged
+      # offline and a failed upload can be diagnosed or repaired without
+      # rerunning the hour-long analyzer.
+      - name: Retain normalized MSVC SARIF
+        if: always() && steps.run-analysis.outputs.sarif != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: msvc-sarif-${{ github.run_id }}
           path: ${{ steps.run-analysis.outputs.sarif }}
           if-no-files-found: ignore
-          retention-days: 1
+          retention-days: 7
 
   recover-sarif:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
     name: Recover preserved SARIF
     runs-on: windows-2022
     timeout-minutes: 15

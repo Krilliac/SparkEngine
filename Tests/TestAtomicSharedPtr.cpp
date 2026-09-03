@@ -21,7 +21,7 @@ namespace
         int value = 0;
         static std::atomic<int> instanceCount;
 
-        TestResource(int v) : value(v) { instanceCount.fetch_add(1); }
+        explicit TestResource(int v) : value(v) { instanceCount.fetch_add(1); }
         ~TestResource() { instanceCount.fetch_sub(1); }
     };
 

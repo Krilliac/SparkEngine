@@ -351,7 +351,7 @@ TEST(Physics_CreateBody)
     EXPECT_EQ(physics.GetBodyCount(), 1);
 
     const auto* body = physics.GetBody(id);
-    EXPECT_TRUE(body != nullptr);
+    ASSERT_TRUE(body != nullptr);
     EXPECT_NEAR(body->desc.position.y, 10.0f, 0.001f);
     EXPECT_TRUE(body->active);
 }
@@ -443,7 +443,7 @@ TEST(Physics_MaterialRegistration)
     EXPECT_TRUE(physics.HasMaterial("Rubber"));
 
     const auto* m = physics.GetMaterial("Rubber");
-    EXPECT_TRUE(m != nullptr);
+    ASSERT_TRUE(m != nullptr);
     EXPECT_NEAR(m->friction, 0.8f, 0.001f);
     EXPECT_NEAR(m->restitution, 0.9f, 0.001f);
 

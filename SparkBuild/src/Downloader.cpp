@@ -207,7 +207,9 @@ namespace SparkBuild
 
     bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destDir)
     {
-        CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        const HRESULT comInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        if (FAILED(comInit) && comInit != RPC_E_CHANGED_MODE)
+            return false;
 
         int zipWLen = MultiByteToWideChar(CP_UTF8, 0, zipPath.c_str(), -1, nullptr, 0);
         std::wstring zipW(zipWLen, 0);

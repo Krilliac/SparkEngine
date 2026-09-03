@@ -433,25 +433,32 @@ void Profiler::Console_ExportCSV(const std::string& filepath) const
         return;
     }
 
-    std::lock_guard<std::mutex> lock(m_mutex);
-
-    file << "Section,TimeMs\n";
-    for (const auto& [name, timeMs] : m_sectionResults)
+    // Snapshot the profiler tables under the lock, then do the disk I/O unlocked.
+    std::ostringstream csv;
     {
-        file << name << "," << timeMs << "\n";
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        csv << "Section,TimeMs\n";
+        for (const auto& [name, timeMs] : m_sectionResults)
+        {
+            csv << name << "," << timeMs << "\n";
+        }
+
+        csv << "\nCategory,TimeMs\n";
+        const char* catNames[] = {"Frame", "Render",    "Physics", "Audio", "GameLogic",
+                                  "Input", "Particles", "UI",      "Custom"};
+        for (size_t i = 0; i < m_categoryTotals.size(); ++i)
+        {
+            csv << catNames[i] << "," << m_categoryTotals[i] << "\n";
+        }
+
+        csv << "\nMemoryCategory,CurrentKB,PeakKB,Allocations\n";
+        for (const auto& [name, cat] : m_memoryCategories)
+        {
+            csv << name << "," << (cat.currentBytes / 1024) << "," << (cat.peakBytes / 1024) << ","
+                << cat.totalAllocations << "\n";
+        }
     }
 
-    file << "\nCategory,TimeMs\n";
-    const char* catNames[] = {"Frame", "Render", "Physics", "Audio", "GameLogic", "Input", "Particles", "UI", "Custom"};
-    for (size_t i = 0; i < m_categoryTotals.size(); ++i)
-    {
-        file << catNames[i] << "," << m_categoryTotals[i] << "\n";
-    }
-
-    file << "\nMemoryCategory,CurrentKB,PeakKB,Allocations\n";
-    for (const auto& [name, cat] : m_memoryCategories)
-    {
-        file << name << "," << (cat.currentBytes / 1024) << "," << (cat.peakBytes / 1024) << "," << cat.totalAllocations
-             << "\n";
-    }
+    file << csv.str();
 }

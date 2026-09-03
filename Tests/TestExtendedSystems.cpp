@@ -108,7 +108,7 @@ TEST(DeltaSnapshot_OnlyChangedFieldsSent)
     tracker.RecordState(1, state1);
 
     auto delta3 = tracker.BuildDelta(0, 1);
-    EXPECT_TRUE(delta3.size() > 0);
+    ASSERT_TRUE(delta3.size() > 0);
     EXPECT_EQ(delta3[0], 0u); // Field index 0 (health)
 }
 

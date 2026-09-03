@@ -2909,7 +2909,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
 
         freeze_step = text[freeze:collect]
         self.assertIn("steps.required-ci.outputs.run_id", freeze_step)
-        self.assertIn("steps.required-ci.outputs.ci120_status_id", freeze_step)
+        self.assertIn("steps.required-ci.outputs.build_matrix_status_id", freeze_step)
         self.assertIn("steps.required-ci.outputs.codeql_status_id", freeze_step)
         self.assertIn("tools/site-data/exact_evidence.py write", freeze_step)
         self.assertNotIn("steps.required-ci-final.outputs", freeze_step)
@@ -3031,7 +3031,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         )
 
         self.assertIn("steps.required-ci-final.outputs.run_id", final_manifest_step)
-        self.assertIn("steps.required-ci-final.outputs.ci120_status_id", final_manifest_step)
+        self.assertIn("steps.required-ci-final.outputs.build_matrix_status_id", final_manifest_step)
         self.assertIn("steps.required-ci-final.outputs.codeql_status_id", final_manifest_step)
         self.assertIn("exact_evidence.py verify", final_manifest_step)
         final_full_step = text[final_full:final_asset]

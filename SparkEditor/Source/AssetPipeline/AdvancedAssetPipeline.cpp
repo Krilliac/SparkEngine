@@ -146,8 +146,14 @@ namespace SparkEditor
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "AdvancedAssetPipeline shutting down");
         m_acceptingJobs.store(false);
-        // Stop processing threads
-        m_shouldStopProcessing.store(true);
+        // Stop processing threads. The flag is published under the queue mutex:
+        // a worker that has already evaluated the wait predicate but not yet
+        // blocked would otherwise miss this notification and never wake, and
+        // the join below would hang.
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            m_shouldStopProcessing.store(true);
+        }
         m_queueCondition.notify_all();
 
         for (auto& thread : m_processingThreads)
@@ -765,8 +771,11 @@ namespace SparkEditor
         if (!m_isInitialized)
             return;
 
-        // Stop existing threads
-        m_shouldStopProcessing.store(true);
+        // Stop existing threads (flag published under the queue mutex, see Shutdown)
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            m_shouldStopProcessing.store(true);
+        }
         m_queueCondition.notify_all();
 
         for (auto& thread : m_processingThreads)

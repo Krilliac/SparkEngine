@@ -516,6 +516,16 @@ static int probe_wrgsbase_usable(void)
     return ok;
 }
 
+/* Read the 64-bit TIB field at `offset` through the current gs.base — the
+ * register-offset form of `movq %gs:OFFSET, %reg`. TIB.StackBase lives at
+ * 0x08 and TIB.StackLimit at 0x10. */
+static inline unsigned long read_gs_qword(unsigned long offset)
+{
+    unsigned long value = 0;
+    __asm__ volatile("movq %%gs:(%1), %0" : "=r"(value) : "r"(offset));
+    return value;
+}
+
 /* Trampoline: fix up the ucontext trap fields, optionally bump REG_RSP into
  * the middle of the active Windows thread stack to bypass Wine's
  * `virtual_setup_exception` bounds check (Wine PR #62 territory), then chain
@@ -523,8 +533,8 @@ static int probe_wrgsbase_usable(void)
 static void trampoline(int sig, siginfo_t* info, void* uctx)
 {
     ucontext_t* uc = (ucontext_t*)uctx;
-    int gs_was_repaired = 0; /* Set to 1 if we fixed gs.base (Option C) */
 #ifdef __x86_64__
+    int gs_was_repaired = 0; /* Set to 1 if we fixed gs.base (Option C) */
     /* Linux's <sys/ucontext.h> defines REG_TRAPNO = 20 and REG_ERR = 19
      * on x86_64. These are indices into gregs[]. */
     uc->uc_mcontext.gregs[REG_TRAPNO] = 14; /* TRAP_x86_PAGEFLT */
@@ -571,14 +581,8 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
      * because it can corrupt SEH frame chains when it fires on faults
      * that don't need it. */
     {
-        unsigned long stack_base = 0;
-        unsigned long stack_limit = 0;
-        unsigned long teb_self = 0;
-        unsigned long gs_base = 0;
-        __asm__ volatile("rdgsbase %0" : "=r"(gs_base));
-        __asm__ volatile("movq %%gs:0x30, %0" : "=r"(teb_self));
-        __asm__ volatile("movq %%gs:0x8, %0" : "=r"(stack_base));
-        __asm__ volatile("movq %%gs:0x10, %0" : "=r"(stack_limit));
+        unsigned long stack_base = read_gs_qword(0x08);
+        unsigned long stack_limit = read_gs_qword(0x10);
         unsigned long old_rsp = (unsigned long)uc->uc_mcontext.gregs[REG_RSP];
 
         /* Wine PR #63 init_handler safety net: a fault on a thread whose
@@ -618,9 +622,8 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
                 {
                     __asm__ volatile("wrgsbase %0" :: "r"(candidate));
                     /* Re-read after wrgsbase for the diagnostic block below. */
-                    __asm__ volatile("movq %%gs:0x30, %0" : "=r"(teb_self));
-                    __asm__ volatile("movq %%gs:0x8, %0"  : "=r"(stack_base));
-                    __asm__ volatile("movq %%gs:0x10, %0" : "=r"(stack_limit));
+                    stack_base = read_gs_qword(0x08);
+                    stack_limit = read_gs_qword(0x10);
                     static int repaired_logged = 0;
                     if (!repaired_logged || g_trampoline_verbose)
                     {
@@ -661,9 +664,8 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
                 if (rescued)
                 {
                     __asm__ volatile("wrgsbase %0" :: "r"(rescued));
-                    __asm__ volatile("movq %%gs:0x30, %0" : "=r"(teb_self));
-                    __asm__ volatile("movq %%gs:0x8, %0"  : "=r"(stack_base));
-                    __asm__ volatile("movq %%gs:0x10, %0" : "=r"(stack_limit));
+                    stack_base = read_gs_qword(0x08);
+                    stack_limit = read_gs_qword(0x10);
                     gs_was_repaired = 1;
                     static int rescue_logged = 0;
                     if (!rescue_logged || g_trampoline_verbose)
@@ -742,7 +744,6 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
             }
         }
     }
-#endif
     /* -----------------------------------------------------------------------
      * Option C — Retry instead of dispatching when gs.base was repaired.
      * -----------------------------------------------------------------------
@@ -791,6 +792,7 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
         }
         return;
     }
+#endif
     if (g_wine_segv_handler)
     {
         g_wine_segv_handler(sig, info, uctx);

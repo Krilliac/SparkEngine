@@ -234,8 +234,11 @@ cmake --build build-asan
 cd build-asan && ctest --output-on-failure --no-tests=error && cd ..
 
 # 3. Verify formatting
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules/SparkGame/Source \
-  -name '*.h' -o -name '*.cpp' | xargs clang-format --dry-run --Werror
+find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+     SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+  -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
+  | xargs clang-format --dry-run --Werror
 
 # 4. Run clang-tidy (optional but recommended)
 cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON

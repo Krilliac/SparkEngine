@@ -74,7 +74,7 @@ TEST(GameplayTags_GetTagInfo)
     reg.RegisterTag("Ability.Ultimate");
     auto id = reg.GetTagId("Ability.Ultimate");
     const auto* info = reg.GetTagInfo(id);
-    EXPECT_TRUE(info != nullptr);
+    ASSERT_TRUE(info != nullptr);
     EXPECT_EQ(info->fullName, std::string("Ability.Ultimate"));
     reg.Shutdown();
 }

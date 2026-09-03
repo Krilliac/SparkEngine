@@ -164,8 +164,8 @@ Every session should start in this exact order before doing anything else:
 1. `git fetch origin Working && git log --oneline HEAD..origin/Working | wc -l` — assess how far behind.
 2. `git rebase origin/Working` — sync with upstream.
 3. Resolve any rebase conflicts (see [Git Rebase Conflicts](Git-Rebase-Conflicts.md)).
-4. `cat .claude/index.md` — load persistent context.
-5. Read any knowledge files relevant to the current task.
+4. `cat wiki/_Sidebar.md` — load persistent context from the wiki.
+5. Read the wiki pages relevant to the current task.
 6. **Bloat check** — run before touching anything:
    ```bash
    find SparkEngine/Source SparkEditor/Source SparkConsole/src GameModules \

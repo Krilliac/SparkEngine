@@ -1104,7 +1104,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--exact-evidence-file",
         type=Path,
-        help="validated exact CI-120 and CodeQL evidence manifest to retain in the snapshot",
+        help="validated exact build-matrix and CodeQL evidence manifest to retain in the snapshot",
     )
     parser.add_argument("--skip-doc-health", action="store_true")
     return parser.parse_args()

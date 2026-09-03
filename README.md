@@ -2,7 +2,7 @@
 
 A C++23 open-source 3D game engine with multiple graphics backends behind a shared RHI surface, ECS (EnTT), Jolt Physics, AngelScript scripting, and an ImGui-based editor. Originally built around first-person shooters, it now includes genre templates for RPGs, MMOs, RTS, racing, open-world, and platformers.
 
-> 🌐 **Website now live:** [sparkengine.dev](https://sparkengine.dev/)
+Website: [sparkengine.dev](https://sparkengine.dev/)
 
 [![Trusted exact-source CI](https://github.com/Krilliac/SparkEngine/actions/workflows/trusted-ci-aggregate.yml/badge.svg?branch=Working)](https://github.com/Krilliac/SparkEngine/actions/workflows/trusted-ci-aggregate.yml?query=branch%3AWorking)
 [![Test definitions](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Ftests.json&style=flat-square)](Tests)
@@ -207,7 +207,7 @@ Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine
 
 ## Quality Assurance
 
-**Tests:** 6,990 test definitions across 577 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 6,992 test definitions across 577 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
 
 ```bash
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
@@ -311,7 +311,7 @@ builds against the engine library and source tree rather than the public SDK alo
 (`SDK-240`, `MOD-310`); and the v143 line names a *supported toolchain family*, not
 a pinned one — no exact MSVC compiler build or Windows SDK version is pinned, and
 the hosted image floats, so the toolchain is neither reproducible nor certified
-(`BLD-100`, `PLT-200`, `CI-120`).
+(`BLD-100`, `PLT-200`).
 
 Breadth is frozen around that shape. Linux, macOS, D3D12, Vulkan, OpenGL, Metal,
 multiplayer, production services, and the prototype game modules all keep their
@@ -353,7 +353,6 @@ uncertified.
 | [Game Module Guide](Templates/README.md) | Building standalone games with the SDK |
 | [Networking Config](wiki/subsystems/Networking.md) | UDP, replication, MMO server setup |
 | [Wiki](wiki/) | 198 Markdown pages in the current source inventory (excluding `_Sidebar.md`); inventory is not support/readiness evidence |
-| [DeepWiki](https://deepwiki.com/Krilliac/SparkEngine) | Community knowledge base |
 
 ---
 
@@ -377,7 +376,7 @@ SparkEngine/
 ├── SparkEditor/Source/    65 *Panel.h classes, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 in-tree module directories
-├── Tests/                 6,990 test definitions, 577 files
+├── Tests/                 6,992 test definitions, 577 files
 ├── wiki/                  198 Markdown pages excluding _Sidebar.md (inventory only)
 └── docs/                  API reference, guides
 ```
@@ -387,13 +386,13 @@ SparkEngine/
 ## Contributing
 
 1. Fork the repository and create a feature branch
-2. Follow the [coding standards in CLAUDE.md](CLAUDE.md) — C++23, zero warnings, RAII, const-correct
+2. Follow the [contributor guidelines](CONTRIBUTING.md) — C++23, zero warnings, RAII, const-correct
 3. Add tests for new functionality
 4. Run `clang-format` (enforced in CI) and ensure all tests pass
 5. Open a pull request — one feature per PR
 
 Questions and bug reports: [GitHub Issues](https://github.com/Krilliac/SparkEngine/issues)  
-Discussion: [Discord](https://discord.gg/NyX8d9UZM)  
+Discussion: [Discord](https://discord.gg/cuJv5uWA5V)  
 Documentation: [Wiki](wiki/)
 
 Thanks to the [Jolt Physics](https://github.com/jrouwe/JoltPhysics), [Dear ImGui](https://github.com/ocornut/imgui), [EnTT](https://github.com/skypjack/entt), Khronos (Vulkan/OpenGL), and AngelScript teams.

@@ -24,7 +24,7 @@ namespace
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <shellapi.h>
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR cmdLine, int)
+int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR cmdLine, _In_ int)
 {
     (void)cmdLine;
     int argumentCount = 0;

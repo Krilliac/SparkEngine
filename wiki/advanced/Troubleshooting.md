@@ -124,12 +124,18 @@ cmake -B build -DCMAKE_PREFIX_PATH=<install-prefix>
 
 ```bash
 # Check for issues
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules/SparkGame/Source \
-  -name '*.h' -o -name '*.cpp' | head -50 | xargs clang-format --dry-run --Werror 2>&1
+find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+     SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+  -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
+  | xargs clang-format --dry-run --Werror 2>&1
 
 # Auto-fix
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules/SparkGame/Source \
-  -name '*.h' -o -name '*.cpp' | xargs clang-format -i
+find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+     SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+  -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
+  | xargs clang-format -i
 ```
 
 ### Linux Build Fails with Missing Headers

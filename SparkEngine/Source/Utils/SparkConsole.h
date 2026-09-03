@@ -182,6 +182,10 @@ namespace Spark
 
         /// @brief Look up and execute a parsed command (CVar or registered handler).
         bool DispatchCommand(const std::string& command, const std::vector<std::string>& args);
+        /// True when the command's arguments must never be retained (history, logs).
+        bool IsSensitiveCommand(const std::string& command) const;
+        /// Appends one entry to the recall history, evicting the oldest past MaxCommandHistory.
+        void RecordCommandHistory(std::string entry);
 
         std::string GetTimestamp() const;
         std::string FindClosestCommand(const std::string& input) const;

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <exception>
 #include <fstream>
 #include <random>
 
@@ -19,8 +20,7 @@ namespace Spark::Daemon
 
         size_t EncodedSnapshotBaseSize(std::string_view sessionId) noexcept
         {
-            return sizeof(uint16_t) + sizeof(uint32_t) + sessionId.size() + sizeof(uint64_t) +
-                   3 * sizeof(uint32_t);
+            return sizeof(uint16_t) + sizeof(uint32_t) + sessionId.size() + sizeof(uint64_t) + 3 * sizeof(uint32_t);
         }
 
         size_t EncodedPeerSize(const CollaborationPeer& peer) noexcept
@@ -51,9 +51,8 @@ namespace Spark::Daemon
         m_config.maximumPeersPerSession = std::clamp<size_t>(m_config.maximumPeersPerSession, 1, 1024);
         m_config.maximumLocksPerSession = std::clamp<size_t>(m_config.maximumLocksPerSession, 1, 1'000'000);
         m_config.maximumEditHistory = std::clamp<size_t>(m_config.maximumEditHistory, 1, 1'000'000);
-        m_config.maximumSnapshotBytes =
-            std::clamp<size_t>(m_config.maximumSnapshotBytes, kMinimumSnapshotBudget,
-                               static_cast<size_t>(kMaxPayloadSize - kFrameHeaderSize));
+        m_config.maximumSnapshotBytes = std::clamp<size_t>(m_config.maximumSnapshotBytes, kMinimumSnapshotBudget,
+                                                           static_cast<size_t>(kMaxPayloadSize - kFrameHeaderSize));
         m_config.peerTimeout =
             std::clamp(m_config.peerTimeout, std::chrono::seconds(5), std::chrono::seconds(24 * 60 * 60));
     }
@@ -398,9 +397,19 @@ namespace Spark::Daemon
         if (!random)
             return {};
 #else
-        std::random_device random;
-        for (auto& byte : bytes)
-            byte = static_cast<uint8_t>(random());
+        // std::random_device reports entropy failure by throwing; convert that
+        // into the same empty-token failure signal the POSIX branch returns so
+        // callers can keep treating an empty token as "generation failed".
+        try
+        {
+            std::random_device random;
+            for (auto& byte : bytes)
+                byte = static_cast<uint8_t>(random());
+        }
+        catch (const std::exception&)
+        {
+            return {};
+        }
 #endif
         static constexpr char hex[] = "0123456789abcdef";
         std::string token;

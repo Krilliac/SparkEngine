@@ -102,7 +102,7 @@ TEST_F(FormationCoverageFixture, GeneratesEveryFormationShape)
     EXPECT_EQ(formations.GetFormationCount(), static_cast<size_t>(5));
 
     const auto* lineData = formations.GetFormation(line);
-    EXPECT_TRUE(lineData != nullptr);
+    ASSERT_TRUE(lineData != nullptr);
     EXPECT_NEAR(lineData->slots[0].localOffset.x, -4.0f, 0.001f);
     EXPECT_NEAR(lineData->slots[1].localOffset.x, 0.0f, 0.001f);
     EXPECT_NEAR(lineData->slots[2].localOffset.x, 4.0f, 0.001f);
@@ -231,7 +231,7 @@ TEST_F(TacticalCoverageFixture, ZeroRadiusAndCoincidentThreatRemainDeterministic
     query.minQuality = 0.0f;
 
     const auto* best = points.FindBestPoint(query);
-    EXPECT_TRUE(best != nullptr);
+    ASSERT_TRUE(best != nullptr);
     EXPECT_NEAR(best->quality, 0.75f, 0.001f);
 }
 
@@ -251,14 +251,14 @@ TEST_F(CoverCoverageFixture, GeometryAnalysisHandlesInvalidAndAllHeightClasses)
     const auto* low = cover.FindNearestCover({0.0f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, 2.0f);
     const auto* high = cover.FindNearestCover({10.0f, 1.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, 2.0f);
     const auto* tall = cover.FindNearestCover({20.0f, 2.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 2.0f);
-    EXPECT_TRUE(low != nullptr);
+    ASSERT_TRUE(low != nullptr);
     EXPECT_EQ(static_cast<int>(low->height), static_cast<int>(CoverHeight::Low));
     EXPECT_TRUE(low->canFireOver);
-    EXPECT_TRUE(high != nullptr);
+    ASSERT_TRUE(high != nullptr);
     EXPECT_EQ(static_cast<int>(high->height), static_cast<int>(CoverHeight::High));
     EXPECT_TRUE(high->canLeanLeft);
     EXPECT_FALSE(high->canFireOver);
-    EXPECT_TRUE(tall != nullptr);
+    ASSERT_TRUE(tall != nullptr);
     EXPECT_FALSE(tall->canLeanLeft);
     EXPECT_FALSE(tall->canLeanRight);
 }
@@ -279,7 +279,7 @@ TEST_F(CoverCoverageFixture, QueriesSortFilterAndTrackOccupancy)
 
     cover.MarkOccupied(nearest, 77);
     const auto* selected = cover.FindNearestCover({0, 0, 0}, {1, 0, 0}, 10.0f);
-    EXPECT_TRUE(selected != nullptr);
+    ASSERT_TRUE(selected != nullptr);
     EXPECT_EQ(selected->id, farther);
 
     cover.MarkFree(nearest);

@@ -440,7 +440,7 @@ namespace Spark
         size_t currentMB = debugger.GetCurrentBytes() / (1024 * 1024);
         size_t peakMB = debugger.GetPeakBytes() / (1024 * 1024);
 
-        char status[128];
+        char status[128] = {};
         DirectX::XMFLOAT4 color;
 
         switch (m_healthStatus)

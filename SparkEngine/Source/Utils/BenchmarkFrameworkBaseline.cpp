@@ -80,12 +80,9 @@ namespace Spark
             {
                 inMetrics = true;
             }
-            else if (inMetrics && trimmed == "}" && !trimmed.empty())
+            else if (inMetrics && (trimmed == "}," || trimmed == "}"))
             {
-                if (trimmed == "}," || trimmed == "}")
-                {
-                    inMetrics = false;
-                }
+                inMetrics = false;
             }
             else if (inMetrics)
             {

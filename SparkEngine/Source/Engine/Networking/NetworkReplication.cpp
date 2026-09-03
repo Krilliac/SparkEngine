@@ -392,9 +392,9 @@ namespace Spark::Net
     // UpdateReplication
     // --------------------------------------------------------------------------
 
-    bool NetworkManager::UpdateReplication(float deltaTime, std::unique_lock<std::recursive_mutex>& apiLock,
-                                           uint64_t lifecycleEpoch)
+    bool NetworkManager::UpdateReplication(float deltaTime, uint64_t lifecycleEpoch)
     {
+        std::unique_lock<std::recursive_mutex> apiLock(m_apiMutex);
         if (GetRole() != NetworkRole::Server)
             return true;
 
@@ -416,23 +416,6 @@ namespace Spark::Net
             for (const auto& [netID, entity] : m_replicatedEntities)
                 entities.push_back(entity);
         }
-
-        auto serializeUnlocked =
-            [&apiLock, this, lifecycleEpoch](const std::function<void(NetBuffer&)>& serializer, NetBuffer& buffer)
-        {
-            apiLock.unlock();
-            try
-            {
-                serializer(buffer);
-            }
-            catch (...)
-            {
-                apiLock.lock();
-                throw;
-            }
-            apiLock.lock();
-            return m_lifecycleEpoch == lifecycleEpoch;
-        };
 
         for (const auto& entity : entities)
         {
@@ -468,8 +451,21 @@ namespace Spark::Net
                     fs.fieldIndex = static_cast<uint8_t>(i & 0xFF);
                     if (prop.serialize)
                     {
+                        // Property serializers are application callbacks: run
+                        // them with the API lock completely released.
                         NetBuffer fieldBuf;
-                        if (!serializeUnlocked(prop.serialize, fieldBuf))
+                        apiLock.unlock();
+                        try
+                        {
+                            prop.serialize(fieldBuf);
+                        }
+                        catch (...)
+                        {
+                            apiLock.lock();
+                            throw;
+                        }
+                        apiLock.lock();
+                        if (m_lifecycleEpoch != lifecycleEpoch)
                             return false;
                         fs.serializedValue = fieldBuf.GetData();
                     }

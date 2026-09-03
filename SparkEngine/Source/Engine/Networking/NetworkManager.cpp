@@ -559,21 +559,6 @@ namespace Spark::Net
     {
         std::unique_lock<std::recursive_mutex> apiLock(m_apiMutex);
         uint64_t updateLifecycleEpoch = m_lifecycleEpoch;
-        auto invokeUnlocked = [&apiLock, this, &updateLifecycleEpoch](auto&& callback)
-        {
-            apiLock.unlock();
-            try
-            {
-                callback();
-            }
-            catch (...)
-            {
-                apiLock.lock();
-                throw;
-            }
-            apiLock.lock();
-            return m_lifecycleEpoch == updateLifecycleEpoch;
-        };
         std::function<void()> reconnectFailedCallback;
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Network", 0.0);
@@ -596,8 +581,10 @@ namespace Spark::Net
             }
             if (GetRole() == NetworkRole::None)
             {
+                // Never call user code while holding the public API serialization lock.
+                apiLock.unlock();
                 if (reconnectFailedCallback)
-                    (void)invokeUnlocked(reconnectFailedCallback);
+                    reconnectFailedCallback();
                 return;
             }
         }
@@ -607,7 +594,15 @@ namespace Spark::Net
         if (!advancedForReconnect)
             m_serverTime += deltaTime;
 
-        auto dispatchMessage = [&](const NetworkMessage& message, bool warnIfUnhandled = true)
+        // Runs the mandatory protocol handler under the API lock and hands the
+        // application observer back to the caller, which invokes it with the lock
+        // released — the release stays in this function body so the lock lifetime
+        // is visible. Protocol state changes stay under the API lock. Application
+        // code runs afterward with that lock fully released and can never replace
+        // the mandatory handler that established the invariant. A terminal protocol
+        // message still reaches its observer; the caller's epoch check then stops
+        // every remaining item in this batch.
+        auto dispatchMessage = [this](const NetworkMessage& message, bool warnIfUnhandled = true) -> MessageHandler
         {
             MessageHandler internalHandler;
             MessageHandler applicationObserver;
@@ -622,30 +617,16 @@ namespace Spark::Net
                     applicationObserver = observerIt->second;
             }
 
-            // Protocol state changes stay under the API lock. Application code
-            // runs afterward with that lock fully released and can never replace
-            // the mandatory handler that established the invariant.
-            bool lifecycleChanged = false;
             if (internalHandler)
             {
                 internalHandler(message);
-                lifecycleChanged = (m_lifecycleEpoch != updateLifecycleEpoch);
             }
-            // A terminal protocol message still reaches its observer. The
-            // epoch check below then stops every remaining item in this batch.
-            if (applicationObserver)
-            {
-                NetworkMessage callbackMessage = message;
-                if (!invokeUnlocked([&applicationObserver, &callbackMessage]()
-                                    { applicationObserver(callbackMessage); }))
-                    return false;
-            }
-            else if (!internalHandler && warnIfUnhandled)
+            else if (!applicationObserver && warnIfUnhandled)
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Network, "Unknown message type %u — dropping",
                                static_cast<unsigned>(message.type));
             }
-            return !lifecycleChanged;
+            return applicationObserver;
         };
 
         // Receive from socket and enqueue. Successful admission events are
@@ -654,7 +635,13 @@ namespace Spark::Net
         const std::vector<NetworkMessage> newlyConnected = ProcessIncoming();
         for (const NetworkMessage& event : newlyConnected)
         {
-            if (!dispatchMessage(event, false))
+            if (const MessageHandler observer = dispatchMessage(event, false))
+            {
+                apiLock.unlock();
+                observer(event);
+                apiLock.lock();
+            }
+            if (m_lifecycleEpoch != updateLifecycleEpoch)
                 return;
 
             bool remainsAdmitted = false;
@@ -781,7 +768,13 @@ namespace Spark::Net
                     peer.expectedOrderedSequence++;
                 }
 
-                if (!dispatchMessage(msg))
+                if (const MessageHandler observer = dispatchMessage(msg))
+                {
+                    apiLock.unlock();
+                    observer(msg);
+                    apiLock.lock();
+                }
+                if (m_lifecycleEpoch != updateLifecycleEpoch)
                     return;
 
                 // Check channel before popping — msg reference is invalidated by pop()
@@ -808,7 +801,13 @@ namespace Spark::Net
                             m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
                             continue;
                         }
-                        if (!dispatchMessage(orderedMessage))
+                        if (const MessageHandler observer = dispatchMessage(orderedMessage))
+                        {
+                            apiLock.unlock();
+                            observer(orderedMessage);
+                            apiLock.lock();
+                        }
+                        if (m_lifecycleEpoch != updateLifecycleEpoch)
                             return;
                     }
                 }
@@ -824,7 +823,13 @@ namespace Spark::Net
             PruneReceivedSequences();
         }
 
-        if (!UpdateReplication(deltaTime, apiLock, updateLifecycleEpoch))
+        // UpdateReplication owns its lock so its property serializers can
+        // completely release it (recursive unlock would leave this frame's
+        // outer acquisition held).
+        apiLock.unlock();
+        const bool replicationLifecycleUnchanged = UpdateReplication(deltaTime, updateLifecycleEpoch);
+        apiLock.lock();
+        if (!replicationLifecycleUnchanged || m_lifecycleEpoch != updateLifecycleEpoch)
             return;
         UpdateHeartbeat(deltaTime);
 

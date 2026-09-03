@@ -98,7 +98,7 @@ TEST(RHIHandlePoolPhaseX_GetReturnsAllocatedPointer)
     auto h = pool.Allocate(&buf);
 
     FakeBuffer* ptr = pool.Get(h);
-    EXPECT_TRUE(ptr != nullptr);
+    ASSERT_TRUE(ptr != nullptr);
     EXPECT_EQ(ptr->id, 42);
     EXPECT_TRUE(pool.IsValid(h));
 }

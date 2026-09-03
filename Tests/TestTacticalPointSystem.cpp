@@ -129,12 +129,12 @@ TEST(TacticalPoint_FindBestPoint)
     sys.RegisterPoint({20, 0, 0}, TestTPS::TacticalPointType::Ambush, 10.0f);
 
     const auto* best = sys.FindBestPoint(TestTPS::TacticalPointType::Sniper);
-    EXPECT_TRUE(best != nullptr);
+    ASSERT_TRUE(best != nullptr);
     EXPECT_NEAR(best->score, 9.0f, 0.001f);
 
     // Ambush type should return the ambush point
     const auto* bestAmbush = sys.FindBestPoint(TestTPS::TacticalPointType::Ambush);
-    EXPECT_TRUE(bestAmbush != nullptr);
+    ASSERT_TRUE(bestAmbush != nullptr);
     EXPECT_NEAR(bestAmbush->score, 10.0f, 0.001f);
 }
 

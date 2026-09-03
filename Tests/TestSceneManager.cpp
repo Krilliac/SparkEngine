@@ -215,7 +215,7 @@ TEST(Scene_AddNode)
     EXPECT_TRUE(mgr.IsDirty());
 
     const auto* n = mgr.GetNode(0);
-    EXPECT_TRUE(n != nullptr);
+    ASSERT_TRUE(n != nullptr);
     EXPECT_EQ(n->name, std::string("Ground"));
     EXPECT_EQ(n->type, std::string("plane"));
 }
@@ -563,7 +563,7 @@ TEST(Scene_MutableNodeModification)
 
     // Modify node through mutable accessor
     auto* n = mgr.GetNode(0);
-    EXPECT_TRUE(n != nullptr);
+    ASSERT_TRUE(n != nullptr);
     n->position = {5.0f, 10.0f, 15.0f};
     n->properties["speed"] = "42";
 

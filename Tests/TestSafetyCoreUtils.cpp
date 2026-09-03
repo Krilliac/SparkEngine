@@ -156,7 +156,7 @@ TEST(CheckedCast_ValidDowncast)
     Derived d;
     Base* base = &d;
     auto* result = Spark::CheckedCast<Derived*>(base);
-    EXPECT_TRUE(result != nullptr);
+    ASSERT_TRUE(result != nullptr);
     EXPECT_EQ(result->derivedVal, 2);
 }
 
@@ -172,6 +172,6 @@ TEST(CheckedCast_ConstCorrectness)
     const Derived d;
     const Base* base = &d;
     auto* result = Spark::CheckedCast<const Derived*>(base);
-    EXPECT_TRUE(result != nullptr);
+    ASSERT_TRUE(result != nullptr);
     EXPECT_EQ(result->derivedVal, 2);
 }

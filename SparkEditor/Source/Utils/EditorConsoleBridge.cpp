@@ -22,12 +22,6 @@ namespace SparkEditor
         // Get the engine's singleton console
         m_engineConsole = &Spark::SimpleConsole::GetInstance();
 
-        if (!m_engineConsole)
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to get engine console instance");
-            return false;
-        }
-
         RegisterDefaultEditorCommands();
 
         m_initialized = true;

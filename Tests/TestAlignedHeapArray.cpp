@@ -38,6 +38,10 @@ namespace
 #endif
         }
 
+        // Owns aligned storage: copying would double-free
+        TestAlignedArray(const TestAlignedArray&) = delete;
+        TestAlignedArray& operator=(const TestAlignedArray&) = delete;
+
         T* data() { return m_data; }
         constexpr size_t size() const { return SIZE; }
         T& operator[](size_t i) { return m_data[i]; }
@@ -78,6 +82,10 @@ namespace
             free(m_data);
 #endif
         }
+
+        // Owns aligned storage: move-only, copying would double-free
+        TestDynamicArray(const TestDynamicArray&) = delete;
+        TestDynamicArray& operator=(const TestDynamicArray&) = delete;
 
         // Move
         TestDynamicArray(TestDynamicArray&& other) noexcept : m_data(other.m_data), m_size(other.m_size)

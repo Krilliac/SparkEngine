@@ -4,7 +4,6 @@
 #include "TestFramework.h"
 
 #include <cstdint>
-#include <cstring>
 #include <string>
 #include <vector>
 
@@ -94,8 +93,8 @@ TEST(GPUParticle_DataLayout_MatchesShader)
 
 TEST(GPUParticle_InitialState_AllDead)
 {
+    // Value-initialisation zeroes every field, including 'alive'
     std::vector<GPUParticleData> pool(1024);
-    std::memset(pool.data(), 0, pool.size() * sizeof(GPUParticleData));
 
     EXPECT_EQ(CountAlive(pool), 0u);
 }

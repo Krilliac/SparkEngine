@@ -94,7 +94,7 @@ TEST(EntityPresetManager_RegisterAndFind)
     mgr.RegisterPreset({"TestEntity", "TestCategory", "A test preset", {{"Transform", {{"position", "1,2,3"}}}}});
 
     auto* found = mgr.FindPreset("TestEntity");
-    EXPECT_TRUE(found != nullptr);
+    ASSERT_TRUE(found != nullptr);
     EXPECT_EQ(found->name, std::string("TestEntity"));
     EXPECT_EQ(found->category, std::string("TestCategory"));
     EXPECT_EQ(found->components.size(), size_t(1));
@@ -123,7 +123,7 @@ TEST(EntityPresetManager_BuiltinPlayerPreset)
     mgr.RegisterBuiltinPresets();
 
     auto* player = mgr.FindPreset("Player");
-    EXPECT_TRUE(player != nullptr);
+    ASSERT_TRUE(player != nullptr);
     EXPECT_EQ(player->category, std::string("Character"));
     EXPECT_TRUE(player->components.size() >= 3);
 
@@ -152,7 +152,7 @@ TEST(EntityPresetManager_BuiltinEnemyPreset)
     mgr.RegisterBuiltinPresets();
 
     auto* enemy = mgr.FindPreset("Enemy");
-    EXPECT_TRUE(enemy != nullptr);
+    ASSERT_TRUE(enemy != nullptr);
     EXPECT_EQ(enemy->category, std::string("Character"));
 
     bool hasAI = false;
@@ -187,7 +187,7 @@ TEST(EntityPresetManager_ComponentProperties)
     mgr.RegisterBuiltinPresets();
 
     auto* player = mgr.FindPreset("Player");
-    EXPECT_TRUE(player != nullptr);
+    ASSERT_TRUE(player != nullptr);
 
     for (const auto& comp : player->components)
     {
@@ -208,7 +208,7 @@ TEST(EntityPresetManager_DuplicateNamesAllowed)
 
     // FindPreset returns first match
     auto* found = mgr.FindPreset("Dupe");
-    EXPECT_TRUE(found != nullptr);
+    ASSERT_TRUE(found != nullptr);
     EXPECT_EQ(found->description, std::string("First"));
     EXPECT_EQ(mgr.GetPresets().size(), size_t(2));
 }
@@ -220,7 +220,7 @@ TEST(EntityPresetManager_EmptyPreset)
     mgr.RegisterPreset({"Empty", "Test", "No components", {}});
 
     auto* found = mgr.FindPreset("Empty");
-    EXPECT_TRUE(found != nullptr);
+    ASSERT_TRUE(found != nullptr);
     EXPECT_EQ(found->components.size(), size_t(0));
 }
 
@@ -231,6 +231,6 @@ TEST(EntityPresetManager_MultipleComponentsPerPreset)
     mgr.RegisterBuiltinPresets();
 
     auto* door = mgr.FindPreset("Door");
-    EXPECT_TRUE(door != nullptr);
+    ASSERT_TRUE(door != nullptr);
     EXPECT_TRUE(door->components.size() >= 3);
 }

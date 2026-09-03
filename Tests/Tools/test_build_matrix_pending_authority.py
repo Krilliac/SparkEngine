@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Acceptance tests for the CI-120 external-authority handoff state."""
+"""Acceptance tests for the build-matrix external-authority handoff state."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ DIGEST = "b" * 64
 def provenance(profile: str) -> dict[str, Any]:
     return {
         "state": "unavailable",
-        "authority": inventory._CI120_EXTERNAL_AUTHORITY,
+        "authority": inventory._BUILD_MATRIX_EXTERNAL_AUTHORITY,
         "authorityReason": "A protected external verifier is required.",
         "structuralState": "validated",
         "recordFile": f"{profile}-{inventory._PROVENANCE_FILE}",
@@ -45,7 +45,7 @@ def provenance(profile: str) -> dict[str, Any]:
         "sourceClean": True,
         "untrackedPolicy": "all-nonignored",
         "replyDigest": "c" * 64,
-        "queryClient": f"client-spark-ci120-{profile}",
+        "queryClient": f"client-spark-build-matrix-{profile}",
         "configureArgv": ["C:/cmake.exe", "--preset", profile],
         "cmakeExecutable": "C:/cmake.exe",
         "cmakeVersion": "4.2.0",
@@ -54,7 +54,7 @@ def provenance(profile: str) -> dict[str, Any]:
         "ciRunId": "120",
         "ciRunAttempt": "1",
         "ciWorkflowRef": "Krilliac/SparkEngine/.github/workflows/build.yml@refs/heads/Working",
-        "ciJob": inventory._CI120_PRODUCER_JOB,
+        "ciJob": inventory._BUILD_MATRIX_PRODUCER_JOB,
         "ciRunnerOs": "Windows",
         "artifactState": "locally-observed-post-build",
     }
@@ -114,7 +114,7 @@ def valid_documents() -> tuple[dict[str, Any], dict[str, Any]]:
                     "category": pending.EXPECTED_ERROR_CATEGORY,
                     "severity": "error",
                     "message": (
-                        f"Profile '{profile}' has structurally validated but untrusted CI-120 evidence"
+                        f"Profile '{profile}' has structurally validated but untrusted build-matrix evidence"
                     ),
                 }
                 for profile in pending.EXPECTED_PROFILES
@@ -264,7 +264,7 @@ class PendingAuthorityTests(unittest.TestCase):
 
             self.assertEqual(completed.returncode, 1)
             self.assertEqual(completed.stdout, output_path.read_bytes())
-            self.assertIn(b"CI-120 PENDING STATE REJECTED", completed.stderr)
+            self.assertIn(b"BUILD-MATRIX PENDING STATE REJECTED", completed.stderr)
 
     def test_duplicate_json_keys_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -287,6 +287,33 @@ class PendingAuthorityTests(unittest.TestCase):
         self.assertEqual(receipt["state"], "pending-external-attestation")
         self.assertEqual(receipt["sourceCommit"], COMMIT)
         self.assertEqual([entry["id"] for entry in receipt["profiles"]], list(pending.EXPECTED_PROFILES))
+
+    def test_utility_target_with_empty_artifact_identities_is_accepted(self) -> None:
+        inventory_document, report = valid_documents()
+        for evidence in inventory_document["configuredTargetEvidence"]:
+            evidence["targets"].append(
+                {
+                    "target": "SparkRuntimeShaders",
+                    "kind": "utility",
+                    "artifactState": "locally-observed-post-build",
+                    "artifactIdentities": [],
+                }
+            )
+        receipt = self.receipt(inventory_document, report)
+        self.assertEqual(receipt["state"], "pending-external-attestation")
+
+    def test_non_utility_target_with_empty_artifact_identities_is_rejected(self) -> None:
+        inventory_document, report = valid_documents()
+        inventory_document["configuredTargetEvidence"][0]["targets"].append(
+            {
+                "target": "BrokenTarget",
+                "kind": "executable",
+                "artifactState": "locally-observed-post-build",
+                "artifactIdentities": [],
+            }
+        )
+        with self.assertRaisesRegex(pending.PendingAuthorityError, "no artifact identities"):
+            self.receipt(inventory_document, report)
 
     def test_old_job_local_verified_state_is_rejected(self) -> None:
         inventory_document, report = valid_documents()

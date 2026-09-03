@@ -225,7 +225,7 @@ namespace SparkEditor
             length += std::sqrt(dx * dx + dy * dy + dz * dz);
         }
 
-        if (m_closedLoop && m_points.size() >= 2)
+        if (m_closedLoop)
         {
             auto& first = m_points.front();
             auto& last = m_points.back();

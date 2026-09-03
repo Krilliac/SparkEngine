@@ -70,7 +70,7 @@ TEST(FPSInteg_GameMode_AddPlayer)
     mode.AddPlayer("Player2");
 
     const auto* score = mode.GetPlayerScore("Player1");
-    EXPECT_TRUE(score != nullptr);
+    ASSERT_TRUE(score != nullptr);
     EXPECT_EQ(score->kills, 0);
     EXPECT_EQ(score->deaths, 0);
 }
@@ -262,7 +262,7 @@ TEST(FPSInteg_GameMode_SuicideRecordsDeathWithoutKillRewards)
     mode.RecordKill("Player1", "Player1", true);
 
     const auto* score = mode.GetPlayerScore("Player1");
-    EXPECT_TRUE(score != nullptr);
+    ASSERT_TRUE(score != nullptr);
     EXPECT_EQ(score->kills, 0);
     EXPECT_EQ(score->deaths, 1);
     EXPECT_EQ(score->headshots, 0);

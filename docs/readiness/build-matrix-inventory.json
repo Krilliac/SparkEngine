@@ -24,7 +24,7 @@
         "generator": "Visual Studio 17 2022",
         "architecture": "x64",
         "toolset": "v143",
-        "packageDirectory": "build/ci120-stage/lib/cmake/SparkEngine",
+        "packageDirectory": "build/build-matrix-stage/lib/cmake/SparkEngine",
         "expectedEngineVersion": "1.0.0",
         "description": "A separate configure against an installed SparkEngine package that proves public SDK headers, imports, and module linkage without source-tree include leakage."
       },
@@ -2854,10 +2854,20 @@
       "resolved": true
     },
     {
+      "target": "SparkRuntimeShaders",
+      "kind": "utility",
+      "file": "CMakeLists.txt",
+      "line": 1727,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkServer",
       "kind": "executable",
       "file": "SparkServer/CMakeLists.txt",
-      "line": 35,
+      "line": 41,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3013,17 +3023,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2156,
+      "line": 2172,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2151",
+          "id": "CMakeLists.txt:2167",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2155",
+          "id": "CMakeLists.txt:2171",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -4452,6 +4462,24 @@
       ]
     },
     {
+      "target": "SparkRuntimeShaders",
+      "kind": "utility",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 1727,
+          "kind": "utility",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkServer",
       "kind": "executable",
       "buildable": true,
@@ -4461,7 +4489,7 @@
       "declarations": [
         {
           "file": "SparkServer/CMakeLists.txt",
-          "line": 35,
+          "line": 41,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4697,7 +4725,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2156,
+          "line": 2172,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5330,7 +5358,7 @@
           },
           {
             "index": 5,
-            "name": "Test CI-120 exact-source status gate",
+            "name": "Test the build-matrix exact-source status gate",
             "id": "",
             "uses": "",
             "shell": "",
@@ -5338,7 +5366,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "0708b7a46377c352"
+            "runDigest": "49a6266d08a82878"
           },
           {
             "index": 6,
@@ -5474,7 +5502,7 @@
           },
           {
             "index": 17,
-            "name": "Test build-matrix inventory and parity (CI-120)",
+            "name": "Test build-matrix inventory and parity",
             "id": "",
             "uses": "",
             "shell": "",
@@ -5486,7 +5514,7 @@
           },
           {
             "index": 18,
-            "name": "Generate and compare deterministic build-matrix inventory (CI-120)",
+            "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
             "shell": "",
@@ -5494,23 +5522,23 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "9933d7d42888b1f0"
+            "runDigest": "0ab6252366aca398"
           },
           {
             "index": 19,
-            "name": "Compare reviewed build-matrix findings (CI-120)",
-            "id": "ci120-parity",
+            "name": "Compare reviewed build-matrix findings",
+            "id": "build-matrix-parity",
             "uses": "",
             "shell": "",
             "if": "absent",
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "90ea701f7b089f94"
+            "runDigest": "d1f0cc7aa640ff32"
           },
           {
             "index": 20,
-            "name": "Upload deterministic CI-120 evidence",
+            "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
             "shell": "",
@@ -6676,7 +6704,7 @@
       },
       {
         "id": "build-windows-shipping",
-        "name": "Windows Shipping structural configured-evidence producer",
+        "name": "Windows Shipping build matrix",
         "runsOn": "windows-2022",
         "runnerLabels": [
           "windows-2022"
@@ -6725,7 +6753,7 @@
           },
           {
             "index": 2,
-            "name": "Configure and build canonical Windows Shipping lane (CI-120)",
+            "name": "Configure and build the Windows Shipping lane",
             "id": "",
             "uses": "",
             "shell": "bash",
@@ -6733,11 +6761,11 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "899cea6e60a36e7c"
+            "runDigest": "def6a5c0227e92b3"
           },
           {
             "index": 3,
-            "name": "Capture Windows Shipping structural provenance (CI-120)",
+            "name": "Capture Windows Shipping provenance",
             "id": "",
             "uses": "",
             "shell": "bash",
@@ -6745,11 +6773,11 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "466746f918d03942"
+            "runDigest": "eaaff83d3b3b01dd"
           },
           {
             "index": 4,
-            "name": "Install exact Windows Shipping SDK for the consumer profile (CI-120)",
+            "name": "Install the Windows Shipping SDK for the consumer profile",
             "id": "",
             "uses": "",
             "shell": "bash",
@@ -6757,11 +6785,11 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "b2fb4f934ded4b8f"
+            "runDigest": "36f226b69437d456"
           },
           {
             "index": 5,
-            "name": "Configure and build canonical Windows validation lane (CI-120)",
+            "name": "Configure and build the Windows validation lane",
             "id": "",
             "uses": "",
             "shell": "bash",
@@ -6769,11 +6797,11 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "e841205c814e7f73"
+            "runDigest": "20adc80d866ecc91"
           },
           {
             "index": 6,
-            "name": "Capture Windows validation structural provenance (CI-120)",
+            "name": "Capture Windows validation provenance",
             "id": "",
             "uses": "",
             "shell": "bash",
@@ -6781,11 +6809,11 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "b44ba50b774ba60b"
+            "runDigest": "3460874c75995c44"
           },
           {
             "index": 7,
-            "name": "Configure and build installed SDK consumer lane (CI-120)",
+            "name": "Configure and build the installed SDK consumer lane",
             "id": "",
             "uses": "",
             "shell": "bash",
@@ -6793,11 +6821,11 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "7a7c77c827930ca5"
+            "runDigest": "bd320f9583bd71d5"
           },
           {
             "index": 8,
-            "name": "Capture installed SDK consumer structural provenance (CI-120)",
+            "name": "Capture installed SDK consumer provenance",
             "id": "",
             "uses": "",
             "shell": "bash",
@@ -6805,11 +6833,11 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "3f0866a937e282ac"
+            "runDigest": "22ba85fa35d4e34d"
           },
           {
             "index": 9,
-            "name": "Generate configured build-matrix inventory from the structural producer (CI-120)",
+            "name": "Generate the configured build-matrix inventory",
             "id": "",
             "uses": "",
             "shell": "bash",
@@ -6821,19 +6849,19 @@
           },
           {
             "index": 10,
-            "name": "Compare reviewed configured-evidence findings (CI-120)",
-            "id": "ci120-parity",
+            "name": "Check the configured build matrix",
+            "id": "build-matrix-parity",
             "uses": "",
             "shell": "bash",
             "if": "absent",
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "a5e2ccef84f5911c"
+            "runDigest": "847469c7e07435aa"
           },
           {
             "index": 11,
-            "name": "Upload untrusted CI-120 structural evidence",
+            "name": "Upload build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
             "shell": "",
@@ -6845,15 +6873,15 @@
           },
           {
             "index": 12,
-            "name": "Enforce reviewed CI-120 findings",
+            "name": "Record build-matrix evidence",
             "id": "",
             "uses": "",
             "shell": "bash",
-            "if": "always() && steps.ci120-parity.outputs.status != ''",
+            "if": "always() && steps.build-matrix-parity.outputs.status != ''",
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "572bc1d72992fef1"
+            "runDigest": "6b56775bc1a17799"
           }
         ],
         "envNames": [],
@@ -9235,7 +9263,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build canonical Windows Shipping lane (CI-120)",
+        "step": "Configure and build the Windows Shipping lane",
         "stepIndex": 2,
         "matrix": {},
         "matrixResolved": true,
@@ -9248,7 +9276,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-shipping 2>&1 | tee ci120-windows-shipping-configure.log",
+        "command": "cmake --preset windows-shipping 2>&1 | tee build-matrix-windows-shipping-configure.log",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-shipping",
@@ -9256,7 +9284,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build canonical Windows Shipping lane (CI-120)",
+        "step": "Configure and build the Windows Shipping lane",
         "stepIndex": 2,
         "matrix": {},
         "matrixResolved": true,
@@ -9269,7 +9297,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 2>&1 | tee ci120-windows-shipping-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 2>&1 | tee build-matrix-windows-shipping-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -9283,7 +9311,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Install exact Windows Shipping SDK for the consumer profile (CI-120)",
+        "step": "Install the Windows Shipping SDK for the consumer profile",
         "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
@@ -9296,16 +9324,16 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "install",
-        "command": "cmake --install build/windows-shipping  --config MinSizeRel  --prefix build/ci120-stage 2>&1 | tee ci120-windows-shipping-install.log",
+        "command": "cmake --install build/windows-shipping  --config MinSizeRel  --prefix build/build-matrix-stage 2>&1 | tee build-matrix-windows-shipping-install.log",
         "commandProvenance": "literal",
         "configuration": "MinSizeRel",
-        "prefix": "build/ci120-stage",
+        "prefix": "build/build-matrix-stage",
         "component": "",
         "commandIndex": 0
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build canonical Windows validation lane (CI-120)",
+        "step": "Configure and build the Windows validation lane",
         "stepIndex": 5,
         "matrix": {},
         "matrixResolved": true,
@@ -9318,7 +9346,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-release 2>&1 | tee ci120-windows-validation-configure.log",
+        "command": "cmake --preset windows-release 2>&1 | tee build-matrix-windows-validation-configure.log",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-release",
@@ -9326,7 +9354,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build canonical Windows validation lane (CI-120)",
+        "step": "Configure and build the Windows validation lane",
         "stepIndex": 5,
         "matrix": {},
         "matrixResolved": true,
@@ -9339,7 +9367,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-release --config Release --parallel 2>&1 | tee ci120-windows-validation-build.log",
+        "command": "cmake --build --preset windows-release --config Release --parallel 2>&1 | tee build-matrix-windows-validation-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -9353,7 +9381,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build installed SDK consumer lane (CI-120)",
+        "step": "Configure and build the installed SDK consumer lane",
         "stepIndex": 7,
         "matrix": {},
         "matrixResolved": true,
@@ -9366,10 +9394,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee ci120-installed-sdk-consumer-configure.log",
+        "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee build-matrix-installed-sdk-consumer-configure.log",
         "commandProvenance": "literal",
         "options": {
-          "SparkEngine_DIR": "${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine",
+          "SparkEngine_DIR": "${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine",
           "SPARK_EXPECTED_ENGINE_VERSION": "1.0.0"
         },
         "sourceDir": "Tests/PackageSmoke",
@@ -9381,7 +9409,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build installed SDK consumer lane (CI-120)",
+        "step": "Configure and build the installed SDK consumer lane",
         "stepIndex": 7,
         "matrix": {},
         "matrixResolved": true,
@@ -9394,7 +9422,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/installed-sdk-consumer  --config Release --parallel 2>&1 | tee ci120-installed-sdk-consumer-build.log",
+        "command": "cmake --build build/installed-sdk-consumer  --config Release --parallel 2>&1 | tee build-matrix-installed-sdk-consumer-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -9408,7 +9436,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build installed SDK consumer lane (CI-120)",
+        "step": "Configure and build the installed SDK consumer lane",
         "stepIndex": 7,
         "matrix": {},
         "matrixResolved": true,
@@ -9421,7 +9449,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build/installed-sdk-consumer -C Release  --output-on-failure --no-tests=error 2>&1 | tee ci120-installed-sdk-consumer-test.log",
+        "command": "ctest --test-dir build/installed-sdk-consumer -C Release  --output-on-failure --no-tests=error 2>&1 | tee build-matrix-installed-sdk-consumer-test.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build/installed-sdk-consumer",
@@ -10828,7 +10856,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build canonical Windows Shipping lane (CI-120)",
+        "step": "Configure and build the Windows Shipping lane",
         "stepIndex": 2,
         "matrix": {},
         "matrixResolved": true,
@@ -10841,7 +10869,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-shipping 2>&1 | tee ci120-windows-shipping-configure.log",
+        "command": "cmake --preset windows-shipping 2>&1 | tee build-matrix-windows-shipping-configure.log",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-shipping",
@@ -10849,7 +10877,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build canonical Windows validation lane (CI-120)",
+        "step": "Configure and build the Windows validation lane",
         "stepIndex": 5,
         "matrix": {},
         "matrixResolved": true,
@@ -10862,7 +10890,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-release 2>&1 | tee ci120-windows-validation-configure.log",
+        "command": "cmake --preset windows-release 2>&1 | tee build-matrix-windows-validation-configure.log",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-release",
@@ -10870,7 +10898,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build installed SDK consumer lane (CI-120)",
+        "step": "Configure and build the installed SDK consumer lane",
         "stepIndex": 7,
         "matrix": {},
         "matrixResolved": true,
@@ -10883,10 +10911,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee ci120-installed-sdk-consumer-configure.log",
+        "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee build-matrix-installed-sdk-consumer-configure.log",
         "commandProvenance": "literal",
         "options": {
-          "SparkEngine_DIR": "${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine",
+          "SparkEngine_DIR": "${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine",
           "SPARK_EXPECTED_ENGINE_VERSION": "1.0.0"
         },
         "sourceDir": "Tests/PackageSmoke",
@@ -11546,7 +11574,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build canonical Windows Shipping lane (CI-120)",
+        "step": "Configure and build the Windows Shipping lane",
         "stepIndex": 2,
         "matrix": {},
         "matrixResolved": true,
@@ -11559,7 +11587,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 2>&1 | tee ci120-windows-shipping-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 2>&1 | tee build-matrix-windows-shipping-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -11573,7 +11601,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build canonical Windows validation lane (CI-120)",
+        "step": "Configure and build the Windows validation lane",
         "stepIndex": 5,
         "matrix": {},
         "matrixResolved": true,
@@ -11586,7 +11614,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-release --config Release --parallel 2>&1 | tee ci120-windows-validation-build.log",
+        "command": "cmake --build --preset windows-release --config Release --parallel 2>&1 | tee build-matrix-windows-validation-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -11600,7 +11628,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build installed SDK consumer lane (CI-120)",
+        "step": "Configure and build the installed SDK consumer lane",
         "stepIndex": 7,
         "matrix": {},
         "matrixResolved": true,
@@ -11613,7 +11641,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/installed-sdk-consumer  --config Release --parallel 2>&1 | tee ci120-installed-sdk-consumer-build.log",
+        "command": "cmake --build build/installed-sdk-consumer  --config Release --parallel 2>&1 | tee build-matrix-installed-sdk-consumer-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -12125,7 +12153,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Configure and build installed SDK consumer lane (CI-120)",
+        "step": "Configure and build the installed SDK consumer lane",
         "stepIndex": 7,
         "matrix": {},
         "matrixResolved": true,
@@ -12138,7 +12166,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build/installed-sdk-consumer -C Release  --output-on-failure --no-tests=error 2>&1 | tee ci120-installed-sdk-consumer-test.log",
+        "command": "ctest --test-dir build/installed-sdk-consumer -C Release  --output-on-failure --no-tests=error 2>&1 | tee build-matrix-installed-sdk-consumer-test.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build/installed-sdk-consumer",
@@ -12459,10 +12487,10 @@
         "commandIndex": 0
       }
     ],
-    "ci120Invocations": [
+    "buildMatrixInvocations": [
       {
         "job": "validate-ci-tools",
-        "step": "Generate and compare deterministic build-matrix inventory (CI-120)",
+        "step": "Generate and compare the deterministic build-matrix inventory",
         "stepIndex": 18,
         "matrix": {},
         "matrixResolved": true,
@@ -12486,11 +12514,11 @@
         "report": "",
         "output": "build-matrix-inventory.json",
         "build": false,
-        "command": "python3 Tools/buildmatrix/inventory.py  --output build-matrix-inventory.json  --check docs/readiness/ci120-build-matrix-inventory.json"
+        "command": "python3 Tools/buildmatrix/inventory.py  --output build-matrix-inventory.json  --check docs/readiness/build-matrix-inventory.json"
       },
       {
         "job": "validate-ci-tools",
-        "step": "Compare reviewed build-matrix findings (CI-120)",
+        "step": "Compare reviewed build-matrix findings",
         "stepIndex": 19,
         "matrix": {},
         "matrixResolved": true,
@@ -12510,15 +12538,15 @@
         "codemodel": "",
         "codemodels": [],
         "inventory": "build-matrix-inventory.json",
-        "baseline": "docs/readiness/ci120-parity-findings.json",
+        "baseline": "docs/readiness/build-matrix-parity-findings.json",
         "report": "",
         "output": "build-matrix-parity-findings.json",
         "build": false,
-        "command": "python3 Tools/buildmatrix/check_parity.py  --inventory build-matrix-inventory.json  --baseline docs/readiness/ci120-parity-findings.json  --output build-matrix-parity-findings.json  > build-matrix-parity-stdout.json"
+        "command": "python3 Tools/buildmatrix/check_parity.py  --inventory build-matrix-inventory.json  --baseline docs/readiness/build-matrix-parity-findings.json  --output build-matrix-parity-findings.json  > build-matrix-parity-stdout.json"
       },
       {
         "job": "build-windows-shipping",
-        "step": "Capture Windows Shipping structural provenance (CI-120)",
+        "step": "Capture Windows Shipping provenance",
         "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,
@@ -12542,11 +12570,11 @@
         "report": "",
         "output": "",
         "build": true,
-        "command": "python Tools/buildmatrix/capture_provenance.py  --profile windows-shipping  --build-dir build/windows-shipping  --build 2>&1 | tee ci120-windows-shipping-producer.log"
+        "command": "python Tools/buildmatrix/capture_provenance.py  --profile windows-shipping  --build-dir build/windows-shipping  --build 2>&1 | tee build-matrix-windows-shipping-producer.log"
       },
       {
         "job": "build-windows-shipping",
-        "step": "Capture Windows validation structural provenance (CI-120)",
+        "step": "Capture Windows validation provenance",
         "stepIndex": 6,
         "matrix": {},
         "matrixResolved": true,
@@ -12570,11 +12598,11 @@
         "report": "",
         "output": "",
         "build": true,
-        "command": "python Tools/buildmatrix/capture_provenance.py  --profile windows-validation  --build-dir build/windows-release  --build 2>&1 | tee ci120-windows-validation-producer.log"
+        "command": "python Tools/buildmatrix/capture_provenance.py  --profile windows-validation  --build-dir build/windows-release  --build 2>&1 | tee build-matrix-windows-validation-producer.log"
       },
       {
         "job": "build-windows-shipping",
-        "step": "Capture installed SDK consumer structural provenance (CI-120)",
+        "step": "Capture installed SDK consumer provenance",
         "stepIndex": 8,
         "matrix": {},
         "matrixResolved": true,
@@ -12598,11 +12626,11 @@
         "report": "",
         "output": "",
         "build": true,
-        "command": "python Tools/buildmatrix/capture_provenance.py  --profile installed-sdk-consumer  --build-dir build/installed-sdk-consumer  --build 2>&1 | tee ci120-installed-sdk-consumer-producer.log"
+        "command": "python Tools/buildmatrix/capture_provenance.py  --profile installed-sdk-consumer  --build-dir build/installed-sdk-consumer  --build 2>&1 | tee build-matrix-installed-sdk-consumer-producer.log"
       },
       {
         "job": "build-windows-shipping",
-        "step": "Generate configured build-matrix inventory from the structural producer (CI-120)",
+        "step": "Generate the configured build-matrix inventory",
         "stepIndex": 9,
         "matrix": {},
         "matrixResolved": true,
@@ -12634,7 +12662,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Compare reviewed configured-evidence findings (CI-120)",
+        "step": "Check the configured build matrix",
         "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
@@ -12662,7 +12690,7 @@
       },
       {
         "job": "build-windows-shipping",
-        "step": "Compare reviewed configured-evidence findings (CI-120)",
+        "step": "Check the configured build matrix",
         "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
@@ -12696,7 +12724,7 @@
       "configureCount": 24,
       "buildCount": 23,
       "testCount": 16,
-      "ci120InvocationCount": 8,
+      "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 18,
       "blockingJobCount": 15,
@@ -12910,7 +12938,7 @@
     },
     {
       "job": "build-windows-shipping",
-      "step": "Configure and build canonical Windows Shipping lane (CI-120)",
+      "step": "Configure and build the Windows Shipping lane",
       "stepIndex": 2,
       "matrix": {},
       "matrixResolved": true,
@@ -12923,7 +12951,7 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --preset windows-shipping 2>&1 | tee ci120-windows-shipping-configure.log",
+      "command": "cmake --preset windows-shipping 2>&1 | tee build-matrix-windows-shipping-configure.log",
       "commandProvenance": "literal",
       "options": {},
       "preset": "windows-shipping",
@@ -12931,7 +12959,7 @@
     },
     {
       "job": "build-windows-shipping",
-      "step": "Configure and build canonical Windows validation lane (CI-120)",
+      "step": "Configure and build the Windows validation lane",
       "stepIndex": 5,
       "matrix": {},
       "matrixResolved": true,
@@ -12944,7 +12972,7 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --preset windows-release 2>&1 | tee ci120-windows-validation-configure.log",
+      "command": "cmake --preset windows-release 2>&1 | tee build-matrix-windows-validation-configure.log",
       "commandProvenance": "literal",
       "options": {},
       "preset": "windows-release",
@@ -12952,7 +12980,7 @@
     },
     {
       "job": "build-windows-shipping",
-      "step": "Configure and build installed SDK consumer lane (CI-120)",
+      "step": "Configure and build the installed SDK consumer lane",
       "stepIndex": 7,
       "matrix": {},
       "matrixResolved": true,
@@ -12965,10 +12993,10 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee ci120-installed-sdk-consumer-configure.log",
+      "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee build-matrix-installed-sdk-consumer-configure.log",
       "commandProvenance": "literal",
       "options": {
-        "SparkEngine_DIR": "${{ github.workspace }}/build/ci120-stage/lib/cmake/SparkEngine",
+        "SparkEngine_DIR": "${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine",
         "SPARK_EXPECTED_ENGINE_VERSION": "1.0.0"
       },
       "sourceDir": "Tests/PackageSmoke",

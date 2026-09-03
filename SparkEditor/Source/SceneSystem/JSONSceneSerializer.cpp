@@ -13,7 +13,6 @@
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
-#include <array>
 #include <atomic>
 #include <chrono>
 #include <charconv>
@@ -29,6 +28,7 @@
 #include <sstream>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 #if defined(_WIN32)
 #define NOMINMAX
@@ -1458,7 +1458,7 @@ namespace SparkEditor
 
         std::string content;
         content.reserve(static_cast<size_t>(fileSize));
-        std::array<char, 64 * 1024> readBuffer{};
+        std::vector<char> readBuffer(64 * 1024);
         while (content.size() <= m_maxFileSize)
         {
             const size_t remaining = m_maxFileSize + 1 - content.size();

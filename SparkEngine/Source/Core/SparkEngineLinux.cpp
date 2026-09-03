@@ -35,6 +35,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
+#include <tuple>
 
 #ifndef SPARK_PLATFORM_WINDOWS
 
@@ -220,9 +221,9 @@ int main(int argc, char* argv[])
                 // Best-effort only during final process teardown.
             }
         }
-        GetEngineRuntime().moduleHotReload.release();
-        GetEngineRuntime().moduleManager.release();
-        GetEngineRuntime().eventBus.release();
+        std::ignore = GetEngineRuntime().moduleHotReload.release();
+        std::ignore = GetEngineRuntime().moduleManager.release();
+        std::ignore = GetEngineRuntime().eventBus.release();
         std::_Exit(result);
 #endif
 
@@ -261,8 +262,8 @@ int main(int argc, char* argv[])
             SPARK_LOG_WARN(Spark::LogCategory::Core, "Unknown exception during eventBus cleanup");
         }
     }
-    GetEngineRuntime().eventBus.release();
-    GetEngineRuntime().moduleManager.release();
+    std::ignore = GetEngineRuntime().eventBus.release();
+    std::ignore = GetEngineRuntime().moduleManager.release();
     return 1;
 }
 #endif // !SPARK_PLATFORM_WINDOWS

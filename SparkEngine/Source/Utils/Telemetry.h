@@ -878,7 +878,7 @@ namespace Spark
 
         static uint64_t SaturatingAdd(uint64_t lhs, uint64_t rhs)
         {
-            const uint64_t maximum = (std::numeric_limits<uint64_t>::max)();
+            constexpr uint64_t maximum = (std::numeric_limits<uint64_t>::max)();
             return rhs > maximum - lhs ? maximum : lhs + rhs;
         }
 

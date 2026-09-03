@@ -141,7 +141,7 @@ namespace Spark::Graphics
         cmd->Dispatch(dispatchX, dispatchY, 1);
 
         // Copy composite output to history buffer for next frame's temporal accumulation
-        if (m_historyBuffer && output)
+        if (m_historyBuffer)
         {
             cmd->CopyTexture(m_historyBuffer.get(), output);
         }

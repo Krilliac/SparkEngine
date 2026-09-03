@@ -475,8 +475,11 @@ sudo dnf install libX11-devel mesa-libGL-devel
 **Fix:** Format your code before committing:
 
 ```bash
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules/SparkGame/Source \
-  -name '*.h' -o -name '*.cpp' | xargs clang-format -i
+find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+     SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+  -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
+  | xargs clang-format -i
 ```
 
 ### Build Succeeds but Engine Crashes on Startup

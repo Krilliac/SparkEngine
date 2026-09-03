@@ -26,6 +26,12 @@ else()
     # the complete module-facing runtime is present for ENABLE_EXPORTS below.
     target_link_libraries(SparkServerCore PUBLIC
         "$<LINK_LIBRARY:WHOLE_ARCHIVE,SparkEngineLib>")
+    # SparkGatewayCore links SparkEngineLib without a feature. CMake 3.28 (the
+    # Ubuntu 24.04 package) rejects that mix as a conflict unless the consumer
+    # states which feature wins; newer CMake already resolves it in favour of
+    # WHOLE_ARCHIVE, so the override keeps every supported toolchain identical.
+    set_property(TARGET SparkServerCore PROPERTY
+        LINK_LIBRARY_OVERRIDE "WHOLE_ARCHIVE,SparkEngineLib")
 endif()
 if(NOT TARGET SparkGatewayCore)
     message(FATAL_ERROR "SparkServer requires SparkGatewayCore; add SparkGateway before SparkServer")
@@ -43,6 +49,8 @@ target_link_libraries(SparkServer PRIVATE SparkServerCore)
 # libSparkGame.so/libSparkGame.dylib immediately at runtime.
 if(NOT WIN32)
     set_target_properties(SparkServer PROPERTIES ENABLE_EXPORTS ON)
+    set_property(TARGET SparkServer PROPERTY
+        LINK_LIBRARY_OVERRIDE "WHOLE_ARCHIVE,SparkEngineLib")
     if(APPLE)
         # SparkGame is shared by multiple hosts, so it cannot use CMake's
         # single-executable -bundle_loader relationship. Its dynamic_lookup

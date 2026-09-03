@@ -213,11 +213,6 @@ namespace SparkEditor
     uint32_t MaterialEditor::AddNode(MaterialNodeType nodeType, const XMFLOAT2& position)
     {
         auto node = CreateNode(nodeType);
-        if (!node)
-        {
-            return 0;
-        }
-
         uint32_t id = m_materialGraph.nextNodeID++;
         node->id = id;
         node->position = position;

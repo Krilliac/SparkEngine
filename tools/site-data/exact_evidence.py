@@ -21,7 +21,7 @@ REPOSITORY_PATTERN = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 
-CI120_STATUS_CONTEXT = "CI-120 Trusted / Exact Source"
+BUILD_MATRIX_STATUS_CONTEXT = "Build Matrix Verifier / Exact Source"
 CODEQL_STATUS_CONTEXT = "CodeQL Trusted / Exact Source"
 
 ENV_FROM_GATE_KEY = {
@@ -29,27 +29,27 @@ ENV_FROM_GATE_KEY = {
     "run_url": "EXACT_BUILD_RUN_URL",
     "run_attempt": "EXACT_BUILD_RUN_ATTEMPT",
     "event": "EXACT_BUILD_EVENT",
-    "build_ci120_producer_job_id": "EXACT_BUILD_CI120_PRODUCER_JOB_ID",
+    "build_build_matrix_producer_job_id": "EXACT_BUILD_MATRIX_PRODUCER_JOB_ID",
     "build_required_gate_job_id": "EXACT_BUILD_REQUIRED_GATE_JOB_ID",
     "build_job_inventory_digest": "EXACT_BUILD_JOB_INVENTORY_DIGEST",
-    "ci120_source_artifact_id": "EXACT_CI120_SOURCE_ARTIFACT_ID",
-    "ci120_source_artifact_digest": "EXACT_CI120_SOURCE_ARTIFACT_DIGEST",
-    "ci120_source_artifact_bytes": "EXACT_CI120_SOURCE_ARTIFACT_BYTES",
-    "ci120_status_id": "EXACT_CI120_STATUS_ID",
-    "ci120_status_target_url": "EXACT_CI120_STATUS_TARGET_URL",
-    "ci120_status_created_at": "EXACT_CI120_STATUS_CREATED_AT",
-    "ci120_status_updated_at": "EXACT_CI120_STATUS_UPDATED_AT",
-    "verifier_run_id": "EXACT_CI120_VERIFIER_RUN_ID",
-    "verifier_run_url": "EXACT_CI120_VERIFIER_RUN_URL",
-    "verifier_run_attempt": "EXACT_CI120_VERIFIER_RUN_ATTEMPT",
+    "build_matrix_source_artifact_id": "EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_ID",
+    "build_matrix_source_artifact_digest": "EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_DIGEST",
+    "build_matrix_source_artifact_bytes": "EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_BYTES",
+    "build_matrix_status_id": "EXACT_BUILD_MATRIX_STATUS_ID",
+    "build_matrix_status_target_url": "EXACT_BUILD_MATRIX_STATUS_TARGET_URL",
+    "build_matrix_status_created_at": "EXACT_BUILD_MATRIX_STATUS_CREATED_AT",
+    "build_matrix_status_updated_at": "EXACT_BUILD_MATRIX_STATUS_UPDATED_AT",
+    "verifier_run_id": "EXACT_BUILD_MATRIX_VERIFIER_RUN_ID",
+    "verifier_run_url": "EXACT_BUILD_MATRIX_VERIFIER_RUN_URL",
+    "verifier_run_attempt": "EXACT_BUILD_MATRIX_VERIFIER_RUN_ATTEMPT",
     "verifier_sha": "EXACT_VERIFIER_COMMIT",
-    "ci120_trusted_verifier_job_id": "EXACT_CI120_TRUSTED_VERIFIER_JOB_ID",
-    "ci120_verifier_job_inventory_digest": "EXACT_CI120_VERIFIER_JOB_INVENTORY_DIGEST",
-    "ci120_status_publish_step_started_at": "EXACT_CI120_STATUS_PUBLISH_STEP_STARTED_AT",
-    "ci120_status_publish_step_completed_at": "EXACT_CI120_STATUS_PUBLISH_STEP_COMPLETED_AT",
-    "receipt_artifact_id": "EXACT_CI120_RECEIPT_ARTIFACT_ID",
-    "receipt_artifact_digest": "EXACT_CI120_RECEIPT_ARTIFACT_DIGEST",
-    "receipt_artifact_bytes": "EXACT_CI120_RECEIPT_ARTIFACT_BYTES",
+    "build_matrix_trusted_verifier_job_id": "EXACT_BUILD_MATRIX_TRUSTED_VERIFIER_JOB_ID",
+    "build_matrix_verifier_job_inventory_digest": "EXACT_BUILD_MATRIX_VERIFIER_JOB_INVENTORY_DIGEST",
+    "build_matrix_status_publish_step_started_at": "EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_STARTED_AT",
+    "build_matrix_status_publish_step_completed_at": "EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_COMPLETED_AT",
+    "receipt_artifact_id": "EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_ID",
+    "receipt_artifact_digest": "EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_DIGEST",
+    "receipt_artifact_bytes": "EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_BYTES",
     "codeql_run_id": "EXACT_CODEQL_RUN_ID",
     "codeql_run_attempt": "EXACT_CODEQL_RUN_ATTEMPT",
     "codeql_run_url": "EXACT_CODEQL_RUN_URL",
@@ -213,12 +213,12 @@ def build_manifest(values: Mapping[str, str]) -> dict[str, Any]:
     build_event = _required(values, "EXACT_BUILD_EVENT")
     if build_event not in {"push", "workflow_dispatch"}:
         raise ExactEvidenceError("EXACT_BUILD_EVENT is not eligible publication evidence")
-    ci120_id, ci120_attempt, ci120_url = _run(
+    build_matrix_id, build_matrix_attempt, build_matrix_url = _run(
         values,
         repository,
-        id_name="EXACT_CI120_VERIFIER_RUN_ID",
-        attempt_name="EXACT_CI120_VERIFIER_RUN_ATTEMPT",
-        url_name="EXACT_CI120_VERIFIER_RUN_URL",
+        id_name="EXACT_BUILD_MATRIX_VERIFIER_RUN_ID",
+        attempt_name="EXACT_BUILD_MATRIX_VERIFIER_RUN_ATTEMPT",
+        url_name="EXACT_BUILD_MATRIX_VERIFIER_RUN_URL",
     )
     codeql_id, codeql_attempt, codeql_url = _run(
         values,
@@ -234,16 +234,16 @@ def build_manifest(values: Mapping[str, str]) -> dict[str, Any]:
         attempt_name="EXACT_CODEQL_REPORTER_RUN_ATTEMPT",
         url_name="EXACT_CODEQL_REPORTER_RUN_URL",
     )
-    run_ids = (build_id, ci120_id, codeql_id, reporter_id)
+    run_ids = (build_id, build_matrix_id, codeql_id, reporter_id)
     if len(set(run_ids)) != len(run_ids):
         raise ExactEvidenceError("exact-evidence workflow run IDs must be globally unique")
 
-    ci120_status = _status_window(
+    build_matrix_status = _status_window(
         values,
         repository,
-        prefix="EXACT_CI120_STATUS",
-        run_id=ci120_id,
-        run_attempt=ci120_attempt,
+        prefix="EXACT_BUILD_MATRIX_STATUS",
+        run_id=build_matrix_id,
+        run_attempt=build_matrix_attempt,
     )
     codeql_status = _status_window(
         values,
@@ -253,16 +253,16 @@ def build_manifest(values: Mapping[str, str]) -> dict[str, Any]:
         run_attempt=reporter_attempt,
     )
 
-    build_ci120_job_id = _positive_int(values, "EXACT_BUILD_CI120_PRODUCER_JOB_ID")
+    build_build_matrix_job_id = _positive_int(values, "EXACT_BUILD_MATRIX_PRODUCER_JOB_ID")
     build_gate_job_id = _positive_int(values, "EXACT_BUILD_REQUIRED_GATE_JOB_ID")
-    ci120_verifier_job_id = _positive_int(
-        values, "EXACT_CI120_TRUSTED_VERIFIER_JOB_ID"
+    build_matrix_verifier_job_id = _positive_int(
+        values, "EXACT_BUILD_MATRIX_TRUSTED_VERIFIER_JOB_ID"
     )
     codeql_reporter_job_id = _positive_int(
         values, "EXACT_CODEQL_TRUSTED_REPORTER_JOB_ID"
     )
-    ci120_source_id = _positive_int(values, "EXACT_CI120_SOURCE_ARTIFACT_ID")
-    receipt_id = _positive_int(values, "EXACT_CI120_RECEIPT_ARTIFACT_ID")
+    build_matrix_source_id = _positive_int(values, "EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_ID")
+    receipt_id = _positive_int(values, "EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_ID")
     codeql_source_ids = {
         language: _positive_int(values, f"EXACT_CODEQL_{environment}_SOURCE_ARTIFACT_ID")
         for language, environment in (
@@ -272,7 +272,7 @@ def build_manifest(values: Mapping[str, str]) -> dict[str, Any]:
         )
     }
     summary_id = _positive_int(values, "EXACT_CODEQL_SUMMARY_ARTIFACT_ID")
-    artifact_ids = [ci120_source_id, receipt_id, *codeql_source_ids.values(), summary_id]
+    artifact_ids = [build_matrix_source_id, receipt_id, *codeql_source_ids.values(), summary_id]
     if len(set(artifact_ids)) != len(artifact_ids):
         raise ExactEvidenceError("exact-evidence artifact IDs must be unique")
 
@@ -287,18 +287,18 @@ def build_manifest(values: Mapping[str, str]) -> dict[str, Any]:
     if len(set(codeql_job_ids.values())) != len(codeql_job_ids):
         raise ExactEvidenceError("CodeQL source job IDs must be unique")
     job_ids = [
-        build_ci120_job_id,
+        build_build_matrix_job_id,
         build_gate_job_id,
-        ci120_verifier_job_id,
+        build_matrix_verifier_job_id,
         *codeql_job_ids.values(),
         codeql_reporter_job_id,
     ]
     if len(set(job_ids)) != len(job_ids):
         raise ExactEvidenceError("exact-evidence job IDs must be globally unique")
 
-    ci120_status_id = _positive_int(values, "EXACT_CI120_STATUS_ID")
+    build_matrix_status_id = _positive_int(values, "EXACT_BUILD_MATRIX_STATUS_ID")
     codeql_status_id = _positive_int(values, "EXACT_CODEQL_STATUS_ID")
-    if ci120_status_id == codeql_status_id:
+    if build_matrix_status_id == codeql_status_id:
         raise ExactEvidenceError("exact-evidence commit status IDs must be unique")
 
     codeql_source_jobs = [
@@ -339,45 +339,45 @@ def build_manifest(values: Mapping[str, str]) -> dict[str, Any]:
             "runAttempt": build_attempt,
             "runUrl": build_url,
             "event": build_event,
-            "ci120ProducerJobId": build_ci120_job_id,
+            "ci120ProducerJobId": build_build_matrix_job_id,
             "requiredGateJobId": build_gate_job_id,
             "jobInventoryDigest": _digest(
                 values, "EXACT_BUILD_JOB_INVENTORY_DIGEST"
             ),
             "ci120SourceArtifact": {
-                "id": ci120_source_id,
-                "name": f"ci120-untrusted-stable-v1-{source_commit}-{build_attempt}",
-                "bytes": _positive_int(values, "EXACT_CI120_SOURCE_ARTIFACT_BYTES"),
-                "digest": _digest(values, "EXACT_CI120_SOURCE_ARTIFACT_DIGEST"),
+                "id": build_matrix_source_id,
+                "name": f"build-matrix-stable-v1-{source_commit}-{build_attempt}",
+                "bytes": _positive_int(values, "EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_BYTES"),
+                "digest": _digest(values, "EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_DIGEST"),
             },
         },
         "ci120": {
-            "statusContext": CI120_STATUS_CONTEXT,
-            "statusId": ci120_status_id,
-            "statusTargetUrl": ci120_status[0],
-            "statusCreatedAt": ci120_status[1],
-            "statusUpdatedAt": ci120_status[2],
-            "statusPublishStepStartedAt": ci120_status[3],
-            "statusPublishStepCompletedAt": ci120_status[4],
-            "verifierWorkflow": "CI-120 Trusted Verifier",
+            "statusContext": BUILD_MATRIX_STATUS_CONTEXT,
+            "statusId": build_matrix_status_id,
+            "statusTargetUrl": build_matrix_status[0],
+            "statusCreatedAt": build_matrix_status[1],
+            "statusUpdatedAt": build_matrix_status[2],
+            "statusPublishStepStartedAt": build_matrix_status[3],
+            "statusPublishStepCompletedAt": build_matrix_status[4],
+            "verifierWorkflow": "Build Matrix Verifier",
             "verifierCommit": verifier_commit,
-            "verifierRunId": ci120_id,
-            "verifierRunAttempt": ci120_attempt,
-            "verifierRunUrl": ci120_url,
-            "verifierJobId": ci120_verifier_job_id,
+            "verifierRunId": build_matrix_id,
+            "verifierRunAttempt": build_matrix_attempt,
+            "verifierRunUrl": build_matrix_url,
+            "verifierJobId": build_matrix_verifier_job_id,
             "verifierJobInventoryDigest": _digest(
-                values, "EXACT_CI120_VERIFIER_JOB_INVENTORY_DIGEST"
+                values, "EXACT_BUILD_MATRIX_VERIFIER_JOB_INVENTORY_DIGEST"
             ),
             "receiptArtifact": {
                 "id": receipt_id,
                 "name": (
-                    f"ci120-trusted-receipt-{source_commit}-{build_id}-"
-                    f"{build_attempt}-{ci120_attempt}"
+                    f"build-matrix-trusted-receipt-{source_commit}-{build_id}-"
+                    f"{build_attempt}-{build_matrix_attempt}"
                 ),
                 "bytes": _positive_int(
-                    values, "EXACT_CI120_RECEIPT_ARTIFACT_BYTES"
+                    values, "EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_BYTES"
                 ),
-                "digest": _digest(values, "EXACT_CI120_RECEIPT_ARTIFACT_DIGEST"),
+                "digest": _digest(values, "EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_DIGEST"),
             },
         },
         "codeql": {
@@ -448,8 +448,8 @@ def values_from_manifest(manifest: Mapping[str, Any]) -> dict[str, str]:
 
     try:
         build = manifest["build"]
-        ci120 = manifest["ci120"]
-        receipt = ci120["receiptArtifact"]
+        build_matrix = manifest["ci120"]
+        receipt = build_matrix["receiptArtifact"]
         codeql = manifest["codeql"]
         source_jobs = codeql["sourceJobs"]
         source_artifacts = codeql["sourceArtifacts"]
@@ -461,39 +461,39 @@ def values_from_manifest(manifest: Mapping[str, Any]) -> dict[str, str]:
             "EXACT_BUILD_RUN_ATTEMPT": str(build["runAttempt"]),
             "EXACT_BUILD_RUN_URL": str(build["runUrl"]),
             "EXACT_BUILD_EVENT": str(build["event"]),
-            "EXACT_BUILD_CI120_PRODUCER_JOB_ID": str(build["ci120ProducerJobId"]),
+            "EXACT_BUILD_MATRIX_PRODUCER_JOB_ID": str(build["ci120ProducerJobId"]),
             "EXACT_BUILD_REQUIRED_GATE_JOB_ID": str(build["requiredGateJobId"]),
             "EXACT_BUILD_JOB_INVENTORY_DIGEST": str(build["jobInventoryDigest"]),
-            "EXACT_CI120_SOURCE_ARTIFACT_ID": str(
+            "EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_ID": str(
                 build["ci120SourceArtifact"]["id"]
             ),
-            "EXACT_CI120_SOURCE_ARTIFACT_DIGEST": str(
+            "EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_DIGEST": str(
                 build["ci120SourceArtifact"]["digest"]
             ),
-            "EXACT_CI120_SOURCE_ARTIFACT_BYTES": str(
+            "EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_BYTES": str(
                 build["ci120SourceArtifact"]["bytes"]
             ),
-            "EXACT_CI120_STATUS_ID": str(ci120["statusId"]),
-            "EXACT_CI120_STATUS_TARGET_URL": str(ci120["statusTargetUrl"]),
-            "EXACT_CI120_STATUS_CREATED_AT": str(ci120["statusCreatedAt"]),
-            "EXACT_CI120_STATUS_UPDATED_AT": str(ci120["statusUpdatedAt"]),
-            "EXACT_CI120_STATUS_PUBLISH_STEP_STARTED_AT": str(
-                ci120["statusPublishStepStartedAt"]
+            "EXACT_BUILD_MATRIX_STATUS_ID": str(build_matrix["statusId"]),
+            "EXACT_BUILD_MATRIX_STATUS_TARGET_URL": str(build_matrix["statusTargetUrl"]),
+            "EXACT_BUILD_MATRIX_STATUS_CREATED_AT": str(build_matrix["statusCreatedAt"]),
+            "EXACT_BUILD_MATRIX_STATUS_UPDATED_AT": str(build_matrix["statusUpdatedAt"]),
+            "EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_STARTED_AT": str(
+                build_matrix["statusPublishStepStartedAt"]
             ),
-            "EXACT_CI120_STATUS_PUBLISH_STEP_COMPLETED_AT": str(
-                ci120["statusPublishStepCompletedAt"]
+            "EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_COMPLETED_AT": str(
+                build_matrix["statusPublishStepCompletedAt"]
             ),
-            "EXACT_CI120_VERIFIER_RUN_ID": str(ci120["verifierRunId"]),
-            "EXACT_CI120_VERIFIER_RUN_ATTEMPT": str(ci120["verifierRunAttempt"]),
-            "EXACT_CI120_VERIFIER_RUN_URL": str(ci120["verifierRunUrl"]),
-            "EXACT_VERIFIER_COMMIT": str(ci120["verifierCommit"]),
-            "EXACT_CI120_TRUSTED_VERIFIER_JOB_ID": str(ci120["verifierJobId"]),
-            "EXACT_CI120_VERIFIER_JOB_INVENTORY_DIGEST": str(
-                ci120["verifierJobInventoryDigest"]
+            "EXACT_BUILD_MATRIX_VERIFIER_RUN_ID": str(build_matrix["verifierRunId"]),
+            "EXACT_BUILD_MATRIX_VERIFIER_RUN_ATTEMPT": str(build_matrix["verifierRunAttempt"]),
+            "EXACT_BUILD_MATRIX_VERIFIER_RUN_URL": str(build_matrix["verifierRunUrl"]),
+            "EXACT_VERIFIER_COMMIT": str(build_matrix["verifierCommit"]),
+            "EXACT_BUILD_MATRIX_TRUSTED_VERIFIER_JOB_ID": str(build_matrix["verifierJobId"]),
+            "EXACT_BUILD_MATRIX_VERIFIER_JOB_INVENTORY_DIGEST": str(
+                build_matrix["verifierJobInventoryDigest"]
             ),
-            "EXACT_CI120_RECEIPT_ARTIFACT_ID": str(receipt["id"]),
-            "EXACT_CI120_RECEIPT_ARTIFACT_DIGEST": str(receipt["digest"]),
-            "EXACT_CI120_RECEIPT_ARTIFACT_BYTES": str(receipt["bytes"]),
+            "EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_ID": str(receipt["id"]),
+            "EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_DIGEST": str(receipt["digest"]),
+            "EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_BYTES": str(receipt["bytes"]),
             "EXACT_CODEQL_RUN_ID": str(codeql["runId"]),
             "EXACT_CODEQL_RUN_ATTEMPT": str(codeql["runAttempt"]),
             "EXACT_CODEQL_RUN_URL": str(codeql["runUrl"]),
@@ -661,7 +661,7 @@ def main() -> int:
     print(
         "Verified exact CI evidence for "
         f"{manifest['sourceCommit']}: Build {manifest['build']['runId']}, "
-        f"CI-120 {manifest['ci120']['verifierRunId']}, "
+        f"build-matrix verifier {manifest['ci120']['verifierRunId']}, "
         f"CodeQL {manifest['codeql']['runId']}."
     )
     return 0

@@ -227,15 +227,17 @@ TEST(EngineSettings_ZeroGravity)
 
 TEST(EngineSettings_TimestepBoundary)
 {
-    PhysicsSettings ps;
-    // Very small timestep
-    ps.fixedTimestep = 1.0f / 240.0f;
-    EXPECT_GT(ps.fixedTimestep, 0.0f);
+    // A consumer must keep a positive timestep and fall back to 60 Hz otherwise
+    auto safeTimestep = [](float configured) { return configured > 0.0f ? configured : 1.0f / 60.0f; };
 
-    // Zero timestep is invalid
+    PhysicsSettings ps;
+    // Very small timestep is valid and must be preserved
+    ps.fixedTimestep = 1.0f / 240.0f;
+    EXPECT_NEAR(safeTimestep(ps.fixedTimestep), 1.0f / 240.0f, 0.00001f);
+
+    // Zero timestep is invalid and must be replaced by the fallback
     ps.fixedTimestep = 0.0f;
-    float safeTimestep = ps.fixedTimestep > 0.0f ? ps.fixedTimestep : 1.0f / 60.0f;
-    EXPECT_GT(safeTimestep, 0.0f);
+    EXPECT_NEAR(safeTimestep(ps.fixedTimestep), 1.0f / 60.0f, 0.00001f);
 }
 
 TEST(EngineSettings_PhysicsRestitutionClamp)
@@ -651,11 +653,15 @@ TEST(EngineSettings_ParticleCountPositive)
 
 TEST(EngineSettings_ReduceMotionDisablesScreenShake)
 {
-    AccessibilitySettings a;
-    a.reduceMotion = true;
     // When reduce motion is on, camera shake/bob multipliers should be 0
-    float cameraShakeMultiplier = a.reduceMotion ? 0.0f : 1.0f;
-    EXPECT_NEAR(cameraShakeMultiplier, 0.0f, 0.01f);
+    auto cameraShakeMultiplier = [](const AccessibilitySettings& a) { return a.reduceMotion ? 0.0f : 1.0f; };
+
+    AccessibilitySettings a;
+    a.reduceMotion = false;
+    EXPECT_NEAR(cameraShakeMultiplier(a), 1.0f, 0.01f);
+
+    a.reduceMotion = true;
+    EXPECT_NEAR(cameraShakeMultiplier(a), 0.0f, 0.01f);
 }
 
 TEST(EngineSettings_VROverridesRenderScale)

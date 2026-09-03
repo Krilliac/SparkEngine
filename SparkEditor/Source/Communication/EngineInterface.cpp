@@ -195,13 +195,6 @@ namespace SparkEditor
         }
 
         ::CloseHandle(overlapped.hEvent);
-#else
-        // On non-Windows platforms, ConnectToNamedPipe handles the blocking wait
-        if (!ConnectToNamedPipe())
-        {
-            std::cerr << "Connect failed: engine did not connect to pipe\n";
-            return false;
-        }
 #endif
 
         m_isConnected = true;
@@ -407,12 +400,7 @@ namespace SparkEditor
 
             // Serialize the command into a binary buffer
             std::vector<uint8_t> buffer;
-            if (!SerializeCommand(command, buffer))
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Failed to serialize command %llu",
-                               (unsigned long long)command.commandID);
-                continue;
-            }
+            SerializeCommand(command, buffer);
 
 #ifdef _WIN32
             // Write to the named pipe if connected
@@ -525,7 +513,7 @@ namespace SparkEditor
         return true;
     }
 
-    bool EngineInterface::SerializeCommand(const EngineCommand& command, std::vector<uint8_t>& buffer)
+    void EngineInterface::SerializeCommand(const EngineCommand& command, std::vector<uint8_t>& buffer)
     {
         // Binary message format:
         //   [4 bytes] magic (0x53504B43 = "SPKC")
@@ -564,8 +552,6 @@ namespace SparkEditor
         // Binary payload
         WriteU32(buffer, static_cast<uint32_t>(command.binaryData.size()));
         buffer.insert(buffer.end(), command.binaryData.begin(), command.binaryData.end());
-
-        return true;
     }
 
     bool EngineInterface::DeserializeEvent(const std::vector<uint8_t>& buffer, EngineEvent& event)
@@ -661,45 +647,6 @@ namespace SparkEditor
 #else
         // Named pipes are a Windows-specific concept; on other platforms a
         // UNIX domain socket or other IPC mechanism would be used instead.
-        std::cout << "Named pipes are only supported on Windows\n";
-        return false;
-#endif
-    }
-
-    bool EngineInterface::ConnectToNamedPipe()
-    {
-        std::cout << "Connecting to named pipe: " << m_pipeName << "\n";
-
-#ifdef _WIN32
-        if (!m_pipeHandle)
-        {
-            std::cerr << "ConnectToNamedPipe: pipe handle is null, create the pipe first\n";
-            return false;
-        }
-
-        HANDLE hPipe = static_cast<HANDLE>(m_pipeHandle);
-
-        // Wait for a client to connect to the pipe.  ConnectNamedPipe returns
-        // TRUE when a new client connects, or FALSE if the client connected
-        // between CreateCommPipe and ConnectNamedPipe (in which case
-        // GetLastError() == ERROR_PIPE_CONNECTED and we treat it as success).
-        BOOL connected = ::ConnectNamedPipe(hPipe, nullptr);
-        if (!connected)
-        {
-            DWORD err = GetLastError();
-            if (err == ERROR_PIPE_CONNECTED)
-            {
-                // Client connected between Create and Connect -- that is fine.
-                std::cout << "Client already connected to pipe\n";
-                return true;
-            }
-            std::cerr << "ConnectNamedPipe failed with error " << err << "\n";
-            return false;
-        }
-
-        std::cout << "Client connected to named pipe successfully\n";
-        return true;
-#else
         std::cout << "Named pipes are only supported on Windows\n";
         return false;
 #endif

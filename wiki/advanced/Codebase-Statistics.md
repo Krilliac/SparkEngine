@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-01.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-03.
 This source inventory is not readiness evidence. The `stable-v1` Windows 11
 x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 314275 |
-| **SparkEditor/Source** | 109363 |
-| **GameModules** | 143040 |
-| **External services** | 11271 |
-| **Asset pipeline** | 2399 |
-| **Tests** | 172048 |
-| **SparkConsole/src** | 1633 |
+| **SparkEngine/Source** | 314465 |
+| **SparkEditor/Source** | 109226 |
+| **GameModules** | 143038 |
+| **External services** | 11280 |
+| **Asset pipeline** | 2400 |
+| **Tests** | 172108 |
+| **SparkConsole/src** | 1634 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~765893** |
+| **Total C++ (excl. ThirdParty)** | **~766022** |
 
 ### File Counts
 
@@ -34,7 +34,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 119532 lines, or 38% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 119617 lines, or 38% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -42,11 +42,11 @@ Graphics contains 119532 lines, or 38% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 119532 | 38.0% |
-| Engine (all subsystems) | 87759 | 27.9% |
-| Utils | 44429 | 14.1% |
-| Core | 29978 | 9.5% |
-| Physics | 10814 | 3.4% |
+| Graphics | 119617 | 38.0% |
+| Engine (all subsystems) | 87770 | 27.9% |
+| Utils | 44534 | 14.1% |
+| Core | 29982 | 9.5% |
+| Physics | 10799 | 3.4% |
 | Audio | 6090 | 1.9% |
 | Input | 3953 | 1.2% |
 | SceneManager | 2241 | 0.7% |
@@ -58,7 +58,7 @@ Graphics contains 119532 lines, or 38% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines |
 |-----------|------:|
-| Networking | 14945 |
+| Networking | 14948 |
 | AI | 13490 |
 | ECS | 8447 |
 | Gameplay | 7755 |
@@ -72,7 +72,7 @@ Graphics contains 119532 lines, or 38% of `SparkEngine/Source`. This is a source
 | World | 1588 |
 | Dialogue | 1425 |
 | Modding | 1377 |
-| Persistence | 1267 |
+| Persistence | 1276 |
 | 2D | 1015 |
 | Coroutine | 800 |
 | Replay | 731 |
@@ -103,14 +103,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 65 |
-| Total editor lines | 109363 |
+| Total editor lines | 109226 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
 | Test files | 577 |
-| TEST() definitions | 6990 |
+| TEST() definitions | 6992 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -157,10 +157,10 @@ inventory is implementation evidence, not support certification.
 | File | Lines |
 |------|------:|
 | `OpenGLDevice.cpp` | 2160 |
-| `CrashHandler.cpp` | 2093 |
+| `CrashHandler.cpp` | 2109 |
 | `SaveSystem.cpp` | 2067 |
 | `VulkanDevice.cpp` | 1991 |
-| `ModuleManager.cpp` | 1848 |
+| `ModuleManager.cpp` | 1849 |
 | `NetworkConnection.cpp` | 1680 |
 | `EngineSettings.cpp` | 1623 |
 | `PostProcessingPipeline.cpp` | 1602 |
@@ -176,7 +176,7 @@ inventory is implementation evidence, not support certification.
 | `GraphicsEngine.h` | 1260 |
 | `JsonUtils.h` | 1087 |
 | `EngineSettings.h` | 1080 |
-| `NetworkManager.h` | 920 |
+| `NetworkManager.h` | 922 |
 | `ECSystems.h` | 846 |
 | `PhysicsTypes.h` | 828 |
 | `MeshClusterSystem.h` | 824 |
@@ -186,14 +186,14 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `ProjectManager.cpp` | 2482 |
+| `ProjectManager.cpp` | 2480 |
 | `EditorUI.cpp` | 2247 |
 | `JSONSceneSerializer.cpp` | 2010 |
 | `VisualScriptPanel.cpp` | 1773 |
-| `CollaborativeEditSession.cpp` | 1670 |
+| `CollaborativeEditSession.cpp` | 1696 |
 | `BuildPipeline.cpp` | 1659 |
-| `PerformanceProfiler.cpp` | 1609 |
-| `EditorTheme.cpp` | 1587 |
+| `PerformanceProfiler.cpp` | 1613 |
+| `EditorTheme.cpp` | 1589 |
 | `HierarchyPanel.cpp` | 1524 |
 | `ProjectSettingsPanel.cpp` | 1503 |
 

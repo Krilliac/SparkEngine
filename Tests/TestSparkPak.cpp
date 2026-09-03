@@ -92,7 +92,10 @@ namespace
                 e.compSize = static_cast<uint32_t>(data.size());
                 e.origSize = static_cast<uint32_t>(data.size());
                 e.path = vpath;
-                std::fwrite(data.data(), 1, data.size(), f);
+                if (!data.empty())
+                {
+                    std::fwrite(data.data(), 1, data.size(), f);
+                }
                 toc.push_back(std::move(e));
             }
 
@@ -122,7 +125,10 @@ namespace
             hdr.tocOffset = static_cast<uint64_t>(std::ftell(f));
             hdr.tocSize = static_cast<uint32_t>(tocRaw.size());
             hdr.tocRawSize = hdr.tocSize; // uncompressed TOC
-            std::fwrite(tocRaw.data(), 1, tocRaw.size(), f);
+            if (!tocRaw.empty())
+            {
+                std::fwrite(tocRaw.data(), 1, tocRaw.size(), f);
+            }
 
             // Rewrite header
             std::fseek(f, 0, SEEK_SET);
@@ -154,8 +160,24 @@ namespace
             std::string path;
         };
 
+        TestPakReader() = default;
+        TestPakReader(const TestPakReader&) = delete;
+        TestPakReader& operator=(const TestPakReader&) = delete;
+
+        ~TestPakReader()
+        {
+            if (m_file)
+                std::fclose(m_file);
+        }
+
         bool Open(const std::string& path)
         {
+            // Release any archive opened by a previous call before reopening.
+            if (m_file)
+            {
+                std::fclose(m_file);
+                m_entries.clear();
+            }
             m_file = std::fopen(path.c_str(), "rb");
             if (!m_file)
                 return false;
@@ -195,12 +217,6 @@ namespace
                 m_entries[e.hash] = std::move(e);
             }
             return true;
-        }
-
-        ~TestPakReader()
-        {
-            if (m_file)
-                std::fclose(m_file);
         }
 
         bool Exists(const std::string& vpath) const { return m_entries.contains(FNV1a(vpath)); }

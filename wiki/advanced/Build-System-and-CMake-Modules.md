@@ -174,9 +174,9 @@ cmake --preset windows-release
 cmake --build --preset windows-release
 ```
 
-### CI-120 configured-target evidence
+### Configured-target build-matrix evidence
 
-CI-120 uses CMake File API replies to prove which targets a concrete build profile actually configured. The capture command creates a unique stateful File API query, invokes the canonical configure itself, and records only the matching reply transaction before inventory generation:
+The build-matrix tooling uses CMake File API replies to prove which targets a concrete build profile actually configured. The capture command creates a unique stateful File API query, invokes the canonical configure itself, and records only the matching reply transaction before inventory generation:
 
 ```bash
 python3 Tools/buildmatrix/capture_provenance.py \
@@ -184,15 +184,15 @@ python3 Tools/buildmatrix/capture_provenance.py \
   --build-dir build/windows-shipping
 python3 Tools/buildmatrix/inventory.py \
   --codemodel windows-shipping=build/windows-shipping \
-  --output docs/readiness/ci120-build-matrix-inventory.json
+  --output docs/readiness/build-matrix-inventory.json
 python3 Tools/buildmatrix/check_parity.py \
-  --inventory docs/readiness/ci120-build-matrix-inventory.json \
-  --baseline docs/readiness/ci120-parity-findings.json
+  --inventory docs/readiness/build-matrix-inventory.json \
+  --baseline docs/readiness/build-matrix-parity-findings.json
 ```
 
 The capture step requires an exactly clean repository, derives the commit itself, creates the query before configuring, and binds the profile, source/build directories, CMake executable and version, generator, cache values, and exact index/codemodel/cache/target reply digests. Inventory rejects missing, malformed, oversized, linked, out-of-directory, changed, unbound, or post-hoc reply data. Caller-supplied commit text is not provenance, and missing material fields or expected cache values remain blocking findings.
 
-The local record detects reply substitution but cannot authorize itself. `CI-120 Trusted Verifier` runs later from the exact current `Working` default-branch workflow, binds one source run/job/artifact through the Actions API, downloads by immutable artifact ID with digest mismatch failure, reparses the File API replies as bounded data, rehashes every declared product, reconstructs the inventory and parity report with trusted code, and attests only the resulting verified receipt. During the initial rollout the producer remains deliberately red at its external-authority enforcement step; CI-120 is not promoted until a remote verifier run proves this path end to end.
+The local record detects reply substitution but cannot authorize itself. The `Windows Shipping build matrix` job records that evidence and succeeds; it never attests anything. The `Build Matrix Verifier` workflow (`.github/workflows/build-matrix-verifier.yml`) runs afterwards from the exact current `Working` default-branch checkout, binds one successful source run/job/artifact through the Actions API, downloads by immutable artifact ID with digest mismatch failure, reparses the File API replies as bounded data, rehashes every declared product, reconstructs the inventory and parity report with trusted code, attests only the resulting verified receipt, and posts the `Build Matrix Verifier / Exact Source` commit status. Work item CI-120 stays open until a verifier run on `Working` proves this path end to end.
 
 ## Cross-Compilation: Windows on Linux (MinGW + Wine)
 
@@ -517,12 +517,18 @@ SparkEngine enforces consistent code style via `.clang-format` (Microsoft-based,
 
 ```bash
 # Check formatting (dry run)
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules/SparkGame/Source \
-  -name '*.h' -o -name '*.cpp' | head -50 | xargs clang-format --dry-run --Werror 2>&1
+find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+     SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+  -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
+  | xargs clang-format --dry-run --Werror 2>&1
 
 # Fix formatting automatically
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules/SparkGame/Source \
-  -name '*.h' -o -name '*.cpp' | xargs clang-format -i
+find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+     SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+  -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
+  | xargs clang-format -i
 ```
 
 CI rejects PRs with formatting violations.

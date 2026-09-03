@@ -426,8 +426,8 @@ Both release the local IPC endpoint on exit.
 
 ## Implemented phases (recap)
 
-Phase history is tracked in `.claude/knowledge/daemon-*-2026-04-16.md`
-but summarised here for convenience:
+Phase history is summarised here; the former `.claude/knowledge` store that
+held the per-phase notes was retired on 2026-06-08 and folded into the wiki:
 
 | Phase | Scope | Status |
 |-------|-------|--------|
@@ -443,7 +443,7 @@ but summarised here for convenience:
 
 ## Future phases
 
-Still tracked in `.claude/knowledge/daemon-services-architecture-2026-04-16.md`:
+Planned and not yet implemented:
 
 - **Build monitor.** Watches CMake + source files, reports
   incremental rebuild events to editors.

@@ -248,17 +248,14 @@ namespace SparkEditor
             return;
         }
 
-        // Check for category prefix
+        // Check for category prefix (the filter is known to be non-empty here)
         std::string query = m_currentFilter;
         std::string categoryFilter;
 
-        if (!query.empty())
+        if (query[0] == PREFIX_COMMAND)
         {
-            if (query[0] == PREFIX_COMMAND)
-            {
-                categoryFilter = ">";
-                query = query.substr(1);
-            }
+            categoryFilter = ">";
+            query = query.substr(1);
         }
 
         // Trim leading space after prefix

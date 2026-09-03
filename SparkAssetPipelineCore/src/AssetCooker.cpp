@@ -10,6 +10,7 @@
 #include <sstream>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -372,7 +373,7 @@ namespace Spark::AssetPipeline
                     error = "failed to restrict cook lock permissions: " + std::string(std::strerror(errno));
                     return false;
                 }
-                struct stat information{};
+                struct stat information = {};
                 if (::fstat(m_fd, &information) != 0 || !S_ISREG(information.st_mode) || information.st_nlink != 1 ||
                     information.st_uid != ::geteuid())
                 {
@@ -687,7 +688,7 @@ namespace Spark::AssetPipeline
             return false;
         }
         Sha256 sha;
-        std::array<uint8_t, 64 * 1024> buffer{};
+        std::vector<uint8_t> buffer(64 * 1024);
         while (file)
         {
             file.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));

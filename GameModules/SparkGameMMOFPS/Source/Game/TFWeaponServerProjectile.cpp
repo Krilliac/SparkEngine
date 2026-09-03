@@ -63,7 +63,7 @@ namespace Terrafront
 
     void TFWeaponSystem::ServerStepProjectiles(float dt)
     {
-        if (m_projectiles.empty())
+        if (!m_ctx || m_projectiles.empty())
             return;
 
         for (auto it = m_projectiles.begin(); it != m_projectiles.end();)
@@ -197,7 +197,7 @@ namespace Terrafront
             }
 
             // Terrain impact.
-            if (!dead && m_ctx && m_ctx->world && p.pos[1] <= m_ctx->world->TerrainHeightAt(p.pos[0], p.pos[2]))
+            if (!dead && m_ctx->world && p.pos[1] <= m_ctx->world->TerrainHeightAt(p.pos[0], p.pos[2]))
             {
                 // W11 impact-broadcast: lift the fx point back onto the surface
                 // (the integrated pos can be up to one step underground).

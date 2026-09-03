@@ -24,7 +24,7 @@ TEST(CpuNeural_Initialize)
     EXPECT_TRUE(CpuNeuralInference::IsInitialized());
 
     const char* isa = CpuNeuralInference::GetActiveISAName();
-    EXPECT_TRUE(isa != nullptr);
+    ASSERT_TRUE(isa != nullptr);
     EXPECT_TRUE(std::string(isa).size() > 0);
 }
 

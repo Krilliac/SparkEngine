@@ -138,7 +138,7 @@ TEST(Subtitle_ActiveDuringRange)
 {
     std::vector<TestSequencer::SubtitleCue> subs = {{1.0f, 3.0f, "Hello"}, {5.0f, 7.0f, "World"}};
     auto* sub = TestSequencer::GetActiveSubtitle(subs, 2.0f);
-    EXPECT_TRUE(sub != nullptr);
+    ASSERT_TRUE(sub != nullptr);
     EXPECT_EQ(sub->text, std::string("Hello"));
 }
 

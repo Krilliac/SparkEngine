@@ -40,7 +40,7 @@ TEST(AchievementSystem_UpdateProgress)
     sys.RegisterAchievement(MakeDef(1, "Kill10", 10.0f));
     sys.UpdateProgress(1, 5.0f);
     const auto* prog = sys.GetProgress(1);
-    EXPECT_TRUE(prog != nullptr);
+    ASSERT_TRUE(prog != nullptr);
     EXPECT_NEAR(prog->currentValue, 5.0f, 0.001f);
     EXPECT_FALSE(prog->unlocked);
     sys.Shutdown();
@@ -62,7 +62,7 @@ TEST(AchievementSystem_IncrementProgress)
     sys.IncrementProgress(1, 2.0f);
     sys.IncrementProgress(1, 1.0f);
     const auto* prog = sys.GetProgress(1);
-    EXPECT_TRUE(prog != nullptr);
+    ASSERT_TRUE(prog != nullptr);
     EXPECT_NEAR(prog->currentValue, 3.0f, 0.001f);
     sys.Shutdown();
 }
@@ -89,7 +89,7 @@ TEST(AchievementSystem_UnlockAchievement)
     sys.UnlockAchievement(1);
     EXPECT_TRUE(sys.IsUnlocked(1));
     const auto* prog = sys.GetProgress(1);
-    EXPECT_TRUE(prog != nullptr);
+    ASSERT_TRUE(prog != nullptr);
     EXPECT_TRUE(prog->unlocked);
     EXPECT_GT(prog->unlockTimestamp, 0u);
     sys.Shutdown();
@@ -154,7 +154,7 @@ TEST(AchievementSystem_ResetProgress)
     sys.UpdateProgress(1, 5.0f);
     sys.ResetProgress(1);
     const auto* prog = sys.GetProgress(1);
-    EXPECT_TRUE(prog != nullptr);
+    ASSERT_TRUE(prog != nullptr);
     EXPECT_NEAR(prog->currentValue, 0.0f, 0.001f);
     EXPECT_FALSE(prog->unlocked);
     sys.Shutdown();

@@ -22,15 +22,15 @@ TEST(UI_CreatePanelAndWidgets)
     canvas.Initialize(1920, 1080);
 
     auto* panel = canvas.CreatePanel("HUD");
-    EXPECT_TRUE(panel != nullptr);
+    ASSERT_TRUE(panel != nullptr);
     EXPECT_EQ(panel->GetName(), std::string("HUD"));
 
     auto* label = panel->CreateLabel("health_text", "Health: 100");
-    EXPECT_TRUE(label != nullptr);
+    ASSERT_TRUE(label != nullptr);
     EXPECT_EQ(label->GetText(), std::string("Health: 100"));
 
     auto* bar = panel->CreateProgressBar("health_bar");
-    EXPECT_TRUE(bar != nullptr);
+    ASSERT_TRUE(bar != nullptr);
     bar->SetValue(0.75f);
     EXPECT_NEAR(bar->GetValue(), 0.75f, 0.001f);
 }
@@ -45,7 +45,7 @@ TEST(UI_FindWidget)
     panel->CreateButton("play_btn", "Play");
 
     auto* found = canvas.FindWidget("title");
-    EXPECT_TRUE(found != nullptr);
+    ASSERT_TRUE(found != nullptr);
     EXPECT_EQ(found->GetName(), std::string("title"));
 
     auto* notFound = canvas.FindWidget("nonexistent");

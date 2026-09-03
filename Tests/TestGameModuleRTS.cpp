@@ -48,7 +48,7 @@ TEST(RTS_Unit_GetUnitVerifyTypeAndFaction)
     units.Initialize(nullptr);
     uint32_t id = units.SpawnUnit(RTSUnitType::Tank, RTSFaction::Sentinel, 5.0f, 10.0f);
     const UnitData* unit = units.GetUnit(id);
-    EXPECT_TRUE(unit != nullptr);
+    ASSERT_TRUE(unit != nullptr);
     EXPECT_TRUE(unit->type == RTSUnitType::Tank);
     EXPECT_TRUE(unit->faction == RTSFaction::Sentinel);
 }
@@ -145,7 +145,7 @@ TEST(RTS_Command_MoveAdvancesAndCompletesDeterministically)
     commands.Update(1.0f);
 
     const UnitData* unit = units.GetUnit(worker);
-    EXPECT_TRUE(unit != nullptr);
+    ASSERT_TRUE(unit != nullptr);
     EXPECT_NEAR(unit->posX, 1.8f, 0.001f);
     EXPECT_NEAR(unit->posY, 2.4f, 0.001f);
     EXPECT_TRUE(unit->state == RTSUnitState::Moving);
@@ -260,7 +260,7 @@ TEST(RTS_Building_GetBuildingVerifyTypeAndFaction)
     buildings.Initialize(nullptr);
     uint32_t id = buildings.PlaceBuilding(RTSBuildingType::Factory, RTSFaction::Sentinel, 10.0f, 20.0f);
     const BuildingData* b = buildings.GetBuilding(id);
-    EXPECT_TRUE(b != nullptr);
+    ASSERT_TRUE(b != nullptr);
     EXPECT_TRUE(b->type == RTSBuildingType::Factory);
     EXPECT_TRUE(b->faction == RTSFaction::Sentinel);
 }
@@ -330,7 +330,7 @@ TEST(RTS_Building_CompletedProductionSpawnsUnitAndConsumesEconomy)
     const auto marines = units.GetUnitsByFaction(RTSFaction::Human);
     EXPECT_EQ(marines.size(), static_cast<size_t>(1));
     const UnitData* marine = units.GetUnit(marines.front());
-    EXPECT_TRUE(marine != nullptr);
+    ASSERT_TRUE(marine != nullptr);
     EXPECT_TRUE(marine->type == RTSUnitType::Marine);
     EXPECT_NEAR(marine->posX, 12.0f, 0.001f);
     EXPECT_NEAR(marine->posY, 14.0f, 0.001f);
@@ -395,7 +395,7 @@ TEST(RTS_Resource_InitializePlayerAndGetResources)
     resources.Initialize(nullptr);
     resources.InitializePlayer(RTSFaction::Human);
     const PlayerResources* pr = resources.GetPlayerResources(RTSFaction::Human);
-    EXPECT_TRUE(pr != nullptr);
+    ASSERT_TRUE(pr != nullptr);
     EXPECT_TRUE(pr->minerals >= 0);
 }
 

@@ -209,7 +209,10 @@ namespace Terrafront
             const std::string s = std::string("[TF-VALIDATE] ") + buf;
             SPARK_LOG_INFO(Spark::LogCategory::Game, "%s", s.c_str());
             os << s << "\n";
-            (pass ? passed : failed) += 1;
+            if (pass)
+                ++passed;
+            else
+                ++failed;
         };
 
         line(passPhysics, "physics: %s joltLive=%d", joltLive ? 1 : 0);

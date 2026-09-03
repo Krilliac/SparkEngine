@@ -8,8 +8,8 @@
  * understands SET/GET/DELETE/KEYS verbs — it does not parse SQL (INSERT/
  * SELECT/etc. fall into the "Unsupported command" branch), so a real
  * prepared-SQL CRUD layer cannot persist rows through it. Per the W5 plan
- * (docs/superpowers/plans/2026-07-06-terrafront-onboarding.md, Task 1 Step
- * 4 / Global Constraints), TFDatabase pivots straight to the atomic-JSON-file
+ * (docs/specs/terrafront-onboarding-design.md, persistence decisions),
+ * TFDatabase pivots straight to the atomic-JSON-file
  * pattern used by TFProgressionSystem (TFProgressionSystem.cpp:385-446) while
  * exposing write failures to Tasks 2-6 instead of reporting in-memory-only
  * mutations as successful.

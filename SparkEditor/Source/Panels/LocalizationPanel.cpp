@@ -189,7 +189,10 @@ namespace SparkEditor
                     char buf[512] = {};
                     auto it = entry.translations.find(lang);
                     if (it != entry.translations.end())
+                    {
                         strncpy(buf, it->second.c_str(), sizeof(buf) - 1);
+                        buf[sizeof(buf) - 1] = '\0';
+                    }
 
                     char widgetId[32];
                     snprintf(widgetId, sizeof(widgetId), "##%s", lang.c_str());

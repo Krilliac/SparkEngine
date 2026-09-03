@@ -73,8 +73,8 @@ namespace Spark::Security
 
             m_regions.clear();
             m_branchGuards.clear();
-            if (++m_branchGuardGeneration == 0)
-                ++m_branchGuardGeneration;
+            // Generation 0 means "never recorded"; a 64-bit counter cannot wrap back to it.
+            ++m_branchGuardGeneration;
             m_violations.clear();
             m_scanCursor = 0;
             m_scanCount = 0;
@@ -134,8 +134,7 @@ namespace Spark::Security
             scanCount = m_scanCount;
             m_regions.clear();
             m_branchGuards.clear();
-            if (++m_branchGuardGeneration == 0)
-                ++m_branchGuardGeneration;
+            ++m_branchGuardGeneration;
             m_initialized.store(false, std::memory_order_release);
         }
 

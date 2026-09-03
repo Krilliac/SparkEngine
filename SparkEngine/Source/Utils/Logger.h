@@ -40,6 +40,22 @@
 #include <ctime>
 #include <fstream>
 #include <sstream>
+
+// Format-string checking for the printf-style logging entry points: GCC and
+// Clang verify the arguments against the format at every call site through the
+// attribute, MSVC's /analyze does the same through the SAL annotation.
+#if defined(_MSC_VER)
+#include <sal.h>
+#define SPARK_PRINTF_FORMAT_STRING _Printf_format_string_
+#define SPARK_PRINTF_FORMAT_ATTRIBUTE(formatIndex, firstArgumentIndex)
+#elif defined(__GNUC__) || defined(__clang__)
+#define SPARK_PRINTF_FORMAT_STRING
+#define SPARK_PRINTF_FORMAT_ATTRIBUTE(formatIndex, firstArgumentIndex)                                                 \
+    __attribute__((format(printf, formatIndex, firstArgumentIndex)))
+#else
+#define SPARK_PRINTF_FORMAT_STRING
+#define SPARK_PRINTF_FORMAT_ATTRIBUTE(formatIndex, firstArgumentIndex)
+#endif
 #include <queue>
 
 // Forward declare StackTrace to avoid circular includes — the .cpp pulls in the full header
@@ -494,6 +510,21 @@ namespace Spark
         {
             Log(level, StringToLogCategory(category), file, line, func, message);
         }
+
+        /**
+         * @brief Format a printf-style message and log it with full metadata
+         *
+         * Formatting happens in this one out-of-line frame, so a call site costs
+         * no stack of its own. The message is truncated at 4095 characters, the
+         * same limit the SPARK_LOG macros always had.
+         * @param format printf-style format string
+         */
+        void LogFormatted(LogLevel level, LogCategory category, const char* file, int line, const char* func,
+                          SPARK_PRINTF_FORMAT_STRING const char* format, ...) SPARK_PRINTF_FORMAT_ATTRIBUTE(7, 8);
+
+        /** @brief LogFormatted overload accepting string category for backward compatibility */
+        void LogFormatted(LogLevel level, const char* category, const char* file, int line, const char* func,
+                          SPARK_PRINTF_FORMAT_STRING const char* format, ...) SPARK_PRINTF_FORMAT_ATTRIBUTE(7, 8);
 
         /**
          * @brief Flush all sinks immediately (blocks until complete)

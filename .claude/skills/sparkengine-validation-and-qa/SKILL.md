@@ -97,7 +97,7 @@ Verified behavior and **limits**:
 - Opt-out: a file containing the comment `// test-registration: ignore` is skipped.
 - **Not wired into CI or `tools/validate-all.sh`** (verified: no workflow references it, and
   `validate-all.sh` does not call it). Running it is a manual, pre-commit discipline.
-  Wiring it into CI/validate-all is an `open` improvement (see `HARDEN_FLEET_HANDOFF.md`).
+  Wiring it into CI/validate-all is an `open` improvement (see the retired `HARDEN_FLEET_HANDOFF.md` (git history only since 2026-09-03)).
 
 ## 3. Running and selecting tests (SparkTests selectors)
 

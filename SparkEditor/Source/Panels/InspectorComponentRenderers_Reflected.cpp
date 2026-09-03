@@ -71,23 +71,29 @@ namespace SparkEditor
                 return ImGui::DragInt(field.name.c_str(), reinterpret_cast<int*>(dst));
             }
 
+        // Floating-point fields are copied in and out of the raw byte storage so the
+        // widgets never alias a float through the char* view of the component.
         case Spark::FieldType::Float:
-            if (field.hasRange)
-            {
-                return ImGui::SliderFloat(field.name.c_str(), reinterpret_cast<float*>(dst), field.rangeMin,
-                                          field.rangeMax, "%.3f");
-            }
-            else
-            {
-                return ImGui::DragFloat(field.name.c_str(), reinterpret_cast<float*>(dst), 0.1f);
-            }
+        {
+            float value = 0.0f;
+            std::memcpy(&value, dst, sizeof(value));
+            const bool changed =
+                field.hasRange ? ImGui::SliderFloat(field.name.c_str(), &value, field.rangeMin, field.rangeMax, "%.3f")
+                               : ImGui::DragFloat(field.name.c_str(), &value, 0.1f);
+            if (changed)
+                std::memcpy(dst, &value, sizeof(value));
+            return changed;
+        }
 
         case Spark::FieldType::Double:
         {
-            auto val = static_cast<float>(*reinterpret_cast<double*>(dst));
-            if (ImGui::DragFloat(field.name.c_str(), &val, 0.1f))
+            double stored = 0.0;
+            std::memcpy(&stored, dst, sizeof(stored));
+            auto value = static_cast<float>(stored);
+            if (ImGui::DragFloat(field.name.c_str(), &value, 0.1f))
             {
-                *reinterpret_cast<double*>(dst) = static_cast<double>(val);
+                stored = static_cast<double>(value);
+                std::memcpy(dst, &stored, sizeof(stored));
                 return true;
             }
             return false;
@@ -115,22 +121,38 @@ namespace SparkEditor
 
         case Spark::FieldType::Vector2:
         {
-            float* v = reinterpret_cast<float*>(dst);
-            return ImGui::DragFloat2(field.name.c_str(), v, 0.1f);
+            float v[2] = {};
+            std::memcpy(v, dst, sizeof(v));
+            if (ImGui::DragFloat2(field.name.c_str(), v, 0.1f))
+            {
+                std::memcpy(dst, v, sizeof(v));
+                return true;
+            }
+            return false;
         }
 
         case Spark::FieldType::Vector3:
         {
-            float* v = reinterpret_cast<float*>(dst);
+            float v[3] = {};
+            std::memcpy(v, dst, sizeof(v));
             const DirectX::XMFLOAT3 before{v[0], v[1], v[2]};
             InspectorPanel::DrawVec3Control(field.name.c_str(), v, 0.0f, 0.1f);
-            return before.x != v[0] || before.y != v[1] || before.z != v[2];
+            const bool changed = before.x != v[0] || before.y != v[1] || before.z != v[2];
+            if (changed)
+                std::memcpy(dst, v, sizeof(v));
+            return changed;
         }
 
         case Spark::FieldType::Vector4:
         {
-            float* v = reinterpret_cast<float*>(dst);
-            return ImGui::ColorEdit4(field.name.c_str(), v);
+            float v[4] = {};
+            std::memcpy(v, dst, sizeof(v));
+            if (ImGui::ColorEdit4(field.name.c_str(), v))
+            {
+                std::memcpy(dst, v, sizeof(v));
+                return true;
+            }
+            return false;
         }
 
         default:

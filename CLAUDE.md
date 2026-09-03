@@ -134,7 +134,7 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 6990 test definitions across 577 files, CTest
+Tests/                                   — 6992 test definitions across 577 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
@@ -211,13 +211,22 @@ docs/update-context.sh update          # Update CLAUDE.md counts
 ### Code changes (`.h`, `.hpp`, `.cpp`, `CMakeLists.txt`)
 
 ```bash
-# 1. Format check
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules \
-  -name '*.h' -o -name '*.cpp' | head -50 | xargs clang-format --dry-run --Werror 2>&1
+# 1. Format check — CI's check-format roots and incremental scope (wiki/development/Clang-Format.md):
+#    every C++ file changed since Working, committed or not. Never truncate the list with head -N.
+git diff --name-only --diff-filter=ACMR origin/Working -- \
+    SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+    SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
+    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+  | grep -E '\.(h|hpp|cpp)$' | grep -v '/Metal/' \
+  | xargs -r clang-format --dry-run --Werror
 
-# 2. Fix formatting (if step 1 fails)
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules \
-  -name '*.h' -o -name '*.cpp' | xargs clang-format -i
+# 2. Fix formatting (if step 1 fails) — same file list
+git diff --name-only --diff-filter=ACMR origin/Working -- \
+    SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+    SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
+    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+  | grep -E '\.(h|hpp|cpp)$' | grep -v '/Metal/' \
+  | xargs -r clang-format -i
 
 # 3. CMake configure
 cmake --preset linux-gcc-release 2>&1 | tail -20

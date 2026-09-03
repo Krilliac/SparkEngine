@@ -101,7 +101,7 @@ TEST(MaterialEffects_RegisterAndGetEffect)
                        {"spark_burst", "impact_metal", "decal_bullet_metal", 0.05f});
 
     const auto* fx = sys.GetEffect(TestMatFX::InteractionType::Bullet, TestMatFX::SurfaceType::Metal);
-    EXPECT_TRUE(fx != nullptr);
+    ASSERT_TRUE(fx != nullptr);
     EXPECT_EQ(fx->particleEffect, std::string("spark_burst"));
     EXPECT_EQ(fx->soundEvent, std::string("impact_metal"));
     EXPECT_NEAR(fx->decalSize, 0.05f, 0.001f);

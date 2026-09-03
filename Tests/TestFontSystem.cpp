@@ -88,7 +88,7 @@ TEST(FontSystem_GetFontInfo)
     fs.Initialize();
     auto id = fs.LoadFont("Assets/Fonts/Roboto.ttf", 24.0f);
     auto* info = fs.GetFontInfo(id);
-    EXPECT_TRUE(info != nullptr);
+    ASSERT_TRUE(info != nullptr);
     EXPECT_EQ(info->fontSize, 24.0f);
     EXPECT_EQ(info->name, std::string("Roboto"));
     EXPECT_TRUE(info->glyphCount > 0); // ASCII preloaded

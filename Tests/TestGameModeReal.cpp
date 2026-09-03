@@ -101,11 +101,11 @@ TEST(GameModeReal_AddPlayerAndScore)
 
     gm.RecordKill("Alice", "Bob", false);
     const auto* score = gm.GetPlayerScore("Alice");
-    EXPECT_TRUE(score != nullptr);
+    ASSERT_TRUE(score != nullptr);
     EXPECT_EQ(score->kills, 1);
 
     const auto* bScore = gm.GetPlayerScore("Bob");
-    EXPECT_TRUE(bScore != nullptr);
+    ASSERT_TRUE(bScore != nullptr);
     EXPECT_EQ(bScore->deaths, 1);
 }
 

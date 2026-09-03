@@ -450,7 +450,7 @@ namespace MMO
         status += "World Time: " + std::to_string(m_worldTime) + "s\n";
 
         auto& originSystem = m_originSystem;
-        auto stats = originSystem.GetStats();
+        const auto& stats = originSystem.GetStats();
         status += "Origin Rebases: " + std::to_string(stats.totalRebases) + "\n";
         status += "Max Distance: " + std::to_string(stats.maxDistanceFromOrigin) + "m\n";
         return status;

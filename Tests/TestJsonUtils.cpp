@@ -29,12 +29,12 @@ namespace Json
         using ObjectType = std::unordered_map<std::string, Value>;
 
         Value() : m_data(nullptr) {}
-        Value(std::nullptr_t) : m_data(nullptr) {}
-        Value(bool b) : m_data(b) {}
-        Value(double num) : m_data(num) {}
-        Value(int num) : m_data(static_cast<double>(num)) {}
-        Value(const char* str) : m_data(std::string(str)) {}
-        Value(std::string str) : m_data(std::move(str)) {}
+        explicit Value(std::nullptr_t) : m_data(nullptr) {}
+        explicit Value(bool b) : m_data(b) {}
+        explicit Value(double num) : m_data(num) {}
+        explicit Value(int num) : m_data(static_cast<double>(num)) {}
+        explicit Value(const char* str) : m_data(std::string(str)) {}
+        explicit Value(std::string str) : m_data(std::move(str)) {}
 
         static Value MakeArray() { return Value(ArrayType{}); }
         static Value MakeObject() { return Value(ObjectType{}); }

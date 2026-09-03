@@ -1,7 +1,6 @@
 # Hardware Acceleration Plan
 
 **Created:** 2026-03-28
-**Branch:** `claude/hardware-acceleration-exploration-JxQNL`
 **Status:** In Progress
 
 ## Executive Summary

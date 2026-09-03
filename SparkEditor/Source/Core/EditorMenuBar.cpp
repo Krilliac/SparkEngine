@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <filesystem>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -77,19 +78,19 @@ namespace SparkEditor
     void EditorUI::ShowOpenSceneDialogNow()
     {
 #ifdef _WIN32
-        wchar_t pathBuffer[32768] = {};
+        std::vector<wchar_t> pathBuffer(32768, L'\0');
         std::wstring initialDirectory;
         if (m_projectManager && m_projectManager->HasOpenProject())
             initialDirectory = std::filesystem::path(m_projectManager->GetProjectScenesPath()).wstring();
         const wchar_t filter[] = L"Spark Scenes (*.sparkscene)\0*.sparkscene\0All Files (*.*)\0*.*\0\0";
         OPENFILENAMEW dialog{};
         dialog.lStructSize = sizeof(dialog);
-        dialog.lpstrFile = pathBuffer;
-        dialog.nMaxFile = static_cast<DWORD>(std::size(pathBuffer));
+        dialog.lpstrFile = pathBuffer.data();
+        dialog.nMaxFile = static_cast<DWORD>(pathBuffer.size());
         dialog.lpstrFilter = filter;
         dialog.lpstrInitialDir = initialDirectory.empty() ? nullptr : initialDirectory.c_str();
         dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
-        if (GetOpenFileNameW(&dialog) && !OpenScene(std::filesystem::path(pathBuffer).string()))
+        if (GetOpenFileNameW(&dialog) && !OpenScene(std::filesystem::path(pathBuffer.data()).string()))
             ShowNotification("Failed to open scene", "error");
 #else
         ShowNotification("Open Scene dialog is not available on this platform", "warning");

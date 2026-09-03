@@ -305,7 +305,7 @@
 | `FilterMode` | enum | SparkEditor | [MaterialEditorPanel.h:L74](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L74) |  |
 | `FireMode` | enum | SparkEngine | [WeaponManager.h:L38](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L38) |  |
 | `FireMode` | enum | Tests | [TestWeaponMechanics.cpp:L23](../../Tests/TestWeaponMechanics.cpp#L23) |  |
-| `FireMode` | enum | Tests | [TestWeaponSystem.cpp:L18](../../Tests/TestWeaponSystem.cpp#L18) |  |
+| `FireMode` | enum | Tests | [TestWeaponSystem.cpp:L19](../../Tests/TestWeaponSystem.cpp#L19) |  |
 | `FlexAlign` | enum | SparkEngine | [UILayoutExtensions.h:L20](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L20) |  |
 | `FogMode` | enum | SparkEngine | [FogSystem.h:L49](../../SparkEngine/Source/Graphics/FogSystem.h#L49) |  |
 | `FoliageRenderLOD` | enum | SparkEngine | [FoliageRenderer.h:L66](../../SparkEngine/Source/Graphics/FoliageRenderer.h#L66) | LOD level chosen for a single foliage instance. |
@@ -443,11 +443,11 @@
 | `LODQualityTier` | enum | SparkEditor | [AssetPipelineTypes.h:L53](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L53) |  |
 | `LODTargetPlatform` | enum | SparkEditor | [AssetPipelineTypes.h:L46](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L46) |  |
 | `LogCategory` | enum | SparkEditor | [EditorLogger.h:L43](../../SparkEditor/Source/Core/EditorLogger.h#L43) | Log categories for classification |
-| `LogCategory` | enum | SparkEngine | [Logger.h:L130](../../SparkEngine/Source/Utils/Logger.h#L130) |  |
+| `LogCategory` | enum | SparkEngine | [Logger.h:L146](../../SparkEngine/Source/Utils/Logger.h#L146) |  |
 | `LogFileFormat` | enum | SparkEngine | [FileLogger.h:L62](../../SparkEngine/Source/Utils/FileLogger.h#L62) | Log file output format |
 | `LoginUIState` | enum | GameModules | [MMOLoginUI.h:L33](../../GameModules/SparkGameMMO/Source/UI/MMOLoginUI.h#L33) | UI flow state machine |
 | `LogLevel` | enum | SparkEditor | [EditorLogger.h:L30](../../SparkEditor/Source/Core/EditorLogger.h#L30) | Log severity levels |
-| `LogLevel` | enum | SparkEngine | [Logger.h:L58](../../SparkEngine/Source/Utils/Logger.h#L58) |  |
+| `LogLevel` | enum | SparkEngine | [Logger.h:L74](../../SparkEngine/Source/Utils/Logger.h#L74) |  |
 | `LoopMode` | enum | SparkEngine | [TweenSystem.h:L65](../../SparkEngine/Source/Engine/Tween/TweenSystem.h#L65) | Loop behavior for a tween. |
 | `LoopMode` | enum | Tests | [TestSplineMath.cpp:L121](../../Tests/TestSplineMath.cpp#L121) |  |
 | `LoopType` | enum | SparkEngine | [Tween.h:L247](../../SparkEngine/Source/Utils/Tween.h#L247) | How a tween behaves when it reaches the end. |
@@ -929,10 +929,10 @@
 | `WaveState` | enum | GameModules | [WaveSpawner.h:L49](../../GameModules/SparkGameFPS/Source/Game/WaveSpawner.h#L49) | Current state of the wave spawner |
 | `WeaponSlot` | enum | SparkEngine | [WeaponManager.h:L55](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L55) |  |
 | `WeaponSlot` | enum | Tests | [TestWeaponMechanics.cpp:L40](../../Tests/TestWeaponMechanics.cpp#L40) |  |
-| `WeaponSlot` | enum | Tests | [TestWeaponSystem.cpp:L35](../../Tests/TestWeaponSystem.cpp#L35) |  |
+| `WeaponSlot` | enum | Tests | [TestWeaponSystem.cpp:L36](../../Tests/TestWeaponSystem.cpp#L36) |  |
 | `WeaponState` | enum | SparkEngine | [WeaponManager.h:L45](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L45) |  |
 | `WeaponState` | enum | Tests | [TestWeaponMechanics.cpp:L30](../../Tests/TestWeaponMechanics.cpp#L30) |  |
-| `WeaponState` | enum | Tests | [TestWeaponSystem.cpp:L25](../../Tests/TestWeaponSystem.cpp#L25) |  |
+| `WeaponState` | enum | Tests | [TestWeaponSystem.cpp:L26](../../Tests/TestWeaponSystem.cpp#L26) |  |
 | `WeaponType` | enum | GameModules | [GameSystemEnums.h:L28](../../GameModules/SparkGameFPS/Source/Enums/GameSystemEnums.h#L28) | Weapon types supported by the game system |
 | `WeaponType` | enum | SparkEngine | [GameSystemEnums.h:L28](../../SparkEngine/Source/Enums/GameSystemEnums.h#L28) | Weapon types supported by the game system |
 | `WeatherCondition` | enum | GameModules | [RacingEnums.h:L75](../../GameModules/SparkGameRacing/Source/Enums/RacingEnums.h#L75) | Weather conditions affecting visibility and grip |

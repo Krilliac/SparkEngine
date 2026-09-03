@@ -26,7 +26,7 @@ TEST(CSG_CreateBox)
     EXPECT_TRUE(id > 0);
     EXPECT_EQ(csg.GetBrushCount(), static_cast<size_t>(1));
     auto* brush = csg.GetBrush(id);
-    EXPECT_TRUE(brush != nullptr);
+    ASSERT_TRUE(brush != nullptr);
     EXPECT_EQ(brush->faces.size(), static_cast<size_t>(6)); // Box has 6 faces
     csg.Shutdown();
 }
@@ -39,7 +39,7 @@ TEST(CSG_CreateCylinder)
     uint32_t id = csg.CreateBrush(Spark::LevelDesign::BrushShape::Cylinder, {1.0f, 3.0f, 0.0f});
     EXPECT_TRUE(id > 0);
     auto* brush = csg.GetBrush(id);
-    EXPECT_TRUE(brush != nullptr);
+    ASSERT_TRUE(brush != nullptr);
     // 8 side faces + 2 caps = 10
     EXPECT_EQ(brush->faces.size(), static_cast<size_t>(10));
     csg.Shutdown();
@@ -53,7 +53,7 @@ TEST(CSG_CreateSphere)
     uint32_t id = csg.CreateBrush(Spark::LevelDesign::BrushShape::Sphere, {1.0f, 0, 0});
     EXPECT_TRUE(id > 0);
     auto* brush = csg.GetBrush(id);
-    EXPECT_TRUE(brush != nullptr);
+    ASSERT_TRUE(brush != nullptr);
     EXPECT_TRUE(brush->faces.size() > 0);
     csg.Shutdown();
 }
@@ -65,7 +65,7 @@ TEST(CSG_CreateWedge)
     uint32_t id = csg.CreateBrush(Spark::LevelDesign::BrushShape::Wedge, {2.0f, 2.0f, 2.0f});
     EXPECT_TRUE(id > 0);
     auto* brush = csg.GetBrush(id);
-    EXPECT_TRUE(brush != nullptr);
+    ASSERT_TRUE(brush != nullptr);
     EXPECT_EQ(brush->faces.size(), static_cast<size_t>(5)); // Wedge has 5 faces
     csg.Shutdown();
 }
@@ -78,7 +78,7 @@ TEST(CSG_CreateCone)
     uint32_t id = csg.CreateBrush(Spark::LevelDesign::BrushShape::Cone, {1.0f, 3.0f, 0});
     EXPECT_TRUE(id > 0);
     auto* brush = csg.GetBrush(id);
-    EXPECT_TRUE(brush != nullptr);
+    ASSERT_TRUE(brush != nullptr);
     // 8 side triangles + 1 bottom cap = 9
     EXPECT_EQ(brush->faces.size(), static_cast<size_t>(9));
     csg.Shutdown();
@@ -94,7 +94,7 @@ TEST(CSG_GenerateMesh_Box)
     csg.Initialize();
     uint32_t id = csg.CreateBrush(Spark::LevelDesign::BrushShape::Box, {1, 1, 1});
     auto* solid = csg.GetBrush(id);
-    EXPECT_TRUE(solid != nullptr);
+    ASSERT_TRUE(solid != nullptr);
     auto mesh = csg.GenerateMesh(*solid);
     EXPECT_EQ(mesh.triangleCount, static_cast<uint32_t>(12)); // 6 faces * 2 triangles each
     EXPECT_EQ(mesh.indices.size(), static_cast<size_t>(36));

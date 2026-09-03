@@ -486,3 +486,7 @@ ThirdParty/dxvk/
 # Transient screenshots captured by live editor/engine test runs under
 # Xvfb — these are ephemeral artifacts and should never be committed.
 tmp-screenshots/
+
+# Editor layout and scene files written when tools are run from the repository root
+/imgui.ini
+/*.scene.json

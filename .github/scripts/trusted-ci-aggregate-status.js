@@ -3,10 +3,10 @@
 const BOT_LOGIN = 'github-actions[bot]';
 const BOT_ID = 41898282;
 const REPORTER_WORKFLOWS = Object.freeze({
-    'CI-120 Trusted Verifier': Object.freeze({
+    'Build Matrix Verifier': Object.freeze({
         workflowId: 345629369,
-        path: '.github/workflows/ci120-report.yml',
-        context: 'CI-120 Trusted / Exact Source'
+        path: '.github/workflows/build-matrix-verifier.yml',
+        context: 'Build Matrix Verifier / Exact Source'
     }),
     'CodeQL Trusted Reporter': Object.freeze({
         workflowId: 344195954,
