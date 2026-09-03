@@ -23,6 +23,10 @@ EXPECTED_CATEGORIES = (
     "codacy/cppcheck-reported-by-codacy-cpp-2/",
 )
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
+# Mirrors the drop rules in normalize-codacy-sarif.py, which this privileged
+# reporter cannot import (it only ships the exact validated artifact).
+SUPPRESSED_RULE_IDS = frozenset({"cppcheck_misra-config", "cppcheck_y2038-unsafe-call"})
+HEADER_PARSED_AS_C_MESSAGE = re.compile(r"\bis invalid C code\b")
 DIGEST_PATTERN = re.compile(r"^sha256:([0-9a-f]{64})$", re.IGNORECASE)
 
 
@@ -70,6 +74,22 @@ def _validate_upload_provenance() -> None:
         raise ValueError(f"unsupported source event: {event!r}")
 
 
+def _is_header_parsed_as_c(result: dict[str, Any]) -> bool:
+    if result.get("ruleId") != "cppcheck_syntaxError":
+        return False
+    message = result.get("message")
+    text = message.get("text") if isinstance(message, dict) else None
+    if not isinstance(text, str) or not HEADER_PARSED_AS_C_MESSAGE.search(text):
+        return False
+    for location in result.get("locations", []) or []:
+        physical = location.get("physicalLocation") if isinstance(location, dict) else None
+        artifact = physical.get("artifactLocation") if isinstance(physical, dict) else None
+        uri = artifact.get("uri") if isinstance(artifact, dict) else None
+        if isinstance(uri, str):
+            return uri.split("?", 1)[0].lower().endswith(".h")
+    return False
+
+
 def _validate_result(result: Any) -> None:
     if not isinstance(result, dict):
         raise ValueError("SARIF results must be objects")
@@ -77,8 +97,10 @@ def _validate_result(result: Any) -> None:
         raise ValueError("SARIF result.ruleId must be a non-empty string")
     if result.get("level") not in {"warning", "error"}:
         raise ValueError("normalized Codacy results must be warning or error severity")
-    if result["ruleId"] == "cppcheck_misra-config":
-        raise ValueError("suppressed cppcheck_misra-config result survived normalization")
+    if result["ruleId"] in SUPPRESSED_RULE_IDS:
+        raise ValueError(f"suppressed {result['ruleId']} result survived normalization")
+    if _is_header_parsed_as_c(result):
+        raise ValueError("header-parsed-as-C cppcheck_syntaxError result survived normalization")
 
 
 def validate_artifact(directory: Path, expected_digest: str) -> dict[str, int]:

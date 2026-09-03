@@ -18,8 +18,11 @@ on:
   workflow_dispatch:
     inputs:
       source_run_id:
-        description: Failed same-workflow push run whose preserved SARIF should be repaired
-        required: true
+        description: >-
+          Failed same-workflow push run whose preserved SARIF should be repaired.
+          Leave empty to run a fresh analysis of the dispatched ref instead.
+        required: false
+        default: ''
         type: string
 
 env:
@@ -31,7 +34,9 @@ permissions:
 
 jobs:
   analyze:
-    if: github.event_name != 'workflow_dispatch'
+    # Scheduled, push, and PR events analyze their ref. A manual dispatch does
+    # too unless it names a preserved SARIF to repair (recover-sarif below).
+    if: github.event_name != 'workflow_dispatch' || inputs.source_run_id == ''
     permissions:
       contents: read # for actions/checkout to fetch code
       security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
@@ -90,16 +95,17 @@ jobs:
         with:
           sarif_file: ${{ steps.run-analysis.outputs.sarif }}
 
-      # Preserve a failed payload briefly so future schema or service-limit
-      # changes can be diagnosed without rerunning the hour-long analyzer.
-      - name: Upload failed MSVC SARIF for diagnosis
-        if: failure() && steps.run-analysis.outputs.sarif != ''
+      # Retain the normalized payload briefly so findings can be triaged
+      # offline and a failed upload can be diagnosed or repaired without
+      # rerunning the hour-long analyzer.
+      - name: Retain normalized MSVC SARIF
+        if: always() && steps.run-analysis.outputs.sarif != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: msvc-sarif-${{ github.run_id }}
           path: ${{ steps.run-analysis.outputs.sarif }}
           if-no-files-found: ignore
-          retention-days: 1
+          retention-days: 7
 
   recover-sarif:
     if: github.event_name == 'workflow_dispatch'

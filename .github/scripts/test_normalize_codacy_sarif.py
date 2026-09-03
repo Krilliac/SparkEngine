@@ -142,6 +142,44 @@ class NormalizeCodacySarifTests(unittest.TestCase):
         )
         self.assertEqual(audit["dropped_rules"]["cppcheck_misra-config"], 2)
 
+    def test_y2038_and_header_parsed_as_c_noise_are_dropped(self) -> None:
+        header_as_c = result(10, rule_id="cppcheck_syntaxError")
+        header_as_c["message"] = {"text": "Code 'namespaceSpark{' is invalid C code."}
+        header_as_c["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] = "SparkEngine/Source/Core/Engine.h"
+        header_real_error = result(11, rule_id="cppcheck_syntaxError")
+        header_real_error["message"] = {"text": "syntax error"}
+        header_real_error["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] = "SparkEngine/Source/Core/Other.h"
+        source_as_c = result(12, rule_id="cppcheck_syntaxError")
+        source_as_c["message"] = {"text": "Code 'namespaceSpark{' is invalid C code."}
+        source_as_c["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] = "SparkLauncher/src/main.cpp"
+        document = payload(
+            run(
+                "cpp",
+                [
+                    result(1, rule_id="cppcheck_y2038-unsafe-call"),
+                    result(2, level="error", rule_id="cppcheck_y2038-unsafe-call"),
+                    header_as_c,
+                    header_real_error,
+                    source_as_c,
+                    result(3, rule_id="cppcheck_knownConditionTrueFalse"),
+                ],
+            )
+        )
+        audit = normalizer.normalize_for_github(document)
+        self.assertEqual(audit["dropped_results"], 3)
+        self.assertEqual(
+            audit["dropped_reasons"],
+            {
+                "rule:cppcheck_y2038-unsafe-call": 2,
+                "header-parsed-as-c:cppcheck_syntaxError": 1,
+            },
+        )
+        retained = [item for shard in document["runs"] for item in shard["results"]]
+        self.assertEqual(
+            sorted(item["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] for item in retained),
+            ["SparkEngine/Source/Core/Other.h", "SparkLauncher/src/main.cpp", "src/file-3.cpp"],
+        )
+
     def test_exact_head_level_distribution_has_deterministic_audit(self) -> None:
         findings: list[dict[str, object]] = []
         index = 0

@@ -22,7 +22,17 @@ MAX_RESULTS_PER_RUN = 25_000
 MAX_RUNS_PER_UPLOAD = 20
 VALID_RESULT_LEVELS = frozenset({"none", "note", "warning", "error"})
 DROP_LEVELS = frozenset({"none", "note"})
-DROP_RULE_IDS = frozenset({"cppcheck_misra-config"})
+# cppcheck_misra-config: configuration chatter, not a finding.
+# cppcheck_y2038-unsafe-call: the y2038 addon warns about 32-bit time_t; every
+# supported SparkEngine target (Windows x64, Linux x86_64, macOS) has a 64-bit
+# time_t, so these calls are not unsafe here.
+DROP_RULE_IDS = frozenset({"cppcheck_misra-config", "cppcheck_y2038-unsafe-call"})
+# Codacy's cppcheck runner parses plain .h headers as C. A C++ header therefore
+# fails at its first namespace or class with "Code '...' is invalid C code",
+# which describes the scanner's language guess, not the source.
+HEADER_PARSED_AS_C_RULE_ID = "cppcheck_syntaxError"
+HEADER_PARSED_AS_C_SUFFIX = ".h"
+HEADER_PARSED_AS_C_MESSAGE = re.compile(r"\bis invalid C code\b")
 EXPECTED_TOOL_SLUG = "cppcheck-reported-by-codacy"
 CATEGORY_ROSTER = (
     "codacy/cppcheck-reported-by-codacy-c/",
@@ -298,11 +308,34 @@ def normalize(payload: dict[str, Any]) -> list[str]:
     return list(CATEGORY_ROSTER)
 
 
+def _primary_uri(result: dict[str, Any]) -> str:
+    for location in result.get("locations", []):
+        physical = location.get("physicalLocation") if isinstance(location, dict) else None
+        artifact = physical.get("artifactLocation") if isinstance(physical, dict) else None
+        uri = artifact.get("uri") if isinstance(artifact, dict) else None
+        if isinstance(uri, str):
+            return uri
+    return ""
+
+
+def _is_header_parsed_as_c(result: dict[str, Any]) -> bool:
+    if result["ruleId"] != HEADER_PARSED_AS_C_RULE_ID:
+        return False
+    message = result.get("message")
+    text = message.get("text") if isinstance(message, dict) else None
+    if not isinstance(text, str) or not HEADER_PARSED_AS_C_MESSAGE.search(text):
+        return False
+    uri = _primary_uri(result)
+    return PurePosixPath(urlsplit(uri).path).suffix.lower() == HEADER_PARSED_AS_C_SUFFIX
+
+
 def _drop_reason(result: dict[str, Any]) -> str | None:
     rule_id = result["ruleId"]
     level = result["level"]
     if rule_id in DROP_RULE_IDS:
         return f"rule:{rule_id}"
+    if _is_header_parsed_as_c(result):
+        return f"header-parsed-as-c:{rule_id}"
     if level in DROP_LEVELS:
         return f"level:{level}"
     return None
@@ -354,7 +387,7 @@ def filter_for_github(payload: dict[str, Any]) -> dict[str, Any]:
     if input_multiset != partitioned_multiset:
         raise ValueError("Codacy SARIF filtering changed the result multiset")
     if any(
-        result["level"] not in {"warning", "error"} or result["ruleId"] in DROP_RULE_IDS
+        result["level"] not in {"warning", "error"} or _drop_reason(result) is not None
         for result in retained
     ):
         raise ValueError("Codacy SARIF filtering retained a suppressed diagnostic")
