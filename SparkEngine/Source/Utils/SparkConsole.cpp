@@ -423,23 +423,25 @@ namespace Spark
 
         // Sensitive commands keep only their name in history. Never retain a
         // recoverable credential merely to support command recall.
-        bool sensitiveArguments = false;
-        {
-            std::lock_guard<std::mutex> commandLock(m_commandMutex);
-            sensitiveArguments = m_sensitiveCommandNames.contains(outCommand);
-        }
-
-        {
-            std::lock_guard<std::mutex> historyLock(m_historyMutex);
-            m_commandHistory.push_back(sensitiveArguments ? outCommand + " <arguments-redacted>" : commandLine);
-            if (m_commandHistory.size() > MaxCommandHistory)
-            {
-                SecureClear(m_commandHistory.front());
-                m_commandHistory.pop_front();
-            }
-        }
-
+        RecordCommandHistory(IsSensitiveCommand(outCommand) ? outCommand + " <arguments-redacted>" : commandLine);
         return true;
+    }
+
+    bool SimpleConsole::IsSensitiveCommand(const std::string& command) const
+    {
+        std::lock_guard<std::mutex> commandLock(m_commandMutex);
+        return m_sensitiveCommandNames.contains(command);
+    }
+
+    void SimpleConsole::RecordCommandHistory(std::string entry)
+    {
+        std::lock_guard<std::mutex> historyLock(m_historyMutex);
+        m_commandHistory.push_back(std::move(entry));
+        if (m_commandHistory.size() > MaxCommandHistory)
+        {
+            SecureClear(m_commandHistory.front());
+            m_commandHistory.pop_front();
+        }
     }
 
     bool SimpleConsole::DispatchCommand(const std::string& command, const std::vector<std::string>& args)

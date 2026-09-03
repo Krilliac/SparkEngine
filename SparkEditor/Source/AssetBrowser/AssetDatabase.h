@@ -273,6 +273,10 @@ namespace SparkEditor
      * @param change File system change
      */
         void HandleFileSystemChange(const FileSystemChange& change);
+        /// Path of the first tracked asset whose file is gone from disk (excludePath skipped), or empty.
+        std::string FindMissingAssetPath(const std::string& excludePath) const;
+        /// Moves the tracked entry, its metadata file and import settings from oldPath to newPath.
+        void RenameAssetEntry(const std::string& oldPath, const std::string& newPath);
 
         /**
      * @brief Check if file is an asset type we care about

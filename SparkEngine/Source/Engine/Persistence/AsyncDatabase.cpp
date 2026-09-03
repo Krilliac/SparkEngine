@@ -871,29 +871,29 @@ namespace Spark::Persistence
         }
     }
 
+    bool AsyncDatabasePool::WaitForWorkItem(WorkItem& item)
+    {
+        // The queue lock lives for this whole function. The wait predicate
+        // guarantees work is queued unless we are stopping, so an empty queue
+        // after the wait means "stopping and drained".
+        std::unique_lock<std::mutex> lock(m_queueMutex);
+        m_queueCV.wait(lock, [this]() { return m_stopping.load() || !m_workQueue.empty(); });
+        if (m_workQueue.empty())
+        {
+            return false;
+        }
+        item = std::move(m_workQueue.front());
+        m_workQueue.pop();
+        return true;
+    }
+
     void AsyncDatabasePool::WorkerThread(int threadIndex)
     {
         (void)threadIndex; // All workers share the single serialized m_syncConnection.
         while (true)
         {
             WorkItem item;
-            bool haveItem = false;
-
-            {
-                std::unique_lock<std::mutex> lock(m_queueMutex);
-                m_queueCV.wait(lock, [this]() { return m_stopping.load() || !m_workQueue.empty(); });
-
-                // The wait predicate guarantees work is queued unless we are stopping,
-                // so an empty queue here means "stopping and drained".
-                if (!m_workQueue.empty())
-                {
-                    item = std::move(m_workQueue.front());
-                    m_workQueue.pop();
-                    haveItem = true;
-                }
-            }
-
-            if (!haveItem)
+            if (!WaitForWorkItem(item))
             {
                 return;
             }

@@ -296,7 +296,7 @@ namespace Spark
     }
 
     void Logger::LogFormatted(LogLevel level, LogCategory category, const char* file, int line, const char* func,
-                              const char* format, ...)
+                              SPARK_PRINTF_FORMAT_STRING const char* format, ...)
     {
         char buffer[kFormattedMessageCapacity];
         va_list arguments;
@@ -307,7 +307,7 @@ namespace Spark
     }
 
     void Logger::LogFormatted(LogLevel level, const char* category, const char* file, int line, const char* func,
-                              const char* format, ...)
+                              SPARK_PRINTF_FORMAT_STRING const char* format, ...)
     {
         char buffer[kFormattedMessageCapacity];
         va_list arguments;

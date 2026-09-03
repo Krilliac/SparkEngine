@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 314453 |
-| **SparkEditor/Source** | 109223 |
+| **SparkEngine/Source** | 314465 |
+| **SparkEditor/Source** | 109226 |
 | **GameModules** | 143038 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2400 |
 | **Tests** | 172108 |
 | **SparkConsole/src** | 1634 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~766007** |
+| **Total C++ (excl. ThirdParty)** | **~766022** |
 
 ### File Counts
 
@@ -43,8 +43,8 @@ Graphics contains 119617 lines, or 38% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 119617 | 38.0% |
-| Engine (all subsystems) | 87768 | 27.9% |
-| Utils | 44524 | 14.1% |
+| Engine (all subsystems) | 87770 | 27.9% |
+| Utils | 44534 | 14.1% |
 | Core | 29982 | 9.5% |
 | Physics | 10799 | 3.4% |
 | Audio | 6090 | 1.9% |
@@ -72,7 +72,7 @@ Graphics contains 119617 lines, or 38% of `SparkEngine/Source`. This is a source
 | World | 1588 |
 | Dialogue | 1425 |
 | Modding | 1377 |
-| Persistence | 1274 |
+| Persistence | 1276 |
 | 2D | 1015 |
 | Coroutine | 800 |
 | Replay | 731 |
@@ -103,7 +103,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 65 |
-| Total editor lines | 109223 |
+| Total editor lines | 109226 |
 
 ## Testing Metrics
 

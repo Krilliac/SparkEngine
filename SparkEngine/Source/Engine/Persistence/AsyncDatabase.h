@@ -259,6 +259,8 @@ namespace Spark::Persistence
         };
 
         void WorkerThread(int threadIndex);
+        /// Blocks until a work item is queued or the pool is stopping; false once drained.
+        bool WaitForWorkItem(WorkItem& item);
 
         std::string m_connectionString;
         std::unordered_map<PreparedStatementID, std::string> m_preparedSQL;

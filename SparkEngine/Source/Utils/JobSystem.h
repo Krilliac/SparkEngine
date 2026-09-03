@@ -224,30 +224,34 @@ namespace Spark
         JobSystem(const JobSystem&) = delete;
         JobSystem& operator=(const JobSystem&) = delete;
 
+        /**
+         * @brief Block until a job is queued or the pool is stopping.
+         * @return false once the pool is stopping and the queue has drained.
+         *
+         * The queue lock lives for this whole function. The wait predicate
+         * guarantees a job is queued unless we are stopping, so an empty queue
+         * after the wait means "stopping and drained".
+         */
+        bool WaitForJob(std::function<void()>& job)
+        {
+            std::unique_lock<std::mutex> lock(m_queueMutex);
+            m_condition.wait(lock, [this] { return m_stop.load(std::memory_order_acquire) || !m_jobQueue.empty(); });
+            if (m_jobQueue.empty())
+            {
+                return false;
+            }
+            job = std::move(m_jobQueue.front());
+            m_jobQueue.pop();
+            ++m_activeJobs;
+            return true;
+        }
+
         void WorkerThread()
         {
             while (true)
             {
                 std::function<void()> job;
-                bool haveJob = false;
-
-                {
-                    std::unique_lock<std::mutex> lock(m_queueMutex);
-                    m_condition.wait(lock,
-                                     [this] { return m_stop.load(std::memory_order_acquire) || !m_jobQueue.empty(); });
-
-                    // The wait predicate guarantees a job is queued unless we are stopping,
-                    // so an empty queue here means "stopping and drained".
-                    if (!m_jobQueue.empty())
-                    {
-                        job = std::move(m_jobQueue.front());
-                        m_jobQueue.pop();
-                        ++m_activeJobs;
-                        haveJob = true;
-                    }
-                }
-
-                if (!haveJob)
+                if (!WaitForJob(job))
                 {
                     return;
                 }
