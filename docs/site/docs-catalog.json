@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "include": {
-    "rootDocuments": ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md", "TROUBLESHOOTING.md", "CODE_OF_CONDUCT.md", "ASSET_DESIGN_BRIEF.md"],
+    "rootDocuments": ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md", "TROUBLESHOOTING.md", "CODE_OF_CONDUCT.md"],
     "recursiveMarkdownRoots": ["wiki", "docs", "Assets", "cmake", "GameModules", "Templates", "SparkBuild", "SparkConsole", "SparkCrashReporter", "SparkDaemon", "SparkInstaller", "SparkLauncher", "SparkSDK", "SparkShaderCompiler", "Tests", "Tools"]
   },
-  "excludePrefixes": ["docs/superpowers/", ".claude/", ".github/prompts/", "ThirdParty/"],
+  "excludePrefixes": [".claude/", ".github/prompts/", "ThirdParty/"],
     "excludePaths": ["wiki/_Sidebar.md", "wiki/_Template.md", "wiki/Changelog.md", "CLAUDE.md", "AGENTS.md"],
   "sections": [
     {"id": "getting-started", "label": "Getting started", "description": "Build, run, and orient yourself in SparkEngine."},

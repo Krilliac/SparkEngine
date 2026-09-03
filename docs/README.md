@@ -67,6 +67,8 @@ Wire formats, binary layouts, and versioned, uncertified interface specification
 - [Asset Format](specs/asset-format.md) — SparkEngine native asset binary layout.
 - [Networking Wire Format](specs/networking-wire-format.md) — UDP packet structure and serialization rules.
 - [C++ Game Module ABI Guide](specs/plugin-abi-guide.md) — Game-module DLL boundary, lifecycle, and version compatibility.
+- [Editor ECS Round-Trip Design](specs/editor-ecs-roundtrip-design.md) — Shared editor/runtime component model and scene round-trip contract.
+- [TERRAFRONT Onboarding Design](specs/terrafront-onboarding-design.md) — Login, account, character, and world-entry pipeline for the MMOFPS module.
 
 ## Plans & Roadmaps
 

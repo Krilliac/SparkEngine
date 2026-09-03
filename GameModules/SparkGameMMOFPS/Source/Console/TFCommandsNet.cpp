@@ -86,8 +86,8 @@ namespace
     //
     // Every check is logged at INFO/WARN under the "[TF-ACCEPTANCE]" tag so a
     // detached run's exec/engine log is independently grep-able for the result,
-    // per docs/superpowers/specs/2026-07-06-terrafront-onboarding-design.md's
-    // "Loopback flow harness" testing note.
+    // per the "Loopback flow harness" testing note in
+    // docs/specs/terrafront-onboarding-design.md.
     std::string RunOnboardingAcceptanceSelfTest(TFGameContext& ctx)
     {
         std::ostringstream os;

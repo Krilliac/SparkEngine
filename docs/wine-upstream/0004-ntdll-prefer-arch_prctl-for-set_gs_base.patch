@@ -1,5 +1,5 @@
 From 6db96945dc59d19de720fe47805fd5e45d2d4d03 Mon Sep 17 00:00:00 2001
-From: Claude <noreply@anthropic.com>
+From: SparkEngine Wine Compatibility <spark-wine@example.invalid>
 Date: Tue, 14 Apr 2026 08:51:04 +0000
 Subject: [PATCH] ntdll: prefer arch_prctl for set_gs_base; fall back to
  wrgsbase only on failure.

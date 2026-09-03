@@ -86,7 +86,7 @@ SPARK_TEST_FILE=Test_lifecycle_ecs_phase_wiring.cpp ./build/bin/SparkTests
 
 ## Important: most historical bugs below are already FIXED
 
-This table was built from the deferred-issue list in `HARDEN_FLEET_HANDOFF.md` (repo root) and
+This table was built from the deferred-issue list in the retired `HARDEN_FLEET_HANDOFF.md` (git history only since 2026-09-03) (git history only since 2026-09-03) and
 **re-verified against the live working tree on 2026-08-23** (branch
 `claude/whole-nine-yards-20260823`, uncommitted changes ahead of `0e1fe7e7`). Eight of the nine listed
 issues are fixed. The value of the table today is twofold:
@@ -311,7 +311,7 @@ Line numbers drift — grep the named symbol, do not trust any number blindly.
 
 ## Provenance and maintenance
 
-- Built from the deferred-issue list in `HARDEN_FLEET_HANDOFF.md` (repo root) and last re-verified
+- Built from the deferred-issue list in the retired `HARDEN_FLEET_HANDOFF.md` (git history only since 2026-09-03) (git history only since 2026-09-03) and last re-verified
   on **2026-08-23** against the working tree (uncommitted changes ahead of `0e1fe7e7`) by
   reading source. Rows 1–7 are verified **FIXED**; row 7 additionally has a clean current-source
   `SparkTests` build plus `TestSequencerAudioWiring.cpp` at 3/3 tests, 18/18 assertions. Rows 8–9

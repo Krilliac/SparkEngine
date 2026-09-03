@@ -33,12 +33,12 @@ docs/sync-wiki.sh sync
 git add -u && git commit --amend --no-edit
 ```
 
-## Rule 2 — Stat counters in README / CLAUDE.md / `.claude/index.md`
+## Rule 2 — Stat counters in README / CLAUDE.md
 
 These files have hardcoded counts (test cases, panels, components). Like wiki AUTO: sections, they are written by scripts:
 
 - `docs/update-readme-badges.sh` → README.md
-- `docs/update-context.sh` → CLAUDE.md, `.claude/index.md`
+- `docs/update-context.sh` → CLAUDE.md
 
 Resolution is identical: take upstream, then regenerate with `docs/update-all-docs.sh`.
 

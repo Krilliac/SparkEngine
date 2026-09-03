@@ -1,6 +1,6 @@
 # TERRAFRONT Multi-Continent Hosting — Design + Current State
 
-**Lane:** multimap-plumbing (W13). **Status:** the redirect handshake is shipped
+**Status:** the redirect handshake is shipped
 and server-authoritative, but production multi-continent hosting is **not yet
 complete**. Global account, outfit, and social JSON stores deliberately take
 lifetime-exclusive authority locks. Two servers cannot safely share one

@@ -52,7 +52,7 @@ recipe here, move it there.
 - **`.mm`** = Objective-C++ source (macOS Metal backends only).
 - **RCON** = remote console: privileged server admin commands over the network.
 - **harden-fleet** = a multi-agent hardening branch (`claude/harden-fleet`), merged into `Working`.
-- **trilobite** = this repo's ad-hoc name for the harden-fleet deferred-verification queue (the word appears only in `1e45b87b`'s message and `HARDEN_FLEET_HANDOFF.md`).
+- **trilobite** = this repo's ad-hoc name for the harden-fleet deferred-verification queue (the word appears only in `1e45b87b`'s message and the retired `HARDEN_FLEET_HANDOFF.md` (git history only since 2026-09-03)).
 
 All commits below are confirmed ancestors of `Working`-line HEAD `0e1fe7e7` (2026-08-23). Verify
 any entry with `git show <hash>`.
@@ -162,10 +162,10 @@ recorded it: `SPARK_EXPECTS(device)` dropped in favor of the graceful `return fa
 three sibling abort/crash fixes (NarrowCast float narrowing, `ValidatePBRProperties`, a nullptr
 registry in a harden test). **Landed** — verified today: `ConstantBufferRing.h` `Initialize`
 returns false on null device with a "do NOT assert" comment. The "run Debug tests in Release"
-workaround in `HARDEN_FLEET_HANDOFF.md` is obsolete.
+workaround in the retired `HARDEN_FLEET_HANDOFF.md` (git history only since 2026-09-03) is obsolete.
 
 ### 8. The deferred "trilobite" queue — final ledger
-`HARDEN_FLEET_HANDOFF.md` (`1e45b87b`) is **stale as a status document**; most items fell within
+the retired `HARDEN_FLEET_HANDOFF.md` (git history only since 2026-09-03) (`1e45b87b`) is **stale as a status document**; most items fell within
 the hour in `52636dda` ("Phase 3 deferred cross-cutting fixes": module `EngineContext` DLL export →
 `SparkModuleInjectEngineContext`, BT `Clone()` deep-copy, `WeaponManager` owner, `EditorUI`
 `SwapWorld` UAF funnel, `HasUnsavedChanges` counter, MMO DI fallbacks, `LocalizationSystem`
@@ -341,7 +341,7 @@ Era-2 ledger shows the shape).
   live working tree, not just the committed HEAD.
 - **Resolved since the 2026-07-07 edition:** ECS phase wiring (`4b42b8d9`), 16 orphan tests
   (`c412f05b`), Debug-suite abort blocker (`96c68e54`). The old "still open" claims for those are
-  gone — do not resurrect them from `HARDEN_FLEET_HANDOFF.md`, which remains stale by design
+  gone — do not resurrect them from the retired `HARDEN_FLEET_HANDOFF.md` (git history only since 2026-09-03), which remains stale by design
   (historical artifact).
 - **Not independently verifiable from a Windows host:** the macOS `.mm` fixes (`1b531e9f`,
   `409c84e8`, `0d0dae01`, `a40ac4aa`) and the non-Windows `#ifndef _WIN32` paths in `cfa9a337`/

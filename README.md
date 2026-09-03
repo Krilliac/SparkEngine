@@ -2,7 +2,7 @@
 
 A C++23 open-source 3D game engine with multiple graphics backends behind a shared RHI surface, ECS (EnTT), Jolt Physics, AngelScript scripting, and an ImGui-based editor. Originally built around first-person shooters, it now includes genre templates for RPGs, MMOs, RTS, racing, open-world, and platformers.
 
-> 🌐 **Website now live:** [sparkengine.dev](https://sparkengine.dev/)
+Website: [sparkengine.dev](https://sparkengine.dev/)
 
 [![Trusted exact-source CI](https://github.com/Krilliac/SparkEngine/actions/workflows/trusted-ci-aggregate.yml/badge.svg?branch=Working)](https://github.com/Krilliac/SparkEngine/actions/workflows/trusted-ci-aggregate.yml?query=branch%3AWorking)
 [![Test definitions](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Ftests.json&style=flat-square)](Tests)
@@ -353,7 +353,6 @@ uncertified.
 | [Game Module Guide](Templates/README.md) | Building standalone games with the SDK |
 | [Networking Config](wiki/subsystems/Networking.md) | UDP, replication, MMO server setup |
 | [Wiki](wiki/) | 198 Markdown pages in the current source inventory (excluding `_Sidebar.md`); inventory is not support/readiness evidence |
-| [DeepWiki](https://deepwiki.com/Krilliac/SparkEngine) | Community knowledge base |
 
 ---
 
@@ -387,13 +386,13 @@ SparkEngine/
 ## Contributing
 
 1. Fork the repository and create a feature branch
-2. Follow the [coding standards in CLAUDE.md](CLAUDE.md) — C++23, zero warnings, RAII, const-correct
+2. Follow the [contributor guidelines](CONTRIBUTING.md) — C++23, zero warnings, RAII, const-correct
 3. Add tests for new functionality
 4. Run `clang-format` (enforced in CI) and ensure all tests pass
 5. Open a pull request — one feature per PR
 
 Questions and bug reports: [GitHub Issues](https://github.com/Krilliac/SparkEngine/issues)  
-Discussion: [Discord](https://discord.gg/NyX8d9UZM)  
+Discussion: [Discord](https://discord.gg/cuJv5uWA5V)  
 Documentation: [Wiki](wiki/)
 
 Thanks to the [Jolt Physics](https://github.com/jrouwe/JoltPhysics), [Dear ImGui](https://github.com/ocornut/imgui), [EnTT](https://github.com/skypjack/entt), Khronos (Vulkan/OpenGL), and AngelScript teams.

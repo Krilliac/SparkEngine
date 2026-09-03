@@ -143,7 +143,7 @@ Expose pass composition as an ImGui node graph (Stride Graphics Compositor). Ver
 **11. Offline shader-dump embedded header** — *effort: medium*
 Add a build step embedding precompiled per-backend blobs into a generated header (Wicked `wiShaderDump.h`) so release builds need no runtime shader compiler. Partially covered: `SparkShaderCompiler` compiles offline and `ShaderDiskCache` persists blobs, but neither emits an embedded C++ header to drop the runtime compiler/file-IO dependency. Self-contained codegen; incremental over the disk cache (which already removes most recompilation cost). *Files:* `SparkShaderCompiler/`, `SparkEngine/Source/Graphics/ShaderDiskCache.h`.
 
-**12. Record the sparse-set storage decision in `.claude/knowledge`** — *effort: low*
+**12. Record the sparse-set storage decision in `wiki/advanced/Codebase-Observations.md`** — *effort: low*
 Document the decision to **keep sparse-set storage and not migrate to an archetype model**. No ECS storage-model decision doc exists today; recording it fits the repo's persistence practice and forecloses a costly future rewrite proposal. The fragmentation/relocation rationale is sound for SparkEngine's dynamic-composition, streaming-heavy workloads, and groups (#1) + reactive systems already recover most of the iteration win. Documentation-only.
 
 ### Considered and skipped (already implemented or duplicative)

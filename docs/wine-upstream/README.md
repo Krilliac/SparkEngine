@@ -215,7 +215,7 @@ Cover letter / cover comment should mention:
   * Bare-metal regression testing: patches are no-ops on normal Linux.
   * Reference SparkEngine's LD_PRELOAD shim as prior-art evidence that
     patch 1's change is sufficient:
-    <https://github.com/Krilliac/SparkEngine/blob/claude/fix-bugs-stability-alRBr/tools/gvisor-wine-shim.c>
+    <https://github.com/Krilliac/SparkEngine/blob/Working/tools/gvisor-wine-shim.c>
 
 ## Open questions / future work
 
@@ -244,7 +244,7 @@ larger, more invasive change and is deliberately not attempted here.
    trap_handler, get_signal_trap_code helper) and `dlls/ntdll/unix/virtual.c`
    (virtual_setup_exception, new refresh_stack_info_from_pthread helper).
  * Root-cause analysis: [Wine Role and Fallback Tiers](../../wiki/advanced/Wine-Role-and-Fallback-Tiers.md)
-   (on the `claude/fix-bugs-stability-alRBr` branch / PR #470).
+   (landed on `Working` through PR #470).
  * LD_PRELOAD proof-of-concept for bug 1: [`tools/gvisor-wine-shim.c`](../../tools/gvisor-wine-shim.c)
    (same PR).
  * gVisor platform signal emulation: <https://github.com/google/gvisor/tree/master/pkg/sentry/platform>
