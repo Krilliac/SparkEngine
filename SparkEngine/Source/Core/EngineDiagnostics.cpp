@@ -153,9 +153,10 @@ namespace Spark
         }
         report.Add(sub, "System available", true);
 
-        // Save original state
-        auto originalState = weather->GetCurrentState();
-        auto originalType = originalState.type;
+        // Save original state. GetCurrentState() aliases the live state, so
+        // snapshot the two scalars needed for the restore instead of copying it.
+        const WeatherType originalType = weather->GetCurrentState().type;
+        const float originalIntensity = weather->GetCurrentState().intensity;
 
         // Cycle through weather types
         const WeatherType types[] = {WeatherType::Clear, WeatherType::Rain, WeatherType::Snow, WeatherType::Fog,
@@ -165,7 +166,7 @@ namespace Spark
         {
             weather->SetWeather(wt, 0.8f, 0.0f); // instant transition
             weather->Update(0.016f);
-            auto state = weather->GetCurrentState();
+            const auto& state = weather->GetCurrentState();
             if (state.type != wt)
             {
                 allTransitions = false;
@@ -178,13 +179,13 @@ namespace Spark
         // Verify state fields are populated
         weather->SetWeather(WeatherType::Storm, 1.0f, 0.0f);
         weather->Update(0.016f);
-        auto storm = weather->GetCurrentState();
+        const auto& storm = weather->GetCurrentState();
         bool stormValid = storm.intensity > 0.0f && storm.windSpeed > 0.0f;
         report.Add(sub, "Storm state populated", stormValid,
                    "intensity=" + std::to_string(storm.intensity) + " wind=" + std::to_string(storm.windSpeed));
 
         // Restore original weather
-        weather->SetWeather(originalType, originalState.intensity, 0.0f);
+        weather->SetWeather(originalType, originalIntensity, 0.0f);
         weather->Update(0.016f);
         report.Add(sub, "Restore original weather", true);
     }

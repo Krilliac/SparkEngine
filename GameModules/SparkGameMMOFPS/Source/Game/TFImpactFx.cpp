@@ -347,6 +347,8 @@ namespace Terrafront
                 slot = &q;
             }
         }
+        if (!slot)
+            return; // only reachable with an empty pool: nothing to reuse
 
         ImpactQuad q;
         q.pos[0] = point[0];

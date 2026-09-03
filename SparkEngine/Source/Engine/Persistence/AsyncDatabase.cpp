@@ -877,18 +877,25 @@ namespace Spark::Persistence
         while (true)
         {
             WorkItem item;
+            bool haveItem = false;
 
             {
                 std::unique_lock<std::mutex> lock(m_queueMutex);
                 m_queueCV.wait(lock, [this]() { return m_stopping.load() || !m_workQueue.empty(); });
 
-                if (m_stopping.load() && m_workQueue.empty())
+                // The wait predicate guarantees work is queued unless we are stopping,
+                // so an empty queue here means "stopping and drained".
+                if (!m_workQueue.empty())
                 {
-                    return;
+                    item = std::move(m_workQueue.front());
+                    m_workQueue.pop();
+                    haveItem = true;
                 }
+            }
 
-                item = std::move(m_workQueue.front());
-                m_workQueue.pop();
+            if (!haveItem)
+            {
+                return;
             }
 
             QueryResult result;

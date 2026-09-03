@@ -1,6 +1,7 @@
 #include "ConsoleApp.h"
 #include <iostream>
 #include <string_view>
+#include <tuple>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
 #include <conio.h>
@@ -69,7 +70,7 @@ int main(int argc, char* argv[])
 #ifdef SPARK_PLATFORM_WINDOWS
         if (HasInteractiveConsoleInput())
         {
-            _getch();
+            std::ignore = _getch();
         }
 #else
         std::cin.get();
@@ -81,7 +82,7 @@ int main(int argc, char* argv[])
 #ifdef SPARK_PLATFORM_WINDOWS
     if (HasInteractiveConsoleInput())
     {
-        _getch();
+        std::ignore = _getch();
     }
 #else
     std::cin.get();

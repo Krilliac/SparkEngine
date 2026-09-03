@@ -35,7 +35,9 @@
 
 /**
  * @brief Log a message through the unified Logger with severity, category,
- *        and source location. Uses snprintf for formatting.
+ *        and source location. The printf-style formatting happens inside
+ *        Logger::LogFormatted, so a call site adds no stack of its own and
+ *        the format string is checked by the compiler.
  *
  * @param level    Spark::LogLevel value
  * @param category Spark::LogCategory value
@@ -48,9 +50,7 @@
         auto& _logger = Spark::Logger::Get();                                                                          \
         if (_logger.ShouldLog(level, category))                                                                        \
         {                                                                                                              \
-            char _sparkLogBuf[4096];                                                                                   \
-            snprintf(_sparkLogBuf, sizeof(_sparkLogBuf), fmt __VA_OPT__(, ) __VA_ARGS__);                              \
-            _logger.Log(level, category, __FILE__, __LINE__, __FUNCTION__, std::string(_sparkLogBuf));                 \
+            _logger.LogFormatted(level, category, __FILE__, __LINE__, __FUNCTION__, fmt __VA_OPT__(, ) __VA_ARGS__);   \
         }                                                                                                              \
     } while (0)
 

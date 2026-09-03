@@ -405,10 +405,10 @@
 | `BillboardComponent` | struct | SparkEngine | [PlacementComponents.h:L320](../../SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h#L320) | Renders a textured quad that always faces the camera. |
 | `BillboardData` | struct | SparkEditor | [SceneFileTypes.h:L814](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L814) | Billboard scene data (always-face-camera sprite) |
 | `BinaryReader` | class | SparkEngine | [AssetMigration.h:L48](../../SparkEngine/Source/Core/AssetMigration.h#L48) |  |
-| `BinaryReader` | class | SparkEngine | [Serializer.h:L208](../../SparkEngine/Source/Utils/Serializer.h#L208) | Sequential binary deserializer that reads from a byte buffer. |
+| `BinaryReader` | class | SparkEngine | [Serializer.h:L217](../../SparkEngine/Source/Utils/Serializer.h#L217) | Sequential binary deserializer that reads from a byte buffer. |
 | `BinaryReader` | class | SparkEngine | [TelemetrySpool.cpp:L158](../../SparkEngine/Source/Utils/TelemetrySpool.cpp#L158) |  |
 | `BinaryWriter` | class | SparkEngine | [AssetMigration.h:L49](../../SparkEngine/Source/Core/AssetMigration.h#L49) |  |
-| `BinaryWriter` | class | SparkEngine | [Serializer.h:L107](../../SparkEngine/Source/Utils/Serializer.h#L107) | Append-only binary serializer that writes into a growable byte buffer. |
+| `BinaryWriter` | class | SparkEngine | [Serializer.h:L116](../../SparkEngine/Source/Utils/Serializer.h#L116) | Append-only binary serializer that writes into a growable byte buffer. |
 | `BiomeRegion` | struct | GameModules | [OWWorldSetup.h:L28](../../GameModules/SparkGameOpenWorld/Source/World/OWWorldSetup.h#L28) | Defines a single biome region in the open world |
 | `Blackboard` | class | SparkEngine | [BehaviorTreeTypes.h:L86](../../SparkEngine/Source/Engine/AI/BehaviorTreeTypes.h#L86) |  |
 | `Blackboard` | class | Tests | [TestAIBehaviorTree.cpp:L22](../../Tests/TestAIBehaviorTree.cpp#L22) |  |
@@ -530,7 +530,7 @@
 | `CacheStats` | struct | SparkEngine | [ShaderCrossCompiler.h:L274](../../SparkEngine/Source/Graphics/ShaderCrossCompiler.h#L274) | Get cache hit statistics. |
 | `CacheStats` | struct | SparkEngine | [CacheDebugger.h:L42](../../SparkEngine/Source/Utils/CacheDebugger.h#L42) | Aggregated statistics for a single named cache |
 | `CacheStats` | struct | Tests | [TestShaderDiskCache.cpp:L151](../../Tests/TestShaderDiskCache.cpp#L151) |  |
-| `CallbackSink` | class | SparkEngine | [Logger.h:L354](../../SparkEngine/Source/Utils/Logger.h#L354) | Calls a user-provided callback for each log message |
+| `CallbackSink` | class | SparkEngine | [Logger.h:L370](../../SparkEngine/Source/Utils/Logger.h#L370) | Calls a user-provided callback for each log message |
 | `CamDrawMask` | struct | Tests | [TestExtendedSystems.cpp:L334](../../Tests/TestExtendedSystems.cpp#L334) |  |
 | `Camera` | struct | SparkEditor | [SceneFileTypes.h:L136](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L136) | Camera component data |
 | `Camera` | struct | SparkEngine | [CoreComponents.h:L113](../../SparkEngine/Source/Engine/ECS/Components/CoreComponents.h#L113) | Perspective camera parameters used to build the projection matrix. |
@@ -558,7 +558,7 @@
 | `Case` | struct | Tests | [TestCoverageScripting.cpp:L235](../../Tests/TestCoverageScripting.cpp#L235) |  |
 | `CastState` | struct | Tests | [TestAbilitySystem.cpp:L88](../../Tests/TestAbilitySystem.cpp#L88) |  |
 | `CategoryEntry` | struct | SparkEngine | [MemoryMonitor.h:L86](../../SparkEngine/Source/Utils/MemoryMonitor.h#L86) |  |
-| `CategoryInfo` | struct | SparkEditor | [EditorMenuBar.cpp:L501](../../SparkEditor/Source/Core/EditorMenuBar.cpp#L501) |  |
+| `CategoryInfo` | struct | SparkEditor | [EditorMenuBar.cpp:L502](../../SparkEditor/Source/Core/EditorMenuBar.cpp#L502) |  |
 | `CatOverride` | struct | SparkEngine | [GameplayLifecycleShared.cpp:L305](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp#L305) |  |
 | `CBAllocation` | struct | SparkEngine | [ConstantBufferRing.h:L55](../../SparkEngine/Source/Graphics/ConstantBufferRing.h#L55) | Result of a constant buffer sub-allocation |
 | `CBRingMetrics` | struct | SparkEngine | [ConstantBufferRing.h:L68](../../SparkEngine/Source/Graphics/ConstantBufferRing.h#L68) | Metrics for constant buffer ring usage |
@@ -783,8 +783,8 @@
 | `ConditionSystem` | class | Tests | [TestConditionSystem.cpp:L67](../../Tests/TestConditionSystem.cpp#L67) |  |
 | `ConeGenerator` | class | SparkEngine | [EnvironmentQuery.h:L160](../../SparkEngine/Source/Engine/AI/EnvironmentQuery.h#L160) | Generates points along a cone (arc) from agent toward a direction |
 | `Config` | struct | SparkEngine | [AIComponents.h:L68](../../SparkEngine/Source/Engine/ECS/Components/AIComponents.h#L68) |  |
-| `Config` | struct | SparkEngine | [Logger.h:L320](../../SparkEngine/Source/Utils/Logger.h#L320) | Writes log messages to a file with automatic rotation |
-| `Config` | struct | SparkEngine | [Logger.h:L508](../../SparkEngine/Source/Utils/Logger.h#L508) | Configuration struct for loading logging settings from config files |
+| `Config` | struct | SparkEngine | [Logger.h:L336](../../SparkEngine/Source/Utils/Logger.h#L336) | Writes log messages to a file with automatic rotation |
+| `Config` | struct | SparkEngine | [Logger.h:L539](../../SparkEngine/Source/Utils/Logger.h#L539) | Configuration struct for loading logging settings from config files |
 | `ConfigManager` | class | SparkBuild | [Config.h:L84](../../SparkBuild/src/Config.h#L84) |  |
 | `ConfigParser` | class | SparkEngine | [ConfigParser.h:L57](../../SparkEngine/Source/Utils/ConfigParser.h#L57) |  |
 | `ConflictResult` | struct | Tests | [TestModSystem.cpp:L108](../../Tests/TestModSystem.cpp#L108) |  |
@@ -841,7 +841,7 @@
 | `ControlsSettings` | struct | Tests | [TestEngineSettingsParser.cpp:L147](../../Tests/TestEngineSettingsParser.cpp#L147) |  |
 | `ConversationState` | struct | SparkEngine | [DialogueSystem.h:L178](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.h#L178) | Runtime state of an active conversation. |
 | `CookLogEntry` | struct | SparkEditor | [DedicatedServerPanel.h:L187](../../SparkEditor/Source/Panels/DedicatedServerPanel.h#L187) |  |
-| `CookOutputLock` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L284](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L284) |  |
+| `CookOutputLock` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L285](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L285) |  |
 | `CookRecord` | struct | SparkAssetPipelineCore | [AssetCooker.h:L12](../../SparkAssetPipelineCore/include/SparkAssetPipelineCore/AssetCooker.h#L12) |  |
 | `CookRequest` | struct | SparkAssetPipelineCore | [AssetCooker.h:L20](../../SparkAssetPipelineCore/include/SparkAssetPipelineCore/AssetCooker.h#L20) |  |
 | `CookResult` | struct | SparkAssetPipelineCore | [AssetCooker.h:L29](../../SparkAssetPipelineCore/include/SparkAssetPipelineCore/AssetCooker.h#L29) |  |
@@ -1062,7 +1062,7 @@
 | `DeterministicTimeController` | class | SparkEngine | [MovieRenderPipeline.h:L154](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L154) | Overrides engine delta time during offline rendering for deterministic simulation |
 | `DiagReport` | struct | SparkEngine | [EngineDiagnostics.h:L31](../../SparkEngine/Source/Core/EngineDiagnostics.h#L31) | Summary of a full diagnostic run. |
 | `DiagResult` | struct | SparkEngine | [EngineDiagnostics.h:L22](../../SparkEngine/Source/Core/EngineDiagnostics.h#L22) | Result of a single diagnostic check. |
-| `DiagTestEvent` | struct | SparkEngine | [EngineDiagnostics.cpp:L319](../../SparkEngine/Source/Core/EngineDiagnostics.cpp#L319) |  |
+| `DiagTestEvent` | struct | SparkEngine | [EngineDiagnostics.cpp:L320](../../SparkEngine/Source/Core/EngineDiagnostics.cpp#L320) |  |
 | `DialogueChoice` | struct | GameModules | [RPGDialogueSystem.h:L27](../../GameModules/SparkGameRPG/Source/Dialogue/RPGDialogueSystem.h#L27) | A single choice option within a Choice dialogue node |
 | `DialogueChoice` | struct | SparkEditor | [DialogueEditorPanel.h:L45](../../SparkEditor/Source/Panels/DialogueEditorPanel.h#L45) |  |
 | `DialogueChoice` | struct | SparkEngine | [DialogueSystem.h:L70](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.h#L70) | A single player-selectable choice in a dialogue. |
@@ -1387,7 +1387,7 @@
 | `FileLoggerConfig` | struct | SparkEngine | [FileLogger.h:L71](../../SparkEngine/Source/Utils/FileLogger.h#L71) | Configuration for the file logger |
 | `FileLogTarget` | class | SparkEditor | [EditorLogger.h:L136](../../SparkEditor/Source/Core/EditorLogger.h#L136) | File output target |
 | `FileReadContext` | struct | SparkEngine | [GLTFStaticMeshLoader.cpp:L29](../../SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp#L29) |  |
-| `FileSink` | class | SparkEngine | [Logger.h:L317](../../SparkEngine/Source/Utils/Logger.h#L317) | Writes log messages to a file with automatic rotation |
+| `FileSink` | class | SparkEngine | [Logger.h:L333](../../SparkEngine/Source/Utils/Logger.h#L333) | Writes log messages to a file with automatic rotation |
 | `fileStat` | struct | SparkEngine | [AssetMetadataLinux.cpp:L206](../../SparkEngine/Source/Graphics/AssetMetadataLinux.cpp#L206) |  |
 | `fileStat` | struct | SparkEngine | [MaterialSystemLinux.cpp:L133](../../SparkEngine/Source/Graphics/MaterialSystemLinux.cpp#L133) |  |
 | `FileState` | struct | SparkEngine | [ScriptHotReload.h:L151](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L151) |  |
@@ -1487,7 +1487,7 @@
 | `FrameInspector` | class | SparkEngine | [FrameInspector.h:L121](../../SparkEngine/Source/Utils/FrameInspector.h#L121) | Singleton frame inspector for debugging frame-by-frame |
 | `FrameParams` | struct | SparkEngine | [MetalRayTracing.h:L121](../../SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.h#L121) | Per-frame uniforms consumed by the RT compute kernels. |
 | `FrameProfileData` | struct | SparkEditor | [ProfilerTypes.h:L152](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L152) | Frame profiling data |
-| `FrameResources` | struct | SparkEngine | [D3D12Types.h:L529](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L529) | Resources that are duplicated for each frame in flight. |
+| `FrameResources` | struct | SparkEngine | [D3D12Types.h:L536](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L536) | Resources that are duplicated for each frame in flight. |
 | `FrameSnapshot` | struct | SparkEngine | [FrameInspector.h:L68](../../SparkEngine/Source/Utils/FrameInspector.h#L68) | Snapshot of key engine state at a specific frame |
 | `FrameStats` | struct | Tests | [TestEngineMonitor.cpp:L95](../../Tests/TestEngineMonitor.cpp#L95) |  |
 | `FrameTimeline` | struct | SparkEngine | [GPUStallProfiler.h:L33](../../SparkEngine/Source/Utils/GPUStallProfiler.h#L33) | Per-frame CPU-GPU timeline data. |
@@ -1861,7 +1861,7 @@
 | `IKChain` | struct | SparkEngine | [AnimationTypes.h:L506](../../SparkEngine/Source/Engine/Animation/AnimationTypes.h#L506) |  |
 | `IKChain` | struct | SparkEngine | [IKSolver.h:L44](../../SparkEngine/Source/Engine/Animation/IKSolver.h#L44) |  |
 | `ILogger` | class | SparkSDK | [ILogger.h:L53](../../SparkSDK/Include/Spark/ILogger.h#L53) | Abstract logging interface for game modules |
-| `ILogSink` | class | SparkEngine | [Logger.h:L284](../../SparkEngine/Source/Utils/Logger.h#L284) | Interface for log output destinations |
+| `ILogSink` | class | SparkEngine | [Logger.h:L300](../../SparkEngine/Source/Utils/Logger.h#L300) | Interface for log output destinations |
 | `ImageComparisonResult` | struct | SparkEngine | [GoldenImageTest.h:L83](../../SparkEngine/Source/Utils/GoldenImageTest.h#L83) | Result of comparing a captured screenshot against a golden image. |
 | `ImGuiStyle` | struct | SparkEditor | [EditorTheme.h:L16](../../SparkEditor/Source/Core/EditorTheme.h#L16) |  |
 | `IMigrationStep` | class | SparkEngine | [AssetMigration.h:L115](../../SparkEngine/Source/Core/AssetMigration.h#L115) | One step in a migration chain that transforms data between versions. |
@@ -1879,14 +1879,14 @@
 | `InboundCommand` | struct | SparkEngine | [RemoteDebugSystem.h:L153](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L153) |  |
 | `INetworkRuntime` | class | SparkEngine | [INetworkRuntime.h:L19](../../SparkEngine/Source/Engine/Networking/INetworkRuntime.h#L19) | DedicatedServer-facing networking runtime abstraction. |
 | `INetworkService` | class | SparkSDK | [ServiceInterfaces.h:L15](../../SparkSDK/Include/Spark/ServiceInterfaces.h#L15) | Thin runtime interface for networking lifecycle orchestration. |
-| `info` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L624](../../SparkCrashReporter/src/CrashReporterApp.cpp#L624) |  |
+| `info` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L626](../../SparkCrashReporter/src/CrashReporterApp.cpp#L626) |  |
 | `info` | struct | SparkEngine | [CrashHandler.cpp:L181](../../SparkEngine/Source/Utils/CrashHandler.cpp#L181) |  |
-| `info` | struct | SparkEngine | [CrashHandler.cpp:L338](../../SparkEngine/Source/Utils/CrashHandler.cpp#L338) |  |
-| `info` | struct | SparkEngine | [CrashHandler.cpp:L403](../../SparkEngine/Source/Utils/CrashHandler.cpp#L403) |  |
-| `info` | struct | SparkEngine | [CrashHandler.cpp:L490](../../SparkEngine/Source/Utils/CrashHandler.cpp#L490) |  |
+| `info` | struct | SparkEngine | [CrashHandler.cpp:L343](../../SparkEngine/Source/Utils/CrashHandler.cpp#L343) |  |
+| `info` | struct | SparkEngine | [CrashHandler.cpp:L408](../../SparkEngine/Source/Utils/CrashHandler.cpp#L408) |  |
+| `info` | struct | SparkEngine | [CrashHandler.cpp:L495](../../SparkEngine/Source/Utils/CrashHandler.cpp#L495) |  |
 | `info` | struct | SparkEngine | [CrashHandlerSupport.h:L260](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L260) |  |
 | `info` | struct | SparkGateway | [GatewaySecurity.cpp:L310](../../SparkGateway/src/GatewaySecurity.cpp#L310) |  |
-| `information` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L375](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L375) |  |
+| `information` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L376](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L376) |  |
 | `information` | struct | SparkEditor | [ProjectManager.cpp:L682](../../SparkEditor/Source/Core/ProjectManager.cpp#L682) |  |
 | `information` | struct | SparkEngine | [DynamicPluginHost.cpp:L230](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L230) |  |
 | `information` | struct | SparkEngine | [DynamicPluginHost.cpp:L316](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L316) |  |
@@ -2098,7 +2098,7 @@
 | `LeaderboardEntry` | struct | SparkEngine | [OnlineServices.h:L80](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L80) | Leaderboard score entry |
 | `LeaderboardMirror` | struct | GameModules | [TFOutfitSystem.h:L173](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h#L173) |  |
 | `LeakEntry` | struct | SparkEngine | [MemoryDebugger.h:L84](../../SparkEngine/Source/Utils/MemoryDebugger.h#L84) | Leak report entry |
-| `LegacyModuleAdapter` | class | SparkEngine | [ModuleManager.cpp:L550](../../SparkEngine/Source/Core/ModuleManager.cpp#L550) | Wraps a legacy IGameModule implementation behind the new IModule interface |
+| `LegacyModuleAdapter` | class | SparkEngine | [ModuleManager.cpp:L551](../../SparkEngine/Source/Core/ModuleManager.cpp#L551) | Wraps a legacy IGameModule implementation behind the new IModule interface |
 | `LensDistortionSettings` | struct | SparkEngine | [PostProcessingTypes.h:L155](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L155) | Lens distortion settings |
 | `LensFlareSettings` | struct | SparkEngine | [PostProcessingTypes.h:L182](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L182) | Lens flare settings |
 | `LevelBonuses` | struct | GameModules | [ProgressionSystem.h:L46](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L46) | Per-level stat bonuses applied automatically |
@@ -2217,10 +2217,10 @@
 | `LODStats` | struct | SparkEngine | [MeshLOD.h:L152](../../SparkEngine/Source/Graphics/MeshLOD.h#L152) |  |
 | `LogEntry` | struct | SparkEditor | [EditorLogger.h:L95](../../SparkEditor/Source/Core/EditorLogger.h#L95) | Log entry structure |
 | `LogEntry` | struct | SparkEngine | [SparkConsole.h:L80](../../SparkEngine/Source/Utils/SparkConsole.h#L80) |  |
-| `Logger` | class | SparkEngine | [Logger.h:L385](../../SparkEngine/Source/Utils/Logger.h#L385) | Unified logging system with async writing and runtime filtering |
+| `Logger` | class | SparkEngine | [Logger.h:L401](../../SparkEngine/Source/Utils/Logger.h#L401) | Unified logging system with async writing and runtime filtering |
 | `LoggingSettings` | struct | SparkEngine | [EngineSettings.h:L583](../../SparkEngine/Source/Core/EngineSettings.h#L583) |  |
 | `LoginRecord` | struct | GameModules | [MMOAccountSystem.h:L52](../../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h#L52) | A single login history entry |
-| `LogMessage` | struct | SparkEngine | [Logger.h:L264](../../SparkEngine/Source/Utils/Logger.h#L264) | A single log message with all associated metadata |
+| `LogMessage` | struct | SparkEngine | [Logger.h:L280](../../SparkEngine/Source/Utils/Logger.h#L280) | A single log message with all associated metadata |
 | `LogStatistics` | struct | SparkEditor | [EditorLogger.h:L173](../../SparkEditor/Source/Core/EditorLogger.h#L173) | Log statistics |
 | `LogTarget` | class | SparkEditor | [EditorLogger.h:L116](../../SparkEditor/Source/Core/EditorLogger.h#L116) | Log output target interface |
 | `LookAtModifier` | class | SparkEngine | [PoseModifier.h:L115](../../SparkEngine/Source/Engine/Animation/PoseModifier.h#L115) | Rotates head/spine bones to face a world-space target. |
@@ -2244,7 +2244,7 @@
 | `ManagedArea` | struct | Tests | [TestSeamlessAreaManager.cpp:L41](../../Tests/TestSeamlessAreaManager.cpp#L41) |  |
 | `ManagedTimer` | struct | SparkEngine | [TimerManager.h:L66](../../SparkEngine/Source/Utils/TimerManager.h#L66) | A single managed timer |
 | `ManifestEntry` | struct | SparkEngine | [GamePackager.h:L78](../../SparkEngine/Source/Engine/Build/GamePackager.h#L78) | A single file entry in the package manifest |
-| `ManifestJsonReader` | class | SparkCrashReporter | [CrashReporterApp.cpp:L101](../../SparkCrashReporter/src/CrashReporterApp.cpp#L101) |  |
+| `ManifestJsonReader` | class | SparkCrashReporter | [CrashReporterApp.cpp:L103](../../SparkCrashReporter/src/CrashReporterApp.cpp#L103) |  |
 | `MapRotation` | class | Tests | [TestDedicatedServer.cpp:L246](../../Tests/TestDedicatedServer.cpp#L246) |  |
 | `MarqueeRect` | struct | SparkEditor | [SelectionManager.h:L103](../../SparkEditor/Source/Panels/SelectionManager.h#L103) | Rectangle in screen space for marquee selection |
 | `Mat4` | struct | Tests | [TestCameraTransforms.cpp:L42](../../Tests/TestCameraTransforms.cpp#L42) |  |
@@ -2482,7 +2482,7 @@
 | `ModuleManager` | class | SparkEngine | [SparkEngineWindowsInternal.h:L22](../../SparkEngine/Source/Core/SparkEngineWindowsInternal.h#L22) |  |
 | `ModuleManager` | class | SparkServer | [ServerApplication.h:L21](../../SparkServer/src/ServerApplication.h#L21) |  |
 | `ModuleManagerGuard` | struct | Tests | [TestModuleABI.cpp:L662](../../Tests/TestModuleABI.cpp#L662) |  |
-| `ModuleSha256` | class | SparkEngine | [ModuleManager.cpp:L119](../../SparkEngine/Source/Core/ModuleManager.cpp#L119) |  |
+| `ModuleSha256` | class | SparkEngine | [ModuleManager.cpp:L120](../../SparkEngine/Source/Core/ModuleManager.cpp#L120) |  |
 | `MonsterData` | struct | GameModules | [ARPGDemoEncounter.h:L22](../../GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.h#L22) |  |
 | `MonsterData` | struct | GameModules | [ARPGMonsterSystem.h:L53](../../GameModules/SparkGameARPG/Source/Monster/ARPGMonsterSystem.h#L53) | A spawned monster instance with level-scaled stats |
 | `MonsterTemplate` | struct | GameModules | [ARPGMonsterSystem.h:L41](../../GameModules/SparkGameARPG/Source/Monster/ARPGMonsterSystem.h#L41) | Template for a monster type (base stats before level scaling) |
@@ -2527,7 +2527,7 @@
 | `Name` | struct | Tests | [TestMovementSystem.cpp:L47](../../Tests/TestMovementSystem.cpp#L47) |  |
 | `NameComponent` | struct | SparkEngine | [CoreComponents.h:L30](../../SparkEngine/Source/Engine/ECS/Components/CoreComponents.h#L30) | Human-readable name for an entity, used in editor UI and debug logs. |
 | `NameComponent` | struct | Tests | [TestCrossSystemIntegration.cpp:L108](../../Tests/TestCrossSystemIntegration.cpp#L108) |  |
-| `namedInfo` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L735](../../SparkCrashReporter/src/CrashReporterApp.cpp#L735) |  |
+| `namedInfo` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L737](../../SparkCrashReporter/src/CrashReporterApp.cpp#L737) |  |
 | `NativeCoroutineWrapper` | class | SparkEngine | [CoroutineTypes.h:L468](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h#L468) | Wraps a C++20 GameCoroutine so the scheduler can manage it |
 | `NavGraph` | struct | Tests | [TestAIStress.cpp:L348](../../Tests/TestAIStress.cpp#L348) |  |
 | `NavLink` | struct | SparkEngine | [NavMeshLink.h:L43](../../SparkEngine/Source/Engine/AI/NavMeshLink.h#L43) | An off-mesh navigation link between two world positions. |
@@ -2587,7 +2587,7 @@
 | `NetworkManagerClientIdTestAccess` | struct | Tests | [TestNetworkManagerIntegration.cpp:L33](../../Tests/TestNetworkManagerIntegration.cpp#L33) |  |
 | `NetworkManagerEndpointLifecycleTestAccess` | struct | Tests | [TestNetworkManagerEdgeCases.cpp:L31](../../Tests/TestNetworkManagerEdgeCases.cpp#L31) |  |
 | `NetworkManagerRuntimeAdapter` | class | SparkEngine | [NetworkManagerRuntimeAdapter.h:L15](../../SparkEngine/Source/Engine/Networking/NetworkManagerRuntimeAdapter.h#L15) |  |
-| `NetworkManagerStub` | class | SparkEngine | [NetworkManager.h:L892](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L892) |  |
+| `NetworkManagerStub` | class | SparkEngine | [NetworkManager.h:L894](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L894) |  |
 | `NetworkMessage` | struct | SparkEngine | [NetworkManager.h:L167](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L167) |  |
 | `NetworkMessage` | struct | SparkEngine | [PacketValidator.h:L27](../../SparkEngine/Source/Engine/Networking/PacketValidator.h#L27) |  |
 | `NetworkMessage` | struct | Tests | [TestNetworkManagerOrchestration.cpp:L64](../../Tests/TestNetworkManagerOrchestration.cpp#L64) |  |
@@ -2816,7 +2816,7 @@
 | `PCSSSettings` | struct | SparkEngine | [PCSSshadows.h:L33](../../SparkEngine/Source/Graphics/PCSSshadows.h#L33) |  |
 | `PCSSShadowEvaluator` | class | SparkEngine | [PCSSshadows.h:L116](../../SparkEngine/Source/Graphics/PCSSshadows.h#L116) | CPU-side PCSS shadow computation (for reference/testing) |
 | `PeerRecord` | struct | SparkDaemon | [CollaborationService.h:L50](../../SparkDaemon/src/CollaborationService.h#L50) |  |
-| `PeerState` | struct | SparkEngine | [NetworkManager.h:L769](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L769) | Reliability state for one remote peer. |
+| `PeerState` | struct | SparkEngine | [NetworkManager.h:L771](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L771) | Reliability state for one remote peer. |
 | `Pending` | struct | Tests | [TestScriptHotReload.cpp:L120](../../Tests/TestScriptHotReload.cpp#L120) |  |
 | `PendingAVShot` | struct | GameModules | [TFDeployableSystem.h:L173](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystem.h#L173) |  |
 | `PendingBindings` | struct | SparkEngine | [VulkanDevice.h:L379](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L379) |  |
@@ -2935,8 +2935,8 @@
 | `PIEDedicatedServerConfig` | struct | SparkEngine | [PlayModeManager.h:L377](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L377) | Configuration for launching a local dedicated server during PIE. |
 | `PIEServerConfig` | struct | SparkEditor | [DedicatedServerPanel.h:L83](../../SparkEditor/Source/Panels/DedicatedServerPanel.h#L83) |  |
 | `PinDescriptor` | struct | Tests | [TestShaderGraphCompiler.cpp:L211](../../Tests/TestShaderGraphCompiler.cpp#L211) |  |
-| `PinnedDirectory` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L596](../../SparkCrashReporter/src/CrashReporterApp.cpp#L596) |  |
-| `PinnedFile` | struct | SparkEngine | [CrashHandler.cpp:L250](../../SparkEngine/Source/Utils/CrashHandler.cpp#L250) |  |
+| `PinnedDirectory` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L598](../../SparkCrashReporter/src/CrashReporterApp.cpp#L598) |  |
+| `PinnedFile` | struct | SparkEngine | [CrashHandler.cpp:L255](../../SparkEngine/Source/Utils/CrashHandler.cpp#L255) |  |
 | `PipelineCacheMetrics` | struct | SparkEngine | [PipelineStateCache.h:L103](../../SparkEngine/Source/Graphics/PipelineStateCache.h#L103) | Cache metrics for profiling state object reuse. |
 | `PipelineCallbacks` | struct | SparkEngine | [RenderGraphBuilder.h:L176](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L176) | User-supplied rendering callbacks for each standard pass. |
 | `PipelineConfig` | struct | SparkEngine | [RenderGraphBuilder.h:L72](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L72) | Configuration that controls which passes are enabled and at what |
@@ -3557,7 +3557,7 @@
 | `S4` | struct | Tests | [TestEngineContext.cpp:L352](../../Tests/TestEngineContext.cpp#L352) |  |
 | `S5` | struct | Tests | [TestEngineContext.cpp:L356](../../Tests/TestEngineContext.cpp#L356) |  |
 | `sa` | struct | SparkEditor | [EditorCrashHandler.cpp:L237](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L237) |  |
-| `sa` | struct | SparkEngine | [CrashHandler.cpp:L1957](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1957) |  |
+| `sa` | struct | SparkEngine | [CrashHandler.cpp:L1973](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1973) |  |
 | `SafeArea` | struct | SparkEngine | [MobilePlatform.h:L137](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.h#L137) | Screen safe area (avoiding notches, home indicators). |
 | `SAHBucket` | struct | SparkEngine | [BVHAccelerator.h:L178](../../SparkEngine/Source/Graphics/BVHAccelerator.h#L178) |  |
 | `Sample` | struct | SparkEngine | [InterpolationBuffer.h:L192](../../SparkEngine/Source/Engine/Networking/InterpolationBuffer.h#L192) |  |
@@ -3643,21 +3643,21 @@
 | `ScopedCurrentPath` | class | SparkCrashReporter | [CrashReporterManifestTests.cpp:L38](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L38) |  |
 | `ScopedCurrentPath` | class | Tests | [TestRuntimePackage.cpp:L15](../../Tests/TestRuntimePackage.cpp#L15) |  |
 | `ScopedCurrentPath` | class | Tests | [TestTemplatesCompile.cpp:L39](../../Tests/TestTemplatesCompile.cpp#L39) |  |
-| `ScopedDirectoryCleanup` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L403](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L403) |  |
+| `ScopedDirectoryCleanup` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L404](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L404) |  |
 | `ScopedDirectoryCleanup` | class | SparkEditor | [BuildPipeline.cpp:L250](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L250) |  |
 | `ScopedEntity` | struct | SparkEngine | [ConnectionScope.h:L52](../../SparkEngine/Source/Engine/Networking/ConnectionScope.h#L52) |  |
 | `ScopedEntity` | struct | Tests | [TestConnectionScope.cpp:L23](../../Tests/TestConnectionScope.cpp#L23) |  |
 | `ScopedGPUEvent` | class | SparkEngine | [GPUDebugMarkers.h:L348](../../SparkEngine/Source/Graphics/GPUDebugMarkers.h#L348) | RAII scoped GPU event — begins on construction, ends on destruction |
-| `ScopedManifestCredentialWiper` | class | SparkCrashReporter | [CrashReporterApp.cpp:L89](../../SparkCrashReporter/src/CrashReporterApp.cpp#L89) |  |
+| `ScopedManifestCredentialWiper` | class | SparkCrashReporter | [CrashReporterApp.cpp:L91](../../SparkCrashReporter/src/CrashReporterApp.cpp#L91) |  |
 | `ScopedMinimumFileSizeLimit` | class | Tests | [Test_persistence_SaveSystem.cpp:L40](../../Tests/harden/Test_persistence_SaveSystem.cpp#L40) |  |
-| `ScopedNativeHandle` | class | SparkCrashReporter | [CrashReporterApp.cpp:L544](../../SparkCrashReporter/src/CrashReporterApp.cpp#L544) |  |
+| `ScopedNativeHandle` | class | SparkCrashReporter | [CrashReporterApp.cpp:L546](../../SparkCrashReporter/src/CrashReporterApp.cpp#L546) |  |
 | `ScopedNetworkBindMode` | class | Tests | [TestNetworkManagerIntegration.cpp:L192](../../Tests/TestNetworkManagerIntegration.cpp#L192) |  |
 | `ScopedNetworkBindMode` | class | Tests | [TestSparkServerApplication.cpp:L21](../../Tests/TestSparkServerApplication.cpp#L21) |  |
 | `ScopedProfileTimer` | class | SparkEngine | [Profiler.h:L153](../../SparkEngine/Source/Utils/Profiler.h#L153) | Scoped CPU timer - automatically records start/end |
 | `ScopedSpriteOutputMergerState` | class | SparkEngine | [WorldBasicRenderer.cpp:L107](../../SparkEngine/Source/Graphics/WorldBasicRenderer.cpp#L107) |  |
-| `ScopedStagedModuleImage` | class | SparkEngine | [ModuleManager.cpp:L365](../../SparkEngine/Source/Core/ModuleManager.cpp#L365) |  |
+| `ScopedStagedModuleImage` | class | SparkEngine | [ModuleManager.cpp:L366](../../SparkEngine/Source/Core/ModuleManager.cpp#L366) |  |
 | `ScopedStderrSilencer` | class | Tests | [TestSparkError.cpp:L81](../../Tests/TestSparkError.cpp#L81) |  |
-| `ScopedStringWiper` | class | SparkCrashReporter | [CrashReporterApp.cpp:L63](../../SparkCrashReporter/src/CrashReporterApp.cpp#L63) |  |
+| `ScopedStringWiper` | class | SparkCrashReporter | [CrashReporterApp.cpp:L65](../../SparkCrashReporter/src/CrashReporterApp.cpp#L65) |  |
 | `ScopedTemporaryDownload` | class | SparkBuild | [Downloader.cpp:L77](../../SparkBuild/src/Downloader.cpp#L77) |  |
 | `ScopedTimer` | class | GameModules | [TFPerfCounters.h:L81](../../GameModules/SparkGameMMOFPS/Source/Utils/TFPerfCounters.h#L81) |  |
 | `ScopedTimer` | class | SparkEngine | [ScopedTimer.h:L44](../../SparkEngine/Source/Utils/ScopedTimer.h#L44) | Measures elapsed time from construction to destruction. |
@@ -3785,9 +3785,9 @@
 | `SetValueCommand` | class | Tests | [TestUndoRedoManager.cpp:L104](../../Tests/TestUndoRedoManager.cpp#L104) |  |
 | `SGDConfig` | struct | SparkEngine | [CpuNeuralTraining.h:L71](../../SparkEngine/Source/Graphics/Neural/CpuNeuralTraining.h#L71) | Plain SGD with optional learning-rate decay. |
 | `SH9` | struct | Tests | [TestExtendedSystems.cpp:L823](../../Tests/TestExtendedSystems.cpp#L823) |  |
-| `Sha256` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L35](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L35) |  |
-| `Sha256` | class | SparkBuild | [DownloadSecurity.cpp:L31](../../SparkBuild/src/DownloadSecurity.cpp#L31) |  |
-| `Sha256` | class | SparkEngine | [FileIntegrity.cpp:L21](../../SparkEngine/Source/Core/FileIntegrity.cpp#L21) |  |
+| `Sha256` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L36](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L36) |  |
+| `Sha256` | class | SparkBuild | [DownloadSecurity.cpp:L32](../../SparkBuild/src/DownloadSecurity.cpp#L32) |  |
+| `Sha256` | class | SparkEngine | [FileIntegrity.cpp:L22](../../SparkEngine/Source/Core/FileIntegrity.cpp#L22) |  |
 | `Sha256State` | struct | GameModules | [TFCrypto.cpp:L85](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp#L85) |  |
 | `Sha256State` | struct | SparkEngine | [PasswordHash.cpp:L47](../../SparkEngine/Source/Utils/PasswordHash.cpp#L47) |  |
 | `Shader` | class | SparkEngine | [GraphicsEngine.h:L90](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L90) |  |
@@ -3855,7 +3855,7 @@
 | `ShotFx` | struct | GameModules | [TFWorldSetup.h:L223](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.h#L223) |  |
 | `ShutdownStage` | class | SparkEngine | [ShutdownStage.cpp:L6](../../SparkEngine/Source/Core/Lifecycle/ShutdownStage.cpp#L6) |  |
 | `si` | struct | SparkEditor | [EditorCrashHandler.cpp:L979](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L979) |  |
-| `si` | struct | SparkEngine | [CrashHandler.cpp:L1647](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1647) |  |
+| `si` | struct | SparkEngine | [CrashHandler.cpp:L1663](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1663) |  |
 | `SiblingDependentModule` | class | Tests | [SiblingDependentModule.cpp:L9](../../Tests/Fixtures/ModuleABI/SiblingDependentModule.cpp#L9) |  |
 | `SimDamageIndicator` | struct | SparkEditor | [GameViewPanel.h:L165](../../SparkEditor/Source/Panels/GameViewPanel.h#L165) |  |
 | `SimKillFeedEntry` | struct | SparkEditor | [GameViewPanel.h:L153](../../SparkEditor/Source/Panels/GameViewPanel.h#L153) |  |
@@ -3936,7 +3936,7 @@
 | `SoundEffectFactory` | class | SparkEngine | [SoundEffect.h:L210](../../SparkEngine/Source/Audio/SoundEffect.h#L210) |  |
 | `SoundEntry` | struct | Tests | [TestAudioEngine.cpp:L37](../../Tests/TestAudioEngine.cpp#L37) |  |
 | `SoundPlayedEvent` | struct | SparkEngine | [EventSystem.h:L251](../../SparkEngine/Source/Engine/Events/EventSystem.h#L251) | Fired when a sound begins playing. |
-| `SourceEntry` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L800](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L800) |  |
+| `SourceEntry` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L801](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L801) |  |
 | `SourceVertex` | struct | Tests | [TestGPUSkinning.cpp:L14](../../Tests/TestGPUSkinning.cpp#L14) |  |
 | `SparkBodyActivationListener` | class | SparkEngine | [PhysicsSystem.cpp:L281](../../SparkEngine/Source/Physics/PhysicsSystem.cpp#L281) |  |
 | `SparkBPLayerInterface` | class | SparkEngine | [PhysicsSystem.cpp:L74](../../SparkEngine/Source/Physics/PhysicsSystem.cpp#L74) |  |
@@ -4041,7 +4041,7 @@
 | `StablePluginFile` | class | SparkEngine | [DynamicPluginHost.cpp:L123](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L123) |  |
 | `StackEntry` | struct | SparkEngine | [UICompositor.h:L230](../../SparkEngine/Source/Graphics/UICompositor.h#L230) |  |
 | `StackFrame` | struct | SparkEngine | [StackTrace.h:L54](../../SparkEngine/Source/Utils/StackTrace.h#L54) | Single frame in a captured stack trace |
-| `StackTrace` | class | SparkEngine | [Logger.h:L48](../../SparkEngine/Source/Utils/Logger.h#L48) |  |
+| `StackTrace` | class | SparkEngine | [Logger.h:L64](../../SparkEngine/Source/Utils/Logger.h#L64) |  |
 | `StackTrace` | class | SparkEngine | [StackTrace.h:L92](../../SparkEngine/Source/Utils/StackTrace.h#L92) | Captured stack trace with symbol resolution |
 | `StagedFile` | struct | SparkEngine | [SparkPakWriter.h:L57](../../SparkEngine/Source/Core/SparkPakWriter.h#L57) | Number of files staged for writing. |
 | `StagedStorage` | struct | SparkEngine | [SaveSystem.cpp:L1231](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1231) |  |
@@ -4069,7 +4069,7 @@
 | `std` | struct | SparkEngine | [ContainerUtils.h:L53](../../SparkEngine/Source/Utils/ContainerUtils.h#L53) |  |
 | `std` | struct | SparkEngine | [ContainerUtils.h:L64](../../SparkEngine/Source/Utils/ContainerUtils.h#L64) |  |
 | `std` | struct | Tests | [TestContainerUtils.cpp:L24](../../Tests/TestContainerUtils.cpp#L24) |  |
-| `StderrSink` | class | SparkEngine | [Logger.h:L307](../../SparkEngine/Source/Utils/Logger.h#L307) | Writes log messages to stderr (and OutputDebugStringA on Windows) |
+| `StderrSink` | class | SparkEngine | [Logger.h:L323](../../SparkEngine/Source/Utils/Logger.h#L323) | Writes log messages to stderr (and OutputDebugStringA on Windows) |
 | `SteamPlatform` | class | SparkEngine | [OnlineServices.h:L418](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L418) |  |
 | `SteamTransport` | class | SparkEngine | [SteamTransport.h:L48](../../SparkEngine/Source/Engine/Networking/SteamTransport.h#L48) | Stub transport for Steam Networking Sockets (not yet implemented). |
 | `SteeringAgent` | struct | Tests | [TestAIStress.cpp:L256](../../Tests/TestAIStress.cpp#L256) |  |
@@ -4077,7 +4077,7 @@
 | `Step` | struct | SparkEngine | [CoroutineTypes.h:L442](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h#L442) |  |
 | `Step` | struct | Tests | [TestCoroutineScheduler.cpp:L118](../../Tests/TestCoroutineScheduler.cpp#L118) |  |
 | `StoreLoadTestResult` | struct | GameModules | [TFSocialSystem.h:L118](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L118) |  |
-| `StormEvent` | struct | Tests | [TestEngineLoadTest.cpp:L923](../../Tests/TestEngineLoadTest.cpp#L923) |  |
+| `StormEvent` | struct | Tests | [TestEngineLoadTest.cpp:L944](../../Tests/TestEngineLoadTest.cpp#L944) |  |
 | `StreamEventLog` | struct | SparkEditor | [StreamingPanel.h:L53](../../SparkEditor/Source/Panels/StreamingPanel.h#L53) |  |
 | `StreamingConfig` | struct | SparkEngine | [SeamlessAreaManagerTypes.h:L83](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManagerTypes.h#L83) | Tuning parameters for the predictive streaming system |
 | `StreamingConfig` | struct | Tests | [TestSeamlessAreaManager.cpp:L48](../../Tests/TestSeamlessAreaManager.cpp#L48) |  |
@@ -4603,7 +4603,7 @@
 | `ThreadLockState` | struct | Tests | [TestDeadlockDetector.cpp:L37](../../Tests/TestDeadlockDetector.cpp#L37) |  |
 | `ThreadRecord` | struct | SparkEngine | [ThreadDebugger.h:L45](../../SparkEngine/Source/Utils/ThreadDebugger.h#L45) | Record of a tracked thread |
 | `ThreadSafeRandomEngine` | class | SparkEngine | [RandomEngine.h:L216](../../SparkEngine/Source/Utils/RandomEngine.h#L216) | Mutex-protected wrapper around RandomEngine for shared use. |
-| `ThreadStacksCapture` | struct | SparkEngine | [CrashHandler.cpp:L864](../../SparkEngine/Source/Utils/CrashHandler.cpp#L864) |  |
+| `ThreadStacksCapture` | struct | SparkEngine | [CrashHandler.cpp:L869](../../SparkEngine/Source/Utils/CrashHandler.cpp#L869) |  |
 | `ThreadState` | struct | SparkEngine | [DeadlockDetector.h:L123](../../SparkEngine/Source/Utils/DeadlockDetector.h#L123) |  |
 | `ThreadState` | struct | Tests | [TestDeadlockDetector.cpp:L112](../../Tests/TestDeadlockDetector.cpp#L112) |  |
 | `ThreatInfo` | struct | SparkEngine | [GroupAI.h:L103](../../SparkEngine/Source/Engine/AI/GroupAI.h#L103) | Information about a known threat shared across the group. |
@@ -4765,7 +4765,7 @@
 | `UITextInput` | class | SparkEngine | [UILayoutExtensions.h:L119](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L119) |  |
 | `UIWidget` | class | SparkEngine | [UISystem.h:L124](../../SparkEngine/Source/Engine/UI/UISystem.h#L124) | Base class for all UI widgets. |
 | `UIWidgetConfig` | struct | SparkEngine | [UIFactory.h:L97](../../SparkEngine/Source/Engine/UI/UIFactory.h#L97) | Simple config node for UI widget definition |
-| `un` | struct | SparkEngine | [CrashHandler.cpp:L1640](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1640) |  |
+| `un` | struct | SparkEngine | [CrashHandler.cpp:L1656](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1656) |  |
 | `UnackedTracker` | struct | Tests | [TestReliableChannel.cpp:L57](../../Tests/TestReliableChannel.cpp#L57) |  |
 | `UndoHistoryPanel` | class | SparkEditor | [UndoHistoryPanel.h:L26](../../SparkEditor/Source/Panels/UndoHistoryPanel.h#L26) | Panel displaying the undo/redo command history |
 | `UndoRedoManager` | class | SparkEditor | [UndoRedoManager.h:L37](../../SparkEditor/Source/UndoRedo/UndoRedoManager.h#L37) | Manages the undo/redo command stack for the editor |
@@ -4782,7 +4782,7 @@
 | `UpscalingSettings` | struct | SparkEngine | [UpscalingTypes.h:L138](../../SparkEngine/Source/Graphics/UpscalingTypes.h#L138) | Configuration for the upscaling system |
 | `UpscalingSystem` | class | SparkEngine | [GraphicsEngine.h:L86](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L86) |  |
 | `UpscalingSystem` | class | SparkEngine | [UpscalingSystem.h:L67](../../SparkEngine/Source/Graphics/UpscalingSystem.h#L67) | Unified upscaling system supporting FSR 1.0/2.0, DLSS, and XeSS |
-| `usage` | struct | Tests | [TestEngineLoadTest.cpp:L93](../../Tests/TestEngineLoadTest.cpp#L93) |  |
+| `usage` | struct | Tests | [TestEngineLoadTest.cpp:L109](../../Tests/TestEngineLoadTest.cpp#L109) |  |
 | `UserInfo` | struct | SparkEditor | [VersionControlTypes.h:L129](../../SparkEditor/Source/VersionControl/VersionControlTypes.h#L129) | User information for commits |
 | `UUID` | class | SparkEngine | [UUID.h:L33](../../SparkEngine/Source/Utils/UUID.h#L33) |  |
 | `ValidatingSceneComponentWriter` | class | SparkEditor | [JSONSceneSerializer.cpp:L402](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L402) |  |

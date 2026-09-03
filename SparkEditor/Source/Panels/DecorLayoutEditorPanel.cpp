@@ -269,6 +269,9 @@ namespace SparkEditor
                 ImGui::EndTabBar();
             }
 
+            // Keep the tab index inside m_tiers before indexing (std::array::operator[] contract).
+            if (m_tier < 0 || m_tier >= kTierCount)
+                m_tier = 0;
             TierTemplate& t = m_tiers[static_cast<size_t>(m_tier)];
 
             const ImVec2 avail = ImGui::GetContentRegionAvail();

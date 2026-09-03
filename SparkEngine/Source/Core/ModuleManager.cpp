@@ -30,6 +30,7 @@
 #include <sstream>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -249,7 +250,7 @@ namespace
             return std::nullopt;
 
         ModuleSha256 sha;
-        std::array<uint8_t, 64 * 1024> buffer{};
+        std::vector<uint8_t> buffer(64 * 1024);
         while (file)
         {
             file.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));

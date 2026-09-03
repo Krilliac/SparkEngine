@@ -85,6 +85,22 @@ struct ResourceSample
 #include <sys/resource.h>
 #include <unistd.h>
 
+// Resident-set drift is only meaningful with the production allocator. A
+// sanitizer allocator keeps every freed block resident in its quarantine and
+// returns pages to the OS on its own schedule, so the delta would measure the
+// sanitizer rather than the engine.
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#define SPARK_TEST_SANITIZER_BUILD 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer) || __has_feature(memory_sanitizer)
+#define SPARK_TEST_SANITIZER_BUILD 1
+#else
+#define SPARK_TEST_SANITIZER_BUILD 0
+#endif
+#else
+#define SPARK_TEST_SANITIZER_BUILD 0
+#endif
+
 static ResourceSample SampleResources()
 {
     ResourceSample s;
@@ -850,7 +866,12 @@ TEST(LoadTest_Adverse_StateThrashing)
     std::cout << "  Memory delta: " << memDeltaKB << " KB\n" << std::flush;
 
     EXPECT_TRUE(avgUs < 5000.0);
-    EXPECT_TRUE(std::abs(memDeltaKB) < 5120); // < 5MB drift
+#if SPARK_TEST_SANITIZER_BUILD
+    std::cout << "  Memory drift check skipped: sanitizer allocator\n";
+#else
+    // Drift means growth: a decrease is the allocator returning pages to the OS.
+    EXPECT_TRUE(memDeltaKB < 5120); // < 5MB growth
+#endif
 }
 
 // ============================================================================

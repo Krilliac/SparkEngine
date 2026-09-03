@@ -505,6 +505,13 @@ namespace Spark
                 ComPtr<ID3D12CommandAllocator> m_commandAllocator;
                 D3D12_COMMAND_LIST_TYPE m_type;
 
+                /// ExecuteIndirect signature for D3D12_DRAW_ARGUMENTS (null if creation failed).
+                ComPtr<ID3D12CommandSignature> m_drawSignature;
+                /// ExecuteIndirect signature for D3D12_DRAW_INDEXED_ARGUMENTS (null if creation failed).
+                ComPtr<ID3D12CommandSignature> m_drawIndexedSignature;
+                /// ExecuteIndirect signature for D3D12_DISPATCH_ARGUMENTS (null if creation failed).
+                ComPtr<ID3D12CommandSignature> m_dispatchSignature;
+
                 /// Pending resource barriers batched for a single call.
                 std::vector<D3D12_RESOURCE_BARRIER> m_pendingBarriers;
 

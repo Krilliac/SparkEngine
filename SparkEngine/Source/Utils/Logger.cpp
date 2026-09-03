@@ -12,6 +12,7 @@
  * - Formatted output: [HH:MM:SS.mmm] [TID:XXXX] [LEVEL] [Category] message  (file:line)
  */
 
+#include <cstdarg>
 #include "Logger.h"
 #include "StackTrace.h"
 #include "DebugHookManager.h"
@@ -288,6 +289,33 @@ namespace Spark
     // ============================================================================
     // Logging
     // ============================================================================
+
+    namespace
+    {
+        constexpr size_t kFormattedMessageCapacity = 4096;
+    }
+
+    void Logger::LogFormatted(LogLevel level, LogCategory category, const char* file, int line, const char* func,
+                              const char* format, ...)
+    {
+        char buffer[kFormattedMessageCapacity];
+        va_list arguments;
+        va_start(arguments, format);
+        vsnprintf(buffer, sizeof(buffer), format, arguments);
+        va_end(arguments);
+        Log(level, category, file, line, func, std::string(buffer));
+    }
+
+    void Logger::LogFormatted(LogLevel level, const char* category, const char* file, int line, const char* func,
+                              const char* format, ...)
+    {
+        char buffer[kFormattedMessageCapacity];
+        va_list arguments;
+        va_start(arguments, format);
+        vsnprintf(buffer, sizeof(buffer), format, arguments);
+        va_end(arguments);
+        Log(level, StringToLogCategory(category), file, line, func, std::string(buffer));
+    }
 
     void Logger::Log(LogLevel level, LogCategory category, const char* file, int line, const char* func,
                      const std::string& message)

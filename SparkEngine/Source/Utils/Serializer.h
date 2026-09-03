@@ -67,7 +67,9 @@ namespace Spark
 #endif
         }
 
-        template <Spark::TriviallyCopyable T> [[nodiscard]] inline T ByteSwap(T value) noexcept
+        template <Spark::TriviallyCopyable T>
+            requires(sizeof(T) > 1)
+        [[nodiscard]] inline T ByteSwap(T value) noexcept
         {
             uint8_t bytes[sizeof(T)];
             std::memcpy(bytes, &value, sizeof(T));
@@ -80,11 +82,18 @@ namespace Spark
 
         template <typename T> [[nodiscard]] inline T ToLittleEndian(T value) noexcept
         {
+            // Single bytes have no byte order; the else-branch keeps ByteSwap from
+            // being instantiated (with a degenerate zero-trip loop) for them.
             if constexpr (sizeof(T) == 1)
+            {
                 return value;
-            if (IsLittleEndian())
-                return value;
-            return ByteSwap(value);
+            }
+            else
+            {
+                if (IsLittleEndian())
+                    return value;
+                return ByteSwap(value);
+            }
         }
 
         template <typename T> [[nodiscard]] inline T FromLittleEndian(T value) noexcept

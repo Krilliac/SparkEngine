@@ -221,8 +221,13 @@ static HANDLE OpenArtifactRelativeToPinnedRoot(const std::filesystem::path& name
 
     using NtCreateFileFn = NTSTATUS(NTAPI*)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK, PLARGE_INTEGER,
                                             ULONG, ULONG, ULONG, ULONG, PVOID, ULONG);
-    static const auto ntCreateFile = reinterpret_cast<NtCreateFileFn>(
-        reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtCreateFile")));
+    static const auto ntCreateFile = []() -> NtCreateFileFn
+    {
+        const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+        if (!ntdll)
+            return nullptr;
+        return reinterpret_cast<NtCreateFileFn>(reinterpret_cast<void*>(GetProcAddress(ntdll, "NtCreateFile")));
+    }();
     if (!ntCreateFile)
         return INVALID_HANDLE_VALUE;
 
@@ -941,8 +946,19 @@ void InstallCrashHandler(const CrashConfig& cfg)
     // Teardown detection (see block comment above): resolve the ntdll probe up
     // front so the crash path never calls GetProcAddress, and set our own flag
     // as soon as normal exit processing starts.
-    g_rtlDllShutdownInProgress = reinterpret_cast<RtlDllShutdownInProgressFn>(
-        reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlDllShutdownInProgress")));
+    const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    if (ntdll)
+    {
+        g_rtlDllShutdownInProgress = reinterpret_cast<RtlDllShutdownInProgressFn>(
+            reinterpret_cast<void*>(GetProcAddress(ntdll, "RtlDllShutdownInProgress")));
+    }
+    else
+    {
+        g_rtlDllShutdownInProgress = nullptr;
+        SPARK_LOG_WARN(Spark::LogCategory::Core,
+                       "CrashHandler: ntdll.dll module handle unavailable; RtlDllShutdownInProgress teardown probe "
+                       "disabled");
+    }
     std::atexit([] { g_processTeardown.store(true, std::memory_order_relaxed); });
 
     SetUnhandledExceptionFilter(CrashFilter);

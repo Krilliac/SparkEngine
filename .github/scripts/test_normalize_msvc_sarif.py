@@ -98,6 +98,43 @@ def run(unit: int, artifacts: list[dict[str, object]]) -> dict[str, object]:
 
 
 class NormalizeMsvcSarifTests(unittest.TestCase):
+    def test_vendored_findings_are_dropped_before_consolidation(self) -> None:
+        engine = artifact("a/SparkEngine/SparkEngine/SparkEngine/Source/Core/Engine")
+        imgui = artifact("a/SparkEngine/SparkEngine/ThirdParty/UI/imgui/imgui")
+        kept_by_index = run(0, [engine, imgui])
+        dropped_by_index = run(1, [imgui, engine])
+        dropped_by_uri = run(2, [engine])
+        dropped_by_uri["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"] = {
+            "uri": "file:///d:/a/SparkEngine/SparkEngine/build/_deps/fmt-src/src/format.cc"
+        }
+        dropped_by_backslash_uri = run(3, [engine])
+        dropped_by_backslash_uri["results"][0]["locations"][0]["physicalLocation"][
+            "artifactLocation"
+        ] = {"uri": "d:\\a\\SparkEngine\\SparkEngine\\build\\ThirdParty\\AngelScriptPatched\\source\\as_map.h"}
+        header_in_engine_unit = run(4, [engine, imgui])
+        header_in_engine_unit["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"] = {
+            "index": 1
+        }
+        payload = {
+            "version": "2.1.0",
+            "runs": [
+                kept_by_index,
+                dropped_by_index,
+                dropped_by_uri,
+                dropped_by_backslash_uri,
+                header_in_engine_unit,
+            ],
+        }
+
+        self.assertEqual(NORMALIZER.drop_vendored(payload), 4)
+        remaining = [result for run_ in payload["runs"] for result in run_["results"]]
+        self.assertEqual([result["message"]["text"] for result in remaining], ["unit:0"])
+
+        NORMALIZER.normalize(payload)
+        merged = [result for run_ in payload["runs"] for result in run_["results"]]
+        self.assertEqual([result["message"]["text"] for result in merged], ["unit:0"])
+        self.assertEqual(NORMALIZER.drop_vendored(payload), 0)
+
     def test_shared_artifacts_are_deduplicated_and_all_references_are_remapped(self) -> None:
         shared = artifact("shared")
         payload = {

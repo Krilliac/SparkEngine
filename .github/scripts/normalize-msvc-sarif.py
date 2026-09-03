@@ -16,6 +16,11 @@ from typing import Any, Iterable
 
 
 MAX_GITHUB_RUNS = 20
+# Findings whose primary location sits under one of these path segments describe
+# vendored code (ThirdParty/, the staged AngelScript tree under build/ThirdParty/,
+# FetchContent checkouts under _deps/). Upstream projects own those; they never
+# become code-scanning alerts for this repository.
+VENDORED_PATH_SEGMENTS = frozenset({"ThirdParty", "_deps"})
 MAX_RESULTS_PER_RUN = 25_000
 SUPPORTED_RUN_KEYS = {"tool", "results", "invocations", "artifacts", "automationDetails"}
 INVOCATION_ARTIFACT_FIELDS = (
@@ -309,6 +314,57 @@ def _merge_bucket(runs: list[dict[str, Any]], automation_id: str) -> dict[str, A
     return merged
 
 
+def _artifact_uri(run: dict[str, Any], reference: Any) -> str:
+    """Resolve an artifactLocation to its URI, following an index into run.artifacts."""
+    if not isinstance(reference, dict):
+        return ""
+    uri = reference.get("uri")
+    if isinstance(uri, str) and uri:
+        return uri
+    index = reference.get("index")
+    if _is_index(index):
+        artifacts = _array(run, "artifacts")
+        if 0 <= index < len(artifacts) and isinstance(artifacts[index], dict):
+            location = artifacts[index].get("location")
+            if isinstance(location, dict) and isinstance(location.get("uri"), str):
+                return location["uri"]
+    return ""
+
+
+def _primary_uri(run: dict[str, Any], result: dict[str, Any]) -> str:
+    locations = result.get("locations")
+    if isinstance(locations, list):
+        for location in locations:
+            physical = location.get("physicalLocation") if isinstance(location, dict) else None
+            if isinstance(physical, dict):
+                uri = _artifact_uri(run, physical.get("artifactLocation"))
+                if uri:
+                    return uri
+    return _artifact_uri(run, result.get("analysisTarget"))
+
+
+def _is_vendored(uri: str) -> bool:
+    return any(segment in VENDORED_PATH_SEGMENTS for segment in uri.replace("\\", "/").split("/"))
+
+
+def drop_vendored(payload: dict[str, Any]) -> int:
+    """Remove findings located in vendored code and return how many were dropped."""
+    dropped = 0
+    for run in payload.get("runs") or []:
+        if not isinstance(run, dict):
+            continue
+        results = _array(run, "results")
+        kept = [
+            result
+            for result in results
+            if not (isinstance(result, dict) and _is_vendored(_primary_uri(run, result)))
+        ]
+        if len(kept) != len(results):
+            dropped += len(results) - len(kept)
+            run["results"] = kept
+    return dropped
+
+
 def normalize(payload: dict[str, Any]) -> list[str]:
     runs = payload.get("runs")
     if not isinstance(runs, list) or not runs:
@@ -371,6 +427,7 @@ def main() -> int:
     original_runs = len(runs)
     original_results = sum(len(_array(run, "results")) for run in runs)
 
+    dropped = drop_vendored(payload)
     assigned = normalize(payload)
     with tempfile.NamedTemporaryFile(
         mode="w", encoding="utf-8", newline="\n", dir=path.parent, delete=False
@@ -380,8 +437,10 @@ def main() -> int:
         temporary = Path(stream.name)
     os.replace(temporary, path)
     print(
-        f"Consolidated {original_runs} MSVC SARIF runs with {original_results} findings "
-        f"into {len(assigned)} categories: {', '.join(assigned)}"
+        f"Dropped {dropped} of {original_results} findings located in vendored code "
+        f"({', '.join(sorted(VENDORED_PATH_SEGMENTS))}); consolidated {original_runs} MSVC SARIF "
+        f"runs with {original_results - dropped} findings into {len(assigned)} categories: "
+        f"{', '.join(assigned)}"
     )
     return 0
 

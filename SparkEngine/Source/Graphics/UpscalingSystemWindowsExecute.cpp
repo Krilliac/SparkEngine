@@ -170,13 +170,23 @@ void UpscalingSystem::ExecuteSparkSR(ID3D11ShaderResourceView* colorSRV, ID3D11S
     UnbindComputeResources();
 
     // Apply RCAS sharpening pass on the output if sharpness > 0
-    if (m_settings.sharpness > 0.0f && m_fsr1RCASShader)
+    if (m_settings.sharpness > 0.0f && m_fsr1RCASShader && m_intermediateTexture)
     {
+        // RCAS reads its input through the intermediate SRV, so the temporal
+        // result is copied there first. Resolve the texture behind the output
+        // UAV; without it there is nothing to sharpen.
+        Microsoft::WRL::ComPtr<ID3D11Resource> outputResource;
+        outputUAV->GetResource(outputResource.GetAddressOf());
+        if (!outputResource)
+        {
+            return;
+        }
+
         auto rcasConst = Spark::Graphics::UpscalingUtils::CalculateRCASConstants(m_settings.sharpness);
         UpdateFSR1Constants(nullptr, &rcasConst);
 
         // Copy output to intermediate for sharpening input
-        m_context->CopyResource(m_intermediateTexture.Get(), nullptr);
+        m_context->CopyResource(m_intermediateTexture.Get(), outputResource.Get());
 
         m_context->CSSetShader(m_fsr1RCASShader.Get(), nullptr, 0);
         ID3D11ShaderResourceView* sharpSRV = m_intermediateSRV.Get();

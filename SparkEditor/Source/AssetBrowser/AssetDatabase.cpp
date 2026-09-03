@@ -865,7 +865,7 @@ namespace SparkEditor
         {
         case FileSystemEvent::Created:
             ImportAsset(change.path);
-            break;
+            return;
 
         case FileSystemEvent::Modified:
             if (GetAssetByPath(change.path))
@@ -876,93 +876,93 @@ namespace SparkEditor
             {
                 ImportAsset(change.path);
             }
-            break;
+            return;
 
         case FileSystemEvent::Deleted:
             DeleteAsset(change.path);
-            break;
+            return;
 
         case FileSystemEvent::Renamed:
-        {
-            // Handle file renames: the change.path contains the new path.
-            // We need to find the old entry and update it.  If oldPath is
-            // available via change.oldPath, use it; otherwise we attempt to
-            // find the entry whose file no longer exists on disk.
-            std::string newPath = change.path;
-            std::string oldPath;
-
-            // Try to identify the old path by finding an asset whose file
-            // no longer exists on disk.
-            {
-                std::lock_guard<std::mutex> lock(m_assetsMutex);
-                for (const auto& [path, index] : m_assetMap)
-                {
-                    if (!std::filesystem::exists(path) && path != newPath)
-                    {
-                        oldPath = path;
-                        break;
-                    }
-                }
-            }
-
-            if (!oldPath.empty())
-            {
-                std::lock_guard<std::mutex> lock(m_assetsMutex);
-                auto mapIt = m_assetMap.find(oldPath);
-                if (mapIt != m_assetMap.end())
-                {
-                    size_t idx = mapIt->second;
-                    AssetInfo& asset = m_assets[idx];
-
-                    // Update the asset entry
-                    asset.path = newPath;
-                    asset.name = std::filesystem::path(newPath).filename().string();
-                    asset.type = DetermineAssetType(newPath);
-                    asset.isDirty = true;
-
-                    // Update path map
-                    m_assetMap.erase(mapIt);
-                    m_assetMap[newPath] = idx;
-
-                    // Rename metadata file
-                    std::string oldMetaPath =
-                        m_metadataDirectory + "/" + std::filesystem::path(oldPath).filename().string() + ".meta";
-                    std::string newMetaPath =
-                        m_metadataDirectory + "/" + std::filesystem::path(newPath).filename().string() + ".meta";
-
-                    try
-                    {
-                        if (std::filesystem::exists(oldMetaPath))
-                        {
-                            std::filesystem::rename(oldMetaPath, newMetaPath);
-                        }
-                    }
-                    catch (const std::exception& e)
-                    {
-                        std::cerr << "Failed to rename metadata file: " << e.what() << "\n";
-                    }
-
-                    // Transfer import settings to the new path
-                    auto settingsIt = m_importSettings.find(oldPath);
-                    if (settingsIt != m_importSettings.end())
-                    {
-                        m_importSettings[newPath] = settingsIt->second;
-                        m_importSettings.erase(settingsIt);
-                    }
-
-                    // Save updated metadata
-                    SaveAssetMetadata(newPath);
-                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Renamed asset: %s -> %s", oldPath.c_str(),
-                                   newPath.c_str());
-                }
-            }
-            else
-            {
-                // Could not determine old path; treat as a new import
-                ImportAsset(newPath);
-            }
             break;
         }
+
+        // Handle file renames: the change.path contains the new path.
+        // We need to find the old entry and update it.  If oldPath is
+        // available via change.oldPath, use it; otherwise we attempt to
+        // find the entry whose file no longer exists on disk.  The rename
+        // bookkeeping sits outside the switch so that each m_assetsMutex
+        // hold is a plain block scope.
+        std::string newPath = change.path;
+        std::string oldPath;
+
+        // Try to identify the old path by finding an asset whose file
+        // no longer exists on disk.
+        {
+            std::lock_guard<std::mutex> findLock(m_assetsMutex);
+            for (const auto& [path, index] : m_assetMap)
+            {
+                if (!std::filesystem::exists(path) && path != newPath)
+                {
+                    oldPath = path;
+                    break;
+                }
+            }
+        }
+
+        if (!oldPath.empty())
+        {
+            std::lock_guard<std::mutex> renameLock(m_assetsMutex);
+            auto mapIt = m_assetMap.find(oldPath);
+            if (mapIt != m_assetMap.end())
+            {
+                size_t idx = mapIt->second;
+                AssetInfo& asset = m_assets[idx];
+
+                // Update the asset entry
+                asset.path = newPath;
+                asset.name = std::filesystem::path(newPath).filename().string();
+                asset.type = DetermineAssetType(newPath);
+                asset.isDirty = true;
+
+                // Update path map
+                m_assetMap.erase(mapIt);
+                m_assetMap[newPath] = idx;
+
+                // Rename metadata file
+                std::string oldMetaPath =
+                    m_metadataDirectory + "/" + std::filesystem::path(oldPath).filename().string() + ".meta";
+                std::string newMetaPath =
+                    m_metadataDirectory + "/" + std::filesystem::path(newPath).filename().string() + ".meta";
+
+                try
+                {
+                    if (std::filesystem::exists(oldMetaPath))
+                    {
+                        std::filesystem::rename(oldMetaPath, newMetaPath);
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "Failed to rename metadata file: " << e.what() << "\n";
+                }
+
+                // Transfer import settings to the new path
+                auto settingsIt = m_importSettings.find(oldPath);
+                if (settingsIt != m_importSettings.end())
+                {
+                    m_importSettings[newPath] = settingsIt->second;
+                    m_importSettings.erase(settingsIt);
+                }
+
+                // Save updated metadata
+                SaveAssetMetadata(newPath);
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Renamed asset: %s -> %s", oldPath.c_str(), newPath.c_str());
+            }
+        }
+        else
+        {
+            // Could not determine old path; treat as a new import
+            ImportAsset(newPath);
         }
     }
 

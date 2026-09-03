@@ -1461,7 +1461,9 @@ namespace SparkEditor
                     return ThemeColor();
                 std::string vals = content.substr(pos, end - pos);
                 float r = 0, g = 0, b = 0, a = 1;
-                std::sscanf(vals.c_str(), "%f, %f, %f, %f", &r, &g, &b, &a);
+                // r, g and b are required; a keeps its default when the entry omits alpha.
+                if (std::sscanf(vals.c_str(), "%f, %f, %f, %f", &r, &g, &b, &a) < 3)
+                    return ThemeColor();
                 return ThemeColor(r, g, b, a);
             };
 

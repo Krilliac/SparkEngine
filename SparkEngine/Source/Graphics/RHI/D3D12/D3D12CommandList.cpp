@@ -143,6 +143,35 @@ namespace Spark
                 if (FAILED(hr))
                     return;
                 m_commandList->Close();
+
+                // ExecuteIndirect needs a command signature describing the argument
+                // layout: one per indirect entry point, with no root signature since
+                // none of them carries root arguments. A failed creation leaves the
+                // member null and the matching entry point skips its draw.
+                const auto createSignature = [device](D3D12_INDIRECT_ARGUMENT_TYPE argumentType, size_t byteStride,
+                                                      ComPtr<ID3D12CommandSignature>& signature, const char* name)
+                {
+                    D3D12_INDIRECT_ARGUMENT_DESC argument = {};
+                    argument.Type = argumentType;
+                    D3D12_COMMAND_SIGNATURE_DESC desc = {};
+                    desc.ByteStride = static_cast<UINT>(byteStride);
+                    desc.NumArgumentDescs = 1;
+                    desc.pArgumentDescs = &argument;
+                    desc.NodeMask = 0;
+                    const HRESULT signatureResult =
+                        device->CreateCommandSignature(&desc, nullptr, IID_PPV_ARGS(&signature));
+                    if (FAILED(signatureResult))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create %s command signature",
+                                        name);
+                    }
+                };
+                createSignature(D3D12_INDIRECT_ARGUMENT_TYPE_DRAW, sizeof(D3D12_DRAW_ARGUMENTS), m_drawSignature,
+                                "draw");
+                createSignature(D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED, sizeof(D3D12_DRAW_INDEXED_ARGUMENTS),
+                                m_drawIndexedSignature, "draw-indexed");
+                createSignature(D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH, sizeof(D3D12_DISPATCH_ARGUMENTS),
+                                m_dispatchSignature, "dispatch");
             }
 
             void D3D12CommandList::Begin()
@@ -339,29 +368,32 @@ namespace Spark
 
             void D3D12CommandList::DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
             {
-                if (!argsBuffer)
+                if (!argsBuffer || !m_drawSignature)
                     return;
                 FlushBarriers();
                 auto* d3dBuf = static_cast<D3D12Buffer*>(argsBuffer);
-                m_commandList->ExecuteIndirect(nullptr, 1, d3dBuf->GetD3D12Resource(), argsOffset, nullptr, 0);
+                m_commandList->ExecuteIndirect(m_drawSignature.Get(), 1, d3dBuf->GetD3D12Resource(), argsOffset,
+                                               nullptr, 0);
             }
 
             void D3D12CommandList::DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
             {
-                if (!argsBuffer)
+                if (!argsBuffer || !m_drawIndexedSignature)
                     return;
                 FlushBarriers();
                 auto* d3dBuf = static_cast<D3D12Buffer*>(argsBuffer);
-                m_commandList->ExecuteIndirect(nullptr, 1, d3dBuf->GetD3D12Resource(), argsOffset, nullptr, 0);
+                m_commandList->ExecuteIndirect(m_drawIndexedSignature.Get(), 1, d3dBuf->GetD3D12Resource(), argsOffset,
+                                               nullptr, 0);
             }
 
             void D3D12CommandList::DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
             {
-                if (!argsBuffer)
+                if (!argsBuffer || !m_dispatchSignature)
                     return;
                 FlushBarriers();
                 auto* d3dBuf = static_cast<D3D12Buffer*>(argsBuffer);
-                m_commandList->ExecuteIndirect(nullptr, 1, d3dBuf->GetD3D12Resource(), argsOffset, nullptr, 0);
+                m_commandList->ExecuteIndirect(m_dispatchSignature.Get(), 1, d3dBuf->GetD3D12Resource(), argsOffset,
+                                               nullptr, 0);
             }
 
             void D3D12CommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)

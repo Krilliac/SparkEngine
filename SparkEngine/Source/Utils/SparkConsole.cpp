@@ -425,12 +425,12 @@ namespace Spark
         // recoverable credential merely to support command recall.
         bool sensitiveArguments = false;
         {
-            std::lock_guard<std::mutex> lock(m_commandMutex);
+            std::lock_guard<std::mutex> commandLock(m_commandMutex);
             sensitiveArguments = m_sensitiveCommandNames.contains(outCommand);
         }
 
         {
-            std::lock_guard<std::mutex> lock(m_historyMutex);
+            std::lock_guard<std::mutex> historyLock(m_historyMutex);
             m_commandHistory.push_back(sensitiveArguments ? outCommand + " <arguments-redacted>" : commandLine);
             if (m_commandHistory.size() > MaxCommandHistory)
             {

@@ -82,10 +82,24 @@ jobs:
           cmakeBuildDirectory: ${{ env.build }}
           # Ruleset file that will determine what checks will be run
           ruleset: NativeRecommendedRules.ruleset
+          # Vendored code is analyzed by its upstream project, not here. Targets
+          # defined under these directories (Jolt, AngelScript) are skipped, and
+          # their headers count as external so findings inside them are not
+          # attributed to engine translation units. Vendored targets defined at
+          # the repository root (miniz, tinyexr, Recast/Detour, glad, ImGui) are
+          # dropped by the normalizer below.
+          ignoredTargetPaths: ThirdParty;build/ThirdParty
+          ignoredIncludePaths: ThirdParty;build/ThirdParty
+          # C6262 defaults to a 16 KB frame, which reports ordinary fixed-size I/O
+          # and ImGui text buffers. Frames of 32 KB and above are fixed in code;
+          # the threshold keeps the warning for frames that matter on a 1 MB
+          # Windows thread stack.
+          additionalArgs: /analyze:stacksize 32768
 
       # The analyzer emits one SARIF run per translation unit (more than 1,000
-      # here), while GitHub accepts at most 20 runs per upload. Coalesce runs by
-      # tool without dropping findings, rebasing their run-relative indices.
+      # here), while GitHub accepts at most 20 runs per upload. Drop findings
+      # located in vendored code, then coalesce runs by tool without losing any
+      # other finding, rebasing their run-relative indices.
       - name: Consolidate MSVC SARIF runs into stable categories
         run: python -I .github/scripts/normalize-msvc-sarif.py "${{ steps.run-analysis.outputs.sarif }}"
 

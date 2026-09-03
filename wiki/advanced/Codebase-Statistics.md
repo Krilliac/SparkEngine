@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 314283 |
-| **SparkEditor/Source** | 109184 |
-| **GameModules** | 143036 |
+| **SparkEngine/Source** | 314453 |
+| **SparkEditor/Source** | 109223 |
+| **GameModules** | 143038 |
 | **External services** | 11280 |
-| **Asset pipeline** | 2399 |
-| **Tests** | 172087 |
-| **SparkConsole/src** | 1633 |
+| **Asset pipeline** | 2400 |
+| **Tests** | 172108 |
+| **SparkConsole/src** | 1634 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~765768** |
+| **Total C++ (excl. ThirdParty)** | **~766007** |
 
 ### File Counts
 
@@ -34,7 +34,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 119558 lines, or 38% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 119617 lines, or 38% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -42,10 +42,10 @@ Graphics contains 119558 lines, or 38% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 119558 | 38.0% |
-| Engine (all subsystems) | 87758 | 27.9% |
-| Utils | 44426 | 14.1% |
-| Core | 29979 | 9.5% |
+| Graphics | 119617 | 38.0% |
+| Engine (all subsystems) | 87768 | 27.9% |
+| Utils | 44524 | 14.1% |
+| Core | 29982 | 9.5% |
 | Physics | 10799 | 3.4% |
 | Audio | 6090 | 1.9% |
 | Input | 3953 | 1.2% |
@@ -58,7 +58,7 @@ Graphics contains 119558 lines, or 38% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines |
 |-----------|------:|
-| Networking | 14945 |
+| Networking | 14948 |
 | AI | 13490 |
 | ECS | 8447 |
 | Gameplay | 7755 |
@@ -72,7 +72,7 @@ Graphics contains 119558 lines, or 38% of `SparkEngine/Source`. This is a source
 | World | 1588 |
 | Dialogue | 1425 |
 | Modding | 1377 |
-| Persistence | 1267 |
+| Persistence | 1274 |
 | 2D | 1015 |
 | Coroutine | 800 |
 | Replay | 731 |
@@ -103,7 +103,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 65 |
-| Total editor lines | 109184 |
+| Total editor lines | 109223 |
 
 ## Testing Metrics
 
@@ -157,10 +157,10 @@ inventory is implementation evidence, not support certification.
 | File | Lines |
 |------|------:|
 | `OpenGLDevice.cpp` | 2160 |
-| `CrashHandler.cpp` | 2093 |
+| `CrashHandler.cpp` | 2109 |
 | `SaveSystem.cpp` | 2067 |
 | `VulkanDevice.cpp` | 1991 |
-| `ModuleManager.cpp` | 1848 |
+| `ModuleManager.cpp` | 1849 |
 | `NetworkConnection.cpp` | 1680 |
 | `EngineSettings.cpp` | 1623 |
 | `PostProcessingPipeline.cpp` | 1602 |
@@ -176,7 +176,7 @@ inventory is implementation evidence, not support certification.
 | `GraphicsEngine.h` | 1260 |
 | `JsonUtils.h` | 1087 |
 | `EngineSettings.h` | 1080 |
-| `NetworkManager.h` | 920 |
+| `NetworkManager.h` | 922 |
 | `ECSystems.h` | 846 |
 | `PhysicsTypes.h` | 828 |
 | `MeshClusterSystem.h` | 824 |
@@ -190,10 +190,10 @@ inventory is implementation evidence, not support certification.
 | `EditorUI.cpp` | 2247 |
 | `JSONSceneSerializer.cpp` | 2010 |
 | `VisualScriptPanel.cpp` | 1773 |
-| `CollaborativeEditSession.cpp` | 1670 |
+| `CollaborativeEditSession.cpp` | 1696 |
 | `BuildPipeline.cpp` | 1659 |
-| `PerformanceProfiler.cpp` | 1609 |
-| `EditorTheme.cpp` | 1587 |
+| `PerformanceProfiler.cpp` | 1613 |
+| `EditorTheme.cpp` | 1589 |
 | `HierarchyPanel.cpp` | 1524 |
 | `ProjectSettingsPanel.cpp` | 1503 |
 

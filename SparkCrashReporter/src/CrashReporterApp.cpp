@@ -54,7 +54,9 @@ namespace SparkCrashReporter
 
         void SecureWipeString(std::string& value) noexcept
         {
-            volatile char* bytes = value.empty() ? nullptr : value.data();
+            if (value.empty())
+                return;
+            volatile char* bytes = value.data();
             for (size_t index = 0; index < value.size(); ++index)
                 bytes[index] = 0;
             value.clear();

@@ -919,14 +919,17 @@ namespace SparkEditor
         if (m_renderDocCaptureAvailable)
         {
             HMODULE renderDocModule = GetModuleHandleA("renderdoc.dll");
-            using TriggerCaptureFn = void (*)();
-            auto triggerCapture =
-                reinterpret_cast<TriggerCaptureFn>(GetProcAddress(renderDocModule, "RENDERDOC_TriggerCapture"));
-            if (triggerCapture)
+            if (renderDocModule)
             {
-                triggerCapture();
-                m_captureStatus = "Triggered RenderDoc capture.";
-                return true;
+                using TriggerCaptureFn = void (*)();
+                auto triggerCapture =
+                    reinterpret_cast<TriggerCaptureFn>(GetProcAddress(renderDocModule, "RENDERDOC_TriggerCapture"));
+                if (triggerCapture)
+                {
+                    triggerCapture();
+                    m_captureStatus = "Triggered RenderDoc capture.";
+                    return true;
+                }
             }
         }
 
@@ -973,8 +976,9 @@ namespace SparkEditor
     {
 #ifndef NDEBUG
 #ifdef SPARK_PLATFORM_WINDOWS
-        m_renderDocCaptureAvailable = GetModuleHandleA("renderdoc.dll") &&
-                                      GetProcAddress(GetModuleHandleA("renderdoc.dll"), "RENDERDOC_TriggerCapture");
+        HMODULE renderDocModule = GetModuleHandleA("renderdoc.dll");
+        m_renderDocCaptureAvailable =
+            renderDocModule != nullptr && GetProcAddress(renderDocModule, "RENDERDOC_TriggerCapture") != nullptr;
 
         m_pixCaptureAvailable = false;
 #if SPARK_EDITOR_HAS_DX_PROGRAMMABLE_CAPTURE

@@ -329,18 +329,20 @@ namespace Spark::Graphics::Neural
                 int32_t cx = std::clamp(static_cast<int32_t>(inX), 0, static_cast<int32_t>(kSRInputPatchSize - 1));
                 int32_t cy = std::clamp(static_cast<int32_t>(inY), 0, static_cast<int32_t>(kSRInputPatchSize - 1));
 
-                auto sampleInput = [&](int32_t x, int32_t y) -> const float*
+                // Float offset of the clamped (x, y) input texel; the callers index
+                // inputPatch with it directly.
+                auto sampleOffset = [](int32_t x, int32_t y) -> uint32_t
                 {
                     x = std::clamp(x, 0, static_cast<int32_t>(kSRInputPatchSize - 1));
                     y = std::clamp(y, 0, static_cast<int32_t>(kSRInputPatchSize - 1));
-                    return inputPatch + (y * kSRInputPatchSize + x) * 3;
+                    return (static_cast<uint32_t>(y) * kSRInputPatchSize + static_cast<uint32_t>(x)) * 3;
                 };
 
-                const float* center = sampleInput(cx, cy);
-                const float* left = sampleInput(cx - 1, cy);
-                const float* right = sampleInput(cx + 1, cy);
-                const float* up = sampleInput(cx, cy - 1);
-                const float* down = sampleInput(cx, cy + 1);
+                const float* center = inputPatch + sampleOffset(cx, cy);
+                const float* left = inputPatch + sampleOffset(cx - 1, cy);
+                const float* right = inputPatch + sampleOffset(cx + 1, cy);
+                const float* up = inputPatch + sampleOffset(cx, cy - 1);
+                const float* down = inputPatch + sampleOffset(cx, cy + 1);
 
                 // Sub-pixel position
                 dst[offset++] = static_cast<float>(ox) / static_cast<float>(kSROutputPatchSize);

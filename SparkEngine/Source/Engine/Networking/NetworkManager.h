@@ -671,8 +671,10 @@ namespace Spark::Net
         /// Requires m_apiMutex and no narrower subsystem lock to be held.
         void DiscardClientLifecycleTraffic(uint64_t lifecycleEpoch);
         std::vector<ClientID> GetConnectedClientIDs() const;
-        bool UpdateReplication(float deltaTime, std::unique_lock<std::recursive_mutex>& apiLock,
-                               uint64_t lifecycleEpoch);
+        /// Caller must not hold m_apiMutex: owns its own acquisition so property
+        /// serializers run with the lock completely released. Returns false when
+        /// a serializer changed the lifecycle epoch (the calling Update stops).
+        bool UpdateReplication(float deltaTime, uint64_t lifecycleEpoch);
         void UpdateHeartbeat(float deltaTime);
         ClientID PrepareNextClientID();
         ClientID HandleConnect(const NetworkMessage& msg);
@@ -710,7 +712,7 @@ namespace Spark::Net
 #endif // ENABLE_NETWORKING
 
         NetworkEndpointPolicy m_endpointPolicy{}; ///< Captured once and unchanged for the active socket lifecycle.
-        bool m_allowLanAdvertisement = false;      ///< Authoritative server option for discovery publishers.
+        bool m_allowLanAdvertisement = false;     ///< Authoritative server option for discovery publishers.
 
         std::atomic<bool> m_initialized{false};
         std::atomic<NetworkRole> m_role{NetworkRole::None};

@@ -4,13 +4,13 @@
 #include <array>
 #include <cstdint>
 #include <system_error>
+#include <vector>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
-#include <vector>
 #else
 #include <unistd.h>
 #endif
@@ -20,7 +20,7 @@ namespace SparkLauncher
     std::filesystem::path GetLauncherExecutablePath()
     {
 #ifdef _WIN32
-        std::array<wchar_t, 32768> buffer{};
+        std::vector<wchar_t> buffer(32768, L'\0');
         const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
         if (length == 0 || length >= buffer.size())
             return {};
