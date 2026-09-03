@@ -2854,6 +2854,16 @@
       "resolved": true
     },
     {
+      "target": "SparkRuntimeShaders",
+      "kind": "utility",
+      "file": "CMakeLists.txt",
+      "line": 1727,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkServer",
       "kind": "executable",
       "file": "SparkServer/CMakeLists.txt",
@@ -4446,6 +4456,24 @@
           "line": 750,
           "kind": "shared_library",
           "origin": "wrapper-call",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkRuntimeShaders",
+      "kind": "utility",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 1727,
+          "kind": "utility",
+          "origin": "declaration",
           "definitionScope": [],
           "resolved": true
         }

@@ -1005,7 +1005,7 @@ def _wrapper_definitions(commands: list[dict[str, Any]]) -> dict[str, dict[str, 
     wrappers: dict[str, dict[str, Any]] = {}
     for command in commands:
         scope = command.get("definitionScope") or []
-        if not scope or command["name"] not in {"add_executable", "add_library"}:
+        if not scope or command["name"] not in {"add_executable", "add_library", "add_custom_target"}:
             continue
         definition = scope[-1]
         parameters = definition.get("parameters") or []
@@ -1025,6 +1025,8 @@ def _wrapper_definitions(commands: list[dict[str, Any]]) -> dict[str, dict[str, 
 def _classify_target(command_name: str, args: list[str]) -> str:
     if command_name == "add_executable":
         return "executable"
+    if command_name == "add_custom_target":
+        return "utility"
     keyword = args[1].upper() if len(args) > 1 else ""
     return _LIBRARY_TYPE_KEYWORDS.get(keyword, "library")
 
@@ -1076,7 +1078,7 @@ def extract_cmake_targets(paths: Iterable[Path] | None = None) -> list[dict[str,
                 _target_record(target, wrappers[name]["kind"], command, scope, origin="wrapper-call")
             )
             continue
-        if name not in {"add_executable", "add_library"}:
+        if name not in {"add_executable", "add_library", "add_custom_target"}:
             continue
         args = _tokenize_cmake_arguments(command["body"])
         if not args:

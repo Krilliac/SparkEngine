@@ -222,7 +222,7 @@ def _validate_inventory(inventory_document: dict[str, Any]) -> tuple[str, list[d
             identities = _require_list(
                 target.get("artifactIdentities"), f"{identifier} target artifact identities", 32
             )
-            if not identities:
+            if not identities and str(target.get("kind", "")).lower() != "utility":
                 raise PendingAuthorityError(f"{identifier}: target has no artifact identities")
 
         ci = {

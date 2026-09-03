@@ -288,6 +288,33 @@ class PendingAuthorityTests(unittest.TestCase):
         self.assertEqual(receipt["sourceCommit"], COMMIT)
         self.assertEqual([entry["id"] for entry in receipt["profiles"]], list(pending.EXPECTED_PROFILES))
 
+    def test_utility_target_with_empty_artifact_identities_is_accepted(self) -> None:
+        inventory_document, report = valid_documents()
+        for evidence in inventory_document["configuredTargetEvidence"]:
+            evidence["targets"].append(
+                {
+                    "target": "SparkRuntimeShaders",
+                    "kind": "utility",
+                    "artifactState": "locally-observed-post-build",
+                    "artifactIdentities": [],
+                }
+            )
+        receipt = self.receipt(inventory_document, report)
+        self.assertEqual(receipt["state"], "pending-external-attestation")
+
+    def test_non_utility_target_with_empty_artifact_identities_is_rejected(self) -> None:
+        inventory_document, report = valid_documents()
+        inventory_document["configuredTargetEvidence"][0]["targets"].append(
+            {
+                "target": "BrokenTarget",
+                "kind": "executable",
+                "artifactState": "locally-observed-post-build",
+                "artifactIdentities": [],
+            }
+        )
+        with self.assertRaisesRegex(pending.PendingAuthorityError, "no artifact identities"):
+            self.receipt(inventory_document, report)
+
     def test_old_job_local_verified_state_is_rejected(self) -> None:
         inventory_document, report = valid_documents()
         inventory_document["configuredTargetEvidence"][0]["producerProvenance"]["state"] = "verified"
