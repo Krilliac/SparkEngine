@@ -166,7 +166,7 @@ assert.strictEqual(contract.hasTerminalReporterSet({
 function completedReporterEvent() {
     return {
         id: 900,
-        workflow_id: 345629369,
+        workflow_id: 349562521,
         run_number: 65,
         run_attempt: 2,
         name: 'Build Matrix Verifier',
