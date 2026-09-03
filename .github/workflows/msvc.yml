@@ -64,6 +64,16 @@ jobs:
         # The build matrix already compiles and runs the test corpus. Keep
         # NativeRecommendedRules focused on production targets so hundreds
         # of test translation units cannot exhaust this job's 60-minute cap.
+        #
+        # C6262 defaults to a 16 KB frame, which reports ordinary fixed-size
+        # I/O and ImGui text buffers. Frames of 32 KB and above are fixed in
+        # code; the threshold keeps the warning for frames that matter on a
+        # 1 MB Windows thread stack. It travels through CMAKE_CXX_FLAGS into
+        # the compile commands the analysis action replays, because the
+        # action's additionalArgs input reassigns a const and aborts the job.
+        env:
+          CFLAGS: /analyze:stacksize 32768
+          CXXFLAGS: /analyze:stacksize 32768
         run: >-
           cmake -S . -B "${{ env.build }}"
           -G "Visual Studio 17 2022" -A x64 -T v143
@@ -90,11 +100,6 @@ jobs:
           # dropped by the normalizer below.
           ignoredTargetPaths: ThirdParty;build/ThirdParty
           ignoredIncludePaths: ThirdParty;build/ThirdParty
-          # C6262 defaults to a 16 KB frame, which reports ordinary fixed-size I/O
-          # and ImGui text buffers. Frames of 32 KB and above are fixed in code;
-          # the threshold keeps the warning for frames that matter on a 1 MB
-          # Windows thread stack.
-          additionalArgs: /analyze:stacksize 32768
 
       # The analyzer emits one SARIF run per translation unit (more than 1,000
       # here), while GitHub accepts at most 20 runs per upload. Drop findings
