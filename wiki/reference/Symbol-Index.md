@@ -236,7 +236,7 @@
 | `AcquireImpl` | function | SparkEngine | [ObjectPool.h:L77](../../SparkEngine/Source/Utils/ObjectPool.h#L77) | Acquire an object from the pool. |
 | `AcquireImpl` | function | SparkEngine | [ObjectPool.h:L81](../../SparkEngine/Source/Utils/ObjectPool.h#L81) |  |
 | `AcquireImpl` | function | SparkEngine | [ObjectPool.h:L131](../../SparkEngine/Source/Utils/ObjectPool.h#L131) | Number of objects currently in use (acquired, not released). |
-| `AcquireLock` | function | SparkDaemon | [CollaborationService.cpp:L78](../../SparkDaemon/src/CollaborationService.cpp#L78) |  |
+| `AcquireLock` | function | SparkDaemon | [CollaborationService.cpp:L76](../../SparkDaemon/src/CollaborationService.cpp#L76) |  |
 | `AcquireLock` | function | SparkDaemon | [CollaborationService.h:L74](../../SparkDaemon/src/CollaborationService.h#L74) |  |
 | `AcquireNextDrawable` | function | SparkEngine | [MetalDevice.h:L336](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L336) |  |
 | `AcquireNextImage` | function | SparkEngine | [VulkanDevice.h:L272](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L272) |  |
@@ -3507,7 +3507,7 @@
 | `CandidateExtraComponentProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L381](../../Tests/harden/Test_persistence_SaveSystem.cpp#L381) |  |
 | `CandidateGhostProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L376](../../Tests/harden/Test_persistence_SaveSystem.cpp#L376) |  |
 | `CanEquipWeapon` | function | GameModules | [Player.h:L388](../../GameModules/SparkGameFPS/Source/Game/Player.h#L388) | Check if a weapon switch is valid for the current class |
-| `CanGrowSnapshot` | function | SparkDaemon | [CollaborationService.cpp:L43](../../SparkDaemon/src/CollaborationService.cpp#L43) |  |
+| `CanGrowSnapshot` | function | SparkDaemon | [CollaborationService.cpp:L42](../../SparkDaemon/src/CollaborationService.cpp#L42) |  |
 | `CanHear` | function | SparkEngine | [PerceptionSystem.h:L267](../../SparkEngine/Source/Engine/AI/PerceptionSystem.h#L267) |  |
 | `CanHear` | function | Tests | [TestPerceptionSystemMath.cpp:L153](../../Tests/TestPerceptionSystemMath.cpp#L153) |  |
 | `CanHear` | function | Tests | [TestSteeringBehaviors.cpp:L176](../../Tests/TestSteeringBehaviors.cpp#L176) |  |
@@ -4565,25 +4565,25 @@
 | `CollaborationPeer` | struct | SparkDaemon | [CollaborationProtocol.h:L55](../../SparkDaemon/src/CollaborationProtocol.h#L55) |  |
 | `CollaborationService` | class | SparkDaemon | [CollaborationService.h:L37](../../SparkDaemon/src/CollaborationService.h#L37) | Authoritative in-memory presence, lock, and edit-history broker. |
 | `CollaborationService` | function | SparkDaemon | [CollaborationService.h:L40](../../SparkDaemon/src/CollaborationService.h#L40) |  |
-| `CollaborationService::AcquireLock` | method | SparkDaemon | [CollaborationService.cpp:L208](../../SparkDaemon/src/CollaborationService.cpp#L208) |  |
-| `CollaborationService::AuthenticateLocked` | method | SparkDaemon | [CollaborationService.cpp:L351](../../SparkDaemon/src/CollaborationService.cpp#L351) |  |
-| `CollaborationService::Create` | method | SparkDaemon | [CollaborationService.cpp:L90](../../SparkDaemon/src/CollaborationService.cpp#L90) |  |
-| `CollaborationService::Delete` | method | SparkDaemon | [CollaborationService.cpp:L119](../../SparkDaemon/src/CollaborationService.cpp#L119) |  |
-| `CollaborationService::GenerateToken` | method | SparkDaemon | [CollaborationService.cpp:L393](../../SparkDaemon/src/CollaborationService.cpp#L393) |  |
-| `CollaborationService::GetSessionCount` | method | SparkDaemon | [CollaborationService.cpp:L330](../../SparkDaemon/src/CollaborationService.cpp#L330) |  |
-| `CollaborationService::HandleMessage` | method | SparkDaemon | [CollaborationService.cpp:L62](../../SparkDaemon/src/CollaborationService.cpp#L62) |  |
-| `CollaborationService::IsValidIdentifier` | method | SparkDaemon | [CollaborationService.cpp:L440](../../SparkDaemon/src/CollaborationService.cpp#L440) |  |
-| `CollaborationService::Join` | method | SparkDaemon | [CollaborationService.cpp:L133](../../SparkDaemon/src/CollaborationService.cpp#L133) |  |
-| `CollaborationService::Leave` | method | SparkDaemon | [CollaborationService.cpp:L171](../../SparkDaemon/src/CollaborationService.cpp#L171) |  |
-| `CollaborationService::MakeAck` | method | SparkDaemon | [CollaborationService.cpp:L344](../../SparkDaemon/src/CollaborationService.cpp#L344) |  |
-| `CollaborationService::MakeError` | method | SparkDaemon | [CollaborationService.cpp:L336](../../SparkDaemon/src/CollaborationService.cpp#L336) |  |
-| `CollaborationService::Presence` | method | SparkDaemon | [CollaborationService.cpp:L184](../../SparkDaemon/src/CollaborationService.cpp#L184) |  |
-| `CollaborationService::PruneExpiredLocked` | method | SparkDaemon | [CollaborationService.cpp:L383](../../SparkDaemon/src/CollaborationService.cpp#L383) |  |
-| `CollaborationService::ReleaseLock` | method | SparkDaemon | [CollaborationService.cpp:L239](../../SparkDaemon/src/CollaborationService.cpp#L239) |  |
-| `CollaborationService::RemovePeerLocked` | method | SparkDaemon | [CollaborationService.cpp:L363](../../SparkDaemon/src/CollaborationService.cpp#L363) |  |
-| `CollaborationService::SecureEquals` | method | SparkDaemon | [CollaborationService.cpp:L427](../../SparkDaemon/src/CollaborationService.cpp#L427) |  |
-| `CollaborationService::Snapshot` | method | SparkDaemon | [CollaborationService.cpp:L296](../../SparkDaemon/src/CollaborationService.cpp#L296) |  |
-| `CollaborationService::SubmitEdit` | method | SparkDaemon | [CollaborationService.cpp:L257](../../SparkDaemon/src/CollaborationService.cpp#L257) |  |
+| `CollaborationService::AcquireLock` | method | SparkDaemon | [CollaborationService.cpp:L206](../../SparkDaemon/src/CollaborationService.cpp#L206) |  |
+| `CollaborationService::AuthenticateLocked` | method | SparkDaemon | [CollaborationService.cpp:L349](../../SparkDaemon/src/CollaborationService.cpp#L349) |  |
+| `CollaborationService::Create` | method | SparkDaemon | [CollaborationService.cpp:L88](../../SparkDaemon/src/CollaborationService.cpp#L88) |  |
+| `CollaborationService::Delete` | method | SparkDaemon | [CollaborationService.cpp:L117](../../SparkDaemon/src/CollaborationService.cpp#L117) |  |
+| `CollaborationService::GenerateToken` | method | SparkDaemon | [CollaborationService.cpp:L391](../../SparkDaemon/src/CollaborationService.cpp#L391) |  |
+| `CollaborationService::GetSessionCount` | method | SparkDaemon | [CollaborationService.cpp:L328](../../SparkDaemon/src/CollaborationService.cpp#L328) |  |
+| `CollaborationService::HandleMessage` | method | SparkDaemon | [CollaborationService.cpp:L60](../../SparkDaemon/src/CollaborationService.cpp#L60) |  |
+| `CollaborationService::IsValidIdentifier` | method | SparkDaemon | [CollaborationService.cpp:L438](../../SparkDaemon/src/CollaborationService.cpp#L438) |  |
+| `CollaborationService::Join` | method | SparkDaemon | [CollaborationService.cpp:L131](../../SparkDaemon/src/CollaborationService.cpp#L131) |  |
+| `CollaborationService::Leave` | method | SparkDaemon | [CollaborationService.cpp:L169](../../SparkDaemon/src/CollaborationService.cpp#L169) |  |
+| `CollaborationService::MakeAck` | method | SparkDaemon | [CollaborationService.cpp:L342](../../SparkDaemon/src/CollaborationService.cpp#L342) |  |
+| `CollaborationService::MakeError` | method | SparkDaemon | [CollaborationService.cpp:L334](../../SparkDaemon/src/CollaborationService.cpp#L334) |  |
+| `CollaborationService::Presence` | method | SparkDaemon | [CollaborationService.cpp:L182](../../SparkDaemon/src/CollaborationService.cpp#L182) |  |
+| `CollaborationService::PruneExpiredLocked` | method | SparkDaemon | [CollaborationService.cpp:L381](../../SparkDaemon/src/CollaborationService.cpp#L381) |  |
+| `CollaborationService::ReleaseLock` | method | SparkDaemon | [CollaborationService.cpp:L237](../../SparkDaemon/src/CollaborationService.cpp#L237) |  |
+| `CollaborationService::RemovePeerLocked` | method | SparkDaemon | [CollaborationService.cpp:L361](../../SparkDaemon/src/CollaborationService.cpp#L361) |  |
+| `CollaborationService::SecureEquals` | method | SparkDaemon | [CollaborationService.cpp:L425](../../SparkDaemon/src/CollaborationService.cpp#L425) |  |
+| `CollaborationService::Snapshot` | method | SparkDaemon | [CollaborationService.cpp:L294](../../SparkDaemon/src/CollaborationService.cpp#L294) |  |
+| `CollaborationService::SubmitEdit` | method | SparkDaemon | [CollaborationService.cpp:L255](../../SparkDaemon/src/CollaborationService.cpp#L255) |  |
 | `CollaborationSettings` | struct | SparkEditor | [VersionControlTypes.h:L185](../../SparkEditor/Source/VersionControl/VersionControlTypes.h#L185) | Collaboration settings |
 | `CollaborationSnapshot` | struct | SparkDaemon | [CollaborationProtocol.h:L76](../../SparkDaemon/src/CollaborationProtocol.h#L76) |  |
 | `CollaborativeEditSession` | class | SparkEditor | [CollaborativeEditSession.h:L219](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L219) | Manages a multi-user collaborative editing session |
@@ -6168,7 +6168,7 @@
 | `crate` | function | SparkEditor | [PrefabManager.cpp:L399](../../SparkEditor/Source/Prefabs/PrefabManager.cpp#L399) |  |
 | `Create` | function | GameModules | [TFCharacterSystem.h:L51](../../GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.h#L51) |  |
 | `Create` | function | GameModules | [TFOutfitStore.h:L116](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.h#L116) |  |
-| `Create` | function | SparkDaemon | [CollaborationService.cpp:L68](../../SparkDaemon/src/CollaborationService.cpp#L68) |  |
+| `Create` | function | SparkDaemon | [CollaborationService.cpp:L66](../../SparkDaemon/src/CollaborationService.cpp#L66) |  |
 | `Create` | function | SparkDaemon | [CollaborationService.h:L69](../../SparkDaemon/src/CollaborationService.h#L69) |  |
 | `Create` | function | SparkEngine | [DynamicPluginHost.cpp:L203](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L203) |  |
 | `Create` | function | SparkEngine | [TweenSystem.cpp:L316](../../SparkEngine/Source/Engine/Tween/TweenSystem.cpp#L316) |  |
@@ -7540,7 +7540,7 @@
 | `DelayedActionBatch` | struct | SparkEngine | [EventResponseSystem.h:L150](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h#L150) |  |
 | `DelayedPacket` | struct | SparkEngine | [InstabilitySimulator.h:L68](../../SparkEngine/Source/Engine/Networking/InstabilitySimulator.h#L68) |  |
 | `Delete` | function | GameModules | [TFCharacterSystem.h:L53](../../GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.h#L53) |  |
-| `Delete` | function | SparkDaemon | [CollaborationService.cpp:L70](../../SparkDaemon/src/CollaborationService.cpp#L70) |  |
+| `Delete` | function | SparkDaemon | [CollaborationService.cpp:L68](../../SparkDaemon/src/CollaborationService.cpp#L68) |  |
 | `Delete` | function | SparkDaemon | [CollaborationService.h:L70](../../SparkDaemon/src/CollaborationService.h#L70) |  |
 | `Delete` | function | SparkEngine | [LocalFileCache.h:L243](../../SparkEngine/Source/Utils/LocalFileCache.h#L243) | Delete a file from disk and evict it from cache |
 | `DeleteAllBlobFiles` | function | SparkDaemon | [AssetService.h:L125](../../SparkDaemon/src/AssetService.h#L125) |  |
@@ -9003,9 +9003,9 @@
 | `EncodeBoolean` | function | SparkDaemon | [CollaborationProtocol.h:L206](../../SparkDaemon/src/CollaborationProtocol.h#L206) |  |
 | `EncodeCollaborationAuth` | function | SparkDaemon | [CollaborationProtocol.h:L97](../../SparkDaemon/src/CollaborationProtocol.h#L97) |  |
 | `EncodeCompiledShaderBlob` | function | SparkEngine | [ShaderDaemonBridge.cpp:L13](../../SparkEngine/Source/Graphics/ShaderDaemonBridge.cpp#L13) |  |
-| `EncodedEditSize` | function | SparkDaemon | [CollaborationService.cpp:L37](../../SparkDaemon/src/CollaborationService.cpp#L37) |  |
-| `EncodedLockSize` | function | SparkDaemon | [CollaborationService.cpp:L32](../../SparkDaemon/src/CollaborationService.cpp#L32) |  |
-| `EncodedPeerSize` | function | SparkDaemon | [CollaborationService.cpp:L27](../../SparkDaemon/src/CollaborationService.cpp#L27) |  |
+| `EncodedEditSize` | function | SparkDaemon | [CollaborationService.cpp:L36](../../SparkDaemon/src/CollaborationService.cpp#L36) |  |
+| `EncodedLockSize` | function | SparkDaemon | [CollaborationService.cpp:L31](../../SparkDaemon/src/CollaborationService.cpp#L31) |  |
+| `EncodedPeerSize` | function | SparkDaemon | [CollaborationService.cpp:L26](../../SparkDaemon/src/CollaborationService.cpp#L26) |  |
 | `EncodedSnapshotBaseSize` | function | SparkDaemon | [CollaborationService.cpp:L21](../../SparkDaemon/src/CollaborationService.cpp#L21) |  |
 | `EncodeEditRequest` | function | SparkDaemon | [CollaborationProtocol.h:L186](../../SparkDaemon/src/CollaborationProtocol.h#L186) |  |
 | `EncodeETC1` | function | SparkEngine | [BasisTranscoder.h:L549](../../SparkEngine/Source/Graphics/BasisTranscoder.h#L549) | ETC1 encoder: RGB block with two 4×2 subblocks |
@@ -20709,7 +20709,7 @@
 | `JitterPixelsToNDC` | function | SparkEngine | [UpscalingSystem.cpp:L414](../../SparkEngine/Source/Graphics/UpscalingSystem.cpp#L414) |  |
 | `JobSystem` | class | SparkEngine | [PhysicsSystem.h:L48](../../SparkEngine/Source/Physics/PhysicsSystem.h#L48) |  |
 | `JobSystem` | class | SparkEngine | [JobSystem.h:L55](../../SparkEngine/Source/Utils/JobSystem.h#L55) | Simple thread pool job system |
-| `Join` | function | SparkDaemon | [CollaborationService.cpp:L72](../../SparkDaemon/src/CollaborationService.cpp#L72) |  |
+| `Join` | function | SparkDaemon | [CollaborationService.cpp:L70](../../SparkDaemon/src/CollaborationService.cpp#L70) |  |
 | `Join` | function | SparkDaemon | [CollaborationService.h:L71](../../SparkDaemon/src/CollaborationService.h#L71) |  |
 | `Join` | function | SparkEngine | [StringUtils.h:L142](../../SparkEngine/Source/Utils/StringUtils.h#L142) |  |
 | `JoinEvent` | function | GameModules | [OWDynamicEventSystem.h:L87](../../GameModules/SparkGameOpenWorld/Source/Events/OWDynamicEventSystem.h#L87) | Player joins an active event |
@@ -20956,7 +20956,7 @@
 | `LeakEntry` | struct | SparkEngine | [MemoryDebugger.h:L84](../../SparkEngine/Source/Utils/MemoryDebugger.h#L84) | Leak report entry |
 | `LearnRecipe` | function | GameModules | [MMOCraftingSystem.h:L93](../../GameModules/SparkGameMMO/Source/Crafting/MMOCraftingSystem.h#L93) |  |
 | `LearnSkill` | function | GameModules | [ARPGSkillSystem.h:L64](../../GameModules/SparkGameARPG/Source/Skill/ARPGSkillSystem.h#L64) |  |
-| `Leave` | function | SparkDaemon | [CollaborationService.cpp:L74](../../SparkDaemon/src/CollaborationService.cpp#L74) |  |
+| `Leave` | function | SparkDaemon | [CollaborationService.cpp:L72](../../SparkDaemon/src/CollaborationService.cpp#L72) |  |
 | `Leave` | function | SparkDaemon | [CollaborationService.h:L72](../../SparkDaemon/src/CollaborationService.h#L72) |  |
 | `LeaveGround` | function | Tests | [TestSparkGamePlatformer.cpp:L101](../../Tests/TestSparkGamePlatformer.cpp#L101) |  |
 | `LeaveGuild` | function | GameModules | [MMOGuildSystem.h:L86](../../GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.h#L86) |  |
@@ -21904,16 +21904,16 @@
 | `lock` | function | SparkDaemon | [AssetService.cpp:L154](../../SparkDaemon/src/AssetService.cpp#L154) |  |
 | `lock` | function | SparkDaemon | [AssetService.cpp:L190](../../SparkDaemon/src/AssetService.cpp#L190) |  |
 | `lock` | function | SparkDaemon | [AssetService.cpp:L208](../../SparkDaemon/src/AssetService.cpp#L208) |  |
-| `lock` | function | SparkDaemon | [CollaborationService.cpp:L98](../../SparkDaemon/src/CollaborationService.cpp#L98) |  |
-| `lock` | function | SparkDaemon | [CollaborationService.cpp:L125](../../SparkDaemon/src/CollaborationService.cpp#L125) |  |
-| `lock` | function | SparkDaemon | [CollaborationService.cpp:L139](../../SparkDaemon/src/CollaborationService.cpp#L139) |  |
-| `lock` | function | SparkDaemon | [CollaborationService.cpp:L176](../../SparkDaemon/src/CollaborationService.cpp#L176) |  |
-| `lock` | function | SparkDaemon | [CollaborationService.cpp:L190](../../SparkDaemon/src/CollaborationService.cpp#L190) |  |
-| `lock` | function | SparkDaemon | [CollaborationService.cpp:L214](../../SparkDaemon/src/CollaborationService.cpp#L214) |  |
-| `lock` | function | SparkDaemon | [CollaborationService.cpp:L245](../../SparkDaemon/src/CollaborationService.cpp#L245) |  |
-| `lock` | function | SparkDaemon | [CollaborationService.cpp:L264](../../SparkDaemon/src/CollaborationService.cpp#L264) |  |
-| `lock` | function | SparkDaemon | [CollaborationService.cpp:L301](../../SparkDaemon/src/CollaborationService.cpp#L301) |  |
-| `lock` | function | SparkDaemon | [CollaborationService.cpp:L332](../../SparkDaemon/src/CollaborationService.cpp#L332) |  |
+| `lock` | function | SparkDaemon | [CollaborationService.cpp:L96](../../SparkDaemon/src/CollaborationService.cpp#L96) |  |
+| `lock` | function | SparkDaemon | [CollaborationService.cpp:L123](../../SparkDaemon/src/CollaborationService.cpp#L123) |  |
+| `lock` | function | SparkDaemon | [CollaborationService.cpp:L137](../../SparkDaemon/src/CollaborationService.cpp#L137) |  |
+| `lock` | function | SparkDaemon | [CollaborationService.cpp:L174](../../SparkDaemon/src/CollaborationService.cpp#L174) |  |
+| `lock` | function | SparkDaemon | [CollaborationService.cpp:L188](../../SparkDaemon/src/CollaborationService.cpp#L188) |  |
+| `lock` | function | SparkDaemon | [CollaborationService.cpp:L212](../../SparkDaemon/src/CollaborationService.cpp#L212) |  |
+| `lock` | function | SparkDaemon | [CollaborationService.cpp:L243](../../SparkDaemon/src/CollaborationService.cpp#L243) |  |
+| `lock` | function | SparkDaemon | [CollaborationService.cpp:L262](../../SparkDaemon/src/CollaborationService.cpp#L262) |  |
+| `lock` | function | SparkDaemon | [CollaborationService.cpp:L299](../../SparkDaemon/src/CollaborationService.cpp#L299) |  |
+| `lock` | function | SparkDaemon | [CollaborationService.cpp:L330](../../SparkDaemon/src/CollaborationService.cpp#L330) |  |
 | `lock` | function | SparkDaemon | [DaemonServer.cpp:L229](../../SparkDaemon/src/DaemonServer.cpp#L229) |  |
 | `lock` | function | SparkDaemon | [DaemonServer.cpp:L341](../../SparkDaemon/src/DaemonServer.cpp#L341) |  |
 | `lock` | function | SparkDaemon | [DaemonServer.cpp:L355](../../SparkDaemon/src/DaemonServer.cpp#L355) |  |
@@ -23379,10 +23379,10 @@
 | `mainFile` | function | Tests | [TestEngineSettingsReal.cpp:L257](../../Tests/TestEngineSettingsReal.cpp#L257) |  |
 | `Make` | function | SparkEngine | [RHIHandlePool.h:L73](../../SparkEngine/Source/Graphics/RHI/RHIHandlePool.h#L73) |  |
 | `Make` | function | Tests | [TestRHIHandlePool.cpp:L31](../../Tests/TestRHIHandlePool.cpp#L31) |  |
-| `MakeAck` | function | SparkDaemon | [CollaborationService.cpp:L130](../../SparkDaemon/src/CollaborationService.cpp#L130) |  |
-| `MakeAck` | function | SparkDaemon | [CollaborationService.cpp:L181](../../SparkDaemon/src/CollaborationService.cpp#L181) |  |
-| `MakeAck` | function | SparkDaemon | [CollaborationService.cpp:L205](../../SparkDaemon/src/CollaborationService.cpp#L205) |  |
-| `MakeAck` | function | SparkDaemon | [CollaborationService.cpp:L254](../../SparkDaemon/src/CollaborationService.cpp#L254) |  |
+| `MakeAck` | function | SparkDaemon | [CollaborationService.cpp:L128](../../SparkDaemon/src/CollaborationService.cpp#L128) |  |
+| `MakeAck` | function | SparkDaemon | [CollaborationService.cpp:L179](../../SparkDaemon/src/CollaborationService.cpp#L179) |  |
+| `MakeAck` | function | SparkDaemon | [CollaborationService.cpp:L203](../../SparkDaemon/src/CollaborationService.cpp#L203) |  |
+| `MakeAck` | function | SparkDaemon | [CollaborationService.cpp:L252](../../SparkDaemon/src/CollaborationService.cpp#L252) |  |
 | `MakeAck` | function | SparkDaemon | [CollaborationService.h:L79](../../SparkDaemon/src/CollaborationService.h#L79) |  |
 | `MakeAnimationClip` | function | GameModules | [ARPGEngineSystems.cpp:L56](../../GameModules/SparkGameARPG/Source/Core/ARPGEngineSystems.cpp#L56) |  |
 | `MakeAnimationClip` | function | GameModules | [ARPGEngineSystems.cpp:L410](../../GameModules/SparkGameARPG/Source/Core/ARPGEngineSystems.cpp#L410) |  |
@@ -23428,37 +23428,37 @@
 | `MakeError` | function | SparkDaemon | [AssetService.cpp:L118](../../SparkDaemon/src/AssetService.cpp#L118) |  |
 | `MakeError` | function | SparkDaemon | [AssetService.cpp:L150](../../SparkDaemon/src/AssetService.cpp#L150) |  |
 | `MakeError` | function | SparkDaemon | [AssetService.h:L113](../../SparkDaemon/src/AssetService.h#L113) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L86](../../SparkDaemon/src/CollaborationService.cpp#L86) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L96](../../SparkDaemon/src/CollaborationService.cpp#L96) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L84](../../SparkDaemon/src/CollaborationService.cpp#L84) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L94](../../SparkDaemon/src/CollaborationService.cpp#L94) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L98](../../SparkDaemon/src/CollaborationService.cpp#L98) |  |
 | `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L100](../../SparkDaemon/src/CollaborationService.cpp#L100) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L102](../../SparkDaemon/src/CollaborationService.cpp#L102) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L108](../../SparkDaemon/src/CollaborationService.cpp#L108) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L115](../../SparkDaemon/src/CollaborationService.cpp#L115) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L124](../../SparkDaemon/src/CollaborationService.cpp#L124) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L128](../../SparkDaemon/src/CollaborationService.cpp#L128) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L138](../../SparkDaemon/src/CollaborationService.cpp#L138) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L142](../../SparkDaemon/src/CollaborationService.cpp#L142) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L146](../../SparkDaemon/src/CollaborationService.cpp#L146) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L153](../../SparkDaemon/src/CollaborationService.cpp#L153) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L157](../../SparkDaemon/src/CollaborationService.cpp#L157) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L167](../../SparkDaemon/src/CollaborationService.cpp#L167) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L175](../../SparkDaemon/src/CollaborationService.cpp#L175) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L179](../../SparkDaemon/src/CollaborationService.cpp#L179) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L189](../../SparkDaemon/src/CollaborationService.cpp#L189) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L193](../../SparkDaemon/src/CollaborationService.cpp#L193) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L201](../../SparkDaemon/src/CollaborationService.cpp#L201) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L213](../../SparkDaemon/src/CollaborationService.cpp#L213) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L217](../../SparkDaemon/src/CollaborationService.cpp#L217) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L244](../../SparkDaemon/src/CollaborationService.cpp#L244) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L248](../../SparkDaemon/src/CollaborationService.cpp#L248) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L251](../../SparkDaemon/src/CollaborationService.cpp#L251) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L263](../../SparkDaemon/src/CollaborationService.cpp#L263) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L267](../../SparkDaemon/src/CollaborationService.cpp#L267) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L270](../../SparkDaemon/src/CollaborationService.cpp#L270) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L284](../../SparkDaemon/src/CollaborationService.cpp#L284) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L300](../../SparkDaemon/src/CollaborationService.cpp#L300) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L304](../../SparkDaemon/src/CollaborationService.cpp#L304) |  |
-| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L326](../../SparkDaemon/src/CollaborationService.cpp#L326) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L106](../../SparkDaemon/src/CollaborationService.cpp#L106) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L113](../../SparkDaemon/src/CollaborationService.cpp#L113) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L122](../../SparkDaemon/src/CollaborationService.cpp#L122) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L126](../../SparkDaemon/src/CollaborationService.cpp#L126) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L136](../../SparkDaemon/src/CollaborationService.cpp#L136) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L140](../../SparkDaemon/src/CollaborationService.cpp#L140) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L144](../../SparkDaemon/src/CollaborationService.cpp#L144) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L151](../../SparkDaemon/src/CollaborationService.cpp#L151) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L155](../../SparkDaemon/src/CollaborationService.cpp#L155) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L165](../../SparkDaemon/src/CollaborationService.cpp#L165) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L173](../../SparkDaemon/src/CollaborationService.cpp#L173) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L177](../../SparkDaemon/src/CollaborationService.cpp#L177) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L187](../../SparkDaemon/src/CollaborationService.cpp#L187) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L191](../../SparkDaemon/src/CollaborationService.cpp#L191) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L199](../../SparkDaemon/src/CollaborationService.cpp#L199) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L211](../../SparkDaemon/src/CollaborationService.cpp#L211) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L215](../../SparkDaemon/src/CollaborationService.cpp#L215) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L242](../../SparkDaemon/src/CollaborationService.cpp#L242) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L246](../../SparkDaemon/src/CollaborationService.cpp#L246) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L249](../../SparkDaemon/src/CollaborationService.cpp#L249) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L261](../../SparkDaemon/src/CollaborationService.cpp#L261) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L265](../../SparkDaemon/src/CollaborationService.cpp#L265) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L268](../../SparkDaemon/src/CollaborationService.cpp#L268) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L282](../../SparkDaemon/src/CollaborationService.cpp#L282) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L298](../../SparkDaemon/src/CollaborationService.cpp#L298) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L302](../../SparkDaemon/src/CollaborationService.cpp#L302) |  |
+| `MakeError` | function | SparkDaemon | [CollaborationService.cpp:L324](../../SparkDaemon/src/CollaborationService.cpp#L324) |  |
 | `MakeError` | function | SparkDaemon | [CollaborationService.h:L78](../../SparkDaemon/src/CollaborationService.h#L78) |  |
 | `MakeError` | function | SparkDaemon | [ShaderService.cpp:L85](../../SparkDaemon/src/ShaderService.cpp#L85) |  |
 | `MakeError` | function | SparkDaemon | [ShaderService.cpp:L99](../../SparkDaemon/src/ShaderService.cpp#L99) |  |
@@ -28728,7 +28728,7 @@
 | `PrepareWeights` | function | SparkEngine | [CpuNeuralInference.h:L98](../../SparkEngine/Source/Graphics/Neural/CpuNeuralInference.h#L98) |  |
 | `PrePresentHook` | alias | SparkEngine | [GraphicsEngine.h:L1173](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L1173) |  |
 | `Pres` | function | GameModules | [TFWorldSetup.h:L174](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.h#L174) |  |
-| `Presence` | function | SparkDaemon | [CollaborationService.cpp:L76](../../SparkDaemon/src/CollaborationService.cpp#L76) |  |
+| `Presence` | function | SparkDaemon | [CollaborationService.cpp:L74](../../SparkDaemon/src/CollaborationService.cpp#L74) |  |
 | `Presence` | function | SparkDaemon | [CollaborationService.h:L73](../../SparkDaemon/src/CollaborationService.h#L73) |  |
 | `Present` | function | SparkEngine | [D3D11Device.h:L199](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L199) |  |
 | `Present` | function | SparkEngine | [D3D12Types.h:L389](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L389) |  |
@@ -29829,7 +29829,7 @@
 | `Rand01` | function | GameModules | [TFImpactFx.h:L144](../../GameModules/SparkGameMMOFPS/Source/Game/TFImpactFx.h#L144) |  |
 | `Rand01` | function | GameModules | [TFVehicleFx.h:L122](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleFx.h#L122) |  |
 | `Rand01` | function | GameModules | [TFWeatherFx.h:L177](../../GameModules/SparkGameMMOFPS/Source/World/TFWeatherFx.h#L177) |  |
-| `random` | function | SparkDaemon | [CollaborationService.cpp:L397](../../SparkDaemon/src/CollaborationService.cpp#L397) |  |
+| `random` | function | SparkDaemon | [CollaborationService.cpp:L395](../../SparkDaemon/src/CollaborationService.cpp#L395) |  |
 | `RandomBytes` | function | GameModules | [TFAccountSystem.cpp:L48](../../GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp#L48) |  |
 | `RandomDirection` | function | SparkEngine | [MathUtilsExtended.h:L101](../../SparkEngine/Source/Utils/MathUtilsExtended.h#L101) | Generate a random unit direction vector. |
 | `RandomDirectorySuffix` | function | SparkEngine | [CrashHandlerSupport.h:L193](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L193) |  |
@@ -30022,7 +30022,7 @@
 | `reader` | function | SparkDaemon | [CollaborationProtocol.h:L217](../../SparkDaemon/src/CollaborationProtocol.h#L217) |  |
 | `reader` | function | SparkDaemon | [CollaborationProtocol.h:L236](../../SparkDaemon/src/CollaborationProtocol.h#L236) |  |
 | `reader` | function | SparkDaemon | [CollaborationProtocol.h:L280](../../SparkDaemon/src/CollaborationProtocol.h#L280) |  |
-| `reader` | function | SparkDaemon | [CollaborationService.cpp:L92](../../SparkDaemon/src/CollaborationService.cpp#L92) |  |
+| `reader` | function | SparkDaemon | [CollaborationService.cpp:L90](../../SparkDaemon/src/CollaborationService.cpp#L90) |  |
 | `reader` | function | SparkDaemon | [OrchestrationJournal.cpp:L125](../../SparkDaemon/src/OrchestrationJournal.cpp#L125) |  |
 | `reader` | function | SparkDaemon | [OrchestrationJournal.cpp:L337](../../SparkDaemon/src/OrchestrationJournal.cpp#L337) |  |
 | `reader` | function | SparkDaemon | [OrchestrationProtocol.h:L133](../../SparkDaemon/src/OrchestrationProtocol.h#L133) |  |
@@ -30944,7 +30944,7 @@
 | `ReleaseGPUResources` | function | SparkEngine | [UpscalingSystem.h:L521](../../SparkEngine/Source/Graphics/UpscalingSystem.h#L521) |  |
 | `releaseHeld` | function | Tests | [TestGatewayAreaControl.cpp:L131](../../Tests/TestGatewayAreaControl.cpp#L131) |  |
 | `ReleaseLoadedData` | function | SparkEngine | [DirectStorageLoader.h:L158](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L158) | Release the loaded data buffer (frees CPU memory) |
-| `ReleaseLock` | function | SparkDaemon | [CollaborationService.cpp:L80](../../SparkDaemon/src/CollaborationService.cpp#L80) |  |
+| `ReleaseLock` | function | SparkDaemon | [CollaborationService.cpp:L78](../../SparkDaemon/src/CollaborationService.cpp#L78) |  |
 | `ReleaseLock` | function | SparkDaemon | [CollaborationService.h:L75](../../SparkDaemon/src/CollaborationService.h#L75) |  |
 | `ReleaseLock` | function | SparkEditor | [CollaborativeEditSession.h:L299](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L299) |  |
 | `ReleaseNetHandlers` | function | GameModules | [TFAudioAmbience.h:L117](../../GameModules/SparkGameMMOFPS/Source/Game/TFAudioAmbience.h#L117) |  |
@@ -37624,7 +37624,7 @@
 | `SmtpReadCallback` | function | SparkEngine | [CrashReportUploader.cpp:L971](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L971) |  |
 | `snapshot` | function | GameModules | [ARPGDemoEncounter.cpp:L52](../../GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.cpp#L52) |  |
 | `snapshot` | function | GameModules | [RPGDemoSession.cpp:L80](../../GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp#L80) |  |
-| `Snapshot` | function | SparkDaemon | [CollaborationService.cpp:L84](../../SparkDaemon/src/CollaborationService.cpp#L84) |  |
+| `Snapshot` | function | SparkDaemon | [CollaborationService.cpp:L82](../../SparkDaemon/src/CollaborationService.cpp#L82) |  |
 | `Snapshot` | function | SparkDaemon | [CollaborationService.h:L77](../../SparkDaemon/src/CollaborationService.h#L77) |  |
 | `Snapshot` | struct | SparkEngine | [AudioMixer.h:L325](../../SparkEngine/Source/Audio/AudioMixer.h#L325) |  |
 | `Snapshot` | struct | SparkEngine | [LagCompensation.h:L103](../../SparkEngine/Source/Engine/Networking/LagCompensation.h#L103) |  |
@@ -39010,7 +39010,7 @@
 | `std::acos` | method | SparkEngine | [FoliageSystem.cpp:L123](../../SparkEngine/Source/Graphics/FoliageSystem.cpp#L123) |  |
 | `std::all_of` | method | GameModules | [TFSocialSystemStore.cpp:L124](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp#L124) |  |
 | `std::all_of` | method | GameModules | [OWPersistence.inl:L286](../../GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl#L286) |  |
-| `std::all_of` | method | SparkDaemon | [CollaborationService.cpp:L444](../../SparkDaemon/src/CollaborationService.cpp#L444) |  |
+| `std::all_of` | method | SparkDaemon | [CollaborationService.cpp:L442](../../SparkDaemon/src/CollaborationService.cpp#L442) |  |
 | `std::all_of` | method | SparkDaemon | [OrchestrationService.cpp:L38](../../SparkDaemon/src/OrchestrationService.cpp#L38) |  |
 | `std::all_of` | method | SparkEditor | [RegionMapDataSource.cpp:L121](../../SparkEditor/Source/Panels/RegionMapDataSource.cpp#L121) |  |
 | `std::all_of` | method | Tests | [TestEditorSubsystems.cpp:L822](../../Tests/TestEditorSubsystems.cpp#L822) |  |
@@ -40009,7 +40009,7 @@
 | `Submit` | function | Tests | [TestJobSystem.cpp:L40](../../Tests/TestJobSystem.cpp#L40) |  |
 | `SubmitChat` | function | Templates | [GameModule.h:L196](../../Templates/MMOStarter/Source/GameModule.h#L196) |  |
 | `SubmitComputeWork` | function | SparkEngine | [AsyncComputeScheduler.h:L141](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.h#L141) | Submit a compute work item to the pending queue. |
-| `SubmitEdit` | function | SparkDaemon | [CollaborationService.cpp:L82](../../SparkDaemon/src/CollaborationService.cpp#L82) |  |
+| `SubmitEdit` | function | SparkDaemon | [CollaborationService.cpp:L80](../../SparkDaemon/src/CollaborationService.cpp#L80) |  |
 | `SubmitEdit` | function | SparkDaemon | [CollaborationService.h:L76](../../SparkDaemon/src/CollaborationService.h#L76) |  |
 | `SubmitLight` | function | SparkEngine | [LightManager.h:L237](../../SparkEngine/Source/Graphics/LightManager.h#L237) | Submit a light for this frame's rendering |
 | `SubmitMeshForRendering` | function | SparkEngine | [GraphicsEngine.h:L290](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L290) |  |

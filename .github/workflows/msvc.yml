@@ -108,7 +108,7 @@ jobs:
           retention-days: 7
 
   recover-sarif:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
     name: Recover preserved SARIF
     runs-on: windows-2022
     timeout-minutes: 15
