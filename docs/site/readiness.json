@@ -1180,13 +1180,13 @@
       "area": "build",
       "state": "blocked",
       "blocking": true,
-      "summary": "The intended configurations and module/tool targets are not all built as required, reproducible gates, and CI-120 has no independently verified protected external attestation for its mutable producer receipt.",
+      "summary": "The intended configurations and module/tool targets are not all built as required, reproducible gates, and The build matrix has no independently verified protected external attestation for its mutable producer receipt.",
       "acceptanceCriteria": [
         "Declared host/compiler configurations configure and build from clean checkout",
         "Every shipped target and real module library is built",
         "Shipping configuration exists and is distinct from Debug/Release",
         "Submodule/toolchain inputs are pinned",
-        "Configured CI-120 evidence is producer-verified only by an independently verified protected external attestation; a same-job OIDC token, mutable workflow, checkout, receipt, artifact path, or hash cannot satisfy this gate"
+        "Configured build-matrix evidence is producer-verified only by an independently verified protected external attestation; a same-job OIDC token, mutable workflow, checkout, receipt, artifact path, or hash cannot satisfy this gate"
       ],
       "evidence": [
         {
@@ -1844,7 +1844,7 @@
           "generator": "Visual Studio 17 2022",
           "architecture": "x64",
           "toolset": "v143",
-          "packageDirectory": "build/ci120-stage/lib/cmake/SparkEngine",
+          "packageDirectory": "build/build-matrix-stage/lib/cmake/SparkEngine",
           "expectedEngineVersion": "1.0.0",
           "description": "A separate configure against an installed SparkEngine package that proves public SDK headers, imports, and module linkage without source-tree include leakage."
         }
@@ -2260,8 +2260,8 @@
         "No Shipping-configuration artifact is signed, checksummed, attested, installed, upgraded, or rollback-tested at a single commit.",
         "The first-party slice SparkGameFPS is in the profile but uncertified: its release state is blocked and it holds this profile at blocked (MOD-310).",
         "SparkGameFPS builds against SparkEngineLib with the engine source tree on its include path, so the public-API-only requirement is unmet (SDK-240, MOD-310).",
-        "No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200, CI-120).",
-        "CI-120 structurally validates its local File API capture but intentionally reports producer authority unavailable: a same-job GitHub OIDC audience proves only the mutable job identity, not CMake execution. An independently verified protected external attestation is not deployed (CI-120).",
+        "No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200).",
+        "The Windows Shipping producer records its File API capture as structural evidence and reports producer authority unavailable by design: a same-job GitHub OIDC audience proves only the mutable job identity, not CMake execution. The protected Build Matrix Verifier attests that evidence from the Working checkout, and no attested receipt exists yet for a Working commit (CI-120).",
         "The editor-to-cook-to-package-to-install-to-run loop has no same-commit end-to-end certification.",
         "MSVC v145 and Visual Studio 2026 are an advisory continue-on-error lane, not a supported compiler line in this profile.",
         "Windows 10 x64 and the Linux and macOS build floors stay documented as development minima, but this profile certifies only Windows 11 x64; headless execution is in profile only on that same host.",

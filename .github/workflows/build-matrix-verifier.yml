@@ -1,10 +1,10 @@
-# CI-120 source artifacts are untrusted.  This workflow executes only the
+# build-matrix source artifacts are untrusted.  This workflow executes only the
 # current default-branch verifier, authorizes one exact completed source run
 # through the Actions API, parses downloaded files as bounded data, and attests
-# the resulting receipt.  The staged rollout intentionally accepts only the
-# producer's documented final fail-closed step; a later reviewed change may
-# promote the handoff after this verifier has passed remotely.
-name: "CI-120 Trusted Verifier"
+# the resulting receipt.  The producer job records structural evidence and
+# succeeds; only this verifier, executing the current Working checkout, can
+# attest that evidence and publish the exact-source status.
+name: "Build Matrix Verifier"
 
 on:
   workflow_run:
@@ -13,12 +13,12 @@ on:
 
 jobs:
   invalidate-running:
-    name: "Invalidate prior CI-120 status for a running source attempt"
+    name: "Invalidate the prior build-matrix status for a running source attempt"
     if: github.event.action == 'in_progress'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
-      group: ci120-trusted-source-${{ github.event.workflow_run.head_sha }}
+      group: build-matrix-trusted-source-${{ github.event.workflow_run.head_sha }}
       cancel-in-progress: false
     permissions:
       actions: read
@@ -52,7 +52,7 @@ jobs:
           const repository = (await github.rest.repos.get(context.repo)).data;
           const checkoutSha = process.env.TRUSTED_CHECKOUT_SHA;
           const workflowSha = process.env.TRUSTED_WORKFLOW_SHA;
-          const expectedRef = `${repository.full_name}/.github/workflows/ci120-report.yml@refs/heads/${repository.default_branch}`;
+          const expectedRef = `${repository.full_name}/.github/workflows/build-matrix-verifier.yml@refs/heads/${repository.default_branch}`;
           const defaultCommit = (await github.rest.repos.getCommit({
             ...context.repo, ref: repository.default_branch
           })).data;
@@ -63,26 +63,26 @@ jobs:
             throw new Error('Verifier checkout, executing workflow, and current Working default branch are not exact.');
           }
 
-    - name: Mark exact source CI-120 status pending
+    - name: Mark the exact source build-matrix status pending
       if: steps.trusted-attestation.outcome == 'success'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
-        CI120_STATUS_MODE: pending
+        BUILD_MATRIX_STATUS_MODE: pending
         TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
         TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
         TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
       with:
         script: |
-          const status = require('./trusted-verifier/.github/scripts/ci120-commit-status.js');
+          const status = require('./trusted-verifier/.github/scripts/build-matrix-commit-status.js');
           await status({ github, context, core });
 
   verify:
-    name: "Verify and attest CI-120 evidence"
+    name: "Verify and attest build-matrix evidence"
     if: github.event.action == 'completed'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
-      group: ci120-trusted-source-${{ github.event.workflow_run.head_sha }}
+      group: build-matrix-trusted-source-${{ github.event.workflow_run.head_sha }}
       cancel-in-progress: false
     permissions:
       actions: read
@@ -118,7 +118,7 @@ jobs:
           const repository = (await github.rest.repos.get(context.repo)).data;
           const checkoutSha = process.env.TRUSTED_CHECKOUT_SHA;
           const workflowSha = process.env.TRUSTED_WORKFLOW_SHA;
-          const expectedRef = `${repository.full_name}/.github/workflows/ci120-report.yml@refs/heads/${repository.default_branch}`;
+          const expectedRef = `${repository.full_name}/.github/workflows/build-matrix-verifier.yml@refs/heads/${repository.default_branch}`;
           const defaultCommit = (await github.rest.repos.getCommit({
             ...context.repo, ref: repository.default_branch
           })).data;
@@ -129,21 +129,21 @@ jobs:
             throw new Error('Verifier checkout, executing workflow, and current Working default branch are not exact.');
           }
 
-    - name: Mark exact source CI-120 status pending
+    - name: Mark the exact source build-matrix status pending
       id: pending-status
       if: steps.trusted-attestation.outcome == 'success'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
-        CI120_STATUS_MODE: pending
+        BUILD_MATRIX_STATUS_MODE: pending
         TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
         TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
         TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
       with:
         script: |
-          const status = require('./trusted-verifier/.github/scripts/ci120-commit-status.js');
+          const status = require('./trusted-verifier/.github/scripts/build-matrix-commit-status.js');
           await status({ github, context, core });
 
-    - name: Test trusted CI-120 verifier
+    - name: Test the trusted build-matrix verifier
       id: verifier-tests
       if: steps.trusted-attestation.outcome == 'success' && steps.pending-status.outcome == 'success'
       shell: bash
@@ -151,14 +151,14 @@ jobs:
       run: |
         set -euo pipefail
         python -m unittest \
-          Tests.Tools.test_ci120_pending_authority \
-          Tests.Tools.test_ci120_external_verifier
+          Tests.Tools.test_build_matrix_pending_authority \
+          Tests.Tools.test_build_matrix_external_verifier
 
     - name: Authorize exact source run, job, and artifact
       id: preflight
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
-        SOURCE_METADATA_PATH: ${{ runner.temp }}/ci120-source-metadata.json
+        SOURCE_METADATA_PATH: ${{ runner.temp }}/build-matrix-source-metadata.json
         TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
         TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
         TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
@@ -166,13 +166,13 @@ jobs:
       with:
         script: |
           const fs = require('fs');
-          const status = require('./trusted-verifier/.github/scripts/ci120-commit-status.js');
+          const status = require('./trusted-verifier/.github/scripts/build-matrix-commit-status.js');
           const shaPattern = /^[0-9a-f]{40}$/i;
           const digestPattern = /^sha256:[0-9a-f]{64}$/i;
           const sourceName = 'Build SparkEngine';
           const sourcePath = '.github/workflows/build.yml';
-          const sourceJobName = 'Windows Shipping structural configured-evidence producer';
-          const finalStepName = 'Enforce reviewed CI-120 findings';
+          const sourceJobName = 'Windows Shipping build matrix';
+          const finalStepName = 'Record build-matrix evidence';
           const normalizePath = value => {
             const text = String(value || '').split('@', 1)[0].replace(/\\/g, '/');
             const marker = '/.github/workflows/';
@@ -203,7 +203,7 @@ jobs:
               checkoutSha !== String(defaultCommit.sha || '').toLowerCase()) {
             throw new Error('Verifier workflow, checkout, repository, and current default branch are not exact.');
           }
-          const expectedVerifierRef = `${repository.full_name}/.github/workflows/ci120-report.yml@refs/heads/Working`;
+          const expectedVerifierRef = `${repository.full_name}/.github/workflows/build-matrix-verifier.yml@refs/heads/Working`;
           if (process.env.TRUSTED_WORKFLOW_REF !== expectedVerifierRef) {
             throw new Error('Executing verifier workflow ref is not the protected Working workflow.');
           }
@@ -231,11 +231,11 @@ jobs:
           if (run.id !== eventRun.id || run.run_attempt !== eventRun.run_attempt ||
               run.workflow_id !== eventRun.workflow_id || run.name !== sourceName ||
               normalizePath(run.path) !== sourcePath || !['push', 'workflow_dispatch'].includes(run.event) ||
-              run.status !== 'completed' || run.conclusion !== 'failure' ||
+              run.status !== 'completed' || run.conclusion !== 'success' ||
               run.head_branch !== 'Working' || String(run.head_sha || '').toLowerCase() !== sourceSha ||
               run.repository?.id !== repository.id || run.repository?.full_name !== repository.full_name ||
               run.head_repository?.id !== repository.id || run.head_repository?.full_name !== repository.full_name) {
-            throw new Error('Actions API source run is not the exact staged fail-closed default-branch build.');
+            throw new Error('Actions API source run is not the exact successful default-branch build.');
           }
 
           const authorization = await status.authorizeSourceJobArtifact({
@@ -292,55 +292,55 @@ jobs:
           core.setOutput('artifact-name', artifact.name);
           core.setOutput('artifact-digest', artifact.digest.toLowerCase());
 
-    - name: Download exact CI-120 source artifact
+    - name: Download the exact build-matrix source artifact
       id: download
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
       with:
         artifact-ids: ${{ steps.preflight.outputs.artifact-id }}
-        path: ${{ runner.temp }}/ci120-source-artifact
+        path: ${{ runner.temp }}/build-matrix-source-artifact
         merge-multiple: true
         digest-mismatch: error
         repository: ${{ github.repository }}
         run-id: ${{ github.event.workflow_run.id }}
         github-token: ${{ github.token }}
 
-    - name: Verify untrusted CI-120 evidence as bounded data
+    - name: Verify the build-matrix evidence as bounded data
       id: verify-evidence
       shell: bash
       run: |
         set -euo pipefail
         python trusted-verifier/Tools/buildmatrix/verify_external_evidence.py \
-          --artifact-root "${{ runner.temp }}/ci120-source-artifact" \
-          --source-metadata "${{ runner.temp }}/ci120-source-metadata.json" \
-          --output "${{ runner.temp }}/ci120-trusted-receipt.json" \
-          > "${{ runner.temp }}/ci120-trusted-receipt-stdout.json"
+          --artifact-root "${{ runner.temp }}/build-matrix-source-artifact" \
+          --source-metadata "${{ runner.temp }}/build-matrix-source-metadata.json" \
+          --output "${{ runner.temp }}/build-matrix-trusted-receipt.json" \
+          > "${{ runner.temp }}/build-matrix-trusted-receipt-stdout.json"
         cmp \
-          "${{ runner.temp }}/ci120-trusted-receipt.json" \
-          "${{ runner.temp }}/ci120-trusted-receipt-stdout.json"
+          "${{ runner.temp }}/build-matrix-trusted-receipt.json" \
+          "${{ runner.temp }}/build-matrix-trusted-receipt-stdout.json"
 
-    - name: Attest trusted CI-120 receipt
+    - name: Attest the trusted build-matrix receipt
       id: attest-receipt
       uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
       with:
-        subject-path: ${{ runner.temp }}/ci120-trusted-receipt.json
+        subject-path: ${{ runner.temp }}/build-matrix-trusted-receipt.json
 
-    - name: Upload trusted CI-120 receipt
+    - name: Upload the trusted build-matrix receipt
       id: upload-receipt
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: ci120-trusted-receipt-${{ github.event.workflow_run.head_sha }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}-${{ github.run_attempt }}
+        name: build-matrix-trusted-receipt-${{ github.event.workflow_run.head_sha }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}-${{ github.run_attempt }}
         path: |
-          ${{ runner.temp }}/ci120-trusted-receipt.json
-          ${{ runner.temp }}/ci120-source-metadata.json
+          ${{ runner.temp }}/build-matrix-trusted-receipt.json
+          ${{ runner.temp }}/build-matrix-source-metadata.json
         retention-days: 30
         if-no-files-found: error
 
-    - name: Publish exact source CI-120 status
+    - name: Publish the exact source build-matrix status
       id: final-status
       if: always() && steps.trusted-attestation.outcome == 'success' && steps.pending-status.outcome == 'success' && steps.verifier-tests.outcome == 'success'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
-        CI120_STATUS_MODE: final
+        BUILD_MATRIX_STATUS_MODE: final
         TRUSTED_CHECKOUT_SHA: ${{ steps.trusted-checkout.outputs.sha }}
         TRUSTED_WORKFLOW_REF: ${{ github.workflow_ref }}
         TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
@@ -350,22 +350,22 @@ jobs:
         VERIFY_EVIDENCE_OUTCOME: ${{ steps.verify-evidence.outcome }}
         ATTEST_RECEIPT_OUTCOME: ${{ steps.attest-receipt.outcome }}
         UPLOAD_RECEIPT_OUTCOME: ${{ steps.upload-receipt.outcome }}
-        SOURCE_METADATA_PATH: ${{ runner.temp }}/ci120-source-metadata.json
-        RECEIPT_PATH: ${{ runner.temp }}/ci120-trusted-receipt.json
-        STATUS_RECORD_PATH: ${{ runner.temp }}/ci120-trusted-status.json
+        SOURCE_METADATA_PATH: ${{ runner.temp }}/build-matrix-source-metadata.json
+        RECEIPT_PATH: ${{ runner.temp }}/build-matrix-trusted-receipt.json
+        STATUS_RECORD_PATH: ${{ runner.temp }}/build-matrix-trusted-status.json
       with:
         script: |
-          const status = require('./trusted-verifier/.github/scripts/ci120-commit-status.js');
+          const status = require('./trusted-verifier/.github/scripts/build-matrix-commit-status.js');
           await status({ github, context, core });
 
     - name: Upload verifier rejection diagnostics
       if: failure()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: ci120-verifier-rejection-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+        name: build-matrix-verifier-rejection-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
         path: |
-          ${{ runner.temp }}/ci120-trusted-receipt.json
-          ${{ runner.temp }}/ci120-source-metadata.json
-          ${{ runner.temp }}/ci120-trusted-status.json
+          ${{ runner.temp }}/build-matrix-trusted-receipt.json
+          ${{ runner.temp }}/build-matrix-source-metadata.json
+          ${{ runner.temp }}/build-matrix-trusted-status.json
         retention-days: 7
         if-no-files-found: warn

@@ -37,7 +37,7 @@ GATE_STATES = {"blocked", "at-risk", "passing", "not-evaluated"}
 WORK_STATES = {"open", "in-progress", "blocked", "done"}
 PRIORITIES = {"P0", "P1", "P2", "P3"}
 PROFILE_APPLICABILITY_STATES = {"required", "shared", "outside"}
-# Schema version of the CI-120 build-matrix inventory and findings artifacts.
+# Schema version of the build-matrix inventory and findings artifacts.
 BUILD_MATRIX_SCHEMA_VERSION = 3
 BUILD_PRODUCT_KINDS = {
     "executable", "static_library", "shared_library", "module_library",
@@ -245,14 +245,14 @@ def executable_ctest_segments(command: str) -> list[str]:
 def build_matrix_evidence_errors(
     inventory: Any, report: Any, profile: dict[str, Any] | None
 ) -> list[str]:
-    """Every way the CI-120 evidence pair can fail to mean what it claims.
+    """Every way the build-matrix evidence pair can fail to mean what it claims.
 
     Kept free of file access so each rejection has a direct test; the caller
     supplies the parsed documents.
     """
     errors: list[str] = []
     if not isinstance(inventory, dict) or not isinstance(report, dict):
-        return ["CI-120 evidence files must contain objects"]
+        return ["build-matrix evidence files must contain objects"]
 
     if inventory.get("schemaVersion") != BUILD_MATRIX_SCHEMA_VERSION:
         errors.append(f"inventory schemaVersion must be {BUILD_MATRIX_SCHEMA_VERSION}")
@@ -320,7 +320,7 @@ def build_matrix_evidence_errors(
                 continue
             if product.get("buildProfile") not in available:
                 errors.append(
-                    f"clean CI-120 report omits configured evidence for supported product "
+                    f"clean build-matrix report omits configured evidence for supported product "
                     f"{product.get('target')!r} ({product.get('applicability')})"
                 )
     return errors
@@ -1202,7 +1202,7 @@ class Validator:
                     f"first-party game {value} is not named by any scope dimension",
                 )
 
-            # CI-120 consumes this profile declaration directly.  The product
+            # The build-matrix tooling consumes this profile declaration directly.  The product
             # inventory is not permitted to reconstruct stable scope from
             # target names, directory names, or a second hard-coded list.
             build_configurations = profile.get("buildConfigurations", [])
@@ -1783,18 +1783,18 @@ class Validator:
         return profile_ids
 
     def validate_build_matrix_evidence(self) -> None:
-        """The CI-120 configuration evidence is part of the contract, not beside it.
+        """The build-matrix configuration evidence is part of the contract, not beside it.
 
         These two artifacts decide whether the build matrix is believed, yet
         nothing here used to open them: absent, truncated, or hand-written
         evidence validated exactly as well as real evidence did.
         """
-        location = "docs/readiness/ci120"
-        inventory_path = REPO_ROOT / "docs" / "readiness" / "ci120-build-matrix-inventory.json"
-        report_path = REPO_ROOT / "docs" / "readiness" / "ci120-parity-findings.json"
+        location = "docs/readiness/build-matrix"
+        inventory_path = REPO_ROOT / "docs" / "readiness" / "build-matrix-inventory.json"
+        report_path = REPO_ROOT / "docs" / "readiness" / "build-matrix-parity-findings.json"
         for path in (inventory_path, report_path):
             if not path.is_file():
-                self.error(location, f"required CI-120 evidence is missing: {path.name}")
+                self.error(location, f"required build-matrix evidence is missing: {path.name}")
                 return
         profile = next(
             (
@@ -2210,7 +2210,7 @@ def main() -> int:
     parser.add_argument(
         "--require-exact-evidence",
         action="store_true",
-        help="require a canonical durable CI-120 and CodeQL evidence manifest in published output",
+        help="require a canonical durable build-matrix and CodeQL evidence manifest in published output",
     )
     args = parser.parse_args()
     try:

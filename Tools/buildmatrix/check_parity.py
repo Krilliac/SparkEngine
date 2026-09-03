@@ -811,7 +811,7 @@ def check_workflow_adoption(data: dict[str, Any]) -> list[Finding]:
     canonical_by_id = {entry.get("id"): entry for entry in canonical}
     producer_profiles = [
         entry.get("profile")
-        for entry in (data.get("workflow") or {}).get("ci120Invocations", [])
+        for entry in (data.get("workflow") or {}).get("buildMatrixInvocations", [])
         if entry.get("kind") == "producer" and entry.get("executable") and entry.get("build")
     ]
     producer_presets = [
@@ -1224,7 +1224,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
             )
         elif provenance_state == "unavailable":
             if (
-                provenance.get("authority") != inventory_tool._CI120_EXTERNAL_AUTHORITY
+                provenance.get("authority") != inventory_tool._BUILD_MATRIX_EXTERNAL_AUTHORITY
                 or provenance.get("structuralState") != "validated"
                 or not isinstance(provenance.get("authorityReason"), str)
                 or not provenance.get("authorityReason")
@@ -1243,7 +1243,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                     Finding(
                         "codemodel-producer-authority-unavailable",
                         "error",
-                        f"Profile '{identifier}' has structurally validated but untrusted CI-120 evidence",
+                        f"Profile '{identifier}' has structurally validated but untrusted build-matrix evidence",
                         "The producer job's checkout, environment, provenance JSON, artifacts, hashes, and "
                         "same-job OIDC audience are self-authored. A protected external attestation verifier "
                         "must independently validate the artifact before producer evidence can be accepted.",
@@ -1255,7 +1255,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                     "codemodel-producer-authority-unverifiable",
                     "error",
                     f"Profile '{identifier}' declares producer-verified evidence without an independent verifier",
-                    "CI-120 intentionally has no parser path that accepts a job-local receipt, OIDC token, "
+                    "The build-matrix tooling intentionally has no parser path that accepts a job-local receipt, OIDC token, "
                     "environment, artifact path, or hash as protected external authority.",
                 )
             )
@@ -1291,7 +1291,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
             and provenance.get("ciRunAttempt", "").isdigit()
             and isinstance(provenance.get("ciWorkflowRef"), str)
             and bool(provenance.get("ciWorkflowRef"))
-            and provenance.get("ciJob") == inventory_tool._CI120_PRODUCER_JOB
+            and provenance.get("ciJob") == inventory_tool._BUILD_MATRIX_PRODUCER_JOB
             and provenance.get("ciRunnerOs") == "Windows"
             ):
                 findings.append(
@@ -1541,7 +1541,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
     return findings
 
 
-def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
+def check_build_matrix_producer_chain(data: dict[str, Any]) -> list[Finding]:
     """Require the real Windows producer to run before its structural validator.
 
     A checked-in JSON receipt is not authority.  This checks local workflow
@@ -1552,7 +1552,7 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
     """
     findings: list[Finding] = []
     workflow = data.get("workflow") or {}
-    invocations = workflow.get("ci120Invocations", [])
+    invocations = workflow.get("buildMatrixInvocations", [])
     jobs = {job.get("id"): job for job in workflow.get("jobs", [])}
 
     def normalized(value: Any) -> str:
@@ -1568,7 +1568,7 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
             and entry.get("matrixResolved") is True
         )
 
-    producer_job = jobs.get(inventory_tool._CI120_PRODUCER_JOB)
+    producer_job = jobs.get(inventory_tool._BUILD_MATRIX_PRODUCER_JOB)
     required_producers = {
         "windows-shipping": "build/windows-shipping",
         "windows-validation": "build/windows-release",
@@ -1580,7 +1580,7 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
             entry
             for entry in invocations
             if entry.get("kind") == "producer"
-            and entry.get("job") == inventory_tool._CI120_PRODUCER_JOB
+            and entry.get("job") == inventory_tool._BUILD_MATRIX_PRODUCER_JOB
             and entry.get("profile") == profile
             and normalized(entry.get("buildDir")) == build_dir
             and entry.get("build") is True
@@ -1602,9 +1602,9 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
                 detail = "The candidate producer is conditional, advisory, wrapped, or not Windows-hosted."
             findings.append(
                 Finding(
-                    "ci120-trusted-producer-missing",
+                    "build-matrix-producer-missing",
                     "error",
-                    f"CI-120 has no mandatory {profile!r} provenance producer",
+                    f"The build matrix has no mandatory {profile!r} provenance producer",
                     detail,
                 )
             )
@@ -1615,17 +1615,17 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
     if not isinstance(producer_job, dict) or producer_job.get("gating") != "blocking":
         findings.append(
             Finding(
-                "ci120-trusted-producer-job-weak",
+                "build-matrix-producer-job-weak",
                 "error",
-                "CI-120 provenance producer job is not a blocking job",
+                "build-matrix provenance producer job is not a blocking job",
             )
         )
     if isinstance(producer_job, dict) and producer_job.get("permissions", {}).get("id-token") == "write":
         findings.append(
             Finding(
-                "ci120-producer-same-job-oidc-forbidden",
+                "build-matrix-producer-same-job-oidc-forbidden",
                 "error",
-                "CI-120 structural producer must not mint a same-job OIDC proof",
+                "build-matrix structural producer must not mint a same-job OIDC proof",
                 "GitHub signs audiences requested by the mutable producer job; that identity proves the job, "
                 "not that CMake or capture_provenance.py produced the receipt. Use a protected external "
                 "attestation verifier instead.",
@@ -1637,7 +1637,7 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
     def later(kind: str, predicate: Any) -> bool:
         return any(
             entry.get("kind") == kind
-            and entry.get("job") == inventory_tool._CI120_PRODUCER_JOB
+            and entry.get("job") == inventory_tool._BUILD_MATRIX_PRODUCER_JOB
             and isinstance(entry.get("stepIndex"), int)
             and entry["stepIndex"] > producer_step
             and entry.get("executable") is True
@@ -1680,9 +1680,9 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
             missing.append("pending-authority validator")
         findings.append(
             Finding(
-                "ci120-producer-validator-disconnected",
+                "build-matrix-producer-validator-disconnected",
                 "error",
-                "CI-120 producer is not followed by its mandatory local validator",
+                "build-matrix producer is not followed by its mandatory local validator",
                 f"Missing after producer: {', '.join(missing)}.",
             )
         )
@@ -1690,13 +1690,13 @@ def check_ci120_producer_chain(data: dict[str, Any]) -> list[Finding]:
     aggregate = jobs.get("required-ci-gate")
     if (
         not isinstance(aggregate, dict)
-        or inventory_tool._CI120_PRODUCER_JOB not in aggregate.get("needs", [])
+        or inventory_tool._BUILD_MATRIX_PRODUCER_JOB not in aggregate.get("needs", [])
     ):
         findings.append(
             Finding(
-                "ci120-producer-not-required",
+                "build-matrix-producer-not-required",
                 "error",
-                "Required CI Gate does not depend on the CI-120 structural producer job",
+                "Required CI Gate does not depend on the build-matrix structural producer job",
                 "A green aggregate could otherwise bypass missing or skipped configured evidence.",
             )
         )
@@ -1718,7 +1718,7 @@ def _validate_inventory_shape(data: dict[str, Any]) -> None:
     workflow_required = {
         "events", "jobs", "summary", "cmakeInvocations", "unresolvedInvocations",
         "configureInvocations", "buildInvocations", "testInvocations", "pathFilteredEvents",
-        "ci120Invocations",
+        "buildMatrixInvocations",
     }
     workflow_missing = sorted(workflow_required - set(workflow))
     if workflow_missing:
@@ -1757,7 +1757,7 @@ def run_all_checks(data: dict[str, Any] | None = None) -> list[Finding]:
     findings.extend(check_codemodel_provenance(current))
     findings.extend(check_workflow_adoption(current))
     findings.extend(check_workflow_semantics(current))
-    findings.extend(check_ci120_producer_chain(current))
+    findings.extend(check_build_matrix_producer_chain(current))
     return findings
 
 
@@ -1801,7 +1801,7 @@ def _load_inventory(path: Path | None) -> dict[str, Any]:
     if path is None:
         return inventory_tool.build_inventory()
     value = inventory_tool._read_bounded_json_file(
-        path, inventory_tool._MAX_INVENTORY_BYTES, "CI-120 inventory"
+        path, inventory_tool._MAX_INVENTORY_BYTES, "build-matrix inventory"
     )
     if not isinstance(value, dict):
         raise inventory_tool.InventoryError("inventory JSON must be an object")
@@ -1828,7 +1828,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.baseline:
             try:
                 baseline_value = inventory_tool._read_bounded_json_file(
-                    args.baseline, inventory_tool._MAX_REPORT_BYTES, "CI-120 findings baseline"
+                    args.baseline, inventory_tool._MAX_REPORT_BYTES, "build-matrix findings baseline"
                 )
                 baseline_payload = render_report(baseline_value)
             except (inventory_tool.InventoryError, OSError, ValueError, json.JSONDecodeError) as error:

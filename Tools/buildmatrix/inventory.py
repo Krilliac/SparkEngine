@@ -1450,17 +1450,17 @@ _MAX_PRESETS_BYTES = 4 * 1024 * 1024
 _MAX_READINESS_BYTES = 16 * 1024 * 1024
 _MAX_INVENTORY_BYTES = 128 * 1024 * 1024
 _MAX_REPORT_BYTES = 64 * 1024 * 1024
-_PROVENANCE_FILE = "spark-ci120-provenance-v4.json"
+_PROVENANCE_FILE = "spark-build-matrix-provenance-v4.json"
 _PROVENANCE_SCHEMA = 4
 _PROVENANCE_PRODUCER = "spark-buildmatrix-configure-build-transaction-v4"
-_CAPTURE_CLIENT_PREFIX = "client-spark-ci120-"
+_CAPTURE_CLIENT_PREFIX = "client-spark-build-matrix-"
 _MAX_CAPTURE_RESTARTS = 3
 _QUERY_CLEANUP_ATTEMPTS = 4
 _QUERY_CLEANUP_RETRY_DELAY_SECONDS = 0.05
 _REPARSE_POINT_ATTRIBUTE = 0x400
-_CI120_WORKFLOW_PATH = ".github/workflows/build.yml"
-_CI120_PRODUCER_JOB = "build-windows-shipping"
-_CI120_EXTERNAL_AUTHORITY = "external-attestation-required"
+_BUILD_MATRIX_WORKFLOW_PATH = ".github/workflows/build.yml"
+_BUILD_MATRIX_PRODUCER_JOB = "build-windows-shipping"
+_BUILD_MATRIX_EXTERNAL_AUTHORITY = "external-attestation-required"
 
 
 def _normalize_directory(value: Any) -> str:
@@ -1493,19 +1493,19 @@ def _github_actions_context() -> dict[str, str] | None:
         "runnerOs": os.environ.get("RUNNER_OS", ""),
     }
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", raw["repository"]):
-        raise InventoryError("CI-120 producer has no valid GITHUB_REPOSITORY")
+        raise InventoryError("build-matrix producer has no valid GITHUB_REPOSITORY")
     if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", raw["sourceCommit"]):
-        raise InventoryError("CI-120 producer has no full GITHUB_SHA")
+        raise InventoryError("build-matrix producer has no full GITHUB_SHA")
     if not raw["runId"].isdigit() or not raw["runAttempt"].isdigit():
-        raise InventoryError("CI-120 producer has no valid GitHub run identity")
-    expected_workflow = f"{raw['repository']}/{_CI120_WORKFLOW_PATH}@"
+        raise InventoryError("build-matrix producer has no valid GitHub run identity")
+    expected_workflow = f"{raw['repository']}/{_BUILD_MATRIX_WORKFLOW_PATH}@"
     if not raw["workflowRef"].startswith(expected_workflow):
         raise InventoryError(
-            "CI-120 producer must be invoked by .github/workflows/build.yml, not an arbitrary workflow"
+            "build-matrix producer must be invoked by .github/workflows/build.yml, not an arbitrary workflow"
         )
-    if raw["job"] != _CI120_PRODUCER_JOB or raw["runnerOs"] != "Windows":
+    if raw["job"] != _BUILD_MATRIX_PRODUCER_JOB or raw["runnerOs"] != "Windows":
         raise InventoryError(
-            "CI-120 producer must run in the blocking Windows build-windows-shipping job"
+            "build-matrix producer must run in the blocking Windows build-windows-shipping job"
         )
     return {"provider": "github-actions", **raw}
 
@@ -3082,12 +3082,12 @@ def _load_producer_provenance(
         # by that same job.  Keep the structural record for diagnosis while
         # making the missing protected external verifier machine-readable.
         "state": "unavailable",
-        "authority": _CI120_EXTERNAL_AUTHORITY,
+        "authority": _BUILD_MATRIX_EXTERNAL_AUTHORITY,
         "authorityReason": (
             "A same-job GitHub Actions token, environment, checkout, provenance record, "
             "artifact path, and hash are producer-controlled inputs. A protected external "
             "attestation verifier must independently validate the captured artifact before "
-            "CI-120 can report producer-verified evidence."
+            "the build matrix can report producer-verified evidence."
         ),
         "structuralState": "validated",
         "recordFile": _provenance_path(Path(evidence["evidenceDirectory"]), profile).name,
@@ -3636,7 +3636,7 @@ def capture_codemodel_transaction(
     ci = _github_actions_context()
     if ci is None:
         raise InventoryError(
-            "CI-120 structural capture is only supported in its GitHub Actions producer job"
+            "build-matrix structural capture is only supported in its GitHub Actions producer job"
         )
     if repository_before["commit"].lower() != ci["sourceCommit"]:
         raise InventoryError(
@@ -3808,7 +3808,7 @@ def capture_codemodel_transaction(
         }
         payload = (json.dumps(record, indent=2, sort_keys=False) + "\n").encode("utf-8")
         if len(payload) > _MAX_PROVENANCE_BYTES:
-            raise InventoryError("generated CI-120 provenance record exceeds its size bound")
+            raise InventoryError("generated build-matrix provenance record exceeds its size bound")
         # Complete the read transaction before making our own metadata change
         # beneath .cmake/api/v1.
         reply_snapshot.assert_stable()

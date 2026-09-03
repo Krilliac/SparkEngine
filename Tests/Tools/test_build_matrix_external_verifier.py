@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adversarial acceptance tests for the protected CI-120 verifier."""
+"""Adversarial acceptance tests for the protected build-matrix verifier."""
 
 from __future__ import annotations
 
@@ -47,18 +47,18 @@ def source_metadata(commit: str = COMMIT) -> dict[str, Any]:
             "runNumber": 12,
             "runAttempt": 1,
             "event": "push",
-            "conclusion": "failure",
+            "conclusion": "success",
             "headBranch": "Working",
             "headSha": commit,
             "jobId": 987,
             "jobName": verifier.SOURCE_JOB_NAME,
-            "jobConclusion": "failure",
+            "jobConclusion": "success",
             "finalStepName": verifier.SOURCE_FINAL_STEP,
-            "finalStepConclusion": "failure",
+            "finalStepConclusion": "success",
         },
         "artifact": {
             "id": 654,
-            "name": f"ci120-untrusted-stable-v1-{commit}-1",
+            "name": f"build-matrix-stable-v1-{commit}-1",
             "bytes": 1024,
             "digest": f"sha256:{'b' * 64}",
         },
@@ -66,7 +66,7 @@ def source_metadata(commit: str = COMMIT) -> dict[str, Any]:
             "repository": "Krilliac/SparkEngine",
             "checkoutSha": commit,
             "workflowSha": commit,
-            "workflowRef": "Krilliac/SparkEngine/.github/workflows/ci120-report.yml@refs/heads/Working",
+            "workflowRef": "Krilliac/SparkEngine/.github/workflows/build-matrix-verifier.yml@refs/heads/Working",
             "sourceWorkflowBlobSha": "d" * 40,
             "trustedWorkflowBlobSha": "d" * 40,
         },
@@ -197,7 +197,7 @@ def shipping_fixture(artifact_root: Path, *, include_pdb: bool = False) -> tuple
         "runId": "789",
         "runAttempt": "1",
         "workflowRef": "Krilliac/SparkEngine/.github/workflows/build.yml@refs/heads/Working",
-        "job": inventory._CI120_PRODUCER_JOB,
+        "job": inventory._BUILD_MATRIX_PRODUCER_JOB,
         "runnerOs": "Windows",
     }
     record = {
@@ -262,7 +262,7 @@ def shipping_fixture(artifact_root: Path, *, include_pdb: bool = False) -> tuple
     inventory._apply_verified_artifact_manifest(portable, claimed_manifest)
     portable["producerProvenance"] = {
         "state": "unavailable",
-        "authority": inventory._CI120_EXTERNAL_AUTHORITY,
+        "authority": inventory._BUILD_MATRIX_EXTERNAL_AUTHORITY,
         "authorityReason": verifier._AUTHORITY_REASON,
         "structuralState": "validated",
         "recordFile": record_path.name,
@@ -298,21 +298,21 @@ class SourceMetadataTests(unittest.TestCase):
             with self.assertRaisesRegex(verifier.ExternalEvidenceError, "strict bounded JSON"):
                 verifier._read_json_payload(path, 1024, "untrusted document")
 
-    def test_trusted_workflow_is_staged_fail_closed_and_attests_only_verified_output(self) -> None:
-        workflow_path = REPO_ROOT / ".github" / "workflows" / "ci120-report.yml"
+    def test_trusted_workflow_is_fail_closed_and_attests_only_verified_output(self) -> None:
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "build-matrix-verifier.yml"
         text = workflow_path.read_text(encoding="utf-8")
         producer_text = (REPO_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
         document = workflow.parse_workflow_yaml(text)
-        self.assertEqual(document["name"], "CI-120 Trusted Verifier")
+        self.assertEqual(document["name"], "Build Matrix Verifier")
         self.assertIn("workflow_run", document["on"])
         self.assertNotIn("pull_request_target", document["on"])
-        self.assertIn("run.conclusion !== 'failure'", text)
+        self.assertIn("run.conclusion !== 'success'", text)
         self.assertIn("digest-mismatch: error", text)
         self.assertIn("verify_external_evidence.py", text)
         self.assertIn("actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6", text)
         self.assertLess(text.index("verify_external_evidence.py"), text.index("actions/attest@"))
-        upload_start = producer_text.index("- name: Upload untrusted CI-120 structural evidence")
-        upload_end = producer_text.index("- name: Enforce reviewed CI-120 findings", upload_start)
+        upload_start = producer_text.index("- name: Upload build-matrix evidence")
+        upload_end = producer_text.index("- name: Record build-matrix evidence", upload_start)
         upload_step = producer_text[upload_start:upload_end]
         self.assertIn("build/windows-shipping/.cmake/api/v1/reply", upload_step)
         self.assertIn("build-matrix-pending-receipt.json", upload_step)
@@ -350,13 +350,13 @@ class SourceMetadataTests(unittest.TestCase):
         with self.assertRaisesRegex(verifier.ExternalEvidenceError, "not exact"):
             verifier.validate_source_metadata(metadata)
 
-    def test_old_successful_source_shape_is_not_accepted_during_staged_rollout(self) -> None:
-        metadata = source_metadata()
-        metadata["source"]["conclusion"] = "success"
-        metadata["source"]["jobConclusion"] = "success"
-        metadata["source"]["finalStepConclusion"] = "success"
-        with self.assertRaisesRegex(verifier.ExternalEvidenceError, "staged fail-closed"):
-            verifier.validate_source_metadata(metadata)
+    def test_failed_source_run_job_or_final_step_is_rejected(self) -> None:
+        for field in ("conclusion", "jobConclusion", "finalStepConclusion"):
+            with self.subTest(field=field):
+                metadata = source_metadata()
+                metadata["source"][field] = "failure"
+                with self.assertRaisesRegex(verifier.ExternalEvidenceError, "exact successful"):
+                    verifier.validate_source_metadata(metadata)
 
     def test_malformed_artifact_digest_is_rejected(self) -> None:
         metadata = source_metadata()
@@ -465,7 +465,7 @@ class RawProfileEvidenceTests(unittest.TestCase):
             root = Path(raw)
             producer_evidence, _ = shipping_fixture(root)
             replay = source_metadata("9" * 40)
-            replay["artifact"]["name"] = f"ci120-untrusted-stable-v1-{'9' * 40}-1"
+            replay["artifact"]["name"] = f"build-matrix-stable-v1-{'9' * 40}-1"
             with self.assertRaisesRegex(verifier.ExternalEvidenceError, "repository identity"):
                 verifier._verify_profile(root, "windows-shipping", producer_evidence, replay)
 
@@ -476,7 +476,7 @@ class PendingReceiptHandoffTests(unittest.TestCase):
         (root / "build-matrix-pending-receipt-stdout.json").write_bytes(stdout_payload)
 
     def test_exact_canonical_receipt_and_stdout_are_accepted(self) -> None:
-        receipt = {"kind": "spark-ci120-pending-authority", "state": "pending-external-attestation"}
+        receipt = {"kind": "spark-build-matrix-pending-authority", "state": "pending-external-attestation"}
         payload = verifier.pending._json_bytes(receipt)
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -484,7 +484,7 @@ class PendingReceiptHandoffTests(unittest.TestCase):
             verifier._verify_pending_receipt_handoff(root, receipt)
 
     def test_file_and_stdout_byte_mismatch_is_rejected(self) -> None:
-        receipt = {"kind": "spark-ci120-pending-authority", "state": "pending-external-attestation"}
+        receipt = {"kind": "spark-build-matrix-pending-authority", "state": "pending-external-attestation"}
         payload = verifier.pending._json_bytes(receipt)
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -493,7 +493,7 @@ class PendingReceiptHandoffTests(unittest.TestCase):
                 verifier._verify_pending_receipt_handoff(root, receipt)
 
     def test_semantically_equal_noncanonical_receipt_is_rejected(self) -> None:
-        receipt = {"kind": "spark-ci120-pending-authority", "state": "pending-external-attestation"}
+        receipt = {"kind": "spark-build-matrix-pending-authority", "state": "pending-external-attestation"}
         noncanonical = json.dumps(receipt, separators=(",", ":")).encode("utf-8")
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -502,7 +502,7 @@ class PendingReceiptHandoffTests(unittest.TestCase):
                 verifier._verify_pending_receipt_handoff(root, receipt)
 
     def test_receipt_semantic_mismatch_is_rejected(self) -> None:
-        expected = {"kind": "spark-ci120-pending-authority", "state": "pending-external-attestation"}
+        expected = {"kind": "spark-build-matrix-pending-authority", "state": "pending-external-attestation"}
         tampered = {**expected, "state": "verified"}
         payload = verifier.pending._json_bytes(tampered)
         with tempfile.TemporaryDirectory() as raw:

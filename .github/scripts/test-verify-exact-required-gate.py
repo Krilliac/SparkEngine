@@ -27,7 +27,7 @@ DIGEST = "sha256:" + "c" * 64
 CODEQL_SOURCE_RUN_ID = 43
 CODEQL_REPORTER_RUN_ID = 85
 CODEQL_DIGEST = "sha256:" + "d" * 64
-CI120_SOURCE_DIGEST = "sha256:" + "e" * 64
+BUILD_MATRIX_SOURCE_DIGEST = "sha256:" + "e" * 64
 CODEQL_SOURCE_DIGESTS = {
     "actions": "sha256:" + "f" * 64,
     "c-cpp": "sha256:" + "1" * 64,
@@ -41,7 +41,7 @@ VERIFIER_RUN_STARTED_AT = "2026-08-30T04:31:00Z"
 VERIFIER_RUN_UPDATED_AT = "2026-08-30T05:00:00Z"
 REPORTER_RUN_STARTED_AT = "2026-08-30T05:01:00Z"
 REPORTER_RUN_UPDATED_AT = "2026-08-30T05:05:00Z"
-CI120_STATUS_AT = "2026-08-30T04:58:30Z"
+BUILD_MATRIX_STATUS_AT = "2026-08-30T04:58:30Z"
 CODEQL_STATUS_AT = "2026-08-30T05:03:30Z"
 
 
@@ -61,7 +61,7 @@ def source_run(run_id=SOURCE_RUN_ID, **overrides):
         "head_branch": "Working",
         "event": "push",
         "status": "completed",
-        "conclusion": "failure",
+        "conclusion": "success",
         "run_started_at": BUILD_RUN_STARTED_AT,
         "updated_at": BUILD_RUN_UPDATED_AT,
         "html_url": f"https://github.com/{REPOSITORY}/actions/runs/{run_id}",
@@ -112,9 +112,9 @@ def source_job(**overrides):
         "workflow_name": "Build SparkEngine",
         "head_branch": "Working",
         "run_url": f"https://api.github.com/repos/{REPOSITORY}/actions/runs/{SOURCE_RUN_ID}",
-        "name": "Windows Shipping structural configured-evidence producer",
+        "name": "Windows Shipping build matrix",
         "status": "completed",
-        "conclusion": "failure",
+        "conclusion": "success",
         "started_at": "2026-08-30T04:01:00Z",
         "completed_at": "2026-08-30T04:20:00Z",
         "steps": [
@@ -129,7 +129,7 @@ def source_job(**overrides):
         + [
             completed_step(
                 MODULE.SOURCE_FINAL_STEP,
-                "failure",
+                "success",
                 number=len(MODULE.SOURCE_REQUIRED_STEPS) + 1,
                 started_at="2026-08-30T04:19:00Z",
                 completed_at="2026-08-30T04:20:00Z",
@@ -197,13 +197,13 @@ def ordinary_job(**overrides):
 def trusted_status(**overrides):
     value = {
         "id": 601,
-        "context": "CI-120 Trusted / Exact Source",
+        "context": "Build Matrix Verifier / Exact Source",
         "state": "success",
-        "description": f"Trusted CI-120 verified for Build run {SOURCE_RUN_ID}, attempt 1.",
+        "description": f"Trusted build-matrix verified for Build run {SOURCE_RUN_ID}, attempt 1.",
         "url": f"https://api.github.com/repos/{REPOSITORY}/statuses/{SHA}",
         "target_url": f"https://github.com/{REPOSITORY}/actions/runs/{VERIFIER_RUN_ID}/attempts/2",
-        "created_at": CI120_STATUS_AT,
-        "updated_at": CI120_STATUS_AT,
+        "created_at": BUILD_MATRIX_STATUS_AT,
+        "updated_at": BUILD_MATRIX_STATUS_AT,
         "creator": {"id": 41898282, "login": "github-actions[bot]", "type": "Bot"},
     }
     value.update(overrides)
@@ -216,8 +216,8 @@ def verifier_run(**overrides):
         "workflow_id": 303,
         "run_number": 20,
         "run_attempt": 2,
-        "name": "CI-120 Trusted Verifier",
-        "path": ".github/workflows/ci120-report.yml@refs/heads/Working",
+        "name": "Build Matrix Verifier",
+        "path": ".github/workflows/build-matrix-verifier.yml@refs/heads/Working",
         "head_sha": SHA,
         "head_branch": "Working",
         "event": "workflow_run",
@@ -239,10 +239,10 @@ def verifier_job(**overrides):
         "run_id": VERIFIER_RUN_ID,
         "run_attempt": 2,
         "head_sha": SHA,
-        "workflow_name": "CI-120 Trusted Verifier",
+        "workflow_name": "Build Matrix Verifier",
         "head_branch": "Working",
         "run_url": f"https://api.github.com/repos/{REPOSITORY}/actions/runs/{VERIFIER_RUN_ID}",
-        "name": "Verify and attest CI-120 evidence",
+        "name": "Verify and attest build-matrix evidence",
         "status": "completed",
         "conclusion": "success",
         "started_at": "2026-08-30T04:32:00Z",
@@ -263,8 +263,8 @@ def receipt_artifact(**overrides):
     artifact_id = overrides.pop("id", 801)
     value = {
         "id": artifact_id,
-        "node_id": "ARTIFACT_CI120_RECEIPT",
-        "name": f"ci120-trusted-receipt-{SHA}-{SOURCE_RUN_ID}-1-2",
+        "node_id": "ARTIFACT_BUILD_MATRIX_RECEIPT",
+        "name": f"build-matrix-trusted-receipt-{SHA}-{SOURCE_RUN_ID}-1-2",
         "expired": False,
         "size_in_bytes": 4096,
         "url": f"https://api.github.com/repos/{REPOSITORY}/actions/artifacts/{artifact_id}",
@@ -287,12 +287,12 @@ def receipt_artifact(**overrides):
     return value
 
 
-def ci120_source_artifact(**overrides):
+def build_matrix_source_artifact(**overrides):
     artifact_id = overrides.pop("id", 803)
     value = {
         "id": artifact_id,
-        "node_id": "ARTIFACT_CI120_SOURCE",
-        "name": f"ci120-untrusted-stable-v1-{SHA}-1",
+        "node_id": "ARTIFACT_BUILD_MATRIX_SOURCE",
+        "name": f"build-matrix-stable-v1-{SHA}-1",
         "size_in_bytes": 16384,
         "url": f"https://api.github.com/repos/{REPOSITORY}/actions/artifacts/{artifact_id}",
         "archive_download_url": (
@@ -302,7 +302,7 @@ def ci120_source_artifact(**overrides):
         "created_at": "2026-08-30T04:15:00Z",
         "updated_at": "2026-08-30T04:16:00Z",
         "expires_at": "2026-09-13T04:16:00Z",
-        "digest": CI120_SOURCE_DIGEST,
+        "digest": BUILD_MATRIX_SOURCE_DIGEST,
         "workflow_run": {
             "id": SOURCE_RUN_ID,
             "repository_id": REPOSITORY_ID,
@@ -496,7 +496,7 @@ class FakeApi:
         self.source_live = source_run()
         self.source_jobs = [source_job(), required_gate(), ordinary_job()]
         self.source_job_responses = None
-        self.source_artifact_responses = [[ci120_source_artifact()]]
+        self.source_artifact_responses = [[build_matrix_source_artifact()]]
         self.codeql_runs_responses = [[codeql_source_run()]]
         self.codeql_source_live = codeql_source_run()
         self.codeql_source_jobs = [
@@ -659,7 +659,7 @@ class FakeApi:
 
 
 class VerifyExactRequiredGateTests(unittest.TestCase):
-    def test_staged_build_only_accepts_exact_reviewed_failure(self):
+    def test_staged_build_only_accepts_exact_successful_source(self):
         evidence = MODULE.verify_exact_staged_build(
             FakeApi(), REPOSITORY, SHA.upper(), SOURCE_RUN_ID, 1
         )
@@ -825,22 +825,22 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
                 api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
             )
 
-    def test_accepts_only_exact_staged_failure_and_trusted_receipt(self):
+    def test_accepts_only_exact_successful_source_and_trusted_receipt(self):
         evidence = MODULE.verify_exact_gate(FakeApi(), REPOSITORY, SHA.upper())
         self.assertEqual(evidence.run_id, SOURCE_RUN_ID)
         self.assertEqual(evidence.run_attempt, 1)
         self.assertEqual(evidence.event, "push")
-        self.assertEqual(evidence.build_ci120_producer_job_id, 501)
+        self.assertEqual(evidence.build_build_matrix_producer_job_id, 501)
         self.assertEqual(evidence.build_required_gate_job_id, 502)
         self.assertRegex(evidence.build_job_inventory_digest, r"^sha256:[0-9a-f]{64}$")
-        self.assertEqual(evidence.ci120_source_artifact_id, 803)
-        self.assertEqual(evidence.ci120_source_artifact_digest, CI120_SOURCE_DIGEST)
-        self.assertEqual(evidence.ci120_status_id, 601)
-        self.assertEqual(evidence.ci120_status_created_at, CI120_STATUS_AT)
-        self.assertEqual(evidence.ci120_status_updated_at, CI120_STATUS_AT)
+        self.assertEqual(evidence.build_matrix_source_artifact_id, 803)
+        self.assertEqual(evidence.build_matrix_source_artifact_digest, BUILD_MATRIX_SOURCE_DIGEST)
+        self.assertEqual(evidence.build_matrix_status_id, 601)
+        self.assertEqual(evidence.build_matrix_status_created_at, BUILD_MATRIX_STATUS_AT)
+        self.assertEqual(evidence.build_matrix_status_updated_at, BUILD_MATRIX_STATUS_AT)
         self.assertEqual(evidence.verifier_run_id, VERIFIER_RUN_ID)
         self.assertEqual(evidence.verifier_run_attempt, 2)
-        self.assertEqual(evidence.ci120_trusted_verifier_job_id, 701)
+        self.assertEqual(evidence.build_matrix_trusted_verifier_job_id, 701)
         self.assertEqual(evidence.receipt_artifact_id, 801)
         self.assertEqual(evidence.receipt_artifact_digest, DIGEST)
         self.assertEqual(evidence.codeql_run_id, CODEQL_SOURCE_RUN_ID)
@@ -940,8 +940,8 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
     def test_source_artifact_replay_and_invalid_inventory_fail_closed(self):
         api = FakeApi()
         api.source_artifact_responses = [
-            [ci120_source_artifact()],
-            [ci120_source_artifact(id=804)],
+            [build_matrix_source_artifact()],
+            [build_matrix_source_artifact(id=804)],
         ]
         with self.assertRaisesRegex(ValueError, "job or artifact evidence|CI/reporter evidence"):
             MODULE.verify_exact_gate(api, REPOSITORY, SHA)
@@ -959,16 +959,16 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
             MODULE.verify_exact_gate(api, REPOSITORY, SHA)
 
         invalid_sets = (
-            [ci120_source_artifact(expired=True)],
-            [ci120_source_artifact(created_at="2026-08-30T03:59:00Z")],
-            [ci120_source_artifact(workflow_run={})],
-            [ci120_source_artifact(digest="sha256:bad")],
+            [build_matrix_source_artifact(expired=True)],
+            [build_matrix_source_artifact(created_at="2026-08-30T03:59:00Z")],
+            [build_matrix_source_artifact(workflow_run={})],
+            [build_matrix_source_artifact(digest="sha256:bad")],
         )
         for artifacts in invalid_sets:
             with self.subTest(artifacts=artifacts[0].get("digest")):
                 api = FakeApi()
                 api.source_artifact_responses = [artifacts]
-                with self.assertRaisesRegex(ValueError, "CI-120 source artifact"):
+                with self.assertRaisesRegex(ValueError, "build-matrix source artifact"):
                     MODULE.verify_exact_gate(api, REPOSITORY, SHA)
 
         api = FakeApi()
@@ -985,7 +985,7 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
             started_at="2026-08-30T04:28:00Z",
             completed_at="2026-08-30T04:29:00Z",
         )
-        api.source_artifact_responses = [[ci120_source_artifact(
+        api.source_artifact_responses = [[build_matrix_source_artifact(
             created_at="2026-08-30T04:28:30Z",
             updated_at="2026-08-30T04:29:00Z",
         )]]
@@ -1039,11 +1039,11 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
 
     def test_rejects_source_artifacts_after_upload_even_inside_run(self):
         api = FakeApi()
-        api.source_artifact_responses = [[ci120_source_artifact(
+        api.source_artifact_responses = [[build_matrix_source_artifact(
             created_at="2026-08-30T04:29:00Z",
             updated_at="2026-08-30T04:29:00Z",
         )]]
-        with self.assertRaisesRegex(ValueError, "CI-120 source artifact"):
+        with self.assertRaisesRegex(ValueError, "build-matrix source artifact"):
             MODULE.verify_exact_gate(api, REPOSITORY, SHA)
 
         api = FakeApi()
@@ -1349,7 +1349,7 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exact current run attempt"):
             MODULE._verify_codeql_source_jobs(fetch, REPOSITORY, source)
 
-    def test_rejects_ci120_verifier_partial_rerun_with_copied_required_job(self):
+    def test_rejects_build_matrix_verifier_partial_rerun_with_copied_required_job(self):
         run = verifier_run(
             run_attempt=3,
             run_started_at="2026-08-30T06:00:00Z",
@@ -1608,14 +1608,26 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "terminal shared snapshot"):
             MODULE.verify_exact_gate(api, REPOSITORY, SHA)
 
-    def test_rejects_newer_running_or_nonstaged_source(self):
-        for status, conclusion in (("in_progress", None), ("completed", "success"), ("completed", "cancelled")):
+    def test_rejects_newer_unsuccessful_source_attempt(self):
+        for status, conclusion in (("in_progress", None), ("completed", "cancelled")):
             with self.subTest(status=status, conclusion=conclusion):
                 api = FakeApi()
                 newer = source_run(43, run_number=11, status=status, conclusion=conclusion)
                 api.runs_responses = [[source_run(), newer]]
                 with self.assertRaisesRegex(ValueError, "newest exact Build attempt"):
                     MODULE.verify_exact_gate(api, REPOSITORY, SHA)
+
+    def test_newer_successful_source_attempt_supersedes_the_selected_run(self):
+        newer = source_run(43, run_number=11)
+        api = FakeApi()
+        api.runs_responses = [[source_run(), newer]]
+        latest = MODULE._latest_source_run(api, REPOSITORY, REPOSITORY_ID, SHA)
+        self.assertEqual(latest["id"], 43)
+
+        api = FakeApi()
+        api.runs_responses = [[source_run(), newer]]
+        with self.assertRaises(ValueError):
+            MODULE.verify_exact_gate(api, REPOSITORY, SHA)
 
     def test_rejects_arbitrary_failed_job_or_failed_required_gate(self):
         for replacement in (
@@ -1631,12 +1643,24 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     MODULE.verify_exact_gate(api, REPOSITORY, SHA)
 
-    def test_rejects_wrong_source_failure_shape(self):
+    def test_rejects_failed_evidence_recording_step(self):
         api = FakeApi()
         broken = source_job()
-        broken["steps"][-1]["conclusion"] = "success"
+        broken["steps"][-1]["conclusion"] = "failure"
         api.source_jobs[0] = broken
-        with self.assertRaisesRegex(ValueError, "Enforce reviewed CI-120 findings"):
+        with self.assertRaisesRegex(ValueError, "Record build-matrix evidence"):
+            MODULE.verify_exact_gate(api, REPOSITORY, SHA)
+
+    def test_rejects_failed_producer_job(self):
+        api = FakeApi()
+        api.source_jobs[0] = source_job(conclusion="failure")
+        with self.assertRaisesRegex(ValueError, "exact completed successful job"):
+            MODULE.verify_exact_gate(api, REPOSITORY, SHA)
+
+    def test_rejects_failed_source_run(self):
+        api = FakeApi()
+        api.runs_responses = [[source_run(conclusion="failure")]]
+        with self.assertRaisesRegex(ValueError, "completed successful run"):
             MODULE.verify_exact_gate(api, REPOSITORY, SHA)
 
     def test_rejects_stale_untrusted_or_unbound_status(self):
@@ -1663,7 +1687,7 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
         broken = verifier_job()
         broken["steps"][-1]["conclusion"] = "failure"
         api.verifier_jobs = [broken]
-        with self.assertRaisesRegex(ValueError, "Publish exact source CI-120 status"):
+        with self.assertRaisesRegex(ValueError, "Publish the exact source build-matrix status"):
             MODULE.verify_exact_gate(api, REPOSITORY, SHA)
 
     def test_rejects_wrong_verifier_job_provenance(self):
@@ -1712,7 +1736,7 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     MODULE.verify_exact_gate(api, REPOSITORY, SHA)
 
-    def test_rejects_duplicate_ci120_receipt_artifact_identities(self):
+    def test_rejects_duplicate_build_matrix_receipt_artifact_identities(self):
         duplicate_id = receipt_artifact(name="unrelated-receipt")
         duplicate_name_left = receipt_artifact(id=830, name="duplicate-receipt")
         duplicate_name_right = receipt_artifact(id=831, name="duplicate-receipt")
@@ -1726,9 +1750,9 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "duplicate or unnamed"):
                     MODULE.verify_exact_gate(api, REPOSITORY, SHA)
 
-    def test_rejects_ci120_receipt_identity_or_timing_drift_during_replay(self):
+    def test_rejects_build_matrix_receipt_identity_or_timing_drift_during_replay(self):
         mutations = (
-            {"node_id": "ARTIFACT_CI120_RECEIPT_REPLACED"},
+            {"node_id": "ARTIFACT_BUILD_MATRIX_RECEIPT_REPLACED"},
             {"created_at": "2026-08-30T04:57:31Z"},
             {"updated_at": "2026-08-30T04:57:58Z"},
             {"expires_at": "2026-09-30T04:57:59Z"},
@@ -1780,7 +1804,7 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
 
     def test_workflow_permissions_and_receipt_name_are_exact(self):
         release = (SCRIPT.parents[1] / "workflows" / "release.yml").read_text(encoding="utf-8")
-        verifier = (SCRIPT.parents[1] / "workflows" / "ci120-report.yml").read_text(encoding="utf-8")
+        verifier = (SCRIPT.parents[1] / "workflows" / "build-matrix-verifier.yml").read_text(encoding="utf-8")
         build = (SCRIPT.parents[1] / "workflows" / "build.yml").read_text(encoding="utf-8")
         self.assertIn("      statuses: read", release)
         self.assertEqual(
@@ -1789,7 +1813,7 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
             "publication must verify once at entry and immediately before both mutation boundaries",
         )
         self.assertIn(
-            "ci120-trusted-receipt-${{ github.event.workflow_run.head_sha }}-"
+            "build-matrix-trusted-receipt-${{ github.event.workflow_run.head_sha }}-"
             "${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}-"
             "${{ github.run_attempt }}",
             verifier,

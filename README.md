@@ -311,7 +311,7 @@ builds against the engine library and source tree rather than the public SDK alo
 (`SDK-240`, `MOD-310`); and the v143 line names a *supported toolchain family*, not
 a pinned one — no exact MSVC compiler build or Windows SDK version is pinned, and
 the hosted image floats, so the toolchain is neither reproducible nor certified
-(`BLD-100`, `PLT-200`, `CI-120`).
+(`BLD-100`, `PLT-200`).
 
 Breadth is frozen around that shape. Linux, macOS, D3D12, Vulkan, OpenGL, Metal,
 multiplayer, production services, and the prototype game modules all keep their

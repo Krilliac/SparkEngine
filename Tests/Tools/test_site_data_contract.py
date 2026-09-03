@@ -1246,27 +1246,27 @@ class ExactEvidenceManifestTests(unittest.TestCase):
         "EXACT_BUILD_RUN_ATTEMPT": "2",
         "EXACT_BUILD_RUN_URL": "https://github.com/Krilliac/SparkEngine/actions/runs/101",
         "EXACT_BUILD_EVENT": "workflow_dispatch",
-        "EXACT_BUILD_CI120_PRODUCER_JOB_ID": "401",
+        "EXACT_BUILD_MATRIX_PRODUCER_JOB_ID": "401",
         "EXACT_BUILD_REQUIRED_GATE_JOB_ID": "402",
         "EXACT_BUILD_JOB_INVENTORY_DIGEST": "sha256:" + "5" * 64,
-        "EXACT_CI120_SOURCE_ARTIFACT_ID": "204",
-        "EXACT_CI120_SOURCE_ARTIFACT_DIGEST": "sha256:" + "6" * 64,
-        "EXACT_CI120_SOURCE_ARTIFACT_BYTES": "4096",
-        "EXACT_CI120_STATUS_ID": "201",
-        "EXACT_CI120_STATUS_TARGET_URL": "https://github.com/Krilliac/SparkEngine/actions/runs/202/attempts/3",
-        "EXACT_CI120_STATUS_CREATED_AT": "2026-08-30T01:00:02Z",
-        "EXACT_CI120_STATUS_UPDATED_AT": "2026-08-30T01:00:03Z",
-        "EXACT_CI120_VERIFIER_RUN_ID": "202",
-        "EXACT_CI120_VERIFIER_RUN_ATTEMPT": "3",
-        "EXACT_CI120_VERIFIER_RUN_URL": "https://github.com/Krilliac/SparkEngine/actions/runs/202",
+        "EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_ID": "204",
+        "EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_DIGEST": "sha256:" + "6" * 64,
+        "EXACT_BUILD_MATRIX_SOURCE_ARTIFACT_BYTES": "4096",
+        "EXACT_BUILD_MATRIX_STATUS_ID": "201",
+        "EXACT_BUILD_MATRIX_STATUS_TARGET_URL": "https://github.com/Krilliac/SparkEngine/actions/runs/202/attempts/3",
+        "EXACT_BUILD_MATRIX_STATUS_CREATED_AT": "2026-08-30T01:00:02Z",
+        "EXACT_BUILD_MATRIX_STATUS_UPDATED_AT": "2026-08-30T01:00:03Z",
+        "EXACT_BUILD_MATRIX_VERIFIER_RUN_ID": "202",
+        "EXACT_BUILD_MATRIX_VERIFIER_RUN_ATTEMPT": "3",
+        "EXACT_BUILD_MATRIX_VERIFIER_RUN_URL": "https://github.com/Krilliac/SparkEngine/actions/runs/202",
         "EXACT_VERIFIER_COMMIT": "2" * 40,
-        "EXACT_CI120_TRUSTED_VERIFIER_JOB_ID": "403",
-        "EXACT_CI120_VERIFIER_JOB_INVENTORY_DIGEST": "sha256:" + "7" * 64,
-        "EXACT_CI120_STATUS_PUBLISH_STEP_STARTED_AT": "2026-08-30T01:00:00Z",
-        "EXACT_CI120_STATUS_PUBLISH_STEP_COMPLETED_AT": "2026-08-30T01:00:05Z",
-        "EXACT_CI120_RECEIPT_ARTIFACT_ID": "203",
-        "EXACT_CI120_RECEIPT_ARTIFACT_DIGEST": "sha256:" + "3" * 64,
-        "EXACT_CI120_RECEIPT_ARTIFACT_BYTES": "1024",
+        "EXACT_BUILD_MATRIX_TRUSTED_VERIFIER_JOB_ID": "403",
+        "EXACT_BUILD_MATRIX_VERIFIER_JOB_INVENTORY_DIGEST": "sha256:" + "7" * 64,
+        "EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_STARTED_AT": "2026-08-30T01:00:00Z",
+        "EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_COMPLETED_AT": "2026-08-30T01:00:05Z",
+        "EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_ID": "203",
+        "EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_DIGEST": "sha256:" + "3" * 64,
+        "EXACT_BUILD_MATRIX_RECEIPT_ARTIFACT_BYTES": "1024",
         "EXACT_CODEQL_RUN_ID": "301",
         "EXACT_CODEQL_RUN_ATTEMPT": "4",
         "EXACT_CODEQL_RUN_URL": "https://github.com/Krilliac/SparkEngine/actions/runs/301",
@@ -1315,7 +1315,7 @@ class ExactEvidenceManifestTests(unittest.TestCase):
         )
         self.assertEqual(
             manifest["ci120"]["receiptArtifact"]["name"],
-            f"ci120-trusted-receipt-{'1' * 40}-101-2-3",
+            f"build-matrix-trusted-receipt-{'1' * 40}-101-2-3",
         )
         self.assertEqual(
             manifest["codeql"]["summaryArtifact"]["name"],
@@ -1342,7 +1342,7 @@ class ExactEvidenceManifestTests(unittest.TestCase):
                 replacement = "Krilliac/SparkEngineFork"
                 for url_field in (
                     "EXACT_BUILD_RUN_URL",
-                    "EXACT_CI120_VERIFIER_RUN_URL",
+                    "EXACT_BUILD_MATRIX_VERIFIER_RUN_URL",
                     "EXACT_CODEQL_RUN_URL",
                     "EXACT_CODEQL_REPORTER_RUN_URL",
                 ):
@@ -1351,7 +1351,7 @@ class ExactEvidenceManifestTests(unittest.TestCase):
                     )
                     mutated[url_field] = prefix + replacement + suffix
                 for url_field in (
-                    "EXACT_CI120_STATUS_TARGET_URL",
+                    "EXACT_BUILD_MATRIX_STATUS_TARGET_URL",
                     "EXACT_CODEQL_STATUS_TARGET_URL",
                 ):
                     prefix, suffix = mutated[url_field].split(
@@ -1364,10 +1364,10 @@ class ExactEvidenceManifestTests(unittest.TestCase):
                 replacement = "sha256:" + "d" * 64
             elif field in {
                 "EXACT_BUILD_RUN_URL",
-                "EXACT_CI120_VERIFIER_RUN_URL",
+                "EXACT_BUILD_MATRIX_VERIFIER_RUN_URL",
                 "EXACT_CODEQL_RUN_URL",
                 "EXACT_CODEQL_REPORTER_RUN_URL",
-                "EXACT_CI120_STATUS_TARGET_URL",
+                "EXACT_BUILD_MATRIX_STATUS_TARGET_URL",
                 "EXACT_CODEQL_STATUS_TARGET_URL",
             }:
                 run_id_field = field.removesuffix("_URL") + "_ID"
@@ -1381,10 +1381,10 @@ class ExactEvidenceManifestTests(unittest.TestCase):
                 continue
             elif field.endswith("_AT"):
                 timestamp_replacements = {
-                    "EXACT_CI120_STATUS_CREATED_AT": "2026-08-30T01:00:01Z",
-                    "EXACT_CI120_STATUS_UPDATED_AT": "2026-08-30T01:00:04Z",
-                    "EXACT_CI120_STATUS_PUBLISH_STEP_STARTED_AT": "2026-08-30T00:59:59Z",
-                    "EXACT_CI120_STATUS_PUBLISH_STEP_COMPLETED_AT": "2026-08-30T01:00:06Z",
+                    "EXACT_BUILD_MATRIX_STATUS_CREATED_AT": "2026-08-30T01:00:01Z",
+                    "EXACT_BUILD_MATRIX_STATUS_UPDATED_AT": "2026-08-30T01:00:04Z",
+                    "EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_STARTED_AT": "2026-08-30T00:59:59Z",
+                    "EXACT_BUILD_MATRIX_STATUS_PUBLISH_STEP_COMPLETED_AT": "2026-08-30T01:00:06Z",
                     "EXACT_CODEQL_STATUS_CREATED_AT": "2026-08-30T02:00:01Z",
                     "EXACT_CODEQL_STATUS_UPDATED_AT": "2026-08-30T02:00:04Z",
                     "EXACT_CODEQL_STATUS_PUBLISH_STEP_STARTED_AT": "2026-08-30T01:59:59Z",
@@ -1398,7 +1398,7 @@ class ExactEvidenceManifestTests(unittest.TestCase):
             mutated[field] = replacement
             run_url_for_id = {
                 "EXACT_BUILD_RUN_ID": "EXACT_BUILD_RUN_URL",
-                "EXACT_CI120_VERIFIER_RUN_ID": "EXACT_CI120_VERIFIER_RUN_URL",
+                "EXACT_BUILD_MATRIX_VERIFIER_RUN_ID": "EXACT_BUILD_MATRIX_VERIFIER_RUN_URL",
                 "EXACT_CODEQL_RUN_ID": "EXACT_CODEQL_RUN_URL",
                 "EXACT_CODEQL_REPORTER_RUN_ID": "EXACT_CODEQL_REPORTER_RUN_URL",
             }
@@ -1407,7 +1407,7 @@ class ExactEvidenceManifestTests(unittest.TestCase):
                     f"https://github.com/{mutated['GITHUB_REPOSITORY']}/actions/runs/{replacement}"
                 )
             status_target_for_id = {
-                "EXACT_CI120_VERIFIER_RUN_ID": "EXACT_CI120_STATUS_TARGET_URL",
+                "EXACT_BUILD_MATRIX_VERIFIER_RUN_ID": "EXACT_BUILD_MATRIX_STATUS_TARGET_URL",
                 "EXACT_CODEQL_REPORTER_RUN_ID": "EXACT_CODEQL_STATUS_TARGET_URL",
             }
             if field in status_target_for_id:
@@ -1417,9 +1417,9 @@ class ExactEvidenceManifestTests(unittest.TestCase):
                     f"{replacement}/attempts/{mutated[attempt_field]}"
                 )
             status_target_for_attempt = {
-                "EXACT_CI120_VERIFIER_RUN_ATTEMPT": (
-                    "EXACT_CI120_VERIFIER_RUN_ID",
-                    "EXACT_CI120_STATUS_TARGET_URL",
+                "EXACT_BUILD_MATRIX_VERIFIER_RUN_ATTEMPT": (
+                    "EXACT_BUILD_MATRIX_VERIFIER_RUN_ID",
+                    "EXACT_BUILD_MATRIX_STATUS_TARGET_URL",
                 ),
                 "EXACT_CODEQL_REPORTER_RUN_ATTEMPT": (
                     "EXACT_CODEQL_REPORTER_RUN_ID",
@@ -1560,14 +1560,14 @@ class ExactEvidenceManifestTests(unittest.TestCase):
 
     def test_status_target_and_timestamp_boundaries_are_exact(self) -> None:
         boundary = dict(self.VALUES)
-        boundary["EXACT_CI120_STATUS_CREATED_AT"] = "2026-08-30T00:59:59Z"
-        boundary["EXACT_CI120_STATUS_UPDATED_AT"] = "2026-08-30T01:00:06Z"
+        boundary["EXACT_BUILD_MATRIX_STATUS_CREATED_AT"] = "2026-08-30T00:59:59Z"
+        boundary["EXACT_BUILD_MATRIX_STATUS_UPDATED_AT"] = "2026-08-30T01:00:06Z"
         exact_evidence.build_manifest(boundary)
 
         for field, replacement in (
-            ("EXACT_CI120_STATUS_CREATED_AT", "2026-08-30T00:59:58Z"),
-            ("EXACT_CI120_STATUS_UPDATED_AT", "2026-08-30T01:00:07Z"),
-            ("EXACT_CI120_STATUS_CREATED_AT", "2026-08-29T20:00:02-05:00"),
+            ("EXACT_BUILD_MATRIX_STATUS_CREATED_AT", "2026-08-30T00:59:58Z"),
+            ("EXACT_BUILD_MATRIX_STATUS_UPDATED_AT", "2026-08-30T01:00:07Z"),
+            ("EXACT_BUILD_MATRIX_STATUS_CREATED_AT", "2026-08-29T20:00:02-05:00"),
             (
                 "EXACT_CODEQL_STATUS_TARGET_URL",
                 "https://github.com/Krilliac/SparkEngine/actions/runs/303/attempts/4",
@@ -1581,7 +1581,7 @@ class ExactEvidenceManifestTests(unittest.TestCase):
 
     def test_verify_manifest_rejects_valid_in_window_timestamp_replay(self) -> None:
         replayed = dict(self.VALUES)
-        replayed["EXACT_CI120_STATUS_CREATED_AT"] = "2026-08-30T01:00:01Z"
+        replayed["EXACT_BUILD_MATRIX_STATUS_CREATED_AT"] = "2026-08-30T01:00:01Z"
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / "SparkEngine-Exact-CI-Evidence.json"
             written = exact_evidence.write_manifest(path, replayed)
@@ -1611,7 +1611,7 @@ class ExactEvidenceManifestTests(unittest.TestCase):
 
 
 class BuildMatrixEvidenceTests(ContractTestCase):
-    """The CI-120 evidence pair must fail closed on absence and fabrication.
+    """The build-matrix evidence pair must fail closed on absence and fabrication.
 
     Every rejection below used to pass: site-data validation never opened these
     two files, so deleted, truncated, and hand-written evidence all validated
@@ -1646,10 +1646,10 @@ class BuildMatrixEvidenceTests(ContractTestCase):
         # The committed evidence pair must satisfy every rejection above.
         profile = self.profile_of(copy.deepcopy(self.contract))
         inventory = site_data_common.load_json(
-            REPO_ROOT / "docs" / "readiness" / "ci120-build-matrix-inventory.json"
+            REPO_ROOT / "docs" / "readiness" / "build-matrix-inventory.json"
         )
         report = site_data_common.load_json(
-            REPO_ROOT / "docs" / "readiness" / "ci120-parity-findings.json"
+            REPO_ROOT / "docs" / "readiness" / "build-matrix-parity-findings.json"
         )
         self.assertEqual(
             site_data_validate.build_matrix_evidence_errors(inventory, report, profile), []
@@ -1722,7 +1722,7 @@ class BuildMatrixEvidenceTests(ContractTestCase):
             "schemaVersion": 3, "state": "clean", "errorCount": 0, "warningCount": 0, "findings": [],
         }
         messages = " ".join(self.errors(inventory=inventory, report=clean, profile=profile))
-        self.assertIn("clean CI-120 report omits configured evidence for supported product", messages)
+        self.assertIn("clean build-matrix report omits configured evidence for supported product", messages)
         self.assertIn("(shared)", messages)
 
     def test_clean_report_with_full_evidence_is_accepted(self) -> None:
@@ -1766,8 +1766,8 @@ class DuplicateJsonKeyTests(unittest.TestCase):
     def test_contract_files_contain_no_duplicate_keys(self) -> None:
         for name in (
             "docs/site/readiness.json",
-            "docs/readiness/ci120-build-matrix-inventory.json",
-            "docs/readiness/ci120-parity-findings.json",
+            "docs/readiness/build-matrix-inventory.json",
+            "docs/readiness/build-matrix-parity-findings.json",
         ):
             with self.subTest(name=name):
                 self.parse((REPO_ROOT / name).read_text(encoding="utf-8"))

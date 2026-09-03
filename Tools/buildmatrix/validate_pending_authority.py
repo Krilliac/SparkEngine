@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the exact CI-120 producer state awaiting external attestation.
+"""Validate the exact build-matrix producer state awaiting external attestation.
 
 This validator deliberately cannot promote producer evidence to ``verified``.
 It accepts only the reviewed three-error state emitted after all three
@@ -121,7 +121,7 @@ def _validate_report(report: dict[str, Any]) -> dict[str, Any]:
     error_profiles: set[str] = set()
     for finding in errors:
         match = re.fullmatch(
-            r"Profile '([a-z0-9][a-z0-9-]{0,63})' has structurally validated but untrusted CI-120 evidence",
+            r"Profile '([a-z0-9][a-z0-9-]{0,63})' has structurally validated but untrusted build-matrix evidence",
             finding["message"],
         )
         if match is None:
@@ -193,7 +193,7 @@ def _validate_inventory(inventory_document: dict[str, Any]) -> tuple[str, list[d
             raise PendingAuthorityError(f"{identifier}: producer provenance fields are incomplete")
         if (
             provenance.get("state") != "unavailable"
-            or provenance.get("authority") != inventory._CI120_EXTERNAL_AUTHORITY
+            or provenance.get("authority") != inventory._BUILD_MATRIX_EXTERNAL_AUTHORITY
             or provenance.get("structuralState") != "validated"
             or provenance.get("artifactState") != "locally-observed-post-build"
             or provenance.get("producer") != inventory._PROVENANCE_PRODUCER
@@ -239,12 +239,13 @@ def _validate_inventory(inventory_document: dict[str, Any]) -> tuple[str, list[d
             or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", ci["repository"])
             or not ci["runId"].isdigit()
             or not ci["runAttempt"].isdigit()
-            or ci["job"] != inventory._CI120_PRODUCER_JOB
+            or ci["job"] != inventory._BUILD_MATRIX_PRODUCER_JOB
             or ci["runnerOs"] != "Windows"
-            or ci["workflowRef"]
-            != f"{ci['repository']}/{inventory._CI120_WORKFLOW_PATH}@refs/heads/Working"
+            or not ci["workflowRef"].startswith(
+                f"{ci['repository']}/{inventory._BUILD_MATRIX_WORKFLOW_PATH}@refs/"
+            )
         ):
-            raise PendingAuthorityError(f"{identifier}: producer CI identity is not canonical")
+            raise PendingAuthorityError(f"{identifier}: producer CI identity is not the build workflow")
         if shared_ci is None:
             shared_ci = ci
         elif shared_ci != ci:
@@ -277,7 +278,7 @@ def build_pending_receipt(
     return {
         "schemaVersion": 1,
         "state": "pending-external-attestation",
-        "authority": inventory._CI120_EXTERNAL_AUTHORITY,
+        "authority": inventory._BUILD_MATRIX_EXTERNAL_AUTHORITY,
         "profile": "stable-v1",
         "sourceCommit": commit,
         "producer": ci,
@@ -325,9 +326,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         inventory_document, inventory_digest = _read_regular_json(
-            args.inventory, MAX_INVENTORY_BYTES, "CI-120 inventory"
+            args.inventory, MAX_INVENTORY_BYTES, "build-matrix inventory"
         )
-        report, report_digest = _read_regular_json(args.report, MAX_REPORT_BYTES, "CI-120 parity report")
+        report, report_digest = _read_regular_json(args.report, MAX_REPORT_BYTES, "build-matrix parity report")
         receipt = build_pending_receipt(
             inventory_document,
             report,
@@ -344,7 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         except OSError:
             pass
         _write_json_stdout(rejection)
-        print(f"CI-120 PENDING STATE REJECTED: {error}", file=sys.stderr)
+        print(f"BUILD-MATRIX PENDING STATE REJECTED: {error}", file=sys.stderr)
         return 1
 
 

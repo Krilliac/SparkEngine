@@ -3,7 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const ci120Status = require('./ci120-commit-status.js');
+const buildMatrixStatus = require('./build-matrix-commit-status.js');
 
 const SHA = '1111111111111111111111111111111111111111';
 const OTHER_SHA = '2222222222222222222222222222222222222222';
@@ -16,7 +16,7 @@ const RAW_DIGEST_A = 'a'.repeat(64);
 const RAW_DIGEST_B = 'b'.repeat(64);
 const RAW_DIGEST_C = 'c'.repeat(64);
 const ENV_KEYS = [
-    'CI120_STATUS_MODE', 'TRUSTED_CHECKOUT_SHA', 'TRUSTED_WORKFLOW_REF',
+    'BUILD_MATRIX_STATUS_MODE', 'TRUSTED_CHECKOUT_SHA', 'TRUSTED_WORKFLOW_REF',
     'TRUSTED_WORKFLOW_SHA', 'VERIFIER_TEST_OUTCOME', 'PREFLIGHT_OUTCOME',
     'DOWNLOAD_OUTCOME', 'VERIFY_EVIDENCE_OUTCOME', 'ATTEST_RECEIPT_OUTCOME',
     'UPLOAD_RECEIPT_OUTCOME', 'SOURCE_METADATA_PATH', 'RECEIPT_PATH',
@@ -54,7 +54,7 @@ function fixture(action = 'in_progress') {
         path: '.github/workflows/build.yml@refs/heads/Working',
         event: 'push',
         status: action === 'in_progress' ? 'in_progress' : 'completed',
-        conclusion: action === 'in_progress' ? null : 'failure',
+        conclusion: action === 'in_progress' ? null : 'success',
         head_branch: 'Working',
         head_sha: SHA,
         repository,
@@ -63,20 +63,20 @@ function fixture(action = 'in_progress') {
     const requiredSteps = [
         'Checkout repository',
         'Setup MSVC',
-        'Configure and build canonical Windows Shipping lane (CI-120)',
-        'Capture Windows Shipping structural provenance (CI-120)',
-        'Install exact Windows Shipping SDK for the consumer profile (CI-120)',
-        'Configure and build canonical Windows validation lane (CI-120)',
-        'Capture Windows validation structural provenance (CI-120)',
-        'Configure and build installed SDK consumer lane (CI-120)',
-        'Capture installed SDK consumer structural provenance (CI-120)',
-        'Generate configured build-matrix inventory from the structural producer (CI-120)',
-        'Compare reviewed configured-evidence findings (CI-120)',
-        'Upload untrusted CI-120 structural evidence'
+        'Configure and build the Windows Shipping lane',
+        'Capture Windows Shipping provenance',
+        'Install the Windows Shipping SDK for the consumer profile',
+        'Configure and build the Windows validation lane',
+        'Capture Windows validation provenance',
+        'Configure and build the installed SDK consumer lane',
+        'Capture installed SDK consumer provenance',
+        'Generate the configured build-matrix inventory',
+        'Check the configured build matrix',
+        'Upload build-matrix evidence'
     ];
     const sourceJob = {
         id: 606,
-        name: 'Windows Shipping structural configured-evidence producer',
+        name: 'Windows Shipping build matrix',
         run_id: run.id,
         run_attempt: run.run_attempt,
         head_sha: run.head_sha,
@@ -84,15 +84,15 @@ function fixture(action = 'in_progress') {
         workflow_name: run.name,
         run_url: `https://api.github.com/repos/${repository.full_name}/actions/runs/${run.id}`,
         status: 'completed',
-        conclusion: 'failure',
+        conclusion: 'success',
         steps: [
             ...requiredSteps.map(name => ({ name, status: 'completed', conclusion: 'success' })),
-            { name: 'Enforce reviewed CI-120 findings', status: 'completed', conclusion: 'failure' }
+            { name: 'Record build-matrix evidence', status: 'completed', conclusion: 'success' }
         ]
     };
     const sourceArtifact = {
         id: 707,
-        name: `ci120-untrusted-stable-v1-${SHA}-1`,
+        name: `build-matrix-stable-v1-${SHA}-1`,
         expired: false,
         size_in_bytes: 8192,
         digest: `sha256:${'a'.repeat(64)}`,
@@ -211,10 +211,10 @@ function harness(data) {
 
 function baseEnvironment(mode) {
     return {
-        CI120_STATUS_MODE: mode,
+        BUILD_MATRIX_STATUS_MODE: mode,
         TRUSTED_CHECKOUT_SHA: SHA,
         TRUSTED_WORKFLOW_SHA: SHA,
-        TRUSTED_WORKFLOW_REF: 'Krilliac/SparkEngine/.github/workflows/ci120-report.yml@refs/heads/Working',
+        TRUSTED_WORKFLOW_REF: 'Krilliac/SparkEngine/.github/workflows/build-matrix-verifier.yml@refs/heads/Working',
         GITHUB_RUN_ID: String(REPORTER_RUN_ID),
         GITHUB_RUN_ATTEMPT: '2'
     };
@@ -224,7 +224,7 @@ async function runMode(data, mode, overrides = {}) {
     const runtime = harness(data);
     const result = await withEnvironment(
         { ...baseEnvironment(mode), ...overrides },
-        () => ci120Status(runtime)
+        () => buildMatrixStatus(runtime)
     );
     return { runtime, result };
 }
@@ -241,18 +241,18 @@ function sourceMetadata() {
             runNumber: 50,
             runAttempt: 1,
             event: 'push',
-            conclusion: 'failure',
+            conclusion: 'success',
             headBranch: 'Working',
             headSha: SHA,
             jobId: 606,
-            jobName: 'Windows Shipping structural configured-evidence producer',
-            jobConclusion: 'failure',
-            finalStepName: 'Enforce reviewed CI-120 findings',
-            finalStepConclusion: 'failure'
+            jobName: 'Windows Shipping build matrix',
+            jobConclusion: 'success',
+            finalStepName: 'Record build-matrix evidence',
+            finalStepConclusion: 'success'
         },
         artifact: {
             id: 707,
-            name: `ci120-untrusted-stable-v1-${SHA}-1`,
+            name: `build-matrix-stable-v1-${SHA}-1`,
             bytes: 8192,
             digest: `sha256:${'a'.repeat(64)}`
         },
@@ -260,7 +260,7 @@ function sourceMetadata() {
             repository: 'Krilliac/SparkEngine',
             checkoutSha: SHA,
             workflowSha: SHA,
-            workflowRef: 'Krilliac/SparkEngine/.github/workflows/ci120-report.yml@refs/heads/Working',
+            workflowRef: 'Krilliac/SparkEngine/.github/workflows/build-matrix-verifier.yml@refs/heads/Working',
             sourceWorkflowBlobSha: WORKFLOW_BLOB_SHA,
             trustedWorkflowBlobSha: WORKFLOW_BLOB_SHA
         }
@@ -270,7 +270,7 @@ function sourceMetadata() {
 function trustedReceipt(metadata = sourceMetadata()) {
     return {
         schemaVersion: 1,
-        kind: 'spark-ci120-trusted-workflow-run',
+        kind: 'spark-build-matrix-trusted-workflow-run',
         state: 'verified',
         authority: 'github-actions-protected-workflow-run-v1',
         profile: 'stable-v1',
@@ -289,7 +289,7 @@ function trustedReceipt(metadata = sourceMetadata()) {
             jobId: metadata.source.jobId,
             jobName: metadata.source.jobName,
             jobConclusion: metadata.source.jobConclusion,
-            expectedFailClosedStep: metadata.source.finalStepName
+            expectedFinalStep: metadata.source.finalStepName
         },
         verifier: {
             repository: metadata.verifier.repository,
@@ -331,7 +331,7 @@ function trustedReceipt(metadata = sourceMetadata()) {
 }
 
 function testPreflightApiGuards() {
-    const exactSinglePageInventory = ci120Status._test.exactSinglePageInventory ||
+    const exactSinglePageInventory = buildMatrixStatus._test.exactSinglePageInventory ||
         ((response, key) => response.data[key]);
     const completeJobs = { data: { total_count: 1, jobs: [{ id: 1 }] } };
     assert.deepStrictEqual(
@@ -367,7 +367,7 @@ function testPreflightApiGuards() {
         'an otherwise complete single-page inventory above 100 entries must fail closed'
     );
 
-    const artifactWorkflowRunMatches = ci120Status._test.artifactWorkflowRunMatches || (() => true);
+    const artifactWorkflowRunMatches = buildMatrixStatus._test.artifactWorkflowRunMatches || (() => true);
     const data = fixture('completed');
     const artifact = {
         workflow_run: {
@@ -398,11 +398,11 @@ function testPreflightApiGuards() {
 }
 
 async function testSourceJobArtifactAuthorization() {
-    assert.strictEqual(typeof ci120Status.authorizeSourceJobArtifact, 'function',
+    assert.strictEqual(typeof buildMatrixStatus.authorizeSourceJobArtifact, 'function',
         'the workflow must call one tested source job/artifact authorizer');
     const data = fixture('completed');
     const runtime = harness(data);
-    const authorized = await ci120Status.authorizeSourceJobArtifact({
+    const authorized = await buildMatrixStatus.authorizeSourceJobArtifact({
         github: runtime.github,
         context: runtime.context,
         run: data.run,
@@ -411,7 +411,7 @@ async function testSourceJobArtifactAuthorization() {
     });
     assert.strictEqual(authorized.sourceJob.id, 606);
     assert.strictEqual(authorized.artifact.id, 707);
-    assert.strictEqual(authorized.finalStep.conclusion, 'failure');
+    assert.strictEqual(authorized.finalStep.conclusion, 'success');
 
     const hostileJobs = [
         ['null inventory entry', value => { value.sourceJobs.push(null); }],
@@ -452,7 +452,7 @@ async function testSourceJobArtifactAuthorization() {
         mutate(hostile);
         const hostileRuntime = harness(hostile);
         try {
-            await ci120Status.authorizeSourceJobArtifact({
+            await buildMatrixStatus.authorizeSourceJobArtifact({
                 github: hostileRuntime.github,
                 context: hostileRuntime.context,
                 run: hostile.run,
@@ -472,7 +472,7 @@ async function testSourceJobArtifactAuthorization() {
     const truncated = fixture('completed');
     truncated.jobsTotalCount = 2;
     await assert.rejects(
-        () => ci120Status.authorizeSourceJobArtifact({
+        () => buildMatrixStatus.authorizeSourceJobArtifact({
             github: harness(truncated).github,
             context: runtime.context,
             run: truncated.run,
@@ -485,7 +485,7 @@ async function testSourceJobArtifactAuthorization() {
     const forged = fixture('completed');
     forged.sourceArtifacts[0].workflow_run.head_sha = OTHER_SHA;
     await assert.rejects(
-        () => ci120Status.authorizeSourceJobArtifact({
+        () => buildMatrixStatus.authorizeSourceJobArtifact({
             github: harness(forged).github,
             context: runtime.context,
             run: forged.run,
@@ -516,38 +516,38 @@ function finalEnvironment(root, metadata = sourceMetadata(), receipt = trustedRe
 }
 
 function testWorkflowShape() {
-    const workflow = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'ci120-report.yml'), 'utf8');
+    const workflow = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'build-matrix-verifier.yml'), 'utf8');
     const build = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'build.yml'), 'utf8');
     assert(workflow.includes('types: [in_progress, completed]'));
     assert(workflow.includes('statuses: write'));
     assert(!workflow.includes('checks: write'));
-    assert(workflow.includes('group: ci120-trusted-source-${{ github.event.workflow_run.head_sha }}'));
+    assert(workflow.includes('group: build-matrix-trusted-source-${{ github.event.workflow_run.head_sha }}'));
     assert.strictEqual((workflow.match(/^\s+queue:/gm) || []).length, 0,
         'concurrency blocks must use only supported GitHub Actions keys');
     assert(workflow.includes("github.event.action == 'in_progress'"));
     assert(workflow.includes("github.event.action == 'completed'"));
-    assert(workflow.includes('CI120_STATUS_MODE: pending'));
-    assert(workflow.includes('CI120_STATUS_MODE: final'));
+    assert(workflow.includes('BUILD_MATRIX_STATUS_MODE: pending'));
+    assert(workflow.includes('BUILD_MATRIX_STATUS_MODE: final'));
     assert(workflow.includes('status.authorizeSourceJobArtifact({'),
         'the trusted workflow must use the behavior-tested source job/artifact authorizer');
     assert(workflow.includes('id: upload-receipt'));
-    assert(workflow.includes('ci120-trusted-receipt-${{ github.event.workflow_run.head_sha }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}-${{ github.run_attempt }}'),
+    assert(workflow.includes('build-matrix-trusted-receipt-${{ github.event.workflow_run.head_sha }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}-${{ github.run_attempt }}'),
         'the durable receipt artifact must bind the exact source run and attempt');
     assert(workflow.includes("if: always() && steps.trusted-attestation.outcome == 'success'"));
-    assert(build.includes('node .github/scripts/test-ci120-commit-status.js'),
+    assert(build.includes('node .github/scripts/test-build-matrix-commit-status.js'),
         'the trusted status tests must run in validate-ci-tools');
 }
 
 async function main() {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spark-ci120-status-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spark-build-matrix-status-'));
     try {
         testWorkflowShape();
         testPreflightApiGuards();
         await testSourceJobArtifactAuthorization();
 
         await assert.rejects(
-            () => withEnvironment({ CI120_STATUS_MODE: 'unsafe' }, () => ci120Status(harness(fixture()))),
-            /Unsupported CI120_STATUS_MODE/
+            () => withEnvironment({ BUILD_MATRIX_STATUS_MODE: 'unsafe' }, () => buildMatrixStatus(harness(fixture()))),
+            /Unsupported BUILD_MATRIX_STATUS_MODE/
         );
 
         const pending = await runMode(fixture(), 'pending');
@@ -559,8 +559,8 @@ async function main() {
             sha: SHA,
             state: 'pending',
             target_url: `https://github.com/Krilliac/SparkEngine/actions/runs/${REPORTER_RUN_ID}/attempts/2`,
-            description: `Trusted CI-120 verification running for Build run ${RUN_ID}, attempt 1.`,
-            context: 'CI-120 Trusted / Exact Source'
+            description: `Trusted build-matrix verification running for Build run ${RUN_ID}, attempt 1.`,
+            context: 'Build Matrix Verifier / Exact Source'
         });
         assert.deepStrictEqual(pending.runtime.observed.statuses[1], {
             owner: 'Krilliac',
@@ -614,7 +614,7 @@ async function main() {
                 temporalRace, mode, mode === 'final' ? finalEnvironment(root) : {});
             assert.strictEqual(raced.runtime.observed.statuses.length, 0,
                 `a newer execution appearing in the immediate inventory must block ${mode} status`);
-            assert(raced.runtime.observed.failed.some(message => message.includes('newer CI-120 source run')),
+            assert(raced.runtime.observed.failed.some(message => message.includes('newer build-matrix source run')),
                 `the immediate ${mode} inventory race must fail closed`);
         }
 
@@ -626,12 +626,12 @@ async function main() {
         newerDispatchData.workflowRuns = [newerDispatch, newerDispatchData.run];
         const superseded = await runMode(newerDispatchData, 'pending');
         assert.strictEqual(superseded.runtime.observed.statuses.length, 0);
-        assert(superseded.runtime.observed.failed.some(message => message.includes('newer CI-120 source run')));
+        assert(superseded.runtime.observed.failed.some(message => message.includes('newer build-matrix source run')));
 
         const lateData = fixture();
         const completed = clone(lateData.run);
         completed.status = 'completed';
-        completed.conclusion = 'failure';
+        completed.conclusion = 'success';
         lateData.workflowRunResponses = [lateData.run, completed];
         const late = await runMode(lateData, 'pending');
         assert.strictEqual(late.runtime.observed.statuses.length, 0,
@@ -673,19 +673,19 @@ async function main() {
             sha: SHA,
             state: 'pending',
             target_url: `https://github.com/Krilliac/SparkEngine/actions/runs/${REPORTER_RUN_ID}/attempts/2`,
-            description: `Trusted CI-120 verification running for Build run ${RUN_ID}, attempt 1.`,
-            context: 'CI-120 Trusted / Exact Source'
+            description: `Trusted build-matrix verification running for Build run ${RUN_ID}, attempt 1.`,
+            context: 'Build Matrix Verifier / Exact Source'
         });
         assert.strictEqual(success.runtime.observed.statuses[1].context,
             'Trusted Exact-Source CI / Aggregate');
         assert.strictEqual(success.runtime.observed.statuses[2].state, 'success');
         assert.strictEqual(success.runtime.observed.statuses[2].sha, SHA);
         assert.strictEqual(success.runtime.observed.statuses[2].description,
-            `Trusted CI-120 verified for Build run ${RUN_ID}, attempt 1.`);
+            `Trusted build-matrix verified for Build run ${RUN_ID}, attempt 1.`);
         assert.strictEqual(success.result.evidenceState, 'verified');
         assert(fs.existsSync(successEnv.STATUS_RECORD_PATH));
         const successRecord = JSON.parse(fs.readFileSync(successEnv.STATUS_RECORD_PATH, 'utf8'));
-        assert.strictEqual(successRecord.commitStatus.context, 'CI-120 Trusted / Exact Source');
+        assert.strictEqual(successRecord.commitStatus.context, 'Build Matrix Verifier / Exact Source');
 
         const failedOutcomeEnv = {
             ...finalEnvironment(root),
@@ -743,10 +743,10 @@ async function main() {
         assert.strictEqual(apiError.result.commitStatus.reason, 'api-error');
         assert.strictEqual(apiError.runtime.observed.statuses.length, 1);
         assert.strictEqual(apiError.runtime.observed.statuses[0].context,
-            'CI-120 Trusted / Exact Source');
+            'Build Matrix Verifier / Exact Source');
         assert(apiError.runtime.observed.failed.some(message => message.includes('status API failed')));
 
-        console.log('ci120 exact-source commit status scenarios passed');
+        console.log('build-matrix exact-source commit status scenarios passed');
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }

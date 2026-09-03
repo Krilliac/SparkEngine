@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the exact staged Build and trusted CI-120 evidence for publication."""
+"""Verify the exact staged Build and trusted build-matrix evidence for publication."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ REPOSITORY_PATTERN = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 DIGEST_PATTERN = re.compile(r"sha256:[0-9a-fA-F]{64}")
 MAX_API_ITEMS = 100
 MAX_SOURCE_RUNS = 200
-MAX_CI120_SOURCE_ARTIFACT_BYTES = 4 * 1024 * 1024 * 1024
+MAX_BUILD_MATRIX_SOURCE_ARTIFACT_BYTES = 4 * 1024 * 1024 * 1024
 MAX_CODEQL_SOURCE_ARTIFACT_BYTES = 25 * 1024 * 1024
 MAX_CODEQL_SOURCE_ARTIFACT_TOTAL_BYTES = 75 * 1024 * 1024
 GITHUB_ACTIONS_BOT_ID = 41898282
@@ -32,13 +32,13 @@ GITHUB_ACTIONS_BOT_ID = 41898282
 SOURCE_WORKFLOW_NAME = "Build SparkEngine"
 SOURCE_WORKFLOW_PATH = ".github/workflows/build.yml"
 SOURCE_BRANCH = "Working"
-SOURCE_JOB_NAME = "Windows Shipping structural configured-evidence producer"
-SOURCE_FINAL_STEP = "Enforce reviewed CI-120 findings"
+SOURCE_JOB_NAME = "Windows Shipping build matrix"
+SOURCE_FINAL_STEP = "Record build-matrix evidence"
 REQUIRED_GATE_NAME = "Required CI Gate"
-STATUS_CONTEXT = "CI-120 Trusted / Exact Source"
-VERIFIER_WORKFLOW_NAME = "CI-120 Trusted Verifier"
-VERIFIER_WORKFLOW_PATH = ".github/workflows/ci120-report.yml"
-VERIFIER_JOB_NAME = "Verify and attest CI-120 evidence"
+STATUS_CONTEXT = "Build Matrix Verifier / Exact Source"
+VERIFIER_WORKFLOW_NAME = "Build Matrix Verifier"
+VERIFIER_WORKFLOW_PATH = ".github/workflows/build-matrix-verifier.yml"
+VERIFIER_JOB_NAME = "Verify and attest build-matrix evidence"
 CODEQL_SOURCE_WORKFLOW_NAME = "CodeQL Advanced"
 CODEQL_SOURCE_WORKFLOW_PATH = ".github/workflows/codeql.yml"
 CODEQL_STATUS_CONTEXT = "CodeQL Trusted / Exact Source"
@@ -49,30 +49,30 @@ CODEQL_REPORTER_JOB_NAME = "Validate and report CodeQL evidence"
 SOURCE_REQUIRED_STEPS = (
     "Checkout repository",
     "Setup MSVC",
-    "Configure and build canonical Windows Shipping lane (CI-120)",
-    "Capture Windows Shipping structural provenance (CI-120)",
-    "Install exact Windows Shipping SDK for the consumer profile (CI-120)",
-    "Configure and build canonical Windows validation lane (CI-120)",
-    "Capture Windows validation structural provenance (CI-120)",
-    "Configure and build installed SDK consumer lane (CI-120)",
-    "Capture installed SDK consumer structural provenance (CI-120)",
-    "Generate configured build-matrix inventory from the structural producer (CI-120)",
-    "Compare reviewed configured-evidence findings (CI-120)",
-    "Upload untrusted CI-120 structural evidence",
+    "Configure and build the Windows Shipping lane",
+    "Capture Windows Shipping provenance",
+    "Install the Windows Shipping SDK for the consumer profile",
+    "Configure and build the Windows validation lane",
+    "Capture Windows validation provenance",
+    "Configure and build the installed SDK consumer lane",
+    "Capture installed SDK consumer provenance",
+    "Generate the configured build-matrix inventory",
+    "Check the configured build matrix",
+    "Upload build-matrix evidence",
 )
 
 VERIFIER_REQUIRED_STEPS = (
     "Checkout trusted default-branch verifier",
     "Resolve trusted verifier commit",
     "Attest exact default-branch verifier before execution",
-    "Mark exact source CI-120 status pending",
-    "Test trusted CI-120 verifier",
+    "Mark the exact source build-matrix status pending",
+    "Test the trusted build-matrix verifier",
     "Authorize exact source run, job, and artifact",
-    "Download exact CI-120 source artifact",
-    "Verify untrusted CI-120 evidence as bounded data",
-    "Attest trusted CI-120 receipt",
-    "Upload trusted CI-120 receipt",
-    "Publish exact source CI-120 status",
+    "Download the exact build-matrix source artifact",
+    "Verify the build-matrix evidence as bounded data",
+    "Attest the trusted build-matrix receipt",
+    "Upload the trusted build-matrix receipt",
+    "Publish the exact source build-matrix status",
 )
 
 CODEQL_SOURCE_JOB_NAMES = frozenset({"Analyze (actions)", "Analyze (c-cpp)", "Analyze (python)"})
@@ -103,24 +103,24 @@ class GateEvidence:
     run_url: str
     event: str
     run_attempt: int
-    build_ci120_producer_job_id: int
+    build_build_matrix_producer_job_id: int
     build_required_gate_job_id: int
     build_job_inventory_digest: str
-    ci120_source_artifact_id: int
-    ci120_source_artifact_digest: str
-    ci120_source_artifact_bytes: int
-    ci120_status_id: int
-    ci120_status_target_url: str
-    ci120_status_created_at: str
-    ci120_status_updated_at: str
+    build_matrix_source_artifact_id: int
+    build_matrix_source_artifact_digest: str
+    build_matrix_source_artifact_bytes: int
+    build_matrix_status_id: int
+    build_matrix_status_target_url: str
+    build_matrix_status_created_at: str
+    build_matrix_status_updated_at: str
     verifier_run_id: int
     verifier_run_url: str
     verifier_run_attempt: int
     verifier_sha: str
-    ci120_trusted_verifier_job_id: int
-    ci120_verifier_job_inventory_digest: str
-    ci120_status_publish_step_started_at: str
-    ci120_status_publish_step_completed_at: str
+    build_matrix_trusted_verifier_job_id: int
+    build_matrix_verifier_job_inventory_digest: str
+    build_matrix_status_publish_step_started_at: str
+    build_matrix_status_publish_step_completed_at: str
     receipt_artifact_id: int
     receipt_artifact_digest: str
     receipt_artifact_bytes: int
@@ -197,7 +197,7 @@ class CodeQLEvidence:
 
 @dataclass(frozen=True)
 class BuildJobEvidence:
-    ci120_producer_job_id: int
+    build_matrix_producer_job_id: int
     required_gate_job_id: int
     inventory_digest: str
     source_upload_step_started_at: str
@@ -526,8 +526,8 @@ def _latest_source_run(
     if not candidates:
         raise ValueError(f"no exact push/workflow_dispatch Build run exists for {target_sha}")
     latest = max(candidates, key=lambda item: (_source_identity(item)[1], _source_identity(item)[2]))
-    if latest.get("status") != "completed" or latest.get("conclusion") != "failure":
-        raise ValueError("newest exact Build attempt is not the completed staged CI-120 failure")
+    if latest.get("status") != "completed" or latest.get("conclusion") != "success":
+        raise ValueError("newest exact Build attempt is not a completed successful run")
     return latest
 
 
@@ -550,8 +550,8 @@ def _live_source_run(
         selected, "selected Build source run"
     ):
         raise ValueError("exact Build run execution window changed after inventory selection")
-    if live.get("status") != "completed" or live.get("conclusion") != "failure":
-        raise ValueError("exact Build run is no longer the completed staged CI-120 failure")
+    if live.get("status") != "completed" or live.get("conclusion") != "success":
+        raise ValueError("exact Build run is no longer a completed successful run")
     return live
 
 
@@ -737,7 +737,7 @@ def _source_artifact_inventory(
     return artifacts
 
 
-def _verify_ci120_source_artifact(
+def _verify_build_matrix_source_artifact(
     fetch_json: FetchJson,
     repository: str,
     repository_id: int,
@@ -746,24 +746,24 @@ def _verify_ci120_source_artifact(
 ) -> SourceArtifactEvidence:
     _, _, attempt = _source_identity(source)
     source_sha = str(source.get("head_sha", "")).lower()
-    expected_name = f"ci120-untrusted-stable-v1-{source_sha}-{attempt}"
+    expected_name = f"build-matrix-stable-v1-{source_sha}-{attempt}"
     artifacts = _source_artifact_inventory(
         fetch_json, repository, source, "Build source artifacts"
     )
     matches = [artifact for artifact in artifacts if artifact.get("name") == expected_name]
     if len(matches) != 1:
-        raise ValueError("Build source run must retain one exact CI-120 source artifact")
+        raise ValueError("Build source run must retain one exact build-matrix source artifact")
     return _validate_source_artifact(
         matches[0],
         repository=repository,
         repository_id=repository_id,
         source=source,
         expected_name=expected_name,
-        language="ci120",
+        language="build-matrix",
         upload_step_started_at=jobs.source_upload_step_started_at,
         upload_step_completed_at=jobs.source_upload_step_completed_at,
-        max_size=MAX_CI120_SOURCE_ARTIFACT_BYTES,
-        label="CI-120 source artifact",
+        max_size=MAX_BUILD_MATRIX_SOURCE_ARTIFACT_BYTES,
+        label="build-matrix source artifact",
     )
 
 
@@ -862,43 +862,38 @@ def _verify_source_jobs(
     source_jobs = [job for job in jobs if job.get("name") == SOURCE_JOB_NAME]
     gates = [job for job in jobs if job.get("name") == REQUIRED_GATE_NAME]
     if len(source_jobs) != 1 or len(gates) != 1:
-        raise ValueError("exact Build attempt must contain one CI-120 producer and one Required CI Gate")
+        raise ValueError("exact Build attempt must contain one build-matrix producer and one Required CI Gate")
     source_job = source_jobs[0]
     gate = gates[0]
-    if source_job.get("status") != "completed" or source_job.get("conclusion") != "failure":
-        raise ValueError("CI-120 producer is not the exact completed staged failure")
+    if source_job.get("status") != "completed" or source_job.get("conclusion") != "success":
+        raise ValueError("build-matrix producer is not the exact completed successful job")
     if gate.get("status") != "completed" or gate.get("conclusion") != "success":
         raise ValueError("Required CI Gate did not succeed in the exact Build attempt")
     for job in jobs:
-        if job is source_job:
-            continue
         if job.get("status") != "completed" or job.get("conclusion") not in {"success", "skipped"}:
             raise ValueError(f"unexpected non-success Build job: {job.get('name', '<unknown>')}")
     for name in SOURCE_REQUIRED_STEPS:
         _exact_step(source_job, name, "success")
-    _exact_step(source_job, SOURCE_FINAL_STEP, "failure")
+    _exact_step(source_job, SOURCE_FINAL_STEP, "success")
     unexpected = []
     seen_step_names: set[str] = set()
     for step in source_job["steps"]:
         step_name = str(step.get("name", ""))
         if not step_name or step_name in seen_step_names:
-            raise ValueError("CI-120 producer contains a duplicate or unnamed step")
+            raise ValueError("build-matrix producer contains a duplicate or unnamed step")
         seen_step_names.add(step_name)
         if step.get("status") != "completed":
             unexpected.append(step_name)
-        elif step_name == SOURCE_FINAL_STEP:
-            if step.get("conclusion") != "failure":
-                unexpected.append(step_name)
         elif step.get("conclusion") != "success":
             unexpected.append(step_name)
     if unexpected:
-        raise ValueError(f"CI-120 producer has unexpected non-success steps: {unexpected}")
+        raise ValueError(f"build-matrix producer has unexpected non-success steps: {unexpected}")
     source_upload = _exact_step(source_job, SOURCE_REQUIRED_STEPS[-1], "success")
     upload_started, upload_completed = _verified_step_window(
-        source_job, source_upload, "CI-120 source upload"
+        source_job, source_upload, "build-matrix source upload"
     )
     return BuildJobEvidence(
-        ci120_producer_job_id=int(source_job["id"]),
+        build_matrix_producer_job_id=int(source_job["id"]),
         required_gate_job_id=int(gate["id"]),
         inventory_digest=_job_inventory_digest(jobs, "Build attempt"),
         source_upload_step_started_at=upload_started,
@@ -938,7 +933,7 @@ def verify_exact_staged_build(
         fetch_json, repository, repository_id, target_sha, selected
     )
     source_jobs = _verify_source_jobs(fetch_json, repository, source)
-    source_artifact = _verify_ci120_source_artifact(
+    source_artifact = _verify_build_matrix_source_artifact(
         fetch_json, repository, repository_id, source, source_jobs
     )
 
@@ -949,7 +944,7 @@ def verify_exact_staged_build(
     if _source_identity(final_source) != identity:
         raise ValueError("exact staged Build evidence changed during final revalidation")
     final_jobs = _verify_source_jobs(fetch_json, repository, final_source)
-    final_source_artifact = _verify_ci120_source_artifact(
+    final_source_artifact = _verify_build_matrix_source_artifact(
         fetch_json, repository, repository_id, final_source, final_jobs
     )
     if final_jobs != source_jobs or final_source_artifact.signature != source_artifact.signature:
@@ -982,10 +977,10 @@ def _trusted_status(
     statuses = _bounded_collection(payload, "statuses", "combined commit status")
     matches = [status for status in statuses if status.get("context") == STATUS_CONTEXT]
     if len(matches) != 1:
-        raise ValueError("combined commit status must contain one latest trusted CI-120 context")
+        raise ValueError("combined commit status must contain one latest trusted build-matrix context")
     status = matches[0]
     run_id, _, source_attempt = _source_identity(source)
-    expected_description = f"Trusted CI-120 verified for Build run {run_id}, attempt {source_attempt}."
+    expected_description = f"Trusted build-matrix verified for Build run {run_id}, attempt {source_attempt}."
     creator = status.get("creator")
     if (
         status.get("state") != "success"
@@ -997,14 +992,14 @@ def _trusted_status(
         or creator.get("login") != "github-actions[bot]"
         or creator.get("type") != "Bot"
     ):
-        raise ValueError("latest CI-120 status is not the exact trusted successful source binding")
-    _positive_int(status.get("id"), "CI-120 status id")
+        raise ValueError("latest build-matrix status is not the exact trusted successful source binding")
+    _positive_int(status.get("id"), "build-matrix status id")
     target_pattern = re.compile(
         rf"https://github\.com/{re.escape(repository)}/actions/runs/([1-9][0-9]*)/attempts/([1-9][0-9]*)"
     )
     target = target_pattern.fullmatch(str(status.get("target_url", "")))
     if not target:
-        raise ValueError("trusted CI-120 status target is not an exact verifier run attempt")
+        raise ValueError("trusted build-matrix status target is not an exact verifier run attempt")
     return status, int(target.group(1)), int(target.group(2))
 
 
@@ -1035,7 +1030,7 @@ def _verify_verifier_run(
 ) -> dict[str, Any]:
     run = _object(
         fetch_json(f"/repos/{repository}/actions/runs/{verifier_run_id}"),
-        "CI-120 verifier run",
+        "build-matrix verifier run",
     )
     if (
         run.get("id") != verifier_run_id
@@ -1052,10 +1047,10 @@ def _verify_verifier_run(
         or not _exact_repository(run.get("repository"), repository_id, repository)
         or not _exact_repository(run.get("head_repository"), repository_id, repository)
     ):
-        raise ValueError("status target is not the exact successful trusted CI-120 verifier run")
+        raise ValueError("status target is not the exact successful trusted build-matrix verifier run")
     expected_url = f"https://github.com/{repository}/actions/runs/{verifier_run_id}"
     if run.get("html_url") != expected_url:
-        raise ValueError("trusted CI-120 verifier run URL is not exact")
+        raise ValueError("trusted build-matrix verifier run URL is not exact")
     return run
 
 
@@ -1068,23 +1063,23 @@ def _verify_verifier_jobs(
     verifier_run: dict[str, Any],
     status: dict[str, Any],
 ) -> TrustedJobEvidence:
-    run_started, run_updated = _run_window(verifier_run, "CI-120 verifier run")
+    run_started, run_updated = _run_window(verifier_run, "build-matrix verifier run")
     jobs = _bounded_collection(
         fetch_json(
             f"/repos/{repository}/actions/runs/{verifier_run_id}/attempts/{verifier_attempt}/jobs"
             f"?per_page={MAX_API_ITEMS}"
         ),
         "jobs",
-        "exact CI-120 verifier attempt jobs",
+        "exact build-matrix verifier attempt jobs",
     )
     expected_run_url = f"https://api.github.com/repos/{repository}/actions/runs/{verifier_run_id}"
     job_ids: set[int] = set()
     job_names: set[str] = set()
     for job in jobs:
-        job_id = _positive_int(job.get("id"), "CI-120 verifier job id")
+        job_id = _positive_int(job.get("id"), "build-matrix verifier job id")
         job_name = str(job.get("name", ""))
         if not job_name or job_id in job_ids or job_name in job_names:
-            raise ValueError("CI-120 verifier attempt contains a duplicate or unnamed job")
+            raise ValueError("build-matrix verifier attempt contains a duplicate or unnamed job")
         if (
             job.get("run_id") != verifier_run_id
             or job.get("run_attempt") != verifier_attempt
@@ -1093,17 +1088,17 @@ def _verify_verifier_jobs(
             or job.get("head_branch") != SOURCE_BRANCH
             or job.get("run_url") != expected_run_url
         ):
-            raise ValueError("CI-120 verifier job provenance does not match the trusted run")
-        _verify_job_window(job, run_started, run_updated, f"CI-120 verifier job '{job_name}'")
+            raise ValueError("build-matrix verifier job provenance does not match the trusted run")
+        _verify_job_window(job, run_started, run_updated, f"build-matrix verifier job '{job_name}'")
         job_ids.add(job_id)
         job_names.add(job_name)
 
     verify_jobs = [job for job in jobs if job.get("name") == VERIFIER_JOB_NAME]
     if len(verify_jobs) != 1:
-        raise ValueError("trusted CI-120 verifier attempt must contain exactly one verification job")
+        raise ValueError("trusted build-matrix verifier attempt must contain exactly one verification job")
     verify_job = verify_jobs[0]
     if verify_job.get("status") != "completed" or verify_job.get("conclusion") != "success":
-        raise ValueError("trusted CI-120 verification job did not succeed")
+        raise ValueError("trusted build-matrix verification job did not succeed")
     for job in jobs:
         if job.get("status") != "completed" or job.get("conclusion") not in {"success", "skipped"}:
             raise ValueError(f"unexpected non-success verifier job: {job.get('name', '<unknown>')}")
@@ -1114,24 +1109,24 @@ def _verify_verifier_jobs(
     for step in verify_job.get("steps", []):
         step_name = str(step.get("name", ""))
         if not step_name or step_name in seen_step_names:
-            raise ValueError("CI-120 verifier contains a duplicate or unnamed step")
+            raise ValueError("build-matrix verifier contains a duplicate or unnamed step")
         seen_step_names.add(step_name)
         if step.get("status") != "completed" or step.get("conclusion") != "success":
             unexpected_steps.append(step_name)
     if unexpected_steps:
-        raise ValueError(f"CI-120 verifier has unexpected non-success steps: {unexpected_steps}")
+        raise ValueError(f"build-matrix verifier has unexpected non-success steps: {unexpected_steps}")
     upload_started, upload_completed, publish_started, publish_completed = (
         _verify_status_publish_window(
             status,
             verify_job,
             VERIFIER_REQUIRED_STEPS[-2],
             VERIFIER_REQUIRED_STEPS[-1],
-            "trusted CI-120 status",
+            "trusted build-matrix status",
         )
     )
     return TrustedJobEvidence(
         job_id=int(verify_job["id"]),
-        inventory_digest=_job_inventory_digest(jobs, "CI-120 verifier attempt"),
+        inventory_digest=_job_inventory_digest(jobs, "build-matrix verifier attempt"),
         artifact_upload_step_started_at=upload_started,
         artifact_upload_step_completed_at=upload_completed,
         status_publish_step_started_at=publish_started,
@@ -1252,16 +1247,16 @@ def _verify_receipt_artifact(
             f"/repos/{repository}/actions/runs/{verifier_run_id}/artifacts?per_page={MAX_API_ITEMS}"
         ),
         "artifacts",
-        "CI-120 verifier artifacts",
+        "build-matrix verifier artifacts",
     )
-    _verify_artifact_inventory_identities(artifacts, "CI-120 verifier artifacts")
+    _verify_artifact_inventory_identities(artifacts, "build-matrix verifier artifacts")
     source_run_id, _, source_attempt = _source_identity(source)
     expected_name = (
-        f"ci120-trusted-receipt-{target_sha}-{source_run_id}-{source_attempt}-{verifier_attempt}"
+        f"build-matrix-trusted-receipt-{target_sha}-{source_run_id}-{source_attempt}-{verifier_attempt}"
     )
     matches = [artifact for artifact in artifacts if artifact.get("name") == expected_name]
     if len(matches) != 1:
-        raise ValueError("trusted verifier must retain one exact source-bound CI-120 receipt artifact")
+        raise ValueError("trusted verifier must retain one exact source-bound build-matrix receipt artifact")
     return _validate_trusted_artifact(
         matches[0],
         repository=repository,
@@ -1273,7 +1268,7 @@ def _verify_receipt_artifact(
         reporter_jobs=verifier_jobs,
         expected_name=expected_name,
         max_size=16 * 1024 * 1024,
-        label="trusted CI-120 receipt artifact",
+        label="trusted build-matrix receipt artifact",
     )
 
 
@@ -1755,7 +1750,7 @@ def verify_exact_gate(fetch_json: FetchJson, repository: str, target_sha: str) -
     )
     source_id, _, source_attempt = _source_identity(source)
     build_jobs = _verify_source_jobs(fetch_json, repository, source)
-    ci120_source_artifact = _verify_ci120_source_artifact(
+    build_matrix_source_artifact = _verify_build_matrix_source_artifact(
         fetch_json, repository, repository_id, source, build_jobs
     )
 
@@ -1789,7 +1784,7 @@ def verify_exact_gate(fetch_json: FetchJson, repository: str, target_sha: str) -
         fetch_json, repository, repository_id, verifier_sha, final_verifier_id, final_verifier_attempt
     )
     final_build_jobs = _verify_source_jobs(fetch_json, repository, final_source)
-    final_ci120_source_artifact = _verify_ci120_source_artifact(
+    final_build_matrix_source_artifact = _verify_build_matrix_source_artifact(
         fetch_json, repository, repository_id, final_source, final_build_jobs
     )
     final_verifier_jobs = _verify_verifier_jobs(
@@ -1806,7 +1801,7 @@ def verify_exact_gate(fetch_json: FetchJson, repository: str, target_sha: str) -
     if (
         _source_identity(final_source) != _source_identity(source)
         or final_build_jobs != build_jobs
-        or final_ci120_source_artifact.signature != ci120_source_artifact.signature
+        or final_build_matrix_source_artifact.signature != build_matrix_source_artifact.signature
         or _status_signature(final_status) != _status_signature(status)
         or final_verifier_id != verifier_run_id
         or final_verifier_attempt != verifier_attempt
@@ -1831,7 +1826,7 @@ def verify_exact_gate(fetch_json: FetchJson, repository: str, target_sha: str) -
         fetch_json, repository, repository_id, target_sha, cross_selected_source
     )
     cross_build_jobs = _verify_source_jobs(fetch_json, repository, cross_source)
-    cross_ci120_source_artifact = _verify_ci120_source_artifact(
+    cross_build_matrix_source_artifact = _verify_build_matrix_source_artifact(
         fetch_json, repository, repository_id, cross_source, cross_build_jobs
     )
     cross_status, cross_verifier_id, cross_verifier_attempt = _trusted_status(
@@ -1902,7 +1897,7 @@ def verify_exact_gate(fetch_json: FetchJson, repository: str, target_sha: str) -
         or _status_signature(terminal_ci[0]) != _status_signature(status)
         or _status_signature(terminal_codeql[0]) != codeql.status_signature
     ):
-        raise ValueError("trusted CI-120 or CodeQL status changed in the terminal shared snapshot")
+        raise ValueError("trusted build-matrix or CodeQL status changed in the terminal shared snapshot")
     cross_default = _object(
         fetch_json(f"/repos/{repository}/commits/{SOURCE_BRANCH}"),
         "cross-gate final Working commit",
@@ -1910,7 +1905,7 @@ def verify_exact_gate(fetch_json: FetchJson, repository: str, target_sha: str) -
     if (
         _source_identity(cross_source) != _source_identity(source)
         or cross_build_jobs != build_jobs
-        or cross_ci120_source_artifact.signature != ci120_source_artifact.signature
+        or cross_build_matrix_source_artifact.signature != build_matrix_source_artifact.signature
         or _status_signature(cross_status) != _status_signature(status)
         or cross_verifier_id != verifier_run_id
         or cross_verifier_attempt != verifier_attempt
@@ -1946,28 +1941,28 @@ def verify_exact_gate(fetch_json: FetchJson, repository: str, target_sha: str) -
         run_url=str(source.get("html_url", "")),
         event=str(source["event"]),
         run_attempt=source_attempt,
-        build_ci120_producer_job_id=build_jobs.ci120_producer_job_id,
+        build_build_matrix_producer_job_id=build_jobs.build_matrix_producer_job_id,
         build_required_gate_job_id=build_jobs.required_gate_job_id,
         build_job_inventory_digest=build_jobs.inventory_digest,
-        ci120_source_artifact_id=ci120_source_artifact.artifact_id,
-        ci120_source_artifact_digest=ci120_source_artifact.digest,
-        ci120_source_artifact_bytes=ci120_source_artifact.size,
-        ci120_status_id=int(status["id"]),
-        ci120_status_target_url=str(status["target_url"]),
-        ci120_status_created_at=_canonical_timestamp(
-            status.get("created_at"), "CI-120 status created_at"
+        build_matrix_source_artifact_id=build_matrix_source_artifact.artifact_id,
+        build_matrix_source_artifact_digest=build_matrix_source_artifact.digest,
+        build_matrix_source_artifact_bytes=build_matrix_source_artifact.size,
+        build_matrix_status_id=int(status["id"]),
+        build_matrix_status_target_url=str(status["target_url"]),
+        build_matrix_status_created_at=_canonical_timestamp(
+            status.get("created_at"), "build-matrix status created_at"
         ),
-        ci120_status_updated_at=_canonical_timestamp(
-            status.get("updated_at"), "CI-120 status updated_at"
+        build_matrix_status_updated_at=_canonical_timestamp(
+            status.get("updated_at"), "build-matrix status updated_at"
         ),
         verifier_run_id=verifier_run_id,
         verifier_run_url=str(verifier.get("html_url", "")),
         verifier_run_attempt=verifier_attempt,
         verifier_sha=verifier_sha,
-        ci120_trusted_verifier_job_id=verifier_jobs.job_id,
-        ci120_verifier_job_inventory_digest=verifier_jobs.inventory_digest,
-        ci120_status_publish_step_started_at=verifier_jobs.status_publish_step_started_at,
-        ci120_status_publish_step_completed_at=verifier_jobs.status_publish_step_completed_at,
+        build_matrix_trusted_verifier_job_id=verifier_jobs.job_id,
+        build_matrix_verifier_job_inventory_digest=verifier_jobs.inventory_digest,
+        build_matrix_status_publish_step_started_at=verifier_jobs.status_publish_step_started_at,
+        build_matrix_status_publish_step_completed_at=verifier_jobs.status_publish_step_completed_at,
         receipt_artifact_id=artifact.artifact_id,
         receipt_artifact_digest=artifact.digest,
         receipt_artifact_bytes=artifact.size,
@@ -2003,16 +1998,16 @@ def verify_exact_gate(fetch_json: FetchJson, repository: str, target_sha: str) -
         codeql_summary_artifact_bytes=codeql.summary_artifact_size,
     )
     job_ids = (
-        evidence.build_ci120_producer_job_id,
+        evidence.build_build_matrix_producer_job_id,
         evidence.build_required_gate_job_id,
-        evidence.ci120_trusted_verifier_job_id,
+        evidence.build_matrix_trusted_verifier_job_id,
         evidence.codeql_actions_source_job_id,
         evidence.codeql_c_cpp_source_job_id,
         evidence.codeql_python_source_job_id,
         evidence.codeql_trusted_reporter_job_id,
     )
     artifact_ids = (
-        evidence.ci120_source_artifact_id,
+        evidence.build_matrix_source_artifact_id,
         evidence.receipt_artifact_id,
         evidence.codeql_actions_source_artifact_id,
         evidence.codeql_c_cpp_source_artifact_id,
@@ -2031,7 +2026,7 @@ def verify_exact_gate(fetch_json: FetchJson, repository: str, target_sha: str) -
         raise ValueError("exact gate job IDs are not globally unique")
     if len(set(artifact_ids)) != len(artifact_ids):
         raise ValueError("exact gate artifact IDs are not globally unique")
-    if evidence.ci120_status_id == evidence.codeql_status_id:
+    if evidence.build_matrix_status_id == evidence.codeql_status_id:
         raise ValueError("exact gate commit status IDs are not unique")
     return evidence
 
@@ -2105,7 +2100,7 @@ def main() -> int:
 
     print(
         f"Exact publication evidence certified {target_sha}: Build run {evidence.run_id} "
-        f"attempt {evidence.run_attempt} ({evidence.event}), CI-120 verifier run "
+        f"attempt {evidence.run_attempt} ({evidence.event}), build-matrix verifier run "
         f"{evidence.verifier_run_id} attempt {evidence.verifier_run_attempt}, receipt artifact "
         f"{evidence.receipt_artifact_id}; CodeQL run {evidence.codeql_run_id} attempt "
         f"{evidence.codeql_run_attempt}, reporter {evidence.codeql_reporter_run_id} attempt "

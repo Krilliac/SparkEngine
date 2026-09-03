@@ -1,13 +1,13 @@
 # The README uses this workflow's native badge. Every non-terminal evaluation
 # therefore fails closed; the workflow succeeds only after the publication gate
-# authenticates terminal CI-120 and CodeQL evidence for current Working.
+# authenticates terminal build-matrix and CodeQL evidence for current Working.
 name: "Trusted Exact-Source CI"
 
 on:
   push:
     branches: [Working]
   workflow_run:
-    workflows: ["CI-120 Trusted Verifier", "CodeQL Trusted Reporter"]
+    workflows: ["Build Matrix Verifier", "CodeQL Trusted Reporter"]
     types: [in_progress, completed]
   schedule:
   - cron: "17 * * * *"
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   exact-source:
-    name: "Require exact CI-120 and CodeQL evidence"
+    name: "Require exact build-matrix and CodeQL evidence"
     concurrency:
       group: trusted-ci-aggregate
       cancel-in-progress: false
@@ -196,7 +196,7 @@ jobs:
             listed: listedResponse.data,
             targetSha,
             contexts: [
-              'CI-120 Trusted / Exact Source',
+              'Build Matrix Verifier / Exact Source',
               'CodeQL Trusted / Exact Source',
             ],
           });
@@ -243,7 +243,7 @@ jobs:
             external_id: externalId,
             output: {
               title: 'Trusted exact-source evidence is pending',
-              summary: 'CI-120 and CodeQL evidence must both pass the exact-source publication gate.'
+              summary: 'Build-matrix and CodeQL evidence must both pass the exact-source publication gate.'
             }
           });
           const check = response.data;
@@ -295,7 +295,7 @@ jobs:
                 raise SystemExit("exact gate emitted malformed or duplicate evidence")
             evidence[key] = value
         required = {
-            "run_id", "run_attempt", "ci120_status_id", "verifier_run_id",
+            "run_id", "run_attempt", "build_matrix_status_id", "verifier_run_id",
             "receipt_artifact_id", "codeql_run_id", "codeql_run_attempt",
             "codeql_status_id", "codeql_reporter_run_id",
             "codeql_summary_artifact_id",
@@ -390,7 +390,7 @@ jobs:
             listed: listedResponse.data,
             targetSha,
             contexts: [
-              'CI-120 Trusted / Exact Source',
+              'Build Matrix Verifier / Exact Source',
               'CodeQL Trusted / Exact Source',
             ],
           });
@@ -522,7 +522,7 @@ jobs:
             listed: liveListed.data,
             targetSha,
             contexts: [
-              'CI-120 Trusted / Exact Source',
+              'Build Matrix Verifier / Exact Source',
               'CodeQL Trusted / Exact Source',
             ],
           });
@@ -604,9 +604,9 @@ jobs:
               finalEvidence[key] = value;
             }
             const requiredStatuses = new Map([
-              ['CI-120 Trusted / Exact Source', {
-                id: Number(finalEvidence.ci120_status_id),
-                targetUrl: finalEvidence.ci120_status_target_url,
+              ['Build Matrix Verifier / Exact Source', {
+                id: Number(finalEvidence.build_matrix_status_id),
+                targetUrl: finalEvidence.build_matrix_status_target_url,
               }],
               ['CodeQL Trusted / Exact Source', {
                 id: Number(finalEvidence.codeql_status_id),
@@ -666,7 +666,7 @@ jobs:
                 ? 'Trusted exact-source evidence passed'
                 : 'Trusted exact-source evidence is incomplete or failed',
               summary: conclusion === 'success'
-                ? 'Both CI-120 and CodeQL evidence chains passed the exact-source publication gate.'
+                ? 'Both build-matrix and CodeQL evidence chains passed the exact-source publication gate.'
                 : `Fail-closed aggregate outcomes: ${outcomes.join(', ')}; Working exact: ${workingIsExact}.`
             }
           })).data;
@@ -795,7 +795,7 @@ jobs:
             listed: listedResponse.data,
             targetSha,
             contexts: [
-              'CI-120 Trusted / Exact Source',
+              'Build Matrix Verifier / Exact Source',
               'CodeQL Trusted / Exact Source',
             ],
           });
@@ -859,7 +859,7 @@ jobs:
               listed: postFailureListedResponse.data,
               targetSha,
               contexts: [
-                'CI-120 Trusted / Exact Source',
+                'Build Matrix Verifier / Exact Source',
                 'CodeQL Trusted / Exact Source',
               ],
             });
@@ -905,7 +905,7 @@ jobs:
             }
             const authorizedPendingTargets = new Set([
               pendingTargetUrl,
-              exactEvidence.ci120_status_target_url,
+              exactEvidence.build_matrix_status_target_url,
               exactEvidence.codeql_status_target_url,
             ]);
             statusContract.validateLatestPendingStatus({
@@ -943,7 +943,7 @@ jobs:
             listed: postListed.data,
             targetSha,
             contexts: [
-              'CI-120 Trusted / Exact Source',
+              'Build Matrix Verifier / Exact Source',
               'CodeQL Trusted / Exact Source',
             ],
           });
@@ -969,9 +969,9 @@ jobs:
             throw new Error('Post-publication aggregate success identity changed.');
           }
           const postExpected = new Map([
-            ['CI-120 Trusted / Exact Source', {
-              id: Number(exactEvidence.ci120_status_id),
-              targetUrl: exactEvidence.ci120_status_target_url,
+            ['Build Matrix Verifier / Exact Source', {
+              id: Number(exactEvidence.build_matrix_status_id),
+              targetUrl: exactEvidence.build_matrix_status_target_url,
             }],
             ['CodeQL Trusted / Exact Source', {
               id: Number(exactEvidence.codeql_status_id),

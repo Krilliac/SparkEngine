@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Verify CI-120 artifacts in a protected downstream workflow.
+"""Verify build-matrix artifacts in a protected downstream workflow.
 
 Downloaded source-run files are untrusted data.  This module never imports or
 executes anything from the artifact.  It reparses bounded CMake File API JSON
 with the trusted default-branch implementation, rehashes every declared product,
-rebuilds the static inventory and parity report, and emits the only CI-120
+rebuilds the static inventory and parity report, and emits the only build-matrix
 receipt allowed to use an externally verified authority state.
 """
 
@@ -30,9 +30,9 @@ import validate_pending_authority as pending
 AUTHORITY = "github-actions-protected-workflow-run-v1"
 SOURCE_WORKFLOW_NAME = "Build SparkEngine"
 SOURCE_WORKFLOW_PATH = ".github/workflows/build.yml"
-SOURCE_JOB_NAME = "Windows Shipping structural configured-evidence producer"
-SOURCE_FINAL_STEP = "Enforce reviewed CI-120 findings"
-VERIFIER_WORKFLOW_PATH = ".github/workflows/ci120-report.yml"
+SOURCE_JOB_NAME = "Windows Shipping build matrix"
+SOURCE_FINAL_STEP = "Record build-matrix evidence"
+VERIFIER_WORKFLOW_PATH = ".github/workflows/build-matrix-verifier.yml"
 MAX_METADATA_BYTES = 1024 * 1024
 MAX_PENDING_RECEIPT_BYTES = 1024 * 1024
 MAX_FILE_COUNT = 100_000
@@ -50,7 +50,7 @@ _AUTHORITY_REASON = (
     "A same-job GitHub Actions token, environment, checkout, provenance record, "
     "artifact path, and hash are producer-controlled inputs. A protected external "
     "attestation verifier must independently validate the captured artifact before "
-    "CI-120 can report producer-verified evidence."
+    "the build matrix can report producer-verified evidence."
 )
 
 
@@ -187,7 +187,7 @@ def validate_source_metadata(document: dict[str, Any]) -> dict[str, Any]:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", str(repository.get("fullName", ""))):
         raise ExternalEvidenceError("metadata repository full name is invalid")
     if repository.get("defaultBranch") != "Working":
-        raise ExternalEvidenceError("CI-120 trusted verification is restricted to the Working default branch")
+        raise ExternalEvidenceError("build-matrix trusted verification is restricted to the Working default branch")
 
     source = _mapping(document.get("source"), "metadata source")
     _exact_fields(
@@ -206,14 +206,14 @@ def validate_source_metadata(document: dict[str, Any]) -> dict[str, Any]:
         source.get("workflowName") != SOURCE_WORKFLOW_NAME
         or source.get("workflowPath") != SOURCE_WORKFLOW_PATH
         or source.get("event") not in {"push", "workflow_dispatch"}
-        or source.get("conclusion") != "failure"
+        or source.get("conclusion") != "success"
         or source.get("headBranch") != "Working"
         or source.get("jobName") != SOURCE_JOB_NAME
-        or source.get("jobConclusion") != "failure"
+        or source.get("jobConclusion") != "success"
         or source.get("finalStepName") != SOURCE_FINAL_STEP
-        or source.get("finalStepConclusion") != "failure"
+        or source.get("finalStepConclusion") != "success"
     ):
-        raise ExternalEvidenceError("source run is not the exact staged fail-closed CI-120 producer execution")
+        raise ExternalEvidenceError("source run is not the exact successful build-matrix producer execution")
 
     artifact = _mapping(document.get("artifact"), "metadata artifact")
     _exact_fields(artifact, {"id", "name", "bytes", "digest"}, "metadata artifact")
@@ -221,7 +221,7 @@ def validate_source_metadata(document: dict[str, Any]) -> dict[str, Any]:
     size = _positive_integer(artifact.get("bytes"), "artifact size")
     if size > MAX_COMPRESSED_ARTIFACT_BYTES:
         raise ExternalEvidenceError("source artifact exceeds the compressed-size bound")
-    expected_name = f"ci120-untrusted-stable-v1-{source_sha}-{source['runAttempt']}"
+    expected_name = f"build-matrix-stable-v1-{source_sha}-{source['runAttempt']}"
     if artifact.get("name") != expected_name:
         raise ExternalEvidenceError("source artifact name does not bind the exact SHA and run attempt")
     _hex_digest(artifact.get("digest"), "source artifact API digest", prefix=True)
@@ -265,7 +265,7 @@ def _allowed_artifact_path(relative: str) -> bool:
         "build-matrix-pending-receipt-stdout.json",
     }:
         return True
-    if re.fullmatch(r"ci120-[A-Za-z0-9_.-]+\.log", relative):
+    if re.fullmatch(r"build-matrix-[A-Za-z0-9_.-]+\.log", relative):
         return True
     prefixes = (
         "build/windows-shipping/.cmake/api/v1/reply/",
@@ -518,7 +518,7 @@ def _verify_profile(
         "workflowRef": (
             f"{source_metadata['repository']['fullName']}/{SOURCE_WORKFLOW_PATH}@refs/heads/Working"
         ),
-        "job": inventory._CI120_PRODUCER_JOB,
+        "job": inventory._BUILD_MATRIX_PRODUCER_JOB,
         "runnerOs": "Windows",
     }
     if ci != expected_ci:
@@ -628,7 +628,7 @@ def _verify_profile(
 
     provenance_summary = {
         "state": "unavailable",
-        "authority": inventory._CI120_EXTERNAL_AUTHORITY,
+        "authority": inventory._BUILD_MATRIX_EXTERNAL_AUTHORITY,
         "authorityReason": _AUTHORITY_REASON,
         "structuralState": "validated",
         "recordFile": record_path.name,
@@ -758,7 +758,7 @@ def verify_external_evidence(
     verifier = metadata["verifier"]
     return {
         "schemaVersion": 1,
-        "kind": "spark-ci120-trusted-workflow-run",
+        "kind": "spark-build-matrix-trusted-workflow-run",
         "state": "verified",
         "authority": AUTHORITY,
         "profile": "stable-v1",
@@ -777,7 +777,7 @@ def verify_external_evidence(
             "jobId": source["jobId"],
             "jobName": source["jobName"],
             "jobConclusion": source["jobConclusion"],
-            "expectedFailClosedStep": source["finalStepName"],
+            "expectedFinalStep": source["finalStepName"],
         },
         "verifier": {
             "repository": verifier["repository"],
@@ -852,7 +852,7 @@ def main(argv: list[str] | None = None) -> int:
         except OSError:
             pass
         print(json.dumps(rejection, indent=2))
-        print(f"CI-120 EXTERNAL EVIDENCE REJECTED: {error}", file=sys.stderr)
+        print(f"BUILD-MATRIX EXTERNAL EVIDENCE REJECTED: {error}", file=sys.stderr)
         return 1
 
 
