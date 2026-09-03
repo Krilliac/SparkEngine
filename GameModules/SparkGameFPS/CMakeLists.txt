@@ -249,22 +249,28 @@ if(EXISTS "${ASSET_ROOT}/Assets/Scenes")
     )
 endif()
 
-# Copy shaders from engine
-set(SHADER_SOURCE_DIR "${ENGINE_SOURCE_DIR}/../Shaders/HLSL")
-if(NOT EXISTS "${SHADER_SOURCE_DIR}")
-    set(SHADER_SOURCE_DIR "${ASSET_ROOT}/SparkEngine/Shaders/HLSL")
-endif()
-if(EXISTS "${SHADER_SOURCE_DIR}")
-    file(GLOB_RECURSE SHADER_FILES "${SHADER_SOURCE_DIR}/*.hlsl")
-    foreach(SHADER_FILE ${SHADER_FILES})
-        get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
-        add_custom_command(TARGET SparkGameFPS POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${SHADER_FILE}
-                "$<TARGET_FILE_DIR:SparkGameFPS>/Shaders/${SHADER_NAME}"
-            COMMENT "Copying shader ${SHADER_NAME}"
-        )
-    endforeach()
+# Copy shaders from engine. In-tree builds stage them once through the shared
+# SparkRuntimeShaders target: every module copying the same files into the
+# same bin/<config>/Shaders directory raced under parallel MSBuild builds.
+if(TARGET SparkRuntimeShaders AND NOT SPARK_GAME_FPS_STANDALONE)
+    add_dependencies(SparkGameFPS SparkRuntimeShaders)
+else()
+    set(SHADER_SOURCE_DIR "${ENGINE_SOURCE_DIR}/../Shaders/HLSL")
+    if(NOT EXISTS "${SHADER_SOURCE_DIR}")
+        set(SHADER_SOURCE_DIR "${ASSET_ROOT}/SparkEngine/Shaders/HLSL")
+    endif()
+    if(EXISTS "${SHADER_SOURCE_DIR}")
+        file(GLOB_RECURSE SHADER_FILES "${SHADER_SOURCE_DIR}/*.hlsl")
+        foreach(SHADER_FILE ${SHADER_FILES})
+            get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
+            add_custom_command(TARGET SparkGameFPS POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${SHADER_FILE}
+                    "$<TARGET_FILE_DIR:SparkGameFPS>/Shaders/${SHADER_NAME}"
+                COMMENT "Copying shader ${SHADER_NAME}"
+            )
+        endforeach()
+    endif()
 endif()
 
 # Ensure SparkConsole is copied if available

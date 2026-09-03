@@ -172,6 +172,12 @@ Two more sanitizer-lane rules learned from the same CI run: (1) the run used to 
 
 ---
 
+## HLSL Shaders Are Staged by One Target, Not by Every Consumer
+
+`SparkEngine` and each of the ten in-tree game modules write to the same `bin/<config>/Shaders` directory. Until 2026-09-03 each target copied the full `SparkEngine/Shaders/HLSL/*.hlsl` set from its own `POST_BUILD` step, so MSBuild building modules in parallel raced on the destination and the Windows Shipping producer failed with `Error copying file (if different) ... SSAO.hlsl` on an otherwise clean commit. The copies now live in one `SparkRuntimeShaders` custom target (top-level `CMakeLists.txt`, section 9.4) that also stages the top-level `Shaders/HLSL/` tree; `SparkEngine` and every module `add_dependencies()` on it, and a module falls back to its own copy loop only when it is built standalone against an installed SDK (`SPARK_GAME_<X>_STANDALONE`), where no other writer exists. Add new shader staging to that target rather than to a consumer's `POST_BUILD` step.
+
+---
+
 ## Source & Freshness
 
 - **Original observation:** `.claude/knowledge/codebase-observations.md`, last updated 2026-03-19.

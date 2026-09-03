@@ -3013,17 +3013,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2156,
+      "line": 2172,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2151",
+          "id": "CMakeLists.txt:2167",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2155",
+          "id": "CMakeLists.txt:2171",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -4697,7 +4697,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2156,
+          "line": 2172,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],

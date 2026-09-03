@@ -1693,6 +1693,46 @@ if(ENABLE_AUTOMATION_HOST AND EXISTS "${CMAKE_SOURCE_DIR}/SparkAutomation/CMakeL
 endif()
 
 # ---------------------------------------------------------------------
+# 9.4) Runtime shader staging (one copier for every consumer)
+#
+# SparkEngine and every in-tree game module share bin/<config>/Shaders.
+# Each of them used to copy the same HLSL files there from its own
+# POST_BUILD step, and parallel MSBuild module builds raced on the
+# destination ("Error copying file (if different)"). A single custom
+# target stages the files; the engine and the modules depend on it.
+# ---------------------------------------------------------------------
+file(GLOB_RECURSE ENGINE_SHADER_FILES "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders/HLSL/*.hlsl")
+set(_SPARK_SHADER_STAGE_COMMANDS
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Shaders")
+foreach(SHADER_FILE ${ENGINE_SHADER_FILES})
+    get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
+    list(APPEND _SPARK_SHADER_STAGE_COMMANDS
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SHADER_FILE}"
+            "$<TARGET_FILE_DIR:SparkEngine>/Shaders/${SHADER_NAME}")
+endforeach()
+
+# Also stage the top-level Shaders/HLSL/ tree (DXR ray-tracing shaders,
+# foliage impostor bake shader, compute shaders, mesh shaders). These
+# live under the repo root rather than SparkEngine/Shaders/HLSL/ for
+# historical reasons; the runtime paths in DXRSupport.cpp and
+# FoliageImpostorBaker.cpp expect them at "Shaders/HLSL/...".
+if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders/HLSL")
+    list(APPEND _SPARK_SHADER_STAGE_COMMANDS
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/Shaders/HLSL"
+            "$<TARGET_FILE_DIR:SparkEngine>/Shaders/HLSL")
+endif()
+
+add_custom_target(SparkRuntimeShaders
+    ${_SPARK_SHADER_STAGE_COMMANDS}
+    COMMENT "Staging HLSL shaders into the runtime output directory"
+    VERBATIM
+)
+add_dependencies(SparkEngine SparkRuntimeShaders)
+unset(_SPARK_SHADER_STAGE_COMMANDS)
+
+# ---------------------------------------------------------------------
 # 9.5) Build game modules from GameModules/ directory (auto-discovery)
 #
 # Drop a game module folder into GameModules/ with a CMakeLists.txt and
@@ -1809,39 +1849,15 @@ if(ENABLE_INSTALLER AND EXISTS "${CMAKE_SOURCE_DIR}/SparkInstaller/CMakeLists.tx
 endif()
 
 # ---------------------------------------------------------------------
-# 10) Asset Management - Copy shaders and assets to engine output
+# 10) Asset Management - Asset directories for the engine output
+#
+# HLSL shaders are staged by the SparkRuntimeShaders target (section 9.4).
 # ---------------------------------------------------------------------
 add_custom_command(TARGET SparkEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Shaders"
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Assets"
     COMMENT "Creating engine asset directory structure"
 )
-
-# Copy HLSL shaders
-file(GLOB_RECURSE ENGINE_SHADER_FILES "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders/HLSL/*.hlsl")
-foreach(SHADER_FILE ${ENGINE_SHADER_FILES})
-    get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
-    add_custom_command(TARGET SparkEngine POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${SHADER_FILE}
-            "$<TARGET_FILE_DIR:SparkEngine>/Shaders/${SHADER_NAME}"
-        COMMENT "Copying shader ${SHADER_NAME}"
-    )
-endforeach()
-
-# Also copy the top-level Shaders/HLSL/ tree (DXR ray-tracing shaders,
-# foliage impostor bake shader, compute shaders, mesh shaders). These
-# live under the repo root rather than SparkEngine/Shaders/HLSL/ for
-# historical reasons; the runtime paths in DXRSupport.cpp and
-# FoliageImpostorBaker.cpp expect them at "Shaders/HLSL/...".
-if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders/HLSL")
-    add_custom_command(TARGET SparkEngine POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/Shaders/HLSL"
-            "$<TARGET_FILE_DIR:SparkEngine>/Shaders/HLSL"
-        COMMENT "Copying top-level Shaders/HLSL/ tree (DXR, compute, mesh, impostor bake)"
-    )
-endif()
 
 # DXR ray-tracing shaders need DXC (lib_6_3 profile) to compile to DXIL
 # blobs. d3dcompiler.dll caps out at SM 5.1 and cannot produce ray
