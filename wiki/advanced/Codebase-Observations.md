@@ -166,10 +166,17 @@ Two more sanitizer-lane rules learned from the same CI run: (1) the run used to 
 
 ---
 
+## Publish Worker Stop Flags Under the Waiter's Mutex
+
+`build-linux-asan` on 2026-09-02 timed out (exit 124 after 900 s) inside `AdvancedAssetPipeline_UnsupportedTransformAndImporterFailClosed`, a test that normally takes 3 ms, while the identical code passed on the neighbouring commits. The worker loop waits with a predicate (`m_shouldStopProcessing || !queue.empty()`) but `Shutdown()` set the atomic flag and called `notify_all()` without holding `m_queueMutex`. A worker that has evaluated the predicate as false but not yet blocked misses that notification, and `join()` then waits forever; slow sanitizer thread start-up makes the window easy to hit. An atomic flag does not help here: the standard requires the shared state to be modified under the mutex the waiter holds for the notification to be visible to it. The fix is `{ lock_guard lock(m_queueMutex); flag = true; } cv.notify_all();`, applied to `AdvancedAssetPipeline`, the Linux and Windows `AssetPipeline` and `TextureSystem` streaming threads, and `LevelStreamingSystem`. `AsyncDatabase::Close()` already did this correctly. When adding a worker thread, store the stop flag inside the queue lock; a bare `flag.store(true); cv.notify_all();` is a latent hang even when the wait uses a predicate.
+
+---
+
 ## Source & Freshness
 
 - **Original observation:** `.claude/knowledge/codebase-observations.md`, last updated 2026-03-19.
 - **Re-measured against codebase 2026-06-08.**
+- **Extended 2026-09-03** with the sanitizer-lane, installed-SDK, CMake 3.28, CI error report, and worker stop-flag notes from the stable-release CI audit.
 - **Extended 2026-09-02** with the docs-currentness, installed-SDK include, AngelScript alignment, and CMake 3.28 link-override notes from the stable-release audit.
 - Changes since the original:
   - `ENABLE_NETWORKING` default OLD `OFF` → NEW `ON` (networking now compiles in standard CI). Updated the most-common-trap framing accordingly.

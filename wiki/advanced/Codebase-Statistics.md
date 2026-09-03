@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-02.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-03.
 This source inventory is not readiness evidence. The `stable-v1` Windows 11
 x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 314275 |
-| **SparkEditor/Source** | 109363 |
+| **SparkEngine/Source** | 314312 |
+| **SparkEditor/Source** | 109384 |
 | **GameModules** | 143040 |
 | **External services** | 11271 |
 | **Asset pipeline** | 2399 |
-| **Tests** | 172054 |
+| **Tests** | 172072 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~765899** |
+| **Total C++ (excl. ThirdParty)** | **~765975** |
 
 ### File Counts
 
@@ -34,7 +34,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 119532 lines, or 38% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 119569 lines, or 38% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -42,7 +42,7 @@ Graphics contains 119532 lines, or 38% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 119532 | 38.0% |
+| Graphics | 119569 | 38.0% |
 | Engine (all subsystems) | 87759 | 27.9% |
 | Utils | 44429 | 14.1% |
 | Core | 29978 | 9.5% |
@@ -103,14 +103,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 65 |
-| Total editor lines | 109363 |
+| Total editor lines | 109384 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
 | Test files | 577 |
-| TEST() definitions | 6990 |
+| TEST() definitions | 6991 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics

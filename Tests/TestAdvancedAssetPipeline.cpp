@@ -352,3 +352,21 @@ TEST(AdvancedAssetPipeline_UnsupportedTransformAndImporterFailClosed)
     pipeline.Update(0.0f);
     EXPECT_EQ(batchCompletionCount.load(), 1);
 }
+
+TEST(AdvancedAssetPipeline_RepeatedInitializeShutdownDoesNotHang)
+{
+    // Regression: Shutdown() and SetProcessingThreadCount() used to publish the
+    // worker stop flag without holding the queue mutex, so a worker between its
+    // wait-predicate check and blocking missed the notification and join()
+    // hung (build-linux-asan timed out on 2026-09-02). Cycling start-up and
+    // shutdown quickly keeps re-opening that window.
+    for (int cycle = 0; cycle < 256; ++cycle)
+    {
+        SparkEditor::AdvancedAssetPipeline pipeline;
+        pipeline.SetFileSystemMonitoring(false);
+        pipeline.SetProcessingThreadCount(2);
+        EXPECT_TRUE(pipeline.Initialize());
+        pipeline.SetProcessingThreadCount(1);
+        pipeline.Shutdown();
+    }
+}

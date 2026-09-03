@@ -66,8 +66,13 @@ void TextureSystem::Shutdown()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "TextureSystem shutting down");
-    // Stop streaming threads
-    m_shouldStop = true;
+    // Stop streaming threads. Publish the stop flag under the waiter's mutex: a worker that has already
+    // evaluated its wait predicate but not yet blocked would otherwise miss this
+    // notification and the join below would hang.
+    {
+        std::lock_guard<std::mutex> lock(m_streamingMutex);
+        m_shouldStop = true;
+    }
     m_streamingCondition.notify_all();
 
     for (auto& thread : m_streamingThreads)

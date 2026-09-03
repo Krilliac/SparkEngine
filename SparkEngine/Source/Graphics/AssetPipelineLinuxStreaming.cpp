@@ -27,8 +27,13 @@ void AssetPipeline::EnableBackgroundStreaming(bool enabled)
 
 void AssetPipeline::SetStreamingThreadCount(int count)
 {
-    // Stop existing threads
-    m_shouldStop = true;
+    // Stop existing threads. Publish the stop flag under the waiter's mutex: a worker that has already
+    // evaluated its wait predicate but not yet blocked would otherwise miss this
+    // notification and the join below would hang.
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        m_shouldStop = true;
+    }
     m_queueCondition.notify_all();
     for (auto& thread : m_loadingThreads)
     {
