@@ -70,7 +70,7 @@ TEST(ModuleHotReload_GetModule_Exists)
     hr.Initialize();
     hr.RegisterModule("MyMod", "/tmp/mymod.dll");
     auto* mod = hr.GetModule("MyMod");
-    EXPECT_TRUE(mod != nullptr);
+    ASSERT_TRUE(mod != nullptr);
     EXPECT_EQ(mod->name, std::string("MyMod"));
     EXPECT_EQ(mod->reloadCount, static_cast<uint32_t>(0));
     hr.Shutdown();

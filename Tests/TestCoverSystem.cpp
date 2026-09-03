@@ -153,7 +153,7 @@ TEST(CoverSystem_FindNearestCover)
     sys.RegisterCoverPoint({3, 0, 0}, {0, 0, 1}, TestCover::CoverHeight::Low);
 
     const auto* nearest = sys.FindNearestCover({0, 0, 0});
-    EXPECT_TRUE(nearest != nullptr);
+    ASSERT_TRUE(nearest != nullptr);
     EXPECT_NEAR(nearest->position.x, 3.0f, 0.001f);
 }
 
@@ -167,7 +167,7 @@ TEST(CoverSystem_FindCoverFromThreat)
 
     // Threat at x=20, search from origin
     const auto* best = sys.FindCoverFromThreat({0, 0, 0}, {20, 0, 0}, 50.0f);
-    EXPECT_TRUE(best != nullptr);
+    ASSERT_TRUE(best != nullptr);
     // The cover with normal facing away from threat should score higher
     EXPECT_NEAR(best->normal.x, -1.0f, 0.001f);
 }

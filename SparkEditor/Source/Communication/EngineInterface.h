@@ -381,21 +381,14 @@ namespace SparkEditor
      * @brief Serialize command to binary format
      * @param command Command to serialize
      * @param buffer Output buffer
-     * @return true if serialization succeeded
      */
-        bool SerializeCommand(const EngineCommand& command, std::vector<uint8_t>& buffer);
+        void SerializeCommand(const EngineCommand& command, std::vector<uint8_t>& buffer);
 
         /**
      * @brief Create named pipe for communication
      * @return true if pipe creation succeeded
      */
         bool CreateCommPipe();
-
-        /**
-     * @brief Connect to existing named pipe
-     * @return true if connection succeeded
-     */
-        bool ConnectToNamedPipe();
 
         /**
      * @brief Generate unique command ID

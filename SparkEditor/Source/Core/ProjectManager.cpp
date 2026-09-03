@@ -1518,7 +1518,6 @@ namespace SparkEditor
         const bool hadOpenProject = m_hasOpenProject;
         const ProjectInfo previousProject = m_currentProject;
         const std::string previousProjectFilePath = m_currentProjectFilePath;
-        bool transitionCommitted = false;
 
         const auto restorePreviousProject = [&]()
         {
@@ -1527,11 +1526,11 @@ namespace SparkEditor
             m_currentProjectFilePath = previousProjectFilePath;
         };
 
+        // Accept either a .sparkproject file or a directory containing one
+        std::string resolvedPath = sparkprojectPath;
+        std::string loadedActiveProjectPath;
         try
         {
-
-            // Accept either a .sparkproject file or a directory containing one
-            std::string resolvedPath = sparkprojectPath;
             const fs::path requestedPath = PathFromUtf8(sparkprojectPath);
             std::error_code pathEc;
             if (fs::is_directory(requestedPath, pathEc) && !pathEc)
@@ -1580,7 +1579,7 @@ namespace SparkEditor
             // editor that the previous document should be retired.
             ProjectInfo loadedProject = std::move(m_currentProject);
             std::string loadedProjectFilePath = std::move(m_currentProjectFilePath);
-            const std::string loadedActiveProjectPath = NormalizeProjectPath(loadedProject.path);
+            loadedActiveProjectPath = NormalizeProjectPath(loadedProject.path);
             restorePreviousProject();
             if (hadOpenProject)
                 CloseProject();
@@ -1588,55 +1587,54 @@ namespace SparkEditor
             m_currentProject = std::move(loadedProject);
             m_currentProjectFilePath = std::move(loadedProjectFilePath);
             m_hasOpenProject = true;
-            transitionCommitted = true;
-            // Everything below is post-commit bookkeeping. A notification or
-            // callback failure must not turn a successful project replacement
-            // into a false return or attempt to resurrect the already-retired
-            // document.
-            try
-            {
-                std::lock_guard lock(s_activeProjectMutex);
-                s_activeProjectPath = loadedActiveProjectPath;
-            }
-            catch (const std::exception& activePathError)
-            {
-                std::cerr << "Could not publish active project path after commit: " << activePathError.what() << "\n";
-            }
-
-            try
-            {
-                AddToRecentProjects(m_currentProject.name, resolvedPath);
-            }
-            catch (const std::exception& recentError)
-            {
-                std::cerr << "Could not update recent projects after commit: " << recentError.what() << "\n";
-            }
-
-            if (m_onProjectOpened)
-            {
-                try
-                {
-                    m_onProjectOpened(m_currentProject);
-                }
-                catch (const std::exception& callbackError)
-                {
-                    std::cerr << "Project-opened callback failed after commit: " << callbackError.what() << "\n";
-                }
-                catch (...)
-                {
-                    std::cerr << "Project-opened callback failed after commit.\n";
-                }
-            }
-
-            return true;
         }
         catch (const std::exception& e)
         {
-            if (!transitionCommitted)
-                restorePreviousProject();
+            restorePreviousProject();
             std::cerr << "Error opening project: " << e.what() << "\n";
             return false;
         }
+
+        // Everything below is post-commit bookkeeping. A notification or
+        // callback failure must not turn a successful project replacement
+        // into a false return or attempt to resurrect the already-retired
+        // document.
+        try
+        {
+            std::lock_guard lock(s_activeProjectMutex);
+            s_activeProjectPath = loadedActiveProjectPath;
+        }
+        catch (const std::exception& activePathError)
+        {
+            std::cerr << "Could not publish active project path after commit: " << activePathError.what() << "\n";
+        }
+
+        try
+        {
+            AddToRecentProjects(m_currentProject.name, resolvedPath);
+        }
+        catch (const std::exception& recentError)
+        {
+            std::cerr << "Could not update recent projects after commit: " << recentError.what() << "\n";
+        }
+
+        if (m_onProjectOpened)
+        {
+            try
+            {
+                m_onProjectOpened(m_currentProject);
+            }
+            catch (const std::exception& callbackError)
+            {
+                std::cerr << "Project-opened callback failed after commit: " << callbackError.what() << "\n";
+            }
+            catch (...)
+            {
+                std::cerr << "Project-opened callback failed after commit.\n";
+            }
+        }
+
+        return true;
     }
 
     bool ProjectManager::SaveProject()

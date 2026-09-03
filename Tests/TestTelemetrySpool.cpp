@@ -866,14 +866,14 @@ TEST(Telemetry_SpoolRecovery_SymlinkRejection)
     }
     std::error_code symlinkError;
     fs::create_symlink(symlinkTarget, symlinked.Artifact(), symlinkError);
+#ifdef _WIN32
     if (symlinkError)
     {
-#ifdef _WIN32
         SKIP_TEST("File symlink fixtures are unsupported: " + symlinkError.message());
-#else
-        ASSERT_TRUE(!symlinkError);
-#endif
     }
+#else
+    ASSERT_TRUE(!symlinkError);
+#endif
 
     auto state = std::make_shared<BackendState>();
     ExerciseRejectedArtifact(MakeSpoolConfig(symlinked.Root()), state);
@@ -890,14 +890,14 @@ TEST(Telemetry_SpoolRecovery_SymlinkRejection)
     }
     symlinkError.clear();
     fs::create_directory_symlink(externalDirectory, linkedDirectory, symlinkError);
+#ifdef _WIN32
     if (symlinkError)
     {
-#ifdef _WIN32
         SKIP_TEST("Directory symlink fixtures are unsupported: " + symlinkError.message());
-#else
-        ASSERT_TRUE(!symlinkError);
-#endif
     }
+#else
+    ASSERT_TRUE(!symlinkError);
+#endif
 
     telemetry.Initialize(MakeSpoolConfig(linkedDirectory));
     state = std::make_shared<BackendState>();
@@ -927,14 +927,14 @@ TEST(Telemetry_SpoolRecovery_SymlinkRejection)
     const fs::path finalLeaf = linkedParent / "new-spool";
     symlinkError.clear();
     fs::create_directory_symlink(externalDirectory, linkedParent, symlinkError);
+#ifdef _WIN32
     if (symlinkError)
     {
-#ifdef _WIN32
         SKIP_TEST("Parent symlink fixtures are unsupported: " + symlinkError.message());
-#else
-        ASSERT_TRUE(!symlinkError);
-#endif
     }
+#else
+    ASSERT_TRUE(!symlinkError);
+#endif
 
     {
         WorkingDirectoryGuard cwd(redirected.Root());

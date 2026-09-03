@@ -29,7 +29,7 @@
 // is the only TU that includes RHIResources.h. Keeping both definitions in a
 // cross-platform TU means every consumer links against the same implementation
 // (avoids ODR landmines if Windows and Linux took different paths).
-MeshAsset::MeshAsset(const std::string& path) : Asset(path, AssetType::Mesh) {}
+MeshAsset::MeshAsset(const std::string& path) : Asset(path, AssetType::Mesh), m_meshData{} {}
 
 MeshAsset::~MeshAsset() = default;
 

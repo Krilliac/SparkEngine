@@ -326,22 +326,6 @@ namespace SparkEditor
 
         if (progressCallback)
         {
-            progressCallback(0.7f);
-        }
-
-        // Generate mip maps if requested
-        if (settings.textureSettings.generateMipMaps)
-        {
-            if (!GenerateMipMaps(outputPath.string()))
-            {
-                metadata.status = ProcessingStatus::FAILED;
-                metadata.errorMessage = "Mip-map generation failed";
-                return false;
-            }
-        }
-
-        if (progressCallback)
-        {
             progressCallback(0.9f);
         }
 
@@ -400,12 +384,6 @@ namespace SparkEditor
         std::error_code ec;
         fs::copy_file(inputPath, outputPath, fs::copy_options::overwrite_existing, ec);
         return !ec;
-    }
-
-    bool TextureProcessor::GenerateMipMaps(const std::string& /*texturePath*/)
-    {
-        // Mip map generation is performed at runtime by the graphics engine.
-        return true;
     }
 
     // =========================================================================
@@ -479,62 +457,6 @@ namespace SparkEditor
             progressCallback(0.3f);
         }
 
-        // Apply mesh processing steps
-        if (settings.meshSettings.optimizeMesh)
-        {
-            if (!OptimizeMesh(outputPath.string(), settings.meshSettings))
-            {
-                metadata.status = ProcessingStatus::FAILED;
-                metadata.errorMessage = "Mesh optimization failed";
-                return false;
-            }
-        }
-
-        if (progressCallback)
-        {
-            progressCallback(0.5f);
-        }
-
-        if (settings.meshSettings.generateNormals)
-        {
-            if (!GenerateNormals(outputPath.string(), settings.meshSettings.normalSmoothingAngle))
-            {
-                metadata.status = ProcessingStatus::FAILED;
-                metadata.errorMessage = "Normal generation failed";
-                return false;
-            }
-        }
-
-        if (progressCallback)
-        {
-            progressCallback(0.6f);
-        }
-
-        if (settings.meshSettings.generateTangents)
-        {
-            if (!GenerateTangents(outputPath.string()))
-            {
-                metadata.status = ProcessingStatus::FAILED;
-                metadata.errorMessage = "Tangent generation failed";
-                return false;
-            }
-        }
-
-        if (progressCallback)
-        {
-            progressCallback(0.7f);
-        }
-
-        if (settings.meshSettings.generateLightmapUVs)
-        {
-            if (!GenerateLightmapUVs(outputPath.string()))
-            {
-                metadata.status = ProcessingStatus::FAILED;
-                metadata.errorMessage = "Lightmap UV generation failed";
-                return false;
-            }
-        }
-
         if (settings.meshSettings.autoGenerateLODs)
         {
             if (!GenerateAutoLODs(metadata, settings.meshSettings))
@@ -577,28 +499,6 @@ namespace SparkEditor
     bool MeshProcessor::Validate(const AssetMetadata& metadata)
     {
         return fs::exists(metadata.sourceFilePath);
-    }
-
-    bool MeshProcessor::OptimizeMesh(const std::string& /*meshPath*/,
-                                     const AssetImportSettings::MeshSettings& /*settings*/)
-    {
-        // Mesh optimization (vertex reordering, cache optimization) is handled by the runtime.
-        return true;
-    }
-
-    bool MeshProcessor::GenerateNormals(const std::string& /*meshPath*/, float /*smoothingAngle*/)
-    {
-        return true;
-    }
-
-    bool MeshProcessor::GenerateTangents(const std::string& /*meshPath*/)
-    {
-        return true;
-    }
-
-    bool MeshProcessor::GenerateLightmapUVs(const std::string& /*meshPath*/)
-    {
-        return true;
     }
 
     bool MeshProcessor::GenerateAutoLODs(AssetMetadata& metadata, const AssetImportSettings::MeshSettings& settings)

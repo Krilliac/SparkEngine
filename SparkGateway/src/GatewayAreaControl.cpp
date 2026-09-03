@@ -895,7 +895,7 @@ namespace Spark::Gateway
                     std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 continue;
             }
-            if (connected && !m_stop.load(std::memory_order_acquire))
+            if (!m_stop.load(std::memory_order_acquire))
             {
                 bool responseSent = false;
                 Daemon::FrameHeader header{};
@@ -1318,7 +1318,7 @@ namespace Spark::Gateway
                     std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 continue;
             }
-            if (connected && !m_stop.load(std::memory_order_acquire))
+            if (!m_stop.load(std::memory_order_acquire))
             {
                 bool responseSent = false;
                 Daemon::FrameHeader header{};

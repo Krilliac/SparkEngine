@@ -160,8 +160,24 @@ namespace
             std::string path;
         };
 
+        TestPakReader() = default;
+        TestPakReader(const TestPakReader&) = delete;
+        TestPakReader& operator=(const TestPakReader&) = delete;
+
+        ~TestPakReader()
+        {
+            if (m_file)
+                std::fclose(m_file);
+        }
+
         bool Open(const std::string& path)
         {
+            // Release any archive opened by a previous call before reopening.
+            if (m_file)
+            {
+                std::fclose(m_file);
+                m_entries.clear();
+            }
             m_file = std::fopen(path.c_str(), "rb");
             if (!m_file)
                 return false;
@@ -201,12 +217,6 @@ namespace
                 m_entries[e.hash] = std::move(e);
             }
             return true;
-        }
-
-        ~TestPakReader()
-        {
-            if (m_file)
-                std::fclose(m_file);
         }
 
         bool Exists(const std::string& vpath) const { return m_entries.contains(FNV1a(vpath)); }

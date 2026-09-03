@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <exception>
 #include <fstream>
 #include <random>
 
@@ -398,9 +399,19 @@ namespace Spark::Daemon
         if (!random)
             return {};
 #else
-        std::random_device random;
-        for (auto& byte : bytes)
-            byte = static_cast<uint8_t>(random());
+        // std::random_device reports entropy failure by throwing; convert that
+        // into the same empty-token failure signal the POSIX branch returns so
+        // callers can keep treating an empty token as "generation failed".
+        try
+        {
+            std::random_device random;
+            for (auto& byte : bytes)
+                byte = static_cast<uint8_t>(random());
+        }
+        catch (const std::exception&)
+        {
+            return {};
+        }
 #endif
         static constexpr char hex[] = "0123456789abcdef";
         std::string token;

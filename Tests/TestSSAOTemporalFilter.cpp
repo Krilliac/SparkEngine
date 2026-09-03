@@ -79,7 +79,7 @@ TEST(SSAOTemporal_FirstFrameReturnsCurrent)
     auto depth = FlatBuffer(0.5f);
     // First call — no history yet, filter must pass through current values.
     const float* out = f.Apply(ao.data(), mx.data(), my.data(), depth.data(), depth.data());
-    EXPECT_TRUE(out != nullptr);
+    ASSERT_TRUE(out != nullptr);
     for (uint32_t i = 0; i < kW * kH; ++i)
     {
         EXPECT_NEAR(out[i], kFlatAO, 1e-4f);
@@ -102,7 +102,7 @@ TEST(SSAOTemporal_ConstantFieldRemainsConstant)
     }
     // After 5 frames of a constant field the blended result must still be
     // constant — the variance-clip band collapses onto the mean.
-    EXPECT_TRUE(out != nullptr);
+    ASSERT_TRUE(out != nullptr);
     for (uint32_t i = 0; i < kW * kH; ++i)
     {
         EXPECT_NEAR(out[i], kFlatAO, 1e-3f);
@@ -154,7 +154,7 @@ TEST(SSAOTemporal_StepTowardHistoryOverFrames)
     // Now feed 0.0 — the filter must not immediately collapse to 0.
     auto lo = FlatBuffer(0.0f);
     const float* out = f.Apply(lo.data(), mx.data(), my.data(), depth.data(), depth.data());
-    EXPECT_TRUE(out != nullptr);
+    ASSERT_TRUE(out != nullptr);
     // Center pixel should be closer to history (1.0) than current (0.0).
     float center = out[(kH / 2) * kW + (kW / 2)];
     EXPECT_GT(center, 0.5f);

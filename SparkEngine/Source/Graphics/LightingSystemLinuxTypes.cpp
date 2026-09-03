@@ -15,7 +15,6 @@
 #include <sstream>
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 // ============================================================================
 // Light (Linux stub)
@@ -60,22 +59,18 @@ Light::Light(LightType type) : m_type(type)
 
 XMMATRIX Light::GetLightMatrix() const
 {
-    XMMATRIX m;
-    memset(&m, 0, sizeof(m));
-    return m;
+    // Linux stub: a default-constructed XMMATRIX is all zeros.
+    return XMMATRIX{};
 }
 
 XMMATRIX Light::GetShadowMatrix() const
 {
-    XMMATRIX m;
-    memset(&m, 0, sizeof(m));
-    return m;
+    return XMMATRIX{};
 }
 
 LightData Light::GetShaderData() const
 {
-    LightData data;
-    memset(&data, 0, sizeof(data));
+    LightData data{};
     data.position = XMFLOAT4(m_position.x, m_position.y, m_position.z, static_cast<float>(m_type));
     data.direction = XMFLOAT4(m_direction.x, m_direction.y, m_direction.z, MathUtils::DegreesToRadians(m_spotAngle));
     data.color = XMFLOAT4(m_color.x, m_color.y, m_color.z, m_intensity);

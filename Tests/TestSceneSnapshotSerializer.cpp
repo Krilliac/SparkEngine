@@ -246,7 +246,7 @@ TEST(ComponentSerializerRegistry_RegisterAndFind)
     EXPECT_EQ(reg.Count(), countBefore + 1);
 
     const auto* found = reg.Find(99999);
-    EXPECT_TRUE(found != nullptr);
+    ASSERT_TRUE(found != nullptr);
     EXPECT_EQ(found->typeName, std::string("TestComponent_RegisterFind"));
 
     const auto* notFound = reg.Find(88888);

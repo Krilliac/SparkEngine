@@ -131,7 +131,7 @@ TEST(Prefab_Instantiation)
                                   });
 
     auto instance = mgr.Instantiate("Soldier");
-    EXPECT_TRUE(instance != nullptr);
+    ASSERT_TRUE(instance != nullptr);
     EXPECT_TRUE(instance->GetSourceName() == "Soldier");
     EXPECT_TRUE(instance->GetProperty("health") == "100");
     EXPECT_TRUE(instance->GetProperty("speed") == "5.0");
@@ -189,7 +189,7 @@ TEST(Prefab_NestedPrefabs)
                                        });
 
     auto instance = mgr.Instantiate("ArmedSoldier");
-    EXPECT_TRUE(instance != nullptr);
+    ASSERT_TRUE(instance != nullptr);
     EXPECT_TRUE(instance->GetProperty("health") == "100");
 
     // Verify children were instantiated

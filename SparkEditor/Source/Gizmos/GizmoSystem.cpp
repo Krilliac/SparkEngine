@@ -121,17 +121,8 @@ namespace SparkEditor
         m_device = device;
         m_context = context;
 
-        if (!CreateGizmoGeometry())
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create gizmo geometry");
-            return false;
-        }
-        if (!CreateGizmoShaders())
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create gizmo shaders");
-            return false;
-        }
-
+        // All gizmo rendering goes through ImGui draw lists, so no GPU geometry
+        // buffers or shaders need to be created here.
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "GizmoSystem initialized");
         return true;
     }
@@ -902,24 +893,6 @@ namespace SparkEditor
         default:
             return {1.0f, 1.0f, 1.0f, 1.0f};
         }
-    }
-
-    // ========================================================================
-    // Resource creation (ImGui-based -- no GPU resources needed)
-    // ========================================================================
-
-    bool GizmoSystem::CreateGizmoGeometry()
-    {
-        // All rendering is done through ImGui draw lists, so no GPU geometry
-        // buffers are required.
-        return true;
-    }
-
-    bool GizmoSystem::CreateGizmoShaders()
-    {
-        // All rendering is done through ImGui draw lists, so no compiled
-        // shaders are required.
-        return true;
     }
 
 } // namespace SparkEditor

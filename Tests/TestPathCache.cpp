@@ -128,7 +128,7 @@ TEST(PathCache_HitAfterStore)
     cache.Store(start, goal, pr, 1.0f);
 
     auto* result = cache.Lookup(start, goal, 2.0f);
-    EXPECT_TRUE(result != nullptr);
+    ASSERT_TRUE(result != nullptr);
     EXPECT_TRUE(result->found);
     EXPECT_NEAR(result->totalCost, 14.14f, 0.01f);
 }

@@ -529,8 +529,6 @@ namespace
                     XMFLOAT3 scale = {1.0f, 1.0f, 1.0f})
     {
         auto obj = std::make_unique<ModelObject>(modelPath);
-        if (!obj)
-            return;
         HRESULT hr = obj->Initialize(device, context);
         if (FAILED(hr))
             return;
@@ -656,7 +654,7 @@ void Game::CreateCombatArena()
         for (int i = 0; i < 3; ++i)
         {
             auto sphere = std::make_unique<SphereObject>(0.5f, 12, 12);
-            if (sphere && SUCCEEDED(sphere->Initialize(device, context)))
+            if (SUCCEEDED(sphere->Initialize(device, context)))
             {
                 sphere->SetPosition({cpPositions[i][0], cpPositions[i][1], cpPositions[i][2]});
                 sphere->SetName("ControlPoint_" + std::to_string(i + 1));
@@ -707,15 +705,12 @@ void Game::CreateTestScene(const std::string& sceneType)
             for (int z = -10; z <= 10; z += 2)
             {
                 auto cube = std::make_unique<CubeObject>(0.5f);
-                if (cube)
+                HRESULT hr = cube->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
+                if (SUCCEEDED(hr))
                 {
-                    HRESULT hr = cube->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                    if (SUCCEEDED(hr))
-                    {
-                        cube->SetPosition({static_cast<float>(x), 0.5f, static_cast<float>(z)});
-                        m_gameObjects.push_back(std::move(cube));
-                        objectsCreated++;
-                    }
+                    cube->SetPosition({static_cast<float>(x), 0.5f, static_cast<float>(z)});
+                    m_gameObjects.push_back(std::move(cube));
+                    objectsCreated++;
                 }
             }
         }

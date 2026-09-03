@@ -1,6 +1,7 @@
 // TestWeaponSystem.cpp - Tests for the FPS weapon management system
 
 #include "TestFramework.h"
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -292,7 +293,7 @@ TEST(Reload_FullMagazine)
     int magazineSize = 30;
 
     int needed = magazineSize - inst.currentAmmo;
-    int available = needed < inst.reserveAmmo ? needed : inst.reserveAmmo;
+    int available = std::min(needed, inst.reserveAmmo);
     inst.currentAmmo += available;
     inst.reserveAmmo -= available;
 
@@ -308,7 +309,7 @@ TEST(Reload_PartialReserve)
     int magazineSize = 30;
 
     int needed = magazineSize - inst.currentAmmo;
-    int available = needed < inst.reserveAmmo ? needed : inst.reserveAmmo;
+    int available = std::min(needed, inst.reserveAmmo);
     inst.currentAmmo += available;
     inst.reserveAmmo -= available;
 

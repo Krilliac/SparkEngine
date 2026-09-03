@@ -108,7 +108,6 @@ namespace SparkEditor
       private:
         bool CompressTexture(const std::string& inputPath, const std::string& outputPath,
                              const AssetImportSettings::TextureSettings& settings);
-        bool GenerateMipMaps(const std::string& texturePath);
     };
 
     /**
@@ -126,10 +125,6 @@ namespace SparkEditor
         bool Validate(const AssetMetadata& metadata) override;
 
       private:
-        bool OptimizeMesh(const std::string& meshPath, const AssetImportSettings::MeshSettings& settings);
-        bool GenerateNormals(const std::string& meshPath, float smoothingAngle);
-        bool GenerateTangents(const std::string& meshPath);
-        bool GenerateLightmapUVs(const std::string& meshPath);
         bool GenerateAutoLODs(AssetMetadata& metadata, const AssetImportSettings::MeshSettings& settings);
     };
 

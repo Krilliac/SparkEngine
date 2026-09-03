@@ -10,7 +10,7 @@ TEST(FrameAllocator_BasicAlloc)
 {
     Spark::FrameAllocator alloc(1024);
     int* p = alloc.Alloc<int>(1);
-    EXPECT_TRUE(p != nullptr);
+    ASSERT_TRUE(p != nullptr);
     *p = 42;
     EXPECT_EQ(*p, 42);
 }

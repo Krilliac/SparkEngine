@@ -108,7 +108,7 @@ DEFINE_GENERATOR(ChargeGenerator, Charge, Active)
 uint32_t targetId;
 float speed;
 float duration;
-ChargeGenerator(uint32_t id, float s = 20.0f, float d = 0.5f) : targetId(id), speed(s), duration(d) {}
+explicit ChargeGenerator(uint32_t id, float s = 20.0f, float d = 0.5f) : targetId(id), speed(s), duration(d) {}
 }
 ;
 
@@ -116,7 +116,7 @@ DEFINE_GENERATOR(SplineGenerator, Spline, Motion)
 std::vector<std::array<float, 3>> controlPoints;
 float speed;
 bool loop;
-SplineGenerator(std::vector<std::array<float, 3>> pts, float s = 5.0f, bool l = false)
+explicit SplineGenerator(std::vector<std::array<float, 3>> pts, float s = 5.0f, bool l = false)
     : controlPoints(std::move(pts)), speed(s), loop(l)
 {
 }
@@ -246,7 +246,7 @@ TEST(Movement_SlotPriorityHigherSlotWins)
     ctrl.SetGenerator(std::make_unique<FleeGenerator>(42, 20, 5)); // Active(2)
 
     auto* active = ctrl.GetActiveGenerator();
-    EXPECT_TRUE(active != nullptr);
+    ASSERT_TRUE(active != nullptr);
     EXPECT_EQ(static_cast<int>(active->GetType()), static_cast<int>(MovementType::Flee));
     EXPECT_EQ(static_cast<int>(active->GetSlot()), static_cast<int>(MovementSlot::Active));
 }
@@ -318,7 +318,7 @@ TEST(Movement_PointMovementWithTargetCoordinates)
     EXPECT_TRUE(ctrl.HasMovementInSlot(MovementSlot::Motion));
 
     auto* gen = dynamic_cast<PointGenerator*>(ctrl.GetActiveGenerator());
-    EXPECT_TRUE(gen != nullptr);
+    ASSERT_TRUE(gen != nullptr);
     EXPECT_NEAR(gen->x, 100.0f, 0.001f);
     EXPECT_NEAR(gen->y, 25.0f, 0.001f);
     EXPECT_NEAR(gen->z, -50.0f, 0.001f);
@@ -336,7 +336,7 @@ TEST(Movement_PatrolWaypointsWithLoopFlag)
     EXPECT_TRUE(ctrl.HasMovementInSlot(MovementSlot::Default));
 
     auto* gen = dynamic_cast<PatrolGenerator*>(ctrl.GetActiveGenerator());
-    EXPECT_TRUE(gen != nullptr);
+    ASSERT_TRUE(gen != nullptr);
     EXPECT_EQ(static_cast<int>(gen->waypoints.size()), 4);
     EXPECT_TRUE(gen->loop);
     EXPECT_NEAR(gen->waypoints[2][2], 10.0f, 0.001f);
@@ -345,7 +345,7 @@ TEST(Movement_PatrolWaypointsWithLoopFlag)
     MotionController ctrl2;
     sys.MovePatrol(ctrl2, {{{0, 0, 0}}, {{5, 0, 0}}}, false);
     auto* gen2 = dynamic_cast<PatrolGenerator*>(ctrl2.GetActiveGenerator());
-    EXPECT_TRUE(gen2 != nullptr);
+    ASSERT_TRUE(gen2 != nullptr);
     EXPECT_FALSE(gen2->loop);
 }
 
@@ -360,7 +360,7 @@ TEST(Movement_FleeGeneratorWithDistanceAndDuration)
     EXPECT_TRUE(ctrl.HasMovementInSlot(MovementSlot::Active));
 
     auto* gen = dynamic_cast<FleeGenerator*>(ctrl.GetActiveGenerator());
-    EXPECT_TRUE(gen != nullptr);
+    ASSERT_TRUE(gen != nullptr);
     EXPECT_EQ(gen->threatId, static_cast<uint32_t>(77));
     EXPECT_NEAR(gen->fleeDistance, 30.0f, 0.001f);
     EXPECT_NEAR(gen->duration, 8.0f, 0.001f);
@@ -456,7 +456,7 @@ TEST(Movement_ChargeGeneratorInActiveSlot)
     EXPECT_TRUE(ctrl.HasMovementInSlot(MovementSlot::Active));
 
     auto* gen = dynamic_cast<ChargeGenerator*>(ctrl.GetActiveGenerator());
-    EXPECT_TRUE(gen != nullptr);
+    ASSERT_TRUE(gen != nullptr);
     EXPECT_EQ(gen->targetId, static_cast<uint32_t>(42));
     EXPECT_NEAR(gen->speed, 25.0f, 0.001f);
     EXPECT_NEAR(gen->duration, 0.8f, 0.001f);
@@ -489,7 +489,7 @@ TEST(Movement_SplineGeneratorWithControlPoints)
     EXPECT_TRUE(ctrl.HasMovementInSlot(MovementSlot::Motion));
 
     auto* gen = dynamic_cast<SplineGenerator*>(ctrl.GetActiveGenerator());
-    EXPECT_TRUE(gen != nullptr);
+    ASSERT_TRUE(gen != nullptr);
     EXPECT_EQ(static_cast<int>(gen->controlPoints.size()), 4);
     EXPECT_NEAR(gen->speed, 8.0f, 0.001f);
     EXPECT_TRUE(gen->loop);
@@ -503,7 +503,7 @@ TEST(Movement_SplineNonLooping)
 
     sys.MoveSpline(ctrl, {{{0, 0, 0}}, {{10, 0, 0}}}, 5.0f, false);
     auto* gen = dynamic_cast<SplineGenerator*>(ctrl.GetActiveGenerator());
-    EXPECT_TRUE(gen != nullptr);
+    ASSERT_TRUE(gen != nullptr);
     EXPECT_FALSE(gen->loop);
     EXPECT_EQ(static_cast<int>(gen->controlPoints.size()), 2);
 }
@@ -519,7 +519,7 @@ TEST(Movement_WaypointGeneratorWithCoordinates)
     EXPECT_TRUE(ctrl.HasMovementInSlot(MovementSlot::Motion));
 
     auto* gen = dynamic_cast<WaypointGenerator*>(ctrl.GetActiveGenerator());
-    EXPECT_TRUE(gen != nullptr);
+    ASSERT_TRUE(gen != nullptr);
     EXPECT_NEAR(gen->x, 50.0f, 0.001f);
     EXPECT_NEAR(gen->y, 10.0f, 0.001f);
     EXPECT_NEAR(gen->z, -30.0f, 0.001f);

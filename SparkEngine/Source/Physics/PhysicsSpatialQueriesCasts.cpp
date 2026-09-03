@@ -80,11 +80,8 @@ static RaycastHit PerformShapeCast(JPH::PhysicsSystem* joltSystem, const JPH::Sh
             if (userData != 0)
             {
                 hit.body = reinterpret_cast<PhysicsBody*>(userData);
-                if (hit.body)
-                {
-                    hit.userData = hit.body->GetUserData();
-                    hit.entityId = hit.body->GetEntityID();
-                }
+                hit.userData = hit.body->GetUserData();
+                hit.entityId = hit.body->GetEntityID();
             }
         }
     }

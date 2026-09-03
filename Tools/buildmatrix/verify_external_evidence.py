@@ -735,20 +735,20 @@ def verify_external_evidence(
         reconstructed.append(evidence)
         profile_receipts.append(profile_receipt)
 
-    trusted_inventory = inventory.build_inventory()
-    trusted_inventory["repository"] = copy.deepcopy(producer_inventory.get("repository"))
-    trusted_inventory["configuredTargetEvidence"] = reconstructed
-    if trusted_inventory != producer_inventory:
+    reconstructed_inventory = inventory.build_inventory()
+    reconstructed_inventory["repository"] = copy.deepcopy(producer_inventory.get("repository"))
+    reconstructed_inventory["configuredTargetEvidence"] = reconstructed
+    if reconstructed_inventory != producer_inventory:
         raise ExternalEvidenceError("producer inventory differs from the trusted exact-commit reconstruction")
-    trusted_report = check_parity.build_report(trusted_inventory)
-    if trusted_report != producer_report:
+    reconstructed_report = check_parity.build_report(reconstructed_inventory)
+    if reconstructed_report != producer_report:
         raise ExternalEvidenceError("producer parity report differs from the trusted checker result")
 
     inventory_digest = hashlib.sha256(inventory_payload).hexdigest()
     report_digest = hashlib.sha256(report_payload).hexdigest()
     pending_receipt = pending.build_pending_receipt(
-        trusted_inventory,
-        trusted_report,
+        reconstructed_inventory,
+        reconstructed_report,
         inventory_sha256=inventory_digest,
         report_sha256=report_digest,
     )

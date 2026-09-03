@@ -377,18 +377,6 @@ namespace SparkEditor
      */
         XMFLOAT4 GetAxisColor(GizmoAxis axis, bool isHighlighted, bool isSelected) const;
 
-        /**
-     * @brief Create gizmo geometry
-     * @return true if geometry creation succeeded
-     */
-        bool CreateGizmoGeometry();
-
-        /**
-     * @brief Create gizmo shaders
-     * @return true if shader creation succeeded
-     */
-        bool CreateGizmoShaders();
-
       private:
         // DirectX resources
         ID3D11Device* m_device = nullptr;         ///< DirectX device

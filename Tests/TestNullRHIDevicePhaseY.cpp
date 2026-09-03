@@ -75,7 +75,7 @@ TEST(NullRHIDevicePhaseY_MapBufferReturnsWritablePointer)
 
     auto buf = fx.device.CreateBuffer(desc);
     void* ptr = fx.device.MapBuffer(buf.get());
-    EXPECT_TRUE(ptr != nullptr);
+    ASSERT_TRUE(ptr != nullptr);
 
     // Prove the pointer is writable by memset'ing the whole range.
     std::memset(ptr, 0xCD, 256);
@@ -357,7 +357,7 @@ TEST(NullRHIDevicePhaseY_ImmediateCommandListWorks)
 {
     PhaseYFixture fx;
     Spark::RHI::IRHICommandList* cmd = fx.device.GetImmediateCommandList();
-    EXPECT_TRUE(cmd != nullptr);
+    ASSERT_TRUE(cmd != nullptr);
 
     cmd->Begin();
     cmd->Draw(3, 0);
@@ -415,7 +415,7 @@ TEST(NullRHIDevicePhaseY_UpdateBufferWritesWithinBounds)
     const uint8_t update[3] = {4, 5, 6};
     fx.device.UpdateBuffer(buffer.get(), update, sizeof(update), 2);
     const auto* bytes = static_cast<const uint8_t*>(fx.device.MapBuffer(buffer.get()));
-    EXPECT_TRUE(bytes != nullptr);
+    ASSERT_TRUE(bytes != nullptr);
     EXPECT_EQ(bytes[1], 0u);
     EXPECT_EQ(bytes[2], 4u);
     EXPECT_EQ(bytes[4], 6u);

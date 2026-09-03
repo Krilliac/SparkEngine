@@ -147,7 +147,7 @@ TEST(ShaderGraph_FindConnection)
     graph.connections.push_back({10, 0, 20, 1}); // node10.out0 -> node20.in1
 
     auto* conn = FindConnectionToInput(graph, 20, 1);
-    EXPECT_TRUE(conn != nullptr);
+    ASSERT_TRUE(conn != nullptr);
     EXPECT_EQ(conn->fromNodeID, 10u);
     EXPECT_EQ(conn->fromSocketIndex, 0u);
 

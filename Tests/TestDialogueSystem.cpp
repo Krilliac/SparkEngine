@@ -30,7 +30,7 @@ TEST(Dialogue_CreateTree)
     EXPECT_EQ(tree.GetStartNodeId(), std::string("start"));
 
     const auto* node = tree.GetNode("start");
-    EXPECT_TRUE(node != nullptr);
+    ASSERT_TRUE(node != nullptr);
     EXPECT_EQ(node->speakerName, std::string("Guard"));
 }
 
@@ -59,7 +59,7 @@ TEST(Dialogue_StartConversation)
     EXPECT_TRUE(sys.IsConversationActive());
 
     const auto* current = sys.GetCurrentNode();
-    EXPECT_TRUE(current != nullptr);
+    ASSERT_TRUE(current != nullptr);
     EXPECT_EQ(current->text, std::string("Hello!"));
 }
 

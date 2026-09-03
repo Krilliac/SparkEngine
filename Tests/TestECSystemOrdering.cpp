@@ -286,7 +286,7 @@ TEST(ECSystem_GetSystemByName)
     mgr.AddSystem<AIUpdateSystem>();
 
     auto* ai = mgr.GetSystem("AIUpdateSystem");
-    EXPECT_TRUE(ai != nullptr);
+    ASSERT_TRUE(ai != nullptr);
     EXPECT_EQ(ai->GetName(), std::string_view("AIUpdateSystem"));
 
     auto* missing = mgr.GetSystem("NonExistentSystem");
@@ -395,7 +395,7 @@ TEST(ECSystem_PhysicsAppliesGravity)
     mgr.UpdateAll(world, 1.0f);
 
     auto* entity = world.GetEntity(id);
-    EXPECT_TRUE(entity != nullptr);
+    ASSERT_TRUE(entity != nullptr);
     EXPECT_NEAR(entity->y, -9.81f, 0.01f);
 }
 

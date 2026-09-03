@@ -39,7 +39,7 @@ namespace
     class CountingSystem : public ISystem
     {
       public:
-        CountingSystem(const char* name) : m_name(name) {}
+        explicit CountingSystem(const char* name) : m_name(name) {}
 
         void Update(World& /*world*/, float dt) override
         {

@@ -32,24 +32,33 @@ using Spark::Json::Value;
 
 namespace
 {
-    enum Faction : int { None = 0, MRA = 1, AUC = 2, HLX = 3 };
+    enum Faction : int
+    {
+        None = 0,
+        MRA = 1,
+        AUC = 2,
+        HLX = 3
+    };
 
     struct Lattice
     {
         int regionCount = 0;
-        std::vector<std::vector<int>> adj;     // undirected conduit graph
-        std::vector<std::string> tier;         // per region
-        std::vector<float> captureSec;         // per region
-        std::vector<int> home;                 // skyanchor home faction (None otherwise)
-        std::vector<int> owner;                // mutable current ownership
+        std::vector<std::vector<int>> adj; // undirected conduit graph
+        std::vector<std::string> tier;     // per region
+        std::vector<float> captureSec;     // per region
+        std::vector<int> home;             // skyanchor home faction (None otherwise)
+        std::vector<int> owner;            // mutable current ownership
         bool loaded = false;
     };
 
     int FactionFromTag(const std::string& tag)
     {
-        if (tag == "MRA") return MRA;
-        if (tag == "AUC") return AUC;
-        if (tag == "HLX") return HLX;
+        if (tag == "MRA")
+            return MRA;
+        if (tag == "AUC")
+            return AUC;
+        if (tag == "HLX")
+            return HLX;
         return None;
     }
 
@@ -208,11 +217,7 @@ TEST(TFLattice_TopologyLoads)
 TEST(TFLattice_GraphIsConnected_NoIsolatedRegions)
 {
     const Lattice& lat = InitialLattice();
-    if (!lat.loaded)
-    {
-        EXPECT_TRUE(lat.loaded);
-        return;
-    }
+    ASSERT_TRUE(lat.loaded);
     // Ownership-blind BFS from region 0 must reach everything: an unreachable
     // region could never be fought over.
     std::vector<char> visited(lat.regionCount, 0);
@@ -244,11 +249,7 @@ TEST(TFLattice_OpeningState_EveryOwnedRegionIsSpawnable)
     // region a faction starts with must trace an owned conduit chain back to
     // its skyanchor.
     const Lattice& lat = InitialLattice();
-    if (!lat.loaded)
-    {
-        EXPECT_TRUE(lat.loaded);
-        return;
-    }
+    ASSERT_TRUE(lat.loaded);
     for (int r = 0; r < lat.regionCount; ++r)
     {
         if (lat.owner[r] == None)
@@ -260,11 +261,7 @@ TEST(TFLattice_OpeningState_EveryOwnedRegionIsSpawnable)
 TEST(TFLattice_CannotSpawnAtEnemyOrNeutralRegions)
 {
     const Lattice& lat = InitialLattice();
-    if (!lat.loaded)
-    {
-        EXPECT_TRUE(lat.loaded);
-        return;
-    }
+    ASSERT_TRUE(lat.loaded);
     for (int r = 0; r < lat.regionCount; ++r)
         for (int f : {MRA, AUC, HLX})
             if (lat.owner[r] != f)
@@ -276,11 +273,7 @@ TEST(TFLattice_IslandOwnershipBlocksSpawn)
     // Give MRA a region with no MRA neighbors (deep in the south): owned but
     // chain-broken => not a legal spawn point.
     Lattice lat = InitialLattice();
-    if (!lat.loaded)
-    {
-        EXPECT_TRUE(lat.loaded);
-        return;
-    }
+    ASSERT_TRUE(lat.loaded);
     // Find a non-skyanchor region whose neighbors contain no MRA territory.
     int island = -1;
     for (int r = 0; r < lat.regionCount && island < 0; ++r)
@@ -294,6 +287,9 @@ TEST(TFLattice_IslandOwnershipBlocksSpawn)
             island = r;
     }
     EXPECT_GE(island, 0); // the shipped map has such regions (e.g. AUC/HLX rear)
+    if (island < 0)
+        return;
+
     lat.owner[island] = MRA;
     EXPECT_FALSE(CanSpawnAt(lat, island, MRA));
 }
@@ -304,11 +300,7 @@ TEST(TFLattice_CuttingTheChainRevokesSpawn)
     // middle link to the enemy: the tip must stop being spawnable while the
     // regions still linked home stay valid.
     Lattice lat = InitialLattice();
-    if (!lat.loaded)
-    {
-        EXPECT_TRUE(lat.loaded);
-        return;
-    }
+    ASSERT_TRUE(lat.loaded);
 
     // Find (anchorSide, mid, tip): mid owned by MRA and conduit-linked to a
     // neutral/enemy region 'tip' that touches no other MRA territory.
@@ -340,7 +332,7 @@ TEST(TFLattice_CuttingTheChainRevokesSpawn)
     lat.owner[tip] = MRA; // captured the tip through mid
     EXPECT_TRUE(CanSpawnAt(lat, tip, MRA));
 
-    lat.owner[mid] = AUC; // enemy cuts the chain
+    lat.owner[mid] = AUC;                    // enemy cuts the chain
     EXPECT_FALSE(CanSpawnAt(lat, tip, MRA)); // tip is now an island
 }
 
@@ -351,11 +343,7 @@ TEST(TFLattice_CuttingTheChainRevokesSpawn)
 TEST(TFLattice_SkyanchorsAreNeverCapturable)
 {
     const Lattice& lat = InitialLattice();
-    if (!lat.loaded)
-    {
-        EXPECT_TRUE(lat.loaded);
-        return;
-    }
+    ASSERT_TRUE(lat.loaded);
     for (int r = 0; r < lat.regionCount; ++r)
     {
         if (lat.tier[r] != "skyanchor")
@@ -368,11 +356,7 @@ TEST(TFLattice_SkyanchorsAreNeverCapturable)
 TEST(TFLattice_OwnRegionsAreNotCapturable)
 {
     const Lattice& lat = InitialLattice();
-    if (!lat.loaded)
-    {
-        EXPECT_TRUE(lat.loaded);
-        return;
-    }
+    ASSERT_TRUE(lat.loaded);
     for (int r = 0; r < lat.regionCount; ++r)
         if (lat.owner[r] != None)
             EXPECT_FALSE(IsCapturable(lat, r, lat.owner[r]));
@@ -383,11 +367,7 @@ TEST(TFLattice_CapturableExactlyWhenConduitLinked)
     // Exhaustive: for every region/faction pair, the rule must equal the
     // brute-force definition "some neighbor owned by attacker".
     const Lattice& lat = InitialLattice();
-    if (!lat.loaded)
-    {
-        EXPECT_TRUE(lat.loaded);
-        return;
-    }
+    ASSERT_TRUE(lat.loaded);
     for (int r = 0; r < lat.regionCount; ++r)
     {
         for (int f : {MRA, AUC, HLX})
@@ -395,8 +375,7 @@ TEST(TFLattice_CapturableExactlyWhenConduitLinked)
             bool linked = false;
             for (int nb : lat.adj[r])
                 linked = linked || lat.owner[nb] == f;
-            const bool expected =
-                linked && lat.owner[r] != f && lat.tier[r] != "skyanchor" && lat.captureSec[r] > 0.0f;
+            const bool expected = linked && lat.owner[r] != f && lat.tier[r] != "skyanchor" && lat.captureSec[r] > 0.0f;
             EXPECT_EQ(IsCapturable(lat, r, f), expected);
         }
     }
@@ -406,11 +385,7 @@ TEST(TFLattice_OpeningState_EveryFactionHasAnAttackFrontier)
 {
     // Day-one map must give all three powers something to fight for.
     const Lattice& lat = InitialLattice();
-    if (!lat.loaded)
-    {
-        EXPECT_TRUE(lat.loaded);
-        return;
-    }
+    ASSERT_TRUE(lat.loaded);
     for (int f : {MRA, AUC, HLX})
     {
         int capturable = 0;
@@ -426,11 +401,7 @@ TEST(TFLattice_DominionShape_LoserStillHasAFoothold)
     // factions must still be able to counterattack out of their skyanchors —
     // the lattice may never deadlock the war.
     Lattice lat = InitialLattice();
-    if (!lat.loaded)
-    {
-        EXPECT_TRUE(lat.loaded);
-        return;
-    }
+    ASSERT_TRUE(lat.loaded);
     for (int r = 0; r < lat.regionCount; ++r)
         if (lat.tier[r] != "skyanchor")
             lat.owner[r] = AUC;

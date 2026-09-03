@@ -56,7 +56,7 @@ TEST(Destruction_RegisterPattern)
     sys.RegisterPattern("test_pattern", pattern);
 
     const auto* p = sys.GetPattern("test_pattern");
-    EXPECT_TRUE(p != nullptr);
+    ASSERT_TRUE(p != nullptr);
     EXPECT_EQ(p->GetPieces().size(), static_cast<size_t>(2));
     EXPECT_EQ(p->GetDestructionSound(), std::string("break_sfx"));
 }

@@ -39,7 +39,7 @@
 | `AbilityUpdateSystem` | class | SparkEngine | [ECSystems.h:L689](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h#L689) |  |
 | `AccessibilitySettings` | struct | SparkEngine | [EngineSettings.h:L621](../../SparkEngine/Source/Core/EngineSettings.h#L621) |  |
 | `AccessibilitySettings` | struct | SparkEngine | [AccessibilitySystem.h:L70](../../SparkEngine/Source/Engine/Accessibility/AccessibilitySystem.h#L70) | All user-facing accessibility preferences. |
-| `AccessibilitySettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L431](../../Tests/TestEngineSettingsEdgeCases.cpp#L431) |  |
+| `AccessibilitySettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L433](../../Tests/TestEngineSettingsEdgeCases.cpp#L433) |  |
 | `AccessibilitySystem` | class | SparkEngine | [AccessibilitySystem.h:L110](../../SparkEngine/Source/Engine/Accessibility/AccessibilitySystem.h#L110) | Singleton managing all engine accessibility features. |
 | `AccountData` | struct | GameModules | [MMOAccountSystem.h:L60](../../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h#L60) | Account data stored in the database |
 | `AccumulatedMetric` | struct | SparkEngine | [BenchmarkFramework.h:L103](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L103) |  |
@@ -54,7 +54,7 @@
 | `AchievementSystem` | class | SparkEngine | [AchievementSystem.h:L123](../../SparkEngine/Source/Engine/Gameplay/AchievementSystem.h#L123) | Singleton system for registering, tracking, and persisting achievements. |
 | `AchievementUnlockEvent` | struct | SparkEngine | [AchievementSystem.h:L108](../../SparkEngine/Source/Engine/Gameplay/AchievementSystem.h#L108) | Event payload delivered when an achievement is unlocked. |
 | `AckState` | struct | Tests | [TestReliableChannel.cpp:L20](../../Tests/TestReliableChannel.cpp#L20) |  |
-| `act` | struct | tools | [gvisor-wine-shim.c:L820](../../tools/gvisor-wine-shim.c#L820) |  |
+| `act` | struct | tools | [gvisor-wine-shim.c:L822](../../tools/gvisor-wine-shim.c#L822) |  |
 | `ActionBinding` | struct | SparkEngine | [GamepadInput.h:L467](../../SparkEngine/Source/Input/GamepadInput.h#L467) | Internal action binding record linking a game action name to a button or trigger |
 | `ActionBinding` | struct | Tests | [TestInputSystem.cpp:L34](../../Tests/TestInputSystem.cpp#L34) |  |
 | `ActionEntry` | struct | SparkEditor | [EventResponsePanel.h:L47](../../SparkEditor/Source/Panels/EventResponsePanel.h#L47) |  |
@@ -88,7 +88,7 @@
 | `AddConnectionCommand` | class | SparkEditor | [VisualScriptPanel.h:L65](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L65) | Undo command for adding a connection |
 | `AddNodeCommand` | class | SparkEditor | [VisualScriptPanel.h:L28](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L28) | Undo command for adding a node to the visual script graph |
 | `AdmissionRequest` | struct | SparkGateway | [GatewayCoordinator.h:L27](../../SparkGateway/src/GatewayCoordinator.h#L27) |  |
-| `AdvancedAssetPipeline` | class | SparkEditor | [AdvancedAssetPipeline.h:L243](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L243) |  |
+| `AdvancedAssetPipeline` | class | SparkEditor | [AdvancedAssetPipeline.h:L238](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L238) |  |
 | `AdvancedProperties` | struct | SparkEngine | [MaterialSystem.h:L156](../../SparkEngine/Source/Graphics/MaterialSystem.h#L156) | Advanced material properties |
 | `AdvEntityState` | struct | Tests | [TestAdversarialEngine.cpp:L1691](../../Tests/TestAdversarialEngine.cpp#L1691) |  |
 | `AdvEvtFloat` | struct | Tests | [TestAdversarialEngine.cpp:L858](../../Tests/TestAdversarialEngine.cpp#L858) |  |
@@ -264,7 +264,7 @@
 | `AssetCategory` | struct | SparkEditor | [BuildCookPanel.cpp:L266](../../SparkEditor/Source/Panels/BuildCookPanel.cpp#L266) |  |
 | `AssetDatabase` | class | SparkEditor | [AssetDatabase.h:L92](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L92) | Advanced asset database with real-time monitoring |
 | `AssetDatabase` | class | Tests | [TestAssetDatabase.cpp:L70](../../Tests/TestAssetDatabase.cpp#L70) |  |
-| `AssetDependencyGraph` | class | SparkEditor | [AdvancedAssetPipeline.h:L159](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L159) | Asset dependency graph |
+| `AssetDependencyGraph` | class | SparkEditor | [AdvancedAssetPipeline.h:L154](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L154) | Asset dependency graph |
 | `AssetDependencyGraph` | class | Tests | [TestAssetDependencyGraph.cpp:L22](../../Tests/TestAssetDependencyGraph.cpp#L22) |  |
 | `AssetEntry` | struct | SparkEngine | [AssetIntegration.h:L242](../../SparkEngine/Source/Core/AssetIntegration.h#L242) |  |
 | `AssetFileHeader` | struct | SparkEngine | [AssetMigration.h:L95](../../SparkEngine/Source/Core/AssetMigration.h#L95) | Fixed-size header at the start of every SparkEngine binary asset. |
@@ -341,14 +341,14 @@
 | `AudioMetrics` | struct | Tests | [TestAudioEngine.cpp:L16](../../Tests/TestAudioEngine.cpp#L16) |  |
 | `AudioMixer` | class | SparkEngine | [AudioMixer.h:L175](../../SparkEngine/Source/Audio/AudioMixer.h#L175) | Central audio mixing system with buses, reverb, and occlusion. |
 | `AudioMixerPanel` | class | SparkEditor | [AudioMixerPanel.h:L22](../../SparkEditor/Source/Panels/AudioMixerPanel.h#L22) | Panel for managing audio buses, volumes, and sound playback |
-| `AudioProcessor` | class | SparkEditor | [AdvancedAssetPipeline.h:L139](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L139) | Audio asset processor |
+| `AudioProcessor` | class | SparkEditor | [AdvancedAssetPipeline.h:L134](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L134) | Audio asset processor |
 | `AudioReverbZoneComponent` | struct | SparkEngine | [VolumeComponents.h:L303](../../SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h#L303) | Defines a spatial zone where audio reverb is applied. |
 | `AudioReverbZoneData` | struct | SparkEditor | [SceneFileTypes.h:L668](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L668) | Audio reverb zone scene data |
 | `AudioSettings` | struct | SparkEditor | [AssetPipelineTypes.h:L122](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L122) |  |
 | `AudioSettings` | struct | SparkEngine | [AudioEngine.h:L316](../../SparkEngine/Source/Audio/AudioEngine.h#L316) | Audio settings structure for console control |
 | `AudioSettings` | struct | SparkEngine | [EngineSettings.h:L70](../../SparkEngine/Source/Core/EngineSettings.h#L70) |  |
 | `AudioSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L36](../../Tests/TestEngineSettingsEdgeCases.cpp#L36) |  |
-| `AudioSettings` | struct | Tests | [TestEngineSettingsParser.cpp:L136](../../Tests/TestEngineSettingsParser.cpp#L136) |  |
+| `AudioSettings` | struct | Tests | [TestEngineSettingsParser.cpp:L138](../../Tests/TestEngineSettingsParser.cpp#L138) |  |
 | `AudioSource` | struct | GameModules | [TFAudioAmbience.h:L53](../../GameModules/SparkGameMMOFPS/Source/Game/TFAudioAmbience.h#L53) |  |
 | `AudioSource` | struct | SparkEditor | [SceneFileTypes.h:L212](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L212) | Audio source component data |
 | `AudioSource` | struct | SparkEngine | [AudioEngine.h:L39](../../SparkEngine/Source/Audio/AudioEngine.h#L39) | Audio source structure for managing individual sound instances |
@@ -375,8 +375,8 @@
 | `Axis2DValue` | struct | SparkEngine | [InputActionSystem.h:L69](../../SparkEngine/Source/Input/InputActionSystem.h#L69) | A 2D axis value |
 | `AxisBinding` | struct | Tests | [TestInputSystem.cpp:L40](../../Tests/TestInputSystem.cpp#L40) |  |
 | `AxisIntersectResult` | struct | Tests | [TestGizmoMath.cpp:L69](../../Tests/TestGizmoMath.cpp#L69) |  |
-| `AxisTest` | struct | SparkEditor | [GizmoSystem.cpp:L598](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L598) |  |
-| `AxisTest` | struct | SparkEditor | [GizmoSystem.cpp:L693](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L693) |  |
+| `AxisTest` | struct | SparkEditor | [GizmoSystem.cpp:L589](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L589) |  |
+| `AxisTest` | struct | SparkEditor | [GizmoSystem.cpp:L684](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L684) |  |
 | `BackendState` | struct | Tests | [TestTelemetrySpool.cpp:L59](../../Tests/TestTelemetrySpool.cpp#L59) |  |
 | `BakeLight` | struct | SparkEngine | [LightmapBaker.h:L85](../../SparkEngine/Source/Graphics/LightmapBaker.h#L85) | A light source for baking |
 | `BakeMesh` | struct | SparkEngine | [LightmapBaker.h:L76](../../SparkEngine/Source/Graphics/LightmapBaker.h#L76) | A mesh contributed to the bake |
@@ -838,7 +838,7 @@
 | `ControlPoint` | struct | SparkEditor | [SplineEditorPanel.h:L39](../../SparkEditor/Source/Panels/SplineEditorPanel.h#L39) |  |
 | `ControlService` | class | SparkDaemon | [ControlService.h:L32](../../SparkDaemon/src/ControlService.h#L32) | Handles Control service messages (ping, version, shutdown, stats). |
 | `ControlsSettings` | struct | SparkEngine | [EngineSettings.h:L85](../../SparkEngine/Source/Core/EngineSettings.h#L85) |  |
-| `ControlsSettings` | struct | Tests | [TestEngineSettingsParser.cpp:L145](../../Tests/TestEngineSettingsParser.cpp#L145) |  |
+| `ControlsSettings` | struct | Tests | [TestEngineSettingsParser.cpp:L147](../../Tests/TestEngineSettingsParser.cpp#L147) |  |
 | `ConversationState` | struct | SparkEngine | [DialogueSystem.h:L178](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.h#L178) | Runtime state of an active conversation. |
 | `CookLogEntry` | struct | SparkEditor | [DedicatedServerPanel.h:L187](../../SparkEditor/Source/Panels/DedicatedServerPanel.h#L187) |  |
 | `CookOutputLock` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L284](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L284) |  |
@@ -1054,7 +1054,7 @@
 | `DestructionEditorPanel` | class | SparkEditor | [DestructionEditorPanel.h:L21](../../SparkEditor/Source/Panels/DestructionEditorPanel.h#L21) | Panel for authoring fracture patterns and managing destructible objects |
 | `DestructionEvent` | struct | SparkEngine | [DestructionSystem.h:L164](../../SparkEngine/Source/Engine/Destruction/DestructionSystem.h#L164) | Event data for a destruction occurrence. |
 | `DestructionSettings` | struct | SparkEngine | [EngineSettings.h:L664](../../SparkEngine/Source/Core/EngineSettings.h#L664) |  |
-| `DestructionSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L458](../../Tests/TestEngineSettingsEdgeCases.cpp#L458) |  |
+| `DestructionSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L460](../../Tests/TestEngineSettingsEdgeCases.cpp#L460) |  |
 | `DestructionSystem` | class | GameModules | [Game.h:L43](../../GameModules/SparkGameFPS/Source/Game/Game.h#L43) |  |
 | `DestructionSystem` | class | SparkEngine | [DestructionSystem.h:L181](../../SparkEngine/Source/Engine/Destruction/DestructionSystem.h#L181) | Manages destructible objects, fracturing, and debris. |
 | `DestructionSystem` | class | SparkSDK | [IEngineContext.h:L94](../../SparkSDK/Include/Spark/IEngineContext.h#L94) |  |
@@ -1225,7 +1225,7 @@
 | `EngineProfilingData` | struct | SparkEditor | [SparkEngineIntegration.h:L109](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L109) | Profiling data from engine |
 | `EngineRuntime` | struct | SparkEngine | [EngineRuntime.h:L49](../../SparkEngine/Source/Core/EngineRuntime.h#L49) | Ownership container for engine subsystem unique_ptrs. |
 | `EngineSettings` | class | SparkEngine | [EngineSettings.h:L32](../../SparkEngine/Source/Core/EngineSettings.h#L32) |  |
-| `EngineSettings` | class | Tests | [TestEngineSettingsParser.cpp:L164](../../Tests/TestEngineSettingsParser.cpp#L164) |  |
+| `EngineSettings` | class | Tests | [TestEngineSettingsParser.cpp:L166](../../Tests/TestEngineSettingsParser.cpp#L166) |  |
 | `EngineShutdownEvent` | struct | SparkEngine | [EventSystem.h:L139](../../SparkEngine/Source/Engine/Events/EventSystem.h#L139) | Fired when the engine begins its shutdown sequence. |
 | `EngineStartEvent` | struct | SparkEngine | [EventSystem.h:L134](../../SparkEngine/Source/Engine/Events/EventSystem.h#L134) | Fired when the engine finishes initialization and is ready to run. |
 | `EngineState` | struct | SparkEditor | [IntegrationTypes.h:L39](../../SparkEditor/Source/Integration/IntegrationTypes.h#L39) | Engine state information |
@@ -1564,7 +1564,7 @@
 | `GameplayTagInfo` | struct | SparkEngine | [GameplayTags.h:L58](../../SparkEngine/Source/Engine/Gameplay/GameplayTags.h#L58) | A single registered gameplay tag with hierarchy info |
 | `GameplayTagRegistry` | class | SparkEngine | [GameplayTags.h:L150](../../SparkEngine/Source/Engine/Gameplay/GameplayTags.h#L150) | Central registry for all gameplay tags in the engine |
 | `GameSettings` | struct | SparkEngine | [EngineSettings.h:L103](../../SparkEngine/Source/Core/EngineSettings.h#L103) |  |
-| `GameSettings` | struct | Tests | [TestEngineSettingsParser.cpp:L154](../../Tests/TestEngineSettingsParser.cpp#L154) |  |
+| `GameSettings` | struct | Tests | [TestEngineSettingsParser.cpp:L156](../../Tests/TestEngineSettingsParser.cpp#L156) |  |
 | `GameTemplateConfig` | struct | SparkEditor | [PrototypingSystem.h:L65](../../SparkEditor/Source/Prototyping/PrototypingSystem.h#L65) | A game template with pre-configured systems |
 | `GameViewPanel` | class | SparkEditor | [GameViewPanel.h:L30](../../SparkEditor/Source/Panels/GameViewPanel.h#L30) | In-editor game viewport with full FPS HUD preview and simulated player state. |
 | `GateProcessor` | class | Tests | [TestAdvancedAssetPipeline.cpp:L62](../../Tests/TestAdvancedAssetPipeline.cpp#L62) |  |
@@ -1594,8 +1594,8 @@
 | `githubToken` | struct | SparkEngine | [CrashReportUploader.cpp:L486](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L486) |  |
 | `githubToken` | struct | SparkEngine | [CrashReportUploader.cpp:L611](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L611) |  |
 | `GitRunner` | class | SparkInstaller | [GitRunner.h:L10](../../SparkInstaller/src/GitRunner.h#L10) |  |
-| `GizmoConstants` | struct | SparkEditor | [GizmoSystem.h:L443](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L443) |  |
-| `GizmoGeometry` | struct | SparkEditor | [GizmoSystem.h:L422](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L422) |  |
+| `GizmoConstants` | struct | SparkEditor | [GizmoSystem.h:L431](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L431) |  |
+| `GizmoGeometry` | struct | SparkEditor | [GizmoSystem.h:L410](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L410) |  |
 | `GizmoInteraction` | struct | SparkEditor | [GizmoSystem.h:L93](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L93) | Gizmo interaction result |
 | `GizmoSystem` | class | SparkEditor | [GizmoSystem.h:L117](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L117) |  |
 | `GLBuffer` | class | SparkEngine | [OpenGLDevice.h:L119](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L119) |  |
@@ -1633,7 +1633,7 @@
 | `GPUMeshletGroup` | struct | SparkEngine | [MeshShaderPipeline.h:L45](../../SparkEngine/Source/Graphics/MeshShaderPipeline.h#L45) | Group of meshlets for LOD selection |
 | `GPUNetwork` | struct | SparkEngine | [NeuralInference.h:L53](../../SparkEngine/Source/Graphics/Neural/NeuralInference.h#L53) | GPU-resident network instance with its weight buffers. |
 | `GPUOcclusionCuller` | class | SparkEngine | [GPUOcclusionCulling.h:L88](../../SparkEngine/Source/Graphics/GPUOcclusionCulling.h#L88) | Culls objects against previous frame's hierarchical Z-buffer |
-| `GPUParticleData` | struct | Tests | [TestGPUParticleSystem.cpp:L15](../../Tests/TestGPUParticleSystem.cpp#L15) |  |
+| `GPUParticleData` | struct | Tests | [TestGPUParticleSystem.cpp:L14](../../Tests/TestGPUParticleSystem.cpp#L14) |  |
 | `GPUPassTimestamp` | struct | SparkEngine | [GPUPerfCounters.h:L65](../../SparkEngine/Source/Utils/GPUPerfCounters.h#L65) | Timestamped GPU render pass sample for the current frame. |
 | `GPUPerfCounters` | class | SparkEngine | [GPUPerfCounters.h:L92](../../SparkEngine/Source/Utils/GPUPerfCounters.h#L92) | Tracks and aggregates GPU performance counters per frame. |
 | `GPUPipelineStats` | struct | SparkEngine | [GPUProfiler.h:L44](../../SparkEngine/Source/Graphics/GPUProfiler.h#L44) | Pipeline statistics for a frame. |
@@ -1695,7 +1695,7 @@
 | `GraphicsSettings` | struct | SparkEngine | [EngineSettings.h:L49](../../SparkEngine/Source/Core/EngineSettings.h#L49) |  |
 | `GraphicsSettings` | struct | SparkEngine | [GraphicsEngineTypes.h:L123](../../SparkEngine/Source/Graphics/GraphicsEngineTypes.h#L123) | Advanced graphics settings |
 | `GraphicsSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L24](../../Tests/TestEngineSettingsEdgeCases.cpp#L24) |  |
-| `GraphicsSettings` | struct | Tests | [TestEngineSettingsParser.cpp:L124](../../Tests/TestEngineSettingsParser.cpp#L124) |  |
+| `GraphicsSettings` | struct | Tests | [TestEngineSettingsParser.cpp:L126](../../Tests/TestEngineSettingsParser.cpp#L126) |  |
 | `GravityState` | struct | GameModules | [GravitySystem.h:L74](../../GameModules/SparkGameFPS/Source/Game/GravitySystem.h#L74) | Per-object gravity state |
 | `GravitySystem` | class | GameModules | [GravitySystem.h:L91](../../GameModules/SparkGameFPS/Source/Game/GravitySystem.h#L91) | Gravity system manager |
 | `GravitySystem` | class | GameModules | [Player.h:L43](../../GameModules/SparkGameFPS/Source/Game/Player.h#L43) |  |
@@ -2083,7 +2083,7 @@
 | `LanBroadcastSnapshot` | struct | SparkEngine | [DedicatedServer.h:L182](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L182) | Immutable state consumed by one LAN broadcast iteration. |
 | `LapRecord` | struct | Tests | [TestSparkGameRacing.cpp:L14](../../Tests/TestSparkGameRacing.cpp#L14) |  |
 | `LastKiller` | struct | GameModules | [TFMedalSystem.h:L228](../../GameModules/SparkGameMMOFPS/Source/Game/TFMedalSystem.h#L228) |  |
-| `Lattice` | struct | Tests | [TestTFRegionLattice.cpp:L37](../../Tests/TestTFRegionLattice.cpp#L37) |  |
+| `Lattice` | struct | Tests | [TestTFRegionLattice.cpp:L43](../../Tests/TestTFRegionLattice.cpp#L43) |  |
 | `LauncherApp` | class | SparkLauncher | [LauncherApp.h:L28](../../SparkLauncher/src/LauncherApp.h#L28) |  |
 | `LaunchRequest` | struct | SparkLauncher | [LauncherProcess.h:L23](../../SparkLauncher/src/LauncherProcess.h#L23) |  |
 | `Layer` | struct | GameModules | [TFSquadHUDBeacon.cpp:L115](../../GameModules/SparkGameMMOFPS/Source/UI/TFSquadHUDBeacon.cpp#L115) |  |
@@ -2312,7 +2312,7 @@
 | `MemoryPressureEvent` | struct | SparkEngine | [EventSystem.h:L261](../../SparkEngine/Source/Engine/Events/EventSystem.h#L261) | Fired when system memory usage exceeds a threshold. |
 | `MemoryProfileSample` | struct | SparkEditor | [ProfilerTypes.h:L138](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L138) | Memory profiling sample |
 | `MemorySettings` | struct | SparkEngine | [EngineSettings.h:L789](../../SparkEngine/Source/Core/EngineSettings.h#L789) |  |
-| `MemorySettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L477](../../Tests/TestEngineSettingsEdgeCases.cpp#L477) |  |
+| `MemorySettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L479](../../Tests/TestEngineSettingsEdgeCases.cpp#L479) |  |
 | `MemorySnapshot` | struct | SparkEngine | [MemoryMonitor.h:L77](../../SparkEngine/Source/Utils/MemoryMonitor.h#L77) | Point-in-time snapshot of memory state for comparison |
 | `MemoryStats` | struct | SparkEditor | [SceneStatisticsPanel.h:L88](../../SparkEditor/Source/Panels/SceneStatisticsPanel.h#L88) |  |
 | `MemoryViolationEvent` | struct | SparkEngine | [MemoryIntegrity.cpp:L40](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp#L40) | Published on EventBus when a memory integrity violation is detected |
@@ -2343,7 +2343,7 @@
 | `MeshletData` | struct | SparkEngine | [MeshOptimizer.h:L66](../../SparkEngine/Source/Graphics/MeshOptimizer.h#L66) | Output of meshlet generation |
 | `MeshletMesh` | struct | SparkEngine | [MeshShaderPipeline.h:L57](../../SparkEngine/Source/Graphics/MeshShaderPipeline.h#L57) | Mesh converted to meshlet format |
 | `MeshOptimizer` | class | SparkEngine | [MeshOptimizer.h:L80](../../SparkEngine/Source/Graphics/MeshOptimizer.h#L80) | Static mesh optimization utility |
-| `MeshProcessor` | class | SparkEditor | [AdvancedAssetPipeline.h:L117](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L117) | Mesh asset processor |
+| `MeshProcessor` | class | SparkEditor | [AdvancedAssetPipeline.h:L116](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L116) | Mesh asset processor |
 | `MeshRenderer` | struct | SparkEditor | [SceneFileTypes.h:L100](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L100) | Mesh renderer component data |
 | `MeshRenderer` | struct | SparkEngine | [CoreComponents.h:L94](../../SparkEngine/Source/Engine/ECS/Components/CoreComponents.h#L94) | Marks an entity for 3D mesh rendering via the deferred draw list. |
 | `MeshRenderer` | struct | Tests | [TestECSIntegration.cpp:L45](../../Tests/TestECSIntegration.cpp#L45) |  |
@@ -2771,13 +2771,13 @@
 | `ParticleEmitter` | class | SparkEngine | [ParticleSystem.h:L168](../../SparkEngine/Source/Graphics/ParticleSystem.h#L168) | Particle emitter instance |
 | `ParticleEmitterComponent` | struct | SparkEngine | [AnimationComponents.h:L29](../../SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h#L29) | Spawns particles from the entity's position using a named effect preset. |
 | `ParticleEmitterComponent` | struct | Tests | [TestECSystemSpecialized.cpp:L110](../../Tests/TestECSystemSpecialized.cpp#L110) |  |
-| `ParticleEmitterConfig` | struct | Tests | [TestGPUParticleSystem.cpp:L28](../../Tests/TestGPUParticleSystem.cpp#L28) |  |
+| `ParticleEmitterConfig` | struct | Tests | [TestGPUParticleSystem.cpp:L27](../../Tests/TestGPUParticleSystem.cpp#L27) |  |
 | `ParticleEmitterData` | struct | SparkEditor | [SceneFileTypes.h:L354](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L354) | Particle emitter scene data |
 | `ParticleEmitterDesc` | struct | SparkEngine | [GPUParticleTypes.h:L106](../../SparkEngine/Source/Graphics/GPUParticleTypes.h#L106) | Particle emitter configuration |
 | `ParticleEmitterDesc` | struct | SparkEngine | [ParticleSystem.h:L115](../../SparkEngine/Source/Graphics/ParticleSystem.h#L115) | Particle emitter configuration |
 | `ParticleHandleTag` | struct | SparkEngine | [OpaqueHandle.h:L82](../../SparkEngine/Source/Utils/OpaqueHandle.h#L82) |  |
 | `ParticleSettings` | struct | SparkEngine | [EngineSettings.h:L765](../../SparkEngine/Source/Core/EngineSettings.h#L765) |  |
-| `ParticleSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L486](../../Tests/TestEngineSettingsEdgeCases.cpp#L486) |  |
+| `ParticleSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L488](../../Tests/TestEngineSettingsEdgeCases.cpp#L488) |  |
 | `ParticleSystem` | class | SparkEngine | [ParticleSystem.h:L226](../../SparkEngine/Source/Graphics/ParticleSystem.h#L226) | Particle system manager - manages all emitters and preset effects |
 | `ParticleSystemTest` | class | Tests | [TestECSystemSpecialized.cpp:L345](../../Tests/TestECSystemSpecialized.cpp#L345) |  |
 | `ParticleUpdateSystem` | class | SparkEngine | [ECSystems.h:L478](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h#L478) |  |
@@ -3101,7 +3101,7 @@
 | `Process` | struct | SparkEngine | [ProcessWin32Internal.h:L24](../../SparkEngine/Source/Utils/ProcessWin32Internal.h#L24) |  |
 | `ProcessDefinition` | struct | SparkDaemon | [OrchestrationProtocol.h:L74](../../SparkDaemon/src/OrchestrationProtocol.h#L74) |  |
 | `ProcessingJob` | struct | SparkEditor | [AssetPipelineTypes.h:L192](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L192) | Asset processing job |
-| `ProcessingStatistics` | struct | SparkEditor | [AdvancedAssetPipeline.h:L351](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L351) | Get processing statistics |
+| `ProcessingStatistics` | struct | SparkEditor | [AdvancedAssetPipeline.h:L346](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L346) | Get processing statistics |
 | `ProcessLaunchResult` | struct | SparkEditor | [EditorProcessLaunch.h:L30](../../SparkEditor/Source/Utils/EditorProcessLaunch.h#L30) | Outcome of a platform process launch attempt. Handles are opaque: |
 | `ProcessRunner` | class | SparkBuild | [ProcessRunner.h:L25](../../SparkBuild/src/ProcessRunner.h#L25) |  |
 | `ProcessStatus` | struct | SparkDaemon | [OrchestrationProtocol.h:L84](../../SparkDaemon/src/OrchestrationProtocol.h#L84) |  |
@@ -3150,7 +3150,7 @@
 | `PSOCache` | class | Tests | [TestExtendedSystems.cpp:L919](../../Tests/TestExtendedSystems.cpp#L919) |  |
 | `PSODesc` | struct | Tests | [TestExtendedSystems.cpp:L908](../../Tests/TestExtendedSystems.cpp#L908) |  |
 | `PSOHash` | struct | Tests | [TestExtendedSystems.cpp:L914](../../Tests/TestExtendedSystems.cpp#L914) |  |
-| `pthread_wrapper_arg` | struct | tools | [gvisor-wine-shim.c:L1000](../../tools/gvisor-wine-shim.c#L1000) |  |
+| `pthread_wrapper_arg` | struct | tools | [gvisor-wine-shim.c:L1002](../../tools/gvisor-wine-shim.c#L1002) |  |
 | `PushedMesh` | struct | SparkEngine | [HybridRTManager.h:L214](../../SparkEngine/Source/Graphics/HybridRT/HybridRTManager.h#L214) |  |
 | `PutAssetRequest` | struct | SparkEngine | [AssetServiceProtocol.h:L69](../../SparkEngine/Source/Utils/AssetServiceProtocol.h#L69) |  |
 | `PutCacheEntryRequest` | struct | SparkEngine | [ShaderServiceProtocol.h:L69](../../SparkEngine/Source/Utils/ShaderServiceProtocol.h#L69) |  |
@@ -3254,7 +3254,7 @@
 | `RandomEngine` | class | SparkEngine | [RandomEngine.h:L49](../../SparkEngine/Source/Utils/RandomEngine.h#L49) | Modern C++ random number generator with multiple distribution types. |
 | `RandomWanderGenerator` | struct | SparkEngine | [MovementSystem.h:L152](../../SparkEngine/Source/Engine/AI/MovementSystem.h#L152) | Wander randomly within a radius, pausing between moves. |
 | `RateLimiter` | class | SparkEngine | [NetworkEncryption.h:L121](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h#L121) | Per-address traffic-control limiter |
-| `raw` | struct | tools | [gvisor-wine-shim.c:L1008](../../tools/gvisor-wine-shim.c#L1008) |  |
+| `raw` | struct | tools | [gvisor-wine-shim.c:L1010](../../tools/gvisor-wine-shim.c#L1010) |  |
 | `RawUdpClient` | class | Tests | [TestReliableChannel.cpp:L437](../../Tests/TestReliableChannel.cpp#L437) |  |
 | `RawUDPSender` | class | Tests | [TestNetworkStress.cpp:L41](../../Tests/TestNetworkStress.cpp#L41) |  |
 | `Ray` | struct | SparkEditor | [GizmoSystem.h:L72](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L72) | Ray structure for mouse picking |
@@ -3282,7 +3282,7 @@
 | `RecentRec` | struct | GameModules | [TFSocialSystem.h:L132](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L132) |  |
 | `RecoilPattern` | struct | SparkEngine | [WeaponManager.h:L71](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L71) | Defines how a weapon's aim deviates during sustained fire |
 | `RecoilPattern` | struct | Tests | [TestWeaponMechanics.cpp:L49](../../Tests/TestWeaponMechanics.cpp#L49) |  |
-| `RecoilPattern` | struct | Tests | [TestWeaponSystem.cpp:L44](../../Tests/TestWeaponSystem.cpp#L44) |  |
+| `RecoilPattern` | struct | Tests | [TestWeaponSystem.cpp:L45](../../Tests/TestWeaponSystem.cpp#L45) |  |
 | `RecompileResult` | struct | SparkEngine | [ScriptHotReload.h:L58](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L58) |  |
 | `RecompileResult` | struct | Tests | [TestScriptHotReload.cpp:L35](../../Tests/TestScriptHotReload.cpp#L35) |  |
 | `Record` | struct | SparkEditor | [ServiceTopologyController.h:L81](../../SparkEditor/Source/Panels/ServiceTopologyController.h#L81) |  |
@@ -3584,7 +3584,7 @@
 | `SaveSystem` | class | SparkSDK | [IEngineContext.h:L83](../../SparkSDK/Include/Spark/IEngineContext.h#L83) |  |
 | `SaveSystemPanel` | class | SparkEditor | [SaveSystemPanel.h:L22](../../SparkEditor/Source/Panels/SaveSystemPanel.h#L22) | Panel for browsing and managing save slots |
 | `SaveSystemSettings` | struct | SparkEngine | [EngineSettings.h:L721](../../SparkEngine/Source/Core/EngineSettings.h#L721) |  |
-| `SaveSystemSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L468](../../Tests/TestEngineSettingsEdgeCases.cpp#L468) |  |
+| `SaveSystemSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L470](../../Tests/TestEngineSettingsEdgeCases.cpp#L470) |  |
 | `SaveWireOffsets` | struct | Tests | [Test_persistence_SaveSystem.cpp:L216](../../Tests/harden/Test_persistence_SaveSystem.cpp#L216) |  |
 | `Scan` | struct | GameModules | [TFBotSystemCombat.cpp:L34](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemCombat.cpp#L34) |  |
 | `Scatter` | struct | SparkEditor | [DecorLayoutEditorPanel.h:L71](../../SparkEditor/Source/Panels/DecorLayoutEditorPanel.h#L71) |  |
@@ -3668,7 +3668,7 @@
 | `ScopeTracer` | class | SparkEngine | [Validate.h:L126](../../SparkEngine/Source/Utils/Validate.h#L126) | RAII scope tracer that logs function/scope entry and exit |
 | `ScoreboardEntry` | struct | GameModules | [HUDSystem.h:L213](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L213) | Scoreboard entry for multiplayer/game mode display |
 | `ScoredCover` | struct | SparkEngine | [CoverSystem.cpp:L216](../../SparkEngine/Source/Engine/AI/CoverSystem.cpp#L216) |  |
-| `ScoredIndex` | struct | SparkEditor | [CommandPalette.cpp:L275](../../SparkEditor/Source/Search/CommandPalette.cpp#L275) |  |
+| `ScoredIndex` | struct | SparkEditor | [CommandPalette.cpp:L272](../../SparkEditor/Source/Search/CommandPalette.cpp#L272) |  |
 | `ScoredPoint` | struct | SparkEngine | [TacticalPointSystem.cpp:L115](../../SparkEngine/Source/Engine/AI/TacticalPointSystem.cpp#L115) |  |
 | `ScratchDirectory` | class | SparkCooker | [main.cpp:L37](../../SparkCooker/src/main.cpp#L37) |  |
 | `ScratchDirectory` | class | SparkCrashReporter | [CrashReporterManifestTests.cpp:L19](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L19) |  |
@@ -3976,7 +3976,7 @@
 | `SpawnPoint` | struct | GameModules | [GameMode.h:L57](../../GameModules/SparkGameFPS/Source/Game/GameMode.h#L57) | Spawn point definition |
 | `SpawnPoint` | struct | GameModules | [MultiplayerSystem.h:L257](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L257) | Spawn point definition. |
 | `SpawnPoint` | struct | GameModules | [PlatformerLevelSystem.h:L60](../../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h#L60) | Spawn point definition |
-| `SpawnPoint` | struct | Tests | [TestFPSMultiplayer.cpp:L250](../../Tests/TestFPSMultiplayer.cpp#L250) |  |
+| `SpawnPoint` | struct | Tests | [TestFPSMultiplayer.cpp:L260](../../Tests/TestFPSMultiplayer.cpp#L260) |  |
 | `SpawnPointComponent` | struct | SparkEngine | [VolumeComponents.h:L261](../../SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h#L261) | Marks an entity position as a spawn point for gameplay entities. |
 | `SpawnPointData` | struct | SparkEditor | [FPSToolsPanel.h:L47](../../SparkEditor/Source/Panels/FPSToolsPanel.h#L47) |  |
 | `SpawnPointData` | struct | SparkEditor | [SceneFileTypes.h:L654](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L654) | Spawn point scene data |
@@ -3998,7 +3998,7 @@
 | `SplinePath` | class | SparkEngine | [SplinePath.h:L55](../../SparkEngine/Source/Utils/SplinePath.h#L55) | Stores control points and evaluates a spline path. |
 | `SpreadConfig` | struct | SparkEngine | [WeaponManager.h:L84](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L84) | Spread configuration for bullet deviation |
 | `SpreadConfig` | struct | Tests | [TestWeaponMechanics.cpp:L59](../../Tests/TestWeaponMechanics.cpp#L59) |  |
-| `SpreadConfig` | struct | Tests | [TestWeaponSystem.cpp:L54](../../Tests/TestWeaponSystem.cpp#L54) |  |
+| `SpreadConfig` | struct | Tests | [TestWeaponSystem.cpp:L55](../../Tests/TestWeaponSystem.cpp#L55) |  |
 | `SpringArmComponent` | struct | SparkEngine | [AdvancedPlacementComponents.h:L339](../../SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h#L339) | Extends a spring arm from an entity to prevent camera clipping. |
 | `SpringArmData` | struct | SparkEditor | [SceneFileTypes.h:L947](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L947) |  |
 | `SpringArmState` | struct | SparkEngine | [SpringArm.h:L39](../../SparkEngine/Source/Graphics/SpringArm.h#L39) | Configuration and runtime state for a spring arm. |
@@ -4691,7 +4691,7 @@
 | `TransformComp` | struct | Tests | [TestRenderECSIntegration.cpp:L25](../../Tests/TestRenderECSIntegration.cpp#L25) |  |
 | `TransformComponent` | struct | Tests | [TestCrossSystemIntegration.cpp:L89](../../Tests/TestCrossSystemIntegration.cpp#L89) |  |
 | `TransformData` | struct | Tests | [TestSceneSerializer.cpp:L35](../../Tests/TestSceneSerializer.cpp#L35) |  |
-| `TransformSnapshot` | struct | SparkEditor | [GizmoSystem.h:L414](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L414) |  |
+| `TransformSnapshot` | struct | SparkEditor | [GizmoSystem.h:L402](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L402) |  |
 | `TransientAllocation` | struct | SparkEngine | [TransientBufferAllocator.h:L44](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L44) | Result of a transient buffer allocation. |
 | `TransientAllocation` | struct | Tests | [TestTransientBufferAllocator.cpp:L13](../../Tests/TestTransientBufferAllocator.cpp#L13) |  |
 | `TransientBufferAllocator` | class | SparkEngine | [TransientBufferAllocator.h:L60](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L60) | Per-frame linear allocator for transient vertex and index buffers. |
@@ -4929,7 +4929,7 @@
 | `VREye` | struct | SparkEngine | [VRSystem.h:L90](../../SparkEngine/Source/Engine/VR/VRSystem.h#L90) | Per-eye rendering data. |
 | `VREye` | struct | Tests | [TestVRSystem.cpp:L50](../../Tests/TestVRSystem.cpp#L50) |  |
 | `VRSettings` | struct | SparkEngine | [EngineSettings.h:L643](../../SparkEngine/Source/Core/EngineSettings.h#L643) |  |
-| `VRSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L446](../../Tests/TestEngineSettingsEdgeCases.cpp#L446) |  |
+| `VRSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L448](../../Tests/TestEngineSettingsEdgeCases.cpp#L448) |  |
 | `VRSystem` | class | SparkEngine | [VRSystem.h:L120](../../SparkEngine/Source/Engine/VR/VRSystem.h#L120) | Manages VR hardware initialization, tracking, and rendering. |
 | `VRSystem` | class | SparkSDK | [IEngineContext.h:L63](../../SparkSDK/Include/Spark/IEngineContext.h#L63) |  |
 | `VRSystem` | class | Tests | [TestVRSystem.cpp:L66](../../Tests/TestVRSystem.cpp#L66) |  |
@@ -4943,7 +4943,7 @@
 | `VulkanSwapChain` | class | SparkEngine | [VulkanDevice.h:L250](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L250) |  |
 | `VulkanTexture` | class | SparkEngine | [VulkanDevice.h:L137](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L137) |  |
 | `w` | struct | SparkBuild | [Terminal.cpp:L91](../../SparkBuild/src/Terminal.cpp#L91) |  |
-| `w` | struct | tools | [gvisor-wine-shim.c:L1087](../../tools/gvisor-wine-shim.c#L1087) |  |
+| `w` | struct | tools | [gvisor-wine-shim.c:L1089](../../tools/gvisor-wine-shim.c#L1089) |  |
 | `WaitForEndOfFrame` | class | SparkEngine | [CoroutineTypes.h:L108](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h#L108) | Yield for one frame (resume next frame). |
 | `WaitForEvent` | class | SparkEngine | [CoroutineTypes.h:L143](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h#L143) |  |
 | `WaitForFrames` | class | SparkEngine | [CoroutineTypes.h:L77](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h#L77) | Yield for a specified number of frames. |
@@ -4980,7 +4980,7 @@
 | `WeaponDef` | struct | GameModules | [TFTargetRange.h:L39](../../GameModules/SparkGameMMOFPS/Source/Game/TFTargetRange.h#L39) |  |
 | `WeaponDefinition` | struct | SparkEngine | [WeaponManager.h:L105](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L105) | Complete definition of a weapon type |
 | `WeaponDefinition` | struct | Tests | [TestWeaponMechanics.cpp:L69](../../Tests/TestWeaponMechanics.cpp#L69) |  |
-| `WeaponDefinition` | struct | Tests | [TestWeaponSystem.cpp:L64](../../Tests/TestWeaponSystem.cpp#L64) |  |
+| `WeaponDefinition` | struct | Tests | [TestWeaponSystem.cpp:L65](../../Tests/TestWeaponSystem.cpp#L65) |  |
 | `WeaponEditorPanel` | class | SparkEditor | [WeaponEditorPanel.h:L18](../../SparkEditor/Source/Panels/WeaponEditorPanel.h#L18) | Editor panel for configuring weapon stats, viewing DPS charts, and comparing weapons. |
 | `WeaponEntry` | struct | SparkEditor | [WeaponEditorPanel.h:L38](../../SparkEditor/Source/Panels/WeaponEditorPanel.h#L38) |  |
 | `WeaponFireEvent` | struct | SparkEngine | [WeaponManager.h:L251](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L251) | Emitted when a weapon fires successfully |
@@ -4988,7 +4988,7 @@
 | `WeaponInstance` | struct | SparkEngine | [WeaponManager.h:L153](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L153) | Runtime state for a single weapon in an entity's inventory |
 | `WeaponInstance` | struct | Tests | [TestGameplayStress.cpp:L288](../../Tests/TestGameplayStress.cpp#L288) |  |
 | `WeaponInstance` | struct | Tests | [TestWeaponMechanics.cpp:L98](../../Tests/TestWeaponMechanics.cpp#L98) |  |
-| `WeaponInstance` | struct | Tests | [TestWeaponSystem.cpp:L91](../../Tests/TestWeaponSystem.cpp#L91) |  |
+| `WeaponInstance` | struct | Tests | [TestWeaponSystem.cpp:L92](../../Tests/TestWeaponSystem.cpp#L92) |  |
 | `WeaponInventoryComponent` | struct | SparkEngine | [WeaponManager.h:L188](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L188) | ECS component that gives an entity a weapon inventory |
 | `WeaponRegistry` | class | SparkEngine | [WeaponManager.h:L218](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L218) | Central registry for all weapon definitions |
 | `WeaponStats` | struct | GameModules | [WeaponStats.h:L23](../../GameModules/SparkGameFPS/Source/Projectiles/WeaponStats.h#L23) | Weapon statistics and configuration structure |

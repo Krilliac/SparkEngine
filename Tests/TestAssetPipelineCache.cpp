@@ -230,7 +230,7 @@ TEST(AssetCache_AddAndRetrieve)
     cache.AddAsset(asset);
 
     auto retrieved = cache.GetAsset("models/cube.obj");
-    EXPECT_TRUE(retrieved != nullptr);
+    ASSERT_TRUE(retrieved != nullptr);
     EXPECT_EQ(retrieved->GetPath(), std::string("models/cube.obj"));
 }
 

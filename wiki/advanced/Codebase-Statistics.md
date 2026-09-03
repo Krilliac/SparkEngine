@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 314312 |
-| **SparkEditor/Source** | 109384 |
-| **GameModules** | 143038 |
-| **External services** | 11271 |
+| **SparkEngine/Source** | 314283 |
+| **SparkEditor/Source** | 109184 |
+| **GameModules** | 143036 |
+| **External services** | 11282 |
 | **Asset pipeline** | 2399 |
-| **Tests** | 172072 |
+| **Tests** | 172087 |
 | **SparkConsole/src** | 1633 |
 | **SparkShaderCompiler/src** | 588 |
-| **Total C++ (excl. ThirdParty)** | **~765973** |
+| **Total C++ (excl. ThirdParty)** | **~765770** |
 
 ### File Counts
 
@@ -34,7 +34,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 119569 lines, or 38% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 119558 lines, or 38% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -42,11 +42,11 @@ Graphics contains 119569 lines, or 38% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 119569 | 38.0% |
-| Engine (all subsystems) | 87759 | 27.9% |
-| Utils | 44429 | 14.1% |
-| Core | 29978 | 9.5% |
-| Physics | 10814 | 3.4% |
+| Graphics | 119558 | 38.0% |
+| Engine (all subsystems) | 87758 | 27.9% |
+| Utils | 44426 | 14.1% |
+| Core | 29979 | 9.5% |
+| Physics | 10799 | 3.4% |
 | Audio | 6090 | 1.9% |
 | Input | 3953 | 1.2% |
 | SceneManager | 2241 | 0.7% |
@@ -103,14 +103,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 65 |
-| Total editor lines | 109384 |
+| Total editor lines | 109184 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
 | Test files | 577 |
-| TEST() definitions | 6991 |
+| TEST() definitions | 6992 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -186,7 +186,7 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `ProjectManager.cpp` | 2482 |
+| `ProjectManager.cpp` | 2480 |
 | `EditorUI.cpp` | 2247 |
 | `JSONSceneSerializer.cpp` | 2010 |
 | `VisualScriptPanel.cpp` | 1773 |

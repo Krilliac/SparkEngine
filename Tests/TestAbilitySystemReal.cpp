@@ -38,7 +38,7 @@ TEST(AbilitySystemReal_RegisterAbility)
 
     EXPECT_EQ(sys.GetRegisteredAbilityCount(), 1);
     auto* retrieved = sys.GetAbilityDef(1);
-    EXPECT_TRUE(retrieved != nullptr);
+    ASSERT_TRUE(retrieved != nullptr);
     EXPECT_EQ(retrieved->name, std::string("Fireball"));
     EXPECT_NEAR(retrieved->cooldown, 2.0f, 0.01f);
 }
@@ -72,7 +72,7 @@ TEST(AbilitySystemReal_RegisterAura)
 
     EXPECT_EQ(sys.GetRegisteredAuraCount(), 1);
     auto* retrieved = sys.GetAuraDef(10);
-    EXPECT_TRUE(retrieved != nullptr);
+    ASSERT_TRUE(retrieved != nullptr);
     EXPECT_EQ(retrieved->name, std::string("Burning"));
     EXPECT_NEAR(retrieved->duration, 8.0f, 0.01f);
 }

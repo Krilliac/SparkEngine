@@ -190,7 +190,7 @@ namespace Spark::Audio
         if (!m_initialized || !monoIn || !stereoOut || frameCount == 0)
             return;
 
-        const float gainStep = frameCount > 0 ? 1.0f / static_cast<float>(frameCount) : 0.0f;
+        const float gainStep = 1.0f / static_cast<float>(frameCount);
         const float leftDelta = (m_targetLeftGain - m_currentLeftGain) * gainStep;
         const float rightDelta = (m_targetRightGain - m_currentRightGain) * gainStep;
 

@@ -553,11 +553,11 @@ TEST(AnimationClip_FindChannel)
     TestAnim::AnimationClip clip = TestAnim::MakeTestClip();
 
     const TestAnim::BoneAnimation* rootCh = clip.FindChannel("Root");
-    EXPECT_TRUE(rootCh != nullptr);
+    ASSERT_TRUE(rootCh != nullptr);
     EXPECT_EQ(rootCh->boneName, std::string("Root"));
 
     const TestAnim::BoneAnimation* spineCh = clip.FindChannel("Spine");
-    EXPECT_TRUE(spineCh != nullptr);
+    ASSERT_TRUE(spineCh != nullptr);
     EXPECT_EQ(spineCh->boneName, std::string("Spine"));
 
     const TestAnim::BoneAnimation* missing = clip.FindChannel("NonExistent");
@@ -814,7 +814,7 @@ TEST(AnimationManager_RegisterAndRetrieveClip)
     mgr.RegisterClip("Run", clip);
 
     auto retrieved = mgr.GetClip("Run");
-    EXPECT_TRUE(retrieved != nullptr);
+    ASSERT_TRUE(retrieved != nullptr);
     EXPECT_EQ(retrieved->name, std::string("Run"));
     EXPECT_NEAR(retrieved->duration, 0.8f, 0.001f);
 }

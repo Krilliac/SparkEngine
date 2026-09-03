@@ -47,9 +47,11 @@ namespace
                 if (line.empty() || line[0] == '#' || line[0] == ';')
                     continue;
 
-                // Section header
-                if (line.front() == '[' && line.back() == ']')
+                // Section header: an unterminated header is malformed (mirrors ConfigParser::LoadFromString)
+                if (line.front() == '[')
                 {
+                    if (line.back() != ']')
+                        return false;
                     currentSection = line.substr(1, line.size() - 2);
                     continue;
                 }
@@ -321,6 +323,14 @@ TEST(EngineSettings_ParseBasicINI)
     EXPECT_EQ(settings.Graphics().windowHeight, 1440);
     EXPECT_TRUE(settings.Graphics().fullscreen);
     EXPECT_FALSE(settings.Graphics().vsync);
+}
+
+TEST(EngineSettings_MalformedSectionHeaderFailsToLoad)
+{
+    EngineSettings settings;
+    EXPECT_FALSE(settings.Load("[Graphics\n"
+                               "windowWidth=2560\n"));
+    EXPECT_FALSE(settings.IsLoaded());
 }
 
 TEST(EngineSettings_ParseAudioSection)

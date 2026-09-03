@@ -338,7 +338,7 @@ TEST(Inventory_ItemRegistry)
     EXPECT_EQ(reg.GetItemCount(), (size_t)2);
 
     auto* potion = reg.GetItem(1);
-    EXPECT_TRUE(potion != nullptr);
+    ASSERT_TRUE(potion != nullptr);
     EXPECT_EQ(potion->name, std::string("Potion"));
     EXPECT_EQ(potion->maxStackSize, 10);
 

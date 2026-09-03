@@ -100,9 +100,8 @@ namespace Spark::Graphics
         /**
          * @brief Register a parsed SparkMatDefinition with the MaterialSystem.
          * @param def The parsed material definition.
-         * @return true if the material was created successfully.
          */
-        bool RegisterMaterial(const SparkMatDefinition& def);
+        void RegisterMaterial(const SparkMatDefinition& def);
 
         std::vector<std::string> m_loadedNames;
     };

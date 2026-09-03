@@ -305,7 +305,7 @@
 | `FilterMode` | enum | SparkEditor | [MaterialEditorPanel.h:L74](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L74) |  |
 | `FireMode` | enum | SparkEngine | [WeaponManager.h:L38](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L38) |  |
 | `FireMode` | enum | Tests | [TestWeaponMechanics.cpp:L23](../../Tests/TestWeaponMechanics.cpp#L23) |  |
-| `FireMode` | enum | Tests | [TestWeaponSystem.cpp:L18](../../Tests/TestWeaponSystem.cpp#L18) |  |
+| `FireMode` | enum | Tests | [TestWeaponSystem.cpp:L19](../../Tests/TestWeaponSystem.cpp#L19) |  |
 | `FlexAlign` | enum | SparkEngine | [UILayoutExtensions.h:L20](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L20) |  |
 | `FogMode` | enum | SparkEngine | [FogSystem.h:L49](../../SparkEngine/Source/Graphics/FogSystem.h#L49) |  |
 | `FoliageRenderLOD` | enum | SparkEngine | [FoliageRenderer.h:L66](../../SparkEngine/Source/Graphics/FoliageRenderer.h#L66) | LOD level chosen for a single foliage instance. |
@@ -929,10 +929,10 @@
 | `WaveState` | enum | GameModules | [WaveSpawner.h:L49](../../GameModules/SparkGameFPS/Source/Game/WaveSpawner.h#L49) | Current state of the wave spawner |
 | `WeaponSlot` | enum | SparkEngine | [WeaponManager.h:L55](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L55) |  |
 | `WeaponSlot` | enum | Tests | [TestWeaponMechanics.cpp:L40](../../Tests/TestWeaponMechanics.cpp#L40) |  |
-| `WeaponSlot` | enum | Tests | [TestWeaponSystem.cpp:L35](../../Tests/TestWeaponSystem.cpp#L35) |  |
+| `WeaponSlot` | enum | Tests | [TestWeaponSystem.cpp:L36](../../Tests/TestWeaponSystem.cpp#L36) |  |
 | `WeaponState` | enum | SparkEngine | [WeaponManager.h:L45](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L45) |  |
 | `WeaponState` | enum | Tests | [TestWeaponMechanics.cpp:L30](../../Tests/TestWeaponMechanics.cpp#L30) |  |
-| `WeaponState` | enum | Tests | [TestWeaponSystem.cpp:L25](../../Tests/TestWeaponSystem.cpp#L25) |  |
+| `WeaponState` | enum | Tests | [TestWeaponSystem.cpp:L26](../../Tests/TestWeaponSystem.cpp#L26) |  |
 | `WeaponType` | enum | GameModules | [GameSystemEnums.h:L28](../../GameModules/SparkGameFPS/Source/Enums/GameSystemEnums.h#L28) | Weapon types supported by the game system |
 | `WeaponType` | enum | SparkEngine | [GameSystemEnums.h:L28](../../SparkEngine/Source/Enums/GameSystemEnums.h#L28) | Weapon types supported by the game system |
 | `WeatherCondition` | enum | GameModules | [RacingEnums.h:L75](../../GameModules/SparkGameRacing/Source/Enums/RacingEnums.h#L75) | Weather conditions affecting visibility and grip |

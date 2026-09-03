@@ -227,22 +227,32 @@ TEST(FPSMultiplayer_MovementAppliesCorrectly)
 
 TEST(FPSMultiplayer_SnapshotDeltaCompression)
 {
+    // Field-level dirty mask: bit 0 = position, bit 1 = health
+    auto computeDirtyMask = [](const NetworkPlayerState& prev, const NetworkPlayerState& curr)
+    {
+        uint8_t dirtyMask = 0;
+        if (std::abs(curr.posX - prev.posX) > 0.001f)
+            dirtyMask |= 0x01;
+        if (std::abs(curr.health - prev.health) > 0.001f)
+            dirtyMask |= 0x02;
+        return dirtyMask;
+    };
+
     NetworkPlayerState prev;
     prev.posX = 0.0f;
     prev.health = 100.0f;
 
-    NetworkPlayerState curr;
-    curr.posX = 1.5f;
-    curr.health = 100.0f; // unchanged
+    // Identical snapshot: nothing to send
+    NetworkPlayerState curr = prev;
+    EXPECT_EQ(computeDirtyMask(prev, curr), static_cast<uint8_t>(0x00));
 
     // Only position changed
-    uint8_t dirtyMask = 0;
-    if (std::abs(curr.posX - prev.posX) > 0.001f)
-        dirtyMask |= 0x01;
-    if (std::abs(curr.health - prev.health) > 0.001f)
-        dirtyMask |= 0x02;
+    curr.posX = 1.5f;
+    EXPECT_EQ(computeDirtyMask(prev, curr), static_cast<uint8_t>(0x01));
 
-    EXPECT_EQ(dirtyMask, static_cast<uint8_t>(0x01));
+    // Position and health changed
+    curr.health = 75.0f;
+    EXPECT_EQ(computeDirtyMask(prev, curr), static_cast<uint8_t>(0x03));
 }
 
 TEST(FPSMultiplayer_SpawnPointSelection)
