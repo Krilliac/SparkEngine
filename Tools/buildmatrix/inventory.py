@@ -3861,7 +3861,7 @@ def _repository_provenance(root: Path = REPO_ROOT) -> dict[str, Any]:
     status_result = subprocess.run(
         [
             "git", "-C", str(repository_root), "status", "--porcelain=v1", "-z",
-            "--untracked-files=all",
+            "--untracked-files=all", "--ignore-submodules=dirty",
         ],
         capture_output=True,
     )
