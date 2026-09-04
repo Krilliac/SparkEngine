@@ -486,7 +486,7 @@ cmake --preset windows-shipping -DBUILD_GAME_MODULES=ON -DENABLE_EDITOR=ON -DBUI
 cmake --build --preset windows-shipping --config MinSizeRel --parallel 2
 ctest --test-dir build/windows-shipping -C MinSizeRel -R ^ModuleProfileLifecycle_SparkGameFPS_D3D11$ --output-on-failure --no-tests=error
 ctest --test-dir build/windows-shipping -C MinSizeRel -L module-profile --output-on-failure --no-tests=error
-Tools/check-test-registration.sh
+tools/check-test-registration.sh
 ```
 
 **Automated evidence**
@@ -617,7 +617,7 @@ ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under
 - `.github/workflows/build.yml`
 - `.github/workflows/codeql.yml`
 - `tools/validate-all.sh`
-- `Tools/check-test-registration.sh`
+- `tools/check-test-registration.sh`
 
 **Entry points**
 
@@ -644,7 +644,7 @@ ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under
 
 ```bash
 bash tools/validate-all.sh
-bash Tools/check-test-registration.sh
+bash tools/check-test-registration.sh
 gh workflow run build.yml
 gh api repos/Krilliac/SparkEngine/branches/Working/protection
 ```

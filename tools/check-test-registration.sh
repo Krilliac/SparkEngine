@@ -1,66 +1,70 @@
-#!/bin/bash
-
-# SparkEngine Test Registration Checker
-# Verifies every Tests/Test*.cpp file is referenced in Tests/CMakeLists.txt.
+#!/bin/sh
 #
-# Usage:
-#   ./check-test-registration.sh          # Exit 1 if unregistered tests found
-#   ./check-test-registration.sh check    # Same as above (default)
+# check-test-registration.sh — guard against test files silently dropping out of the build.
+#
+# Recursively inventories Tests/Test*.cpp, Tests/Test*.mm, and nested Test*
+# sources, then verifies each relative path is referenced in Tests/CMakeLists.txt.
+# Relative paths matter: duplicate basenames in different directories must not
+# allow an unregistered source to hide behind a registered one.
+#
+# Opt-out: a test file that contains the comment "// test-registration: ignore"
+# is intentionally excluded and not reported.
+#
+# Exit 0 when every on-disk test is registered (or ignored); exit 1 otherwise.
+#
+# POSIX sh only (find / grep / sed / basename) — no bash-isms, no ripgrep.
 
-set -e
+set -u
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-TESTS_DIR="$PROJECT_ROOT/Tests"
-CMAKE_FILE="$TESTS_DIR/CMakeLists.txt"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+REPO_ROOT=${SPARK_TEST_REGISTRATION_ROOT:-$(cd -- "$SCRIPT_DIR/.." && pwd)}
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+TESTS_DIR="$REPO_ROOT/Tests"
+CMAKE_LISTS="$TESTS_DIR/CMakeLists.txt"
 
-log_info()    { echo -e "${BLUE}[TEST-REG]${NC} $1"; }
-log_success() { echo -e "${GREEN}[TEST-REG]${NC} $1"; }
-log_warning() { echo -e "${YELLOW}[TEST-REG]${NC} $1"; }
-
-if [ ! -f "$CMAKE_FILE" ]; then
-    log_warning "Tests/CMakeLists.txt not found"
+if [ ! -f "$CMAKE_LISTS" ]; then
+    echo "check-test-registration: $CMAKE_LISTS not found" >&2
     exit 1
 fi
 
-log_info "Checking test source registration in Tests/CMakeLists.txt..."
+# Extract normalized relative Test*.cpp/Test*.mm paths from active CMake lines.
+# Strip comments first so a commented-out source cannot masquerade as registered.
+registered=$(
+    sed 's/[[:space:]]*#.*$//' "$CMAKE_LISTS" \
+        | grep -oE '([A-Za-z0-9_.-]+/)*Test[A-Za-z0-9_.-]+\.(cpp|mm)' \
+        | sed 's|^Tests/||' \
+        | sort -u \
+        || true
+)
 
-UNREGISTERED=0
+inventory=$(mktemp "${TMPDIR:-/tmp}/spark-test-registration.XXXXXX") || exit 1
+trap 'rm -f "$inventory"' EXIT HUP INT TERM
+find "$TESTS_DIR" -type f \( -name 'Test*.cpp' -o -name 'Test*.mm' \) -print \
+    | sort > "$inventory"
 
-while IFS= read -r -d '' test_file; do
-    basename=$(basename "$test_file")
-    rel=$(echo "$test_file" | sed "s|$PROJECT_ROOT/||")
+missing=0
+while IFS= read -r test_file; do
+    [ -n "$test_file" ] || continue
+    relative=${test_file#"$TESTS_DIR"/}
 
-    if ! grep -qF "$basename" "$CMAKE_FILE"; then
-        echo -e "  ${YELLOW}✗${NC} $rel"
-        UNREGISTERED=$((UNREGISTERED + 1))
+    # Opt-out: file explicitly excluded from the build.
+    if grep -q '// test-registration: ignore' "$test_file" 2>/dev/null; then
+        continue
     fi
-done < <(find "$TESTS_DIR" -maxdepth 1 -name 'Test*.cpp' -print0 | sort -z)
 
-# Also check Integration/ subdirectory
-while IFS= read -r -d '' test_file; do
-    basename="Integration/$(basename "$test_file")"
-    rel=$(echo "$test_file" | sed "s|$PROJECT_ROOT/||")
-
-    if ! grep -qF "$basename" "$CMAKE_FILE"; then
-        echo -e "  ${YELLOW}✗${NC} $rel"
-        UNREGISTERED=$((UNREGISTERED + 1))
+    if printf '%s\n' "$registered" | grep -Fqx "$relative"; then
+        continue
     fi
-done < <(find "$TESTS_DIR/Integration" -maxdepth 1 -name 'Test*.cpp' -print0 2>/dev/null | sort -z)
 
-TOTAL=$(find "$TESTS_DIR" -maxdepth 1 -name 'Test*.cpp' | wc -l)
-REGISTERED=$((TOTAL - UNREGISTERED))
+    echo "MISSING REGISTRATION: Tests/$relative" >&2
+    missing=$((missing + 1))
+done < "$inventory"
 
-if [ "$UNREGISTERED" -eq 0 ]; then
-    log_success "All $TOTAL test sources registered"
+if [ "$missing" -eq 0 ]; then
+    echo "check-test-registration: OK — all recursive Tests/Test*.cpp and Test*.mm sources are registered"
     exit 0
-else
-    log_warning "$UNREGISTERED of $TOTAL test source(s) not found in CMakeLists.txt"
-    exit 1
 fi
+
+echo "check-test-registration: $missing unregistered test file(s) found —" >&2
+echo "  add them to Tests/CMakeLists.txt or mark with '// test-registration: ignore'" >&2
+exit 1

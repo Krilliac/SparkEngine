@@ -82,7 +82,7 @@ jobs:
       run: python3 -m unittest discover -s Tools/spark-cli/tests -p "test_*.py" -v
 
     - name: Verify every test source is registered
-      run: bash Tools/check-test-registration.sh
+      run: bash tools/check-test-registration.sh
 
     - name: Validate model and template asset contracts
       run: python3 Tools/model_pipeline/validate_models.py --repo-root .

@@ -11,7 +11,7 @@ on:
       - '**.inl'
       - 'docs/codebase-metrics.py'
       - '.github/scripts/test-codebase-metrics.py'
-      - 'Tools/check-test-registration.sh'
+      - 'tools/check-test-registration.sh'
       - '.github/scripts/test-check-test-registration.py'
       - 'docs/update-codebase-stats.sh'
       - 'docs/sync-wiki.sh'
@@ -89,7 +89,7 @@ jobs:
         set -euo pipefail
         python3 .github/scripts/test-codebase-metrics.py -v
         python3 .github/scripts/test-check-test-registration.py -v
-        bash Tools/check-test-registration.sh
+        bash tools/check-test-registration.sh
 
     - name: Count lines of code
       id: loc
