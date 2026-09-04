@@ -1,38 +1,6 @@
-/**
- * @file Components.h
- * @brief ECS components and World class for Spark Engine (umbrella header)
- * @author Spark Engine Team
- * @date 2025
- *
- * @details
- * This is the umbrella header that includes all ECS component headers.
- * For faster compilation, prefer including only the specific component
- * headers you need:
- *
- *   #include "Components/CoreComponents.h"       // Transform, Camera, etc.
- *   #include "Components/PhysicsComponents.h"     // RigidBody, Collider
- *   #include "Components/AudioComponents.h"       // AudioSource
- *   #include "Components/LightComponents.h"       // LightComponent
- *   #include "Components/AnimationComponents.h"   // Animation, Particles
- *   #include "Components/AIComponents.h"          // AI, NetworkIdentity
- *   #include "Components/GameplayComponents.h"    // Tags, Health, Weather, etc.
- *   #include "Components/FPSComponents.h"         // Decals, Projectiles, Interactions
- *
- * ## Component categories
- *
- * | Category       | Components                                               |
- * |----------------|----------------------------------------------------------|
- * | Core           | NameComponent, Transform, MeshRenderer, Camera, Script  |
- * | Physics        | RigidBodyComponent, ColliderComponent                    |
- * | Audio          | AudioSourceComponent                                     |
- * | Lighting       | LightComponent                                           |
- * | Particles      | ParticleEmitterComponent                                 |
- * | Animation      | AnimationController                                      |
- * | AI             | AIComponent                                              |
- * | Networking     | NetworkIdentity                                          |
- * | Tags/Metadata  | TagComponent, ActiveComponent, HealthComponent           |
- * | FPS            | DecalComponent, ProjectileComponent, InteractionComponent|
- */
+/// @file Components.h
+/// @brief ECS components and World class (umbrella header).
+/// Prefer including specific component headers for faster compilation.
 
 #pragma once
 

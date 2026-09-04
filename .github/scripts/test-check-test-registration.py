@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).resolve().parents[2] / "Tools" / "check-test-registration.sh"
+SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "check-test-registration.sh"
 
 
 def bash_executable() -> str | None:

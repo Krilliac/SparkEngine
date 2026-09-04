@@ -1,9 +1,5 @@
-/**
- * @file EditorPluginManager.cpp
- * @brief Implementation of the editor plugin manager (R7.1)
- * @author Spark Engine Team
- * @date 2025
- */
+/// @file EditorPluginManager.cpp
+/// @brief Implementation of the editor plugin manager.
 
 #include "EditorPluginManager.h"
 #include "EditorPluginDiscovery.h"
@@ -42,7 +38,6 @@ namespace SparkEditor
     }
 
     // ----- Registration -----
-
     bool EditorPluginManager::RegisterPluginInstance(EditorPluginPtr plugin)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
@@ -53,8 +48,6 @@ namespace SparkEditor
         }
 
         const std::string name = plugin->GetName();
-
-        // Check for duplicate names
         if (FindPlugin(name) != m_plugins.end())
         {
             Spark::SimpleConsole::GetInstance().LogWarning("EditorPluginManager: Plugin '" + name +
@@ -78,7 +71,6 @@ namespace SparkEditor
         SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !path.empty(), false);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading plugin from '%s'", path.c_str());
 
-        // Security: reject path traversal sequences
         if (path.contains(".."))
         {
             Spark::SimpleConsole::GetInstance().LogError("Plugin path rejected — contains '..' traversal: " + path);
@@ -209,7 +201,6 @@ namespace SparkEditor
             return false;
         }
 
-        // Shutdown if initialized
         if (it->isInitialized)
         {
             Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Shutting down plugin '" + name + "'...");
@@ -217,8 +208,6 @@ namespace SparkEditor
             it->isInitialized = false;
         }
 
-        // Panel vtables and destructors may live in the plugin DLL. Release
-        // them before destroying the plugin instance or unloading the library.
         ReleasePanelsForPlugin(name);
 
         it->plugin.reset();
@@ -233,11 +222,7 @@ namespace SparkEditor
     IEditorPlugin* EditorPluginManager::GetPlugin(const std::string& name) const
     {
         auto it = FindPlugin(name);
-        if (it != m_plugins.end())
-        {
-            return it->plugin.get();
-        }
-        return nullptr;
+        return it != m_plugins.end() ? it->plugin.get() : nullptr;
     }
 
     const SparkPluginDescriptor* EditorPluginManager::GetDynamicPluginDescriptor(const std::string& nameOrId) const
@@ -256,9 +241,7 @@ namespace SparkEditor
         std::vector<std::string> names;
         names.reserve(GetPluginCount());
         for (const auto& entry : m_plugins)
-        {
             names.emplace_back(entry.plugin->GetName());
-        }
         for (const auto& entry : m_dynamicPlugins)
             names.push_back(entry.name);
         return names;
@@ -273,9 +256,7 @@ namespace SparkEditor
         for (auto& entry : m_plugins)
         {
             if (entry.isInitialized)
-            {
                 continue;
-            }
 
             const std::string name = entry.plugin->GetName();
             Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Initializing plugin '" + name + "'...");
@@ -332,7 +313,6 @@ namespace SparkEditor
         }
         m_dynamicPlugins.clear();
 
-        // Shutdown in reverse order
         for (auto it = m_plugins.rbegin(); it != m_plugins.rend(); ++it)
         {
             if (it->isInitialized)
@@ -345,14 +325,11 @@ namespace SparkEditor
             }
         }
 
-        // Plugin-provided panel implementations must be gone before any DLL
-        // that supplied their virtual methods is unloaded.
         for (auto it = m_registeredPanels.rbegin(); it != m_registeredPanels.rend(); ++it)
             (*it)->Shutdown();
         m_registeredPanels.clear();
         m_registeredPanelOwners.clear();
 
-        // Destroy plugin objects while their DLL exports remain callable.
         for (auto it = m_plugins.rbegin(); it != m_plugins.rend(); ++it)
             it->plugin.reset();
 
@@ -365,9 +342,7 @@ namespace SparkEditor
         for (auto& entry : m_plugins)
         {
             if (entry.isInitialized)
-            {
                 SPARK_GUARDED_UPDATE("EditorPlugin:Update", "Editor", { entry.plugin->Update(deltaTime); });
-            }
         }
 
         for (auto& entry : m_dynamicPlugins)
@@ -388,9 +363,7 @@ namespace SparkEditor
         for (auto& entry : m_plugins)
         {
             if (entry.isInitialized)
-            {
                 SPARK_GUARDED_UPDATE("EditorPlugin:Render", "Editor", { entry.plugin->OnGUI(); });
-            }
         }
     }
 
@@ -401,9 +374,7 @@ namespace SparkEditor
         for (auto& entry : m_plugins)
         {
             if (entry.isInitialized)
-            {
                 SPARK_GUARDED_UPDATE("EditorPlugin:SceneLoad", "Editor", { entry.plugin->OnSceneLoad(scenePath); });
-            }
         }
     }
 
@@ -412,9 +383,7 @@ namespace SparkEditor
         for (auto& entry : m_plugins)
         {
             if (entry.isInitialized)
-            {
                 SPARK_GUARDED_UPDATE("EditorPlugin:SceneSave", "Editor", { entry.plugin->OnSceneSave(scenePath); });
-            }
         }
     }
 
@@ -423,10 +392,8 @@ namespace SparkEditor
         for (auto& entry : m_plugins)
         {
             if (entry.isInitialized)
-            {
                 SPARK_GUARDED_UPDATE("EditorPlugin:EntitySelect", "Editor",
                                      { entry.plugin->OnEntitySelected(entityID); });
-            }
         }
     }
 
@@ -435,9 +402,7 @@ namespace SparkEditor
         for (auto& entry : m_plugins)
         {
             if (entry.isInitialized)
-            {
                 SPARK_GUARDED_UPDATE("EditorPlugin:MenuBar", "Editor", { entry.plugin->OnMenuBar(); });
-            }
         }
     }
 
@@ -505,26 +470,14 @@ namespace SparkEditor
 
     std::vector<PluginEntry>::iterator EditorPluginManager::FindPlugin(const std::string& name)
     {
-        for (auto it = m_plugins.begin(); it != m_plugins.end(); ++it)
-        {
-            if (it->plugin && std::string(it->plugin->GetName()) == name)
-            {
-                return it;
-            }
-        }
-        return m_plugins.end();
+        return std::find_if(m_plugins.begin(), m_plugins.end(), [&name](const PluginEntry& e)
+                            { return e.plugin && std::string(e.plugin->GetName()) == name; });
     }
 
     std::vector<PluginEntry>::const_iterator EditorPluginManager::FindPlugin(const std::string& name) const
     {
-        for (auto it = m_plugins.cbegin(); it != m_plugins.cend(); ++it)
-        {
-            if (it->plugin && std::string(it->plugin->GetName()) == name)
-            {
-                return it;
-            }
-        }
-        return m_plugins.cend();
+        return std::find_if(m_plugins.cbegin(), m_plugins.cend(), [&name](const PluginEntry& e)
+                            { return e.plugin && std::string(e.plugin->GetName()) == name; });
     }
 
     std::vector<DynamicPluginEntry>::iterator EditorPluginManager::FindDynamicPlugin(const std::string& nameOrId)

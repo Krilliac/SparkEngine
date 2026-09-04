@@ -360,7 +360,7 @@ TEST(MyFeature_Comparisons) {
 }
 ```
 
-2. Add the source file to the explicit test-source list in `Tests/CMakeLists.txt`. CI runs `Tools/check-test-registration.sh` and fails when a test source is present but not registered. See [Build System and CMake Modules](Build-System-and-CMake-Modules.md) for build configuration.
+2. Add the source file to the explicit test-source list in `Tests/CMakeLists.txt`. CI runs `tools/check-test-registration.sh` and fails when a test source is present but not registered. See [Build System and CMake Modules](Build-System-and-CMake-Modules.md) for build configuration.
 
 3. Build and run:
 
