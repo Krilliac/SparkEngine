@@ -140,8 +140,6 @@ namespace Spark::Graphics
       private:
         TextureCompressor() = default;
 
-        void CompressBlockBC1(const uint8_t* block4x4, uint8_t* output);
-        void CompressBlockBC7(const uint8_t* block4x4, uint8_t* output);
         std::vector<uint8_t> GenerateMipLevel(const uint8_t* src, uint32_t srcW, uint32_t srcH);
 
         uint32_t m_texturesCompressed = 0;

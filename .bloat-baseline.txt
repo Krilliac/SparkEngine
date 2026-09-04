@@ -28,6 +28,7 @@ GameModules/SparkGameMMO/Source/UI/MMOLoginUI.cpp
 GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp
 GameModules/SparkGameMMOFPS/Source/Core/TFTypes.h
 GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp
+GameModules/SparkGameMMOFPS/Source/Net/TFServerSimOnboarding.cpp
 GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp
 GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h
 GameModules/SparkGameOpenWorld/Source/Core/Main.cpp
@@ -136,6 +137,7 @@ SparkEngine/Source/Core/EngineSettings.cpp
 SparkEngine/Source/Core/EngineSettings.h
 SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp
 SparkEngine/Source/Core/ModuleManager.cpp
+SparkEngine/Source/Core/ModuleManager.h
 SparkEngine/Source/Core/PlatformAudioStubs.h
 SparkEngine/Source/Core/PlatformDirectXMathStubs.h
 SparkEngine/Source/Core/PlatformTypes.h
@@ -200,6 +202,7 @@ SparkEngine/Source/Engine/Networking/AreaServer.cpp
 SparkEngine/Source/Engine/Networking/DatablockRegistry.h
 SparkEngine/Source/Engine/Networking/DedicatedServer.cpp
 SparkEngine/Source/Engine/Networking/DedicatedServer.h
+SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h
 SparkEngine/Source/Engine/Networking/NetworkConnection.cpp
 SparkEngine/Source/Engine/Networking/NetworkManager.cpp
 SparkEngine/Source/Engine/Networking/NetworkManager.h
@@ -210,6 +213,7 @@ SparkEngine/Source/Engine/OnlineServices/OnlineServices.h
 SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp
 SparkEngine/Source/Engine/Physics/JoltPhysicsInterface.h
 SparkEngine/Source/Engine/Procedural/ProceduralGenerator.h
+SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h
 SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h
 SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h
 SparkEngine/Source/Engine/Replay/ReplaySystem.cpp
@@ -253,6 +257,7 @@ SparkEngine/Source/Graphics/GPUTimestampQuery.h
 SparkEngine/Source/Graphics/GTAOEffect.h
 SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsBasicState.cpp
 SparkEngine/Source/Graphics/GraphicsEngine.h
+SparkEngine/Source/Graphics/LODGenerator.cpp
 SparkEngine/Source/Graphics/LightManager.h
 SparkEngine/Source/Graphics/LightingSystem.h
 SparkEngine/Source/Graphics/LightmapBaker.h

@@ -1,15 +1,5 @@
-/**
- * @file SaveSystemTypes.h
- * @brief Data types used by the save/load system (metadata, serialized entities, save data).
- * @author Spark Engine Team
- * @date 2025
- *
- * @details
- * This header defines the plain data structures used to represent serialized
- * game state: SaveMetadata, SerializedComponent, SerializedEntity, and SaveData.
- * These types are separated from SaveSystem.h so that code needing only the
- * data definitions does not pull in the full SaveSystem class.
- */
+/// @file SaveSystemTypes.h
+/// @brief Data types used by the save/load system (metadata, serialized entities, save data).
 
 #pragma once
 #include "../../Core/Platform.h"
@@ -27,21 +17,15 @@
 namespace Spark
 {
 
-    /** @brief Oldest save format that this build can migrate and load. */
+    /// Oldest save format that this build can migrate and load.
     inline constexpr uint32_t kOldestSupportedSaveVersion = 1;
 
-    /** @brief Save format emitted by every writer in this build. */
+    /// Save format emitted by every writer in this build.
     inline constexpr uint32_t kCurrentSaveVersion = 2;
 
-    /**
-     * @brief Shared structural limits for both disk-backed and in-memory saves.
-     *
-     * The binary format uses uint16 length/count fields below the entity and
-     * custom-state layers. Aggregate limits are derived from the 512 MiB wire
-     * budget and the four-byte minimum encoding of a component/property record.
-     * Keeping these values in the representation layer prevents WriteToFile(),
-     * ReadFromFile(), and DeserializeWorld() from accepting different shapes.
-     */
+    /// Shared structural limits for both disk-backed and in-memory saves.
+    /// The binary format uses uint16 length/count fields below the entity and
+    /// custom-state layers. Aggregate limits derive from the 512 MiB wire budget.
     struct SaveRepresentationLimits
     {
         static constexpr size_t maxWireBytes = 512ull * 1024ull * 1024ull;
@@ -80,12 +64,7 @@ namespace Spark
         }
     };
 
-    /**
-     * @brief Overflow-safe aggregate accounting for a serialized save shape.
-     *
-     * This small value type is also useful to validate synthetic boundary cases
-     * without allocating a maximum-sized SaveData in a test.
-     */
+    /// Overflow-safe aggregate accounting for a serialized save shape.
     struct SaveRepresentationBudget
     {
         size_t wireBytes = 0;
@@ -124,258 +103,83 @@ namespace Spark
     // Save Data Types
     // ============================================================================
 
-    /**
- * @brief Lightweight metadata header attached to every save file.
- *
- * SaveMetadata is written in the versioned binary save header and returned by
- * slot-enumeration APIs such as GetSaveSlots(), which read only that header.
- *
- * ### Fields for slot-selection UI
- * The fields `saveName`, `screenshotPath`, `playerHealth`, `playerKills`, and
- * `playTime` are primarily intended for the save/load screen. Populate them before
- * passing the struct to Save() or AutoSave().
- *
- * ### Versioning
- * The `version` field is incremented whenever the save format changes. The load
- * path checks this value and may run migration routines before deserializing
- * components. Writers always replace this value with kCurrentSaveVersion. Older
- * values are only valid on parsed or manually constructed migration inputs.
- *
- * @code
- *   SaveMetadata meta;
- *   meta.saveName       = "After Tutorial";
- *   meta.sceneName      = world.GetCurrentSceneName();
- *   meta.playerClass    = player.GetClassName();
- *   meta.playTime       = g_totalPlayTime;
- *   meta.playerHealth   = player.GetHealth();
- *   meta.playerPosition = player.GetPosition();
- *   meta.playerKills    = stats.kills;
- *   meta.playerDeaths   = stats.deaths;
- *   ss.Save("slot1", world, meta);
- * @endcode
- */
+    /// Lightweight metadata header attached to every save file.
+    /// Written in the versioned binary save header and returned by slot-enumeration APIs.
     struct SaveMetadata
     {
-        /** @brief Human-readable name shown in the save-slot UI (e.g. "Before Boss Fight"). */
+        /// Human-readable name shown in the save-slot UI (e.g. "Before Boss Fight").
         std::string saveName;
 
-        /**
-     * @brief Internal scene/level identifier used to reload the correct level geometry.
-     *
-     * Should match the scene file name without extension (e.g. "Level03").
-     * The SceneManager uses this string when deserializing to load the level
-     * before restoring entity state.
-     */
+        /// Internal scene/level identifier for reloading (e.g. "Level03").
         std::string sceneName;
 
-        /**
-     * @brief Name of the player's chosen class at save time.
-     *
-     * Stored for UI display only (e.g. "Soldier", "Engineer"). The actual class
-     * component data is restored from the serialized entity list.
-     */
+        /// Player's class name at save time, for UI display only.
         std::string playerClass;
 
-        /**
-     * @brief Save format version number.
-     *
-     * Defaults to kCurrentSaveVersion. The loader accepts the inclusive range
-     * kOldestSupportedSaveVersion..kCurrentSaveVersion and migrates older data in
-     * memory before restoring a world. Do not modify this field in game code.
-     */
+        /// Save format version. Writers replace with kCurrentSaveVersion; loaders accept
+        /// kOldestSupportedSaveVersion..kCurrentSaveVersion and migrate in memory.
         uint32_t version = kCurrentSaveVersion;
 
-        /**
-     * @brief Unix timestamp (seconds since epoch) when the save was created.
-     *
-     * Set automatically by the SaveSystem to `time(nullptr)` at save time.
-     * The UI can convert this to a human-readable date string.
-     */
+        /// Unix timestamp (seconds since epoch) when the save was created.
         uint64_t timestamp = 0;
 
-        /**
-     * @brief Total accumulated play time in seconds at save time.
-     *
-     * Populate from your game's running play-time counter before calling Save().
-     * Displayed in the slot UI as "Played: 2h 34m".
-     */
+        /// Total accumulated play time in seconds at save time.
         float playTime = 0.0f;
 
-        /**
-     * @brief Relative or absolute path to a PNG/JPG screenshot for the slot thumbnail.
-     *
-     * The SaveSystem does **not** capture or write the screenshot; your game code
-     * must capture it (e.g. via a back-buffer readback) and set this path. Leave
-     * empty to display the engine's placeholder thumbnail.
-     */
+        /// Path to a PNG/JPG screenshot for the slot thumbnail. Empty = placeholder.
         std::string screenshotPath;
 
-        // -------------------------------------------------------------------------
-        // Player summary fields — used by the save-slot UI for quick display.
-        // -------------------------------------------------------------------------
-
-        /** @brief Player's health value at save time. Range: [0, maxHealth]. */
+        /// Player's health value at save time. Range: [0, maxHealth].
         float playerHealth = 0.0f;
 
-        /** @brief Player's armor/shield value at save time. Range: [0, maxArmor]. */
+        /// Player's armor/shield value at save time. Range: [0, maxArmor].
         float playerArmor = 0.0f;
 
-        /**
-     * @brief Player's world-space position at save time.
-     *
-     * Shown in the UI as a map pin or coordinate display. Also used by the
-     * SceneManager as a hint for where to spawn the player during load.
-     */
+        /// Player's world-space position at save time.
         DirectX::XMFLOAT3 playerPosition{0, 0, 0};
 
-        /** @brief Total enemy kills accumulated up to this save point. */
+        /// Total enemy kills accumulated up to this save point.
         int playerKills = 0;
 
-        /** @brief Total player deaths accumulated up to this save point. */
+        /// Total player deaths accumulated up to this save point.
         int playerDeaths = 0;
     };
 
-    /**
- * @brief Serialized representation of a single component instance.
- *
- * SerializedComponent is an intermediate, type-erased container that bridges
- * the strongly-typed component structs (e.g. `Transform`, `HealthComponent`)
- * and the type-erased binary representation on disk.
- *
- * All field values are stored as **strings** so they can be written directly to
- * the common binary property map without type-specific code in the core system. Each
- * component's registered serializer is responsible for encoding and decoding its
- * fields (e.g. converting `XMFLOAT3{1, 2, 3}` to the string `"1.0 2.0 3.0"`).
- *
- * ### Example serialized Transform component
- * ```json
- * {
- *   "typeName": "Transform",
- *   "properties": {
- *     "posX": "1.0", "posY": "0.5", "posZ": "-3.0",
- *     "rotX": "0.0", "rotY": "45.0", "rotZ": "0.0",
- *     "scaleX": "1.0", "scaleY": "1.0", "scaleZ": "1.0"
- *   }
- * }
- * ```
- */
+    /// Serialized representation of a single component instance.
+    /// Type-erased bridge between strongly-typed component structs and the binary format.
     struct SerializedComponent
     {
-        /**
-     * @brief C++ type name of the component (e.g. "Transform", "HealthComponent").
-     *
-     * Must match the key used when registering serializers with
-     * ComponentSerializerRegistry::Register(). The deserializer uses this string
-     * to look up the correct deserialization function.
-     */
+        /// C++ type name of the component (must match ComponentSerializerRegistry key).
         std::string typeName;
 
-        /**
-     * @brief String-encoded key-value properties for this component instance.
-     *
-     * Both keys and values are plain strings. The component serializer encodes
-     * typed values (floats, ints, booleans, vectors) to strings, and the
-     * deserializer parses them back. Use a consistent encoding convention within
-     * each component serializer (e.g. `std::to_string` for numerics).
-     */
+        /// String-encoded key-value properties for this component instance.
         std::unordered_map<std::string, std::string> properties;
     };
 
-    /**
- * @brief Serialized representation of a single entity and all its components.
- *
- * SerializedEntity is a snapshot of one ECS entity at save time. The
- * `entityID` stored here is **not** guaranteed to match the entity's ID when
- * loaded, because EnTT may recycle IDs. The ID is stored purely for reference
- * (e.g. resolving entity cross-references in custom-state data).
- *
- * During deserialization, the SaveSystem creates a brand-new entity via
- * `World::CreateEntity()` and attaches each component listed in `components`.
- */
+    /// Serialized representation of a single entity and all its components.
     struct SerializedEntity
     {
-        /**
-     * @brief EnTT entity ID at save time.
-     *
-     * Informational only during load; do not use as a stable cross-save reference.
-     * If you need stable inter-entity references, store a named identifier in a
-     * custom component and reference it via name in `customState`.
-     */
+        /// EnTT entity ID at save time (informational only; IDs may be recycled on load).
         uint32_t entityID;
 
-        /**
-     * @brief Human-readable entity name from NameComponent (if present).
-     *
-     * Used to create the entity with the same display name in the editor and
-     * in debug logs. Empty string if the entity had no NameComponent.
-     */
+        /// Human-readable entity name from NameComponent (empty if none).
         std::string name;
 
-        /**
-     * @brief All serialized components attached to this entity.
-     *
-     * Populated by iterating over the entity's component set at save time and
-     * calling the registered serializer for each type. Only components with
-     * registered serializers are included; unrecognized components are silently
-     * skipped.
-     */
+        /// All serialized components attached to this entity.
         std::vector<SerializedComponent> components;
     };
 
-    /**
- * @brief Complete snapshot of a game state that can be written to and read from disk.
- *
- * SaveData is the root container passed to `SaveSystem::WriteToFile()` and
- * returned by `SaveSystem::ReadFromFile()`. It contains everything needed to
- * reconstruct the game world from scratch: the metadata header, the full entity
- * list, and any free-form key-value state for game-specific data that doesn't
- * fit into ECS components.
- *
- * ### Creating a SaveData manually
- * In most cases you should call `SaveSystem::Save()` rather than constructing
- * SaveData directly. However, `SaveSystem::SerializeWorld()` returns a SaveData
- * without writing to disk, which is useful for in-memory snapshots (e.g. undo
- * systems or server-side checkpointing).
- *
- * @code
- *   // Take an in-memory snapshot without touching the file system
- *   SaveData snapshot = SaveSystem::GetInstance().SerializeWorld(world, meta);
- *   // ... modify world state ...
- *   // Restore from snapshot
- *   SaveSystem::GetInstance().DeserializeWorld(snapshot, world);
- * @endcode
- */
+    /// Complete snapshot of a game state for disk or in-memory persistence.
+    /// Root container for SaveSystem::WriteToFile() and ReadFromFile().
     struct SaveData
     {
-        /**
-     * @brief Metadata header for this save (slot UI display, versioning, scene name).
-     *
-     * See SaveMetadata for field descriptions. Always populate this before
-     * writing; the SaveSystem reads `metadata.version` to select the appropriate
-     * migration path during load.
-     */
+        /// Metadata header (slot UI display, versioning, scene name).
         SaveMetadata metadata;
 
-        /**
-     * @brief Serialized snapshot of all entities and their components.
-     *
-     * One entry per entity in the World that has at least one serializable
-     * component. Entities with no registered-component types are omitted.
-     */
+        /// Serialized snapshot of all entities with at least one serializable component.
         std::vector<SerializedEntity> entities;
 
-        /**
-     * @brief Free-form key-value store for game-specific state.
-     *
-     * Use this for data that doesn't map cleanly to ECS components: global game
-     * mode flags, world event triggers, puzzle states, timer values, etc.
-     *
-     * @code
-     *   data.customState["doorOpened_MainHall"] = "true";
-     *   data.customState["questStep_FindKey"]   = "3";
-     *   data.customState["globalTimer"]         = std::to_string(elapsedSeconds);
-     * @endcode
-     */
+        /// Free-form key-value store for game-specific state not mapped to ECS components.
         std::unordered_map<std::string, std::string> customState;
     };
 

@@ -239,15 +239,19 @@ async function listSameCommitRuns(github, request) {
     return page;
 }
 
-function runMatches(run, expected, repository) {
+function runMatchesIdentity(run, expected, repository) {
     return isObject(run) && isObject(expected) &&
         run.id === expected.id && run.workflow_id === expected.workflow_id &&
         run.run_number === expected.run_number && run.run_attempt === expected.run_attempt &&
         run.name === SOURCE_WORKFLOW_NAME && normalizeWorkflowPath(run.path) === SOURCE_WORKFLOW_PATH &&
-        run.event === expected.event && run.status === expected.status &&
-        run.conclusion === expected.conclusion && run.head_branch === 'Working' &&
+        run.event === expected.event && run.head_branch === 'Working' &&
         normalizedSha(run.head_sha) === normalizedSha(expected.head_sha) &&
         exactRepository(run.repository, repository) && exactRepository(run.head_repository, repository);
+}
+
+function runMatches(run, expected, repository) {
+    return runMatchesIdentity(run, expected, repository) &&
+        run.status === expected.status && run.conclusion === expected.conclusion;
 }
 
 function sameCommitInventoryReasons(runs, eventRun, sourceSha) {
@@ -321,7 +325,7 @@ async function inspectSource({ github, context }, mode) {
     if (Number.isInteger(eventRun?.id) && eventRun.id > 0) {
         run = (await github.rest.actions.getWorkflowRun({ owner, repo, run_id: eventRun.id })).data;
     }
-    if (!runMatches(run, eventRun, repository)) {
+    if (!runMatchesIdentity(run, eventRun, repository)) {
         reasons.push('The Actions API source run changed or is not the trusted Build workflow.');
     }
     if (sourceSha && checkoutSha) {
@@ -342,9 +346,11 @@ async function inspectSource({ github, context }, mode) {
             reasons.push(`The source Build workflow could not be attested: ${error.message}`);
         }
     }
-    const expectedStatus = event.action === 'in_progress' ? 'in_progress' : 'completed';
-    if (eventRun?.status !== expectedStatus || run?.status !== expectedStatus) {
-        reasons.push(`The source run is not in the expected '${expectedStatus}' lifecycle state.`);
+    const acceptedStatuses = event.action === 'in_progress'
+        ? ['in_progress', 'completed']
+        : ['completed'];
+    if (!acceptedStatuses.includes(eventRun?.status) || !acceptedStatuses.includes(run?.status)) {
+        reasons.push(`The source run is not in the expected '${acceptedStatuses.join('/')}' lifecycle state (event: ${eventRun?.status}, api: ${run?.status}).`);
     }
     if (mode === 'final' && event.action !== 'completed') {
         reasons.push('A final build-matrix status requires a completed source event.');
