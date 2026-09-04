@@ -277,7 +277,7 @@
 | `EngineConnectionStatus` | enum | SparkEditor | [SparkEngineIntegration.h:L37](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L37) | Engine connection status |
 | `EngineEventType` | enum | SparkEditor | [EngineInterface.h:L95](../../SparkEditor/Source/Communication/EngineInterface.h#L95) | Event types that can be received from the engine |
 | `entity` | enum | SparkEngine | [TerrainRenderer.h:L40](../../SparkEngine/Source/Graphics/TerrainRenderer.h#L40) |  |
-| `EntityEventCleanupMode` | enum | SparkEngine | [Components.h:L104](../../SparkEngine/Source/Engine/ECS/Components.h#L104) |  |
+| `EntityEventCleanupMode` | enum | SparkEngine | [Components.h:L72](../../SparkEngine/Source/Engine/ECS/Components.h#L72) |  |
 | `EventCategory` | enum | SparkEditor | [EventMonitorPanel.h:L36](../../SparkEditor/Source/Panels/EventMonitorPanel.h#L36) |  |
 | `EventPriority` | enum | SparkEngine | [EventSystem.h:L279](../../SparkEngine/Source/Engine/Events/EventSystem.h#L279) | Dispatch priority tier for queued events. |
 | `EventState` | enum | GameModules | [OpenWorldEnums.h:L180](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L180) | Event lifecycle state |
