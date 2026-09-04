@@ -3634,7 +3634,16 @@ def capture_codemodel_transaction(
     _validate_directory_chain(source_dir, f"{profile} source directory")
     repository_before = _repository_provenance(REPO_ROOT)
     if repository_before["clean"] is not True:
-        raise InventoryError(f"{profile}: source repository must be exactly clean before configure")
+        dirty_result = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "status", "--porcelain=v1",
+             "--untracked-files=all", "--ignore-submodules=dirty"],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        dirty_lines = dirty_result.stdout.strip() if dirty_result.returncode == 0 else "(git status failed)"
+        raise InventoryError(
+            f"{profile}: source repository must be exactly clean before configure\n"
+            f"Dirty files:\n{dirty_lines}"
+        )
     ci = _github_actions_context()
     if ci is None:
         raise InventoryError(
