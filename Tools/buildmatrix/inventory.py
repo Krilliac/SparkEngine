@@ -3639,7 +3639,11 @@ def capture_codemodel_transaction(
              "--untracked-files=all", "--ignore-submodules=dirty"],
             capture_output=True, text=True, encoding="utf-8",
         )
-        dirty_lines = dirty_result.stdout.strip() if dirty_result.returncode == 0 else "(git status failed)"
+        dirty_lines = (
+            dirty_result.stdout.strip()
+            if dirty_result.returncode == 0
+            else "(git status failed)"
+        )
         raise InventoryError(
             f"{profile}: source repository must be exactly clean before configure\n"
             f"Dirty files:\n{dirty_lines}"
@@ -3867,6 +3871,10 @@ def _repository_provenance(root: Path = REPO_ROOT) -> dict[str, Any]:
         return completed.returncode, completed.stdout.strip()
 
     head_code, head = git_text("rev-parse", "HEAD")
+    subprocess.run(
+        ["git", "-C", str(repository_root), "update-index", "--refresh"],
+        capture_output=True,
+    )
     status_result = subprocess.run(
         [
             "git", "-C", str(repository_root), "status", "--porcelain=v1", "-z",
