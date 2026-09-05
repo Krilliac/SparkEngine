@@ -8,7 +8,7 @@ DirectX 11 is SparkEngine's primary Windows implementation and the renderer cand
 - **Files:** `Graphics/RHI/D3D11/D3D11Device.{h,cpp}` (~360 LOC header)
 - **Guard:** `#ifdef _WIN32` — compiled only on Windows builds.
 - **Links against:** `d3d11.dll`, `dxgi.dll`, `d3dcompiler_47.dll`, `dxguid.lib` (automatic via MSVC `#pragma comment`).
-- **Feature level:** 11_0 (minimum), 11_1 (preferred).
+- **Feature level:** 11_0 (Shader Model 5.0) is the hard floor; 11_1 is preferred. Device creation fails on adapters below 11_0 instead of degrading.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ DirectX 11 is SparkEngine's primary Windows implementation and the renderer cand
 | `D3D11Sampler` | Sampler state | `IRHISampler` |
 | `D3D11PipelineState` | Aggregate rasterizer / depth / blend / VS+PS | `IRHIPipelineState` |
 | `D3D11SwapChain` | DXGI 1.2+ flip-model swap chain | `IRHISwapChain` |
-| `D3D11CommandList` | Immediate-mode translation of deferred RHI calls | `IRHICommandList` |
+| `D3D11CommandList` | Immediate-context translation of RHI calls; deferred lists record via `FinishCommandList` and replay on `ExecuteCommandList` | `IRHICommandList` |
 
 Resources use `Microsoft::WRL::ComPtr` (RAII for COM objects). No raw `AddRef` / `Release` calls in user code.
 
@@ -32,8 +32,9 @@ Each `D3D11Device` owns a `TransientBufferAllocator` used for per-frame CPU-visi
 ## Features
 
 - **Debug layer** — auto-enabled on Debug builds (`D3D11_CREATE_DEVICE_DEBUG` + info-queue breakpoints).
-- **WARP fallback** — if no hardware adapter matches, the engine retries with `D3D_DRIVER_TYPE_WARP`; see [RHI Abstraction Layer](RHI-Abstraction-Layer.md#nullrhidevice-selection-and-bridge-failover) for the broader fallback chain.
-- **Deferred deletion queue** — resources freed mid-frame are kept alive until the GPU has finished referencing them (see `DeferredDeletionQueue.h`).
+- **WARP fallback** — if no hardware adapter matches, the engine retries with `D3D_DRIVER_TYPE_WARP`; see [RHI Abstraction Layer](RHI-Abstraction-Layer.md#nullrhidevice-selection-and-bridge-failover) for the broader fallback chain. `RHIBridge::Initialize` no longer degrades a windowed request to NullRHI unless `allowHeadlessFallback` is passed.
+- **Structured / indirect buffers** — created with the matching `D3D11_RESOURCE_MISC_*` flags plus SRV/UAV views; no `IRHICommandList` overload binds an `IRHIBuffer` as a shader resource yet.
+- **Deferred deletion queue** — `RHI/DeferredDeletionQueue.h` is header-only with test coverage (`Tests/TestDeferredDeletionReal.cpp`) but **no production caller**: `D3D11Device` holds no such member and no backend calls `Enqueue`/`ProcessQueue` (D3D12 has its own fence-based queue). D3D11 is immediate-mode, so frame-delayed deletion is not required there.
 - **Tearing / flip-discard** — swap chain opts into `DXGI_SWAP_EFFECT_FLIP_DISCARD` and `DXGI_FEATURE_PRESENT_ALLOW_TEARING` when the adapter reports support.
 - **MSAA / sRGB / HDR formats** — supported; per-texture MSAA sample count is validated via `CheckMultisampleQualityLevels`.
 

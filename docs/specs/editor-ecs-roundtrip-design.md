@@ -11,7 +11,7 @@ models**:
 - The editor operates on its own `SparkEditor::SceneFile` (~90 private component POD structs in
   `SparkEditor/Source/SceneSystem/SceneFileTypes.h`). Its Hierarchy and Inspector edit that
   in-memory model. Its Scene View (`Panels/SceneViewPanel.cpp`) renders **no geometry** (a
-  blue/green split placeholder), gizmos (`Gizmos/GizmoSystem.cpp` — real math) aren't overlaid on
+  blue/green split placeholder), gizmos (`Gizmos/GizmoSystem.cpp` — real math; **deleted 2026-09**, the live gizmos are `SceneViewPanel` + `Gizmos/SceneEditTools`) aren't overlaid on
   it, and **Ctrl+S is lossy**: `EditorUI::SaveCurrentScene` writes only object names + an identity
   transform, discarding all component/transform/mesh/material edits (real serializers exist under
   `SparkEditor/Source/SceneSystem/` but aren't on the save path).
@@ -35,7 +35,7 @@ The engine already provides reusable infrastructure that is 80% there but unconn
   `CommandHistory` (undo/redo). Today it is fed the editor's `SceneFile` structs, not `TypeRegistry`.
 - Real `SceneFile` JSON/binary serializers, a working undoable Hierarchy
   (`Panels/HierarchyPanel.cpp`), real gizmo math, a real Material editor, `ProjectManager`, an
-  `AssetDatabase` (GUIDs) — most reusable, some to be repointed.
+  `AssetDatabase` (GUIDs; **deleted 2026-09**, no production caller) — most reusable, some to be repointed.
 
 ## Decision (approved)
 
@@ -114,7 +114,7 @@ Renders the engine `World` into the Scene View's existing D3D11 render-target.
   basic shader. Same technique validated in `TFWorldSetup::RenderWorld` (device-direct instead of
   the AssetPipeline OBJ path, which is unreliable on Windows).
 - Editor fly-camera: WASD + RMB-look + scroll (replace SceneViewPanel's orbit-distance proxy).
-- Gizmo overlay: feed the existing `GizmoSystem` the selected entity's `Transform*`; it already
+- Gizmo overlay (done differently, 2026-09: `GizmoSystem` was deleted; `SceneViewPanel` + `SceneEditTools` ship translate/rotate/scale with one `CommandHistory` entry per drag): feed the existing `GizmoSystem` the selected entity's `Transform*`; it already
   ray-picks and applies deltas with undo snapshots. Wire it to draw over the rendered RT and consume
   viewport mouse input.
 - Location: `SparkEditor/Source/Rendering/EditorSceneRenderer.{h,cpp}`; `SceneViewPanel` calls it

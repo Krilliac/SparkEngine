@@ -55,7 +55,7 @@ The current lifecycle source contains the named hooks. Test filenames below are 
 | ReplicationFields | `Spark::Net` | N/A (data) | N/A (data) | N/A | `TestReplicationFields.cpp` |
 | ScriptHookManager | `Spark::Scripting` | Singleton | `DispatchHook()` | `Clear()` | `TestScriptHookManager.cpp` |
 | ConsoleRBAC | `Spark::Console` | Singleton | N/A (query) | N/A | `TestConsoleRBAC.cpp` |
-| ModuleHotReload | `Spark` | `Initialize()` | `PollChanges()` | `Stop()` | `TestModuleHotReload.cpp` |
+| ModuleHotReload (`Spark::ModuleHotReloadManager`, `Core/ModuleHotReload.cpp`) | `Spark` | `Initialize()` | `PollChanges()` (polled by the platform frame loops) | `Stop()` | `TestModuleHotReload.cpp` -- the older `Engine/HotReload/ModuleHotReload` singleton is no longer in the lifecycle |
 
 ### Source Surfaces Added Since the Historical Audit
 

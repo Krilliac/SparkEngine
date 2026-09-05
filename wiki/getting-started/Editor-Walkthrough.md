@@ -70,7 +70,7 @@ The Scene View toolbar lets you switch between render modes:
 ### Creating Entities
 
 - **Hierarchy panel** → Right-click → "Create Entity"
-- Or use the **Object Placement** panel (Window → Object Placement) for advanced placement with brush, line, grid, and scatter modes
+- Or use the **Object Placement** panel (Window → Object Placement): **Quick Place** and **Place Selected** create real, undoable entities from the editor's entity templates. The brush/line/grid/scatter modes, align mode, and snap settings are authored in the panel but not yet read by the viewport
 
 ### Selecting Entities
 
@@ -148,7 +148,7 @@ Open from **Window → Terrain Editor**. Sculpt heightmap terrain:
 
 ### Weapon Editor
 
-Open from **Window → Weapon Editor**. Balance weapons by editing stats:
+Open from **Window → Weapon Editor**. It is a balance calculator (DPS chart and comparison table); edits are session-only -- the panel cannot save and no game module reads them:
 
 - Damage, fire rate, magazine size, reload time
 - Accuracy, range, recoil pattern

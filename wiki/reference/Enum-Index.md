@@ -61,7 +61,6 @@
 | `AssetType` | enum | SparkEditor | [AssetPipelineTypes.h:L25](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L25) | Asset types supported by the pipeline |
 | `AssetType` | enum | SparkEngine | [AssetMigration.h:L60](../../SparkEngine/Source/Core/AssetMigration.h#L60) | Discriminator for the kind of asset stored in a binary file. |
 | `AssetType` | enum | SparkEngine | [AssetPipeline.h:L49](../../SparkEngine/Source/Graphics/AssetPipeline.h#L49) | Asset types supported by the pipeline |
-| `AssetType` | enum | Tests | [TestAssetDatabase.cpp:L13](../../Tests/TestAssetDatabase.cpp#L13) |  |
 | `AssetType` | enum | Tests | [TestAssetPipelineCache.cpp:L26](../../Tests/TestAssetPipelineCache.cpp#L26) |  |
 | `AuctionDuration` | enum | GameModules | [MMOEnums.h:L130](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L130) | Auction house listing duration |
 | `Audio3DMode` | enum | SparkEditor | [AudioSystemEnums.h:L94](../../SparkEditor/Source/Enums/AudioSystemEnums.h#L94) | 3D audio modes |
@@ -299,7 +298,6 @@
 | `FileChangeType` | enum | Tests | [TestScriptHotReload.cpp:L20](../../Tests/TestScriptHotReload.cpp#L20) |  |
 | `FileLogLevel` | enum | SparkEngine | [FileLogger.h:L49](../../SparkEngine/Source/Utils/FileLogger.h#L49) | Log severity levels for file filtering |
 | `FileStatus` | enum | SparkEditor | [VersionControlEnums.h:L54](../../SparkEditor/Source/Enums/VersionControlEnums.h#L54) | File status in version control |
-| `FileSystemEvent` | enum | SparkEditor | [AssetDatabase.h:L45](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L45) | File system event types |
 | `FillMode` | enum | SparkEditor | [RenderingEnums.h:L94](../../SparkEditor/Source/Enums/RenderingEnums.h#L94) | Fill modes |
 | `FilterMode` | enum | SparkEditor | [RenderingEnums.h:L103](../../SparkEditor/Source/Enums/RenderingEnums.h#L103) | Filter modes |
 | `FilterMode` | enum | SparkEditor | [MaterialEditorPanel.h:L74](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L74) |  |
@@ -339,10 +337,7 @@
 | `Generator` | enum | SparkBuild | [Config.h:L42](../../SparkBuild/src/Config.h#L42) |  |
 | `GestureType` | enum | SparkEngine | [MobilePlatform.h:L64](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.h#L64) | Recognized gesture types. |
 | `GestureType` | enum | SparkEngine | [InputEnums.h:L134](../../SparkEngine/Source/Enums/InputEnums.h#L134) | Touch gesture types |
-| `GizmoAxis` | enum | SparkEditor | [GizmoSystem.h:L56](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L56) | Gizmo axis identification |
-| `GizmoMode` | enum | SparkEditor | [GizmoSystem.h:L36](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L36) | Gizmo operation modes |
 | `GizmoMode` | enum | SparkEditor | [SceneViewPanel.h:L201](../../SparkEditor/Source/Panels/SceneViewPanel.h#L201) |  |
-| `GizmoSpace` | enum | SparkEditor | [GizmoSystem.h:L47](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L47) | Gizmo coordinate space |
 | `GPUCaptureTool` | enum | SparkEngine | [GPUDebugMarkers.h:L52](../../SparkEngine/Source/Graphics/GPUDebugMarkers.h#L52) |  |
 | `GPUCounterCategory` | enum | SparkEngine | [GPUPerfCounters.h:L26](../../SparkEngine/Source/Utils/GPUPerfCounters.h#L26) | GPU performance counter categories. |
 | `GPUResourceType` | enum | SparkEngine | [GPUResourceLeakDetector.h:L42](../../SparkEngine/Source/Utils/GPUResourceLeakDetector.h#L42) | GPU resource type classification for leak tracking |
@@ -389,7 +384,6 @@
 | `InteractiveObjectType` | enum | SparkEngine | [GameSystemEnums.h:L343](../../SparkEngine/Source/Enums/GameSystemEnums.h#L343) | Interactive object types |
 | `InternalMessageType` | enum | SparkEditor | [CollaborativeEditSession.h:L171](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L171) | Types of internal messages exchanged between peers |
 | `InterpolationMode` | enum | SparkEngine | [Sequencer.h:L46](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L46) |  |
-| `InterpolationType` | enum | SparkEditor | [AnimationTimelineTypes.h:L41](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L41) |  |
 | `IOOperationType` | enum | SparkEngine | [IODebugger.h:L43](../../SparkEngine/Source/Utils/IODebugger.h#L43) | Type of I/O operation |
 | `ISALevel` | enum | SparkEngine | [MultiISA.h:L24](../../SparkEngine/Source/Utils/MultiISA.h#L24) | Detected SIMD instruction set level. |
 | `ItemCategory` | enum | GameModules | [InventorySystem.h:L61](../../GameModules/SparkGameFPS/Source/Game/InventorySystem.h#L61) | Item category for filtering and UI grouping |
@@ -420,7 +414,6 @@
 | `LifecyclePhase` | enum | SparkEngine | [GameplaySystemLifecycle.cpp:L25](../../SparkEngine/Source/Core/GameplaySystemLifecycle.cpp#L25) |  |
 | `LifecycleState` | enum | SparkEngine | [EngineContext.h:L120](../../SparkEngine/Source/Core/EngineContext.h#L120) |  |
 | `LifecycleThreadAffinity` | enum | SparkEngine | [LifecycleStage.h:L13](../../SparkEngine/Source/Core/Lifecycle/LifecycleStage.h#L13) |  |
-| `LightFalloff` | enum | SparkEditor | [LightingTools.h:L44](../../SparkEditor/Source/Lighting/LightingTools.h#L44) | Light falloff models |
 | `LightType` | enum | SparkEditor | [SceneSystemEnums.h:L103](../../SparkEditor/Source/Enums/SceneSystemEnums.h#L103) | Light component types |
 | `LightType` | enum | SparkEngine | [LightingSystem.h:L36](../../SparkEngine/Source/Graphics/LightingSystem.h#L36) | Light types supported by the system |
 | `LightType` | enum | Tests | [TestSceneSerializer.cpp:L51](../../Tests/TestSceneSerializer.cpp#L51) |  |
@@ -456,7 +449,6 @@
 | `LossType` | enum | SparkEngine | [CpuNeuralTraining.h:L59](../../SparkEngine/Source/Graphics/Neural/CpuNeuralTraining.h#L59) |  |
 | `MatchPhase` | enum | Templates | [GameModule.h:L49](../../Templates/MultiplayerArena/Source/GameModule.h#L49) |  |
 | `MaterialBlendMode` | enum | SparkEngine | [MaterialDefinition.h:L61](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L61) | Blend mode presets for material render state |
-| `MaterialNodeType` | enum | SparkEditor | [MaterialEditor.h:L39](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L39) | Node types in the material graph |
 | `MaterialTextureType` | enum | SparkEngine | [MaterialSystem.h:L85](../../SparkEngine/Source/Graphics/MaterialSystem.h#L85) | Texture types for material slots |
 | `MaterialTextureType` | enum | Tests | [TestMaterialSystemEdgeCases.cpp:L47](../../Tests/TestMaterialSystemEdgeCases.cpp#L47) |  |
 | `MaterialTextureType` | enum | Tests | [TestMaterialSystemValidation.cpp:L42](../../Tests/TestMaterialSystemValidation.cpp#L42) |  |
@@ -576,7 +568,6 @@
 | `PlatformKeyCode` | enum | SparkEngine | [PlatformInput.h:L49](../../SparkEngine/Source/Input/PlatformInput.h#L49) | Unified key/button codes across all input devices. |
 | `PlatformType` | enum | GameModules | [PlatformerEnums.h:L40](../../GameModules/SparkGamePlatformer/Source/Enums/PlatformerEnums.h#L40) | Types of platforms with different behaviors |
 | `PlaybackCamera` | enum | SparkEngine | [ReplaySystem.h:L28](../../SparkEngine/Source/Engine/Replay/ReplaySystem.h#L28) |  |
-| `PlaybackState` | enum | SparkEditor | [AnimationTimelineTypes.h:L222](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L222) | Animation playback state |
 | `PlaybackState` | enum | SparkEngine | [ReplaySystem.h:L37](../../SparkEngine/Source/Engine/Replay/ReplaySystem.h#L37) |  |
 | `PlayerActionFlags` | enum | GameModules | [MultiplayerSystem.h:L91](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L91) | Replicated player state sent in each snapshot. |
 | `PlayerClass` | enum | GameModules | [GameSystemEnums.h:L269](../../GameModules/SparkGameFPS/Source/Enums/GameSystemEnums.h#L269) | Player class types for class-based FPS gameplay |
@@ -728,9 +719,7 @@
 | `ShaderType` | enum | SparkEngine | [Shader.h:L82](../../SparkEngine/Source/Graphics/Shader.h#L82) | Shader types supported by the engine |
 | `ShadingModel` | enum | SparkEngine | [MaterialDefinition.h:L51](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L51) | Shading model selection for material definitions |
 | `ShadowMapType` | enum | SparkEditor | [RenderingEnums.h:L161](../../SparkEditor/Source/Enums/RenderingEnums.h#L161) | Shadow map types |
-| `ShadowQuality` | enum | SparkEditor | [LightingTools.h:L55](../../SparkEditor/Source/Lighting/LightingTools.h#L55) | Shadow quality settings |
 | `ShadowTechnique` | enum | SparkEngine | [LightingSystem.h:L48](../../SparkEngine/Source/Graphics/LightingSystem.h#L48) | Shadow mapping techniques |
-| `Shape` | enum | SparkEditor | [MaterialEditor.h:L218](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L218) | Material preview sphere |
 | `Shape` | enum | SparkEngine | [PhysicsComponents.h:L106](../../SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h#L106) | Defines the collision shape attached to a rigid body. |
 | `Shape` | enum | SparkEngine | [PlacementComponents.h:L115](../../SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h#L115) | Marks an entity as an occluder for the software occlusion system. |
 | `Shape` | enum | SparkEngine | [Sprite2DComponents.h:L425](../../SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h#L425) |  |
@@ -756,9 +745,6 @@
 | `SocialListKind` | enum | GameModules | [TFSocialProtocol.h:L69](../../GameModules/SparkGameMMOFPS/Source/Net/TFSocialProtocol.h#L69) |  |
 | `SocialOp` | enum | GameModules | [TFSocialProtocol.h:L48](../../GameModules/SparkGameMMOFPS/Source/Net/TFSocialProtocol.h#L48) |  |
 | `SocialOpResult` | enum | GameModules | [TFSocialProtocol.h:L57](../../GameModules/SparkGameMMOFPS/Source/Net/TFSocialProtocol.h#L57) |  |
-| `SocketDirection` | enum | SparkEditor | [MaterialEditor.h:L111](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L111) | Socket direction |
-| `SocketType` | enum | SparkEditor | [MaterialEditor.h:L96](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L96) | Socket types for node connections |
-| `SparkLightType` | enum | SparkEditor | [LightingTools.h:L31](../../SparkEditor/Source/Lighting/LightingTools.h#L31) | Light types supported by Spark Engine |
 | `SplineLoopMode` | enum | SparkEngine | [SplineComponents.h:L51](../../SparkEngine/Source/Engine/ECS/Components/SplineComponents.h#L51) | Controls what happens when a spline follower reaches the end of its path. |
 | `SplineType` | enum | SparkEngine | [SplinePath.h:L40](../../SparkEngine/Source/Utils/SplinePath.h#L40) | Interpolation method used by SplinePath. |
 | `SplineType` | enum | Tests | [TestSplineMath.cpp:L114](../../Tests/TestSplineMath.cpp#L114) |  |

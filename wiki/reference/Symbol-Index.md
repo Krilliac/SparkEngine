@@ -368,7 +368,6 @@
 | `AddChild` | function | Tests | [TestAIBehaviorTree.cpp:L80](../../Tests/TestAIBehaviorTree.cpp#L80) |  |
 | `AddChild` | function | Tests | [TestAIStress.cpp:L73](../../Tests/TestAIStress.cpp#L73) |  |
 | `AddChild` | function | Tests | [TestAIStress.cpp:L95](../../Tests/TestAIStress.cpp#L95) |  |
-| `AddChild` | function | Tests | [TestPrefabManager.cpp:L74](../../Tests/TestPrefabManager.cpp#L74) |  |
 | `AddClient` | function | SparkEngine | [AreaServer.h:L199](../../SparkEngine/Source/Engine/Networking/AreaServer.h#L199) | Register handler for cross-area messages |
 | `AddClient` | function | SparkEngine | [ConnectionScope.h:L90](../../SparkEngine/Source/Engine/Networking/ConnectionScope.h#L90) | Register a client for scope tracking. Call when a client connects. |
 | `AddClient` | function | Tests | [TestConnectionScope.cpp:L42](../../Tests/TestConnectionScope.cpp#L42) |  |
@@ -394,14 +393,12 @@
 | `AddCreate` | function | SparkEngine | [RenderGraphPass.h:L73](../../SparkEngine/Source/Graphics/RenderGraphPass.h#L73) |  |
 | `AddCue` | function | SparkEngine | [Sequencer.h:L201](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L201) |  |
 | `AddCue` | function | SparkEngine | [Sequencer.h:L215](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L215) |  |
-| `AddCurve` | function | SparkEditor | [AnimationTimelineTypes.h:L128](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L128) | Add curve to track |
 | `AddCustomLine` | function | SparkEngine | [DebugOverlay.h:L223](../../SparkEngine/Source/Utils/DebugOverlay.h#L223) | Add or update a custom debug line |
 | `AddDamageFromWorldPos` | function | GameModules | [HUDSystem.h:L284](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L284) | Add damage indicator from world position |
 | `AddDamageIndicator` | function | GameModules | [HUDSystem.h:L275](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L275) | Add a damage indicator from a direction |
 | `AddDebugPass` | function | SparkEngine | [RenderGraphBuilder.h:L292](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L292) |  |
 | `AddDependency` | function | SparkEditor | [AdvancedAssetPipeline.h:L174](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L174) | Add dependency relationship |
 | `AddDependency` | function | SparkEditor | [AssetAuditGraph.h:L167](../../SparkEditor/Source/Panels/AssetAuditGraph.h#L167) | Add a dependency edge: `from` depends on `to` |
-| `AddDependency` | function | Tests | [TestAssetDatabase.cpp:L105](../../Tests/TestAssetDatabase.cpp#L105) |  |
 | `AddDependency` | function | Tests | [TestAssetDependencyGraph.cpp:L32](../../Tests/TestAssetDependencyGraph.cpp#L32) |  |
 | `AddDirectionalLight` | function | SparkEngine | [LightmapBaker.h:L172](../../SparkEngine/Source/Graphics/LightmapBaker.h#L172) |  |
 | `AddDirectory` | function | SparkEngine | [SparkPakWriter.h:L46](../../SparkEngine/Source/Core/SparkPakWriter.h#L46) | Recursively add all files from a directory. |
@@ -444,8 +441,6 @@
 | `AddItem` | function | Tests | [TestInventorySystem.cpp:L79](../../Tests/TestInventorySystem.cpp#L79) |  |
 | `additional` | function | Tests | [TestCoverageScripting.cpp:L131](../../Tests/TestCoverageScripting.cpp#L131) |  |
 | `AddJoint` | function | SparkEngine | [RagdollSystem.h:L124](../../SparkEngine/Source/Engine/Animation/RagdollSystem.h#L124) | Add a joint constraint between two bones. |
-| `AddKeyframe` | function | SparkEditor | [AnimationTimeline.h:L187](../../SparkEditor/Source/Animation/AnimationTimeline.h#L187) | Add keyframe for object property |
-| `AddKeyframe` | function | SparkEditor | [AnimationTimelineTypes.h:L86](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L86) | Add keyframe to curve |
 | `AddKeyframe` | function | SparkEngine | [Sequencer.h:L147](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L147) |  |
 | `AddKeyframe` | function | SparkEngine | [Sequencer.h:L187](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L187) |  |
 | `AddKeyframe` | function | SparkEngine | [Sequencer.h:L243](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L243) |  |
@@ -473,7 +468,6 @@
 | `AddModelObb` | function | GameModules | [TFWorldCollision.h:L112](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.h#L112) |  |
 | `AddModifier` | function | SparkEngine | [PoseModifier.h:L217](../../SparkEngine/Source/Engine/Animation/PoseModifier.h#L217) | Add a modifier to the stack. Ownership is transferred. |
 | `AddNewRule` | function | SparkEditor | [EventResponsePanel.h:L81](../../SparkEditor/Source/Panels/EventResponsePanel.h#L81) |  |
-| `AddNode` | function | SparkEditor | [MaterialEditor.h:L330](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L330) | Add node to the graph |
 | `AddNode` | function | SparkEngine | [DialogueSystem.h:L136](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.h#L136) | Add a node to the tree. |
 | `AddNode` | function | SparkEngine | [FastNoise2SIMD.h:L720](../../SparkEngine/Source/Graphics/FastNoise2SIMD.h#L720) | Add a node to the graph (takes ownership) |
 | `AddNode` | function | SparkEngine | [SceneManager.h:L215](../../SparkEngine/Source/SceneManager/SceneManager.h#L215) |  |
@@ -585,7 +579,6 @@
 | `AddToSelection` | function | SparkEditor | [SelectionManager.h:L223](../../SparkEditor/Source/Panels/SelectionManager.h#L223) | Add an entity to the current selection (Ctrl+Click) |
 | `AddToSelection` | function | Tests | [TestSelectionManager.cpp:L63](../../Tests/TestSelectionManager.cpp#L63) |  |
 | `AddTraceEntry` | function | SparkEditor | [ScriptDebugPanel.h:L77](../../SparkEditor/Source/Panels/ScriptDebugPanel.h#L77) |  |
-| `AddTrack` | function | SparkEditor | [AnimationTimelineTypes.h:L171](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L171) | Add track for object |
 | `AddTradeItem` | function | GameModules | [MMOTradingSystem.h:L93](../../GameModules/SparkGameMMO/Source/Trading/MMOTradingSystem.h#L93) |  |
 | `AddTransition` | function | SparkEngine | [AnimationSystem.h:L119](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L119) | Register a transition between two states. |
 | `AddTransition` | function | SparkEngine | [StateMachine.h:L117](../../SparkEngine/Source/Utils/StateMachine.h#L117) |  |
@@ -1030,16 +1023,10 @@
 | `Animation` | function | SparkEngine | [EngineSettings.h:L908](../../SparkEngine/Source/Core/EngineSettings.h#L908) |  |
 | `Animation` | function | SparkEngine | [EngineSettings.h:L909](../../SparkEngine/Source/Core/EngineSettings.h#L909) |  |
 | `AnimationAssetData` | struct | SparkEngine | [AssetPipeline.h:L115](../../SparkEngine/Source/Graphics/AssetPipeline.h#L115) | Animation data structure |
-| `AnimationClip` | struct | SparkEditor | [AnimationTimelineTypes.h:L147](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L147) | Animation clip |
 | `AnimationClip` | struct | SparkEngine | [AnimationClip.h:L147](../../SparkEngine/Source/Engine/Animation/AnimationClip.h#L147) |  |
 | `AnimationClip` | struct | SparkEngine | [AnimationTypes.h:L267](../../SparkEngine/Source/Engine/Animation/AnimationTypes.h#L267) |  |
 | `AnimationClip` | struct | Tests | [TestAnimationStress.cpp:L159](../../Tests/TestAnimationStress.cpp#L159) |  |
 | `AnimationClip` | struct | Tests | [TestAnimationSystem.cpp:L238](../../Tests/TestAnimationSystem.cpp#L238) |  |
-| `AnimationClip::AddTrack` | method | SparkEditor | [AnimationClipManager.cpp:L54](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L54) |  |
-| `AnimationClip::Evaluate` | method | SparkEditor | [AnimationClipManager.cpp:L88](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L88) |  |
-| `AnimationClip::FindTrack` | method | SparkEditor | [AnimationClipManager.cpp:L76](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L76) |  |
-| `AnimationClip::RemoveTrack` | method | SparkEditor | [AnimationClipManager.cpp:L69](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L69) |  |
-| `AnimationClip::SetTime` | method | SparkEditor | [AnimationClipManager.cpp:L103](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L103) |  |
 | `AnimationCompressor` | class | SparkEngine | [AnimationCompression.h:L85](../../SparkEngine/Source/Engine/Animation/AnimationCompression.h#L85) | Compresses AnimationClip data by removing redundant keyframes and quantizing. |
 | `AnimationCompressor::CalculateInterpolationError` | method | SparkEngine | [AnimationCompression.cpp:L639](../../SparkEngine/Source/Engine/Animation/AnimationCompression.cpp#L639) |  |
 | `AnimationCompressor::CalculateRotationError` | method | SparkEngine | [AnimationCompression.cpp:L663](../../SparkEngine/Source/Engine/Animation/AnimationCompression.cpp#L663) |  |
@@ -1064,11 +1051,6 @@
 | `AnimationCompressor::SampleScale` | method | SparkEngine | [AnimationCompression.cpp:L314](../../SparkEngine/Source/Engine/Animation/AnimationCompression.cpp#L314) |  |
 | `AnimationController` | struct | SparkEngine | [AnimationComponents.h:L65](../../SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h#L65) | Controls skeletal animation playback on an entity. |
 | `AnimationControllerData` | struct | SparkEditor | [SceneFileTypes.h:L371](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L371) | Animation controller scene data |
-| `AnimationCurve` | struct | SparkEditor | [AnimationTimelineTypes.h:L60](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L60) | Animation curve (track) |
-| `AnimationCurve::AddKeyframe` | method | SparkEditor | [AnimationCurve.cpp:L140](../../SparkEditor/Source/Animation/AnimationCurve.cpp#L140) |  |
-| `AnimationCurve::Evaluate` | method | SparkEditor | [AnimationCurve.cpp:L15](../../SparkEditor/Source/Animation/AnimationCurve.cpp#L15) |  |
-| `AnimationCurve::FindKeyframe` | method | SparkEditor | [AnimationCurve.cpp:L165](../../SparkEditor/Source/Animation/AnimationCurve.cpp#L165) |  |
-| `AnimationCurve::RemoveKeyframe` | method | SparkEditor | [AnimationCurve.cpp:L150](../../SparkEditor/Source/Animation/AnimationCurve.cpp#L150) |  |
 | `AnimationEvaluator` | class | SparkEngine | [AnimationEvaluator.h:L38](../../SparkEngine/Source/Engine/Animation/AnimationEvaluator.h#L38) |  |
 | `AnimationEvaluator` | class | SparkEngine | [AnimationSystem.h:L458](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L458) |  |
 | `AnimationEvaluator` | class | Tests | [TestAnimationSystem.cpp:L410](../../Tests/TestAnimationSystem.cpp#L410) |  |
@@ -1082,7 +1064,6 @@
 | `AnimationHandleTag` | struct | SparkEngine | [OpaqueHandle.h:L85](../../SparkEngine/Source/Utils/OpaqueHandle.h#L85) |  |
 | `AnimationInstance` | struct | SparkEngine | [AnimationSystem.h:L237](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L237) |  |
 | `AnimationInstance::Update` | method | SparkEngine | [AnimationSystem.cpp:L507](../../SparkEngine/Source/Engine/Animation/AnimationSystem.cpp#L507) |  |
-| `AnimationKeyframe` | struct | SparkEditor | [AnimationTimelineTypes.h:L34](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L34) | Animation keyframe |
 | `AnimationLayer` | struct | SparkEngine | [AnimationBlender.h:L46](../../SparkEngine/Source/Engine/Animation/AnimationBlender.h#L46) |  |
 | `AnimationLayer` | struct | SparkEngine | [AnimationTypes.h:L344](../../SparkEngine/Source/Engine/Animation/AnimationTypes.h#L344) |  |
 | `AnimationLayer` | struct | Tests | [TestAnimationSystem.cpp:L266](../../Tests/TestAnimationSystem.cpp#L266) |  |
@@ -1112,64 +1093,7 @@
 | `AnimationStateMachine::Update` | method | SparkEngine | [AnimationStateMachine.cpp:L43](../../SparkEngine/Source/Engine/Animation/AnimationStateMachine.cpp#L43) |  |
 | `AnimationSystem` | alias | SparkEngine | [AnimationSystem.h:L546](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L546) | Type alias so EngineContext/EngineSetup can reference "AnimationSystem" |
 | `AnimationSystem` | alias | SparkSDK | [IEngineContext.h:L40](../../SparkSDK/Include/Spark/IEngineContext.h#L40) |  |
-| `AnimationTimeline` | class | SparkEditor | [AnimationTimeline.h:L38](../../SparkEditor/Source/Animation/AnimationTimeline.h#L38) |  |
-| `AnimationTimeline::AddKeyframe` | method | SparkEditor | [AnimationPlayback.cpp:L160](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L160) |  |
-| `AnimationTimeline::ApplyAnimationToScene` | method | SparkEditor | [AnimationPlayback.cpp:L444](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L444) |  |
-| `AnimationTimeline::AutoFitView` | method | SparkEditor | [AnimationPlayback.cpp:L315](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L315) |  |
-| `AnimationTimeline::CalculateAutoTangents` | method | SparkEditor | [AnimationPlayback.cpp:L391](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L391) |  |
-| `AnimationTimeline::CreateNewClip` | method | SparkEditor | [AnimationClipManager.cpp:L112](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L112) |  |
-| `AnimationTimeline::FindKeyframeAtPosition` | method | SparkEditor | [AnimationTimelineUI.cpp:L889](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L889) |  |
-| `AnimationTimeline::FrameAll` | method | SparkEditor | [AnimationPlayback.cpp:L260](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L260) |  |
-| `AnimationTimeline::FrameSelected` | method | SparkEditor | [AnimationPlayback.cpp:L229](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L229) |  |
-| `AnimationTimeline::GetPlaybackTime` | method | SparkEditor | [AnimationPlayback.cpp:L136](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L136) |  |
-| `AnimationTimeline::GoToEnd` | method | SparkEditor | [AnimationPlayback.cpp:L122](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L122) |  |
-| `AnimationTimeline::GoToStart` | method | SparkEditor | [AnimationPlayback.cpp:L115](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L115) |  |
-| `AnimationTimeline::HandleCurveEditorInput` | method | SparkEditor | [AnimationTimelineUI.cpp:L777](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L777) |  |
-| `AnimationTimeline::HandleEvent` | method | SparkEditor | [AnimationTimelineUI.cpp:L83](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L83) |  |
-| `AnimationTimeline::HandleKeyframeDragging` | method | SparkEditor | [AnimationTimelineUI.cpp:L855](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L855) |  |
-| `AnimationTimeline::HandleKeyframeSelection` | method | SparkEditor | [AnimationTimelineUI.cpp:L811](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L811) |  |
-| `AnimationTimeline::HandleTimelineInput` | method | SparkEditor | [AnimationTimelineUI.cpp:L647](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L647) |  |
-| `AnimationTimeline::Initialize` | method | SparkEditor | [AnimationTimeline.cpp:L23](../../SparkEditor/Source/Animation/AnimationTimeline.cpp#L23) |  |
-| `AnimationTimeline::LoadAnimationClip` | method | SparkEditor | [AnimationClipManager.cpp:L129](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L129) |  |
-| `AnimationTimeline::Pause` | method | SparkEditor | [AnimationPlayback.cpp:L76](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L76) |  |
-| `AnimationTimeline::Play` | method | SparkEditor | [AnimationPlayback.cpp:L66](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L66) |  |
-| `AnimationTimeline::RecordKeyframes` | method | SparkEditor | [AnimationPlayback.cpp:L478](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L478) |  |
-| `AnimationTimeline::RemoveSelectedKeyframes` | method | SparkEditor | [AnimationPlayback.cpp:L189](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L189) |  |
-| `AnimationTimeline::Render` | method | SparkEditor | [AnimationTimelineUI.cpp:L22](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L22) |  |
-| `AnimationTimeline::RenderAnimationProperties` | method | SparkEditor | [AnimationTimelineUI.cpp:L386](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L386) |  |
-| `AnimationTimeline::RenderCurve` | method | SparkEditor | [AnimationTimelineUI.cpp:L469](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L469) |  |
-| `AnimationTimeline::RenderCurveEditor` | method | SparkEditor | [AnimationTimelineUI.cpp:L313](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L313) |  |
-| `AnimationTimeline::RenderKeyframes` | method | SparkEditor | [AnimationTimelineUI.cpp:L428](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L428) |  |
-| `AnimationTimeline::RenderPlaybackControls` | method | SparkEditor | [AnimationTimelineUI.cpp:L113](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L113) |  |
-| `AnimationTimeline::RenderPlayhead` | method | SparkEditor | [AnimationTimelineUI.cpp:L620](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L620) |  |
-| `AnimationTimeline::RenderTimelineEditor` | method | SparkEditor | [AnimationTimelineUI.cpp:L252](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L252) |  |
-| `AnimationTimeline::RenderTimelineHeader` | method | SparkEditor | [AnimationTimelineUI.cpp:L185](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L185) |  |
-| `AnimationTimeline::RenderTimeRuler` | method | SparkEditor | [AnimationTimelineUI.cpp:L543](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L543) |  |
-| `AnimationTimeline::RenderTrack` | method | SparkEditor | [AnimationTimelineUI.cpp:L408](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L408) |  |
-| `AnimationTimeline::RenderTrackList` | method | SparkEditor | [AnimationTimelineUI.cpp:L203](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L203) |  |
-| `AnimationTimeline::SaveAnimationClip` | method | SparkEditor | [AnimationClipManager.cpp:L234](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L234) |  |
-| `AnimationTimeline::ScreenToTime` | method | SparkEditor | [AnimationPlayback.cpp:L354](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L354) |  |
-| `AnimationTimeline::ScreenToValue` | method | SparkEditor | [AnimationPlayback.cpp:L374](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L374) |  |
-| `AnimationTimeline::SetCurrentClip` | method | SparkEditor | [AnimationClipManager.cpp:L280](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L280) |  |
-| `AnimationTimeline::SetKeyframeInterpolation` | method | SparkEditor | [AnimationPlayback.cpp:L217](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L217) |  |
-| `AnimationTimeline::SetPlaybackTime` | method | SparkEditor | [AnimationPlayback.cpp:L129](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L129) |  |
-| `AnimationTimeline::SetRecording` | method | SparkEditor | [AnimationPlayback.cpp:L143](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L143) |  |
-| `AnimationTimeline::SetTimelineZoom` | method | SparkEditor | [AnimationPlayback.cpp:L327](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L327) |  |
-| `AnimationTimeline::SetViewRange` | method | SparkEditor | [AnimationPlayback.cpp:L305](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L305) |  |
-| `AnimationTimeline::Shutdown` | method | SparkEditor | [AnimationTimeline.cpp:L32](../../SparkEditor/Source/Animation/AnimationTimeline.cpp#L32) |  |
-| `AnimationTimeline::SnapToFrame` | method | SparkEditor | [AnimationPlayback.cpp:L383](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L383) |  |
-| `AnimationTimeline::StepBackward` | method | SparkEditor | [AnimationPlayback.cpp:L107](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L107) |  |
-| `AnimationTimeline::StepForward` | method | SparkEditor | [AnimationPlayback.cpp:L99](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L99) |  |
-| `AnimationTimeline::Stop` | method | SparkEditor | [AnimationPlayback.cpp:L88](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L88) |  |
-| `AnimationTimeline::TimeToScreen` | method | SparkEditor | [AnimationPlayback.cpp:L344](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L344) |  |
-| `AnimationTimeline::Update` | method | SparkEditor | [AnimationPlayback.cpp:L22](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L22) |  |
-| `AnimationTimeline::UpdateAnimationPreview` | method | SparkEditor | [AnimationPlayback.cpp:L431](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L431) |  |
-| `AnimationTimeline::ValueToScreen` | method | SparkEditor | [AnimationPlayback.cpp:L363](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L363) |  |
-| `AnimationTrack` | struct | SparkEditor | [AnimationTimelineTypes.h:L106](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L106) | Animation track for an object/component |
 | `AnimationTrack` | struct | SparkEngine | [AssetPipeline.h:L125](../../SparkEngine/Source/Graphics/AssetPipeline.h#L125) |  |
-| `AnimationTrack::AddCurve` | method | SparkEditor | [AnimationClipManager.cpp:L21](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L21) |  |
-| `AnimationTrack::FindCurve` | method | SparkEditor | [AnimationClipManager.cpp:L38](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L38) |  |
-| `AnimationTrack::RemoveCurve` | method | SparkEditor | [AnimationClipManager.cpp:L31](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L31) |  |
 | `AnimationTransition` | struct | SparkEngine | [AnimationTypes.h:L418](../../SparkEngine/Source/Engine/Animation/AnimationTypes.h#L418) | Defines a transition from one animation state to another. |
 | `AnimationTransition` | struct | Tests | [TestAnimationStress.cpp:L249](../../Tests/TestAnimationStress.cpp#L249) |  |
 | `AnimationTransition` | struct | Tests | [TestAnimationSystem.cpp:L282](../../Tests/TestAnimationSystem.cpp#L282) |  |
@@ -1297,7 +1221,6 @@
 | `ApplyAdvancedStyling` | function | SparkEditor | [EditorTheme.h:L295](../../SparkEditor/Source/Core/EditorTheme.h#L295) | Create custom orange accent theme |
 | `ApplyAIDriverInputs` | function | GameModules | [SparkGameRacing.h:L67](../../GameModules/SparkGameRacing/Source/Core/SparkGameRacing.h#L67) |  |
 | `ApplyAlignment` | function | SparkEngine | [FontSystem.h:L548](../../SparkEngine/Source/Engine/Text/FontSystem.h#L548) | Apply text alignment to a line of quads |
-| `ApplyAnimationToScene` | function | SparkEditor | [AnimationTimeline.h:L374](../../SparkEditor/Source/Animation/AnimationTimeline.h#L374) | Apply animation to scene objects |
 | `ApplyAura` | function | SparkEngine | [AbilitySystem.h:L306](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h#L306) |  |
 | `ApplyAura` | function | Tests | [TestAbilitySystem.cpp:L165](../../Tests/TestAbilitySystem.cpp#L165) |  |
 | `ApplyAura` | function | Tests | [TestGameplayStress.cpp:L381](../../Tests/TestGameplayStress.cpp#L381) |  |
@@ -1363,7 +1286,6 @@
 | `ApplyInputToVehicle` | function | GameModules | [RacingVehicleSystem.h:L102](../../GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.h#L102) |  |
 | `ApplyLayout` | function | SparkEditor | [EditorLayoutManager.h:L182](../../SparkEditor/Source/Core/EditorLayoutManager.h#L182) | Alias for LoadLayout; kept for symmetry with the previous API. |
 | `ApplyLightComponent` | function | SparkEngine | [EntityArchetypeLoader.cpp:L192](../../SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.cpp#L192) |  |
-| `ApplyLightingPreset` | function | SparkEditor | [LightingTools.h:L428](../../SparkEditor/Source/Lighting/LightingTools.h#L428) | Apply lighting preset |
 | `ApplyLocalInput` | function | GameModules | [MMOPlayerSystem.h:L94](../../GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.h#L94) |  |
 | `ApplyLoginReply` | function | GameModules | [TFClientSessionState.h:L25](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientSessionState.h#L25) |  |
 | `ApplyLookAhead` | function | GameModules | [PlatformerCameraSystem.h:L74](../../GameModules/SparkGamePlatformer/Source/Camera/PlatformerCameraSystem.h#L74) | Get the point the camera is looking at |
@@ -1393,10 +1315,8 @@
 | `ApplyRasterizerState` | function | SparkEngine | [OpenGLDevice.h:L255](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L255) |  |
 | `ApplyRecoil` | function | Tests | [TestWeaponMechanics.cpp:L135](../../Tests/TestWeaponMechanics.cpp#L135) |  |
 | `ApplyResistance` | function | Tests | [TestSparkGameRPG.cpp:L83](../../Tests/TestSparkGameRPG.cpp#L83) |  |
-| `ApplyRotation` | function | SparkEditor | [GizmoSystem.h:L332](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L332) | Apply rotation delta to transforms |
 | `ApplyRuntimeWindowCaption` | function | SparkEngine | [SparkEngineWindows.cpp:L275](../../SparkEngine/Source/Core/SparkEngineWindows.cpp#L275) | Apply the authoritative engine/project caption to the main window. |
 | `ApplyRuntimeWindowCaption` | function | SparkEngine | [SparkEngineWindowsInternal.h:L72](../../SparkEngine/Source/Core/SparkEngineWindowsInternal.h#L72) | Reapply the authoritative engine/project caption to the main window. |
-| `ApplyScale` | function | SparkEditor | [GizmoSystem.h:L340](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L340) | Apply scale delta to transforms |
 | `ApplySculptingTool` | function | SparkEditor | [TerrainEditor.h:L87](../../SparkEditor/Source/Terrain/TerrainEditor.h#L87) |  |
 | `ApplySecurityDefaults` | function | SparkEngine | [ScriptSandbox.h:L214](../../SparkEngine/Source/Engine/Scripting/ScriptSandbox.h#L214) |  |
 | `ApplySpeedShake` | function | GameModules | [RacingCameraSystem.h:L99](../../GameModules/SparkGameRacing/Source/Camera/RacingCameraSystem.h#L99) |  |
@@ -1416,7 +1336,6 @@
 | `ApplyTorque` | function | SparkEngine | [PhysicsBody.h:L94](../../SparkEngine/Source/Physics/PhysicsBody.h#L94) |  |
 | `ApplyTorqueImpulse` | function | SparkEngine | [PhysicsBody.h:L95](../../SparkEngine/Source/Physics/PhysicsBody.h#L95) |  |
 | `ApplyTransform` | function | SparkEngine | [EntityArchetypeLoader.cpp:L170](../../SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.cpp#L170) |  |
-| `ApplyTranslation` | function | SparkEditor | [GizmoSystem.h:L324](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L324) | Apply translation delta to transforms |
 | `ApplyTravelReply` | function | GameModules | [TFTravelSystem.h:L161](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystem.h#L161) |  |
 | `ApplyTurretPose` | function | GameModules | [TFVehicleSystem.h:L176](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L176) |  |
 | `ApplyVerticalTracking` | function | GameModules | [PlatformerCameraSystem.h:L75](../../GameModules/SparkGamePlatformer/Source/Camera/PlatformerCameraSystem.h#L75) | Get the point the camera is looking at |
@@ -1521,14 +1440,6 @@
 | `AreCustomFontsLoaded` | function | SparkEditor | [EditorFonts.h:L47](../../SparkEditor/Source/Core/EditorFonts.h#L47) | Check if custom fonts were loaded successfully |
 | `AreDependenciesMet` | function | SparkEngine | [ModSystem.h:L157](../../SparkEngine/Source/Engine/Modding/ModSystem.h#L157) | Check if all dependencies for a mod are satisfied. |
 | `AreLightRadiiVisible` | function | SparkEditor | [DebugVisualizerPanel.h:L48](../../SparkEditor/Source/Panels/DebugVisualizerPanel.h#L48) |  |
-| `ArenaBuilder` | class | GameModules | [ArenaBuilder.h:L39](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L39) |  |
-| `ArenaBuilder::BuildArena` | method | GameModules | [ArenaBuilder.cpp:L43](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.cpp#L43) |  |
-| `ArenaBuilder::BuildCorridors` | method | GameModules | [ArenaBuilder.cpp:L191](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.cpp#L191) |  |
-| `ArenaBuilder::BuildCover` | method | GameModules | [ArenaBuilder.cpp:L116](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.cpp#L116) |  |
-| `ArenaBuilder::BuildFloor` | method | GameModules | [ArenaBuilder.cpp:L66](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.cpp#L66) |  |
-| `ArenaBuilder::BuildPlatforms` | method | GameModules | [ArenaBuilder.cpp:L149](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.cpp#L149) |  |
-| `ArenaBuilder::BuildRamps` | method | GameModules | [ArenaBuilder.cpp:L174](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.cpp#L174) |  |
-| `ArenaBuilder::BuildWalls` | method | GameModules | [ArenaBuilder.cpp:L90](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.cpp#L90) |  |
 | `ArenaTeam` | enum | Templates | [GameModule.h:L22](../../Templates/MultiplayerArena/Source/GameModule.h#L22) |  |
 | `AreNormalsVisible` | function | SparkEditor | [DebugVisualizerPanel.h:L46](../../SparkEditor/Source/Panels/DebugVisualizerPanel.h#L46) |  |
 | `AreShadersCompiled` | function | SparkEngine | [UpscalingSystem.h:L382](../../SparkEngine/Source/Graphics/UpscalingSystem.h#L382) | Check if compute shaders were compiled successfully |
@@ -1848,36 +1759,6 @@
 | `AssetChangedCallback` | alias | SparkEditor | [IntegrationTypes.h:L159](../../SparkEditor/Source/Integration/IntegrationTypes.h#L159) | Callback function types |
 | `AssetChangedCallback` | alias | SparkEditor | [SparkEngineIntegration.h:L169](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L169) | Callback function types |
 | `ASSetComponentField` | function | SparkEngine | [AngelScriptEngine.cpp:L1194](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp#L1194) |  |
-| `AssetDatabase` | class | SparkEditor | [AssetDatabase.h:L92](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L92) | Advanced asset database with real-time monitoring |
-| `AssetDatabase` | class | Tests | [TestAssetDatabase.cpp:L70](../../Tests/TestAssetDatabase.cpp#L70) |  |
-| `AssetDatabase::DeleteAsset` | method | SparkEditor | [AssetDatabase.cpp:L258](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L258) |  |
-| `AssetDatabase::DetermineAssetType` | method | SparkEditor | [AssetDatabase.cpp:L469](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L469) |  |
-| `AssetDatabase::FileSystemMonitoringThread` | method | SparkEditor | [AssetDatabase.cpp:L652](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L652) |  |
-| `AssetDatabase::FindMissingAssetPath` | method | SparkEditor | [AssetDatabase.cpp:L902](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L902) |  |
-| `AssetDatabase::GenerateGUID` | method | SparkEditor | [AssetDatabase.cpp:L484](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L484) |  |
-| `AssetDatabase::GetAssetByGUID` | method | SparkEditor | [AssetDatabase.cpp:L175](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L175) |  |
-| `AssetDatabase::GetAssetByPath` | method | SparkEditor | [AssetDatabase.cpp:L164](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L164) |  |
-| `AssetDatabase::GetAssetDependencies` | method | SparkEditor | [AssetDatabase.cpp:L331](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L331) |  |
-| `AssetDatabase::GetAssetsByType` | method | SparkEditor | [AssetDatabase.cpp:L291](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L291) |  |
-| `AssetDatabase::GetDatabaseStats` | method | SparkEditor | [AssetDatabase.cpp:L377](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L377) |  |
-| `AssetDatabase::GetImportSettings` | method | SparkEditor | [AssetDatabase.cpp:L347](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L347) |  |
-| `AssetDatabase::HandleFileSystemChange` | method | SparkEditor | [AssetDatabase.cpp:L862](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L862) |  |
-| `AssetDatabase::ImportAsset` | method | SparkEditor | [AssetDatabase.cpp:L186](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L186) |  |
-| `AssetDatabase::Initialize` | method | SparkEditor | [AssetDatabase.cpp:L109](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L109) |  |
-| `AssetDatabase::IsAssetFile` | method | SparkEditor | [AssetDatabase.cpp:L968](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L968) |  |
-| `AssetDatabase::LoadAssetMetadata` | method | SparkEditor | [AssetDatabase.cpp:L495](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L495) |  |
-| `AssetDatabase::ProcessFileSystemChanges` | method | SparkEditor | [AssetDatabase.cpp:L834](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L834) |  |
-| `AssetDatabase::RefreshDatabase` | method | SparkEditor | [AssetDatabase.cpp:L363](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L363) |  |
-| `AssetDatabase::ReimportAsset` | method | SparkEditor | [AssetDatabase.cpp:L240](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L240) |  |
-| `AssetDatabase::RenameAssetEntry` | method | SparkEditor | [AssetDatabase.cpp:L915](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L915) |  |
-| `AssetDatabase::SaveAssetMetadata` | method | SparkEditor | [AssetDatabase.cpp:L594](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L594) |  |
-| `AssetDatabase::ScanDirectory` | method | SparkEditor | [AssetDatabase.cpp:L418](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L418) |  |
-| `AssetDatabase::SearchAssets` | method | SparkEditor | [AssetDatabase.cpp:L307](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L307) |  |
-| `AssetDatabase::SetFileSystemChangeCallback` | method | SparkEditor | [AssetDatabase.cpp:L342](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L342) |  |
-| `AssetDatabase::SetImportSettings` | method | SparkEditor | [AssetDatabase.cpp:L357](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L357) |  |
-| `AssetDatabase::Shutdown` | method | SparkEditor | [AssetDatabase.cpp:L146](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L146) |  |
-| `AssetDatabase::Update` | method | SparkEditor | [AssetDatabase.cpp:L133](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L133) |  |
-| `AssetDatabase::UpdateAssetModificationTime` | method | SparkEditor | [AssetDatabase.cpp:L977](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L977) |  |
 | `ASSetDebugTraceCallback` | function | SparkEngine | [AngelScriptEngine.cpp:L369](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp#L369) |  |
 | `ASSetDebugTraceCallback` | function | SparkEngine | [AngelScriptEngine.h:L576](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h#L576) | Set a callback to receive debug trace messages from running scripts |
 | `AssetDependencyGraph` | class | SparkEditor | [AdvancedAssetPipeline.h:L154](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L154) | Asset dependency graph |
@@ -1901,9 +1782,7 @@
 | `AssetHandle` | function | SparkEngine | [AssetHandle.h:L44](../../SparkEngine/Source/Core/AssetHandle.h#L44) |  |
 | `ASSetHealth` | function | SparkEngine | [AngelScriptEngine.cpp:L307](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp#L307) |  |
 | `ASSetHealth` | function | SparkEngine | [AngelScriptEngine.h:L549](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h#L549) | Set entity health value (callable as `setHealth()`) |
-| `AssetImportSettings` | struct | SparkEditor | [AssetDatabase.h:L67](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L67) | Asset import settings |
 | `AssetImportSettings` | struct | SparkEditor | [AssetPipelineTypes.h:L77](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L77) | Asset import settings |
-| `AssetInfo` | struct | SparkEditor | [AssetDatabase.h:L27](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L27) | Asset information structure |
 | `AssetInfo` | struct | Tests | [TestAssetDependencyGraph.cpp:L15](../../Tests/TestAssetDependencyGraph.cpp#L15) |  |
 | `AssetKey` | struct | SparkEngine | [AssetServiceProtocol.h:L52](../../SparkEngine/Source/Utils/AssetServiceProtocol.h#L52) |  |
 | `AssetLoadRequest` | struct | SparkEngine | [AssetPipeline.h:L159](../../SparkEngine/Source/Graphics/AssetPipeline.h#L159) | Asset loading request |
@@ -1915,7 +1794,6 @@
 | `AssetMetadata` | struct | SparkEditor | [AssetPipelineTypes.h:L159](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L159) | Asset metadata |
 | `AssetMetadata` | struct | SparkEngine | [AssetIntegration.h:L42](../../SparkEngine/Source/Core/AssetIntegration.h#L42) | Metadata about a registered asset. |
 | `AssetMetadata` | struct | SparkEngine | [AssetPipeline.h:L140](../../SparkEngine/Source/Graphics/AssetPipeline.h#L140) | Asset metadata |
-| `AssetMetadata` | struct | Tests | [TestAssetDatabase.cpp:L23](../../Tests/TestAssetDatabase.cpp#L23) |  |
 | `AssetMetadataValidator` | class | SparkEngine | [AssetValidator.h:L75](../../SparkEngine/Source/Core/AssetValidator.h#L75) |  |
 | `AssetMetadataValidator::GetRuleName` | method | SparkEngine | [AssetValidator.cpp:L183](../../SparkEngine/Source/Core/AssetValidator.cpp#L183) |  |
 | `AssetMetadataValidator::ValidateAsset` | method | SparkEngine | [AssetValidator.cpp:L142](../../SparkEngine/Source/Core/AssetValidator.cpp#L142) |  |
@@ -2091,7 +1969,6 @@
 | `AssetType` | enum | SparkEditor | [AssetPipelineTypes.h:L25](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L25) | Asset types supported by the pipeline |
 | `AssetType` | enum | SparkEngine | [AssetMigration.h:L60](../../SparkEngine/Source/Core/AssetMigration.h#L60) | Discriminator for the kind of asset stored in a binary file. |
 | `AssetType` | enum | SparkEngine | [AssetPipeline.h:L49](../../SparkEngine/Source/Graphics/AssetPipeline.h#L49) | Asset types supported by the pipeline |
-| `AssetType` | enum | Tests | [TestAssetDatabase.cpp:L13](../../Tests/TestAssetDatabase.cpp#L13) |  |
 | `AssetType` | enum | Tests | [TestAssetPipelineCache.cpp:L26](../../Tests/TestAssetPipelineCache.cpp#L26) |  |
 | `AssetTypeToString` | function | SparkEngine | [AssetMetadataLinux.cpp:L218](../../SparkEngine/Source/Graphics/AssetMetadataLinux.cpp#L218) |  |
 | `AssetTypeToString` | function | SparkEngine | [AssetMetadataWindows.cpp:L182](../../SparkEngine/Source/Graphics/AssetMetadataWindows.cpp#L182) |  |
@@ -2161,7 +2038,6 @@
 | `AsyncWriterThread` | function | SparkEngine | [Logger.h:L568](../../SparkEngine/Source/Utils/Logger.h#L568) | Background thread function that drains the message queue |
 | `at` | function | GameModules | [TFOpticsSystem.cpp:L343](../../GameModules/SparkGameMMOFPS/Source/Game/TFOpticsSystem.cpp#L343) |  |
 | `At` | function | SparkEngine | [LagCompensation.h:L109](../../SparkEngine/Source/Engine/Networking/LagCompensation.h#L109) |  |
-| `AtmosphereSettings` | struct | SparkEditor | [LightingTools.h:L152](../../SparkEditor/Source/Lighting/LightingTools.h#L152) | Atmosphere and weather settings |
 | `ATOM` | alias | SparkEngine | [PlatformTypes.h:L124](../../SparkEngine/Source/Core/PlatformTypes.h#L124) |  |
 | `AtomicReplace` | function | GameModules | [TFSavePaths.h:L281](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L281) |  |
 | `AtomicReplace` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L211](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L211) |  |
@@ -2384,7 +2260,6 @@
 | `AutoExposureSettings` | struct | SparkEngine | [PostProcessingTypes.h:L253](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L253) | Auto-exposure / eye adaptation settings |
 | `AutoExposureSettings` | struct | SparkEngine | [TonemapColorGrading.h:L69](../../SparkEngine/Source/Graphics/TonemapColorGrading.h#L69) |  |
 | `AutoExposureSettings` | struct | Tests | [TestPostProcessingPipeline.cpp:L101](../../Tests/TestPostProcessingPipeline.cpp#L101) |  |
-| `AutoFitView` | function | SparkEditor | [AnimationTimeline.h:L226](../../SparkEditor/Source/Animation/AnimationTimeline.h#L226) | Auto-fit view to animation duration |
 | `AutoGenerateTexturePlacement` | function | SparkEditor | [TerrainEditor.h:L55](../../SparkEditor/Source/Terrain/TerrainEditor.h#L55) |  |
 | `AutoHandle` | struct | SparkEngine | [ProcessWin32Launch.cpp:L37](../../SparkEngine/Source/Utils/ProcessWin32Launch.cpp#L37) |  |
 | `AutoHandle` | function | SparkEngine | [ProcessWin32Launch.cpp:L42](../../SparkEngine/Source/Utils/ProcessWin32Launch.cpp#L42) |  |
@@ -2421,8 +2296,6 @@
 | `Axis2DValue` | struct | SparkEngine | [InputActionSystem.h:L69](../../SparkEngine/Source/Input/InputActionSystem.h#L69) | A 2D axis value |
 | `AxisBinding` | struct | Tests | [TestInputSystem.cpp:L40](../../Tests/TestInputSystem.cpp#L40) |  |
 | `AxisIntersectResult` | struct | Tests | [TestGizmoMath.cpp:L69](../../Tests/TestGizmoMath.cpp#L69) |  |
-| `AxisTest` | struct | SparkEditor | [GizmoSystem.cpp:L589](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L589) |  |
-| `AxisTest` | struct | SparkEditor | [GizmoSystem.cpp:L684](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L684) |  |
 | `b` | function | Tests | [TestBitFlags.cpp:L86](../../Tests/TestBitFlags.cpp#L86) |  |
 | `b` | function | Tests | [TestEditorSubsystems.cpp:L2507](../../Tests/TestEditorSubsystems.cpp#L2507) |  |
 | `b` | function | Tests | [TestEditorSubsystems.cpp:L2517](../../Tests/TestEditorSubsystems.cpp#L2517) |  |
@@ -2459,7 +2332,6 @@
 | `BakeAllRegisteredSpecies` | function | SparkEngine | [FoliageImpostorBaker.h:L281](../../SparkEngine/Source/Graphics/FoliageImpostorBaker.h#L281) |  |
 | `BakeImpostorAtlasIfNeeded` | function | SparkEngine | [FoliageRenderer.h:L396](../../SparkEngine/Source/Graphics/FoliageRenderer.h#L396) |  |
 | `BakeLight` | struct | SparkEngine | [LightmapBaker.h:L85](../../SparkEngine/Source/Graphics/LightmapBaker.h#L85) | A light source for baking |
-| `BakeLightmaps` | function | SparkEditor | [LightingTools.h:L340](../../SparkEditor/Source/Lighting/LightingTools.h#L340) | Bake lightmaps |
 | `BakeMesh` | struct | SparkEngine | [LightmapBaker.h:L76](../../SparkEngine/Source/Graphics/LightmapBaker.h#L76) | A mesh contributed to the bake |
 | `BakeProbe` | function | SparkEngine | [LightProbeSystem.h:L102](../../SparkEngine/Source/Graphics/LightProbeSystem.h#L102) | Bake a probe with sky/ground gradient SH |
 | `BakeProbe` | function | SparkEngine | [LightProbeSystem.h:L113](../../SparkEngine/Source/Graphics/LightProbeSystem.h#L113) | Bake a probe with explicit light parameters |
@@ -3052,7 +2924,6 @@
 | `buffer` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L691](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L691) |  |
 | `buffer` | function | SparkBuild | [DownloadSecurity.cpp:L168](../../SparkBuild/src/DownloadSecurity.cpp#L168) |  |
 | `buffer` | function | SparkBuild | [Downloader.cpp:L194](../../SparkBuild/src/Downloader.cpp#L194) |  |
-| `buffer` | function | SparkEditor | [AssetDatabase.cpp:L669](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L669) |  |
 | `buffer` | function | SparkEditor | [EngineInterface.cpp:L340](../../SparkEditor/Source/Communication/EngineInterface.cpp#L340) |  |
 | `buffer` | function | SparkEditor | [ProjectManager.cpp:L388](../../SparkEditor/Source/Core/ProjectManager.cpp#L388) |  |
 | `buffer` | function | SparkEditor | [ProjectManager.cpp:L398](../../SparkEditor/Source/Core/ProjectManager.cpp#L398) |  |
@@ -3103,7 +2974,6 @@
 | `BuildAll` | function | SparkEngine | [CSGSystem.h:L327](../../SparkEngine/Source/Engine/LevelDesign/CSGSystem.h#L327) | Build the combined mesh from all registered brushes |
 | `BuildArchitecture` | enum | SparkEditor | [BuildSystemEnums.h:L53](../../SparkEditor/Source/Enums/BuildSystemEnums.h#L53) | Build architecture |
 | `BuildAreas` | function | Tests | [TestSparkGatewayCoordinator.cpp:L78](../../Tests/TestSparkGatewayCoordinator.cpp#L78) |  |
-| `BuildArena` | function | GameModules | [ArenaBuilder.h:L47](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L47) | Build the complete arena into the game's object list |
 | `BuildBehaviorTree` | function | GameModules | [Enemy.h:L102](../../GameModules/SparkGameFPS/Source/Game/Enemy.h#L102) | Set patrol waypoints (replaces current behavior with patrol+combat) |
 | `BuildBLASResource` | function | SparkEngine | [DXRSupport.cpp:L280](../../SparkEngine/Source/Graphics/RHI/DXRSupport.cpp#L280) |  |
 | `BuildBlockNetwork` | function | SparkEngine | [NeuralTextureCompressor.h:L136](../../SparkEngine/Source/Graphics/Neural/NeuralTextureCompressor.h#L136) | Build the MLP architecture for a block. |
@@ -3145,8 +3015,6 @@
 | `BuildCookPanel::RenderStrippingOptions` | method | SparkEditor | [BuildCookPanel.cpp:L215](../../SparkEditor/Source/Panels/BuildCookPanel.cpp#L215) |  |
 | `BuildCookPanel::Shutdown` | method | SparkEditor | [BuildCookPanel.cpp:L123](../../SparkEditor/Source/Panels/BuildCookPanel.cpp#L123) |  |
 | `BuildCookPanel::Update` | method | SparkEditor | [BuildCookPanel.cpp:L35](../../SparkEditor/Source/Panels/BuildCookPanel.cpp#L35) |  |
-| `BuildCorridors` | function | GameModules | [ArenaBuilder.h:L66](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L66) | Create side corridors and rooms |
-| `BuildCover` | function | GameModules | [ArenaBuilder.h:L57](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L57) | Create cover structures (pillars, half-walls, crates) |
 | `BuildCrashArchiveAllowlist` | function | SparkEngine | [CrashHandlerSupport.h:L214](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L214) | Build the exact allowlist used to create a crash-report archive. |
 | `BuildDefaultPasses` | function | SparkEngine | [RenderPipeline.h:L167](../../SparkEngine/Source/Graphics/RenderPipeline.h#L167) |  |
 | `BuildDelta` | function | Tests | [TestExtendedSystems.cpp:L48](../../Tests/TestExtendedSystems.cpp#L48) |  |
@@ -3162,12 +3030,10 @@
 | `builder` | function | SparkEditor | [DedicatedServerProcessController.cpp:L135](../../SparkEditor/Source/Panels/DedicatedServerProcessController.cpp#L135) |  |
 | `builder` | function | SparkEditor | [ServiceTopologyController.cpp:L68](../../SparkEditor/Source/Panels/ServiceTopologyController.cpp#L68) |  |
 | `builder` | function | SparkEditor | [VersionControlRender.cpp:L28](../../SparkEditor/Source/VersionControl/VersionControlRender.cpp#L28) |  |
-| `builder` | function | SparkEditor | [VersionControlRender.cpp:L556](../../SparkEditor/Source/VersionControl/VersionControlRender.cpp#L556) |  |
 | `builder` | function | SparkEditor | [BuiltinWorkflows.cpp:L44](../../SparkEditor/Source/Workflow/BuiltinWorkflows.cpp#L44) |  |
 | `builder` | function | SparkEngine | [RenderGraph.h:L146](../../SparkEngine/Source/Graphics/RenderGraph.h#L146) |  |
 | `Builder` | class | SparkEngine | [Process.h:L57](../../SparkEngine/Source/Utils/Process.h#L57) | Fluent builder for configuring and launching a child process. |
 | `Builder` | function | SparkEngine | [Process.h:L61](../../SparkEngine/Source/Utils/Process.h#L61) | Fluent builder for configuring and launching a child process. |
-| `BuildFloor` | function | GameModules | [ArenaBuilder.h:L51](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L51) | Create the arena floor sections |
 | `BuildFromBoneNames` | function | SparkEngine | [AnimationRetargeting.h:L65](../../SparkEngine/Source/Engine/Animation/AnimationRetargeting.h#L65) |  |
 | `BuildFromHeightfield` | function | SparkEngine | [NavMesh.h:L323](../../SparkEngine/Source/Engine/AI/NavMesh.h#L323) |  |
 | `BuildGameLaunchCommandLine` | function | SparkEditor | [EditorProcessLaunch.cpp:L166](../../SparkEditor/Source/Utils/EditorProcessLaunch.cpp#L166) |  |
@@ -3191,7 +3057,6 @@
 | `BuildLogEntry` | struct | SparkEditor | [BuildCookPanel.h:L134](../../SparkEditor/Source/Panels/BuildCookPanel.h#L134) |  |
 | `BuildLogLine` | struct | SparkEditor | [BuildPipeline.h:L37](../../SparkEditor/Source/Panels/BuildPipeline.h#L37) | A single line of build output with severity. |
 | `BuildLootTable` | function | GameModules | [LootSystem.h:L154](../../GameModules/SparkGameFPS/Source/Game/LootSystem.h#L154) |  |
-| `BuildMesh` | function | GameModules | [Terrain.h:L180](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L180) |  |
 | `BuildMeshFromComponent` | function | SparkEngine | [TerrainRenderer.h:L166](../../SparkEngine/Source/Graphics/TerrainRenderer.h#L166) |  |
 | `BuildMeshFromComponent` | function | Tests | [TestTerrainRenderer.cpp:L57](../../Tests/TestTerrainRenderer.cpp#L57) |  |
 | `BuildMeshlets` | function | SparkEngine | [MeshShaderPipeline.h:L115](../../SparkEngine/Source/Graphics/MeshShaderPipeline.h#L115) | Convert a traditional mesh to meshlet format |
@@ -3241,14 +3106,11 @@
 | `BuildPipeline::StartCookOnly` | method | SparkEditor | [BuildPipeline.cpp:L704](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L704) |  |
 | `BuildPipeline::WorkerThread` | method | SparkEditor | [BuildPipeline.cpp:L769](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L769) |  |
 | `BuildPlatform` | enum | SparkEditor | [BuildSystemEnums.h:L19](../../SparkEditor/Source/Enums/BuildSystemEnums.h#L19) | Target platforms for building |
-| `BuildPlatforms` | function | GameModules | [ArenaBuilder.h:L60](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L60) | Create elevated platforms and sniper nests |
 | `BuildProbeGrid` | function | SparkEngine | [ProbeSystem.h:L88](../../SparkEngine/Source/Graphics/HybridRT/ProbeSystem.h#L88) |  |
 | `BuildProfile` | enum | SparkEditor | [BuildCookPanel.h:L27](../../SparkEditor/Source/Panels/BuildCookPanel.h#L27) | Build, cook, and packaging configuration panel for standalone game builds. |
 | `BuildProject` | function | SparkBuild | [SparkBuild.h:L50](../../SparkBuild/src/SparkBuild.h#L50) |  |
 | `BuildQuadGrid` | function | Tests | [TestMeshOptimizer.cpp:L37](../../Tests/TestMeshOptimizer.cpp#L37) |  |
-| `BuildQuadTree` | function | GameModules | [Terrain.h:L184](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L184) |  |
 | `BuildQueueEntry` | struct | Tests | [TestSparkGameRTS.cpp:L69](../../Tests/TestSparkGameRTS.cpp#L69) |  |
-| `BuildRamps` | function | GameModules | [ArenaBuilder.h:L63](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L63) | Create connecting ramps between elevation levels |
 | `BuildRecursive` | function | SparkEngine | [BVHAccelerator.h:L223](../../SparkEngine/Source/Graphics/BVHAccelerator.h#L223) |  |
 | `BuildReport` | function | GameModules | [TFChaosHarness.h:L74](../../GameModules/SparkGameMMOFPS/Source/Game/TFChaosHarness.h#L74) |  |
 | `BuildResult` | enum | SparkEditor | [BuildPipeline.h:L28](../../SparkEditor/Source/Panels/BuildPipeline.h#L28) | Result of a completed build. |
@@ -3284,7 +3146,6 @@
 | `BuildTypeToString` | function | SparkBuild | [Config.h:L75](../../SparkBuild/src/Config.h#L75) |  |
 | `BuildUnlockTable` | function | GameModules | [ProgressionSystem.h:L137](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L137) |  |
 | `BuildViewRay` | function | GameModules | [TFWeaponSystem.h:L179](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystem.h#L179) |  |
-| `BuildWalls` | function | GameModules | [ArenaBuilder.h:L54](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L54) | Create perimeter walls |
 | `BuildWireMessage` | function | Tests | [TestNetworkManagerIntegration.cpp:L295](../../Tests/TestNetworkManagerIntegration.cpp#L295) |  |
 | `BuildWorkerJobs` | function | SparkCooker | [main.cpp:L129](../../SparkCooker/src/main.cpp#L129) |  |
 | `BuildWorldMatrix` | function | SparkEngine | [FoliageRenderer.h:L298](../../SparkEngine/Source/Graphics/FoliageRenderer.h#L298) | Build a row-major world matrix for a FoliageInstance. |
@@ -3369,9 +3230,7 @@
 | `CacheStats` | struct | SparkEngine | [CacheDebugger.h:L42](../../SparkEngine/Source/Utils/CacheDebugger.h#L42) | Aggregated statistics for a single named cache |
 | `CacheStats` | struct | Tests | [TestShaderDiskCache.cpp:L151](../../Tests/TestShaderDiskCache.cpp#L151) |  |
 | `Calculate` | function | Tests | [TestGraphicsIntegration.cpp:L42](../../Tests/TestGraphicsIntegration.cpp#L42) |  |
-| `CalculateAdaptiveSize` | function | SparkEditor | [GizmoSystem.h:L369](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L369) | Calculate adaptive gizmo size based on camera distance |
 | `CalculateApproxLength` | function | SparkEditor | [SplineEditorPanel.h:L50](../../SparkEditor/Source/Panels/SplineEditorPanel.h#L50) |  |
-| `CalculateAutoTangents` | function | SparkEditor | [AnimationTimeline.h:L392](../../SparkEditor/Source/Animation/AnimationTimeline.h#L392) | Calculate curve tangents automatically |
 | `CalculateBlendFactor` | function | SparkEngine | [VolumeSystem.h:L317](../../SparkEngine/Source/Graphics/VolumeSystem.h#L317) | Calculate blend factor for a world position [0=outside, 1=fully inside] |
 | `CalculateChecksum` | function | SparkEditor | [AdvancedAssetPipeline.h:L484](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L484) | Calculate asset checksum |
 | `CalculateChecksum` | function | SparkEngine | [AssetPipeline.h:L561](../../SparkEngine/Source/Graphics/AssetPipeline.h#L561) |  |
@@ -3385,7 +3244,6 @@
 | `CalculateEASUConstants` | function | SparkEngine | [UpscalingSystemWindowsInternal.h:L20](../../SparkEngine/Source/Graphics/UpscalingSystemWindowsInternal.h#L20) |  |
 | `CalculateEffectiveDamage` | function | GameModules | [ARPGCombatSystem.h:L80](../../GameModules/SparkGameARPG/Source/Combat/ARPGCombatSystem.h#L80) |  |
 | `CalculateFireDirection` | function | GameModules | [Player.h:L779](../../GameModules/SparkGameFPS/Source/Game/Player.h#L779) | Calculate the direction vector for projectile firing |
-| `CalculateGizmoCenter` | function | SparkEditor | [GizmoSystem.h:L361](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L361) | Calculate gizmo center from multiple transforms |
 | `CalculateInterpolationError` | function | SparkEngine | [AnimationCompression.h:L129](../../SparkEngine/Source/Engine/Animation/AnimationCompression.h#L129) |  |
 | `CalculateJitterForQuality` | function | SparkEngine | [UpscalingSystem.cpp:L384](../../SparkEngine/Source/Graphics/UpscalingSystem.cpp#L384) |  |
 | `CalculateJitterOffset` | function | SparkEngine | [UpscalingSystem.cpp:L92](../../SparkEngine/Source/Graphics/UpscalingSystem.cpp#L92) |  |
@@ -3398,7 +3256,6 @@
 | `CalculateMemoryUsage` | function | SparkEngine | [RenderTarget.h:L382](../../SparkEngine/Source/Graphics/RenderTarget.h#L382) |  |
 | `CalculateMemoryUsage` | function | SparkEngine | [TextureSystem.h:L442](../../SparkEngine/Source/Graphics/TextureSystem.h#L442) |  |
 | `CalculateMipLevels` | function | SparkEngine | [TextureCompressor.h:L128](../../SparkEngine/Source/Graphics/TextureCompressor.h#L128) | Calculate number of mip levels for given dimensions |
-| `CalculateNormals` | function | GameModules | [Terrain.h:L181](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L181) |  |
 | `CalculateNormals` | function | SparkEngine | [Mesh.h:L229](../../SparkEngine/Source/Graphics/Mesh.h#L229) | Calculate vertex normals for the mesh |
 | `CalculateOcclusion` | function | SparkEngine | [AudioMixer.h:L286](../../SparkEngine/Source/Audio/AudioMixer.h#L286) | Calculate occlusion between two positions. |
 | `CalculatePlayerSkillLevel` | function | SparkEngine | [AIDirector.h:L191](../../SparkEngine/Source/Engine/AI/AIDirector.h#L191) | Set intensity manually (console integration / debugging). |
@@ -3408,13 +3265,11 @@
 | `CalculateRenderResolution` | function | SparkEngine | [DynamicQualityTypes.h:L177](../../SparkEngine/Source/Graphics/DynamicQualityTypes.h#L177) | Calculate the render resolution for the given display resolution |
 | `CalculateRenderResolution` | function | SparkEngine | [UpscalingTypes.h:L175](../../SparkEngine/Source/Graphics/UpscalingTypes.h#L175) | Calculate the render resolution for the given display resolution |
 | `CalculateRotationError` | function | SparkEngine | [AnimationCompression.h:L131](../../SparkEngine/Source/Engine/Animation/AnimationCompression.h#L131) |  |
-| `CalculateSplatWeights` | function | GameModules | [Terrain.h:L182](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L182) |  |
 | `CalculateSpread` | function | SparkEngine | [WeaponManager.h:L300](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L300) |  |
 | `CalculateSpread` | function | Tests | [TestWeaponMechanics.cpp:L119](../../Tests/TestWeaponMechanics.cpp#L119) |  |
 | `CalculateStars` | function | GameModules | [PlatformerLevelSystem.h:L155](../../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h#L155) | Get current level timer |
 | `CalculateStartupSplashLetterbox` | function | SparkEngine | [StartupSplash.cpp:L435](../../SparkEngine/Source/Core/StartupSplash.cpp#L435) |  |
 | `CalculateStatistics` | function | SparkEditor | [PerformanceProfiler.h:L350](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L350) | Calculate performance statistics |
-| `CalculateSunColor` | function | SparkEditor | [LightingTools.h:L498](../../SparkEditor/Source/Lighting/LightingTools.h#L498) | Calculate sun color based on time of day |
 | `CalculateTerrainNormal` | function | SparkEditor | [TerrainEditor.h:L93](../../SparkEditor/Source/Terrain/TerrainEditor.h#L93) |  |
 | `CalculateTerrainSlope` | function | SparkEditor | [TerrainEditor.h:L94](../../SparkEditor/Source/Terrain/TerrainEditor.h#L94) |  |
 | `CalculateTilePriority` | function | SparkEditor | [LevelStreamingSystem.h:L387](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L387) | Calculate tile priority |
@@ -3973,7 +3828,6 @@
 | `Clear` | function | GameModules | [InventorySystem.h:L361](../../GameModules/SparkGameFPS/Source/Game/InventorySystem.h#L361) | Clear the entire inventory |
 | `Clear` | function | GameModules | [TFEvents.h:L132](../../GameModules/SparkGameMMOFPS/Source/Core/TFEvents.h#L132) |  |
 | `Clear` | function | GameModules | [TFPlayerMeta.h:L95](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFPlayerMeta.h#L95) |  |
-| `Clear` | function | SparkEditor | [AnimationTimelineTypes.h:L245](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L245) | Clear all selection |
 | `Clear` | function | SparkEditor | [CommandHistory.h:L162](../../SparkEditor/Source/CommandHistory.h#L162) | Clear all history (e.g., when opening a new scene). |
 | `Clear` | function | SparkEditor | [EditorLogger.h:L161](../../SparkEditor/Source/Core/EditorLogger.h#L161) |  |
 | `Clear` | function | SparkEditor | [EditorLogger.h:L224](../../SparkEditor/Source/Core/EditorLogger.h#L224) |  |
@@ -4086,7 +3940,6 @@
 | `ClearAllDirty` | function | Tests | [TestReplicationFields.cpp:L143](../../Tests/TestReplicationFields.cpp#L143) |  |
 | `ClearAllTargets` | function | SparkEngine | [RenderTarget.h:L289](../../SparkEngine/Source/Graphics/RenderTarget.h#L289) |  |
 | `ClearAllTimers` | function | SparkEngine | [TimerManager.h:L159](../../SparkEngine/Source/Utils/TimerManager.h#L159) | Clear all timers |
-| `ClearBakedLighting` | function | SparkEditor | [LightingTools.h:L353](../../SparkEditor/Source/Lighting/LightingTools.h#L353) | Clear all baked lighting data |
 | `ClearBindings` | function | SparkEngine | [InputActionSystem.h:L244](../../SparkEngine/Source/Input/InputActionSystem.h#L244) | Clear all bindings for an action |
 | `ClearBreakConditions` | function | SparkEngine | [FrameInspector.h:L385](../../SparkEngine/Source/Utils/FrameInspector.h#L385) | Clear all break conditions |
 | `ClearBreakpointFrames` | function | SparkEngine | [FrameInspector.h:L362](../../SparkEngine/Source/Utils/FrameInspector.h#L362) | Clear all frame breakpoints |
@@ -4871,8 +4724,6 @@
 | `CompileGLSLtoSPIRV` | function | SparkEngine | [RHIFactory.cpp:L536](../../SparkEngine/Source/Graphics/RHI/RHIFactory.cpp#L536) |  |
 | `CompileGLSLtoSPIRV` | function | SparkEngine | [RHIFactory.h:L132](../../SparkEngine/Source/Graphics/RHI/RHIFactory.h#L132) | Compile GLSL to SPIR-V using glslang |
 | `CompileGraph` | function | SparkEditor | [VisualScriptPanel.h:L148](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L148) |  |
-| `CompileMaterial` | function | SparkEditor | [MaterialEditor.cpp:L63](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L63) |  |
-| `CompileMaterial` | function | SparkEditor | [MaterialEditor.h:L322](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L322) | Compile current material to shaders |
 | `CompileMaterial` | function | SparkEngine | [MaterialSystem.h:L256](../../SparkEngine/Source/Graphics/MaterialSystem.h#L256) |  |
 | `CompileMotionBlurShaders` | function | SparkEngine | [TemporalEffects.h:L519](../../SparkEngine/Source/Graphics/TemporalEffects.h#L519) |  |
 | `CompilerConfig` | struct | SparkShaderCompiler | [main.cpp:L47](../../SparkShaderCompiler/src/main.cpp#L47) |  |
@@ -5230,7 +5081,6 @@
 | `ConnectionToken` | alias | Tests | [TestNetworkEncryption.cpp:L28](../../Tests/TestNetworkEncryption.cpp#L28) |  |
 | `ConnectionUI` | struct | SparkEditor | [VisualScriptPanel.h:L112](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L112) |  |
 | `connectRace` | function | Tests | [TestDaemonConcurrent.cpp:L127](../../Tests/TestDaemonConcurrent.cpp#L127) |  |
-| `ConnectSockets` | function | SparkEditor | [MaterialEditor.h:L347](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L347) | Connect two sockets |
 | `ConnectStandaloneBroker` | function | SparkEditor | [CollaborativeEditSession.h:L262](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L262) | Join an existing SparkCollabServer session. |
 | `ConnectStandaloneBrokerInternal` | function | SparkEditor | [CollaborativeEditSession.h:L343](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L343) |  |
 | `ConnectStandaloneBrokerInternal` | function | SparkEditor | [CollaborativeEditSessionBroker.cpp:L17](../../SparkEditor/Source/Communication/CollaborativeEditSessionBroker.cpp#L17) |  |
@@ -5245,14 +5095,6 @@
 | `console` | function | GameModules | [AdvancedConsoleCommands.cpp:L76](../../GameModules/SparkGameFPS/Source/Console/AdvancedConsoleCommands.cpp#L76) |  |
 | `console` | function | GameModules | [Main.cpp:L335](../../GameModules/SparkGameFPS/Source/Core/Main.cpp#L335) |  |
 | `Console` | class | GameModules | [SparkGameFPS.h:L25](../../GameModules/SparkGameFPS/Source/Core/SparkGameFPS.h#L25) |  |
-| `Console` | class | GameModules | [Console.h:L79](../../GameModules/SparkGameFPS/Source/Game/Console.h#L79) |  |
-| `Console::ExecuteCommand` | method | GameModules | [Console.cpp:L199](../../GameModules/SparkGameFPS/Source/Game/Console.cpp#L199) |  |
-| `Console::HandleChar` | method | GameModules | [Console.cpp:L90](../../GameModules/SparkGameFPS/Source/Game/Console.cpp#L90) |  |
-| `Console::HandleKeyDown` | method | GameModules | [Console.cpp:L103](../../GameModules/SparkGameFPS/Source/Game/Console.cpp#L103) |  |
-| `Console::Initialize` | method | GameModules | [Console.cpp:L12](../../GameModules/SparkGameFPS/Source/Game/Console.cpp#L12) |  |
-| `Console::Log` | method | GameModules | [Console.cpp:L187](../../GameModules/SparkGameFPS/Source/Game/Console.cpp#L187) |  |
-| `Console::RegisterCommand` | method | GameModules | [Console.cpp:L74](../../GameModules/SparkGameFPS/Source/Game/Console.cpp#L74) |  |
-| `Console::Render` | method | GameModules | [Console.cpp:L234](../../GameModules/SparkGameFPS/Source/Game/Console.cpp#L234) |  |
 | `Console_AddZone` | function | GameModules | [GravitySystem.h:L214](../../GameModules/SparkGameFPS/Source/Game/GravitySystem.h#L214) | Create a radial gravity zone (pulls toward center) |
 | `Console_ApplyForce` | function | SparkEngine | [PhysicsBody.h:L155](../../SparkEngine/Source/Physics/PhysicsBody.h#L155) |  |
 | `Console_ApplyForce` | function | SparkEngine | [PhysicsSystem.h:L464](../../SparkEngine/Source/Physics/PhysicsSystem.h#L464) |  |
@@ -5296,7 +5138,6 @@
 | `Console_GetEmitterInfo` | function | SparkEngine | [ParticleSystem.h:L256](../../SparkEngine/Source/Graphics/ParticleSystem.h#L256) |  |
 | `Console_GetGPUReport` | function | SparkEngine | [Profiler.h:L280](../../SparkEngine/Source/Utils/Profiler.h#L280) |  |
 | `Console_GetGraphStats` | function | SparkEngine | [RenderGraph.h:L537](../../SparkEngine/Source/Graphics/RenderGraph.h#L537) | Get a console-friendly summary string of graph statistics. |
-| `Console_GetInfo` | function | GameModules | [Terrain.h:L177](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L177) |  |
 | `Console_GetKillHistory` | function | GameModules | [GameMechanics.h:L212](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L212) | Register a kill for scoring |
 | `Console_GetLightInfo` | function | SparkEngine | [LightingSystem.h:L370](../../SparkEngine/Source/Graphics/LightingSystem.h#L370) | Get detailed light information |
 | `Console_GetLODInfo` | function | SparkEngine | [MeshLOD.h:L147](../../SparkEngine/Source/Graphics/MeshLOD.h#L147) |  |
@@ -5666,7 +5507,6 @@
 | `ConsoleApp::SetConsoleColor` | method | SparkConsole | [ConsoleApp.cpp:L675](../../SparkConsole/src/ConsoleApp.cpp#L675) |  |
 | `ConsoleApp::SetConsoleColor` | method | SparkConsole | [ConsoleApp.cpp:L680](../../SparkConsole/src/ConsoleApp.cpp#L680) |  |
 | `ConsoleApp::ShouldForwardToEngine` | method | SparkConsole | [ConsoleApp.cpp:L713](../../SparkConsole/src/ConsoleApp.cpp#L713) |  |
-| `ConsoleCommand` | struct | GameModules | [Console.h:L55](../../GameModules/SparkGameFPS/Source/Game/Console.h#L55) | Console command structure |
 | `ConsoleCommand` | struct | SparkEditor | [ConsolePanel.h:L33](../../SparkEditor/Source/Panels/ConsolePanel.h#L33) | Console command structure |
 | `ConsoleCommandHandler` | alias | SparkEngine | [InGameConsole.h:L88](../../SparkEngine/Source/Utils/InGameConsole.h#L88) | Console command handler — receives args, returns output string |
 | `ConsoleCommandInfo` | struct | SparkEngine | [InGameConsole.h:L80](../../SparkEngine/Source/Utils/InGameConsole.h#L80) | Registered console command info |
@@ -5905,10 +5745,8 @@
 | `ContainsShellMetachars` | function | SparkEditor | [VersionControlGitOps.cpp:L16](../../SparkEditor/Source/VersionControl/VersionControlGitOps.cpp#L16) |  |
 | `ContainsShellMetachars` | function | SparkEditor | [VersionControlSystem.cpp:L22](../../SparkEditor/Source/VersionControl/VersionControlSystem.cpp#L22) |  |
 | `content` | function | SparkBuild | [Config.cpp:L727](../../SparkBuild/src/Config.cpp#L727) |  |
-| `content` | function | SparkEditor | [AssetDatabase.cpp:L513](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L513) |  |
 | `content` | function | SparkEditor | [EditorUI.cpp:L1459](../../SparkEditor/Source/Core/EditorUI.cpp#L1459) |  |
 | `content` | function | SparkEditor | [ProjectManager.cpp:L1466](../../SparkEditor/Source/Core/ProjectManager.cpp#L1466) |  |
-| `content` | function | SparkEditor | [MaterialEditor.cpp:L100](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L100) |  |
 | `content` | function | SparkEditor | [BuildPipeline.cpp:L478](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L478) |  |
 | `content` | function | SparkEditor | [VisualScriptPanel.cpp:L1309](../../SparkEditor/Source/Panels/VisualScriptPanel.cpp#L1309) |  |
 | `content` | function | SparkEngine | [DataTableSystem.h:L734](../../SparkEngine/Source/Engine/DataTable/DataTableSystem.h#L734) |  |
@@ -6431,7 +6269,6 @@
 | `CreateJetBrainsTheme` | function | SparkEditor | [EditorTheme.h:L270](../../SparkEditor/Source/Core/EditorTheme.h#L270) | Create JetBrains-inspired dark theme |
 | `CreateLabel` | function | SparkEngine | [UISystem.h:L322](../../SparkEngine/Source/Engine/UI/UISystem.h#L322) | Set background color. |
 | `CreateLavaZone` | function | GameModules | [GameMechanics.h:L131](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L131) |  |
-| `CreateLight` | function | SparkEditor | [LightingTools.h:L287](../../SparkEditor/Source/Lighting/LightingTools.h#L287) | Create a new light |
 | `CreateLight` | function | SparkEngine | [LightingSystem.h:L327](../../SparkEngine/Source/Graphics/LightingSystem.h#L327) |  |
 | `CreateLinked` | function | SparkEngine | [CancellationToken.h:L38](../../SparkEngine/Source/Engine/Coroutine/CancellationToken.h#L38) | Create a linked token that cancels when either this or any ancestor cancels. |
 | `CreateListing` | function | GameModules | [MMOTradingSystem.h:L99](../../GameModules/SparkGameMMO/Source/Trading/MMOTradingSystem.h#L99) |  |
@@ -6484,14 +6321,11 @@
 | `CreateMRT` | function | SparkEngine | [RenderTarget.h:L277](../../SparkEngine/Source/Graphics/RenderTarget.h#L277) |  |
 | `CreateMutableCompoundBody` | function | SparkEngine | [PhysicsSystem.h:L577](../../SparkEngine/Source/Physics/PhysicsSystem.h#L577) |  |
 | `CreateNetwork` | function | SparkEngine | [NeuralInference.h:L99](../../SparkEngine/Source/Graphics/Neural/NeuralInference.h#L99) | Create a GPU-resident network from an architecture descriptor. |
-| `CreateNewClip` | function | SparkEditor | [AnimationTimeline.h:L87](../../SparkEditor/Source/Animation/AnimationTimeline.h#L87) | Create new animation clip |
-| `CreateNewMaterial` | function | SparkEditor | [MaterialEditor.h:L302](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L302) | Create new material |
 | `CreateNewScene` | function | SparkEditor | [SparkEngineIntegration.h:L299](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L299) | Create new empty scene |
 | `CreateNewScene` | function | SparkEditor | [SceneManager.h:L40](../../SparkEditor/Source/SceneSystem/SceneManager.h#L40) | Create a blank scene with default camera and light. |
 | `CreateNewTerrain` | function | SparkEditor | [TerrainEditor.h:L31](../../SparkEditor/Source/Terrain/TerrainEditor.h#L31) |  |
 | `CreateNewWorld` | function | SparkEditor | [LevelStreamingSystem.h:L96](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L96) | Create new world composition |
 | `CreateNode` | function | GameModules | [RTSResourceSystem.h:L75](../../GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.h#L75) |  |
-| `CreateNode` | function | SparkEditor | [MaterialEditor.h:L443](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L443) | Create node of specified type |
 | `CreateNoise` | function | SparkEngine | [SoundEffect.h:L243](../../SparkEngine/Source/Audio/SoundEffect.h#L243) | Create white noise |
 | `CreateObject` | function | SparkEditor | [HierarchyPanel.h:L120](../../SparkEditor/Source/Panels/HierarchyPanel.h#L120) | Create a new object in the scene hierarchy. |
 | `CreateOpenGLDevice` | function | SparkEngine | [OpenGLDevice.cpp:L2151](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp#L2151) |  |
@@ -7097,10 +6931,7 @@
 | `DamageZoneType` | enum | GameModules | [GameSystemEnums.h:L381](../../GameModules/SparkGameFPS/Source/Enums/GameSystemEnums.h#L381) | Damage zone types |
 | `DamageZoneType` | enum | SparkEngine | [GameSystemEnums.h:L381](../../SparkEngine/Source/Enums/GameSystemEnums.h#L381) | Damage zone types |
 | `Darken` | function | SparkEditor | [EditorTheme.h:L59](../../SparkEditor/Source/Core/EditorTheme.h#L59) | Create a darker version of this color |
-| `data` | function | GameModules | [Terrain.cpp:L30](../../GameModules/SparkGameFPS/Source/Game/Terrain.cpp#L30) |  |
-| `data` | function | GameModules | [Terrain.cpp:L208](../../GameModules/SparkGameFPS/Source/Game/Terrain.cpp#L208) |  |
 | `data` | function | SparkEditor | [CollaborativeEditSession.cpp:L337](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L337) |  |
-| `data` | function | SparkEditor | [PerformanceProfiler.cpp:L1608](../../SparkEditor/Source/Profiler/PerformanceProfiler.cpp#L1608) |  |
 | `data` | function | SparkEngine | [EngineDiagnosticsExtended.cpp:L111](../../SparkEngine/Source/Core/EngineDiagnosticsExtended.cpp#L111) |  |
 | `data` | function | SparkEngine | [SparkPakWriter.cpp:L148](../../SparkEngine/Source/Core/SparkPakWriter.cpp#L148) |  |
 | `data` | function | SparkEngine | [FBXImporter.cpp:L701](../../SparkEngine/Source/Graphics/FBXImporter.cpp#L701) |  |
@@ -7123,7 +6954,6 @@
 | `data` | function | Tests | [TestMaterialSystemIntegration.cpp:L172](../../Tests/TestMaterialSystemIntegration.cpp#L172) |  |
 | `data` | function | Tests | [TestNetworkSecurity.cpp:L78](../../Tests/TestNetworkSecurity.cpp#L78) |  |
 | `data` | function | Tests | [TestSparkPak.cpp:L231](../../Tests/TestSparkPak.cpp#L231) |  |
-| `DatabaseStats` | struct | SparkEditor | [AssetDatabase.h:L213](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L213) | Get database statistics |
 | `Datablock` | struct | SparkEngine | [DatablockRegistry.h:L60](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h#L60) | An immutable set of named properties describing a game object template. |
 | `DatablockID` | alias | SparkEngine | [DatablockRegistry.h:L50](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h#L50) | Unique identifier for a datablock (assigned at registration time) |
 | `DatablockRegistry` | class | SparkEngine | [DatablockRegistry.h:L118](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h#L118) | Central registry for immutable datablock definitions. |
@@ -7557,7 +7387,6 @@
 | `Delete` | function | SparkEngine | [LocalFileCache.h:L243](../../SparkEngine/Source/Utils/LocalFileCache.h#L243) | Delete a file from disk and evict it from cache |
 | `DeleteAllBlobFiles` | function | SparkDaemon | [AssetService.h:L125](../../SparkDaemon/src/AssetService.h#L125) |  |
 | `DeleteAllBlobFiles` | function | SparkDaemon | [ShaderService.h:L137](../../SparkDaemon/src/ShaderService.h#L137) |  |
-| `DeleteAsset` | function | SparkEditor | [AssetDatabase.h:L162](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L162) | Delete asset |
 | `DeleteBlobFile` | function | SparkDaemon | [AssetService.h:L124](../../SparkDaemon/src/AssetService.h#L124) |  |
 | `DeleteBlobFile` | function | SparkDaemon | [ShaderService.h:L136](../../SparkDaemon/src/ShaderService.h#L136) |  |
 | `DeleteBranch` | function | SparkEditor | [VersionControlSystem.h:L205](../../SparkEditor/Source/VersionControl/VersionControlSystem.h#L205) | Delete branch |
@@ -7573,7 +7402,6 @@
 | `DeleteLayout` | function | SparkEditor | [EditorLayoutManager.h:L188](../../SparkEditor/Source/Core/EditorLayoutManager.h#L188) | Delete a saved layout file. |
 | `DeleteLayout` | function | SparkEditor | [EditorWindowManager.h:L152](../../SparkEditor/Source/Core/EditorWindowManager.h#L152) | Delete a saved layout by name |
 | `DeleteLayout` | function | Tests | [TestEditorWindowManager.cpp:L82](../../Tests/TestEditorWindowManager.cpp#L82) |  |
-| `DeleteLight` | function | SparkEditor | [LightingTools.h:L300](../../SparkEditor/Source/Lighting/LightingTools.h#L300) | Delete a light |
 | `DeleteObject` | function | GameModules | [Game.h:L231](../../GameModules/SparkGameFPS/Source/Game/Game.h#L231) | Delete an object from the scene by index |
 | `DeleteObject` | function | SparkEditor | [HierarchyPanel.h:L335](../../SparkEditor/Source/Panels/HierarchyPanel.h#L335) | Delete object and all children |
 | `DeletePrefab` | function | SparkEditor | [PrefabManager.h:L103](../../SparkEditor/Source/Prefabs/PrefabManager.h#L103) | Delete a prefab by name |
@@ -7832,7 +7660,6 @@
 | `DetectDXRSupport` | function | SparkEngine | [D3D12Device.h:L183](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L183) |  |
 | `DetectFeatures` | function | SparkEngine | [MetalDevice.h:L514](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L514) |  |
 | `DetectFeatures` | function | SparkEngine | [UpscalingSystem.h:L515](../../SparkEngine/Source/Graphics/UpscalingSystem.h#L515) | Console command to set sharpness |
-| `DetectFileType` | function | Tests | [TestAssetDatabase.cpp:L31](../../Tests/TestAssetDatabase.cpp#L31) |  |
 | `DetectFormat` | function | SparkEditor | [SceneSerializer.h:L136](../../SparkEditor/Source/SceneSystem/SceneSerializer.h#L136) | Detect format from file extension |
 | `DetectGPUBottlenecks` | function | SparkEditor | [PerformanceProfiler.h:L330](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L330) | Detect GPU bottlenecks |
 | `DetectGvisorImpl` | function | SparkEngine | [WineDetection.cpp:L69](../../SparkEngine/Source/Utils/WineDetection.cpp#L69) |  |
@@ -7843,7 +7670,6 @@
 | `DetectMergeConflicts` | function | SparkEditor | [VersionControlSystem.h:L427](../../SparkEditor/Source/VersionControl/VersionControlSystem.h#L427) | Detect merge conflicts |
 | `DetectPipeMode` | function | SparkConsole | [ConsoleApp.h:L53](../../SparkConsole/src/ConsoleApp.h#L53) |  |
 | `DetectXeSSAvailability` | function | SparkEngine | [UpscalingSystem.cpp:L164](../../SparkEngine/Source/Graphics/UpscalingSystem.cpp#L164) | Check if Intel XeSS is available on the system |
-| `DetermineAssetType` | function | SparkEditor | [AssetDatabase.h:L238](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L238) | Determine asset type from file extension |
 | `DetermineSourceLanguage` | function | SparkEngine | [ShaderHotReload.h:L354](../../SparkEngine/Source/Graphics/ShaderHotReload.h#L354) |  |
 | `DetermineVisibility` | function | SparkEngine | [PortalCulling.h:L206](../../SparkEngine/Source/Graphics/PortalCulling.h#L206) | Determine which cells are visible from the camera. |
 | `DetermineVisibility` | function | Tests | [TestPortalCulling.cpp:L141](../../Tests/TestPortalCulling.cpp#L141) |  |
@@ -8063,7 +7889,6 @@
 | `DisconnectClient` | function | Tests | [TestServerMockClient.cpp:L215](../../Tests/TestServerMockClient.cpp#L215) |  |
 | `DisconnectFromEngine` | function | SparkEditor | [SparkEngineIntegration.h:L226](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L226) | Disconnect from engine |
 | `DisconnectNetwork` | function | GameModules | [Game.h:L535](../../GameModules/SparkGameFPS/Source/Game/Game.h#L535) | Disconnect from current server or stop hosting |
-| `DisconnectSocket` | function | SparkEditor | [MaterialEditor.h:L355](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L355) | Disconnect sockets |
 | `DisconnectStandaloneBroker` | function | SparkEditor | [CollaborativeEditSession.h:L345](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L345) |  |
 | `Discover` | function | SparkEditor | [EditorPluginDiscovery.h:L43](../../SparkEditor/Source/Core/EditorPluginDiscovery.h#L43) | Resolve and enumerate native plugins from one explicit project-owned directory. |
 | `DiscoveredModule` | struct | SparkEngine | [ModuleManager.h:L45](../../SparkEngine/Source/Core/ModuleManager.h#L45) | Metadata about a module DLL discovered on disk (before loading) |
@@ -8455,7 +8280,6 @@
 | `DrawStatusLine` | function | GameModules | [TFOutfitPanel.h:L65](../../GameModules/SparkGameMMOFPS/Source/UI/TFOutfitPanel.h#L65) |  |
 | `DrawSuitRow` | function | GameModules | [TFLoadoutScreen.h:L76](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoadoutScreen.h#L76) |  |
 | `DrawTerrain` | function | GameModules | [TFWorldSetup.h:L242](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.h#L242) |  |
-| `DrawText` | function | GameModules | [Console.h:L41](../../GameModules/SparkGameFPS/Source/Game/Console.h#L41) |  |
 | `DrawText` | function | SparkEngine | [StartupSplash.cpp:L326](../../SparkEngine/Source/Core/StartupSplash.cpp#L326) |  |
 | `DrawText` | function | SparkEngine | [MSDFTextRenderer.h:L177](../../SparkEngine/Source/Graphics/MSDFTextRenderer.h#L177) | Queue text for rendering (batched, rendered on Flush) |
 | `DrawText3D` | function | SparkEngine | [DebugDraw.h:L255](../../SparkEngine/Source/Utils/DebugDraw.h#L255) | Draw a world-space text label |
@@ -9062,7 +8886,6 @@
 | `EncryptPacket` | function | SparkEngine | [NetworkEncryption.cpp:L108](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp#L108) |  |
 | `EncryptPacket` | function | SparkEngine | [NetworkEncryption.h:L79](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h#L79) |  |
 | `EncryptPacket` | function | Tests | [TestNetworkEncryption.cpp:L91](../../Tests/TestNetworkEncryption.cpp#L91) |  |
-| `End` | function | SparkEditor | [ProfilerTypes.h:L297](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L297) | RAII profiling scope helper |
 | `End` | function | SparkEngine | [MovieRenderPipeline.h:L168](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L168) |  |
 | `end` | function | SparkEngine | [EnumUtils.h:L191](../../SparkEngine/Source/Enums/EnumUtils.h#L191) |  |
 | `End` | function | SparkEngine | [SpriteBatch.h:L202](../../SparkEngine/Source/Graphics/2D/SpriteBatch.h#L202) |  |
@@ -9599,8 +9422,6 @@
 | `EvAlertEnded` | struct | GameModules | [TFAlertSystem.h:L132](../../GameModules/SparkGameMMOFPS/Source/World/TFAlertSystem.h#L132) |  |
 | `EvAlertScoreTick` | struct | GameModules | [TFAlertSystem.h:L128](../../GameModules/SparkGameMMOFPS/Source/World/TFAlertSystem.h#L128) |  |
 | `EvAlertStarted` | struct | GameModules | [TFAlertSystem.h:L123](../../GameModules/SparkGameMMOFPS/Source/World/TFAlertSystem.h#L123) |  |
-| `Evaluate` | function | SparkEditor | [AnimationTimelineTypes.h:L80](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L80) | Evaluate curve at given time |
-| `Evaluate` | function | SparkEditor | [AnimationTimelineTypes.h:L190](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L190) | Evaluate animation at current time |
 | `Evaluate` | function | SparkEngine | [AnimNotify.h:L222](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L222) |  |
 | `Evaluate` | function | SparkEngine | [BlendSpace.h:L143](../../SparkEngine/Source/Engine/Animation/BlendSpace.h#L143) |  |
 | `Evaluate` | function | SparkEngine | [Sequencer.h:L149](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L149) |  |
@@ -9852,7 +9673,6 @@
 | `ExecuteActions` | function | SparkEngine | [EventResponseSystem.h:L216](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h#L216) | Execute a list of actions in the context of an entity |
 | `ExecuteActions` | function | Tests | [TestEventResponseSystem.cpp:L159](../../Tests/TestEventResponseSystem.cpp#L159) |  |
 | `ExecuteCallback` | alias | SparkEngine | [RenderGraphPass.h:L44](../../SparkEngine/Source/Graphics/RenderGraphPass.h#L44) |  |
-| `ExecuteCommand` | function | GameModules | [Console.h:L204](../../GameModules/SparkGameFPS/Source/Game/Console.h#L204) | Parse and execute a command line |
 | `ExecuteCommand` | function | SparkConsole | [CommandRegistry.h:L62](../../SparkConsole/src/CommandRegistry.h#L62) | Execute a registered command by name. |
 | `ExecuteCommand` | function | SparkConsole | [ConsoleApp.h:L85](../../SparkConsole/src/ConsoleApp.h#L85) |  |
 | `ExecuteCommand` | function | SparkEditor | [EditorUI.h:L215](../../SparkEditor/Source/Core/EditorUI.h#L215) |  |
@@ -10437,10 +10257,6 @@
 | `file` | function | SparkBuild | [DownloaderTests.cpp:L118](../../SparkBuild/tests/DownloaderTests.cpp#L118) |  |
 | `file` | function | SparkBuild | [ProcessRunnerTests.cpp:L61](../../SparkBuild/tests/ProcessRunnerTests.cpp#L61) |  |
 | `file` | function | SparkBuild | [ProcessRunnerTests.cpp:L71](../../SparkBuild/tests/ProcessRunnerTests.cpp#L71) |  |
-| `file` | function | SparkEditor | [AnimationClipManager.cpp:L132](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L132) |  |
-| `file` | function | SparkEditor | [AnimationClipManager.cpp:L240](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L240) |  |
-| `file` | function | SparkEditor | [AssetDatabase.cpp:L500](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L500) |  |
-| `file` | function | SparkEditor | [AssetDatabase.cpp:L599](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L599) |  |
 | `file` | function | SparkEditor | [AdvancedAssetPipeline.cpp:L850](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp#L850) |  |
 | `file` | function | SparkEditor | [AdvancedAssetPipeline.cpp:L907](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp#L907) |  |
 | `file` | function | SparkEditor | [AdvancedAssetPipelineUI.cpp:L787](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipelineUI.cpp#L787) |  |
@@ -10465,10 +10281,6 @@
 | `file` | function | SparkEditor | [LevelStreamingSystem.cpp:L253](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.cpp#L253) |  |
 | `file` | function | SparkEditor | [LevelStreamingSystem.cpp:L337](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.cpp#L337) |  |
 | `file` | function | SparkEditor | [LevelStreamingSystem.cpp:L1158](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.cpp#L1158) |  |
-| `file` | function | SparkEditor | [LightingTools.cpp:L471](../../SparkEditor/Source/Lighting/LightingTools.cpp#L471) |  |
-| `file` | function | SparkEditor | [LightingTools.cpp:L555](../../SparkEditor/Source/Lighting/LightingTools.cpp#L555) |  |
-| `file` | function | SparkEditor | [MaterialEditor.cpp:L91](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L91) |  |
-| `file` | function | SparkEditor | [MaterialEditor.cpp:L121](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L121) |  |
 | `file` | function | SparkEditor | [BasicMaterialEditorPanel.cpp:L249](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.cpp#L249) |  |
 | `file` | function | SparkEditor | [BasicMaterialEditorPanel.cpp:L433](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.cpp#L433) |  |
 | `file` | function | SparkEditor | [BuildPipeline.cpp:L412](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L412) |  |
@@ -10611,7 +10423,6 @@
 | `FileLogTarget` | function | SparkEditor | [EditorLogger.h:L139](../../SparkEditor/Source/Core/EditorLogger.h#L139) | File output target |
 | `FileLogTarget::Flush` | method | SparkEditor | [EditorLogger.cpp:L49](../../SparkEditor/Source/Core/EditorLogger.cpp#L49) |  |
 | `FileLogTarget::WriteLog` | method | SparkEditor | [EditorLogger.cpp:L38](../../SparkEditor/Source/Core/EditorLogger.cpp#L38) |  |
-| `fileName` | function | SparkEditor | [AssetDatabase.cpp:L695](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L695) |  |
 | `filename` | function | SparkEditor | [DedicatedServerProcessController.cpp:L100](../../SparkEditor/Source/Panels/DedicatedServerProcessController.cpp#L100) |  |
 | `FileName` | function | SparkInstaller | [InstallState.h:L23](../../SparkInstaller/src/InstallState.h#L23) |  |
 | `fileno` | function | Tests | [TestSparkError.cpp:L46](../../Tests/TestSparkError.cpp#L46) |  |
@@ -10629,10 +10440,7 @@
 | `FileState` | struct | SparkEngine | [ScriptHotReload.h:L151](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L151) |  |
 | `FileStatus` | enum | SparkEditor | [VersionControlEnums.h:L54](../../SparkEditor/Source/Enums/VersionControlEnums.h#L54) | File status in version control |
 | `fileStream` | function | SparkEngine | [PBRMaterialLightingWindows.cpp:L59](../../SparkEngine/Source/Graphics/PBRMaterialLightingWindows.cpp#L59) |  |
-| `FileSystemChange` | struct | SparkEditor | [AssetDatabase.h:L56](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L56) | File system change notification |
-| `FileSystemEvent` | enum | SparkEditor | [AssetDatabase.h:L45](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L45) | File system event types |
 | `FileSystemMonitoringFunction` | function | SparkEditor | [AdvancedAssetPipeline.h:L458](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L458) | File system monitoring thread function |
-| `FileSystemMonitoringThread` | function | SparkEditor | [AssetDatabase.h:L264](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L264) | File system monitoring thread function |
 | `FILETIME` | struct | SparkEngine | [PlatformD3DStubs.h:L83](../../SparkEngine/Source/Core/PlatformD3DStubs.h#L83) |  |
 | `fileUtf8` | function | SparkEngine | [Model.cpp:L30](../../SparkEngine/Source/Game/Model.cpp#L30) |  |
 | `fileUtf8` | function | SparkEngine | [Model.cpp:L174](../../SparkEngine/Source/Game/Model.cpp#L174) |  |
@@ -10755,7 +10563,6 @@
 | `FindContainingTriangle` | function | Tests | [TestNavMesh.cpp:L363](../../Tests/TestNavMesh.cpp#L363) |  |
 | `FindCoverFromThreat` | function | SparkEngine | [CoverSystem.h:L127](../../SparkEngine/Source/Engine/AI/CoverSystem.h#L127) | Find cover points that protect from a specific threat position. |
 | `FindCoverFromThreat` | function | Tests | [TestCoverSystem.cpp:L83](../../Tests/TestCoverSystem.cpp#L83) |  |
-| `FindCurve` | function | SparkEditor | [AnimationTimelineTypes.h:L141](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L141) | Find curve by property path |
 | `FindCycle` | function | Tests | [TestDeadlockDetector.cpp:L121](../../Tests/TestDeadlockDetector.cpp#L121) |  |
 | `FindDedicatedServerHostExecutable` | function | SparkEditor | [BuildPipeline.cpp:L538](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L538) |  |
 | `FindDuplicateIssue` | function | SparkEngine | [CrashReportUploader.cpp:L269](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L269) |  |
@@ -10778,8 +10585,6 @@
 | `FindItem` | function | GameModules | [InventorySystem.h:L338](../../GameModules/SparkGameFPS/Source/Game/InventorySystem.h#L338) | Find the first slot index containing a given item |
 | `FindItem` | function | Tests | [TestInventorySystem.cpp:L153](../../Tests/TestInventorySystem.cpp#L153) |  |
 | `FindKey` | function | SparkEditor | [EditorLayoutManager.cpp:L325](../../SparkEditor/Source/Core/EditorLayoutManager.cpp#L325) |  |
-| `FindKeyframe` | function | SparkEditor | [AnimationTimelineTypes.h:L100](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L100) | Find keyframe at time |
-| `FindKeyframeAtPosition` | function | SparkEditor | [AnimationTimeline.h:L364](../../SparkEditor/Source/Animation/AnimationTimeline.h#L364) | Find keyframe at screen position |
 | `FindKeyIndex` | function | SparkEngine | [SkeletalAnimation.cpp:L21](../../SparkEngine/Source/Engine/Animation/SkeletalAnimation.cpp#L21) |  |
 | `FindLauncherTemplatesDirectory` | function | SparkLauncher | [LauncherPaths.cpp:L51](../../SparkLauncher/src/LauncherPaths.cpp#L51) |  |
 | `FindLauncherTemplatesDirectory` | function | SparkLauncher | [LauncherPaths.h:L16](../../SparkLauncher/src/LauncherPaths.h#L16) | Locate project templates for development and installed layouts. |
@@ -10787,7 +10592,6 @@
 | `FindLegacyField` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L77](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L77) |  |
 | `FindLink` | function | SparkEngine | [NavMeshLink.h:L92](../../SparkEngine/Source/Engine/AI/NavMeshLink.h#L92) |  |
 | `FindLinksNear` | function | SparkEngine | [NavMeshLink.h:L101](../../SparkEngine/Source/Engine/AI/NavMeshLink.h#L101) | Find all enabled links within radius of a position. |
-| `findLock` | function | SparkEditor | [AssetDatabase.cpp:L904](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L904) |  |
 | `FindMainEcsCamera` | function | SparkEngine | [SubsystemConsoleCommands.cpp:L39](../../SparkEngine/Source/Core/SubsystemConsoleCommands.cpp#L39) |  |
 | `FindMatchingBrace` | function | SparkEngine | [UILayoutExtensions.h:L244](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L244) |  |
 | `FindMatchingBracket` | function | SparkEngine | [UILayoutExtensions.cpp:L436](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.cpp#L436) |  |
@@ -10796,7 +10600,6 @@
 | `FindMember` | function | GameModules | [TFOutfitStore.h:L79](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.h#L79) |  |
 | `FindMember` | function | GameModules | [TFOutfitStore.h:L80](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.h#L80) |  |
 | `FindMemoryType` | function | SparkEngine | [VulkanDevice.h:L459](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L459) |  |
-| `FindMissingAssetPath` | function | SparkEditor | [AssetDatabase.h:L277](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L277) | Handle file system change |
 | `FindModuleMatches` | function | SparkLauncher | [LauncherProcess.cpp:L162](../../SparkLauncher/src/LauncherProcess.cpp#L162) |  |
 | `FindNamedEntity` | function | Tests | [Test_persistence_SaveSystem.cpp:L337](../../Tests/harden/Test_persistence_SaveSystem.cpp#L337) |  |
 | `FindNamedEntity` | function | Tests | [Test_persistence_SaveSystem.cpp:L353](../../Tests/harden/Test_persistence_SaveSystem.cpp#L353) |  |
@@ -10811,7 +10614,6 @@
 | `FindNode` | function | SparkEngine | [SceneManager.h:L285](../../SparkEngine/Source/SceneManager/SceneManager.h#L285) | Find the first node with the given name and return its index. |
 | `FindNode` | function | Tests | [TestSceneManager.cpp:L148](../../Tests/TestSceneManager.cpp#L148) |  |
 | `FindNode` | function | Tests | [TestVisualScriptCompiler.cpp:L125](../../Tests/TestVisualScriptCompiler.cpp#L125) |  |
-| `FindNodeAtPosition` | function | SparkEditor | [MaterialEditor.h:L496](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L496) | Find node at position |
 | `FindNumberValue` | function | SparkEditor | [BasicMaterialEditorPanel.cpp:L108](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.cpp#L108) | Extract a scalar numeric value for @p key. Returns false if absent or non-numeric. |
 | `FindObject` | function | SparkEditor | [SceneFile.h:L43](../../SparkEditor/Source/SceneSystem/SceneFile.h#L43) | Find object by ID |
 | `FindObjectsByName` | function | SparkEditor | [SceneFile.h:L50](../../SparkEditor/Source/SceneSystem/SceneFile.h#L50) | Find objects by name |
@@ -10861,7 +10663,6 @@
 | `FindShader` | function | SparkEngine | [AsyncComputeScheduler.h:L193](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.h#L193) |  |
 | `FindSkyanchorSpawn` | function | GameModules | [TFPlayerSystem.h:L104](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystem.h#L104) |  |
 | `FindSkyanchorSpawn` | function | GameModules | [TFPlayerSystemSpawn.cpp:L111](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystemSpawn.cpp#L111) |  |
-| `FindSocketAtPosition` | function | SparkEditor | [MaterialEditor.h:L506](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L506) | Find socket at position |
 | `FindSparkAutomationExecutable` | function | SparkEditor | [BuildPipeline.h:L100](../../SparkEditor/Source/Panels/BuildPipeline.h#L100) | Locate the shipped SparkAutomation executable using bounded paths. |
 | `FindSparkCookerExecutable` | function | SparkEditor | [BuildPipeline.h:L97](../../SparkEditor/Source/Panels/BuildPipeline.h#L97) | Locate the shipped SparkCooker executable using bounded paths. |
 | `FindSparkEnginePackageDirectory` | function | SparkEditor | [BuildPipeline.h:L121](../../SparkEditor/Source/Panels/BuildPipeline.h#L121) | Locate the installed SparkEngine CMake package used by builds. |
@@ -10876,7 +10677,6 @@
 | `FindTextureSlot` | function | SparkEditor | [MaterialEditorPanel.h:L154](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L154) | Find a texture slot by name. |
 | `FindTextureSlot` | function | SparkEngine | [MaterialDefinition.h:L212](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L212) | Find a texture slot declaration by name. |
 | `FindToolWeapon` | function | GameModules | [TFWeaponSystem.h:L182](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystem.h#L182) |  |
-| `FindTrack` | function | SparkEditor | [AnimationTimelineTypes.h:L184](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L184) | Find track by object ID |
 | `FindType` | function | SparkEngine | [Reflection.h:L214](../../SparkEngine/Source/Core/Reflection.h#L214) | Look up type metadata by TypeId. Returns nullptr if not registered. |
 | `FindType` | function | Tests | [TestReflection.cpp:L99](../../Tests/TestReflection.cpp#L99) |  |
 | `FindTypeByName` | function | SparkEngine | [Reflection.h:L221](../../SparkEngine/Source/Core/Reflection.h#L221) | Look up type metadata by name. Returns nullptr if not registered. |
@@ -11008,7 +10808,6 @@
 | `flat` | function | Tests | [TestFoliageSystem.cpp:L199](../../Tests/TestFoliageSystem.cpp#L199) |  |
 | `FlatBuffer` | function | Tests | [TestSSAOTemporalFilter.cpp:L25](../../Tests/TestSSAOTemporalFilter.cpp#L25) |  |
 | `FlattenCubicBezier` | function | SparkEngine | [SVGRenderer.h:L602](../../SparkEngine/Source/Graphics/SVGRenderer.h#L602) | Recursively flatten a cubic Bezier curve |
-| `FlattenHeight` | function | GameModules | [Terrain.h:L136](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L136) | Flatten terrain at a world position to a target height |
 | `FlattenPath` | function | SparkEngine | [SVGRenderer.h:L367](../../SparkEngine/Source/Graphics/SVGRenderer.h#L367) |  |
 | `FlattenQuadBezier` | function | SparkEngine | [SVGRenderer.h:L649](../../SparkEngine/Source/Graphics/SVGRenderer.h#L649) | Recursively flatten a quadratic Bezier curve |
 | `Flee` | function | GameModules | [RPGDemoSession.h:L39](../../GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.h#L39) |  |
@@ -11394,7 +11193,6 @@
 | `FracturePieceInfo` | struct | SparkEditor | [DestructionEditorPanel.h:L33](../../SparkEditor/Source/Panels/DestructionEditorPanel.h#L33) |  |
 | `FragDef` | function | GameModules | [TFGrenadeSystem.cpp:L199](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystem.cpp#L199) |  |
 | `FragDef` | function | GameModules | [TFGrenadeSystem.h:L212](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystem.h#L212) |  |
-| `FrameAll` | function | SparkEditor | [AnimationTimeline.h:L208](../../SparkEditor/Source/Animation/AnimationTimeline.h#L208) | Frame all keyframes in view |
 | `FrameAllocator` | class | SparkEngine | [FrameAllocator.h:L38](../../SparkEngine/Source/Utils/FrameAllocator.h#L38) |  |
 | `FrameAllocator` | function | SparkEngine | [FrameAllocator.h:L42](../../SparkEngine/Source/Utils/FrameAllocator.h#L42) |  |
 | `FrameBeginEvent` | struct | SparkEngine | [EventSystem.h:L144](../../SparkEngine/Source/Engine/Events/EventSystem.h#L144) | Fired at the beginning of each frame before any systems update. |
@@ -11415,7 +11213,6 @@
 | `FrameParams` | struct | SparkEngine | [MetalRayTracing.h:L121](../../SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.h#L121) | Per-frame uniforms consumed by the RT compute kernels. |
 | `FrameProfileData` | struct | SparkEditor | [ProfilerTypes.h:L152](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L152) | Frame profiling data |
 | `FrameResources` | struct | SparkEngine | [D3D12Types.h:L536](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L536) | Resources that are duplicated for each frame in flight. |
-| `FrameSelected` | function | SparkEditor | [AnimationTimeline.h:L203](../../SparkEditor/Source/Animation/AnimationTimeline.h#L203) | Frame selected keyframes in view |
 | `FrameSnapshot` | struct | SparkEngine | [FrameInspector.h:L68](../../SparkEngine/Source/Utils/FrameInspector.h#L68) | Snapshot of key engine state at a specific frame |
 | `FrameState` | enum | SparkEngine | [FrameInspector.h:L57](../../SparkEngine/Source/Utils/FrameInspector.h#L57) | Frame execution state |
 | `FrameStats` | struct | Tests | [TestEngineMonitor.cpp:L95](../../Tests/TestEngineMonitor.cpp#L95) |  |
@@ -11424,7 +11221,6 @@
 | `FrameTimeRingBuffer` | class | Tests | [TestPerformanceStats.cpp:L17](../../Tests/TestPerformanceStats.cpp#L17) |  |
 | `FrameTimeSample` | struct | SparkEngine | [DebugOverlay.h:L88](../../SparkEngine/Source/Utils/DebugOverlay.h#L88) | Frame time sample for mini-graph |
 | `FrameTimingHistory` | struct | SparkEngine | [Profiler.h:L64](../../SparkEngine/Source/Utils/Profiler.h#L64) | Frame timing history for graphs |
-| `FrameToTime` | function | SparkEditor | [AnimationTimelineTypes.h:L216](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L216) | Convert frame number to time |
 | `Free` | function | SparkEngine | [D3D12Types.h:L99](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L99) |  |
 | `Free` | function | SparkEngine | [RHIHandlePool.h:L172](../../SparkEngine/Source/Graphics/RHI/RHIHandlePool.h#L172) | Free a handle, incrementing the generation counter. |
 | `Free` | function | SparkEngine | [LockFreeRingAllocator.h:L95](../../SparkEngine/Source/Utils/LockFreeRingAllocator.h#L95) | Advance the read position past one allocation. |
@@ -11639,7 +11435,6 @@
 | `GainExperience` | function | GameModules | [ARPGHeroSystem.h:L94](../../GameModules/SparkGameARPG/Source/Hero/ARPGHeroSystem.h#L94) |  |
 | `Game` | class | GameModules | [AdvancedConsoleCommands.h:L9](../../GameModules/SparkGameFPS/Source/Console/AdvancedConsoleCommands.h#L9) | Console command declarations for unified GraphicsEngine |
 | `Game` | class | GameModules | [SparkGameFPS.h:L24](../../GameModules/SparkGameFPS/Source/Core/SparkGameFPS.h#L24) |  |
-| `Game` | class | GameModules | [ArenaBuilder.h:L22](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L22) |  |
 | `Game` | class | GameModules | [Game.h:L91](../../GameModules/SparkGameFPS/Source/Game/Game.h#L91) |  |
 | `Game` | class | GameModules | [WaveSpawner.h:L22](../../GameModules/SparkGameFPS/Source/Game/WaveSpawner.h#L22) |  |
 | `Game` | function | SparkEngine | [EngineSettings.h:L854](../../SparkEngine/Source/Core/EngineSettings.h#L854) |  |
@@ -11996,7 +11791,6 @@
 | `GenerateGlyphQuads` | function | SparkEngine | [MSDFTextRenderer.h:L191](../../SparkEngine/Source/Graphics/MSDFTextRenderer.h#L191) | Measure text dimensions without rendering |
 | `GenerateGrid` | function | SparkEngine | [PCSSshadows.h:L91](../../SparkEngine/Source/Graphics/PCSSshadows.h#L91) | Generate a regular grid pattern (fallback) |
 | `GenerateGrid` | function | SparkEngine | [WaterRenderer.h:L230](../../SparkEngine/Source/Graphics/WaterRenderer.h#L230) | Generate a flat tessellated grid for a water plane. |
-| `GenerateGUID` | function | SparkEditor | [AssetDatabase.h:L245](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L245) | Generate GUID for asset |
 | `GenerateHaltonSequence` | function | SparkEngine | [UpscalingSystem.cpp:L59](../../SparkEngine/Source/Graphics/UpscalingSystem.cpp#L59) |  |
 | `GenerateHeightmap` | function | SparkEngine | [ProceduralGenerator.h:L213](../../SparkEngine/Source/Engine/Procedural/ProceduralGenerator.h#L213) | Generate a noise-based heightmap |
 | `GenerateHLSL` | function | Tests | [TestShaderGraphCompiler.cpp:L284](../../Tests/TestShaderGraphCompiler.cpp#L284) |  |
@@ -12011,7 +11805,6 @@
 | `GenerateKey` | function | SparkEngine | [NetworkSecurity.h:L166](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L166) | Generate non-cryptographic prototype key material. |
 | `GenerateKeyStream` | function | SparkEngine | [NetworkEncryption.cpp:L53](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp#L53) |  |
 | `GenerateKeyStream` | function | Tests | [TestNetworkEncryption.cpp:L56](../../Tests/TestNetworkEncryption.cpp#L56) |  |
-| `GenerateLightProbes` | function | SparkEditor | [LightingTools.h:L348](../../SparkEditor/Source/Lighting/LightingTools.h#L348) | Generate light probes |
 | `GenerateLODChain` | function | SparkEngine | [MeshLOD.h:L128](../../SparkEngine/Source/Graphics/MeshLOD.h#L128) |  |
 | `GenerateLODChain` | function | Tests | [TestLODGenerator.cpp:L128](../../Tests/TestLODGenerator.cpp#L128) |  |
 | `GenerateManifest` | function | Tests | [TestModuleDiscovery.cpp:L21](../../Tests/TestModuleDiscovery.cpp#L21) |  |
@@ -12038,7 +11831,6 @@
 | `GenerateSessionKey` | function | SparkEngine | [NetworkEncryption.h:L54](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h#L54) | Generate pseudo-random state for the XOR prototype |
 | `GenerateSessionKey` | function | Tests | [TestNetworkEncryption.cpp:L36](../../Tests/TestNetworkEncryption.cpp#L36) |  |
 | `GenerateSessionToken` | function | GameModules | [MMOAccountSystem.h:L149](../../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h#L149) |  |
-| `GenerateShaderCode` | function | SparkEditor | [MaterialEditor.h:L468](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L468) | Generate shader code for the material |
 | `GenerateSlots` | function | SparkEngine | [FormationSystem.h:L199](../../SparkEngine/Source/Engine/AI/FormationSystem.h#L199) | Generate slot offsets for a given type, count, and spacing. |
 | `GenerateSphere` | function | SparkEngine | [CSGSystem.h:L496](../../SparkEngine/Source/Engine/LevelDesign/CSGSystem.h#L496) | Generate a sphere solid centered at origin |
 | `GenerateSpriteQuad` | function | SparkEngine | [SpriteBatch.h:L292](../../SparkEngine/Source/Graphics/2D/SpriteBatch.h#L292) |  |
@@ -12263,7 +12055,6 @@
 | `GetAllEntities` | function | SparkEditor | [SparkEngineIntegration.h:L307](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L307) | Get all entities in scene |
 | `GetAllItems` | function | GameModules | [InventorySystem.h:L167](../../GameModules/SparkGameFPS/Source/Game/InventorySystem.h#L167) | Get all registered item definitions |
 | `GetAllKeys` | function | SparkEngine | [LocalizationSystem.h:L84](../../SparkEngine/Source/Engine/Localization/LocalizationSystem.h#L84) | Return all keys in this table. |
-| `GetAllLights` | function | SparkEditor | [LightingTools.h:L313](../../SparkEditor/Source/Lighting/LightingTools.h#L313) | Get all lights |
 | `GetAllLocks` | function | SparkEditor | [CollaborativeEditSession.h:L302](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L302) |  |
 | `GetAllMods` | function | SparkEngine | [ModSystem.h:L130](../../SparkEngine/Source/Engine/Modding/ModSystem.h#L130) | Get all discovered mods. |
 | `GetAllocator` | function | SparkEngine | [D3D12Types.h:L501](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L501) | Flushes any pending resource barriers recorded via |
@@ -12343,13 +12134,10 @@
 | `GetAsset` | function | SparkEngine | [AssetPipeline.h:L400](../../SparkEngine/Source/Graphics/AssetPipeline.h#L400) |  |
 | `GetAsset` | function | SparkEngine | [AssetServiceClient.h:L40](../../SparkEngine/Source/Utils/AssetServiceClient.h#L40) | Look up a compiled asset blob by logical path + platform. |
 | `GetAsset` | function | Tests | [TestAssetPipelineCache.cpp:L107](../../Tests/TestAssetPipelineCache.cpp#L107) |  |
-| `GetAssetByGUID` | function | SparkEditor | [AssetDatabase.h:L141](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L141) | Get asset by GUID |
-| `GetAssetByPath` | function | SparkEditor | [AssetDatabase.h:L134](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L134) | Get asset by path |
 | `GetAssetCount` | function | SparkEditor | [AssetAuditGraph.h:L376](../../SparkEditor/Source/Panels/AssetAuditGraph.h#L376) | Get total asset count |
 | `GetAssetCount` | function | SparkEngine | [AssetIntegration.h:L183](../../SparkEngine/Source/Core/AssetIntegration.h#L183) | Get the number of registered assets. |
 | `GetAssetCount` | function | Tests | [TestAssetDependencyGraph.cpp:L110](../../Tests/TestAssetDependencyGraph.cpp#L110) |  |
 | `GetAssetCount` | function | Tests | [TestAssetPipelineCache.cpp:L161](../../Tests/TestAssetPipelineCache.cpp#L161) |  |
-| `GetAssetDependencies` | function | SparkEditor | [AssetDatabase.h:L183](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L183) | Get asset dependencies |
 | `GetAssetLoader` | function | SparkEngine | [SeamlessAreaManager.h:L153](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.h#L153) | Get the area asset loader (for diagnostics or direct access) |
 | `GetAssetLoader` | function | SparkEngine | [SeamlessAreaManager.h:L154](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.h#L154) | Get the area asset loader (for diagnostics or direct access) |
 | `GetAssetMetadata` | function | SparkEditor | [AdvancedAssetPipeline.h:L326](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L326) | Get asset metadata |
@@ -12364,9 +12152,7 @@
 | `GetAssetRegistry` | function | SparkSDK | [IEngineContext.h:L206](../../SparkSDK/Include/Spark/IEngineContext.h#L206) | Get the asset registry for handle-based asset lookups |
 | `GetAssetRequest` | struct | SparkEngine | [AssetServiceProtocol.h:L58](../../SparkEngine/Source/Utils/AssetServiceProtocol.h#L58) |  |
 | `GetAssetResponse` | struct | SparkEngine | [AssetServiceProtocol.h:L63](../../SparkEngine/Source/Utils/AssetServiceProtocol.h#L63) |  |
-| `GetAssets` | function | SparkEditor | [AssetDatabase.h:L127](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L127) | Get all assets |
 | `GetAssets` | function | SparkEditor | [AssetBrowserPanel.h:L100](../../SparkEditor/Source/Panels/AssetBrowserPanel.h#L100) | Wire live basic-path cache invalidation after an import. |
-| `GetAssetsByType` | function | SparkEditor | [AssetDatabase.h:L169](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L169) | Get assets by type |
 | `GetAssetsExceedingBudget` | function | Tests | [TestAssetDependencyGraph.cpp:L101](../../Tests/TestAssetDependencyGraph.cpp#L101) |  |
 | `GetAssetType` | function | SparkEditor | [AdvancedAssetPipeline.h:L59](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L59) | Get asset type this processor handles |
 | `GetAssetType` | function | SparkEditor | [AdvancedAssetPipeline.h:L102](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L102) | Texture asset processor |
@@ -12377,7 +12163,6 @@
 | `GetAtlas` | function | SparkEngine | [FontSystem.h:L405](../../SparkEngine/Source/Engine/Text/FontSystem.h#L405) | Get the atlas texture data for a font (for GPU upload) |
 | `GetAtlasSize` | function | SparkEngine | [ShadowAtlas.h:L94](../../SparkEngine/Source/Graphics/ShadowAtlas.h#L94) | Get the atlas texture size in pixels |
 | `GetAtlasTexture` | function | SparkEngine | [ShadowAtlas.h:L117](../../SparkEngine/Source/Graphics/ShadowAtlas.h#L117) | Get the depth atlas texture for sampling in lighting shaders |
-| `GetAtmosphereSettings` | function | SparkEditor | [LightingTools.h:L367](../../SparkEditor/Source/Lighting/LightingTools.h#L367) | Get atmosphere settings |
 | `GetAttacksProcessed` | function | GameModules | [ARPGCombatSystem.h:L85](../../GameModules/SparkGameARPG/Source/Combat/ARPGCombatSystem.h#L85) |  |
 | `GetAttempts` | function | Tests | [TestSelfRecovery.cpp:L216](../../Tests/TestSelfRecovery.cpp#L216) |  |
 | `GetAttenuation` | function | SparkEngine | [LightingSystem.h:L118](../../SparkEngine/Source/Graphics/LightingSystem.h#L118) |  |
@@ -12415,7 +12200,6 @@
 | `GetAvailableGenerators` | function | SparkBuild | [Config.cpp:L140](../../SparkBuild/src/Config.cpp#L140) |  |
 | `GetAvailableGenerators` | function | SparkBuild | [Config.h:L79](../../SparkBuild/src/Config.h#L79) |  |
 | `GetAvailableLanguages` | function | SparkEngine | [LocalizationSystem.h:L133](../../SparkEngine/Source/Engine/Localization/LocalizationSystem.h#L133) | Get a list of all loaded language codes. |
-| `GetAvailableLightingProfiles` | function | SparkEditor | [LightingTools.h:L422](../../SparkEditor/Source/Lighting/LightingTools.h#L422) | Get available lighting profiles |
 | `GetAvailableRecipes` | function | GameModules | [MMOCraftingSystem.h:L87](../../GameModules/SparkGameMMO/Source/Crafting/MMOCraftingSystem.h#L87) |  |
 | `GetAvailableRewards` | function | GameModules | [MMOReputationSystem.h:L82](../../GameModules/SparkGameMMO/Source/Reputation/MMOReputationSystem.h#L82) |  |
 | `GetAvailableScenes` | function | GameModules | [Game.h:L503](../../GameModules/SparkGameFPS/Source/Game/Game.h#L503) | Get list of available scenes |
@@ -12446,7 +12230,6 @@
 | `GetAxis` | function | SparkEngine | [BVHAccelerator.h:L359](../../SparkEngine/Source/Graphics/BVHAccelerator.h#L359) |  |
 | `GetAxis1D` | function | SparkEngine | [InputActionSystem.h:L467](../../SparkEngine/Source/Input/InputActionSystem.h#L467) | Get the current 1D axis value for an action |
 | `GetAxis2D` | function | SparkEngine | [InputActionSystem.h:L474](../../SparkEngine/Source/Input/InputActionSystem.h#L474) | Get the current 2D axis value for an action |
-| `GetAxisColor` | function | SparkEditor | [GizmoSystem.h:L378](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L378) | Get color for gizmo axis |
 | `GetAxisCount` | function | Tests | [TestInputSystem.cpp:L92](../../Tests/TestInputSystem.cpp#L92) |  |
 | `GetAxisValue` | function | Tests | [TestInputSystem.cpp:L68](../../Tests/TestInputSystem.cpp#L68) |  |
 | `GetBackBuffer` | function | SparkEngine | [D3D11Device.h:L201](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L201) |  |
@@ -12562,7 +12345,6 @@
 | `GetBottlenecks` | function | SparkEditor | [PerformanceProfiler.h:L198](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L198) | Get detected bottlenecks |
 | `GetBoundingSphere` | function | GameModules | [Projectile.h:L160](../../GameModules/SparkGameFPS/Source/Projectiles/Projectile.h#L160) | Get the collision bounding sphere |
 | `GetBoundPort` | function | SparkEngine | [NetworkManager.h:L524](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L524) |  |
-| `GetBounds` | function | GameModules | [Terrain.h:L164](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L164) | Get the terrain bounding box |
 | `GetBoundWorld` | function | SparkEngine | [AngelScriptEngine.h:L263](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h#L263) | Get the currently bound World pointer. |
 | `GetBoundWorld` | function | Tests | [TestAngelScriptEngine.cpp:L209](../../Tests/TestAngelScriptEngine.cpp#L209) |  |
 | `GetBreakConditions` | function | SparkEngine | [FrameInspector.h:L388](../../SparkEngine/Source/Utils/FrameInspector.h#L388) | Get all break conditions (for UI display) |
@@ -12724,8 +12506,6 @@
 | `GetChildKillJob` | function | SparkEngine | [ProcessWin32Launch.cpp:L91](../../SparkEngine/Source/Utils/ProcessWin32Launch.cpp#L91) |  |
 | `GetChildObjects` | function | SparkEditor | [HierarchyPanel.h:L308](../../SparkEditor/Source/Panels/HierarchyPanel.h#L308) | Get child objects of a parent |
 | `GetChildren` | function | SparkEngine | [SceneGraph2D.h:L203](../../SparkEngine/Source/Engine/2D/SceneGraph2D.h#L203) |  |
-| `GetChildren` | function | Tests | [TestPrefabManager.cpp:L71](../../Tests/TestPrefabManager.cpp#L71) |  |
-| `GetChildren` | function | Tests | [TestPrefabManager.cpp:L72](../../Tests/TestPrefabManager.cpp#L72) |  |
 | `GetChromaticAberrationSettings` | function | SparkEngine | [PostProcessingPipeline.h:L138](../../SparkEngine/Source/Graphics/PostProcessingPipeline.h#L138) |  |
 | `GetChromaticAberrationSettings` | function | SparkEngine | [PostProcessingPipeline.h:L139](../../SparkEngine/Source/Graphics/PostProcessingPipeline.h#L139) |  |
 | `GetCinematic` | function | SparkEngine | [EngineContext.h:L259](../../SparkEngine/Source/Core/EngineContext.h#L259) |  |
@@ -12802,7 +12582,6 @@
 | `GetCombatRNG` | function | GameModules | [ARPGCombatSystem.cpp:L22](../../GameModules/SparkGameARPG/Source/Combat/ARPGCombatSystem.cpp#L22) |  |
 | `GetCombatStatusString` | function | GameModules | [ARPGCombatSystem.h:L86](../../GameModules/SparkGameARPG/Source/Combat/ARPGCombatSystem.h#L86) |  |
 | `GetComboState` | function | GameModules | [RPGCombatSystem.h:L104](../../GameModules/SparkGameRPG/Source/Combat/RPGCombatSystem.h#L104) |  |
-| `GetCommandCount` | function | GameModules | [Console.h:L179](../../GameModules/SparkGameFPS/Source/Game/Console.h#L179) | Get number of registered commands |
 | `GetCommandCount` | function | SparkEditor | [EditorAutomation.h:L396](../../SparkEditor/Source/Panels/EditorAutomation.h#L396) | Get registered command count |
 | `GetCommandCount` | function | SparkEditor | [EditorCommand.h:L116](../../SparkEditor/Source/UndoRedo/EditorCommand.h#L116) | Get number of sub-commands |
 | `GetCommandCount` | function | SparkEngine | [InGameConsole.h:L343](../../SparkEngine/Source/Utils/InGameConsole.h#L343) | Get registered command count |
@@ -12963,7 +12742,6 @@
 | `GetCurrentBytes` | function | SparkEngine | [MemoryDebugger.h:L347](../../SparkEngine/Source/Utils/MemoryDebugger.h#L347) | Get current allocated bytes |
 | `GetCurrentCameraState` | function | SparkEngine | [Sequencer.h:L302](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L302) |  |
 | `GetCurrentClassType` | function | GameModules | [HUDSystem.h:L392](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L392) | Get current class type for HUD rendering |
-| `GetCurrentClip` | function | SparkEditor | [AnimationTimeline.h:L113](../../SparkEditor/Source/Animation/AnimationTimeline.h#L113) | Get current animation clip |
 | `GetCurrentClip` | function | SparkEngine | [Sprite2DComponents.h:L134](../../SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h#L134) |  |
 | `GetCurrentClip` | function | Tests | [TestSprite2DComponents.cpp:L151](../../Tests/TestSprite2DComponents.cpp#L151) |  |
 | `GetCurrentClipName` | function | SparkEngine | [AnimationSystem.h:L179](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L179) | Get the clip name for the current state. |
@@ -13005,7 +12783,6 @@
 | `GetCurrentLayoutName` | function | SparkEditor | [EditorLayoutManager.h:L207](../../SparkEditor/Source/Core/EditorLayoutManager.h#L207) | Get the name of the most recently loaded/saved layout. |
 | `GetCurrentLevelIndex` | function | GameModules | [PlatformerLevelSystem.h:L128](../../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h#L128) | Get currently active level index |
 | `GetCurrentLevelStats` | function | GameModules | [PlatformerCollectibleSystem.h:L109](../../GameModules/SparkGamePlatformer/Source/Collectible/PlatformerCollectibleSystem.h#L109) | Get current level's collection stats |
-| `GetCurrentLODLevel` | function | GameModules | [Terrain.h:L173](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L173) |  |
 | `GetCurrentMap` | function | SparkEngine | [DedicatedServer.h:L251](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L251) | Get the name of the currently loaded map. |
 | `GetCurrentMap` | function | Tests | [TestDedicatedServer.cpp:L252](../../Tests/TestDedicatedServer.cpp#L252) |  |
 | `GetCurrentMemory` | function | SparkEngine | [AssetPipeline.h:L317](../../SparkEngine/Source/Graphics/AssetPipeline.h#L317) |  |
@@ -13114,7 +12891,6 @@
 | `GetData` | function | Tests | [TestDedicatedServer.cpp:L229](../../Tests/TestDedicatedServer.cpp#L229) |  |
 | `GetData` | function | Tests | [TestFreezeSystem.cpp:L79](../../Tests/TestFreezeSystem.cpp#L79) |  |
 | `GetData` | function | Tests | [TestNetBuffer.cpp:L149](../../Tests/TestNetBuffer.cpp#L149) |  |
-| `GetDatabaseStats` | function | SparkEditor | [AssetDatabase.h:L224](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L224) |  |
 | `GetDataPath` | function | SparkEditor | [DecorLayoutEditorPanel.h:L103](../../SparkEditor/Source/Panels/DecorLayoutEditorPanel.h#L103) | Absolute-ish path (after prefix probing) of the file being edited. |
 | `GetDataPath` | function | SparkEditor | [RegionMapEditorPanel.h:L84](../../SparkEditor/Source/Panels/RegionMapEditorPanel.h#L84) | Absolute-ish path (after prefix probing) of the file being edited. |
 | `GetDataSize` | function | SparkEngine | [SoundEffect.h:L112](../../SparkEngine/Source/Audio/SoundEffect.h#L112) | Get the size of the audio data in bytes |
@@ -13201,7 +12977,6 @@
 | `GetDensity` | function | SparkEngine | [FogSystem.h:L224](../../SparkEngine/Source/Graphics/FogSystem.h#L224) | Set fog density for exponential and height modes |
 | `GetDependencies` | function | SparkEditor | [AdvancedAssetPipeline.h:L188](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L188) | Get direct dependencies of an asset |
 | `GetDependencies` | function | SparkEditor | [AssetAuditGraph.h:L219](../../SparkEditor/Source/Panels/AssetAuditGraph.h#L219) | Get direct dependencies of an asset |
-| `GetDependencies` | function | Tests | [TestAssetDatabase.cpp:L114](../../Tests/TestAssetDatabase.cpp#L114) |  |
 | `GetDependencies` | function | Tests | [TestAssetDependencyGraph.cpp:L38](../../Tests/TestAssetDependencyGraph.cpp#L38) |  |
 | `GetDependencyGraph` | function | SparkEditor | [AdvancedAssetPipeline.h:L362](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L362) | Get asset dependency graph |
 | `GetDependents` | function | SparkEditor | [AdvancedAssetPipeline.h:L195](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L195) | Get assets that depend on this asset |
@@ -13233,7 +13008,6 @@
 | `GetDepthStencilView` | function | SparkEngine | [RenderTarget.h:L150](../../SparkEngine/Source/Graphics/RenderTarget.h#L150) |  |
 | `GetDerivedTypes` | function | SparkEngine | [Reflection.h:L242](../../SparkEngine/Source/Core/Reflection.h#L242) | Get all types derived from a given base type. |
 | `GetDerivedTypes` | function | Tests | [TestReflection.cpp:L117](../../Tests/TestReflection.cpp#L117) |  |
-| `GetDesc` | function | GameModules | [Terrain.h:L170](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L170) | Get the terrain bounding box |
 | `GetDesc` | function | SparkEngine | [ParticleSystem.h:L194](../../SparkEngine/Source/Graphics/ParticleSystem.h#L194) |  |
 | `GetDesc` | function | SparkEngine | [D3D11Device.h:L52](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L52) |  |
 | `GetDesc` | function | SparkEngine | [D3D11Device.h:L77](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L77) |  |
@@ -13689,7 +13463,6 @@
 | `GetFragmentShader` | function | SparkEngine | [MetalDevice.h:L252](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L252) |  |
 | `GetFrame` | function | SparkEditor | [PerformanceProfiler.h:L192](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L192) | Get frame data by index |
 | `GetFrameCameraPosition` | function | SparkEngine | [GraphicsEngine.h:L907](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L907) | Get the camera position from the most recent frame. |
-| `GetFrameCount` | function | SparkEditor | [AnimationTimelineTypes.h:L202](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L202) | Get total frame count |
 | `GetFrameCount` | function | SparkEngine | [PlayModeManager.h:L307](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L307) |  |
 | `GetFrameCount` | function | SparkEngine | [TemporalEffectsTypes.h:L245](../../SparkEngine/Source/Graphics/TemporalEffectsTypes.h#L245) | Get the number of stored history frames |
 | `GetFrameCount` | function | SparkEngine | [TemporalTypes.h:L248](../../SparkEngine/Source/Graphics/TemporalTypes.h#L248) | Get the number of stored history frames |
@@ -13747,14 +13520,10 @@
 | `GetGeneratedItemCount` | function | GameModules | [ARPGLootSystem.h:L66](../../GameModules/SparkGameARPG/Source/Loot/ARPGLootSystem.h#L66) |  |
 | `GetGeometryShader` | function | SparkEngine | [D3D11Device.h:L123](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L123) |  |
 | `GetGestures` | function | SparkEngine | [MobilePlatform.h:L177](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.h#L177) | Get recognized gestures since last frame. |
-| `GetGizmoMode` | function | SparkEditor | [GizmoSystem.h:L184](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L184) | Get current gizmo mode |
-| `GetGizmoSize` | function | SparkEditor | [GizmoSystem.h:L256](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L256) | Get gizmo size scale |
-| `GetGizmoSpace` | function | SparkEditor | [GizmoSystem.h:L196](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L196) | Get gizmo coordinate space |
 | `GetGizmoSystem` | function | SparkEditor | [EditorUI.h:L160](../../SparkEditor/Source/Core/EditorUI.h#L160) |  |
 | `GetGLBuffer` | function | SparkEngine | [OpenGLDevice.h:L137](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L137) |  |
 | `GetGLFramebuffer` | function | SparkEngine | [OpenGLDevice.h:L174](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L174) |  |
 | `GetGlobalDifficulty` | function | GameModules | [RacingAIDriver.h:L115](../../GameModules/SparkGameRacing/Source/AI/RacingAIDriver.h#L115) |  |
-| `GetGlobalIlluminationSettings` | function | SparkEditor | [LightingTools.h:L333](../../SparkEditor/Source/Lighting/LightingTools.h#L333) | Get global illumination settings |
 | `GetGlobalLevel` | function | SparkEngine | [Logger.h:L439](../../SparkEngine/Source/Utils/Logger.h#L439) | Get the current global minimum log level |
 | `GetGlobalLODBias` | function | SparkEngine | [MeshLOD.h:L143](../../SparkEngine/Source/Graphics/MeshLOD.h#L143) |  |
 | `GetGlobalShadowQuality` | function | SparkEngine | [LightingSystem.h:L341](../../SparkEngine/Source/Graphics/LightingSystem.h#L341) |  |
@@ -13876,8 +13645,6 @@
 | `GetHeight` | function | SparkEngine | [VulkanDevice.h:L150](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L150) |  |
 | `GetHeight` | function | SparkEngine | [VulkanDevice.h:L263](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L263) |  |
 | `GetHeight` | function | SparkEngine | [RenderDevice.h:L87](../../SparkEngine/Source/Graphics/RenderDevice.h#L87) |  |
-| `GetHeightAt` | function | GameModules | [Terrain.h:L154](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L154) | Get terrain height at a world XZ position (bilinear interpolated) |
-| `GetHeightData` | function | GameModules | [Terrain.h:L174](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L174) |  |
 | `GetHeightInterpolated` | function | SparkEditor | [TerrainData.h:L88](../../SparkEditor/Source/Terrain/TerrainData.h#L88) |  |
 | `GetHeightSettings` | function | SparkEngine | [FogSystem.h:L234](../../SparkEngine/Source/Graphics/FogSystem.h#L234) | Set linear fog start and end distances |
 | `GetHeldLocks` | function | Tests | [TestDeadlockDetector.cpp:L102](../../Tests/TestDeadlockDetector.cpp#L102) |  |
@@ -13930,7 +13697,6 @@
 | `GetImmediateCommandList` | function | SparkEngine | [RHIDevice.h:L163](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L163) |  |
 | `GetImmediateCommandList` | function | SparkEngine | [VulkanDevice.h:L432](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L432) |  |
 | `GetImmediateCommandList` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L132](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L132) |  |
-| `GetImportSettings` | function | SparkEditor | [AssetDatabase.h:L196](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L196) | Get import settings for asset |
 | `GetImpostorAtlas` | function | SparkEngine | [FoliageRenderer.h:L399](../../SparkEngine/Source/Graphics/FoliageRenderer.h#L399) | Read-only access to the singleton impostor atlas. |
 | `GetImpostorDistance` | function | SparkEngine | [FoliageRenderer.h:L262](../../SparkEngine/Source/Graphics/FoliageRenderer.h#L262) | Current impostor switch distance. |
 | `GetInbox` | function | Tests | [TestServerMockClient.cpp:L454](../../Tests/TestServerMockClient.cpp#L454) |  |
@@ -14161,7 +13927,6 @@
 | `GetInt` | function | Tests | [TestEngineSettingsParser.cpp:L255](../../Tests/TestEngineSettingsParser.cpp#L255) |  |
 | `GetInt` | function | Tests | [TestSceneSerializer.cpp:L243](../../Tests/TestSceneSerializer.cpp#L243) |  |
 | `GetIntensity` | function | SparkEngine | [LightingSystem.h:L111](../../SparkEngine/Source/Graphics/LightingSystem.h#L111) |  |
-| `GetInteraction` | function | SparkEditor | [GizmoSystem.h:L262](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L262) | Get current interaction state |
 | `GetInteractionPrompt` | function | GameModules | [HUDSystem.h:L316](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L316) |  |
 | `GetInteractionPrompt` | function | GameModules | [InteractiveObject.h:L74](../../GameModules/SparkGameFPS/Source/Game/InteractiveObject.h#L74) | Get the interaction prompt text for HUD display |
 | `GetInteractionPrompt` | function | GameModules | [InteractiveObject.h:L130](../../GameModules/SparkGameFPS/Source/Game/InteractiveObject.h#L130) |  |
@@ -14313,12 +14078,10 @@
 | `GetLevelResolution` | function | SparkEngine | [NeuralRadianceCache.h:L165](../../SparkEngine/Source/Graphics/Neural/NeuralRadianceCache.h#L165) | Get the grid resolution at a given level. |
 | `GetLevelTimer` | function | GameModules | [PlatformerLevelSystem.h:L148](../../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h#L148) | Get current level timer |
 | `GetLifecycleEvidence` | function | SparkEngine | [ModuleManager.h:L237](../../SparkEngine/Source/Core/ModuleManager.h#L237) | Get cumulative successful callback counts for this manager lifetime. |
-| `GetLight` | function | SparkEditor | [LightingTools.h:L307](../../SparkEditor/Source/Lighting/LightingTools.h#L307) | Get light data |
 | `GetLightCount` | function | SparkEngine | [LightmapBaker.h:L232](../../SparkEngine/Source/Graphics/LightmapBaker.h#L232) | Get the number of lights in the scene |
 | `GetLightCount` | function | Tests | [TestExtendedSystems.cpp:L637](../../Tests/TestExtendedSystems.cpp#L637) |  |
 | `GetLightDataSRV` | function | SparkEngine | [GPUClusterCulling.h:L118](../../SparkEngine/Source/Graphics/GPUClusterCulling.h#L118) | Get the light data SRV for binding to pixel shader |
 | `GetLightIndexBuffer` | function | SparkEngine | [ClusteredLightCulling.h:L154](../../SparkEngine/Source/Graphics/ClusteredLightCulling.h#L154) | Get the GPU buffer containing the flat light index list |
-| `GetLightingMetrics` | function | SparkEditor | [LightingTools.h:L446](../../SparkEditor/Source/Lighting/LightingTools.h#L446) |  |
 | `GetLightingSystem` | function | SparkEngine | [GraphicsEngine.h:L356](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L356) |  |
 | `GetLightManager` | function | SparkEngine | [GraphicsEngine.h:L527](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L527) | Set non-owning physics pointer (called by engine during init) |
 | `GetLightMatrix` | function | SparkEngine | [LightingSystem.h:L149](../../SparkEngine/Source/Graphics/LightingSystem.h#L149) |  |
@@ -14432,7 +14195,6 @@
 | `GetMaterial` | function | Tests | [TestPhysicsSystem.cpp:L179](../../Tests/TestPhysicsSystem.cpp#L179) |  |
 | `GetMaterialCount` | function | Tests | [TestMaterialSystemValidation.cpp:L270](../../Tests/TestMaterialSystemValidation.cpp#L270) |  |
 | `GetMaterialData` | function | SparkEngine | [PersistentMaterialCB.h:L172](../../SparkEngine/Source/Graphics/PersistentMaterialCB.h#L172) | Get CPU shadow buffer pointer at a material's offset |
-| `GetMaterialGraph` | function | SparkEditor | [MaterialEditor.h:L361](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L361) | Get current material graph |
 | `GetMaterialPath` | function | SparkEngine | [GameObject.h:L247](../../SparkEngine/Source/Game/GameObject.h#L247) | Get the material asset path assigned by the scene (may be empty) |
 | `GetMaterialSystem` | function | SparkEngine | [GraphicsEngine.h:L355](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L355) |  |
 | `GetMatrix` | function | SparkEditor | [SceneFileTypes.h:L88](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L88) | Get transform matrix |
@@ -14846,12 +14608,10 @@
 | `GetNodes` | function | GameModules | [RTSResourceSystem.h:L81](../../GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.h#L81) |  |
 | `GetNodes` | function | SparkEditor | [VisualScriptPanel.h:L200](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L200) |  |
 | `GetNodeTitle` | function | SparkEditor | [VisualScriptPanel.cpp:L72](../../SparkEditor/Source/Panels/VisualScriptPanel.cpp#L72) |  |
-| `GetNodeTypeInfo` | function | SparkEditor | [MaterialEditor.h:L460](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L460) |  |
 | `GetNoise` | function | SparkEngine | [FastNoiseLite.h:L118](../../SparkEngine/Source/Graphics/FastNoiseLite.h#L118) | Get 2D noise value at (x, y). Returns approximately [-1, 1]. |
 | `GetNoise` | function | SparkEngine | [FastNoiseLite.h:L130](../../SparkEngine/Source/Graphics/FastNoiseLite.h#L130) | Get 3D noise value at (x, y, z). Returns approximately [-1, 1]. |
 | `GetNoiseTexture` | function | SparkEngine | [ScreenSpaceEffects.h:L273](../../SparkEngine/Source/Graphics/ScreenSpaceEffects.h#L273) |  |
 | `GetNoiseTexture` | function | SparkEngine | [TextureSystem.h:L266](../../SparkEngine/Source/Graphics/TextureSystem.h#L266) |  |
-| `GetNormalAt` | function | GameModules | [Terrain.h:L159](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L159) | Get terrain normal at a world XZ position |
 | `GetNormalized` | function | SparkEditor | [SelectionManager.h:L109](../../SparkEditor/Source/Panels/SelectionManager.h#L109) | Get normalized rect (min/max corrected) |
 | `GetNormalTexture` | function | SparkEngine | [TextureSystem.h:L265](../../SparkEngine/Source/Graphics/TextureSystem.h#L265) |  |
 | `GetNPC` | function | GameModules | [RPGNPCSystem.h:L93](../../GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.h#L93) |  |
@@ -15061,8 +14821,6 @@
 | `GetPlatformName` | function | SparkEngine | [OnlineServices.h:L475](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L475) |  |
 | `GetPlatformName` | function | SparkEngine | [OnlineServices.h:L526](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L526) |  |
 | `GetPlaybackSpeed` | function | SparkEngine | [Sequencer.h:L298](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L298) |  |
-| `GetPlaybackState` | function | SparkEditor | [AnimationTimeline.h:L166](../../SparkEditor/Source/Animation/AnimationTimeline.h#L166) | Get current playback state |
-| `GetPlaybackTime` | function | SparkEditor | [AnimationTimeline.h:L160](../../SparkEditor/Source/Animation/AnimationTimeline.h#L160) | Get current playback time |
 | `GetPlayer` | function | GameModules | [Game.h:L265](../../GameModules/SparkGameFPS/Source/Game/Game.h#L265) | Get player instance for console integration |
 | `GetPlayer` | function | GameModules | [RTSMatchSystem.h:L61](../../GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.h#L61) |  |
 | `GetPlayerBestLap` | function | GameModules | [RacingRaceManager.h:L138](../../GameModules/SparkGameRacing/Source/Race/RacingRaceManager.h#L138) |  |
@@ -15135,7 +14893,6 @@
 | `GetPosition` | function | Tests | [TestGameObjectTransforms.cpp:L100](../../Tests/TestGameObjectTransforms.cpp#L100) |  |
 | `GetPositionSuffix` | function | GameModules | [RacingHUDSystem.h:L104](../../GameModules/SparkGameRacing/Source/HUD/RacingHUDSystem.h#L104) |  |
 | `GetPostProcessingPipeline` | function | SparkEngine | [GraphicsEngine.h:L357](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L357) |  |
-| `GetPostProcessingSettings` | function | SparkEditor | [LightingTools.h:L400](../../SparkEditor/Source/Lighting/LightingTools.h#L400) | Get post-processing settings |
 | `GetPowerUpName` | function | GameModules | [LootSystem.cpp:L321](../../GameModules/SparkGameFPS/Source/Game/LootSystem.cpp#L321) |  |
 | `GetPowerUpName` | function | GameModules | [LootSystem.h:L146](../../GameModules/SparkGameFPS/Source/Game/LootSystem.h#L146) | Get the power-up name for display |
 | `GetPredictedLocalState` | function | GameModules | [TFClientNet.h:L99](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.h#L99) |  |
@@ -15158,7 +14915,6 @@
 | `GetPresetsByCategory` | function | Tests | [TestEntityPresetManager.cpp:L44](../../Tests/TestEntityPresetManager.cpp#L44) |  |
 | `GetPressureLevel` | function | SparkEngine | [VRAMBudgetMonitor.h:L86](../../SparkEngine/Source/Graphics/VRAMBudgetMonitor.h#L86) | Current memory-pressure level. |
 | `GetPressureRatio` | function | SparkEngine | [VRAMBudgetMonitor.h:L89](../../SparkEngine/Source/Graphics/VRAMBudgetMonitor.h#L89) | Pressure as a 0.0 – 1.0 ratio (currentUsage / budget). |
-| `GetPreviewSettings` | function | SparkEditor | [MaterialEditor.h:L373](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L373) | Get material preview settings |
 | `GetPreviousFrame` | function | SparkEngine | [TemporalEffectsTypes.h:L238](../../SparkEngine/Source/Graphics/TemporalEffectsTypes.h#L238) | Get a previous frame (1 = last frame, 2 = two frames ago, etc.) |
 | `GetPreviousFrame` | function | SparkEngine | [TemporalTypes.h:L241](../../SparkEngine/Source/Graphics/TemporalTypes.h#L241) | Get a previous frame (1 = last frame, 2 = two frames ago, etc.) |
 | `GetPreviousPosition` | function | GameModules | [Projectile.h:L154](../../GameModules/SparkGameFPS/Source/Projectiles/Projectile.h#L154) | Get the position before the most recent update for swept collision tests. |
@@ -15224,9 +14980,7 @@
 | `GetProjectTemplateDescriptors` | function | SparkEditor | [ProjectManager.h:L175](../../SparkEditor/Source/Core/ProjectManager.h#L175) |  |
 | `GetProjectTemplateName` | function | SparkEditor | [ProjectManager.h:L180](../../SparkEditor/Source/Core/ProjectManager.h#L180) |  |
 | `GetProjectTempPath` | function | SparkEditor | [ProjectManager.h:L165](../../SparkEditor/Source/Core/ProjectManager.h#L165) |  |
-| `GetProperties` | function | Tests | [TestPrefabManager.cpp:L69](../../Tests/TestPrefabManager.cpp#L69) |  |
 | `GetProperty` | function | SparkEngine | [RemoteDebugSystem.h:L536](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L536) | Request the value of a named property. |
-| `GetProperty` | function | Tests | [TestPrefabManager.cpp:L40](../../Tests/TestPrefabManager.cpp#L40) |  |
 | `GetPropertyName` | function | SparkEngine | [MaterialPropertyHandle.h:L121](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.h#L121) | Get the name of a property from its handle. |
 | `GetPropertyType` | function | SparkEngine | [MaterialPropertyHandle.h:L128](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.h#L128) | Get the type of a property from its handle. |
 | `GetProviderName` | function | SparkEngine | [ArchiveResourceProvider.h:L54](../../SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.h#L54) |  |
@@ -15461,7 +15215,6 @@
 | `GetRotation` | function | SparkEngine | [PhysicsBody.h:L74](../../SparkEngine/Source/Physics/PhysicsBody.h#L74) |  |
 | `GetRotation` | function | Tests | [TestCameraTransforms.cpp:L230](../../Tests/TestCameraTransforms.cpp#L230) |  |
 | `GetRotation` | function | Tests | [TestGameObjectTransforms.cpp:L101](../../Tests/TestGameObjectTransforms.cpp#L101) |  |
-| `GetRotationSnapAngle` | function | SparkEditor | [GizmoSystem.h:L232](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L232) | Get rotation snap angle |
 | `GetRoundResults` | function | GameModules | [GameMode.h:L256](../../GameModules/SparkGameFPS/Source/Game/GameMode.h#L256) |  |
 | `GetRoundState` | function | GameModules | [GameMode.h:L244](../../GameModules/SparkGameFPS/Source/Game/GameMode.h#L244) |  |
 | `GetRoundTimeRemaining` | function | GameModules | [GameMode.h:L246](../../GameModules/SparkGameFPS/Source/Game/GameMode.h#L246) |  |
@@ -15596,7 +15349,6 @@
 | `GetSelectedMaterial` | function | SparkEditor | [MaterialEditorPanel.h:L230](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L230) |  |
 | `GetSelectedObjects` | function | SparkEditor | [HierarchyPanel.h:L132](../../SparkEditor/Source/Panels/HierarchyPanel.h#L132) | Get currently selected objects |
 | `GetSelection` | function | GameModules | [RTSCommandSystem.h:L54](../../GameModules/SparkGameRTS/Source/Command/RTSCommandSystem.h#L54) |  |
-| `GetSelection` | function | SparkEditor | [AnimationTimeline.h:L214](../../SparkEditor/Source/Animation/AnimationTimeline.h#L214) | Get timeline selection |
 | `GetSelection` | function | SparkEditor | [SelectionManager.h:L307](../../SparkEditor/Source/Panels/SelectionManager.h#L307) | Get selection as ordered vector |
 | `GetSelection` | function | Tests | [TestSelectionManager.cpp:L98](../../Tests/TestSelectionManager.cpp#L98) |  |
 | `GetSelectionCount` | function | GameModules | [RTSCommandSystem.h:L55](../../GameModules/SparkGameRTS/Source/Command/RTSCommandSystem.h#L55) |  |
@@ -15761,12 +15513,10 @@
 | `GetSnapshotInfo` | function | SparkEngine | [SceneSnapshotSerializer.h:L260](../../SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h#L260) | Get a human-readable summary of the snapshot. |
 | `GetSnapshots` | function | SparkEngine | [FrameInspector.h:L326](../../SparkEngine/Source/Utils/FrameInspector.h#L326) | Get the last N snapshots |
 | `GetSnapshotSize` | function | SparkEngine | [PlayModeManager.h:L372](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L372) |  |
-| `GetSnapSize` | function | SparkEditor | [GizmoSystem.h:L220](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L220) | Get grid snap size |
 | `getsockopt` | function | SparkEditor | [CollaborativeEditSession.cpp:L475](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L475) |  |
 | `GetSortedMounts` | function | SparkEngine | [VirtualFileSystem.h:L184](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h#L184) | Get a snapshot of mounts sorted by descending priority. |
 | `GetSound` | function | SparkEngine | [AudioEngine.h:L184](../../SparkEngine/Source/Audio/AudioEngine.h#L184) | Get a pointer to a loaded sound effect |
 | `GetSoundCount` | function | Tests | [TestAudioEngine.cpp:L116](../../Tests/TestAudioEngine.cpp#L116) |  |
-| `GetSourceName` | function | Tests | [TestPrefabManager.cpp:L68](../../Tests/TestPrefabManager.cpp#L68) |  |
 | `GetSourcePath` | function | SparkEngine | [DataTableSystem.h:L385](../../SparkEngine/Source/Engine/DataTable/DataTableSystem.h#L385) |  |
 | `GetSourceVersion` | function | SparkEngine | [AssetMigration.h:L121](../../SparkEngine/Source/Core/AssetMigration.h#L121) | Version this step reads from. |
 | `GetSourceVersion` | function | Tests | [TestAssetMigration.cpp:L147](../../Tests/TestAssetMigration.cpp#L147) |  |
@@ -16099,8 +15849,6 @@
 | `GetTilesY` | function | SparkEngine | [LightManager.h:L331](../../SparkEngine/Source/Graphics/LightManager.h#L331) |  |
 | `GetTileUV` | function | SparkEngine | [Sprite2DComponents.h:L334](../../SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h#L334) |  |
 | `GetTime` | function | SparkEngine | [VolumetricClouds.h:L165](../../SparkEngine/Source/Graphics/VolumetricClouds.h#L165) | Number of seconds accumulated since Initialize |
-| `GetTimelineZoom` | function | SparkEditor | [AnimationTimeline.h:L238](../../SparkEditor/Source/Animation/AnimationTimeline.h#L238) | Get timeline zoom |
-| `GetTimeOfDay` | function | SparkEditor | [LightingTools.h:L379](../../SparkEditor/Source/Lighting/LightingTools.h#L379) | Get current time of day |
 | `GetTimeOfDay` | function | SparkEngine | [EngineContext.h:L237](../../SparkEngine/Source/Core/EngineContext.h#L237) |  |
 | `GetTimeOfDay` | function | SparkEngine | [EngineContext.h:L238](../../SparkEngine/Source/Core/EngineContext.h#L238) |  |
 | `GetTimeOfDay` | function | SparkEngine | [TimeOfDaySystem.h:L88](../../SparkEngine/Source/Engine/World/TimeOfDaySystem.h#L88) | Get the current time of day in hours [0, 24) |
@@ -16247,7 +15995,6 @@
 | `GetTree` | function | GameModules | [RPGDialogueSystem.h:L103](../../GameModules/SparkGameRPG/Source/Dialogue/RPGDialogueSystem.h#L103) |  |
 | `GetTreeCount` | function | GameModules | [RPGDialogueSystem.h:L104](../../GameModules/SparkGameRPG/Source/Dialogue/RPGDialogueSystem.h#L104) |  |
 | `GetTrendAnalysis` | function | SparkEditor | [PerformanceProfiler.h:L269](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L269) | Get performance trend analysis |
-| `GetTriangleCount` | function | GameModules | [Terrain.h:L172](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L172) |  |
 | `GetTriangleCount` | function | SparkEngine | [LightmapBaker.h:L238](../../SparkEngine/Source/Graphics/LightmapBaker.h#L238) | Get total triangle count across all meshes |
 | `GetTriangleCount` | function | SparkEngine | [DebugOverlay.h:L255](../../SparkEngine/Source/Utils/DebugOverlay.h#L255) |  |
 | `GetTriangleCount` | function | SparkEngine | [PerformanceStats.h:L262](../../SparkEngine/Source/Utils/PerformanceStats.h#L262) | Get all system timings |
@@ -16448,7 +16195,6 @@
 | `GetVertexBuffer` | function | SparkEngine | [Mesh.h:L208](../../SparkEngine/Source/Graphics/Mesh.h#L208) | Raw D3D11 vertex buffer (stride = sizeof(Vertex), slot-0 layout). |
 | `GetVertexBytesUsed` | function | SparkEngine | [TransientBufferAllocator.h:L215](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L215) | Bytes used so far this frame for vertices. |
 | `GetVertexBytesUsed` | function | Tests | [TestTransientBufferAllocator.cpp:L83](../../Tests/TestTransientBufferAllocator.cpp#L83) |  |
-| `GetVertexCount` | function | GameModules | [Terrain.h:L171](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L171) |  |
 | `GetVertexCount` | function | SparkEngine | [AssetPipeline.h:L215](../../SparkEngine/Source/Graphics/AssetPipeline.h#L215) |  |
 | `GetVertexCount` | function | SparkEngine | [Mesh.h:L192](../../SparkEngine/Source/Graphics/Mesh.h#L192) | Get the number of vertices in the mesh |
 | `GetVertexCount` | function | SparkEngine | [SoftBodyPhysics.h:L135](../../SparkEngine/Source/Physics/SoftBodyPhysics.h#L135) | Get number of vertices. |
@@ -16664,33 +16410,7 @@
 | `GitRunner::HeadCommit` | method | SparkInstaller | [GitRunner.cpp:L165](../../SparkInstaller/src/GitRunner.cpp#L165) |  |
 | `GitRunner::Run` | method | SparkInstaller | [GitRunner.cpp:L91](../../SparkInstaller/src/GitRunner.cpp#L91) |  |
 | `GitRunner::UpdateSubmodules` | method | SparkInstaller | [GitRunner.cpp:L160](../../SparkInstaller/src/GitRunner.cpp#L160) |  |
-| `GizmoAxis` | enum | SparkEditor | [GizmoSystem.h:L56](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L56) | Gizmo axis identification |
-| `GizmoConstants` | struct | SparkEditor | [GizmoSystem.h:L431](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L431) |  |
-| `GizmoGeometry` | struct | SparkEditor | [GizmoSystem.h:L410](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L410) |  |
-| `GizmoInteraction` | struct | SparkEditor | [GizmoSystem.h:L93](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L93) | Gizmo interaction result |
-| `GizmoMode` | enum | SparkEditor | [GizmoSystem.h:L36](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L36) | Gizmo operation modes |
 | `GizmoMode` | enum | SparkEditor | [SceneViewPanel.h:L201](../../SparkEditor/Source/Panels/SceneViewPanel.h#L201) |  |
-| `GizmoSpace` | enum | SparkEditor | [GizmoSystem.h:L47](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L47) | Gizmo coordinate space |
-| `GizmoSystem` | class | SparkEditor | [GizmoSystem.h:L117](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L117) |  |
-| `GizmoSystem::ApplyRotation` | method | SparkEditor | [GizmoSystem.cpp:L740](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L740) |  |
-| `GizmoSystem::ApplyScale` | method | SparkEditor | [GizmoSystem.cpp:L775](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L775) |  |
-| `GizmoSystem::ApplyTranslation` | method | SparkEditor | [GizmoSystem.cpp:L724](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L724) |  |
-| `GizmoSystem::CalculateAdaptiveSize` | method | SparkEditor | [GizmoSystem.cpp:L856](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L856) |  |
-| `GizmoSystem::CalculateGizmoCenter` | method | SparkEditor | [GizmoSystem.cpp:L827](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L827) |  |
-| `GizmoSystem::GetAxisColor` | method | SparkEditor | [GizmoSystem.cpp:L874](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L874) |  |
-| `GizmoSystem::HandleMouseInput` | method | SparkEditor | [GizmoSystem.cpp:L191](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L191) |  |
-| `GizmoSystem::Initialize` | method | SparkEditor | [GizmoSystem.cpp:L118](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L118) |  |
-| `GizmoSystem::Render` | method | SparkEditor | [GizmoSystem.cpp:L151](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L151) |  |
-| `GizmoSystem::RenderRotationGizmo` | method | SparkEditor | [GizmoSystem.cpp:L476](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L476) |  |
-| `GizmoSystem::RenderScaleGizmo` | method | SparkEditor | [GizmoSystem.cpp:L534](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L534) |  |
-| `GizmoSystem::RenderTranslationGizmo` | method | SparkEditor | [GizmoSystem.cpp:L384](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L384) |  |
-| `GizmoSystem::Shutdown` | method | SparkEditor | [GizmoSystem.cpp:L130](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L130) |  |
-| `GizmoSystem::SnapToGrid` | method | SparkEditor | [GizmoSystem.cpp:L804](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L804) |  |
-| `GizmoSystem::SnapToRotation` | method | SparkEditor | [GizmoSystem.cpp:L813](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L813) |  |
-| `GizmoSystem::TestRotationGizmoHit` | method | SparkEditor | [GizmoSystem.cpp:L626](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L626) |  |
-| `GizmoSystem::TestScaleGizmoHit` | method | SparkEditor | [GizmoSystem.cpp:L674](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L674) |  |
-| `GizmoSystem::TestTranslationGizmoHit` | method | SparkEditor | [GizmoSystem.cpp:L580](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L580) |  |
-| `GizmoSystem::Update` | method | SparkEditor | [GizmoSystem.cpp:L140](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L140) |  |
 | `GLBuffer` | class | SparkEngine | [OpenGLDevice.h:L119](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L119) |  |
 | `GLBuffer::SetDebugName` | method | SparkEngine | [OpenGLDevice.cpp:L50](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp#L50) |  |
 | `GLCommandList` | class | SparkEngine | [OpenGLDevice.h:L305](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L305) |  |
@@ -16759,7 +16479,6 @@
 | `Global` | function | SparkEngine | [RandomEngine.h:L252](../../SparkEngine/Source/Utils/RandomEngine.h#L252) |  |
 | `Global` | function | SparkEngine | [StringPool.h:L141](../../SparkEngine/Source/Utils/StringPool.h#L141) | Access the engine-wide global string pool. |
 | `global` | function | Tests | [Test_tests_inversekinematics.cpp:L88](../../Tests/harden/Test_tests_inversekinematics.cpp#L88) |  |
-| `GlobalIlluminationSettings` | struct | SparkEditor | [LightingTools.h:L123](../../SparkEditor/Source/Lighting/LightingTools.h#L123) | Global illumination settings |
 | `GlobalLocaleGuard` | class | Tests | [TestSceneSerializerReal.cpp:L62](../../Tests/TestSceneSerializerReal.cpp#L62) |  |
 | `GlobalLocaleGuard` | function | Tests | [TestSceneSerializerReal.cpp:L65](../../Tests/TestSceneSerializerReal.cpp#L65) |  |
 | `globalTransforms` | function | SparkEngine | [InverseKinematics.cpp:L44](../../SparkEngine/Source/Engine/Animation/InverseKinematics.cpp#L44) |  |
@@ -16796,8 +16515,6 @@
 | `golden` | function | Tests | [TestGoldenImageTest.cpp:L69](../../Tests/TestGoldenImageTest.cpp#L69) |  |
 | `GoldenImageConfig` | struct | SparkEngine | [GoldenImageTest.h:L99](../../SparkEngine/Source/Utils/GoldenImageTest.h#L99) | Configuration for the golden image test runner. |
 | `GoldenImageTestRunner` | class | SparkEngine | [GoldenImageTest.h:L140](../../SparkEngine/Source/Utils/GoldenImageTest.h#L140) | Singleton that captures screenshots and compares against golden references. |
-| `GoToEnd` | function | SparkEditor | [AnimationTimeline.h:L148](../../SparkEditor/Source/Animation/AnimationTimeline.h#L148) | Go to last frame |
-| `GoToStart` | function | SparkEditor | [AnimationTimeline.h:L143](../../SparkEditor/Source/Animation/AnimationTimeline.h#L143) | Go to first frame |
 | `GoToStep` | function | SparkEditor | [TutorialSystem.h:L228](../../SparkEditor/Source/Core/TutorialSystem.h#L228) | Jump to a specific step index. |
 | `GPU_MARKER` | macro | SparkEngine | [GPUDebugMarkers.h:L378](../../SparkEngine/Source/Graphics/GPUDebugMarkers.h#L378) | Place an instant GPU marker |
 | `GPU_SCOPED_EVENT` | macro | SparkEngine | [GPUDebugMarkers.h:L375](../../SparkEngine/Source/Graphics/GPUDebugMarkers.h#L375) | Create a scoped GPU event that lasts for the enclosing block |
@@ -16984,7 +16701,6 @@
 | `GraphicsAPI` | enum | SparkEngine | [GraphicsEnums.h:L19](../../SparkEngine/Source/Enums/GraphicsEnums.h#L19) | Graphics API types |
 | `GraphicsBackend` | enum | SparkEngine | [RHITypes.h:L32](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L32) |  |
 | `GraphicsEngine` | class | GameModules | [AdvancedConsoleCommands.h:L10](../../GameModules/SparkGameFPS/Source/Console/AdvancedConsoleCommands.h#L10) | Console command declarations for unified GraphicsEngine |
-| `GraphicsEngine` | class | GameModules | [ArenaBuilder.h:L23](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L23) |  |
 | `GraphicsEngine` | class | GameModules | [Game.h:L51](../../GameModules/SparkGameFPS/Source/Game/Game.h#L51) |  |
 | `GraphicsEngine` | class | GameModules | [ModelObject.h:L15](../../GameModules/SparkGameFPS/Source/Game/ModelObject.h#L15) |  |
 | `GraphicsEngine` | class | GameModules | [Player.h:L38](../../GameModules/SparkGameFPS/Source/Game/Player.h#L38) |  |
@@ -17252,7 +16968,6 @@
 | `GraphicsSettings` | struct | SparkEngine | [GraphicsEngineTypes.h:L123](../../SparkEngine/Source/Graphics/GraphicsEngineTypes.h#L123) | Advanced graphics settings |
 | `GraphicsSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L24](../../Tests/TestEngineSettingsEdgeCases.cpp#L24) |  |
 | `GraphicsSettings` | struct | Tests | [TestEngineSettingsParser.cpp:L126](../../Tests/TestEngineSettingsParser.cpp#L126) |  |
-| `GraphToScreen` | function | SparkEditor | [MaterialEditor.h:L489](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L489) | Convert graph coordinates to screen coordinates |
 | `GravityState` | struct | GameModules | [GravitySystem.h:L74](../../GameModules/SparkGameFPS/Source/Game/GravitySystem.h#L74) | Per-object gravity state |
 | `GravitySystem` | class | GameModules | [GravitySystem.h:L91](../../GameModules/SparkGameFPS/Source/Game/GravitySystem.h#L91) | Gravity system manager |
 | `GravitySystem` | class | GameModules | [Player.h:L43](../../GameModules/SparkGameFPS/Source/Game/Player.h#L43) |  |
@@ -17440,7 +17155,6 @@
 | `HandleAssertion` | function | SparkEditor | [EditorCrashHandler.h:L92](../../SparkEditor/Source/Core/EditorCrashHandler.h#L92) |  |
 | `HandleBackspaceKey` | function | SparkConsole | [ConsoleApp.h:L70](../../SparkConsole/src/ConsoleApp.h#L70) |  |
 | `HandleCanvasInput` | function | SparkEditor | [VisualScriptPanel.h:L135](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L135) |  |
-| `HandleChar` | function | GameModules | [Console.h:L135](../../GameModules/SparkGameFPS/Source/Game/Console.h#L135) | Handle character input for console text entry |
 | `HandleCharCreate` | function | GameModules | [TFServerSim.h:L203](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L203) |  |
 | `HandleCharDelete` | function | GameModules | [TFServerSim.h:L204](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L204) |  |
 | `HandleCharList` | function | GameModules | [TFServerSim.h:L202](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L202) |  |
@@ -17460,7 +17174,6 @@
 | `HandleCollisions` | function | SparkEngine | [ClothSimulation.h:L260](../../SparkEngine/Source/Physics/ClothSimulation.h#L260) | Get simulation status (console integration). |
 | `HandleConnect` | function | SparkEngine | [NetworkManager.h:L680](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L680) |  |
 | `HandleConnection` | function | SparkDaemon | [DaemonServer.h:L96](../../SparkDaemon/src/DaemonServer.h#L96) |  |
-| `HandleConnectionCreation` | function | SparkEditor | [MaterialEditor.h:L426](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L426) | Handle connection creation |
 | `HandleConnectionEvents` | function | SparkEditor | [EngineInterface.h:L378](../../SparkEditor/Source/Communication/EngineInterface.h#L378) | Handle connection events |
 | `HandleConsoleControl` | function | SparkDaemon | [CollabServerMain.cpp:L27](../../SparkDaemon/src/CollabServerMain.cpp#L27) |  |
 | `HandleConsoleControl` | function | SparkDaemon | [main.cpp:L64](../../SparkDaemon/src/main.cpp#L64) |  |
@@ -17470,7 +17183,6 @@
 | `HandleCrashInternal` | function | SparkEditor | [EditorCrashHandler.h:L135](../../SparkEditor/Source/Core/EditorCrashHandler.h#L135) |  |
 | `HandleCrashInternal` | function | SparkEngine | [CrashHandler.cpp:L820](../../SparkEngine/Source/Utils/CrashHandler.cpp#L820) |  |
 | `HandleCrashInternal` | function | SparkEngine | [CrashHandler.cpp:L1043](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1043) |  |
-| `HandleCurveEditorInput` | function | SparkEditor | [AnimationTimeline.h:L312](../../SparkEditor/Source/Animation/AnimationTimeline.h#L312) | Handle curve editor mouse input |
 | `HandleDash` | function | GameModules | [PlatformerPlayerController.h:L131](../../GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.h#L131) |  |
 | `HandleDatagram` | function | GameModules | [TFLanDiscovery.h:L130](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.h#L130) |  |
 | `handleDecodeFailure` | function | SparkEngine | [GraphicsDeviceResourcesWindowsTextures.cpp:L341](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsTextures.cpp#L341) |  |
@@ -17482,11 +17194,9 @@
 | `HandleDisconnect` | function | SparkEngine | [NetworkManager.h:L681](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L681) |  |
 | `HandleEditShortcuts` | function | SparkEditor | [SceneViewPanel.h:L134](../../SparkEditor/Source/Panels/SceneViewPanel.h#L134) |  |
 | `HandleEnterWorld` | function | GameModules | [TFServerSim.h:L207](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L207) |  |
-| `HandleEvent` | function | SparkEditor | [AnimationTimeline.h:L79](../../SparkEditor/Source/Animation/AnimationTimeline.h#L79) | Handle panel events |
 | `HandleEvent` | function | SparkEditor | [AdvancedAssetPipeline.h:L279](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L279) | Handle panel events |
 | `HandleEvent` | function | SparkEditor | [EditorPanel.h:L87](../../SparkEditor/Source/Core/EditorPanel.h#L87) | Handle panel-specific events |
 | `HandleEvent` | function | SparkEditor | [LevelStreamingSystem.h:L89](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L89) | Handle panel events |
-| `HandleEvent` | function | SparkEditor | [MaterialEditor.h:L296](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L296) | Handle panel events |
 | `HandleEvent` | function | SparkEditor | [AssetBrowserPanel.h:L67](../../SparkEditor/Source/Panels/AssetBrowserPanel.h#L67) | Handle panel events |
 | `HandleEvent` | function | SparkEditor | [BuildCookPanel.h:L113](../../SparkEditor/Source/Panels/BuildCookPanel.h#L113) |  |
 | `HandleEvent` | function | SparkEditor | [ConsolePanel.h:L106](../../SparkEditor/Source/Panels/ConsolePanel.h#L106) |  |
@@ -17504,7 +17214,6 @@
 | `HandleEvent` | function | SparkEditor | [TerrainEditor.h:L28](../../SparkEditor/Source/Terrain/TerrainEditor.h#L28) |  |
 | `HandleEvent` | function | SparkEditor | [VersionControlSystem.h:L84](../../SparkEditor/Source/VersionControl/VersionControlSystem.h#L84) | Handle panel events |
 | `HandleFactionSelect` | function | GameModules | [TFServerSim.h:L184](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L184) |  |
-| `HandleFileSystemChange` | function | SparkEditor | [AssetDatabase.h:L275](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L275) | Handle file system change |
 | `HandleFileSystemChanges` | function | SparkEditor | [VersionControlSystem.h:L417](../../SparkEditor/Source/VersionControl/VersionControlSystem.h#L417) | Handle file system changes |
 | `HandleFireEvent` | function | GameModules | [TFServerSim.h:L183](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L183) |  |
 | `HandleFiring` | function | SparkEngine | [WeaponManager.h:L293](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L293) | Register a callback for fire events |
@@ -17526,9 +17235,6 @@
 | `HandleInvalidateAsset` | function | SparkDaemon | [AssetService.h:L109](../../SparkDaemon/src/AssetService.h#L109) |  |
 | `HandleJump` | function | GameModules | [PlatformerPlayerController.h:L129](../../GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.h#L129) |  |
 | `HandleKeyboardShortcuts` | function | SparkEditor | [EditorUI.h:L488](../../SparkEditor/Source/Core/EditorUI.h#L488) |  |
-| `HandleKeyDown` | function | GameModules | [Console.h:L146](../../GameModules/SparkGameFPS/Source/Game/Console.h#L146) | Handle key down events for console control |
-| `HandleKeyframeDragging` | function | SparkEditor | [AnimationTimeline.h:L324](../../SparkEditor/Source/Animation/AnimationTimeline.h#L324) | Handle keyframe dragging |
-| `HandleKeyframeSelection` | function | SparkEditor | [AnimationTimeline.h:L319](../../SparkEditor/Source/Animation/AnimationTimeline.h#L319) | Handle keyframe selection |
 | `HandleLinuxCrash` | function | SparkEngine | [CrashHandler.cpp:L1771](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1771) |  |
 | `HandleLogin` | function | GameModules | [TFServerSim.h:L199](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L199) |  |
 | `HandleMessage` | function | SparkDaemon | [AssetService.h:L73](../../SparkDaemon/src/AssetService.h#L73) | Cap total cached bytes; oldest entries are evicted on overflow. |
@@ -17538,9 +17244,6 @@
 | `HandleMessage` | function | SparkDaemon | [ShaderService.h:L83](../../SparkDaemon/src/ShaderService.h#L83) |  |
 | `HandleMessage` | function | SparkEngine | [InputManager.h:L134](../../SparkEngine/Source/Input/InputManager.h#L134) |  |
 | `HandleMouseButtonMessage` | function | SparkEngine | [InputManager.h:L409](../../SparkEngine/Source/Input/InputManager.h#L409) | Consolidated handler for mouse button down/up messages. |
-| `HandleMouseInput` | function | SparkEditor | [GizmoSystem.h:L170](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L170) |  |
-| `HandleNodeDragging` | function | SparkEditor | [MaterialEditor.h:L421](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L421) | Handle node dragging |
-| `HandleNodeSelection` | function | SparkEditor | [MaterialEditor.h:L431](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L431) | Handle node selection |
 | `HandleObjectDragDrop` | function | SparkEditor | [HierarchyPanel.h:L294](../../SparkEditor/Source/Panels/HierarchyPanel.h#L294) | Handle object drag and drop |
 | `HandlePlayerConnect` | function | SparkEngine | [WorldServer.h:L227](../../SparkEngine/Source/Engine/Networking/WorldServer.h#L227) | Handle a new player connection |
 | `HandlePlayerConnect` | function | Tests | [TestWorldServerRouting.cpp:L175](../../Tests/TestWorldServerRouting.cpp#L175) |  |
@@ -17571,7 +17274,6 @@
 | `HandleSignal` | function | SparkServer | [main.cpp:L48](../../SparkServer/src/main.cpp#L48) |  |
 | `HandleSpawnRequest` | function | GameModules | [TFServerSim.h:L182](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L182) |  |
 | `HandleSwitching` | function | SparkEngine | [WeaponManager.h:L296](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h#L296) |  |
-| `HandleTimelineInput` | function | SparkEditor | [AnimationTimeline.h:L307](../../SparkEditor/Source/Animation/AnimationTimeline.h#L307) | Handle timeline mouse input |
 | `HandleVehicleSeatOp` | function | GameModules | [TFServerSim.h:L187](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L187) |  |
 | `HandleVersionCompatibility` | function | SparkEditor | [SceneSerializer.h:L279](../../SparkEditor/Source/SceneSystem/SceneSerializer.h#L279) | Handle version compatibility |
 | `HandleWallSlide` | function | GameModules | [PlatformerPlayerController.h:L130](../../GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.h#L130) |  |
@@ -17721,7 +17423,6 @@
 | `HasMovementInSlot` | function | Tests | [TestMovementSystem.cpp:L177](../../Tests/TestMovementSystem.cpp#L177) |  |
 | `HasOnlyTrailingWhitespace` | function | GameModules | [OWPersistence.inl:L65](../../GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl#L65) |  |
 | `HasOpenProject` | function | SparkEditor | [ProjectManager.h:L137](../../SparkEditor/Source/Core/ProjectManager.h#L137) | Persist a successfully opened/saved scene as project-relative state. |
-| `HasOverride` | function | Tests | [TestPrefabManager.cpp:L52](../../Tests/TestPrefabManager.cpp#L52) |  |
 | `HasParentTraversal` | function | SparkEngine | [ProjectAssetPath.cpp:L114](../../SparkEngine/Source/Graphics/ProjectAssetPath.cpp#L114) |  |
 | `HasPending` | function | SparkEditor | [EditorUI.h:L98](../../SparkEditor/Source/Core/EditorUI.h#L98) |  |
 | `HasPerm` | function | GameModules | [MMOGuildSystem.h:L96](../../GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.h#L96) |  |
@@ -17745,7 +17446,6 @@
 | `HasSceneComponentPayloadCodec` | function | SparkEditor | [SceneComponentCodec.cpp:L760](../../SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp#L760) |  |
 | `HasSection` | function | SparkEngine | [ConfigParser.h:L272](../../SparkEngine/Source/Utils/ConfigParser.h#L272) |  |
 | `HasSection` | function | Tests | [TestEngineSettingsParser.cpp:L90](../../Tests/TestEngineSettingsParser.cpp#L90) |  |
-| `HasSelection` | function | SparkEditor | [AnimationTimelineTypes.h:L257](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L257) | Check if anything is selected |
 | `HasSelection` | function | SparkEditor | [SelectionManager.h:L316](../../SparkEditor/Source/Panels/SelectionManager.h#L316) | Check if anything is selected |
 | `HasSerializer` | function | SparkEngine | [SaveSystem.h:L262](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L262) | Check whether a serializer is registered for the given type name. |
 | `HasSideEffects` | function | SparkEngine | [RenderGraphPass.h:L62](../../SparkEngine/Source/Graphics/RenderGraphPass.h#L62) |  |
@@ -18398,7 +18098,6 @@
 | `IM_COL32` | function | GameModules | [RTSDemoPresentation.cpp:L41](../../GameModules/SparkGameRTS/Source/Demo/RTSDemoPresentation.cpp#L41) |  |
 | `IM_COL32` | function | GameModules | [RTSDemoPresentation.cpp:L43](../../GameModules/SparkGameRTS/Source/Demo/RTSDemoPresentation.cpp#L43) |  |
 | `IM_COL32` | function | SparkEditor | [EditorTheme.cpp:L1175](../../SparkEditor/Source/Core/EditorTheme.cpp#L1175) |  |
-| `IM_COL32` | function | SparkEditor | [GizmoSystem.cpp:L55](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L55) |  |
 | `IM_COL32` | function | SparkEditor | [AssetBrowserPanel.cpp:L151](../../SparkEditor/Source/Panels/AssetBrowserPanel.cpp#L151) |  |
 | `IM_COL32` | function | SparkEditor | [AssetBrowserPanel.cpp:L153](../../SparkEditor/Source/Panels/AssetBrowserPanel.cpp#L153) |  |
 | `IM_COL32` | function | SparkEditor | [AssetBrowserPanel.cpp:L155](../../SparkEditor/Source/Panels/AssetBrowserPanel.cpp#L155) |  |
@@ -18471,7 +18170,6 @@
 | `Impl` | struct | SparkEngine | [MetalRayTracing.h:L222](../../SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.h#L222) | Human-readable status string for console output. |
 | `Impl` | struct | SparkEngine | [Process.h:L156](../../SparkEngine/Source/Utils/Process.h#L156) |  |
 | `Import` | function | SparkEngine | [RenderGraph.h:L181](../../SparkEngine/Source/Graphics/RenderGraph.h#L181) |  |
-| `ImportAsset` | function | SparkEditor | [AssetDatabase.h:L148](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L148) | Import asset from file |
 | `ImportAsset` | function | SparkEditor | [AssetBrowserPanel.h:L93](../../SparkEditor/Source/Panels/AssetBrowserPanel.h#L93) | Import a file into the current folder of the active project. |
 | `ImportAssetDatabase` | function | SparkEditor | [AdvancedAssetPipeline.h:L412](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L412) | Import asset database |
 | `ImportFromMemory` | function | SparkEngine | [FBXImporter.cpp:L709](../../SparkEngine/Source/Graphics/FBXImporter.cpp#L709) |  |
@@ -18520,8 +18218,6 @@
 | `ImVec4` | function | SparkEditor | [StreamingPanel.cpp:L292](../../SparkEditor/Source/Panels/StreamingPanel.cpp#L292) |  |
 | `ImVec4` | function | SparkEditor | [StreamingPanel.cpp:L294](../../SparkEditor/Source/Panels/StreamingPanel.cpp#L294) |  |
 | `ImVec4` | function | SparkEditor | [StreamingPanel.cpp:L296](../../SparkEditor/Source/Panels/StreamingPanel.cpp#L296) |  |
-| `in` | function | GameModules | [Terrain.cpp:L31](../../GameModules/SparkGameFPS/Source/Game/Terrain.cpp#L31) |  |
-| `in` | function | GameModules | [Terrain.cpp:L217](../../GameModules/SparkGameFPS/Source/Game/Terrain.cpp#L217) |  |
 | `in` | function | GameModules | [TFProgressionSystemInternal.h:L22](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemInternal.h#L22) |  |
 | `in` | function | GameModules | [TFDatabase.cpp:L42](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp#L42) |  |
 | `in` | function | GameModules | [TFOutfitStoreDisk.cpp:L39](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStoreDisk.cpp#L39) |  |
@@ -18558,7 +18254,6 @@
 | `Index` | function | SparkEditor | [ServiceTopologyController.h:L87](../../SparkEditor/Source/Panels/ServiceTopologyController.h#L87) |  |
 | `IndexBuffer` | function | SparkEngine | [MakeDesc.h:L311](../../SparkEngine/Source/Graphics/MakeDesc.h#L311) | Index buffer descriptor |
 | `indexDist` | function | GameModules | [ARPGLootSystem.cpp:L148](../../GameModules/SparkGameARPG/Source/Loot/ARPGLootSystem.cpp#L148) |  |
-| `IndexFile` | function | Tests | [TestAssetDatabase.cpp:L73](../../Tests/TestAssetDatabase.cpp#L73) |  |
 | `IndexOfId` | function | GameModules | [TFDirectiveSystem.h:L112](../../GameModules/SparkGameMMOFPS/Source/Game/TFDirectiveSystem.h#L112) |  |
 | `indices` | function | GameModules | [RacingRaceManager.cpp:L362](../../GameModules/SparkGameRacing/Source/Race/RacingRaceManager.cpp#L362) |  |
 | `indices` | function | SparkEngine | [SVGRenderer.h:L446](../../SparkEngine/Source/Graphics/SVGRenderer.h#L446) |  |
@@ -18587,7 +18282,6 @@
 | `ingress` | function | Tests | [TestGatewayAreaControl.cpp:L264](../../Tests/TestGatewayAreaControl.cpp#L264) |  |
 | `ingressSquatter` | function | Tests | [TestGatewayAreaControl.cpp:L426](../../Tests/TestGatewayAreaControl.cpp#L426) |  |
 | `InGuild` | function | GameModules | [MMOGuildSystem.h:L60](../../GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.h#L60) | Per-player guild state |
-| `inHandle` | function | SparkEditor | [AnimationTimelineUI.cpp:L531](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L531) |  |
 | `inheritedProbe` | function | Tests | [TestGatewaySecurity.cpp:L433](../../Tests/TestGatewaySecurity.cpp#L433) |  |
 | `INIParser` | class | Tests | [TestEngineSettingsParser.cpp:L28](../../Tests/TestEngineSettingsParser.cpp#L28) |  |
 | `INISection` | struct | Tests | [TestEngineSettingsParser.cpp:L23](../../Tests/TestEngineSettingsParser.cpp#L23) |  |
@@ -18633,7 +18327,6 @@
 | `Initialize` | function | GameModules | [ARPGSkillSystem.h:L58](../../GameModules/SparkGameARPG/Source/Skill/ARPGSkillSystem.h#L58) | Skill trees with per-class abilities, learning, and cooldown tracking |
 | `Initialize` | function | GameModules | [SparkGameFPS.h:L60](../../GameModules/SparkGameFPS/Source/Core/SparkGameFPS.h#L60) |  |
 | `Initialize` | function | GameModules | [ClassSystem.h:L182](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L182) | Initialize the class system with default class definitions |
-| `Initialize` | function | GameModules | [Console.h:L91](../../GameModules/SparkGameFPS/Source/Game/Console.h#L91) | Initialize the console system |
 | `Initialize` | function | GameModules | [Enemy.h:L72](../../GameModules/SparkGameFPS/Source/Game/Enemy.h#L72) | Initialize with D3D resources and enemy configuration |
 | `Initialize` | function | GameModules | [Game.h:L121](../../GameModules/SparkGameFPS/Source/Game/Game.h#L121) |  |
 | `Initialize` | function | GameModules | [GameMechanics.h:L117](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L117) | Damage zone and environmental hazard system |
@@ -18648,9 +18341,6 @@
 | `Initialize` | function | GameModules | [MultiplayerSystem.h:L282](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L282) | Initialize the multiplayer system |
 | `Initialize` | function | GameModules | [Player.h:L105](../../GameModules/SparkGameFPS/Source/Game/Player.h#L105) |  |
 | `Initialize` | function | GameModules | [ProgressionSystem.h:L80](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L80) | Initialize with default unlock table and XP curve |
-| `Initialize` | function | GameModules | [Terrain.cpp:L242](../../GameModules/SparkGameFPS/Source/Game/Terrain.cpp#L242) |  |
-| `Initialize` | function | GameModules | [Terrain.h:L92](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L92) | Initialize terrain from a heightmap file |
-| `Initialize` | function | GameModules | [Terrain.h:L98](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L98) | Legacy initialize (backward compatible) |
 | `Initialize` | function | GameModules | [VehicleSystem.h:L123](../../GameModules/SparkGameFPS/Source/Game/VehicleSystem.h#L123) |  |
 | `Initialize` | function | GameModules | [VehicleSystem.h:L295](../../GameModules/SparkGameFPS/Source/Game/VehicleSystem.h#L295) | Initialize vehicle definitions |
 | `Initialize` | function | GameModules | [WaveSpawner.h:L87](../../GameModules/SparkGameFPS/Source/Game/WaveSpawner.h#L87) | Initialize with spawn point locations |
@@ -18769,8 +18459,6 @@
 | `Initialize` | function | GameModules | [RacingVehicleSystem.h:L84](../../GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.h#L84) |  |
 | `Initialize` | function | SparkDaemon | [AssetService.h:L64](../../SparkDaemon/src/AssetService.h#L64) | Enable on-disk persistence. |
 | `Initialize` | function | SparkDaemon | [ShaderService.h:L68](../../SparkDaemon/src/ShaderService.h#L68) |  |
-| `Initialize` | function | SparkEditor | [AnimationTimeline.h:L55](../../SparkEditor/Source/Animation/AnimationTimeline.h#L55) | Initialize the animation timeline |
-| `Initialize` | function | SparkEditor | [AssetDatabase.h:L110](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L110) | Initialize the asset database |
 | `Initialize` | function | SparkEditor | [AdvancedAssetPipeline.h:L255](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L255) | Initialize the asset pipeline |
 | `Initialize` | function | SparkEditor | [EngineInterface.h:L234](../../SparkEditor/Source/Communication/EngineInterface.h#L234) | Initialize the engine interface |
 | `Initialize` | function | SparkEditor | [EditorApplication.h:L74](../../SparkEditor/Source/Core/EditorApplication.h#L74) |  |
@@ -18783,12 +18471,9 @@
 | `Initialize` | function | SparkEditor | [IEditorPlugin.h:L54](../../SparkEditor/Source/Core/IEditorPlugin.h#L54) | Initialize the plugin |
 | `Initialize` | function | SparkEditor | [ProjectManager.h:L117](../../SparkEditor/Source/Core/ProjectManager.h#L117) |  |
 | `Initialize` | function | SparkEditor | [TutorialSystem.h:L136](../../SparkEditor/Source/Core/TutorialSystem.h#L136) | Initialize the tutorial system and register built-in tutorials. |
-| `Initialize` | function | SparkEditor | [GizmoSystem.h:L136](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L136) | Initialize the gizmo system |
 | `Initialize` | function | SparkEditor | [ExternalConsoleIntegration.h:L47](../../SparkEditor/Source/Integration/ExternalConsoleIntegration.h#L47) | Initialize the console integration |
 | `Initialize` | function | SparkEditor | [SparkEngineIntegration.h:L200](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L200) | Initialize the integration system |
 | `Initialize` | function | SparkEditor | [LevelStreamingSystem.h:L65](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L65) | Initialize the level streaming system |
-| `Initialize` | function | SparkEditor | [LightingTools.h:L262](../../SparkEditor/Source/Lighting/LightingTools.h#L262) | Initialize the lighting system |
-| `Initialize` | function | SparkEditor | [MaterialEditor.h:L272](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L272) | Initialize the material editor |
 | `Initialize` | function | SparkEditor | [AIDebugPanel.h:L36](../../SparkEditor/Source/Panels/AIDebugPanel.h#L36) |  |
 | `Initialize` | function | SparkEditor | [AIEditorPanel.h:L28](../../SparkEditor/Source/Panels/AIEditorPanel.h#L28) |  |
 | `Initialize` | function | SparkEditor | [AbilityEditorPanel.h:L29](../../SparkEditor/Source/Panels/AbilityEditorPanel.h#L29) |  |
@@ -18827,7 +18512,6 @@
 | `Initialize` | function | SparkEditor | [Physics3DPanel.h:L36](../../SparkEditor/Source/Panels/Physics3DPanel.h#L36) |  |
 | `Initialize` | function | SparkEditor | [PlayControlPanel.h:L46](../../SparkEditor/Source/Panels/PlayControlPanel.h#L46) | Editor panel for launching, monitoring, and stopping real out-of-process |
 | `Initialize` | function | SparkEditor | [PlayModeToolbarPanel.h:L47](../../SparkEditor/Source/Panels/PlayModeToolbarPanel.h#L47) |  |
-| `Initialize` | function | SparkEditor | [PostProcessingPanel.h:L26](../../SparkEditor/Source/Panels/PostProcessingPanel.h#L26) |  |
 | `Initialize` | function | SparkEditor | [PrefabEditorPanel.h:L37](../../SparkEditor/Source/Panels/PrefabEditorPanel.h#L37) | Construct the prefab editor panel |
 | `Initialize` | function | SparkEditor | [ProjectBrowserPanel.h:L38](../../SparkEditor/Source/Panels/ProjectBrowserPanel.h#L38) |  |
 | `Initialize` | function | SparkEditor | [ProjectSettingsPanel.h:L27](../../SparkEditor/Source/Panels/ProjectSettingsPanel.h#L27) |  |
@@ -19188,7 +18872,6 @@
 | `InitializeManagers` | function | SparkEditor | [EditorUI.h:L491](../../SparkEditor/Source/Core/EditorUI.h#L491) |  |
 | `InitializeNetworkingSystemsImpl` | function | SparkEngine | [GameplayLifecycleShared.cpp:L740](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp#L740) |  |
 | `InitializeNetworkingSystemsImpl` | function | SparkEngine | [GameplayLifecycleShared.h:L17](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.h#L17) |  |
-| `InitializeNodeTypes` | function | SparkEditor | [MaterialEditor.h:L512](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L512) | Initialize default node types |
 | `InitializeOnly` | function | SparkEngine | [DedicatedServer.h:L240](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L240) | Initialize the server without starting the background |
 | `InitializePanelCategories` | function | SparkEditor | [EditorUI.h:L485](../../SparkEditor/Source/Core/EditorUI.h#L485) |  |
 | `InitializePanelIcons` | function | SparkEditor | [EditorUI.h:L484](../../SparkEditor/Source/Core/EditorUI.h#L484) |  |
@@ -19562,7 +19245,6 @@
 | `InstanceTemplate` | struct | SparkEngine | [InstanceManager.h:L119](../../SparkEngine/Source/Engine/Gameplay/InstanceManager.h#L119) | Blueprint for an instance type (dungeon, raid, arena, etc.) |
 | `InstanceTemplate` | struct | Tests | [TestInstanceManager.cpp:L37](../../Tests/TestInstanceManager.cpp#L37) |  |
 | `InstantEvent` | function | SparkEngine | [ChromeTracing.h:L102](../../SparkEngine/Source/Utils/ChromeTracing.h#L102) |  |
-| `Instantiate` | function | Tests | [TestPrefabManager.cpp:L89](../../Tests/TestPrefabManager.cpp#L89) |  |
 | `InstantiateNodes` | function | SparkEngine | [SceneManager.h:L524](../../SparkEngine/Source/SceneManager/SceneManager.h#L524) | Create `GameObject` instances for all nodes in `m_sceneNodes`. |
 | `InstantiatePrefab` | function | SparkEditor | [PrefabManager.h:L81](../../SparkEditor/Source/Prefabs/PrefabManager.h#L81) | Instantiate a prefab into the scene |
 | `INT` | alias | SparkEngine | [PlatformTypes.h:L36](../../SparkEngine/Source/Core/PlatformTypes.h#L36) |  |
@@ -19662,7 +19344,6 @@
 | `InterpolateScale` | function | Tests | [TestAnimationSystem.cpp:L216](../../Tests/TestAnimationSystem.cpp#L216) |  |
 | `InterpolationMode` | enum | SparkEngine | [Sequencer.h:L46](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L46) |  |
 | `InterpolationSnapshot` | struct | SparkEngine | [NetworkInterpolation.h:L28](../../SparkEngine/Source/Engine/Networking/NetworkInterpolation.h#L28) | A single timestamped snapshot of an entity's network state. |
-| `InterpolationType` | enum | SparkEditor | [AnimationTimelineTypes.h:L41](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L41) |  |
 | `InterpQuintic` | function | SparkEngine | [FastNoiseLite.h:L186](../../SparkEngine/Source/Graphics/FastNoiseLite.h#L186) |  |
 | `InterruptCast` | function | SparkEngine | [AbilitySystem.h:L302](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h#L302) |  |
 | `InterruptCast` | function | Tests | [TestAbilitySystem.cpp:L156](../../Tests/TestAbilitySystem.cpp#L156) |  |
@@ -19844,7 +19525,6 @@
 | `IsAnyDirty` | function | SparkEngine | [ReplicationFields.h:L147](../../SparkEngine/Source/Engine/Networking/ReplicationFields.h#L147) | Check if any field is dirty |
 | `IsAreaLoadComplete` | function | SparkEngine | [AreaAssetLoader.h:L119](../../SparkEngine/Source/Engine/Streaming/AreaAssetLoader.h#L119) | Check if an area's load is fully complete |
 | `IsAreaLoadComplete` | function | Tests | [TestAreaAssetLoader.cpp:L176](../../Tests/TestAreaAssetLoader.cpp#L176) |  |
-| `IsAssetFile` | function | SparkEditor | [AssetDatabase.h:L286](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L286) | Check if file is an asset type we care about |
 | `IsAssetLoaded` | function | SparkEngine | [AssetPipeline.h:L401](../../SparkEngine/Source/Graphics/AssetPipeline.h#L401) |  |
 | `IsAsyncLoading` | function | SparkEngine | [SceneManager.h:L412](../../SparkEngine/Source/SceneManager/SceneManager.h#L412) | Check if an asynchronous scene load is in progress. |
 | `IsAudioBackendAvailable` | function | SparkEngine | [AudioEngine.h:L113](../../SparkEngine/Source/Audio/AudioEngine.h#L113) | Check whether a real audio backend is available on this platform |
@@ -20196,7 +19876,6 @@
 | `IsInScope` | function | Tests | [TestConnectionScope.cpp:L128](../../Tests/TestConnectionScope.cpp#L128) |  |
 | `IsInsideTrigger` | function | SparkEngine | [ProximityTriggerSystem.h:L164](../../SparkEngine/Source/Engine/World/ProximityTriggerSystem.h#L164) | Test whether a point is inside a trigger volume. |
 | `IsInteractable` | function | GameModules | [InteractiveObject.h:L81](../../GameModules/SparkGameFPS/Source/Game/InteractiveObject.h#L81) |  |
-| `IsInteracting` | function | SparkEditor | [GizmoSystem.h:L268](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L268) | Check if any gizmo is currently being interacted with |
 | `IsInterpolationEnabled` | function | SparkEngine | [PhysicsSystem.h:L216](../../SparkEngine/Source/Physics/PhysicsSystem.h#L216) |  |
 | `IsInterpolationEnabled` | function | Tests | [TestPhysicsSystem.cpp:L132](../../Tests/TestPhysicsSystem.cpp#L132) |  |
 | `IsInVehicle` | function | GameModules | [Player.h:L436](../../GameModules/SparkGameFPS/Source/Game/Player.h#L436) | Check if the player is currently in a vehicle |
@@ -20394,7 +20073,6 @@
 | `IsRecastAvailable` | function | SparkEngine | [RecastDetourBackend.cpp:L22](../../SparkEngine/Source/Engine/AI/RecastDetourBackend.cpp#L22) |  |
 | `IsRecastAvailable` | function | SparkEngine | [RecastDetourBackend.cpp:L329](../../SparkEngine/Source/Engine/AI/RecastDetourBackend.cpp#L329) |  |
 | `IsRecastAvailable` | function | SparkEngine | [RecastDetourBackend.h:L46](../../SparkEngine/Source/Engine/AI/RecastDetourBackend.h#L46) | Returns true if the Recast backend is available at compile time. |
-| `IsRecording` | function | SparkEditor | [AnimationTimeline.h:L178](../../SparkEditor/Source/Animation/AnimationTimeline.h#L178) | Check if animation recording is enabled |
 | `IsRecording` | function | SparkEngine | [ScreenCapture.h:L220](../../SparkEngine/Source/Graphics/ScreenCapture.h#L220) | Check if a frame sequence is being recorded |
 | `IsRecoveryRequested` | function | Tests | [TestFreezeDetector.cpp:L97](../../Tests/TestFreezeDetector.cpp#L97) |  |
 | `IsRectOccluded` | function | SparkEngine | [OcclusionCulling.h:L197](../../SparkEngine/Source/Graphics/OcclusionCulling.h#L197) | Test if a screen-space rect is fully behind the depth buffer. |
@@ -20425,18 +20103,10 @@
 | `IsRunningUnderWine` | function | SparkEngine | [WineDetection.cpp:L188](../../SparkEngine/Source/Utils/WineDetection.cpp#L188) |  |
 | `IsRunningUnderWine` | function | SparkEngine | [WineDetection.cpp:L226](../../SparkEngine/Source/Utils/WineDetection.cpp#L226) |  |
 | `IsRunningUnderWine` | function | SparkEngine | [WineDetection.h:L55](../../SparkEngine/Source/Utils/WineDetection.h#L55) | True if the process is running under Wine (any version). |
-| `iss` | function | GameModules | [Console.cpp:L204](../../GameModules/SparkGameFPS/Source/Game/Console.cpp#L204) |  |
 | `iss` | function | SparkConsole | [ConsoleApp.cpp:L520](../../SparkConsole/src/ConsoleApp.cpp#L520) |  |
-| `iss` | function | SparkEditor | [AnimationClipManager.cpp:L152](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L152) |  |
-| `iss` | function | SparkEditor | [AnimationClipManager.cpp:L163](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L163) |  |
-| `iss` | function | SparkEditor | [AnimationClipManager.cpp:L175](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L175) |  |
-| `iss` | function | SparkEditor | [AnimationClipManager.cpp:L181](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L181) |  |
-| `iss` | function | SparkEditor | [AnimationClipManager.cpp:L204](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L204) |  |
-| `iss` | function | SparkEditor | [AnimationClipManager.cpp:L215](../../SparkEditor/Source/Animation/AnimationClipManager.cpp#L215) |  |
 | `iss` | function | SparkEditor | [AdvancedAssetPipeline.cpp:L962](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp#L962) |  |
 | `iss` | function | SparkEditor | [AssetProcessors.cpp:L133](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp#L133) |  |
 | `iss` | function | SparkEditor | [EditorTheme.cpp:L50](../../SparkEditor/Source/Core/EditorTheme.cpp#L50) |  |
-| `iss` | function | SparkEditor | [LightingTools.cpp:L575](../../SparkEditor/Source/Lighting/LightingTools.cpp#L575) |  |
 | `iss` | function | SparkEditor | [ConsolePanel.cpp:L624](../../SparkEditor/Source/Panels/ConsolePanel.cpp#L624) |  |
 | `iss` | function | SparkEngine | [SaveSystem.cpp:L598](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L598) |  |
 | `iss` | function | SparkEngine | [SaveSystem.cpp:L806](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L806) |  |
@@ -20479,7 +20149,6 @@
 | `IsSharedLibraryExtension` | function | SparkLauncher | [LauncherProcess.cpp:L104](../../SparkLauncher/src/LauncherProcess.cpp#L104) |  |
 | `IsSiblingSharedLibrary` | function | SparkEngine | [ModuleManager.cpp:L393](../../SparkEngine/Source/Core/ModuleManager.cpp#L393) |  |
 | `IsSimulating` | function | SparkEngine | [PlayModeManager.h:L289](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L289) |  |
-| `IsSnapToGrid` | function | SparkEditor | [GizmoSystem.h:L208](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L208) | Check if grid snapping is enabled |
 | `IsSoftwareDevice` | function | SparkEngine | [D3D11Device.h:L316](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L316) |  |
 | `IsSoftwareDevice` | function | SparkEngine | [D3D12Device.h:L143](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L143) |  |
 | `IsSoftwareDevice` | function | SparkEngine | [VulkanDevice.h:L447](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L447) |  |
@@ -20631,10 +20300,8 @@
 | `IsValidUtf8` | function | SparkEditor | [ProjectManager.cpp:L516](../../SparkEditor/Source/Core/ProjectManager.cpp#L516) |  |
 | `IsValidUTF8` | function | SparkEditor | [JSONSceneSerializer.cpp:L46](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L46) |  |
 | `IsVehicleUnlocked` | function | GameModules | [TFProgressionSystem.h:L158](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.h#L158) |  |
-| `IsVisible` | function | GameModules | [Console.h:L124](../../GameModules/SparkGameFPS/Source/Game/Console.h#L124) | Check if the console is currently visible |
 | `IsVisible` | function | GameModules | [RTSFogOfWarSystem.h:L57](../../GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.h#L57) |  |
 | `IsVisible` | function | SparkEditor | [EditorPanel.h:L105](../../SparkEditor/Source/Core/EditorPanel.h#L105) | Check if panel is visible |
-| `IsVisible` | function | SparkEditor | [GizmoSystem.h:L244](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L244) | Check if gizmos are visible |
 | `IsVisible` | function | SparkEngine | [SceneGraph2D.h:L198](../../SparkEngine/Source/Engine/2D/SceneGraph2D.h#L198) |  |
 | `IsVisible` | function | SparkEngine | [UISystem.h:L154](../../SparkEngine/Source/Engine/UI/UISystem.h#L154) | Check visibility. |
 | `IsVisible` | function | SparkEngine | [UISystem.h:L447](../../SparkEngine/Source/Engine/UI/UISystem.h#L447) | Show or hide all UI. |
@@ -21082,11 +20749,6 @@
 | `Lerp3` | function | GameModules | [TFDayNight.cpp:L36](../../GameModules/SparkGameMMOFPS/Source/World/TFDayNight.cpp#L36) |  |
 | `LerpColor` | function | SparkEngine | [TimeOfDaySystem.h:L147](../../SparkEngine/Source/Engine/World/TimeOfDaySystem.h#L147) | Linearly interpolate between two colors |
 | `LerpColor` | function | Tests | [TestTimeOfDaySystem.cpp:L27](../../Tests/TestTimeOfDaySystem.cpp#L27) |  |
-| `lerpF4` | function | SparkEditor | [AnimationCurve.cpp:L69](../../SparkEditor/Source/Animation/AnimationCurve.cpp#L69) |  |
-| `lerpF4` | function | SparkEditor | [AnimationCurve.cpp:L106](../../SparkEditor/Source/Animation/AnimationCurve.cpp#L106) |  |
-| `lerpF4` | function | SparkEditor | [AnimationCurve.cpp:L113](../../SparkEditor/Source/Animation/AnimationCurve.cpp#L113) |  |
-| `lerpF4` | function | SparkEditor | [AnimationCurve.cpp:L129](../../SparkEditor/Source/Animation/AnimationCurve.cpp#L129) |  |
-| `lerpF4` | function | SparkEditor | [AnimationCurve.cpp:L135](../../SparkEditor/Source/Animation/AnimationCurve.cpp#L135) |  |
 | `LerpFloat3` | function | SparkEngine | [WeatherSystem.h:L425](../../SparkEngine/Source/Graphics/WeatherSystem.h#L425) |  |
 | `LerpFloat4` | function | SparkEngine | [WeatherSystem.h:L430](../../SparkEngine/Source/Graphics/WeatherSystem.h#L430) |  |
 | `LerpMat4x4` | function | Tests | [TestAnimationSystem.cpp:L102](../../Tests/TestAnimationSystem.cpp#L102) |  |
@@ -21207,8 +20869,6 @@
 | `Light::GetShaderData` | method | SparkEngine | [LightingSystemWindowsTypes.cpp:L92](../../SparkEngine/Source/Graphics/LightingSystemWindowsTypes.cpp#L92) |  |
 | `Light::GetShadowMatrix` | method | SparkEngine | [LightingSystemLinuxTypes.cpp:L66](../../SparkEngine/Source/Graphics/LightingSystemLinuxTypes.cpp#L66) |  |
 | `Light::GetShadowMatrix` | method | SparkEngine | [LightingSystemWindowsTypes.cpp:L75](../../SparkEngine/Source/Graphics/LightingSystemWindowsTypes.cpp#L75) |  |
-| `LightBakeProgressCallback` | alias | SparkEditor | [LightingTools.h:L229](../../SparkEditor/Source/Lighting/LightingTools.h#L229) | Light baking progress callback |
-| `LightChangedCallback` | alias | SparkEditor | [LightingTools.h:L234](../../SparkEditor/Source/Lighting/LightingTools.h#L234) | Light changed callback |
 | `LightChangeReactiveSystem` | class | SparkEngine | [ReactiveSystem.h:L204](../../SparkEngine/Source/Engine/ECS/ReactiveSystem.h#L204) | Reactive system for LightComponent changes. |
 | `LightComponent` | struct | SparkEngine | [LightComponents.h:L27](../../SparkEngine/Source/Engine/ECS/Components/LightComponents.h#L27) | Light source attached to an entity, consumed by the LightingSystem. |
 | `LightComponentData` | struct | Tests | [TestSceneSerializer.cpp:L49](../../Tests/TestSceneSerializer.cpp#L49) |  |
@@ -21216,9 +20876,7 @@
 | `LightData` | struct | SparkEngine | [LightingSystem.h:L61](../../SparkEngine/Source/Graphics/LightingSystem.h#L61) | Light data structure for shaders |
 | `LightData` | struct | Tests | [TestGPUClusterCulling.cpp:L20](../../Tests/TestGPUClusterCulling.cpp#L20) |  |
 | `Lighten` | function | SparkEditor | [EditorTheme.h:L64](../../SparkEditor/Source/Core/EditorTheme.h#L64) | Create a lighter version of this color |
-| `LightFalloff` | enum | SparkEditor | [LightingTools.h:L44](../../SparkEditor/Source/Lighting/LightingTools.h#L44) | Light falloff models |
 | `LightingData` | struct | SparkEngine | [Shader.h:L172](../../SparkEngine/Source/Graphics/Shader.h#L172) | Lighting data structure for advanced lighting |
-| `LightingMetrics` | struct | SparkEditor | [LightingTools.h:L435](../../SparkEditor/Source/Lighting/LightingTools.h#L435) | Get lighting performance metrics |
 | `LightingMetrics` | struct | SparkEngine | [LightingSystem.h:L256](../../SparkEngine/Source/Graphics/LightingSystem.h#L256) | Lighting system metrics |
 | `LightingPass` | function | SparkEngine | [GraphicsEngine.h:L1225](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L1225) |  |
 | `LightingPassData` | struct | SparkEngine | [RenderGraphBuilder.h:L143](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L143) | Lighting pass outputs placed on the blackboard. |
@@ -21298,46 +20956,6 @@
 | `LightingSystem::UpdateLightBuffer` | method | SparkEngine | [LightingSystemInternalWindows.cpp:L146](../../SparkEngine/Source/Graphics/LightingSystemInternalWindows.cpp#L146) |  |
 | `LightingSystem::UpdateShadowMaps` | method | SparkEngine | [LightingSystemInternalLinux.cpp:L31](../../SparkEngine/Source/Graphics/LightingSystemInternalLinux.cpp#L31) |  |
 | `LightingSystem::UpdateShadowMaps` | method | SparkEngine | [LightingSystemInternalWindows.cpp:L226](../../SparkEngine/Source/Graphics/LightingSystemInternalWindows.cpp#L226) |  |
-| `LightingTools` | class | SparkEditor | [LightingTools.h:L243](../../SparkEditor/Source/Lighting/LightingTools.h#L243) | Advanced lighting and environment system for Spark Engine |
-| `LightingTools::ApplyLightingPreset` | method | SparkEditor | [LightingTools.cpp:L883](../../SparkEditor/Source/Lighting/LightingTools.cpp#L883) |  |
-| `LightingTools::BakeLightmaps` | method | SparkEditor | [LightingTools.cpp:L243](../../SparkEditor/Source/Lighting/LightingTools.cpp#L243) |  |
-| `LightingTools::CalculateSunColor` | method | SparkEditor | [LightingToolsUI.cpp:L683](../../SparkEditor/Source/Lighting/LightingToolsUI.cpp#L683) |  |
-| `LightingTools::ClearBakedLighting` | method | SparkEditor | [LightingTools.cpp:L400](../../SparkEditor/Source/Lighting/LightingTools.cpp#L400) |  |
-| `LightingTools::CreateLight` | method | SparkEditor | [LightingTools.cpp:L162](../../SparkEditor/Source/Lighting/LightingTools.cpp#L162) |  |
-| `LightingTools::DeleteLight` | method | SparkEditor | [LightingTools.cpp:L192](../../SparkEditor/Source/Lighting/LightingTools.cpp#L192) |  |
-| `LightingTools::GenerateLightProbes` | method | SparkEditor | [LightingTools.cpp:L361](../../SparkEditor/Source/Lighting/LightingTools.cpp#L361) |  |
-| `LightingTools::GetAllLights` | method | SparkEditor | [LightingTools.cpp:L213](../../SparkEditor/Source/Lighting/LightingTools.cpp#L213) |  |
-| `LightingTools::GetAtmosphereSettings` | method | SparkEditor | [LightingTools.cpp:L421](../../SparkEditor/Source/Lighting/LightingTools.cpp#L421) |  |
-| `LightingTools::GetAvailableLightingProfiles` | method | SparkEditor | [LightingTools.cpp:L861](../../SparkEditor/Source/Lighting/LightingTools.cpp#L861) |  |
-| `LightingTools::GetGlobalIlluminationSettings` | method | SparkEditor | [LightingTools.cpp:L238](../../SparkEditor/Source/Lighting/LightingTools.cpp#L238) |  |
-| `LightingTools::GetLight` | method | SparkEditor | [LightingTools.cpp:L203](../../SparkEditor/Source/Lighting/LightingTools.cpp#L203) |  |
-| `LightingTools::GetLightingMetrics` | method | SparkEditor | [LightingTools.cpp:L1053](../../SparkEditor/Source/Lighting/LightingTools.cpp#L1053) |  |
-| `LightingTools::GetPostProcessingSettings` | method | SparkEditor | [LightingTools.cpp:L455](../../SparkEditor/Source/Lighting/LightingTools.cpp#L455) |  |
-| `LightingTools::GetTimeOfDay` | method | SparkEditor | [LightingTools.cpp:L433](../../SparkEditor/Source/Lighting/LightingTools.cpp#L433) |  |
-| `LightingTools::Initialize` | method | SparkEditor | [LightingTools.cpp:L40](../../SparkEditor/Source/Lighting/LightingTools.cpp#L40) |  |
-| `LightingTools::LoadLightingProfile` | method | SparkEditor | [LightingTools.cpp:L551](../../SparkEditor/Source/Lighting/LightingTools.cpp#L551) |  |
-| `LightingTools::OptimizeLightingPerformance` | method | SparkEditor | [LightingTools.cpp:L1102](../../SparkEditor/Source/Lighting/LightingTools.cpp#L1102) |  |
-| `LightingTools::RenderAtmosphereUI` | method | SparkEditor | [LightingToolsUI.cpp:L371](../../SparkEditor/Source/Lighting/LightingToolsUI.cpp#L371) |  |
-| `LightingTools::RenderGlobalIlluminationUI` | method | SparkEditor | [LightingToolsUI.cpp:L290](../../SparkEditor/Source/Lighting/LightingToolsUI.cpp#L290) |  |
-| `LightingTools::RenderLightInspectorUI` | method | SparkEditor | [LightingToolsUI.cpp:L111](../../SparkEditor/Source/Lighting/LightingToolsUI.cpp#L111) |  |
-| `LightingTools::RenderLightListUI` | method | SparkEditor | [LightingToolsUI.cpp:L19](../../SparkEditor/Source/Lighting/LightingToolsUI.cpp#L19) |  |
-| `LightingTools::RenderPerformanceUI` | method | SparkEditor | [LightingToolsUI.cpp:L548](../../SparkEditor/Source/Lighting/LightingToolsUI.cpp#L548) |  |
-| `LightingTools::RenderPostProcessingUI` | method | SparkEditor | [LightingToolsUI.cpp:L474](../../SparkEditor/Source/Lighting/LightingToolsUI.cpp#L474) |  |
-| `LightingTools::RenderPresetsUI` | method | SparkEditor | [LightingToolsUI.cpp:L580](../../SparkEditor/Source/Lighting/LightingToolsUI.cpp#L580) |  |
-| `LightingTools::RenderUI` | method | SparkEditor | [LightingTools.cpp:L90](../../SparkEditor/Source/Lighting/LightingTools.cpp#L90) |  |
-| `LightingTools::SaveLightingProfile` | method | SparkEditor | [LightingTools.cpp:L464](../../SparkEditor/Source/Lighting/LightingTools.cpp#L464) |  |
-| `LightingTools::SetAtmosphereSettings` | method | SparkEditor | [LightingTools.cpp:L414](../../SparkEditor/Source/Lighting/LightingTools.cpp#L414) |  |
-| `LightingTools::SetGlobalIlluminationSettings` | method | SparkEditor | [LightingTools.cpp:L233](../../SparkEditor/Source/Lighting/LightingTools.cpp#L233) |  |
-| `LightingTools::SetLightChangedCallback` | method | SparkEditor | [LightingTools.cpp:L224](../../SparkEditor/Source/Lighting/LightingTools.cpp#L224) |  |
-| `LightingTools::SetPostProcessingSettings` | method | SparkEditor | [LightingTools.cpp:L450](../../SparkEditor/Source/Lighting/LightingTools.cpp#L450) |  |
-| `LightingTools::SetTimeOfDay` | method | SparkEditor | [LightingTools.cpp:L426](../../SparkEditor/Source/Lighting/LightingTools.cpp#L426) |  |
-| `LightingTools::SetTimeOfDayAnimation` | method | SparkEditor | [LightingTools.cpp:L438](../../SparkEditor/Source/Lighting/LightingTools.cpp#L438) |  |
-| `LightingTools::Shutdown` | method | SparkEditor | [LightingTools.cpp:L142](../../SparkEditor/Source/Lighting/LightingTools.cpp#L142) |  |
-| `LightingTools::Update` | method | SparkEditor | [LightingTools.cpp:L60](../../SparkEditor/Source/Lighting/LightingTools.cpp#L60) |  |
-| `LightingTools::UpdateAtmosphereScattering` | method | SparkEditor | [LightingToolsUI.cpp:L731](../../SparkEditor/Source/Lighting/LightingToolsUI.cpp#L731) |  |
-| `LightingTools::UpdateLight` | method | SparkEditor | [LightingTools.cpp:L176](../../SparkEditor/Source/Lighting/LightingTools.cpp#L176) |  |
-| `LightingTools::UpdateSunPosition` | method | SparkEditor | [LightingToolsUI.cpp:L638](../../SparkEditor/Source/Lighting/LightingToolsUI.cpp#L638) |  |
-| `LightingTools::ValidateLightData` | method | SparkEditor | [LightingToolsUI.cpp:L765](../../SparkEditor/Source/Lighting/LightingToolsUI.cpp#L765) |  |
 | `LightLayerMask` | struct | SparkEngine | [LightLayers.h:L33](../../SparkEngine/Source/Graphics/LightLayers.h#L33) | 32-bit light layer mask |
 | `LightLayerRegistry` | class | SparkEngine | [LightLayers.h:L68](../../SparkEngine/Source/Graphics/LightLayers.h#L68) | Named light layer definitions |
 | `LightManager` | class | SparkEngine | [GraphicsEngine.h:L74](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L74) |  |
@@ -21498,14 +21116,12 @@
 | `LoadAllInternal` | function | GameModules | [TFDataTables.h:L262](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.h#L262) |  |
 | `LoadAndCompileScripts` | function | GameModules | [SparkGameVisualScript.h:L58](../../GameModules/SparkGameVisualScript/Source/Core/SparkGameVisualScript.h#L58) |  |
 | `LoadAndInitModules` | function | SparkEngine | [SparkEngineWindowsInit.cpp:L148](../../SparkEngine/Source/Core/SparkEngineWindowsInit.cpp#L148) |  |
-| `LoadAnimationClip` | function | SparkEditor | [AnimationTimeline.h:L94](../../SparkEditor/Source/Animation/AnimationTimeline.h#L94) | Load animation clip from file |
 | `LoadAnimations` | function | SparkEngine | [AnimationSystem.h:L390](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L390) | Load animation clips from Spark Engine `.sanim` binary data. |
 | `LoadArchetypeFromFile` | function | SparkEngine | [EntityArchetypeLoader.cpp:L107](../../SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.cpp#L107) |  |
 | `LoadArchetypeFromFile` | function | SparkEngine | [EntityArchetypeLoader.h:L41](../../SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.h#L41) | Load an archetype definition from a .archetype text file. |
 | `LoadAsset` | function | SparkEditor | [SparkEngineIntegration.h:L371](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L371) | Load asset in engine |
 | `LoadAsset` | function | SparkEngine | [AssetPipeline.h:L387](../../SparkEngine/Source/Graphics/AssetPipeline.h#L387) | Update the asset pipeline (call per frame) |
 | `LoadAssetAsync` | function | SparkEngine | [AssetPipeline.h:L393](../../SparkEngine/Source/Graphics/AssetPipeline.h#L393) |  |
-| `LoadAssetMetadata` | function | SparkEditor | [AssetDatabase.h:L252](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L252) | Load asset metadata from .meta file |
 | `LoadAudio` | function | SparkEngine | [AssetPipeline.h:L390](../../SparkEngine/Source/Graphics/AssetPipeline.h#L390) | Update the asset pipeline (call per frame) |
 | `LoadAudioFromFile` | function | SparkEngine | [AssetPipeline.h:L568](../../SparkEngine/Source/Graphics/AssetPipeline.h#L568) |  |
 | `LoadBeginEvent` | struct | SparkEngine | [SaveSystem.cpp:L54](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L54) | Published on the global EventBus before deserialization begins. |
@@ -21613,14 +21229,12 @@
 | `LoadLayout` | function | Tests | [TestEditorWindowManager.cpp:L61](../../Tests/TestEditorWindowManager.cpp#L61) |  |
 | `LoadLayoutFromFile` | function | SparkEditor | [EditorWindowManager.h:L134](../../SparkEditor/Source/Core/EditorWindowManager.h#L134) | Load a layout from a file path |
 | `LoadLevel` | function | GameModules | [PlatformerLevelSystem.h:L122](../../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h#L122) | Load a level by index (0-based) |
-| `LoadLightingProfile` | function | SparkEditor | [LightingTools.h:L416](../../SparkEditor/Source/Lighting/LightingTools.h#L416) | Load lighting profile |
 | `LoadLockouts` | function | GameModules | [MMOPersistenceSystem.h:L244](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h#L244) |  |
 | `LoadManifest` | function | SparkCrashReporter | [CrashReporterApp.cpp:L1076](../../SparkCrashReporter/src/CrashReporterApp.cpp#L1076) |  |
 | `LoadManifest` | function | SparkCrashReporter | [CrashReporterApp.h:L72](../../SparkCrashReporter/src/CrashReporterApp.h#L72) |  |
 | `LoadManifestFromPinnedDirectory` | function | SparkCrashReporter | [CrashReporterApp.cpp:L889](../../SparkCrashReporter/src/CrashReporterApp.cpp#L889) |  |
 | `LoadManifestFromPinnedDirectory` | function | SparkCrashReporter | [CrashReporterApp.cpp:L1087](../../SparkCrashReporter/src/CrashReporterApp.cpp#L1087) |  |
 | `LoadMatch` | function | GameModules | [RTSEngineSystems.h:L67](../../GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.h#L67) | Load an RTS match state from the given slot. |
-| `LoadMaterial` | function | SparkEditor | [MaterialEditor.h:L309](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L309) | Load material from file |
 | `LoadMaterial` | function | SparkEngine | [MaterialLoader.h:L74](../../SparkEngine/Source/Graphics/MaterialLoader.h#L74) | Load a single .sparkmat file and register the material. |
 | `LoadMaterial` | function | SparkEngine | [MaterialSystem.h:L347](../../SparkEngine/Source/Graphics/MaterialSystem.h#L347) | Create a new material with the given name. |
 | `LoadMaterialsFromDirectory` | function | SparkEngine | [MaterialLoader.h:L81](../../SparkEngine/Source/Graphics/MaterialLoader.h#L81) | Load all .sparkmat files from a directory (non-recursive). |
@@ -21948,22 +21562,6 @@
 | `lock` | function | SparkDaemon | [ShaderService.cpp:L134](../../SparkDaemon/src/ShaderService.cpp#L134) |  |
 | `lock` | function | SparkDaemon | [ShaderService.cpp:L166](../../SparkDaemon/src/ShaderService.cpp#L166) |  |
 | `lock` | function | SparkDaemon | [ShaderService.cpp:L188](../../SparkDaemon/src/ShaderService.cpp#L188) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L158](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L158) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L166](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L166) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L177](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L177) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L195](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L195) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L244](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L244) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L262](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L262) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L293](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L293) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L309](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L309) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L333](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L333) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L367](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L367) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L379](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L379) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L724](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L724) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L784](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L784) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L797](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L797) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L821](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L821) |  |
-| `lock` | function | SparkEditor | [AssetDatabase.cpp:L839](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L839) |  |
 | `lock` | function | SparkEditor | [AdvancedAssetPipeline.cpp:L154](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp#L154) |  |
 | `lock` | function | SparkEditor | [AdvancedAssetPipeline.cpp:L177](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp#L177) |  |
 | `lock` | function | SparkEditor | [AdvancedAssetPipeline.cpp:L187](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp#L187) |  |
@@ -22584,7 +22182,6 @@
 | `lock` | function | SparkEngine | [GraphicsConsoleOpsWindows.cpp:L38](../../SparkEngine/Source/Graphics/GraphicsConsoleOpsWindows.cpp#L38) |  |
 | `lock` | function | SparkEngine | [GraphicsEngineWindowsFrame.cpp:L285](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsFrame.cpp#L285) |  |
 | `lock` | function | SparkEngine | [GraphicsEngineWindowsFrame.cpp:L365](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsFrame.cpp#L365) |  |
-| `lock` | function | SparkEngine | [GraphicsEngineWindowsFrame.cpp:L473](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsFrame.cpp#L473) |  |
 | `lock` | function | SparkEngine | [GraphicsRenderPipelinesWindows.cpp:L106](../../SparkEngine/Source/Graphics/GraphicsRenderPipelinesWindows.cpp#L106) |  |
 | `lock` | function | SparkEngine | [GraphicsRenderPipelinesWindows.cpp:L188](../../SparkEngine/Source/Graphics/GraphicsRenderPipelinesWindows.cpp#L188) |  |
 | `lock` | function | SparkEngine | [GraphicsRenderPipelinesWindows.cpp:L263](../../SparkEngine/Source/Graphics/GraphicsRenderPipelinesWindows.cpp#L263) |  |
@@ -23146,7 +22743,6 @@
 | `LODSelector` | class | SparkEngine | [MeshClusterSystem.h:L497](../../SparkEngine/Source/Graphics/MeshClusterSystem.h#L497) | Select which clusters to render based on screen-space error |
 | `LODStats` | struct | SparkEngine | [MeshLOD.h:L152](../../SparkEngine/Source/Graphics/MeshLOD.h#L152) |  |
 | `LODTargetPlatform` | enum | SparkEditor | [AssetPipelineTypes.h:L46](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L46) |  |
-| `Log` | function | GameModules | [Console.h:L156](../../GameModules/SparkGameFPS/Source/Game/Console.h#L156) | Add a log message to the console buffer |
 | `log` | function | SparkAutomation | [main.cpp:L613](../../SparkAutomation/src/main.cpp#L613) |  |
 | `Log` | function | SparkEditor | [EditorLogger.h:L202](../../SparkEditor/Source/Core/EditorLogger.h#L202) | Get singleton instance |
 | `Log` | function | SparkEditor | [EditorConsoleBridge.h:L84](../../SparkEditor/Source/Utils/EditorConsoleBridge.h#L84) | Disconnect from the engine console. |
@@ -23284,7 +22880,6 @@
 | `long` | function | tools | [gvisor-wine-shim.c:L138](../../tools/gvisor-wine-shim.c#L138) |  |
 | `longId` | function | Tests | [TestCollaborativeEditing.cpp:L418](../../Tests/TestCollaborativeEditing.cpp#L418) |  |
 | `longName` | function | Tests | [TestServerMockClient.cpp:L1155](../../Tests/TestServerMockClient.cpp#L1155) |  |
-| `longStr` | function | Tests | [TestPacketValidator.cpp:L290](../../Tests/TestPacketValidator.cpp#L290) |  |
 | `Look` | function | Templates | [GameModule.h:L96](../../Templates/Blank3D/Source/GameModule.h#L96) |  |
 | `LookAt` | function | Tests | [TestCameraTransforms.cpp:L53](../../Tests/TestCameraTransforms.cpp#L53) |  |
 | `LookAt` | function | Tests | [TestFrustumCulling.cpp:L78](../../Tests/TestFrustumCulling.cpp#L78) |  |
@@ -23293,7 +22888,6 @@
 | `Lookup` | function | SparkEngine | [ShaderDiskCache.h:L56](../../SparkEngine/Source/Graphics/ShaderDiskCache.h#L56) | Look up a cached blob. Returns nullopt if not found. |
 | `Lookup` | function | Tests | [TestPathCache.cpp:L65](../../Tests/TestPathCache.cpp#L65) |  |
 | `Lookup` | function | Tests | [TestShaderDiskCache.cpp:L31](../../Tests/TestShaderDiskCache.cpp#L31) |  |
-| `LookupByPath` | function | Tests | [TestAssetDatabase.cpp:L82](../../Tests/TestAssetDatabase.cpp#L82) |  |
 | `LookupCharacterStat` | function | GameModules | [RPGGameplayBridge.cpp:L291](../../GameModules/SparkGameRPG/Source/Gameplay/RPGGameplayBridge.cpp#L291) |  |
 | `LookupContinentEndpoint` | function | GameModules | [TFTravelSystem.h:L140](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystem.h#L140) |  |
 | `LookupFeatures` | function | SparkEngine | [NeuralRadianceCache.h:L159](../../SparkEngine/Source/Graphics/Neural/NeuralRadianceCache.h#L159) | Look up features from hash grid for a position. |
@@ -23681,7 +23275,6 @@
 | `Mat4x4` | struct | Tests | [TestAnimationStress.cpp:L52](../../Tests/TestAnimationStress.cpp#L52) |  |
 | `Mat4x4` | struct | Tests | [TestAnimationSystem.cpp:L81](../../Tests/TestAnimationSystem.cpp#L81) |  |
 | `Mat4x4` | struct | Tests | [TestRenderECSIntegration.cpp:L21](../../Tests/TestRenderECSIntegration.cpp#L21) |  |
-| `Match` | function | Tests | [TestJsonUtils.cpp:L343](../../Tests/TestJsonUtils.cpp#L343) |  |
 | `Matches` | function | GameModules | [TFDirectiveSystem.h:L111](../../GameModules/SparkGameMMOFPS/Source/Game/TFDirectiveSystem.h#L111) |  |
 | `MatchLiteral` | function | SparkEngine | [JsonUtils.h:L703](../../SparkEngine/Source/Utils/JsonUtils.h#L703) |  |
 | `MatchPhase` | enum | Templates | [GameModule.h:L49](../../Templates/MultiplayerArena/Source/GameModule.h#L49) |  |
@@ -23731,50 +23324,11 @@
 | `MaterialCBSlot` | struct | SparkEngine | [PersistentMaterialCB.h:L35](../../SparkEngine/Source/Graphics/PersistentMaterialCB.h#L35) |  |
 | `MaterialChangeReactiveSystem` | class | SparkEngine | [ReactiveSystem.h:L184](../../SparkEngine/Source/Engine/ECS/ReactiveSystem.h#L184) | Concrete reactive system for MeshRenderer material changes. |
 | `MaterialCommand` | class | SparkEditor | [EditorCommands.h:L101](../../SparkEditor/Source/UndoRedo/EditorCommands.h#L101) | Command for changing a material property on an entity |
-| `MaterialConnection` | struct | SparkEditor | [MaterialEditor.h:L139](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L139) | Connection between sockets |
 | `MaterialConstants` | struct | SparkEngine | [MaterialSystem.h:L45](../../SparkEngine/Source/Graphics/MaterialSystem.h#L45) | GPU-aligned constant buffer matching HLSL material layout |
 | `MaterialDefinition` | struct | SparkEditor | [MaterialEditorPanel.h:L129](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L129) | Complete material definition. |
 | `MaterialDefinition` | struct | SparkEngine | [MaterialDefinition.h:L150](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L150) | A complete declarative material definition. |
 | `MaterialDefinitionRegistry` | class | SparkEngine | [MaterialDefinition.h:L475](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L475) | Registry of material definitions, keyed by name. |
 | `MaterialDoc` | struct | SparkEditor | [BasicMaterialEditorPanel.h:L60](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.h#L60) | One material JSON document loaded into editable fields. |
-| `MaterialEditor` | class | SparkEditor | [MaterialEditor.h:L255](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L255) |  |
-| `MaterialEditor::AddNode` | method | SparkEditor | [MaterialEditor.cpp:L213](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L213) |  |
-| `MaterialEditor::CompileMaterial` | method | SparkEditor | [MaterialEditor.cpp:L148](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L148) |  |
-| `MaterialEditor::ConnectSockets` | method | SparkEditor | [MaterialEditor.cpp:L250](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L250) |  |
-| `MaterialEditor::CreateNewMaterial` | method | SparkEditor | [MaterialEditor.cpp:L72](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L72) |  |
-| `MaterialEditor::CreateNode` | method | SparkEditor | [MaterialEditor.cpp:L922](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L922) |  |
-| `MaterialEditor::DisconnectSocket` | method | SparkEditor | [MaterialEditor.cpp:L295](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L295) |  |
-| `MaterialEditor::FindNodeAtPosition` | method | SparkEditor | [MaterialEditor.cpp:L1193](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L1193) |  |
-| `MaterialEditor::FindSocketAtPosition` | method | SparkEditor | [MaterialEditor.cpp:L1208](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L1208) |  |
-| `MaterialEditor::GenerateShaderCode` | method | SparkEditor | [MaterialEditor.cpp:L1054](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L1054) |  |
-| `MaterialEditor::GetNodeTypeInfo` | method | SparkEditor | [MaterialEditor.cpp:L1038](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L1038) |  |
-| `MaterialEditor::GraphToScreen` | method | SparkEditor | [MaterialEditor.cpp:L1187](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L1187) |  |
-| `MaterialEditor::HandleConnectionCreation` | method | SparkEditor | [MaterialEditor.cpp:L755](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L755) |  |
-| `MaterialEditor::HandleEvent` | method | SparkEditor | [MaterialEditor.cpp:L59](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L59) |  |
-| `MaterialEditor::HandleNodeDragging` | method | SparkEditor | [MaterialEditor.cpp:L705](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L705) |  |
-| `MaterialEditor::HandleNodeSelection` | method | SparkEditor | [MaterialEditor.cpp:L851](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L851) |  |
-| `MaterialEditor::Initialize` | method | SparkEditor | [MaterialEditor.cpp:L31](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L31) |  |
-| `MaterialEditor::InitializeNodeTypes` | method | SparkEditor | [MaterialEditor.cpp:L944](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L944) |  |
-| `MaterialEditor::LoadMaterial` | method | SparkEditor | [MaterialEditor.cpp:L89](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L89) |  |
-| `MaterialEditor::RemoveNode` | method | SparkEditor | [MaterialEditor.cpp:L223](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L223) |  |
-| `MaterialEditor::Render` | method | SparkEditor | [MaterialEditor.cpp:L44](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L44) |  |
-| `MaterialEditor::RenderCompilationOutput` | method | SparkEditor | [MaterialEditor.cpp:L526](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L526) |  |
-| `MaterialEditor::RenderConnections` | method | SparkEditor | [MaterialEditor.cpp:L650](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L650) |  |
-| `MaterialEditor::RenderGraphEditor` | method | SparkEditor | [MaterialEditor.cpp:L327](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L327) |  |
-| `MaterialEditor::RenderMaterialPreview` | method | SparkEditor | [MaterialEditor.cpp:L471](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L471) |  |
-| `MaterialEditor::RenderMaterialProperties` | method | SparkEditor | [MaterialEditor.cpp:L373](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L373) |  |
-| `MaterialEditor::RenderNode` | method | SparkEditor | [MaterialEditor.cpp:L563](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L563) |  |
-| `MaterialEditor::RenderNodePalette` | method | SparkEditor | [MaterialEditor.cpp:L343](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L343) |  |
-| `MaterialEditor::RenderNodeSockets` | method | SparkEditor | [MaterialEditor.cpp:L605](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L605) |  |
-| `MaterialEditor::RenderPreviewToTexture` | method | SparkEditor | [MaterialEditor.cpp:L1258](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L1258) |  |
-| `MaterialEditor::SaveMaterial` | method | SparkEditor | [MaterialEditor.cpp:L119](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L119) |  |
-| `MaterialEditor::ScreenToGraph` | method | SparkEditor | [MaterialEditor.cpp:L1181](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L1181) |  |
-| `MaterialEditor::SetPreviewShape` | method | SparkEditor | [MaterialEditor.cpp:L318](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L318) |  |
-| `MaterialEditor::SetupPreviewRendering` | method | SparkEditor | [MaterialEditor.cpp:L1251](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L1251) |  |
-| `MaterialEditor::Shutdown` | method | SparkEditor | [MaterialEditor.cpp:L53](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L53) |  |
-| `MaterialEditor::Update` | method | SparkEditor | [MaterialEditor.cpp:L39](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L39) |  |
-| `MaterialEditor::UpdateNodePreviews` | method | SparkEditor | [MaterialEditor.cpp:L903](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L903) |  |
-| `MaterialEditor::ValidateMaterialGraph` | method | SparkEditor | [MaterialEditor.cpp:L1143](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L1143) |  |
 | `MaterialEditorPanel` | class | SparkEditor | [MaterialEditorPanel.h:L185](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L185) |  |
 | `MaterialEditorPanel::CreateMaterial` | method | SparkEditor | [MaterialEditorPanel.cpp:L248](../../SparkEditor/Source/Panels/MaterialEditorPanel.cpp#L248) |  |
 | `MaterialEditorPanel::GetSelectedMaterial` | method | SparkEditor | [MaterialEditorPanel.cpp:L618](../../SparkEditor/Source/Panels/MaterialEditorPanel.cpp#L618) |  |
@@ -23811,7 +23365,6 @@
 | `MaterialEffectSystem::RegisterEffect` | method | SparkEngine | [MaterialEffects.cpp:L32](../../SparkEngine/Source/Engine/Gameplay/MaterialEffects.cpp#L32) |  |
 | `MaterialEffectSystem::Shutdown` | method | SparkEngine | [MaterialEffects.cpp:L22](../../SparkEngine/Source/Engine/Gameplay/MaterialEffects.cpp#L22) |  |
 | `MaterialEffectSystem::TriggerEffect` | method | SparkEngine | [MaterialEffects.cpp:L61](../../SparkEngine/Source/Engine/Gameplay/MaterialEffects.cpp#L61) |  |
-| `MaterialGraph` | struct | SparkEditor | [MaterialEditor.h:L190](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L190) | Material graph |
 | `MaterialInstance` | class | SparkEngine | [MaterialDefinition.h:L287](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L287) | A concrete material instance created from a MaterialDefinition. |
 | `MaterialInstance` | function | SparkEngine | [MaterialDefinition.h:L290](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L290) |  |
 | `MaterialInstance` | function | SparkEngine | [MaterialDefinition.h:L512](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L512) | Create a material instance from a registered definition. |
@@ -23830,12 +23383,9 @@
 | `MaterialMergeHandler::ValidateMerge` | method | SparkEditor | [VersionControlSystem.cpp:L180](../../SparkEditor/Source/VersionControl/VersionControlSystem.cpp#L180) |  |
 | `MaterialMetrics` | struct | SparkEngine | [MaterialSystem.h:L312](../../SparkEngine/Source/Graphics/MaterialSystem.h#L312) | Material system performance metrics |
 | `MaterialMetrics` | struct | Tests | [TestMaterialSystemEdgeCases.cpp:L81](../../Tests/TestMaterialSystemEdgeCases.cpp#L81) |  |
-| `MaterialNode` | struct | SparkEditor | [MaterialEditor.h:L155](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L155) | Material graph node |
-| `MaterialNodeType` | enum | SparkEditor | [MaterialEditor.h:L39](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L39) | Node types in the material graph |
 | `MaterialParams` | struct | SparkEngine | [MetalRayTracing.h:L95](../../SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.h#L95) |  |
 | `MaterialParamsFromPBR` | function | SparkEngine | [RTMaterialAdapter.h:L47](../../SparkEngine/Source/Graphics/HybridRT/RTMaterialAdapter.h#L47) |  |
 | `MaterialPreset` | struct | SparkEditor | [Physics3DPanel.h:L82](../../SparkEditor/Source/Panels/Physics3DPanel.h#L82) |  |
-| `MaterialPreview` | struct | SparkEditor | [MaterialEditor.h:L216](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L216) | Material preview sphere |
 | `MaterialPropertyHandle` | struct | SparkEngine | [MaterialPropertyHandle.h:L49](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.h#L49) | Compact handle encoding binding index, type, and byte offset. |
 | `MaterialPropertyHandle::Invalid` | method | SparkEngine | [MaterialPropertyHandle.cpp:L42](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.cpp#L42) |  |
 | `MaterialPropertyRegistry` | class | SparkEngine | [MaterialPropertyHandle.h:L85](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.h#L85) |  |
@@ -23850,7 +23400,6 @@
 | `MaterialRenderState` | struct | SparkEngine | [MaterialSystem.h:L193](../../SparkEngine/Source/Graphics/MaterialSystem.h#L193) | Material render state |
 | `MaterialRenderState` | struct | Tests | [TestMaterialSystemEdgeCases.cpp:L69](../../Tests/TestMaterialSystemEdgeCases.cpp#L69) |  |
 | `MaterialRenderState` | struct | Tests | [TestMaterialSystemValidation.cpp:L71](../../Tests/TestMaterialSystemValidation.cpp#L71) |  |
-| `MaterialSocket` | struct | SparkEditor | [MaterialEditor.h:L120](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L120) | Material node socket |
 | `MaterialState` | struct | Tests | [TestRenderECSIntegration.cpp:L96](../../Tests/TestRenderECSIntegration.cpp#L96) |  |
 | `MaterialSystem` | class | SparkEngine | [GraphicsEngine.h:L73](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L73) |  |
 | `MaterialSystem` | class | SparkEngine | [RTSceneFeeder.h:L33](../../SparkEngine/Source/Graphics/HybridRT/RTSceneFeeder.h#L33) |  |
@@ -24815,7 +24364,6 @@
 | `ModelVertex` | struct | SparkEngine | [ModelVertex.h:L43](../../SparkEngine/Source/Game/ModelVertex.h#L43) |  |
 | `ModEntry` | struct | SparkEditor | [ModdingPanel.h:L33](../../SparkEditor/Source/Panels/ModdingPanel.h#L33) |  |
 | `ModeToString` | function | GameModules | [RacingCameraSystem.h:L91](../../GameModules/SparkGameRacing/Source/Camera/RacingCameraSystem.h#L91) |  |
-| `ModifyHeight` | function | GameModules | [Terrain.h:L126](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L126) | Raise/lower terrain at a world position |
 | `ModifyTerrainHeight` | function | SparkEditor | [TerrainEditor.h:L90](../../SparkEditor/Source/Terrain/TerrainEditor.h#L90) |  |
 | `ModInfo` | struct | SparkEngine | [ModSystem.h:L41](../../SparkEngine/Source/Engine/Modding/ModSystem.h#L41) | Metadata for a single mod. |
 | `ModManifest` | struct | Tests | [TestModSystem.cpp:L54](../../Tests/TestModSystem.cpp#L54) |  |
@@ -25625,7 +25173,6 @@
 | `NodeStatus` | enum | Tests | [TestAIStress.cpp:L20](../../Tests/TestAIStress.cpp#L20) |  |
 | `NodeType` | enum | SparkEditor | [DialogueEditorPanel.h:L35](../../SparkEditor/Source/Panels/DialogueEditorPanel.h#L35) |  |
 | `NodeType` | enum | Tests | [TestShaderGraphCompiler.cpp:L17](../../Tests/TestShaderGraphCompiler.cpp#L17) |  |
-| `NodeTypeInfo` | struct | SparkEditor | [MaterialEditor.h:L450](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L450) | Get node type information |
 | `NodeUI` | struct | SparkEditor | [VisualScriptPanel.h:L102](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L102) |  |
 | `noise` | function | Tests | [TestNoiseGenerator.cpp:L81](../../Tests/TestNoiseGenerator.cpp#L81) |  |
 | `noise` | function | Tests | [TestNoiseGenerator.cpp:L122](../../Tests/TestNoiseGenerator.cpp#L122) |  |
@@ -26465,7 +26012,6 @@
 | `OptimizeAllAssets` | function | SparkEditor | [AdvancedAssetPipeline.h:L392](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L392) | Optimize all assets |
 | `OptimizeBroadPhase` | function | GameModules | [TFWorldCollision.h:L141](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.h#L141) |  |
 | `OptimizeBroadPhase` | function | SparkEngine | [PhysicsSystem.h:L170](../../SparkEngine/Source/Physics/PhysicsSystem.h#L170) | Optimize the Jolt broadphase after bulk static-body creation (level load). No-op without Jolt. |
-| `OptimizeLightingPerformance` | function | SparkEditor | [LightingTools.h:L452](../../SparkEditor/Source/Lighting/LightingTools.h#L452) | Optimize lighting for performance |
 | `OptimizerKind` | enum | SparkEngine | [NeuralWeights.h:L47](../../SparkEngine/Source/Graphics/Neural/NeuralWeights.h#L47) | Optimizer kind enumeration, stored inside the optimizer trailer. |
 | `OptimizerState` | struct | SparkEngine | [NeuralWeights.h:L76](../../SparkEngine/Source/Graphics/Neural/NeuralWeights.h#L76) | Optional optimizer-state trailer (serialised when @p kNNWFlagOptimizerState is set). |
 | `OptimizeTileArrangement` | function | SparkEditor | [LevelStreamingSystem.h:L283](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L283) | Optimize tile arrangement |
@@ -26569,7 +26115,6 @@
 | `OutfitResultText` | function | GameModules | [TFOutfitSystem.cpp:L36](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.cpp#L36) |  |
 | `OutfitResultText` | function | GameModules | [TFOutfitSystemTypes.h:L75](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystemTypes.h#L75) |  |
 | `OutfitTaggedLabel` | function | GameModules | [TFOutfitSystemTypes.h:L194](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystemTypes.h#L194) |  |
-| `outHandle` | function | SparkEditor | [AnimationTimelineUI.cpp:L536](../../SparkEditor/Source/Animation/AnimationTimelineUI.cpp#L536) |  |
 | `outPath` | function | SparkBuild | [Downloader.cpp:L177](../../SparkBuild/src/Downloader.cpp#L177) |  |
 | `output` | function | GameModules | [TFWorldSave.h:L206](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFWorldSave.h#L206) |  |
 | `output` | function | SparkBuild | [DownloaderTests.cpp:L167](../../SparkBuild/tests/DownloaderTests.cpp#L167) |  |
@@ -26844,7 +26389,6 @@
 | `P` | alias | Tests | [TestCoreAndBuildSystems.cpp:L309](../../Tests/TestCoreAndBuildSystems.cpp#L309) |  |
 | `p` | function | Tests | [TestDaemonCodexFixes.cpp:L62](../../Tests/TestDaemonCodexFixes.cpp#L62) |  |
 | `p` | function | Tests | [TestDaemonLRU.cpp:L38](../../Tests/TestDaemonLRU.cpp#L38) |  |
-| `p` | function | Tests | [TestJsonUtils.cpp:L361](../../Tests/TestJsonUtils.cpp#L361) |  |
 | `p` | function | Tests | [TestShaderDiskCacheDaemon.cpp:L51](../../Tests/TestShaderDiskCacheDaemon.cpp#L51) |  |
 | `p` | function | Tests | [TestShaderServiceClient.cpp:L232](../../Tests/TestShaderServiceClient.cpp#L232) |  |
 | `p0` | function | SparkEngine | [AIDebugRenderer.cpp:L64](../../SparkEngine/Source/Engine/AI/AIDebugRenderer.cpp#L64) |  |
@@ -26942,7 +26486,6 @@
 | `Padding` | struct | SparkEngine | [UILayoutExtensions.h:L30](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L30) |  |
 | `Page` | enum | SparkInstaller | [WizardGui.cpp:L22](../../SparkInstaller/src/gui/WizardGui.cpp#L22) |  |
 | `PageKey` | struct | SparkEngine | [VirtualTexture.cpp:L69](../../SparkEngine/Source/Graphics/VirtualTexture.cpp#L69) |  |
-| `PaintSplatMap` | function | GameModules | [Terrain.h:L145](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L145) | Paint splat map at a world position |
 | `PaintTextureWeight` | function | SparkEditor | [TerrainEditor.h:L92](../../SparkEditor/Source/Terrain/TerrainEditor.h#L92) |  |
 | `PairHash` | struct | Tests | [TestCrossSystemIntegration.cpp:L75](../../Tests/TestCrossSystemIntegration.cpp#L75) |  |
 | `PAK_FSEEK` | macro | SparkEngine | [SparkPak.cpp:L25](../../SparkEngine/Source/Core/SparkPak.cpp#L25) |  |
@@ -27015,7 +26558,6 @@
 | `ParseArray` | function | SparkEngine | [JsonUtils.h:L438](../../SparkEngine/Source/Utils/JsonUtils.h#L438) |  |
 | `ParseArray` | function | SparkEngine | [JsonUtils.h:L619](../../SparkEngine/Source/Utils/JsonUtils.h#L619) |  |
 | `ParseArray` | function | Tests | [TestJsonUtils.cpp:L175](../../Tests/TestJsonUtils.cpp#L175) |  |
-| `ParseArray` | function | Tests | [TestJsonUtils.cpp:L276](../../Tests/TestJsonUtils.cpp#L276) |  |
 | `ParseBackend` | function | SparkShaderCompiler | [main.cpp:L129](../../SparkShaderCompiler/src/main.cpp#L129) |  |
 | `ParseBackendName` | function | SparkEngine | [RHIFactory.cpp:L82](../../SparkEngine/Source/Graphics/RHI/RHIFactory.cpp#L82) |  |
 | `ParseBlendMode` | function | SparkEngine | [MaterialLoader.cpp:L174](../../SparkEngine/Source/Graphics/MaterialLoader.cpp#L174) |  |
@@ -27093,7 +26635,6 @@
 | `ParseIntegerExact` | function | SparkEngine | [ComponentReflection.cpp:L43](../../SparkEngine/Source/Core/ComponentReflection.cpp#L43) |  |
 | `ParseIPv4Address` | function | SparkEngine | [NetworkBindPolicy.h:L82](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h#L82) | Whether a numeric IPv4 address belongs to the complete 127/8 loopback block. |
 | `ParseJobCount` | function | SparkCooker | [main.cpp:L60](../../SparkCooker/src/main.cpp#L60) |  |
-| `ParseJson` | function | Tests | [TestJsonUtils.cpp:L359](../../Tests/TestJsonUtils.cpp#L359) |  |
 | `ParseJsonHex4` | function | SparkEditor | [ProjectManager.cpp:L130](../../SparkEditor/Source/Core/ProjectManager.cpp#L130) |  |
 | `ParseLine` | function | SparkEditor | [BuildPipeline.h:L165](../../SparkEditor/Source/Panels/BuildPipeline.h#L165) |  |
 | `ParseManifest` | function | Tests | [TestModSystem.cpp:L65](../../Tests/TestModSystem.cpp#L65) |  |
@@ -27111,7 +26652,6 @@
 | `ParseObject` | function | SparkEngine | [JsonUtils.h:L436](../../SparkEngine/Source/Utils/JsonUtils.h#L436) |  |
 | `ParseObject` | function | SparkEngine | [JsonUtils.h:L653](../../SparkEngine/Source/Utils/JsonUtils.h#L653) |  |
 | `ParseObject` | function | Tests | [TestJsonUtils.cpp:L173](../../Tests/TestJsonUtils.cpp#L173) |  |
-| `ParseObject` | function | Tests | [TestJsonUtils.cpp:L305](../../Tests/TestJsonUtils.cpp#L305) |  |
 | `ParseOpticName` | function | GameModules | [TFOpticsSystem.cpp:L78](../../GameModules/SparkGameMMOFPS/Source/Game/TFOpticsSystem.cpp#L78) |  |
 | `ParseOptions` | function | SparkInstaller | [InstallState.cpp:L99](../../SparkInstaller/src/InstallState.cpp#L99) |  |
 | `ParseOptions` | function | Tests | [GatewayTopologyProbe.cpp:L110](../../Tests/Fixtures/GatewayTopologyProbe.cpp#L110) |  |
@@ -27160,7 +26700,6 @@
 | `ParseString` | function | SparkEngine | [JsonUtils.h:L434](../../SparkEngine/Source/Utils/JsonUtils.h#L434) |  |
 | `ParseString` | function | SparkEngine | [JsonUtils.h:L520](../../SparkEngine/Source/Utils/JsonUtils.h#L520) |  |
 | `ParseString` | function | Tests | [TestJsonUtils.cpp:L171](../../Tests/TestJsonUtils.cpp#L171) |  |
-| `ParseString` | function | Tests | [TestJsonUtils.cpp:L236](../../Tests/TestJsonUtils.cpp#L236) |  |
 | `ParseTerrainParams` | function | GameModules | [TFWorldSetup.h:L167](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.h#L167) |  |
 | `ParseTestFrameLimit` | function | SparkEngine | [SparkEngineWindows.cpp:L75](../../SparkEngine/Source/Core/SparkEngineWindows.cpp#L75) | Parse -test-frames N from a wide command line string (Windows). |
 | `ParseTestFrameLimitArgs` | function | SparkEngine | [SparkEngineLinux.cpp:L59](../../SparkEngine/Source/Core/SparkEngineLinux.cpp#L59) |  |
@@ -27323,7 +26862,6 @@
 | `PassThroughSettings` | function | Tests | [TestAdvancedAssetPipeline.cpp:L133](../../Tests/TestAdvancedAssetPipeline.cpp#L133) |  |
 | `PassTypeToString` | function | SparkEngine | [RenderGraph.h:L1343](../../SparkEngine/Source/Graphics/RenderGraph.h#L1343) |  |
 | `PasswordBuffer` | alias | Tests | [TestMMOCredentialSecurity.cpp:L13](../../Tests/TestMMOCredentialSecurity.cpp#L13) |  |
-| `path` | function | GameModules | [Terrain.cpp:L211](../../GameModules/SparkGameFPS/Source/Game/Terrain.cpp#L211) |  |
 | `path` | function | SparkBuild | [Config.cpp:L681](../../SparkBuild/src/Config.cpp#L681) |  |
 | `path` | function | SparkBuild | [Downloader.cpp:L296](../../SparkBuild/src/Downloader.cpp#L296) |  |
 | `path` | function | SparkEditor | [AdvancedAssetPipeline.cpp:L608](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp#L608) |  |
@@ -27412,7 +26950,6 @@
 | `Pause` | function | GameModules | [SparkGameFPS.h:L65](../../GameModules/SparkGameFPS/Source/Core/SparkGameFPS.h#L65) |  |
 | `Pause` | function | GameModules | [Game.h:L156](../../GameModules/SparkGameFPS/Source/Game/Game.h#L156) | Pause the game simulation |
 | `Pause` | function | GameModules | [WaveSpawner.h:L105](../../GameModules/SparkGameFPS/Source/Game/WaveSpawner.h#L105) | Pause wave progression |
-| `Pause` | function | SparkEditor | [AnimationTimeline.h:L123](../../SparkEditor/Source/Animation/AnimationTimeline.h#L123) | Pause animation playback |
 | `Pause` | function | SparkEngine | [MusicManager.h:L239](../../SparkEngine/Source/Audio/MusicManager.h#L239) |  |
 | `Pause` | function | SparkEngine | [IGameModule.h:L69](../../SparkEngine/Source/Core/IGameModule.h#L69) | Pause game simulation |
 | `Pause` | function | SparkEngine | [Sequencer.h:L276](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L276) |  |
@@ -28242,7 +27779,6 @@
 | `PlatformInputFactory` | class | SparkEngine | [PlatformInput.h:L481](../../SparkEngine/Source/Input/PlatformInput.h#L481) | Factory that creates the appropriate input backend for the current platform. |
 | `PlatformKeyCode` | enum | SparkEngine | [PlatformInput.h:L49](../../SparkEngine/Source/Input/PlatformInput.h#L49) | Unified key/button codes across all input devices. |
 | `PlatformType` | enum | GameModules | [PlatformerEnums.h:L40](../../GameModules/SparkGamePlatformer/Source/Enums/PlatformerEnums.h#L40) | Types of platforms with different behaviors |
-| `Play` | function | SparkEditor | [AnimationTimeline.h:L118](../../SparkEditor/Source/Animation/AnimationTimeline.h#L118) | Start animation playback |
 | `Play` | function | SparkEngine | [MusicManager.h:L237](../../SparkEngine/Source/Audio/MusicManager.h#L237) |  |
 | `Play` | function | SparkEngine | [Sequencer.h:L275](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L275) |  |
 | `Play` | function | SparkEngine | [VideoPlayer.h:L169](../../SparkEngine/Source/Engine/Cinematic/VideoPlayer.h#L169) | Start or resume playback |
@@ -28251,7 +27787,6 @@
 | `Play` | function | Tests | [TestSprite2DComponents.cpp:L135](../../Tests/TestSprite2DComponents.cpp#L135) |  |
 | `PlayableFaction` | function | GameModules | [TFAlertSystemInternal.h:L25](../../GameModules/SparkGameMMOFPS/Source/World/TFAlertSystemInternal.h#L25) |  |
 | `PlaybackCamera` | enum | SparkEngine | [ReplaySystem.h:L28](../../SparkEngine/Source/Engine/Replay/ReplaySystem.h#L28) |  |
-| `PlaybackState` | enum | SparkEditor | [AnimationTimelineTypes.h:L222](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L222) | Animation playback state |
 | `PlaybackState` | enum | SparkEngine | [ReplaySystem.h:L37](../../SparkEngine/Source/Engine/Replay/ReplaySystem.h#L37) |  |
 | `playColor` | function | SparkEditor | [PlayModeToolbarPanel.cpp:L180](../../SparkEditor/Source/Panels/PlayModeToolbarPanel.cpp#L180) |  |
 | `PlayControlPanel` | class | SparkEditor | [PlayControlPanel.h:L40](../../SparkEditor/Source/Panels/PlayControlPanel.h#L40) | Editor panel for launching, monitoring, and stopping real out-of-process |
@@ -28465,8 +28000,6 @@
 | `PointInSphere` | function | SparkEngine | [MathUtilsExtended.h:L191](../../SparkEngine/Source/Utils/MathUtilsExtended.h#L191) |  |
 | `PointInTriangle` | function | SparkEngine | [SVGRenderer.h:L727](../../SparkEngine/Source/Graphics/SVGRenderer.h#L727) | Point-in-triangle test using barycentric coordinates |
 | `PointOfInterest` | struct | GameModules | [OWExplorationSystem.h:L27](../../GameModules/SparkGameOpenWorld/Source/Exploration/OWExplorationSystem.h#L27) | A point of interest in the world |
-| `PointToCircleDistance2D` | function | SparkEditor | [GizmoSystem.cpp:L78](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L78) |  |
-| `PointToLineDistance2D` | function | SparkEditor | [GizmoSystem.cpp:L59](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L59) |  |
 | `PointToSegmentDistance` | function | SparkEditor | [SceneViewPanel.cpp:L822](../../SparkEditor/Source/Panels/SceneViewPanel.cpp#L822) |  |
 | `PointType` | enum | SparkEngine | [PlacementComponents.h:L175](../../SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h#L175) | Marks an entity position as a tactical point for AI decision-making. |
 | `POIProgress` | struct | GameModules | [OWExplorationSystem.h:L43](../../GameModules/SparkGameOpenWorld/Source/Exploration/OWExplorationSystem.h#L43) | Per-POI discovery tracking |
@@ -28600,16 +28133,6 @@
 | `PostProcessCB` | struct | SparkEngine | [PostProcessingPipeline.h:L334](../../SparkEngine/Source/Graphics/PostProcessingPipeline.h#L334) |  |
 | `PostProcessEffect` | enum | SparkEditor | [RenderingEnums.h:L172](../../SparkEditor/Source/Enums/RenderingEnums.h#L172) | Post-processing effects |
 | `PostProcessingConstants` | struct | SparkEngine | [Shader.h:L202](../../SparkEngine/Source/Graphics/Shader.h#L202) | Post-processing parameters |
-| `PostProcessingPanel` | class | SparkEditor | [PostProcessingPanel.h:L20](../../SparkEditor/Source/Panels/PostProcessingPanel.h#L20) | Panel for editing post-processing and environment settings |
-| `PostProcessingPanel::Initialize` | method | SparkEditor | [PostProcessingPanel.cpp:L17](../../SparkEditor/Source/Panels/PostProcessingPanel.cpp#L17) |  |
-| `PostProcessingPanel::Render` | method | SparkEditor | [PostProcessingPanel.cpp:L25](../../SparkEditor/Source/Panels/PostProcessingPanel.cpp#L25) |  |
-| `PostProcessingPanel::RenderBloomSettings` | method | SparkEditor | [PostProcessingPanel.cpp:L54](../../SparkEditor/Source/Panels/PostProcessingPanel.cpp#L54) |  |
-| `PostProcessingPanel::RenderFogSettings` | method | SparkEditor | [PostProcessingPanel.cpp:L90](../../SparkEditor/Source/Panels/PostProcessingPanel.cpp#L90) |  |
-| `PostProcessingPanel::RenderSkySettings` | method | SparkEditor | [PostProcessingPanel.cpp:L113](../../SparkEditor/Source/Panels/PostProcessingPanel.cpp#L113) |  |
-| `PostProcessingPanel::RenderTonemappingSettings` | method | SparkEditor | [PostProcessingPanel.cpp:L72](../../SparkEditor/Source/Panels/PostProcessingPanel.cpp#L72) |  |
-| `PostProcessingPanel::RenderWindSettings` | method | SparkEditor | [PostProcessingPanel.cpp:L150](../../SparkEditor/Source/Panels/PostProcessingPanel.cpp#L150) |  |
-| `PostProcessingPanel::Shutdown` | method | SparkEditor | [PostProcessingPanel.cpp:L49](../../SparkEditor/Source/Panels/PostProcessingPanel.cpp#L49) |  |
-| `PostProcessingPanel::Update` | method | SparkEditor | [PostProcessingPanel.cpp:L23](../../SparkEditor/Source/Panels/PostProcessingPanel.cpp#L23) |  |
 | `PostProcessingPipeline` | class | SparkEngine | [GraphicsEngine.h:L77](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L77) |  |
 | `PostProcessingPipeline` | class | SparkEngine | [PostProcessingPipeline.h:L87](../../SparkEngine/Source/Graphics/PostProcessingPipeline.h#L87) | Manages an ordered chain of post-processing effects |
 | `PostProcessingPipeline` | class | Tests | [TestPostProcessingPipeline.cpp:L117](../../Tests/TestPostProcessingPipeline.cpp#L117) |  |
@@ -28640,7 +28163,6 @@
 | `PostProcessingPipeline::Resize` | method | SparkEngine | [PostProcessingPipeline.cpp:L78](../../SparkEngine/Source/Graphics/PostProcessingPipeline.cpp#L78) |  |
 | `PostProcessingPipeline::SetDevice` | method | SparkEngine | [PostProcessingPipeline.cpp:L116](../../SparkEngine/Source/Graphics/PostProcessingPipeline.cpp#L116) |  |
 | `PostProcessingPipeline::Shutdown` | method | SparkEngine | [PostProcessingPipeline.cpp:L122](../../SparkEngine/Source/Graphics/PostProcessingPipeline.cpp#L122) |  |
-| `PostProcessingSettings` | struct | SparkEditor | [LightingTools.h:L198](../../SparkEditor/Source/Lighting/LightingTools.h#L198) | Post-processing and tonemapping |
 | `PostProcessPass` | enum | SparkEngine | [PostProcessingTypes.h:L40](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L40) | Individual post-processing passes in render order |
 | `PostProcessPass` | enum | Tests | [TestPostProcessingPipeline.cpp:L13](../../Tests/TestPostProcessingPipeline.cpp#L13) |  |
 | `PostProcessPassData` | struct | SparkEngine | [RenderGraphBuilder.h:L151](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L151) | Post-process pass outputs placed on the blackboard. |
@@ -28680,7 +28202,6 @@
 | `PrefabAsset::RemoveComponent` | method | SparkEditor | [PrefabAsset.cpp:L39](../../SparkEditor/Source/Prefabs/PrefabAsset.cpp#L39) |  |
 | `PrefabAsset::Save` | method | SparkEditor | [PrefabAsset.cpp:L68](../../SparkEditor/Source/Prefabs/PrefabAsset.cpp#L68) |  |
 | `PrefabComponentData` | struct | SparkEngine | [RuntimePrefab.h:L69](../../SparkEngine/Source/Engine/ECS/RuntimePrefab.h#L69) | Serialized component descriptor within a prefab. |
-| `PrefabData` | struct | Tests | [TestPrefabManager.cpp:L25](../../Tests/TestPrefabManager.cpp#L25) |  |
 | `PrefabEditorPanel` | class | SparkEditor | [PrefabEditorPanel.h:L26](../../SparkEditor/Source/Panels/PrefabEditorPanel.h#L26) | Panel for browsing and editing prefab templates |
 | `PrefabEditorPanel` | function | SparkEditor | [PrefabEditorPanel.h:L33](../../SparkEditor/Source/Panels/PrefabEditorPanel.h#L33) | Construct the prefab editor panel |
 | `PrefabEditorPanel::Initialize` | method | SparkEditor | [PrefabEditorPanel.cpp:L23](../../SparkEditor/Source/Panels/PrefabEditorPanel.cpp#L23) |  |
@@ -28695,10 +28216,7 @@
 | `PrefabEntry` | struct | SparkEditor | [ObjectPlacementPanel.h:L53](../../SparkEditor/Source/Panels/ObjectPlacementPanel.h#L53) |  |
 | `PrefabFileHeader` | struct | SparkEngine | [RuntimePrefab.h:L206](../../SparkEngine/Source/Engine/ECS/RuntimePrefab.h#L206) | Simple asset file header written before prefab data. |
 | `PrefabInstance` | struct | SparkEditor | [PrefabManager.h:L27](../../SparkEditor/Source/Prefabs/PrefabManager.h#L27) | Tracks a prefab instance in the scene |
-| `PrefabInstance` | class | Tests | [TestPrefabManager.cpp:L32](../../Tests/TestPrefabManager.cpp#L32) |  |
-| `PrefabInstance` | function | Tests | [TestPrefabManager.cpp:L35](../../Tests/TestPrefabManager.cpp#L35) |  |
 | `PrefabManager` | class | SparkEditor | [PrefabManager.h:L40](../../SparkEditor/Source/Prefabs/PrefabManager.h#L40) | Manages prefab assets and their instances |
-| `PrefabManager` | class | Tests | [TestPrefabManager.cpp:L84](../../Tests/TestPrefabManager.cpp#L84) |  |
 | `PrefabManager::ApplyPrefabToInstances` | method | SparkEditor | [PrefabManager.cpp:L261](../../SparkEditor/Source/Prefabs/PrefabManager.cpp#L261) |  |
 | `PrefabManager::CreateEmptyPrefab` | method | SparkEditor | [PrefabManager.cpp:L89](../../SparkEditor/Source/Prefabs/PrefabManager.cpp#L89) |  |
 | `PrefabManager::CreatePrefabFromEntity` | method | SparkEditor | [PrefabManager.cpp:L34](../../SparkEditor/Source/Prefabs/PrefabManager.cpp#L34) |  |
@@ -28939,7 +28457,6 @@
 | `ProcessEffects` | function | SparkEngine | [AbilitySystem.h:L325](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h#L325) |  |
 | `ProcessEntityMigrations` | function | SparkEngine | [WorldServer.h:L318](../../SparkEngine/Source/Engine/Networking/WorldServer.h#L318) |  |
 | `ProcessFeedback` | function | SparkEngine | [VirtualTexture.h:L100](../../SparkEngine/Source/Graphics/VirtualTexture.h#L100) | Analyze feedback buffer and schedule page loads/evictions. |
-| `ProcessFileSystemChanges` | function | SparkEditor | [AssetDatabase.h:L269](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L269) | Process file system changes |
 | `ProcessGlobalHotkeys` | function | SparkEditor | [EditorUI.h:L502](../../SparkEditor/Source/Core/EditorUI.h#L502) |  |
 | `ProcessGPUQueries` | function | SparkEditor | [PerformanceProfiler.h:L340](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L340) | Process GPU timing queries |
 | `ProcessGroupExists` | function | SparkBuild | [ProcessRunner.cpp:L103](../../SparkBuild/src/ProcessRunner.cpp#L103) |  |
@@ -29015,19 +28532,16 @@
 | `PROFILE_BEGIN` | macro | SparkEngine | [Profiler.h:L351](../../SparkEngine/Source/Utils/Profiler.h#L351) |  |
 | `PROFILE_END` | macro | SparkEngine | [Profiler.h:L340](../../SparkEngine/Source/Utils/Profiler.h#L340) |  |
 | `PROFILE_END` | macro | SparkEngine | [Profiler.h:L352](../../SparkEngine/Source/Utils/Profiler.h#L352) |  |
-| `PROFILE_FUNCTION` | macro | SparkEditor | [ProfilerTypes.h:L310](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L310) | Profiling macros for easy instrumentation |
 | `PROFILE_GPU_BEGIN` | macro | SparkEngine | [Profiler.h:L342](../../SparkEngine/Source/Utils/Profiler.h#L342) |  |
 | `PROFILE_GPU_BEGIN` | macro | SparkEngine | [Profiler.h:L345](../../SparkEngine/Source/Utils/Profiler.h#L345) |  |
 | `PROFILE_GPU_BEGIN` | macro | SparkEngine | [Profiler.h:L353](../../SparkEngine/Source/Utils/Profiler.h#L353) |  |
 | `PROFILE_GPU_END` | macro | SparkEngine | [Profiler.h:L343](../../SparkEngine/Source/Utils/Profiler.h#L343) |  |
 | `PROFILE_GPU_END` | macro | SparkEngine | [Profiler.h:L346](../../SparkEngine/Source/Utils/Profiler.h#L346) |  |
 | `PROFILE_GPU_END` | macro | SparkEngine | [Profiler.h:L354](../../SparkEngine/Source/Utils/Profiler.h#L354) |  |
-| `PROFILE_SCOPE` | macro | SparkEditor | [ProfilerTypes.h:L308](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L308) | Profiling macros for easy instrumentation |
 | `PROFILE_SCOPE` | macro | SparkEngine | [Profiler.h:L337](../../SparkEngine/Source/Utils/Profiler.h#L337) |  |
 | `PROFILE_SCOPE` | macro | SparkEngine | [Profiler.h:L349](../../SparkEngine/Source/Utils/Profiler.h#L349) |  |
 | `PROFILE_SCOPE_CAT` | macro | SparkEngine | [Profiler.h:L338](../../SparkEngine/Source/Utils/Profiler.h#L338) |  |
 | `PROFILE_SCOPE_CAT` | macro | SparkEngine | [Profiler.h:L350](../../SparkEngine/Source/Utils/Profiler.h#L350) |  |
-| `PROFILE_SCOPE_CATEGORY` | macro | SparkEditor | [ProfilerTypes.h:L309](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L309) | Profiling macros for easy instrumentation |
 | `ProfileCategory` | enum | SparkEngine | [Profiler.h:L32](../../SparkEngine/Source/Utils/Profiler.h#L32) | Profiling category |
 | `ProfileProperties` | class | SparkEngine | [ProfileProperties.h:L50](../../SparkEngine/Source/Utils/ProfileProperties.h#L50) | Singleton registry of frame-resetting typed profile counters |
 | `ProfileProperties::AddFloat` | method | SparkEngine | [ProfileProperties.cpp:L37](../../SparkEngine/Source/Utils/ProfileProperties.cpp#L37) |  |
@@ -29272,7 +28786,6 @@
 | `Propagate` | function | SparkEngine | [ProceduralGenerator.h:L496](../../SparkEngine/Source/Engine/Procedural/ProceduralGenerator.h#L496) | Propagate WFC constraints — remove impossible tiles from a cell |
 | `PropertyChangeCommand` | class | Tests | [TestEditorCommands.cpp:L145](../../Tests/TestEditorCommands.cpp#L145) |  |
 | `PropertyKeyframe` | struct | SparkEngine | [Sequencer.h:L82](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L82) |  |
-| `PropertyMap` | alias | Tests | [TestPrefabManager.cpp:L23](../../Tests/TestPrefabManager.cpp#L23) |  |
 | `PropertyType` | enum | SparkEngine | [MaterialPropertyHandle.h:L29](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.h#L29) | Type of a material property value. |
 | `PropertyValue` | alias | SparkEditor | [EditorCommand.h:L73](../../SparkEditor/Source/UndoRedo/EditorCommand.h#L73) | Property value variant type for generic property changes |
 | `PropertyValue` | alias | Tests | [TestEditorCommands.cpp:L23](../../Tests/TestEditorCommands.cpp#L23) |  |
@@ -29565,10 +29078,6 @@
 | `QuestTrackerTag` | struct | SparkEngine | [GameplayComponents.h:L165](../../SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h#L165) | Tag component for entities with quest tracking. |
 | `queue` | function | Tests | [TestDeferredDeletion.cpp:L82](../../Tests/TestDeferredDeletion.cpp#L82) |  |
 | `queue` | function | Tests | [TestDeferredDeletion.cpp:L93](../../Tests/TestDeferredDeletion.cpp#L93) |  |
-| `queue` | function | Tests | [TestDeferredDeletion.cpp:L112](../../Tests/TestDeferredDeletion.cpp#L112) |  |
-| `queue` | function | Tests | [TestDeferredDeletion.cpp:L130](../../Tests/TestDeferredDeletion.cpp#L130) |  |
-| `queue` | function | Tests | [TestDeferredDeletion.cpp:L145](../../Tests/TestDeferredDeletion.cpp#L145) |  |
-| `queue` | function | Tests | [TestDeferredDeletion.cpp:L157](../../Tests/TestDeferredDeletion.cpp#L157) |  |
 | `queue` | function | Tests | [TestThreadSafeQueue.cpp:L52](../../Tests/TestThreadSafeQueue.cpp#L52) |  |
 | `queue` | function | Tests | [TestThreadSafeQueue.cpp:L60](../../Tests/TestThreadSafeQueue.cpp#L60) |  |
 | `queue` | function | Tests | [TestUtilsStress.cpp:L187](../../Tests/TestUtilsStress.cpp#L187) |  |
@@ -29905,7 +29414,6 @@
 | `rawData` | function | SparkEngine | [AssetTypesWindowsMedia.cpp:L58](../../SparkEngine/Source/Graphics/AssetTypesWindowsMedia.cpp#L58) |  |
 | `RawUdpClient` | class | Tests | [TestReliableChannel.cpp:L437](../../Tests/TestReliableChannel.cpp#L437) |  |
 | `RawUDPSender` | class | Tests | [TestNetworkStress.cpp:L41](../../Tests/TestNetworkStress.cpp#L41) |  |
-| `Ray` | struct | SparkEditor | [GizmoSystem.h:L72](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L72) | Ray structure for mouse picking |
 | `ray` | function | SparkEngine | [CollisionSystem.cpp:L581](../../SparkEngine/Source/Physics/CollisionSystem.cpp#L581) |  |
 | `Ray` | struct | SparkEngine | [CollisionSystem.h:L106](../../SparkEngine/Source/Physics/CollisionSystem.h#L106) | 3D ray for raycasting operations |
 | `ray` | function | SparkEngine | [PhysicsSpatialQueries.cpp:L61](../../SparkEngine/Source/Physics/PhysicsSpatialQueries.cpp#L61) |  |
@@ -29915,7 +29423,6 @@
 | `Ray` | struct | SparkSDK | [MathTypes.h:L107](../../SparkSDK/Include/Spark/MathTypes.h#L107) | 3D ray (origin + direction) |
 | `Ray` | struct | Tests | [TestGizmoMath.cpp:L60](../../Tests/TestGizmoMath.cpp#L60) |  |
 | `Ray::GetPoint` | method | SparkEngine | [CollisionSystem.cpp:L71](../../SparkEngine/Source/Physics/CollisionSystem.cpp#L71) |  |
-| `Ray::ScreenToWorldRay` | method | SparkEditor | [GizmoSystem.cpp:L90](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L90) |  |
 | `RayAABB` | function | Tests | [TestLagCompensationIntegration.cpp:L126](../../Tests/TestLagCompensationIntegration.cpp#L126) |  |
 | `RayAxisClosestPoint` | function | Tests | [TestGizmoMath.cpp:L76](../../Tests/TestGizmoMath.cpp#L76) |  |
 | `Raycast` | function | SparkEngine | [Physics2D.h:L288](../../SparkEngine/Source/Engine/2D/Physics2D.h#L288) |  |
@@ -30370,7 +29877,6 @@
 | `RecordInput` | function | SparkEngine | [ClientPrediction.h:L122](../../SparkEngine/Source/Engine/Networking/ClientPrediction.h#L122) | Record a new input and add to pending buffer. |
 | `RecordInput` | function | SparkEngine | [SubTickInput.h:L72](../../SparkEngine/Source/Engine/Networking/SubTickInput.h#L72) | Record an input sample into the buffer |
 | `RecordInsertion` | function | SparkEngine | [CacheDebugger.h:L154](../../SparkEngine/Source/Utils/CacheDebugger.h#L154) |  |
-| `RecordKeyframes` | function | SparkEditor | [AnimationTimeline.h:L379](../../SparkEditor/Source/Animation/AnimationTimeline.h#L379) | Record current object states as keyframes |
 | `RecordKill` | function | GameModules | [GameMechanics.h:L207](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L207) | Register a kill for scoring |
 | `RecordKill` | function | GameModules | [GameMode.h:L228](../../GameModules/SparkGameFPS/Source/Game/GameMode.h#L228) |  |
 | `RecordLagCompSnapshot` | function | GameModules | [TFServerSim.h:L159](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L159) |  |
@@ -30481,7 +29987,6 @@
 | `RefreshBroadcastTargets` | function | GameModules | [TFLanDiscovery.h:L128](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.h#L128) |  |
 | `RefreshCaptureAvailability` | function | SparkEditor | [PerformanceProfiler.h:L367](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L367) | Render performance graph |
 | `RefreshClassSpeeds` | function | GameModules | [TFClientNet.h:L166](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.h#L166) |  |
-| `RefreshDatabase` | function | SparkEditor | [AssetDatabase.h:L208](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L208) | Refresh asset database (rescan all files) |
 | `RefreshEndpointConfiguration` | function | GameModules | [TFLanDiscovery.h:L129](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.h#L129) |  |
 | `RefreshGraphicsSettings` | function | GameModules | [Game.h:L479](../../GameModules/SparkGameFPS/Source/Game/Game.h#L479) | Force graphics engine refresh with new settings |
 | `RefreshIdentity` | function | GameModules | [TFMedalSystem.h:L244](../../GameModules/SparkGameMMOFPS/Source/Game/TFMedalSystem.h#L244) |  |
@@ -30628,7 +30133,6 @@
 | `RegisterCollision` | function | GameModules | [TFRegionDecor.h:L183](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionDecor.h#L183) |  |
 | `RegisterCommand` | function | GameModules | [AdvancedConsoleCommands.cpp:L39](../../GameModules/SparkGameFPS/Source/Console/AdvancedConsoleCommands.cpp#L39) |  |
 | `RegisterCommand` | function | GameModules | [Main.cpp:L54](../../GameModules/SparkGameFPS/Source/Core/Main.cpp#L54) |  |
-| `RegisterCommand` | function | GameModules | [Console.h:L164](../../GameModules/SparkGameFPS/Source/Game/Console.h#L164) | Register a command with the in-game console |
 | `RegisterCommand` | function | SparkConsole | [CommandRegistry.h:L53](../../SparkConsole/src/CommandRegistry.h#L53) | Register a new command. |
 | `RegisterCommand` | function | SparkEditor | [EditorUI.h:L216](../../SparkEditor/Source/Core/EditorUI.h#L216) |  |
 | `RegisterCommand` | function | SparkEditor | [ConsolePanel.h:L112](../../SparkEditor/Source/Panels/ConsolePanel.h#L112) | Register a console command |
@@ -30825,7 +30329,6 @@
 | `RegisterPoint` | function | Tests | [TestTacticalPointSystem.cpp:L50](../../Tests/TestTacticalPointSystem.cpp#L50) |  |
 | `RegisterPostProcessCommands` | function | SparkEngine | [SubsystemConsoleCommands.cpp:L556](../../SparkEngine/Source/Core/SubsystemConsoleCommands.cpp#L556) |  |
 | `RegisterPrefab` | function | SparkEngine | [RuntimePrefab.h:L289](../../SparkEngine/Source/Engine/ECS/RuntimePrefab.h#L289) | Register a prefab and take ownership. |
-| `RegisterPrefab` | function | Tests | [TestPrefabManager.cpp:L87](../../Tests/TestPrefabManager.cpp#L87) |  |
 | `RegisterPreparedStatements` | function | GameModules | [MMOPersistenceSystem.h:L231](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h#L231) |  |
 | `RegisterPreset` | function | SparkEngine | [EntityPresetManager.h:L73](../../SparkEngine/Source/Engine/ECS/EntityPresetManager.h#L73) | Register a custom preset |
 | `RegisterPreset` | function | SparkEngine | [InputBindings.h:L164](../../SparkEngine/Source/Input/InputBindings.h#L164) | Register a binding preset. |
@@ -30930,7 +30433,6 @@
 | `registry` | function | Tests | [TestRegionMapDataSource.cpp:L81](../../Tests/TestRegionMapDataSource.cpp#L81) |  |
 | `RegistryStorageIds` | function | Tests | [Test_persistence_SaveSystem.cpp:L499](../../Tests/harden/Test_persistence_SaveSystem.cpp#L499) |  |
 | `RegressionDetail` | struct | SparkEngine | [BenchmarkFramework.h:L41](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L41) |  |
-| `ReimportAsset` | function | SparkEditor | [AssetDatabase.h:L155](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L155) | Reimport asset |
 | `Release` | function | GameModules | [TFCrypto.cpp:L60](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp#L60) |  |
 | `Release` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L418](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L418) |  |
 | `Release` | function | SparkCrashReporter | [CrashReporterApp.cpp:L577](../../SparkCrashReporter/src/CrashReporterApp.cpp#L577) |  |
@@ -31086,7 +30588,6 @@
 | `RemoveConnection` | function | SparkEngine | [ConnectionScopeFilter.h:L161](../../SparkEngine/Source/Engine/Networking/ConnectionScopeFilter.h#L161) | Remove a connection's scope (e.g., on disconnect) |
 | `RemoveConnectionDirect` | function | SparkEditor | [VisualScriptPanel.h:L199](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L199) |  |
 | `RemoveConstraint` | function | SparkEngine | [PhysicsSystem.h:L315](../../SparkEngine/Source/Physics/PhysicsSystem.h#L315) |  |
-| `RemoveCurve` | function | SparkEditor | [AnimationTimelineTypes.h:L134](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L134) | Remove curve from track |
 | `RemoveCustomLine` | function | SparkEngine | [DebugOverlay.h:L233](../../SparkEngine/Source/Utils/DebugOverlay.h#L233) | Remove a custom debug line |
 | `removed` | function | Tests | [TestLODGenerator.cpp:L62](../../Tests/TestLODGenerator.cpp#L62) |  |
 | `RemoveDependency` | function | SparkEditor | [AdvancedAssetPipeline.h:L181](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L181) | Remove dependency relationship |
@@ -31119,7 +30620,6 @@
 | `RemoveItem` | function | Tests | [TestGameplayStress.cpp:L109](../../Tests/TestGameplayStress.cpp#L109) |  |
 | `RemoveItem` | function | Tests | [TestInventorySystem.cpp:L116](../../Tests/TestInventorySystem.cpp#L116) |  |
 | `RemoveKey` | function | SparkEngine | [ConfigParser.h:L321](../../SparkEngine/Source/Utils/ConfigParser.h#L321) |  |
-| `RemoveKeyframe` | function | SparkEditor | [AnimationTimelineTypes.h:L92](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L92) | Remove keyframe at index |
 | `RemoveKeyframe` | function | SparkEngine | [Sequencer.h:L148](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L148) |  |
 | `RemoveLight` | function | SparkEngine | [LightingSystem.h:L329](../../SparkEngine/Source/Graphics/LightingSystem.h#L329) |  |
 | `RemoveLink` | function | SparkEngine | [NavMeshLink.h:L83](../../SparkEngine/Source/Engine/AI/NavMeshLink.h#L83) |  |
@@ -31134,7 +30634,6 @@
 | `RemoveModuleCopy` | function | Tests | [TestModuleABI.cpp:L98](../../Tests/TestModuleABI.cpp#L98) |  |
 | `RemoveNavMesh` | function | SparkEngine | [NavMesh.h:L432](../../SparkEngine/Source/Engine/AI/NavMesh.h#L432) | Unregister and free a single NavMesh by name. |
 | `RemoveNavMesh` | function | Tests | [TestNavMesh.cpp:L458](../../Tests/TestNavMesh.cpp#L458) |  |
-| `RemoveNode` | function | SparkEditor | [MaterialEditor.h:L337](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L337) | Remove node from graph |
 | `RemoveNode` | function | SparkEngine | [SceneManager.h:L230](../../SparkEngine/Source/SceneManager/SceneManager.h#L230) |  |
 | `RemoveNode` | function | Tests | [TestSceneManager.cpp:L65](../../Tests/TestSceneManager.cpp#L65) |  |
 | `RemoveNodeCommand` | class | SparkEditor | [VisualScriptPanel.h:L47](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L47) | Undo command for removing a node from the visual script graph |
@@ -31170,7 +30669,6 @@
 | `RemoveRulesByCategory` | function | SparkEngine | [InvalidStateDetector.h:L149](../../SparkEngine/Source/Utils/InvalidStateDetector.h#L149) |  |
 | `RemoveSample` | function | SparkEngine | [BlendSpace.h:L130](../../SparkEngine/Source/Engine/Animation/BlendSpace.h#L130) | Remove a sample by animation name. |
 | `RemoveSection` | function | SparkEngine | [ConfigParser.h:L333](../../SparkEngine/Source/Utils/ConfigParser.h#L333) |  |
-| `RemoveSelectedKeyframes` | function | SparkEditor | [AnimationTimeline.h:L192](../../SparkEditor/Source/Animation/AnimationTimeline.h#L192) | Remove selected keyframes |
 | `RemoveSequence` | function | SparkEngine | [Sequencer.h:L341](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L341) |  |
 | `RemoveSpawnPoint` | function | GameModules | [GameMechanics.h:L160](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L160) |  |
 | `RemoveStateProvider` | function | SparkEngine | [FrameInspector.h:L323](../../SparkEngine/Source/Utils/FrameInspector.h#L323) | Remove a state provider |
@@ -31186,7 +30684,6 @@
 | `RemoveTerrain` | function | Tests | [TestTerrainRenderer.cpp:L77](../../Tests/TestTerrainRenderer.cpp#L77) |  |
 | `RemoveTextureLayer` | function | SparkEditor | [TerrainData.h:L157](../../SparkEditor/Source/Terrain/TerrainData.h#L157) |  |
 | `RemoveTile` | function | SparkEditor | [LevelStreamingSystem.h:L124](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L124) | Remove tile from world |
-| `RemoveTrack` | function | SparkEditor | [AnimationTimelineTypes.h:L177](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L177) | Remove track |
 | `RemoveTrigger` | function | SparkEngine | [ProximityTriggerSystem.h:L133](../../SparkEngine/Source/Engine/World/ProximityTriggerSystem.h#L133) | Remove a trigger volume by ID. |
 | `RemoveTrigger` | function | Tests | [TestProximityTriggerSystem.cpp:L56](../../Tests/TestProximityTriggerSystem.cpp#L56) |  |
 | `RemoveVehicle` | function | GameModules | [VehicleSystem.h:L317](../../GameModules/SparkGameFPS/Source/Game/VehicleSystem.h#L317) | Remove a destroyed vehicle |
@@ -31203,20 +30700,15 @@
 | `RemoveZone` | function | GameModules | [GravitySystem.h:L113](../../GameModules/SparkGameFPS/Source/Game/GravitySystem.h#L113) | Remove a gravity zone by index |
 | `RemoveZoneByName` | function | GameModules | [GameMechanics.h:L122](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L122) |  |
 | `RemoveZoneByName` | function | GameModules | [GravitySystem.h:L118](../../GameModules/SparkGameFPS/Source/Game/GravitySystem.h#L118) | Remove a gravity zone by name |
-| `RenameAssetEntry` | function | SparkEditor | [AssetDatabase.h:L279](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L279) | Handle file system change |
 | `renameat` | function | SparkCrashReporter | [CrashReporterApp.cpp:L1012](../../SparkCrashReporter/src/CrashReporterApp.cpp#L1012) |  |
-| `renameLock` | function | SparkEditor | [AssetDatabase.cpp:L917](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L917) |  |
 | `RenameObject` | function | SparkEditor | [HierarchyPanel.h:L342](../../SparkEditor/Source/Panels/HierarchyPanel.h#L342) | Rename object |
 | `renameStorage` | function | SparkEngine | [CrashHandler.cpp:L672](../../SparkEngine/Source/Utils/CrashHandler.cpp#L672) |  |
 | `Render` | function | GameModules | [SparkGameFPS.h:L63](../../GameModules/SparkGameFPS/Source/Core/SparkGameFPS.h#L63) |  |
-| `Render` | function | GameModules | [Console.h:L174](../../GameModules/SparkGameFPS/Source/Game/Console.h#L174) | Render the console interface |
 | `Render` | function | GameModules | [Enemy.h:L75](../../GameModules/SparkGameFPS/Source/Game/Enemy.h#L75) |  |
 | `Render` | function | GameModules | [Game.h:L148](../../GameModules/SparkGameFPS/Source/Game/Game.h#L148) | Render the current frame using unified graphics system |
 | `Render` | function | GameModules | [InteractiveObject.h:L54](../../GameModules/SparkGameFPS/Source/Game/InteractiveObject.h#L54) |  |
 | `Render` | function | GameModules | [ModelObject.h:L47](../../GameModules/SparkGameFPS/Source/Game/ModelObject.h#L47) | Render the model object |
 | `Render` | function | GameModules | [Player.h:L127](../../GameModules/SparkGameFPS/Source/Game/Player.h#L127) | Render the player (typically no visual representation in first-person) |
-| `Render` | function | GameModules | [Terrain.h:L109](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L109) | Render the terrain |
-| `Render` | function | GameModules | [Terrain.h:L114](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L114) | Render with explicit matrices |
 | `Render` | function | GameModules | [VehicleSystem.h:L125](../../GameModules/SparkGameFPS/Source/Game/VehicleSystem.h#L125) |  |
 | `Render` | function | GameModules | [Bullet.h:L89](../../GameModules/SparkGameFPS/Source/Projectiles/Bullet.h#L89) | Render the bullet mesh |
 | `Render` | function | GameModules | [Grenade.h:L91](../../GameModules/SparkGameFPS/Source/Projectiles/Grenade.h#L91) | Render the grenade mesh |
@@ -31231,15 +30723,12 @@
 | `Render` | function | GameModules | [PlatformerHazardSystem.h:L107](../../GameModules/SparkGamePlatformer/Source/Hazard/PlatformerHazardSystem.h#L107) |  |
 | `Render` | function | GameModules | [PlatformerLevelSystem.h:L116](../../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h#L116) |  |
 | `Render` | function | GameModules | [PlatformerPlayerController.h:L72](../../GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.h#L72) |  |
-| `Render` | function | SparkEditor | [AnimationTimeline.h:L66](../../SparkEditor/Source/Animation/AnimationTimeline.h#L66) | Render animation timeline UI |
 | `Render` | function | SparkEditor | [AdvancedAssetPipeline.h:L266](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L266) | Render asset pipeline UI |
 | `Render` | function | SparkEditor | [EditorApplication.h:L110](../../SparkEditor/Source/Core/EditorApplication.h#L110) |  |
 | `Render` | function | SparkEditor | [EditorNotificationManager.h:L42](../../SparkEditor/Source/Core/EditorNotificationManager.h#L42) | Render all live notifications as stacked toasts. |
 | `Render` | function | SparkEditor | [EditorPanel.h:L74](../../SparkEditor/Source/Core/EditorPanel.h#L74) | Render the panel UI |
 | `Render` | function | SparkEditor | [EditorUI.h:L138](../../SparkEditor/Source/Core/EditorUI.h#L138) |  |
-| `Render` | function | SparkEditor | [GizmoSystem.h:L156](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L156) | Render gizmos for selected objects |
 | `Render` | function | SparkEditor | [LevelStreamingSystem.h:L76](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L76) | Render level streaming UI |
-| `Render` | function | SparkEditor | [MaterialEditor.h:L283](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L283) | Render material editor UI |
 | `Render` | function | SparkEditor | [AIDebugPanel.h:L38](../../SparkEditor/Source/Panels/AIDebugPanel.h#L38) |  |
 | `Render` | function | SparkEditor | [AIEditorPanel.h:L30](../../SparkEditor/Source/Panels/AIEditorPanel.h#L30) |  |
 | `Render` | function | SparkEditor | [AbilityEditorPanel.h:L31](../../SparkEditor/Source/Panels/AbilityEditorPanel.h#L31) |  |
@@ -31276,7 +30765,6 @@
 | `Render` | function | SparkEditor | [Physics3DPanel.h:L38](../../SparkEditor/Source/Panels/Physics3DPanel.h#L38) |  |
 | `Render` | function | SparkEditor | [PlayControlPanel.h:L48](../../SparkEditor/Source/Panels/PlayControlPanel.h#L48) |  |
 | `Render` | function | SparkEditor | [PlayModeToolbarPanel.h:L49](../../SparkEditor/Source/Panels/PlayModeToolbarPanel.h#L49) |  |
-| `Render` | function | SparkEditor | [PostProcessingPanel.h:L28](../../SparkEditor/Source/Panels/PostProcessingPanel.h#L28) |  |
 | `Render` | function | SparkEditor | [PrefabEditorPanel.h:L39](../../SparkEditor/Source/Panels/PrefabEditorPanel.h#L39) |  |
 | `Render` | function | SparkEditor | [ProjectBrowserPanel.h:L40](../../SparkEditor/Source/Panels/ProjectBrowserPanel.h#L40) |  |
 | `Render` | function | SparkEditor | [ProjectSettingsPanel.h:L29](../../SparkEditor/Source/Panels/ProjectSettingsPanel.h#L29) |  |
@@ -31353,7 +30841,6 @@
 | `RenderAll` | function | SparkEngine | [ModuleManager.h:L156](../../SparkEngine/Source/Core/ModuleManager.h#L156) | Call OnRender() on all modules in load order |
 | `RenderAmmoDisplay` | function | SparkEditor | [GameViewPanel.h:L98](../../SparkEditor/Source/Panels/GameViewPanel.h#L98) |  |
 | `RenderAnimationControllerComponent` | function | SparkEditor | [InspectorPanel.h:L111](../../SparkEditor/Source/Panels/InspectorPanel.h#L111) |  |
-| `RenderAnimationProperties` | function | SparkEditor | [AnimationTimeline.h:L269](../../SparkEditor/Source/Animation/AnimationTimeline.h#L269) | Render animation properties |
 | `RenderAnimationTab` | function | SparkEditor | [ProjectSettingsPanel.h:L46](../../SparkEditor/Source/Panels/ProjectSettingsPanel.h#L46) |  |
 | `RenderAppearanceSettings` | function | SparkEditor | [ParticleEditorPanel.h:L40](../../SparkEditor/Source/Panels/ParticleEditorPanel.h#L40) |  |
 | `RenderAreaList` | function | SparkEditor | [StreamingPanel.h:L60](../../SparkEditor/Source/Panels/StreamingPanel.h#L60) |  |
@@ -31362,7 +30849,6 @@
 | `RenderAssetGrid` | function | SparkEditor | [AssetBrowserPanel.h:L108](../../SparkEditor/Source/Panels/AssetBrowserPanel.h#L108) |  |
 | `RenderAssetInspector` | function | SparkEditor | [AdvancedAssetPipeline.h:L433](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L433) | Render asset inspector |
 | `RenderAssetList` | function | SparkEditor | [AdvancedAssetPipeline.h:L418](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L418) | Render asset list |
-| `RenderAtmosphereUI` | function | SparkEditor | [LightingTools.h:L473](../../SparkEditor/Source/Lighting/LightingTools.h#L473) | Render atmosphere UI |
 | `RenderAudioDebug` | function | SparkEditor | [DebugVisualizerPanel.h:L61](../../SparkEditor/Source/Panels/DebugVisualizerPanel.h#L61) |  |
 | `RenderAudioListenerComponent` | function | SparkEditor | [InspectorPanel.h:L138](../../SparkEditor/Source/Panels/InspectorPanel.h#L138) |  |
 | `RenderAudioReverbZoneComponent` | function | SparkEditor | [InspectorPanel.h:L135](../../SparkEditor/Source/Panels/InspectorPanel.h#L135) |  |
@@ -31383,7 +30869,6 @@
 | `RenderBlackboardInspector` | function | SparkEditor | [AIDebugPanel.h:L79](../../SparkEditor/Source/Panels/AIDebugPanel.h#L79) |  |
 | `RenderBlackboardViewer` | function | SparkEditor | [AIEditorPanel.h:L55](../../SparkEditor/Source/Panels/AIEditorPanel.h#L55) |  |
 | `RenderBlockoutSection` | function | SparkEditor | [PrototypingPanel.h:L38](../../SparkEditor/Source/Panels/PrototypingPanel.h#L38) |  |
-| `RenderBloomSettings` | function | SparkEditor | [PostProcessingPanel.h:L34](../../SparkEditor/Source/Panels/PostProcessingPanel.h#L34) |  |
 | `RenderBodyInspector` | function | SparkEditor | [Physics2DPanel.h:L46](../../SparkEditor/Source/Panels/Physics2DPanel.h#L46) |  |
 | `RenderBoolParam` | function | SparkEditor | [MaterialEditorPanel.h:L217](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L217) |  |
 | `RenderBoostMeter` | function | GameModules | [RacingHUDSystem.h:L101](../../GameModules/SparkGameRacing/Source/HUD/RacingHUDSystem.h#L101) |  |
@@ -31434,7 +30919,6 @@
 | `RenderCommandQueue` | class | SparkEngine | [RenderCommandRing.h:L177](../../SparkEngine/Source/Graphics/RenderCommandRing.h#L177) | Singleton render command queue with default ring size. |
 | `RenderCommandType` | enum | SparkEngine | [RenderCommandRing.h:L28](../../SparkEngine/Source/Graphics/RenderCommandRing.h#L28) | Command types that can be posted to the render thread. |
 | `RenderComparisonTable` | function | SparkEditor | [WeaponEditorPanel.h:L34](../../SparkEditor/Source/Panels/WeaponEditorPanel.h#L34) |  |
-| `RenderCompilationOutput` | function | SparkEditor | [MaterialEditor.h:L399](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L399) | Render compilation output |
 | `RenderCompileBar` | function | SparkEditor | [VisualScriptPanel.h:L129](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L129) |  |
 | `RenderCompleteCallback` | alias | SparkEngine | [MovieRenderPipeline.h:L202](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L202) | Offline cinematic rendering pipeline (singleton). Call Update() each frame. |
 | `RenderComponentEditor` | function | SparkEditor | [PrefabEditorPanel.h:L48](../../SparkEditor/Source/Panels/PrefabEditorPanel.h#L48) |  |
@@ -31445,7 +30929,6 @@
 | `RenderConfigurationPanel` | function | SparkEditor | [PerformanceProfiler.h:L305](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L305) | Render configuration panel |
 | `RenderConflictsPanel` | function | SparkEditor | [VersionControlSystem.h:L367](../../SparkEditor/Source/VersionControl/VersionControlSystem.h#L367) | Render conflicts panel |
 | `RenderConnectionControls` | function | SparkEditor | [CollaborationPanel.h:L34](../../SparkEditor/Source/Panels/CollaborationPanel.h#L34) |  |
-| `RenderConnections` | function | SparkEditor | [MaterialEditor.h:L416](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L416) | Render connections between nodes |
 | `RenderConnections` | function | SparkEditor | [VisualScriptPanel.h:L134](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L134) |  |
 | `RenderConnectionSummary` | function | SparkEditor | [NetworkDebugPanel.h:L469](../../SparkEditor/Source/Panels/NetworkDebugPanel.h#L469) |  |
 | `RenderConnectionSummary` | function | SparkEditor | [NetworkDebugPanel.h:L484](../../SparkEditor/Source/Panels/NetworkDebugPanel.h#L484) |  |
@@ -31464,8 +30947,6 @@
 | `RenderCPUSampleHierarchy` | function | SparkEditor | [PerformanceProfiler.h:L357](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L357) | Render CPU sample hierarchy |
 | `RenderCreateDialog` | function | SparkEditor | [TriggerEditorPanel.h:L49](../../SparkEditor/Source/Panels/TriggerEditorPanel.h#L49) |  |
 | `RenderCrosshair` | function | SparkEditor | [GameViewPanel.h:L96](../../SparkEditor/Source/Panels/GameViewPanel.h#L96) |  |
-| `RenderCurve` | function | SparkEditor | [AnimationTimeline.h:L289](../../SparkEditor/Source/Animation/AnimationTimeline.h#L289) | Render curve in curve editor |
-| `RenderCurveEditor` | function | SparkEditor | [AnimationTimeline.h:L259](../../SparkEditor/Source/Animation/AnimationTimeline.h#L259) | Render curve editor |
 | `RenderDamageIndicators` | function | SparkEditor | [GameViewPanel.h:L100](../../SparkEditor/Source/Panels/GameViewPanel.h#L100) |  |
 | `RenderDayInfo` | function | SparkEditor | [TimeOfDayPanel.h:L34](../../SparkEditor/Source/Panels/TimeOfDayPanel.h#L34) |  |
 | `RenderDebrisMonitor` | function | SparkEditor | [DestructionEditorPanel.h:L53](../../SparkEditor/Source/Panels/DestructionEditorPanel.h#L53) |  |
@@ -31614,7 +31095,6 @@
 | `RenderFilterControls` | function | SparkEditor | [ConsolePanel.h:L200](../../SparkEditor/Source/Panels/ConsolePanel.h#L200) | Render filter controls |
 | `RenderFlashOverlay` | function | GameModules | [TFGrenadeSystem.h:L155](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystem.h#L155) |  |
 | `RenderFloatParam` | function | SparkEditor | [MaterialEditorPanel.h:L214](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L214) | Check if the material has unsaved changes. |
-| `RenderFogSettings` | function | SparkEditor | [PostProcessingPanel.h:L36](../../SparkEditor/Source/Panels/PostProcessingPanel.h#L36) |  |
 | `RenderFogVolumeComponent` | function | SparkEditor | [InspectorPanel.h:L132](../../SparkEditor/Source/Panels/InspectorPanel.h#L132) |  |
 | `RenderFolderNode` | function | SparkEditor | [AssetBrowserPanel.h:L107](../../SparkEditor/Source/Panels/AssetBrowserPanel.h#L107) |  |
 | `RenderFolderTree` | function | SparkEditor | [AssetBrowserPanel.h:L106](../../SparkEditor/Source/Panels/AssetBrowserPanel.h#L106) |  |
@@ -31634,7 +31114,6 @@
 | `RenderGameplayTab` | function | SparkEditor | [ProjectSettingsPanel.h:L42](../../SparkEditor/Source/Panels/ProjectSettingsPanel.h#L42) |  |
 | `RenderGenerationTools` | function | SparkEditor | [TerrainEditor.h:L84](../../SparkEditor/Source/Terrain/TerrainEditor.h#L84) |  |
 | `RenderGeometryPass` | function | SparkEngine | [GraphicsEngine.h:L1228](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L1228) |  |
-| `RenderGlobalIlluminationUI` | function | SparkEditor | [LightingTools.h:L468](../../SparkEditor/Source/Lighting/LightingTools.h#L468) | Render global illumination UI |
 | `RenderGPU` | function | SparkEngine | [SkyAtmosphere.h:L174](../../SparkEngine/Source/Graphics/SkyAtmosphere.h#L174) |  |
 | `RenderGPUProfilerPanel` | function | SparkEditor | [PerformanceProfiler.h:L285](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L285) | Render GPU profiler panel |
 | `RenderGraph` | class | SparkEngine | [RenderGraph.h:L65](../../SparkEngine/Source/Graphics/RenderGraph.h#L65) |  |
@@ -31649,7 +31128,6 @@
 | `RenderGraphBuilder::Create` | method | SparkEngine | [RenderGraph.h:L1399](../../SparkEngine/Source/Graphics/RenderGraph.h#L1399) |  |
 | `RenderGraphBuilder::Read` | method | SparkEngine | [RenderGraph.h:L1407](../../SparkEngine/Source/Graphics/RenderGraph.h#L1407) |  |
 | `RenderGraphBuilder::Write` | method | SparkEngine | [RenderGraph.h:L1414](../../SparkEngine/Source/Graphics/RenderGraph.h#L1414) |  |
-| `RenderGraphEditor` | function | SparkEditor | [MaterialEditor.h:L379](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L379) | Render graph editor area |
 | `RenderGraphExporter` | class | SparkEngine | [RenderGraphExporter.h:L26](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphExporter.h#L26) | Static utility for exporting render graphs to GraphViz format |
 | `RenderGraphExporter::ExportGraphViz` | method | SparkEngine | [RenderGraphExporter.cpp:L67](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphExporter.cpp#L67) |  |
 | `RenderGraphExporter::GenerateDotString` | method | SparkEngine | [RenderGraphExporter.cpp:L16](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphExporter.cpp#L16) |  |
@@ -31687,7 +31165,6 @@
 | `RenderInteractionComponent` | function | SparkEditor | [InspectorPanel.h:L121](../../SparkEditor/Source/Panels/InspectorPanel.h#L121) |  |
 | `RenderInteractionPrompt` | function | SparkEditor | [GameViewPanel.h:L107](../../SparkEditor/Source/Panels/GameViewPanel.h#L107) |  |
 | `RenderJobState` | enum | SparkEngine | [MovieRenderPipeline.h:L111](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L111) | State of a movie render job |
-| `RenderKeyframes` | function | SparkEditor | [AnimationTimeline.h:L283](../../SparkEditor/Source/Animation/AnimationTimeline.h#L283) | Render keyframes for a curve |
 | `RenderKillFeed` | function | SparkEditor | [GameViewPanel.h:L101](../../SparkEditor/Source/Panels/GameViewPanel.h#L101) |  |
 | `RenderLanguageSelector` | function | SparkEditor | [LocalizationPanel.h:L43](../../SparkEditor/Source/Panels/LocalizationPanel.h#L43) |  |
 | `RenderLanServerList` | function | GameModules | [TFLoginFlow.h:L133](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoginFlow.h#L133) |  |
@@ -31700,8 +31177,6 @@
 | `RenderLightComponent` | function | SparkEditor | [InspectorPanel.h:L91](../../SparkEditor/Source/Panels/InspectorPanel.h#L91) |  |
 | `RenderLightingPass` | function | SparkEngine | [GraphicsEngine.h:L1229](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L1229) |  |
 | `RenderLightingPreview` | function | SparkEditor | [TimeOfDayPanel.h:L33](../../SparkEditor/Source/Panels/TimeOfDayPanel.h#L33) |  |
-| `RenderLightInspectorUI` | function | SparkEditor | [LightingTools.h:L463](../../SparkEditor/Source/Lighting/LightingTools.h#L463) | Render light inspector UI |
-| `RenderLightListUI` | function | SparkEditor | [LightingTools.h:L458](../../SparkEditor/Source/Lighting/LightingTools.h#L458) | Render light list UI |
 | `RenderLightProbeComponent` | function | SparkEditor | [InspectorPanel.h:L129](../../SparkEditor/Source/Panels/InspectorPanel.h#L129) |  |
 | `RenderLiveEditControls` | function | SparkEditor | [PlayModeToolbarPanel.h:L61](../../SparkEditor/Source/Panels/PlayModeToolbarPanel.h#L61) | Connect to the engine's PlayModeManager. |
 | `RenderLoadOrder` | function | SparkEditor | [ModdingPanel.h:L48](../../SparkEditor/Source/Panels/ModdingPanel.h#L48) |  |
@@ -31724,8 +31199,6 @@
 | `RenderMaterialList` | function | SparkEditor | [DecalEditorPanel.h:L52](../../SparkEditor/Source/Panels/DecalEditorPanel.h#L52) |  |
 | `RenderMaterialList` | function | SparkEditor | [MaterialEditorPanel.h:L210](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L210) | Check if the material has unsaved changes. |
 | `RenderMaterialPresets` | function | SparkEditor | [Physics3DPanel.h:L49](../../SparkEditor/Source/Panels/Physics3DPanel.h#L49) |  |
-| `RenderMaterialPreview` | function | SparkEditor | [MaterialEditor.h:L394](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L394) | Render material preview |
-| `RenderMaterialProperties` | function | SparkEditor | [MaterialEditor.h:L389](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L389) | Render material properties |
 | `RenderMaterialProperties` | function | SparkEditor | [BasicMaterialEditorPanel.h:L95](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.h#L95) |  |
 | `RenderMemoryBudget` | function | SparkEditor | [StreamingPanel.h:L63](../../SparkEditor/Source/Panels/StreamingPanel.h#L63) |  |
 | `RenderMemoryProfilerPanel` | function | SparkEditor | [PerformanceProfiler.h:L290](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L290) | Render memory profiler panel |
@@ -31754,14 +31227,11 @@
 | `RenderNetworkTab` | function | SparkEditor | [ProjectSettingsPanel.h:L44](../../SparkEditor/Source/Panels/ProjectSettingsPanel.h#L44) |  |
 | `RenderNewProjectForm` | function | SparkEditor | [ProjectBrowserPanel.h:L75](../../SparkEditor/Source/Panels/ProjectBrowserPanel.h#L75) |  |
 | `RenderNineSliceComponent` | function | SparkEditor | [InspectorPanel.h:L103](../../SparkEditor/Source/Panels/InspectorPanel.h#L103) |  |
-| `RenderNode` | function | SparkEditor | [MaterialEditor.h:L405](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L405) | Render a single node |
 | `RenderNode` | function | SparkEditor | [VisualScriptPanel.h:L133](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L133) |  |
 | `RenderNodeEditor` | function | SparkEditor | [DialogueEditorPanel.h:L80](../../SparkEditor/Source/Panels/DialogueEditorPanel.h#L80) |  |
 | `RenderNodeList` | function | SparkEditor | [DialogueEditorPanel.h:L79](../../SparkEditor/Source/Panels/DialogueEditorPanel.h#L79) |  |
-| `RenderNodePalette` | function | SparkEditor | [MaterialEditor.h:L384](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L384) | Render node palette |
 | `RenderNodePalette` | function | SparkEditor | [VisualScriptPanel.h:L126](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L126) |  |
 | `RenderNodeProperties` | function | SparkEditor | [VisualScriptPanel.h:L130](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L130) |  |
-| `RenderNodeSockets` | function | SparkEditor | [MaterialEditor.h:L411](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L411) | Render node sockets |
 | `RenderNoiseSettings` | function | SparkEditor | [ParticleEditorPanel.h:L45](../../SparkEditor/Source/Panels/ParticleEditorPanel.h#L45) |  |
 | `RenderNoTerrainView` | function | SparkEditor | [TerrainEditor.h:L75](../../SparkEditor/Source/Terrain/TerrainEditor.h#L75) |  |
 | `RenderObjectContextMenu` | function | SparkEditor | [HierarchyPanel.h:L281](../../SparkEditor/Source/Panels/HierarchyPanel.h#L281) | Render object context menu |
@@ -31801,7 +31271,6 @@
 | `RenderPerformanceCountersPanel` | function | SparkEditor | [PerformanceProfiler.h:L295](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L295) | Render performance counters panel |
 | `RenderPerformanceGraph` | function | SparkEditor | [PerformanceProfiler.h:L364](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L364) | Render performance graph |
 | `RenderPerformanceGraphs` | function | SparkEditor | [SceneStatisticsPanel.h:L46](../../SparkEditor/Source/Panels/SceneStatisticsPanel.h#L46) |  |
-| `RenderPerformanceUI` | function | SparkEditor | [LightingTools.h:L483](../../SparkEditor/Source/Lighting/LightingTools.h#L483) | Render performance UI |
 | `RenderPhysicsDebug` | function | SparkEditor | [DebugVisualizerPanel.h:L58](../../SparkEditor/Source/Panels/DebugVisualizerPanel.h#L58) |  |
 | `RenderPhysicsSettings` | function | SparkEditor | [ParticleEditorPanel.h:L41](../../SparkEditor/Source/Panels/ParticleEditorPanel.h#L41) |  |
 | `RenderPhysicsStats` | function | SparkEditor | [Physics2DPanel.h:L45](../../SparkEditor/Source/Panels/Physics2DPanel.h#L45) |  |
@@ -31825,33 +31294,27 @@
 | `RenderPixelPerfectComponent` | function | SparkEditor | [InspectorPanel.h:L105](../../SparkEditor/Source/Panels/InspectorPanel.h#L105) |  |
 | `RenderPlacementModeSelector` | function | SparkEditor | [ObjectPlacementPanel.h:L75](../../SparkEditor/Source/Panels/ObjectPlacementPanel.h#L75) |  |
 | `RenderPlatformSelector` | function | SparkEditor | [BuildCookPanel.h:L119](../../SparkEditor/Source/Panels/BuildCookPanel.h#L119) |  |
-| `RenderPlaybackControls` | function | SparkEditor | [AnimationTimeline.h:L264](../../SparkEditor/Source/Animation/AnimationTimeline.h#L264) | Render playback controls |
 | `RenderPlayBar` | function | SparkEditor | [PlayControlPanel.h:L78](../../SparkEditor/Source/Panels/PlayControlPanel.h#L78) |  |
 | `RenderPlayerConfig` | function | SparkEditor | [FPSToolsPanel.h:L32](../../SparkEditor/Source/Panels/FPSToolsPanel.h#L32) |  |
 | `RenderPlayerList` | function | SparkEditor | [DedicatedServerPanel.h:L167](../../SparkEditor/Source/Panels/DedicatedServerPanel.h#L167) |  |
 | `RenderPlayerTab` | function | SparkEditor | [ProjectSettingsPanel.h:L41](../../SparkEditor/Source/Panels/ProjectSettingsPanel.h#L41) |  |
-| `RenderPlayhead` | function | SparkEditor | [AnimationTimeline.h:L301](../../SparkEditor/Source/Animation/AnimationTimeline.h#L301) | Render playhead |
 | `RenderPlayTestSection` | function | SparkEditor | [PrototypingPanel.h:L41](../../SparkEditor/Source/Panels/PrototypingPanel.h#L41) |  |
 | `RenderPointEditor` | function | SparkEditor | [SplineEditorPanel.h:L46](../../SparkEditor/Source/Panels/SplineEditorPanel.h#L46) |  |
 | `RenderPointList` | function | SparkEditor | [SplineEditorPanel.h:L45](../../SparkEditor/Source/Panels/SplineEditorPanel.h#L45) |  |
 | `RenderPositionIndicator` | function | GameModules | [RacingHUDSystem.h:L99](../../GameModules/SparkGameRacing/Source/HUD/RacingHUDSystem.h#L99) |  |
 | `RenderPostProcessing` | function | SparkEngine | [GraphicsEngine.h:L1230](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L1230) |  |
 | `RenderPostProcessingTab` | function | SparkEditor | [ProjectSettingsPanel.h:L36](../../SparkEditor/Source/Panels/ProjectSettingsPanel.h#L36) |  |
-| `RenderPostProcessingUI` | function | SparkEditor | [LightingTools.h:L478](../../SparkEditor/Source/Lighting/LightingTools.h#L478) | Render post-processing UI |
 | `RenderPostProcessVolumeComponent` | function | SparkEditor | [InspectorPanel.h:L127](../../SparkEditor/Source/Panels/InspectorPanel.h#L127) |  |
 | `RenderPrefabInspector` | function | SparkEditor | [PrefabEditorPanel.h:L47](../../SparkEditor/Source/Panels/PrefabEditorPanel.h#L47) |  |
 | `RenderPrefabLibrary` | function | SparkEditor | [ObjectPlacementPanel.h:L78](../../SparkEditor/Source/Panels/ObjectPlacementPanel.h#L78) |  |
 | `RenderPrefabList` | function | SparkEditor | [PrefabEditorPanel.h:L46](../../SparkEditor/Source/Panels/PrefabEditorPanel.h#L46) |  |
 | `RenderPresetButtons` | function | SparkEditor | [UIDesignerPanel.h:L42](../../SparkEditor/Source/Panels/UIDesignerPanel.h#L42) |  |
-| `RenderPresetEditor` | function | SparkEditor | [WeatherFogPanel.h:L57](../../SparkEditor/Source/Panels/WeatherFogPanel.h#L57) |  |
 | `RenderPresetList` | function | SparkEditor | [WeatherFogPanel.h:L56](../../SparkEditor/Source/Panels/WeatherFogPanel.h#L56) |  |
 | `RenderPresets` | function | SparkEditor | [TimeOfDayPanel.h:L32](../../SparkEditor/Source/Panels/TimeOfDayPanel.h#L32) |  |
 | `RenderPresetSelector` | function | SparkEditor | [ParticleEditorPanel.h:L47](../../SparkEditor/Source/Panels/ParticleEditorPanel.h#L47) |  |
-| `RenderPresetsUI` | function | SparkEditor | [LightingTools.h:L488](../../SparkEditor/Source/Lighting/LightingTools.h#L488) | Render presets UI |
 | `RenderPreview` | function | SparkEditor | [MaterialEditorPanel.h:L222](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L222) |  |
 | `RenderPreview` | function | SparkEditor | [SpriteAnimationEditorPanel.h:L49](../../SparkEditor/Source/Panels/SpriteAnimationEditorPanel.h#L49) |  |
 | `RenderPreviewAndImport` | function | SparkEditor | [SceneImportPanel.h:L120](../../SparkEditor/Source/Panels/SceneImportPanel.h#L120) | Execute the import of @p parsed into the current World as ONE |
-| `RenderPreviewToTexture` | function | SparkEditor | [MaterialEditor.h:L523](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L523) | Render material preview to texture |
 | `RenderProcessingQueue` | function | SparkEditor | [AdvancedAssetPipeline.h:L423](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L423) | Render processing queue |
 | `RenderProcessingStatistics` | function | SparkEditor | [AdvancedAssetPipeline.h:L443](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L443) | Render processing statistics |
 | `RenderProcsTab` | function | SparkEditor | [AbilityEditorPanel.h:L84](../../SparkEditor/Source/Panels/AbilityEditorPanel.h#L84) |  |
@@ -31890,13 +31353,11 @@
 | `RenderReverbZones` | function | SparkEditor | [AudioMixerPanel.h:L69](../../SparkEditor/Source/Panels/AudioMixerPanel.h#L69) |  |
 | `RenderRigidBody2DComponent` | function | SparkEditor | [InspectorPanel.h:L106](../../SparkEditor/Source/Panels/InspectorPanel.h#L106) |  |
 | `RenderRigidBodyComponent` | function | SparkEditor | [InspectorPanel.h:L93](../../SparkEditor/Source/Panels/InspectorPanel.h#L93) |  |
-| `RenderRotationGizmo` | function | SparkEditor | [GizmoSystem.h:L285](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L285) | Render rotation gizmo |
 | `RenderRuleEditor` | function | SparkEditor | [EventResponsePanel.h:L40](../../SparkEditor/Source/Panels/EventResponsePanel.h#L40) |  |
 | `RenderRuleList` | function | SparkEditor | [EventResponsePanel.h:L39](../../SparkEditor/Source/Panels/EventResponsePanel.h#L39) |  |
 | `RenderRulesSection` | function | SparkEditor | [PrototypingPanel.h:L40](../../SparkEditor/Source/Panels/PrototypingPanel.h#L40) |  |
 | `RenderSaveReplayTab` | function | SparkEditor | [ProjectSettingsPanel.h:L53](../../SparkEditor/Source/Panels/ProjectSettingsPanel.h#L53) |  |
 | `RenderSaveSlots` | function | SparkEditor | [SaveSystemPanel.h:L45](../../SparkEditor/Source/Panels/SaveSystemPanel.h#L45) |  |
-| `RenderScaleGizmo` | function | SparkEditor | [GizmoSystem.h:L293](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L293) | Render scale gizmo |
 | `RenderScene` | function | SparkEngine | [GraphicsEngine.h:L246](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L246) | Render the scene with advanced pipeline |
 | `RenderSceneContent` | function | SparkEditor | [SceneViewPanel.h:L127](../../SparkEditor/Source/Panels/SceneViewPanel.h#L127) | Set collaborative session for peer visualization in viewport |
 | `RenderScoreboard` | function | SparkEditor | [GameViewPanel.h:L105](../../SparkEditor/Source/Panels/GameViewPanel.h#L105) |  |
@@ -31920,7 +31381,6 @@
 | `RenderSimulationControls` | function | SparkEditor | [NetworkDebugPanel.h:L481](../../SparkEditor/Source/Panels/NetworkDebugPanel.h#L481) |  |
 | `RenderSingleField` | function | SparkEditor | [InspectorComponentRenderers_Reflected.cpp:L34](../../SparkEditor/Source/Panels/InspectorComponentRenderers_Reflected.cpp#L34) |  |
 | `RenderSkyboxComponent` | function | SparkEditor | [InspectorPanel.h:L140](../../SparkEditor/Source/Panels/InspectorPanel.h#L140) |  |
-| `RenderSkySettings` | function | SparkEditor | [PostProcessingPanel.h:L37](../../SparkEditor/Source/Panels/PostProcessingPanel.h#L37) |  |
 | `RenderSlotActions` | function | SparkEditor | [SaveSystemPanel.h:L47](../../SparkEditor/Source/Panels/SaveSystemPanel.h#L47) |  |
 | `RenderSnapSettings` | function | SparkEditor | [ObjectPlacementPanel.h:L76](../../SparkEditor/Source/Panels/ObjectPlacementPanel.h#L76) |  |
 | `RenderSortingSettings` | function | SparkEditor | [SpriteEditorPanel.h:L47](../../SparkEditor/Source/Panels/SpriteEditorPanel.h#L47) |  |
@@ -32086,11 +31546,7 @@
 | `RenderTimeControls` | function | SparkEditor | [TimeOfDayPanel.h:L31](../../SparkEditor/Source/Panels/TimeOfDayPanel.h#L31) |  |
 | `RenderTimeline` | function | SparkEditor | [CinematicSequencerPanel.h:L68](../../SparkEditor/Source/Panels/CinematicSequencerPanel.h#L68) |  |
 | `RenderTimeline` | function | SparkEditor | [SpriteAnimationEditorPanel.h:L48](../../SparkEditor/Source/Panels/SpriteAnimationEditorPanel.h#L48) |  |
-| `RenderTimelineEditor` | function | SparkEditor | [AnimationTimeline.h:L254](../../SparkEditor/Source/Animation/AnimationTimeline.h#L254) | Render timeline editor |
-| `RenderTimelineHeader` | function | SparkEditor | [AnimationTimeline.h:L244](../../SparkEditor/Source/Animation/AnimationTimeline.h#L244) | Render timeline header |
-| `RenderTimeRuler` | function | SparkEditor | [AnimationTimeline.h:L295](../../SparkEditor/Source/Animation/AnimationTimeline.h#L295) | Render time ruler |
 | `RenderTimeScaleControls` | function | SparkEditor | [PlayModeToolbarPanel.h:L58](../../SparkEditor/Source/Panels/PlayModeToolbarPanel.h#L58) | Connect to the engine's PlayModeManager. |
-| `RenderTonemappingSettings` | function | SparkEditor | [PostProcessingPanel.h:L35](../../SparkEditor/Source/Panels/PostProcessingPanel.h#L35) |  |
 | `RenderToolbar` | function | SparkEditor | [EditorUI.h:L468](../../SparkEditor/Source/Core/EditorUI.h#L468) |  |
 | `RenderToolbar` | function | SparkEditor | [BasicMaterialEditorPanel.h:L93](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.h#L93) |  |
 | `RenderToolbar` | function | SparkEditor | [CinematicSequencerPanel.h:L67](../../SparkEditor/Source/Panels/CinematicSequencerPanel.h#L67) |  |
@@ -32114,15 +31570,12 @@
 | `RenderToolbarTransformTools` | function | SparkEditor | [EditorUI.h:L469](../../SparkEditor/Source/Core/EditorUI.h#L469) |  |
 | `RenderToolPalette` | function | SparkEditor | [TerrainEditor.h:L76](../../SparkEditor/Source/Terrain/TerrainEditor.h#L76) |  |
 | `RenderTraceLog` | function | SparkEditor | [ScriptDebugPanel.h:L96](../../SparkEditor/Source/Panels/ScriptDebugPanel.h#L96) |  |
-| `RenderTrack` | function | SparkEditor | [AnimationTimeline.h:L276](../../SparkEditor/Source/Animation/AnimationTimeline.h#L276) | Render a single track |
 | `RenderTrackingInfo` | function | SparkEditor | [VRConfigPanel.h:L33](../../SparkEditor/Source/Panels/VRConfigPanel.h#L33) |  |
-| `RenderTrackList` | function | SparkEditor | [AnimationTimeline.h:L249](../../SparkEditor/Source/Animation/AnimationTimeline.h#L249) | Render track list |
 | `RenderTrackList` | function | SparkEditor | [CinematicSequencerPanel.h:L69](../../SparkEditor/Source/Panels/CinematicSequencerPanel.h#L69) |  |
 | `RenderTrailSettings` | function | SparkEditor | [ParticleEditorPanel.h:L46](../../SparkEditor/Source/Panels/ParticleEditorPanel.h#L46) |  |
 | `RenderTransformComponent` | function | SparkEditor | [InspectorPanel.h:L89](../../SparkEditor/Source/Panels/InspectorPanel.h#L89) |  |
 | `RenderTransformConstraints` | function | SparkEditor | [ObjectPlacementPanel.h:L79](../../SparkEditor/Source/Panels/ObjectPlacementPanel.h#L79) |  |
 | `RenderTranslateGizmo` | function | SparkEditor | [SceneViewPanel.h:L141](../../SparkEditor/Source/Panels/SceneViewPanel.h#L141) |  |
-| `RenderTranslationGizmo` | function | SparkEditor | [GizmoSystem.h:L277](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L277) | Render translation gizmo |
 | `RenderTransportControls` | function | SparkEditor | [PlayModeToolbarPanel.h:L57](../../SparkEditor/Source/Panels/PlayModeToolbarPanel.h#L57) | Connect to the engine's PlayModeManager. |
 | `RenderTransportControls` | function | SparkEditor | [ReplayPanel.h:L42](../../SparkEditor/Source/Panels/ReplayPanel.h#L42) |  |
 | `RenderTriggerDetails` | function | SparkEditor | [TriggerEditorPanel.h:L48](../../SparkEditor/Source/Panels/TriggerEditorPanel.h#L48) |  |
@@ -32152,7 +31605,6 @@
 | `RenderUI` | function | GameModules | [TFSanctuaryDecor.h:L55](../../GameModules/SparkGameMMOFPS/Source/World/TFSanctuaryDecor.h#L55) |  |
 | `RenderUI` | function | GameModules | [TFTravelSystem.h:L99](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystem.h#L99) |  |
 | `RenderUI` | function | GameModules | [RTSDemoPresentation.h:L37](../../GameModules/SparkGameRTS/Source/Demo/RTSDemoPresentation.h#L37) |  |
-| `RenderUI` | function | SparkEditor | [LightingTools.h:L273](../../SparkEditor/Source/Lighting/LightingTools.h#L273) | Render the lighting tools UI |
 | `RenderUnsavedChangesDialog` | function | SparkEditor | [EditorUI.h:L442](../../SparkEditor/Source/Core/EditorUI.h#L442) |  |
 | `RenderValidationAndSave` | function | SparkEditor | [DecorLayoutEditorPanel.h:L134](../../SparkEditor/Source/Panels/DecorLayoutEditorPanel.h#L134) |  |
 | `RenderValidationAndSave` | function | SparkEditor | [RegionMapEditorPanel.h:L104](../../SparkEditor/Source/Panels/RegionMapEditorPanel.h#L104) |  |
@@ -32172,7 +31624,6 @@
 | `RenderWidgetInspector` | function | SparkEditor | [UIDesignerPanel.h:L40](../../SparkEditor/Source/Panels/UIDesignerPanel.h#L40) |  |
 | `RenderWidgetTree` | function | SparkEditor | [UIDesignerPanel.h:L39](../../SparkEditor/Source/Panels/UIDesignerPanel.h#L39) |  |
 | `RenderWindowMenu` | function | SparkEditor | [EditorUI.h:L464](../../SparkEditor/Source/Core/EditorUI.h#L464) |  |
-| `RenderWindSettings` | function | SparkEditor | [PostProcessingPanel.h:L38](../../SparkEditor/Source/Panels/PostProcessingPanel.h#L38) |  |
 | `RenderWindZoneComponent` | function | SparkEditor | [InspectorPanel.h:L136](../../SparkEditor/Source/Panels/InspectorPanel.h#L136) |  |
 | `RenderWorkflowList` | function | SparkEditor | [WorkflowPanel.h:L40](../../SparkEditor/Source/Panels/WorkflowPanel.h#L40) | Set the EditorUI pointer for workflow context access. |
 | `RenderWorld` | function | GameModules | [TFWorldSetup.h:L132](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.h#L132) |  |
@@ -32728,16 +32179,6 @@
 | `RespawnPlayer` | function | GameModules | [MultiplayerSystem.h:L360](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L360) |  |
 | `RespawnPoint` | struct | GameModules | [GameMechanics.h:L64](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L64) | Respawn point in the world |
 | `RespawnSystem` | class | GameModules | [GameMechanics.h:L148](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L148) | Respawn system for player death and revival |
-| `RespawnSystem::AddSpawnPoint` | method | GameModules | [GameMechanics.cpp:L268](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.cpp#L268) |  |
-| `RespawnSystem::Console_GetKillHistory` | method | GameModules | [GameMechanics.cpp:L385](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.cpp#L385) |  |
-| `RespawnSystem::Console_GetScoreboard` | method | GameModules | [GameMechanics.cpp:L369](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.cpp#L369) |  |
-| `RespawnSystem::GetBestSpawnPoint` | method | GameModules | [GameMechanics.cpp:L284](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.cpp#L284) |  |
-| `RespawnSystem::Initialize` | method | GameModules | [GameMechanics.cpp:L236](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.cpp#L236) |  |
-| `RespawnSystem::OnPlayerDeath` | method | GameModules | [GameMechanics.cpp:L312](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.cpp#L312) |  |
-| `RespawnSystem::RecordKill` | method | GameModules | [GameMechanics.cpp:L349](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.cpp#L349) |  |
-| `RespawnSystem::RemoveSpawnPoint` | method | GameModules | [GameMechanics.cpp:L276](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.cpp#L276) |  |
-| `RespawnSystem::RespawnPlayer` | method | GameModules | [GameMechanics.cpp:L331](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.cpp#L331) |  |
-| `RespawnSystem::Update` | method | GameModules | [GameMechanics.cpp:L256](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.cpp#L256) |  |
 | `RespondReady` | function | GameModules | [MMOPartySystem.h:L91](../../GameModules/SparkGameMMO/Source/Party/MMOPartySystem.h#L91) |  |
 | `response` | function | SparkEditor | [ExternalConsoleIntegration.cpp:L782](../../SparkEditor/Source/Integration/ExternalConsoleIntegration.cpp#L782) |  |
 | `response` | function | SparkEditor | [ExternalConsoleIntegration.cpp:L828](../../SparkEditor/Source/Integration/ExternalConsoleIntegration.cpp#L828) |  |
@@ -32859,7 +32300,6 @@
 | `ReverbPreset` | enum | SparkEngine | [AudioMixer.h:L61](../../SparkEngine/Source/Audio/AudioMixer.h#L61) | Predefined reverb environment settings. |
 | `ReverbZone` | struct | SparkEngine | [AudioMixer.h:L103](../../SparkEngine/Source/Audio/AudioMixer.h#L103) | A spatial volume that applies reverb to sounds within it. |
 | `RevertFile` | function | SparkEditor | [VersionControlSystem.h:L230](../../SparkEditor/Source/VersionControl/VersionControlSystem.h#L230) | Revert file to last committed version |
-| `RevertOverride` | function | Tests | [TestPrefabManager.cpp:L54](../../Tests/TestPrefabManager.cpp#L54) |  |
 | `Revive` | function | SparkEngine | [GameplayComponents.h:L89](../../SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h#L89) |  |
 | `Revive` | function | Tests | [TestECSStress.cpp:L39](../../Tests/TestECSStress.cpp#L39) |  |
 | `Revive` | function | Tests | [TestECSWorld.cpp:L37](../../Tests/TestECSWorld.cpp#L37) |  |
@@ -33696,8 +33136,6 @@
 | `SampleDensity` | function | SparkEngine | [VolumetricClouds.h:L151](../../SparkEngine/Source/Graphics/VolumetricClouds.h#L151) | Sample cloud density at a world point. |
 | `SampleDetailNoise` | function | SparkEngine | [VolumetricClouds.h:L193](../../SparkEngine/Source/Graphics/VolumetricClouds.h#L193) |  |
 | `SampleEntity` | struct | SparkEditor | [SearchPanel.h:L97](../../SparkEditor/Source/Panels/SearchPanel.h#L97) |  |
-| `SampleHeight` | function | GameModules | [Terrain.cpp:L515](../../GameModules/SparkGameFPS/Source/Game/Terrain.cpp#L515) |  |
-| `SampleHeight` | function | GameModules | [Terrain.h:L188](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L188) |  |
 | `SampleHeight` | function | SparkEngine | [ClipmapTerrain.h:L117](../../SparkEngine/Source/Graphics/ClipmapTerrain.h#L117) |  |
 | `SampleIrradiance` | function | SparkEngine | [AdaptiveProbeVolumes.h:L234](../../SparkEngine/Source/Graphics/AdaptiveProbeVolumes.h#L234) |  |
 | `SampleIrradiance` | function | SparkEngine | [LightProbeSystem.h:L92](../../SparkEngine/Source/Graphics/LightProbeSystem.h#L92) | Sample indirect irradiance at a world position |
@@ -33758,9 +33196,7 @@
 | `SaveAchievementState` | function | GameModules | [MMOPersistenceSystem.h:L239](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h#L239) |  |
 | `SaveAllModified` | function | SparkEditor | [BasicMaterialEditorPanel.h:L91](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.h#L91) |  |
 | `SaveAllWeapons` | function | SparkEditor | [WeaponEditorPanel.h:L35](../../SparkEditor/Source/Panels/WeaponEditorPanel.h#L35) |  |
-| `SaveAnimationClip` | function | SparkEditor | [AnimationTimeline.h:L101](../../SparkEditor/Source/Animation/AnimationTimeline.h#L101) | Save current animation clip to file |
 | `SaveAs` | function | SparkEngine | [EngineSettings.h:L833](../../SparkEngine/Source/Core/EngineSettings.h#L833) |  |
-| `SaveAssetMetadata` | function | SparkEditor | [AssetDatabase.h:L259](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L259) | Save asset metadata to .meta file |
 | `SaveBaseline` | function | SparkEngine | [BenchmarkFramework.h:L85](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L85) |  |
 | `SaveBeginEvent` | struct | SparkEngine | [SaveSystem.cpp:L43](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L43) | Published on the global EventBus before serialization begins. |
 | `SaveBinary` | function | SparkEditor | [SceneSerializer.h:L176](../../SparkEditor/Source/SceneSystem/SceneSerializer.h#L176) | Save scene in binary format |
@@ -33800,11 +33236,9 @@
 | `SaveLayout` | function | SparkEditor | [EditorUI.h:L203](../../SparkEditor/Source/Core/EditorUI.h#L203) |  |
 | `SaveLayout` | function | SparkEditor | [EditorWindowManager.h:L113](../../SparkEditor/Source/Core/EditorWindowManager.h#L113) | Save the current layout under a name |
 | `SaveLayout` | function | Tests | [TestEditorWindowManager.cpp:L46](../../Tests/TestEditorWindowManager.cpp#L46) |  |
-| `SaveLightingProfile` | function | SparkEditor | [LightingTools.h:L409](../../SparkEditor/Source/Lighting/LightingTools.h#L409) | Save lighting profile |
 | `SaveLoadLifecycleProbeEvent` | struct | Tests | [Test_persistence_SaveSystem.cpp:L356](../../Tests/harden/Test_persistence_SaveSystem.cpp#L356) |  |
 | `SaveLockouts` | function | GameModules | [MMOPersistenceSystem.h:L243](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h#L243) |  |
 | `SaveMatch` | function | GameModules | [RTSEngineSystems.h:L64](../../GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.h#L64) | Save the full RTS match state to the given slot. |
-| `SaveMaterial` | function | SparkEditor | [MaterialEditor.h:L316](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L316) | Save current material to file |
 | `SaveMaterial` | function | SparkEditor | [MaterialEditorPanel.h:L204](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L204) | Save the current material. |
 | `SaveMetadata` | function | SparkEditor | [AdvancedAssetPipeline.h:L496](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L496) | Save asset metadata to file |
 | `SaveModuleManifest` | function | SparkEditor | [GameModuleSelectorPanel.h:L58](../../SparkEditor/Source/Panels/GameModuleSelectorPanel.h#L58) |  |
@@ -33941,7 +33375,6 @@
 | `Scan` | struct | GameModules | [TFBotSystemCombat.cpp:L34](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemCombat.cpp#L34) |  |
 | `scan_maps_for_tebs` | function | tools | [gvisor-wine-shim.c:L183](../../tools/gvisor-wine-shim.c#L183) |  |
 | `ScanAllRegions` | function | SparkEngine | [MemoryIntegrity.h:L178](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L178) |  |
-| `ScanDirectory` | function | SparkEditor | [AssetDatabase.h:L231](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L231) | Scan directory for assets |
 | `ScanDirectory` | function | SparkEditor | [AdvancedAssetPipeline.h:L341](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L341) | Scan directory for assets |
 | `ScanDirectory` | function | SparkEngine | [ScriptHotReload.h:L158](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L158) |  |
 | `ScanDirectory` | function | SparkEngine | [AssetPipeline.h:L436](../../SparkEngine/Source/Graphics/AssetPipeline.h#L436) |  |
@@ -34222,10 +33655,6 @@
 | `ScreenSpaceEffects::SetSSRQuality` | method | SparkEngine | [ScreenSpaceEffects.cpp:L122](../../SparkEngine/Source/Graphics/ScreenSpaceEffects.cpp#L122) |  |
 | `ScreenSpaceEffects::Shutdown` | method | SparkEngine | [ScreenSpaceEffects.cpp:L44](../../SparkEngine/Source/Graphics/ScreenSpaceEffects.cpp#L44) |  |
 | `ScreenSpaceMetrics` | struct | SparkEngine | [ScreenSpaceEffects.h:L239](../../SparkEngine/Source/Graphics/ScreenSpaceEffects.h#L239) |  |
-| `ScreenToGraph` | function | SparkEditor | [MaterialEditor.h:L482](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L482) | Convert screen coordinates to graph coordinates |
-| `ScreenToTime` | function | SparkEditor | [AnimationTimeline.h:L340](../../SparkEditor/Source/Animation/AnimationTimeline.h#L340) | Convert screen X coordinate to time |
-| `ScreenToValue` | function | SparkEditor | [AnimationTimeline.h:L356](../../SparkEditor/Source/Animation/AnimationTimeline.h#L356) | Convert screen Y coordinate to value (curve editor) |
-| `ScreenToWorldRay` | function | SparkEditor | [GizmoSystem.h:L86](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L86) | Create ray from screen coordinates |
 | `screenVerts` | function | SparkEngine | [OcclusionCulling.cpp:L204](../../SparkEngine/Source/Graphics/OcclusionCulling.cpp#L204) |  |
 | `screenX` | function | SparkEngine | [MeshClusterSystem.h:L713](../../SparkEngine/Source/Graphics/MeshClusterSystem.h#L713) |  |
 | `screenY` | function | SparkEngine | [MeshClusterSystem.h:L714](../../SparkEngine/Source/Graphics/MeshClusterSystem.h#L714) |  |
@@ -34397,8 +33826,6 @@
 | `SeamlessAreaManager::UnregisterArea` | method | SparkEngine | [SeamlessAreaManager.cpp:L153](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.cpp#L153) |  |
 | `SeamlessAreaManager::Update` | method | SparkEngine | [SeamlessAreaManager.cpp:L59](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.cpp#L59) |  |
 | `SeamlessAreaManager::UpdateAreaDistances` | method | SparkEngine | [SeamlessAreaManagerStreaming.cpp:L127](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManagerStreaming.cpp#L127) |  |
-| `Search` | function | Tests | [TestAssetDatabase.cpp:L92](../../Tests/TestAssetDatabase.cpp#L92) |  |
-| `SearchAssets` | function | SparkEditor | [AssetDatabase.h:L176](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L176) | Search assets by name |
 | `SearchFilter` | enum | SparkEditor | [SearchPanel.h:L47](../../SparkEditor/Source/Panels/SearchPanel.h#L47) | Search filter type selection |
 | `SearchListings` | function | GameModules | [MMOTradingSystem.h:L104](../../GameModules/SparkGameMMO/Source/Trading/MMOTradingSystem.h#L104) |  |
 | `SearchPanel` | class | SparkEditor | [SearchPanel.h:L61](../../SparkEditor/Source/Panels/SearchPanel.h#L61) | Global search panel for the editor |
@@ -35103,7 +34530,6 @@
 | `SetAssetChangedCallback` | function | SparkEditor | [SparkEngineIntegration.h:L490](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L490) | Set asset changed callback |
 | `SetAssetPipeline` | function | SparkEngine | [EngineContext.h:L322](../../SparkEngine/Source/Core/EngineContext.h#L322) |  |
 | `SetAssetRegistry` | function | SparkEngine | [EngineContext.h:L326](../../SparkEngine/Source/Core/EngineContext.h#L326) |  |
-| `SetAtmosphereSettings` | function | SparkEditor | [LightingTools.h:L361](../../SparkEditor/Source/Lighting/LightingTools.h#L361) | Set atmosphere settings |
 | `SetAttenuation` | function | SparkEngine | [LightingSystem.h:L119](../../SparkEngine/Source/Graphics/LightingSystem.h#L119) |  |
 | `SetAudio` | function | SparkEngine | [EngineContext.h:L311](../../SparkEngine/Source/Core/EngineContext.h#L311) |  |
 | `SetAudioBackend` | function | SparkEngine | [Sequencer.h:L366](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L366) | Attach the non-owning runtime audio service. |
@@ -35267,7 +34693,6 @@
 | `SetCrouching` | function | GameModules | [Player.h:L299](../../GameModules/SparkGameFPS/Source/Game/Player.h#L299) | Set the crouching state of the player |
 | `SetCulled` | function | SparkEngine | [RenderGraphPass.h:L75](../../SparkEngine/Source/Graphics/RenderGraphPass.h#L75) |  |
 | `SetCurrentClass` | function | GameModules | [HUDSystem.h:L397](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L397) | Set current class type for HUD rendering |
-| `SetCurrentClip` | function | SparkEditor | [AnimationTimeline.h:L107](../../SparkEditor/Source/Animation/AnimationTimeline.h#L107) | Set current animation clip |
 | `SetCurrentEntries` | function | SparkEngine | [CacheDebugger.h:L186](../../SparkEngine/Source/Utils/CacheDebugger.h#L186) |  |
 | `SetCurrentFrameSRV` | function | SparkEngine | [TemporalEffects.h:L173](../../SparkEngine/Source/Graphics/TemporalEffects.h#L173) | Set the current frame's color SRV |
 | `SetCurrentLanguage` | function | SparkEngine | [LocalizationSystem.h:L121](../../SparkEngine/Source/Engine/Localization/LocalizationSystem.h#L121) | Set the active language. |
@@ -35499,7 +34924,6 @@
 | `SetFileCache` | function | SparkEngine | [SceneManager.h:L480](../../SparkEngine/Source/SceneManager/SceneManager.h#L480) | Set the file cache for scene I/O (non-owning). |
 | `SetFileInformationByHandle` | function | SparkCrashReporter | [CrashReporterApp.cpp:L734](../../SparkCrashReporter/src/CrashReporterApp.cpp#L734) |  |
 | `SetFilePath` | function | SparkEditor | [PrefabAsset.h:L93](../../SparkEditor/Source/Prefabs/PrefabAsset.h#L93) | Set the file path |
-| `SetFileSystemChangeCallback` | function | SparkEditor | [AssetDatabase.h:L189](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L189) | Set file system change callback |
 | `SetFileSystemMonitoring` | function | SparkEditor | [AdvancedAssetPipeline.h:L368](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L368) | Enable/disable file system monitoring |
 | `SetFillColor` | function | SparkEngine | [UISystem.h:L261](../../SparkEngine/Source/Engine/UI/UISystem.h#L261) |  |
 | `SetFilter` | function | SparkEditor | [ConsolePanel.h:L142](../../SparkEditor/Source/Panels/ConsolePanel.h#L142) | Set console filter |
@@ -35551,13 +34975,9 @@
 | `SetGameplayTagService` | function | SparkEngine | [EngineContext.h:L318](../../SparkEngine/Source/Core/EngineContext.h#L318) |  |
 | `SetGenerator` | function | SparkEngine | [MovementSystem.h:L344](../../SparkEngine/Source/Engine/AI/MovementSystem.h#L344) | Place a generator into its declared slot, replacing any existing one. |
 | `SetGenerator` | function | Tests | [TestMovementSystem.cpp:L138](../../Tests/TestMovementSystem.cpp#L138) |  |
-| `SetGizmoMode` | function | SparkEditor | [GizmoSystem.h:L178](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L178) | Set current gizmo mode |
 | `SetGizmosEnabled` | function | SparkEditor | [SparkEngineIntegration.h:L546](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L546) | Enable/disable gizmos |
-| `SetGizmoSize` | function | SparkEditor | [GizmoSystem.h:L250](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L250) | Set gizmo size scale |
-| `SetGizmoSpace` | function | SparkEditor | [GizmoSystem.h:L190](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L190) | Set gizmo coordinate space |
 | `SetGlobalBudget` | function | SparkEngine | [MemoryMonitor.h:L163](../../SparkEngine/Source/Utils/MemoryMonitor.h#L163) | Set a global memory budget (0 = no budget) |
 | `SetGlobalDifficulty` | function | GameModules | [RacingAIDriver.h:L105](../../GameModules/SparkGameRacing/Source/AI/RacingAIDriver.h#L105) |  |
-| `SetGlobalIlluminationSettings` | function | SparkEditor | [LightingTools.h:L327](../../SparkEditor/Source/Lighting/LightingTools.h#L327) | Set global illumination settings |
 | `SetGlobalInstance` | function | SparkEngine | [SparkConsole.h:L120](../../SparkEngine/Source/Utils/SparkConsole.h#L120) |  |
 | `SetGlobalKeyword` | function | SparkEngine | [ShaderVariantSystem.h:L211](../../SparkEngine/Source/Graphics/ShaderVariantSystem.h#L211) | Enable/disable a global keyword |
 | `SetGlobalLevel` | function | SparkEngine | [Logger.h:L434](../../SparkEngine/Source/Utils/Logger.h#L434) | Set the global minimum log level |
@@ -35600,7 +35020,6 @@
 | `SetIcon` | function | SparkEditor | [EditorPanel.h:L292](../../SparkEditor/Source/Core/EditorPanel.h#L292) | Set icon for the panel title bar |
 | `SetId` | function | SparkEngine | [DialogueSystem.h:L125](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.h#L125) | Set the tree identifier. |
 | `SetImGuiInjection` | function | SparkEngine | [ModuleManager.h:L170](../../SparkEngine/Source/Core/ModuleManager.h#L170) | Provide the host ImGui context + allocators for module injection. |
-| `SetImportSettings` | function | SparkEditor | [AssetDatabase.h:L203](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L203) | Set import settings for asset |
 | `SetImpostorDistance` | function | SparkEngine | [FoliageRenderer.h:L267](../../SparkEngine/Source/Graphics/FoliageRenderer.h#L267) | Update the impostor switch distance at runtime. |
 | `SetIncomingDamageFilter` | function | GameModules | [TFDamageSystem.h:L212](../../GameModules/SparkGameMMOFPS/Source/Game/TFDamageSystem.h#L212) |  |
 | `SetIndex` | function | Tests | [TestDedicatedServer.cpp:L268](../../Tests/TestDedicatedServer.cpp#L268) |  |
@@ -35645,7 +35064,6 @@
 | `SetJumpInput` | function | GameModules | [PlatformerPlayerController.h:L106](../../GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.h#L106) | Set jump-button state; a rising edge queues a buffered jump. |
 | `SetKeepChangesOnStop` | function | SparkEngine | [PlayModeManager.h:L258](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L258) |  |
 | `SetKey` | function | Tests | [TestInputSystem.cpp:L23](../../Tests/TestInputSystem.cpp#L23) |  |
-| `SetKeyframeInterpolation` | function | SparkEditor | [AnimationTimeline.h:L198](../../SparkEditor/Source/Animation/AnimationTimeline.h#L198) | Set keyframe interpolation type |
 | `SetKeyStateProviders` | function | SparkEngine | [InputActionSystem.h:L163](../../SparkEngine/Source/Input/InputActionSystem.h#L163) | Set the key state provider (connects to InputManager) |
 | `SetKeyword` | function | SparkEngine | [ShaderVariantSystem.h:L95](../../SparkEngine/Source/Graphics/ShaderVariantSystem.h#L95) |  |
 | `SetKeyword` | function | Tests | [TestGraphicsIntegration.cpp:L501](../../Tests/TestGraphicsIntegration.cpp#L501) |  |
@@ -35665,7 +35083,6 @@
 | `SetLeftFootIndex` | function | SparkEngine | [PoseModifier.h:L183](../../SparkEngine/Source/Engine/Animation/PoseModifier.h#L183) |  |
 | `SetLevelSpawn` | function | GameModules | [PlatformerCheckpointSystem.h:L74](../../GameModules/SparkGamePlatformer/Source/Checkpoint/PlatformerCheckpointSystem.h#L74) | Set the initial spawn point (used before any checkpoint is activated) |
 | `SetLifeTime` | function | GameModules | [Projectile.h:L176](../../GameModules/SparkGameFPS/Source/Projectiles/Projectile.h#L176) | Set the maximum lifetime |
-| `SetLightChangedCallback` | function | SparkEditor | [LightingTools.h:L319](../../SparkEditor/Source/Lighting/LightingTools.h#L319) | Set light changed callback |
 | `SetLimit` | function | SparkEngine | [FBXImporter.h:L227](../../SparkEngine/Source/Graphics/FBXImporter.h#L227) |  |
 | `SetLinearRange` | function | SparkEngine | [FogSystem.h:L227](../../SparkEngine/Source/Graphics/FogSystem.h#L227) | Set linear fog start and end distances |
 | `SetLinearVelocity` | function | SparkEngine | [JoltPhysicsInterface.h:L290](../../SparkEngine/Source/Engine/Physics/JoltPhysicsInterface.h#L290) |  |
@@ -35876,7 +35293,6 @@
 | `SetOutputRTV` | function | SparkEngine | [PostProcessingPipeline.h:L316](../../SparkEngine/Source/Graphics/PostProcessingPipeline.h#L316) | Set the borrowed final output RTV for this frame |
 | `SetOutputTextures` | function | SparkEngine | [MetalRayTracing.h:L200](../../SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.h#L200) | Set per-effect output render targets. Passing nullptr |
 | `SetOverlayVisible` | function | SparkEngine | [Profiler.h:L272](../../SparkEngine/Source/Utils/Profiler.h#L272) |  |
-| `SetOverride` | function | Tests | [TestPrefabManager.cpp:L46](../../Tests/TestPrefabManager.cpp#L46) |  |
 | `SetOwned` | function | SparkEngine | [EngineContext.h:L168](../../SparkEngine/Source/Core/EngineContext.h#L168) | Set the global EngineContext (initialization only) |
 | `SetPadding` | function | SparkEngine | [UILayoutExtensions.h:L50](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L50) |  |
 | `SetPadding` | function | SparkEngine | [UISystem.h:L315](../../SparkEngine/Source/Engine/UI/UISystem.h#L315) | Set padding inside the panel. |
@@ -35937,7 +35353,6 @@
 | `SetPlatform` | function | SparkEngine | [OnlineServices.h:L608](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L608) | Set a custom platform implementation |
 | `SetPlaybackSpeed` | function | SparkEngine | [Sequencer.h:L281](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L281) |  |
 | `SetPlaybackSpeed` | function | SparkEngine | [VideoPlayer.h:L235](../../SparkEngine/Source/Engine/Cinematic/VideoPlayer.h#L235) | Set playback speed |
-| `SetPlaybackTime` | function | SparkEditor | [AnimationTimeline.h:L154](../../SparkEditor/Source/Animation/AnimationTimeline.h#L154) | Set playback time |
 | `SetPlayer` | function | GameModules | [HUDSystem.h:L253](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L253) | Set the player to read state from |
 | `SetPlayerClass` | function | GameModules | [Game.h:L299](../../GameModules/SparkGameFPS/Source/Game/Game.h#L299) | Switch the player's class |
 | `SetPlayerFaction` | function | GameModules | [TFServerSim.h:L66](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L66) |  |
@@ -35977,7 +35392,6 @@
 | `SetPosition` | function | SparkEngine | [DebugOverlay.h:L170](../../SparkEngine/Source/Utils/DebugOverlay.h#L170) |  |
 | `SetPosition` | function | Tests | [TestCameraTransforms.cpp:L115](../../Tests/TestCameraTransforms.cpp#L115) |  |
 | `SetPosition` | function | Tests | [TestGameObjectTransforms.cpp:L62](../../Tests/TestGameObjectTransforms.cpp#L62) |  |
-| `SetPostProcessingSettings` | function | SparkEditor | [LightingTools.h:L394](../../SparkEditor/Source/Lighting/LightingTools.h#L394) | Set post-processing settings |
 | `SetPredictionCorrectionCount` | function | SparkEngine | [NetworkManager.h:L510](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L510) |  |
 | `SetPreferredVelocity` | function | SparkEngine | [CollisionAvoidance.h:L136](../../SparkEngine/Source/Engine/AI/CollisionAvoidance.h#L136) | Set the desired velocity for an agent (from pathfinding). |
 | `SetPreferredVelocity` | function | Tests | [TestCollisionAvoidance.cpp:L51](../../Tests/TestCollisionAvoidance.cpp#L51) |  |
@@ -35989,7 +35403,6 @@
 | `SetPresence` | function | SparkEngine | [OnlineServices.h:L551](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L551) |  |
 | `SetPressedColor` | function | SparkEngine | [UISystem.h:L231](../../SparkEngine/Source/Engine/UI/UISystem.h#L231) |  |
 | `SetPrettyPrintJSON` | function | SparkEditor | [SceneSerializer.h:L161](../../SparkEditor/Source/SceneSystem/SceneSerializer.h#L161) | Enable/disable pretty printing for JSON format |
-| `SetPreviewShape` | function | SparkEditor | [MaterialEditor.h:L367](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L367) | Set material preview shape |
 | `SetPrimitiveTopology` | function | SparkEngine | [D3D11Device.h:L239](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L239) |  |
 | `SetPrimitiveTopology` | function | SparkEngine | [D3D12Types.h:L451](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L451) |  |
 | `SetPrimitiveTopology` | function | SparkEngine | [MetalDevice.h:L372](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L372) |  |
@@ -36023,7 +35436,6 @@
 | `SetRecompileCallback` | function | SparkEngine | [ScriptHotReload.h:L100](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L100) | Set callback for recompiling a changed script |
 | `SetRecompileCallback` | function | Tests | [TestScriptHotReload.cpp:L54](../../Tests/TestScriptHotReload.cpp#L54) |  |
 | `SetReconnectFailedCallback` | function | SparkEngine | [NetworkManager.h:L592](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L592) | Register a callback invoked when auto-reconnect gives up |
-| `SetRecording` | function | SparkEditor | [AnimationTimeline.h:L172](../../SparkEditor/Source/Animation/AnimationTimeline.h#L172) | Enable/disable animation recording |
 | `SetRecoveryCallback` | function | SparkEditor | [EditorCrashHandler.h:L89](../../SparkEditor/Source/Core/EditorCrashHandler.h#L89) |  |
 | `SetRecoveryCooldown` | function | SparkEngine | [FaultIsolation.h:L91](../../SparkEngine/Source/Core/FaultIsolation.h#L91) |  |
 | `SetRecoveryCooldown` | function | Tests | [TestSelfRecovery.cpp:L91](../../Tests/TestSelfRecovery.cpp#L91) |  |
@@ -36071,7 +35483,6 @@
 | `SetRotation` | function | SparkEngine | [PhysicsBody.h:L75](../../SparkEngine/Source/Physics/PhysicsBody.h#L75) |  |
 | `SetRotation` | function | Tests | [TestGameObjectTransforms.cpp:L68](../../Tests/TestGameObjectTransforms.cpp#L68) |  |
 | `SetRotationAngle` | function | GameModules | [InteractiveObject.h:L151](../../GameModules/SparkGameFPS/Source/Game/InteractiveObject.h#L151) |  |
-| `SetRotationSnapAngle` | function | SparkEditor | [GizmoSystem.h:L226](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L226) | Set rotation snap angle |
 | `SetRows` | function | SparkEngine | [UILayoutExtensions.h:L71](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L71) |  |
 | `SetRTV` | function | SparkEngine | [D3D11Device.h:L94](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L94) |  |
 | `SetRTVDescriptor` | function | SparkEngine | [D3D12Types.h:L264](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L264) |  |
@@ -36097,7 +35508,6 @@
 | `SetScene` | function | SparkEditor | [InspectorPanel.h:L54](../../SparkEditor/Source/Panels/InspectorPanel.h#L54) | Set the scene that provides entity data |
 | `SetScene` | function | SparkEditor | [Physics2DPanel.h:L39](../../SparkEditor/Source/Panels/Physics2DPanel.h#L39) |  |
 | `SetScene` | function | SparkEditor | [Physics3DPanel.h:L41](../../SparkEditor/Source/Panels/Physics3DPanel.h#L41) |  |
-| `SetScene` | function | SparkEditor | [PostProcessingPanel.h:L31](../../SparkEditor/Source/Panels/PostProcessingPanel.h#L31) |  |
 | `SetScene` | function | SparkEditor | [SpriteAnimationEditorPanel.h:L42](../../SparkEditor/Source/Panels/SpriteAnimationEditorPanel.h#L42) |  |
 | `SetScene` | function | SparkEditor | [SpriteEditorPanel.h:L39](../../SparkEditor/Source/Panels/SpriteEditorPanel.h#L39) |  |
 | `SetScene` | function | SparkEditor | [TilemapEditorPanel.h:L43](../../SparkEditor/Source/Panels/TilemapEditorPanel.h#L43) |  |
@@ -36183,8 +35593,6 @@
 | `SetSliderMotorVelocity` | function | SparkEngine | [PhysicsSystem.h:L343](../../SparkEngine/Source/Physics/PhysicsSystem.h#L343) | Set a velocity motor on a slider constraint. |
 | `SetSmoothCorrection` | function | SparkEngine | [ClientPrediction.h:L174](../../SparkEngine/Source/Engine/Networking/ClientPrediction.h#L174) | Enable smooth correction interpolation. |
 | `SetSnapshotCallbacks` | function | SparkEngine | [PlayModeManager.h:L498](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L498) | Override snapshot persistence for hosts that own a richer scene model. |
-| `SetSnapSize` | function | SparkEditor | [GizmoSystem.h:L214](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L214) | Set grid snap size |
-| `SetSnapToGrid` | function | SparkEditor | [GizmoSystem.h:L202](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L202) | Enable/disable grid snapping |
 | `SetSocial` | function | GameModules | [TFChatWindow.h:L53](../../GameModules/SparkGameMMOFPS/Source/UI/TFChatWindow.h#L53) |  |
 | `SetSocial` | function | GameModules | [TFSocialPanel.h:L42](../../GameModules/SparkGameMMOFPS/Source/UI/TFSocialPanel.h#L42) |  |
 | `SetSocialPanel` | function | GameModules | [TFClientNet.h:L111](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.h#L111) |  |
@@ -36279,16 +35687,12 @@
 | `SetTile` | function | Tests | [TestSprite2DComponents.cpp:L283](../../Tests/TestSprite2DComponents.cpp#L283) |  |
 | `SetTime` | function | GameModules | [OWEngineSystems.h:L51](../../GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.h#L51) |  |
 | `SetTime` | function | GameModules | [RPGEngineSystems.h:L60](../../GameModules/SparkGameRPG/Source/Core/RPGEngineSystems.h#L60) | Set time of day (0-24 hours) |
-| `SetTime` | function | SparkEditor | [AnimationTimelineTypes.h:L196](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L196) | Set animation time |
 | `SetTime` | function | SparkEngine | [Sequencer.h:L280](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L280) |  |
-| `SetTimelineZoom` | function | SparkEditor | [AnimationTimeline.h:L232](../../SparkEditor/Source/Animation/AnimationTimeline.h#L232) | Set timeline zoom |
 | `SetTimeOfDay` | function | GameModules | [RTSEngineSystems.h:L76](../../GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.h#L76) | Set the time of day (0-24 hour). |
-| `SetTimeOfDay` | function | SparkEditor | [LightingTools.h:L373](../../SparkEditor/Source/Lighting/LightingTools.h#L373) | Set time of day |
 | `SetTimeOfDay` | function | SparkEngine | [EngineContext.h:L328](../../SparkEngine/Source/Core/EngineContext.h#L328) |  |
 | `SetTimeOfDay` | function | SparkEngine | [TimeOfDaySystem.h:L85](../../SparkEngine/Source/Engine/World/TimeOfDaySystem.h#L85) | Set the current time of day |
 | `SetTimeOfDay` | function | Tests | [TestDayNightCycle.cpp:L57](../../Tests/TestDayNightCycle.cpp#L57) |  |
 | `SetTimeOfDay` | function | Tests | [TestTimeOfDaySystem.cpp:L54](../../Tests/TestTimeOfDaySystem.cpp#L54) |  |
-| `SetTimeOfDayAnimation` | function | SparkEditor | [LightingTools.h:L386](../../SparkEditor/Source/Lighting/LightingTools.h#L386) | Enable/disable automatic time of day animation |
 | `SetTimeoutDuration` | function | Tests | [TestNetworkManagerOrchestration.cpp:L327](../../Tests/TestNetworkManagerOrchestration.cpp#L327) |  |
 | `SetTimeoutHandler` | function | SparkEngine | [NetworkManager.h:L555](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L555) | Remove a client's visibility scope, reverting to "see everything". |
 | `SetTimeoutHandler` | function | Tests | [TestNetworkManagerOrchestration.cpp:L326](../../Tests/TestNetworkManagerOrchestration.cpp#L326) |  |
@@ -36396,7 +35800,6 @@
 | `SetupMinimalContext` | function | Tests | [TestEngineDiagnostics.cpp:L39](../../Tests/TestEngineDiagnostics.cpp#L39) |  |
 | `SetupNetworkHandlers` | function | GameModules | [MMOChatSystem.h:L82](../../GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.h#L82) |  |
 | `SetupNetworkHandlers` | function | GameModules | [MMOPlayerSystem.h:L125](../../GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.h#L125) |  |
-| `SetupPreviewRendering` | function | SparkEditor | [MaterialEditor.h:L518](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L518) | Setup material preview rendering |
 | `SetupProviders` | function | Tests | [TestInputActionSystem.cpp:L19](../../Tests/TestInputActionSystem.cpp#L19) |  |
 | `SetupReplay` | function | GameModules | [PlatformerEngineSystems.h:L81](../../GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.h#L81) |  |
 | `SetupReplay` | function | GameModules | [RacingEngineSystems.h:L90](../../GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.h#L90) | Set weather type by name (clear/rain/storm). |
@@ -36453,11 +35856,9 @@
 | `SetViewport` | function | SparkEngine | [RHIDevice.h:L87](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L87) |  |
 | `SetViewport` | function | SparkEngine | [VulkanDevice.h:L319](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L319) |  |
 | `SetViewportSize` | function | SparkEngine | [UILayoutExtensions.h:L89](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L89) |  |
-| `SetViewRange` | function | SparkEditor | [AnimationTimeline.h:L221](../../SparkEditor/Source/Animation/AnimationTimeline.h#L221) | Set timeline view range |
 | `SetViolationCallback` | function | SparkEngine | [MemoryIntegrity.h:L201](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L201) |  |
 | `SetVisibility` | function | Tests | [TestReplicationFields.cpp:L50](../../Tests/TestReplicationFields.cpp#L50) |  |
 | `SetVisible` | function | SparkEditor | [EditorPanel.h:L111](../../SparkEditor/Source/Core/EditorPanel.h#L111) | Set panel visibility |
-| `SetVisible` | function | SparkEditor | [GizmoSystem.h:L238](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L238) | Enable/disable gizmo visibility |
 | `SetVisible` | function | SparkEngine | [SceneGraph2D.h:L136](../../SparkEngine/Source/Engine/2D/SceneGraph2D.h#L136) |  |
 | `SetVisible` | function | SparkEngine | [UISystem.h:L151](../../SparkEngine/Source/Engine/UI/UISystem.h#L151) | Set visibility. |
 | `SetVisible` | function | SparkEngine | [UISystem.h:L446](../../SparkEngine/Source/Engine/UI/UISystem.h#L446) | Show or hide all UI. |
@@ -36758,7 +36159,6 @@
 | `ShadowMap` | struct | SparkEngine | [LightingSystem.h:L223](../../SparkEngine/Source/Graphics/LightingSystem.h#L223) | Shadow map resource |
 | `ShadowMapType` | enum | SparkEditor | [RenderingEnums.h:L161](../../SparkEditor/Source/Enums/RenderingEnums.h#L161) | Shadow map types |
 | `ShadowPassData` | struct | SparkEngine | [RenderGraphBuilder.h:L122](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L122) | Shadow pass outputs placed on the blackboard. |
-| `ShadowQuality` | enum | SparkEditor | [LightingTools.h:L55](../../SparkEditor/Source/Lighting/LightingTools.h#L55) | Shadow quality settings |
 | `ShadowTechnique` | enum | SparkEngine | [LightingSystem.h:L48](../../SparkEngine/Source/Graphics/LightingSystem.h#L48) | Shadow mapping techniques |
 | `ShadowTechniqueToString` | function | SparkEngine | [LightingSystem.h:L476](../../SparkEngine/Source/Graphics/LightingSystem.h#L476) |  |
 | `ShadowTechniqueToString` | function | SparkEngine | [LightingSystemInternalWindowsTypes.cpp:L62](../../SparkEngine/Source/Graphics/LightingSystemInternalWindowsTypes.cpp#L62) |  |
@@ -36766,7 +36166,6 @@
 | `ShadowTile` | struct | SparkEngine | [ShadowAtlas.h:L38](../../SparkEngine/Source/Graphics/ShadowAtlas.h#L38) | A tile allocation within the shadow atlas |
 | `ShadowTile` | struct | SparkEngine | [ShadowAtlasTypes.h:L20](../../SparkEngine/Source/Graphics/ShadowAtlasTypes.h#L20) | A tile allocation within the shadow atlas |
 | `ShadowUpdateRequest` | struct | SparkEngine | [CachedShadowAtlas.h:L59](../../SparkEngine/Source/Graphics/CachedShadowAtlas.h#L59) | Request to update a light's shadow map in the cached atlas |
-| `Shape` | enum | SparkEditor | [MaterialEditor.h:L218](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L218) | Material preview sphere |
 | `Shape` | enum | SparkEngine | [PhysicsComponents.h:L106](../../SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h#L106) | Defines the collision shape attached to a rigid body. |
 | `Shape` | enum | SparkEngine | [PlacementComponents.h:L115](../../SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h#L115) | Marks an entity as an occluder for the software occlusion system. |
 | `Shape` | enum | SparkEngine | [Sprite2DComponents.h:L425](../../SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h#L425) |  |
@@ -36983,8 +36382,6 @@
 | `Shutdown` | function | GameModules | [RacingRaceManager.h:L103](../../GameModules/SparkGameRacing/Source/Race/RacingRaceManager.h#L103) |  |
 | `Shutdown` | function | GameModules | [RacingTrackSystem.h:L108](../../GameModules/SparkGameRacing/Source/Track/RacingTrackSystem.h#L108) |  |
 | `Shutdown` | function | GameModules | [RacingVehicleSystem.h:L87](../../GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.h#L87) |  |
-| `Shutdown` | function | SparkEditor | [AnimationTimeline.h:L71](../../SparkEditor/Source/Animation/AnimationTimeline.h#L71) | Shutdown the animation timeline |
-| `Shutdown` | function | SparkEditor | [AssetDatabase.h:L121](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L121) | Shutdown the asset database |
 | `Shutdown` | function | SparkEditor | [AdvancedAssetPipeline.h:L271](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L271) | Shutdown the asset pipeline |
 | `Shutdown` | function | SparkEditor | [EngineInterface.h:L239](../../SparkEditor/Source/Communication/EngineInterface.h#L239) | Shutdown the interface |
 | `Shutdown` | function | SparkEditor | [EditorApplication.h:L76](../../SparkEditor/Source/Core/EditorApplication.h#L76) |  |
@@ -36997,12 +36394,9 @@
 | `Shutdown` | function | SparkEditor | [IEditorPlugin.h:L59](../../SparkEditor/Source/Core/IEditorPlugin.h#L59) | Shutdown the plugin and release resources |
 | `Shutdown` | function | SparkEditor | [ProjectManager.h:L118](../../SparkEditor/Source/Core/ProjectManager.h#L118) |  |
 | `Shutdown` | function | SparkEditor | [TutorialSystem.h:L147](../../SparkEditor/Source/Core/TutorialSystem.h#L147) | Shut down and release all state. |
-| `Shutdown` | function | SparkEditor | [GizmoSystem.h:L141](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L141) | Shutdown the gizmo system |
 | `Shutdown` | function | SparkEditor | [ExternalConsoleIntegration.h:L52](../../SparkEditor/Source/Integration/ExternalConsoleIntegration.h#L52) | Shutdown the console integration |
 | `Shutdown` | function | SparkEditor | [SparkEngineIntegration.h:L211](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L211) | Shutdown the integration system |
 | `Shutdown` | function | SparkEditor | [LevelStreamingSystem.h:L81](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L81) | Shutdown the level streaming system |
-| `Shutdown` | function | SparkEditor | [LightingTools.h:L278](../../SparkEditor/Source/Lighting/LightingTools.h#L278) | Shutdown the lighting system |
-| `Shutdown` | function | SparkEditor | [MaterialEditor.h:L288](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L288) | Shutdown the material editor |
 | `Shutdown` | function | SparkEditor | [AIDebugPanel.h:L39](../../SparkEditor/Source/Panels/AIDebugPanel.h#L39) |  |
 | `Shutdown` | function | SparkEditor | [AIEditorPanel.h:L31](../../SparkEditor/Source/Panels/AIEditorPanel.h#L31) |  |
 | `Shutdown` | function | SparkEditor | [AbilityEditorPanel.h:L32](../../SparkEditor/Source/Panels/AbilityEditorPanel.h#L32) |  |
@@ -37041,7 +36435,6 @@
 | `Shutdown` | function | SparkEditor | [Physics3DPanel.h:L39](../../SparkEditor/Source/Panels/Physics3DPanel.h#L39) |  |
 | `Shutdown` | function | SparkEditor | [PlayControlPanel.h:L49](../../SparkEditor/Source/Panels/PlayControlPanel.h#L49) |  |
 | `Shutdown` | function | SparkEditor | [PlayModeToolbarPanel.h:L50](../../SparkEditor/Source/Panels/PlayModeToolbarPanel.h#L50) |  |
-| `Shutdown` | function | SparkEditor | [PostProcessingPanel.h:L29](../../SparkEditor/Source/Panels/PostProcessingPanel.h#L29) |  |
 | `Shutdown` | function | SparkEditor | [PrefabEditorPanel.h:L40](../../SparkEditor/Source/Panels/PrefabEditorPanel.h#L40) |  |
 | `Shutdown` | function | SparkEditor | [ProjectBrowserPanel.h:L41](../../SparkEditor/Source/Panels/ProjectBrowserPanel.h#L41) |  |
 | `Shutdown` | function | SparkEditor | [ProjectSettingsPanel.h:L30](../../SparkEditor/Source/Panels/ProjectSettingsPanel.h#L30) |  |
@@ -37667,11 +37060,8 @@
 | `SnapshotReader` | function | SparkEngine | [SceneSnapshotSerializer.h:L66](../../SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h#L66) |  |
 | `SnapshotRecentProjects` | function | Tests | [TestEditorSubsystems.cpp:L826](../../Tests/TestEditorSubsystems.cpp#L826) |  |
 | `SnapshotWriter` | class | SparkEngine | [SceneSnapshotSerializer.h:L39](../../SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h#L39) |  |
-| `SnapToFrame` | function | SparkEditor | [AnimationTimeline.h:L386](../../SparkEditor/Source/Animation/AnimationTimeline.h#L386) | Snap time to frame boundary |
-| `SnapToGrid` | function | SparkEditor | [GizmoSystem.h:L347](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L347) | Snap value to grid |
 | `SnapToGrid` | function | SparkEngine | [ClipmapTerrain.h:L162](../../SparkEngine/Source/Graphics/ClipmapTerrain.h#L162) | Snap a world coordinate to a grid cell boundary |
 | `SnapToRest` | function | GameModules | [TFSecondaryMotion.h:L90](../../GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.h#L90) |  |
-| `SnapToRotation` | function | SparkEditor | [GizmoSystem.h:L354](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L354) | Snap angle to rotation increment |
 | `SnapYaw15` | function | SparkEditor | [DecorLayoutEditorInternal.h:L45](../../SparkEditor/Source/Panels/DecorLayoutEditorInternal.h#L45) |  |
 | `SocialListKind` | enum | GameModules | [TFSocialProtocol.h:L69](../../GameModules/SparkGameMMOFPS/Source/Net/TFSocialProtocol.h#L69) |  |
 | `SocialOp` | enum | GameModules | [TFSocialProtocol.h:L48](../../GameModules/SparkGameMMOFPS/Source/Net/TFSocialProtocol.h#L48) |  |
@@ -37680,9 +37070,7 @@
 | `SOCKET` | alias | SparkEngine | [NetworkManager.h:L59](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L59) |  |
 | `SOCKET` | alias | SparkEngine | [UDPTransport.h:L32](../../SparkEngine/Source/Engine/Networking/UDPTransport.h#L32) |  |
 | `Socket` | function | Tests | [TestNetworkManagerEdgeCases.cpp:L33](../../Tests/TestNetworkManagerEdgeCases.cpp#L33) |  |
-| `SocketDirection` | enum | SparkEditor | [MaterialEditor.h:L111](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L111) | Socket direction |
 | `SocketFactory` | alias | SparkEditor | [LiveEditBridge.h:L58](../../SparkEditor/Source/Communication/LiveEditBridge.h#L58) |  |
-| `SocketType` | enum | SparkEditor | [MaterialEditor.h:L96](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L96) | Socket types for node connections |
 | `SoftBody` | class | SparkEngine | [SoftBodyPhysics.h:L120](../../SparkEngine/Source/Physics/SoftBodyPhysics.h#L120) |  |
 | `SoftBody::ApplyWindForce` | method | SparkEngine | [SoftBodyPhysics.cpp:L353](../../SparkEngine/Source/Physics/SoftBodyPhysics.cpp#L353) |  |
 | `SoftBody::GetAllVertexPositions` | method | SparkEngine | [SoftBodyPhysics.cpp:L229](../../SparkEngine/Source/Physics/SoftBodyPhysics.cpp#L229) |  |
@@ -37767,7 +37155,6 @@
 | `Spark::ComponentFactory::Get` | method | SparkEngine | [AngelScriptEngine.cpp:L1223](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp#L1223) |  |
 | `Spark::ContainerUtils::Contains` | method | GameModules | [MMOCharacterSystem.cpp:L200](../../GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.cpp#L200) |  |
 | `Spark::ContainerUtils::Contains` | method | GameModules | [MMOCraftingSystem.cpp:L329](../../GameModules/SparkGameMMO/Source/Crafting/MMOCraftingSystem.cpp#L329) |  |
-| `Spark::ContainerUtils::Contains` | method | SparkEditor | [AssetDatabase.cpp:L974](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L974) |  |
 | `Spark::ContainerUtils::Contains` | method | SparkEditor | [InspectorPanel.cpp:L193](../../SparkEditor/Source/Panels/InspectorPanel.cpp#L193) |  |
 | `Spark::ContainerUtils::Contains` | method | SparkEngine | [AssetIntegration.h:L162](../../SparkEngine/Source/Core/AssetIntegration.h#L162) | Check if an asset is registered. |
 | `Spark::ContainerUtils::Contains` | method | SparkEngine | [EnumUtils.h:L126](../../SparkEngine/Source/Enums/EnumUtils.h#L126) |  |
@@ -38466,8 +37853,6 @@
 | `SparkInstaller::Installer::Run` | method | SparkInstaller | [main.cpp:L116](../../SparkInstaller/src/main.cpp#L116) |  |
 | `SparkInstaller::Installer::Run` | method | SparkInstaller | [main.cpp:L125](../../SparkInstaller/src/main.cpp#L125) |  |
 | `SparkInstaller::Installer::Run` | method | SparkInstaller | [main.cpp:L135](../../SparkInstaller/src/main.cpp#L135) |  |
-| `SparkLightData` | struct | SparkEditor | [LightingTools.h:L68](../../SparkEditor/Source/Lighting/LightingTools.h#L68) | Advanced light configuration |
-| `SparkLightType` | enum | SparkEditor | [LightingTools.h:L31](../../SparkEditor/Source/Lighting/LightingTools.h#L31) | Light types supported by Spark Engine |
 | `SparkMatDefinition` | struct | SparkEngine | [MaterialLoader.h:L39](../../SparkEngine/Source/Graphics/MaterialLoader.h#L39) | Parsed material definition from a .sparkmat file. |
 | `SparkModuleCompatibilityDescriptor` | struct | SparkSDK | [ModuleABI.h:L70](../../SparkSDK/Include/Spark/ModuleABI.h#L70) | C-layout compatibility descriptor returned by every supported module. |
 | `SparkModuleInjectConsole` | function | Tests | [MismatchedModule.cpp:L58](../../Tests/Fixtures/ModuleABI/MismatchedModule.cpp#L58) |  |
@@ -39036,7 +38421,6 @@
 | `std` | struct | SparkEngine | [ContainerUtils.h:L53](../../SparkEngine/Source/Utils/ContainerUtils.h#L53) |  |
 | `std` | struct | SparkEngine | [ContainerUtils.h:L64](../../SparkEngine/Source/Utils/ContainerUtils.h#L64) |  |
 | `std` | struct | Tests | [TestContainerUtils.cpp:L24](../../Tests/TestContainerUtils.cpp#L24) |  |
-| `std::abs` | method | SparkEditor | [GizmoSystem.cpp:L83](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L83) |  |
 | `std::abs` | method | SparkEngine | [NavMesh.cpp:L359](../../SparkEngine/Source/Engine/AI/NavMesh.cpp#L359) |  |
 | `std::abs` | method | Templates | [GameModule.h:L310](../../Templates/PlatformerKit/Source/GameModule.h#L310) |  |
 | `std::abs` | method | Tests | [TestAnimationCompressionReal.cpp:L25](../../Tests/TestAnimationCompressionReal.cpp#L25) |  |
@@ -39295,9 +38679,6 @@
 | `std::ranges::any_of` | method | Templates | [GameModule.h:L237](../../Templates/MMOStarter/Source/GameModule.h#L237) |  |
 | `std::ranges::none_of` | method | SparkEngine | [TemplateRuntime.h:L272](../../SparkEngine/Source/Game/TemplateRuntime.h#L272) |  |
 | `std::ranges::none_of` | method | SparkGateway | [GatewayCoordinator.cpp:L17](../../SparkGateway/src/GatewayCoordinator.cpp#L17) |  |
-| `std::round` | method | SparkEditor | [AnimationPlayback.cpp:L388](../../SparkEditor/Source/Animation/AnimationPlayback.cpp#L388) |  |
-| `std::round` | method | SparkEditor | [GizmoSystem.cpp:L810](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L810) |  |
-| `std::round` | method | SparkEditor | [GizmoSystem.cpp:L820](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L820) |  |
 | `std::runtime_error` | method | SparkEditor | [EditorUI.cpp:L89](../../SparkEditor/Source/Core/EditorUI.cpp#L89) |  |
 | `std::runtime_error` | method | SparkEditor | [EditorUI.cpp:L94](../../SparkEditor/Source/Core/EditorUI.cpp#L94) |  |
 | `std::runtime_error` | method | SparkEditor | [EditorUI.cpp:L98](../../SparkEditor/Source/Core/EditorUI.cpp#L98) |  |
@@ -39422,8 +38803,6 @@
 | `std::sqrt` | method | GameModules | [TFServerValidation.cpp:L151](../../GameModules/SparkGameMMOFPS/Source/Game/TFServerValidation.cpp#L151) |  |
 | `std::sqrt` | method | GameModules | [TFWeaponMath.h:L29](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponMath.h#L29) |  |
 | `std::sqrt` | method | GameModules | [TFSpawnScreenDraw.cpp:L209](../../GameModules/SparkGameMMOFPS/Source/UI/TFSpawnScreenDraw.cpp#L209) |  |
-| `std::sqrt` | method | SparkEditor | [GizmoSystem.cpp:L68](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L68) |  |
-| `std::sqrt` | method | SparkEditor | [GizmoSystem.cpp:L75](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L75) |  |
 | `std::sqrt` | method | SparkEditor | [LevelStreamingSystem.cpp:L31](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.cpp#L31) |  |
 | `std::sqrt` | method | SparkEditor | [SceneViewPanel.cpp:L831](../../SparkEditor/Source/Panels/SceneViewPanel.cpp#L831) |  |
 | `std::sqrt` | method | SparkEditor | [SceneViewPanel.cpp:L836](../../SparkEditor/Source/Panels/SceneViewPanel.cpp#L836) |  |
@@ -39739,10 +39118,8 @@
 | `Step` | function | SparkEngine | [MovieRenderPipeline.h:L171](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L171) | Advance one simulation step, returns the fixed dt used |
 | `Step` | struct | Tests | [TestCoroutineScheduler.cpp:L118](../../Tests/TestCoroutineScheduler.cpp#L118) |  |
 | `StepAdam` | function | SparkEngine | [CpuNeuralTraining.h:L166](../../SparkEngine/Source/Graphics/Neural/CpuNeuralTraining.h#L166) | Apply one Adam step using the currently-accumulated gradient. |
-| `StepBackward` | function | SparkEditor | [AnimationTimeline.h:L138](../../SparkEditor/Source/Animation/AnimationTimeline.h#L138) | Step to previous frame |
 | `StepCapture` | function | Tests | [TestTFCaptureMath.cpp:L57](../../Tests/TestTFCaptureMath.cpp#L57) |  |
 | `StepFixed` | function | SparkEngine | [PhysicsSystem.h:L167](../../SparkEngine/Source/Physics/PhysicsSystem.h#L167) |  |
-| `StepForward` | function | SparkEditor | [AnimationTimeline.h:L133](../../SparkEditor/Source/Animation/AnimationTimeline.h#L133) | Step to next frame |
 | `StepFrame` | function | SparkEditor | [SparkEngineIntegration.h:L264](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L264) | Step engine one frame (when paused) |
 | `StepFrame` | function | SparkEngine | [PlayModeManager.h:L193](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L193) |  |
 | `StepFrame` | function | SparkEngine | [MovieRenderPipeline.h:L369](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L369) | Advance one sub-frame; capture when all sub-frames for a frame complete |
@@ -39775,7 +39152,6 @@
 | `stmt` | function | Tests | [TestAsyncDatabase.cpp:L324](../../Tests/TestAsyncDatabase.cpp#L324) |  |
 | `stmt` | function | Tests | [TestAsyncDatabase.cpp:L334](../../Tests/TestAsyncDatabase.cpp#L334) |  |
 | `Stop` | function | SparkDaemon | [DaemonServer.h:L76](../../SparkDaemon/src/DaemonServer.h#L76) |  |
-| `Stop` | function | SparkEditor | [AnimationTimeline.h:L128](../../SparkEditor/Source/Animation/AnimationTimeline.h#L128) | Stop animation playback |
 | `stop` | function | SparkEditor | [ServiceTopologyController.cpp:L173](../../SparkEditor/Source/Panels/ServiceTopologyController.cpp#L173) |  |
 | `Stop` | function | SparkEditor | [ServiceTopologyController.h:L51](../../SparkEditor/Source/Panels/ServiceTopologyController.h#L51) |  |
 | `Stop` | function | SparkEditor | [EditorProcessLaunch.h:L128](../../SparkEditor/Source/Utils/EditorProcessLaunch.h#L128) |  |
@@ -39901,7 +39277,6 @@
 | `stream` | function | SparkAssetPipelineCore | [AssetCookerTests.cpp:L23](../../SparkAssetPipelineCore/tests/AssetCookerTests.cpp#L23) |  |
 | `stream` | function | SparkBuild | [SparkBuild.cpp:L344](../../SparkBuild/src/SparkBuild.cpp#L344) |  |
 | `stream` | function | SparkEditor | [SparkEngineIntegration.cpp:L925](../../SparkEditor/Source/Integration/SparkEngineIntegration.cpp#L925) |  |
-| `stream` | function | SparkEditor | [MaterialEditor.cpp:L109](../../SparkEditor/Source/MaterialEditor/MaterialEditor.cpp#L109) |  |
 | `stream` | function | SparkEditor | [BuildPipeline.cpp:L1466](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L1466) |  |
 | `stream` | function | SparkEditor | [DedicatedServerProcessController.cpp:L226](../../SparkEditor/Source/Panels/DedicatedServerProcessController.cpp#L226) |  |
 | `stream` | function | SparkEditor | [EditorAutomation.h:L281](../../SparkEditor/Source/Panels/EditorAutomation.h#L281) | Run a script (multiple commands, one per line) |
@@ -40869,8 +40244,6 @@
 | `TestResult` | struct | Tests | [TestMain.cpp:L85](../../Tests/TestMain.cpp#L85) |  |
 | `TestRigidBody2D` | struct | Tests | [TestSprite2DComponents.cpp:L410](../../Tests/TestSprite2DComponents.cpp#L410) |  |
 | `TestRingAllocator` | class | Tests | [TestLockFreeRingAllocator.cpp:L14](../../Tests/TestLockFreeRingAllocator.cpp#L14) |  |
-| `TestRotationGizmoHit` | function | SparkEditor | [GizmoSystem.h:L309](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L309) | Test ray intersection with rotation gizmo |
-| `TestScaleGizmoHit` | function | SparkEditor | [GizmoSystem.h:L317](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L317) | Test ray intersection with scale gizmo |
 | `TestSceneConfig` | struct | Tests | [TestSceneConfigDatabase.cpp:L13](../../Tests/TestSceneConfigDatabase.cpp#L13) |  |
 | `TestSceneDB` | class | Tests | [TestSceneConfigDatabase.cpp:L23](../../Tests/TestSceneConfigDatabase.cpp#L23) |  |
 | `TestScheduler` | class | Tests | [TestAsyncComputeScheduler.cpp:L40](../../Tests/TestAsyncComputeScheduler.cpp#L40) |  |
@@ -40900,7 +40273,6 @@
 | `TestTagComponent` | struct | Tests | [TestECSWorld.cpp:L115](../../Tests/TestECSWorld.cpp#L115) |  |
 | `TestThrashTracker` | struct | Tests | [TestTextureZombiePool.cpp:L68](../../Tests/TestTextureZombiePool.cpp#L68) |  |
 | `TestTilemapComponent` | struct | Tests | [TestSprite2DComponents.cpp:L269](../../Tests/TestSprite2DComponents.cpp#L269) |  |
-| `TestTranslationGizmoHit` | function | SparkEditor | [GizmoSystem.h:L301](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L301) | Test ray intersection with translation gizmo |
 | `TestUDPClient` | class | Tests | [TestNetworkMMOIntegration.cpp:L40](../../Tests/TestNetworkMMOIntegration.cpp#L40) |  |
 | `TestUtf8CrashArtifactPathConversion` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L614](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L614) |  |
 | `TestValidationRule` | class | Tests | [TestAssetValidator.cpp:L30](../../Tests/TestAssetValidator.cpp#L30) |  |
@@ -43016,7 +42388,6 @@
 | `TileTool` | enum | SparkEditor | [TilemapEditorPanel.h:L48](../../SparkEditor/Source/Panels/TilemapEditorPanel.h#L48) |  |
 | `TileType` | enum | SparkEditor | [LevelStreamingEnums.h:L67](../../SparkEditor/Source/Enums/LevelStreamingEnums.h#L67) | Tile types |
 | `tiling` | function | SparkEngine | [WorldBasicRenderer.cpp:L349](../../SparkEngine/Source/Graphics/WorldBasicRenderer.cpp#L349) |  |
-| `TimelineSelection` | struct | SparkEditor | [AnimationTimelineTypes.h:L233](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L233) | Timeline selection |
 | `TimeOfDay` | function | SparkEngine | [EngineSettings.h:L920](../../SparkEngine/Source/Core/EngineSettings.h#L920) |  |
 | `TimeOfDay` | function | SparkEngine | [EngineSettings.h:L921](../../SparkEngine/Source/Core/EngineSettings.h#L921) |  |
 | `TimeOfDayChangedEvent` | struct | SparkEngine | [EventSystem.h:L105](../../SparkEngine/Source/Engine/Events/EventSystem.h#L105) | Fired when the time of day changes significantly (e.g. dawn, dusk). |
@@ -43075,9 +42446,7 @@
 | `TimerManager` | class | SparkEngine | [TimerManager.h:L86](../../SparkEngine/Source/Utils/TimerManager.h#L86) | Centralized gameplay timer service |
 | `TimerState` | struct | SparkEngine | [EventResponseSystem.h:L267](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h#L267) |  |
 | `TimerState` | enum | SparkEngine | [TimerManager.h:L55](../../SparkEngine/Source/Utils/TimerManager.h#L55) | Timer state |
-| `TimeToFrame` | function | SparkEditor | [AnimationTimelineTypes.h:L209](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L209) | Convert time to frame number |
 | `TimeToKill` | function | Tests | [TestTFDamageModel.cpp:L76](../../Tests/TestTFDamageModel.cpp#L76) |  |
-| `TimeToScreen` | function | SparkEditor | [AnimationTimeline.h:L332](../../SparkEditor/Source/Animation/AnimationTimeline.h#L332) | Convert time to screen X coordinate |
 | `TINYOBJLOADER_IMPLEMENTATION` | macro | SparkEngine | [TinyObjImpl.cpp:L13](../../SparkEngine/Source/Utils/TinyObjImpl.cpp#L13) |  |
 | `tip` | function | GameModules | [TFMinimap.cpp:L363](../../GameModules/SparkGameMMOFPS/Source/UI/TFMinimap.cpp#L363) |  |
 | `TipOf` | function | Tests | [TestTFSecondaryMotion.cpp:L45](../../Tests/TestTFSecondaryMotion.cpp#L45) |  |
@@ -43364,7 +42733,6 @@
 | `TransformData` | struct | Tests | [TestSceneSerializer.cpp:L35](../../Tests/TestSceneSerializer.cpp#L35) |  |
 | `TransformPoint` | function | SparkEngine | [ClusteredLightCulling.h:L169](../../SparkEngine/Source/Graphics/ClusteredLightCulling.h#L169) | Transform a point from world space to view space. |
 | `transforms` | function | Tests | [TestECSIntegration.cpp:L298](../../Tests/TestECSIntegration.cpp#L298) |  |
-| `TransformSnapshot` | struct | SparkEditor | [GizmoSystem.h:L402](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L402) |  |
 | `TransformSpace` | enum | SparkEditor | [EditorUI.h:L375](../../SparkEditor/Source/Core/EditorUI.h#L375) |  |
 | `TransformSpace` | enum | SparkEditor | [SceneSystemEnums.h:L188](../../SparkEditor/Source/Enums/SceneSystemEnums.h#L188) | Transform space types |
 | `TransformToJSON` | function | SparkEditor | [SceneSerializer.h:L239](../../SparkEditor/Source/SceneSystem/SceneSerializer.h#L239) | Convert transform to JSON object |
@@ -44216,8 +43584,6 @@
 | `Update` | function | GameModules | [RacingVehicleSystem.h:L85](../../GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.h#L85) |  |
 | `Update` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L39](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L39) |  |
 | `Update` | function | SparkBuild | [DownloadSecurity.cpp:L35](../../SparkBuild/src/DownloadSecurity.cpp#L35) |  |
-| `Update` | function | SparkEditor | [AnimationTimeline.h:L61](../../SparkEditor/Source/Animation/AnimationTimeline.h#L61) | Update animation timeline |
-| `Update` | function | SparkEditor | [AssetDatabase.h:L116](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L116) | Update the asset database (call once per frame) |
 | `Update` | function | SparkEditor | [AdvancedAssetPipeline.h:L261](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L261) | Update asset pipeline |
 | `Update` | function | SparkEditor | [CollaborativeEditSession.h:L286](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L286) | Update the session (call each frame) |
 | `Update` | function | SparkEditor | [EngineInterface.h:L245](../../SparkEditor/Source/Communication/EngineInterface.h#L245) | Update the interface (call each frame) |
@@ -44228,11 +43594,8 @@
 | `Update` | function | SparkEditor | [EditorUI.h:L137](../../SparkEditor/Source/Core/EditorUI.h#L137) |  |
 | `Update` | function | SparkEditor | [IEditorPlugin.h:L65](../../SparkEditor/Source/Core/IEditorPlugin.h#L65) | Per-frame update tick |
 | `Update` | function | SparkEditor | [TutorialSystem.h:L314](../../SparkEditor/Source/Core/TutorialSystem.h#L314) | Per-frame update — handles auto-advance timers. |
-| `Update` | function | SparkEditor | [GizmoSystem.h:L147](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L147) | Update gizmo system |
 | `Update` | function | SparkEditor | [SparkEngineIntegration.h:L206](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L206) | Update the integration system |
 | `Update` | function | SparkEditor | [LevelStreamingSystem.h:L71](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L71) | Update level streaming system |
-| `Update` | function | SparkEditor | [LightingTools.h:L268](../../SparkEditor/Source/Lighting/LightingTools.h#L268) | Update the lighting system |
-| `Update` | function | SparkEditor | [MaterialEditor.h:L278](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L278) | Update material editor |
 | `Update` | function | SparkEditor | [AIDebugPanel.h:L37](../../SparkEditor/Source/Panels/AIDebugPanel.h#L37) |  |
 | `Update` | function | SparkEditor | [AIEditorPanel.h:L29](../../SparkEditor/Source/Panels/AIEditorPanel.h#L29) |  |
 | `Update` | function | SparkEditor | [AbilityEditorPanel.h:L30](../../SparkEditor/Source/Panels/AbilityEditorPanel.h#L30) |  |
@@ -44270,7 +43633,6 @@
 | `Update` | function | SparkEditor | [Physics3DPanel.h:L37](../../SparkEditor/Source/Panels/Physics3DPanel.h#L37) |  |
 | `Update` | function | SparkEditor | [PlayControlPanel.h:L47](../../SparkEditor/Source/Panels/PlayControlPanel.h#L47) |  |
 | `Update` | function | SparkEditor | [PlayModeToolbarPanel.h:L48](../../SparkEditor/Source/Panels/PlayModeToolbarPanel.h#L48) |  |
-| `Update` | function | SparkEditor | [PostProcessingPanel.h:L27](../../SparkEditor/Source/Panels/PostProcessingPanel.h#L27) |  |
 | `Update` | function | SparkEditor | [PrefabEditorPanel.h:L38](../../SparkEditor/Source/Panels/PrefabEditorPanel.h#L38) | Construct the prefab editor panel |
 | `Update` | function | SparkEditor | [ProjectBrowserPanel.h:L39](../../SparkEditor/Source/Panels/ProjectBrowserPanel.h#L39) |  |
 | `Update` | function | SparkEditor | [ProjectSettingsPanel.h:L28](../../SparkEditor/Source/Panels/ProjectSettingsPanel.h#L28) |  |
@@ -44550,11 +43912,8 @@
 | `UpdateAndRender` | function | GameModules | [TFImpactFx.h:L104](../../GameModules/SparkGameMMOFPS/Source/Game/TFImpactFx.h#L104) |  |
 | `UpdateAndRender` | function | GameModules | [TFVehicleFx.h:L86](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleFx.h#L86) |  |
 | `UpdateAnimation` | function | GameModules | [Player.h:L715](../../GameModules/SparkGameFPS/Source/Game/Player.h#L715) | Update animation timers and effects |
-| `UpdateAnimationPreview` | function | SparkEditor | [AnimationTimeline.h:L369](../../SparkEditor/Source/Animation/AnimationTimeline.h#L369) | Update animation preview |
 | `UpdateAreaDistances` | function | SparkEngine | [SeamlessAreaManager.h:L193](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.h#L193) | Compute a distance biased by alignment with the player's movement direction. |
 | `UpdateAssetDatabaseInfo` | function | SparkEditor | [EditorUI.h:L227](../../SparkEditor/Source/Core/EditorUI.h#L227) |  |
-| `UpdateAssetModificationTime` | function | SparkEditor | [AssetDatabase.h:L292](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L292) | Update asset modification time |
-| `UpdateAtmosphereScattering` | function | SparkEditor | [LightingTools.h:L503](../../SparkEditor/Source/Lighting/LightingTools.h#L503) | Update atmosphere scattering parameters |
 | `UpdateAudio` | function | SparkEngine | [WeatherGameplayIntegration.h:L108](../../SparkEngine/Source/Engine/Gameplay/WeatherGameplayIntegration.h#L108) |  |
 | `UpdateAuras` | function | SparkEngine | [AbilitySystem.h:L324](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h#L324) |  |
 | `UpdateAuthorityLifecycle` | function | GameModules | [TFPlayerSystem.h:L115](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystem.h#L115) |  |
@@ -44669,7 +44028,6 @@
 | `UpdateKillFeed` | function | GameModules | [HUDSystem.h:L439](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L439) |  |
 | `UpdateLasers` | function | GameModules | [PlatformerHazardSystem.h:L127](../../GameModules/SparkGamePlatformer/Source/Hazard/PlatformerHazardSystem.h#L127) | Get wind force at a given position (for wind zones) |
 | `UpdateLayers` | function | SparkEngine | [AnimationSystem.h:L316](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L316) | Advance layer playback times and sample/blend all layers. |
-| `UpdateLight` | function | SparkEditor | [LightingTools.h:L294](../../SparkEditor/Source/Lighting/LightingTools.h#L294) | Update an existing light |
 | `UpdateLightBuffer` | function | SparkEngine | [LightingSystem.h:L458](../../SparkEngine/Source/Graphics/LightingSystem.h#L458) |  |
 | `UpdateLightingData` | function | SparkEngine | [Shader.h:L411](../../SparkEngine/Source/Graphics/Shader.h#L411) | Update lighting data |
 | `UpdateListenerReverbZone` | function | SparkEngine | [MusicManager.h:L260](../../SparkEngine/Source/Audio/MusicManager.h#L260) |  |
@@ -44696,7 +44054,6 @@
 | `UpdateMousePosition` | function | SparkEngine | [InputManager.h:L432](../../SparkEngine/Source/Input/InputManager.h#L432) | Update mouse position and calculate delta |
 | `UpdateMovement` | function | GameModules | [Player.h:L697](../../GameModules/SparkGameFPS/Source/Game/Player.h#L697) | Update movement based on input and physics |
 | `UpdateMovement` | function | SparkEngine | [AISystem.h:L383](../../SparkEngine/Source/Engine/AI/AISystem.h#L383) |  |
-| `UpdateNodePreviews` | function | SparkEditor | [MaterialEditor.h:L436](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L436) | Update node previews |
 | `UpdateNodeRespawns` | function | GameModules | [OWGatheringSystem.h:L139](../../GameModules/SparkGameOpenWorld/Source/Gathering/OWGatheringSystem.h#L139) |  |
 | `UpdateNonECSSystems` | function | SparkEngine | [GameplayLifecycleShared.cpp:L811](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp#L811) |  |
 | `UpdateObjectGravity` | function | GameModules | [GravitySystem.h:L156](../../GameModules/SparkGameFPS/Source/Game/GravitySystem.h#L156) | Get gravity state for an object (with transitions) |
@@ -44789,7 +44146,6 @@
 | `UpdateStreaming` | function | SparkEngine | [AdaptiveProbeVolumes.h:L212](../../SparkEngine/Source/Graphics/AdaptiveProbeVolumes.h#L212) | Update streaming: load/unload bricks based on camera distance |
 | `UpdateSubmodules` | function | SparkInstaller | [GitRunner.h:L20](../../SparkInstaller/src/GitRunner.h#L20) |  |
 | `UpdateSun` | function | Tests | [TestDayNightCycle.cpp:L104](../../Tests/TestDayNightCycle.cpp#L104) |  |
-| `UpdateSunPosition` | function | SparkEditor | [LightingTools.h:L493](../../SparkEditor/Source/Lighting/LightingTools.h#L493) | Update sun position based on time of day |
 | `UpdateSunState` | function | SparkEngine | [TimeOfDaySystem.h:L144](../../SparkEngine/Source/Engine/World/TimeOfDaySystem.h#L144) | Recompute sun direction, color, and intensity from m_hour |
 | `UpdateSunState` | function | Tests | [TestTimeOfDaySystem.cpp:L111](../../Tests/TestTimeOfDaySystem.cpp#L111) |  |
 | `UpdateSurvival` | function | GameModules | [OWPlayerSystem.h:L116](../../GameModules/SparkGameOpenWorld/Source/Player/OWPlayerSystem.h#L116) |  |
@@ -45019,8 +44375,6 @@
 | `ValidateHit` | function | SparkEngine | [NetworkManager.h:L637](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L637) |  |
 | `ValidateHit` | function | Tests | [TestLagCompensationIntegration.cpp:L156](../../Tests/TestLagCompensationIntegration.cpp#L156) |  |
 | `ValidateLexemes` | function | GameModules | [TFJsonStrict.h:L22](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFJsonStrict.h#L22) |  |
-| `ValidateLightData` | function | SparkEditor | [LightingTools.h:L510](../../SparkEditor/Source/Lighting/LightingTools.h#L510) | Validate light configuration |
-| `ValidateMaterialGraph` | function | SparkEditor | [MaterialEditor.h:L475](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L475) | Validate material graph |
 | `ValidateMerge` | function | SparkEditor | [VersionControlTypes.h:L260](../../SparkEditor/Source/VersionControl/VersionControlTypes.h#L260) | Validate merged result |
 | `ValidateMerge` | function | SparkEditor | [VersionControlTypes.h:L273](../../SparkEditor/Source/VersionControl/VersionControlTypes.h#L273) |  |
 | `ValidateMerge` | function | SparkEditor | [VersionControlTypes.h:L286](../../SparkEditor/Source/VersionControl/VersionControlTypes.h#L286) |  |
@@ -45183,7 +44537,6 @@
 | `ValueNoise2D` | function | Tests | [TestGraphicsIntegration.cpp:L575](../../Tests/TestGraphicsIntegration.cpp#L575) |  |
 | `ValueOr` | function | SparkEngine | [Result.h:L79](../../SparkEngine/Source/Utils/Result.h#L79) |  |
 | `values` | function | Tests | [TestEngineMonitor.cpp:L574](../../Tests/TestEngineMonitor.cpp#L574) |  |
-| `ValueToScreen` | function | SparkEditor | [AnimationTimeline.h:L348](../../SparkEditor/Source/Animation/AnimationTimeline.h#L348) | Convert value to screen Y coordinate (curve editor) |
 | `VariableDecl` | struct | SparkEngine | [VisualScriptGraphTypes.h:L79](../../SparkEngine/Source/Engine/Scripting/VisualScriptGraphTypes.h#L79) | A user-defined variable in the script |
 | `VariableDecl` | struct | Tests | [TestVisualScriptCompiler.cpp:L93](../../Tests/TestVisualScriptCompiler.cpp#L93) |  |
 | `VariableUI` | struct | SparkEditor | [VisualScriptPanel.h:L117](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L117) |  |
@@ -46167,7 +45520,6 @@
 | `WFCTileRule` | struct | SparkEngine | [ProceduralGenerator.h:L126](../../SparkEngine/Source/Engine/Procedural/ProceduralGenerator.h#L126) | Adjacency rules for Wave Function Collapse |
 | `wFile` | function | SparkEngine | [ShaderCompilationLinuxCompileOps.cpp:L216](../../SparkEngine/Source/Graphics/ShaderCompilationLinuxCompileOps.cpp#L216) |  |
 | `wFile` | function | SparkEngine | [ShaderCompilationWindowsCompileOps.cpp:L303](../../SparkEngine/Source/Graphics/ShaderCompilationWindowsCompileOps.cpp#L303) |  |
-| `wFileName` | function | SparkEditor | [AssetDatabase.cpp:L694](../../SparkEditor/Source/AssetBrowser/AssetDatabase.cpp#L694) |  |
 | `wFilePath` | function | SparkEngine | [ShaderCompilationWindows.cpp:L438](../../SparkEngine/Source/Graphics/ShaderCompilationWindows.cpp#L438) |  |
 | `White` | function | SparkBuild | [Terminal.cpp:L70](../../SparkBuild/src/Terminal.cpp#L70) |  |
 | `White` | function | SparkBuild | [Terminal.h:L23](../../SparkBuild/src/Terminal.h#L23) |  |
@@ -46443,7 +45795,6 @@
 | `WorldToGrid` | function | GameModules | [RTSFogOfWarSystem.h:L72](../../GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.h#L72) |  |
 | `WorldToHeightmap` | function | GameModules | [Terrain.h:L187](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L187) |  |
 | `WorldToHeightmapCoords` | function | SparkEditor | [TerrainEditor.h:L95](../../SparkEditor/Source/Terrain/TerrainEditor.h#L95) |  |
-| `WorldToScreen` | function | SparkEditor | [GizmoSystem.cpp:L42](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L42) |  |
 | `WorldToSplatmapCoords` | function | SparkEditor | [TerrainEditor.h:L96](../../SparkEditor/Source/Terrain/TerrainEditor.h#L96) |  |
 | `WorldToVoxel` | function | SparkEngine | [VoxelConeTracing.h:L255](../../SparkEngine/Source/Graphics/VoxelConeTracing.h#L255) |  |
 | `WorldVariable` | struct | SparkEditor | [ConditionEditorPanel.h:L50](../../SparkEditor/Source/Panels/ConditionEditorPanel.h#L50) |  |
@@ -46877,7 +46228,6 @@
 | `XMFLOAT4` | function | SparkEngine | [CharacterController.cpp:L149](../../SparkEngine/Source/Physics/CharacterController.cpp#L149) |  |
 | `XMFLOAT4` | function | SparkEngine | [MathUtils.cpp:L245](../../SparkEngine/Source/Utils/MathUtils.cpp#L245) |  |
 | `XMFLOAT4` | struct | Tests | [TestEditorCommands.cpp:L18](../../Tests/TestEditorCommands.cpp#L18) |  |
-| `XMFloat4ToImU32` | function | SparkEditor | [GizmoSystem.cpp:L53](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L53) |  |
 | `XMFLOAT4X4` | struct | SparkEngine | [PlatformDirectXMathStubs.h:L45](../../SparkEngine/Source/Core/PlatformDirectXMathStubs.h#L45) |  |
 | `xml` | function | Tests | [TestMain.cpp:L409](../../Tests/TestMain.cpp#L409) |  |
 | `XmlEscape` | function | Tests | [TestMain.cpp:L377](../../Tests/TestMain.cpp#L377) |  |
@@ -46892,7 +46242,6 @@
 | `XMMATRIX` | function | SparkEngine | [PhysicsBodyImpl.cpp:L158](../../SparkEngine/Source/Physics/PhysicsBodyImpl.cpp#L158) |  |
 | `XMMatrixDecompose` | function | SparkEngine | [PlatformDirectXMathStubs.h:L714](../../SparkEngine/Source/Core/PlatformDirectXMathStubs.h#L714) |  |
 | `XMMatrixIdentity` | function | GameModules | [TFSecondaryMotion.cpp:L204](../../GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.cpp#L204) |  |
-| `XMMatrixIdentity` | function | SparkEditor | [GizmoSystem.cpp:L47](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L47) |  |
 | `XMMatrixIdentity` | function | SparkEngine | [PlatformDirectXMathStubs.h:L100](../../SparkEngine/Source/Core/PlatformDirectXMathStubs.h#L100) |  |
 | `XMMatrixIdentity` | function | SparkEngine | [PlatformDirectXMathStubs.h:L201](../../SparkEngine/Source/Core/PlatformDirectXMathStubs.h#L201) |  |
 | `XMMatrixIdentity` | function | SparkEngine | [LightingSystemWindowsTypes.cpp:L88](../../SparkEngine/Source/Graphics/LightingSystemWindowsTypes.cpp#L88) |  |

@@ -6,7 +6,7 @@ SparkEngine's hybrid ray tracing system provides Lumen-style multi-tier global i
 
 ```
 HybridRTManager (coordinator)
-  ├── SDFSceneManager     (software SDFGI sphere tracing — DX11 CS 5.0+)
+  ├── SDFSceneManager     (software SDFGI sphere tracing — CS 5.0+; not reachable on the Windows D3D11 path)
   ├── DXRManager          (hardware DXR 1.1 — DX12 Ultimate)
   ├── RTCompositor        (blends screen-space + RT results)
   └── ProbeSystem         (irradiance probe grid for cached GI)
@@ -18,7 +18,7 @@ HybridRTManager (coordinator)
 |-----|---------|--------|
 | RTX 20xx+ (DX12) | `HardwareDXR` | DXR 1.1 DispatchRays, TLAS/BLAS |
 | RDNA2+ (Vulkan) | `HardwareVKRT` | VK_KHR_ray_tracing_pipeline |
-| GTX 10xx / DX11 | `Software_SDFGI` | Compute shader sphere tracing |
+| GTX 10xx / DX11 | *none on Windows* | `HybridRTManager` is only constructed behind an RHI bridge, and the Windows D3D11 path has no RHI bridge (`GraphicsEngine::GetRHIBridge()` is `nullptr` on Windows), so no hybrid RT -- including `Software_SDFGI` -- runs on the D3D11 path regardless of the `SPARK_HYBRID_RT` default. The software SDFGI backend is reachable only on the Linux RHI path. |
 | Integrated | `Disabled` | Screen-space effects only |
 
 ## Quality Presets

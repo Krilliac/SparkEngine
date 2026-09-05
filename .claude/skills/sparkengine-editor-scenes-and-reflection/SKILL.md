@@ -197,9 +197,17 @@ conditional visibility.
   Treat any such warning in the log as a real defect to wrap in a command.
 - **Gizmos**: the SceneView translate-gizmo drag (`Panels/SceneViewPanel.cpp`)
   executes a `LambdaCommand` at drag end — World-entity gizmo moves ARE undoable.
-  The older `Gizmos/GizmoSystem.cpp` `ApplyTranslation/Rotation/Scale` mutate
-  `Transform*` directly behind the log-only guard and have no non-test editor
-  callers found (dormant legacy path — `candidate` for wiring or deletion).
+  The older `Gizmos/GizmoSystem.cpp` with its `ApplyTranslation/Rotation/Scale`
+  bypass path was **deleted in the 2026-09 sweep** (along with `AssetDatabase`,
+  `MaterialEditor`, `LightingTools`, `AnimationTimeline` and `PostProcessingPanel`);
+  `SparkEditor/Source/Gizmos/` now holds `SceneEditTools.{h,cpp}` only. Do not cite
+  `GizmoSystem` as live code, and expect generated reference indexes to keep listing
+  it until the API-doc generator is re-run.
+- **Scene statistics are a Windows-only readout.** `SceneViewPanel`'s D3D11
+  `GetLastRenderStats` path is compiled under `_WIN32` only, so on any other host
+  `SceneStatisticsPanel::HasRenderStats()` stays false forever and the panel shows no
+  draw counts. Stable-v1 ships Windows only; the surrounding per-frame comment in
+  `SparkEditor/Source/Core/EditorUI.cpp` is not an unconditional contract.
 
 ## Failure modes → first moves
 
@@ -260,9 +268,18 @@ A run that lists 0 tests proves nothing — confirm the filter actually matched
 ## Provenance and maintenance
 
 Authored 2026-08-23 against branch `claude/whole-nine-yards-20260823`; every claim
-verified by reading the cited files in this repo on that date. Re-verify lines:
+verified by reading the cited files in this repo on that date.
+
+**Updated 2026-09-05** against the uncommitted working tree of branch
+`claude/release-readiness-sweep-20260904`: `Gizmos/GizmoSystem.cpp` and five other editor sources
+deleted, and scene render statistics recorded as a Windows-only readout. Read from source; no build
+or editor run at this tree.
+
+Re-verify lines:
 
 ```bash
+# GizmoSystem really is gone (expect: SceneEditTools only)
+ls SparkEditor/Source/Gizmos
 # Scene versions still 2 / 1
 grep -n "SCENE_FILE_VERSION = " SparkEditor/Source/SceneSystem/SceneFileTypes.h
 grep -n "SCENE_COMPONENT_SCHEMA_VERSION = " SparkEditor/Source/SceneSystem/SceneComponentCodec.h

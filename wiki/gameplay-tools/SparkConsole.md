@@ -44,13 +44,29 @@ stdin/stdout development transport. It provides development-time inspection and 
 ## Overview
 
 SparkConsole runs as a separate process alongside SparkEngine. On the Windows
-development path, the engine can launch it and establish bidirectional named
-pipes. Non-Windows paths use inherited stdin/stdout and do not implement the same
-pipe transport.
+development path, the engine launches it and establishes bidirectional named
+pipes. The full log path is longer than the diagram: `SPARK_LOG_*` -> `Spark::Logger`
+-> `ConsoleSink` -> `SimpleConsole` -> `ConsoleProcessManager` pipe ->
+`SparkConsole.exe`. `Logger::InstallDefaultSinks` (called once per process by the
+gameplay lifecycle) installs the `ConsoleSink` together with the `FileSink` that
+writes the per-user `Logs/SparkEngine_<timestamp>.log`; until that call runs, log
+macros do not reach the console process. `InstallDefaultSinks` begins with `ClearSinks()`, so it
+must run **before** any editor panel registers its own sink — a panel sink installed first is
+silently dropped. The engine-to-console mirror queue is bounded at 4096 lines with drop-oldest and
+emits a single `[WARN] SparkConsole mirror dropped N log line(s): outgoing queue full` notice per
+burst once the pipe drains; the log file keeps the full record.
+`ConsoleProcessManager::Initialize()` returning `true` only means "initialization attempted without
+error" (child launched, no trusted executable found, or the console compiled out of a Shipping
+build) — `IsConsoleRunning()` is the liveness answer. SparkConsole's human-facing output goes to
+its own console screen buffer (`CONOUT$`, allocating a console if the launching
+process has none); **stdout is reserved exclusively for commands sent back to the
+engine** on Windows as well as Linux, and the console no longer feeds its own
+banner to the engine as commands. Non-Windows paths use inherited stdin/stdout and
+do not implement the same pipe transport.
 
 ### Communication Flow
 
-1. **Engine Output**: SparkEngine writes log messages, diagnostic data, and command results to the output pipe
+1. **Engine Output**: SparkEngine writes log messages (via the installed `ConsoleSink`), diagnostic data, and command results to the output pipe
 2. **User Commands**: SparkConsole reads user input, parses it, and either handles it locally or forwards it to the engine via the input pipe
 3. **Background Thread**: A dedicated `m_engineInputThread` reads engine output asynchronously, protected by `m_outputMutex`
 

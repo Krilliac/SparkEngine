@@ -31,18 +31,65 @@ These imply a capability the engine does not actually have.
 
 Fully implemented-in-header classes that no `.cpp` calls. Candidates for deletion unless an owner claims them.
 
-### Engine subsystems (resolved)
+### Engine subsystems flagged by the 2026-04 audit
 
-Verification found 3 of 6 were false positives (wrong class names in the audit). The 3 real orphans were wired in.
+All six entries from the original audit are closed (three were wrong class names,
+three were wired in with tests) and are no longer tracked here.
 
-| File | Lines | Resolution |
+### Lifecycle registrations removed in the 2026-09 release-readiness sweep
+
+These classes still exist but are **no longer initialized, ticked, or shut down by
+the gameplay lifecycle**. Each had a lifecycle `Initialize()`/`Shutdown()` pair
+and no producer or consumer anywhere in production, so the pretend-wiring was
+removed rather than kept. Resolution path for each: wire a real consumer, or
+delete. Any wiki page that describes these as active is stale.
+
+| Class | Location | Note |
 |---|---|---|
-| `Engine/DataTable/DataTableSystem.h` | 800 | **False positive.** Class is `DataTableRegistry` (not `DataTableManager`) and was already wired (Initialize + Shutdown). |
-| `Engine/AI/NavMeshLink.h` | 134 | **Resolved.** `NavMeshLinkSystem::GetInstance().Initialize()/Shutdown()` now called from the lifecycle path. `Tests/TestNavMeshLink.cpp` added (5 tests). |
-| `Engine/Gameplay/GameplayTags.h` | 386 | **False positive.** Class is `GameplayTagRegistry` (not `GameplayTagManager`) and was already wired + tested. |
-| `Engine/Gameplay/GameplaySystemExtension.h` | 260 | **Resolved.** `GameplayExtensionRegistry::GetInstance()` touched at startup, `Clear()` at shutdown. Fixed an ODR hazard by renaming the extension-local `QuestDefinition`/`QuestContext` to `QuestExtensionInput`/`QuestExtensionState`. `Tests/TestGameplaySystemExtension.cpp` added (6 tests). |
-| `Engine/ECS/RuntimePrefab.h` | 478 | **Resolved.** `PrefabRegistry::GetInstance()` touched at startup. Fixed a build hazard by switching forward declarations of `BinaryWriter`/`BinaryReader` to a real `#include "Utils/Serializer.h"`. Existing `Tests/TestRuntimePrefab.cpp` exercises the real class. |
-| `Engine/SaveSystem/SaveSystemTypes.h` | 288 | **False positive.** Already `#include`d from `SaveSystem.h`. |
+| `OcclusionCullingSystem` | `Graphics/` | No renderer consumes its results. |
+| `LightProbeSystem` | `Graphics/` | No probe data reaches a shader. |
+| `PipelineStateCache` (RHI) | `Graphics/RHI/PipelineStateCache.h` | `GetOrCreate`/`Invalidate` have no callers; D3D11 uses `D3D11PipelineStateCache`. |
+| `TransientResourcePool` | `Graphics/` | No allocation call sites. |
+| `VirtualTextureManager` | `Graphics/` | No feedback/page producer. |
+| `DynamicQualityScaler` | `Graphics/` | `[DynamicQuality]` settings are read but nothing scales; see [Configuration Reference](Configuration-Reference.md). |
+| `GPUStallProfiler` | `Graphics/` | No query submission. |
+| `AsyncComputeScheduler` | `Graphics/` | No dispatch submission. |
+| `AIDebugRenderer` | `Engine/AI/` | Tested (`Tests/TestAIDebugRendererReal.cpp`) but no draw consumer. |
+| `HLODSystem` | `Engine/HLOD/` | No renderer consumer; see [HLOD and World Partition](../gameplay-tools/HLOD-And-World-Partition.md). |
+| `Engine/HotReload/ModuleHotReload` singleton | `Engine/HotReload/` | Duplicate of the live `Spark::ModuleHotReloadManager` (`Core/ModuleHotReload.cpp`, polled by the platform frame loops). |
+| `Spark::FileLogger` + `SPARK_FILE_LOG*` | `Utils/FileLogger.h` | Zero production writers; its two lifecycle calls were removed in the 2026-09 sweep. Engine log files come from the `Logger` `FileSink` installed by `InstallDefaultSinks`. Pending wire-it-in-or-delete. |
+| `RenderingSettings::occlusionCulling` | `Core/EngineSettings.h` | Setting is still exposed although the implementation behind it is unreachable (see `OcclusionCullingSystem` above). |
+| `ReplicatedFieldSet::WriteDirtyMask`/`ReadDirtyMask` | `Engine/Networking/` | Not wired into `EntityReplicator`'s serialize/deserialize path (zero callers), so `ReadDirtyMask`'s `[[nodiscard]]` "abandon the packet" contract is unenforced and untested. |
+| `MobilePlatform`, `RagdollSystem` | `Engine/Mobile/`, `Engine/Physics/` | Lifecycle comment corrected; deletion routed to their owners. |
+| `HybridRTManager` on Windows | `Graphics/` | Only constructed behind an RHI bridge; `GraphicsEngine::GetRHIBridge()`/`GetRHIDevice()` are `nullptr` on Windows (real bridge on Linux), so no hybrid RT runs on the D3D11 path. |
+
+Also in this class: `AudioMixer::AddBusEffect` (per-bus DSP chains) and reverb
+zones (`GetReverbAtPosition`) are **stored but not applied** to any voice. The
+earlier claim that `AudioMixer::CalculateOcclusion` / `MusicManager::ComputeOcclusion`
+could never report occlusion is retired: both trace `WorldStatic` hits once a
+`PhysicsSystem` is attached (`AudioMixer::IsOcclusionAvailable()`).
+
+### Deleted rather than completed (2026-09 sweep)
+
+| Deleted | Why |
+|---|---|
+| `SparkEditor/Source/Gizmos/GizmoSystem.{h,cpp}` | Duplicate of the `SceneViewPanel` gizmo path, which now ships translate/rotate/scale with one `CommandHistory` entry per drag. |
+| `SparkEditor/Source/Panels/PostProcessingPanel.{h,cpp}` | `SceneFile`-backed editor for a document model the editor no longer builds; use the Inspector's Post-Process Volume component. |
+| `SparkEditor/Source/MaterialEditor/MaterialEditor.{h,cpp}` | Standalone class with no production caller; the shipped panel is `Panels/MaterialEditorPanel`. |
+| `SparkEditor/Source/Lighting/LightingTools*.{h,cpp}` | No production caller. `BakeLightmaps` wrote a fixed radial ramp in texture space (nothing scene-derived) and `GenerateLightProbes` discarded its probes -- no lightmap baking or light probes are claimed anywhere now. |
+| `SparkEditor/Source/Animation/*` (timeline, clip manager, curve, playback) | No production caller. |
+| `SparkEditor/Source/AssetBrowser/AssetDatabase.{h,cpp}` | No production caller. |
+| `Tests/TestAssetDatabase.cpp`, `Tests/TestPrefabManager.cpp` | Decoy tests that included no production header; `Tests/TestEditorSubsystemsReal.cpp` covers the real `PrefabManager`. |
+| `GameModules/SparkGameFPS/Source/Game/{Console,Terrain,ArenaBuilder}.*` | Unreachable in-game console overlay, unreferenced terrain, and an `ArenaBuilder` whose body was entirely commented out. |
+| `Shaders/Compiled/Basic{VS,PS}.cso`, `SparkEngine/Shaders/Compiled/Basic{VS,PS}.cso` | Prebuilt bytecode is no longer shipped; the basic shaders are compiled from source (`GraphicsDeviceResourcesWindowsShaders.cpp` embeds them; `Shaders/HLSL/BasicVS.hlsl` / `BasicPS.hlsl` are the on-disk copies for the Linux/RHI path). |
+
+### Editor panels in an honest Preview state
+
+| Panel | Status |
+|---|---|
+| `DebugVisualizerPanel` | Toggles are authored but no renderer consumes them and no debug-draw counts are reported; shows **Preview - not connected**. |
+| `ObjectPlacementPanel` modes | Quick Place / Place Selected create real undoable entities; brush/line/grid/scatter, align, and snap settings are not read by the viewport. |
+| `DedicatedServerPanel` discovery | Lists only the server launched from this editor; no discovery transport, no RCON, no kick/ban. |
 
 ### Graphics subsystems
 
@@ -59,12 +106,12 @@ High-value utilities, all **documented as intentional** (selected):
 | `Graphics/SSAOTemporal.h` | 231 | Temporal SSAO with history. |
 | `Graphics/MeshOptimizer.h` | 471 | Vertex-cache / overdraw optimizer. Tested. |
 | `Graphics/RenderTargetPool.h` | 398 | Pooled RT allocator. |
-| `Graphics/PipelineStateCache.h` | 398 | **False positive (filename collision).** Orphan defines `D3D11PipelineStateCache`; `Graphics/RHI/PipelineStateCache.h` defines the wired `PipelineStateCache`. Disambiguated via header note. |
+| `Graphics/PipelineStateCache.h` | 398 | Filename collision: this header defines `D3D11PipelineStateCache`, which the D3D11 path uses. `Graphics/RHI/PipelineStateCache.h` defines a *different*, **not wired** `PipelineStateCache`: `GetOrCreate`/`Invalidate` have no callers, and its lifecycle Initialize/Shutdown lines were removed in the 2026-09 sweep (see below). |
 | `Graphics/ReflectionProbeCache.h` | 317 | Prefiltered env-map cache. |
 | `Graphics/CachedShadowAtlas.h` | 328 | Per-light shadow atlas. Tested. |
 | `Graphics/RTHandleSystem.h` | 265 | RT handle abstraction. |
 | `Graphics/ShaderVariantSystem.h` | 391 | Keyword-based shader permutations. Tested. |
-| `Graphics/ShaderCrossCompiler.h` | 376 | HLSL↔GLSL translation (may be superseded by Slang interface). |
+| `Graphics/ShaderCrossCompiler.h` | 376 | The DXBC target now compiles for real via `d3dcompiler_47`; DXIL/SPIR-V/GLSL/MSL are explicit not-integrated failures (exit 1), no longer success-with-empty-bytecode. `CrossCompileHLSLtoGLSL` survives only because `Tests/TestGLSLPipelineIntegration.cpp` asserts on it; `CompileShader` no longer calls it. |
 | `Graphics/ConstantBufferRing.h` | 362 | Per-frame constant-buffer ring allocator. |
 | `Graphics/GPUDebugMarkers.h` | 377 | Scoped PIX/RenderDoc/NSight markers. |
 | `Graphics/GPUTimestampQuery.h` | 490 | GPU timestamp query pool. |
@@ -82,7 +129,7 @@ Smaller utilities — 2 of 8 were false positives (already wired); the rest docu
 | `Graphics/DirtyRectTracker.h` | 167 | CPU rectangle-merge for partial texture updates. Tested. |
 | `Graphics/ClusteredLightGPU.h` | 163 | Bridge to structured-buffer arrays for forward+. Tested. |
 | `Graphics/ConstantBufferDiff.h` | 138 | **False positive.** `ConstantBufferDiffManager` wired in the per-frame loop. |
-| `Graphics/RHI/DeferredDeletionQueue.h` | 121 | **False positive.** Held as a member of `D3D11Device`. |
+| `Graphics/RHI/DeferredDeletionQueue.h` | 121 | Header-only with real test coverage (`Tests/TestDeferredDeletionReal.cpp`) but **no production caller**: `D3D11Device` has no such member and no backend calls `Enqueue`/`ProcessQueue` (`D3D12Device` has its own fence-based queue). |
 | `Graphics/RHI/RHIHandlePool.h` | 233 | Generic `HandlePool<T,N>` template. Tested. |
 | `Graphics/RHI/TransientBufferAllocator.h` | 232 | Per-frame bump allocator. Tested. |
 
@@ -90,21 +137,19 @@ Smaller utilities — 2 of 8 were false positives (already wired); the rest docu
 
 | Feature | File(s) | Current Status |
 |---|---|---|
-| `TutorialSystem` | `SparkEditor/Source/Core/TutorialSystem.h` | **Resolved.** `EditorUI::InitializeManagers` calls `Initialize()`, `EditorUI::Update` ticks it under a guarded update, `Shutdown()` on teardown. 7 new tests added. |
-| `AssetAuditGraph` (was `AssetDependencyGraph`) | `SparkEditor/Source/Panels/AssetAuditGraph.h` | **Resolved.** Renamed from `AssetDependencyGraph` to break an ODR collision with the build-pipeline graph of the same name; wired into `EditorUI::InitializeManagers/Shutdown`; 11 new tests added. The build-system `AssetPipeline::AssetDependencyGraph` is untouched. |
 | `ClusteredLightGPU` | `Graphics/ClusteredLightGPU.h` | Tested; documented as an intentional Tier-2 utility (no render-path call yet). |
-| `ConstantBufferDiff` | `Graphics/ConstantBufferDiff.h` | **Now wired** (see Tier 2 false positive) — `ConstantBufferDiffManager` is in the per-frame loop. |
 | `DirtyRectTracker` | `Graphics/DirtyRectTracker.h` | Tested; documented as intentional utility. |
-| `AIIntegratedSystem` + `ParallelPerceptionSystem` | `Engine/AI/AIIntegration.h`, `Engine/AI/ParallelPerception.h/.cpp` | **Resolved (2026-04-14).** Added an `AIIntegrationConfig::runCoreAISystem` flag (default false) to avoid double-ticking behavior trees alongside the ECS `AIUpdateSystem`. Wired `Initialize`/`Update`/`Shutdown` into the AI lifecycle. `Tests/TestAIIntegratedSystem.cpp` added (11 tests). `@warning` headers rewritten as `@note WIRED`. |
+| `DeferredDeletionQueue` | `Graphics/RHI/DeferredDeletionQueue.h` | Tested (`TestDeferredDeletionReal.cpp`); no production caller (see Tier 2). |
+| `AdvancedAssetPipeline` | `SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h` | 3,835 lines with a real test (`Tests/TestAdvancedAssetPipeline.cpp`) and no production caller; ship-or-delete needs a product decision. |
+
+Resolved and no longer tracked: `TutorialSystem`, `AssetAuditGraph`, `ConstantBufferDiff` (wired), `AIIntegratedSystem` + `ParallelPerceptionSystem`.
 
 ## Tier 4 — Editor infrastructure with unimplemented bodies
 
 | File | Current Status |
 |---|---|
-| `SparkEditor/Source/Core/EditorLayoutManager.h` | **Resolved.** Header de-coupled from ImGui (plain floats); real `EditorLayoutManager.cpp` with disk-backed JSON persistence; instantiated in `InitializeManagers()`, torn down in `Shutdown()`. 10 new tests. |
-| `SparkEditor/Source/Core/EditorWindowManager.h` | **Resolved.** `SaveCurrentLayoutToFile()`/`LoadLayoutFromFile()` implemented with hand-rolled JSON helpers; `EditorApplication::Initialize/Shutdown` (Windows + SDL2 paths) call Initialize/Shutdown. 6 new tests. |
+| `SparkEditor/Source/Core/EditorWindowManager.h` | **Resolved (2026-09).** `SaveCurrentLayoutToFile()`/`LoadLayoutFromFile()` now have real callers: `EditorApplication::Initialize` restores `<EditorData>/window_layout.json` and `Shutdown` writes it (`EditorApplication::WindowLayoutFilePath`). |
 | `SparkEditor/Source/Panels/SelectionManager.h` | **Partially resolved.** Singleton now initialized/torn down from `EditorUI`. 13 new tests. **Still pending:** migrating `HierarchyPanel`/`InspectorPanel`/`SceneView` off their per-panel selection state — blocked on unifying `SelectionManager::EntityId` (`uint32_t`) with the editor's `ObjectID` (`uint64_t`). |
-| `SparkEditor/Source/Panels/CSGEditorPanel.h` | **Resolved.** Testable public API wrapping `Spark::LevelDesign::CSGSystem`; real ImGui rendering behind `#if __has_include(<imgui.h>)`, no-op in headless/test builds. 10 new tests. |
 | `SparkEditor/Source/Panels/NetworkDebugPanel.h` | **Resolved (data + UI).** Data model and ImGui rendering implemented. **Still pending:** wiring `NetworkManager` to feed `RecordBytesSent`/`RecordBytesRecv`/`LogPacket`/`SetCurrentLatency` — verified 2026-06-08 that no producer calls these in the networking `.cpp` files yet. |
 
 ## Confirmed false positives (do NOT add to any deletion list)
@@ -135,7 +180,7 @@ Smaller utilities — 2 of 8 were false positives (already wired); the rest docu
 ## Source & Freshness
 
 - Original entry: `.claude/knowledge/stub-and-abandoned-features-2026-04-10.md` (compiled 2026-04-10; AI integration resolution 2026-04-14).
-- Verified against codebase 2026-06-08.
+- Verified against codebase 2026-06-08; lifecycle-removal, deletion, and Preview-panel sections added from the 2026-09-05 release-readiness sweep (static verification against the working tree, no build/test evidence attached).
 
 Status changes / verifications found during freshening:
 
@@ -144,7 +189,7 @@ Status changes / verifications found during freshening:
 - **FoliageSystem — confirmed RESOLVED and further advanced:** `FoliageRenderer`, `FoliageImpostorBaker` (with Windows variants) exist and are wired in `GameplayLifecycleShared.cpp` (Initialize ~490, per-frame collect ~934, shutdown ~1174). The previously-deferred AssetPipeline binding is now done via `InstallAssetPipelineLoader` (~493).
 - **NetworkDebugPanel producer wiring — still pending:** verified no `RecordBytesSent`/`RecordBytesRecv`/`SetCurrentLatency` calls exist in networking `.cpp` files.
 - **SelectionManager panel migration — still pending** (EntityId/ObjectID width mismatch unresolved).
-- All Tier-1 through Tier-4 "Resolved" items confirmed by file presence.
+- Resolved items that no longer need tracking were removed from the tables in the 2026-09 sweep; the 2026-06 verification of the remaining rows stands.
 
 ## Related Pages
 

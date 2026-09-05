@@ -27,7 +27,7 @@ guidelines and information for contributors.
 - **PascalCase** for classes/methods, **camelCase** for locals, `m_` prefix for members
 - `#pragma once` in all headers
 - `const` on all non-mutating methods and parameters
-- Zero warnings under `/W4` (MSVC) or `-Wall -Wextra` (GCC/Clang)
+- Warning-free at the configured levels: the root MSVC flags are `/W3 /MP /bigobj` (no `/W4`, no `/WX`) and GCC/Clang use `-Wall -Wextra`; CI does not fail on warnings, so keep new code clean at those levels rather than relying on a gate
 - Use `EngineContext` service locator, not deprecated globals
 
 See `.clang-format` for the full style configuration.
@@ -49,7 +49,16 @@ See `.clang-format` for the full style configuration.
    docs/update-all-docs.sh
    ```
 3. **Update CHANGELOG.md** with your changes under `[Unreleased]`
-4. **Add tests** for new functionality
+4. **Add tests** for new functionality. Tests must execute production source (a
+   copied model or a mock-only test cannot promote readiness). Waive a single
+   environment-sensitive assertion with `EXPECT_WARN_ONLY(expr, reason)` -- an
+   entry in `Tests/TestWarnings.h` waives the *entire* matched test. Use
+   `EXPECT_NO_CRASH(reason)` instead of `EXPECT_TRUE(true)` in does-not-crash
+   tests, and `SKIP_TEST(reason)` in any `#else` placeholder for a compiled-out
+   feature; a test with zero assertions is reported as `[ EMPTY ]`
+5. **Know what CI enforces.** No branch protection is active on `Working` today;
+   `required-ci-gate` is a post-hoc publication gate (`CI-100`), so a green PR
+   check list is not proof the required set ran. See `wiki/advanced/Testing.md`
 5. **Keep PRs focused** — one feature or fix per PR
 6. **Write clear commit messages** explaining the "why"
 

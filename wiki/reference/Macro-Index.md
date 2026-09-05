@@ -635,8 +635,6 @@
 | `KillcamNotifyFn` | alias | GameModules | [TFDeathRecap.h:L80](../../GameModules/SparkGameMMOFPS/Source/UI/TFDeathRecap.h#L80) |  |
 | `LanBroadcastSocketFactory` | alias | SparkEngine | [DedicatedServer.h:L189](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L189) | Immutable state consumed by one LAN broadcast iteration. |
 | `LayerEvalFunc` | alias | SparkEngine | [CpuNeuralInference.cpp:L32](../../SparkEngine/Source/Graphics/Neural/CpuNeuralInference.cpp#L32) |  |
-| `LightBakeProgressCallback` | alias | SparkEditor | [LightingTools.h:L229](../../SparkEditor/Source/Lighting/LightingTools.h#L229) | Light baking progress callback |
-| `LightChangedCallback` | alias | SparkEditor | [LightingTools.h:L234](../../SparkEditor/Source/Lighting/LightingTools.h#L234) | Light changed callback |
 | `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L1040](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1040) |  |
 | `List` | alias | Tests | [TestTypeTraits.cpp:L102](../../Tests/TestTypeTraits.cpp#L102) |  |
 | `List` | alias | Tests | [TestTypeTraits.cpp:L114](../../Tests/TestTypeTraits.cpp#L114) |  |
@@ -791,24 +789,20 @@
 | `PROFILE_BEGIN` | macro | SparkEngine | [Profiler.h:L351](../../SparkEngine/Source/Utils/Profiler.h#L351) |  |
 | `PROFILE_END` | macro | SparkEngine | [Profiler.h:L340](../../SparkEngine/Source/Utils/Profiler.h#L340) |  |
 | `PROFILE_END` | macro | SparkEngine | [Profiler.h:L352](../../SparkEngine/Source/Utils/Profiler.h#L352) |  |
-| `PROFILE_FUNCTION` | macro | SparkEditor | [ProfilerTypes.h:L310](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L310) | Profiling macros for easy instrumentation |
 | `PROFILE_GPU_BEGIN` | macro | SparkEngine | [Profiler.h:L342](../../SparkEngine/Source/Utils/Profiler.h#L342) |  |
 | `PROFILE_GPU_BEGIN` | macro | SparkEngine | [Profiler.h:L345](../../SparkEngine/Source/Utils/Profiler.h#L345) |  |
 | `PROFILE_GPU_BEGIN` | macro | SparkEngine | [Profiler.h:L353](../../SparkEngine/Source/Utils/Profiler.h#L353) |  |
 | `PROFILE_GPU_END` | macro | SparkEngine | [Profiler.h:L343](../../SparkEngine/Source/Utils/Profiler.h#L343) |  |
 | `PROFILE_GPU_END` | macro | SparkEngine | [Profiler.h:L346](../../SparkEngine/Source/Utils/Profiler.h#L346) |  |
 | `PROFILE_GPU_END` | macro | SparkEngine | [Profiler.h:L354](../../SparkEngine/Source/Utils/Profiler.h#L354) |  |
-| `PROFILE_SCOPE` | macro | SparkEditor | [ProfilerTypes.h:L308](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L308) | Profiling macros for easy instrumentation |
 | `PROFILE_SCOPE` | macro | SparkEngine | [Profiler.h:L337](../../SparkEngine/Source/Utils/Profiler.h#L337) |  |
 | `PROFILE_SCOPE` | macro | SparkEngine | [Profiler.h:L349](../../SparkEngine/Source/Utils/Profiler.h#L349) |  |
 | `PROFILE_SCOPE_CAT` | macro | SparkEngine | [Profiler.h:L338](../../SparkEngine/Source/Utils/Profiler.h#L338) |  |
 | `PROFILE_SCOPE_CAT` | macro | SparkEngine | [Profiler.h:L350](../../SparkEngine/Source/Utils/Profiler.h#L350) |  |
-| `PROFILE_SCOPE_CATEGORY` | macro | SparkEditor | [ProfilerTypes.h:L309](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L309) | Profiling macros for easy instrumentation |
 | `ProfilingDataCallback` | alias | SparkEditor | [IntegrationTypes.h:L161](../../SparkEditor/Source/Integration/IntegrationTypes.h#L161) | Callback function types |
 | `ProfilingDataCallback` | alias | SparkEditor | [SparkEngineIntegration.h:L171](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L171) | Callback function types |
 | `ProjectCallback` | alias | SparkEditor | [ProjectManager.h:L169](../../SparkEditor/Source/Core/ProjectManager.h#L169) |  |
 | `ProjectileExpiredCallback` | alias | SparkEngine | [ECSystems.h:L594](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h#L594) | Callback invoked when a projectile expires or impacts. |
-| `PropertyMap` | alias | Tests | [TestPrefabManager.cpp:L23](../../Tests/TestPrefabManager.cpp#L23) |  |
 | `PropertyValue` | alias | SparkEditor | [EditorCommand.h:L73](../../SparkEditor/Source/UndoRedo/EditorCommand.h#L73) | Property value variant type for generic property changes |
 | `PropertyValue` | alias | Tests | [TestEditorCommands.cpp:L23](../../Tests/TestEditorCommands.cpp#L23) |  |
 | `PS` | alias | SparkEngine | [EngineSettings.cpp:L60](../../SparkEngine/Source/Core/EngineSettings.cpp#L60) |  |

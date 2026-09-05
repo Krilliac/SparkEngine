@@ -142,7 +142,6 @@
 | `AnimalInstance` | struct | GameModules | [OWWildlifeSystem.h:L46](../../GameModules/SparkGameOpenWorld/Source/Wildlife/OWWildlifeSystem.h#L46) | Runtime state for a single spawned animal |
 | `AnimalSpecies` | struct | GameModules | [OWWildlifeSystem.h:L26](../../GameModules/SparkGameOpenWorld/Source/Wildlife/OWWildlifeSystem.h#L26) | Template defining an animal species |
 | `AnimationAssetData` | struct | SparkEngine | [AssetPipeline.h:L115](../../SparkEngine/Source/Graphics/AssetPipeline.h#L115) | Animation data structure |
-| `AnimationClip` | struct | SparkEditor | [AnimationTimelineTypes.h:L147](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L147) | Animation clip |
 | `AnimationClip` | struct | SparkEngine | [AnimationClip.h:L147](../../SparkEngine/Source/Engine/Animation/AnimationClip.h#L147) |  |
 | `AnimationClip` | struct | SparkEngine | [AnimationTypes.h:L267](../../SparkEngine/Source/Engine/Animation/AnimationTypes.h#L267) |  |
 | `AnimationClip` | struct | Tests | [TestAnimationStress.cpp:L159](../../Tests/TestAnimationStress.cpp#L159) |  |
@@ -150,13 +149,11 @@
 | `AnimationCompressor` | class | SparkEngine | [AnimationCompression.h:L85](../../SparkEngine/Source/Engine/Animation/AnimationCompression.h#L85) | Compresses AnimationClip data by removing redundant keyframes and quantizing. |
 | `AnimationController` | struct | SparkEngine | [AnimationComponents.h:L65](../../SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h#L65) | Controls skeletal animation playback on an entity. |
 | `AnimationControllerData` | struct | SparkEditor | [SceneFileTypes.h:L371](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L371) | Animation controller scene data |
-| `AnimationCurve` | struct | SparkEditor | [AnimationTimelineTypes.h:L60](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L60) | Animation curve (track) |
 | `AnimationEvaluator` | class | SparkEngine | [AnimationEvaluator.h:L38](../../SparkEngine/Source/Engine/Animation/AnimationEvaluator.h#L38) |  |
 | `AnimationEvaluator` | class | SparkEngine | [AnimationSystem.h:L458](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L458) |  |
 | `AnimationEvaluator` | class | Tests | [TestAnimationSystem.cpp:L410](../../Tests/TestAnimationSystem.cpp#L410) |  |
 | `AnimationHandleTag` | struct | SparkEngine | [OpaqueHandle.h:L85](../../SparkEngine/Source/Utils/OpaqueHandle.h#L85) |  |
 | `AnimationInstance` | struct | SparkEngine | [AnimationSystem.h:L237](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L237) |  |
-| `AnimationKeyframe` | struct | SparkEditor | [AnimationTimelineTypes.h:L34](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L34) | Animation keyframe |
 | `AnimationLayer` | struct | SparkEngine | [AnimationBlender.h:L46](../../SparkEngine/Source/Engine/Animation/AnimationBlender.h#L46) |  |
 | `AnimationLayer` | struct | SparkEngine | [AnimationTypes.h:L344](../../SparkEngine/Source/Engine/Animation/AnimationTypes.h#L344) |  |
 | `AnimationLayer` | struct | Tests | [TestAnimationSystem.cpp:L266](../../Tests/TestAnimationSystem.cpp#L266) |  |
@@ -173,8 +170,6 @@
 | `AnimationStateMachine` | class | SparkEngine | [AnimationSystem.h:L106](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L106) |  |
 | `AnimationStateMachine` | class | Tests | [TestAnimationStress.cpp:L265](../../Tests/TestAnimationStress.cpp#L265) |  |
 | `AnimationStateMachine` | class | Tests | [TestAnimationSystem.cpp:L300](../../Tests/TestAnimationSystem.cpp#L300) |  |
-| `AnimationTimeline` | class | SparkEditor | [AnimationTimeline.h:L38](../../SparkEditor/Source/Animation/AnimationTimeline.h#L38) |  |
-| `AnimationTrack` | struct | SparkEditor | [AnimationTimelineTypes.h:L106](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L106) | Animation track for an object/component |
 | `AnimationTrack` | struct | SparkEngine | [AssetPipeline.h:L125](../../SparkEngine/Source/Graphics/AssetPipeline.h#L125) |  |
 | `AnimationTransition` | struct | SparkEngine | [AnimationTypes.h:L418](../../SparkEngine/Source/Engine/Animation/AnimationTypes.h#L418) | Defines a transition from one animation state to another. |
 | `AnimationTransition` | struct | Tests | [TestAnimationStress.cpp:L249](../../Tests/TestAnimationStress.cpp#L249) |  |
@@ -212,7 +207,6 @@
 | `AreaServer` | class | SparkEngine | [AreaServer.h:L69](../../SparkEngine/Source/Engine/Networking/AreaServer.h#L69) |  |
 | `AreaServerConfig` | struct | SparkEngine | [AreaServerTypes.h:L40](../../SparkEngine/Source/Engine/Networking/AreaServerTypes.h#L40) | Configuration for an individual Area Server instance |
 | `AreaServerStats` | struct | SparkEngine | [AreaServerTypes.h:L77](../../SparkEngine/Source/Engine/Networking/AreaServerTypes.h#L77) | Runtime performance metrics for a single area server instance. |
-| `ArenaBuilder` | class | GameModules | [ArenaBuilder.h:L39](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L39) |  |
 | `Army` | struct | Tests | [TestSparkGameRTS.cpp:L128](../../Tests/TestSparkGameRTS.cpp#L128) |  |
 | `ARPGAbilityCatalog` | struct | GameModules | [ARPGAbilityCatalog.h:L15](../../GameModules/SparkGameARPG/Source/Core/ARPGAbilityCatalog.h#L15) | Stable IDs and registration routine for the ARPG engine ability bridge. |
 | `ARPGCombatSystem` | class | GameModules | [ARPGCombatSystem.h:L66](../../GameModules/SparkGameARPG/Source/Combat/ARPGCombatSystem.h#L66) | Real-time combat system with damage types, crits, AoE, and DoTs |
@@ -262,16 +256,12 @@
 | `AssetCache` | class | Tests | [TestAssetPipelineCache.cpp:L85](../../Tests/TestAssetPipelineCache.cpp#L85) |  |
 | `AssetCacheStats` | struct | SparkEngine | [AssetServiceProtocol.h:L85](../../SparkEngine/Source/Utils/AssetServiceProtocol.h#L85) |  |
 | `AssetCategory` | struct | SparkEditor | [BuildCookPanel.cpp:L266](../../SparkEditor/Source/Panels/BuildCookPanel.cpp#L266) |  |
-| `AssetDatabase` | class | SparkEditor | [AssetDatabase.h:L92](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L92) | Advanced asset database with real-time monitoring |
-| `AssetDatabase` | class | Tests | [TestAssetDatabase.cpp:L70](../../Tests/TestAssetDatabase.cpp#L70) |  |
 | `AssetDependencyGraph` | class | SparkEditor | [AdvancedAssetPipeline.h:L154](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L154) | Asset dependency graph |
 | `AssetDependencyGraph` | class | Tests | [TestAssetDependencyGraph.cpp:L22](../../Tests/TestAssetDependencyGraph.cpp#L22) |  |
 | `AssetEntry` | struct | SparkEngine | [AssetIntegration.h:L242](../../SparkEngine/Source/Core/AssetIntegration.h#L242) |  |
 | `AssetFileHeader` | struct | SparkEngine | [AssetMigration.h:L95](../../SparkEngine/Source/Core/AssetMigration.h#L95) | Fixed-size header at the start of every SparkEngine binary asset. |
 | `AssetHandle` | struct | SparkEngine | [AssetHandle.h:L39](../../SparkEngine/Source/Core/AssetHandle.h#L39) |  |
-| `AssetImportSettings` | struct | SparkEditor | [AssetDatabase.h:L67](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L67) | Asset import settings |
 | `AssetImportSettings` | struct | SparkEditor | [AssetPipelineTypes.h:L77](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L77) | Asset import settings |
-| `AssetInfo` | struct | SparkEditor | [AssetDatabase.h:L27](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L27) | Asset information structure |
 | `AssetInfo` | struct | Tests | [TestAssetDependencyGraph.cpp:L15](../../Tests/TestAssetDependencyGraph.cpp#L15) |  |
 | `AssetKey` | struct | SparkEngine | [AssetServiceProtocol.h:L52](../../SparkEngine/Source/Utils/AssetServiceProtocol.h#L52) |  |
 | `AssetLoadRequest` | struct | SparkEngine | [AssetPipeline.h:L159](../../SparkEngine/Source/Graphics/AssetPipeline.h#L159) | Asset loading request |
@@ -280,7 +270,6 @@
 | `AssetMetadata` | struct | SparkEditor | [AssetPipelineTypes.h:L159](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L159) | Asset metadata |
 | `AssetMetadata` | struct | SparkEngine | [AssetIntegration.h:L42](../../SparkEngine/Source/Core/AssetIntegration.h#L42) | Metadata about a registered asset. |
 | `AssetMetadata` | struct | SparkEngine | [AssetPipeline.h:L140](../../SparkEngine/Source/Graphics/AssetPipeline.h#L140) | Asset metadata |
-| `AssetMetadata` | struct | Tests | [TestAssetDatabase.cpp:L23](../../Tests/TestAssetDatabase.cpp#L23) |  |
 | `AssetMetadataValidator` | class | SparkEngine | [AssetValidator.h:L75](../../SparkEngine/Source/Core/AssetValidator.h#L75) |  |
 | `AssetMetrics` | struct | SparkEngine | [AssetPipeline.h:L354](../../SparkEngine/Source/Graphics/AssetPipeline.h#L354) | Asset pipeline metrics |
 | `AssetMigrationRegistry` | class | SparkEngine | [AssetMigration.h:L214](../../SparkEngine/Source/Core/AssetMigration.h#L214) | Singleton registry that chains migration steps to upgrade assets. |
@@ -311,7 +300,6 @@
 | `AsyncComputeScheduler` | class | SparkEngine | [AsyncComputeScheduler.h:L117](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.h#L117) | Schedules and dispatches async compute workloads. |
 | `AsyncComputeStats` | struct | SparkEngine | [AsyncComputeScheduler.h:L96](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.h#L96) |  |
 | `AsyncDatabasePool` | class | SparkEngine | [AsyncDatabase.h:L190](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L190) |  |
-| `AtmosphereSettings` | struct | SparkEditor | [LightingTools.h:L152](../../SparkEditor/Source/Lighting/LightingTools.h#L152) | Atmosphere and weather settings |
 | `AuctionListing` | struct | GameModules | [MMOTradingSystem.h:L57](../../GameModules/SparkGameMMO/Source/Trading/MMOTradingSystem.h#L57) | An auction house listing |
 | `AudioAsset` | class | SparkEngine | [AssetPipeline.h:L285](../../SparkEngine/Source/Graphics/AssetPipeline.h#L285) | Audio asset |
 | `AudioBusMixer` | class | SparkEngine | [MusicManager.h:L57](../../SparkEngine/Source/Audio/MusicManager.h#L57) |  |
@@ -375,8 +363,6 @@
 | `Axis2DValue` | struct | SparkEngine | [InputActionSystem.h:L69](../../SparkEngine/Source/Input/InputActionSystem.h#L69) | A 2D axis value |
 | `AxisBinding` | struct | Tests | [TestInputSystem.cpp:L40](../../Tests/TestInputSystem.cpp#L40) |  |
 | `AxisIntersectResult` | struct | Tests | [TestGizmoMath.cpp:L69](../../Tests/TestGizmoMath.cpp#L69) |  |
-| `AxisTest` | struct | SparkEditor | [GizmoSystem.cpp:L589](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L589) |  |
-| `AxisTest` | struct | SparkEditor | [GizmoSystem.cpp:L684](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp#L684) |  |
 | `BackendState` | struct | Tests | [TestTelemetrySpool.cpp:L59](../../Tests/TestTelemetrySpool.cpp#L59) |  |
 | `BakeLight` | struct | SparkEngine | [LightmapBaker.h:L85](../../SparkEngine/Source/Graphics/LightmapBaker.h#L85) | A light source for baking |
 | `BakeMesh` | struct | SparkEngine | [LightmapBaker.h:L76](../../SparkEngine/Source/Graphics/LightmapBaker.h#L76) | A mesh contributed to the bake |
@@ -798,9 +784,7 @@
 | `ConnectionStats` | struct | SparkEditor | [EngineInterface.h:L333](../../SparkEditor/Source/Communication/EngineInterface.h#L333) | Get connection statistics |
 | `ConnectionUI` | struct | SparkEditor | [VisualScriptPanel.h:L112](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L112) |  |
 | `Console` | class | GameModules | [SparkGameFPS.h:L25](../../GameModules/SparkGameFPS/Source/Core/SparkGameFPS.h#L25) |  |
-| `Console` | class | GameModules | [Console.h:L79](../../GameModules/SparkGameFPS/Source/Game/Console.h#L79) |  |
 | `ConsoleApp` | class | SparkConsole | [ConsoleApp.h:L38](../../SparkConsole/src/ConsoleApp.h#L38) | The SparkConsole subprocess application. |
-| `ConsoleCommand` | struct | GameModules | [Console.h:L55](../../GameModules/SparkGameFPS/Source/Game/Console.h#L55) | Console command structure |
 | `ConsoleCommand` | struct | SparkEditor | [ConsolePanel.h:L33](../../SparkEditor/Source/Panels/ConsolePanel.h#L33) | Console command structure |
 | `ConsoleCommandInfo` | struct | SparkEngine | [InGameConsole.h:L80](../../SparkEngine/Source/Utils/InGameConsole.h#L80) | Registered console command info |
 | `ConsoleFilter` | struct | SparkEditor | [ConsolePanel.h:L56](../../SparkEditor/Source/Panels/ConsolePanel.h#L56) | Console filter settings |
@@ -960,7 +944,6 @@
 | `DamageResult` | struct | GameModules | [RPGCombatSystem.h:L53](../../GameModules/SparkGameRPG/Source/Combat/RPGCombatSystem.h#L53) | Result of a single damage calculation |
 | `DamageZone` | struct | GameModules | [GameMechanics.h:L38](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L38) | Environmental damage zone |
 | `DamageZoneSystem` | class | GameModules | [GameMechanics.h:L111](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L111) | Damage zone and environmental hazard system |
-| `DatabaseStats` | struct | SparkEditor | [AssetDatabase.h:L213](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L213) | Get database statistics |
 | `Datablock` | struct | SparkEngine | [DatablockRegistry.h:L60](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h#L60) | An immutable set of named properties describing a game object template. |
 | `DatablockRegistry` | class | SparkEngine | [DatablockRegistry.h:L118](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h#L118) | Central registry for immutable datablock definitions. |
 | `DataColumn` | struct | SparkEngine | [DataTableSystem.h:L37](../../SparkEngine/Source/Engine/DataTable/DataTableSystem.h#L37) | Describes a named column with type info and a default value. |
@@ -1391,7 +1374,6 @@
 | `fileStat` | struct | SparkEngine | [AssetMetadataLinux.cpp:L206](../../SparkEngine/Source/Graphics/AssetMetadataLinux.cpp#L206) |  |
 | `fileStat` | struct | SparkEngine | [MaterialSystemLinux.cpp:L133](../../SparkEngine/Source/Graphics/MaterialSystemLinux.cpp#L133) |  |
 | `FileState` | struct | SparkEngine | [ScriptHotReload.h:L151](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L151) |  |
-| `FileSystemChange` | struct | SparkEditor | [AssetDatabase.h:L56](../../SparkEditor/Source/AssetBrowser/AssetDatabase.h#L56) | File system change notification |
 | `FILETIME` | struct | SparkEngine | [PlatformD3DStubs.h:L83](../../SparkEngine/Source/Core/PlatformD3DStubs.h#L83) |  |
 | `FileWatcher` | class | SparkEngine | [FileWatcher.h:L95](../../SparkEngine/Source/Utils/FileWatcher/FileWatcher.h#L95) | File and directory change notification system |
 | `FilmGrainSettings` | struct | SparkEngine | [PostProcessingTypes.h:L142](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L142) | Film grain effect settings |
@@ -1528,7 +1510,6 @@
 | `FxQuad` | struct | GameModules | [TFVehicleFx.h:L100](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleFx.h#L100) |  |
 | `Game` | class | GameModules | [AdvancedConsoleCommands.h:L9](../../GameModules/SparkGameFPS/Source/Console/AdvancedConsoleCommands.h#L9) | Console command declarations for unified GraphicsEngine |
 | `Game` | class | GameModules | [SparkGameFPS.h:L24](../../GameModules/SparkGameFPS/Source/Core/SparkGameFPS.h#L24) |  |
-| `Game` | class | GameModules | [ArenaBuilder.h:L22](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L22) |  |
 | `Game` | class | GameModules | [Game.h:L91](../../GameModules/SparkGameFPS/Source/Game/Game.h#L91) |  |
 | `Game` | class | GameModules | [WaveSpawner.h:L22](../../GameModules/SparkGameFPS/Source/Game/WaveSpawner.h#L22) |  |
 | `GameCoroutine` | class | SparkEngine | [CoroutineTypes.h:L173](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h#L173) | Return type for C++20 coroutine functions that yield to the scheduler. |
@@ -1594,15 +1575,10 @@
 | `githubToken` | struct | SparkEngine | [CrashReportUploader.cpp:L486](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L486) |  |
 | `githubToken` | struct | SparkEngine | [CrashReportUploader.cpp:L611](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L611) |  |
 | `GitRunner` | class | SparkInstaller | [GitRunner.h:L10](../../SparkInstaller/src/GitRunner.h#L10) |  |
-| `GizmoConstants` | struct | SparkEditor | [GizmoSystem.h:L431](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L431) |  |
-| `GizmoGeometry` | struct | SparkEditor | [GizmoSystem.h:L410](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L410) |  |
-| `GizmoInteraction` | struct | SparkEditor | [GizmoSystem.h:L93](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L93) | Gizmo interaction result |
-| `GizmoSystem` | class | SparkEditor | [GizmoSystem.h:L117](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L117) |  |
 | `GLBuffer` | class | SparkEngine | [OpenGLDevice.h:L119](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L119) |  |
 | `GLCommandList` | class | SparkEngine | [OpenGLDevice.h:L305](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L305) |  |
 | `GLDevice` | class | SparkEngine | [OpenGLDevice.h:L113](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L113) |  |
 | `GLDevice` | class | SparkEngine | [OpenGLDevice.h:L368](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L368) |  |
-| `GlobalIlluminationSettings` | struct | SparkEditor | [LightingTools.h:L123](../../SparkEditor/Source/Lighting/LightingTools.h#L123) | Global illumination settings |
 | `GlobalLocaleGuard` | class | Tests | [TestSceneSerializerReal.cpp:L62](../../Tests/TestSceneSerializerReal.cpp#L62) |  |
 | `GLPipelineState` | class | SparkEngine | [OpenGLDevice.h:L236](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L236) |  |
 | `GLSampler` | class | SparkEngine | [OpenGLDevice.h:L212](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L212) |  |
@@ -1658,7 +1634,6 @@
 | `GrantState` | struct | SparkEngine | [RemoteDebugAccessControl.h:L139](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L139) |  |
 | `Graph` | struct | Tests | [TestShaderGraphCompiler.cpp:L48](../../Tests/TestShaderGraphCompiler.cpp#L48) |  |
 | `GraphicsEngine` | class | GameModules | [AdvancedConsoleCommands.h:L10](../../GameModules/SparkGameFPS/Source/Console/AdvancedConsoleCommands.h#L10) | Console command declarations for unified GraphicsEngine |
-| `GraphicsEngine` | class | GameModules | [ArenaBuilder.h:L23](../../GameModules/SparkGameFPS/Source/Game/ArenaBuilder.h#L23) |  |
 | `GraphicsEngine` | class | GameModules | [Game.h:L51](../../GameModules/SparkGameFPS/Source/Game/Game.h#L51) |  |
 | `GraphicsEngine` | class | GameModules | [ModelObject.h:L15](../../GameModules/SparkGameFPS/Source/Game/ModelObject.h#L15) |  |
 | `GraphicsEngine` | class | GameModules | [Player.h:L38](../../GameModules/SparkGameFPS/Source/Game/Player.h#L38) |  |
@@ -2125,12 +2100,10 @@
 | `LightData` | struct | SparkEngine | [LightingSystem.h:L61](../../SparkEngine/Source/Graphics/LightingSystem.h#L61) | Light data structure for shaders |
 | `LightData` | struct | Tests | [TestGPUClusterCulling.cpp:L20](../../Tests/TestGPUClusterCulling.cpp#L20) |  |
 | `LightingData` | struct | SparkEngine | [Shader.h:L172](../../SparkEngine/Source/Graphics/Shader.h#L172) | Lighting data structure for advanced lighting |
-| `LightingMetrics` | struct | SparkEditor | [LightingTools.h:L435](../../SparkEditor/Source/Lighting/LightingTools.h#L435) | Get lighting performance metrics |
 | `LightingMetrics` | struct | SparkEngine | [LightingSystem.h:L256](../../SparkEngine/Source/Graphics/LightingSystem.h#L256) | Lighting system metrics |
 | `LightingPassData` | struct | SparkEngine | [RenderGraphBuilder.h:L143](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L143) | Lighting pass outputs placed on the blackboard. |
 | `LightingSystem` | class | SparkEngine | [GraphicsEngine.h:L84](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L84) |  |
 | `LightingSystem` | class | SparkEngine | [LightingSystem.h:L250](../../SparkEngine/Source/Graphics/LightingSystem.h#L250) | Lighting system manager |
-| `LightingTools` | class | SparkEditor | [LightingTools.h:L243](../../SparkEditor/Source/Lighting/LightingTools.h#L243) | Advanced lighting and environment system for Spark Engine |
 | `LightLayerMask` | struct | SparkEngine | [LightLayers.h:L33](../../SparkEngine/Source/Graphics/LightLayers.h#L33) | 32-bit light layer mask |
 | `LightLayerRegistry` | class | SparkEngine | [LightLayers.h:L68](../../SparkEngine/Source/Graphics/LightLayers.h#L68) | Named light layer definitions |
 | `LightManager` | class | SparkEngine | [GraphicsEngine.h:L74](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L74) |  |
@@ -2260,35 +2233,29 @@
 | `MaterialCBSlot` | struct | SparkEngine | [PersistentMaterialCB.h:L35](../../SparkEngine/Source/Graphics/PersistentMaterialCB.h#L35) |  |
 | `MaterialChangeReactiveSystem` | class | SparkEngine | [ReactiveSystem.h:L184](../../SparkEngine/Source/Engine/ECS/ReactiveSystem.h#L184) | Concrete reactive system for MeshRenderer material changes. |
 | `MaterialCommand` | class | SparkEditor | [EditorCommands.h:L101](../../SparkEditor/Source/UndoRedo/EditorCommands.h#L101) | Command for changing a material property on an entity |
-| `MaterialConnection` | struct | SparkEditor | [MaterialEditor.h:L139](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L139) | Connection between sockets |
 | `MaterialConstants` | struct | SparkEngine | [MaterialSystem.h:L45](../../SparkEngine/Source/Graphics/MaterialSystem.h#L45) | GPU-aligned constant buffer matching HLSL material layout |
 | `MaterialDefinition` | struct | SparkEditor | [MaterialEditorPanel.h:L129](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L129) | Complete material definition. |
 | `MaterialDefinition` | struct | SparkEngine | [MaterialDefinition.h:L150](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L150) | A complete declarative material definition. |
 | `MaterialDefinitionRegistry` | class | SparkEngine | [MaterialDefinition.h:L475](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L475) | Registry of material definitions, keyed by name. |
 | `MaterialDoc` | struct | SparkEditor | [BasicMaterialEditorPanel.h:L60](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.h#L60) | One material JSON document loaded into editable fields. |
-| `MaterialEditor` | class | SparkEditor | [MaterialEditor.h:L255](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L255) |  |
 | `MaterialEditorPanel` | class | SparkEditor | [MaterialEditorPanel.h:L185](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L185) |  |
 | `MaterialEffect` | struct | SparkEngine | [MaterialEffects.h:L66](../../SparkEngine/Source/Engine/Gameplay/MaterialEffects.h#L66) | Describes the particle, sound, and decal effects for a material interaction. |
 | `MaterialEffect` | struct | Tests | [TestMaterialEffects.cpp:L33](../../Tests/TestMaterialEffects.cpp#L33) |  |
 | `MaterialEffectSystem` | class | SparkEngine | [MaterialEffects.h:L89](../../SparkEngine/Source/Engine/Gameplay/MaterialEffects.h#L89) | Resolves and triggers material interaction effects. |
 | `MaterialEffectSystem` | struct | Tests | [TestMaterialEffects.cpp:L41](../../Tests/TestMaterialEffects.cpp#L41) |  |
-| `MaterialGraph` | struct | SparkEditor | [MaterialEditor.h:L190](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L190) | Material graph |
 | `MaterialInstance` | class | SparkEngine | [MaterialDefinition.h:L287](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L287) | A concrete material instance created from a MaterialDefinition. |
 | `MaterialLoader` | class | SparkEngine | [MaterialLoader.h:L64](../../SparkEngine/Source/Graphics/MaterialLoader.h#L64) | Singleton that loads materials from .sparkmat text files. |
 | `MaterialMergeHandler` | class | SparkEditor | [VersionControlTypes.h:L279](../../SparkEditor/Source/VersionControl/VersionControlTypes.h#L279) | Material merge handler |
 | `MaterialMetrics` | struct | SparkEngine | [MaterialSystem.h:L312](../../SparkEngine/Source/Graphics/MaterialSystem.h#L312) | Material system performance metrics |
 | `MaterialMetrics` | struct | Tests | [TestMaterialSystemEdgeCases.cpp:L81](../../Tests/TestMaterialSystemEdgeCases.cpp#L81) |  |
-| `MaterialNode` | struct | SparkEditor | [MaterialEditor.h:L155](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L155) | Material graph node |
 | `MaterialParams` | struct | SparkEngine | [MetalRayTracing.h:L95](../../SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.h#L95) |  |
 | `MaterialPreset` | struct | SparkEditor | [Physics3DPanel.h:L82](../../SparkEditor/Source/Panels/Physics3DPanel.h#L82) |  |
-| `MaterialPreview` | struct | SparkEditor | [MaterialEditor.h:L216](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L216) | Material preview sphere |
 | `MaterialPropertyHandle` | struct | SparkEngine | [MaterialPropertyHandle.h:L49](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.h#L49) | Compact handle encoding binding index, type, and byte offset. |
 | `MaterialPropertyRegistry` | class | SparkEngine | [MaterialPropertyHandle.h:L85](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.h#L85) |  |
 | `MaterialRenderState` | struct | SparkEditor | [MaterialEditorPanel.h:L100](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L100) | Render state configuration for a material. |
 | `MaterialRenderState` | struct | SparkEngine | [MaterialSystem.h:L193](../../SparkEngine/Source/Graphics/MaterialSystem.h#L193) | Material render state |
 | `MaterialRenderState` | struct | Tests | [TestMaterialSystemEdgeCases.cpp:L69](../../Tests/TestMaterialSystemEdgeCases.cpp#L69) |  |
 | `MaterialRenderState` | struct | Tests | [TestMaterialSystemValidation.cpp:L71](../../Tests/TestMaterialSystemValidation.cpp#L71) |  |
-| `MaterialSocket` | struct | SparkEditor | [MaterialEditor.h:L120](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L120) | Material node socket |
 | `MaterialState` | struct | Tests | [TestRenderECSIntegration.cpp:L96](../../Tests/TestRenderECSIntegration.cpp#L96) |  |
 | `MaterialSystem` | class | SparkEngine | [GraphicsEngine.h:L73](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L73) |  |
 | `MaterialSystem` | class | SparkEngine | [RTSceneFeeder.h:L33](../../SparkEngine/Source/Graphics/HybridRT/RTSceneFeeder.h#L33) |  |
@@ -2623,7 +2590,6 @@
 | `Node2D` | class | SparkEngine | [SceneGraph2D.h:L92](../../SparkEngine/Source/Engine/2D/SceneGraph2D.h#L92) | Base node in the 2D scene graph |
 | `NodeInput` | struct | Tests | [TestShaderGraphCompiler.cpp:L27](../../Tests/TestShaderGraphCompiler.cpp#L27) |  |
 | `NodeLock` | struct | SparkEditor | [CollaborativeEditSession.h:L146](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L146) | Lock information for a scene node |
-| `NodeTypeInfo` | struct | SparkEditor | [MaterialEditor.h:L450](../../SparkEditor/Source/MaterialEditor/MaterialEditor.h#L450) | Get node type information |
 | `NodeUI` | struct | SparkEditor | [VisualScriptPanel.h:L102](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L102) |  |
 | `NoiseGraph` | class | SparkEngine | [FastNoise2SIMD.h:L709](../../SparkEngine/Source/Graphics/FastNoise2SIMD.h#L709) | Composable noise node graph with batch evaluation |
 | `NoiseNode` | class | SparkEngine | [FastNoise2SIMD.h:L170](../../SparkEngine/Source/Graphics/FastNoise2SIMD.h#L170) | Abstract base for all noise generator nodes |
@@ -3052,11 +3018,9 @@
 | `PosixSignalRegistration` | struct | SparkEditor | [EditorCrashHandler.cpp:L50](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L50) |  |
 | `PostProcessCB` | struct | SparkEngine | [PostProcessingPipeline.h:L334](../../SparkEngine/Source/Graphics/PostProcessingPipeline.h#L334) |  |
 | `PostProcessingConstants` | struct | SparkEngine | [Shader.h:L202](../../SparkEngine/Source/Graphics/Shader.h#L202) | Post-processing parameters |
-| `PostProcessingPanel` | class | SparkEditor | [PostProcessingPanel.h:L20](../../SparkEditor/Source/Panels/PostProcessingPanel.h#L20) | Panel for editing post-processing and environment settings |
 | `PostProcessingPipeline` | class | SparkEngine | [GraphicsEngine.h:L77](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L77) |  |
 | `PostProcessingPipeline` | class | SparkEngine | [PostProcessingPipeline.h:L87](../../SparkEngine/Source/Graphics/PostProcessingPipeline.h#L87) | Manages an ordered chain of post-processing effects |
 | `PostProcessingPipeline` | class | Tests | [TestPostProcessingPipeline.cpp:L117](../../Tests/TestPostProcessingPipeline.cpp#L117) |  |
-| `PostProcessingSettings` | struct | SparkEditor | [LightingTools.h:L198](../../SparkEditor/Source/Lighting/LightingTools.h#L198) | Post-processing and tonemapping |
 | `PostProcessPassData` | struct | SparkEngine | [RenderGraphBuilder.h:L151](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L151) | Post-process pass outputs placed on the blackboard. |
 | `PostProcessSettings` | struct | SparkEngine | [EngineSettings.h:L147](../../SparkEngine/Source/Core/EngineSettings.h#L147) |  |
 | `PostProcessSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L71](../../Tests/TestEngineSettingsEdgeCases.cpp#L71) |  |
@@ -3069,14 +3033,11 @@
 | `PredictedState` | struct | SparkEngine | [ClientPrediction.h:L88](../../SparkEngine/Source/Engine/Networking/ClientPrediction.h#L88) | Predicted entity state resulting from input application. |
 | `PrefabAsset` | class | SparkEditor | [PrefabAsset.h:L60](../../SparkEditor/Source/Prefabs/PrefabAsset.h#L60) | Prefab asset storing a reusable entity template |
 | `PrefabComponentData` | struct | SparkEngine | [RuntimePrefab.h:L69](../../SparkEngine/Source/Engine/ECS/RuntimePrefab.h#L69) | Serialized component descriptor within a prefab. |
-| `PrefabData` | struct | Tests | [TestPrefabManager.cpp:L25](../../Tests/TestPrefabManager.cpp#L25) |  |
 | `PrefabEditorPanel` | class | SparkEditor | [PrefabEditorPanel.h:L26](../../SparkEditor/Source/Panels/PrefabEditorPanel.h#L26) | Panel for browsing and editing prefab templates |
 | `PrefabEntry` | struct | SparkEditor | [ObjectPlacementPanel.h:L53](../../SparkEditor/Source/Panels/ObjectPlacementPanel.h#L53) |  |
 | `PrefabFileHeader` | struct | SparkEngine | [RuntimePrefab.h:L206](../../SparkEngine/Source/Engine/ECS/RuntimePrefab.h#L206) | Simple asset file header written before prefab data. |
 | `PrefabInstance` | struct | SparkEditor | [PrefabManager.h:L27](../../SparkEditor/Source/Prefabs/PrefabManager.h#L27) | Tracks a prefab instance in the scene |
-| `PrefabInstance` | class | Tests | [TestPrefabManager.cpp:L32](../../Tests/TestPrefabManager.cpp#L32) |  |
 | `PrefabManager` | class | SparkEditor | [PrefabManager.h:L40](../../SparkEditor/Source/Prefabs/PrefabManager.h#L40) | Manages prefab assets and their instances |
-| `PrefabManager` | class | Tests | [TestPrefabManager.cpp:L84](../../Tests/TestPrefabManager.cpp#L84) |  |
 | `PrefabOverride` | struct | SparkEditor | [PrefabAsset.h:L46](../../SparkEditor/Source/Prefabs/PrefabAsset.h#L46) | Override tracking for a prefab instance property |
 | `PrefabRegistry` | class | SparkEngine | [RuntimePrefab.h:L270](../../SparkEngine/Source/Engine/ECS/RuntimePrefab.h#L270) | Singleton registry that stores, retrieves, and spawns prefabs. |
 | `PreparedStatementData` | struct | SparkEngine | [AsyncDatabase.h:L85](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L85) | Prepared statement handle with bindable parameters. |
@@ -3257,7 +3218,6 @@
 | `raw` | struct | tools | [gvisor-wine-shim.c:L1010](../../tools/gvisor-wine-shim.c#L1010) |  |
 | `RawUdpClient` | class | Tests | [TestReliableChannel.cpp:L437](../../Tests/TestReliableChannel.cpp#L437) |  |
 | `RawUDPSender` | class | Tests | [TestNetworkStress.cpp:L41](../../Tests/TestNetworkStress.cpp#L41) |  |
-| `Ray` | struct | SparkEditor | [GizmoSystem.h:L72](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L72) | Ray structure for mouse picking |
 | `Ray` | struct | SparkEngine | [CollisionSystem.h:L106](../../SparkEngine/Source/Physics/CollisionSystem.h#L106) | 3D ray for raycasting operations |
 | `Ray` | struct | SparkSDK | [MathTypes.h:L107](../../SparkSDK/Include/Spark/MathTypes.h#L107) | 3D ray (origin + direction) |
 | `Ray` | struct | Tests | [TestGizmoMath.cpp:L60](../../Tests/TestGizmoMath.cpp#L60) |  |
@@ -3960,7 +3920,6 @@
 | `SparkGameRPGModule` | class | GameModules | [SparkGameRPG.h:L46](../../GameModules/SparkGameRPG/Source/Core/SparkGameRPG.h#L46) |  |
 | `SparkGameRTSModule` | class | GameModules | [SparkGameRTS.h:L45](../../GameModules/SparkGameRTS/Source/Core/SparkGameRTS.h#L45) |  |
 | `SparkGameVisualScriptModule` | class | GameModules | [SparkGameVisualScript.h:L40](../../GameModules/SparkGameVisualScript/Source/Core/SparkGameVisualScript.h#L40) | Game module with all logic defined in visual scripts |
-| `SparkLightData` | struct | SparkEditor | [LightingTools.h:L68](../../SparkEditor/Source/Lighting/LightingTools.h#L68) | Advanced light configuration |
 | `SparkMatDefinition` | struct | SparkEngine | [MaterialLoader.h:L39](../../SparkEngine/Source/Graphics/MaterialLoader.h#L39) | Parsed material definition from a .sparkmat file. |
 | `SparkModuleCompatibilityDescriptor` | struct | SparkSDK | [ModuleABI.h:L70](../../SparkSDK/Include/Spark/ModuleABI.h#L70) | C-layout compatibility descriptor returned by every supported module. |
 | `SparkObjectLayerPairFilter` | class | SparkEngine | [PhysicsSystem.cpp:L130](../../SparkEngine/Source/Physics/PhysicsSystem.cpp#L130) |  |
@@ -4192,26 +4151,21 @@
 | `TempScriptTree` | class | Tests | [TestCoverageScripting.cpp:L25](../../Tests/TestCoverageScripting.cpp#L25) |  |
 | `TempTelemetrySpool` | class | Tests | [TestTelemetrySpool.cpp:L22](../../Tests/TestTelemetrySpool.cpp#L22) |  |
 | `TerrafrontModule` | class | GameModules | [SparkGameMMOFPS.h:L39](../../GameModules/SparkGameMMOFPS/Source/Core/SparkGameMMOFPS.h#L39) |  |
-| `Terrain` | class | GameModules | [Terrain.h:L83](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L83) | Enhanced terrain with LOD and texture splatting |
 | `TerrainBrush` | struct | SparkEditor | [TerrainData.h:L50](../../SparkEditor/Source/Terrain/TerrainData.h#L50) |  |
 | `TerrainComponent` | struct | SparkEngine | [TerrainComponents.h:L34](../../SparkEngine/Source/Engine/ECS/Components/TerrainComponents.h#L34) | Attaches terrain data to an entity, enabling heightmap-based landscape rendering. |
 | `TerrainComponent` | struct | Tests | [TestTerrainRenderer.cpp:L15](../../Tests/TestTerrainRenderer.cpp#L15) |  |
 | `TerrainData` | struct | SparkEditor | [TerrainData.h:L139](../../SparkEditor/Source/Terrain/TerrainData.h#L139) |  |
-| `TerrainDesc` | struct | GameModules | [Terrain.h:L67](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L67) | Terrain configuration |
 | `TerrainDetailMesh` | struct | SparkEditor | [TerrainData.h:L119](../../SparkEditor/Source/Terrain/TerrainData.h#L119) |  |
 | `TerrainEditor` | class | SparkEditor | [TerrainEditor.h:L18](../../SparkEditor/Source/Terrain/TerrainEditor.h#L18) | Professional terrain editing system with sculpting, painting, and generation tools. |
 | `TerrainGPUData` | struct | SparkEngine | [TerrainRenderer.h:L49](../../SparkEngine/Source/Graphics/TerrainRenderer.h#L49) | Per-terrain GPU resources for a single terrain entity. |
 | `TerrainHeightmap` | struct | SparkEditor | [TerrainData.h:L77](../../SparkEditor/Source/Terrain/TerrainData.h#L77) |  |
 | `TerrainMesh` | struct | Tests | [TestTerrainRenderer.cpp:L23](../../Tests/TestTerrainRenderer.cpp#L23) |  |
 | `TerrainOperation` | struct | SparkEditor | [TerrainData.h:L163](../../SparkEditor/Source/Terrain/TerrainData.h#L163) |  |
-| `TerrainQuadNode` | struct | GameModules | [Terrain.h:L53](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L53) | Quadtree node for LOD terrain rendering |
 | `TerrainRenderer` | class | SparkEngine | [TerrainRenderer.h:L85](../../SparkEngine/Source/Graphics/TerrainRenderer.h#L85) |  |
 | `TerrainRenderer` | struct | Tests | [TestTerrainRenderer.cpp:L30](../../Tests/TestTerrainRenderer.cpp#L30) |  |
 | `TerrainSceneData` | struct | SparkEditor | [SceneFileTypes.h:L310](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L310) | Terrain component scene data |
 | `TerrainSystem` | class | SparkEngine | [TerrainSystem.h:L26](../../SparkEngine/Source/Engine/ECS/Systems/TerrainSystem.h#L26) |  |
-| `TerrainTextureLayer` | struct | GameModules | [Terrain.h:L41](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L41) | Terrain texture layer for multi-texture splatting |
 | `TerrainTextureLayer` | struct | SparkEditor | [TerrainData.h:L96](../../SparkEditor/Source/Terrain/TerrainData.h#L96) |  |
-| `TerrainVertex` | struct | GameModules | [Terrain.h:L30](../../GameModules/SparkGameFPS/Source/Game/Terrain.h#L30) |  |
 | `TerrainVertex` | struct | SparkEngine | [TerrainRenderer.h:L66](../../SparkEngine/Source/Graphics/TerrainRenderer.h#L66) | Terrain vertex layout matching the engine's PBR vertex format. |
 | `TerrainVisualDef` | struct | GameModules | [TFDataTables.h:L160](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.h#L160) |  |
 | `TestAbort` | struct | Tests | [TestFramework.h:L85](../../Tests/TestFramework.h#L85) |  |
@@ -4621,7 +4575,6 @@
 | `TilemapRenderSystem` | class | SparkEngine | [Systems2D.h:L367](../../SparkEngine/Source/Engine/ECS/Systems/Systems2D.h#L367) | Submits tilemap tile draw commands to the SpriteBatch. |
 | `TilemapSnapshot` | struct | SparkEditor | [TilemapEditorPanel.h:L96](../../SparkEditor/Source/Panels/TilemapEditorPanel.h#L96) |  |
 | `TilesetInfo` | struct | SparkEngine | [Sprite2DComponents.h:L236](../../SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h#L236) |  |
-| `TimelineSelection` | struct | SparkEditor | [AnimationTimelineTypes.h:L233](../../SparkEditor/Source/Animation/AnimationTimelineTypes.h#L233) | Timeline selection |
 | `TimeOfDayChangedEvent` | struct | SparkEngine | [EventSystem.h:L105](../../SparkEngine/Source/Engine/Events/EventSystem.h#L105) | Fired when the time of day changes significantly (e.g. dawn, dusk). |
 | `TimeOfDayPanel` | class | SparkEditor | [TimeOfDayPanel.h:L19](../../SparkEditor/Source/Panels/TimeOfDayPanel.h#L19) | Panel for controlling the TimeOfDaySystem day/night cycle |
 | `TimeOfDaySettings` | struct | SparkEngine | [EngineSettings.h:L509](../../SparkEngine/Source/Core/EngineSettings.h#L509) |  |
@@ -4692,7 +4645,6 @@
 | `TransformComp` | struct | Tests | [TestRenderECSIntegration.cpp:L25](../../Tests/TestRenderECSIntegration.cpp#L25) |  |
 | `TransformComponent` | struct | Tests | [TestCrossSystemIntegration.cpp:L89](../../Tests/TestCrossSystemIntegration.cpp#L89) |  |
 | `TransformData` | struct | Tests | [TestSceneSerializer.cpp:L35](../../Tests/TestSceneSerializer.cpp#L35) |  |
-| `TransformSnapshot` | struct | SparkEditor | [GizmoSystem.h:L402](../../SparkEditor/Source/Gizmos/GizmoSystem.h#L402) |  |
 | `TransientAllocation` | struct | SparkEngine | [TransientBufferAllocator.h:L44](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L44) | Result of a transient buffer allocation. |
 | `TransientAllocation` | struct | Tests | [TestTransientBufferAllocator.cpp:L13](../../Tests/TestTransientBufferAllocator.cpp#L13) |  |
 | `TransientBufferAllocator` | class | SparkEngine | [TransientBufferAllocator.h:L60](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L60) | Per-frame linear allocator for transient vertex and index buffers. |

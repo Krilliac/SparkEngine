@@ -380,7 +380,8 @@
         "Packaged-server soak, load, shutdown, leak, crash, and operations evidence is not yet a blocking release lane",
         "Production server observability, load, backup, and incident drills are out of the stable-v1 profile and stay gated by OPS-110 with the service surfaces they serve",
         "NullRHI performs no rendering at all. Software rasterization through Mesa llvmpipe is the experimental OpenGL backend, not NullRHI, and is outside the stable-v1 profile.",
-        "NullRHI is in the stable-v1 profile only on Windows 11 x64; headless execution on any other host is uncertified."
+        "NullRHI is in the stable-v1 profile only on Windows 11 x64; headless execution on any other host is uncertified.",
+        "A windowed request no longer falls back to NullRHIDevice silently; headless mode requires a headless request or allowHeadlessFallback (2026-09 sweep)"
       ],
       "evidence": [
         {
@@ -429,7 +430,10 @@
       "release": "candidate",
       "summary": "D3D11 is the deepest and intended primary rendered path on Windows.",
       "limitations": [
-        "Same-commit packaged golden scenes, performance budgets, driver coverage, and release evidence remain open"
+        "Same-commit packaged golden scenes, performance budgets, driver coverage, and release evidence remain open",
+        "Shadow-caster depth rendering exists only on the Deferred and RenderGraph pipelines for ECS-submitted meshes; the default Forward pipeline has no shadow term and no PCF/VSM/PCSS filtering is implemented in the pixel shaders (2026-09 sweep)",
+        "Hybrid ray tracing is not reachable on the Windows D3D11 path (no RHI bridge); shader hot reload and the shader disk cache are not active in the shipped engine",
+        "RHIBridge::Initialize fails a windowed request whose GPU candidates all fail unless allowHeadlessFallback is passed; D3D11 requires feature level 11_0"
       ],
       "evidence": [
         {
@@ -900,8 +904,9 @@
       "release": "candidate",
       "summary": "SparkEditor contains a broad real tool surface, while command-backed editing, full gizmos, typed asset workflows, cooking, and packaged round trips need closure.",
       "limitations": [
-        "Some hierarchy/inspector changes bypass undo",
-        "Rotate/scale gizmo and real asset-thumbnail/drag paths are incomplete"
+        "World-document create/delete/duplicate/reparent/rename/transform and inspector edits are command-backed and all three transform gizmos ship (2026-09 sweep, Tests/TestEditorUndoHierarchyReal.cpp and Tests/TestEditorGizmoTransformReal.cpp); editor-wide certification is still open under EDT-210",
+        "Real asset-thumbnail/drag paths, the author-to-package round trip, and the crash-recovery pipeline (RecoveryCallback, RecordOperation callers, recovery dialog) remain incomplete or unwired",
+        "Debug Visualizer toggles, Object Placement brush/line/grid/scatter modes, and Dedicated Server discovery/RCON/kick-ban have no backend and render an explicit Preview - not connected state"
       ],
       "evidence": [
         {
@@ -1014,7 +1019,7 @@
         "Builds against SparkEngineLib with the engine source tree on its include path rather than the public SDK surface alone, so the public-API-only requirement is unmet",
         "Fake/in-memory multiplayer state",
         "No production two-client authoritative loop",
-        "Content and persistence gaps remain"
+        "Content gaps remain; quicksave/quickload now persist the declared local profile (slot fps_quicksave) through the engine context's SaveSystem, and the single-player death -> respawn -> score loop is complete (Tests/TestSparkGameFPSLoopReal.cpp), but there is no installed-package smoke and the module still initializes gameplay only (GPU work skipped) without a D3D11 device"
       ],
       "evidence": [
         {

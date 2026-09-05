@@ -78,17 +78,23 @@ which one you are in before running `cmake --build`:
 Gotchas (all verified):
 - `cmake --build build` after a **preset** configure fails or builds a stale tree — the
   preset tree is `build/<presetName>`. Use `cmake --build --preset <name>` with presets.
-- `build.ps1` defaults **`-DENABLE_EDITOR=OFF`**, `ENABLE_CONSOLE=OFF`,
-  `ENABLE_ANGELSCRIPT=OFF` unless you pass `-editor -console -angelscript`. A plain
-  `./build.ps1` build has no editor. `build.sh` is the opposite (all three default ON)
-  and defaults to the **Ninja** generator.
+- `build.ps1` switches are **additive only**: with no switches it no longer forces
+  `ENABLE_EDITOR=OFF` / `ENABLE_ANGELSCRIPT=OFF`, so a plain `./build.ps1` now matches the project
+  defaults (both ON) and is materially larger and slower than the old default build. `-editor` /
+  `-angelscript` force those ON explicitly. The `-console` / `-C` switches were **removed** — there
+  never was an `ENABLE_CONSOLE` option (only `ENABLE_CONSOLE_IN_SHIPPING`), so any script still
+  passing them now errors on the switch. `build.sh` defaults to the **Ninja** generator.
+- Visual Studio generator builds from `build.ps1` are MSBuild `/m:1` by design, so wall-clock
+  expectations from older docs no longer hold.
 - There is **no Ninja preset** in `CMakePresets.json` (verified: only VS, plain
   Makefile-style Linux/macOS, and MinGW presets). Ninja Multi-Config is supported by the
-  build logic (per-config archive dirs are written for it) but you must pass
-  `-G "Ninja Multi-Config"` manually.
-- Binaries land in `<builddir>/bin` (plus `bin/<Config>` under multi-config VS),
-  shared libs in `<builddir>/lib`, and **static archives in `<builddir>/lib/<Config>`**
-  (see "Windows Release archaeology" below for why).
+  build logic but you must pass `-G "Ninja Multi-Config"` manually.
+- **Output layout follows `GENERATOR_IS_MULTI_CONFIG`, not the generator's name.** Under any
+  multi-config generator — Visual Studio *and* Ninja Multi-Config — runtime output is
+  `<builddir>/bin/<Config>` and shared libs `<builddir>/lib/<Config>`; single-config Ninja/Make
+  keeps the flat `<builddir>/bin` and `<builddir>/lib`. Static archives are **always**
+  `<builddir>/lib/<Config>` (see "Windows Release archaeology" below for why). A Ninja
+  Multi-Config build that "produced no binary" is usually a `bin/` vs `bin/Release/` mistake.
 
 ### Canonical commands
 
@@ -130,7 +136,10 @@ vice versa.
 - Runtime library is pinned via CMP0091 to `MultiThreaded$<$<CONFIG:Debug>:Debug>DLL`
   (i.e. `/MD` / `/MDd`) for **all** targets including vendored deps.
 - Debug info format is pinned via CMP0141 to `Embedded` (`/Z7`) so object files are
-  cacheable by compiler caches while link-time `/DEBUG` still emits PDBs.
+  cacheable by compiler caches while link-time `/DEBUG` still emits PDBs. **It is set before
+  `project()` deliberately**: the compiler-identification try-compiles run inside `project()`, and
+  with `CMAKE_CXX_COMPILER_LAUNCHER=sccache` the default `/Zi` makes them fail — i.e. a *fresh*
+  configure under sccache breaks if this moves below `project()`. Non-MSVC toolchains ignore it.
 
 ## Compile/link flag policy (top-level `CMakeLists.txt`, section 6/6.5)
 
@@ -320,6 +329,32 @@ Advisory (job-level `continue-on-error: true`; never block merges):
 advisory, but configure/compile failures block). Canonical required-vs-advisory
 fine print: `sparkengine-validation-and-qa` §10.
 
+**Shipping symbols:** `windows-shipping` (MinSizeRel) links **without** `/DEBUG`, so it emits no PDB
+and no PDB path, and `linux-shipping` links with `-s`. Runtime `SymFromAddr` symbolication and
+post-mortem minidump analysis of a shipping build change accordingly, and `SparkCrashReporter`
+output for a shipping build is address-only. The `SPARK_STRIP_DEBUG_SYMBOLS` compile definition was
+removed (zero remaining source references) — external tooling keying on it must stop.
+
+**Windows installers are opt-in:** `SPARK_REQUIRE_WINDOWS_INSTALLERS` (set ON by `release.yml`)
+makes the NSIS/WiX generators mandatory. Without it a developer `cpack` on Windows produces a ZIP
+only plus a STATUS line, where it previously failed loudly when `makensis`/WiX were missing.
+Anything scripting against the presence of the NSIS/WiX artifacts needs the new option.
+
+**Package layout changed twice:** prebuilt `bin/Shaders/*.cso` are no longer installed, and the
+engine HLSL tree keeps its subdirectories — packaged Forward+ shaders are now at
+`bin/Shaders/ForwardPlus/*.hlsl`, not the old flattened `bin/Shaders/*.hlsl`.
+
+**`ENABLE_EDITOR` is not a compile definition** (known gap, deliberately open): it is a CMake option
+used only to guard an `add_subdirectory` and a status message, so the `#ifdef ENABLE_EDITOR` blocks
+inside `GameModules/` are dead in **every** configuration, editor build included. Do not document
+the option as gating game-module editor code until it is either defined for those targets or the
+blocks are deleted.
+
+**Site-data commands must spell the directory lowercase** (`python3 tools/site-data/validate.py …`).
+The repo tracks both `Tools/` and `tools/` as distinct index paths; on Linux CI an uppercase spelling
+resolves elsewhere and the bare sibling imports in `validate.py` fail. `site-data.yml` enforces this
+with an explicit "Assert site-data modules are tracked at the lowercase path" step.
+
 **Cache contract:** every build job restores `~/.ccache` (or sccache on Windows) *and*
 the `build/` directory keyed on `hashFiles('**/CMakeLists.txt', '**/*.cmake')` + SHA.
 The defenses against stale caches are: `cmake --fresh` (Windows), `*.pch` deletion
@@ -360,9 +395,26 @@ build/CI run at this exact tree. SDL2 export repair landed in `34ee7ab7`
 ("fix(ci): export SDL2 and format hardened sources"). Facts most likely to
 drift: preset list, CI job set/gating, dependency pins, the sccache-launcher open item.
 
+**Updated 2026-09-05** against the uncommitted working tree of branch
+`claude/release-readiness-sweep-20260904`: `build.ps1` switch semantics (`-console` removed,
+defaults no longer forced OFF, VS generator `/m:1`), the multi-config output-directory rule that
+covers Ninja Multi-Config as well as Visual Studio, the pre-`project()` `Embedded` debug-format
+requirement for a fresh sccache configure, shipping-build symbol stripping and the removed
+`SPARK_STRIP_DEBUG_SYMBOLS` define, `SPARK_REQUIRE_WINDOWS_INSTALLERS`, the two package-layout
+changes, the dead `ENABLE_EDITOR` guards, and the lowercase `tools/site-data` requirement. Read
+from source and workflow files; no build or CI run at this tree.
+
 Re-verify with:
 
 ```bash
+# Multi-config output layout (bin/<Config> under VS and Ninja Multi-Config)
+grep -n 'GENERATOR_IS_MULTI_CONFIG' CMakeLists.txt
+# Debug-format pin must stay ABOVE project() for a fresh sccache configure
+grep -n 'CMAKE_MSVC_DEBUG_INFORMATION_FORMAT' CMakeLists.txt
+# Shipping symbol policy and installer gate
+grep -n 'SPARK_REQUIRE_WINDOWS_INSTALLERS\|STRIP_DEBUG_SYMBOLS' CMakeLists.txt
+# build.ps1 switch surface (expect: no -console)
+grep -n 'param(\|ENABLE_' build.ps1 | head -20
 # Presets and binaryDir convention
 grep -n 'binaryDir\|"name"' CMakePresets.json | head -30
 # MSVC gate, toolset hint, runtime/debug-format pinning

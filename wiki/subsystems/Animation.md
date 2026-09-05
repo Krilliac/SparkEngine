@@ -178,8 +178,15 @@ The `AnimationManager` ensures each unique asset is loaded once. All runtime ins
 | Method | Description |
 |--------|-------------|
 | `GetInstance()` | Access the global singleton |
-| `LoadSkeleton(filepath)` | Load/cache a Spark `SKEL`/`.skel` skeleton binary |
-| `LoadAnimations(filepath)` | Load clips from a Spark `ANIM`/`.sanim` binary (does NOT auto-register) |
+| `LoadSkeleton(filepath)` | Load/cache a Spark `SKEL`/`.skel` skeleton binary; rejects a name-length prefix outside `[0, 256)`, a non-finite matrix, or a `parentIndex` that does not refer to an already-read bone |
+| `LoadAnimations(filepath)` | Load clips from a Spark `ANIM`/`.sanim` binary (does NOT auto-register); a name-length prefix outside `[0, 256)` aborts the load (previously the loader skipped the name without consuming its bytes, desynced, and still reported success) |
+
+**There is no partial parse.** Any corruption — a rejected length prefix, an out-of-range count, a
+non-finite matrix, an invalid parent index, or truncation anywhere inside a channel's keyframes —
+aborts the whole file: `LoadAnimations` returns zero clips and `LoadSkeleton` returns an empty
+skeleton, both logging at ERROR with explicit failure wording and no `Loaded N ...` success line. A
+failed skeleton load is **not cached**, so a repaired asset can be reloaded in the same process.
+Callers must not treat a non-null `shared_ptr` as proof of a successful load — check the contents.
 | `RegisterClip(name, clip)` | Register a clip by name for lookup |
 | `GetClip(name)` | Retrieve a cached clip (nullptr if not found) |
 | `GetSkeleton(name)` | Retrieve a cached skeleton |

@@ -350,19 +350,27 @@ Holes are stored as a bitfield per chunk (1 bit per quad) and are serialized alo
 
 ## Terrain Serialization Format
 
-The `.sparkterrain` native format stores all terrain data in a single binary archive:
+The `.sparkterrain` native format is **version 2** (`Spark::Graphics::SparkTerrain::kVersion`, magic
+`'SPKT'`). The canonical layout is the code in `namespace Spark::Graphics::SparkTerrain` in
+`SparkEngine/Source/Graphics/TerrainRenderer.h`; this table summarizes it:
 
 | Section | Content |
 |---------|---------|
-| Header (64 bytes) | Magic number, version, dimensions, chunk size, height range, layer count |
-| Heightmap | 32-bit float per vertex, row-major, chunk-major ordering |
-| Splatmaps | RGBA8 per texel, one block per splatmap |
-| Hole Mask | 1 bit per quad, packed into uint32 blocks |
-| Layer Table | Array of layer descriptors (diffuse, normal, roughness texture paths, UV scale) |
-| Object Scatter Data | Per-layer scatter configuration and instance transforms |
-| Metadata | JSON blob with editor annotations, biome assignments, author info |
+| Header | Magic `'SPKT'`, an explicit version word (`2`), heightmap dimensions/scale, `uint8 generateCollider` |
+| Heightmap | 32-bit float per vertex, bounded by `kMinHeightmapResolution`..`kMaxHeightmapResolution` (2..8193) |
+| Splatmaps | Bounded by `kMaxSplatmapResolution` (8192) |
+| Texture layers | Up to `kMaxTextureLayers` (64): diffuse/normal/mask paths plus tiling, offset, opacity, metallic, roughness |
+| Detail meshes | Up to `kMaxDetailMeshes` (256) with their instances (`kMaxDetailInstancesPerMesh` = 4,000,000) |
 
-The format uses LZ4 block compression on heightmap and splatmap sections for fast streaming. A checksum (CRC-32) per section allows incremental validation.
+Both readers (engine and editor) reject version 1 files. Every read goes through a bounds-checked
+`Reader` cursor: a truncated or hostile header can never size an allocation, strings are capped at
+`kMaxStringLength` (4096), and a failed read leaves the reader permanently failed. There is no
+per-section compression or checksum in the shipped format.
+
+In SparkEditor, **Terrain Save** writes to an editable, project-relative path defaulting to
+`Assets/Terrains/<name>.sparkterrain` (with an overwrite confirmation) and creates the directory; it
+no longer writes a bare `terrain.sparkterrain` into the working directory. Texture layers expose
+Diffuse/Normal texture fields and detail meshes expose a Mesh Path field.
 
 ## Biome System Integration
 
