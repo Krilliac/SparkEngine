@@ -1,40 +1,77 @@
 {
   "schemaVersion": 1,
+  "baseline": {
+    "commit": "4fec0297f8dc27ddf2b4cf8f0235f908c160820a",
+    "buildRunId": 33854547067,
+    "measured": {
+      "linux": {
+        "recorded": 6917,
+        "executed": 6914,
+        "skipped": 3
+      },
+      "windows-vs2022-release": {
+        "recorded": 6819,
+        "executed": 6818,
+        "skipped": 1
+      }
+    },
+    "note": "Floors are the measured counts minus a documented slack. Re-measure from the Build run that moved the count instead of lowering a floor. maximumFlaky bounds waived (executed and failed) tests; maximumEmpty bounds tests that ran zero assertions; minimumProductionSourceTests is enforced by Tools/test_source_census.py --minimum-production-tests in the Build workflow.",
+    "productionSourceTests": {
+      "measured": 4964,
+      "tool": "Tools/test_source_census.py --json",
+      "note": "Tests that include at least one production header. The remaining registered tests assert about test-local reimplementations, so the headline total is not a measure of shipped-code coverage."
+    }
+  },
   "lanes": {
     "linux-asan": {
-      "minimumRecorded": 6600,
-      "minimumExecuted": 6600,
-      "maximumSkipped": 25
+      "minimumRecorded": 6900,
+      "minimumExecuted": 6890,
+      "maximumSkipped": 25,
+      "maximumFlaky": 10,
+      "maximumEmpty": 25
     },
     "linux-clang-Debug": {
-      "minimumRecorded": 6600,
-      "minimumExecuted": 6600,
-      "maximumSkipped": 25
+      "minimumRecorded": 6900,
+      "minimumExecuted": 6890,
+      "maximumSkipped": 25,
+      "maximumFlaky": 10,
+      "maximumEmpty": 25
     },
     "linux-clang-Release": {
-      "minimumRecorded": 6600,
-      "minimumExecuted": 6600,
-      "maximumSkipped": 25
+      "minimumRecorded": 6900,
+      "minimumExecuted": 6890,
+      "maximumSkipped": 25,
+      "maximumFlaky": 10,
+      "maximumEmpty": 25
     },
     "linux-gcc-Debug": {
-      "minimumRecorded": 6600,
-      "minimumExecuted": 6600,
-      "maximumSkipped": 25
+      "minimumRecorded": 6900,
+      "minimumExecuted": 6890,
+      "maximumSkipped": 25,
+      "maximumFlaky": 10,
+      "maximumEmpty": 25
     },
     "linux-gcc-Release": {
-      "minimumRecorded": 6600,
-      "minimumExecuted": 6600,
-      "maximumSkipped": 25
+      "minimumRecorded": 6900,
+      "minimumExecuted": 6890,
+      "maximumSkipped": 25,
+      "maximumFlaky": 10,
+      "maximumEmpty": 25
     },
     "linux-tsan": {
-      "minimumRecorded": 6600,
-      "minimumExecuted": 6600,
-      "maximumSkipped": 25
+      "minimumRecorded": 6900,
+      "minimumExecuted": 6890,
+      "maximumSkipped": 25,
+      "maximumFlaky": 10,
+      "maximumEmpty": 25
     },
     "windows-vs2022-release": {
-      "minimumRecorded": 6600,
-      "minimumExecuted": 6600,
-      "maximumSkipped": 25
+      "minimumRecorded": 6800,
+      "minimumExecuted": 6790,
+      "maximumSkipped": 25,
+      "maximumFlaky": 10,
+      "maximumEmpty": 25
     }
-  }
+  },
+  "minimumProductionSourceTests": 4900
 }

@@ -288,6 +288,44 @@ set -e
 process_status="${pipeline_status[0]}"
 capture_status="${pipeline_status[1]}"
 
+# log_path keeps the sanitizer stream out of the console/JUnit evidence being
+# verified, which also kept every finding out of the job log: the report only
+# existed inside a multi-GB artifact.  Echo a bounded excerpt for a non-clean
+# classification.  The runtime report is untrusted text, so workflow commands
+# are stopped around it instead of mangling the "::" in demangled C++ frames.
+RUNTIME_EXCERPT_LINES=200
+RUNTIME_EXCERPT_BYTES=65536
+
+emit_runtime_excerpt() {
+    local runtime_file
+    local token
+    local excerpt_files=()
+    for runtime_file in "$runtime_dir"/sanitizer.*; do
+        [[ -f "$runtime_file" && ! -L "$runtime_file" ]] && excerpt_files+=("$runtime_file")
+    done
+    if (( ${#excerpt_files[@]} == 0 )); then
+        echo "Sanitizer runtime reports: none were written to the private runtime directory."
+        return 0
+    fi
+    token="$("$PYTHON_BIN" -c 'import secrets; print(secrets.token_hex(16))' 2>/dev/null)"
+    echo "::group::Sanitizer runtime findings ($sanitizer, first $RUNTIME_EXCERPT_LINES lines per report)"
+    if [[ -n "$token" ]]; then
+        echo "::stop-commands::$token"
+    fi
+    {
+        for runtime_file in "${excerpt_files[@]}"; do
+            printf -- '--- %s ---\n' "${runtime_file##*/}"
+            head -n "$RUNTIME_EXCERPT_LINES" -- "$runtime_file"
+        done
+    } 2>/dev/null | head -c "$RUNTIME_EXCERPT_BYTES"
+    printf '\n'
+    if [[ -n "$token" ]]; then
+        echo "::$token::"
+    fi
+    echo "::endgroup::"
+    echo "Full sanitizer reports remain in the sanitizer-report-$sanitizer artifact."
+}
+
 scan() {
     local pattern="$1"
     local include_runtime="${2:-0}"
@@ -357,6 +395,7 @@ set -e
 }
 
 if [[ "$classification" != "clean" ]]; then
+    emit_runtime_excerpt
     echo "::error::Sanitizer evidence classification: $classification"
 fi
 if [[ "$process_status" -ne 0 ]]; then

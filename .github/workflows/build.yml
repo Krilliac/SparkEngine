@@ -16,6 +16,18 @@ concurrency:
 permissions:
   contents: read
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SparkTests minimum-count floors (--minimum-tests / --min-tests below)
+# Measured at 4fec0297f8dc27ddf2b4cf8f0235f908c160820a, Build run 33854547067:
+#   Linux gcc/clang/asan/tsan lanes: 6917 recorded, 6914 executed, 3 skipped
+#   windows-vs2022-release:          6819 recorded, 6818 executed, 1 skipped
+# Floors are that measurement minus a documented slack (17 / 19), so a lane
+# that silently drops a whole test file is caught: the previous 6600 floor sat
+# 317 tests below reality and would not have noticed.  The per-lane ratchet in
+# .github/test-count-ratchet.json carries the same baseline and is the stricter
+# gate; raise both together, and re-measure from the run that moved the count.
+# The macOS advisory lane keeps its own floor because its suite is unmeasured.
+# ─────────────────────────────────────────────────────────────────────────────
 env:
   ARTIFACT_RETENTION_DAYS: 14
   ERROR_RETENTION_DAYS: 1
@@ -44,6 +56,14 @@ jobs:
 
     - name: Test aggregate test evidence
       run: python3 .github/scripts/test-aggregate-test-stats.py
+
+    # The sanitizer lanes treat an unparseable JUnit report as a
+    # verification-failure and exit 70, so a runner-side report-shape change
+    # that this parser rejects takes both required sanitizer lanes down. Pin
+    # the shape here, where it fails in seconds instead of after a sanitizer
+    # build.
+    - name: Test sanitizer JUnit evidence parser
+      run: python3 .github/scripts/test-verify-sanitizer-evidence.py
 
     - name: Test required-job gate
       run: python3 .github/scripts/test-verify-required-jobs.py
@@ -394,7 +414,7 @@ jobs:
           --run-attempt "${{ github.run_attempt }}" \
           --job "${{ github.job }}" \
           --expected-selector all \
-          --minimum-tests 6600 \
+          --minimum-tests 6900 \
           --timeout-seconds 900 \
           --runtime-env ASAN_OPTIONS \
           -- build/bin/SparkTests --warn-is-error --shuffle 123
@@ -403,7 +423,7 @@ jobs:
       run: |
         python3 .github/scripts/summarize-test-results.py \
           "$SANITIZER_EVIDENCE_DIR/junit.xml" \
-          --min-tests 6600 \
+          --min-tests 6900 \
           --title "SparkTests — Linux ASan/UBSan/LSan" \
           --json "$SANITIZER_EVIDENCE_DIR/test-stats-linux-asan.json"
 
@@ -418,7 +438,7 @@ jobs:
           --run-id "${{ github.run_id }}" \
           --run-attempt "${{ github.run_attempt }}" \
           --job build-linux-asan \
-          --minimum-tests 6600 \
+          --minimum-tests 6900 \
           --timeout-seconds 900
 
     - name: Extract error summary
@@ -533,7 +553,7 @@ jobs:
           --run-attempt "${{ github.run_attempt }}" \
           --job "${{ github.job }}" \
           --expected-selector all \
-          --minimum-tests 6600 \
+          --minimum-tests 6900 \
           --timeout-seconds 900 \
           --runtime-env TSAN_OPTIONS \
           -- build/bin/SparkTests --warn-is-error --shuffle 123
@@ -542,7 +562,7 @@ jobs:
       run: |
         python3 .github/scripts/summarize-test-results.py \
           "$SANITIZER_EVIDENCE_DIR/junit.xml" \
-          --min-tests 6600 \
+          --min-tests 6900 \
           --title "SparkTests — Linux TSan" \
           --json "$SANITIZER_EVIDENCE_DIR/test-stats-linux-tsan.json"
 
@@ -557,7 +577,7 @@ jobs:
           --run-id "${{ github.run_id }}" \
           --run-attempt "${{ github.run_attempt }}" \
           --job build-linux-tsan \
-          --minimum-tests 6600 \
+          --minimum-tests 6900 \
           --timeout-seconds 900
 
     - name: Extract error summary
@@ -652,9 +672,22 @@ jobs:
   # MSan requires ALL code (including stdlib) to be MSan-instrumented. The
   # system libc++ on ubuntu-24.04 is NOT instrumented, which causes false
   # positives in basic string/IO operations. A fully clean MSan build would
-  # require building libc++ from source with -fsanitize=memory. This job is
-  # marked continue-on-error because of these inherent false positives, but
-  # the report artifact is still uploaded for manual review of real findings.
+  # require building libc++ from source with -fsanitize=memory, so this job
+  # stays continue-on-error; Tests/msan_ignorelist.txt suppresses the frames
+  # that have actually been confirmed.
+  #
+  # Standing-advisory review mechanism (CI-110) — "manual review" had no owner
+  # and no record, and the evidence needed to do it was unreadable:
+  #   * run-sanitizer-tests.sh now echoes a bounded excerpt of the runtime
+  #     report into this job's log for any non-clean classification, so a
+  #     finding can be read without downloading the multi-GB bundle;
+  #   * verify-sanitizer-evidence.py reports 'incomplete-run' (naming the last
+  #     started test) when the suite died before writing JUnit, so an aborted
+  #     run is no longer indistinguishable from a completed one with a finding.
+  # Last observed failure, 2026-09-04 (run 33854547067, commit 4fec0297): the
+  # suite aborted during RegionMapDataSource_RejectsUnsafeRegistryEntry with no
+  # JUnit written — an incomplete run, NOT a libc++ false positive. Promote
+  # this lane into EXPECTED_REQUIRED_JOBS_JSON once a run classifies clean.
   # ===========================================================================
   build-linux-msan:
     runs-on: ubuntu-24.04
@@ -730,7 +763,7 @@ jobs:
           --run-attempt "${{ github.run_attempt }}" \
           --job "${{ github.job }}" \
           --expected-selector all \
-          --minimum-tests 6600 \
+          --minimum-tests 6900 \
           --timeout-seconds 900 \
           --runtime-env MSAN_OPTIONS \
           -- build/bin/SparkTests --warn-is-error --shuffle 123
@@ -803,6 +836,9 @@ jobs:
           build/SparkTests-junit.xml \
           build/SparkTests.log \
           build/SparkTests-output.log \
+          build/SparkTests-load-junit.xml \
+          build/SparkTests-load.log \
+          build/SparkTests-load-output.log \
           build/ctest-junit.xml \
           build/*-process-smoke.log \
           build/*-process-smoke.json \
@@ -827,6 +863,14 @@ jobs:
       if: always()
       run: sccache --show-stats
 
+    # Debug is built but not tested here: the Debug SparkTests run exceeds the
+    # single ctest timeout this lane inherits, so no green lane in the
+    # repository currently executes SparkTests in a Debug MSVC configuration
+    # (iterator debug level, enabled assertions, SPARK_BUILD_DEBUG paths).
+    # To close that gap, land the per-config SparkTests timeout first, then
+    # drop this guard and add a windows-vs2022-debug entry to BOTH
+    # .github/test-count-ratchet.json and the --expected-lane list of
+    # "Require and aggregate primary-lane evidence" (they are asserted equal).
     - name: Run Tests
       if: matrix.config == 'Release'
       shell: bash
@@ -845,11 +889,48 @@ jobs:
         test -s build/SparkTests.log
         test -s build/SparkTests-output.log
         test -s build/ctest-junit.xml
+        test -s build/test-registration-count.json
+        # Both ctest lanes are summarized: SparkEngineTests excludes the
+        # load/stress family and SparkEngineLoadTests runs it, so summarizing
+        # only the first would shrink the population the floors measure without
+        # lowering the floors. --registration-count compares the executed total
+        # against the TEST macros this build actually compiled, which is the one
+        # comparison a hand-written --min-tests literal cannot make.
+        test -s build/SparkTests-load-junit.xml
         python .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
-          --min-tests 5000 \
+          build/SparkTests-load-junit.xml \
+          --min-tests 6800 \
+          --registration-count build/test-registration-count.json \
           --title "SparkTests — Windows VS2022 Release" \
           --json test-stats-windows-vs2022-release.json
+
+    - name: Census of production-source vs mirror tests
+      if: always() && matrix.config == 'Release'
+      shell: bash
+      # The pass headline counts every registered TEST equally, but a test that
+      # includes no production header can never detect a regression in shipped
+      # code. Exit 1 means a new mirror file appeared, or a *_Skipped test
+      # fabricated a pass instead of calling SKIP_TEST.
+      run: |
+        set -euo pipefail
+        MIN_PRODUCTION_TESTS="$(python -c "import json;print(json.load(open('.github/test-count-ratchet.json'))['minimumProductionSourceTests'])")"
+        python Tools/test_source_census.py --check \
+          --json test-source-census.json \
+          --minimum-production-tests "$MIN_PRODUCTION_TESTS"
+
+    # Named for the exact commit so a consumer (the site-data publish job) can ask
+    # for the CTest report of this SHA and nothing else. generate.py publishes
+    # tests.executed/failed/skipped only from a report it was handed for the
+    # commit it is publishing.
+    - name: Upload exact-commit CTest report
+      if: always() && matrix.config == 'Release'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ctest-junit-${{ github.sha }}
+        path: build/ctest-junit.xml
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
 
     - name: Upload machine-readable test results
       if: always() && matrix.config == 'Release'
@@ -860,11 +941,16 @@ jobs:
           build/SparkTests-junit.xml
           build/SparkTests.log
           build/SparkTests-output.log
+          build/SparkTests-load-junit.xml
+          build/SparkTests-load.log
+          build/SparkTests-load-output.log
           build/ctest-junit.xml
+          build/test-registration-count.json
           build/*-process-smoke.log
           build/*-process-smoke.json
           build/*-process-smoke.xml
           test-stats-windows-vs2022-release.json
+          test-source-census.json
           test-results.log
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
         if-no-files-found: error
@@ -934,7 +1020,9 @@ jobs:
       run: |
         set -euo pipefail
         cmake --preset windows-shipping 2>&1 | tee build-matrix-windows-shipping-configure.log
-        cmake --build --preset windows-shipping --config MinSizeRel --parallel 2>&1 | tee build-matrix-windows-shipping-build.log
+        # --parallel 1: MSBuild /m x cl /MP is an N^2 process explosion on a
+        # 2-core runner. /MP stays; the project-level parallelism is capped.
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee build-matrix-windows-shipping-build.log
 
     - name: Capture Windows Shipping provenance
       shell: bash
@@ -958,7 +1046,8 @@ jobs:
       run: |
         set -euo pipefail
         cmake --preset windows-release 2>&1 | tee build-matrix-windows-validation-configure.log
-        cmake --build --preset windows-release --config Release --parallel 2>&1 | tee build-matrix-windows-validation-build.log
+        # --parallel 1 for the same MSBuild /m x cl /MP reason as above.
+        cmake --build --preset windows-release --config Release --parallel 1 2>&1 | tee build-matrix-windows-validation-build.log
 
     - name: Capture Windows validation provenance
       shell: bash
@@ -973,10 +1062,15 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
+        # The expected version is read from the configured engine cache instead of
+        # being written down here: a literal made this gate pass against a package
+        # built from a different tag, which is the one thing it exists to catch.
+        SPARK_EXPECTED_VERSION="$(cmake -L -N build/windows-shipping | sed -n 's/^SPARK_ENGINE_VERSION:STRING=//p')"
+        test -n "$SPARK_EXPECTED_VERSION"
         cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer \
           -G "Visual Studio 17 2022" -A x64 -T v143 \
           -DSparkEngine_DIR="${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine" \
-          -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee build-matrix-installed-sdk-consumer-configure.log
+          -DSPARK_EXPECTED_ENGINE_VERSION="$SPARK_EXPECTED_VERSION" 2>&1 | tee build-matrix-installed-sdk-consumer-configure.log
         cmake --build build/installed-sdk-consumer \
           --config Release --parallel 2>&1 | tee build-matrix-installed-sdk-consumer-build.log
         ctest --test-dir build/installed-sdk-consumer -C Release \
@@ -1108,6 +1202,9 @@ jobs:
           build/SparkTests-junit.xml \
           build/SparkTests.log \
           build/SparkTests-output.log \
+          build/SparkTests-load-junit.xml \
+          build/SparkTests-load.log \
+          build/SparkTests-load-output.log \
           build/ctest-junit.xml \
           build/*-process-smoke.log \
           build/*-process-smoke.json \
@@ -1147,9 +1244,13 @@ jobs:
         test -s build/SparkTests.log
         test -s build/SparkTests-output.log
         test -s build/ctest-junit.xml
+        test -s build/SparkTests-load-junit.xml
+        test -s build/test-registration-count.json
         python .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
-          --min-tests 5000 \
+          build/SparkTests-load-junit.xml \
+          --min-tests 6800 \
+          --registration-count build/test-registration-count.json \
           --title "SparkTests — Windows VS2026 Release" \
           --json test-stats-windows-vs2026-release.json
 
@@ -1162,6 +1263,9 @@ jobs:
           build/SparkTests-junit.xml
           build/SparkTests.log
           build/SparkTests-output.log
+          build/SparkTests-load-junit.xml
+          build/SparkTests-load.log
+          build/SparkTests-load-output.log
           build/ctest-junit.xml
           build/*-process-smoke.log
           build/*-process-smoke.json
@@ -1225,6 +1329,9 @@ jobs:
           build/SparkTests-junit.xml \
           build/SparkTests.log \
           build/SparkTests-output.log \
+          build/SparkTests-load-junit.xml \
+          build/SparkTests-load.log \
+          build/SparkTests-load-output.log \
           build/ctest-junit.xml \
           build/*-process-smoke.log \
           build/*-process-smoke.json \
@@ -1266,9 +1373,13 @@ jobs:
         test -s build/SparkTests.log
         test -s build/SparkTests-output.log
         test -s build/ctest-junit.xml
+        test -s build/SparkTests-load-junit.xml
+        test -s build/test-registration-count.json
         python3 .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
-          --min-tests 5000 \
+          build/SparkTests-load-junit.xml \
+          --min-tests 6900 \
+          --registration-count build/test-registration-count.json \
           --title "SparkTests — Linux GCC ${{ matrix.config }}" \
           --json test-stats-linux-gcc-${{ matrix.config }}.json
 
@@ -1281,6 +1392,9 @@ jobs:
           build/SparkTests-junit.xml
           build/SparkTests.log
           build/SparkTests-output.log
+          build/SparkTests-load-junit.xml
+          build/SparkTests-load.log
+          build/SparkTests-load-output.log
           build/ctest-junit.xml
           build/*-process-smoke.log
           build/*-process-smoke.json
@@ -1380,6 +1494,9 @@ jobs:
           build/SparkTests-junit.xml \
           build/SparkTests.log \
           build/SparkTests-output.log \
+          build/SparkTests-load-junit.xml \
+          build/SparkTests-load.log \
+          build/SparkTests-load-output.log \
           build/ctest-junit.xml \
           build/*-process-smoke.log \
           build/*-process-smoke.json \
@@ -1435,9 +1552,13 @@ jobs:
         test -s build/SparkTests.log
         test -s build/SparkTests-output.log
         test -s build/ctest-junit.xml
+        test -s build/SparkTests-load-junit.xml
+        test -s build/test-registration-count.json
         python3 .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
-          --min-tests 5000 \
+          build/SparkTests-load-junit.xml \
+          --min-tests 6900 \
+          --registration-count build/test-registration-count.json \
           --title "SparkTests — Linux Clang ${{ matrix.config }}" \
           --json test-stats-linux-clang-${{ matrix.config }}.json
 
@@ -1450,6 +1571,9 @@ jobs:
           build/SparkTests-junit.xml
           build/SparkTests.log
           build/SparkTests-output.log
+          build/SparkTests-load-junit.xml
+          build/SparkTests-load.log
+          build/SparkTests-load-output.log
           build/ctest-junit.xml
           build/*-process-smoke.log
           build/*-process-smoke.json
@@ -1660,6 +1784,9 @@ jobs:
           build/SparkTests-junit.xml \
           build/SparkTests.log \
           build/SparkTests-output.log \
+          build/SparkTests-load-junit.xml \
+          build/SparkTests-load.log \
+          build/SparkTests-load-output.log \
           build/ctest-junit.xml \
           build/*-process-smoke.log \
           build/*-process-smoke.json \
@@ -1715,9 +1842,16 @@ jobs:
         test -s build/SparkTests.log
         test -s build/SparkTests-output.log
         test -s build/ctest-junit.xml
+        # SparkEngineTests excludes the load/stress family and SparkEngineLoadTests
+        # runs it. Summarizing only the first shrinks the population --min-tests
+        # measures without lowering the literal, so both ctest lanes are handed in.
+        test -s build/SparkTests-load-junit.xml
+        test -s build/test-registration-count.json
         python3 .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
+          build/SparkTests-load-junit.xml \
           --min-tests 5000 \
+          --registration-count build/test-registration-count.json \
           --title "SparkTests — macOS ${{ matrix.backend }} Release" \
           --json test-stats-macos-${{ matrix.backend }}-release.json
 
@@ -1730,6 +1864,9 @@ jobs:
           build/SparkTests-junit.xml
           build/SparkTests.log
           build/SparkTests-output.log
+          build/SparkTests-load-junit.xml
+          build/SparkTests-load.log
+          build/SparkTests-load-output.log
           build/ctest-junit.xml
           build/*-process-smoke.log
           build/*-process-smoke.json
@@ -2278,7 +2415,7 @@ jobs:
             --run-attempt "${{ github.run_attempt }}" \
             --allow-prior-attempt \
             --job build-linux-asan \
-            --minimum-tests 6600 \
+            --minimum-tests 6900 \
             --timeout-seconds 900
 
       - name: Verify downloaded TSan evidence identity
@@ -2293,7 +2430,7 @@ jobs:
             --run-attempt "${{ github.run_attempt }}" \
             --allow-prior-attempt \
             --job build-linux-tsan \
-            --minimum-tests 6600 \
+            --minimum-tests 6900 \
             --timeout-seconds 900
 
       - name: Collect deterministic repository metrics
@@ -2305,7 +2442,7 @@ jobs:
             --input-root ci-test-results \
             --repository-metrics repository-metrics.json \
             --ratchet .github/test-count-ratchet.json \
-            --minimum-tests 5000 \
+            --minimum-tests 6800 \
             --commit "${{ github.sha }}" \
             --expected-lane linux-asan \
             --expected-lane linux-tsan \

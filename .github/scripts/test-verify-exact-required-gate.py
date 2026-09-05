@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import re
 import sys
 import unittest
+from base64 import b64encode
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -45,8 +47,77 @@ BUILD_MATRIX_STATUS_AT = "2026-08-30T04:58:30Z"
 CODEQL_STATUS_AT = "2026-08-30T05:03:30Z"
 
 
+BUILD_WORKFLOW_YAML = """name: Build SparkEngine
+
+on:
+  push:
+    branches: [Working]
+
+jobs:
+  build-windows-shipping:
+    name: "Windows Shipping build matrix"
+    runs-on: windows-2022
+    steps:
+    - name: Checkout repository
+      run: |
+        echo "  not-a-job:"
+        echo "    continue-on-error: true"
+
+  ordinary-required:
+    name: "ordinary required job"
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Run
+      run: echo ordinary
+
+  build-linux-msan:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+    - name: Run
+      run: echo msan
+
+  build-macos:
+    runs-on: macos-15
+    continue-on-error: true
+    strategy:
+      matrix:
+        config: [Debug, Release]
+    steps:
+    - name: Run
+      run: echo macos
+
+  required-ci-gate:
+    name: "Required CI Gate"
+    if: always()
+    needs:
+      - build-windows-shipping
+      - ordinary-required
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Verify every required job succeeded
+      env:
+        EXPECTED_REQUIRED_JOBS_JSON: '["build-windows-shipping","ordinary-required"]'
+      run: python3 .github/scripts/verify-required-jobs.py
+"""
+
+
 def repository():
     return {"id": REPOSITORY_ID, "full_name": REPOSITORY, "default_branch": "Working"}
+
+
+def build_workflow_contents(text=BUILD_WORKFLOW_YAML, **overrides):
+    encoded = text.encode("utf-8")
+    value = {
+        "path": ".github/workflows/build.yml",
+        "type": "file",
+        "encoding": "base64",
+        "size": len(encoded),
+        "sha": "9" * 40,
+        "content": b64encode(encoded).decode("ascii"),
+    }
+    value.update(overrides)
+    return value
 
 
 def source_run(run_id=SOURCE_RUN_ID, **overrides):
@@ -493,6 +564,9 @@ class FakeApi:
         self.commit = {"sha": SHA}
         self.default_sha = SHA
         self.runs_responses = [[source_run()]]
+        self.build_workflow = BUILD_WORKFLOW_YAML
+        self.build_workflow_payload = None
+        self.build_workflow_calls = 0
         self.source_live = source_run()
         self.source_jobs = [source_job(), required_gate(), ordinary_job()]
         self.source_job_responses = None
@@ -574,6 +648,14 @@ class FakeApi:
             if start + len(page_runs) >= len(result):
                 self.codeql_run_calls += 1
             return {"total_count": len(result), "workflow_runs": page_runs}
+        if path.startswith(f"/repos/{REPOSITORY}/contents/.github/workflows/build.yml?ref="):
+            ref = path.split("ref=", 1)[1]
+            if not re.fullmatch(r"[0-9a-f]{40}", ref):
+                raise AssertionError(f"unexpected Build workflow reference: {path}")
+            self.build_workflow_calls += 1
+            if self.build_workflow_payload is not None:
+                return copy.deepcopy(self.build_workflow_payload)
+            return build_workflow_contents(self.build_workflow)
         if path == f"/repos/{REPOSITORY}/actions/runs/{SOURCE_RUN_ID}":
             return copy.deepcopy(self.source_live)
         if f"/actions/runs/{SOURCE_RUN_ID}/attempts/1/jobs?" in path:
@@ -783,10 +865,93 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
                 api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
             )
 
-    def test_staged_build_only_rejects_unrelated_job_failure(self):
+    def test_staged_build_only_rejects_required_job_failure(self):
         api = FakeApi()
         api.source_jobs[2] = ordinary_job(conclusion="failure")
         with self.assertRaisesRegex(ValueError, "unexpected non-success Build job"):
+            MODULE.verify_exact_staged_build(
+                api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
+            )
+        self.assertGreater(api.build_workflow_calls, 0)
+
+    def test_staged_build_only_accepts_failure_declared_advisory_at_the_source_commit(self):
+        for name in ("build-linux-msan", "build-macos (Release)"):
+            with self.subTest(job=name):
+                api = FakeApi()
+                api.source_jobs[2] = ordinary_job(
+                    id=504, name=name, conclusion="failure"
+                )
+                evidence = MODULE.verify_exact_staged_build(
+                    api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
+                )
+                self.assertEqual(evidence.run_id, SOURCE_RUN_ID)
+
+    def test_staged_build_only_rejects_failure_of_a_job_absent_from_the_workflow(self):
+        api = FakeApi()
+        api.source_jobs[2] = ordinary_job(
+            id=505, name="undeclared lane", conclusion="failure"
+        )
+        with self.assertRaisesRegex(ValueError, "unexpected non-success Build job: undeclared lane"):
+            MODULE.verify_exact_staged_build(
+                api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
+            )
+
+    def test_staged_build_only_rejects_incomplete_advisory_job(self):
+        api = FakeApi()
+        api.source_jobs[2] = ordinary_job(
+            id=506, name="build-linux-msan", status="in_progress", conclusion=None
+        )
+        with self.assertRaisesRegex(ValueError, "unexpected non-success Build job: build-linux-msan"):
+            MODULE.verify_exact_staged_build(
+                api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
+            )
+
+    def test_staged_build_only_rejects_a_required_job_downgraded_to_advisory(self):
+        api = FakeApi()
+        api.build_workflow = BUILD_WORKFLOW_YAML.replace(
+            "  ordinary-required:\n    name: \"ordinary required job\"\n    runs-on: ubuntu-24.04\n",
+            "  ordinary-required:\n    name: \"ordinary required job\"\n    runs-on: ubuntu-24.04\n"
+            "    continue-on-error: true\n",
+        )
+        api.source_jobs[2] = ordinary_job(conclusion="failure")
+        with self.assertRaisesRegex(ValueError, "declares required jobs advisory"):
+            MODULE.verify_exact_staged_build(
+                api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
+            )
+
+    def test_staged_build_only_rejects_required_inventory_disagreement(self):
+        api = FakeApi()
+        api.build_workflow = BUILD_WORKFLOW_YAML.replace(
+            '\'["build-windows-shipping","ordinary-required"]\'',
+            '\'["build-windows-shipping"]\'',
+        )
+        with self.assertRaisesRegex(ValueError, "required-job inventory and gate needs disagree"):
+            MODULE.verify_exact_staged_build(
+                api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
+            )
+
+    def test_staged_build_only_rejects_unusable_workflow_payloads(self):
+        mutations = (
+            ({"encoding": "none", "content": ""}, "base64 file payload"),
+            ({"path": ".github/workflows/other.yml"}, "base64 file payload"),
+            ({"content": "!!!!"}, "not valid base64"),
+            ({"size": 999999999}, "exceeds the inspection limit"),
+        )
+        for overrides, message in mutations:
+            with self.subTest(overrides=overrides):
+                api = FakeApi()
+                api.build_workflow_payload = build_workflow_contents(**overrides)
+                with self.assertRaisesRegex(ValueError, message):
+                    MODULE.verify_exact_staged_build(
+                        api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
+                    )
+
+    def test_staged_build_only_rejects_a_workflow_without_the_required_gate(self):
+        api = FakeApi()
+        api.build_workflow = BUILD_WORKFLOW_YAML.replace(
+            'name: "Required CI Gate"', 'name: "Advisory CI Gate"'
+        )
+        with self.assertRaisesRegex(ValueError, "required CI gate job name is not exact"):
             MODULE.verify_exact_staged_build(
                 api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
             )
@@ -1819,6 +1984,16 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
             verifier,
         )
         self.assertIn("python3 .github/scripts/test-verify-exact-required-gate.py", build)
+
+    def test_trusted_workflows_declare_no_run_name(self):
+        # GitHub returns a rendered run-name as the workflow run's API "name",
+        # and _verify_verifier_run requires that field to equal the workflow
+        # name exactly, so a run-name on either trusted workflow fails every
+        # publication gate closed.
+        for workflow in ("build-matrix-verifier.yml", "codeql-report.yml"):
+            with self.subTest(workflow=workflow):
+                text = (SCRIPT.parents[1] / "workflows" / workflow).read_text(encoding="utf-8")
+                self.assertNotRegex(text, r"(?m)^run-name:")
 
 
 if __name__ == "__main__":

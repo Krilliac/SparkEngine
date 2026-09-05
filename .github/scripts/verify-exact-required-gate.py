@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from base64 import b64decode
 from dataclasses import dataclass, fields
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -27,6 +28,7 @@ MAX_SOURCE_RUNS = 200
 MAX_BUILD_MATRIX_SOURCE_ARTIFACT_BYTES = 4 * 1024 * 1024 * 1024
 MAX_CODEQL_SOURCE_ARTIFACT_BYTES = 25 * 1024 * 1024
 MAX_CODEQL_SOURCE_ARTIFACT_TOTAL_BYTES = 75 * 1024 * 1024
+MAX_WORKFLOW_SOURCE_BYTES = 1024 * 1024
 GITHUB_ACTIONS_BOT_ID = 41898282
 
 SOURCE_WORKFLOW_NAME = "Build SparkEngine"
@@ -35,6 +37,15 @@ SOURCE_BRANCH = "Working"
 SOURCE_JOB_NAME = "Windows Shipping build matrix"
 SOURCE_FINAL_STEP = "Record build-matrix evidence"
 REQUIRED_GATE_NAME = "Required CI Gate"
+REQUIRED_GATE_JOB_KEY = "required-ci-gate"
+
+WORKFLOW_JOB_KEY_PATTERN = re.compile(r"^  ([A-Za-z0-9_-]+):(?:\s+#.*)?$")
+WORKFLOW_JOB_FIELD_PATTERN = re.compile(r"^    ([A-Za-z0-9_-]+):(?:[ \t]+(.*?))?[ \t]*$")
+WORKFLOW_NEEDS_ITEM_PATTERN = re.compile(r"^      - ([A-Za-z0-9_-]+)[ \t]*(?:#.*)?$")
+WORKFLOW_REQUIRED_INVENTORY_PATTERN = re.compile(
+    r"^ *EXPECTED_REQUIRED_JOBS_JSON: '(\[[^']*\])'[ \t]*$", re.MULTILINE
+)
+WORKFLOW_EXPRESSION_PATTERN = re.compile(r"\$\{\{.*?\}\}")
 STATUS_CONTEXT = "Build Matrix Verifier / Exact Source"
 VERIFIER_WORKFLOW_NAME = "Build Matrix Verifier"
 VERIFIER_WORKFLOW_PATH = ".github/workflows/build-matrix-verifier.yml"
@@ -244,6 +255,15 @@ class TrustedArtifactEvidence:
     size: int
     digest: str
     signature: tuple[Any, ...]
+
+
+@dataclass(frozen=True)
+class SourceWorkflowJobs:
+    """Job declarations parsed from the Build workflow at the verified source commit."""
+
+    required: frozenset[str]
+    advisory: frozenset[str]
+    display_names: tuple[tuple[str, str], ...]
 
 
 def _object(payload: Any, label: str) -> dict[str, Any]:
@@ -825,6 +845,151 @@ def _verify_codeql_source_artifacts(
     return tuple(evidence)
 
 
+def _unquote_workflow_scalar(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+def _parse_workflow_needs_inline(value: str) -> list[str]:
+    body = value[1:-1] if value.startswith("[") and value.endswith("]") else value
+    items = [_unquote_workflow_scalar(item.strip()) for item in body.split(",") if item.strip()]
+    if not items or any(not re.fullmatch(r"[A-Za-z0-9_-]+", item) for item in items):
+        raise ValueError("exact Build workflow declares needs in an unsupported form")
+    return items
+
+
+def _parse_source_workflow_jobs(text: str) -> SourceWorkflowJobs:
+    """Parse job keys, display names, advisory flags, and the required inventory."""
+    display: dict[str, str] = {}
+    needs: dict[str, list[str]] = {}
+    advisory: set[str] = set()
+    inside_jobs = False
+    current: str | None = None
+    collecting_needs = False
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line.startswith(" "):
+            inside_jobs = line.rstrip() == "jobs:"
+            current = None
+            collecting_needs = False
+            continue
+        if not inside_jobs:
+            continue
+        key = WORKFLOW_JOB_KEY_PATTERN.match(line)
+        if key:
+            current = key.group(1)
+            if current in display:
+                raise ValueError(f"exact Build workflow declares duplicate job '{current}'")
+            display[current] = current
+            needs[current] = []
+            collecting_needs = False
+            continue
+        if current is None:
+            continue
+        if collecting_needs:
+            item = WORKFLOW_NEEDS_ITEM_PATTERN.match(line)
+            if item:
+                needs[current].append(item.group(1))
+                continue
+            collecting_needs = False
+        field = WORKFLOW_JOB_FIELD_PATTERN.match(line)
+        if not field:
+            continue
+        name = field.group(1)
+        value = field.group(2) or ""
+        if name == "name" and value:
+            display[current] = _unquote_workflow_scalar(value)
+        elif name == "continue-on-error" and value == "true":
+            advisory.add(current)
+        elif name == "needs":
+            if value:
+                needs[current] = _parse_workflow_needs_inline(value)
+            else:
+                collecting_needs = True
+
+    if REQUIRED_GATE_JOB_KEY not in display:
+        raise ValueError("exact Build workflow does not declare the required CI gate job")
+    if display[REQUIRED_GATE_JOB_KEY] != REQUIRED_GATE_NAME:
+        raise ValueError("exact Build workflow required CI gate job name is not exact")
+    inventories = WORKFLOW_REQUIRED_INVENTORY_PATTERN.findall(text)
+    if len(inventories) != 1:
+        raise ValueError("exact Build workflow must declare one required-job inventory")
+    try:
+        inventory = json.loads(inventories[0])
+    except json.JSONDecodeError as error:
+        raise ValueError("exact Build workflow required-job inventory is not valid JSON") from error
+    if (
+        not isinstance(inventory, list)
+        or not inventory
+        or any(not isinstance(job, str) or not job for job in inventory)
+        or len(set(inventory)) != len(inventory)
+    ):
+        raise ValueError("exact Build workflow required-job inventory must be unique and non-empty")
+    declared = needs[REQUIRED_GATE_JOB_KEY]
+    if not declared or len(set(declared)) != len(declared) or set(declared) != set(inventory):
+        raise ValueError("exact Build workflow required-job inventory and gate needs disagree")
+    undeclared = sorted(set(inventory) - set(display))
+    if undeclared:
+        raise ValueError(f"exact Build workflow requires undeclared jobs: {undeclared}")
+    downgraded = sorted(set(inventory) & advisory)
+    if downgraded:
+        raise ValueError(f"exact Build workflow declares required jobs advisory: {downgraded}")
+    return SourceWorkflowJobs(
+        required=frozenset(inventory),
+        advisory=frozenset(advisory),
+        display_names=tuple(sorted(display.items())),
+    )
+
+
+def _verify_source_workflow(
+    fetch_json: FetchJson, repository: str, source_sha: str
+) -> SourceWorkflowJobs:
+    """Read and parse the Build workflow exactly as committed at the source SHA."""
+    if not SHA_PATTERN.fullmatch(source_sha):
+        raise ValueError("exact Build source commit is not a full hexadecimal commit ID")
+    payload = _object(
+        fetch_json(f"/repos/{repository}/contents/{SOURCE_WORKFLOW_PATH}?ref={source_sha}"),
+        "exact Build workflow source",
+    )
+    if (
+        payload.get("path") != SOURCE_WORKFLOW_PATH
+        or payload.get("type") != "file"
+        or payload.get("encoding") != "base64"
+    ):
+        raise ValueError("exact Build workflow source is not the expected base64 file payload")
+    size = _positive_int(payload.get("size"), "exact Build workflow size")
+    if size > MAX_WORKFLOW_SOURCE_BYTES:
+        raise ValueError("exact Build workflow source exceeds the inspection limit")
+    content = payload.get("content")
+    if not isinstance(content, str) or not content:
+        raise ValueError("exact Build workflow source content is missing")
+    try:
+        decoded = b64decode("".join(content.split()), validate=True)
+    except ValueError as error:
+        raise ValueError("exact Build workflow source is not valid base64") from error
+    if len(decoded) != size:
+        raise ValueError("exact Build workflow source size does not match its content")
+    try:
+        return _parse_source_workflow_jobs(decoded.decode("utf-8"))
+    except UnicodeDecodeError as error:
+        raise ValueError("exact Build workflow source is not UTF-8 text") from error
+
+
+def _workflow_job_key(workflow: SourceWorkflowJobs, job_name: str) -> str | None:
+    """Resolve an API job name to the single workflow job key that can produce it."""
+    matched: list[str] = []
+    for key, display in workflow.display_names:
+        literals = WORKFLOW_EXPRESSION_PATTERN.split(display)
+        body = ".+".join(re.escape(literal) for literal in literals)
+        if re.fullmatch(rf"{body}(?: \(.+\))?", job_name):
+            matched.append(key)
+    if len(matched) != 1:
+        return None
+    return matched[0]
+
+
 def _verify_source_jobs(
     fetch_json: FetchJson, repository: str, source: dict[str, Any]
 ) -> BuildJobEvidence:
@@ -869,9 +1034,19 @@ def _verify_source_jobs(
         raise ValueError("build-matrix producer is not the exact completed successful job")
     if gate.get("status") != "completed" or gate.get("conclusion") != "success":
         raise ValueError("Required CI Gate did not succeed in the exact Build attempt")
+    # A lane that build.yml declares continue-on-error at this exact commit is
+    # allowed to fail; every other job must still finish successfully. Proving
+    # the declaration from the verified source is stricter than an allowlist.
+    workflow = _verify_source_workflow(fetch_json, repository, source_sha)
     for job in jobs:
-        if job.get("status") != "completed" or job.get("conclusion") not in {"success", "skipped"}:
-            raise ValueError(f"unexpected non-success Build job: {job.get('name', '<unknown>')}")
+        job_name = str(job.get("name", "<unknown>"))
+        if job.get("status") != "completed":
+            raise ValueError(f"unexpected non-success Build job: {job_name}")
+        if job.get("conclusion") in {"success", "skipped"}:
+            continue
+        advisory_key = _workflow_job_key(workflow, job_name)
+        if advisory_key is None or advisory_key not in workflow.advisory:
+            raise ValueError(f"unexpected non-success Build job: {job_name}")
     for name in SOURCE_REQUIRED_STEPS:
         _exact_step(source_job, name, "success")
     _exact_step(source_job, SOURCE_FINAL_STEP, "success")

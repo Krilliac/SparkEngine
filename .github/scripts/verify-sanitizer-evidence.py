@@ -29,8 +29,15 @@ MAX_REPORT_BYTES = 16 * 1024 * 1024
 MAX_JUNIT_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 1024 * 1024
 MAX_JUNIT_TESTS = 10_000
+# testsuites/testsuite/testcase plus, for waived and zero-assertion cases, a
+# <properties> block of up to four <property> children. The ceiling covers one
+# element per testcase plus the bounded flaky/empty metadata the ratchet caps.
 MAX_JUNIT_ELEMENTS = 20_050
-MAX_JUNIT_DEPTH = 4
+MAX_JUNIT_DEPTH = 5
+
+# Marks that a testcase has already opened a <properties> block, so a second one
+# is an error even when the first carried no recognised property.
+PROPERTY_BLOCK_SENTINEL = "#properties"
 MAX_JUNIT_CHARACTERS = MAX_JUNIT_BYTES
 MAX_RUNTIME_LOGS = 32
 MAX_RUNTIME_LOG_BYTES = 4 * 1024 * 1024
@@ -75,6 +82,10 @@ CRASH_PATTERN = re.compile(
     r"(?:Segmentation fault|core dumped|AddressSanitizer:DEADLYSIGNAL|"
     r"terminate called|uncaught exception|\bAborted\b)",
     re.IGNORECASE,
+)
+LAST_STARTED_TEST_PATTERN = re.compile(
+    r"^\[[ \t]*RUN[ \t]*\][ \t]+([A-Za-z0-9_.:<>-]{1,120})[ \t]*$",
+    re.MULTILINE,
 )
 INFRASTRUCTURE_PATTERN = re.compile(
     r"(?:command not found|No such file or directory|cannot execute|Permission denied|"
@@ -618,11 +629,20 @@ def parse_junit(
     case_names: set[str] = set()
     case_records: list[dict[str, Any]] = []
     case_outcomes: list[int] = []
+    case_properties: list[set[str]] = []
     tests = 0
     failures = 0
     test_errors = 0
     skipped = 0
-    known_warnings = 0
+    # A waived (known-flaky) test is reported two ways across the shapes this
+    # verifier has to accept: the historical `<skipped message="Known flaky:">`
+    # and the current `<flakyFailure>`. They are counted separately because they
+    # sit in different buckets of the declared totals - the historical form is
+    # inside `skipped`, the current one is not - and the terminal Results
+    # reconciliation has to subtract each from the bucket it actually occupies.
+    flaky_skips = 0
+    flaky_outcomes = 0
+    empty_cases = 0
     suites = 0
     elements = 0
 
@@ -649,7 +669,7 @@ def parse_junit(
                         return {}
                     check_attributes(
                         element.attrib,
-                        allowed={"tests", "failures", "errors", "skipped", "time"},
+                        allowed={"tests", "failures", "errors", "skipped", "flaky", "empty", "time"},
                         field="testsuites",
                         errors=errors,
                     )
@@ -661,6 +681,18 @@ def parse_junit(
                         )
                         for name in ("tests", "failures", "errors", "skipped")
                     }
+                    root_counts.update(
+                        {
+                            name: (
+                                None
+                                if element.attrib.get(name) is None
+                                else parse_nonnegative_int(
+                                    element.attrib[name], field=f"testsuites.{name}", errors=errors
+                                )
+                            )
+                            for name in ("flaky", "empty")
+                        }
+                    )
                     validate_time(element.attrib.get("time"), field="testsuites.time", errors=errors)
                 elif depth == 2:
                     if stack[-2] != "testsuites" or tag != "testsuite":
@@ -671,7 +703,7 @@ def parse_junit(
                         errors.append("JUnit must contain exactly one SparkEngine testsuite")
                     check_attributes(
                         element.attrib,
-                        allowed={"name", "tests", "failures", "errors", "skipped", "time"},
+                        allowed={"name", "tests", "failures", "errors", "skipped", "flaky", "empty", "time"},
                         field="testsuite",
                         errors=errors,
                     )
@@ -683,6 +715,18 @@ def parse_junit(
                         )
                         for name in ("tests", "failures", "errors", "skipped")
                     }
+                    suite_counts.update(
+                        {
+                            name: (
+                                None
+                                if element.attrib.get(name) is None
+                                else parse_nonnegative_int(
+                                    element.attrib[name], field=f"testsuite.{name}", errors=errors
+                                )
+                            )
+                            for name in ("flaky", "empty")
+                        }
+                    )
                     validate_time(element.attrib.get("time"), field="testsuite.time", errors=errors)
                 elif depth == 3:
                     if stack[-2] != "testsuite" or tag != "testcase":
@@ -716,37 +760,81 @@ def parse_junit(
                         errors.append(f"JUnit exceeds the {MAX_JUNIT_TESTS} testcase ceiling")
                         return {}
                     case_outcomes.append(0)
+                    case_properties.append(set())
                 elif depth == 4:
-                    if stack[-2] != "testcase" or tag not in {"failure", "error", "skipped"}:
-                        errors.append("JUnit testcase may contain only one failure, error, or skipped outcome")
+                    if stack[-2] != "testcase" or tag not in {
+                        "failure",
+                        "error",
+                        "skipped",
+                        "flakyFailure",
+                        "properties",
+                    }:
+                        errors.append(
+                            "JUnit testcase may contain only one failure, error, skipped, or flakyFailure "
+                            "outcome and an optional properties block"
+                        )
                         return {}
                     check_attributes(
                         element.attrib,
-                        allowed={"message", "type"},
+                        allowed=set() if tag == "properties" else {"message", "type"},
                         field=tag,
                         errors=errors,
                     )
-                    case_outcomes[-1] += 1
-                    if case_outcomes[-1] > 1:
-                        errors.append("JUnit testcase contains multiple outcome elements")
-                    if tag == "failure":
-                        failures += 1
-                    elif tag == "error":
-                        test_errors += 1
+                    if tag == "properties":
+                        # A properties block is metadata, not an outcome: it
+                        # accompanies the outcome element rather than replacing
+                        # it, so it must not consume the one-outcome budget.
+                        if PROPERTY_BLOCK_SENTINEL in case_properties[-1]:
+                            errors.append("JUnit testcase contains multiple properties blocks")
+                        case_properties[-1].add(PROPERTY_BLOCK_SENTINEL)
                     else:
-                        skipped += 1
-                        if (element.attrib.get("message") or "").startswith("Known flaky:"):
-                            known_warnings += 1
+                        case_outcomes[-1] += 1
+                        if case_outcomes[-1] > 1:
+                            errors.append("JUnit testcase contains multiple outcome elements")
+                        if tag == "failure":
+                            failures += 1
+                        elif tag == "error":
+                            test_errors += 1
+                        elif tag == "flakyFailure":
+                            flaky_outcomes += 1
+                        else:
+                            skipped += 1
+                            # The runner emitted waived tests as a Known-flaky
+                            # <skipped> before the flakyFailure shape landed;
+                            # both are still recognised so archived evidence
+                            # cannot silently reclassify as a genuine skip.
+                            if (element.attrib.get("message") or "").startswith("Known flaky:"):
+                                flaky_skips += 1
+                elif depth == 5:
+                    if stack[-2] != "properties" or tag != "property":
+                        errors.append("JUnit properties may contain only property elements")
+                        return {}
+                    check_attributes(
+                        element.attrib,
+                        allowed={"name", "value"},
+                        field="property",
+                        errors=errors,
+                    )
+                    property_name = element.attrib.get("name", "")
+                    if property_name not in {"flaky", "flaky-reason", "waived-assertions", "empty"}:
+                        errors.append(f"JUnit property name is outside the SparkTests schema: {property_name!r}")
+                    elif property_name in case_properties[-1]:
+                        errors.append(f"JUnit testcase repeats the {property_name!r} property")
+                    else:
+                        case_properties[-1].add(property_name)
+                        if property_name == "empty" and element.attrib.get("value") == "true":
+                            empty_cases += 1
             else:
                 if not stack or stack[-1] != tag:
                     errors.append("JUnit element nesting is inconsistent")
                     return {}
-                if tag in {"testsuites", "testsuite", "testcase"} and (element.text or "").strip():
+                if tag in {"testsuites", "testsuite", "testcase", "properties"} and (element.text or "").strip():
                     errors.append(f"JUnit {tag} contains unexpected direct text")
                 if (element.tail or "").strip():
                     errors.append(f"JUnit {tag} contains unexpected tail text")
                 if tag == "testcase":
                     case_outcomes.pop()
+                    case_properties.pop()
                 stack.pop()
                 element.clear()
     except ET.ParseError as exc:
@@ -759,8 +847,18 @@ def parse_junit(
         errors.append(f"JUnit contains {tests} testcases; expected at least {minimum_tests}")
 
     actual = {"tests": tests, "failures": failures, "errors": test_errors, "skipped": skipped}
+    # flaky/empty are declared only by the current runner shape, so they are
+    # reconciled separately: absent means "old evidence", not "zero". Declared
+    # counts that disagree with the elements actually present are the exact
+    # shape a silently reclassified waiver would take, so they are errors.
+    declared_derived = {"flaky": flaky_outcomes, "empty": empty_cases}
     for scope, declared in (("testsuites", root_counts), ("testsuite", suite_counts)):
         for name, count in actual.items():
+            if declared.get(name) is not None and declared.get(name) != count:
+                errors.append(
+                    f"JUnit {scope}.{name} declares {declared.get(name)} but contains {count}"
+                )
+        for name, count in declared_derived.items():
             if declared.get(name) is not None and declared.get(name) != count:
                 errors.append(
                     f"JUnit {scope}.{name} declares {declared.get(name)} but contains {count}"
@@ -768,7 +866,13 @@ def parse_junit(
 
     result: dict[str, Any] = {
         **actual,
-        "knownFlakyWarnings": known_warnings,
+        # Waivers reported through either shape are one population; the buckets
+        # they occupy differ, so both are published for the terminal-Results
+        # reconciliation to subtract from the right total.
+        "knownFlakyWarnings": flaky_skips + flaky_outcomes,
+        "flakyOutcomes": flaky_outcomes,
+        "flakySkips": flaky_skips,
+        "empty": empty_cases,
         "suiteNames": ["SparkEngine"] if suites == 1 else [],
     }
     if collect_cases:
@@ -1448,17 +1552,24 @@ def published_main(argv: list[str]) -> int:
         or console_counts[2] != report_counts[2]
     ):
         errors.append("published console, report, seed, and JUnit counts do not agree")
+    # A waived test is never a pass and never a genuine skip. The current runner
+    # reports it as <flakyFailure>, which is counted in `tests` but in neither
+    # `skipped` nor `failures`; archived evidence reports it as a Known-flaky
+    # <skipped>, which is inside `skipped`. Subtract each from the bucket it
+    # actually occupies so the console's warned/skipped split reconciles under
+    # both shapes instead of silently agreeing under neither.
     expected_terminal = {
         "passed": (
             junit.get("tests", 0)
             - junit.get("failures", 0)
             - junit.get("errors", 0)
             - junit.get("skipped", 0)
+            - junit.get("flakyOutcomes", 0)
         ) if junit else None,
         "failed": junit.get("failures") if junit else None,
         "warned": junit.get("knownFlakyWarnings") if junit else None,
         "skipped": (
-            junit.get("skipped", 0) - junit.get("knownFlakyWarnings", 0)
+            junit.get("skipped", 0) - junit.get("flakySkips", 0)
         ) if junit else None,
     }
     if console_counts[3] != report_counts[3] or console_counts[3] != expected_terminal:
@@ -1581,6 +1692,9 @@ def published_main(argv: list[str]) -> int:
                 "errors",
                 "skipped",
                 "knownFlakyWarnings",
+                "flakyOutcomes",
+                "flakySkips",
+                "empty",
                 "suiteNames",
                 "shuffleSeed",
                 "junitSha256",
@@ -1598,6 +1712,9 @@ def published_main(argv: list[str]) -> int:
                 "errors": junit.get("errors"),
                 "skipped": junit.get("skipped"),
                 "knownFlakyWarnings": junit.get("knownFlakyWarnings"),
+                "flakyOutcomes": junit.get("flakyOutcomes"),
+                "flakySkips": junit.get("flakySkips"),
+                "empty": junit.get("empty"),
                 "suiteNames": ["SparkEngine"],
                 "shuffleSeed": 123,
                 "junitSha256": sha256_bytes(payloads.get("junit", b"")),
@@ -1930,17 +2047,24 @@ def main() -> int:
         errors.append("console, report, and JUnit test counts do not agree")
     if console_seed != 123 or report_seed != 123 or console_seed != report_seed:
         errors.append("console and report shuffle seed evidence does not agree")
+    # A waived test is never a pass and never a genuine skip. The current runner
+    # reports it as <flakyFailure>, which is counted in `tests` but in neither
+    # `skipped` nor `failures`; archived evidence reports it as a Known-flaky
+    # <skipped>, which is inside `skipped`. Subtract each from the bucket it
+    # actually occupies so the console's warned/skipped split reconciles under
+    # both shapes instead of silently agreeing under neither.
     expected_terminal = {
         "passed": (
             junit.get("tests", 0)
             - junit.get("failures", 0)
             - junit.get("errors", 0)
             - junit.get("skipped", 0)
+            - junit.get("flakyOutcomes", 0)
         ) if junit else None,
         "failed": junit.get("failures") if junit else None,
         "warned": junit.get("knownFlakyWarnings") if junit else None,
         "skipped": (
-            junit.get("skipped", 0) - junit.get("knownFlakyWarnings", 0)
+            junit.get("skipped", 0) - junit.get("flakySkips", 0)
         ) if junit else None,
     }
     if console_summary != report_summary or console_summary != expected_terminal:
@@ -2047,6 +2171,10 @@ def main() -> int:
         errors=errors,
     )
 
+    incomplete_run = not junit or console_summary is None
+    started_tests = LAST_STARTED_TEST_PATTERN.findall(console_text)
+    last_started_test = started_tests[-1] if started_tests else None
+
     completion_errors = [
         error
         for error in errors
@@ -2066,6 +2194,13 @@ def main() -> int:
     elif timed_out:
         classification = "timeout"
         recommended_exit = args.process_exit
+    elif sanitizer_finding and incomplete_run:
+        # A suite that died mid-run is materially different evidence from a
+        # completed run that reported a finding: an unknown fraction of the
+        # tests never ran and the --minimum-tests floor cannot bite, because
+        # there is no JUnit to count.  Name the incompleteness, not a finding.
+        classification = "incomplete-run"
+        recommended_exit = args.process_exit or 70
     elif sanitizer_finding:
         classification = "sanitizer-finding"
         recommended_exit = args.process_exit or 1
@@ -2266,6 +2401,14 @@ def main() -> int:
 
     for error in errors:
         print(f"error: {error}", file=sys.stderr)
+    if incomplete_run:
+        print(
+            "error: sanitizer suite did not complete: "
+            f"junit={'absent' if not junit else 'present'}, "
+            f"terminalResults={'absent' if console_summary is None else 'present'}, "
+            f"lastStartedTest={last_started_test or 'unknown'}",
+            file=sys.stderr,
+        )
     print(classification)
     return recommended_exit
 
