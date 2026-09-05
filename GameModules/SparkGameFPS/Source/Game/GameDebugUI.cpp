@@ -96,6 +96,8 @@ std::string Game::GetStatusString() const
     }
 
     status << "SDK services: " << (m_engineSystemsInitialized ? "wired" : "legacy/minimal")
+           << " | Quicksave: " << (m_saveSystemReady ? "available" : "unavailable")
+           << " | Rendering: " << (m_renderingEnabled ? "on" : "off (no D3D11 device)")
            << " | Time scale: " << std::fixed << std::setprecision(2) << m_timeScale << "x | "
            << (m_isPaused ? "Paused" : "Running");
     return status.str();

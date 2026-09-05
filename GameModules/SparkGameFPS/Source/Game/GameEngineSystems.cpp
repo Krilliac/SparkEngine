@@ -19,6 +19,7 @@
 
 #include "Game.h"
 #include "Player.h"
+#include "FPSAssetPaths.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -73,14 +74,14 @@ void Game::InitializeEngineSystems()
         // Register game music tracks for the combat arena
         Spark::Audio::MusicTrack explorationTrack;
         explorationTrack.name = "arena_ambient";
-        explorationTrack.filepath = "Assets/Audio/Music/arena_ambient.ogg";
+        explorationTrack.filepath = Spark::FPSAssets::ResolveUtf8("Audio/ambient_wind.wav");
         explorationTrack.bpm = 90.0f;
         explorationTrack.loop = true;
         music->RegisterTrack(explorationTrack);
 
         Spark::Audio::MusicTrack combatTrack;
         combatTrack.name = "arena_combat";
-        combatTrack.filepath = "Assets/Audio/Music/arena_combat.ogg";
+        combatTrack.filepath = Spark::FPSAssets::ResolveUtf8("Audio/music_combat.wav");
         combatTrack.bpm = 140.0f;
         combatTrack.loop = true;
         music->RegisterTrack(combatTrack);
@@ -210,9 +211,16 @@ void Game::InitializeEngineSystems()
     }
 
     // ---- Save System --------------------------------------------------
+    // Quicksave needs both a SaveSystem service and a World to serialise; claim
+    // readiness only when the engine context actually supplies them.
+    m_saveSystemReady = (m_engineContext->GetSaveSystem() != nullptr) && (m_engineContext->GetWorld() != nullptr);
+    if (m_saveSystemReady)
     {
-        m_saveSystemReady = true;
         LOG_TO_CONSOLE_IMMEDIATE(L"Save system: ready for quicksave/quickload", L"SUCCESS");
+    }
+    else
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Save system: unavailable - quicksave/quickload disabled", L"WARNING");
     }
 
     // ---- Coroutine Scheduler ------------------------------------------
@@ -270,4 +278,164 @@ void Game::InitializeEngineSystems()
     m_engineSystemsInitialized = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "All engine systems wired into game");
     LOG_TO_CONSOLE_IMMEDIATE(L"All engine systems wired into game", L"SUCCESS");
+}
+
+// ============================================================================
+// LOCAL PROFILE PERSISTENCE
+// ============================================================================
+
+Spark::FPSLocalProfile Game::CaptureLocalProfile() const
+{
+    Spark::FPSLocalProfile profile;
+    profile.playTimeSeconds = m_playTime;
+
+    if (m_progression)
+    {
+        profile.progressionLevel = m_progression->GetLevel();
+        profile.progressionXP = m_progression->GetCurrentXP();
+    }
+    if (m_player)
+    {
+        profile.playerClass = static_cast<int>(m_player->GetClass());
+        profile.weapon = static_cast<int>(m_player->GetCurrentWeaponType());
+        profile.health = m_player->GetHealth();
+        profile.armor = m_player->GetArmor();
+    }
+    if (m_gameMode)
+    {
+        if (const auto* score = m_gameMode->GetPlayerScore("Player1"))
+        {
+            profile.kills = score->kills;
+            profile.deaths = score->deaths;
+            profile.score = score->totalScore;
+        }
+    }
+    return profile;
+}
+
+void Game::ApplyLocalProfile(const Spark::FPSLocalProfile& profile)
+{
+    m_playTime = profile.playTimeSeconds;
+
+    if (m_progression)
+        m_progression->RestoreProgress(profile.progressionXP);
+
+    if (m_player)
+    {
+        m_player->SetClass(static_cast<PlayerClass>(profile.playerClass), m_classSystem.get());
+        m_player->Console_ChangeWeapon(static_cast<WeaponType>(profile.weapon));
+        m_player->Console_SetHealth(profile.health);
+        m_player->Console_SetArmor(profile.armor);
+        m_player->SetActive(profile.health > 0.0f);
+    }
+    if (m_hudSystem)
+        m_hudSystem->SetCurrentClass(static_cast<PlayerClass>(profile.playerClass));
+
+    // The scoreboard lives outside the ECS, so a loaded save has to put it back
+    // explicitly. Capturing kills/deaths/score and then not restoring them is what made
+    // a quickload silently reset the match score.
+    if (m_gameMode)
+        m_gameMode->RestorePlayerScore("Player1", profile.kills, profile.deaths, profile.score);
+
+    // A profile captured while dead restores an inactive player. Player::Update()
+    // early-returns while dead and only a PlayerRespawnEvent revives it, so the respawn
+    // countdown has to be re-armed here or the restored session can never progress.
+    if (m_respawnSystem && profile.health <= 0.0f && !m_respawnSystem->IsWaitingForRespawn())
+    {
+        m_respawnSystem->ArmRespawn();
+        LOG_TO_CONSOLE_IMMEDIATE(L"Restored profile was captured while dead - respawn countdown re-armed", L"WARNING");
+    }
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Local profile applied from save", L"SUCCESS");
+}
+
+bool Game::QuickSaveProfile(std::string& outMessage)
+{
+    if (!m_engineContext)
+    {
+        outMessage = "Save system unavailable: no engine context";
+        return false;
+    }
+
+    auto* saveSystem = m_engineContext->GetSaveSystem();
+    World* world = m_engineContext->GetWorld();
+    if (!saveSystem || !world)
+    {
+        outMessage = "Save system unavailable: engine exposes no save system or world";
+        return false;
+    }
+
+    Spark::SaveMetadata metadata;
+    metadata.saveName = "Quick Save";
+    metadata.sceneName = "combat_arena";
+    metadata.playTime = m_playTime;
+    if (m_player)
+    {
+        metadata.playerHealth = m_player->GetHealth();
+        metadata.playerArmor = m_player->GetArmor();
+        metadata.playerPosition = m_player->GetPosition();
+    }
+
+    const Spark::FPSLocalProfile profile = CaptureLocalProfile();
+    metadata.playerKills = profile.kills;
+    metadata.playerDeaths = profile.deaths;
+
+    std::unordered_map<std::string, std::string> customState;
+    profile.WriteTo(customState);
+
+    if (!saveSystem->Save(kQuickSaveSlot, *world, metadata, customState))
+    {
+        outMessage = std::string("Quick save FAILED to write slot '") + kQuickSaveSlot + "'";
+        return false;
+    }
+
+    outMessage = std::string("Quick save written to slot '") + kQuickSaveSlot + "'";
+    return true;
+}
+
+bool Game::QuickLoadProfile(std::string& outMessage)
+{
+    if (!m_engineContext)
+    {
+        outMessage = "Save system unavailable: no engine context";
+        return false;
+    }
+
+    auto* saveSystem = m_engineContext->GetSaveSystem();
+    World* world = m_engineContext->GetWorld();
+    if (!saveSystem || !world)
+    {
+        outMessage = "Save system unavailable: engine exposes no save system or world";
+        return false;
+    }
+    if (!saveSystem->SaveExists(kQuickSaveSlot))
+    {
+        outMessage = std::string("No quicksave found in slot '") + kQuickSaveSlot + "'";
+        return false;
+    }
+
+    std::unordered_map<std::string, std::string> customState;
+    if (!saveSystem->Load(kQuickSaveSlot, *world, customState))
+    {
+        outMessage = std::string("Quick load FAILED for slot '") + kQuickSaveSlot + "'";
+        return false;
+    }
+
+    Spark::FPSLocalProfile profile;
+    std::string profileError;
+    if (!profile.ReadFrom(customState, profileError))
+    {
+        outMessage = "Quick load restored the world but the local profile was rejected: " + profileError;
+        return false;
+    }
+
+    ApplyLocalProfile(profile);
+
+    // Report the level the session is actually at: ApplyLocalProfile re-derives it from
+    // XP through ProgressionSystem, which can disagree with the level stored in the file
+    // (older save, changed XP curve, level cap).
+    const int restoredLevel = m_progression ? m_progression->GetLevel() : profile.progressionLevel;
+    outMessage = "Quick load restored level " + std::to_string(restoredLevel) + " (" +
+                 std::to_string(profile.progressionXP) + " XP)";
+    return true;
 }

@@ -63,11 +63,20 @@ HRESULT ProjectilePool::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     LOG_TO_CONSOLE_IMMEDIATE(L"ProjectilePool::Initialize called.", L"OPERATION");
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
 
     m_device = device;
     m_context = context;
+
+    // A NullRHI / headless host has no D3D11 device. The pool is still populated so the
+    // combat loop (firing, flight, collision, recycling) really runs; only each
+    // projectile's GPU mesh is skipped and Render() becomes a no-op. Leaving the pool
+    // empty instead would make every shot a silent no-op that still reports success.
+    m_hasRenderResources = (device != nullptr) && (context != nullptr);
+    if (!m_hasRenderResources)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"ProjectilePool: no D3D11 device - projectiles are simulated but not rendered.",
+                                 L"WARNING");
+    }
 
     // Create projectiles based on pool size distribution
     size_t bulletsCount = m_poolSize / 2;                            // 50% bullets
@@ -81,11 +90,12 @@ HRESULT ProjectilePool::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
         {
             auto p = TypeFactory();
             SPARK_REQUIRE_MSG(Spark::LogCategory::Game, p != nullptr, "Failed to create projectile");
-            if (SUCCEEDED(p->Initialize(m_device, m_context)))
-            {
-                m_availableProjectiles.push(p.get());
-                m_projectiles.push_back(std::move(p));
-            }
+            if (!p)
+                continue;
+            if (m_hasRenderResources && FAILED(p->Initialize(m_device, m_context)))
+                continue;
+            m_availableProjectiles.push(p.get());
+            m_projectiles.push_back(std::move(p));
         }
     };
 
@@ -121,6 +131,10 @@ void ProjectilePool::Update(float deltaTime)
 void ProjectilePool::Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& projection)
 {
     // **FIXED: Remove per-frame logging completely**
+    // Device-less pools carry no projectile mesh, so there is nothing to draw.
+    if (!m_hasRenderResources)
+        return;
+
     for (auto& up : m_projectiles)
     {
         if (up->IsActive())
@@ -137,6 +151,9 @@ void ProjectilePool::Shutdown()
     m_projectiles.clear();
     std::queue<Projectile*> empty;
     std::swap(m_availableProjectiles, empty);
+    m_hasRenderResources = false;
+    m_device = nullptr;
+    m_context = nullptr;
 
     LOG_TO_CONSOLE_IMMEDIATE(L"ProjectilePool shutdown complete.", L"INFO");
 }

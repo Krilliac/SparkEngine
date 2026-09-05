@@ -11,13 +11,14 @@
 #include <algorithm>
 #include <cmath>
 #include <sstream>
+#include <utility>
 
 namespace Spark
 {
 
     ProgressionSystem::ProgressionSystem() = default;
 
-    void ProgressionSystem::Initialize()
+    void ProgressionSystem::ResetToDefaults()
     {
         m_level = 1;
         m_currentXP = 0;
@@ -32,6 +33,27 @@ namespace Spark
         m_unlockedWeapons[static_cast<int>(WeaponType::PISTOL)] = true;
         m_unlockedWeapons[static_cast<int>(WeaponType::RIFLE)] = true;
         m_unlockedClasses[static_cast<int>(PlayerClass::SCOUT)] = true;
+    }
+
+    void ProgressionSystem::RestoreProgress(int totalXP)
+    {
+        // Suppress the play-time callbacks while replaying the curve: a load is
+        // not a level-up, and the HUD must not show a level-up banner for it.
+        ProgressionCallbacks liveCallbacks = std::move(m_callbacks);
+        m_callbacks = ProgressionCallbacks{};
+
+        ResetToDefaults();
+        m_currentXP = std::max(0, totalXP);
+        CheckLevelUp();
+
+        m_callbacks = std::move(liveCallbacks);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Progression restored from save (level %d, %d XP)", m_level,
+                       m_currentXP);
+    }
+
+    void ProgressionSystem::Initialize()
+    {
+        ResetToDefaults();
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Progression system initialized (level 1, max %d)", m_maxLevel);
         LOG_TO_CONSOLE_IMMEDIATE(L"Progression system initialized (level 1, 50 max)", L"SUCCESS");

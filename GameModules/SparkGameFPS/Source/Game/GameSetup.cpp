@@ -21,7 +21,6 @@
 #include "WaveSpawner.h"
 #include "ProgressionSystem.h"
 #include "LootSystem.h"
-#include "ArenaBuilder.h"
 #include "Utils/SparkConsole.h"
 
 #include "Graphics/GraphicsEngine.h"
@@ -112,6 +111,21 @@ void Game::InitializeRespawnAndVehicles()
 {
     m_respawnSystem = std::make_unique<Spark::RespawnSystem>();
     m_respawnSystem->Initialize();
+    m_respawnSystem->SetEventBus(m_eventBus);
+
+    // Close the death -> respawn -> score loop: without this callback a death
+    // only deactivates the player and the single-player slice ends there.
+    if (m_player)
+    {
+        m_player->SetDeathCallback(
+            [this]()
+            {
+                if (m_respawnSystem)
+                    m_respawnSystem->OnPlayerDeath("Enemy", "Unknown", false);
+                if (m_gameMode)
+                    m_gameMode->RecordKill("Enemy", "Player1");
+            });
+    }
 
     // NOTE: Spawn points are now defined in the scene file (Assets/Scenes/level1.scene)
     // as [SpawnPoint] entries with position, tag, and priority. They can be placed and
@@ -535,6 +549,18 @@ bool Game::StartWaves()
 
     m_waveSpawner->Reset();
     m_waveSpawner->Start();
+
+    // A restart must also revive the player: a dead player is deactivated and
+    // stops updating, so waves would spawn around an inert corpse.
+    if (m_player)
+    {
+        const Spark::RespawnPoint spawn =
+            m_respawnSystem ? m_respawnSystem->GetBestSpawnPoint(-1) : Spark::RespawnPoint{};
+        m_player->Console_SetHealth(m_player->GetMaxHealth());
+        m_player->Console_SetArmor(0.0f);
+        m_player->Console_SetPosition(spawn.position.x, spawn.position.y, spawn.position.z);
+        m_player->SetActive(true);
+    }
 
     if (m_hudSystem)
     {
