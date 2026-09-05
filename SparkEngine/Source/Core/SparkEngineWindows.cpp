@@ -21,6 +21,7 @@
 #include "Engine/Modding/ModSystem.h"
 #include "Engine/UI/UISystem.h"
 #include "EngineRuntime.h"
+#include "Core/Lifecycle/GameplayLifecycleShared.h"
 #include "Graphics/WeatherSystem.h"
 #include "ModuleManager.h"
 #include "Utils/Assert.h"
@@ -38,8 +39,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <format>
+#include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -74,23 +77,12 @@ namespace
  */
 static int ParseTestFrameLimit(LPWSTR cmdLine)
 {
-    std::wstring cmd(cmdLine);
-    auto pos = cmd.find(L"-test-frames");
-    if (pos == std::wstring::npos)
+    // Exact-token parsing: substring matching used to fire on any argument that
+    // merely contained the flag text (a module path, a scene name).
+    const auto frames = Spark::Platform::FindWindowsCommandLineNumber<long long>(cmdLine, L"-test-frames");
+    if (!frames)
         return 0;
-    pos += 12; // length of "-test-frames"
-    while (pos < cmd.size() && cmd[pos] == L' ')
-        ++pos;
-    if (pos >= cmd.size())
-        return 0;
-    try
-    {
-        return std::max(0, std::stoi(std::wstring(cmd.substr(pos))));
-    }
-    catch (const std::exception&)
-    {
-        return 0;
-    }
+    return static_cast<int>(std::clamp<long long>(*frames, 0, INT_MAX));
 }
 
 /**
@@ -122,23 +114,11 @@ static uint32_t ParseThreadCount(LPWSTR cmdLine)
         }
     }
 
-    std::wstring cmd(cmdLine);
-    auto pos = cmd.find(L"-threads");
-    if (pos == std::wstring::npos)
+    // Exact token: `-threadsafe` must never be read as `-threads`.
+    const auto threads = Spark::Platform::FindWindowsCommandLineNumber<long long>(cmdLine, L"-threads");
+    if (!threads)
         return fromEnv;
-    pos += 8; // length of "-threads"
-    while (pos < cmd.size() && cmd[pos] == L' ')
-        ++pos;
-    if (pos >= cmd.size())
-        return fromEnv;
-    try
-    {
-        return static_cast<uint32_t>(std::max(0, std::stoi(std::wstring(cmd.substr(pos)))));
-    }
-    catch (const std::exception&)
-    {
-        return fromEnv;
-    }
+    return static_cast<uint32_t>(std::clamp<long long>(*threads, 0, UINT_MAX));
 }
 
 /**
@@ -146,31 +126,23 @@ static uint32_t ParseThreadCount(LPWSTR cmdLine)
  */
 static void ParseWindowSizeOverride(LPWSTR cmdLine)
 {
-    std::wstring cmd(cmdLine);
-    auto pos = cmd.find(L"-window-size");
-    if (pos == std::wstring::npos)
+    const auto sizeToken = Spark::Platform::FindWindowsCommandLineArgument(cmdLine, L"-window-size");
+    if (!sizeToken)
         return;
-    pos += 12;
-    while (pos < cmd.size() && cmd[pos] == L' ')
-        ++pos;
-    if (pos >= cmd.size())
-        return;
-    auto sizeStr = cmd.substr(pos);
-    auto xPos = sizeStr.find(L'x');
+
+    auto xPos = sizeToken->find(L'x');
     if (xPos == std::wstring::npos)
-        xPos = sizeStr.find(L'X');
-    if (xPos != std::wstring::npos)
-    {
-        try
-        {
-            g_windowWidthOverride = std::max(320, std::stoi(sizeStr.substr(0, xPos)));
-            g_windowHeightOverride = std::max(240, std::stoi(sizeStr.substr(xPos + 1)));
-        }
-        catch (const std::exception&)
-        {
-            // Ignore malformed window size arguments
-        }
-    }
+        xPos = sizeToken->find(L'X');
+    if (xPos == std::wstring::npos)
+        return;
+
+    const auto width = Spark::Platform::ParseWholeWideNumber<long long>(sizeToken->substr(0, xPos));
+    const auto height = Spark::Platform::ParseWholeWideNumber<long long>(sizeToken->substr(xPos + 1));
+    if (!width || !height)
+        return; // Ignore malformed window size arguments
+
+    g_windowWidthOverride = static_cast<int>(std::clamp<long long>(*width, 320, INT_MAX));
+    g_windowHeightOverride = static_cast<int>(std::clamp<long long>(*height, 240, INT_MAX));
 }
 
 /**
@@ -182,39 +154,9 @@ static void ParseWindowSizeOverride(LPWSTR cmdLine)
  */
 static std::string ParseScenePathOverride(LPWSTR cmdLine)
 {
-    // lpCmdLine omits the executable. Prefix a dummy argv[0] so the system
-    // tokenizer applies normal quoting/backslash rules to every user argument.
-    const std::wstring fullCommandLine = L"SparkEngine.exe " + std::wstring(cmdLine ? cmdLine : L"");
-    int argc = 0;
-    LPWSTR* argv = CommandLineToArgvW(fullCommandLine.c_str(), &argc);
-    if (!argv)
-        return {};
-
-    std::wstring wpath;
-    for (int i = 1; i + 1 < argc; ++i)
-    {
-        if (std::wstring_view(argv[i]) == L"-scene")
-        {
-            wpath = argv[i + 1];
-            break;
-        }
-    }
-    LocalFree(argv);
-    if (wpath.empty() || wpath.size() > static_cast<size_t>(INT_MAX))
-        return {};
-
-    const int inputLength = static_cast<int>(wpath.size());
-    const int utf8Length =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wpath.data(), inputLength, nullptr, 0, nullptr, nullptr);
-    if (utf8Length <= 0)
-        return {};
-    std::string utf8(static_cast<size_t>(utf8Length), '\0');
-    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wpath.data(), inputLength, utf8.data(), utf8Length, nullptr,
-                            nullptr) != utf8Length)
-    {
-        return {};
-    }
-    return utf8;
+    // WindowsCommandLine.h owns the tokenizer and the UTF-8 conversion; this
+    // used to be a private duplicate of both.
+    return Spark::Platform::FindWindowsCommandLineUtf8Argument(cmdLine, L"-scene").value_or(std::string{});
 }
 
 static std::string StartupSplashUtf8(const wchar_t* value)
@@ -304,8 +246,10 @@ void ApplyRuntimeWindowCaption()
  */
 static bool ParseHeadlessFlag(LPWSTR cmdLine)
 {
-    std::wstring cmd(cmdLine);
-    return cmd.find(L"-headless") != std::wstring::npos || cmd.find(L"-dedicated") != std::wstring::npos;
+    // Exact tokens only: a `-game` path that merely contains "-headless" must
+    // not switch the process into headless mode.
+    return Spark::Platform::HasWindowsCommandLineOption(cmdLine, L"-headless") ||
+           Spark::Platform::HasWindowsCommandLineOption(cmdLine, L"-dedicated");
 }
 #endif // SPARK_HEADLESS_SUPPORT
 
@@ -498,18 +442,24 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         return 0;
     }
 
-    // Initialize the unified Logger with a stderr sink as the *very first*
-    // engine action — before SetupCrashHandler, before anything that could
-    // fault — so any crash in EngineSettings or the crash handler install
-    // path itself is visible. Previously this block lived after
-    // SetupCrashHandler and a crash during settings load would leave us
-    // with no output at all. Matches the Linux path ordering in
-    // SparkEngineLinux.cpp::main. The later InitializeDebugSystemsImpl
-    // ClearSinks()+AddSink() keeps this idempotent.
+    // Initialize the unified Logger as the *very first* engine action — before
+    // SetupCrashHandler, before anything that could fault — so any crash in
+    // EngineSettings or the crash handler install path itself is visible.
+    // Previously this block lived after SetupCrashHandler and a crash during
+    // settings load would leave us with no output at all. Matches the Linux path
+    // ordering in SparkEngineLinux.cpp::main.
+    //
+    // The full sink set (stderr + per-user log file + console bridge) goes in
+    // here, not just stderr: wWinMain has no console attached, so everything
+    // logged between here and InitializeDebugSystemsImpl — crash-handler install,
+    // settings load, module manifest resolution, graphics bring-up — was written
+    // to a stderr nobody reads and was missing from the log file entirely.
+    // InstallEngineLogSinksImpl installs exactly once per process, so the later
+    // InitializeDebugSystemsImpl call reuses this one instead of reopening.
     {
         auto& earlyLogger = Spark::Logger::Get();
         earlyLogger.Initialize(/*enableAsync=*/false);
-        earlyLogger.AddSink(std::make_unique<Spark::StderrSink>());
+        Spark::Core::Lifecycle::InstallEngineLogSinksImpl();
     }
 
     // Log whether we're under Wine so operators can tell at a glance
@@ -522,41 +472,36 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     SetupCrashHandler();
 
     g_testFrameLimit = ParseTestFrameLimit(lpCmdLine);
-    {
-        // -test-seconds N: wall-clock exit for smokes whose gameplay runs on
-        // real dt (frame counts are meaningless when fps varies with vsync).
-        std::wstring cmd(lpCmdLine);
-        if (auto pos = cmd.find(L"-test-seconds"); pos != std::wstring::npos)
-        {
-            pos += 13;
-            while (pos < cmd.size() && cmd[pos] == L' ')
-                ++pos;
-            try
-            {
-                if (pos < cmd.size())
-                    g_testSecondsLimit = std::max(0.0, std::stod(std::wstring(cmd.substr(pos))));
-            }
-            catch (const std::exception&)
-            {
-            }
-        }
-    }
+    // -test-seconds N: wall-clock exit for smokes whose gameplay runs on
+    // real dt (frame counts are meaningless when fps varies with vsync).
+    if (const auto seconds = Spark::Platform::FindWindowsCommandLineNumber<double>(lpCmdLine, L"-test-seconds"))
+        g_testSecondsLimit = std::max(0.0, *seconds);
     g_maxWorkerThreads = ParseThreadCount(lpCmdLine);
-    g_noSubprocess = (std::wstring(lpCmdLine).find(L"-no-subprocess") != std::wstring::npos);
+    g_noSubprocess = Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-no-subprocess");
     LoadExecScriptFromCmdLine(lpCmdLine);
-    g_minimalInit = (std::wstring(lpCmdLine).find(L"-minimal-init") != std::wstring::npos);
-    g_noJobSystem = (std::wstring(lpCmdLine).find(L"-no-jobsystem") != std::wstring::npos);
+    g_minimalInit = Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-minimal-init");
+    g_noJobSystem = Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-no-jobsystem");
     ParseWindowSizeOverride(lpCmdLine);
     g_scenePath = ParseScenePathOverride(lpCmdLine);
 
     // spark-cli packages are self-contained applications. Windows supplies the
     // caller's working directory when an .exe is double-clicked or started by
-    // another process, so root package-relative scenes/saves at the executable
-    // unless the caller explicitly supplied a content/module location.
-    const bool hasExplicitLaunchRoot = Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-game") ||
-                                       Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-manifest") ||
-                                       !g_scenePath.empty();
-    if (!hasExplicitLaunchRoot)
+    // another process, so root package-relative scenes/saves at the executable.
+    //
+    // Only a RELATIVE command-line path forces us to keep the caller's working
+    // directory, because that is the directory it is resolved against. Skipping
+    // the anchor for absolute `-game`/`-manifest`/`-scene` arguments — the
+    // documented and CI-used launch form — left a packaged runtime with zero
+    // mounted Data/*.spk archives and scattered its Logs/Saves into whatever
+    // directory the caller happened to be in.
+    const auto isRelativeOptionPath = [lpCmdLine](std::wstring_view option)
+    {
+        const auto value = Spark::Platform::FindWindowsCommandLineUtf8Argument(lpCmdLine, option);
+        return value && !value->empty() && std::filesystem::path(*value).is_relative();
+    };
+    const bool hasRelativeLaunchRoot = isRelativeOptionPath(L"-game") || isRelativeOptionPath(L"-manifest") ||
+                                       (!g_scenePath.empty() && std::filesystem::path(g_scenePath).is_relative());
+    if (!hasRelativeLaunchRoot)
     {
         std::error_code packageError;
         const auto packageResult = Spark::RuntimePackage::AnchorWorkingDirectory(

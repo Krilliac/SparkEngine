@@ -18,6 +18,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 
 class GraphicsEngine;
 class InputManager;
@@ -36,6 +37,10 @@ namespace Spark
     namespace Audio
     {
         class IAudioBackend;
+    }
+    namespace Gameplay
+    {
+        class WeaponSystem;
     }
 } // namespace Spark
 
@@ -67,6 +72,17 @@ struct EngineRuntime
 #ifdef SPARK_JOLT_PHYSICS_AVAILABLE
     std::unique_ptr<PhysicsSystem> physics;
 #endif
+    /// Engine-owned weapon state machine, created by the gameplay lifecycle and
+    /// published through EngineContext::GetWeapons(); the frame loop ticks it.
+    std::unique_ptr<Spark::Gameplay::WeaponSystem> weaponSystem;
+
+    /// Set once Lifecycle::InstallEngineLogSinksImpl has installed the Logger
+    /// sinks; the path of the log file it opened (empty when none could be, which
+    /// leaves the flag clear so the next entry point retries). The `log_path`
+    /// console command reports both so an operator filing a bug can name the file
+    /// this run wrote, instead of guessing which per-user directory it landed in.
+    bool logSinksInstalled = false;
+    std::string engineLogPath;
 
     /**
      * @brief Create and register the CPU-only asset services required by modules.

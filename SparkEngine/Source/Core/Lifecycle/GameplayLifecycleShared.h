@@ -5,6 +5,7 @@
 
 #pragma once
 #include <cstdint>
+#include <string>
 
 namespace Spark::ECS
 {
@@ -13,6 +14,13 @@ namespace Spark::ECS
 
 namespace Spark::Core::Lifecycle
 {
+    /// Install the engine's standard Logger sinks (stderr + rotating per-user log
+    /// file + SparkConsole bridge) exactly once per process. Platform entry points
+    /// call it as early as possible so startup logging reaches the file;
+    /// InitializeDebugSystemsImpl calls it again and gets the same result.
+    /// @return Path of the engine log file, or empty when no file could be opened.
+    std::string InstallEngineLogSinksImpl();
+
     void InitializeDebugSystemsImpl();
     void InitializeNetworkingSystemsImpl();
     void InitializeGameplaySystemsImpl();

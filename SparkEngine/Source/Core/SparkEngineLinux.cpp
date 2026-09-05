@@ -19,6 +19,7 @@
 #include "ModuleManager.h"
 #include "ModuleHotReload.h"
 #include "RuntimePackage.h"
+#include "Core/Lifecycle/GameplayLifecycleShared.h"
 #include "Engine/Events/EventSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Logger.h"
@@ -150,12 +151,14 @@ int main(int argc, char* argv[])
     // gap between subsystem construction and InitDebugSystemsImpl, because
     // Logger::Log() early-returns while m_initialized is still false. The later
     // InitDebugSystemsImpl::Logger::Initialize() call becomes a no-op (idempotent
-    // via the m_initialized check). ApplyConfig / FileLogger / ChromeTracing all
-    // still happen in InitDebugSystemsImpl as before.
+    // via the m_initialized check). ApplyConfig and ChromeTracing still happen in
+    // InitDebugSystemsImpl as before.
     {
         auto& earlyLogger = Spark::Logger::Get();
         earlyLogger.Initialize(/*enableAsync=*/false);
-        earlyLogger.AddSink(std::make_unique<Spark::StderrSink>());
+        // Full sink set (stderr + per-user log file + console bridge), installed
+        // once per process; InitDebugSystemsImpl reuses it instead of reopening.
+        Spark::Core::Lifecycle::InstallEngineLogSinksImpl();
     }
 
     // Log Wine environment if applicable. On native Linux this is a no-op

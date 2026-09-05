@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <new>
 
 #ifdef SPARK_MINIZ_AVAILABLE
 #include <miniz.h>
@@ -37,6 +38,84 @@ namespace Spark
         constexpr uint64_t kMaxTocBytes = 256ull * 1024ull * 1024ull;   // 256 MB
         constexpr uint32_t kMaxFileCount = 10'000'000u;                 // 10M entries
         constexpr uint32_t kMaxEntryBytes = 2u * 1024u * 1024u * 1024u; // 2 GB
+
+        // A .spk is untrusted input (every archive found in ./Data is mounted at
+        // startup). kMaxEntryBytes alone lets a 100-byte entry declare a 2 GB
+        // originalSize, and ReadFile allocates that buffer BEFORE decompression can
+        // fail. The bound is therefore a per-entry decompression budget, checked in
+        // ReadFile: an entry that violates it fails on its own instead of unmounting
+        // the archive, because legitimate cooked content does reach extreme ratios
+        // (a zero-filled lightmap or padded heightmap deflates at deflate's ~1032:1
+        // ceiling, and zstd goes far past it) and an archive-wide rejection at Open
+        // would take every other asset in the pak down with it.
+        //
+        // Two bounds, both per entry:
+        //  - an absolute ceiling on the buffer any single entry can demand, and
+        //  - an expansion factor above every codec's maximum, so a tiny compressed
+        //    blob still cannot claim a huge output.
+        // The output itself is bounded at decompression time as well: the destination
+        // buffer is exactly originalSize and both mz_uncompress and ZSTD_decompress
+        // are told that size, so neither can stream more bytes than the budget allows.
+        constexpr uint64_t kMaxDecompressedEntryBytes = 256ull * 1024ull * 1024ull; // 256 MB
+        constexpr uint64_t kMaxCompressionRatio = 100'000ull;
+
+        /// Reject an entry whose declared decompressed size is outside the per-entry
+        /// budget. Returns false (and logs) for the offending entry only.
+        bool WithinDecompressionBudget(const PakEntry& entry, const std::string& virtualPath)
+        {
+            if (entry.compression == PakCompression::Stored)
+                return true;
+
+            if (static_cast<uint64_t>(entry.originalSize) > kMaxDecompressedEntryBytes)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                "SparkPak: '%s' declares %u decompressed bytes, over the %llu byte per-entry budget",
+                                virtualPath.c_str(), entry.originalSize,
+                                static_cast<unsigned long long>(kMaxDecompressedEntryBytes));
+                return false;
+            }
+
+            if (entry.compressedSize == 0 && entry.originalSize != 0)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPak: '%s' declares %u bytes from an empty payload",
+                                virtualPath.c_str(), entry.originalSize);
+                return false;
+            }
+
+            if (static_cast<uint64_t>(entry.originalSize) >
+                static_cast<uint64_t>(entry.compressedSize) * kMaxCompressionRatio)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                "SparkPak: '%s' declares a %u:%u expansion, over the %llu:1 cap", virtualPath.c_str(),
+                                entry.originalSize, entry.compressedSize,
+                                static_cast<unsigned long long>(kMaxCompressionRatio));
+                return false;
+            }
+
+            return true;
+        }
+
+#if defined(SPARK_MINIZ_AVAILABLE) || defined(SPARK_ZSTD_AVAILABLE)
+        /// Allocate an entry's decompressed buffer, turning a hostile or merely
+        /// huge originalSize into a clean failure instead of a std::bad_alloc
+        /// thrown out of an asset-loading path that has no handler.
+        bool AllocateDecompressBuffer(std::vector<uint8_t>& buffer, const PakEntry& entry,
+                                      const std::string& virtualPath)
+        {
+            try
+            {
+                buffer.resize(entry.originalSize);
+            }
+            catch (const std::bad_alloc&)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                "SparkPak: out of memory decompressing '%s' (%u bytes declared)", virtualPath.c_str(),
+                                entry.originalSize);
+                return false;
+            }
+            return true;
+        }
+#endif
     } // namespace
 
     // =========================================================================
@@ -243,6 +322,9 @@ namespace Spark
                 return false;
             if (entry.compression == PakCompression::Stored && entry.compressedSize != entry.originalSize)
                 return false;
+            // The decompression budget is deliberately NOT enforced here: it is a
+            // per-entry refusal in ReadFile, so one over-compressible or hostile entry
+            // cannot fail Open() and unmount every other asset in the archive.
 
             auto hash = entry.pathHash;
             m_entries.emplace(hash, std::move(entry));
@@ -274,7 +356,26 @@ namespace Spark
 
         const auto& entry = it->second;
 
-        std::vector<uint8_t> compressed(entry.compressedSize);
+        // Refuse this entry before touching the file if its declared expansion is
+        // outside the per-entry budget. Other entries in the archive stay readable.
+        if (!WithinDecompressionBudget(entry, virtualPath))
+            return {};
+
+        // The declared sizes are attacker-controlled. ReadTOC bounds them, but the
+        // allocations here still fail hard on a memory-starved machine, and a
+        // throwing vector constructor would propagate out of an asset-loading path
+        // that has no handler.
+        std::vector<uint8_t> compressed;
+        try
+        {
+            compressed.resize(entry.compressedSize);
+        }
+        catch (const std::bad_alloc&)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPak: out of memory reading '%s' (%u compressed bytes)",
+                            virtualPath.c_str(), entry.compressedSize);
+            return {};
+        }
         {
             // A FILE* has one shared cursor. Keep seek+read indivisible so two
             // concurrent asset loads cannot redirect each other's reads.
@@ -291,7 +392,9 @@ namespace Spark
         if (entry.compression == PakCompression::Deflate)
         {
 #ifdef SPARK_MINIZ_AVAILABLE
-            std::vector<uint8_t> decompressed(entry.originalSize);
+            std::vector<uint8_t> decompressed;
+            if (!AllocateDecompressBuffer(decompressed, entry, virtualPath))
+                return {};
             mz_ulong destLen = entry.originalSize;
             if (mz_uncompress(decompressed.data(), &destLen, compressed.data(), entry.compressedSize) != MZ_OK)
                 return {};
@@ -306,7 +409,9 @@ namespace Spark
         if (entry.compression == PakCompression::Zstd)
         {
 #ifdef SPARK_ZSTD_AVAILABLE
-            std::vector<uint8_t> decompressed(entry.originalSize);
+            std::vector<uint8_t> decompressed;
+            if (!AllocateDecompressBuffer(decompressed, entry, virtualPath))
+                return {};
             size_t result =
                 ZSTD_decompress(decompressed.data(), entry.originalSize, compressed.data(), entry.compressedSize);
             if (ZSTD_isError(result) || result != entry.originalSize)

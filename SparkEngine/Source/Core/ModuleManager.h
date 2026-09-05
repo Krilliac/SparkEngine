@@ -255,8 +255,19 @@ class ModuleManager
      */
     const std::string& GetLastLoadError() const { return m_lastLoadError; }
 
-    /** @brief Check if any modules are loaded */
+    /**
+     * @brief Check if any module entry exists, including one whose OnLoad failed.
+     *
+     * A module that fails OnLoad keeps its entry so its DLL stays mapped until
+     * UnloadAll, so this answers "is a module image still held", not "is a
+     * module usable". Frame loops must use HasInitializedModules() instead —
+     * driving the module branch for a dead entry skips both the module's
+     * rendering and the engine-only present path, leaving a frozen window.
+     */
     bool HasModules() const { return !m_modules.empty(); }
+
+    /** @brief Check whether at least one module completed OnLoad and can be ticked. */
+    bool HasInitializedModules() const { return GetInitializedModuleCount() != 0; }
 
     /** @brief Get paths and names of all loaded modules for hot-reload watching */
     std::vector<std::pair<std::string, std::string>> GetModulePathsAndNames() const;

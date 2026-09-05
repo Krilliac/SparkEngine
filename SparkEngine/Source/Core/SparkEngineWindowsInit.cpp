@@ -213,7 +213,12 @@ void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
 
     auto& console = Spark::SimpleConsole::GetInstance();
 
-    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+    // Saves live in the per-user data directory: an install under Program Files
+    // cannot write beside its binaries, and an upgrade would delete saves there.
+    // ResolveSaveDirectory picks a spelling the narrow SaveSystem API can reopen
+    // (a non-ASCII Windows profile otherwise mangles to '?') and migrates an
+    // existing <cwd>/Saves tree once, so an upgrading player keeps their slots.
+    if (!Spark::SaveSystem::GetInstance().Initialize(Spark::UserPaths::ResolveSaveDirectory()))
     {
         console.LogWarning("SaveSystem initialization failed — save/load unavailable");
     }

@@ -30,6 +30,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -39,6 +40,32 @@
 
 namespace Spark
 {
+
+    // =========================================================================
+    // Virtual path policy
+    // =========================================================================
+
+    /**
+     * @brief Whether a mount-relative virtual path may be resolved at all.
+     *
+     * A substring test for ".." is both too weak and too strong on Windows. It
+     * rejects legitimate names ("weapon..old.mesh") while missing:
+     *  - drive-relative paths ("C:evil"),
+     *  - NTFS alternate data streams ("assets/logo.png:secret"),
+     *  - reserved device names ("COM1", "NUL"), which Win32 resolves as devices
+     *    no matter what directory prefix they carry, so opening one can block the
+     *    loading thread on a serial port.
+     *
+     * This predicate decides containment on the NORMALIZED path, so "a/../../etc"
+     * is rejected for the '..' it actually resolves to rather than for the two
+     * characters it contains. It is the policy gate for every untrusted path the
+     * engine consumes — VFS mounts and .sparkscene manifests alike.
+     *
+     * @param virtualPath Mount-relative path from untrusted content.
+     * @return true when the path is relative, contains no escaping component, no
+     *         ':' and no reserved device name.
+     */
+    [[nodiscard]] bool IsVirtualPathSafe(const std::string& virtualPath);
 
     // =========================================================================
     // Priority constants
@@ -104,10 +131,12 @@ namespace Spark
         std::string GetProviderName() const override;
 
       private:
-        /// @brief Resolve a virtual path to the real filesystem path.
+        /// @brief Resolve a virtual path to the real filesystem path, or {} if it escapes the root.
         std::string ResolvePath(const std::string& virtualPath) const;
 
         std::string m_rootPath;
+        std::filesystem::path m_root;          ///< Normalized root, no trailing separator.
+        std::filesystem::path m_canonicalRoot; ///< Root with symlinks resolved, for the containment check.
     };
 
     // =========================================================================

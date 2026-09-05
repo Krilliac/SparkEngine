@@ -216,11 +216,41 @@ namespace Spark::ECS
             auto& transform = view.get<Transform>(entity);
             auto& audio = view.get<AudioSourceComponent>(entity);
 
-            if (!audio.is3D || !audio.audioSourceHandle)
-                continue;
-
+            // Drop a handle whose pooled slot has been recycled for someone else.
+            // The bound generation is kept: it records that this component has
+            // already played once, so playOnAwake does not restart a finished cue.
             auto* source = audio.audioSourceHandle.As<AudioSource>();
-            if (!source)
+            if (audio.audioSourceHandle && !m_audio->IsSourceLive(source, audio.audioSourceGeneration))
+            {
+                audio.audioSourceHandle = nullptr;
+                audio.isPlaying = false;
+                source = nullptr;
+            }
+
+            // Bind an authored component to a live source exactly once (a pooled
+            // source's Generation is >= 1 after its first acquire, so 0 means
+            // "never bound").
+            if (!audio.audioSourceHandle && audio.audioSourceGeneration == 0 && audio.playOnAwake &&
+                !audio.soundName.empty())
+            {
+                source = audio.is3D ? m_audio->PlaySound3D(audio.soundName, transform.position, audio.volume,
+                                                           audio.pitch, audio.loop)
+                                    : m_audio->PlaySound(audio.soundName, audio.volume, audio.pitch, audio.loop);
+                if (source)
+                {
+                    if (audio.is3D)
+                    {
+                        source->MinDistance = audio.minDistance;
+                        source->MaxDistance = audio.maxDistance;
+                    }
+                    audio.audioSourceHandle = Spark::AudioHandle(source);
+                    audio.audioSourceGeneration = source->Generation;
+                    audio.isPlaying = true;
+                    audio.previousPosition = transform.position;
+                }
+            }
+
+            if (!audio.is3D || !source)
                 continue;
 
             // XAudio2 uses source velocity relative to the listener to compute
