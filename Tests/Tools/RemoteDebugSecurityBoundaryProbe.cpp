@@ -4,6 +4,14 @@
 // deliberately emulates an external translation unit: defining the legacy test
 // macro must not mint a principal, public loopback must stay observer-only, and
 // StopListening must serialize revocation with a protected handler.
+//
+// test-registration: ignore
+//
+// This probe carries its own Logger/SimpleConsole mirrors, so linking it into
+// SparkTests produces LNK2005 duplicate symbols. It stays a manual tool driven
+// by Tests/Tools/run-remote-debug-security-probes.ps1; the protections it
+// probes are enforced in-suite by Tests/TestRemoteDebugSystem.cpp. Deleting the
+// marker without registering the file is what the guard is for.
 
 #define NDEBUG 1
 #define SPARK_REMOTE_DEBUG_TESTING 1

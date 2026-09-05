@@ -7,12 +7,20 @@
  * code. This prevents known flaky tests (timing-dependent, environment-
  * sensitive, etc.) from blocking PRs while still making their failures visible.
  *
+ * SCOPE — read before adding an entry:
+ *   An entry here waives the ENTIRE test. Every assertion in the matched test
+ *   becomes non-blocking, not just the flaky one, so a real regression in any
+ *   other assertion of that test is tolerated too. When only one measurement is
+ *   environment-sensitive, use EXPECT_WARN_ONLY(expr, reason) from
+ *   TestFramework.h instead: it waives that single assertion and leaves the rest
+ *   of the test strict.
+ *
  * To add a new pattern:
  *   1. Add a {pattern, reason} entry to g_testWarningPatterns below
  *   2. The pattern is a substring match against the full test name
  *
  * To promote a warning back to a hard failure:
- *   Remove its entry from this list.
+ *   Remove its entry from this list. --warn-is-error does it for every entry.
  */
 
 #pragma once
@@ -49,15 +57,6 @@ inline constexpr TestWarningPattern g_testWarningPatterns[] = {
     {"Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation",
      "InstabilitySimulator RNG occasionally produces correction magnitudes below threshold"},
 
-    // Full-engine 3000-frame load test — the `spikes10x <= 30` assertion
-    // is timing-sensitive and depends on host scheduling pressure. Verified
-    // flaky on a pristine baseline (5/5 runs produced 34–55 spikes,
-    // 1/6 runs produced 19) on the same machine within a single minute,
-    // independent of source changes. The other 6 assertions in the test
-    // (event delivery, avg frame, memory growth, entity count) remain
-    // strict.
-    {"LoadTest_FullEngine_3000Frames",
-     "spikes10x threshold sensitive to host scheduling pressure"},
 };
 // clang-format on
 

@@ -1022,7 +1022,7 @@ TEST(NetworkStress_Skipped)
 {
     // Networking stress tests require ENABLE_NETWORKING to be defined.
     // The CMake option ENABLE_NETWORKING=ON (default) provides this.
-    EXPECT_TRUE(true);
+    SKIP_TEST("ENABLE_NETWORKING is OFF in this configuration");
 }
 
 #endif // ENABLE_NETWORKING
