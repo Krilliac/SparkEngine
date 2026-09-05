@@ -130,9 +130,18 @@ TEST(ShaderHotReload_ForceReloadAll)
     hr.ForceReloadAll();
     uint32_t reloadsAfter = hr.GetReloadCount();
 
-    // Each shader file should have been reloaded
+#ifdef _WIN32
+    // Each shader file is really compiled (D3DCompile) and counted as a reload.
     EXPECT_GT(reloadsAfter, reloadsBefore);
     EXPECT_EQ(reloadsAfter - reloadsBefore, hr.GetWatchedShaderCount());
+#else
+    // Only the DXBC target has a compiler behind RHI::CompileShader; every other
+    // target fails closed. A forced reload here must therefore count zero
+    // successes: counting one would be exactly the silent "reload" the
+    // fail-closed change removed, so this asserts the absence, not a skip.
+    EXPECT_EQ(reloadsAfter, reloadsBefore);
+    EXPECT_EQ(hr.GetWatchedShaderCount(), 3u);
+#endif
 
     hr.Shutdown();
     CleanupTempShaderDir(dir);

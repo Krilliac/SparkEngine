@@ -154,6 +154,11 @@ TEST(AudioECSBinding_PlayOnAwakeWithUnknownSoundStaysUnbound)
 
 TEST(AudioECSBinding_PlayOnAwakeBindsAuthoredComponentToLiveSource)
 {
+    // Linux/macOS builds carry no-op audio stubs: Initialize() succeeds but no
+    // sound can be loaded, so the live-source binding cannot be exercised there.
+    if (!AudioEngine::IsAudioBackendAvailable())
+        SKIP_TEST("no audio backend on this platform (XAudio2 is Windows-only; stubs are no-ops)");
+
     AudioEngine engine;
     if (FAILED(engine.Initialize(2)))
     {

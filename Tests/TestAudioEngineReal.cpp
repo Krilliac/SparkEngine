@@ -135,6 +135,12 @@ TEST(AudioEngineReal_FormatsCompatibleRejectsDifferentWaveFormats)
 
 TEST(AudioEngineReal_PooledVoiceIsRebuiltForANewSoundFormat)
 {
+    // Linux/macOS builds carry no-op audio stubs: Initialize() succeeds but no
+    // sound can be loaded or played, so the XAudio2 semantics under test do not
+    // exist there. Skip explicitly instead of failing on the first LoadSound.
+    if (!AudioEngine::IsAudioBackendAvailable())
+        SKIP_TEST("no audio backend on this platform (XAudio2 is Windows-only; stubs are no-ops)");
+
     AudioEngine engine;
     if (FAILED(engine.Initialize(1)))
     {
@@ -205,6 +211,9 @@ TEST(AudioEngineReal_CategoryVolumeExcludesMasterAndTracksBuses)
 
 TEST(AudioEngineReal_LiveSourcesFollowCategoryVolumeChanges)
 {
+    if (!AudioEngine::IsAudioBackendAvailable())
+        SKIP_TEST("no audio backend on this platform (XAudio2 is Windows-only; stubs are no-ops)");
+
     AudioEngine engine;
     if (FAILED(engine.Initialize(2)))
     {
@@ -366,6 +375,9 @@ TEST(AudioEngineReal_DistanceAttenuationHonorsAuthoredRange)
 
 TEST(AudioEngineReal_RecycledSourceInvalidatesAnOlderHandle)
 {
+    if (!AudioEngine::IsAudioBackendAvailable())
+        SKIP_TEST("no audio backend on this platform (XAudio2 is Windows-only; stubs are no-ops)");
+
     AudioEngine engine;
     if (FAILED(engine.Initialize(1)))
     {
