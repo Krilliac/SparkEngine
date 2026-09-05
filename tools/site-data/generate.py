@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import posixpath
 import re
@@ -11,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ElementTree
 from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
@@ -31,18 +33,19 @@ from common import (
     load_contract,
     load_json,
     plain_text,
+    read_bytes_stable,
     repository_source,
     sha256_bytes,
     slug_part,
     title_from_filename,
     to_posix,
-    walk_files,
+    tracked_files,
     write_bytes_atomic,
     write_json,
     write_text,
 )
 from render_handoff import render_handoff
-from validate import validate_contract
+from validate import validate_contract, warn_legacy_contract_flag_deprecated
 from exact_evidence import (
     ExactEvidenceError,
     load_manifest as load_exact_evidence_manifest,
@@ -59,6 +62,11 @@ import docs_contract  # noqa: E402
 SOURCE_EXTENSIONS = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".m", ".mm"}
 LARGE_DOCUMENT_BYTES = 240_000
 API_GENERATION_TIMEOUT_SECONDS = 240
+# Nine declared generators, each bounded to 300 s by docs/update-all-docs.sh.
+DOC_HEALTH_TIMEOUT_SECONDS = 1800
+MAX_HEALTH_JSON_BYTES = 4 * 1024 * 1024
+MAX_CTEST_REPORT_BYTES = 32 * 1024 * 1024
+CODEBASE_METRICS_PATH = REPO_ROOT / "docs" / "codebase-metrics.py"
 MAX_OUTPUT_FILES = 5000
 MAX_OUTPUT_BYTES = 256 * 1024 * 1024
 DOC_OUTPUT_ENVIRONMENT = (
@@ -213,7 +221,7 @@ def module_statistics() -> list[dict[str, Any]]:
     for module in sorted((REPO_ROOT / "GameModules").glob("SparkGame*")):
         if not module.is_dir() or not (module / "CMakeLists.txt").is_file():
             continue
-        source_files, source_lines = file_lines((module / "Source").rglob("*") if (module / "Source").exists() else [])
+        source_files, source_lines = file_lines(tracked_files(module / "Source"))
         modules.append(
             {
                 "name": module.name,
@@ -224,6 +232,47 @@ def module_statistics() -> list[dict[str, Any]]:
             }
         )
     return modules
+
+
+def codebase_metrics_module() -> Any:
+    """Load the one tracked-tree inventory definition shared with README badges.
+
+    docs/update-readme-badges.sh publishes these same counts, so a second
+    definition here is a second answer to one public question.
+    """
+    specification = importlib.util.spec_from_file_location(
+        "spark_codebase_metrics", CODEBASE_METRICS_PATH
+    )
+    if specification is None or specification.loader is None:
+        raise SiteDataError(f"cannot load {to_posix(CODEBASE_METRICS_PATH.relative_to(REPO_ROOT))}")
+    module = importlib.util.module_from_spec(specification)
+    try:
+        specification.loader.exec_module(module)
+    except (OSError, ValueError) as error:
+        raise SiteDataError(f"codebase metrics are unavailable: {error}") from error
+    return module
+
+
+def ctest_summary(path: Path) -> dict[str, int]:
+    """Execution totals from the exact-commit CTest JUnit report."""
+    payload = read_bytes_stable(path, MAX_CTEST_REPORT_BYTES, "CTest JUnit report")
+    document = payload.decode("utf-8", errors="replace")
+    # CTest emits no doctype. Refusing one keeps entity expansion out of the
+    # parser instead of trusting a report that reached us through an artifact.
+    if "<!DOCTYPE" in document or "<!ENTITY" in document:
+        raise SiteDataError("CTest JUnit report declares a doctype or entity and is refused")
+    try:
+        root = ElementTree.fromstring(document)
+    except ElementTree.ParseError as error:
+        raise SiteDataError(f"CTest JUnit report is not well-formed XML: {error}") from error
+    cases = root.findall(".//testcase")
+    if not cases:
+        raise SiteDataError("CTest JUnit report contains no test cases")
+    failed = sum(
+        1 for case in cases if case.find("failure") is not None or case.find("error") is not None
+    )
+    skipped = sum(1 for case in cases if case.find("skipped") is not None)
+    return {"executed": len(cases), "failed": failed, "skipped": skipped}
 
 
 def metric(identifier: str, label: str, value: int | float | str, evidence: list[dict[str, Any]], unit: str | None = None) -> dict[str, Any]:
@@ -239,31 +288,19 @@ def metric(identifier: str, label: str, value: int | float | str, evidence: list
     return result
 
 
-def collect_metrics(authored_documents: int, modules: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    canonical_code_roots = [
-        "SparkEngine/Source",
-        "SparkEditor/Source",
-        "GameModules",
-        "SparkConsole/src",
-        "SparkShaderCompiler/src",
-        "Tests",
-    ]
-    canonical_code_files: list[Path] = []
-    for root_value in canonical_code_roots:
-        root = REPO_ROOT / root_value
-        if root.is_dir():
-            canonical_code_files.extend(
-                path for path in root.rglob("*")
-                if path.is_file() and path.suffix.lower() in {".cpp", ".h", ".hpp"}
-            )
-    code_files, code_lines = file_lines(canonical_code_files)
-
-    test_pattern = re.compile(r"^[ \t]*TEST(?:_F)?[ \t]*\(", flags=re.MULTILINE)
-    test_definitions = 0
-    test_sources = list(walk_files(REPO_ROOT / "Tests", {".cpp"}))
-    for path in test_sources:
-        content = path.read_text(encoding="utf-8", errors="ignore")
-        test_definitions += len(test_pattern.findall(content))
+def collect_metrics(
+    authored_documents: int,
+    modules: list[dict[str, Any]],
+    execution: dict[str, int] | None = None,
+) -> list[dict[str, Any]]:
+    inventory_module = codebase_metrics_module()
+    try:
+        inventory = inventory_module.collect()
+    except ValueError as error:
+        raise SiteDataError(f"codebase metrics are unavailable: {error}") from error
+    canonical_code_roots = sorted(
+        {root for roots in inventory_module.CATEGORIES.values() for root in roots}
+    )
 
     panel_path = REPO_ROOT / "SparkEditor" / "Source" / "Core" / "EditorPanelFactory.cpp"
     panel_content = panel_path.read_text(encoding="utf-8", errors="ignore")
@@ -275,16 +312,15 @@ def collect_metrics(authored_documents: int, modules: list[dict[str, Any]]) -> l
     visual_nodes = len(re.findall(r"\{\s*ScriptNodeType::", palette_match.group("body") if palette_match else ""))
 
     shader_root = REPO_ROOT / "Shaders"
-    hlsl = sum(1 for path in shader_root.rglob("*") if path.is_file() and path.suffix.lower() == ".hlsl")
-    glsl = sum(1 for path in shader_root.rglob("*") if path.is_file() and path.suffix.lower() == ".glsl")
+    hlsl = len(tracked_files(shader_root, {".hlsl"}))
+    glsl = len(tracked_files(shader_root, {".glsl"}))
 
     networking_files: list[Path] = []
     for root in (
         REPO_ROOT / "SparkEngine" / "Source" / "Engine" / "Networking",
         REPO_ROOT / "SparkEngine" / "Source" / "Engine" / "OnlineServices",
     ):
-        if root.exists():
-            networking_files.extend(root.rglob("*"))
+        networking_files.extend(tracked_files(root))
     _, networking_lines = file_lines(networking_files)
 
     by_name = {module["name"]: module for module in modules}
@@ -307,17 +343,33 @@ def collect_metrics(authored_documents: int, modules: list[dict[str, Any]]) -> l
     replication_hz = exact_rate("kReplicationHz")
     source_evidence = lambda path, label: [{"type": "source", "path": path, "label": label}]
     code_evidence = [
-        {"type": "metric", "path": "tools/site-data/generate.py", "selector": "collect_metrics", "label": "Exact-commit LOC derivation"},
+        {"type": "metric", "path": "docs/codebase-metrics.py", "selector": "collect", "label": "Tracked-tree source and test inventory"},
         *(
             {"type": "source", "path": path, "label": "Canonical LOC root"}
             for path in canonical_code_roots
         ),
     ]
+    execution_metrics: list[dict[str, Any]] = []
+    if execution is not None:
+        execution_evidence = [
+            {
+                "type": "workflow",
+                "path": ".github/workflows/build.yml",
+                "selector": "build-windows-vs2022",
+                "label": "CTest JUnit report for the exact commit",
+            }
+        ]
+        execution_metrics = [
+            metric("tests.executed", "CTest cases executed", execution["executed"], execution_evidence, "tests"),
+            metric("tests.failed", "CTest cases failed", execution["failed"], execution_evidence, "tests"),
+            metric("tests.skipped", "CTest cases skipped", execution["skipped"], execution_evidence, "tests"),
+        ]
     return [
-        metric("code.totalLines", "C/C++ physical lines", code_lines, code_evidence, "lines"),
-        metric("code.files", "C/C++ source files", code_files, code_evidence, "files"),
-        metric("tests.definitions", "GoogleTest definitions", test_definitions, source_evidence("Tests", "TEST and TEST_F declarations"), "tests"),
-        metric("tests.files", "Test C++ translation units", len(test_sources), source_evidence("Tests", "Recursive .cpp files in the test tree"), "files"),
+        metric("code.totalLines", "C/C++ physical lines", inventory["total_lines"], code_evidence, "lines"),
+        metric("code.files", "C/C++ source files", inventory["file_count"], code_evidence, "files"),
+        metric("tests.definitions", "SparkTests TEST and TEST_F definitions", inventory["test_definitions"], code_evidence, "tests"),
+        metric("tests.files", "Source files defining SparkTests cases", inventory["test_files"], code_evidence, "files"),
+        *execution_metrics,
         metric("editor.panels", "Registered editor panels", editor_panels, source_evidence("SparkEditor/Source/Core/EditorPanelFactory.cpp", "Editor panel registrations"), "panels"),
         metric("shaders.hlsl", "HLSL shader files", hlsl, source_evidence("Shaders/HLSL", "HLSL source tree"), "files"),
         metric("shaders.glsl", "GLSL shader files", glsl, source_evidence("Shaders/GLSL", "GLSL source tree"), "files"),
@@ -538,14 +590,87 @@ def split_large_document(document: dict[str, Any]) -> list[dict[str, Any]]:
     return [parent, *children]
 
 
-def documentation_health() -> dict[str, Any]:
+def summarize_documentation_health(payload: Any, exit_code: int, commit: str) -> dict[str, Any]:
+    """Translate schema-v1 health evidence into the published health block.
+
+    Every declared generator must appear exactly once with its own status, and
+    the aggregate counts must agree with the rows they summarize; anything else
+    is evidence that did not measure what it claims to measure.
+    """
+    if not isinstance(payload, dict) or payload.get("schemaVersion") != 1:
+        raise SiteDataError("documentation health evidence is not schema-v1")
+    if payload.get("sourceCommit") != commit:
+        raise SiteDataError(
+            f"documentation health evidence is bound to {payload.get('sourceCommit')!r}, not {commit}"
+        )
+    results = payload.get("results")
+    if not isinstance(results, list) or not results:
+        raise SiteDataError("documentation health evidence declares no generator results")
+    checks: list[dict[str, Any]] = []
+    for row in results:
+        if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
+            raise SiteDataError("documentation health evidence has an unidentified generator result")
+        if not isinstance(row.get("status"), str) or not isinstance(row.get("message"), str):
+            raise SiteDataError(f"documentation health result for {row['id']!r} is malformed")
+        checks.append(
+            {
+                "name": row["id"],
+                "status": "current" if row["status"] == "current" else "refresh-pending",
+                "detail": row["message"][:500],
+            }
+        )
+    names = [check["name"] for check in checks]
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        raise SiteDataError(f"documentation health evidence repeats generators: {duplicates}")
+    failures = sum(1 for check in checks if check["status"] != "current")
+    successes = len(checks) - failures
+    if payload.get("failures") != failures or payload.get("successes") != successes:
+        raise SiteDataError("documentation health aggregate counts contradict the generator results")
+    current = (
+        exit_code == 0
+        and failures == 0
+        and payload.get("overall") == "pass"
+        and payload.get("exitCode") == 0
+    )
+    return {
+        "status": "current" if current else "refresh-pending",
+        "checks": checks,
+        "successes": successes,
+        "failures": failures,
+        "exitCode": payload.get("exitCode"),
+        "sourceCommit": commit,
+    }
+
+
+def documentation_health_from_file(path: Path, commit: str) -> dict[str, Any]:
+    """Consume health evidence a job already produced for this exact commit.
+
+    docs/update-all-docs.sh writes this file itself, so reusing it costs one
+    read instead of a second full regeneration; it is accepted only when it is
+    bound to the commit being published.
+    """
+    payload = load_json(path, maximum=MAX_HEALTH_JSON_BYTES)
+    exit_code = payload.get("exitCode") if isinstance(payload, dict) else None
+    return summarize_documentation_health(payload, exit_code if isinstance(exit_code, int) else 1, commit)
+
+
+def documentation_health(commit: str, *, emit_to: Path | None = None) -> dict[str, Any]:
+    """Regenerate every declared documentation output in an isolated checkout.
+
+    The verdict comes from the machine-readable evidence the generator writes
+    for itself (docs/.health.json), not from scraped console text. A check that
+    cannot run raises: an unrunnable check is not a passing one, and publishing
+    it as "unknown" is how a never-executed gate reaches the website.
+    """
     script_relative = Path("docs") / "update-all-docs.sh"
     if not (REPO_ROOT / script_relative).is_file():
-        return {"status": "unknown", "checks": []}
+        raise SiteDataError(f"documentation health requires {to_posix(script_relative)}")
     with tempfile.TemporaryDirectory(prefix="sparkengine-doc-health-") as temporary:
         checkout = Path(temporary) / "checkout"
+        health_path = Path(temporary) / "health.json"
         add = subprocess.run(
-            ["git", "worktree", "add", "--detach", str(checkout), "HEAD"],
+            ["git", "worktree", "add", "--detach", str(checkout), commit],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
@@ -553,21 +678,30 @@ def documentation_health() -> dict[str, Any]:
         )
         if add.returncode:
             detail = add.stderr.strip() or add.stdout.strip()
-            return {"status": "unknown", "checks": [{"name": "Documentation generators", "status": "refresh-pending", "detail": f"Isolated check unavailable: {detail}"}]}
+            raise SiteDataError(f"isolated documentation health check is unavailable: {detail}")
         try:
             environment = os.environ.copy()
             for key in DOC_OUTPUT_ENVIRONMENT:
                 environment.pop(key, None)
-            try:
-                result = run_bounded_process(
-                    ["bash", str(checkout / script_relative), "check"],
-                    cwd=checkout,
-                    environment=environment,
-                    timeout=90,
-                    label="isolated documentation health check",
-                )
-            except SiteDataError:
-                return {"status": "unknown", "checks": [{"name": "Documentation generators", "status": "refresh-pending", "detail": "Health check exceeded 90 seconds"}]}
+            environment["SPARK_DOC_HEALTH_OUTPUT"] = str(health_path)
+            result = run_bounded_process(
+                ["bash", str(checkout / script_relative), "update"],
+                cwd=checkout,
+                environment=environment,
+                timeout=DOC_HEALTH_TIMEOUT_SECONDS,
+                label="isolated documentation health check",
+            )
+            if not health_path.is_file():
+                raise SiteDataError("isolated documentation health check produced no health evidence")
+            payload = load_json(health_path, maximum=MAX_HEALTH_JSON_BYTES)
+            if emit_to is not None:
+                # Publishing this evidence lets a later run in the same job
+                # consume it with --doc-health-file. A determinism proof that
+                # skips health does not cover the block that actually ships;
+                # reusing one regeneration lets the proof and the published
+                # payload run the same health mode inside one time budget.
+                emit_to.parent.mkdir(parents=True, exist_ok=True)
+                emit_to.write_bytes(health_path.read_bytes())
         finally:
             subprocess.run(
                 ["git", "worktree", "remove", "--force", str(checkout)],
@@ -576,22 +710,35 @@ def documentation_health() -> dict[str, Any]:
                 text=True,
                 check=False,
             )
-    output = f"{result.stdout}\n{result.stderr}"
-    output = re.sub(r"\x1b\[[0-9;]*m", "", output)
-    checks = []
-    for match in re.finditer(r"\[CHECK\]\s+(.+?)\.\.\.\s+([✓✗])\s+([^\n]+)", output):
-        checks.append(
-            {
-                "name": match.group(1).strip(),
-                "status": "current" if match.group(2) == "✓" else "refresh-pending",
-                "detail": match.group(3).strip(),
-            }
-        )
-    status = "current" if result.returncode == 0 else ("refresh-pending" if checks else "unknown")
-    return {"status": status, "checks": checks}
+    return summarize_documentation_health(payload, result.returncode, commit)
 
 
-def build_documents(contract: dict[str, Any], source: dict[str, str], *, check_health: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], int]:
+def documentation_health_block(
+    commit: str,
+    check_health: bool,
+    health_file: Path | None,
+    emit_health_file: Path | None = None,
+) -> dict[str, Any]:
+    if not check_health:
+        if emit_health_file is not None:
+            raise SiteDataError("--emit-doc-health-file cannot be combined with --skip-doc-health")
+        return {"status": "skipped", "checks": []}
+    if health_file is not None:
+        if emit_health_file is not None and health_file.resolve() != emit_health_file.resolve():
+            emit_health_file.parent.mkdir(parents=True, exist_ok=True)
+            emit_health_file.write_bytes(health_file.read_bytes())
+        return documentation_health_from_file(health_file, commit)
+    return documentation_health(commit, emit_to=emit_health_file)
+
+
+def build_documents(
+    contract: dict[str, Any],
+    source: dict[str, str],
+    *,
+    check_health: bool,
+    health_file: Path | None = None,
+    emit_health_file: Path | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], int]:
     catalog = contract["docsCatalog"]
     authored: list[dict[str, Any]] = []
     for path in collect_document_sources(catalog):
@@ -680,7 +827,7 @@ def build_documents(contract: dict[str, Any], source: dict[str, str], *, check_h
     snapshot = {
         **source,
         "generatedAt": source["committedAt"],
-        "health": documentation_health() if check_health else {"status": "unknown", "checks": []},
+        "health": documentation_health_block(commit, check_health, health_file, emit_health_file),
         "counts": {
             "documents": len(rewritten),
             "authoredDocuments": authored_count,
@@ -849,7 +996,7 @@ def enforce_publication_budgets(output: Path, bundle_path: Path, page_root: Path
 
 
 def generate(args: argparse.Namespace) -> dict[str, Any]:
-    contract = validate_contract()
+    contract = validate_contract(allow_legacy_contract=args.allow_legacy_contract)
     source = repository_source(
         branch_override=args.source_branch,
         commit_override=args.source_commit,
@@ -900,8 +1047,21 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
     page_root.mkdir(parents=True, exist_ok=True)
 
     documents, sections, docs_snapshot, authored_count = build_documents(
-        contract, source, check_health=not args.skip_doc_health
+        contract,
+        source,
+        check_health=not args.skip_doc_health,
+        health_file=args.doc_health_file,
+        emit_health_file=args.emit_doc_health_file,
     )
+    health = docs_snapshot["health"]
+    if health["status"] != "current" and not args.skip_doc_health:
+        stale = ", ".join(
+            check["name"] for check in health["checks"] if check["status"] != "current"
+        )
+        raise SiteDataError(
+            "documentation health is not current; refresh-pending generators: "
+            f"{stale or 'unreported'}"
+        )
     metadata: list[dict[str, Any]] = []
     search_records: list[dict[str, Any]] = []
     files_by_slug: dict[str, dict[str, Any]] = {}
@@ -973,7 +1133,8 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
     docs_index_info = pointer(output, docs_index_path, write_json(docs_index_path, {"schemaVersion": SCHEMA_VERSION, **docs_payload}))
 
     modules = module_statistics()
-    metrics = collect_metrics(authored_count, modules)
+    execution = ctest_summary(args.ctest_junit) if args.ctest_junit else None
+    metrics = collect_metrics(authored_count, modules, execution)
     readiness = contract["readiness"]
     evidence_commit = args.evidence_commit or source["commit"]
     conclusion = args.ci_conclusion or ("dirty-working-tree" if dirty else "success")
@@ -1106,12 +1267,46 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="validated exact build-matrix and CodeQL evidence manifest to retain in the snapshot",
     )
-    parser.add_argument("--skip-doc-health", action="store_true")
+    parser.add_argument(
+        "--allow-legacy-contract",
+        action="store_true",
+        help=(
+            "DEPRECATED, retired waiver: accept unresolved CI job, test selector, and "
+            "path references with a warning. The contract validates strictly, so this "
+            "flag can only hide a newly added unresolvable reference"
+        ),
+    )
+    parser.add_argument(
+        "--doc-health-file",
+        type=Path,
+        help="schema-v1 documentation health evidence for this commit, instead of regenerating it",
+    )
+    parser.add_argument(
+        "--ctest-junit",
+        type=Path,
+        help="CTest JUnit report for this exact commit; publishes tests.executed/failed/skipped",
+    )
+    parser.add_argument(
+        "--emit-doc-health-file",
+        type=Path,
+        help=(
+            "write the documentation health evidence this run computed, so a later run "
+            "in the same job can consume it with --doc-health-file and publish the same "
+            "health block the determinism proof compared"
+        ),
+    )
+    parser.add_argument(
+        "--skip-doc-health",
+        action="store_true",
+        help="publish with docs health 'skipped'; never valid for a release publication",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    if args.allow_legacy_contract:
+        warn_legacy_contract_flag_deprecated("generate.py")
     try:
         result = generate(args)
     except (SiteDataError, OSError, ValueError, KeyError) as error:

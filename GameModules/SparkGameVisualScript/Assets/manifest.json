@@ -1,0 +1,38 @@
+{
+  "manifestVersion": 1,
+  "package": "SparkGameVisualScript",
+  "license": "Spark Open License 1.0; repository-original generated scripts",
+  "assets": [
+    {
+      "path": "Scripts/Generated/Collectible.as",
+      "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
+      "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
+      "sha256": "4de0a581a01283ccbc8fdb2180d7a5f75d2627401911e158f92bed3637042c21"
+    },
+    {
+      "path": "Scripts/Generated/EnemyPatrol.as",
+      "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
+      "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
+      "sha256": "1768d08609a98db4eecdce0dfeb8e10fb45e0705292e0d4dc8f5fb44e283974e"
+    },
+    {
+      "path": "Scripts/Generated/GameManager.as",
+      "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
+      "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
+      "sha256": "2102e10de6d7e274bb6702da4cfcb8e425f0def185add126a6c224fb4b479a19"
+    },
+    {
+      "path": "Scripts/Generated/HealthPickup.as",
+      "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
+      "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
+      "sha256": "5b0cc0b4fde60f47cecce419690029e3953d34c0a923e07c7738e6ff10d255d9"
+    },
+    {
+      "path": "Scripts/Generated/PlayerController.as",
+      "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
+      "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
+      "sha256": "64915256110eabed95f2b0dc667cdaf7d55cffc6275d9ecaf27c525ec02530ba"
+    }
+  ],
+  "notes": "Generated AngelScript sources checked in so the module runs without a graph-compilation step. Regenerate them from the module's graphs and update the SHA-256 values in the same change."
+}
