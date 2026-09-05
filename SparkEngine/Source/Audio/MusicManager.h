@@ -161,7 +161,6 @@ namespace Spark::Audio
         bool enabled = true;
         float maxOcclusionFactor = 0.8f;    ///< Maximum volume reduction (0-1)
         float lowPassWhenOccluded = 800.0f; ///< Low-pass cutoff when fully occluded
-        int maxRays = 4;                    ///< Number of occlusion rays to cast
     };
 
     /**

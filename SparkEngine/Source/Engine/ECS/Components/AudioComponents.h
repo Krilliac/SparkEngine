@@ -13,6 +13,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
+#include <cstdint>
 #include <string>
 
 // =============================================================================
@@ -27,16 +28,24 @@
  */
 struct AudioSourceComponent
 {
-    std::string soundName;                       ///< Sound asset name registered with AudioEngine.
-    float volume = 1.0f;                         ///< Playback volume [0, 2]; values > 1 amplify.
-    float pitch = 1.0f;                          ///< Playback pitch multiplier (0, 4]; 1 = normal speed.
-    float minDistance = 1.0f;                    ///< Distance at which attenuation begins (meters).
-    float maxDistance = 50.0f;                   ///< Distance at which the sound is fully attenuated (meters).
-    bool is3D = true;                            ///< When true, the sound is spatialized using entity position.
-    bool loop = false;                           ///< Restart playback automatically when the clip ends.
-    bool playOnAwake = false;                    ///< Begin playing immediately when the entity is created.
-    bool isPlaying = false;                      ///< Runtime state: whether the source is currently audible.
-    Spark::AudioHandle audioSourceHandle;        ///< Opaque handle to the underlying XAudio2 source voice.
+    std::string soundName; ///< Sound asset name registered with AudioEngine.
+    float volume = 1.0f;   ///< Playback volume [0, 2]; values > 1 amplify.
+    float pitch = 1.0f;    ///< Playback pitch multiplier (0, 4]; 1 = normal speed.
+    /// Distance at which attenuation begins (meters). Copied to
+    /// AudioSource::MinDistance on bind and consumed by the engine's rolloff.
+    float minDistance = 1.0f;
+    /// Distance at which the sound is fully attenuated (meters). Copied to
+    /// AudioSource::MaxDistance on bind and consumed by the engine's rolloff.
+    float maxDistance = 50.0f;
+    bool is3D = true;                     ///< When true, the sound is spatialized using entity position.
+    bool loop = false;                    ///< Restart playback automatically when the clip ends.
+    bool playOnAwake = false;             ///< Begin playing immediately when the entity is created.
+    bool isPlaying = false;               ///< Runtime state: whether the source is currently audible.
+    Spark::AudioHandle audioSourceHandle; ///< Opaque handle to the underlying XAudio2 source voice.
+    /// AudioSource::Generation observed when the handle was bound. Pooled voices
+    /// are recycled, so a handle alone cannot tell "still mine" from "reused by
+    /// another entity" -- always check AudioEngine::IsSourceLive(handle, this).
+    uint32_t audioSourceGeneration = 0;
     DirectX::XMFLOAT3 previousPosition{0, 0, 0}; ///< Last frame's position, used to compute velocity for Doppler.
 
     /**

@@ -25,9 +25,29 @@
 #include <memory>
 #include <functional>
 #include <mutex>
+#include <atomic>
+#include <cstdint>
 
 using DirectX::XMFLOAT3;
 using DirectX::XMMATRIX;
+
+namespace Spark::Audio
+{
+    class AudioMixer;
+}
+
+/**
+ * @brief Volume category a playback request is billed to
+ *
+ * The category selects which stored volume -- and, when a mixer is attached,
+ * which mix bus -- scales the caller's requested volume. Master volume is NOT
+ * part of that chain: it is applied once, on the mastering voice.
+ */
+enum class AudioCategory : uint8_t
+{
+    SFX,  ///< Sound effects: scaled by the SFX volume and the "SFX" bus
+    Music ///< Music: scaled by the music volume and the "Music" bus
+};
 
 /**
  * @brief Audio source structure for managing individual sound instances
@@ -41,13 +61,20 @@ struct AudioSource
     IXAudio2SourceVoice* Voice; ///< XAudio2 source voice for audio playback
     XMFLOAT3 Position;          ///< 3D world position for spatial audio
     XMFLOAT3 Velocity;          ///< 3D velocity for Doppler effects
-    float Volume;               ///< Volume level (0.0 to 1.0+)
+    float RequestedVolume;      ///< Caller's unscaled volume request (0.0 to 1.0)
+    float Volume;               ///< Post-category gain actually sent to the voice
     float Pitch;                ///< Pitch multiplier (1.0 = normal pitch)
+    float MinDistance;          ///< Distance at which 3D attenuation begins (meters)
+    float MaxDistance;          ///< Distance at which a 3D source is fully attenuated (meters)
     bool Is3D;                  ///< Whether this source uses 3D positioning
     bool IsLooping;             ///< Whether the sound should loop continuously
     bool IsPlaying;             ///< Whether the source is currently playing
+    bool HasVoiceFormat;        ///< Whether VoiceFormat describes the live source voice
+    AudioCategory Category;     ///< Volume category this playback is billed to
     SoundEffect* Sound;         ///< Pointer to the associated sound effect
     uint32_t SourceID;          ///< Unique identifier for console tracking
+    uint32_t Generation;        ///< Incremented on every acquire; stale handles compare unequal
+    WAVEFORMATEX VoiceFormat;   ///< Format the live source voice was created with
 
     /**
      * @brief Default constructor with safe initial values
@@ -55,8 +82,9 @@ struct AudioSource
      * Initializes all members to safe defaults suitable for audio playback.
      */
     AudioSource()
-        : Voice(nullptr), Position(0, 0, 0), Velocity(0, 0, 0), Volume(1.0f), Pitch(1.0f), Is3D(false),
-          IsLooping(false), IsPlaying(false), Sound(nullptr), SourceID(0)
+        : Voice(nullptr), Position(0, 0, 0), Velocity(0, 0, 0), RequestedVolume(1.0f), Volume(1.0f), Pitch(1.0f),
+          MinDistance(1.0f), MaxDistance(50.0f), Is3D(false), IsLooping(false), IsPlaying(false), HasVoiceFormat(false),
+          Category(AudioCategory::SFX), Sound(nullptr), SourceID(0), Generation(0), VoiceFormat{}
     {
     }
 };
@@ -193,9 +221,11 @@ class AudioEngine
      * @param volume Volume level (0.0 to 1.0+, default: 1.0)
      * @param pitch Pitch multiplier (1.0 = normal pitch, default: 1.0)
      * @param loop Whether to loop the sound continuously (default: false)
+     * @param category Volume category the request is billed to (default: SFX)
      * @return Pointer to the AudioSource playing the sound, or nullptr if failed
      */
-    AudioSource* PlaySound(const std::string& name, float volume = 1.0f, float pitch = 1.0f, bool loop = false);
+    AudioSource* PlaySound(const std::string& name, float volume = 1.0f, float pitch = 1.0f, bool loop = false,
+                           AudioCategory category = AudioCategory::SFX);
 
     /**
      * @brief Play a 3D positioned sound effect
@@ -208,10 +238,11 @@ class AudioEngine
      * @param volume Base volume level before 3D attenuation (default: 1.0)
      * @param pitch Pitch multiplier (1.0 = normal pitch, default: 1.0)
      * @param loop Whether to loop the sound continuously (default: false)
+     * @param category Volume category the request is billed to (default: SFX)
      * @return Pointer to the AudioSource playing the sound, or nullptr if failed
      */
     AudioSource* PlaySound3D(const std::string& name, const XMFLOAT3& position, float volume = 1.0f, float pitch = 1.0f,
-                             bool loop = false);
+                             bool loop = false, AudioCategory category = AudioCategory::SFX);
 
     /**
      * @brief Stop a specific audio source
@@ -285,6 +316,133 @@ class AudioEngine
      * @return Number of active audio sources
      */
     size_t GetActiveSourceCount() const;
+
+    // ============================================================================
+    // MIXER, LISTENER AND SOURCE-LIFETIME API
+    // ============================================================================
+
+    /**
+     * @brief Attach a mix bus provider used to scale category volumes
+     *
+     * When a mixer is attached, the effective volume of the "SFX" / "Music" bus
+     * (including mute, solo and the parent chain) multiplies the category volume
+     * for every source, so bus changes become audible. It also supplies audio
+     * occlusion for 3D sources when the mixer has a physics system.
+     *
+     * @param mixer Non-owning mixer pointer, or nullptr to detach
+     */
+    void SetMixer(Spark::Audio::AudioMixer* mixer);
+
+    /**
+     * @brief Effective volume multiplier for a category
+     *
+     * Returns categoryVolume * mixer bus volume (1.0 when no mixer is attached).
+     * Master volume is deliberately excluded: it lives on the mastering voice.
+     *
+     * @param category Category to query
+     * @return Multiplier applied to a caller's requested volume
+     */
+    float GetCategoryVolume(AudioCategory category) const;
+
+    /**
+     * @brief Drive the 3D listener from a camera transform
+     *
+     * Sets listener position/orientation and derives listener velocity from the
+     * position delta. A delta implying a speed above the speed of sound is
+     * treated as a teleport discontinuity and yields zero velocity rather than a
+     * degenerate Doppler shift.
+     *
+     * @param position World-space camera position
+     * @param forward  Camera forward vector (need not be normalized)
+     * @param up       Camera up vector (need not be normalized)
+     * @param deltaTime Seconds since the previous call; <= 0 skips velocity
+     */
+    void SetListenerFromCamera(const XMFLOAT3& position, const XMFLOAT3& forward, const XMFLOAT3& up, float deltaTime);
+
+    /**
+     * @brief Set the listener velocity used for Doppler directly
+     * @param velocity World-space listener velocity in m/s
+     */
+    void SetListenerVelocity(const XMFLOAT3& velocity);
+
+    /** @brief Get the current 3D listener position. */
+    XMFLOAT3 GetListenerPosition() const;
+
+    /** @brief Get the current 3D listener velocity. */
+    XMFLOAT3 GetListenerVelocity() const;
+
+    /**
+     * @brief Check whether a handle still names the same live playback
+     *
+     * Pooled sources are recycled, so a stored AudioSource* can silently start
+     * referring to a different sound. Callers that keep a handle must also keep
+     * the AudioSource::Generation observed when they acquired it.
+     *
+     * @param source     Source pointer previously returned by PlaySound*
+     * @param generation Generation observed when the handle was stored
+     * @return true when the source is still playing that same acquisition
+     */
+    bool IsSourceLive(const AudioSource* source, uint32_t generation) const;
+
+    /**
+     * @brief Distance attenuation for a 3D source (inverse-distance, clamped)
+     *
+     * Full volume within minDistance, silent beyond maxDistance, inverse
+     * rolloff in between scaled by the engine's distance scale.
+     *
+     * @param distance      Listener-to-source distance in meters
+     * @param minDistance   Distance at which attenuation begins
+     * @param maxDistance   Distance at which the source is silent
+     * @param distanceScale Global rolloff multiplier
+     * @return Attenuation in [0, 1]
+     */
+    static float ComputeDistanceAttenuation(float distance, float minDistance, float maxDistance, float distanceScale);
+
+    /**
+     * @brief Whether two wave formats can share a single XAudio2 source voice
+     *
+     * A source voice is created for one format and cannot be re-pointed at
+     * another, so a pooled voice must be destroyed when the format changes.
+     */
+    static bool FormatsCompatible(const WAVEFORMATEX& a, const WAVEFORMATEX& b);
+
+    /**
+     * @brief Whether an XAudio2 HRESULT means the output device went away
+     * @param hr HRESULT returned by an XAudio2 call
+     */
+    static bool IsDeviceLostResult(HRESULT hr);
+
+    /** @brief True once a voice call reported the output device was invalidated. */
+    bool IsDeviceLost() const { return m_deviceLost; }
+
+    /**
+     * @brief Report a critical audio-engine error (device loss) from any thread.
+     *
+     * Raised by the registered XAudio2 engine callback when the output device is torn
+     * out from under sounds that are already playing - the case no voice-call HRESULT
+     * on the game thread would ever reveal. Only a flag is set here; Update() enters
+     * the device-lost state and drives recovery on the game thread.
+     *
+     * @note Thread-safe. Also lets a test drive the device-loss path with no device.
+     */
+    void ReportCriticalError() noexcept;
+
+    /**
+     * @brief Whether playback can currently reach an output device
+     *
+     * False before Initialize(), after Shutdown(), and while the device is lost.
+     */
+    bool IsAvailable() const;
+
+    /**
+     * @brief Rebuild the mastering voice after a device loss
+     *
+     * Destroys every voice created against the dead device and recreates the
+     * mastering voice. Called automatically (throttled) from Update().
+     *
+     * @return true when the engine has a usable mastering voice again
+     */
+    bool RecoverDevice();
 
     // ============================================================================
     // CONSOLE INTEGRATION METHODS - Audio Engine Control
@@ -449,6 +607,11 @@ class AudioEngine
      * @param inputChannels Number of input channels (default: 2 for stereo)
      * @param inputSampleRate Sample rate in Hz (default: 44100)
      * @return Pointer to the created submix voice, or nullptr on failure
+     *
+     * @warning A returned pointer does not survive an output-device loss: recovery
+     * destroys every voice created against the dead device and creates a replacement
+     * with the same parameters. Re-query after IsDeviceLost() has cleared instead of
+     * caching the pointer across frames.
      */
     IXAudio2SubmixVoice* CreateSubmixVoice(uint32_t inputChannels = 2, uint32_t inputSampleRate = 44100);
 
@@ -549,6 +712,63 @@ class AudioEngine
     void Update3DAudio();
 
     /**
+     * @brief Push a source's category-scaled gain to its voice
+     * @param source Source whose RequestedVolume/Category should be re-applied
+     */
+    void ApplySourceGain(AudioSource& source);
+
+    /**
+     * @brief Re-apply gains to every playing source in a category
+     * @param category Category whose live sources must pick up a new volume
+     */
+    void RefreshSourceGains(AudioCategory category);
+
+    /**
+     * @brief Record a device-invalidated HRESULT so Update() can recover
+     * @param hr HRESULT returned by an XAudio2 voice call
+     */
+    void HandleVoiceResult(HRESULT hr);
+
+    /**
+     * @brief Enter the device-lost state and start the recovery throttle
+     *
+     * @note [game thread] Called from HandleVoiceResult() and from Update() when the
+     * XAudio2 engine callback reported a critical error on its own worker thread.
+     */
+    void HandleDeviceLoss();
+
+#ifdef SPARK_PLATFORM_WINDOWS
+    /**
+     * @brief XAudio2 engine callback used to observe device loss.
+     *
+     * Voice-call HRESULTs only reveal a vanished output device when the game calls
+     * into XAudio2. A session that is merely keeping already-started sounds playing
+     * issues no such call, so without this callback the device could die while
+     * IsAvailable() kept reporting true and no recovery was ever attempted.
+     *
+     * @note OnCriticalError runs on the XAudio2 worker thread: it only raises an
+     * atomic flag that Update() consumes on the game thread.
+     */
+    class DeviceLossCallback final : public IXAudio2EngineCallback
+    {
+      public:
+        explicit DeviceLossCallback(AudioEngine& owner) noexcept : m_owner(owner) {}
+
+        void STDMETHODCALLTYPE OnProcessingPassStart() override {}
+        void STDMETHODCALLTYPE OnProcessingPassEnd() override {}
+        void STDMETHODCALLTYPE OnCriticalError(HRESULT error) override;
+
+      private:
+        AudioEngine& m_owner;
+    };
+
+    DeviceLossCallback m_deviceLossCallback{*this}; ///< Registered with IXAudio2 in Initialize()
+#endif                                              // SPARK_PLATFORM_WINDOWS
+
+    /// Raised by the XAudio2 worker thread, consumed by Update() on the game thread.
+    std::atomic<bool> m_criticalErrorPending{false};
+
+    /**
      * @brief Notify console of state changes
      */
     void NotifyStateChange();
@@ -559,9 +779,26 @@ class AudioEngine
      */
     AudioMetrics GetMetricsThreadSafe() const;
 
-    IXAudio2* m_xAudio2;                              ///< Main XAudio2 engine interface
-    IXAudio2MasteringVoice* m_masterVoice;            ///< XAudio2 mastering voice for final output
-    std::vector<IXAudio2SubmixVoice*> m_submixVoices; ///< Created submix voices for cleanup
+    /**
+     * @brief One created submix voice plus the parameters needed to recreate it.
+     *
+     * Device recovery destroys every voice created against the dead device; keeping the
+     * creation parameters is what lets the submixes come back instead of silently
+     * disappearing for the rest of the session.
+     */
+    struct SubmixVoiceRecord
+    {
+        IXAudio2SubmixVoice* voice = nullptr; ///< Live voice (owned by XAudio2)
+        uint32_t inputChannels = 0;           ///< Channel count the voice was created with
+        uint32_t inputSampleRate = 0;         ///< Sample rate the voice was created with
+    };
+
+    IXAudio2* m_xAudio2;                             ///< Main XAudio2 engine interface
+    IXAudio2MasteringVoice* m_masterVoice;           ///< XAudio2 mastering voice for final output
+    std::vector<SubmixVoiceRecord> m_submixVoices;   ///< Created submix voices for cleanup/recovery
+    Spark::Audio::AudioMixer* m_mixer;                ///< Non-owning mix bus provider (may be null)
+    bool m_deviceLost;                                ///< Output device reported invalidated
+    float m_deviceRecoveryTimer;                      ///< Seconds since the last recovery attempt
     float m_masterVolume;                             ///< Current master volume level
     float m_sfxVolume;                                ///< Current sound effects volume level
     float m_musicVolume;                              ///< Current music volume level

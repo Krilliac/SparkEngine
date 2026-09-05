@@ -1,4 +1,5 @@
 #include "AudioEngine.h"
+#include "AudioMixer.h"
 #include "Core/Platform.h"
 #include "Utils/MathUtils.h"
 // AudioEngine.cpp
@@ -13,8 +14,29 @@
 #include <iomanip>
 
 using namespace DirectX;
+
+namespace
+{
+    /// XAudio2 reports a vanished output device with this HRESULT on every voice
+    /// call. The SDK macro is Windows-only; the platform stubs do not define it.
+    /// The value must stay XAUDIO2_E_DEVICE_INVALIDATED (0x88960004): 0x88960001 is
+    /// XAUDIO2_E_INVALID_CALL, an illegal-argument report and not a device loss.
+    constexpr HRESULT kAudioDeviceInvalidatedFallback = static_cast<HRESULT>(0x88960004L);
+#ifdef XAUDIO2_E_DEVICE_INVALIDATED
+    constexpr HRESULT kAudioDeviceInvalidated = static_cast<HRESULT>(XAUDIO2_E_DEVICE_INVALIDATED);
+    static_assert(kAudioDeviceInvalidated == kAudioDeviceInvalidatedFallback,
+                  "Device-loss fallback HRESULT drifted from the XAudio2 SDK value");
+#else
+    constexpr HRESULT kAudioDeviceInvalidated = kAudioDeviceInvalidatedFallback;
+#endif
+
+    /// Seconds between mastering-voice recreation attempts while the device is lost.
+    constexpr float kDeviceRecoveryIntervalSeconds = 1.0f;
+} // namespace
+
 AudioEngine::AudioEngine()
-    : m_xAudio2(nullptr), m_masterVoice(nullptr), m_masterVolume(1.0f), m_sfxVolume(1.0f), m_musicVolume(1.0f),
+    : m_xAudio2(nullptr), m_masterVoice(nullptr), m_mixer(nullptr), m_deviceLost(false), m_deviceRecoveryTimer(0.0f),
+      m_masterVolume(1.0f), m_sfxVolume(1.0f), m_musicVolume(1.0f),
       m_maxSources(32), m_nextSourceID(1), m_listenerPosition(0.0f, 0.0f, 0.0f), m_listenerVelocity(0.0f, 0.0f, 0.0f),
       m_listenerForward(0.0f, 0.0f, 1.0f), m_listenerUp(0.0f, 1.0f, 0.0f), m_dopplerScale(1.0f), m_distanceScale(1.0f),
       m_3DEnabled(true)
@@ -72,6 +94,24 @@ HRESULT AudioEngine::Initialize(size_t maxSources)
         return hr;
     }
 
+    m_criticalErrorPending.store(false, std::memory_order_relaxed);
+#ifdef SPARK_PLATFORM_WINDOWS
+    // Without this registration a device that dies while sounds are already looping is
+    // never noticed: nothing else on the game thread issues a voice call whose HRESULT
+    // could report it, so IsAvailable() would keep answering true while output is silent.
+    const HRESULT callbackResult = m_xAudio2->RegisterForCallbacks(&m_deviceLossCallback);
+    if (FAILED(callbackResult))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Audio,
+                       "RegisterForCallbacks failed HR=0x%08lX -- device loss will only be detected on the next "
+                       "PlaySound",
+                       static_cast<long>(callbackResult));
+    }
+#endif // SPARK_PLATFORM_WINDOWS
+
+    m_deviceLost = false;
+    m_deviceRecoveryTimer = 0.0f;
+
     m_audioSources.clear();
     m_availableSources.clear();
     m_audioSources.reserve(m_maxSources);
@@ -103,6 +143,30 @@ void AudioEngine::Update(float deltaTime)
         Spark::SimpleConsole::GetInstance().Log("AudioEngine::Update - First frame started with console integration",
                                                 "INFO");
         firstFrame = false;
+    }
+
+    // A device that vanished while sounds were already playing produces no failing
+    // voice call for the game thread to inspect; XAudio2 reports it through
+    // OnCriticalError on its own worker thread instead. Consume that report here so the
+    // engine stops claiming to be available and the recovery throttle starts running.
+    if (m_criticalErrorPending.exchange(false, std::memory_order_acquire))
+    {
+        HandleDeviceLoss();
+    }
+
+    // While the output device is invalidated every voice call fails, so there is
+    // nothing to update: retry the mastering voice on a throttle instead of
+    // logging a warning per sound per frame.
+    if (m_deviceLost)
+    {
+        m_deviceRecoveryTimer += deltaTime;
+        if (m_deviceRecoveryTimer >= kDeviceRecoveryIntervalSeconds)
+        {
+            m_deviceRecoveryTimer = 0.0f;
+            RecoverDevice();
+        }
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Audio", 0.0);
+        return;
     }
 
     UpdateSources();
@@ -137,11 +201,11 @@ void AudioEngine::Shutdown()
     m_availableSources.clear();
 
     // Destroy all submix voices before the mastering voice
-    for (auto* submix : m_submixVoices)
+    for (const SubmixVoiceRecord& submix : m_submixVoices)
     {
-        if (submix)
+        if (submix.voice)
         {
-            submix->DestroyVoice();
+            submix.voice->DestroyVoice();
         }
     }
     m_submixVoices.clear();
@@ -153,9 +217,16 @@ void AudioEngine::Shutdown()
     }
     if (m_xAudio2)
     {
+#ifdef SPARK_PLATFORM_WINDOWS
+        // The callback object dies with this AudioEngine, so it must not stay registered.
+        m_xAudio2->UnregisterForCallbacks(&m_deviceLossCallback);
+#endif // SPARK_PLATFORM_WINDOWS
         m_xAudio2->Release();
         m_xAudio2 = nullptr;
     }
+    m_deviceLost = false;
+    m_deviceRecoveryTimer = 0.0f;
+    m_criticalErrorPending.store(false, std::memory_order_relaxed);
     Spark::SimpleConsole::GetInstance().Log("AudioEngine shutdown complete.", "INFO");
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Audio", 0.0);
 }
@@ -202,7 +273,8 @@ SoundEffect* AudioEngine::GetSound(const std::string& name)
     return it != m_soundEffects.end() ? it->second.get() : nullptr;
 }
 
-AudioSource* AudioEngine::PlaySound(const std::string& name, float volume, float pitch, bool loop)
+AudioSource* AudioEngine::PlaySound(const std::string& name, float volume, float pitch, bool loop,
+                                    AudioCategory category)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, !name.empty(), "Sound name must be non-empty");
@@ -220,12 +292,31 @@ AudioSource* AudioEngine::PlaySound(const std::string& name, float volume, float
         return nullptr;
     }
 
+    // A source voice is permanently bound to the WAVEFORMATEX it was created
+    // with. Pooled sources outlive one sound, so a voice created for the first
+    // asset would replay a later asset's raw bytes at that first format -- a
+    // 22 kHz mono clip through a 44.1 kHz stereo voice plays as noise at the
+    // wrong speed. Recreate the voice whenever the format changes.
+    const WAVEFORMATEX& format = sound->GetFormat();
+    if (src->Voice && (!src->HasVoiceFormat || !FormatsCompatible(src->VoiceFormat, format)))
+    {
+        src->Voice->DestroyVoice();
+        src->Voice = nullptr;
+        src->HasVoiceFormat = false;
+    }
+
     if (!src->Voice)
     {
-        HRESULT hr = CreateSourceVoice(sound->GetFormat(), &src->Voice);
+        HRESULT hr = CreateSourceVoice(format, &src->Voice);
         SPARK_WARN_IF(Spark::LogCategory::Audio, FAILED(hr), "CreateSourceVoice failed");
         if (FAILED(hr))
+        {
+            HandleVoiceResult(hr);
+            ReturnSource(src);
             return nullptr;
+        }
+        src->VoiceFormat = format;
+        src->HasVoiceFormat = true;
     }
 
     if (volume < 0.0f || volume > 1.0f)
@@ -242,13 +333,17 @@ AudioSource* AudioEngine::PlaySound(const std::string& name, float volume, float
     }
 
     src->Sound = sound;
-    src->Volume = volume * m_sfxVolume * m_masterVolume;
+    src->RequestedVolume = volume;
+    src->Category = category;
     src->Pitch = pitch;
     src->IsLooping = loop;
     src->Is3D = false;
     src->IsPlaying = true;
 
-    src->Voice->SetVolume(src->Volume);
+    // Master volume is applied once, on the mastering voice (SetMasterVolume),
+    // so the per-source gain is request * category only -- multiplying it in
+    // here as well would square it.
+    ApplySourceGain(*src);
     src->Voice->SetFrequencyRatio(src->Pitch);
 
     XAUDIO2_BUFFER buffer = {};
@@ -262,16 +357,26 @@ AudioSource* AudioEngine::PlaySound(const std::string& name, float volume, float
     HRESULT hr = src->Voice->SubmitSourceBuffer(&buffer);
     SPARK_WARN_IF(Spark::LogCategory::Audio, FAILED(hr), "SubmitSourceBuffer failed");
     if (FAILED(hr))
+    {
+        HandleVoiceResult(hr);
+        ReturnSource(src);
         return nullptr;
+    }
 
-    src->Voice->Start();
+    hr = src->Voice->Start();
+    if (FAILED(hr))
+    {
+        HandleVoiceResult(hr);
+        ReturnSource(src);
+        return nullptr;
+    }
     return src;
 }
 
 AudioSource* AudioEngine::PlaySound3D(const std::string& name, const XMFLOAT3& position, float volume, float pitch,
-                                      bool loop)
+                                      bool loop, AudioCategory category)
 {
-    AudioSource* src = PlaySound(name, volume, pitch, loop);
+    AudioSource* src = PlaySound(name, volume, pitch, loop, category);
     if (src)
     {
         src->Is3D = true;
@@ -335,17 +440,24 @@ void AudioEngine::SetMasterVolume(float volume)
 
 void AudioEngine::SetSFXVolume(float volume)
 {
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    m_sfxVolume = std::clamp(volume, 0.0f, 1.0f);
-    m_settings.sfxVolume = m_sfxVolume;
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_sfxVolume = std::clamp(volume, 0.0f, 1.0f);
+        m_settings.sfxVolume = m_sfxVolume;
+    }
+    // Storing the field alone left already-playing sources at their old gain.
+    RefreshSourceGains(AudioCategory::SFX);
     NotifyStateChange();
 }
 
 void AudioEngine::SetMusicVolume(float volume)
 {
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    m_musicVolume = std::clamp(volume, 0.0f, 1.0f);
-    m_settings.musicVolume = m_musicVolume;
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_musicVolume = std::clamp(volume, 0.0f, 1.0f);
+        m_settings.musicVolume = m_musicVolume;
+    }
+    RefreshSourceGains(AudioCategory::Music);
     NotifyStateChange();
 }
 
@@ -660,6 +772,9 @@ void AudioEngine::Console_ApplySettings(const AudioSettings& settings)
         m_masterVoice->SetVolume(m_masterVolume);
     }
 
+    RefreshSourceGains(AudioCategory::SFX);
+    RefreshSourceGains(AudioCategory::Music);
+
     NotifyStateChange();
     Spark::SimpleConsole::GetInstance().Log("Audio settings applied via console", "SUCCESS");
 }
@@ -694,15 +809,11 @@ void AudioEngine::Console_RefreshAudio()
         Update3DAudio();
     }
 
-    // Update volume for all active sources
-    for (auto& source : m_audioSources)
-    {
-        if (source->IsPlaying && source->Voice)
-        {
-            float adjustedVolume = source->Volume * m_sfxVolume * m_masterVolume;
-            source->Voice->SetVolume(adjustedVolume);
-        }
-    }
+    // Re-derive each source's gain from its stored request. Multiplying the
+    // already-scaled Volume again would compound the category and master gain
+    // on every refresh.
+    RefreshSourceGains(AudioCategory::SFX);
+    RefreshSourceGains(AudioCategory::Music);
 
     Spark::SimpleConsole::GetInstance().Log("Audio system refresh complete", "SUCCESS");
 }
@@ -755,6 +866,9 @@ AudioSource* AudioEngine::GetAvailableSource()
         return nullptr;
     AudioSource* src = m_availableSources.back();
     m_availableSources.pop_back();
+    // Every acquisition gets a fresh generation so a handle stored by a previous
+    // owner (e.g. an AudioSourceComponent) stops matching this slot.
+    ++src->Generation;
     return src;
 }
 
@@ -762,8 +876,21 @@ void AudioEngine::ReturnSource(AudioSource* source)
 {
     std::lock_guard<std::mutex> lock(m_sourceMutex);
     SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Audio, source);
+    if (source->Voice)
+    {
+        source->Voice->FlushSourceBuffers();
+    }
     source->IsPlaying = false;
     source->Sound = nullptr;
+    // Reset the per-playback parameters so a recycled slot cannot inherit the
+    // previous owner's spatial range, category or gain request.
+    source->Is3D = false;
+    source->IsLooping = false;
+    source->RequestedVolume = 1.0f;
+    source->Category = AudioCategory::SFX;
+    source->MinDistance = 1.0f;
+    source->MaxDistance = 50.0f;
+    source->Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
     m_availableSources.push_back(source);
 }
 
@@ -809,12 +936,18 @@ void AudioEngine::Apply3DAudioToSource(AudioSource* source)
     float dz = source->Position.z - m_listenerPosition.z;
     float distance = sqrtf(dx * dx + dy * dy + dz * dz);
 
-    // Apply distance attenuation
-    float attenuation = 1.0f / (1.0f + distance * m_distanceScale * 0.1f);
-    attenuation = std::clamp(attenuation, 0.0f, 1.0f);
+    // Apply the source's authored attenuation range (AudioSourceComponent's
+    // minDistance/maxDistance land here) instead of a fixed global rolloff.
+    const float attenuation =
+        ComputeDistanceAttenuation(distance, source->MinDistance, source->MaxDistance, m_distanceScale);
 
-    // Apply volume with 3D attenuation
+    // Apply volume with 3D attenuation, then occlusion when the mixer can
+    // actually trace against the physics world.
     float finalVolume = source->Volume * attenuation;
+    if (m_mixer && m_mixer->IsOcclusionAvailable())
+    {
+        finalVolume *= m_mixer->CalculateOcclusion(m_listenerPosition, source->Position).volumeScale;
+    }
     source->Voice->SetVolume(finalVolume);
 
     // Stereo panning based on relative position to listener
@@ -912,6 +1045,282 @@ void AudioEngine::Apply3DAudioToSource(AudioSource* source)
     }
 }
 
+// ============================================================================
+// MIXER, LISTENER, LIFETIME AND DEVICE-LOSS IMPLEMENTATIONS
+// ============================================================================
+
+void AudioEngine::SetMixer(Spark::Audio::AudioMixer* mixer)
+{
+    m_mixer = mixer;
+    RefreshSourceGains(AudioCategory::SFX);
+    RefreshSourceGains(AudioCategory::Music);
+}
+
+float AudioEngine::GetCategoryVolume(AudioCategory category) const
+{
+    const float categoryVolume = (category == AudioCategory::Music) ? m_musicVolume : m_sfxVolume;
+    if (!m_mixer)
+    {
+        return categoryVolume;
+    }
+    const char* busName = (category == AudioCategory::Music) ? "Music" : "SFX";
+    return categoryVolume * m_mixer->GetEffectiveBusVolume(busName);
+}
+
+void AudioEngine::ApplySourceGain(AudioSource& source)
+{
+    source.Volume = std::clamp(source.RequestedVolume, 0.0f, 1.0f) * GetCategoryVolume(source.Category);
+    if (!source.Voice)
+    {
+        return;
+    }
+    if (source.Is3D && m_3DEnabled)
+    {
+        Apply3DAudioToSource(&source);
+    }
+    else
+    {
+        source.Voice->SetVolume(source.Volume);
+    }
+}
+
+void AudioEngine::RefreshSourceGains(AudioCategory category)
+{
+    for (auto& source : m_audioSources)
+    {
+        if (source && source->IsPlaying && source->Category == category)
+        {
+            ApplySourceGain(*source);
+        }
+    }
+}
+
+void AudioEngine::SetListenerFromCamera(const XMFLOAT3& position, const XMFLOAT3& forward, const XMFLOAT3& up,
+                                        float deltaTime)
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+
+    if (deltaTime > 1e-6f)
+    {
+        const float vx = (position.x - m_listenerPosition.x) / deltaTime;
+        const float vy = (position.y - m_listenerPosition.y) / deltaTime;
+        const float vz = (position.z - m_listenerPosition.z) / deltaTime;
+
+        // A camera cut or level load moves the listener arbitrarily far in one
+        // frame; treating that as motion would drive Doppler into a degenerate
+        // pitch shift, so anything faster than sound is a discontinuity.
+        constexpr float kMaxDopplerSpeed = 343.0f;
+        if (vx * vx + vy * vy + vz * vz <= kMaxDopplerSpeed * kMaxDopplerSpeed)
+        {
+            m_listenerVelocity = XMFLOAT3(vx, vy, vz);
+        }
+        else
+        {
+            m_listenerVelocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
+        }
+    }
+
+    m_listenerPosition = position;
+
+    const float forwardLength = sqrtf(forward.x * forward.x + forward.y * forward.y + forward.z * forward.z);
+    if (forwardLength > 1e-6f)
+    {
+        const float invLength = 1.0f / forwardLength;
+        m_listenerForward = XMFLOAT3(forward.x * invLength, forward.y * invLength, forward.z * invLength);
+    }
+
+    const float upLength = sqrtf(up.x * up.x + up.y * up.y + up.z * up.z);
+    if (upLength > 1e-6f)
+    {
+        const float invLength = 1.0f / upLength;
+        m_listenerUp = XMFLOAT3(up.x * invLength, up.y * invLength, up.z * invLength);
+    }
+
+    m_settings.listenerPosition = m_listenerPosition;
+    m_settings.listenerVelocity = m_listenerVelocity;
+    m_settings.listenerForward = m_listenerForward;
+    m_settings.listenerUp = m_listenerUp;
+    // Deliberately no NotifyStateChange(): this runs every frame.
+}
+
+void AudioEngine::SetListenerVelocity(const XMFLOAT3& velocity)
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    m_listenerVelocity = velocity;
+    m_settings.listenerVelocity = velocity;
+}
+
+XMFLOAT3 AudioEngine::GetListenerPosition() const
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    return m_listenerPosition;
+}
+
+XMFLOAT3 AudioEngine::GetListenerVelocity() const
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    return m_listenerVelocity;
+}
+
+bool AudioEngine::IsSourceLive(const AudioSource* source, uint32_t generation) const
+{
+    if (!source)
+    {
+        return false;
+    }
+    for (const auto& owned : m_audioSources)
+    {
+        if (owned.get() == source)
+        {
+            return source->IsPlaying && source->Generation == generation;
+        }
+    }
+    return false;
+}
+
+float AudioEngine::ComputeDistanceAttenuation(float distance, float minDistance, float maxDistance,
+                                              float distanceScale)
+{
+    const float minRange = std::max(minDistance, 0.0f);
+    if (distance <= minRange)
+    {
+        return 1.0f;
+    }
+    if (maxDistance > minRange && distance >= maxDistance)
+    {
+        return 0.0f;
+    }
+
+    const float scale = std::max(distanceScale, 0.0f);
+    float attenuation;
+    if (minRange > 0.0f)
+    {
+        const float denominator = minRange + scale * (distance - minRange);
+        attenuation = (denominator > 0.0f) ? (minRange / denominator) : 1.0f;
+    }
+    else
+    {
+        // No near range authored: fall back to a plain inverse rolloff so a
+        // zero minDistance cannot divide the source into silence.
+        attenuation = 1.0f / (1.0f + scale * distance);
+    }
+    return std::clamp(attenuation, 0.0f, 1.0f);
+}
+
+bool AudioEngine::FormatsCompatible(const WAVEFORMATEX& a, const WAVEFORMATEX& b)
+{
+    return a.wFormatTag == b.wFormatTag && a.nChannels == b.nChannels && a.nSamplesPerSec == b.nSamplesPerSec &&
+           a.wBitsPerSample == b.wBitsPerSample && a.nBlockAlign == b.nBlockAlign;
+}
+
+bool AudioEngine::IsDeviceLostResult(HRESULT hr)
+{
+    return hr == kAudioDeviceInvalidated;
+}
+
+bool AudioEngine::IsAvailable() const
+{
+    return m_xAudio2 != nullptr && m_masterVoice != nullptr && !m_deviceLost;
+}
+
+void AudioEngine::HandleVoiceResult(HRESULT hr)
+{
+    if (!IsDeviceLostResult(hr))
+    {
+        return;
+    }
+    HandleDeviceLoss();
+}
+
+void AudioEngine::HandleDeviceLoss()
+{
+    if (m_deviceLost)
+    {
+        return;
+    }
+    m_deviceLost = true;
+    m_deviceRecoveryTimer = 0.0f;
+    SPARK_LOG_ERROR(Spark::LogCategory::Audio,
+                    "XAudio2 output device invalidated -- audio is silent until a device returns");
+    Spark::SimpleConsole::GetInstance().Log("Audio output device invalidated - attempting recovery", "ERROR");
+}
+
+void AudioEngine::ReportCriticalError() noexcept
+{
+    // Any thread: raise a flag only. Logging and voice recreation belong to the game
+    // thread, which picks this up at the top of the next Update().
+    m_criticalErrorPending.store(true, std::memory_order_release);
+}
+
+#ifdef SPARK_PLATFORM_WINDOWS
+void STDMETHODCALLTYPE AudioEngine::DeviceLossCallback::OnCriticalError(HRESULT error)
+{
+    (void)error;
+    m_owner.ReportCriticalError();
+}
+#endif // SPARK_PLATFORM_WINDOWS
+
+bool AudioEngine::RecoverDevice()
+{
+    if (!m_xAudio2)
+    {
+        return false;
+    }
+
+    StopAllSounds();
+
+    // Every voice was created against the dead device and cannot be reused.
+    for (auto& source : m_audioSources)
+    {
+        if (source && source->Voice)
+        {
+            source->Voice->DestroyVoice();
+            source->Voice = nullptr;
+            source->HasVoiceFormat = false;
+        }
+    }
+    std::vector<SubmixVoiceRecord> submixesToRecreate;
+    submixesToRecreate.swap(m_submixVoices);
+    for (const SubmixVoiceRecord& submix : submixesToRecreate)
+    {
+        if (submix.voice)
+        {
+            submix.voice->DestroyVoice();
+        }
+    }
+    if (m_masterVoice)
+    {
+        m_masterVoice->DestroyVoice();
+        m_masterVoice = nullptr;
+    }
+
+    const HRESULT hr = m_xAudio2->CreateMasteringVoice(&m_masterVoice);
+    if (FAILED(hr))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Audio, "Audio device recovery failed HR=0x%08lX", static_cast<long>(hr));
+        return false;
+    }
+
+    m_masterVoice->SetVolume(m_masterVolume);
+
+    // Recreate the submixes against the new device. Dropping them instead would leave
+    // the engine permanently without the mix buses it was asked to create.
+    for (const SubmixVoiceRecord& submix : submixesToRecreate)
+    {
+        if (CreateSubmixVoice(submix.inputChannels, submix.inputSampleRate) == nullptr)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Audio,
+                           "Audio device recovery could not recreate a submix voice (%u channels, %u Hz)",
+                           submix.inputChannels, submix.inputSampleRate);
+        }
+    }
+
+    m_deviceLost = false;
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "Audio output device recovered");
+    Spark::SimpleConsole::GetInstance().Log("Audio output device recovered", "SUCCESS");
+    return true;
+}
+
 HRESULT AudioEngine::CreateSourceVoice(const WAVEFORMATEX& format, IXAudio2SourceVoice** voice)
 {
     SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, m_xAudio2 != nullptr, "XAudio2 not initialized");
@@ -935,7 +1344,7 @@ IXAudio2SubmixVoice* AudioEngine::CreateSubmixVoice(uint32_t inputChannels, uint
         return nullptr;
     }
 
-    m_submixVoices.push_back(submixVoice);
+    m_submixVoices.push_back(SubmixVoiceRecord{submixVoice, inputChannels, inputSampleRate});
 
     std::stringstream ss;
     ss << "Submix voice created: " << inputChannels << " channels, " << inputSampleRate << " Hz";
