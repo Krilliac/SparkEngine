@@ -101,3 +101,8 @@ wiki/getting-started/Engine-Architecture-Flowchart.md text eol=lf
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+# Content-addressed package assets: the manifest SHA-256 covers exact bytes,
+# so the generated scripts (and the manifest itself) must stay LF on every
+# checkout; Windows autocrlf rewrote them and broke the asset-integrity job.
+GameModules/*/Assets/manifest.json text eol=lf
+GameModules/*/Assets/**/*.as text eol=lf

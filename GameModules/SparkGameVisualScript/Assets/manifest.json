@@ -7,31 +7,31 @@
       "path": "Scripts/Generated/Collectible.as",
       "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
       "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
-      "sha256": "4de0a581a01283ccbc8fdb2180d7a5f75d2627401911e158f92bed3637042c21"
+      "sha256": "be90fb33f9c95e79972cf55c7637e37664e39128e16f7a7681b8df1dab6a84f8"
     },
     {
       "path": "Scripts/Generated/EnemyPatrol.as",
       "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
       "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
-      "sha256": "1768d08609a98db4eecdce0dfeb8e10fb45e0705292e0d4dc8f5fb44e283974e"
+      "sha256": "ded6dbb7a87a970469cf7689cfeac8a6de3cb29a3d125ff4ce27fd0872274b55"
     },
     {
       "path": "Scripts/Generated/GameManager.as",
       "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
       "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
-      "sha256": "2102e10de6d7e274bb6702da4cfcb8e425f0def185add126a6c224fb4b479a19"
+      "sha256": "e3f0ae7107fafa2bd208d6cf1417961bd1a9520a99ce778b4b9ecc6c2e16f4f4"
     },
     {
       "path": "Scripts/Generated/HealthPickup.as",
       "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
       "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
-      "sha256": "5b0cc0b4fde60f47cecce419690029e3953d34c0a923e07c7738e6ff10d255d9"
+      "sha256": "089bbfe2f37bb8fccfe36bd50ab51fd399eab4ca12e6bb2ae2f35203873b99d3"
     },
     {
       "path": "Scripts/Generated/PlayerController.as",
       "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
       "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
-      "sha256": "64915256110eabed95f2b0dc667cdaf7d55cffc6275d9ecaf27c525ec02530ba"
+      "sha256": "ca15bbdd6aa003ad6d0b086543eadd356918fb4b7f4e97d0856a005f3fa3aaba"
     }
   ],
   "notes": "Generated AngelScript sources checked in so the module runs without a graph-compilation step. Regenerate them from the module's graphs and update the SHA-256 values in the same change."
