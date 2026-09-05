@@ -528,6 +528,103 @@ TEST(SparkPak_ProductionRejectsTinyArchiveWith2GiBEntryDeclaration)
     Cleanup();
 }
 
+TEST(SparkPak_ProductionRefusesHostileCompressionRatioPerEntry)
+{
+    // A ~1 KB archive whose TOC declares a 100-byte deflate entry expanding to
+    // 2 GB. ReadFile allocated entry.originalSize BEFORE decompression could fail,
+    // so a handful of such entries demanded gigabytes from an asset-loading path
+    // with no bad_alloc handler. The per-entry decompression budget refuses the
+    // bomb at ReadFile; the archive itself still opens, so a hostile entry cannot
+    // unmount every other asset in the pak.
+    const auto path = TempPath("hostile_ratio.spk");
+    const std::string virtualPath = "bomb.bin";
+    const uint32_t compressedSize = 100;
+
+    Spark::PakHeader header;
+    header.fileCount = 1;
+    header.tocOffset = sizeof(Spark::PakHeader) + compressedSize;
+    header.tocSize = static_cast<uint32_t>(27 + virtualPath.size());
+    header.tocRawSize = header.tocSize;
+
+    std::vector<uint8_t> toc(header.tocSize);
+    uint8_t* cursor = toc.data();
+    const uint64_t hash = Spark::PakFNV1a(virtualPath);
+    const uint64_t dataOffset = sizeof(Spark::PakHeader);
+    const uint32_t originalSize = 2147483647u;
+    const uint8_t compression = static_cast<uint8_t>(Spark::PakCompression::Deflate);
+    const uint16_t pathLen = static_cast<uint16_t>(virtualPath.size());
+    std::memcpy(cursor, &hash, sizeof(hash));
+    cursor += sizeof(hash);
+    std::memcpy(cursor, &dataOffset, sizeof(dataOffset));
+    cursor += sizeof(dataOffset);
+    std::memcpy(cursor, &compressedSize, sizeof(compressedSize));
+    cursor += sizeof(compressedSize);
+    std::memcpy(cursor, &originalSize, sizeof(originalSize));
+    cursor += sizeof(originalSize);
+    std::memcpy(cursor, &compression, sizeof(compression));
+    cursor += sizeof(compression);
+    std::memcpy(cursor, &pathLen, sizeof(pathLen));
+    cursor += sizeof(pathLen);
+    std::memcpy(cursor, virtualPath.data(), virtualPath.size());
+
+    {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        const std::vector<uint8_t> payload(compressedSize, 0x00);
+        out.write(reinterpret_cast<const char*>(payload.data()), static_cast<std::streamsize>(payload.size()));
+        out.write(reinterpret_cast<const char*>(toc.data()), static_cast<std::streamsize>(toc.size()));
+    }
+
+    Spark::SparkPakReader reader;
+    EXPECT_TRUE(reader.Open(path));
+    EXPECT_TRUE(reader.Exists("bomb.bin"));
+    EXPECT_TRUE(reader.ReadFile("bomb.bin").empty());
+    Cleanup();
+}
+
+TEST(SparkPak_ProductionReadsExtremelyCompressibleEntries)
+{
+    // Regression: the archive-wide 1000:1 cap failed Open() for content the cooker
+    // legitimately produces. 1 MB of zeros (a blank lightmap, a padded heightmap, a
+    // zeroed vertex buffer) deflates at roughly deflate's 1032:1 ceiling, so the old
+    // cap unmounted the WHOLE archive — including the ordinary asset beside it.
+    const auto path = TempPath("compressible.spk");
+    const std::vector<uint8_t> zeros(1024 * 1024, 0x00);
+    std::vector<uint8_t> ordinary(4096);
+    for (size_t i = 0; i < ordinary.size(); ++i)
+        ordinary[i] = static_cast<uint8_t>(i * 7 + 3);
+
+    Spark::SparkPakWriter writer;
+    writer.AddFile("blank_lightmap.bin", zeros, true);
+    writer.AddFile("ordinary.bin", ordinary, true);
+    EXPECT_TRUE(writer.Finalize(path));
+
+    Spark::SparkPakReader reader;
+    EXPECT_TRUE(reader.Open(path));
+    EXPECT_TRUE(reader.ReadFile("blank_lightmap.bin") == zeros);
+    EXPECT_TRUE(reader.ReadFile("ordinary.bin") == ordinary);
+    Cleanup();
+}
+
+TEST(SparkPak_ProductionAcceptsOrdinaryCompressionRatios)
+{
+    // The budget must not reject archives the cooker actually produces:
+    // 64 KB of highly repetitive bytes compresses well and must round-trip.
+    const auto path = TempPath("normal_ratio.spk");
+    std::vector<uint8_t> payload(64 * 1024);
+    for (size_t i = 0; i < payload.size(); ++i)
+        payload[i] = static_cast<uint8_t>(i % 251);
+
+    Spark::SparkPakWriter writer;
+    writer.AddFile("normal.bin", payload, true);
+    EXPECT_TRUE(writer.Finalize(path));
+
+    Spark::SparkPakReader reader;
+    EXPECT_TRUE(reader.Open(path));
+    EXPECT_TRUE(reader.ReadFile("normal.bin") == payload);
+    Cleanup();
+}
+
 TEST(SparkPak_ProductionConcurrentReadsKeepEntryBoundaries)
 {
     const auto path = TempPath("parallel_reads.spk");

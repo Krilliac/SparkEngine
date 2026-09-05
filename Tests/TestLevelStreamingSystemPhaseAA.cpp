@@ -152,17 +152,11 @@ TEST(LevelStreamingPhaseAA_ValidateWorldOnEmptyReturnsClean)
     ls.Initialize();
 
     std::vector<std::string> errors;
-    // Empty world should validate cleanly (no tiles, no inconsistencies).
     const bool result = ls.ValidateWorld(errors);
-    // Either valid with no errors, or valid with empty errors — the real
-    // contract is that errors is populated on failure. For an empty
-    // world, validation may report success or a warning; just verify
-    // the call is safe and doesn't throw.
-    (void)result;
-    // `errors` is always a valid vector after the call (size is unsigned
-    // so a `>= 0` check is tautological); we simply assert that
-    // ValidateWorld did not crash or corrupt the vector.
-    EXPECT_TRUE(true);
+    // The contract is that `errors` is populated on failure and left empty on
+    // success. For an empty world either verdict is legitimate, so assert the
+    // invariant that ties the two outputs together rather than a fixed verdict.
+    EXPECT_EQ(result, errors.empty());
 
     ls.Shutdown();
 }
@@ -174,6 +168,7 @@ TEST(LevelStreamingPhaseAA_ShutdownIsIdempotent)
     ls.Shutdown();
     // Second Shutdown is safe.
     ls.Shutdown();
+    EXPECT_NO_CRASH("LevelStreamingSystem exposes no post-shutdown state to assert on");
 }
 
 TEST(LevelStreamingPhaseAA_UpdateCallIsSafe)
@@ -184,5 +179,6 @@ TEST(LevelStreamingPhaseAA_UpdateCallIsSafe)
     // crash.
     ls.Update(0.016f);
     ls.Update(0.016f);
+    EXPECT_NO_CRASH("Update has no observable effect without a viewer or tiles");
     ls.Shutdown();
 }

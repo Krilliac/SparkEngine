@@ -53,7 +53,6 @@ class PlatformerKitModule final : public Spark::IModule
                             [this](const Spark::Templates::TemplateRuntimeScene& scene)
                             {
                                 m_groundEntity = scene.Find("Ground");
-                                m_lightEntity = scene.Find("Directional Light");
                                 m_cameraEntity = scene.Find("Main Camera");
                                 m_playerEntity = scene.Find("Player");
                                 m_platformEntities = {scene.Find("Platform A"), scene.Find("Platform B")};
@@ -62,14 +61,23 @@ class PlatformerKitModule final : public Spark::IModule
                                 m_checkpointEntity = scene.Find("Checkpoint");
                                 m_finishEntity = scene.Find("Finish");
 
-                                return HasVisual(scene, m_groundEntity) && scene.Get<Transform>(m_lightEntity) &&
-                                       scene.Get<LightComponent>(m_lightEntity) &&
-                                       scene.Get<Transform>(m_cameraEntity) && scene.Get<Camera>(m_cameraEntity) &&
-                                       HasVisual(scene, m_playerEntity) && HasVisual(scene, m_platformEntities[0]) &&
-                                       HasVisual(scene, m_platformEntities[1]) && HasVisual(scene, m_coinEntities[0]) &&
-                                       HasVisual(scene, m_coinEntities[1]) && HasVisual(scene, m_coinEntities[2]) &&
-                                       HasVisual(scene, m_hazardEntity) && HasVisual(scene, m_checkpointEntity) &&
-                                       HasVisual(scene, m_finishEntity);
+                                // Required: the ground the level derives its collision from, the
+                                // camera, and every entity the level logic drives. The directional
+                                // light is decoration nothing else reads, so it stays local and a
+                                // missing one warns instead of failing.
+                                if (!HasVisual(scene, m_groundEntity) || !scene.Get<Transform>(m_cameraEntity) ||
+                                    !scene.Get<Camera>(m_cameraEntity) || !HasVisual(scene, m_playerEntity) ||
+                                    !HasVisual(scene, m_platformEntities[0]) ||
+                                    !HasVisual(scene, m_platformEntities[1]) || !HasVisual(scene, m_coinEntities[0]) ||
+                                    !HasVisual(scene, m_coinEntities[1]) || !HasVisual(scene, m_coinEntities[2]) ||
+                                    !HasVisual(scene, m_hazardEntity) || !HasVisual(scene, m_checkpointEntity) ||
+                                    !HasVisual(scene, m_finishEntity))
+                                    return false;
+                                const uint32_t light = scene.Find("Directional Light");
+                                if (!scene.Get<Transform>(light) || !scene.Get<LightComponent>(light))
+                                    SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                                   "PlatformerKit scene has no usable 'Directional Light'");
+                                return true;
                             }))
             return false;
 
@@ -219,7 +227,6 @@ class PlatformerKitModule final : public Spark::IModule
     {
         constexpr uint32_t invalid = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
         m_groundEntity = invalid;
-        m_lightEntity = invalid;
         m_cameraEntity = invalid;
         m_playerEntity = invalid;
         m_platformEntities.fill(invalid);
@@ -485,7 +492,6 @@ class PlatformerKitModule final : public Spark::IModule
     float m_fixedAccumulator = 0.0f;
     bool m_sprintInput = false;
     uint32_t m_groundEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
-    uint32_t m_lightEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_cameraEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_playerEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     std::array<uint32_t, 2> m_platformEntities{};

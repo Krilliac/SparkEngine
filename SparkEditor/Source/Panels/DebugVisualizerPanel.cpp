@@ -6,13 +6,12 @@
  */
 
 #include "DebugVisualizerPanel.h"
-#include <iostream>
 
 #include <imgui.h>
 
 #include "../Core/EditorIcons.h"
 #include "Utils/LogMacros.h"
-#include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "Utils/Validate.h"
 
 namespace SparkEditor
 {
@@ -28,10 +27,11 @@ namespace SparkEditor
         return true;
     }
 
-    void DebugVisualizerPanel::Update(float deltaTime)
+    void DebugVisualizerPanel::Update(float /*deltaTime*/)
     {
-        // Update debug draw stats
-        m_stats.gridLines = m_showGrid ? static_cast<int>((m_gridSize / m_gridSpacing) * 4) : 0;
+        // No debug-draw counts are reported here: nothing consumes this panel's
+        // toggles yet, so there is nothing drawn to count. Deriving a grid-line
+        // figure from the settings would report geometry that was never drawn.
     }
 
     void DebugVisualizerPanel::Render()
@@ -41,6 +41,10 @@ namespace SparkEditor
 
         if (BeginPanel())
         {
+            ImGui::TextDisabled("Preview - not connected: the scene viewport does not read these");
+            ImGui::TextDisabled("toggles yet, so changing them does not alter what is drawn.");
+            ImGui::Separator();
+
             RenderQuickToggles();
             ImGui::Separator();
 
@@ -241,12 +245,7 @@ namespace SparkEditor
     void DebugVisualizerPanel::RenderStats()
     {
         ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Debug Draw Stats:");
-        ImGui::Text("  Grid Lines: %d", m_stats.gridLines);
-        ImGui::Text("  Collider Shapes: %d", m_stats.colliderShapes);
-        ImGui::Text("  Bounding Boxes: %d", m_stats.boundingBoxes);
-        ImGui::Text("  NavMesh Polygons: %d", m_stats.navMeshPolygons);
-        ImGui::Text("  Light Gizmos: %d", m_stats.lightGizmos);
-        ImGui::Text("  Audio Sources: %d", m_stats.audioSources);
+        ImGui::TextDisabled("  No renderer reports debug-draw counts to this panel.");
     }
 
 } // namespace SparkEditor

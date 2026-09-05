@@ -14,6 +14,17 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <system_error>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+#endif
 
 namespace Spark::Persistence
 {
@@ -546,24 +557,55 @@ namespace Spark::Persistence
 
     void SQLiteConnection::FlushToDisk()
     {
-        std::ofstream file(m_dbPath, std::ios::trunc);
-        if (!file.is_open())
+        // Never truncate the live store: a crash or a write error midway through would
+        // destroy every key. Build the new revision in a sibling temp file and replace
+        // the destination only after the content is complete (DATA-120).
+        const std::filesystem::path destination(m_dbPath);
+        const std::filesystem::path temporary(m_dbPath + ".tmp");
+
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to open '%s' for writing",
-                            m_dbPath.c_str());
-            return;
+            std::ofstream file(temporary, std::ios::trunc);
+            if (!file.is_open())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to open '%s' for writing",
+                                temporary.string().c_str());
+                return;
+            }
+
+            file << kKVFormatMarker << '\n';
+            for (const auto& [key, value] : m_kvStore)
+            {
+                file << EscapeKVField(key) << '\t' << EscapeKVField(value) << '\n';
+            }
+
+            file.close();
+            if (file.fail())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: write error flushing '%s' (%zu entries)",
+                                m_dbPath.c_str(), m_kvStore.size());
+                std::error_code removeError;
+                std::filesystem::remove(temporary, removeError);
+                return;
+            }
         }
 
-        file << kKVFormatMarker << '\n';
-        for (const auto& [key, value] : m_kvStore)
+        // Replace in one step so the destination is never missing: std::filesystem::rename
+        // does not overwrite on Windows, where MoveFileEx does.
+        std::error_code replaceError;
+#ifdef _WIN32
+        if (!::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
         {
-            file << EscapeKVField(key) << '\t' << EscapeKVField(value) << '\n';
+            replaceError = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
         }
-
-        if (file.fail())
+#else
+        std::filesystem::rename(temporary, destination, replaceError);
+#endif
+        if (replaceError)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: write error flushing '%s' (%zu entries)",
-                            m_dbPath.c_str(), m_kvStore.size());
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to replace '%s' with '%s': %s",
+                            m_dbPath.c_str(), temporary.string().c_str(), replaceError.message().c_str());
+            std::error_code removeError;
+            std::filesystem::remove(temporary, removeError);
         }
     }
 

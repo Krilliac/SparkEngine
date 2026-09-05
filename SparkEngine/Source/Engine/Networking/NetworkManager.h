@@ -343,7 +343,26 @@ namespace Spark::Net
         bool RewindToTime(float targetTime, HistorySnapshot& outSnapshot) const;
 
         void SetMaxHistoryDuration(float seconds) { m_maxHistoryDuration = seconds; }
+        [[nodiscard]] float GetMaxHistoryDuration() const { return m_maxHistoryDuration; }
         void Clear() { m_history.clear(); }
+
+        /// Timestamp of the most recently recorded snapshot — the server's own view
+        /// of "now" for hit validation. Callers bound client-supplied timestamps
+        /// against this instead of trusting them.
+        /// @param outNewest Receives the newest timestamp when history is non-empty.
+        /// @return false when no snapshot has been recorded yet.
+        [[nodiscard]] bool GetNewestSnapshotTime(float& outNewest) const
+        {
+            if (m_history.empty())
+                return false;
+            outNewest = m_history.back().timestamp;
+            for (const auto& snapshot : m_history)
+            {
+                if (snapshot.timestamp > outNewest)
+                    outNewest = snapshot.timestamp;
+            }
+            return true;
+        }
 
       private:
         std::vector<HistorySnapshot> m_history;

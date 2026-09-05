@@ -6,18 +6,19 @@
 .PARAMETER Gen
   CMake generator (default: "Visual Studio 17 2022")
 .PARAMETER Editor
-  Switch ON the editor module
-.PARAMETER Console
-  Switch ON the external console
+  Force ENABLE_EDITOR=ON (the project already defaults it ON)
 .PARAMETER AngelScript
-  Switch ON AngelScript integration
+  Force ENABLE_ANGELSCRIPT=ON (the project already defaults it ON)
+.NOTES
+  There is no ENABLE_CONSOLE option in the build system; the console is
+  controlled by ENABLE_CONSOLE_IN_SHIPPING, which only affects Shipping
+  (MinSizeRel) builds. Use the windows-shipping preset for that.
 #>
 
 param(
   [ValidateSet("Debug","Release")][string]$config = "Debug",
   [string]$gen  = "Visual Studio 17 2022",
   [switch]$editor,
-  [switch]$console,
   [switch]$angelscript
 )
 
@@ -70,11 +71,23 @@ $buildDir = "build"
 if (!(Test-Path $buildDir)) { New-Item $buildDir -ItemType Directory | Out-Null }
 Push-Location $buildDir
 
+# Switches are additive only. Passing -DENABLE_EDITOR=OFF whenever the switch
+# was omitted silently inverted the project defaults (both options default ON),
+# so an unadorned build.ps1 produced a different engine than a preset build.
 $cmakeOpts = @()
-if ($editor)      { $cmakeOpts += "-DENABLE_EDITOR=ON" }      else { $cmakeOpts += "-DENABLE_EDITOR=OFF" }
-if ($console)     { $cmakeOpts += "-DENABLE_CONSOLE=ON" }     else { $cmakeOpts += "-DENABLE_CONSOLE=OFF" }
-if ($angelscript) { $cmakeOpts += "-DENABLE_ANGELSCRIPT=ON" } else { $cmakeOpts += "-DENABLE_ANGELSCRIPT=OFF" }
+if ($editor)      { $cmakeOpts += "-DENABLE_EDITOR=ON" }
+if ($angelscript) { $cmakeOpts += "-DENABLE_ANGELSCRIPT=ON" }
 
 cmake .. -G "$gen" @cmakeOpts
-cmake --build . --config $config --parallel
+
+# With a Visual Studio generator, --parallel becomes MSBuild /m (one project
+# node per core) while every cl.exe already runs /MP (one compiler per core),
+# so the two multiply into N^2 compilers and the build goes memory-bound.
+# /m:1 keeps one project at a time and lets /MP schedule inside it, which is
+# what a build dominated by a single ~1000-file library wants anyway.
+if ($gen -like "Visual Studio*") {
+  cmake --build . --config $config --parallel 1
+} else {
+  cmake --build . --config $config --parallel
+}
 Pop-Location

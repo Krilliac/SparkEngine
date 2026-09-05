@@ -180,6 +180,16 @@ Build/Package/MyGame_Windows_Release/
 
 The folder name follows the pattern `{projectName}_{platform}_{config}`.
 
+At runtime the packaged game does not write inside this tree. `Saves/`, `Logs/`
+(rotating `SparkEngine_<timestamp>.log`), `spark_trace.json`, and `ShaderCache/`
+live under `%LOCALAPPDATA%/SparkEngine` (POSIX: `$XDG_DATA_HOME` or
+`~/.local/share/SparkEngine`), and `settings.ini` resolves to
+`%LOCALAPPDATA%/SparkEngine/Config/settings.ini` (`$XDG_CONFIG_HOME` or
+`~/.config/SparkEngine`) whenever a user copy exists or the install's `Config/` is
+not writable. `Data/*.spk` is resolved beside the executable first. Engine shaders
+are no longer flattened on install: `Shaders/ForwardPlus/*.hlsl` ships as a
+subdirectory and no prebuilt `Basic*.cso` is shipped.
+
 ## Console Commands
 
 The packager exposes a console status command:

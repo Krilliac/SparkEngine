@@ -41,9 +41,14 @@ Enemy::~Enemy() = default;
 
 HRESULT Enemy::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, EnemyType type, Player* player)
 {
-    HRESULT hr = GameObject::Initialize(device, context);
-    if (FAILED(hr))
-        return hr;
+    // A device-less host (NullRHI / headless smoke) still needs live enemies for
+    // the AI and combat loop; only the GPU mesh is skipped.
+    if (device != nullptr && context != nullptr)
+    {
+        const HRESULT hr = GameObject::Initialize(device, context);
+        if (FAILED(hr))
+            return hr;
+    }
 
     m_type = type;
     m_player = player;

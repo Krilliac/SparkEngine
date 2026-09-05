@@ -347,6 +347,72 @@ namespace Spark::Gameplay
     }
 
     // ============================================================================
+    // Persistence
+    // ============================================================================
+
+    InventorySnapshot InventorySystem::CaptureEntityState(uint32_t entityId) const
+    {
+        InventorySnapshot snapshot;
+        const auto invIt = m_inventories.find(entityId);
+        const auto maxIt = m_maxSlots.find(entityId);
+        if (invIt == m_inventories.end() && maxIt == m_maxSlots.end())
+            return snapshot;
+
+        snapshot.maxSlots = (maxIt != m_maxSlots.end()) ? maxIt->second : kDefaultMaxSlots;
+        if (invIt != m_inventories.end())
+            snapshot.slots = invIt->second;
+        return snapshot;
+    }
+
+    bool InventorySystem::ValidateEntityState(const InventorySnapshot& snapshot) const
+    {
+        // maxSlots == 0 is the canonical "no inventory" snapshot and cannot carry slots.
+        if (snapshot.maxSlots == 0)
+            return snapshot.slots.empty();
+
+        if (snapshot.slots.size() > snapshot.maxSlots)
+            return false;
+
+        for (const InventorySlot& slot : snapshot.slots)
+        {
+            if (slot.itemId == 0)
+            {
+                // A free slot is exactly {0, 0}; anything else is a malformed record.
+                if (slot.count != 0)
+                    return false;
+                continue;
+            }
+
+            const ItemDefinition* def = GetItemDef(slot.itemId);
+            if (!def || slot.count == 0 || slot.count > def->maxStackSize)
+                return false;
+        }
+        return true;
+    }
+
+    bool InventorySystem::RestoreEntityState(uint32_t entityId, const InventorySnapshot& snapshot)
+    {
+        if (!ValidateEntityState(snapshot))
+            return false;
+
+        if (snapshot.maxSlots == 0)
+        {
+            ClearEntityState(entityId);
+            return true;
+        }
+
+        m_inventories[entityId] = snapshot.slots;
+        m_maxSlots[entityId] = snapshot.maxSlots;
+        return true;
+    }
+
+    void InventorySystem::ClearEntityState(uint32_t entityId)
+    {
+        m_inventories.erase(entityId);
+        m_maxSlots.erase(entityId);
+    }
+
+    // ============================================================================
     // Console
     // ============================================================================
 

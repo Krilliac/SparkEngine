@@ -324,7 +324,7 @@
       "description": "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 156,
+      "line": 163,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -333,7 +333,7 @@
       "description": "Build test suite",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 155,
+      "line": 162,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -342,7 +342,7 @@
       "description": "Enable the AngelScript gameplay scripting runtime",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 150,
+      "line": 157,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -351,7 +351,7 @@
       "description": "Build deterministic cooker and worker processes",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 167,
+      "line": 174,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -360,7 +360,7 @@
       "description": "Build the standalone automation host",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 168,
+      "line": 175,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -369,7 +369,7 @@
       "description": "Include SparkConsole in Shipping builds",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 171,
+      "line": 178,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -378,7 +378,7 @@
       "description": "Include developer commands (god, noclip, etc.) in Shipping builds",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 172,
+      "line": 179,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -387,7 +387,7 @@
       "description": "Enable DirectX Raytracing support (requires D3D12, runtime fallback to SDFGI)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 141,
+      "line": 148,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -396,7 +396,7 @@
       "description": "Enable editor features",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 162,
+      "line": 169,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -405,7 +405,7 @@
       "description": "Enable graphics engine",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 135,
+      "line": 142,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -414,7 +414,7 @@
       "description": "Enable hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 142,
+      "line": 149,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -423,7 +423,7 @@
       "description": "Build SparkInstaller (bootstrap installer/updater)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 165,
+      "line": 172,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -432,7 +432,7 @@
       "description": "Build SparkLauncher (Unity-Hub-style project picker)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 163,
+      "line": 170,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -441,17 +441,8 @@
       "description": "Enable link-time optimization in Release/MinSizeRel builds",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 386,
-      "conditionFrames": [
-        {
-          "id": "CMakeLists.txt:328",
-          "branch": 1,
-          "branches": [
-            "MSVC",
-            "CMAKE_CXX_COMPILER_ID MATCHES \"GNU|Clang|AppleClang|IntelLLVM\""
-          ]
-        }
-      ],
+      "line": 357,
+      "conditionFrames": [],
       "definitionScope": []
     },
     {
@@ -459,7 +450,7 @@
       "description": "Enable Metal graphics backend (macOS, experimental)",
       "default": "${APPLE}",
       "file": "CMakeLists.txt",
-      "line": 140,
+      "line": 147,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -468,7 +459,7 @@
       "description": "Enable mobile platform support (touch, gestures, battery-aware scaling)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 154,
+      "line": 161,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -477,7 +468,7 @@
       "description": "Enable networking features (UDP sockets)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 137,
+      "line": 144,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -486,7 +477,7 @@
       "description": "Enable neural rendering features (NTC, radiance cache, neural post-processing)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 152,
+      "line": 159,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -495,7 +486,7 @@
       "description": "Enable OpenGL graphics backend (experimental)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 139,
+      "line": 146,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -504,7 +495,7 @@
       "description": "Enable profiling tools",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 136,
+      "line": 143,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -513,7 +504,7 @@
       "description": "Enable Recast/Detour navmesh generation (improved voxel-based builder)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 151,
+      "line": 158,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -522,10 +513,10 @@
       "description": "Enable SDL2 cross-platform input and windowing",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 145,
+      "line": 152,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:144",
+          "id": "CMakeLists.txt:151",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -539,10 +530,10 @@
       "description": "Enable SDL2 cross-platform input and windowing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 147,
+      "line": 154,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:144",
+          "id": "CMakeLists.txt:151",
           "branch": 1,
           "branches": [
             "NOT WIN32",
@@ -557,7 +548,7 @@
       "description": "Build dedicated server, gateway, and orchestration processes",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 166,
+      "line": 173,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -566,7 +557,7 @@
       "description": "Build SparkBuild (terminal-UI CMake configurator)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 164,
+      "line": 171,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -575,7 +566,7 @@
       "description": "Enable VR/AR framework (OpenXR-ready stub)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 153,
+      "line": 160,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -584,7 +575,7 @@
       "description": "Enable Vulkan graphics backend (experimental)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 138,
+      "line": 145,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -593,7 +584,7 @@
       "description": "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 159,
+      "line": 166,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -602,7 +593,7 @@
       "description": "Enable headless/dedicated server mode support",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 149,
+      "line": 156,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -611,8 +602,25 @@
       "description": "Tune for the build machine's CPU (SSE4.2/AVX2/etc). Disable for distributed binaries.",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 326,
+      "line": 350,
       "conditionFrames": [],
+      "definitionScope": []
+    },
+    {
+      "name": "SPARK_REQUIRE_WINDOWS_INSTALLERS",
+      "description": "Fail configuration when the NSIS or WiX toolchain is missing",
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 3262,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:3258",
+          "branch": 0,
+          "branches": [
+            "WIN32"
+          ]
+        }
+      ],
       "definitionScope": []
     },
     {
@@ -620,7 +628,7 @@
       "description": "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 157,
+      "line": 164,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -629,7 +637,7 @@
       "description": "Suppress compiler warnings from third-party libraries (Jolt, etc.)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 158,
+      "line": 165,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -638,7 +646,7 @@
       "description": "Strip debug symbols from the final binary",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 173,
+      "line": 180,
       "conditionFrames": [],
       "definitionScope": []
     }
@@ -803,10 +811,10 @@
     {
       "name": "ENABLE_LTO",
       "description": "Enable link-time optimization in Release/MinSizeRel builds",
-      "default": "inactive",
-      "status": "platform-inactive",
+      "default": true,
+      "status": "active",
       "declarationCount": 1,
-      "activeDeclarationCount": 0,
+      "activeDeclarationCount": 1,
       "indeterminateDeclarationCount": 0,
       "declaredIn": [
         "CMakeLists.txt"
@@ -993,6 +1001,18 @@
       ]
     },
     {
+      "name": "SPARK_REQUIRE_WINDOWS_INSTALLERS",
+      "description": "Fail configuration when the NSIS or WiX toolchain is missing",
+      "default": false,
+      "status": "active",
+      "declarationCount": 1,
+      "activeDeclarationCount": 1,
+      "indeterminateDeclarationCount": 0,
+      "declaredIn": [
+        "CMakeLists.txt"
+      ]
+    },
+    {
       "name": "SPARK_STRICT_DEPS",
       "description": "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)",
       "default": false,
@@ -1035,7 +1055,7 @@
       "description": "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 156,
+      "line": 163,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1044,7 +1064,7 @@
       "description": "Build test suite",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 155,
+      "line": 162,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1053,7 +1073,7 @@
       "description": "Enable the AngelScript gameplay scripting runtime",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 150,
+      "line": 157,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1062,7 +1082,7 @@
       "description": "Build deterministic cooker and worker processes",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 167,
+      "line": 174,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1071,7 +1091,7 @@
       "description": "Build the standalone automation host",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 168,
+      "line": 175,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1080,7 +1100,7 @@
       "description": "Include SparkConsole in Shipping builds",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 171,
+      "line": 178,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1089,7 +1109,7 @@
       "description": "Include developer commands (god, noclip, etc.) in Shipping builds",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 172,
+      "line": 179,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1098,7 +1118,7 @@
       "description": "Enable DirectX Raytracing support (requires D3D12, runtime fallback to SDFGI)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 141,
+      "line": 148,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1107,7 +1127,7 @@
       "description": "Enable editor features",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 162,
+      "line": 169,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1116,7 +1136,7 @@
       "description": "Enable graphics engine",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 135,
+      "line": 142,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1125,7 +1145,7 @@
       "description": "Enable hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 142,
+      "line": 149,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1134,7 +1154,7 @@
       "description": "Build SparkInstaller (bootstrap installer/updater)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 165,
+      "line": 172,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1143,7 +1163,7 @@
       "description": "Build SparkLauncher (Unity-Hub-style project picker)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 163,
+      "line": 170,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1152,17 +1172,8 @@
       "description": "Enable link-time optimization in Release/MinSizeRel builds",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 386,
-      "conditionFrames": [
-        {
-          "id": "CMakeLists.txt:328",
-          "branch": 1,
-          "branches": [
-            "MSVC",
-            "CMAKE_CXX_COMPILER_ID MATCHES \"GNU|Clang|AppleClang|IntelLLVM\""
-          ]
-        }
-      ],
+      "line": 357,
+      "conditionFrames": [],
       "definitionScope": []
     },
     {
@@ -1170,7 +1181,7 @@
       "description": "Enable Metal graphics backend (macOS, experimental)",
       "default": "${APPLE}",
       "file": "CMakeLists.txt",
-      "line": 140,
+      "line": 147,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1179,7 +1190,7 @@
       "description": "Enable mobile platform support (touch, gestures, battery-aware scaling)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 154,
+      "line": 161,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1188,7 +1199,7 @@
       "description": "Enable networking features (UDP sockets)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 137,
+      "line": 144,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1197,7 +1208,7 @@
       "description": "Enable neural rendering features (NTC, radiance cache, neural post-processing)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 152,
+      "line": 159,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1206,7 +1217,7 @@
       "description": "Enable OpenGL graphics backend (experimental)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 139,
+      "line": 146,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1215,7 +1226,7 @@
       "description": "Enable profiling tools",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 136,
+      "line": 143,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1224,7 +1235,7 @@
       "description": "Enable Recast/Detour navmesh generation (improved voxel-based builder)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 151,
+      "line": 158,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1233,10 +1244,10 @@
       "description": "Enable SDL2 cross-platform input and windowing",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 145,
+      "line": 152,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:144",
+          "id": "CMakeLists.txt:151",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -1250,10 +1261,10 @@
       "description": "Enable SDL2 cross-platform input and windowing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 147,
+      "line": 154,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:144",
+          "id": "CMakeLists.txt:151",
           "branch": 1,
           "branches": [
             "NOT WIN32",
@@ -1268,7 +1279,7 @@
       "description": "Build dedicated server, gateway, and orchestration processes",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 166,
+      "line": 173,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1277,7 +1288,7 @@
       "description": "Build SparkBuild (terminal-UI CMake configurator)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 164,
+      "line": 171,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1286,7 +1297,7 @@
       "description": "Enable VR/AR framework (OpenXR-ready stub)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 153,
+      "line": 160,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1295,7 +1306,7 @@
       "description": "Enable Vulkan graphics backend (experimental)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 138,
+      "line": 145,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1331,7 +1342,16 @@
       "description": "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 159,
+      "line": 166,
+      "conditionFrames": [],
+      "definitionScope": []
+    },
+    {
+      "name": "SPARK_ENABLE_INSTALLED_SDK_TESTS",
+      "description": "Register the slow installed-SDK template verification as a CTest",
+      "default": "OFF",
+      "file": "Tests/CMakeLists.txt",
+      "line": 1441,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1340,7 +1360,7 @@
       "description": "Enable headless/dedicated server mode support",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 149,
+      "line": 156,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1349,8 +1369,25 @@
       "description": "Tune for the build machine's CPU (SSE4.2/AVX2/etc). Disable for distributed binaries.",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 326,
+      "line": 350,
       "conditionFrames": [],
+      "definitionScope": []
+    },
+    {
+      "name": "SPARK_REQUIRE_WINDOWS_INSTALLERS",
+      "description": "Fail configuration when the NSIS or WiX toolchain is missing",
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 3262,
+      "conditionFrames": [
+        {
+          "id": "CMakeLists.txt:3258",
+          "branch": 0,
+          "branches": [
+            "WIN32"
+          ]
+        }
+      ],
       "definitionScope": []
     },
     {
@@ -1358,7 +1395,7 @@
       "description": "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 157,
+      "line": 164,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1367,7 +1404,16 @@
       "description": "Suppress compiler warnings from third-party libraries (Jolt, etc.)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 158,
+      "line": 165,
+      "conditionFrames": [],
+      "definitionScope": []
+    },
+    {
+      "name": "SPARK_TESTS_WARN_IS_ERROR",
+      "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
+      "default": "OFF",
+      "file": "Tests/CMakeLists.txt",
+      "line": 1247,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1376,7 +1422,7 @@
       "description": "Strip debug symbols from the final binary",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 173,
+      "line": 180,
       "conditionFrames": [],
       "definitionScope": []
     }
@@ -1946,10 +1992,10 @@
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1628,
+      "line": 1665,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1614",
+          "id": "CMakeLists.txt:1651",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -1984,24 +2030,24 @@
       "target": "Jolt",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1599,
+      "line": 1636,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1505",
+          "id": "CMakeLists.txt:1542",
           "branch": 0,
           "branches": [
             "JOLT_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:1597",
+          "id": "CMakeLists.txt:1634",
           "branch": 0,
           "branches": [
             "SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"
           ]
         },
         {
-          "id": "CMakeLists.txt:1598",
+          "id": "CMakeLists.txt:1635",
           "branch": 0,
           "branches": [
             "MSVC"
@@ -2036,31 +2082,31 @@
       "target": "OpenGL::GL",
       "kind": "imported",
       "file": "CMakeLists.txt",
-      "line": 549,
+      "line": 586,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:484",
+          "id": "CMakeLists.txt:521",
           "branch": 0,
           "branches": [
             "NOT WIN32 AND ENABLE_SDL2 AND EXISTS \"${SDL2_SUBMODULE_DIR}/CMakeLists.txt\""
           ]
         },
         {
-          "id": "CMakeLists.txt:488",
+          "id": "CMakeLists.txt:525",
           "branch": 0,
           "branches": [
             "NOT OpenGL_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:503",
+          "id": "CMakeLists.txt:540",
           "branch": 0,
           "branches": [
             "_LIBGL_RUNTIME AND EXISTS \"${_FALLBACK_GL_HEADERS}/GL/gl.h\""
           ]
         },
         {
-          "id": "CMakeLists.txt:548",
+          "id": "CMakeLists.txt:585",
           "branch": 0,
           "branches": [
             "NOT TARGET OpenGL::GL"
@@ -2095,10 +2141,10 @@
       "target": "Recast",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1616,
+      "line": 1653,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1614",
+          "id": "CMakeLists.txt:1651",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2295,7 +2341,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 666,
+      "line": 683,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2416,7 +2462,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 644,
+      "line": 661,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2475,10 +2521,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1371,
+      "line": 1408,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1370",
+          "id": "CMakeLists.txt:1407",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -2493,10 +2539,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1373,
+      "line": 1410,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1370",
+          "id": "CMakeLists.txt:1407",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -2512,10 +2558,10 @@
       "target": "SparkEngineInterface",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 1354,
+      "line": 1391,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1353",
+          "id": "CMakeLists.txt:1390",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -2530,7 +2576,7 @@
       "target": "SparkEngineLib",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1327,
+      "line": 1364,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2540,7 +2586,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 745,
+      "line": 762,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2690,10 +2736,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 653,
+      "line": 670,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:652",
+          "id": "Tests/CMakeLists.txt:669",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -2785,7 +2831,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 664,
+      "line": 681,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2795,7 +2841,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 668,
+      "line": 685,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2847,7 +2893,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 750,
+      "line": 767,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2857,7 +2903,7 @@
       "target": "SparkRuntimeShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1727,
+      "line": 1770,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2887,7 +2933,7 @@
       "target": "SparkShaderCompiler",
       "kind": "executable",
       "file": "SparkShaderCompiler/CMakeLists.txt",
-      "line": 57,
+      "line": 62,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2897,7 +2943,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 670,
+      "line": 687,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2907,7 +2953,7 @@
       "target": "SparkTests",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 34,
+      "line": 45,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2929,7 +2975,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 740,
+      "line": 757,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2969,10 +3015,10 @@
       "target": "VulkanMemoryAllocator",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 690,
+      "line": 727,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:689",
+          "id": "CMakeLists.txt:726",
           "branch": 0,
           "branches": [
             "NOT TARGET VulkanMemoryAllocator AND EXISTS \"${VMA_ROOT}/vk_mem_alloc.h\""
@@ -2987,10 +3033,10 @@
       "target": "angelscript",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 951,
+      "line": 988,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:893",
+          "id": "CMakeLists.txt:930",
           "branch": 0,
           "branches": [
             "ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE"
@@ -3005,10 +3051,10 @@
       "target": "cgltf",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 759,
+      "line": 796,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:758",
+          "id": "CMakeLists.txt:795",
           "branch": 0,
           "branches": [
             "NOT TARGET cgltf AND EXISTS \"${CGLTF_DIR}/cgltf.h\""
@@ -3023,17 +3069,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2172,
+      "line": 2217,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2167",
+          "id": "CMakeLists.txt:2212",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2171",
+          "id": "CMakeLists.txt:2216",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -3113,10 +3159,10 @@
       "target": "miniaudio",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 778,
+      "line": 815,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:777",
+          "id": "CMakeLists.txt:814",
           "branch": 0,
           "branches": [
             "NOT TARGET miniaudio AND EXISTS \"${MINIAUDIO_DIR}/miniaudio.h\""
@@ -3131,10 +3177,10 @@
       "target": "miniz",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 641,
+      "line": 678,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:639",
+          "id": "CMakeLists.txt:676",
           "branch": 0,
           "branches": [
             "MINIZ_SOURCES"
@@ -3149,10 +3195,10 @@
       "target": "nlohmann_json",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 804,
+      "line": 841,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:803",
+          "id": "CMakeLists.txt:840",
           "branch": 0,
           "branches": [
             "NOT TARGET nlohmann_json AND EXISTS \"${NLOHMANN_JSON_DIR}/nlohmann_json.h\""
@@ -3187,10 +3233,10 @@
       "target": "stb_image",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 740,
+      "line": 777,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:739",
+          "id": "CMakeLists.txt:776",
           "branch": 0,
           "branches": [
             "NOT TARGET stb_image AND EXISTS \"${STB_DIR}/stb_image.h\""
@@ -3205,10 +3251,10 @@
       "target": "tinyexr",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 817,
+      "line": 854,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:816",
+          "id": "CMakeLists.txt:853",
           "branch": 0,
           "branches": [
             "NOT TARGET tinyexr AND EXISTS \"${TINYEXR_DIR}/tinyexr.h\""
@@ -3223,10 +3269,10 @@
       "target": "tinyobjloader",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 713,
+      "line": 750,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:710",
+          "id": "CMakeLists.txt:747",
           "branch": 0,
           "branches": [
             "TINYOBJLOADER_INCLUDE_DIR"
@@ -3241,10 +3287,10 @@
       "target": "zstd",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 669,
+      "line": 706,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:668",
+          "id": "CMakeLists.txt:705",
           "branch": 0,
           "branches": [
             "NOT TARGET zstd AND EXISTS \"${ZSTD_ROOT}/zstd.h\""
@@ -3315,7 +3361,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1628,
+          "line": 1665,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3369,7 +3415,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1599,
+          "line": 1636,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -3423,7 +3469,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 549,
+          "line": 586,
           "kind": "imported",
           "origin": "non-build",
           "definitionScope": [],
@@ -3477,7 +3523,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1616,
+          "line": 1653,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3717,7 +3763,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 666,
+          "line": 683,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3863,7 +3909,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 644,
+          "line": 661,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -3927,7 +3973,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1371,
+          "line": 1408,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -3935,7 +3981,7 @@
         },
         {
           "file": "CMakeLists.txt",
-          "line": 1373,
+          "line": 1410,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -3953,7 +3999,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1354,
+          "line": 1391,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3971,7 +4017,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1327,
+          "line": 1364,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3989,7 +4035,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 745,
+          "line": 762,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4259,7 +4305,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 653,
+          "line": 670,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4359,7 +4405,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 664,
+          "line": 681,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4377,7 +4423,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 668,
+          "line": 685,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4453,7 +4499,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 750,
+          "line": 767,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4471,7 +4517,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1727,
+          "line": 1770,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -4525,7 +4571,7 @@
       "declarations": [
         {
           "file": "SparkShaderCompiler/CMakeLists.txt",
-          "line": 57,
+          "line": 62,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4543,7 +4589,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 670,
+          "line": 687,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4561,7 +4607,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 34,
+          "line": 45,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4599,7 +4645,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 740,
+          "line": 757,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4671,7 +4717,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 690,
+          "line": 727,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4689,7 +4735,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 951,
+          "line": 988,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -4707,7 +4753,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 759,
+          "line": 796,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4725,7 +4771,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2172,
+          "line": 2217,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4769,7 +4815,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 778,
+          "line": 815,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4787,7 +4833,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 641,
+          "line": 678,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4805,7 +4851,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 804,
+          "line": 841,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4859,7 +4905,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 740,
+          "line": 777,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4877,7 +4923,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 817,
+          "line": 854,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4895,7 +4941,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 713,
+          "line": 750,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4913,7 +4959,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 669,
+          "line": 706,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5061,6 +5107,15 @@
       "line": 227
     },
     {
+      "name": "ENABLE_LTO",
+      "displayName": "Link-Time Optimization",
+      "description": "Enable link-time optimization in Release/MinSizeRel builds",
+      "default": true,
+      "category": "Shipping",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 261
+    },
+    {
       "name": "ENABLE_METAL",
       "displayName": "Metal Backend",
       "description": "Build the experimental macOS Metal backend",
@@ -5076,7 +5131,7 @@
       "default": false,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 267
+      "line": 276
     },
     {
       "name": "ENABLE_NETWORKING",
@@ -5085,7 +5140,7 @@
       "default": true,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 260
+      "line": 269
     },
     {
       "name": "ENABLE_NEURAL_RENDERING",
@@ -5139,7 +5194,7 @@
       "default": true,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 262
+      "line": 271
     },
     {
       "name": "ENABLE_SPARKBUILD",
@@ -5157,7 +5212,7 @@
       "default": false,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 265
+      "line": 274
     },
     {
       "name": "ENABLE_VULKAN",
@@ -5194,6 +5249,15 @@
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
       "line": 246
+    },
+    {
+      "name": "SPARK_REQUIRE_WINDOWS_INSTALLERS",
+      "displayName": "Require Windows Installers",
+      "description": "Fail configuration when the NSIS or WiX toolchain is missing",
+      "default": false,
+      "category": "Shipping",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 264
     },
     {
       "name": "SPARK_STRICT_DEPS",
@@ -5294,7 +5358,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 24,
+        "stepCount": 25,
         "steps": [
           {
             "index": 0,
@@ -5334,6 +5398,18 @@
           },
           {
             "index": 3,
+            "name": "Test sanitizer JUnit evidence parser",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "08f7a521a6eb9051"
+          },
+          {
+            "index": 4,
             "name": "Test required-job gate",
             "id": "",
             "uses": "",
@@ -5345,7 +5421,7 @@
             "runDigest": "a688de9d2e6d4cfe"
           },
           {
-            "index": 4,
+            "index": 5,
             "name": "Test exact-commit release gate",
             "id": "",
             "uses": "",
@@ -5357,7 +5433,7 @@
             "runDigest": "b660839f28f576e8"
           },
           {
-            "index": 5,
+            "index": 6,
             "name": "Test the build-matrix exact-source status gate",
             "id": "",
             "uses": "",
@@ -5369,7 +5445,7 @@
             "runDigest": "49a6266d08a82878"
           },
           {
-            "index": 6,
+            "index": 7,
             "name": "Test crash-consistent release download counters",
             "id": "",
             "uses": "",
@@ -5381,7 +5457,7 @@
             "runDigest": "660224552d6751a4"
           },
           {
-            "index": 7,
+            "index": 8,
             "name": "Test exact release asset publication boundary",
             "id": "",
             "uses": "",
@@ -5393,7 +5469,7 @@
             "runDigest": "c1cda3d75fd3d19c"
           },
           {
-            "index": 8,
+            "index": 9,
             "name": "Test release publication recovery",
             "id": "",
             "uses": "",
@@ -5405,7 +5481,7 @@
             "runDigest": "b5a4aee105620528"
           },
           {
-            "index": 9,
+            "index": 10,
             "name": "Test extracted portable-package validation",
             "id": "",
             "uses": "",
@@ -5417,7 +5493,7 @@
             "runDigest": "3cede89fce1f5dba"
           },
           {
-            "index": 10,
+            "index": 11,
             "name": "Test coverage evidence semantics",
             "id": "",
             "uses": "",
@@ -5429,7 +5505,7 @@
             "runDigest": "b870b844a6e610de"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Test sanitizer pipeline exit propagation",
             "id": "",
             "uses": "",
@@ -5441,7 +5517,7 @@
             "runDigest": "e9e9310a91486157"
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Test workflow failure-propagation contract",
             "id": "",
             "uses": "",
@@ -5453,7 +5529,7 @@
             "runDigest": "f7233b3f14c1a94a"
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Test granular SparkTests wrapper failure recovery",
             "id": "",
             "uses": "",
@@ -5465,7 +5541,7 @@
             "runDigest": "326ef3bd02bde17a"
           },
           {
-            "index": 14,
+            "index": 15,
             "name": "Test Spark CLI",
             "id": "",
             "uses": "",
@@ -5477,7 +5553,7 @@
             "runDigest": "409c9f97b4a909ab"
           },
           {
-            "index": 15,
+            "index": 16,
             "name": "Verify every test source is registered",
             "id": "",
             "uses": "",
@@ -5489,7 +5565,7 @@
             "runDigest": "4033bf80ea364bbe"
           },
           {
-            "index": 16,
+            "index": 17,
             "name": "Validate model and template asset contracts",
             "id": "",
             "uses": "",
@@ -5501,7 +5577,7 @@
             "runDigest": "518945017eec4a52"
           },
           {
-            "index": 17,
+            "index": 18,
             "name": "Test build-matrix inventory and parity",
             "id": "",
             "uses": "",
@@ -5513,7 +5589,7 @@
             "runDigest": "c0f9a3a90d8ff03f"
           },
           {
-            "index": 18,
+            "index": 19,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
@@ -5525,7 +5601,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 19,
+            "index": 20,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -5537,7 +5613,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 20,
+            "index": 21,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -5549,7 +5625,7 @@
             "runDigest": ""
           },
           {
-            "index": 21,
+            "index": 22,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -5561,7 +5637,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 22,
+            "index": 23,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -5576,7 +5652,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 23,
+            "index": 24,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -5915,7 +5991,7 @@
               "LSAN_OPTIONS",
               "UBSAN_OPTIONS"
             ],
-            "runDigest": "d2f517200cbe4b4d"
+            "runDigest": "c0d31683eba276b6"
           },
           {
             "index": 9,
@@ -5927,7 +6003,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "f4e8c59a1570a5e9"
+            "runDigest": "93bd2553f3288aeb"
           },
           {
             "index": 10,
@@ -5939,7 +6015,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "450ac819f55e1bee"
+            "runDigest": "51e01f4dd90e99da"
           },
           {
             "index": 11,
@@ -6124,7 +6200,7 @@
             "env": [
               "TSAN_OPTIONS"
             ],
-            "runDigest": "a13ce8eb60a698c1"
+            "runDigest": "a6bf614507170cb8"
           },
           {
             "index": 9,
@@ -6136,7 +6212,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "f30cfb52e98aadf9"
+            "runDigest": "185755c0a34b0874"
           },
           {
             "index": 10,
@@ -6148,7 +6224,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "0c40b58f4024a37b"
+            "runDigest": "953b8d03bfeaedc8"
           },
           {
             "index": 11,
@@ -6444,7 +6520,7 @@
             "env": [
               "MSAN_OPTIONS"
             ],
-            "runDigest": "f59214d781025153"
+            "runDigest": "72e80abc4d1c94d9"
           },
           {
             "index": 9,
@@ -6516,7 +6592,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 15,
+        "stepCount": 17,
         "steps": [
           {
             "index": 0,
@@ -6576,7 +6652,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "43049608474d5e1a"
+            "runDigest": "aa854d3d7363656e"
           },
           {
             "index": 5,
@@ -6636,10 +6712,34 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "b1b34131f7e8f56d"
+            "runDigest": "04d1482b4a194b41"
           },
           {
             "index": 10,
+            "name": "Census of production-source vs mirror tests",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "always() && matrix.config == 'Release'",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "7741b0414f585daa"
+          },
+          {
+            "index": 11,
+            "name": "Upload exact-commit CTest report",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "always() && matrix.config == 'Release'",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 12,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6651,7 +6751,7 @@
             "runDigest": ""
           },
           {
-            "index": 11,
+            "index": 13,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -6663,7 +6763,7 @@
             "runDigest": "fe715c78b7a4aa4e"
           },
           {
-            "index": 12,
+            "index": 14,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6675,7 +6775,7 @@
             "runDigest": ""
           },
           {
-            "index": 13,
+            "index": 15,
             "name": "Package build output",
             "id": "",
             "uses": "",
@@ -6687,7 +6787,7 @@
             "runDigest": "7b34a4169ceb6e5e"
           },
           {
-            "index": 14,
+            "index": 16,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6761,7 +6861,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "def6a5c0227e92b3"
+            "runDigest": "ea9a46d2c01da324"
           },
           {
             "index": 3,
@@ -6797,7 +6897,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "20adc80d866ecc91"
+            "runDigest": "5605dbef17f25623"
           },
           {
             "index": 6,
@@ -6821,7 +6921,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "bd320f9583bd71d5"
+            "runDigest": "9cd61c1b24e1a4ef"
           },
           {
             "index": 8,
@@ -6965,7 +7065,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "43049608474d5e1a"
+            "runDigest": "aa854d3d7363656e"
           },
           {
             "index": 4,
@@ -7025,7 +7125,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "45fef95257927cb9"
+            "runDigest": "ccfea9cd882fe6e7"
           },
           {
             "index": 9,
@@ -7145,7 +7245,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "43049608474d5e1a"
+            "runDigest": "aa854d3d7363656e"
           },
           {
             "index": 5,
@@ -7205,7 +7305,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "83b15fdd037d4be1"
+            "runDigest": "8d7518b4302271f9"
           },
           {
             "index": 10,
@@ -7385,7 +7485,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "43049608474d5e1a"
+            "runDigest": "aa854d3d7363656e"
           },
           {
             "index": 5,
@@ -7445,7 +7545,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "265042f5b0dd2b99"
+            "runDigest": "32bb99d0cdcf7285"
           },
           {
             "index": 10,
@@ -7784,7 +7884,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "43049608474d5e1a"
+            "runDigest": "aa854d3d7363656e"
           },
           {
             "index": 5,
@@ -7844,7 +7944,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "8703b3c1f150085a"
+            "runDigest": "478334f65ffcf8f2"
           },
           {
             "index": 10,
@@ -8414,7 +8514,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "bf95a6c86592831b"
+            "runDigest": "b626b9c44fedd4ea"
           },
           {
             "index": 3,
@@ -8426,7 +8526,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "6f18a9fbd8740c36"
+            "runDigest": "790d5c81bba51632"
           },
           {
             "index": 4,
@@ -8450,7 +8550,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "1d1e18c29bd2f701"
+            "runDigest": "661de126f5a284d9"
           },
           {
             "index": 6,
@@ -9297,7 +9397,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 2>&1 | tee build-matrix-windows-shipping-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee build-matrix-windows-shipping-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -9305,7 +9405,7 @@
         "configuration": "MinSizeRel",
         "buildDir": "",
         "preset": "windows-shipping",
-        "parallel": "2>",
+        "parallel": "1",
         "buildsAllTargets": true,
         "commandIndex": 1
       },
@@ -9367,7 +9467,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-release --config Release --parallel 2>&1 | tee build-matrix-windows-validation-build.log",
+        "command": "cmake --build --preset windows-release --config Release --parallel 1 2>&1 | tee build-matrix-windows-validation-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -9375,7 +9475,7 @@
         "configuration": "Release",
         "buildDir": "",
         "preset": "windows-release",
-        "parallel": "2>",
+        "parallel": "1",
         "buildsAllTargets": true,
         "commandIndex": 1
       },
@@ -9394,11 +9494,11 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee build-matrix-installed-sdk-consumer-configure.log",
+        "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=\"$SPARK_EXPECTED_VERSION\" 2>&1 | tee build-matrix-installed-sdk-consumer-configure.log",
         "commandProvenance": "literal",
         "options": {
           "SparkEngine_DIR": "${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine",
-          "SPARK_EXPECTED_ENGINE_VERSION": "1.0.0"
+          "SPARK_EXPECTED_ENGINE_VERSION": "$SPARK_EXPECTED_VERSION"
         },
         "sourceDir": "Tests/PackageSmoke",
         "buildDir": "build/installed-sdk-consumer",
@@ -10911,11 +11011,11 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee build-matrix-installed-sdk-consumer-configure.log",
+        "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=\"$SPARK_EXPECTED_VERSION\" 2>&1 | tee build-matrix-installed-sdk-consumer-configure.log",
         "commandProvenance": "literal",
         "options": {
           "SparkEngine_DIR": "${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine",
-          "SPARK_EXPECTED_ENGINE_VERSION": "1.0.0"
+          "SPARK_EXPECTED_ENGINE_VERSION": "$SPARK_EXPECTED_VERSION"
         },
         "sourceDir": "Tests/PackageSmoke",
         "buildDir": "build/installed-sdk-consumer",
@@ -11587,7 +11687,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 2>&1 | tee build-matrix-windows-shipping-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee build-matrix-windows-shipping-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -11595,7 +11695,7 @@
         "configuration": "MinSizeRel",
         "buildDir": "",
         "preset": "windows-shipping",
-        "parallel": "2>",
+        "parallel": "1",
         "buildsAllTargets": true,
         "commandIndex": 1
       },
@@ -11614,7 +11714,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-release --config Release --parallel 2>&1 | tee build-matrix-windows-validation-build.log",
+        "command": "cmake --build --preset windows-release --config Release --parallel 1 2>&1 | tee build-matrix-windows-validation-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -11622,7 +11722,7 @@
         "configuration": "Release",
         "buildDir": "",
         "preset": "windows-release",
-        "parallel": "2>",
+        "parallel": "1",
         "buildsAllTargets": true,
         "commandIndex": 1
       },
@@ -12491,7 +12591,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 18,
+        "stepIndex": 19,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -12519,7 +12619,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 19,
+        "stepIndex": 20,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -12993,11 +13093,11 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=1.0.0 2>&1 | tee build-matrix-installed-sdk-consumer-configure.log",
+      "command": "cmake -S Tests/PackageSmoke -B build/installed-sdk-consumer  -G \"Visual Studio 17 2022\" -A x64 -T v143  -DSparkEngine_DIR=\"${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine\"  -DSPARK_EXPECTED_ENGINE_VERSION=\"$SPARK_EXPECTED_VERSION\" 2>&1 | tee build-matrix-installed-sdk-consumer-configure.log",
       "commandProvenance": "literal",
       "options": {
         "SparkEngine_DIR": "${{ github.workspace }}/build/build-matrix-stage/lib/cmake/SparkEngine",
-        "SPARK_EXPECTED_ENGINE_VERSION": "1.0.0"
+        "SPARK_EXPECTED_ENGINE_VERSION": "$SPARK_EXPECTED_VERSION"
       },
       "sourceDir": "Tests/PackageSmoke",
       "buildDir": "build/installed-sdk-consumer",

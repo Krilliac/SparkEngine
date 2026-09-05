@@ -86,6 +86,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include <filesystem>
+#include <string_view>
 #include <thread>
 
 // CrashHandler is cross-platform — needed by SetupCrashHandler() which is called
@@ -284,9 +285,11 @@ void ShutdownEngineAfterPreflight()
     // cache never holds a dangling client pointer during gameplay shutdown.
     Spark::Daemon::ShutdownDaemonLifecycle();
 
-    ShutdownGameplaySystems();
-    ShutdownDebugSystems();
-
+    // Teardown mirrors startup: modules go first, then the engine systems they
+    // were built on. Running ShutdownGameplaySystems()/ShutdownDebugSystems()
+    // ahead of module OnUnload made every module deregistration (script
+    // bindings, InvalidStateDetector rules, quest/inventory/ability hooks)
+    // operate on already-cleared or shut-down singletons.
     if (rt.moduleManager)
     {
         // CanShutdownEngine already completed the only fallible phase. Never
@@ -294,7 +297,13 @@ void ShutdownEngineAfterPreflight()
         // begun: a second veto here used to strand a partially destroyed
         // engine and let platform entry points exit anyway.
         rt.moduleManager->ShutdownAllAfterPreflight();
+    }
 
+    ShutdownGameplaySystems();
+    ShutdownDebugSystems();
+
+    if (rt.moduleManager)
+    {
         // Clear console commands and EventBus channels BEFORE dlclose()
         // unmaps module code. Command handlers and ChannelOf<E> vtables
         // live in the .so — destroying them after unload segfaults.
@@ -472,7 +481,12 @@ void SetupCrashHandler()
     crashCfg.captureSystemInfo = cr.captureSystemInfo;
     crashCfg.captureAllThreads = cr.captureAllThreads;
     crashCfg.zipBeforeUpload = true;
-    crashCfg.triggerCrashOnAssert = false;
+    // Off by default: a surviving developer assertion should not manufacture a
+    // crash report. SPARK_CRASH_ON_ASSERT=1 opts a run in, which is what the
+    // release-assert and freeze-watchdog gates need so a fatal VERIFY or a
+    // watchdog kill leaves a dump behind instead of only a log line.
+    const char* envAssertCrash = std::getenv("SPARK_CRASH_ON_ASSERT");
+    crashCfg.triggerCrashOnAssert = envAssertCrash != nullptr && std::string_view(envAssertCrash) == "1";
     crashCfg.connectTimeoutSeconds = cr.timeoutSeconds;
     crashCfg.enableCrashReporting = cr.enabled;
     crashCfg.requireConsent = cr.requireConsent;

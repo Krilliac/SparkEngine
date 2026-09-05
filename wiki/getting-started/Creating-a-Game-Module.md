@@ -73,6 +73,13 @@ The `ModuleInfo` struct provides metadata about your module:
 | `sdkVersion` | `uint32_t` | SDK version this module was built against (`SPARK_SDK_VERSION`) |
 | `loadOrder` | `int` | Initialization priority (lower = earlier, default 1000) |
 
+`SPARK_SDK_VERSION` is **4** (`SparkSDK/include/Spark/Version.h`) after `IEngineContext` gained
+`GetInvalidStateDetector()` and `GetComponentSerializers()`. `IsSDKCompatible` is exact equality, so
+a v3 module is refused by a v4 host and a v4 module by a v3 host — there is no forward or backward
+window. `Spark/IEngineContext.h` pins `EngineContextVirtualCount = 90` with a `static_assert` tying
+it to the version constant: adding or removing a virtual means updating **both** together, or an old
+host will accept a module that calls off the end of its vtable.
+
 ### IModule Method Reference
 
 | Method | Required | When Called | Description |
@@ -390,6 +397,13 @@ The process hosts one Game module. Compatible `ModuleKind::Addon` modules (libra
 ### The IEngineContext Interface
 
 Once you have the `IEngineContext*`, access services exposed by the active build. Availability varies by configuration; do not infer that every listed subsystem is part of stable-v1.
+
+Since the 2026-09 sweep the gameplay lifecycle populates `GetLocalization`, `GetAI`, `GetAnimation`,
+`GetWeapons`, `GetMusic`, `GetDestruction`, `GetAbilities`, `GetConditions`, `GetInstances`,
+`GetTween`, `GetVFS`, and `GetAreaStreaming` with the host's instances. Two accessors are new:
+`GetInvalidStateDetector()` and `GetComponentSerializers()` -- modules must use these host instances
+rather than `GetInstance()`, which returns a DLL-local copy inside the module. `GetSceneManager()` is
+`nullptr` unless a host registers one, and the engine loads no language file on its own.
 
 ```cpp
 class IEngineContext

@@ -8,9 +8,11 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 #include <climits>
+#include <exception>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <windows.h>
 #include <shellapi.h>
 
@@ -84,6 +86,54 @@ namespace Spark::Platform
         }
         LocalFree(argv);
         return value;
+    }
+
+    /**
+     * @brief Whole-token numeric parse.
+     *
+     * Returns nullopt unless the entire token is consumed, so a value such as
+     * "12x" or "abc" is rejected instead of silently reading as 12 or 0.
+     */
+    template <typename ValueType> std::optional<ValueType> ParseWholeWideNumber(const std::wstring& token)
+    {
+        static_assert(std::is_arithmetic_v<ValueType>, "ParseWholeWideNumber handles numeric options only");
+        if (token.empty())
+            return std::nullopt;
+
+        size_t consumed = 0;
+        ValueType value{};
+        try
+        {
+            if constexpr (std::is_floating_point_v<ValueType>)
+                value = static_cast<ValueType>(std::stod(token, &consumed));
+            else
+                value = static_cast<ValueType>(std::stoll(token, &consumed));
+        }
+        catch (const std::exception&)
+        {
+            return std::nullopt;
+        }
+
+        if (consumed != token.size())
+            return std::nullopt;
+        return value;
+    }
+
+    /**
+     * @brief Whole-token numeric value of an exact command-line option.
+     *
+     * The engine's numeric flags (-test-frames, -threads, -test-seconds) used to
+     * be read with std::wstring::find plus a fixed offset, which matched inside
+     * unrelated arguments (`-threadsafe`, a module path) and accepted trailing
+     * garbage. Exact tokenization plus a whole-token parse removes both.
+     */
+    template <typename ValueType>
+    std::optional<ValueType> FindWindowsCommandLineNumber(const wchar_t* commandLine, std::wstring_view option)
+    {
+        const auto token = FindWindowsCommandLineArgument(commandLine, option);
+        if (!token)
+            return std::nullopt;
+        return ParseWholeWideNumber<ValueType>(*token);
     }
 
     /** @brief UTF-8 form of FindWindowsCommandLineArgument for filesystem APIs. */

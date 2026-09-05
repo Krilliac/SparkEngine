@@ -6,6 +6,7 @@
 #include "BuiltinWorkflows.h"
 #include "EditorWorkflow.h"
 #include "../Core/EditorUI.h"
+#include "../Core/ProjectManager.h"
 #include "Utils/Process.h"
 
 #include <filesystem>
@@ -64,6 +65,53 @@ namespace SparkEditor
             return exitCode;
         }
 
+        /// @brief Build directory belonging to the open project, or an empty path when
+        /// no project is open. Never falls back to a CWD-relative "build".
+        std::filesystem::path ProjectBuildDirectory()
+        {
+            const std::filesystem::path project = ProjectManager::GetActiveProjectPath();
+            if (project.empty())
+                return {};
+            return project / "build";
+        }
+
+        /// @brief Configure the open project into its own build directory.
+        /// A repo CMake preset was used here previously, which resolves its binaryDir relative to
+        /// whatever CMakePresets.json sits in the editor's working directory — never the
+        /// <project>/build tree the Build and Clean steps operate on. Configure and build must
+        /// name the same directory or the workflow can never succeed.
+        bool ConfigureOpenProject(WorkflowContext& ctx)
+        {
+            const std::filesystem::path project = ProjectManager::GetActiveProjectPath();
+            if (project.empty())
+            {
+                ctx.Log("No project is open — refusing to configure an unscoped directory");
+                return false;
+            }
+
+            const std::filesystem::path buildDir = project / "build";
+            const int rc = RunWorkflowProcess(
+                ctx, "cmake", {"-S", project.string(), "-B", buildDir.string(), "-DCMAKE_BUILD_TYPE=Release"}, 5);
+            ctx.Log("CMake configure exit: " + std::to_string(rc));
+            return rc == 0;
+        }
+
+        /// @brief Build the directory ConfigureOpenProject() just wrote.
+        bool BuildOpenProject(WorkflowContext& ctx)
+        {
+            const std::filesystem::path buildDir = ProjectBuildDirectory();
+            if (buildDir.empty())
+            {
+                ctx.Log("No project is open — refusing to build an unscoped directory");
+                return false;
+            }
+
+            const int rc = RunWorkflowProcess(
+                ctx, "cmake", {"--build", buildDir.string(), "--config", "Release", "--parallel", "2"}, 10);
+            ctx.Log("Build exit: " + std::to_string(rc));
+            return rc == 0;
+        }
+
         std::vector<std::string> CollectFormatCheckFiles()
         {
             std::vector<std::string> files;
@@ -104,29 +152,20 @@ namespace SparkEditor
                         {
                             if (ctx.editorUI)
                             {
-                                auto path = ctx.editorUI->GetCurrentSceneName() + ".sparkscene";
-                                bool saved = ctx.editorUI->SaveCurrentScene(path);
-                                ctx.Log(saved ? "Scene saved: " + path : "Scene save failed");
+                                // SaveScene() resolves the project-relative scene path; a bare
+                                // "<name>.sparkscene" would be written next to the working
+                                // directory and then adopted as the editor's current scene.
+                                const bool saved = ctx.editorUI->SaveScene();
+                                ctx.Log(saved ? "Scene saved" : "Scene save failed");
                                 return saved;
                             }
                             ctx.Log("No editor context — skipping scene save");
                             return true;
                         }});
 
-            wf.AddStep({"Configure", "Run CMake configure with default preset", [](WorkflowContext& ctx)
-                        {
-                            int rc = RunWorkflowProcess(ctx, "cmake", {"--preset", "linux-gcc-release"}, 5);
-                            ctx.Log("CMake configure exit: " + std::to_string(rc));
-                            return rc == 0;
-                        }});
+            wf.AddStep({"Configure", "Run CMake configure on the open project", ConfigureOpenProject});
 
-            wf.AddStep({"Build", "Compile the project", [](WorkflowContext& ctx)
-                        {
-                            int rc = RunWorkflowProcess(
-                                ctx, "cmake", {"--build", "build", "--config", "Release", "--parallel", "2"}, 10);
-                            ctx.Log("Build exit: " + std::to_string(rc));
-                            return rc == 0;
-                        }});
+            wf.AddStep({"Build", "Compile the project", BuildOpenProject});
 
             registry.Register(std::move(wf));
         }
@@ -135,36 +174,43 @@ namespace SparkEditor
         // Build: Clean & Rebuild
         // ====================================================================
         {
-            EditorWorkflow wf("Clean & Rebuild", "Delete build directory, reconfigure, and build from scratch",
+            EditorWorkflow wf("Clean & Rebuild",
+                              "Delete the open project's build directory, reconfigure, and build from scratch",
                               "Build");
+            wf.SetRequiresConfirmation(true);
 
-            wf.AddStep({"Clean", "Remove build directory", [](WorkflowContext& ctx)
+            wf.AddStep({"Clean", "Remove the open project's build directory", [](WorkflowContext& ctx)
                         {
+                            // Deleting a CWD-relative "build" would erase whatever build tree
+                            // happens to sit next to the editor's working directory. Only the
+                            // open project's own build directory may be removed.
+                            const std::filesystem::path buildDir = ProjectBuildDirectory();
+                            if (buildDir.empty())
+                            {
+                                ctx.Log("No project is open — refusing to delete an unscoped 'build' directory");
+                                return false;
+                            }
+
                             std::error_code ec;
-                            std::filesystem::remove_all("build", ec);
+                            if (!std::filesystem::exists(buildDir, ec))
+                            {
+                                ctx.Log("Nothing to clean: " + buildDir.string() + " does not exist");
+                                return true;
+                            }
+
+                            std::filesystem::remove_all(buildDir, ec);
                             if (ec)
                             {
-                                ctx.Log("Warning: " + ec.message());
-                                return true; // Non-fatal — directory may not exist
+                                ctx.Log("Failed to remove " + buildDir.string() + ": " + ec.message());
+                                return false;
                             }
-                            ctx.Log("Removed build directory");
+                            ctx.Log("Removed build directory: " + buildDir.string());
                             return true;
                         }});
 
-            wf.AddStep({"Configure", "Run CMake configure", [](WorkflowContext& ctx)
-                        {
-                            int rc = RunWorkflowProcess(ctx, "cmake", {"--preset", "linux-gcc-release"}, 5);
-                            ctx.Log("CMake configure exit: " + std::to_string(rc));
-                            return rc == 0;
-                        }});
+            wf.AddStep({"Configure", "Run CMake configure on the open project", ConfigureOpenProject});
 
-            wf.AddStep({"Build", "Full rebuild", [](WorkflowContext& ctx)
-                        {
-                            int rc = RunWorkflowProcess(
-                                ctx, "cmake", {"--build", "build", "--config", "Release", "--parallel", "2"}, 10);
-                            ctx.Log("Build exit: " + std::to_string(rc));
-                            return rc == 0;
-                        }});
+            wf.AddStep({"Build", "Full rebuild", BuildOpenProject});
 
             registry.Register(std::move(wf));
         }

@@ -30,8 +30,10 @@
 #include "WaveSpawner.h"
 #include "ProgressionSystem.h"
 #include "LootSystem.h"
+#include "FPSLocalProfile.h"
 #include "Engine/Networking/NetworkManager.h"
 #include <memory>
+#include <string>
 #include <vector>
 
 // Forward declarations for engine systems wired into the game
@@ -385,6 +387,44 @@ class SPARK_GAME_API Game
      */
     Spark::RespawnSystem* GetRespawnSystem() const { return m_respawnSystem.get(); }
 
+    /** @brief Non-owning enemy roster, for state validation and scoring. */
+    const std::vector<Enemy*>& GetEnemies() const { return m_enemies; }
+
+    /**
+     * @brief True when a D3D11 device was available at initialization.
+     *
+     * False under a device-less (NullRHI/headless) host: gameplay state is fully
+     * built, GPU resource creation and rendering are skipped.
+     */
+    bool IsRenderingEnabled() const { return m_renderingEnabled; }
+
+    // ============================================================================
+    // LOCAL PROFILE PERSISTENCE
+    // ============================================================================
+
+    /** @brief Snapshot the declared local profile (progression, class, loadout, score). */
+    Spark::FPSLocalProfile CaptureLocalProfile() const;
+
+    /** @brief Apply a loaded profile to progression, the player, and the game mode. */
+    void ApplyLocalProfile(const Spark::FPSLocalProfile& profile);
+
+    /**
+     * @brief Write the world plus the local profile to the quicksave slot.
+     * @param outMessage Human-readable result, suitable for the console.
+     * @return false when the save system is unavailable or the write failed.
+     */
+    bool QuickSaveProfile(std::string& outMessage);
+
+    /**
+     * @brief Restore the world plus the local profile from the quicksave slot.
+     * @param outMessage Human-readable result, suitable for the console.
+     * @return false when no quicksave exists or the restore failed.
+     */
+    bool QuickLoadProfile(std::string& outMessage);
+
+    /** @brief Save slot the quicksave/quickload console commands use. */
+    static constexpr const char* kQuickSaveSlot = "fps_quicksave";
+
     /**
      * @brief Spawn a vehicle at a position
      */
@@ -658,7 +698,8 @@ class SPARK_GAME_API Game
     bool m_audioInitialized{false};       ///< Audio engine is available and wired
     bool m_weatherActive{false};          ///< Weather system is providing environment data
     bool m_dialogueActive{false};         ///< A dialogue conversation is in progress
-    bool m_saveSystemReady{false};        ///< Save system initialized and available
+    bool m_renderingEnabled{true};        ///< A D3D11 device was available at init
+    bool m_saveSystemReady{false};        ///< Save system reachable through the engine context
     float m_playTime{0.0f};               ///< Total play time for save metadata (seconds)
     float m_weatherTransitionTimer{0.0f}; ///< Timer for cycling weather presets
 };

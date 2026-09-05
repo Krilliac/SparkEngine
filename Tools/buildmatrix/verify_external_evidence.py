@@ -39,6 +39,7 @@ MAX_FILE_COUNT = 100_000
 MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024
 MAX_SINGLE_FILE_BYTES = 4 * 1024 * 1024 * 1024
 MAX_COMPRESSED_ARTIFACT_BYTES = 4 * 1024 * 1024 * 1024
+MAX_DIFFERENCE_DETAIL_CHARS = 2048
 
 PROFILE_BUILD_DIRS = {
     "installed-sdk-consumer": "build/installed-sdk-consumer",
@@ -56,6 +57,55 @@ _AUTHORITY_REASON = (
 
 class ExternalEvidenceError(ValueError):
     """The downloaded artifact or its trusted source binding is invalid."""
+
+
+def _describe(value: Any, limit: int = 200) -> str:
+    """Render untrusted data as one escaped, bounded, single-line token."""
+    try:
+        text = json.dumps(value, sort_keys=True, default=repr)
+    except (TypeError, ValueError):
+        text = repr(value)
+    text = text.encode("unicode_escape").decode("ascii")
+    if len(text) > limit:
+        text = text[:limit] + "..."
+    return text
+
+
+def _first_difference(producer: Any, trusted: Any, path: str = "") -> str:
+    """Locate the first structural difference between two parsed payloads."""
+    if type(producer) is not type(trusted):
+        return f"{path or '<root>'}: producer={_describe(producer)} trusted={_describe(trusted)}"
+    if isinstance(producer, dict):
+        producer_keys = list(producer)
+        trusted_keys = list(trusted)
+        if producer_keys != trusted_keys:
+            return (
+                f"{path or '<root>'}: key order or membership differs, "
+                f"producer={_describe(producer_keys)} trusted={_describe(trusted_keys)}"
+            )
+        for key in producer_keys:
+            if producer[key] != trusted[key]:
+                return _first_difference(producer[key], trusted[key], f"{path}.{key}")
+        return ""
+    if isinstance(producer, list):
+        if len(producer) != len(trusted):
+            return (
+                f"{path or '<root>'}: producer has {len(producer)} entries, "
+                f"trusted has {len(trusted)}"
+            )
+        for index, (left, right) in enumerate(zip(producer, trusted)):
+            if left != right:
+                return _first_difference(left, right, f"{path}[{index}]")
+        return ""
+    return f"{path or '<root>'}: producer={_describe(producer)} trusted={_describe(trusted)}"
+
+
+def _difference_detail(producer: Any, trusted: Any) -> str:
+    """Describe a rejection so CI output can be root-caused without the artifact."""
+    detail = _first_difference(producer, trusted)
+    if not detail:
+        detail = "the payloads compare equal but render differently"
+    return f"; first difference at {detail}"[:MAX_DIFFERENCE_DETAIL_CHARS]
 
 
 def _mapping(value: Any, label: str) -> dict[str, Any]:
@@ -739,10 +789,22 @@ def verify_external_evidence(
     reconstructed_inventory["repository"] = copy.deepcopy(producer_inventory.get("repository"))
     reconstructed_inventory["configuredTargetEvidence"] = reconstructed
     if reconstructed_inventory != producer_inventory:
-        raise ExternalEvidenceError("producer inventory differs from the trusted exact-commit reconstruction")
-    reconstructed_report = check_parity.build_report(reconstructed_inventory)
-    if reconstructed_report != producer_report:
-        raise ExternalEvidenceError("producer parity report differs from the trusted checker result")
+        raise ExternalEvidenceError(
+            "producer inventory differs from the trusted exact-commit reconstruction"
+            + _difference_detail(producer_inventory, reconstructed_inventory)
+        )
+    # The inventories are now proven equal, so the trusted report is computed
+    # over the producer's own parsed object.  Running the checker over freshly
+    # constructed Python objects instead makes key insertion order and
+    # int/float equivalence -- neither visible to "==", both rendered into
+    # findings by build_report -- decide whether publication proceeds.
+    # Compare the rendered bytes so ordering is compared deliberately.
+    reconstructed_report = check_parity.build_report(producer_inventory)
+    if check_parity.render_report(reconstructed_report) != check_parity.render_report(producer_report):
+        raise ExternalEvidenceError(
+            "producer parity report differs from the trusted checker result"
+            + _difference_detail(producer_report, reconstructed_report)
+        )
 
     inventory_digest = hashlib.sha256(inventory_payload).hexdigest()
     report_digest = hashlib.sha256(report_payload).hexdigest()

@@ -14,7 +14,7 @@ Before optimizing, measure. SparkEngine provides several profiling tools:
 |------|---------------|---------------|
 | FPS counter | Press **F3** or `ShowFPS = true` in settings | Frame rate and frame time |
 | Profiler panel | Editor → Window → Profiler | Per-system frame timing |
-| Scene Statistics panel | Editor → Window → Scene Statistics | Entity/component counts, draw calls, triangles |
+| Scene Statistics panel | Editor → Window → Scene Statistics | Entity/component counts; draw calls only while the scene viewport reports stats (triangles are not measured) |
 | Console commands | See below | On-demand metrics |
 
 ### Useful Console Commands

@@ -288,6 +288,64 @@ set -e
 process_status="${pipeline_status[0]}"
 capture_status="${pipeline_status[1]}"
 
+# log_path keeps the sanitizer stream out of the console/JUnit evidence being
+# verified, which also kept every finding out of the job log: the report only
+# existed inside a multi-GB artifact.  Echo a bounded excerpt for a non-clean
+# classification.  The runtime report is untrusted text, so workflow commands
+# are stopped around it instead of mangling the "::" in demangled C++ frames.
+RUNTIME_EXCERPT_LINES=200
+RUNTIME_EXCERPT_BYTES=65536
+
+emit_runtime_excerpt() {
+    local runtime_file
+    local token
+    local excerpt_files=()
+    for runtime_file in "$runtime_dir"/sanitizer.*; do
+        [[ -f "$runtime_file" && ! -L "$runtime_file" ]] && excerpt_files+=("$runtime_file")
+    done
+    if (( ${#excerpt_files[@]} == 0 )); then
+        echo "Sanitizer runtime reports: none were written to the private runtime directory."
+        return 0
+    fi
+    token="$("$PYTHON_BIN" -c 'import secrets; print(secrets.token_hex(16))' 2>/dev/null)"
+    echo "::group::Sanitizer runtime findings ($sanitizer, first $RUNTIME_EXCERPT_LINES lines per report)"
+    if [[ -n "$token" ]]; then
+        echo "::stop-commands::$token"
+    fi
+    # Python rather than `head -n | head -c`: a multi-megabyte single-line
+    # report made the byte-capping consumer close the pipe early, the producer
+    # died with SIGPIPE, and pipefail turned the whole runner into exit 141
+    # (exit 1 on the CI runner) for a case that must classify as a verification
+    # failure (exit 70). Bounded per line and per byte with no pipeline.
+    "$PYTHON_BIN" - "$RUNTIME_EXCERPT_LINES" "$RUNTIME_EXCERPT_BYTES" "${excerpt_files[@]}" <<'PY' || true
+import sys
+max_lines, budget = int(sys.argv[1]), int(sys.argv[2])
+out = sys.stdout.buffer
+for path in sys.argv[3:]:
+    header = ("--- " + path.replace("\\", "/").rsplit("/", 1)[-1] + " ---\n").encode()
+    chunk = header[:budget]
+    out.write(chunk)
+    budget -= len(chunk)
+    if budget <= 0:
+        break
+    with open(path, "rb") as stream:
+        for index, line in enumerate(stream):
+            if index >= max_lines or budget <= 0:
+                break
+            chunk = line[:budget]
+            out.write(chunk)
+            budget -= len(chunk)
+    if budget <= 0:
+        break
+out.write(b"\n")
+PY
+    if [[ -n "$token" ]]; then
+        echo "::$token::"
+    fi
+    echo "::endgroup::"
+    echo "Full sanitizer reports remain in the sanitizer-report-$sanitizer artifact."
+}
+
 scan() {
     local pattern="$1"
     local include_runtime="${2:-0}"
@@ -357,6 +415,7 @@ set -e
 }
 
 if [[ "$classification" != "clean" ]]; then
+    emit_runtime_excerpt
     echo "::error::Sanitizer evidence classification: $classification"
 fi
 if [[ "$process_status" -ne 0 ]]; then

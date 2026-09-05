@@ -50,6 +50,8 @@ namespace SparkEditor
 
         PrefabManager* m_prefabManager = nullptr;
         std::string m_selectedPrefab;
+        /// Component type queued by the context menu for removal after the render loop.
+        std::string m_componentToRemove;
         std::string m_searchFilter;
         char m_newPrefabName[128] = {};
         bool m_showCreateDialog = false;

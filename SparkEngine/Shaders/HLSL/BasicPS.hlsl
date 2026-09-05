@@ -1,3 +1,13 @@
+// Legacy copy - superseded by <repo>/Shaders/HLSL/BasicPS.hlsl.
+//
+// The cbuffer below is an old LightBuffer block at b1; the engine binds
+// PerFrameConstants there (Graphics/Shader.h), so this source does not match
+// what the renderer writes. No in-tree code path loads it: Windows compiles the
+// source embedded in GraphicsDeviceResourcesWindowsShaders.cpp, and the Linux
+// RHI bridge registers "Shaders/HLSL/BasicPS.hlsl", which CMake stages from the
+// repo-root Shaders/HLSL tree. This file is staged to bin/Shaders/BasicPS.hlsl,
+// where nothing reads it. Edit the repo-root copy.
+
 struct PS_INPUT
 {
     float4 Pos      : SV_POSITION;

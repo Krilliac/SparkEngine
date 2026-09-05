@@ -31,11 +31,15 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
     if (!rhi.initialized)
         return E_FAIL;
 
-    // Register basic shader pairs (HLSL for Windows, GLSL for Linux)
-    rhi.bridge.RegisterShader("basic_vs", Spark::RHI::RHIShaderStage::Vertex, "Shaders/Basic.hlsl",
-                              "Shaders/Basic.vert.glsl", "Shaders/Basic.vert.spv", "main");
-    rhi.bridge.RegisterShader("basic_ps", Spark::RHI::RHIShaderStage::Pixel, "Shaders/Basic.hlsl",
-                              "Shaders/Basic.frag.glsl", "Shaders/Basic.frag.spv", "main");
+    // Register basic shader pairs (HLSL for Windows, GLSL for Linux). Every
+    // path here must name a file that ships: the previous Shaders/Basic.*
+    // names existed nowhere in the repository. There is no SPIR-V variant of
+    // the basic pair, so the SPIR-V slot is left empty rather than pointing at
+    // a .spv that is never produced.
+    rhi.bridge.RegisterShader("basic_vs", Spark::RHI::RHIShaderStage::Vertex, "Shaders/HLSL/BasicVS.hlsl",
+                              "Shaders/GLSL/BasicVS.glsl", "", "main");
+    rhi.bridge.RegisterShader("basic_ps", Spark::RHI::RHIShaderStage::Pixel, "Shaders/HLSL/BasicPS.hlsl",
+                              "Shaders/GLSL/BasicPS.glsl", "", "main");
 
     // Verify shaders can be loaded
     Spark::RHI::IRHIShader* vs = rhi.bridge.GetShader("basic_vs");

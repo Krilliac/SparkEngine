@@ -12,6 +12,8 @@
 #include "Core/EngineContext.h"
 #include "Core/EngineSetup.h"
 #include "Core/EngineSettings.h"
+#include "Core/EngineRuntime.h"
+#include "Core/RuntimePackage.h"
 #include "Engine/Events/EventSystem.h"
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Graphics/GraphicsEngine.h"
@@ -34,15 +36,17 @@
 #include "Utils/DebugDraw.h"
 #include "Utils/DebugHookManager.h"
 #include "Utils/DebugOverlay.h"
-#include "Utils/FileLogger.h"
 #include "Utils/Logger.h"
-#include "Utils/JobSystem.h"
+#include "Utils/ConsoleSink.h"
 #include "Utils/Profiler.h"
 #include "Utils/ProfileProperties.h"
 #include "Graphics/DecalSystem.h"
+#include "Audio/AudioEngine.h"
 #include "Audio/MusicManager.h"
 #include "Audio/AudioMixer.h"
+#include "Camera/SparkEngineCamera.h"
 #include "Engine/Gameplay/WeaponManager.h"
+#include "Input/InputManager.h"
 #include "Engine/Gameplay/AbilitySystem.h"
 #include "Engine/Gameplay/ConditionSystem.h"
 #include "Engine/Gameplay/InstanceManager.h"
@@ -56,6 +60,8 @@
 #include "Engine/AI/GroupAI.h"
 #include "Engine/AI/CollisionAvoidance.h"
 #include "Engine/AI/AIIntegration.h"
+#include "Engine/Animation/AnimationSystem.h"
+#include "Engine/Localization/LocalizationSystem.h"
 #include "Engine/Gameplay/MaterialEffects.h"
 #include "Engine/Gameplay/AchievementSystem.h"
 #include "Engine/Accessibility/AccessibilitySystem.h"
@@ -67,9 +73,9 @@
 #include "Graphics/SkyAtmosphere.h"
 #include "Graphics/VolumetricClouds.h"
 #include "Graphics/WaterRenderer.h"
-#include "Graphics/OcclusionCulling.h"
 #include "Engine/SaveSystem/FreezeSystem.h"
 #include "Engine/Editor/CoreComponentSerializers.h"
+#include "Engine/SaveSystem/SaveSystem.h"
 #include "Graphics/RenderCommandRing.h"
 #include "Graphics/ConstantBufferDiff.h"
 #include "Graphics/GPUProfiler.h"
@@ -78,6 +84,9 @@
 #include "SceneManager/SceneConfigDatabase.h"
 #include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Replay/ReplaySystem.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/ECS/Components/PhysicsComponents.h"
+#include "Engine/ECS/Components/VolumeComponents.h"
 #include "Engine/VR/VRSystem.h"
 #include "Core/FaultIsolation.h"
 #include "Core/FixedTimestepAccumulator.h"
@@ -87,23 +96,7 @@
 #include "Engine/Animation/AnimNotify.h"
 #include "Engine/ECS/RuntimePrefab.h"
 #include "Engine/Gameplay/GameplaySystemExtension.h"
-// Phase BB Theme 3D: activated two SparkEngine singleton orphans that
-// had existing implementations but zero external call sites. See the
-// lifecycle Initialize / Shutdown blocks below for the touch-based
-// wire-up that keeps them reachable from any code path.
 #include "Engine/Scripting/ScriptHookManager.h"
-#include "Graphics/DynamicQualityScaler.h"
-// Phase CC Theme 3D: two more singleton orphans surfaced by a broader
-// sweep. `GPUStallProfiler` lives in Utils and tracks CPU-GPU frame
-// overlap; `AsyncComputeScheduler` manages compute workloads with a
-// D3D11 synchronous fallback.
-#include "Utils/GPUStallProfiler.h"
-#include "Graphics/AsyncComputeScheduler.h"
-// Phase DD Theme 3D: AIDebugRenderer singleton — renders NavMesh,
-// paths, perception cones, behavior-tree state, and cover points via
-// the engine DebugDraw system. Was previously unreferenced by any
-// production code; Phase DD lands the lifecycle seam.
-#include "Engine/AI/AIDebugRenderer.h"
 // Phase EE Theme 3D: three more SparkEngine singleton orphans
 // surfaced by a deep parallel sweep. All three are low-risk pure-CPU
 // utilities with default constructors and no platform guards.
@@ -139,7 +132,6 @@
 #include "Utils/InvalidStateDetector.h"
 #include "Engine/Networking/ConnectionScopeFilter.h"
 #include "Engine/Tween/TweenSystem.h"
-#include "Engine/HotReload/ModuleHotReload.h"
 #include "Engine/LevelDesign/CSGSystem.h"
 #include "Engine/Text/FontSystem.h"
 #include "Input/InputActionSystem.h"
@@ -148,7 +140,6 @@
 #include "Engine/DataTable/DataTableSystem.h"
 #include "Engine/Rendering/MovieRenderPipeline.h"
 #include "Engine/RemoteDebug/RemoteDebugSystem.h"
-#include "Engine/HLOD/HLODSystem.h"
 #include "Engine/Crafting/LootAndCraftingSystem.h"
 #include "Utils/FileWatcher/FileWatcher.h"
 #include "Utils/TimerManager.h"
@@ -162,14 +153,10 @@
 #include "Graphics/RHI/NullRHIDevice.h"
 #include "Graphics/RHI/RHIValidationLayer.h"
 #include "Graphics/ClusteredLightCulling.h"
-#include "Graphics/LightProbeSystem.h"
 #include "Graphics/ClipmapTerrain.h"
 #include "Graphics/FoliageRenderer.h"
 #include "Graphics/FoliageSystem.h"
-#include "Graphics/VirtualTexture.h"
 #include "Graphics/MaterialPropertyHandle.h"
-#include "Graphics/RHI/PipelineStateCache.h"
-#include "Graphics/RenderGraph/TransientResourcePool.h"
 #include "Engine/ECS/Components/LightComponents.h"
 #include "Engine/ECS/Components/CoreComponents.h"
 #include "Engine/Streaming/SeamlessAreaManager.h"
@@ -183,9 +170,82 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace Spark::Core::Lifecycle
 {
+
+    // ============================================================================
+    // Runtime path anchoring
+    // ============================================================================
+
+    /// Per-user writable location for @p relative (Logs/, spark_trace.json, ...).
+    /// Falls back to the CWD-relative form when the platform supplies no per-user
+    /// directory — or when the per-user directory has no narrow spelling the
+    /// engine's std::string file APIs can reopen (a non-ASCII Windows profile
+    /// outside a UTF-8 code page) — so those runs keep their previous behaviour
+    /// instead of writing to a '?'-mangled path that cannot be created.
+    static std::filesystem::path ResolveUserDataPath(std::string_view relative)
+    {
+        const std::filesystem::path root = Spark::UserPaths::NarrowSafeDirectory(Spark::UserPaths::GetUserDataDir());
+        return root.empty() ? std::filesystem::path(relative) : root / relative;
+    }
+
+    std::string InstallEngineLogSinksImpl()
+    {
+        auto& runtime = GetEngineRuntime();
+        auto& logger = Spark::Logger::Get();
+        if (runtime.logSinksInstalled)
+        {
+            // The latch alone is not proof: the Logger is a process-wide
+            // singleton that anything (an editor panel, a tool, a test) can
+            // ClearSinks() or Shutdown() behind this flag. Trusting the latch
+            // then hands out a log path nothing is writing to, so re-check the
+            // Logger itself and reinstall when it has been torn down.
+            if (logger.IsInitialized() && logger.GetSinkCount() > 0)
+                return runtime.engineLogPath;
+            runtime.logSinksInstalled = false;
+            runtime.engineLogPath.clear();
+        }
+
+        // Sinks without an initialized Logger receive nothing: Log() drops every
+        // message until Initialize() has run. The platform entry points call
+        // Initialize first; make the install self-sufficient for every other
+        // caller (Initialize is idempotent, whichever call runs first picks the
+        // mode, and the lifecycle uses synchronous logging).
+        if (!logger.IsInitialized())
+            logger.Initialize(/*enableAsync=*/false);
+
+        // Logger::InstallDefaultSinks replaces every sink and opens a fresh
+        // timestamped file, so it must run exactly once per process: a second
+        // call within the same second would truncate the file the first one
+        // opened. The early-init entry points and InitializeDebugSystemsImpl all
+        // route through here; whichever runs first wins.
+        Spark::Logger::SinkSetup setup;
+        setup.file.directory = ResolveUserDataPath("Logs").string() + "/";
+        setup.file.prefix = "SparkEngine";
+        // The Logger is a leaf that standalone tools compile without the console
+        // subsystem, so the SimpleConsole bridge (which feeds SparkConsole.exe) is
+        // supplied here, where SparkConsole.cpp is always linked.
+        runtime.engineLogPath = logger.InstallDefaultSinks(setup, std::make_unique<Spark::ConsoleSink>());
+
+        // InstallDefaultSinks returns an empty path when the FileSink could not
+        // open its file, and drops the sink. Latching "installed" on that result
+        // would make the absence of the log file — the artifact the release gates
+        // read — permanent and silent, so leave the flag clear: the next entry
+        // point retries, and the failure is stated once here.
+        runtime.logSinksInstalled = !runtime.engineLogPath.empty();
+        if (!runtime.logSinksInstalled)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "Engine file logging unavailable: could not open a log file in '%s'",
+                           setup.file.directory.c_str());
+        }
+        return runtime.engineLogPath;
+    }
 
     // ============================================================================
     // SparkPak auto-mount — scan for .spk files beside the executable
@@ -196,9 +256,16 @@ namespace Spark::Core::Lifecycle
         auto& vfs = Spark::VirtualFileSystem::GetInstance();
         auto& console = Spark::SimpleConsole::GetInstance();
 
-        // Search for .spk files in "Data/" subdirectory next to executable
-        std::filesystem::path dataDir = std::filesystem::current_path() / "Data";
+        // Read-only content ships beside the executable. A -game/-manifest launch
+        // from another directory must still find it, so anchor at the executable
+        // first and only fall back to the CWD form for development trees.
         std::error_code ec;
+        std::filesystem::path dataDir;
+        const std::filesystem::path exeDir = Spark::RuntimePackage::GetExecutableDirectory();
+        if (!exeDir.empty() && std::filesystem::exists(exeDir / "Data", ec))
+            dataDir = exeDir / "Data";
+        else
+            dataDir = std::filesystem::current_path(ec) / "Data";
         if (!std::filesystem::exists(dataDir, ec))
             return;
 
@@ -282,16 +349,13 @@ namespace Spark::Core::Lifecycle
         Spark::DebugHookManager::GetInstance().SetEnabled(true);
         SPARK_DEBUG_HOOK(EnginePreInit, 0, 0.0f);
 
-        // Initialize the unified Logger with a stderr sink so SPARK_LOG_* output is visible.
-        // Platform entry points (SparkEngineLinux.cpp main, SparkEngineWindows.cpp wWinMain)
-        // may have already called Initialize + AddSink early so startup logs are captured,
-        // in which case Initialize here is idempotent. ClearSinks() before AddSink makes
-        // this function idempotent w.r.t. the StderrSink too — otherwise every log line
-        // would be written twice.
+        // Initialize the unified Logger and install the engine's standard sink set
+        // (stderr + rotating per-user log file + SparkConsole bridge). Platform entry
+        // points may already have done both early so startup logs are captured;
+        // Initialize is idempotent and InstallEngineLogSinksImpl installs once.
         auto& logger = Spark::Logger::Get();
         logger.Initialize(/*enableAsync=*/false);
-        logger.ClearSinks();
-        logger.AddSink(std::make_unique<Spark::StderrSink>());
+        InstallEngineLogSinksImpl();
 
         // Apply logging configuration from settings.ini [Logging] section
         {
@@ -336,7 +400,6 @@ namespace Spark::Core::Lifecycle
             logger.ApplyConfig(cfg);
         }
 
-        Spark::FileLogger::GetInstance().Initialize("Logs");
         Spark::ChromeTracing::GetInstance().Start();
 #ifndef NDEBUG
         Spark::MemoryDebugger::GetInstance().SetEnabled(true);
@@ -352,6 +415,13 @@ namespace Spark::Core::Lifecycle
         Spark::GPUResourceLeakDetector::GetInstance().Initialize();
         Spark::Security::MemoryIntegritySystem::GetInstance().Initialize();
         Spark::InvalidStateDetector::GetInstance().Initialize();
+        // Publish the host detector through the context: game-module DLLs link
+        // SparkEngineLib statically, so their GetInstance() is a DLL-local copy
+        // the host never ticks.
+        if (auto* ctx = EngineContext::Get())
+        {
+            ctx->SetInvalidStateDetector(&Spark::InvalidStateDetector::GetInstance());
+        }
 
         // Register memory pressure response callbacks
         Spark::MemoryMonitor::GetInstance().RegisterPressureCallback(
@@ -413,19 +483,45 @@ namespace Spark::Core::Lifecycle
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "CoreGameplaySystems", 0.0);
         auto* eventBus = ctx->GetEventBus();
 
+        // Each engine-lifetime singleton is registered on the context right after
+        // its Initialize() so IEngineContext getters hand modules the host instance
+        // (a module DLL's own GetInstance() is a DLL-local copy).
         Spark::Gameplay::ConditionSystem::GetInstance().Initialize();
+        ctx->SetConditions(&Spark::Gameplay::ConditionSystem::GetInstance());
         Spark::Gameplay::AbilitySystem::GetInstance().Initialize(eventBus);
+        ctx->SetAbilities(&Spark::Gameplay::AbilitySystem::GetInstance());
         Spark::Gameplay::InstanceManager::GetInstance().Initialize();
+        ctx->SetInstances(&Spark::Gameplay::InstanceManager::GetInstance());
         Spark::Gameplay::InventorySystem::GetInstance().Initialize();
         Spark::Gameplay::QuestSystem::GetInstance().Initialize();
         Spark::Gameplay::AchievementSystem::GetInstance().Initialize();
         Spark::Accessibility::AccessibilitySystem::GetInstance().Initialize();
         Spark::AI::MovementSystem::GetInstance().Initialize();
         Spark::Audio::MusicManager::GetInstance().Initialize();
-        Spark::Audio::AudioMixer::GetInstance().Initialize();
+        ctx->SetMusic(&Spark::Audio::MusicManager::GetInstance());
+
+        // Mixer: bus volumes reach the voices only once AudioEngine knows the mixer,
+        // and occlusion traces need the physics system.
+        auto& mixer = Spark::Audio::AudioMixer::GetInstance();
+        mixer.Initialize();
+        mixer.SetPhysics(ctx->GetPhysics());
+        if (auto* audio = ctx->GetAudio())
+        {
+            audio->SetMixer(&mixer);
+        }
+
+        // WeaponSystem is engine-owned (EngineRuntime) so GetWeapons() hands modules
+        // the instance the frame loop actually ticks.
+        auto& runtime = GetEngineRuntime();
+        if (!runtime.weaponSystem)
+        {
+            runtime.weaponSystem = std::make_unique<Spark::Gameplay::WeaponSystem>();
+        }
+        ctx->SetWeapons(runtime.weaponSystem.get());
 
         auto& destruction = Spark::DestructionSystem::GetInstance();
         destruction.Initialize();
+        ctx->SetDestruction(&destruction);
         if (auto* world = ctx->GetWorld())
         {
             destruction.SetWorld(world);
@@ -437,7 +533,7 @@ namespace Spark::Core::Lifecycle
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "CoreGameplaySystems", 0.0);
     }
 
-    static void InitAIAndWorldSystems(Spark::EventBus* eventBus)
+    static void InitAIAndWorldSystems(EngineContext* ctx, Spark::EventBus* eventBus)
     {
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "AIAndWorldSystems", 0.0);
         Spark::AI::TacticalPointSystem::GetInstance().Initialize();
@@ -451,6 +547,8 @@ namespace Spark::Core::Lifecycle
         // once per frame — by Spark::ECS::AIUpdateSystem, which runs in the
         // lifecycle-owned PhaseSystemManager (see InitializeEcsPhaseSystemsImpl).
         Spark::AI::AIIntegratedSystem::GetInstance().Initialize();
+        ctx->SetAI(&Spark::AI::AIIntegratedSystem::GetInstance().GetAISystem());
+        ctx->SetAnimation(&Spark::Animation::AnimationManager::GetInstance());
         Spark::Gameplay::MaterialEffectSystem::GetInstance().Initialize();
         Spark::Dialogue::DynamicResponseSystem::GetInstance().Initialize();
         Spark::ECS::EntityArchetypeSystem::GetInstance().Initialize();
@@ -459,7 +557,9 @@ namespace Spark::Core::Lifecycle
         Spark::Graphics::SkyAtmosphereSystem::GetInstance().Initialize();
         Spark::Graphics::VolumetricCloudSystem::GetInstance().Initialize();
         Spark::Graphics::WaterRenderer::GetInstance().Initialize();
-        Spark::Graphics::OcclusionCullingSystem::GetInstance().Initialize();
+        // OcclusionCullingSystem is not initialized here: nothing submits occluders
+        // or queries it, so a lifecycle Initialize/Shutdown pair would only report a
+        // system as active that never runs.
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "AIAndWorldSystems", 0.0);
     }
 
@@ -475,13 +575,16 @@ namespace Spark::Core::Lifecycle
 
         Spark::FixedTimestepAccumulator::GetInstance().Initialize();
         Spark::TweenSystem::GetInstance().Initialize();
+        ctx->SetTween(&Spark::TweenSystem::GetInstance());
         Spark::VirtualFileSystem::GetInstance().Initialize();
+        ctx->SetVFS(&Spark::VirtualFileSystem::GetInstance());
         MountSparkPakArchives();
         Spark::UI::UIFactory::GetInstance().Initialize();
         Spark::Graphics::ClusteredLightCulling::GetInstance().Initialize();
-        Spark::Graphics::LightProbeSystem::GetInstance().Initialize();
-        Spark::Graphics::PipelineStateCache::GetInstance().Initialize();
-        Spark::Graphics::TransientResourcePool::GetInstance().Initialize();
+        // LightProbeSystem, RHI PipelineStateCache, TransientResourcePool and
+        // VirtualTextureManager are deliberately not initialized here: no renderer
+        // feeds or consults them (the D3D11 path uses its own D3D11PipelineStateCache),
+        // so lifecycle-wiring them would only advertise dead systems as live.
         Spark::Graphics::ClipmapTerrain::GetInstance().Initialize();
         Spark::Graphics::FoliageManager::GetInstance().Initialize();
         // FoliageRenderer::Initialize with a nullptr loader. The renderer
@@ -495,7 +598,6 @@ namespace Spark::Core::Lifecycle
         {
             Spark::Graphics::FoliageRenderer::GetInstance().InstallAssetPipelineLoader(pipeline);
         }
-        Spark::Graphics::VirtualTextureManager::GetInstance().Initialize();
         Spark::PluginRegistry::InitializeAll();
 
         Spark::Animation::AnimNotifyManager::GetInstance().Initialize();
@@ -516,10 +618,21 @@ namespace Spark::Core::Lifecycle
         Spark::Procedural::ProceduralGenerator::GetInstance().Initialize();
         Spark::Graphics::GPUProfiler::GetInstance().Initialize();
 
-        Spark::HotReload::ModuleHotReload::GetInstance().Initialize();
+        // Module hot reload is owned by EngineRuntime::moduleHotReload
+        // (Spark::ModuleHotReloadManager) and polled by the platform frame loops;
+        // the Engine/HotReload/ModuleHotReload singleton had no registered modules
+        // and is no longer part of the lifecycle.
         Spark::LevelDesign::CSGSystem::GetInstance().Initialize();
         Spark::Text::FontSystem::GetInstance().Initialize();
         Spark::Input::InputActionSystem::GetInstance().Initialize();
+        // Actions can only trigger once the system can read keys: bind the providers
+        // to the engine-owned InputManager (absent in headless mode).
+        if (auto* input = ctx->GetInput())
+        {
+            Spark::Input::InputActionSystem::GetInstance().SetKeyStateProviders(
+                [input](int key) { return input->IsKeyDown(key); }, [input](int key)
+                { return input->WasKeyPressed(key); }, [input](int key) { return input->WasKeyReleased(key); });
+        }
         Spark::Build::GamePackager::GetInstance().Initialize();
         Spark::OnlineServices::OnlineServiceManager::GetInstance().Initialize();
         Spark::Data::DataTableRegistry::GetInstance().Initialize();
@@ -550,44 +663,11 @@ namespace Spark::Core::Lifecycle
         // having it alive from engine startup is the correct lifetime.
         (void)Spark::Scripting::ScriptHookManager::GetInstance();
 
-        // Phase BB Theme 3D: Dynamic resolution scaler — tracks FPS over
-        // a sliding window and adjusts render scale toward a target
-        // frame rate. Initialised here with sensible defaults; the
-        // upscaling pipeline can re-initialise with game-specific
-        // thresholds later. RecordFrameTime is pumped from the main
-        // render loop wherever the caller has access to delta-time.
-        {
-            Spark::Graphics::DynamicQualityThresholds dqsDefaults;
-            dqsDefaults.targetFPS = 60.0f;
-            dqsDefaults.headroomPercent = 10.0f;
-            dqsDefaults.dropThresholdPercent = 5.0f;
-            dqsDefaults.minScale = 0.5f;
-            dqsDefaults.maxScale = 1.0f;
-            Spark::Graphics::DynamicQualityScaler::GetInstance().Initialize(dqsDefaults);
-        }
-
-        // Phase CC Theme 3D: GPU stall profiler — tracks CPU/GPU frame
-        // overlap and classifies each frame as CPU-bound, GPU-bound,
-        // balanced, or a pipeline bubble. Initialize clears the
-        // history ring; actual BeginCPUWork / EndCPUWork / EndFrame
-        // calls are made from the render loop when a real profiler
-        // feed is wired (Phase CC only lands the lifecycle seam).
-        Spark::GPUStallProfiler::GetInstance().Initialize();
-
-        // Phase CC Theme 3D: Async compute scheduler — submits compute
-        // workloads with a D3D11 synchronous-immediate fallback.
-        // Initialize sets up the pending queue; SetDeviceContext is
-        // called from the D3D11 render path on Windows when the device
-        // is ready, and Flush/BeginFrame are pumped from the render
-        // loop once a consumer exists.
-        Spark::Graphics::AsyncComputeScheduler::GetInstance().Initialize();
-
-        // Phase DD Theme 3D: AI debug renderer — initializes as
-        // disabled (IsEnabled() returns false until SetEnabled(true)).
-        // Update(dt) is pumped by the AI system when debug mode is
-        // toggled on; the singleton just needs to be alive so
-        // ImGui menu toggles can reach it.
-        Spark::AI::AIDebugRenderer::GetInstance().Initialize();
+        // DynamicQualityScaler, GPUStallProfiler, AsyncComputeScheduler and
+        // AIDebugRenderer are not lifecycle-initialized: none of them has a
+        // per-frame producer or consumer in production (RecordFrameTime,
+        // BeginCPUWork, Submit/Flush and Update have zero callers), so an
+        // Initialize/Shutdown pair here would present unwired utilities as live.
 
         // Phase EE Theme 3D: Event response rule engine — data-driven
         // "When/If/Then" gameplay logic for no-code designers. Rules
@@ -666,7 +746,8 @@ namespace Spark::Core::Lifecycle
 
         Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
-        Spark::HLOD::HLODSystem::GetInstance().Initialize();
+        // HLODSystem: no cluster registration or per-frame Update exists in
+        // production, so it is not lifecycle-initialized.
         Spark::Gameplay::LootTableManager::GetInstance().Initialize();
         Spark::Gameplay::CraftingSystem::GetInstance().Initialize();
         Spark::Utils::FileWatcher::GetInstance().Initialize();
@@ -706,6 +787,8 @@ namespace Spark::Core::Lifecycle
 #endif
 
         Spark::Streaming::SeamlessAreaManager::GetInstance().Initialize();
+        ctx->SetAreaStreaming(&Spark::Streaming::SeamlessAreaManager::GetInstance());
+        ctx->SetLocalization(&Spark::LocalizationSystem::Get());
 
 #ifdef ENABLE_NETWORKING
         SPARK_LOG_INFO(Spark::LogCategory::Core,
@@ -715,11 +798,9 @@ namespace Spark::Core::Lifecycle
         ctx->SetCinematic(&Spark::Cinematic::SequencerManager::GetInstance());
         ctx->SetReplay(&Spark::ReplaySystem::GetInstance());
 
-        // RagdollSystem and MobilePlatform were formerly initialized here
-        // into block-scope statics with no accessor — unreachable after
-        // this function returned, so nothing could call their APIs or
-        // pump their Update loops. Removed per the wire-in-or-delete
-        // rule; re-add via an EngineContext slot when actually wired.
+        // RagdollSystem and MobilePlatform are not constructed by the engine:
+        // nothing owns or ticks them (wire-in-or-delete rule). Deleting the
+        // classes themselves is tracked with their owners.
 
         {
             static Spark::VR::VRSystem s_vrSystem;
@@ -783,12 +864,14 @@ namespace Spark::Core::Lifecycle
 
         InitCoreGameplaySystems(ctx);
 
-        // Register snapshot serializers for play-in-editor mode
+        // Register snapshot serializers for play-in-editor mode and publish the
+        // host registry so module DLLs register into the one SaveSystem consults.
         Spark::Editor::RegisterCoreComponentSerializers();
+        ctx->SetComponentSerializers(&Spark::ComponentSerializerRegistry::GetInstance());
 
         if (auto* eventBus = ctx->GetEventBus())
         {
-            InitAIAndWorldSystems(eventBus);
+            InitAIAndWorldSystems(ctx, eventBus);
         }
         else
         {
@@ -808,93 +891,268 @@ namespace Spark::Core::Lifecycle
     // Per-frame update
     // ============================================================================
 
+    // The Update stage declares MainThread affinity, and none of these systems
+    // is thread-safe (they publish EventBus events and are read by module
+    // OnUpdate on the same frame), so they run serially on the main thread.
     static void UpdateNonECSSystems(EngineContext* ctx, float dt)
     {
-        auto& jobs = Spark::JobSystem::Get();
-        bool canParallelize = jobs.IsInitialized() && jobs.GetWorkerCount() > 0;
+        SPARK_GUARDED_UPDATE("Weather", "Core", {
+            if (auto* weather = ctx->GetWeather())
+                weather->Update(dt);
+        });
 
-        if (canParallelize)
-        {
-            // Batch 1: Weather, TimeOfDay, Dialogue, UI are independent — run in parallel
-            auto futWeather = jobs.Submit(
-                [ctx, dt]()
-                {
-                    SPARK_GUARDED_UPDATE("Weather", "Core", {
-                        if (auto* weather = ctx->GetWeather())
-                            weather->Update(dt);
-                    });
-                });
+        SPARK_GUARDED_UPDATE("TimeOfDay", "Core", { Spark::TimeOfDaySystem::GetInstance().Update(dt); });
 
-            auto futTimeOfDay = jobs.Submit(
-                [dt]()
-                { SPARK_GUARDED_UPDATE("TimeOfDay", "Core", { Spark::TimeOfDaySystem::GetInstance().Update(dt); }); });
+        // WeatherGameplay depends on Weather — must run after Weather completes
+        SPARK_GUARDED_UPDATE("WeatherGameplay", "Core", {
+            auto* weather = ctx->GetWeather();
+            auto* physics = ctx->GetPhysics();
+            if (weather && physics)
+            {
+                Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, weather, physics);
+            }
+        });
 
-            auto futDialogue = jobs.Submit(
-                [ctx, dt]()
-                {
-                    SPARK_GUARDED_UPDATE("Dialogue", "Core", {
-                        if (auto* dialogue = ctx->GetDialogue())
-                            dialogue->Update(dt);
-                    });
-                });
+        SPARK_GUARDED_UPDATE("Dialogue", "Core", {
+            if (auto* dialogue = ctx->GetDialogue())
+                dialogue->Update(dt);
+        });
 
-            auto futUI = jobs.Submit(
-                [ctx, dt]()
-                {
-                    SPARK_GUARDED_UPDATE("UI", "Core", {
-                        if (auto* ui = ctx->GetUI())
-                            ui->Update(dt);
-                    });
-                });
-
-            // Wait for parallel batch to complete
-            futWeather.get();
-            futTimeOfDay.get();
-            futDialogue.get();
-            futUI.get();
-
-            // WeatherGameplay depends on Weather — must run after Weather completes
-            SPARK_GUARDED_UPDATE("WeatherGameplay", "Core", {
-                auto* weather = ctx->GetWeather();
-                auto* physics = ctx->GetPhysics();
-                if (weather && physics)
-                {
-                    Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, weather, physics);
-                }
-            });
-        }
-        else
-        {
-            // Fallback: sequential execution when JobSystem is unavailable
-            SPARK_GUARDED_UPDATE("Weather", "Core", {
-                if (auto* weather = ctx->GetWeather())
-                    weather->Update(dt);
-            });
-
-            SPARK_GUARDED_UPDATE("TimeOfDay", "Core", { Spark::TimeOfDaySystem::GetInstance().Update(dt); });
-
-            SPARK_GUARDED_UPDATE("WeatherGameplay", "Core", {
-                auto* weather = ctx->GetWeather();
-                auto* physics = ctx->GetPhysics();
-                if (weather && physics)
-                {
-                    Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, weather, physics);
-                }
-            });
-
-            SPARK_GUARDED_UPDATE("Dialogue", "Core", {
-                if (auto* dialogue = ctx->GetDialogue())
-                    dialogue->Update(dt);
-            });
-
-            SPARK_GUARDED_UPDATE("UI", "Core", {
-                if (auto* ui = ctx->GetUI())
-                    ui->Update(dt);
-            });
-        }
+        SPARK_GUARDED_UPDATE("UI", "Core", {
+            if (auto* ui = ctx->GetUI())
+                ui->Update(dt);
+        });
     }
 
-    static void UpdateECSDependentSystems(::World* world, float dt)
+    // ------------------------------------------------------------------------
+    // TriggerVolumeComponent -> ProximityTriggerSystem bridge
+    // ------------------------------------------------------------------------
+
+    /// What the bridge created for one authored volume. ProximityTriggerSystem
+    /// has no owner concept and no in-place update, so this is the only record of
+    /// which triggers belong to a TriggerVolumeComponent and of the authored state
+    /// they were built from.
+    struct BridgedTriggerVolume
+    {
+        uint32_t triggerID = 0;
+        TriggerVolumeComponent::Shape shape = TriggerVolumeComponent::Shape::Sphere;
+        XMFLOAT3 center{0.0f, 0.0f, 0.0f};
+        XMFLOAT3 halfExtents{0.0f, 0.0f, 0.0f};
+        float radius = 0.0f;
+        bool enabled = true;
+        /// Set from the enter callback so the next tick can write the disable back
+        /// into the component, which would otherwise keep claiming to be enabled.
+        bool oneShotFired = false;
+    };
+
+    /// Bridge-owned triggers keyed by the volume entity. The key is the whole entt
+    /// entity value, so a recycled index (which carries a new version) is a
+    /// different key rather than a collision.
+    static std::unordered_map<uint32_t, BridgedTriggerVolume>& BridgedTriggerVolumes()
+    {
+        static std::unordered_map<uint32_t, BridgedTriggerVolume> s_bridgedTriggerVolumes;
+        return s_bridgedTriggerVolumes;
+    }
+
+    /// Whether @p tracked was built from the volume's current authored state.
+    static bool MatchesAuthoredVolume(const BridgedTriggerVolume& tracked, const TriggerVolumeComponent& volume,
+                                      const XMFLOAT3& position)
+    {
+        if (tracked.shape != volume.shape)
+            return false;
+        if (tracked.center.x != position.x || tracked.center.y != position.y || tracked.center.z != position.z)
+            return false;
+        if (volume.shape == TriggerVolumeComponent::Shape::AABB)
+        {
+            return tracked.halfExtents.x == volume.halfExtents.x && tracked.halfExtents.y == volume.halfExtents.y &&
+                   tracked.halfExtents.z == volume.halfExtents.z;
+        }
+        return tracked.radius == volume.radius;
+    }
+
+    /// Drop every trigger this bridge created. Called at gameplay shutdown so the
+    /// singleton does not carry triggers into the next initialization.
+    static void RemoveBridgedTriggerVolumes()
+    {
+        auto& triggers = Spark::World::ProximityTriggerSystem::GetInstance();
+        for (const auto& [entity, tracked] : BridgedTriggerVolumes())
+            triggers.RemoveTrigger(tracked.triggerID);
+        BridgedTriggerVolumes().clear();
+    }
+
+    static void UpdateProximityTriggers(EngineContext* ctx, ::World& world)
+    {
+        auto& triggers = Spark::World::ProximityTriggerSystem::GetInstance();
+        auto& bridged = BridgedTriggerVolumes();
+        auto& reg = world.GetRegistry();
+        Spark::EventBus* bus = ctx->GetEventBus();
+
+        // Retire triggers whose volume is gone — entity destroyed, component
+        // removed, level unloaded. Nothing else removes them, so without this the
+        // singleton accumulates triggers that keep publishing enter/exit events
+        // naming an entity id entt has since handed to something unrelated.
+        std::erase_if(bridged,
+                      [&reg, &triggers](const std::pair<const uint32_t, BridgedTriggerVolume>& tracked)
+                      {
+                          const auto entity = static_cast<entt::entity>(tracked.first);
+                          const TriggerVolumeComponent* volume =
+                              reg.valid(entity) ? reg.try_get<TriggerVolumeComponent>(entity) : nullptr;
+                          if (volume && volume->runtimeTriggerID == tracked.second.triggerID)
+                              return false;
+                          triggers.RemoveTrigger(tracked.second.triggerID);
+                          return true;
+                      });
+
+        // Create the runtime trigger for every authored volume that has none yet,
+        // and reconcile the ones that already exist: a volume that moved, was
+        // resized or was toggled at runtime must not keep testing against the state
+        // it was authored with. The callbacks publish TriggerEnter/ExitEvent on the
+        // engine EventBus and fire the authored script event names;
+        // ProximityTriggerSystem defers dispatch until its scan is complete, so a
+        // one-shot volume may disable itself from inside onEnter.
+        auto volumeView = reg.view<TriggerVolumeComponent, Transform>();
+        for (auto entity : volumeView)
+        {
+            auto& volume = volumeView.get<TriggerVolumeComponent>(entity);
+            const auto& transform = volumeView.get<Transform>(entity);
+            const uint32_t volumeEntity = static_cast<uint32_t>(entity);
+
+            auto tracked = bridged.find(volumeEntity);
+            if (tracked != bridged.end() && (volume.runtimeTriggerID != tracked->second.triggerID ||
+                                             !MatchesAuthoredVolume(tracked->second, volume, transform.position)))
+            {
+                // The system exposes no way to move or resize a trigger in place,
+                // so rebuild it. Occupancy restarts with it: an entity standing
+                // inside a volume that moves is reported as entering the new one.
+                triggers.RemoveTrigger(tracked->second.triggerID);
+                bridged.erase(tracked);
+                tracked = bridged.end();
+            }
+
+            if (tracked == bridged.end())
+            {
+                const bool oneShot = volume.oneShot;
+                const std::string onEnterEvent = volume.onEnterEvent;
+                const std::string onExitEvent = volume.onExitEvent;
+                auto onEnter = [bus, volumeEntity, oneShot, onEnterEvent](uint32_t triggerID, uint32_t entityID)
+                {
+                    if (bus)
+                        bus->Publish(Spark::TriggerEnterEvent{entityID, volumeEntity});
+                    // The authored script event: without this the inspector field
+                    // is a knob the editor advertises and nothing reads.
+                    if (!onEnterEvent.empty())
+                        Spark::Gameplay::EventResponseSystem::GetInstance().FireCustomEvent(onEnterEvent, entityID);
+                    if (oneShot)
+                    {
+                        Spark::World::ProximityTriggerSystem::GetInstance().EnableTrigger(triggerID, false);
+                        auto& volumes = BridgedTriggerVolumes();
+                        if (auto fired = volumes.find(volumeEntity); fired != volumes.end())
+                        {
+                            fired->second.enabled = false;
+                            fired->second.oneShotFired = true;
+                        }
+                    }
+                };
+                auto onExit = [bus, volumeEntity, onExitEvent](uint32_t /*triggerID*/, uint32_t entityID)
+                {
+                    if (bus)
+                        bus->Publish(Spark::TriggerExitEvent{entityID, volumeEntity});
+                    if (!onExitEvent.empty())
+                        Spark::Gameplay::EventResponseSystem::GetInstance().FireCustomEvent(onExitEvent, entityID);
+                };
+                const uint32_t triggerID = (volume.shape == TriggerVolumeComponent::Shape::AABB)
+                                               ? triggers.CreateAABBTrigger(transform.position, volume.halfExtents,
+                                                                            std::move(onEnter), std::move(onExit))
+                                               : triggers.CreateSphereTrigger(transform.position, volume.radius,
+                                                                              std::move(onEnter), std::move(onExit));
+                volume.runtimeTriggerID = triggerID;
+
+                BridgedTriggerVolume record;
+                record.triggerID = triggerID;
+                record.shape = volume.shape;
+                record.center = transform.position;
+                record.halfExtents = volume.halfExtents;
+                record.radius = volume.radius;
+                record.enabled = volume.enabled;
+                if (!volume.enabled)
+                    triggers.EnableTrigger(triggerID, false);
+                bridged.emplace(volumeEntity, record);
+            }
+            else if (tracked->second.oneShotFired)
+            {
+                // A fired one-shot disabled its trigger from inside the callback;
+                // make the component say so instead of advertising enabled = true.
+                volume.enabled = false;
+                tracked->second.oneShotFired = false;
+            }
+            else if (tracked->second.enabled != volume.enabled)
+            {
+                triggers.EnableTrigger(tracked->second.triggerID, volume.enabled);
+                tracked->second.enabled = volume.enabled;
+            }
+        }
+
+        if (triggers.GetTotalTriggerCount() == 0)
+            return;
+
+        // Every positioned entity that is not itself a trigger volume is a candidate.
+        // The buffer is reused across frames: this scan runs on the main thread
+        // every frame and a fresh allocation each time is pure overhead.
+        static std::vector<Spark::World::EntityPosition> positions;
+        positions.clear();
+        auto view = reg.view<Transform>();
+        positions.reserve(static_cast<size_t>(view.size()));
+        for (auto entity : view)
+        {
+            if (reg.any_of<TriggerVolumeComponent>(entity))
+                continue;
+            positions.push_back({static_cast<uint32_t>(entity), view.get<Transform>(entity).position});
+        }
+        triggers.Update(positions);
+    }
+
+    // ------------------------------------------------------------------------
+    // Replay capture: the engine-side RecordFrame producer
+    // ------------------------------------------------------------------------
+
+    static void CaptureReplayFrame(::World& world, float dt)
+    {
+        auto& replay = Spark::ReplaySystem::GetInstance();
+        if (!replay.IsRecording())
+            return;
+
+        // Reused scratch: this scan walks every Transform entity on the main thread
+        // for every recorded frame.
+        static std::vector<Spark::ReplayEntityState> states;
+        states.clear();
+        auto& reg = world.GetRegistry();
+        auto view = reg.view<Transform>();
+        states.reserve(static_cast<size_t>(view.size()));
+        for (auto entity : view)
+        {
+            const auto& transform = view.get<Transform>(entity);
+            Spark::ReplayEntityState state;
+            state.entityId = static_cast<uint32_t>(entity);
+            state.position = transform.position;
+            // Transform::rotation is Euler degrees (pitch, yaw, roll).
+            const XMVECTOR q = XMQuaternionRotationRollPitchYaw(XMConvertToRadians(transform.rotation.x),
+                                                                XMConvertToRadians(transform.rotation.y),
+                                                                XMConvertToRadians(transform.rotation.z));
+            XMStoreFloat4(&state.rotation, q);
+            if (const auto* rb = reg.try_get<RigidBodyComponent>(entity))
+                state.velocity = rb->linearVelocity;
+            if (const auto* health = reg.try_get<HealthComponent>(entity))
+                state.health = health->health;
+            state.flags = Spark::ReplayFlags::Alive;
+            states.push_back(state);
+        }
+        // ReplaySystem owns the capture clock (StartRecording resets it) and
+        // applies the configured record interval itself; this producer only
+        // supplies the tick's delta and the entity states.
+        replay.RecordFrameTick(states, dt);
+    }
+
+    static void UpdateECSDependentSystems(EngineContext* ctx, ::World* world, float dt)
     {
         SPARK_GUARDED_UPDATE("AbilitySystem", "Core", {
             SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AbilitySystem", 0.0);
@@ -924,14 +1182,32 @@ namespace Spark::Core::Lifecycle
 
         SPARK_GUARDED_UPDATE("MusicManager", "Core", { Spark::Audio::MusicManager::GetInstance().Update(dt); });
 
-        SPARK_GUARDED_UPDATE("AudioMixer", "Core", { Spark::Audio::AudioMixer::GetInstance().Update({0, 0, 0}, dt); });
+        // 3D listener follows the active camera; the mixer's occlusion/reverb
+        // queries use the same listener position instead of a fixed origin.
+        SPARK_GUARDED_UPDATE("AudioListener", "Core", {
+            auto* audio = ctx->GetAudio();
+            auto* camera = ctx->GetCamera();
+            if (audio && camera)
+            {
+                audio->SetListenerFromCamera(camera->GetPosition(), camera->GetForward(), {0.0f, 1.0f, 0.0f}, dt);
+            }
+        });
+        SPARK_GUARDED_UPDATE("AudioMixer", "Core", {
+            auto* audio = ctx->GetAudio();
+            Spark::Audio::AudioMixer::GetInstance().Update(
+                audio ? audio->GetListenerPosition() : DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f}, dt);
+        });
         SPARK_GUARDED_UPDATE("Accessibility", "Core",
                              { Spark::Accessibility::AccessibilitySystem::GetInstance().Update(dt); });
 
         SPARK_GUARDED_UPDATE("WeaponSystem", "Core", {
-            static Spark::Gameplay::WeaponSystem s_weaponSystem;
-            s_weaponSystem.Update(dt);
+            if (auto* weapons = ctx->GetWeapons())
+                weapons->Update(dt);
         });
+
+        SPARK_GUARDED_UPDATE("ProximityTriggers", "Core", { UpdateProximityTriggers(ctx, *world); });
+
+        SPARK_GUARDED_UPDATE("ReplayCapture", "Core", { CaptureReplayFrame(*world, dt); });
 
         SPARK_GUARDED_UPDATE("Destruction", "Core", {
             SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Destruction", 0.0);
@@ -1017,81 +1293,27 @@ namespace Spark::Core::Lifecycle
         });
     }
 
+    // Main thread only: TweenSystem runs user callbacks and has no
+    // synchronization, and the Update stage declares MainThread affinity.
     static void UpdateExtendedSystems(EngineContext* ctx, float dt)
     {
-        auto& jobs = Spark::JobSystem::Get();
-        bool canParallelize = jobs.IsInitialized() && jobs.GetWorkerCount() > 0;
-
-        if (canParallelize)
-        {
-            // Batch: SeamlessArea, Tween, Cinematic, Replay are independent singletons
-            auto futSeamless = jobs.Submit(
-                [dt]()
-                {
-                    SPARK_GUARDED_UPDATE("SeamlessArea", "Core",
-                                         { Spark::Streaming::SeamlessAreaManager::GetInstance().Update(dt); });
-                });
-
-            auto futTween = jobs.Submit(
-                [dt]() { SPARK_GUARDED_UPDATE("Tween", "Core", { Spark::TweenSystem::GetInstance().Update(dt); }); });
-
-            auto futCinematic = jobs.Submit(
-                [dt]()
-                {
-                    SPARK_GUARDED_UPDATE("Cinematic", "Core",
-                                         { Spark::Cinematic::SequencerManager::GetInstance().Update(dt); });
-                });
-
-            auto futReplay = jobs.Submit(
-                [dt]()
-                {
-                    SPARK_GUARDED_UPDATE("Replay", "Core", { Spark::ReplaySystem::GetInstance().UpdatePlayback(dt); });
-                });
-
-            // These run on the main thread while the batch is in flight
-            SPARK_GUARDED_UPDATE("UIFactory", "Core", { Spark::UI::UIFactory::GetInstance().UpdateAllBindings(); });
-            SPARK_GUARDED_UPDATE("Plugins", "Core", { Spark::PluginRegistry::UpdateAll(dt); });
+        SPARK_GUARDED_UPDATE("SeamlessArea", "Core",
+                             { Spark::Streaming::SeamlessAreaManager::GetInstance().Update(dt); });
+        SPARK_GUARDED_UPDATE("Tween", "Core", { Spark::TweenSystem::GetInstance().Update(dt); });
+        SPARK_GUARDED_UPDATE("UIFactory", "Core", { Spark::UI::UIFactory::GetInstance().UpdateAllBindings(); });
+        SPARK_GUARDED_UPDATE("Plugins", "Core", { Spark::PluginRegistry::UpdateAll(dt); });
 
 #ifndef NDEBUG
-            Spark::ProfileProperties::GetInstance().ResetFrameProperties();
+        Spark::ProfileProperties::GetInstance().ResetFrameProperties();
 #endif
 
-            SPARK_GUARDED_UPDATE("VR", "Core", {
-                if (auto* vr = ctx->GetVR())
-                    vr->UpdateTracking();
-            });
-
-            // Wait for parallel batch before the ECS phase pipeline runs
-            // (phase systems may depend on Tween/Cinematic results)
-            futSeamless.get();
-            futTween.get();
-            futCinematic.get();
-            // Sequencer may evaluate on a worker, but audio backends are
-            // game-thread services. Deliver copied cues only after join.
-            Spark::Cinematic::SequencerManager::GetInstance().DispatchPendingAudioCues();
-            futReplay.get();
-        }
-        else
-        {
-            SPARK_GUARDED_UPDATE("SeamlessArea", "Core",
-                                 { Spark::Streaming::SeamlessAreaManager::GetInstance().Update(dt); });
-            SPARK_GUARDED_UPDATE("Tween", "Core", { Spark::TweenSystem::GetInstance().Update(dt); });
-            SPARK_GUARDED_UPDATE("UIFactory", "Core", { Spark::UI::UIFactory::GetInstance().UpdateAllBindings(); });
-            SPARK_GUARDED_UPDATE("Plugins", "Core", { Spark::PluginRegistry::UpdateAll(dt); });
-
-#ifndef NDEBUG
-            Spark::ProfileProperties::GetInstance().ResetFrameProperties();
-#endif
-
-            SPARK_GUARDED_UPDATE("Cinematic", "Core",
-                                 { Spark::Cinematic::SequencerManager::GetInstance().Update(dt); });
-            Spark::Cinematic::SequencerManager::GetInstance().DispatchPendingAudioCues();
-            SPARK_GUARDED_UPDATE("Replay", "Core", { Spark::ReplaySystem::GetInstance().UpdatePlayback(dt); });
-            SPARK_GUARDED_UPDATE("VR", "Core", {
-                if (auto* vr = ctx->GetVR())
-                    vr->UpdateTracking();
-            });
-        }
+        SPARK_GUARDED_UPDATE("Cinematic", "Core", { Spark::Cinematic::SequencerManager::GetInstance().Update(dt); });
+        Spark::Cinematic::SequencerManager::GetInstance().DispatchPendingAudioCues();
+        SPARK_GUARDED_UPDATE("Replay", "Core", { Spark::ReplaySystem::GetInstance().UpdatePlayback(dt); });
+        SPARK_GUARDED_UPDATE("VR", "Core", {
+            if (auto* vr = ctx->GetVR())
+                vr->UpdateTracking();
+        });
 
         SPARK_GUARDED_UPDATE("GameplayDebugger", "Core", { Spark::Utils::GameplayDebugger::GetInstance().Update(dt); });
         SPARK_GUARDED_UPDATE("VideoPlayer", "Core", { Spark::Cinematic::VideoPlayer::GetInstance().Update(dt); });
@@ -1130,8 +1352,6 @@ namespace Spark::Core::Lifecycle
             bus->Publish(Spark::FrameBeginEvent{dt});
         }
 
-        SPARK_GUARDED_UPDATE("ModuleHotReload", "Core",
-                             { Spark::HotReload::ModuleHotReload::GetInstance().Update(dt); });
         SPARK_GUARDED_UPDATE("InputActions", "Core", { Spark::Input::InputActionSystem::GetInstance().Update(); });
         SPARK_GUARDED_UPDATE("OnlineServices", "Core",
                              { Spark::OnlineServices::OnlineServiceManager::GetInstance().Update(dt); });
@@ -1154,7 +1374,7 @@ namespace Spark::Core::Lifecycle
         if (!world)
             return;
 
-        UpdateECSDependentSystems(world, dt);
+        UpdateECSDependentSystems(ctx, world, dt);
 
         Spark::Graphics::ConstantBufferDiffManager::GetInstance().BeginFrame();
         Spark::Graphics::GPUProfiler::GetInstance().EndFrame();
@@ -1186,7 +1406,6 @@ namespace Spark::Core::Lifecycle
 
     static void ShutdownAIAndWorldSystems()
     {
-        Spark::Graphics::OcclusionCullingSystem::GetInstance().Shutdown();
         Spark::Graphics::WaterRenderer::GetInstance().Shutdown();
         Spark::Graphics::SkyAtmosphereSystem::GetInstance().Shutdown();
         Spark::Graphics::VolumetricCloudSystem::GetInstance().Shutdown();
@@ -1216,14 +1435,10 @@ namespace Spark::Core::Lifecycle
 #ifndef NDEBUG
         Spark::ProfileProperties::GetInstance().Shutdown();
 #endif
-        Spark::Graphics::VirtualTextureManager::GetInstance().Shutdown();
         Spark::Graphics::FoliageRenderer::GetInstance().Shutdown();
         Spark::Graphics::FoliageManager::GetInstance().Shutdown();
         Spark::Graphics::ClipmapTerrain::GetInstance().Shutdown();
-        Spark::Graphics::TransientResourcePool::GetInstance().Shutdown();
-        Spark::Graphics::PipelineStateCache::GetInstance().Shutdown();
         Spark::Graphics::MaterialPropertyRegistry::GetInstance().Shutdown();
-        Spark::Graphics::LightProbeSystem::GetInstance().Shutdown();
         Spark::Graphics::ClusteredLightCulling::GetInstance().Shutdown();
         Spark::UI::UIFactory::GetInstance().Shutdown();
         Spark::VirtualFileSystem::GetInstance().Shutdown();
@@ -1247,11 +1462,46 @@ namespace Spark::Core::Lifecycle
         // physics/audio/graphics, which the platform layer tears down next.
         GetPhaseSystemManagerImpl() = Spark::ECS::PhaseSystemManager{};
 
+        // Unregister the engine-lifetime services published at init BEFORE the
+        // singletons behind them are torn down: between the Shutdown* calls and
+        // this block, GetVFS()/GetAI()/GetAreaStreaming()/GetTween() would hand a
+        // module or console command a shut-down singleton — exactly what this
+        // block exists to prevent. The list is the inverse of the init path.
+        if (ctx)
+        {
+            if (auto* audio = ctx->GetAudio())
+                audio->SetMixer(nullptr);
+            ctx->SetConditions(nullptr);
+            ctx->SetAbilities(nullptr);
+            ctx->SetInstances(nullptr);
+            ctx->SetMusic(nullptr);
+            ctx->SetDestruction(nullptr);
+            ctx->SetWeapons(nullptr);
+            ctx->SetAI(nullptr);
+            ctx->SetAnimation(nullptr);
+            ctx->SetTween(nullptr);
+            ctx->SetVFS(nullptr);
+            ctx->SetAreaStreaming(nullptr);
+            ctx->SetLocalization(nullptr);
+            ctx->SetCinematic(nullptr);
+            ctx->SetReplay(nullptr);
+            ctx->SetComponentSerializers(nullptr);
+        }
+
         Spark::Streaming::SeamlessAreaManager::GetInstance().Shutdown();
         Spark::Net::ConnectionScopeFilter::GetInstance().Shutdown();
 
+        // Retire the triggers the TriggerVolumeComponent bridge created before the
+        // system that owns them goes away, so a later initialization does not
+        // inherit them.
+        RemoveBridgedTriggerVolumes();
+
         ShutdownAIAndWorldSystems();
         ShutdownRenderingAndUtilitySystems();
+
+        GetEngineRuntime().weaponSystem.reset();
+        Spark::Audio::AudioMixer::GetInstance().SetPhysics(nullptr);
+        Spark::Audio::AudioMixer::GetInstance().Shutdown();
 
         Spark::Audio::MusicManager::GetInstance().Shutdown();
         Spark::AI::MovementSystem::GetInstance().Shutdown();
@@ -1278,9 +1528,10 @@ namespace Spark::Core::Lifecycle
         Spark::Graphics::LightmapBaker::GetInstance().Shutdown();
         Spark::Procedural::ProceduralGenerator::GetInstance().Shutdown();
         Spark::Graphics::GPUProfiler::GetInstance().Shutdown();
-        Spark::HotReload::ModuleHotReload::GetInstance().Shutdown();
         Spark::LevelDesign::CSGSystem::GetInstance().Shutdown();
         Spark::Text::FontSystem::GetInstance().Shutdown();
+        // Drop the InputManager-bound providers before the platform layer frees it.
+        Spark::Input::InputActionSystem::GetInstance().SetKeyStateProviders({}, {}, {});
         Spark::Input::InputActionSystem::GetInstance().Shutdown();
         Spark::Build::GamePackager::GetInstance().Shutdown();
         Spark::InGameConsole::GetInstance().Shutdown();
@@ -1288,7 +1539,6 @@ namespace Spark::Core::Lifecycle
         Spark::Utils::FileWatcher::GetInstance().Shutdown();
         Spark::Gameplay::CraftingSystem::GetInstance().Shutdown();
         Spark::Gameplay::LootTableManager::GetInstance().Shutdown();
-        Spark::HLOD::HLODSystem::GetInstance().Shutdown();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Shutdown();
         Spark::Rendering::MovieRenderPipeline::GetInstance().Shutdown();
         Spark::Data::DataTableRegistry::GetInstance().Shutdown();
@@ -1317,15 +1567,6 @@ namespace Spark::Core::Lifecycle
         // the process-exit destructor handles cleanup.
         Spark::AssetMigrationRegistry::GetInstance().Shutdown();
         Spark::Gameplay::EventResponseSystem::GetInstance().Shutdown();
-        // Phase DD Theme 3D addition:
-        Spark::AI::AIDebugRenderer::GetInstance().Shutdown();
-        // Phase CC Theme 3D additions (released first — they depend on
-        // the render loop being alive, so tear them down before the
-        // rest of the engine winds down):
-        Spark::Graphics::AsyncComputeScheduler::GetInstance().Shutdown();
-        Spark::GPUStallProfiler::GetInstance().Shutdown();
-        // Phase BB Theme 3D additions:
-        Spark::Graphics::DynamicQualityScaler::GetInstance().Reset();
         Spark::Scripting::ScriptHookManager::GetInstance().Clear();
         Spark::Gameplay::GameplayExtensionRegistry::GetInstance().Clear();
         Spark::AI::NavMeshLinkSystem::GetInstance().Shutdown();
@@ -1394,13 +1635,16 @@ namespace Spark::Core::Lifecycle
         Spark::NetworkHealthMonitor::GetInstance().Shutdown();
         Spark::GPUResourceLeakDetector::GetInstance().Shutdown();
         Spark::Security::MemoryIntegritySystem::GetInstance().Shutdown();
+        if (auto* ctx = EngineContext::Get())
+        {
+            ctx->SetInvalidStateDetector(nullptr);
+        }
         Spark::InvalidStateDetector::GetInstance().Shutdown();
 #ifndef NDEBUG
         Spark::MemoryDebugger::GetInstance().PrintLeakReport();
 #endif
-        Spark::ChromeTracing::GetInstance().SaveToFile("spark_trace.json");
+        Spark::ChromeTracing::GetInstance().SaveToFile(ResolveUserDataPath("spark_trace.json").string());
         Spark::ChromeTracing::GetInstance().Stop();
-        Spark::FileLogger::GetInstance().Shutdown();
 
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "DebugSystems", 0.0);
     }

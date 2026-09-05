@@ -50,7 +50,7 @@ branch `claude/whole-nine-yards-20260823` (uncommitted changes ahead of `0e1fe7e
 
 | Layer | Files | Format | Owner code |
 |---|---|---|---|
-| World saves | `<saveDir>/*.spark_save` | Custom binary, `SPRK` magic, version 1 | `SparkEngine/Source/Engine/SaveSystem/SaveSystem.{h,cpp}` |
+| World saves | `<saveDir>/*.spark_save` | Custom binary, `SPRK` magic, version 3 (reader window 1..3) | `SparkEngine/Source/Engine/SaveSystem/SaveSystem.{h,cpp}` |
 | Engine async DB | one KV text file per `Open()` path | `#!spark-kv-v2` tab-delimited KV | `SparkEngine/Source/Engine/Persistence/AsyncDatabase.{h,cpp}` |
 | TERRAFRONT stores | accounts/characters DB, outfit store, `Saves/terrafront_state.json`, territory JSON | JSON via `Spark::Json` (`SparkEngine/Source/Utils/JsonUtils.h`) | `GameModules/SparkGameMMOFPS/Source/Persistence/`, `Source/Game/TFProgressionSystemPersist.cpp`, `Source/World/TFRegionSystemNet.cpp` |
 | MMO module | via AsyncDatabase (characters); accounts **in-memory only** | pseudo-SQL over KV | `GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp`, `Source/Account/MMOAccountSystem.cpp` |
@@ -87,9 +87,12 @@ release-blocking in the readiness handoff; local persistence must never be descr
 production-grade until their acceptance criteria (N-1 fixtures, rollback, forced-failure
 recovery, rehearsed backup restore) have evidence.
 
-## `.spark_save` on-disk format (version 1)
+## `.spark_save` on-disk format (version 3)
 
-Defined entirely in `SaveSystem.cpp` (`kCurrentSaveVersion = 1`). Layout, in order:
+Version constants live in `SaveSystem.{h,cpp}`'s companion header
+`SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h`: `kCurrentSaveVersion = 3`,
+`kOldestSupportedSaveVersion = 1`, so the reader accepts v1, v2 and v3 and `WriteToFile` refuses to
+emit anything but v3. Layout, in order:
 
 1. 4-byte magic `"SPRK"`.
 2. `uint32` format version.
@@ -100,6 +103,25 @@ Defined entirely in `SaveSystem.cpp` (`kCurrentSaveVersion = 1`). Layout, in ord
    count; per component: prefixed type name, `uint16` property count, prefixed key/value
    string pairs.
 5. `uint32` customState count + prefixed key/value pairs (always present, even when 0).
+
+**Hierarchy edges are not a new file section.** v3 encodes each parent link as the child's
+`Transform` component `parent` property, holding the parent's *index into the entity array*
+(`ParseTransformParentIndex`); v2 could not express an edge at all, so the v2->v3 in-memory
+migration treats every Transform it carries as a root.
+
+**Which components are written.** `SerializeWorld` is registry-driven: every reflected type that owns
+both `ComponentFactory` operations and a serializer is written, replacing the old fixed 14-type
+allowlist. The opt-out is `SaveSystem::MarkComponentTransient(typeName)` /
+`IsComponentTransient(typeName)`; the default transient set is `ProjectileComponent` and
+`DecalComponent`. This widens saves written by this build relative to earlier ones.
+
+**Slot retention.** `Save()` retains the previous revision as `<slotName>.spark_save.bak` **by
+copying** before the atomic replace — never by renaming the live file away, which would open a window
+where the slot does not exist at all. `Load()` falls back to the `.bak` and warns;
+`SaveExists()`/`GetSaveSlots()` report a slot that survives only as its `.bak`, matching what `Load()`
+can recover. `DeleteSave()` removes the primary first and the `.bak` only after that succeeds. Every
+`GetSaveSlots()` entry carries its `slotName`. The save directory is created on demand in
+`WriteToFile`, so `SetSaveDirectory()`'s promise holds.
 
 Writer-side rejections (fail the save rather than corrupt it): any string > 65,535 bytes
 (`rejectIfTooLong`), any embedded `\n`/`\r` in the three getline metadata fields
@@ -121,11 +143,12 @@ Reserved slots: `__quicksave`, `__autosave_0..N-1` (rotating, default 3).
 
 ## Versioning and migration — decision rules
 
-- **Bump `kCurrentSaveVersion`** whenever the binary layout changes. The load path already
-  rejects `version == 0 || version > kCurrentSaveVersion` and has a migration hook
-  (`if (version < kCurrentSaveVersion)` in `ReadFromFile`) that currently only logs —
-  version 1 is the baseline, so there is nothing to migrate yet. Each future bump must add
-  a real upgrade branch there **and** in `ReadMetadataOnly`'s version gate.
+- **Bump `kCurrentSaveVersion`** whenever the binary layout changes, and decide explicitly whether
+  `kOldestSupportedSaveVersion` moves with it. The load path rejects anything outside
+  `[kOldestSupportedSaveVersion, kCurrentSaveVersion]`, and the migration loop
+  (`while (migrated.metadata.version < kCurrentSaveVersion)` in the load path) now carries real
+  in-memory upgrades: v1->v2 and v2->v3. Each future bump must add a step to that loop **and** be
+  reflected in `ReadMetadataOnly`'s version gate.
 - **Adding a field to an existing component**: no version bump needed — components are
   string-keyed property maps; deserializers use `SafeGetFloat/SafeGetUint32/SafeGetString`
   with defaults, so missing keys degrade to defaults. This is the additive-migration path.
@@ -268,7 +291,7 @@ above instead.
 Re-verify the code claims in this skill:
 
 ```bash
-grep -n "kCurrentSaveVersion" SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp
+grep -n "kCurrentSaveVersion\|kOldestSupportedSaveVersion" SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h
 grep -n "kMaxSaveFileSize\|kMaxEntities\|kMaxCustomState\|kMaxMetaSize" SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp
 grep -n "ios::trunc" SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp   # torn-flush hazard still present if this hits FlushToDisk
 grep -rn "corrupt-" GameModules/SparkGameMMOFPS/Source/Persistence/
@@ -308,10 +331,19 @@ grep -rn "persistence-integration\|recovery-drill\|BackupRestore" .github/workfl
 
 Authored 2026-08-23 against the working tree of branch
 `claude/whole-nine-yards-20260823` (uncommitted changes ahead of `0e1fe7e7`), by reading
-the cited sources and tests — no full-suite or CI run at this exact tree. Volatile facts
-and one-line re-checks:
+the cited sources and tests — no full-suite or CI run at this exact tree.
 
-- Save format version (currently 1): `grep -n kCurrentSaveVersion SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp`
+**Updated 2026-09-05** against the uncommitted working tree of branch
+`claude/release-readiness-sweep-20260904`: save format v3 with a v1..v3 reader window and real
+v1->v2 / v2->v3 in-memory migrations, Transform-`parent` hierarchy edges, registry-driven
+`SerializeWorld` with `MarkComponentTransient`, and `.bak` retention/fallback/`slotName`
+reporting. Read from source, not from a test or CI run.
+
+Volatile facts and one-line re-checks:
+
+- Save format version (currently 3) and reader window (oldest 1): `grep -n "kCurrentSaveVersion\|kOldestSupportedSaveVersion" SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h`
+- `.bak` retention is a copy, not a rename: `grep -n "kSaveBackupSuffix\|copy_file" SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp`
+- Registry-driven component coverage and its opt-out: `grep -n "MarkComponentTransient\|IsComponentTransient" SparkEngine/Source/Engine/SaveSystem/SaveSystem.{h,cpp}`
 - Durable atomic slot replace still present: `grep -n "FlushFileDurably\|ReplaceFileAtomically" SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp` and `grep -n "ReplacesExistingSlotAtomically" Tests/harden/Test_persistence_SaveSystem.cpp`
 - Torn-flush hazard still open: `grep -n "ios::trunc" SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp` (hit inside `FlushToDisk` = still open)
 - Close/admission still linearized: `grep -n "m_accepting" SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp` and `grep -n "CloseRace_Drains" Tests/harden/Test_persistence_AsyncDatabasePool.cpp`

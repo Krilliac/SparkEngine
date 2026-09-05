@@ -16,6 +16,7 @@
 #include "ModuleManager.h"
 #include "Audio/AudioEngine.h"
 #include "Audio/IAudioBackend.h"
+#include "Engine/Gameplay/WeaponManager.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
 #include "Utils/LocalFileCache.h"

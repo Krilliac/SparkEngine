@@ -450,7 +450,20 @@ namespace Spark::Daemon
 
         g_shaderClient = std::make_unique<ShaderServiceClient>(*client);
         g_assetClient = std::make_unique<AssetServiceClient>(*client);
-        Spark::Graphics::GetShaderDiskCache().SetDaemonClient(g_shaderClient.get());
+
+        // Lookup and Store both early-return until the cache is initialized, so
+        // attaching a daemon client to an uninitialized cache wires the daemon
+        // to nothing and no shader ever crosses it. Only Shader::Initialize
+        // initializes the cache today, so say so rather than reporting a
+        // working shader-cache link that shares nothing.
+        auto& shaderDiskCache = Spark::Graphics::GetShaderDiskCache();
+        shaderDiskCache.SetDaemonClient(g_shaderClient.get());
+        if (!shaderDiskCache.IsInitialized())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "Daemon shader client attached to an uninitialized ShaderDiskCache: no shader will be "
+                           "shared until the graphics shader system initializes the cache");
+        }
         g_active = true;
 
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Daemon wired: shader cache sharing via %s",

@@ -1,5 +1,99 @@
 cmake_minimum_required(VERSION 3.25)
 
+if(NOT DEFINED SPARK_TEMPLATE_CONFIG OR SPARK_TEMPLATE_CONFIG STREQUAL "")
+    set(SPARK_TEMPLATE_CONFIG Release)
+endif()
+
+# Opt-in install driver. With SPARK_TEMPLATE_INSTALL_FROM_BUILD_DIR set, stage a
+# fresh SDK out of an existing engine build tree into SPARK_TEMPLATE_INSTALL_PREFIX
+# and verify the templates against that prefix, so "a standalone CMake project
+# consuming an installed SDK" can be checked from a plain CTest instead of only
+# in the nightly publish workflow. Without it the caller supplies
+# SPARK_TEMPLATE_ROOT and SPARK_ENGINE_DIR itself, exactly as before.
+if(DEFINED SPARK_TEMPLATE_INSTALL_FROM_BUILD_DIR AND NOT SPARK_TEMPLATE_INSTALL_FROM_BUILD_DIR STREQUAL "")
+    if(NOT EXISTS "${SPARK_TEMPLATE_INSTALL_FROM_BUILD_DIR}/CMakeCache.txt")
+        message(FATAL_ERROR
+            "SPARK_TEMPLATE_INSTALL_FROM_BUILD_DIR is not a configured build tree: "
+            "${SPARK_TEMPLATE_INSTALL_FROM_BUILD_DIR}")
+    endif()
+    if(NOT DEFINED SPARK_TEMPLATE_INSTALL_PREFIX OR SPARK_TEMPLATE_INSTALL_PREFIX STREQUAL "")
+        message(FATAL_ERROR
+            "SPARK_TEMPLATE_INSTALL_PREFIX is required with SPARK_TEMPLATE_INSTALL_FROM_BUILD_DIR")
+    endif()
+
+    # The next step erases this prefix. Refuse to do that to anything that is not
+    # provably scratch space owned by this driver: a mistyped -D would otherwise
+    # recursively delete a build tree, a home directory, or an existing SDK.
+    file(TO_CMAKE_PATH "${SPARK_TEMPLATE_INSTALL_PREFIX}" spark_install_prefix)
+    string(REGEX REPLACE "/+$" "" spark_install_prefix "${spark_install_prefix}")
+    if(NOT IS_ABSOLUTE "${spark_install_prefix}")
+        message(FATAL_ERROR
+            "SPARK_TEMPLATE_INSTALL_PREFIX must be an absolute path: ${spark_install_prefix}")
+    endif()
+    get_filename_component(spark_install_prefix_parent "${spark_install_prefix}" DIRECTORY)
+    if(spark_install_prefix_parent STREQUAL "" OR spark_install_prefix_parent STREQUAL spark_install_prefix)
+        message(FATAL_ERROR
+            "SPARK_TEMPLATE_INSTALL_PREFIX must not be a filesystem root: ${spark_install_prefix}")
+    endif()
+
+    # Owned when this driver has staged here before (marker), or when the prefix
+    # lives inside the build tree / template build root the caller already named.
+    set(spark_install_marker "${spark_install_prefix}/.spark-template-install-prefix")
+    set(spark_prefix_is_scratch FALSE)
+    if(EXISTS "${spark_install_marker}")
+        set(spark_prefix_is_scratch TRUE)
+    endif()
+    foreach(spark_owned_root IN ITEMS
+            "${SPARK_TEMPLATE_INSTALL_FROM_BUILD_DIR}" "${SPARK_TEMPLATE_BUILD_ROOT}")
+        if(spark_owned_root STREQUAL "")
+            continue()
+        endif()
+        file(TO_CMAKE_PATH "${spark_owned_root}" spark_owned_root)
+        string(REGEX REPLACE "/+$" "" spark_owned_root "${spark_owned_root}")
+        string(FIND "${spark_install_prefix}/" "${spark_owned_root}/" spark_owned_position)
+        if(spark_owned_position EQUAL 0 AND NOT spark_install_prefix STREQUAL spark_owned_root)
+            set(spark_prefix_is_scratch TRUE)
+        endif()
+    endforeach()
+
+    if(EXISTS "${spark_install_prefix}")
+        if(NOT IS_DIRECTORY "${spark_install_prefix}")
+            message(FATAL_ERROR
+                "SPARK_TEMPLATE_INSTALL_PREFIX exists and is not a directory: ${spark_install_prefix}")
+        endif()
+        if(NOT spark_prefix_is_scratch)
+            message(FATAL_ERROR
+                "Refusing to erase ${spark_install_prefix}: it is not a staging prefix this driver owns.\n"
+                "Point SPARK_TEMPLATE_INSTALL_PREFIX at a new directory, or at one inside "
+                "SPARK_TEMPLATE_INSTALL_FROM_BUILD_DIR / SPARK_TEMPLATE_BUILD_ROOT, and delete the "
+                "existing directory yourself if you really meant this one.")
+        endif()
+        file(REMOVE_RECURSE "${spark_install_prefix}")
+    endif()
+    file(MAKE_DIRECTORY "${spark_install_prefix}")
+    file(WRITE "${spark_install_marker}"
+        "Scratch install prefix staged by cmake/VerifyInstalledTemplates.cmake. Safe to delete.\n")
+    set(SPARK_TEMPLATE_INSTALL_PREFIX "${spark_install_prefix}")
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" --install "${SPARK_TEMPLATE_INSTALL_FROM_BUILD_DIR}"
+            --prefix "${SPARK_TEMPLATE_INSTALL_PREFIX}"
+            --config "${SPARK_TEMPLATE_CONFIG}"
+        RESULT_VARIABLE install_result
+        OUTPUT_VARIABLE install_stdout
+        ERROR_VARIABLE install_stderr
+    )
+    if(NOT install_result EQUAL 0)
+        message(FATAL_ERROR
+            "Staging an installed SDK failed (exit ${install_result})\n"
+            "stdout:\n${install_stdout}\n"
+            "stderr:\n${install_stderr}")
+    endif()
+
+    set(SPARK_TEMPLATE_ROOT "${SPARK_TEMPLATE_INSTALL_PREFIX}/share/SparkEngine/templates")
+    set(SPARK_ENGINE_DIR "${SPARK_TEMPLATE_INSTALL_PREFIX}/lib/cmake/SparkEngine")
+    message(STATUS "Staged an installed SDK for template verification in ${SPARK_TEMPLATE_INSTALL_PREFIX}")
+endif()
+
 foreach(required IN ITEMS SPARK_TEMPLATE_ROOT SPARK_TEMPLATE_BUILD_ROOT SPARK_ENGINE_DIR)
     if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
         message(FATAL_ERROR "${required} is required")
@@ -22,11 +116,38 @@ if(DEFINED SPARK_ENGINE_EXECUTABLE AND
    NOT EXISTS "${SPARK_ENGINE_EXECUTABLE}")
     message(FATAL_ERROR "Installed SparkEngine executable does not exist: ${SPARK_ENGINE_EXECUTABLE}")
 endif()
-if(NOT DEFINED SPARK_TEMPLATE_CONFIG OR SPARK_TEMPLATE_CONFIG STREQUAL "")
-    set(SPARK_TEMPLATE_CONFIG Release)
-endif()
+# Live smoke inventory. This is a list: by default every buildable template gets
+# a staged-host run, because configure/build coverage says nothing about whether
+# a package's authored scene actually appends, ticks and renders on a real host.
+# Callers may narrow it (for example to one package in a time-boxed job).
 if(NOT DEFINED SPARK_TEMPLATE_LIVE_SMOKE_NAME OR SPARK_TEMPLATE_LIVE_SMOKE_NAME STREQUAL "")
-    set(SPARK_TEMPLATE_LIVE_SMOKE_NAME EmptyProject)
+    set(SPARK_TEMPLATE_LIVE_SMOKE_NAME "")
+    set(spark_live_smoke_all TRUE)
+else()
+    set(spark_live_smoke_all FALSE)
+endif()
+# Every live-smoke branch below is guarded on SPARK_ENGINE_EXECUTABLE, including
+# the final "did each requested smoke actually run" count check. So an explicit
+# SPARK_TEMPLATE_LIVE_SMOKE_NAME with no usable executable silently reconciles to
+# zero runs and the script still reports "verification passed" -- a check that
+# stopped checking, reporting the reassuring value. Refuse instead.
+if(NOT spark_live_smoke_all)
+    if(NOT DEFINED SPARK_ENGINE_EXECUTABLE OR SPARK_ENGINE_EXECUTABLE STREQUAL "")
+        message(FATAL_ERROR
+            "SPARK_TEMPLATE_LIVE_SMOKE_NAME requested a live smoke for "
+            "'${SPARK_TEMPLATE_LIVE_SMOKE_NAME}' but SPARK_ENGINE_EXECUTABLE is not set, so no "
+            "staged-host run can happen. Pass the installed engine executable, or leave "
+            "SPARK_TEMPLATE_LIVE_SMOKE_NAME unset to skip live smokes deliberately.")
+    endif()
+    if(IS_DIRECTORY "${SPARK_ENGINE_EXECUTABLE}")
+        message(FATAL_ERROR
+            "SPARK_TEMPLATE_LIVE_SMOKE_NAME requested a live smoke for "
+            "'${SPARK_TEMPLATE_LIVE_SMOKE_NAME}' but SPARK_ENGINE_EXECUTABLE is a directory, not an "
+            "executable: ${SPARK_ENGINE_EXECUTABLE}")
+    endif()
+endif()
+if(NOT DEFINED SPARK_TEMPLATE_LIVE_SMOKE_FRAMES OR SPARK_TEMPLATE_LIVE_SMOKE_FRAMES STREQUAL "")
+    set(SPARK_TEMPLATE_LIVE_SMOKE_FRAMES 8)
 endif()
 
 file(MAKE_DIRECTORY "${SPARK_TEMPLATE_BUILD_ROOT}")
@@ -44,6 +165,11 @@ foreach(template_dir IN LISTS template_candidates)
         list(APPEND installed_template_names "${template_name}")
     endif()
 endforeach()
+
+if(spark_live_smoke_all)
+    set(SPARK_TEMPLATE_LIVE_SMOKE_NAME ${installed_template_names})
+endif()
+list(LENGTH SPARK_TEMPLATE_LIVE_SMOKE_NAME expected_live_smoke_count)
 
 # Compare the installed distribution's buildable template inventory with the
 # source inventory when CI supplies both roots. The builds below still consume
@@ -127,9 +253,10 @@ foreach(template_dir IN LISTS template_candidates)
     math(EXPR template_count "${template_count} + 1")
     message(STATUS "Installed template ${template_name}: configure/build passed")
 
+    list(FIND SPARK_TEMPLATE_LIVE_SMOKE_NAME "${template_name}" live_smoke_index)
     if(DEFINED SPARK_ENGINE_EXECUTABLE AND
        NOT SPARK_ENGINE_EXECUTABLE STREQUAL "" AND
-       template_name STREQUAL SPARK_TEMPLATE_LIVE_SMOKE_NAME)
+       NOT live_smoke_index EQUAL -1)
         if(CMAKE_HOST_WIN32)
             set(module_prefix "")
             set(module_suffix ".dll")
@@ -162,7 +289,7 @@ foreach(template_dir IN LISTS template_candidates)
             COMMAND "${SPARK_ENGINE_EXECUTABLE}"
                 -headless
                 -game "${module_candidates}"
-                -test-frames 1
+                -test-frames ${SPARK_TEMPLATE_LIVE_SMOKE_FRAMES}
                 -require-game
                 -no-subprocess
                 -no-jobsystem
@@ -170,7 +297,7 @@ foreach(template_dir IN LISTS template_candidates)
             RESULT_VARIABLE live_smoke_result
             OUTPUT_VARIABLE live_smoke_stdout
             ERROR_VARIABLE live_smoke_stderr
-            TIMEOUT 30
+            TIMEOUT 60
         )
         file(REMOVE_RECURSE "${live_smoke_work}")
         if(NOT live_smoke_result EQUAL 0)
@@ -179,8 +306,26 @@ foreach(template_dir IN LISTS template_candidates)
                 "stdout:\n${live_smoke_stdout}\n"
                 "stderr:\n${live_smoke_stderr}")
         endif()
+
+        # A zero exit only proves the host started and stopped. Require the
+        # module's own evidence that it resolved a scene and took ownership of at
+        # least one entity, so a template whose scene contract silently falls
+        # through can no longer pass this gate.
+        set(live_smoke_output "${live_smoke_stdout}${live_smoke_stderr}")
+        if(NOT live_smoke_output MATCHES
+           "${template_name} loaded scene '[^']+' with ([1-9][0-9]*) owned entities")
+            message(FATAL_ERROR
+                "Installed ${template_name} live-load smoke produced no scene-ownership evidence.\n"
+                "Expected a log line \"${template_name} loaded scene '<path>' with <n> owned entities\" "
+                "with a non-zero count.\n"
+                "stdout:\n${live_smoke_stdout}\n"
+                "stderr:\n${live_smoke_stderr}")
+        endif()
+        set(live_smoke_entities "${CMAKE_MATCH_1}")
         math(EXPR live_smoke_count "${live_smoke_count} + 1")
-        message(STATUS "Installed template ${template_name}: staged host live-load passed")
+        message(STATUS
+            "Installed template ${template_name}: staged host live-load passed "
+            "(${live_smoke_entities} owned entities over ${SPARK_TEMPLATE_LIVE_SMOKE_FRAMES} frames)")
     endif()
 endforeach()
 
@@ -189,9 +334,10 @@ if(template_count EQUAL 0)
 endif()
 if(DEFINED SPARK_ENGINE_EXECUTABLE AND
    NOT SPARK_ENGINE_EXECUTABLE STREQUAL "" AND
-   NOT live_smoke_count EQUAL 1)
+   NOT live_smoke_count EQUAL expected_live_smoke_count)
     message(FATAL_ERROR
-        "Requested live smoke template was not built: ${SPARK_TEMPLATE_LIVE_SMOKE_NAME}")
+        "Live smoke ran for ${live_smoke_count} of ${expected_live_smoke_count} requested template(s): "
+        "${SPARK_TEMPLATE_LIVE_SMOKE_NAME}")
 endif()
 
 message(STATUS "Installed template SDK verification passed for ${template_count} template(s)")

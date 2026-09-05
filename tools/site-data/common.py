@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import math
@@ -13,7 +14,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterable
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -47,7 +48,10 @@ METRIC_IDS = {
     "shaders.glsl",
     "shaders.hlsl",
     "tests.definitions",
+    "tests.executed",
+    "tests.failed",
     "tests.files",
+    "tests.skipped",
     "visualScript.nodes",
 }
 
@@ -438,13 +442,55 @@ def git_dirty_paths() -> list[str]:
     return paths
 
 
-def walk_files(root: Path, suffixes: Iterable[str] | None = None) -> Iterator[Path]:
+@functools.lru_cache(maxsize=1)
+def tracked_paths() -> frozenset[str]:
+    """Repository-relative POSIX paths recorded in the git index.
+
+    A published metric claims to describe an exact commit, so it must be derived
+    from what the commit contains. A filesystem walk also sees untracked files
+    and would silently move a number the bundle attributes to the SHA.
+    """
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--cached"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise SiteDataError(f"git ls-files failed: {detail}")
+    paths: set[str] = set()
+    for raw in result.stdout.split(b"\x00"):
+        if not raw:
+            continue
+        try:
+            paths.add(raw.decode("utf-8"))
+        except UnicodeDecodeError as error:
+            raise SiteDataError("tracked repository path is not valid UTF-8") from error
+    return frozenset(paths)
+
+
+def tracked_files(root: Path, suffixes: Iterable[str] | None = None) -> list[Path]:
+    """Tracked regular files under ``root``, filtered by suffix.
+
+    Tracked-but-deleted paths and symlinks are excluded so the caller measures
+    real bytes of the checked-out commit.
+    """
     accepted = {suffix.lower() for suffix in suffixes} if suffixes else None
-    if not root.exists():
-        return
-    for path in sorted(root.rglob("*")):
-        if path.is_file() and (accepted is None or path.suffix.lower() in accepted):
-            yield path
+    try:
+        prefix = root.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+    except ValueError as error:
+        raise SiteDataError(f"{root} is outside the repository") from error
+    selected: list[Path] = []
+    for relative in tracked_paths():
+        if prefix not in {"", "."} and not (relative == prefix or relative.startswith(f"{prefix}/")):
+            continue
+        path = REPO_ROOT / relative
+        if accepted is not None and path.suffix.lower() not in accepted:
+            continue
+        if path.is_file() and not path.is_symlink():
+            selected.append(path)
+    return sorted(selected)
 
 
 def slug_part(value: str) -> str:

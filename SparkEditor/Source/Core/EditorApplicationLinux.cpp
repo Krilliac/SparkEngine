@@ -14,6 +14,7 @@
 #include "EditorFonts.h"
 #include "ProjectManager.h"
 #include "EditorWindowManager.h"
+#include "EditorCrashHandler.h"
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
@@ -308,6 +309,10 @@ namespace SparkEditor
         if (m_windowManagerInitialized)
         {
             console.LogInfo("Shutting down window manager...");
+            // Persist to disk before Shutdown() tears the manager down; the
+            // in-memory "__autosave__" entry alone never survives the process.
+            if (!EditorWindowManager::GetInstance().SaveCurrentLayoutToFile(WindowLayoutFilePath()))
+                console.LogWarning("Window layout could not be written to disk");
             EditorWindowManager::GetInstance().Shutdown();
             m_windowManagerInitialized = false;
             console.LogSuccess("Window manager shutdown complete");
@@ -338,6 +343,10 @@ namespace SparkEditor
         }
         SDL_Quit();
         console.LogSuccess("OpenGL and SDL2 cleanup complete");
+
+        // Last, so a fault during teardown is still captured: this also restores
+        // the previous unhandled-exception filter installed at startup.
+        EditorCrashHandler::GetInstance().Shutdown();
 
         m_isInitialized = false;
         m_initializationStarted = false;

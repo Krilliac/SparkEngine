@@ -310,8 +310,6 @@ The **MaterialEditorPanel** (`SparkEditor/Source/Panels/MaterialEditorPanel.h`) 
 | `SparkEditor/Source/Panels/MaterialEditorPanel.cpp` | Editor panel implementation |
 | `SparkEditor/Source/Panels/MaterialEditorParameters.cpp` | Parameter editing UI |
 | `SparkEditor/Source/Panels/MaterialEditorPreview.cpp` | Live preview rendering |
-| `SparkEditor/Source/MaterialEditor/MaterialEditor.h` | Standalone material editor |
-| `SparkEditor/Source/MaterialEditor/MaterialEditor.cpp` | Standalone material editor implementation |
 
 ## See Also
 

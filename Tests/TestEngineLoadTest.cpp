@@ -639,8 +639,11 @@ TEST(LoadTest_FullEngine_3000Frames)
     // All events should have been delivered
     EXPECT_EQ(eventsReceived, NUM_FRAMES);
 
-    // No excessive severe frame spikes (allow some for warmup, JIT, thread scheduling)
-    EXPECT_TRUE(spikes10x <= 30);
+    // No excessive severe frame spikes (allow some for warmup, JIT, thread scheduling).
+    // This one assertion is genuinely host-scheduling sensitive, so it is waived
+    // per-assertion. Every other assertion in this test stays strict: the
+    // whole-test waiver that used to cover all seven is gone from TestWarnings.h.
+    EXPECT_WARN_ONLY(spikes10x <= 30, "spikes10x threshold sensitive to host scheduling pressure");
 
     // Average frame time should be reasonable (generous for Debug/ASan builds)
     EXPECT_TRUE(avgFrameUs < 50000.0);

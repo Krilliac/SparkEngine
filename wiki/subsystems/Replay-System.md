@@ -4,6 +4,11 @@ SparkEngine provides a replay recording and playback system for FPS games. It ca
 
 **Source:** `SparkEngine/Source/Engine/Replay/ReplaySystem.h`
 
+> **What is wired today (2026-09):** while `ReplaySystem` is recording, the engine lifecycle records
+> Transform/velocity/health frames for every positioned entity, honouring the record interval.
+> Playback only advances `GetCurrentFrame()`; no ghost-entity consumer applies recorded frames to the
+> scene, so kill cams and visual playback described below are the API's design, not shipped behavior.
+
 ## Architecture Overview
 
 The replay system records per-frame snapshots of all entity states and discrete gameplay events into a `ReplayData` structure. During playback, it uses binary search to seek to any point in time and provides the corresponding frame data for the game to apply to the scene.

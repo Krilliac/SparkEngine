@@ -94,6 +94,9 @@ namespace Spark
             std::string usage;
             uint64_t nameHash = 0;
             CommandPermission requiredPermission = CommandPermission::Player;
+            /// Registrant token. Empty means the engine/host itself; game modules
+            /// pass their module id so their commands can be removed as a set.
+            std::string ownerId;
         };
 
         struct ConsoleStats
@@ -136,15 +139,50 @@ namespace Spark
         void LogDebug(const std::string& message);
 
         // Commands
-        void RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description = "",
+        //
+        // Registration is not a silent overwrite: a name already registered by a
+        // different owner is refused, and a re-registration by the same owner can
+        // never lower the permission the command already requires. Every overload
+        // returns true only when the handler in the registry is the one passed in.
+        bool RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description = "",
                              const std::string& category = "General", const std::string& usage = "");
-        void RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
+        bool RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
                              const std::string& category, const std::string& usage, CommandPermission permission);
+        /**
+         * @brief Register a command owned by a specific registrant.
+         *
+         * Game-module DLLs share the host console (see SetGlobalInstance), so a
+         * module passes its module id here and ModuleManager removes the whole
+         * set with UnregisterCommandsByOwner(moduleId) on unload and before a
+         * hot-reload swap. That pairing is what keeps an unloaded module's
+         * handlers — std::functions living in the module image — from outliving
+         * the image, without erasing an identically named host command.
+         *
+         * @param ownerId Registrant token. Callers that are the host itself pass
+         *        nothing (the empty token); every module MUST pass its own module
+         *        id, because UnregisterCommandsByOwner() refuses the empty token
+         *        rather than sweeping the host registry.
+         */
+        bool RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
+                             const std::string& category, const std::string& usage, CommandPermission permission,
+                             const std::string& ownerId);
         /** Register a command whose arguments must be redacted from history and scrubbed after dispatch. */
-        void RegisterSensitiveCommand(const std::string& name, CommandHandler handler,
+        bool RegisterSensitiveCommand(const std::string& name, CommandHandler handler,
                                       const std::string& description = "", const std::string& category = "General",
                                       const std::string& usage = "");
         bool UnregisterCommand(const std::string& name);
+        /**
+         * @brief Remove every command registered with this owner token.
+         *
+         * Called by the module host on unload and before a hot-reload swap. An
+         * empty @p ownerId is refused (it is the engine's own token, so honouring
+         * it would erase the whole host registry).
+         *
+         * @return Number of commands removed; 0 for an empty or unknown token.
+         */
+        size_t UnregisterCommandsByOwner(const std::string& ownerId);
+        /** @brief Owner token of a registered command; empty for host commands and for unknown names. */
+        std::string GetCommandOwner(const std::string& name) const;
         bool HasCommand(const std::string& name) const;
         bool ExecuteCommand(const std::string& commandLine);
 
@@ -175,6 +213,11 @@ namespace Spark
         SimpleConsole& operator=(const SimpleConsole&) = delete;
 
         std::vector<std::string> ParseCommand(const std::string& commandLine);
+
+        /// @brief Shared registration path for every RegisterCommand overload.
+        bool RegisterCommandInternal(const std::string& name, CommandHandler handler, const std::string& description,
+                                     const std::string& category, const std::string& usage,
+                                     CommandPermission permission, const std::string& ownerId, bool sensitive);
 
         /// @brief Resolve aliases, tokenize the command line, and record in history.
         bool ParseCommandLine(const std::string& commandLine, std::string& outCommand,

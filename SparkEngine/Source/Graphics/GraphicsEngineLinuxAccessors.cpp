@@ -72,6 +72,12 @@ const GraphicsSettings& GraphicsEngine::GetGraphicsSettings() const
     return m_settings;
 }
 
+Spark::RHI::RHIBridge* GraphicsEngine::GetRHIBridge() const
+{
+    auto& rhi = GetRHI();
+    return rhi.initialized ? &rhi.bridge : nullptr;
+}
+
 Spark::RHI::IRHIDevice* GraphicsEngine::GetRHIDevice() const
 {
     auto& rhi = GetRHI();

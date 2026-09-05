@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include "Spark/ServiceInterfaces.h"
+#include "Spark/Version.h"
 
 // Forward declarations — engine types accessible through the context.
 // Modules include the specific engine headers they need for full definitions.
@@ -92,6 +93,8 @@ namespace Spark
     class LocalizationSystem;
     class TweenSystem;
     class DestructionSystem;
+    class InvalidStateDetector;
+    class ComponentSerializerRegistry;
 
     namespace UI
     {
@@ -149,11 +152,11 @@ namespace Spark
         virtual PhysicsSystem* GetPhysics() = 0;
         virtual const PhysicsSystem* GetPhysics() const = 0;
 
-        /** @brief Get the animation system */
+        /** @brief Get the animation system (the engine's AnimationManager; registered by the gameplay lifecycle) */
         virtual Animation::AnimationSystem* GetAnimation() { return nullptr; }
         virtual const Animation::AnimationSystem* GetAnimation() const { return nullptr; }
 
-        /** @brief Get the AI system */
+        /** @brief Get the AI system (owned by AIIntegratedSystem; registered by the gameplay lifecycle) */
         virtual AI::AISystem* GetAI() { return nullptr; }
         virtual const AI::AISystem* GetAI() const { return nullptr; }
 
@@ -177,7 +180,13 @@ namespace Spark
         virtual ::World* GetWorld() { return nullptr; }
         virtual const ::World* GetWorld() const { return nullptr; }
 
-        /** @brief Get the scene manager */
+        /**
+         * @brief Get the scene manager
+         *
+         * The engine runtime does not own a SceneManager: it is registered only by
+         * a host (editor or game) that creates one, so this is nullptr in the
+         * stock windowed and headless entry points.
+         */
         virtual SceneManager* GetSceneManager() { return nullptr; }
         virtual const SceneManager* GetSceneManager() const { return nullptr; }
 
@@ -229,7 +238,12 @@ namespace Spark
         virtual ReplaySystem* GetReplay() { return nullptr; }
         virtual const ReplaySystem* GetReplay() const { return nullptr; }
 
-        /** @brief Get the localization/i18n system */
+        /**
+         * @brief Get the localization/i18n system
+         *
+         * Registered by the gameplay lifecycle. No language table is loaded by the
+         * engine itself; a game calls LoadLanguage() with its own string files.
+         */
         virtual LocalizationSystem* GetLocalization() { return nullptr; }
         virtual const LocalizationSystem* GetLocalization() const { return nullptr; }
 
@@ -327,6 +341,47 @@ namespace Spark
          * ensuring dependents are shut down before their dependencies.
          */
         virtual void ShutdownAll() {}
+
+        // =====================================================================
+        // Host-owned registries (appended last to keep earlier vtable slots stable)
+        // =====================================================================
+
+        /**
+         * @brief Get the host's invalid-state detector
+         *
+         * SparkEngineLib is linked statically into every game-module DLL, so
+         * InvalidStateDetector::GetInstance() inside a module is a DLL-local copy
+         * the host never ticks. Modules must register rules on this instance.
+         */
+        virtual InvalidStateDetector* GetInvalidStateDetector() { return nullptr; }
+        virtual const InvalidStateDetector* GetInvalidStateDetector() const { return nullptr; }
+
+        /**
+         * @brief Get the host's component serializer registry
+         *
+         * The registry the host SaveSystem consults. A module that registers a
+         * serializer on its own ComponentSerializerRegistry::GetInstance() registers
+         * into a DLL-local copy and its components are never saved.
+         */
+        virtual ComponentSerializerRegistry* GetComponentSerializers() { return nullptr; }
+        virtual const ComponentSerializerRegistry* GetComponentSerializers() const { return nullptr; }
     };
+
+    /**
+     * @brief Number of virtual functions IEngineContext declares, destructor included.
+     *
+     * A module calls the host's IEngineContext through this vtable, so appending a
+     * virtual is a binary-incompatible change: a module built against the longer
+     * interface calls past the end of an older host's vtable. IsSDKCompatible is
+     * exact equality and is the only thing standing between the two layouts, so the
+     * count is pinned to the SDK version below. When you add (or remove) a virtual
+     * here, update this count *and* bump SPARK_SDK_VERSION in Spark/Version.h.
+     */
+    inline constexpr uint32_t EngineContextVirtualCount = 90;
+
+    static_assert(EngineContextVirtualCount == 90 && SPARK_SDK_VERSION == 4,
+                  "IEngineContext's vtable layout changed: bump SPARK_SDK_VERSION and update "
+                  "EngineContextVirtualCount together, or an old host will accept a module that "
+                  "calls off the end of its vtable.");
 
 } // namespace Spark

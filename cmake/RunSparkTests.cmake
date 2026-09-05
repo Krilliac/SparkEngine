@@ -1,14 +1,17 @@
 cmake_minimum_required(VERSION 3.25)
 
-foreach(_required SPARK_TEST_EXECUTABLE SPARK_JUNIT_REPORT SPARK_TEST_LOG SPARK_TEST_OUTPUT)
+# SPARK_TEST_TIMEOUT_SECONDS is required, not defaulted: a single hard-coded
+# wall clock silently applied to every configuration, and the slow (Debug)
+# configuration exceeded it while the suite itself was healthy. Callers must
+# state the budget they mean, so a config that needs more can never inherit
+# the fast config's number by omission.
+foreach(_required SPARK_TEST_EXECUTABLE SPARK_JUNIT_REPORT SPARK_TEST_LOG SPARK_TEST_OUTPUT
+                  SPARK_TEST_TIMEOUT_SECONDS)
     if(NOT DEFINED ${_required} OR "${${_required}}" STREQUAL "")
-        message(FATAL_ERROR "RunSparkTests.cmake requires -D${_required}=<path>")
+        message(FATAL_ERROR "RunSparkTests.cmake requires -D${_required}=<value>")
     endif()
 endforeach()
 
-if(NOT DEFINED SPARK_TEST_TIMEOUT_SECONDS)
-    set(SPARK_TEST_TIMEOUT_SECONDS 180)
-endif()
 if(NOT "${SPARK_TEST_TIMEOUT_SECONDS}" MATCHES "^[1-9][0-9]*$")
     message(FATAL_ERROR "SPARK_TEST_TIMEOUT_SECONDS must be a positive integer")
 endif()
@@ -43,12 +46,19 @@ if(DEFINED SPARK_TEST_DRIVER AND NOT "${SPARK_TEST_DRIVER}" STREQUAL "")
     list(APPEND _spark_test_command "${SPARK_TEST_DRIVER}")
 endif()
 
+# The direct-invocation lanes (linux-asan/linux-tsan) already run with
+# --warn-is-error; without this switch the ctest lanes had no way to ask for it.
+set(_spark_test_flags --quiet)
+if(SPARK_TEST_WARN_IS_ERROR)
+    list(APPEND _spark_test_flags --warn-is-error)
+endif()
+
 # Keep framework output separate from the raw process stream. TestMain needs its
 # own file to populate per-test JUnit failures, while CMake must retain stdout and
 # raw stderr from log sinks and crash handlers even when TestMain cannot finish.
 execute_process(
     COMMAND ${_spark_test_command}
-        --quiet
+        ${_spark_test_flags}
         --output-file "${SPARK_TEST_OUTPUT}"
         --junit-xml "${SPARK_JUNIT_REPORT}"
     RESULT_VARIABLE _result

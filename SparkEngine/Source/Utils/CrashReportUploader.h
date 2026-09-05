@@ -118,6 +118,18 @@ bool UploadCrashFile(const CrashConfig& cfg, const std::string& url, const std::
                      const std::string& field);
 
 /**
+ * @brief Marker every engine stack-trace producer puts on a frame line
+ *
+ * CrashHandler's SymStackTrace() (Windows) and CaptureStackTraceString()
+ * (POSIX) write "  FRAME <symbol> +0x<displacement>", and ComputeStackHash
+ * keys on this marker rather than guessing at a format. Producer and consumer
+ * share one constant so they cannot drift apart: before this existed, no line
+ * the engine wrote matched the parser and every crash hashed to "".
+ */
+inline constexpr const char* kStackFrameMarker = "FRAME ";
+inline constexpr const wchar_t* kStackFrameMarkerW = L"FRAME ";
+
+/**
  * @brief Compute a short hex hash of the top stack frames from a crash log
  *
  * Extracts function names from the first @p maxFrames stack frames and

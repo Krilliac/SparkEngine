@@ -160,11 +160,23 @@ namespace Spark::Net
         uint64_t GetVisibilityMask(FieldVisibility visibility) const;
 
         /// @brief Write the dirty bitmask into a byte buffer
+        ///
+        /// Wire format helper. EntityReplicator does not route its serialize path
+        /// through this pair yet, so neither function has an in-tree caller and the
+        /// decode contract below is a contract for a future one, not an enforced
+        /// invariant: nothing today can regress it and no test can fail on it.
         void WriteDirtyMask(std::vector<uint8_t>& buffer) const;
 
         /// @brief Read a dirty bitmask from a byte buffer
-        /// @return Number of bytes consumed (8) or 0 on failure
-        size_t ReadDirtyMask(const std::vector<uint8_t>& buffer, size_t readPos);
+        ///
+        /// On success exactly kDirtyMaskBytes are consumed at @p readPos. On
+        /// failure the stored mask is left untouched and the packet must be
+        /// abandoned: the decode cursor is no longer trustworthy.
+        /// @return true when the mask was read, false when the buffer is too short
+        [[nodiscard]] bool ReadDirtyMask(const std::vector<uint8_t>& buffer, size_t readPos);
+
+        /// @brief Bytes consumed by WriteDirtyMask / a successful ReadDirtyMask
+        static constexpr size_t kDirtyMaskBytes = sizeof(uint64_t);
 
         /// @brief Get the number of registered fields
         uint8_t GetFieldCount() const;

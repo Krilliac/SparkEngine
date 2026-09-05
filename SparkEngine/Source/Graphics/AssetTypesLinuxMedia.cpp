@@ -165,6 +165,11 @@ void AssetCache::SetMaxMemory(size_t maxMemoryMB)
 size_t AssetCache::GetCurrentMemory() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    return CurrentMemoryLocked();
+}
+
+size_t AssetCache::CurrentMemoryLocked() const
+{
     size_t total = 0;
     for (const auto& pair : m_cache)
     {
@@ -186,6 +191,13 @@ void AssetCache::AddAsset(std::shared_ptr<Asset> asset)
     entry.lastAccessed = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
     entry.accessCount = 1;
     m_cache[asset->GetPath()] = entry;
+
+    // Same budget enforcement as the Windows cache, through the *Locked helpers
+    // because m_mutex is already held (std::mutex is non-recursive).
+    while (!m_cache.empty() && CurrentMemoryLocked() > m_maxMemory)
+    {
+        EvictLRULocked();
+    }
 }
 
 std::shared_ptr<Asset> AssetCache::GetAsset(const std::string& path)
@@ -212,6 +224,11 @@ void AssetCache::RemoveAsset(const std::string& path)
 void AssetCache::EvictLRU()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    EvictLRULocked();
+}
+
+void AssetCache::EvictLRULocked()
+{
     if (m_cache.empty())
         return;
 

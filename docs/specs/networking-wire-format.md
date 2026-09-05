@@ -125,6 +125,13 @@ are rejected before dispatch.
 | `ScoreUpdate` | 18 | S→C | Player scores | Score change |
 | `UserDefined` | 1000+ | Both | Custom | Game-specific messages |
 
+A module whose payload prepends its own header (a channel byte, a sub-type tag) must claim a type in
+the `UserDefined` range and register a schema for **that** type with the matching
+`stringFieldOffset`. Re-registering a built-in type's schema replaces a process-wide entry that is
+never restored on module shutdown, so every other producer and consumer of that type — the engine
+included, after the module unloads — would keep validating against the module's layout.
+`GameModules/SparkGameMMO` does this correctly: `UserDefined + 1` with `stringFieldOffset = 1`.
+
 ## Handshake Sequence
 
 ```

@@ -1,189 +1,33 @@
 /**
  * @file TestPacketValidator.cpp
- * @brief Tests for the PacketValidator network security layer
+ * @brief PacketValidator schema/auth/direction contract against the SHIPPED class.
+ *
+ * This file used to declare its own namespace TestPacket with a private copy of
+ * MessageSchema/PacketValidator/ValidateString/SanitizeString and included no
+ * engine header, so the coverage it appeared to provide said nothing about the
+ * code that ships. The mock is gone; every assertion below runs
+ * Engine/Networking/PacketValidator.cpp.
+ *
+ * Hostile-input regressions (string-field screening, malformed length prefixes)
+ * live in TestSecurityParsersReal.cpp.
  */
 
 #include "TestFramework.h"
 
-#include <cstdint>
+#include "Engine/Networking/NetworkManager.h"
+#include "Engine/Networking/PacketValidator.h"
+
 #include <string>
-#include <unordered_map>
-#include <vector>
 
-// ============================================================================
-// Inline minimal reproduction for unit testing
-// ============================================================================
-
-namespace TestPacket
-{
-
-    enum class MessageType : uint16_t
-    {
-        Connect = 1,
-        ConnectAccepted = 2,
-        Disconnect = 4,
-        Heartbeat = 5,
-        EntityStateUpdate = 9,
-        ClientInput = 11,
-        ChatMessage = 13,
-        UserDefined = 1000
-    };
-
-    enum class PacketViolation : uint8_t
-    {
-        None,
-        PayloadTooLarge,
-        PayloadTooSmall,
-        InvalidType,
-        SchemaViolation,
-        BadString,
-        Unauthenticated,
-        DirectionViolation
-    };
-
-    struct ValidationResult
-    {
-        bool valid = true;
-        PacketViolation violation = PacketViolation::None;
-        std::string reason;
-    };
-
-    struct MessageSchema
-    {
-        size_t minPayloadSize = 0;
-        size_t maxPayloadSize = 4096;
-        bool requiresAuth = false;
-        bool allowedFromClient = true;
-        bool allowedFromServer = true;
-        bool sanitizeStrings = false;
-    };
-
-    struct NetworkMessage
-    {
-        MessageType type;
-        uint32_t senderID = 0;
-        std::vector<uint8_t> payload;
-    };
-
-    struct PacketValidationStats
-    {
-        uint64_t totalValidated = 0;
-        uint64_t totalRejected = 0;
-    };
-
-    class PacketValidator
-    {
-      public:
-        void SetMaxPayloadSize(size_t bytes) { m_maxPayloadSize = bytes; }
-        void SetMaxStringLength(size_t chars) { m_maxStringLength = chars; }
-
-        void RegisterSchema(MessageType type, const MessageSchema& schema) { m_schemas[type] = schema; }
-
-        ValidationResult ValidatePacket(const NetworkMessage& msg, bool senderIsAuthenticated,
-                                        bool senderIsClient) const
-        {
-            m_stats.totalValidated++;
-
-            size_t payloadSize = msg.payload.size();
-
-            if (payloadSize > m_maxPayloadSize)
-            {
-                m_stats.totalRejected++;
-                return {false, PacketViolation::PayloadTooLarge, "Exceeds global max"};
-            }
-
-            auto schemaIt = m_schemas.find(msg.type);
-            if (schemaIt == m_schemas.end())
-            {
-                if (static_cast<uint16_t>(msg.type) < static_cast<uint16_t>(MessageType::UserDefined))
-                {
-                    m_stats.totalRejected++;
-                    return {false, PacketViolation::InvalidType, "Unknown type"};
-                }
-                return {true, PacketViolation::None, ""};
-            }
-
-            const auto& schema = schemaIt->second;
-
-            if (payloadSize < schema.minPayloadSize)
-            {
-                m_stats.totalRejected++;
-                return {false, PacketViolation::PayloadTooSmall, "Below minimum"};
-            }
-
-            if (payloadSize > schema.maxPayloadSize)
-            {
-                m_stats.totalRejected++;
-                return {false, PacketViolation::PayloadTooLarge, "Exceeds type max"};
-            }
-
-            if (schema.requiresAuth && !senderIsAuthenticated)
-            {
-                m_stats.totalRejected++;
-                return {false, PacketViolation::Unauthenticated, "Requires auth"};
-            }
-
-            if (senderIsClient && !schema.allowedFromClient)
-            {
-                m_stats.totalRejected++;
-                return {false, PacketViolation::DirectionViolation, "Not allowed from client"};
-            }
-
-            if (!senderIsClient && !schema.allowedFromServer)
-            {
-                m_stats.totalRejected++;
-                return {false, PacketViolation::DirectionViolation, "Not allowed from server"};
-            }
-
-            return {true, PacketViolation::None, ""};
-        }
-
-        bool ValidateString(const std::string& str) const
-        {
-            if (str.size() > m_maxStringLength)
-                return false;
-
-            for (char c : str)
-            {
-                if (c < 0x20 && c != '\n' && c != '\t' && c != '\r')
-                    return false;
-                if (c == 0x7F)
-                    return false;
-            }
-            return true;
-        }
-
-        void SanitizeString(std::string& str) const
-        {
-            if (str.size() > m_maxStringLength)
-                str.resize(m_maxStringLength);
-
-            std::erase_if(str, [](char c) -> bool
-                          { return (c < 0x20 && c != '\n' && c != '\t' && c != '\r') || c == 0x7F; });
-        }
-
-        PacketValidationStats GetStatistics() const { return m_stats; }
-
-      private:
-        size_t m_maxPayloadSize = 4096;
-        size_t m_maxStringLength = 1024;
-        std::unordered_map<MessageType, MessageSchema> m_schemas;
-        mutable PacketValidationStats m_stats;
-    };
-
-} // namespace TestPacket
-
-// ============================================================================
-// Tests
-// ============================================================================
+using namespace Spark::Net;
 
 TEST(PacketValidator_GlobalMaxPayloadSize)
 {
-    TestPacket::PacketValidator validator;
+    PacketValidator validator;
     validator.SetMaxPayloadSize(100);
 
-    TestPacket::NetworkMessage msg;
-    msg.type = TestPacket::MessageType::UserDefined;
+    NetworkMessage msg;
+    msg.type = MessageType::UserDefined;
     msg.payload.resize(50);
 
     auto result = validator.ValidatePacket(msg, true, true);
@@ -192,21 +36,21 @@ TEST(PacketValidator_GlobalMaxPayloadSize)
     msg.payload.resize(200);
     result = validator.ValidatePacket(msg, true, true);
     EXPECT_FALSE(result.valid);
-    EXPECT_TRUE(result.violation == TestPacket::PacketViolation::PayloadTooLarge);
+    EXPECT_TRUE(result.violation == PacketViolation::PayloadTooLarge);
 }
 
 TEST(PacketValidator_PerTypePayloadBounds)
 {
-    TestPacket::PacketValidator validator;
-    validator.RegisterSchema(TestPacket::MessageType::ClientInput, {.minPayloadSize = 8, .maxPayloadSize = 512});
+    PacketValidator validator;
+    validator.RegisterSchema(MessageType::ClientInput, {.minPayloadSize = 8, .maxPayloadSize = 512});
 
-    TestPacket::NetworkMessage msg;
-    msg.type = TestPacket::MessageType::ClientInput;
+    NetworkMessage msg;
+    msg.type = MessageType::ClientInput;
 
     msg.payload.resize(4);
     auto result = validator.ValidatePacket(msg, true, true);
     EXPECT_FALSE(result.valid);
-    EXPECT_TRUE(result.violation == TestPacket::PacketViolation::PayloadTooSmall);
+    EXPECT_TRUE(result.violation == PacketViolation::PayloadTooSmall);
 
     msg.payload.resize(100);
     result = validator.ValidatePacket(msg, true, true);
@@ -215,21 +59,21 @@ TEST(PacketValidator_PerTypePayloadBounds)
     msg.payload.resize(1000);
     result = validator.ValidatePacket(msg, true, true);
     EXPECT_FALSE(result.valid);
-    EXPECT_TRUE(result.violation == TestPacket::PacketViolation::PayloadTooLarge);
+    EXPECT_TRUE(result.violation == PacketViolation::PayloadTooLarge);
 }
 
 TEST(PacketValidator_AuthenticationRequired)
 {
-    TestPacket::PacketValidator validator;
-    validator.RegisterSchema(TestPacket::MessageType::Heartbeat, {.maxPayloadSize = 16, .requiresAuth = true});
+    PacketValidator validator;
+    validator.RegisterSchema(MessageType::Heartbeat, {.maxPayloadSize = 16, .requiresAuth = true});
 
-    TestPacket::NetworkMessage msg;
-    msg.type = TestPacket::MessageType::Heartbeat;
+    NetworkMessage msg;
+    msg.type = MessageType::Heartbeat;
     msg.payload.resize(8);
 
     auto result = validator.ValidatePacket(msg, false, true);
     EXPECT_FALSE(result.valid);
-    EXPECT_TRUE(result.violation == TestPacket::PacketViolation::Unauthenticated);
+    EXPECT_TRUE(result.violation == PacketViolation::Unauthenticated);
 
     result = validator.ValidatePacket(msg, true, true);
     EXPECT_TRUE(result.valid);
@@ -237,18 +81,18 @@ TEST(PacketValidator_AuthenticationRequired)
 
 TEST(PacketValidator_DirectionEnforcement)
 {
-    TestPacket::PacketValidator validator;
+    PacketValidator validator;
     validator.RegisterSchema(
-        TestPacket::MessageType::EntityStateUpdate,
+        MessageType::EntityStateUpdate,
         {.minPayloadSize = 8, .maxPayloadSize = 2048, .allowedFromClient = false, .allowedFromServer = true});
 
-    TestPacket::NetworkMessage msg;
-    msg.type = TestPacket::MessageType::EntityStateUpdate;
+    NetworkMessage msg;
+    msg.type = MessageType::EntityStateUpdate;
     msg.payload.resize(100);
 
     auto result = validator.ValidatePacket(msg, true, true);
     EXPECT_FALSE(result.valid);
-    EXPECT_TRUE(result.violation == TestPacket::PacketViolation::DirectionViolation);
+    EXPECT_TRUE(result.violation == PacketViolation::DirectionViolation);
 
     result = validator.ValidatePacket(msg, true, false);
     EXPECT_TRUE(result.valid);
@@ -256,23 +100,23 @@ TEST(PacketValidator_DirectionEnforcement)
 
 TEST(PacketValidator_UnknownBuiltinTypeRejected)
 {
-    TestPacket::PacketValidator validator;
+    PacketValidator validator;
 
-    TestPacket::NetworkMessage msg;
-    msg.type = static_cast<TestPacket::MessageType>(999);
+    NetworkMessage msg;
+    msg.type = static_cast<MessageType>(999);
     msg.payload.resize(10);
 
     auto result = validator.ValidatePacket(msg, true, true);
     EXPECT_FALSE(result.valid);
-    EXPECT_TRUE(result.violation == TestPacket::PacketViolation::InvalidType);
+    EXPECT_TRUE(result.violation == PacketViolation::InvalidType);
 }
 
 TEST(PacketValidator_UserDefinedTypesPass)
 {
-    TestPacket::PacketValidator validator;
+    PacketValidator validator;
 
-    TestPacket::NetworkMessage msg;
-    msg.type = static_cast<TestPacket::MessageType>(1001);
+    NetworkMessage msg;
+    msg.type = static_cast<MessageType>(1001);
     msg.payload.resize(100);
 
     auto result = validator.ValidatePacket(msg, true, true);
@@ -281,25 +125,25 @@ TEST(PacketValidator_UserDefinedTypesPass)
 
 TEST(PacketValidator_StringValidation)
 {
-    TestPacket::PacketValidator validator;
+    PacketValidator validator;
     validator.SetMaxStringLength(50);
 
     EXPECT_TRUE(validator.ValidateString("Hello, world!"));
     EXPECT_TRUE(validator.ValidateString("Line 1\nLine 2\tTabbed"));
 
-    std::string longStr(100, 'A');
+    const std::string longStr(100, 'A');
     EXPECT_FALSE(validator.ValidateString(longStr));
 
-    std::string withControl = "bad\x01string";
+    const std::string withControl = "bad\x01string";
     EXPECT_FALSE(validator.ValidateString(withControl));
 
-    std::string withDel = "bad\x7Fstring";
+    const std::string withDel = "bad\x7Fstring";
     EXPECT_FALSE(validator.ValidateString(withDel));
 }
 
 TEST(PacketValidator_StringSanitization)
 {
-    TestPacket::PacketValidator validator;
+    PacketValidator validator;
     validator.SetMaxStringLength(20);
 
     std::string str = "Hello\x01World\x7F!";
@@ -319,35 +163,35 @@ TEST(PacketValidator_StringSanitization)
 
 TEST(PacketValidator_StatisticsTracking)
 {
-    TestPacket::PacketValidator validator;
+    PacketValidator validator;
     validator.SetMaxPayloadSize(100);
 
-    TestPacket::NetworkMessage good;
-    good.type = TestPacket::MessageType::UserDefined;
+    NetworkMessage good;
+    good.type = MessageType::UserDefined;
     good.payload.resize(50);
 
-    TestPacket::NetworkMessage bad;
-    bad.type = TestPacket::MessageType::UserDefined;
+    NetworkMessage bad;
+    bad.type = MessageType::UserDefined;
     bad.payload.resize(200);
 
-    validator.ValidatePacket(good, true, true);
-    validator.ValidatePacket(good, true, true);
-    validator.ValidatePacket(bad, true, true);
+    EXPECT_TRUE(validator.ValidatePacket(good, true, true).valid);
+    EXPECT_TRUE(validator.ValidatePacket(good, true, true).valid);
+    EXPECT_FALSE(validator.ValidatePacket(bad, true, true).valid);
 
-    auto stats = validator.GetStatistics();
+    const auto stats = validator.GetStatistics();
     EXPECT_EQ(stats.totalValidated, 3u);
     EXPECT_EQ(stats.totalRejected, 1u);
 }
 
 TEST(PacketValidator_ConnectClientOnly)
 {
-    TestPacket::PacketValidator validator;
+    PacketValidator validator;
     validator.RegisterSchema(
-        TestPacket::MessageType::Connect,
+        MessageType::Connect,
         {.maxPayloadSize = 256, .requiresAuth = false, .allowedFromClient = true, .allowedFromServer = false});
 
-    TestPacket::NetworkMessage msg;
-    msg.type = TestPacket::MessageType::Connect;
+    NetworkMessage msg;
+    msg.type = MessageType::Connect;
     msg.payload.resize(32);
 
     auto result = validator.ValidatePacket(msg, false, true);
@@ -355,5 +199,5 @@ TEST(PacketValidator_ConnectClientOnly)
 
     result = validator.ValidatePacket(msg, false, false);
     EXPECT_FALSE(result.valid);
-    EXPECT_TRUE(result.violation == TestPacket::PacketViolation::DirectionViolation);
+    EXPECT_TRUE(result.violation == PacketViolation::DirectionViolation);
 }

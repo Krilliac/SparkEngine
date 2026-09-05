@@ -162,6 +162,15 @@ namespace Spark
             // Command lists
             virtual IRHICommandList* GetImmediateCommandList() = 0;
             virtual std::unique_ptr<IRHICommandList> CreateDeferredCommandList() = 0;
+            /// Submit a command list recorded with CreateDeferredCommandList().
+            ///
+            /// Contract every backend must honour: submitting a list does not disturb
+            /// state the caller has bound elsewhere. On a backend with an immediate
+            /// context (D3D11) that means the immediate context's shaders, input layout,
+            /// constant buffers, render targets and viewport survive the call, so a
+            /// deferred list may be executed mid-frame without re-binding; queue-based
+            /// backends (D3D12, Vulkan) satisfy it by construction. A list that was
+            /// never recorded (End() not called) is rejected, not partially replayed.
             virtual void ExecuteCommandList(IRHICommandList* commandList) = 0;
 
             // Frame management

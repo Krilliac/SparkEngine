@@ -42,18 +42,18 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
         return hr;
     }
 
-    // Try to compile from file first, then fall back to embedded shaders
+    // The embedded source is the single source of truth for the basic shaders:
+    // it is compiled from this translation unit, so its cbuffer layout cannot
+    // drift from PerObjectConstants/PerFrameConstants. The previous from-file
+    // attempt named Shaders/HLSL/BasicVertex.hlsl, which has never existed in
+    // the repository, so it failed on every launch and logged a warning before
+    // taking this path anyway.
     ComPtr<ID3DBlob> vsBlob;
-    hr = CompileShaderFromFile(L"Shaders/HLSL/BasicVertex.hlsl", "main", "vs_5_0", &vsBlob);
+    hr = CompileEmbeddedVertexShader(&vsBlob);
     if (FAILED(hr))
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Falling back to embedded vertex shader", L"WARNING");
-        hr = CompileEmbeddedVertexShader(&vsBlob);
-        if (FAILED(hr))
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to compile embedded vertex shader", L"ERROR");
-            return hr;
-        }
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to compile embedded vertex shader", L"ERROR");
+        return hr;
     }
 
     // Create vertex shader
@@ -79,18 +79,13 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
         return hr;
     }
 
-    // Try to compile pixel shader from file, then fall back to embedded
+    // Embedded for the same reason as the vertex shader above.
     ComPtr<ID3DBlob> psBlob;
-    hr = CompileShaderFromFile(L"Shaders/HLSL/BasicPixel.hlsl", "main", "ps_5_0", &psBlob);
+    hr = CompileEmbeddedPixelShader(&psBlob);
     if (FAILED(hr))
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Falling back to embedded pixel shader", L"WARNING");
-        hr = CompileEmbeddedPixelShader(&psBlob);
-        if (FAILED(hr))
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to compile embedded pixel shader", L"ERROR");
-            return hr;
-        }
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to compile embedded pixel shader", L"ERROR");
+        return hr;
     }
 
     // Create pixel shader

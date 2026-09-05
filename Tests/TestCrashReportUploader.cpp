@@ -2,6 +2,7 @@
 // Tests ComputeStackHash, IsCrashUploadRateLimited, and URL auto-detection
 
 #include "TestFramework.h"
+#include "Utils/CrashReportUploader.h"
 #include <string>
 #include <sstream>
 #include <cstdint>
@@ -9,87 +10,15 @@
 #include <atomic>
 
 // ============================================================================
-// Inline reimplementation of ComputeStackHash for test purposes.
-// The real implementation lives in CrashReportUploader.cpp which may be
-// excluded when miniz is not found. This is identical logic.
+// ComputeStackHash is exercised through the real CrashReportUploader.cpp
+// implementation. This file used to carry an inline copy of that logic, which
+// is precisely why the production parser could stop recognising the engine's
+// own stack-trace format without a single test turning red.
 // ============================================================================
 
 static std::string TestComputeStackHash(const std::string& logContent, int maxFrames = 5)
 {
-    std::istringstream iss(logContent);
-    std::string line;
-    std::string frameData;
-    int frameCount = 0;
-
-    while (std::getline(iss, line) && frameCount < maxFrames)
-    {
-        if (line.size() < 4)
-            continue;
-
-        bool isFrame = false;
-        if (line.find("  #") != std::string::npos)
-            isFrame = true;
-        else if (line.starts_with("0x") || line.starts_with("  0x"))
-            isFrame = true;
-        else if (line.find("Frame ") != std::string::npos || line.find("SymStackTrace") != std::string::npos)
-            isFrame = true;
-        else if (line.find(" + 0x") != std::string::npos)
-            isFrame = true;
-
-        if (isFrame)
-        {
-            std::string cleaned;
-            size_t i = 0;
-            while (i < line.size())
-            {
-                if (i + 1 < line.size() && line[i] == '0' && (line[i + 1] == 'x' || line[i + 1] == 'X'))
-                {
-                    i += 2;
-                    while (i < line.size() &&
-                           ((line[i] >= '0' && line[i] <= '9') || (line[i] >= 'a' && line[i] <= 'f') ||
-                            (line[i] >= 'A' && line[i] <= 'F')))
-                        ++i;
-                    if (!cleaned.empty() && cleaned.back() != ' ')
-                        cleaned += ' ';
-                    continue;
-                }
-                if (line[i] >= '0' && line[i] <= '9')
-                {
-                    while (i < line.size() && line[i] >= '0' && line[i] <= '9')
-                        ++i;
-                    if (!cleaned.empty() && cleaned.back() != ' ')
-                        cleaned += ' ';
-                    continue;
-                }
-                if ((line[i] >= 'A' && line[i] <= 'Z') || (line[i] >= 'a' && line[i] <= 'z') || line[i] == '_' ||
-                    line[i] == ':')
-                {
-                    cleaned += line[i];
-                }
-                else if (!cleaned.empty() && cleaned.back() != ' ')
-                {
-                    cleaned += ' ';
-                }
-                ++i;
-            }
-            frameData += cleaned + "\n";
-            ++frameCount;
-        }
-    }
-
-    if (frameData.empty())
-        return "";
-
-    uint32_t hash = 0x811c9dc5u;
-    for (char c : frameData)
-    {
-        hash ^= static_cast<uint32_t>(static_cast<unsigned char>(c));
-        hash *= 0x01000193u;
-    }
-
-    char buf[16];
-    snprintf(buf, sizeof(buf), "%08x", hash);
-    return buf;
+    return ComputeStackHash(logContent, maxFrames);
 }
 
 // ============================================================================

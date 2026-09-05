@@ -44,47 +44,6 @@ namespace SparkEditor
 #endif
     } // namespace
 
-    static bool TokenizeGitCommand(const std::string& command, std::vector<std::string>& args)
-    {
-        args.clear();
-        std::string current;
-        bool inQuotes = false;
-
-        for (size_t i = 0; i < command.size(); ++i)
-        {
-            char c = command[i];
-            if (c == '"')
-            {
-                inQuotes = !inQuotes;
-                continue;
-            }
-
-            if ((c == ' ' || c == '\t') && !inQuotes)
-            {
-                if (!current.empty())
-                {
-                    args.push_back(current);
-                    current.clear();
-                }
-                continue;
-            }
-
-            if (c == '\n' || c == '\r' || c == '\0')
-                return false;
-            current.push_back(c);
-        }
-
-        if (inQuotes)
-            return false;
-        if (!current.empty())
-            args.push_back(current);
-
-        if (args.empty() || args.front() != "git")
-            return false;
-        args.erase(args.begin());
-        return true;
-    }
-
     // ============================================================================
     // UI Rendering
     // ============================================================================
@@ -345,7 +304,7 @@ namespace SparkEditor
         // List branches
         if (ImGui::Button("Refresh Branches"))
         {
-            VCSOperationResult result = ExecuteCommand("git branch -a", m_repositoryInfo->path);
+            VCSOperationResult result = ExecuteGit({"branch", "-a"}, m_repositoryInfo->path);
             if (result.success)
             {
                 m_repositoryInfo->branches = ParseGitBranches(result.output);
@@ -537,28 +496,34 @@ namespace SparkEditor
         }
     }
 
-    VCSOperationResult VersionControlSystem::ExecuteCommand(const std::string& command,
-                                                            const std::string& workingDirectory)
+    VCSOperationResult VersionControlSystem::ExecuteGit(const std::vector<std::string>& args,
+                                                        const std::string& workingDirectory)
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Executing VCS command: %s", command.c_str());
         VCSOperationResult result;
-        auto startTime = std::chrono::steady_clock::now();
-
-        std::vector<std::string> gitArgs;
-        if (!TokenizeGitCommand(command, gitArgs))
+        if (args.empty())
         {
             result.success = false;
-            result.errorMessage = "Only git commands are allowed";
+            result.errorMessage = "No git arguments supplied";
             result.exitCode = -1;
             return result;
         }
+
+        std::string display = "git";
+        for (const auto& arg : args)
+        {
+            display += ' ';
+            display += arg;
+        }
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Executing VCS command: %s", display.c_str());
+
+        auto startTime = std::chrono::steady_clock::now();
 
         Spark::Process::Builder builder("git");
         if (!workingDirectory.empty())
         {
             builder.Arg("-C").Arg(workingDirectory);
         }
-        for (const auto& arg : gitArgs)
+        for (const auto& arg : args)
             builder.Arg(arg);
         builder.CaptureStdout();
 

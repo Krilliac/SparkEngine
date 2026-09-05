@@ -12,8 +12,20 @@ from typing import Any
 
 
 REQUIRED_STAT_FIELDS = ("tests", "passed", "failures", "errors", "skipped")
+# Emitted by summarize-test-results.py; absent in a report produced before the
+# flaky/empty JUnit shape existed, and read as zero in that case.
+OPTIONAL_STAT_FIELDS = ("flaky", "empty")
 REQUIRED_REPO_FIELDS = ("total_lines", "file_count", "test_definitions", "test_files")
-REQUIRED_RATCHET_FIELDS = ("minimumRecorded", "minimumExecuted", "maximumSkipped")
+REQUIRED_RATCHET_FIELDS = (
+    "minimumRecorded",
+    "minimumExecuted",
+    "maximumSkipped",
+    # A waived known-flaky test executed and failed. Without a ceiling, any
+    # number of registry-matched tests can fail invisibly behind a green lane.
+    "maximumFlaky",
+    # A test that ran zero assertions passes because nothing was checked.
+    "maximumEmpty",
+)
 
 
 def lane_name(path: Path) -> str:
@@ -51,12 +63,21 @@ def validate_lane(path: Path, minimum_tests: int) -> tuple[str, dict[str, Any]]:
         field: nonnegative_int(stats.get(field), field=field, source=path)
         for field in REQUIRED_STAT_FIELDS
     }
+    # flaky/empty are their own outcomes in the JUnit report. A lane report that
+    # omits them is read as zero, and the identity below then fails closed if the
+    # lane actually had any.
+    for field in OPTIONAL_STAT_FIELDS:
+        counts[field] = nonnegative_int(stats.get(field, 0), field=field, source=path)
     classified = (
-        counts["passed"] + counts["failures"] + counts["errors"] + counts["skipped"]
+        counts["passed"]
+        + counts["failures"]
+        + counts["errors"]
+        + counts["skipped"]
+        + counts["flaky"]
     )
     if classified != counts["tests"]:
         raise ValueError(
-            f"{path}: passed + failures + errors + skipped ({classified}) "
+            f"{path}: passed + failures + errors + skipped + flaky ({classified}) "
             f"does not equal tests ({counts['tests']})"
         )
     executed = counts["tests"] - counts["skipped"]
@@ -180,6 +201,16 @@ def enforce_ratchet(
                 f"lane {name!r}: skipped {stats['skipped']} cases; ratchet permits at most "
                 f"{limits['maximumSkipped']} skipped cases"
             )
+        if stats.get("flaky", 0) > limits["maximumFlaky"]:
+            raise ValueError(
+                f"lane {name!r}: {stats['flaky']} waived flaky cases; ratchet permits at most "
+                f"{limits['maximumFlaky']}. A waived test failed; it did not pass."
+            )
+        if stats.get("empty", 0) > limits["maximumEmpty"]:
+            raise ValueError(
+                f"lane {name!r}: {stats['empty']} cases ran zero assertions; ratchet permits "
+                f"at most {limits['maximumEmpty']}"
+            )
 
 
 def aggregate(
@@ -223,6 +254,8 @@ def aggregate(
                 "recordedAboveMinimum": stats["tests"] - limits["minimumRecorded"],
                 "executedAboveMinimum": stats["executed"] - limits["minimumExecuted"],
                 "skippedBelowMaximum": limits["maximumSkipped"] - stats["skipped"],
+                "flakyBelowMaximum": limits["maximumFlaky"] - stats.get("flaky", 0),
+                "emptyBelowMaximum": limits["maximumEmpty"] - stats.get("empty", 0),
             }
         ordered_lanes[name] = stats
     return {

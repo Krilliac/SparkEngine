@@ -99,26 +99,6 @@ namespace SparkEditor
     }
 
     // ============================================================================
-    // ProfileScope Implementation
-    // ============================================================================
-
-    ProfileScope::ProfileScope(const std::string& name, const std::string& /*category*/)
-        : m_name(name), m_startTime(std::chrono::high_resolution_clock::now()), m_ended(false)
-    {
-    }
-
-    ProfileScope::~ProfileScope()
-    {
-        if (!m_ended)
-            End();
-    }
-
-    void ProfileScope::End()
-    {
-        m_ended = true;
-    }
-
-    // ============================================================================
     // PerformanceProfiler Implementation
     // ============================================================================
 
@@ -147,8 +127,7 @@ namespace SparkEditor
         if (!m_isProfiling)
             return;
 
-        // Update frame data
-        UpdateFrameData();
+        UpdateFrameData(deltaTime);
 
         m_currentFrameNumber++;
     }
@@ -816,19 +795,25 @@ namespace SparkEditor
         ImGui::Text("Performance Overview");
         ImGui::Separator();
 
-        if (m_currentFrame)
+        if (m_currentFrame && m_hasFrameSample)
         {
             ImGui::Text("Frame: %d", m_currentFrame->frameNumber);
             ImGui::Text("Frame Time: %.2f ms", m_currentFrame->frameTime);
-            ImGui::Text("CPU/GPU: %.2f ms / %.2f ms", m_currentFrame->cpuTime, m_currentFrame->gpuTime);
             ImGui::Text("FPS: %.1f", m_currentFrame->fps);
+            ImGui::Text("Average: %.2f ms (%.1f FPS)", m_avgFrameTime, m_avgFps);
+            ImGui::Text("Min/Max: %.2f ms / %.2f ms", m_minFrameTime, m_maxFrameTime);
+            ImGui::Text("p50/p95/p99: %.2f / %.2f / %.2f ms", m_p50FrameTime, m_p95FrameTime, m_p99FrameTime);
+            ImGui::Separator();
+            ImGui::Text("CPU/GPU: %.2f ms / %.2f ms", m_currentFrame->cpuTime, m_currentFrame->gpuTime);
             ImGui::Text("Draw Calls: %d", m_currentFrame->drawCalls);
+            ImGui::TextDisabled("CPU/GPU time and draw calls are only populated by an imported capture.");
             ImGui::Text("GPU Backend: %s", m_currentFrame->gpuProfilerBackend.c_str());
             ImGui::TextWrapped("%s", m_currentFrame->gpuProfilerStatus.c_str());
         }
         else
         {
             ImGui::Text("No profiling data available");
+            ImGui::TextWrapped("The profiler has not received a frame with a non-zero delta yet.");
         }
     }
 
@@ -1109,7 +1094,7 @@ namespace SparkEditor
         ImGui::SliderFloat("Target FPS", &m_config.targetFrameRate, 30.0f, 144.0f);
     }
 
-    void PerformanceProfiler::UpdateFrameData()
+    void PerformanceProfiler::UpdateFrameData(float deltaTime)
     {
         m_currentFrame = std::make_unique<FrameProfileData>();
         m_currentFrame->frameNumber = m_currentFrameNumber;
@@ -1119,12 +1104,20 @@ namespace SparkEditor
         m_currentFrame->gpuProfilerBackend = m_gpuBackendName;
         m_currentFrame->gpuProfilerStatus = m_gpuSupportStatus;
 
+        // The real frame clock. Previously frameTime came only from CalculateStatistics averaging a history
+        // seeded from frameTime itself, so it was structurally 0 and every derived readout, suggestion and
+        // export was fabricated.
+        m_currentFrame->frameTime = deltaTime * 1000.0f;
+        m_currentFrame->fps = m_currentFrame->frameTime > 0.0f ? 1000.0f / m_currentFrame->frameTime : 0.0f;
+        m_currentFrame->targetFrameTime = m_config.targetFrameRate > 0.0f ? 1000.0f / m_config.targetFrameRate : 16.67f;
+        m_currentFrame->isPerformanceTarget = m_currentFrame->frameTime <= m_currentFrame->targetFrameTime;
+        if (m_currentFrame->frameTime > 0.0f)
+            m_hasFrameSample = true;
+
         ProcessGPUQueries();
         UpdateMemoryTracking();
-        CalculateStatistics();
-        AnalyzePerformance();
 
-        // Keep history within limits
+        // History is appended before the aggregates are computed, so this frame is part of its own window.
         if (static_cast<int>(m_frameHistory.size()) >= m_config.maxFrameHistory)
         {
             m_frameHistory.erase(m_frameHistory.begin());
@@ -1135,6 +1128,9 @@ namespace SparkEditor
         historyFrame->frameTime = m_currentFrame->frameTime;
         historyFrame->fps = m_currentFrame->fps;
         m_frameHistory.push_back(std::move(historyFrame));
+
+        CalculateStatistics();
+        AnalyzePerformance();
     }
 
     void PerformanceProfiler::AnalyzePerformance()
@@ -1536,21 +1532,19 @@ namespace SparkEditor
 
         // Calculate aggregate statistics over recent history
         int windowSize = std::min(static_cast<int>(m_frameHistory.size()), m_config.analysisWindowSize);
+        if (windowSize <= 0)
+            return; // a non-positive configured window would divide by zero below
         int startIdx = static_cast<int>(m_frameHistory.size()) - windowSize;
 
-        float sumFrameTime = 0.0f, sumCpuTime = 0.0f, sumGpuTime = 0.0f;
+        float sumFrameTime = 0.0f;
         float minFrameTime = FLT_MAX, maxFrameTime = 0.0f;
-        int sumDrawCalls = 0, sumTriangles = 0;
         std::vector<float> frameTimes;
+        frameTimes.reserve(static_cast<size_t>(windowSize));
 
         for (int i = startIdx; i < static_cast<int>(m_frameHistory.size()); ++i)
         {
             const auto& frame = m_frameHistory[i];
             sumFrameTime += frame->frameTime;
-            sumCpuTime += frame->cpuTime;
-            sumGpuTime += frame->gpuTime;
-            sumDrawCalls += frame->drawCalls;
-            sumTriangles += frame->triangles;
             if (frame->frameTime < minFrameTime)
                 minFrameTime = frame->frameTime;
             if (frame->frameTime > maxFrameTime)
@@ -1558,28 +1552,27 @@ namespace SparkEditor
             frameTimes.push_back(frame->frameTime);
         }
 
-        float avgFrameTime = sumFrameTime / static_cast<float>(windowSize);
-        float avgFps = (avgFrameTime > 0.0f) ? 1000.0f / avgFrameTime : 0.0f;
-
-        // Used for bottleneck detection (below) — suppress unused warnings for now
-        (void)sumCpuTime;
-        (void)sumGpuTime;
-        (void)sumDrawCalls;
-        (void)sumTriangles;
-
-        // Calculate percentiles (sort frame times)
         std::sort(frameTimes.begin(), frameTimes.end());
-        float p50 = frameTimes.empty() ? 0.0f : frameTimes[frameTimes.size() / 2];
-        float p95 = frameTimes.empty() ? 0.0f : frameTimes[static_cast<size_t>(frameTimes.size() * 0.95f)];
-        float p99 = frameTimes.empty() ? 0.0f : frameTimes[static_cast<size_t>(frameTimes.size() * 0.99f)];
-
-        // Update the current frame with calculated statistics
-        if (m_currentFrame)
+        const size_t sampleCount = frameTimes.size();
+        const auto percentile = [&frameTimes, sampleCount](float fraction)
         {
-            m_currentFrame->fps = avgFps;
-            m_currentFrame->frameTime = avgFrameTime;
-            m_currentFrame->isPerformanceTarget = (avgFrameTime <= m_currentFrame->targetFrameTime);
-        }
+            if (sampleCount == 0)
+                return 0.0f;
+            size_t index = static_cast<size_t>(static_cast<float>(sampleCount) * fraction);
+            if (index >= sampleCount)
+                index = sampleCount - 1;
+            return frameTimes[index];
+        };
+
+        // Aggregates are display values only. Writing them back into m_currentFrame is what closed the
+        // frame-time feedback loop that made every reading 0.
+        m_avgFrameTime = sumFrameTime / static_cast<float>(windowSize);
+        m_avgFps = (m_avgFrameTime > 0.0f) ? 1000.0f / m_avgFrameTime : 0.0f;
+        m_minFrameTime = (minFrameTime == FLT_MAX) ? 0.0f : minFrameTime;
+        m_maxFrameTime = maxFrameTime;
+        m_p50FrameTime = percentile(0.50f);
+        m_p95FrameTime = percentile(0.95f);
+        m_p99FrameTime = percentile(0.99f);
 
         // Clear and regenerate bottlenecks
         m_detectedBottlenecks.clear();

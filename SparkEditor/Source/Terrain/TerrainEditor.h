@@ -33,6 +33,17 @@ namespace SparkEditor
         bool LoadTerrain(const std::string& filePath);
         bool SaveTerrain(const std::string& filePath);
 
+        /**
+         * @brief Project-relative default location for a terrain of the given name.
+         *
+         * Save and Load both start from this path, so a terrain saved from the panel is where the panel's
+         * load field looks for it. Characters that are illegal in a filename are replaced with '_'.
+         */
+        static std::string DefaultTerrainPath(const std::string& terrainName);
+
+        /// @brief Path of the last file this panel loaded or saved, empty until one succeeds.
+        const std::string& GetTerrainFilePath() const { return m_terrainFilePath; }
+
         // --- Tool interface ---
         void SetCurrentTool(TerrainTool tool) { m_currentTool = tool; }
         TerrainTool GetCurrentTool() const { return m_currentTool; }
@@ -83,6 +94,11 @@ namespace SparkEditor
         void RenderDetailMeshesPanel();
         void RenderGenerationTools();
 
+        /// @brief Re-seed the Save/Load path buffers from the terrain that is now current.
+        /// Called whenever the current terrain changes, so the Save field can never keep pointing at
+        /// the previous terrain's file.
+        void RefreshPathBuffers();
+
         // Tool application (TerrainEditorTools.cpp)
         void ApplySculptingTool(const XMFLOAT3& worldPosition, float strength);
         void ApplyTexturePaintingTool(const XMFLOAT3& worldPosition, float strength);
@@ -99,6 +115,7 @@ namespace SparkEditor
 
       private:
         std::unique_ptr<TerrainData> m_currentTerrain;
+        std::string m_terrainFilePath;
         TerrainTool m_currentTool = TerrainTool::SCULPT_RAISE;
         TerrainBrush m_brushSettings;
         int m_selectedTextureLayer = 0;
@@ -118,6 +135,14 @@ namespace SparkEditor
         bool m_showDetailPlacement = false;
         bool m_showGenerationTools = false;
         float m_toolPanelWidth = 250.0f;
+
+        // UI path buffers. These were function-local statics inside the render functions: process-wide
+        // mutable state shared by every TerrainEditor instance and seeded exactly once, so after loading a
+        // second terrain the Save field still named the first one and Save silently overwrote it.
+        char m_savePathBuffer[256] = {};
+        char m_loadPathBuffer[256] = {};
+        /// Last save/load/layer failure, shown inline so a refused operation is visible in the UI.
+        std::string m_terrainIoMessage;
 
         bool m_showWireframe = false;
         bool m_showNormals = false;

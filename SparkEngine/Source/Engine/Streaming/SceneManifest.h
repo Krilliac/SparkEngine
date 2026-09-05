@@ -25,16 +25,25 @@
 #pragma once
 
 #include "../../Utils/LogMacros.h"
+#include "../Modding/VirtualFileSystem.h"
 
 #include <cerrno>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace Spark::Streaming
 {
+
+    /// A .sparkscene is content a shared project or a mod supplies, so it is
+    /// untrusted input: bound the file and the entry count before the streaming
+    /// loaders are handed anything.
+    inline constexpr size_t MAX_SCENE_MANIFEST_BYTES = 8u * 1024u * 1024u;
+    inline constexpr size_t MAX_SCENE_MANIFEST_ENTRIES = 100000u;
 
     /**
      * @brief Asset manifest describing all resources needed for a scene/area
@@ -72,8 +81,52 @@ namespace Spark::Streaming
         static SceneManifest ParseFromString(const std::string& content)
         {
             SceneManifest manifest;
+
+            // ParseFromString is a public entry point, so the byte bound belongs here
+            // as well as in ParseFromFile — a caller that already has the text in
+            // memory (a VFS read, an archive entry, a test) reaches this overload
+            // directly and would otherwise be unbounded.
+            if (content.size() > MAX_SCENE_MANIFEST_BYTES)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Scene, "SceneManifest: content is %zu bytes, above the %zu limit",
+                               content.size(), MAX_SCENE_MANIFEST_BYTES);
+                return manifest;
+            }
+
             std::istringstream stream(content);
             std::string line;
+
+            // A parse-time filter, not the containment gate: a SceneManifest can also
+            // be built in code and handed straight to AreaAssetLoader::SetManifest,
+            // so containment for every provenance is enforced where the paths are
+            // consumed (AreaAssetLoader::BeginAreaLoad). Dropping here as well keeps
+            // '../../../../Users/<name>/.ssh/id_rsa' and absolute paths out of the
+            // parsed manifest, with a log line rather than silently.
+            bool entriesTruncated = false;
+            const auto addPath =
+                [&manifest, &entriesTruncated](std::vector<std::string>& target, const std::string& value)
+            {
+                if (manifest.TotalAssetCount() >= MAX_SCENE_MANIFEST_ENTRIES)
+                {
+                    // Dropping silently would load a truncated asset set that looks
+                    // like a complete one. Log once, not once per surplus entry.
+                    if (!entriesTruncated)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Scene,
+                                       "SceneManifest: entry cap of %zu reached; later entries are dropped",
+                                       MAX_SCENE_MANIFEST_ENTRIES);
+                        entriesTruncated = true;
+                    }
+                    return;
+                }
+                if (!IsVirtualPathSafe(value))
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Scene, "SceneManifest: dropped out-of-root asset path '%s'",
+                                   value.c_str());
+                    return;
+                }
+                target.push_back(value);
+            };
 
             while (std::getline(stream, line))
             {
@@ -110,11 +163,11 @@ namespace Spark::Streaming
                 if (key == "name")
                     manifest.name = value;
                 else if (key == "mesh")
-                    manifest.meshPaths.push_back(value);
+                    addPath(manifest.meshPaths, value);
                 else if (key == "texture")
-                    manifest.texturePaths.push_back(value);
+                    addPath(manifest.texturePaths, value);
                 else if (key == "audio")
-                    manifest.audioPaths.push_back(value);
+                    addPath(manifest.audioPaths, value);
             }
 
             return manifest;
@@ -127,6 +180,25 @@ namespace Spark::Streaming
          */
         static SceneManifest ParseFromFile(const std::string& filePath)
         {
+            std::error_code ec;
+            const auto fileSize = std::filesystem::file_size(filePath, ec);
+            if (ec)
+            {
+                // Fail closed. A path the process can open but not stat (a pipe, a
+                // device, a race with a writer) is exactly the case where an
+                // unbounded slurp is most dangerous, so an unknown size is a refusal
+                // rather than a skipped guard.
+                SPARK_LOG_WARN(Spark::LogCategory::Scene, "SceneManifest: cannot size '%s' (%s); refusing to parse",
+                               filePath.c_str(), ec.message().c_str());
+                return {};
+            }
+            if (fileSize > MAX_SCENE_MANIFEST_BYTES)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Scene, "SceneManifest: '%s' is %llu bytes, above the %zu limit",
+                               filePath.c_str(), static_cast<unsigned long long>(fileSize), MAX_SCENE_MANIFEST_BYTES);
+                return {};
+            }
+
             std::ifstream file(filePath);
             if (!file.is_open())
             {

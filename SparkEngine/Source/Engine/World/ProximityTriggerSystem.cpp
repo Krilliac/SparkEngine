@@ -118,6 +118,17 @@ namespace Spark::World
 
     void ProximityTriggerSystem::Update(const std::vector<EntityPosition>& entityPositions)
     {
+        // Callbacks are collected during the scan and fired afterwards: a callback
+        // that calls RemoveTrigger/EnableTrigger (one-shot volumes do) would
+        // otherwise mutate m_triggers while it is being iterated.
+        struct PendingEvent
+        {
+            TriggerCallback callback;
+            uint32_t triggerID = 0;
+            uint32_t entityID = 0;
+        };
+        std::vector<PendingEvent> pending;
+
         for (auto& [triggerID, trigger] : m_triggers)
         {
             if (!trigger.enabled)
@@ -145,7 +156,7 @@ namespace Spark::World
                     SPARK_LOG_TRACE(Spark::LogCategory::Scene, "Trigger %u: entity %u entered", triggerID, entityID);
                     if (trigger.onEnter)
                     {
-                        trigger.onEnter(triggerID, entityID);
+                        pending.push_back({trigger.onEnter, triggerID, entityID});
                     }
                 }
             }
@@ -158,13 +169,18 @@ namespace Spark::World
                     SPARK_LOG_TRACE(Spark::LogCategory::Scene, "Trigger %u: entity %u exited", triggerID, entityID);
                     if (trigger.onExit)
                     {
-                        trigger.onExit(triggerID, entityID);
+                        pending.push_back({trigger.onExit, triggerID, entityID});
                     }
                 }
             }
 
             // Update the occupant set
             currentOccupants = std::move(nowInside);
+        }
+
+        for (const auto& event : pending)
+        {
+            event.callback(event.triggerID, event.entityID);
         }
     }
 

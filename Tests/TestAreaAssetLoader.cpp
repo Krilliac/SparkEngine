@@ -3,6 +3,9 @@
 
 #include "TestFramework.h"
 
+#include "Engine/Streaming/AreaAssetLoader.h"
+#include "Engine/Streaming/SceneManifest.h"
+
 #include <cstdint>
 #include <functional>
 #include <sstream>
@@ -13,78 +16,22 @@
 namespace
 {
 
-    // ========================================================================
-    // Standalone SceneManifest (matches engine SceneManifest.h)
-    // ========================================================================
-
-    struct SceneManifest
-    {
-        std::string name;
-        std::vector<std::string> meshPaths;
-        std::vector<std::string> texturePaths;
-        std::vector<std::string> audioPaths;
-
-        size_t TotalAssetCount() const { return meshPaths.size() + texturePaths.size() + audioPaths.size(); }
-
-        std::vector<std::string> AllPaths() const
-        {
-            std::vector<std::string> all;
-            all.reserve(TotalAssetCount());
-            all.insert(all.end(), meshPaths.begin(), meshPaths.end());
-            all.insert(all.end(), texturePaths.begin(), texturePaths.end());
-            all.insert(all.end(), audioPaths.begin(), audioPaths.end());
-            return all;
-        }
-
-        static SceneManifest ParseFromString(const std::string& content)
-        {
-            SceneManifest manifest;
-            std::istringstream stream(content);
-            std::string line;
-
-            while (std::getline(stream, line))
-            {
-                auto start = line.find_first_not_of(" \t\r\n");
-                if (start == std::string::npos)
-                    continue;
-                line = line.substr(start);
-
-                if (line.empty() || line.rfind("//", 0) == 0)
-                    continue;
-
-                auto eq = line.find('=');
-                if (eq == std::string::npos)
-                    continue;
-
-                std::string key = line.substr(0, eq);
-                std::string value = line.substr(eq + 1);
-
-                auto trimEnd = key.find_last_not_of(" \t");
-                if (trimEnd != std::string::npos)
-                    key = key.substr(0, trimEnd + 1);
-                auto valStart = value.find_first_not_of(" \t");
-                if (valStart != std::string::npos)
-                    value = value.substr(valStart);
-                auto valEnd = value.find_last_not_of(" \t\r\n");
-                if (valEnd != std::string::npos)
-                    value = value.substr(0, valEnd + 1);
-
-                if (key == "name")
-                    manifest.name = value;
-                else if (key == "mesh")
-                    manifest.meshPaths.push_back(value);
-                else if (key == "texture")
-                    manifest.texturePaths.push_back(value);
-                else if (key == "audio")
-                    manifest.audioPaths.push_back(value);
-            }
-
-            return manifest;
-        }
-    };
+    // The scene manifest under test is the shipped one. It used to be a local
+    // copy 'matching' Engine/Streaming/SceneManifest.h, which stopped being true
+    // the moment the real parser started dropping out-of-root asset paths: the
+    // copy would have kept reporting the old behavior forever.
+    using SceneManifest = Spark::Streaming::SceneManifest;
 
     // ========================================================================
-    // Standalone AreaAssetLoader (matches engine AreaAssetLoader behavior)
+    // ModelAreaAssetLoader — a local completion-accounting MODEL, not the shipped
+    // loader.
+    //
+    // It exists because Engine/Streaming/AreaAssetLoader.cpp drives real I/O
+    // through DirectStorageLoader, which these tests cannot stand up. Nothing it
+    // asserts is evidence about the production loader, so it carries a name that
+    // cannot be mistaken for one. The production behaviour that CAN be tested
+    // without I/O — path containment at BeginAreaLoad — is covered against the
+    // shipped class at the bottom of this file.
     // ========================================================================
 
     using AreaID = uint32_t;
@@ -100,7 +47,7 @@ namespace
         bool loading = false;
     };
 
-    class AreaAssetLoader
+    class ModelAreaAssetLoader
     {
       public:
         void Initialize() { m_initialized = true; }
@@ -265,6 +212,24 @@ TEST(SceneManifest_AllPaths)
     EXPECT_EQ(all[3], std::string("d.wav"));
 }
 
+TEST(SceneManifest_ParseDropsOutOfRootAssetPaths)
+{
+    // A .sparkscene is untrusted content (a shared project or a mod supplies it),
+    // and every path it declares is opened verbatim by the streaming loaders.
+    std::string content = "name = Hostile\n"
+                          "mesh = ../../secrets/id_rsa\n"
+                          "texture = /etc/passwd\n"
+                          "audio = audio/ok.wav\n";
+
+    auto manifest = SceneManifest::ParseFromString(content);
+
+    EXPECT_EQ(manifest.name, std::string("Hostile"));
+    EXPECT_EQ(manifest.meshPaths.size(), 0u);
+    EXPECT_EQ(manifest.texturePaths.size(), 0u);
+    EXPECT_EQ(manifest.audioPaths.size(), 1u);
+    EXPECT_EQ(manifest.audioPaths[0], std::string("audio/ok.wav"));
+}
+
 TEST(SceneManifest_ParseWhitespaceHandling)
 {
     std::string content = "  name  =  Spaced Out  \n"
@@ -277,12 +242,13 @@ TEST(SceneManifest_ParseWhitespaceHandling)
 }
 
 // ============================================================================
-// AreaAssetLoader Tests
+// ModelAreaAssetLoader Tests — completion accounting only; see the note above the
+// class. These assert nothing about Engine/Streaming/AreaAssetLoader.cpp.
 // ============================================================================
 
 TEST(AreaAssetLoader_EmptyManifestCompletesImmediately)
 {
-    AreaAssetLoader loader;
+    ModelAreaAssetLoader loader;
     loader.Initialize();
 
     // No manifest registered — should complete immediately
@@ -295,7 +261,7 @@ TEST(AreaAssetLoader_EmptyManifestCompletesImmediately)
 
 TEST(AreaAssetLoader_EmptyAssetListCompletesImmediately)
 {
-    AreaAssetLoader loader;
+    ModelAreaAssetLoader loader;
     loader.Initialize();
 
     SceneManifest empty;
@@ -311,7 +277,7 @@ TEST(AreaAssetLoader_EmptyAssetListCompletesImmediately)
 
 TEST(AreaAssetLoader_ManifestManagement)
 {
-    AreaAssetLoader loader;
+    ModelAreaAssetLoader loader;
     loader.Initialize();
 
     EXPECT_FALSE(loader.HasManifest(1));
@@ -330,7 +296,7 @@ TEST(AreaAssetLoader_ManifestManagement)
 
 TEST(AreaAssetLoader_AsyncLoadCompletion)
 {
-    AreaAssetLoader loader;
+    ModelAreaAssetLoader loader;
     loader.Initialize();
 
     SceneManifest m;
@@ -366,7 +332,7 @@ TEST(AreaAssetLoader_AsyncLoadCompletion)
 
 TEST(AreaAssetLoader_FailedAssetsStillComplete)
 {
-    AreaAssetLoader loader;
+    ModelAreaAssetLoader loader;
     loader.Initialize();
 
     SceneManifest m;
@@ -390,7 +356,7 @@ TEST(AreaAssetLoader_FailedAssetsStillComplete)
 
 TEST(AreaAssetLoader_UnloadReleasesState)
 {
-    AreaAssetLoader loader;
+    ModelAreaAssetLoader loader;
     loader.Initialize();
 
     SceneManifest m;
@@ -414,7 +380,7 @@ TEST(AreaAssetLoader_UnloadReleasesState)
 
 TEST(AreaAssetLoader_MultipleConcurrentAreaLoads)
 {
-    AreaAssetLoader loader;
+    ModelAreaAssetLoader loader;
     loader.Initialize();
 
     SceneManifest m1;
@@ -446,7 +412,7 @@ TEST(AreaAssetLoader_MultipleConcurrentAreaLoads)
 
 TEST(AreaAssetLoader_ProgressTracking)
 {
-    AreaAssetLoader loader;
+    ModelAreaAssetLoader loader;
     loader.Initialize();
 
     SceneManifest m;
@@ -463,6 +429,39 @@ TEST(AreaAssetLoader_ProgressTracking)
 
     loader.SimulateAssetComplete(1, 2);
     EXPECT_NEAR(loader.GetAreaLoadProgress(1), 1.0f, 0.001f);
+
+    loader.Shutdown();
+}
+
+// ============================================================================
+// Production AreaAssetLoader — path containment at the consumption point
+// ============================================================================
+
+TEST(AreaAssetLoader_ProductionDropsOutOfRootManifestPaths)
+{
+    // A SceneManifest can be built in code and handed to SetManifest without ever
+    // passing through the parser, so the parser's own filter is not a gate. This
+    // drives the SHIPPED loader: every declared path escapes the asset root, so
+    // none may reach DirectStorageLoader and the area must still complete.
+    Spark::Streaming::AreaAssetLoader loader;
+    loader.Initialize();
+
+    Spark::Streaming::SceneManifest manifest;
+    manifest.name = "Hostile";
+    manifest.meshPaths = {"../../../../Users/victim/.ssh/id_rsa"};
+    manifest.texturePaths = {"C:/Windows/System32/config/SAM"};
+    manifest.audioPaths = {"assets/logo.png:secret"};
+    EXPECT_EQ(manifest.TotalAssetCount(), 3u);
+
+    loader.SetManifest(7, manifest);
+    EXPECT_TRUE(loader.HasManifest(7));
+
+    bool completed = false;
+    loader.BeginAreaLoad(7, [&completed](Spark::Streaming::AreaID) { completed = true; });
+
+    // No request was submitted, so the callback has to have fired synchronously.
+    EXPECT_TRUE(completed);
+    EXPECT_EQ(loader.GetLoadedAssetCount(7), 0u);
 
     loader.Shutdown();
 }

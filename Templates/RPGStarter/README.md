@@ -4,7 +4,7 @@ A complete village RPG quest with bounded exploration, dialogue, relic inventory
 reward, and save/load.
 
 This installed-SDK example exposes a complete tiny quest flow: talk to the elder, recover a relic, defeat the warden,
-claim a reward, and exercise in-memory save/load. Movement is normalized and village-bounded; the hero and warden face
+claim a reward, and save or reload the run. Movement is normalized and village-bounded; the hero and warden face
 their actions while a following camera keeps the authored village composition visible. Dialogue, inventory, combat,
 quest, reward, and save state remain public and deterministic.
 
@@ -27,8 +27,12 @@ Load `RPGStarter.dll` through `spark.modules.json`; the scene is `Scenes/Village
 - `R` -- reset the quest after defeat or at any time
 
 The elder, relic, combat, and reward interactions are proximity-gated. The warden retaliates while the hero remains in
-combat range; reaching zero health hides the hero until `R` starts a new run. The save slot is intentionally in-process
-demo state: it survives `R`/`NewGame()` but not module unload or application exit.
+combat range; reaching zero health hides the hero until `R` starts a new run. The single demo slot is written to
+`Saves/rpg_slot0.spark_save` under the project root, so it survives `R`/`NewGame()`, module unload, and application
+exit; `F9` restores it in a later session. Without a project root (the deterministic `OnLoad(nullptr)` seam) the slot
+stays in-process only and `SaveToSlot()` returns false. `SaveToSlot()` reports the real write result: when the slot file
+cannot be written (read-only install directory, full disk) it also returns false, the run continues in memory, the save
+HUD keeps showing the empty cell, and the failure is logged rather than reported as a save.
 
 ## Quest walkthrough
 

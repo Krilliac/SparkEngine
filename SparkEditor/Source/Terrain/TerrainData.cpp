@@ -4,6 +4,7 @@
  */
 
 #include "TerrainData.h"
+#include "Graphics/TerrainRenderer.h"
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
@@ -194,6 +195,16 @@ namespace SparkEditor
 
     TerrainTextureLayer* TerrainData::AddTextureLayer(const std::string& name)
     {
+        // The .sparkterrain readers reject a file declaring more than kMaxTextureLayers, so a terrain
+        // that exceeds the cap in memory would save and then never load again. Refuse the layer here.
+        if (textureLayers.size() >= Spark::Graphics::SparkTerrain::kMaxTextureLayers)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Terrain already has the maximum of %u texture layers; '%s' was not added",
+                            Spark::Graphics::SparkTerrain::kMaxTextureLayers, name.c_str());
+            return nullptr;
+        }
+
         auto layer = std::make_unique<TerrainTextureLayer>();
         layer->name = name;
         auto* ptr = layer.get();

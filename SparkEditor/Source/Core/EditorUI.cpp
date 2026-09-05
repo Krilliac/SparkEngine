@@ -43,7 +43,6 @@
 #include "../Panels/DedicatedServerPanel.h"
 #include "../Panels/MaterialEditorPanel.h"
 #include "../Panels/PlayModeToolbarPanel.h"
-#include "../Panels/PostProcessingPanel.h"
 #include "../Panels/DialogueEditorPanel.h"
 #include "../Panels/AIEditorPanel.h"
 #include "../Panels/SplineEditorPanel.h"
@@ -245,7 +244,10 @@ namespace SparkEditor
 
         // Crash handler
         console.LogInfo("Initializing crash handler...");
-        if (m_crashHandler && m_crashHandler->Initialize())
+        // Crash artefacts belong under the per-user editor data directory, not in
+        // whatever directory the editor happened to be launched from.
+        const std::string crashDirectory = ProjectManager::GetEditorDataDirectory() + "/Crashes";
+        if (m_crashHandler && m_crashHandler->Initialize(crashDirectory))
         {
             console.LogSuccess("Crash handler initialized successfully");
         }
@@ -334,18 +336,6 @@ namespace SparkEditor
         console.LogInfo("Initializing command palette...");
         m_commandPalette = std::make_unique<CommandPalette>();
         console.LogSuccess("Command palette initialized");
-
-        // Gizmo system — 3D manipulation overlays
-        console.LogInfo("Initializing gizmo system...");
-        m_gizmoSystem = std::make_unique<GizmoSystem>();
-        if (m_gizmoSystem->Initialize(nullptr, nullptr))
-        {
-            console.LogSuccess("Gizmo system initialized");
-        }
-        else
-        {
-            console.LogWarning("Gizmo system initialization failed");
-        }
 
         // Collaborative editing session
         console.LogInfo("Initializing collaborative edit session...");
@@ -530,12 +520,6 @@ namespace SparkEditor
         // Update stats
         UpdateStats(deltaTime);
 
-        // Update gizmo system
-        SPARK_GUARDED_UPDATE("GizmoSystem", "Editor", {
-            if (m_gizmoSystem)
-                m_gizmoSystem->Update(deltaTime);
-        });
-
         // Update collaborative editing session (processes incoming messages, broadcasts presence)
         SPARK_GUARDED_UPDATE("CollabSession", "Editor", {
             if (m_collabSession)
@@ -653,15 +637,15 @@ namespace SparkEditor
         {
             if (ImGui::IsKeyPressed(ImGuiKey_W) && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
             {
-                m_currentTool = TransformTool::Move;
+                SetTransformTool(TransformTool::Move);
             }
             else if (ImGui::IsKeyPressed(ImGuiKey_E) && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
             {
-                m_currentTool = TransformTool::Rotate;
+                SetTransformTool(TransformTool::Rotate);
             }
             else if (ImGui::IsKeyPressed(ImGuiKey_R) && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
             {
-                m_currentTool = TransformTool::Scale;
+                SetTransformTool(TransformTool::Scale);
             }
         }
     }
@@ -846,15 +830,6 @@ namespace SparkEditor
             console.LogSuccess("Prefab manager shutdown complete");
         }
 
-        // Shutdown gizmo system
-        if (m_gizmoSystem)
-        {
-            console.LogInfo("Shutting down gizmo system...");
-            m_gizmoSystem->Shutdown();
-            m_gizmoSystem.reset();
-            console.LogSuccess("Gizmo system shutdown complete");
-        }
-
         // Disconnect live edit bridge
         if (m_liveEditBridge)
         {
@@ -1015,6 +990,30 @@ namespace SparkEditor
         auto now = std::chrono::steady_clock::now();
         float deltaTime = std::chrono::duration<float>(now - lastClock).count();
         lastClock = now;
+
+#ifdef _WIN32
+        // The viewport is the only thing that measures what was actually
+        // submitted, so hand its counts to the statistics panel before the
+        // panels render. Done every frame rather than at re-wire time because
+        // the numbers change with the camera and the document.
+        //
+        // Windows-only: SceneViewPanel's D3D11 render path (and therefore
+        // GetLastRenderStats) exists only under _WIN32, so on other platforms
+        // SceneStatisticsPanel::HasRenderStats() stays false and the panel shows
+        // no draw counts. Stable-v1 ships Windows only; this is a real gap on any
+        // other host, not an oversight in this block.
+        {
+            auto sceneViewIt = m_panels.find("SceneView");
+            auto sceneStatsIt = m_panels.find("SceneStats");
+            if (sceneViewIt != m_panels.end() && sceneStatsIt != m_panels.end())
+            {
+                auto* sceneView = dynamic_cast<SceneViewPanel*>(sceneViewIt->second.get());
+                auto* sceneStats = dynamic_cast<SceneStatisticsPanel*>(sceneStatsIt->second.get());
+                if (sceneView && sceneStats)
+                    sceneStats->SetRenderStats(sceneView->GetLastRenderStats());
+            }
+        }
+#endif
 
         for (auto& [name, panel] : m_panels)
         {
@@ -1905,6 +1904,33 @@ namespace SparkEditor
                                       m_world ? static_cast<uint32_t>(m_world->GetEntityCount()) : 0u);
     }
 
+    void EditorUI::SetTransformTool(TransformTool tool)
+    {
+        m_currentTool = tool;
+
+        // The viewport gizmo is the consumer: without this push the toolbar,
+        // hotkeys and command palette only changed a status-bar label.
+        auto sceneViewIt = m_panels.find("SceneView");
+        if (sceneViewIt == m_panels.end())
+            return;
+        auto* sceneView = dynamic_cast<SceneViewPanel*>(sceneViewIt->second.get());
+        if (!sceneView)
+            return;
+
+        switch (tool)
+        {
+        case TransformTool::Move:
+            sceneView->SetGizmoMode(SceneViewPanel::GizmoMode::Move);
+            break;
+        case TransformTool::Rotate:
+            sceneView->SetGizmoMode(SceneViewPanel::GizmoMode::Rotate);
+            break;
+        case TransformTool::Scale:
+            sceneView->SetGizmoMode(SceneViewPanel::GizmoMode::Scale);
+            break;
+        }
+    }
+
     void EditorUI::RewirePanelsToWorld()
     {
         auto& console = Spark::SimpleConsole::GetInstance();
@@ -1944,6 +1970,38 @@ namespace SparkEditor
                 gameView->SetWorld(m_world.get());
         }
 
+        // SceneStatistics counts the live document instead of sample data.
+        auto sceneStatsIt = m_panels.find("SceneStats");
+        if (sceneStatsIt != m_panels.end())
+        {
+            if (auto* sceneStats = dynamic_cast<SceneStatisticsPanel*>(sceneStatsIt->second.get()))
+                sceneStats->SetWorld(m_world.get());
+        }
+
+        // Search enumerates the live document and the project's real asset tree,
+        // and hands a hit back to the editor's selection.
+        auto searchIt = m_panels.find("Search");
+        if (searchIt != m_panels.end())
+        {
+            if (auto* search = dynamic_cast<SearchPanel*>(searchIt->second.get()))
+            {
+                search->SetWorld(m_world.get());
+                search->SetSelectionHandler([this](uint32_t id) { SetSelectedEntity(static_cast<::EntityID>(id)); });
+                const std::string projectPath = ProjectManager::GetActiveProjectPath();
+                if (!projectPath.empty())
+                    search->SetAssetRoot(projectPath + "/Assets");
+            }
+        }
+
+        // ObjectPlacement creates entities in the live document rather than
+        // reporting a placement it never made.
+        auto placementIt = m_panels.find("ObjectPlacement");
+        if (placementIt != m_panels.end())
+        {
+            if (auto* placement = dynamic_cast<ObjectPlacementPanel*>(placementIt->second.get()))
+                placement->SetEntityCreator([this](const std::string& name) { return CreateDocumentEntity(name); });
+        }
+
         // Inspector reads EditorUI::GetWorld()/GetSelectedEntity() live each
         // frame — no re-wire needed.
 
@@ -1964,6 +2022,23 @@ namespace SparkEditor
 
         try
         {
+            // A path outside the open project (for example the bare CWD-relative name a
+            // workflow step used to pass) must NOT become the editor's current scene path,
+            // or every later Ctrl+S is silently redirected away from the project scene.
+            // Decide this BEFORE writing: the write itself still succeeds and is still
+            // reported as a success, only the adoption of the path is withheld.
+            bool insideOpenProject = true;
+            if (m_projectManager && m_projectManager->HasOpenProject())
+            {
+                std::error_code pathError;
+                const auto projectRoot =
+                    std::filesystem::weakly_canonical(PathFromUtf8(ProjectManager::GetActiveProjectPath()), pathError);
+                const auto candidate = std::filesystem::weakly_canonical(PathFromUtf8(path), pathError);
+                const auto relative = std::filesystem::relative(candidate, projectRoot, pathError).lexically_normal();
+                insideOpenProject =
+                    !pathError && !relative.empty() && !relative.is_absolute() && *relative.begin() != "..";
+            }
+
             // Ensure parent directory exists
             auto parentPath = PathFromUtf8(path).parent_path();
             if (!parentPath.empty())
@@ -1981,14 +2056,28 @@ namespace SparkEditor
                 return false;
             }
 
-            m_currentScenePath = path;
+            // The document is on disk either way, so it is no longer dirty. Reporting failure here
+            // would leave the document permanently modified and make callers such as the menu bar
+            // and --save-scene claim a save failed for a file that exists.
             m_sceneModified = false;
             Spark::Editor::CommandHistory::GetInstance().MarkSaved();
 
-            if (m_projectManager && m_projectManager->HasOpenProject() && !m_projectManager->RecordOpenedScene(path))
+            if (insideOpenProject)
+            {
+                m_currentScenePath = path;
+
+                if (m_projectManager && m_projectManager->HasOpenProject() &&
+                    !m_projectManager->RecordOpenedScene(path))
+                {
+                    Spark::SimpleConsole::GetInstance().LogWarning(
+                        "Scene saved, but project last-opened-scene metadata was not updated: " + path);
+                }
+            }
+            else
             {
                 Spark::SimpleConsole::GetInstance().LogWarning(
-                    "Scene saved, but project last-opened-scene metadata was not updated: " + path);
+                    "Scene written to '" + path +
+                    "', but it is outside the open project; the editor's current scene path is unchanged");
             }
 
             auto& console = Spark::SimpleConsole::GetInstance();
@@ -2176,12 +2265,6 @@ namespace SparkEditor
                 inspector->SetEditorUI(this);
                 console.LogSuccess("EditorUI wired to Inspector panel (World-backed ECS inspector)");
             }
-        }
-
-        // Re-initialize gizmo system with the actual D3D11 device
-        if (m_gizmoSystem)
-        {
-            m_gizmoSystem->Initialize(device, context);
         }
     }
 #endif

@@ -41,6 +41,8 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <cstring>
+#include <optional>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -205,6 +207,65 @@ HRESULT Shader::LoadPixelShader(const std::wstring& filename, const ShaderCompil
 // SHADER LOADING FROM SOURCE AND FILE
 // ============================================================================
 
+namespace
+{
+    Spark::Graphics::ShaderStage ToCacheStage(ShaderType type)
+    {
+        switch (type)
+        {
+        case ShaderType::PIXEL_SHADER:
+            return Spark::Graphics::ShaderStage::Pixel;
+        case ShaderType::GEOMETRY_SHADER:
+            return Spark::Graphics::ShaderStage::Geometry;
+        case ShaderType::HULL_SHADER:
+            return Spark::Graphics::ShaderStage::Hull;
+        case ShaderType::DOMAIN_SHADER:
+            return Spark::Graphics::ShaderStage::Domain;
+        case ShaderType::COMPUTE_SHADER:
+            return Spark::Graphics::ShaderStage::Compute;
+        default:
+            return Spark::Graphics::ShaderStage::Vertex;
+        }
+    }
+
+    /// True when @p bytecode starts with a Direct3D container magic ('DXBC' for
+    /// FXC/DXBC, 'DXIL' for DXC). The write side (RHIFactory::SaveCompiledShader)
+    /// enforces the same rule; without it here, whatever bytes happen to be in the
+    /// user-writable cache directory would be handed straight to the D3D11 runtime.
+    bool IsDirect3DBytecode(const std::vector<uint8_t>& bytecode)
+    {
+        if (bytecode.size() < 4)
+            return false;
+
+        const bool isDXBC = bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'B' && bytecode[3] == 'C';
+        const bool isDXIL = bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'I' && bytecode[3] == 'L';
+        return isDXBC || isDXIL;
+    }
+
+    /// Build the disk-cache key for a source compile.
+    ///
+    /// ShaderDiskCache::HashSourceForDisk already mixes hlslCode, defines, target,
+    /// stage and entryPoint into the key. It does not see the target profile string
+    /// or the D3DCompile flag word, and both change the emitted bytecode, so those
+    /// two are folded into the defines list here. Without that, a debug and a
+    /// release build of the same source would share one cache entry and the second
+    /// run would load the wrong blob.
+    Spark::Graphics::ShaderSource MakeDiskCacheKey(const std::string& source, ShaderType type,
+                                                   const ShaderCompilationFlags& flags, const std::string& target,
+                                                   UINT compileFlags)
+    {
+        Spark::Graphics::ShaderSource key;
+        key.hlslCode = source;
+        key.entryPoint = flags.entryPoint.empty() ? "main" : flags.entryPoint;
+        key.stage = ToCacheStage(type);
+        key.shaderModel = target;
+        key.defines = flags.defines;
+        key.defines.push_back("__spark_target=" + target);
+        key.defines.push_back("__spark_flags=" + std::to_string(compileFlags));
+        return key;
+    }
+} // namespace
+
 HRESULT Shader::LoadShaderFromSource(const std::string& source, ShaderType type, const ShaderCompilationFlags& flags)
 {
     ASSERT_MSG(!source.empty(), "LoadShaderFromSource: source is empty");
@@ -256,22 +317,55 @@ HRESULT Shader::LoadShaderFromSource(const std::string& source, ShaderType type,
         compileFlags |= D3DCOMPILE_WARNINGS_ARE_ERRORS;
     }
 
-    ComPtr<ID3DBlob> shaderBlob;
-    ComPtr<ID3DBlob> errorBlob;
-    HRESULT hr = D3DCompile(source.c_str(), source.size(), nullptr, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
-                            flags.entryPoint.c_str(), target.c_str(), compileFlags, 0, &shaderBlob, &errorBlob);
+    // Phase V: consult the shared disk cache before invoking the compiler. A
+    // hit is wrapped in a D3DCreateBlob buffer so CreateVertexShader and
+    // CreateInputLayout take exactly the same path as a fresh compile.
+    auto& diskCache = Spark::Graphics::GetShaderDiskCache();
+    const Spark::Graphics::ShaderSource cacheSource = MakeDiskCacheKey(source, type, flags, target, compileFlags);
 
-    if (FAILED(hr))
+    ComPtr<ID3DBlob> shaderBlob;
+    bool servedFromDiskCache = false;
+    if (diskCache.IsInitialized())
     {
-        if (errorBlob)
+        const std::optional<Spark::Graphics::CompiledShaderBlob> cached =
+            diskCache.Lookup(cacheSource, Spark::Graphics::ShaderTarget::DXBC);
+        if (cached && cached->success && IsDirect3DBytecode(cached->bytecode))
         {
-            std::string errorString(reinterpret_cast<const char*>(errorBlob->GetBufferPointer()));
-            std::wstring wErrorString(errorString.begin(), errorString.end());
-            LOG_TO_CONSOLE_IMMEDIATE(L"Shader source compilation error: " + wErrorString, L"ERROR");
+            if (SUCCEEDED(D3DCreateBlob(cached->bytecode.size(), shaderBlob.GetAddressOf())))
+            {
+                std::memcpy(shaderBlob->GetBufferPointer(), cached->bytecode.data(), cached->bytecode.size());
+                servedFromDiskCache = true;
+            }
         }
-        std::lock_guard<std::mutex> lock(m_metricsMutex);
-        m_metrics.failedCompilations++;
-        return hr;
+        else if (cached && cached->success && !cached->bytecode.empty())
+        {
+            // The cache lives in a user-writable directory and can also be filled by
+            // an external daemon, so a hit is not proof of valid bytecode. Handing a
+            // truncated or tampered payload to CreateVertexShader/CreateInputLayout
+            // would fail the shader permanently; fall through to a fresh compile.
+            LOG_TO_CONSOLE_IMMEDIATE(L"Shader disk-cache entry rejected: payload is not DXBC/DXIL", L"WARNING");
+        }
+    }
+
+    HRESULT hr = S_OK;
+    if (!servedFromDiskCache)
+    {
+        ComPtr<ID3DBlob> errorBlob;
+        hr = D3DCompile(source.c_str(), source.size(), nullptr, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
+                        flags.entryPoint.c_str(), target.c_str(), compileFlags, 0, &shaderBlob, &errorBlob);
+
+        if (FAILED(hr))
+        {
+            if (errorBlob)
+            {
+                std::string errorString(reinterpret_cast<const char*>(errorBlob->GetBufferPointer()));
+                std::wstring wErrorString(errorString.begin(), errorString.end());
+                LOG_TO_CONSOLE_IMMEDIATE(L"Shader source compilation error: " + wErrorString, L"ERROR");
+            }
+            std::lock_guard<std::mutex> lock(m_metricsMutex);
+            m_metrics.failedCompilations++;
+            return hr;
+        }
     }
 
     // Create the appropriate shader object
@@ -313,46 +407,18 @@ HRESULT Shader::LoadShaderFromSource(const std::string& source, ShaderType type,
 
     if (SUCCEEDED(hr))
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader compiled from source in %.2f ms", compileTimeMs);
-        LOG_TO_CONSOLE_IMMEDIATE(L"Shader compiled from source successfully", L"SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader %s in %.2f ms",
+                       servedFromDiskCache ? "loaded from disk cache" : "compiled from source", compileTimeMs);
+        LOG_TO_CONSOLE_IMMEDIATE(servedFromDiskCache ? L"Shader loaded from disk cache"
+                                                     : L"Shader compiled from source successfully",
+                                 L"SUCCESS");
         m_isCompiled = true;
 
-        // Phase V: store the compiled DXBC bytecode in the shared disk
-        // cache. The Windows branch is store-only for now — the
-        // lookup path would need to wrap D3DCreateBlob around the
-        // cached bytes for CreateInputLayout; that expansion lands in
-        // a follow-up. The store-only path already populates the
-        // shared cache so Linux / headless builds sharing the same
-        // `ShaderCache/` directory can reuse the blob.
-        auto& diskCache = Spark::Graphics::GetShaderDiskCache();
-        if (diskCache.IsInitialized() && shaderBlob)
+        // Phase V: store the freshly compiled DXBC bytecode in the shared disk
+        // cache so the next run hits the lookup above. A blob that came from
+        // the cache is not written back.
+        if (diskCache.IsInitialized() && shaderBlob && !servedFromDiskCache)
         {
-            Spark::Graphics::ShaderSource cacheSource;
-            cacheSource.hlslCode = source;
-            cacheSource.entryPoint = flags.entryPoint.empty() ? "main" : flags.entryPoint;
-            switch (type)
-            {
-            case ShaderType::VERTEX_SHADER:
-                cacheSource.stage = Spark::Graphics::ShaderStage::Vertex;
-                break;
-            case ShaderType::PIXEL_SHADER:
-                cacheSource.stage = Spark::Graphics::ShaderStage::Pixel;
-                break;
-            case ShaderType::GEOMETRY_SHADER:
-                cacheSource.stage = Spark::Graphics::ShaderStage::Geometry;
-                break;
-            case ShaderType::HULL_SHADER:
-                cacheSource.stage = Spark::Graphics::ShaderStage::Hull;
-                break;
-            case ShaderType::DOMAIN_SHADER:
-                cacheSource.stage = Spark::Graphics::ShaderStage::Domain;
-                break;
-            case ShaderType::COMPUTE_SHADER:
-                cacheSource.stage = Spark::Graphics::ShaderStage::Compute;
-                break;
-            }
-            cacheSource.defines = flags.defines;
-
             Spark::Graphics::CompiledShaderBlob blob;
             const uint8_t* bytes = static_cast<const uint8_t*>(shaderBlob->GetBufferPointer());
             blob.bytecode.assign(bytes, bytes + shaderBlob->GetBufferSize());

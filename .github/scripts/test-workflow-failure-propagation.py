@@ -212,6 +212,55 @@ def yaml_section(workflow: str, key: str, *, indent: int) -> str:
     return "\n".join(lines[start:end])
 
 
+def run_command(block: str, *, indent: int = 4) -> str | None:
+    """Return a step's ``run:`` command folded back into a single line.
+
+    A folded (``>-``) scalar is the same command as an inline one, but a literal
+    comparison cannot see that: when the readiness gate grew a second flag and
+    moved to ``run: >-``, every exact check of it silently started comparing
+    against the string ``>-`` instead of against the command. Folding here keeps
+    the comparison exact without pinning the YAML style the command is written
+    in. Returns None when the step does not carry exactly one ``run:``.
+    """
+
+    pattern = re.compile(rf"^{' ' * indent}run:[ \t]*(.*?)[ \t]*$", re.MULTILINE)
+    matches = list(pattern.finditer(block))
+    if len(matches) != 1:
+        return None
+    head = matches[0].group(1)
+    if head not in {">", ">-", ">+", "|", "|-", "|+"}:
+        return head
+    folded: list[str] = []
+    for line in block[matches[0].end():].split("\n")[1:]:
+        if not line.strip():
+            break
+        if len(line) - len(line.lstrip(" ")) <= indent:
+            break
+        folded.append(line.strip())
+    return " ".join(folded)
+
+
+def suppress_run_command(step: str) -> str:
+    """Append a failure-swallowing suffix to the step's command, whatever its style."""
+
+    lines = step.rstrip("\n").split("\n")
+    lines[-1] = f"{lines[-1]} || echo ignored"
+    return "\n".join(lines) + step[len(step.rstrip("\n")):]
+
+
+def inject_before_run(step: str, injected: str) -> str:
+    """Insert a sibling key immediately above the step's ``run:`` key."""
+
+    lines = step.split("\n")
+    for index, line in enumerate(lines):
+        if line.strip().startswith("run:"):
+            lines.insert(index, injected)
+            break
+    else:
+        raise AssertionError("step has no run: key to inject above")
+    return "\n".join(lines)
+
+
 def exact_field(block: str, field: str, value: str, *, indent: int = 4) -> bool:
     pattern = re.compile(
         rf"^{' ' * indent}{re.escape(field)}:\s*(.*?)\s*(?:#.*)?$",
@@ -267,12 +316,12 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
         indent=6,
     ):
         errors.append("stable-v1 publication gate must use the exact versioned-release condition")
-    if not exact_field(
-        readiness,
-        "run",
-        "python3 tools/site-data/validate.py --require-ready",
-        indent=6,
-    ):
+    # The --allow-legacy-contract waiver was retired once the contract validated
+    # strictly: the gate now runs the plain strict validator and --require-ready
+    # must stay on the command. Pinning the literal is deliberate -- a mismatch
+    # here is the gate telling you the command moved, and reintroducing any
+    # waiver flag fails this check instead of quietly weakening publication.
+    if run_command(readiness, indent=6) != "python3 tools/site-data/validate.py --require-ready":
         errors.append("stable-v1 publication gate must run the exact readiness validator")
     if not exact_field(readiness, "shell", "bash", indent=6):
         errors.append("stable-v1 publication gate must use the exact bash shell contract")
@@ -569,7 +618,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 '--run-attempt "${{ github.run_attempt }}"',
                 '--job "${{ github.job }}"',
                 "--expected-selector all",
-                "--minimum-tests 6600",
+                "--minimum-tests 6900",
                 "--timeout-seconds 900",
             ):
                 if runner.count(fragment) != 1:
@@ -592,7 +641,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 '--run-id "${{ github.run_id }}"',
                 '--run-attempt "${{ github.run_attempt }}"',
                 "--timeout-seconds 900",
-                "--minimum-tests 6600",
+                "--minimum-tests 6900",
             )
             for fragment in expected_fragments:
                 if published.count(fragment) != 1:
@@ -1126,9 +1175,13 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 "      if: needs.prepare.outputs.is_versioned == 'true' || github.event_name == 'workflow_dispatch'",
                 1,
             ),
+            # The mutants are derived from the step itself rather than from a
+            # copy of its command text: a hard-coded copy stops matching the
+            # moment the command changes, and then "mutation not detected"
+            # becomes "mutation never applied" -- a fixture that cannot fail.
             "suppressed validator": self.release.replace(
-                "      run: python3 tools/site-data/validate.py --require-ready",
-                "      run: python3 tools/site-data/validate.py --require-ready || echo ignored",
+                readiness,
+                suppress_run_command(readiness),
                 1,
             ),
             "shell suppresses validator": self.release.replace(
@@ -1141,13 +1194,13 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 1,
             ),
             "continue on error": self.release.replace(
-                "      run: python3 tools/site-data/validate.py --require-ready",
-                "      continue-on-error: true\n      run: python3 tools/site-data/validate.py --require-ready",
+                readiness,
+                inject_before_run(readiness, "      continue-on-error: true"),
                 1,
             ),
             "quoted continue on error": self.release.replace(
-                "      run: python3 tools/site-data/validate.py --require-ready",
-                "      'continue-on-error': true\n      run: python3 tools/site-data/validate.py --require-ready",
+                readiness,
+                inject_before_run(readiness, "      'continue-on-error': true"),
                 1,
             ),
             "gate after tag mutation": gate_after_tag_binding,

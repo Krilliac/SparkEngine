@@ -4,9 +4,12 @@
  * @author Spark Engine Team
  * @date 2026
  *
- * Wraps RHI calls to check resource states, binding correctness, and
- * format compatibility at runtime. All validation logic compiles to no-ops
- * in release builds via NDEBUG guards.
+ * Tracks RHI resource lifetimes and checks draw-call parameters at runtime.
+ * The D3D11 backend feeds it: D3D11Buffer/D3D11Texture track and untrack
+ * themselves on construction/destruction, and D3D11CommandList validates
+ * non-indexed draws. All validation logic compiles to no-ops in release
+ * builds via NDEBUG guards, and every entry point is inert until
+ * Initialize() is called (the debug lifecycle does that).
  *
  * @see RHI, RHIDevice, RHIResources
  */
@@ -101,6 +104,15 @@ namespace Spark::Graphics
         void TrackResource(uint64_t handle, const std::string& name, const std::string& type);
 
         /**
+         * @brief Stop tracking a resource (called from the backend resource destructor).
+         *
+         * Silently ignores handles that were never tracked, so backends can call it
+         * unconditionally without knowing whether the layer was active at creation time.
+         * @param handle Unique resource handle.
+         */
+        void UntrackResource(uint64_t handle);
+
+        /**
          * @brief Update the lifecycle state of a tracked resource.
          * @param handle Resource handle.
          * @param state New state.
@@ -185,6 +197,7 @@ namespace Spark::Graphics
 
         bool Initialize() { return true; }
         void TrackResource(uint64_t, const std::string&, const std::string&) {}
+        void UntrackResource(uint64_t) {}
         void SetResourceState(uint64_t, ResourceState) {}
         ResourceState GetResourceState(uint64_t) const { return ResourceState::Unknown; }
         bool ValidateBinding(uint64_t, uint64_t, uint32_t) { return true; }

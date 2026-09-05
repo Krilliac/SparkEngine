@@ -5,9 +5,11 @@
 #include "Game/TemplateRuntime.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -55,31 +57,46 @@ class RPGStarterModule final : public Spark::IModule
         m_savedInventory.clear();
         m_savedRewardClaimed = false;
         m_hasSave = false;
+        m_hasDiskSave = false;
 
-        if (!m_runtime.Load(context, "RPGStarter", {"Startup.sparkscene", "Scenes/Village.sparkscene"},
-                            [this](const Spark::Templates::TemplateRuntimeScene& scene)
-                            {
-                                m_groundEntity = scene.Find("Ground");
-                                m_lightEntity = scene.Find("Directional Light");
-                                m_cameraEntity = scene.Find("Main Camera");
-                                m_heroEntity = scene.Find("Hero");
-                                m_elderEntity = scene.Find("Village Elder");
-                                m_relicEntity = scene.Find("Lost Relic");
-                                m_wardenEntity = scene.Find("Training Warden");
-                                m_houseEntities = {scene.Find("Village House A"), scene.Find("Village House B")};
+        if (!m_runtime.Load(
+                context, "RPGStarter", {"Startup.sparkscene", "Scenes/Village.sparkscene"},
+                [this](const Spark::Templates::TemplateRuntimeScene& scene)
+                {
+                    m_cameraEntity = scene.Find("Main Camera");
+                    m_heroEntity = scene.Find("Hero");
+                    m_elderEntity = scene.Find("Village Elder");
+                    m_relicEntity = scene.Find("Lost Relic");
+                    m_wardenEntity = scene.Find("Training Warden");
 
-                                return HasVisual(scene, m_groundEntity) && scene.Get<Transform>(m_lightEntity) &&
-                                       scene.Get<LightComponent>(m_lightEntity) &&
-                                       scene.Get<Transform>(m_cameraEntity) && scene.Get<Camera>(m_cameraEntity) &&
-                                       HasVisual(scene, m_heroEntity) && HasVisual(scene, m_elderEntity) &&
-                                       HasVisual(scene, m_relicEntity) && HasVisual(scene, m_wardenEntity) &&
-                                       HasVisual(scene, m_houseEntities[0]) && HasVisual(scene, m_houseEntities[1]);
-                            }))
+                    // Required: the ground, the camera, and every entity the quest
+                    // logic drives. Nothing outside this contract reads the ground,
+                    // the light or the houses, so they stay local: the ground is a
+                    // hard requirement, the decoration only warns.
+                    if (!HasVisual(scene, scene.Find("Ground")) || !scene.Get<Transform>(m_cameraEntity) ||
+                        !scene.Get<Camera>(m_cameraEntity) || !HasVisual(scene, m_heroEntity) ||
+                        !HasVisual(scene, m_elderEntity) || !HasVisual(scene, m_relicEntity) ||
+                        !HasVisual(scene, m_wardenEntity))
+                        return false;
+                    const uint32_t light = scene.Find("Directional Light");
+                    if (!scene.Get<Transform>(light) || !scene.Get<LightComponent>(light))
+                        SPARK_LOG_WARN(Spark::LogCategory::Game, "RPGStarter scene has no usable 'Directional Light'");
+                    for (const char* house : {"Village House A", "Village House B"})
+                    {
+                        if (!HasVisual(scene, scene.Find(house)))
+                            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                           "RPGStarter scene is missing the village house prop '%s'", house);
+                    }
+                    return true;
+                }))
             return false;
 
         if (m_runtime.IsActive())
             CaptureAuthoredScene();
         NewGame();
+        // A slot written by a previous session is what the HUD must show on
+        // startup, so probe the disk once here instead of stat-ing every frame.
+        m_hasDiskSave = SaveFileExists();
         if (m_runtime.IsActive() && m_runtime.GetGraphics())
         {
             m_statusHudEntity = m_runtime.CreateSprite("RPG Health And XP HUD", "Assets/rpg_runtime_sheet.png",
@@ -177,7 +194,13 @@ class RPGStarterModule final : public Spark::IModule
         return true;
     }
 
-    void SaveToSlot()
+    /**
+     * Snapshot the run and persist it to `Saves/rpg_slot0.spark_save` under the
+     * project root so a save survives the process. Returns false when only the
+     * in-memory snapshot could be taken (no project root, or the write failed);
+     * the slot HUD then keeps reporting "no save on disk", because there is none.
+     */
+    bool SaveToSlot()
     {
         m_savedState = m_state;
         m_savedInventory = m_inventory;
@@ -186,11 +209,14 @@ class RPGStarterModule final : public Spark::IModule
         m_savedWardenYawDegrees = m_wardenYawDegrees;
         m_savedEnemyAttackCooldown = m_enemyAttackCooldown;
         m_hasSave = true;
+        m_hasDiskSave = WriteSaveFile();
+        return m_hasDiskSave;
     }
 
+    /** Restore the in-memory snapshot, or the on-disk slot when this process has none. */
     bool LoadFromSlot()
     {
-        if (!m_hasSave)
+        if (!m_hasSave && !ReadSaveFile())
             return false;
         m_state = m_savedState;
         m_inventory = m_savedInventory;
@@ -199,6 +225,13 @@ class RPGStarterModule final : public Spark::IModule
         m_wardenYawDegrees = m_savedWardenYawDegrees;
         m_enemyAttackCooldown = m_savedEnemyAttackCooldown;
         return true;
+    }
+
+    /** Project-relative slot path; empty when no project root has been resolved. */
+    [[nodiscard]] std::filesystem::path GetSaveFilePath() const
+    {
+        const std::filesystem::path& root = m_runtime.GetProjectRoot();
+        return root.empty() ? std::filesystem::path() : root / "Saves" / "rpg_slot0.spark_save";
     }
 
     void NewGame()
@@ -215,7 +248,9 @@ class RPGStarterModule final : public Spark::IModule
 
     [[nodiscard]] const RPGStarterState& GetState() const { return m_state; }
     [[nodiscard]] const std::vector<std::string>& GetInventory() const { return m_inventory; }
-    [[nodiscard]] bool HasSave() const { return m_hasSave; }
+    [[nodiscard]] bool HasSave() const { return m_hasSave || SaveFileExists(); }
+    /** True only for a slot that actually reached disk; this is what the save HUD reports. */
+    [[nodiscard]] bool HasDiskSave() const { return m_hasDiskSave; }
     [[nodiscard]] bool IsRewardClaimed() const { return m_rewardClaimed; }
     [[nodiscard]] float GetEnemyAttackCooldown() const { return m_enemyAttackCooldown; }
     [[nodiscard]] float GetHeroYawDegrees() const { return m_heroYawDegrees; }
@@ -239,17 +274,147 @@ class RPGStarterModule final : public Spark::IModule
         return scene.Get<Transform>(entity) && scene.Get<MeshRenderer>(entity);
     }
 
+    [[nodiscard]] bool SaveFileExists() const
+    {
+        const std::filesystem::path path = GetSaveFilePath();
+        std::error_code ec;
+        return !path.empty() && std::filesystem::is_regular_file(path, ec) && !ec;
+    }
+
+    bool WriteSaveFile() const
+    {
+        const std::filesystem::path path = GetSaveFilePath();
+        if (path.empty())
+            return false;
+
+        std::error_code ec;
+        std::filesystem::create_directories(path.parent_path(), ec);
+        if (ec)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "RPGStarter could not create its save directory");
+            return false;
+        }
+
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        if (!file)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "RPGStarter could not open its save slot for writing");
+            return false;
+        }
+        file.precision(9);
+        file << "version=1\n"
+             << "x=" << m_savedState.x << "\n"
+             << "z=" << m_savedState.z << "\n"
+             << "health=" << m_savedState.health << "\n"
+             << "enemyHealth=" << m_savedState.enemyHealth << "\n"
+             << "gold=" << m_savedState.gold << "\n"
+             << "experience=" << m_savedState.experience << "\n"
+             << "questStage=" << static_cast<unsigned>(m_savedState.questStage) << "\n"
+             << "dialogueOpen=" << (m_savedState.dialogueOpen ? 1 : 0) << "\n"
+             << "enemyDefeated=" << (m_savedState.enemyDefeated ? 1 : 0) << "\n"
+             << "rewardClaimed=" << (m_savedRewardClaimed ? 1 : 0) << "\n"
+             << "heroYaw=" << m_savedHeroYawDegrees << "\n"
+             << "wardenYaw=" << m_savedWardenYawDegrees << "\n"
+             << "enemyAttackCooldown=" << m_savedEnemyAttackCooldown << "\n";
+        for (const std::string& item : m_savedInventory)
+            file << "item=" << item << "\n";
+        file.flush();
+        return file.good();
+    }
+
+    bool ReadSaveFile()
+    {
+        const std::filesystem::path path = GetSaveFilePath();
+        if (path.empty())
+            return false;
+        std::ifstream file(path, std::ios::binary);
+        if (!file)
+            return false;
+
+        RPGStarterState state{};
+        std::vector<std::string> inventory;
+        float heroYaw = m_heroSpawnYawDegrees;
+        float wardenYaw = m_wardenSpawnYawDegrees;
+        float cooldown = 0.0f;
+        bool rewardClaimed = false;
+        unsigned long version = 0;
+        std::string line;
+        while (std::getline(file, line))
+        {
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+            const std::size_t split = line.find('=');
+            if (split == std::string::npos)
+                continue;
+            const std::string key = line.substr(0, split);
+            const std::string value = line.substr(split + 1);
+            if (key == "version")
+                version = ParseUnsigned(value);
+            else if (key == "x")
+                state.x = ParseFloat(value);
+            else if (key == "z")
+                state.z = ParseFloat(value);
+            else if (key == "health")
+                state.health = ParseFloat(value);
+            else if (key == "enemyHealth")
+                state.enemyHealth = ParseFloat(value);
+            else if (key == "gold")
+                state.gold = static_cast<uint32_t>(ParseUnsigned(value));
+            else if (key == "experience")
+                state.experience = static_cast<uint32_t>(ParseUnsigned(value));
+            else if (key == "questStage")
+                state.questStage = static_cast<RPGStarterQuestStage>(std::min<unsigned long>(
+                    ParseUnsigned(value), static_cast<unsigned long>(RPGStarterQuestStage::Complete)));
+            else if (key == "dialogueOpen")
+                state.dialogueOpen = ParseUnsigned(value) != 0;
+            else if (key == "enemyDefeated")
+                state.enemyDefeated = ParseUnsigned(value) != 0;
+            else if (key == "rewardClaimed")
+                rewardClaimed = ParseUnsigned(value) != 0;
+            else if (key == "heroYaw")
+                heroYaw = ParseFloat(value);
+            else if (key == "wardenYaw")
+                wardenYaw = ParseFloat(value);
+            else if (key == "enemyAttackCooldown")
+                cooldown = ParseFloat(value);
+            else if (key == "item")
+                inventory.push_back(value);
+        }
+        // Every float here came from strtof over untrusted file text: a hand-edited
+        // or truncated slot must be rejected, not copied into live state.
+        if (version != 1 || !std::isfinite(state.x) || !std::isfinite(state.z) || !std::isfinite(state.health) ||
+            !std::isfinite(state.enemyHealth) || !std::isfinite(heroYaw) || !std::isfinite(wardenYaw) ||
+            !std::isfinite(cooldown))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "RPGStarter ignored an unreadable save slot");
+            return false;
+        }
+        state.health = std::max(0.0f, state.health);
+        state.enemyHealth = std::max(0.0f, state.enemyHealth);
+        cooldown = std::max(0.0f, cooldown);
+
+        m_savedState = state;
+        m_savedInventory = std::move(inventory);
+        m_savedRewardClaimed = rewardClaimed;
+        m_savedHeroYawDegrees = heroYaw;
+        m_savedWardenYawDegrees = wardenYaw;
+        m_savedEnemyAttackCooldown = cooldown;
+        m_hasSave = true;
+        m_hasDiskSave = true;
+        return true;
+    }
+
+    static float ParseFloat(const std::string& value) { return std::strtof(value.c_str(), nullptr); }
+    static unsigned long ParseUnsigned(const std::string& value) { return std::strtoul(value.c_str(), nullptr, 10); }
+
     void ResetRuntimeHandles()
     {
         constexpr uint32_t invalid = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
-        m_groundEntity = invalid;
-        m_lightEntity = invalid;
         m_cameraEntity = invalid;
         m_heroEntity = invalid;
         m_elderEntity = invalid;
         m_relicEntity = invalid;
         m_wardenEntity = invalid;
-        m_houseEntities.fill(invalid);
         m_statusHudEntity = invalid;
         m_saveHudEntity = invalid;
         m_questHudEntity = invalid;
@@ -301,8 +466,9 @@ class RPGStarterModule final : public Spark::IModule
             NewGame();
             return;
         }
-        if (input->WasKeyPressed(VK_F5))
-            SaveToSlot();
+        if (input->WasKeyPressed(VK_F5) && !SaveToSlot())
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "RPGStarter kept the run in memory: the save slot did not reach disk");
         if (input->WasKeyPressed(VK_F9))
             LoadFromSlot();
         if (input->WasKeyPressed(VK_ESCAPE) && m_state.dialogueOpen)
@@ -395,7 +561,7 @@ class RPGStarterModule final : public Spark::IModule
         }
         if (SpriteRenderer* save = m_runtime.Get<SpriteRenderer>(m_saveHudEntity))
         {
-            save->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(m_hasSave ? 2u : 1u, 2);
+            save->sourceRect = Spark::Templates::TemplateRuntimeScene::SheetCell(m_hasDiskSave ? 2u : 1u, 2);
         }
         if (SpriteRenderer* quest = m_runtime.Get<SpriteRenderer>(m_questHudEntity))
         {
@@ -448,14 +614,12 @@ class RPGStarterModule final : public Spark::IModule
     bool m_rewardClaimed = false;
     bool m_savedRewardClaimed = false;
     bool m_hasSave = false;
-    uint32_t m_groundEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
-    uint32_t m_lightEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
+    bool m_hasDiskSave = false;
     uint32_t m_cameraEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_heroEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_elderEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_relicEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_wardenEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
-    std::array<uint32_t, 2> m_houseEntities{};
     uint32_t m_statusHudEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_saveHudEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;
     uint32_t m_questHudEntity = Spark::Templates::TemplateRuntimeScene::InvalidEntity;

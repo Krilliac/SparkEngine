@@ -22,7 +22,6 @@
 
 // Forward declarations
 class Game;
-class Console;
 
 // Global game pointer shared between SparkGame and SparkEngineLib (SparkConsole).
 // Raw pointer — owned by SparkGameModule, set during Initialize, cleared during Shutdown.

@@ -88,7 +88,10 @@ mods.LoadConfig("Data/Config/mods.json");
 
 ## mod.json Schema
 
-The `mod.json` file is the manifest for every mod. All fields are described below:
+The `mod.json` file is the manifest for every mod. It and the mod config are
+capped at 64 KB and parsed strictly (`Json::ParseBounded`, depth 16, 4096 nodes):
+a manifest with trailing junk or a truncated document is refused with a logged
+reason instead of silently yielding a partial object. All fields are described below:
 
 ```json
 {
@@ -160,6 +163,18 @@ Mods execute in a restricted sandbox to protect the player's system and the engi
 - Mods can only read files within their own directory and the shared `Data/` directory.
 - Mods **cannot** write to any location outside `Data/Mods/<mod_id>/UserData/`.
 - Attempts to access paths outside the sandbox throw a `ModSecurityException` and are logged.
+
+### Virtual-path policy (`Spark::IsVirtualPathSafe`)
+
+Every path a mod hands to the `VirtualFileSystem` must be mount-relative. A path is
+rejected when it contains `:` (drive-relative or NTFS alternate data stream), names
+a reserved Windows device (`CON`, `NUL`, `COM1`, ...), or escapes the mount after
+normalization; containment is decided on the normalized path and then re-checked
+against the canonical path so a symlink or junction planted inside the mount cannot
+redirect a read outside it. Two behavior changes for mod authors: a name that merely
+*contains* `..` is legal (`weapon..old.mesh` loads), and a zero-byte override file
+now wins the mount-priority contest instead of falling through to the
+lower-priority original.
 
 ### Script Sandbox
 

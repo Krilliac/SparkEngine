@@ -41,9 +41,11 @@ the selected engine revision locally.
 git clone --recurse-submodules https://github.com/Krilliac/SparkEngine.git
 cd SparkEngine
 
-# Windows
-.\generate.bat -g "Visual Studio 17 2022" release
-.\build.ps1 -config Release -editor -angelscript
+# Windows (CMake presets are the primary path)
+cmake --preset windows-release
+cmake --build --preset windows-release
+# generate.bat / build.ps1 remain supported; ENABLE_EDITOR and ENABLE_ANGELSCRIPT default ON,
+# and build.ps1's -editor/-angelscript switches only force them ON
 
 # Linux / macOS
 ./generate.sh release -g Ninja
@@ -153,7 +155,7 @@ Support words below are the `stable-v1` release-profile classifications from
 | Metal | Outside `stable-v1` — experimental; macOS, in progress |
 | NullRHI | In `stable-v1` — no-render path on Windows 11 x64; profile blocked and uncertified |
 
-Render features include PBR materials, global illumination (DDGI, Adaptive Probe Volumes, hybrid ray tracing), forward/deferred/clustered render paths, cascaded shadow maps, GPU-driven rendering (compute frustum culling, indirect draw), virtual texturing, mesh shaders, DXR 1.1, FSR upscaling, and a 35-node Shader Graph. Post-processing covers bloom, HDR tone mapping (Reinhard/ACES/Uncharted 2), TAA, FXAA, MSAA, depth of field, motion blur, volumetric fog, lens flares, and light shafts.
+Render features include PBR materials, global illumination (DDGI, Adaptive Probe Volumes; hybrid ray tracing is not reachable on the Windows D3D11 path), forward/deferred/clustered render paths, shadow-caster depth rendering into per-light and CSM depth targets on the Deferred and RenderGraph pipelines only (for ECS-submitted meshes; the default Forward pipeline has no shadow term and shadow filtering is not yet implemented in the pixel shaders), GPU-driven rendering (compute frustum culling, indirect draw), virtual texturing, mesh shaders, DXR 1.1, an experimental SparkSR upscaler (no vendor FSR/DLSS/XeSS SDK is linked and the upscaling pass is not yet executed in the frame path), and a 35-node Shader Graph. Post-processing covers bloom, HDR tone mapping (Reinhard/ACES/Uncharted 2), TAA, FXAA, MSAA, depth of field, motion blur, volumetric fog, lens flares, and light shafts.
 
 ### Physics
 
@@ -179,13 +181,13 @@ UDP client/server with entity replication, dirty property tracking, client-side 
 
 ### ECS and Gameplay
 
-EnTT-backed ECS with 75+ component types. Includes: FPS weapons, damage model, HUD; vehicle physics; inventory, quests, achievements, dialogue trees; ability/cooldown/trigger system; destructible objects; replay record/playback; day/night cycle; weather; 2D/sprite rendering; tween system; async coroutine scheduler; save/load with ECS-aware serialization; async database-backed persistence.
+EnTT-backed ECS with 75+ component types. Includes: FPS weapons, damage model, HUD; vehicle physics; inventory, quests, achievements, dialogue trees; ability/cooldown/trigger system; destructible objects; replay recording (Transform/velocity/health frames while recording; playback only advances frames, no ghost-entity consumer yet); day/night cycle; weather; 2D/sprite rendering; tween system; async coroutine scheduler; save/load with ECS-aware serialization; async database-backed persistence.
 
 **Large worlds:** Source includes area-streaming and floating-point origin-rebasing implementations. "No load screens" and "100K+ entities per area" are design/load-test targets, not `stable-v1` evidence; the 100K entity-flood test validates entity-count correctness rather than per-area throughput or release performance.
 
 ### Editor (65 panel header classes)
 
-Scene hierarchy, Inspector, Asset browser, Game viewport, Gizmos (ImGuizmo), Node graphs (imnodes), Animation timeline, Material editor, Visual script editor, Terrain editor, Weapon editor, Profiler, AI debugger, Physics debug overlay, Cinematic sequencer, Dialogue editor, Ability/condition editors, Destruction editor, 2D/tilemap editors, Audio mixer, Replay panel, Save system panel, Dedicated server panel, Version control integration, Build/deployment pipeline, Level streaming, Command palette (Ctrl+P), Prefab system, Event monitor, Coroutine debugger, Collaboration panel (multi-user with node locking and presence), and more. Collaboration, visual scripting, and their service paths are experimental and outside `stable-v1`; rotate/scale gizmo behavior and full undo/redo certification remain open.
+Scene hierarchy, Inspector, Asset browser, Game viewport, Gizmos (translate/rotate/scale), Node graphs (imnodes), Material editor, Visual script editor, Terrain editor, Weapon editor, Profiler, AI debugger, Physics debug overlay, Cinematic sequencer, Dialogue editor, Ability/condition editors, Destruction editor, 2D/tilemap editors, Audio mixer, Replay panel, Save system panel, Dedicated server panel, Version control integration, Build/deployment pipeline, Level streaming, Command palette (Ctrl+P), Prefab system, Event monitor, Coroutine debugger, Collaboration panel (multi-user with node locking and presence), and more. Collaboration, visual scripting, and their service paths are experimental and outside `stable-v1`; the asset drag/assign path and the author-to-package round trip remain open (`EDT-210`).
 
 ### Game Module Templates
 
@@ -207,7 +209,7 @@ Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine
 
 ## Quality Assurance
 
-**Tests:** 6,992 test definitions across 577 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 7,269 test definitions across 602 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
 
 ```bash
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
@@ -376,7 +378,7 @@ SparkEngine/
 ├── SparkEditor/Source/    65 *Panel.h classes, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 in-tree module directories
-├── Tests/                 6,992 test definitions, 577 files
+├── Tests/                 7,269 test definitions, 602 files
 ├── wiki/                  198 Markdown pages excluding _Sidebar.md (inventory only)
 └── docs/                  API reference, guides
 ```
@@ -386,7 +388,7 @@ SparkEngine/
 ## Contributing
 
 1. Fork the repository and create a feature branch
-2. Follow the [contributor guidelines](CONTRIBUTING.md) — C++23, zero warnings, RAII, const-correct
+2. Follow the [contributor guidelines](CONTRIBUTING.md) — C++23, warning-free at the configured levels (`/W3`, `-Wall -Wextra`), RAII, const-correct
 3. Add tests for new functionality
 4. Run `clang-format` (enforced in CI) and ensure all tests pass
 5. Open a pull request — one feature per PR

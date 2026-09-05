@@ -422,6 +422,8 @@ struct VolumetricSettings {
 | CSM | Cascaded shadow maps (up to 3 cascades) | High | Moderate |
 | PCSS | Percentage-closer soft shadows | Very high | Expensive |
 
+> **Depth generation only (2026-09):** shadow casters are rasterized into per-light and CSM depth targets on the Deferred and RenderGraphBased pipelines, but none of the filtering techniques in this table is implemented in either pixel shader yet, and the shadow SRV register bound by `BindLightingData` (t4+) does not match `StandardPixel.hlsl`'s declared t12. Treat the table as the design target until that is reconciled.
+
 The `LightManager` manages a shadow atlas with up to 16 slots:
 
 ```cpp

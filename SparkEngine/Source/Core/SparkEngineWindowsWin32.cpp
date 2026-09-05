@@ -71,7 +71,9 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
     static World g_sceneWorld;
     static Spark::WorldMeshCache g_sceneCache;
     std::string sceneProjectRoot;
-    bool haveModules = GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules();
+    // A module whose OnLoad failed keeps its entry (its DLL stays mapped) but
+    // renders nothing, so the usable-module question is the initialized one.
+    bool haveModules = GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules();
     if (!g_scenePath.empty() && !haveModules)
     {
         if (Spark::LoadWorld(g_sceneWorld, g_scenePath))
@@ -177,7 +179,7 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
                     GetEngineRuntime().input->Update();
             });
 
-            if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules())
+            if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules())
             {
                 SPARK_GUARDED_UPDATE("Modules", "Core", {
                     GetEngineRuntime().moduleManager->UpdateAll(dt);
@@ -285,6 +287,20 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
     // in reverse creation order, NOT at static teardown - the C runtime exit
     // path otherwise AVs in ~UIPanel (dead ImGui/graphics) and then hangs
     // inside the crash handler.
+    //
+    // Deregister them from EngineContext FIRST. Module OnUnload runs later,
+    // inside ShutdownEngineAfterPreflight, and a module that unregisters what
+    // it installed in OnLoad reaches these systems through ctx->GetUI() /
+    // GetDialogue() / GetWeather() / GetModSystem(). Leaving the slots set
+    // handed that module freed memory; clearing them makes the getters return
+    // null, which the documented contract allows.
+    if (EngineContext* shutdownContext = EngineContext::Get())
+    {
+        shutdownContext->SetModSystem(nullptr);
+        shutdownContext->SetDialogue(nullptr);
+        shutdownContext->SetUI(nullptr);
+        shutdownContext->SetWeather(nullptr);
+    }
     g_modSystem.reset();
     g_dialogueSystem.reset();
     g_uiSystem.reset();
@@ -351,8 +367,7 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
         if (ShouldShowWindowsFatalDialog())
             MessageBoxW(nullptr, buf, L"Fatal Error", MB_ICONERROR);
         else
-            SPARK_LOG_ERROR(Spark::LogCategory::Core,
-                            "CreateWindowW failed during automated startup (error=0x%08lX)",
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "CreateWindowW failed during automated startup (error=0x%08lX)",
                             static_cast<unsigned long>(err));
         return FALSE;
     }

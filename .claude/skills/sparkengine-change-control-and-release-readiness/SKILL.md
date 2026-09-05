@@ -2,7 +2,7 @@
 name: sparkengine-change-control-and-release-readiness
 description: >-
   Canonical runbook for SparkEngine's release-readiness contract: the 18 release gates,
-  55 tracked work items, capability truth ledger, claim-promotion rules, same-SHA evidence
+  58 tracked work items, capability truth ledger, claim-promotion rules, same-SHA evidence
   discipline, and the caller/registration/tick/teardown wiring audit. TRIGGER when:
   "is SparkEngine / this subsystem / this module release-ready or production-ready",
   "what's blocking the release", "which readiness work item should I pick up next",
@@ -58,8 +58,8 @@ Term key (defined once):
 | Global release state | `blocked` — "Pre-release hardening" |
 | Gates | 18 total, **all 18 blocked**, 0 passing |
 | Capabilities tracked | 22 (best are `candidate`; none `ready`) |
-| Work items | 55 total: 50 open, 2 in-progress (`RDY-000`, `DOC-400`), 3 blocked (`REL-200`, `PLT-250`, `MOD-390`) |
-| Unfinished release blockers | 46 (items with `"blocking": true` and status ≠ done) |
+| Work items | 58 total (2026-09-05): 51 open, 4 in-progress (`RDY-000`, `RDY-010`, `CI-120`, `DOC-400`), 3 blocked (`REL-200`, `PLT-250`, `MOD-390`) |
+| Unfinished release blockers | 49 (items with `"blocking": true` and status ≠ done) |
 | First unblocked item | `RDY-000` — Establish the release profiles and capability ledger |
 
 Re-derive these numbers at any commit (verified command; run from the repo root):
@@ -150,6 +150,20 @@ Work-item schema (every field required by `validate.py`): `id`, `title`, `priori
 listed in `FUTURE_ACCEPTANCE_PATHS` inside `validate.py` (deliberate outputs of
 unfinished items).
 
+**`plannedCiJobs` / `plannedTestSelectors` — the honest way to reference something that does not
+exist yet.** `requiredCiJobs` must name a job that really exists in `.github/workflows/`, and
+`testSelectors` must resolve to a real CTest name or `SparkTests` `TEST` prefix; the strict
+validator rejects anything else. A job or selector the item still has to *create* goes in
+`plannedCiJobs` / `plannedTestSelectors` instead, which keeps the intent recorded without letting
+the contract assert coverage that cannot run. Moving an entry from `planned*` to `required*` is
+itself a promotion and needs the evidence the promotion rules demand. As of 2026-09-05, 57 of the
+58 items carry at least one of these arrays.
+
+**The contract validates strictly.** `python tools/site-data/validate.py` passes **without**
+`--allow-legacy-contract` (2026-09-05: "Validated 22 capabilities, 18 gates, 1 release profiles,
+and 58 work items."). Do not reintroduce `--allow-legacy-contract` into a command, a workflow or a
+doc: a run that needs it is a run whose references no longer resolve.
+
 ## Runbook 1 — Answer "what is the status of X?"
 
 Run from the repo root:
@@ -216,7 +230,7 @@ Local loop (all verified on Windows Git Bash, 2026-08-23; run from the repo root
 `python` / `py -3` on Windows, `python3` on Linux CI):
 
 ```bash
-python tools/site-data/validate.py            # "Validated 22 capabilities, 18 gates, and 55 work items."
+python tools/site-data/validate.py            # strict; 2026-09-05: "Validated 22 capabilities, 18 gates, 1 release profiles, and 58 work items."
 python tools/site-data/validate.py --assets
 python tools/site-data/validate.py --docs
 python tools/site-data/validate.py --legal
@@ -283,11 +297,20 @@ claims, close a work item, touch a gate, or assert readiness.
 Written 2026-08-23 against the working tree (branch
 `claude/whole-nine-yards-20260823`, uncommitted changes ahead of `34ee7ab7`) by
 inspecting the live contract, tools, and workflows — not a full-suite or CI run at
-this exact tree. All counts and states above are volatile. Re-verify with:
+this exact tree. All counts and states above are volatile.
+
+**Updated 2026-09-05** against the uncommitted working tree of branch
+`claude/release-readiness-sweep-20260904`: work-item count and status split (58 / 51 open / 4
+in-progress / 3 blocked / 49 unfinished blockers), strict `validate.py` passing without
+`--allow-legacy-contract`, and the `plannedCiJobs` / `plannedTestSelectors` mechanism. Counts came
+from reading `docs/readiness/work-items/*.json` and one `validate.py` run at that dirty tree — not
+from CI, and not at a committed SHA.
+
+Re-verify with:
 
 ```bash
 git status --short && git rev-parse HEAD                                      # note the exact tree you re-verify against
-python tools/site-data/validate.py                                            # expect "22 capabilities, 18 gates, 55 work items" (counts may grow)
+python tools/site-data/validate.py                                            # 2026-09-05: 22 capabilities, 18 gates, 1 release profile, 58 work items (counts may grow)
 python tools/site-data/render_handoff.py --check                              # handoff currency
 python -c "import json; print(json.load(open('docs/site/readiness.json'))['globalRelease']['state'])"   # expect "blocked" until REL-200 closes
 grep -rn 'TOD[O]\|FIXM[E]\|HACK\|XX[X]' SparkEngine/Source SparkEditor/Source GameModules --include='*.h' --include='*.cpp' | wc -l   # was 6

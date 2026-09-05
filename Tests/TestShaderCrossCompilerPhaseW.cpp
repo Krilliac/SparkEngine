@@ -10,23 +10,25 @@
  *     cross-TU sharing.
  *   - Initialize / Shutdown toggle IsInitialized correctly.
  *   - Compile on an uninitialised instance returns an empty blob.
- *   - Compile on an initialised instance returns success for each
- *     supported ShaderTarget (DXBC, DXIL, SPIRV, GLSL, MSL).
+ *   - DXBC is a real compile: valid HLSL yields a blob whose first four
+ *     bytes are 'DXBC', and broken HLSL fails with a compiler diagnostic.
+ *   - DXIL / SPIR-V / GLSL / MSL have no compiler integrated and report
+ *     `success = false` with the missing dependency named — they used to
+ *     report success with zero bytecode, and these tests used to assert
+ *     that success, which locked the stub in.
+ *   - Only successful compilations are cached; a failed target adds no
+ *     cache entry.
  *   - Compile caches its result — a second call with the same source
  *     bumps the cache hit counter and the cache size stays stable.
- *   - CompileAll returns at least one blob per target platform.
  *   - ClearCache wipes the in-memory map but keeps IsInitialized().
- *   - CompileAsync returns a future that resolves to the same blob.
- *   - CompileVariantsAsync fans out N compilations and returns N
- *     futures.
- *   - Cache key discriminates on stage (VS vs PS of same source).
- *   - Cache key discriminates on target (same source, DXBC vs SPIRV).
- *   - Cache key discriminates on defines (preprocessor toggle).
+ *   - CompileAsync / CompileVariantsAsync resolve to the same blobs.
+ *   - Cache key discriminates on stage and on defines.
  *   - Console_GetStatus returns a non-empty status string.
  *
  * Tests run against the real Spark::Graphics::ShaderCrossCompiler class
- * via the new GetShaderCrossCompiler() accessor — no local reimplemen-
- * tation — per the Phase L / O / P / Q / U / V playbook.
+ * via the GetShaderCrossCompiler() accessor — no local reimplementation.
+ * The DXBC path needs d3dcompiler_47, so tests that require a successful
+ * compilation skip on non-Windows rather than assert a different outcome.
  */
 
 #include "TestFramework.h"
@@ -39,7 +41,16 @@
 namespace
 {
 
-    Spark::Graphics::ShaderSource MakeSource(const std::string& hlsl = "float4 main():SV_Target{return 0;}",
+    // Valid vs_5_0 / ps_5_0 bodies. A vertex shader must write SV_Position and
+    // a pixel shader must write SV_Target, so the two stages cannot share one
+    // source once the compiler is real.
+    const char* const kVertexSource = "struct VSOutput { float4 position : SV_Position; };\n"
+                                      "VSOutput main(float3 position : POSITION)\n"
+                                      "{ VSOutput o; o.position = float4(position, 1.0f); return o; }\n";
+
+    const char* const kPixelSource = "float4 main() : SV_Target { return float4(1, 0, 0, 1); }\n";
+
+    Spark::Graphics::ShaderSource MakeSource(const std::string& hlsl = kVertexSource,
                                              Spark::Graphics::ShaderStage stage = Spark::Graphics::ShaderStage::Vertex,
                                              std::vector<std::string> defines = {})
     {
@@ -58,6 +69,18 @@ namespace
         auto& xc = Spark::Graphics::GetShaderCrossCompiler();
         xc.Shutdown();
         xc.Initialize();
+    }
+
+#ifdef _WIN32
+    constexpr bool kDXBCCompilerAvailable = true;
+#else
+    constexpr bool kDXBCCompilerAvailable = false;
+#endif
+
+    bool StartsWithDXBC(const std::vector<uint8_t>& bytecode)
+    {
+        return bytecode.size() >= 4 && bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'B' &&
+               bytecode[3] == 'C';
     }
 
 } // namespace
@@ -88,10 +111,13 @@ TEST(ShaderCrossCompilerPhaseW_InitializeSetsFlag)
 
 TEST(ShaderCrossCompilerPhaseW_ShutdownClearsFlagAndCache)
 {
+    if constexpr (!kDXBCCompilerAvailable)
+        SKIP_TEST("Populating the cache needs the DXBC compiler (Windows only)");
+
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
 
-    xc.Compile(MakeSource("float4 main():SV_Target{return 1;}"), Spark::Graphics::ShaderTarget::DXBC);
+    xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::DXBC);
     EXPECT_TRUE(xc.GetCacheSize() > static_cast<size_t>(0));
 
     xc.Shutdown();
@@ -118,52 +144,97 @@ TEST(ShaderCrossCompilerPhaseW_CompileBeforeInitializeEmpty)
 }
 
 // ============================================================================
-// Compile for each target
+// DXBC is a real compile
 // ============================================================================
 
-TEST(ShaderCrossCompilerPhaseW_CompileDXBCSucceeds)
+TEST(ShaderCrossCompilerPhaseW_CompileDXBCProducesBytecode)
 {
+    if constexpr (!kDXBCCompilerAvailable)
+        SKIP_TEST("DXBC compilation needs d3dcompiler_47 (Windows only)");
+
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
-    auto blob = xc.Compile(MakeSource("float4 main():SV_Target{return 0;}"), Spark::Graphics::ShaderTarget::DXBC);
+    auto blob = xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::DXBC);
+
     EXPECT_TRUE(blob.success);
     EXPECT_EQ(static_cast<int>(blob.target), static_cast<int>(Spark::Graphics::ShaderTarget::DXBC));
+    EXPECT_TRUE(StartsWithDXBC(blob.bytecode));
+    EXPECT_TRUE(blob.errors.empty());
 }
 
-TEST(ShaderCrossCompilerPhaseW_CompileDXILSucceeds)
+TEST(ShaderCrossCompilerPhaseW_CompileDXBCRejectsBrokenHLSL)
+{
+    if constexpr (!kDXBCCompilerAvailable)
+        SKIP_TEST("DXBC compilation needs d3dcompiler_47 (Windows only)");
+
+    ResetCrossCompiler();
+    auto& xc = Spark::Graphics::GetShaderCrossCompiler();
+    auto blob = xc.Compile(MakeSource("float4 main() : SV_Target { return this_is_not_hlsl(; }"),
+                           Spark::Graphics::ShaderTarget::DXBC);
+
+    EXPECT_FALSE(blob.success);
+    EXPECT_EQ(blob.bytecode.size(), static_cast<size_t>(0));
+    EXPECT_FALSE(blob.errors.empty());
+    EXPECT_EQ(xc.GetCacheSize(), static_cast<size_t>(0)); // failures are never cached
+}
+
+// ============================================================================
+// Targets with no compiler behind them fail closed
+// ============================================================================
+
+TEST(ShaderCrossCompilerPhaseW_CompileDXILReportsNotImplemented)
 {
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
-    auto blob = xc.Compile(MakeSource("float4 main():SV_Target{return 0;}"), Spark::Graphics::ShaderTarget::DXIL);
-    EXPECT_TRUE(blob.success);
-    EXPECT_EQ(static_cast<int>(blob.target), static_cast<int>(Spark::Graphics::ShaderTarget::DXIL));
+    auto blob = xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::DXIL);
+
+    EXPECT_FALSE(blob.success);
+    EXPECT_EQ(blob.bytecode.size(), static_cast<size_t>(0));
+    EXPECT_STR_CONTAINS(blob.errors, "not implemented");
+    EXPECT_STR_CONTAINS(blob.errors, "DXC");
 }
 
-TEST(ShaderCrossCompilerPhaseW_CompileSPIRVSucceeds)
+TEST(ShaderCrossCompilerPhaseW_CompileSPIRVReportsNotImplemented)
 {
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
-    auto blob = xc.Compile(MakeSource("float4 main():SV_Target{return 0;}"), Spark::Graphics::ShaderTarget::SPIRV);
-    EXPECT_TRUE(blob.success);
-    EXPECT_EQ(static_cast<int>(blob.target), static_cast<int>(Spark::Graphics::ShaderTarget::SPIRV));
+    auto blob = xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::SPIRV);
+
+    EXPECT_FALSE(blob.success);
+    EXPECT_EQ(blob.bytecode.size(), static_cast<size_t>(0));
+    EXPECT_STR_CONTAINS(blob.errors, "DXC");
 }
 
-TEST(ShaderCrossCompilerPhaseW_CompileGLSLSucceeds)
+TEST(ShaderCrossCompilerPhaseW_CompileGLSLReportsNotImplemented)
 {
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
-    auto blob = xc.Compile(MakeSource("float4 main():SV_Target{return 0;}"), Spark::Graphics::ShaderTarget::GLSL);
-    EXPECT_TRUE(blob.success);
-    EXPECT_EQ(static_cast<int>(blob.target), static_cast<int>(Spark::Graphics::ShaderTarget::GLSL));
+    auto blob = xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::GLSL);
+
+    EXPECT_FALSE(blob.success);
+    EXPECT_STR_CONTAINS(blob.errors, "SPIRV-Cross");
 }
 
-TEST(ShaderCrossCompilerPhaseW_CompileMSLSucceeds)
+TEST(ShaderCrossCompilerPhaseW_CompileMSLReportsNotImplemented)
 {
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
-    auto blob = xc.Compile(MakeSource("float4 main():SV_Target{return 0;}"), Spark::Graphics::ShaderTarget::MSL);
-    EXPECT_TRUE(blob.success);
-    EXPECT_EQ(static_cast<int>(blob.target), static_cast<int>(Spark::Graphics::ShaderTarget::MSL));
+    auto blob = xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::MSL);
+
+    EXPECT_FALSE(blob.success);
+    EXPECT_STR_CONTAINS(blob.errors, "SPIRV-Cross");
+}
+
+TEST(ShaderCrossCompilerPhaseW_UnimplementedTargetsAreNotCached)
+{
+    ResetCrossCompiler();
+    auto& xc = Spark::Graphics::GetShaderCrossCompiler();
+
+    xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::SPIRV);
+    xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::GLSL);
+    xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::MSL);
+
+    EXPECT_EQ(xc.GetCacheSize(), static_cast<size_t>(0));
 }
 
 // ============================================================================
@@ -172,10 +243,13 @@ TEST(ShaderCrossCompilerPhaseW_CompileMSLSucceeds)
 
 TEST(ShaderCrossCompilerPhaseW_SecondCompileHitsCache)
 {
+    if constexpr (!kDXBCCompilerAvailable)
+        SKIP_TEST("Populating the cache needs the DXBC compiler (Windows only)");
+
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
 
-    auto source = MakeSource("float4 main():SV_Target{return 2;}");
+    auto source = MakeSource();
     xc.Compile(source, Spark::Graphics::ShaderTarget::DXBC);
     const auto stats1 = xc.GetCacheStats();
     const size_t size1 = xc.GetCacheSize();
@@ -190,10 +264,13 @@ TEST(ShaderCrossCompilerPhaseW_SecondCompileHitsCache)
 
 TEST(ShaderCrossCompilerPhaseW_ClearCacheKeepsInitialized)
 {
+    if constexpr (!kDXBCCompilerAvailable)
+        SKIP_TEST("Populating the cache needs the DXBC compiler (Windows only)");
+
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
 
-    xc.Compile(MakeSource("float4 main():SV_Target{return 3;}"), Spark::Graphics::ShaderTarget::DXBC);
+    xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::DXBC);
     EXPECT_TRUE(xc.GetCacheSize() > static_cast<size_t>(0));
 
     xc.ClearCache();
@@ -207,34 +284,51 @@ TEST(ShaderCrossCompilerPhaseW_ClearCacheKeepsInitialized)
 
 TEST(ShaderCrossCompilerPhaseW_StageDiscriminatesCache)
 {
+    if constexpr (!kDXBCCompilerAvailable)
+        SKIP_TEST("Populating the cache needs the DXBC compiler (Windows only)");
+
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
 
-    xc.Compile(MakeSource("void main(){}", Spark::Graphics::ShaderStage::Vertex), Spark::Graphics::ShaderTarget::DXBC);
-    xc.Compile(MakeSource("void main(){}", Spark::Graphics::ShaderStage::Pixel), Spark::Graphics::ShaderTarget::DXBC);
+    const auto vs = xc.Compile(MakeSource(kVertexSource, Spark::Graphics::ShaderStage::Vertex),
+                               Spark::Graphics::ShaderTarget::DXBC);
+    const auto ps =
+        xc.Compile(MakeSource(kPixelSource, Spark::Graphics::ShaderStage::Pixel), Spark::Graphics::ShaderTarget::DXBC);
 
+    EXPECT_TRUE(vs.success);
+    EXPECT_TRUE(ps.success);
+    EXPECT_NE(static_cast<int>(vs.stage), static_cast<int>(ps.stage));
+    EXPECT_NE(vs.bytecode.size(), static_cast<size_t>(0));
     EXPECT_EQ(xc.GetCacheSize(), static_cast<size_t>(2));
 }
 
 TEST(ShaderCrossCompilerPhaseW_TargetDiscriminatesCache)
 {
+    if constexpr (!kDXBCCompilerAvailable)
+        SKIP_TEST("Populating the cache needs the DXBC compiler (Windows only)");
+
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
 
-    xc.Compile(MakeSource("void main(){}"), Spark::Graphics::ShaderTarget::DXBC);
-    xc.Compile(MakeSource("void main(){}"), Spark::Graphics::ShaderTarget::SPIRV);
+    xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::DXBC);
+    xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::SPIRV);
 
-    EXPECT_EQ(xc.GetCacheSize(), static_cast<size_t>(2));
+    // Only DXBC compiles, so the SPIR-V attempt must leave the cache alone
+    // instead of inserting a zero-byte "success" entry.
+    EXPECT_EQ(xc.GetCacheSize(), static_cast<size_t>(1));
 }
 
 TEST(ShaderCrossCompilerPhaseW_DefinesDiscriminateCache)
 {
+    if constexpr (!kDXBCCompilerAvailable)
+        SKIP_TEST("Populating the cache needs the DXBC compiler (Windows only)");
+
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
 
-    xc.Compile(MakeSource("void main(){}", Spark::Graphics::ShaderStage::Vertex, {"USE_FOO=1"}),
+    xc.Compile(MakeSource(kVertexSource, Spark::Graphics::ShaderStage::Vertex, {"USE_FOO=1"}),
                Spark::Graphics::ShaderTarget::DXBC);
-    xc.Compile(MakeSource("void main(){}", Spark::Graphics::ShaderStage::Vertex, {"USE_FOO=2"}),
+    xc.Compile(MakeSource(kVertexSource, Spark::Graphics::ShaderStage::Vertex, {"USE_FOO=2"}),
                Spark::Graphics::ShaderTarget::DXBC);
 
     EXPECT_EQ(xc.GetCacheSize(), static_cast<size_t>(2));
@@ -244,17 +338,26 @@ TEST(ShaderCrossCompilerPhaseW_DefinesDiscriminateCache)
 // CompileAll fan-out
 // ============================================================================
 
-TEST(ShaderCrossCompilerPhaseW_CompileAllProducesMultipleTargets)
+TEST(ShaderCrossCompilerPhaseW_CompileAllReportsPerTargetTruth)
 {
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
 
-    auto blobs = xc.CompileAll(MakeSource("void main(){}"));
+    auto blobs = xc.CompileAll(MakeSource());
     EXPECT_TRUE(blobs.size() >= static_cast<size_t>(2));
-    // Linux platform produces at least SPIRV + GLSL; Windows adds DXBC.
+
     for (const auto& blob : blobs)
     {
-        EXPECT_TRUE(blob.success);
+        if (blob.target == Spark::Graphics::ShaderTarget::DXBC)
+        {
+            EXPECT_EQ(blob.success, kDXBCCompilerAvailable);
+        }
+        else
+        {
+            // SPIR-V and GLSL have no compiler: never a silent success.
+            EXPECT_FALSE(blob.success);
+            EXPECT_FALSE(blob.errors.empty());
+        }
     }
 }
 
@@ -267,10 +370,10 @@ TEST(ShaderCrossCompilerPhaseW_CompileAsyncResolvesToBlob)
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
 
-    auto future = xc.CompileAsync(MakeSource("void main(){}"), Spark::Graphics::ShaderTarget::SPIRV);
+    auto future = xc.CompileAsync(MakeSource(), Spark::Graphics::ShaderTarget::DXBC);
     auto blob = future.get();
-    EXPECT_TRUE(blob.success);
-    EXPECT_EQ(static_cast<int>(blob.target), static_cast<int>(Spark::Graphics::ShaderTarget::SPIRV));
+    EXPECT_EQ(static_cast<int>(blob.target), static_cast<int>(Spark::Graphics::ShaderTarget::DXBC));
+    EXPECT_EQ(blob.success, kDXBCCompilerAvailable);
 }
 
 TEST(ShaderCrossCompilerPhaseW_CompileVariantsAsyncFanout)
@@ -279,15 +382,15 @@ TEST(ShaderCrossCompilerPhaseW_CompileVariantsAsyncFanout)
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
 
     std::vector<Spark::Graphics::ShaderSource> sources = {
-        MakeSource("void main(){}", Spark::Graphics::ShaderStage::Vertex, {"A"}),
-        MakeSource("void main(){}", Spark::Graphics::ShaderStage::Vertex, {"B"}),
-        MakeSource("void main(){}", Spark::Graphics::ShaderStage::Vertex, {"C"})};
-    auto futures = xc.CompileVariantsAsync(sources, Spark::Graphics::ShaderTarget::GLSL);
+        MakeSource(kVertexSource, Spark::Graphics::ShaderStage::Vertex, {"A"}),
+        MakeSource(kVertexSource, Spark::Graphics::ShaderStage::Vertex, {"B"}),
+        MakeSource(kVertexSource, Spark::Graphics::ShaderStage::Vertex, {"C"})};
+    auto futures = xc.CompileVariantsAsync(sources, Spark::Graphics::ShaderTarget::DXBC);
     EXPECT_EQ(futures.size(), static_cast<size_t>(3));
     for (auto& f : futures)
     {
         auto blob = f.get();
-        EXPECT_TRUE(blob.success);
+        EXPECT_EQ(blob.success, kDXBCCompilerAvailable);
     }
 }
 
@@ -300,7 +403,7 @@ TEST(ShaderCrossCompilerPhaseW_ConsoleStatusReturnsString)
     ResetCrossCompiler();
     auto& xc = Spark::Graphics::GetShaderCrossCompiler();
 
-    xc.Compile(MakeSource("void main(){}"), Spark::Graphics::ShaderTarget::DXBC);
+    xc.Compile(MakeSource(), Spark::Graphics::ShaderTarget::DXBC);
 
     const auto status = xc.Console_GetStatus();
     EXPECT_STR_CONTAINS(status, "ShaderCrossCompiler");

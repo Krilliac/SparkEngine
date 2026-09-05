@@ -230,6 +230,18 @@ namespace Spark
         void RecordObjectiveScore(const std::string& player, int points);
         void AddScore(const std::string& player, int points);
 
+        /**
+         * @brief Restore a player's persisted kills/deaths/score after a save is loaded.
+         *
+         * The scoreboard is match state, not ECS state, so a loaded save has to put it
+         * back explicitly; without this the counters silently reset to zero on quickload.
+         * The player is registered first when the match does not know the name yet, so a
+         * restore into a fresh session works.
+         *
+         * @return false when @p name is empty or a counter is negative (nothing written).
+         */
+        bool RestorePlayerScore(const std::string& name, int kills, int deaths, int totalScore);
+
         // === Spawn Points ===
 
         void AddSpawnPoint(const SpawnPoint& spawn);

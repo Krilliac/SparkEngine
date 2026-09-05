@@ -161,13 +161,31 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     // Shader instances and LoadFromFile calls add further watch
     // directories on demand via AddWatchDirectory.
     auto& hotReload = Spark::Graphics::ShaderHotReload::GetInstance();
-    if (!hotReload.IsWatching())
+
+    // The working directory is a load-time fallback in m_searchPaths, not a
+    // watch root: watching it walks the whole install (Assets/, Saves/, module
+    // DLLs) recursively on every packaged launch.
+    auto isWatchableShaderDir = [](const std::string& path)
     {
         std::error_code ec;
+        if (!std::filesystem::exists(path, ec) || ec)
+            return false;
+
+        const std::filesystem::path candidate = std::filesystem::weakly_canonical(path, ec);
+        if (ec)
+            return false;
+        const std::filesystem::path workingDir = std::filesystem::current_path(ec);
+        if (ec)
+            return false;
+        return candidate != workingDir;
+    };
+
+    if (!hotReload.IsWatching())
+    {
         bool initialized = false;
         for (const auto& path : m_searchPaths)
         {
-            if (std::filesystem::exists(path, ec))
+            if (isWatchableShaderDir(path))
             {
                 hotReload.Initialize(path);
                 initialized = true;
@@ -176,15 +194,28 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
         }
         if (!initialized)
         {
-            hotReload.Initialize(".");
+            // A watcher with nothing to watch must be off, not aimed at the
+            // working directory: Initialize(".") recursively scans the whole
+            // install (Assets/, Saves/, module DLLs) on every packaged launch.
+            hotReload.SetEnabled(false);
+            std::string searched;
+            for (const auto& path : m_searchPaths)
+            {
+                if (!searched.empty())
+                    searched += ", ";
+                searched += path;
+            }
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "Shader hot reload disabled: no configured shader search path is a watchable "
+                           "directory (%s)",
+                           searched.c_str());
         }
     }
     else
     {
         for (const auto& path : m_searchPaths)
         {
-            std::error_code ec;
-            if (std::filesystem::exists(path, ec))
+            if (isWatchableShaderDir(path))
             {
                 hotReload.AddWatchDirectory(path);
             }
@@ -204,13 +235,11 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     }
 
     // Phase W: activate Spark::Graphics::ShaderCrossCompiler singleton.
-    // In-memory compile cache used by CompileAll / CompileAsync. The
-    // internal per-target Compile* functions are currently stubs that
-    // report success without producing bytecode — Phase W wires the
-    // lifecycle so tests and future asset cookers that need a
-    // cross-target compile surface have a shared instance to talk to,
-    // and so any real DXC / SPIRV-Cross integration slots into this
-    // existing activation.
+    // In-memory compile cache used by CompileAll / CompileAsync. Its DXBC
+    // target compiles for real through d3dcompiler_47; DXIL / SPIR-V / GLSL /
+    // MSL have no compiler integrated and fail closed with the missing
+    // dependency named, so any future DXC / SPIRV-Cross integration slots into
+    // this existing activation.
     auto& crossCompiler = Spark::Graphics::GetShaderCrossCompiler();
     if (!crossCompiler.IsInitialized())
     {

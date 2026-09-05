@@ -8,6 +8,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -71,6 +72,24 @@ namespace SparkEditor
         AlignMode GetAlignMode() const { return m_alignMode; }
         const PlacementBrush& GetBrush() const { return m_brush; }
 
+        /// Creates one entity from an entity-template name; returns false if unsupported.
+        using EntityTemplateCreator = std::function<bool(const std::string&)>;
+
+        /**
+         * @brief Install the document's entity-creation entry point.
+         *
+         * The editor shell passes a creator that routes to
+         * EditorUI::CreateDocumentEntity, so placement is a real, undoable document
+         * edit rather than a log line.
+         */
+        void SetEntityCreator(EntityTemplateCreator creator) { m_entityCreator = std::move(creator); }
+
+        /// @brief Whether placement can actually create entities.
+        bool IsPlacementConnected() const { return static_cast<bool>(m_entityCreator); }
+
+        /// @brief Create one entity from an entity template; false when unconnected or unsupported.
+        bool PlaceTemplate(const std::string& templateName);
+
       private:
         void RenderPlacementModeSelector();
         void RenderSnapSettings();
@@ -99,7 +118,10 @@ namespace SparkEditor
         bool m_lockZ = false;
         bool m_uniformScale = true;
 
-        // Prefab library
+        // Document entity creation entry point; empty until the editor wires it in.
+        EntityTemplateCreator m_entityCreator;
+
+        // Entity template library
         std::vector<PrefabEntry> m_prefabs;
         char m_prefabSearch[256] = {0};
         int m_selectedPrefab = -1;

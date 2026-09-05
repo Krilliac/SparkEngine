@@ -214,6 +214,15 @@ XML
     summary-signature)
         write_clean "SUMMARY: AddressSanitizer: heap-buffer-overflow"
         ;;
+    incomplete-signature)
+        printf '=== SparkEngine Test Suite ===\n'
+        printf 'Shuffle seed: 123\n'
+        printf 'Running 2 tests...\n'
+        printf '[   OK   ] Contract_One\n'
+        printf '[ RUN    ] Contract_Two\n'
+        printf 'ERROR: AddressSanitizer: heap-buffer-overflow\n'
+        exit 1
+        ;;
     plain-sanitizer-prose)
         write_clean "ThreadSanitizer instrumentation enabled"
         ;;
@@ -828,6 +837,10 @@ expect_status 1 "$CASE_STATUS" "sanitizer signature overrides exit zero"
 expect_contains "$CASE_DIR/metadata.json" '"classification": "sanitizer-finding"' "console sanitizer classification"
 run_case summary-signature
 expect_status 1 "$CASE_STATUS" "summary-only sanitizer signature overrides exit zero"
+run_case incomplete-signature
+expect_status 1 "$CASE_STATUS" "an aborted signature run preserves the producer exit code"
+expect_contains "$CASE_DIR/metadata.json" '"classification": "incomplete-run"' \
+    "a suite that died mid-run is not reported as a completed sanitizer finding"
 run_case plain-sanitizer-prose
 expect_status 0 "$CASE_STATUS" "plain sanitizer prose is not a finding"
 run_case runtime

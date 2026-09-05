@@ -32,5 +32,6 @@ namespace SparkEditor
         std::string m_gatewayConfig = "Config/gateway.ini";
         std::string m_serverConfig = "Config/server.ini";
         std::string m_serverId = "local-area";
+        std::string m_orchestratorNotice; ///< Last orchestrator command rejection, shown in the panel.
     };
 } // namespace SparkEditor

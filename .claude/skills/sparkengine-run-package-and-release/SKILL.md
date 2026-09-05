@@ -37,7 +37,14 @@ facts below were verified against the working tree on 2026-08-23.
 - **Game module** — a gameplay DLL/SO under `GameModules/` loaded by the engine exe at runtime.
 - **Module manifest** — `spark.modules.json` placed next to the engine exe; lists which module(s) to load.
 - **CPack** — CMake's packaging tool; produces the ZIP/TGZ/NSIS/WIX artifacts the release workflow publishes.
-- **NullRHIDevice** — GPU-less rendering fallback; engine continues headless when no graphics backend exists.
+- **NullRHIDevice** — GPU-less rendering device. It is a *headless* device, not a silent fallback:
+  `RHIBridge::Initialize` no longer degrades a **windowed** request to NullRHI. A null window handle or
+  `GraphicsBackend::None` is still treated as a headless request; an embedder that wants the old
+  degrade-on-failure behaviour must pass `allowHeadlessFallback = true`.
+- **Per-user data root** — `Spark::UserPaths` (`SparkEngine/Source/Core/EngineSettings.h`):
+  `%LOCALAPPDATA%/SparkEngine` on Windows, `$XDG_DATA_HOME/SparkEngine` (else
+  `$HOME/.local/share/SparkEngine`) on POSIX. `Logs/`, `Saves/`, `spark_trace.json`, `ShaderCache/`
+  and the `settings.ini` fallback all live there, not beside the executable.
 
 ## When NOT to use this skill (sibling routing)
 
@@ -70,8 +77,8 @@ every exit code with log evidence (`Logs/`, see Diagnostics).
 |---|---|---|
 | `SparkEngine.exe` | The game runtime (windowed `WIN32` app on Windows; also the headless/dedicated server) | `SparkEngine` (root `CMakeLists.txt` ~line 1204) |
 | `SparkEditor.exe` | ImGui editor (`ENABLE_EDITOR=ON`, default) | `SparkEditor` |
-| `SparkConsole.exe` | External console subprocess the engine spawns via `ConsoleProcessManager` | `SparkConsole` |
-| `SparkShaderCompiler.exe` | Shader compilation tool | `SparkShaderCompiler` |
+| `SparkConsole.exe` | External console subprocess the engine spawns via `ConsoleProcessManager`. Its human-facing output goes to its own console screen buffer (`CONOUT$`); **stdout is reserved for commands sent back to the engine**, so the console no longer feeds its own banner to the engine as commands | `SparkConsole` |
+| `SparkShaderCompiler.exe` | Shader compilation tool. The Direct3D path is a real compile through `d3dcompiler_47`; every other backend is a passthrough/stub and `HasIntegratedCompiler` keeps `-validate` from reporting those as a pass | `SparkShaderCompiler` |
 | `SparkTests.exe` | Unit test runner (also run by CTest) | `SparkTests` |
 | `SparkLauncher.exe` | Project picker (`ENABLE_LAUNCHER=ON`, default) | `SparkLauncher` |
 | `SparkBuild.exe` | Terminal-UI CMake configurator (`ENABLE_SPARKBUILD=ON`, default) | `SparkBuild` |
@@ -273,19 +280,40 @@ gh release view nightly --json assets --jq '[.assets[].download_count] | add'
 | Engine starts, "N module candidates found — project selector armed" (headless: pick-one guidance, nothing loads) | Bare launch with ≥2 module DLLs next to the exe | Pass `-game <dll>` or drop a `spark.modules.json` next to the exe |
 | "no game modules" guidance | No module DLL next to the exe (e.g. `BUILD_GAME_MODULES=OFF`, or running from the wrong dir) | Launch from the `bin/` dir of the same preset that built the modules |
 | Second gameplay module refuses to load | `ModuleManager` hard-refuses a second Game-kind module (the old bulk-load double-stepped physics) | Intentional; load exactly one Game module |
-| No external console window appears | You passed `-no-subprocess`, or `SparkConsole.exe` isn't beside the engine exe | Check `ConsoleProcessManager` log lines; `SimpleConsole` still captures logs in-process |
-| Blank window, no GPU errors | No GPU backend → `NullRHIDevice` headless fallback engaged | Expected on GPU-less hosts; use WARP/Lavapipe/llvmpipe for software rendering |
+| No external console window appears | You passed `-no-subprocess`, or `SparkConsole.exe` isn't beside the engine exe | Check `ConsoleProcessManager` log lines; `SimpleConsole` still captures logs in-process. `ConsoleProcessManager::Initialize()` returning `true` only means "initialization attempted without error" (child launched, no trusted executable found, or the console compiled out of a Shipping build) — `IsConsoleRunning()` is the liveness answer |
+| Console mirror shows a gap and one `[WARN] SparkConsole mirror dropped N log line(s)` | The engine→SparkConsole mirror queue is bounded at 4096 lines with drop-oldest; the notice is emitted once per burst when the pipe drains | Not a crash; the in-process log file is complete |
+| Windowed launch fails at graphics init on a GPU-less host | `RHIBridge::Initialize` no longer silently degrades a windowed request to NullRHI | Intentional. Launch `-headless`, or pass `allowHeadlessFallback = true` from an embedder |
 | Wrong/old binary behavior | You built one preset and launched another (`build/windows-debug` vs `build/windows-release`) | Check binary timestamp vs your build log; a stale binary still fails a RED proof |
 | Crash | `CrashHandler` writes a full-memory minidump `<dumpPrefix><timestamp>.dmp` and a manifest dir under `%TEMP%/spark_crash_<pid>`; `SparkCrashReporter.exe` is the out-of-process reporter | Grab the `.dmp` + newest `Logs/` file, then switch to `sparkengine-debugging-playbook` |
 
-**Logs:** the file logger writes `Logs/<prefix>_<timestamp>.log` relative to the working directory
-(`Utils/Logger.h` default `directory = "Logs/"`) — so launch working-directory matters. A stray
+**Logs:** engine logs come from the `Logger` `FileSink` installed by `Logger::InstallDefaultSinks`, and
+the directory is resolved per user — `GameplayLifecycleShared.cpp` passes
+`ResolveUserDataPath("Logs")`, i.e. `%LOCALAPPDATA%/SparkEngine/Logs` (XDG equivalent on POSIX), not a
+CWD-relative `Logs/`. `InstallDefaultSinks` returns the opened path and warns *through the sinks it
+just installed* when a file sink was requested but no file could be opened, naming the directory; an
+empty returned path means "could not open", never "not requested". It also calls `ClearSinks()` first,
+so engine sinks must be installed before any editor panel registers its own sink. A stray
 `server.log` at repo root is redirected server output from a local session, not an engine-created path.
+
+**Saves:** `SaveSystem::Initialize` takes `Spark::UserPaths::ResolveSaveDirectory()` on all three entry
+points (Windows windowed, Windows headless, Linux). A pre-existing `<cwd>/Saves` tree is copied across
+once on first run and a `.migrated-from-working-directory` marker keeps it a one-time migration; a
+failed copy leaves the marker off so the next launch retries and logs. When no usable per-user location
+exists the legacy `"Saves"` path is kept.
 
 ## Provenance and maintenance
 
 Facts verified 2026-08-23 against the working tree of branch
-`claude/whole-nine-yards-20260823` (uncommitted changes ahead of `0e1fe7e7`). Re-verify with:
+`claude/whole-nine-yards-20260823` (uncommitted changes ahead of `0e1fe7e7`).
+
+**Updated 2026-09-05** against the uncommitted working tree of branch
+`claude/release-readiness-sweep-20260904`: per-user `Logs/`/`Saves/` through `Spark::UserPaths` with a
+one-time legacy-saves migration, `Logger::InstallDefaultSinks` semantics (ClearSinks ordering, warn on
+an unopenable file sink), `ConsoleProcessManager::Initialize()` return-value meaning and the bounded
+4096-line SparkConsole mirror queue, `RHIBridge::Initialize` no longer degrading a windowed request to
+NullRHI, and the real-vs-stub split in `SparkShaderCompiler`. Read from source, not from a run.
+
+Re-verify with:
 
 ```bash
 ls -d GameModules/*/ | wc -l                                             # module count (11)
@@ -298,6 +326,10 @@ grep -n 'cron\|PackageSmoke\|softprops' .github/workflows/release.yml    # relea
 grep -n 'PackageSmoke' .github/workflows/build.yml                       # (expect: no matches — release-only gate)
 grep -rn 'Build::GamePackager::GetInstance' SparkEngine/Source SparkEditor/Source  # packager wiring status
 grep -n 'SPARK_ENGINE_VERSION' CMakeLists.txt                            # version used in package names
+grep -n 'ResolveSaveDirectory\|GetUserDataDir' SparkEngine/Source/Core/EngineSettings.h  # per-user roots
+grep -n 'ResolveUserDataPath("Logs")' SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp
+grep -n 'allowHeadlessFallback' SparkEngine/Source/Graphics/RHI/RHIBridge.h              # windowed-request policy
+grep -n 'HasIntegratedCompiler' SparkShaderCompiler/src/main.cpp                          # real-compile backends
 ```
 
 Volatile items most likely to drift: module count (CMake auto-discovers `GameModules/*/CMakeLists.txt`),

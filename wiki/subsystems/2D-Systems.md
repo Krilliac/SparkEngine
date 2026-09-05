@@ -658,7 +658,7 @@ Run the tests with:
 ```bash
 cd build && ctest --output-on-failure --no-tests=error
 # Or directly:
-./bin/SparkTests --gtest_filter="*Sprite2D*"
+SPARK_TEST_NAME=Sprite2D ./bin/SparkTests   # substring filter; the harness is not GoogleTest
 ```
 
 ---

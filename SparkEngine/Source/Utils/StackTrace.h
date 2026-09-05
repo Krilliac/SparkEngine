@@ -160,6 +160,62 @@ namespace Spark
             return oss.str();
         }
 
+        /**
+         * @brief The one process-wide lock guarding every DbgHelp call
+         *
+         * Microsoft documents all DbgHelp entry points (Sym*, StackWalk64) as
+         * single-threaded: concurrent calls "will likely result in unexpected
+         * behavior or memory corruption". The synchronous production logger
+         * captures a trace on whichever thread logs an Error, and Assert does
+         * the same, so two threads really do reach SymFromAddr at once. Every
+         * Sym* call in the engine — here and in CrashHandler — takes this lock.
+         */
+        static std::mutex& SymbolLock()
+        {
+            static std::mutex s_symbolMutex;
+            return s_symbolMutex;
+        }
+
+        /**
+         * @brief Initialize the DbgHelp symbol handler once per process (Windows only)
+         *
+         * SymInitialize must be called exactly once before any Sym* call, and no
+         * caller may SymCleanup afterwards: the once-flag never re-fires, so a
+         * cleanup would leave every later trace symbol-less.
+         *
+         * @note The caller must already hold SymbolLock().
+         */
+        static void EnsureSymbolsInitialized()
+        {
+#ifdef SPARK_PLATFORM_WINDOWS
+            static std::once_flag s_symInitFlag;
+            std::call_once(s_symInitFlag,
+                           []()
+                           {
+                               HANDLE process = GetCurrentProcess();
+
+                               // SYMOPT_UNDNAME: return demangled C++ names
+                               // SYMOPT_LOAD_LINES: resolve source file + line numbers
+                               // Note: SYMOPT_DEFERRED_LOADS is intentionally omitted —
+                               // it delays symbol loading and can cause the main module's
+                               // PDB to be missed if SymFromAddr is called before the
+                               // deferred load triggers.
+                               SymSetOptions(SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
+
+                               // Build a search path that includes the executable's directory,
+                               // so the PDB file is found even when the working directory differs.
+                               char exePath[MAX_PATH] = {};
+                               GetModuleFileNameA(nullptr, exePath, MAX_PATH);
+                               // Truncate to directory
+                               char* lastSlash = strrchr(exePath, '\\');
+                               if (lastSlash)
+                                   *lastSlash = '\0';
+
+                               SymInitialize(process, exePath, TRUE);
+                           });
+#endif
+        }
+
       private:
         std::vector<StackFrame> m_frames;
         void* m_rawAddresses[MAX_FRAMES] = {};
@@ -205,49 +261,14 @@ namespace Spark
 #endif
         }
 
-        /**
-         * @brief Initialize DbgHelp symbol handler once per process (Windows only)
-         *
-         * SymInitialize must be called exactly once before any Sym* calls.
-         * Calling it repeatedly without SymCleanup causes subsequent calls to fail.
-         * SymSetOptions configures PDB search, line resolution, and name undecorating.
-         */
-        static void EnsureSymbolsInitialized()
-        {
-#ifdef SPARK_PLATFORM_WINDOWS
-            static std::once_flag s_symInitFlag;
-            std::call_once(s_symInitFlag,
-                           []()
-                           {
-                               HANDLE process = GetCurrentProcess();
-
-                               // SYMOPT_UNDNAME: return demangled C++ names
-                               // SYMOPT_LOAD_LINES: resolve source file + line numbers
-                               // Note: SYMOPT_DEFERRED_LOADS is intentionally omitted —
-                               // it delays symbol loading and can cause the main module's
-                               // PDB to be missed if SymFromAddr is called before the
-                               // deferred load triggers.
-                               SymSetOptions(SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
-
-                               // Build a search path that includes the executable's directory,
-                               // so the PDB file is found even when the working directory differs.
-                               char exePath[MAX_PATH] = {};
-                               GetModuleFileNameA(nullptr, exePath, MAX_PATH);
-                               // Truncate to directory
-                               char* lastSlash = strrchr(exePath, '\\');
-                               if (lastSlash)
-                                   *lastSlash = '\0';
-
-                               SymInitialize(process, exePath, TRUE);
-                           });
-#endif
-        }
-
         void ResolveSymbols()
         {
             m_frames.resize(static_cast<size_t>(m_capturedFrames));
 
 #ifdef SPARK_PLATFORM_WINDOWS
+            // DbgHelp is single-threaded; hold the process-wide lock across the
+            // whole resolve loop, not just the one-time initialization.
+            std::lock_guard<std::mutex> symbolLock(SymbolLock());
             EnsureSymbolsInitialized();
             HANDLE process = GetCurrentProcess();
 

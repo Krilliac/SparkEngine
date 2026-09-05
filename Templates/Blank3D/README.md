@@ -17,6 +17,10 @@ Load `Blank3D.dll` through `spark.modules.json`; the starter scene is `Scenes/De
 
 - `W`, `A`, `S`, `D`: fly on the camera-relative horizontal plane
 - `Q`, `E`: descend and ascend
+- Scripted movement goes through `Blank3DGameModule::Move(forward, right, vertical, deltaTime)` in
+  `Source/GameModule.h`. It now uses the same yaw-relative frame as the keys (it used to move along world axes), but
+  unlike the key path it does not clamp the input vector to unit length, so a caller passing `(1, 1, 0)` moves
+  faster than the equivalent `W`+`D` hold.
 - Hold right mouse and move: yaw and pitch the camera
 - `R`: reset the camera to the authored overview
 

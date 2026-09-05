@@ -81,7 +81,12 @@ namespace SparkEditor
 
                     if (ImGui::Button(ICON_FA_PLAY, ImVec2(28, 24)))
                     {
-                        RunWorkflow(*wf);
+                        // Destructive workflows (Clean & Rebuild deletes a build tree) must
+                        // never run straight off a single click.
+                        if (wf->RequiresConfirmation())
+                            m_pendingConfirmWorkflow = wf->GetName();
+                        else
+                            RunWorkflow(*wf);
                     }
 
                     if (isRunning)
@@ -107,6 +112,74 @@ namespace SparkEditor
         {
             ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "No workflows registered");
         }
+
+        RenderConfirmationModal();
+    }
+
+    void WorkflowPanel::RenderConfirmationModal()
+    {
+        static constexpr const char* kModalId = "Confirm workflow##WorkflowConfirm";
+
+        if (m_pendingConfirmWorkflow.empty())
+        {
+            m_confirmModalOpen = false;
+            return;
+        }
+
+        if (!m_confirmModalOpen)
+        {
+            ImGui::OpenPopup(kModalId);
+            m_confirmModalOpen = true;
+        }
+
+        // ImGui closes a modal on Escape or on a click outside without running the Cancel branch. Pass
+        // p_open so that close is observable: without it m_pendingConfirmWorkflow stayed set, the popup
+        // was re-opened on the next frame, and the dialog could not be dismissed except with Cancel.
+        bool stayOpen = true;
+        if (!ImGui::BeginPopupModal(kModalId, &stayOpen, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            // BeginPopupModal returns false once the popup is closed; treat that as a cancel.
+            m_pendingConfirmWorkflow.clear();
+            m_confirmModalOpen = false;
+            return;
+        }
+
+        if (!stayOpen)
+        {
+            m_pendingConfirmWorkflow.clear();
+            m_confirmModalOpen = false;
+            ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+            return;
+        }
+
+        const EditorWorkflow* workflow = WorkflowRegistry::Instance().Find(m_pendingConfirmWorkflow);
+        ImGui::TextWrapped("'%s' deletes files that cannot be recovered.", m_pendingConfirmWorkflow.c_str());
+        if (workflow && !workflow->GetDescription().empty())
+            ImGui::TextWrapped("%s", workflow->GetDescription().c_str());
+        ImGui::Spacing();
+        ImGui::TextWrapped("The editor is unresponsive while a workflow runs.");
+        ImGui::Separator();
+
+        if (ImGui::Button("Run", ImVec2(110, 0)))
+        {
+            const std::string name = m_pendingConfirmWorkflow;
+            m_pendingConfirmWorkflow.clear();
+            m_confirmModalOpen = false;
+            ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+            if (const EditorWorkflow* confirmed = WorkflowRegistry::Instance().Find(name))
+                RunWorkflow(*confirmed);
+            return;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(110, 0)))
+        {
+            m_pendingConfirmWorkflow.clear();
+            m_confirmModalOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
 
     void WorkflowPanel::RenderActiveWorkflow()

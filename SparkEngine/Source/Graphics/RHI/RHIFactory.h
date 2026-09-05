@@ -91,12 +91,14 @@ namespace Spark
         /**
  * @brief Compile a shader for a specific backend
  *
- * Handles cross-compilation between shader languages:
- * - HLSL -> DXBC (D3D11/D3D12)
- * - HLSL -> SPIR-V (via DXC for Vulkan)
- * - GLSL -> SPIR-V (via glslang for Vulkan)
- * - GLSL -> native (for OpenGL)
- * - SPIR-V -> SPIR-V (passthrough for Vulkan)
+ * Implemented paths:
+ * - HLSL -> DXBC (D3D11/D3D12) via d3dcompiler_47, Windows only, SM 5.0/5.1
+ * - GLSL -> GLSL (OpenGL): passthrough, because the driver compiles source text
+ *
+ * Every other path fails with an explicit "not integrated" errorMessage:
+ * HLSL -> SPIR-V needs DXC, GLSL -> SPIR-V needs glslang, HLSL -> GLSL needs
+ * SPIRV-Cross, and ray tracing stages need DXC's lib_6_3 profile. The function
+ * never reports success for bytes no compiler has parsed.
  */
         ShaderCompileResult CompileShader(const ShaderCompileOptions& options);
 
@@ -115,19 +117,23 @@ namespace Spark
         // ============================================================================
 
         /**
- * @brief Cross-compile HLSL to GLSL
+ * @brief Keyword-substitution HLSL->GLSL shim. NOT a cross-compiler.
+ *
+ * Translates a handful of types, intrinsics and semantics textually. The output
+ * is a readable starting point, not compilable GLSL, so CompileShader does not
+ * use it — an HLSL->GLSL request fails with a "requires SPIRV-Cross" message.
  */
         std::string CrossCompileHLSLtoGLSL(const std::string& hlslSource, RHIShaderStage stage,
                                            const std::string& entryPoint = "main");
 
         /**
- * @brief Cross-compile HLSL to SPIR-V
+ * @brief Cross-compile HLSL to SPIR-V. Not integrated: always returns empty.
  */
         std::vector<uint8_t> CrossCompileHLSLtoSPIRV(const std::string& hlslSource, RHIShaderStage stage,
                                                      const std::string& entryPoint = "main");
 
         /**
- * @brief Compile GLSL to SPIR-V using glslang
+ * @brief Compile GLSL to SPIR-V using glslang. Not integrated: always returns empty.
  */
         std::vector<uint8_t> CompileGLSLtoSPIRV(const std::string& glslSource, RHIShaderStage stage,
                                                 const std::string& entryPoint = "main");
@@ -178,7 +184,11 @@ namespace Spark
         };
 
         /**
- * @brief Reflect SPIR-V shader to get binding information
+ * @brief Reflect SPIR-V shader to get binding information.
+ *
+ * SPIRV-Reflect is not integrated: this returns an empty reflection for every
+ * input. Callers must not present an empty result as "the shader has no
+ * bindings" — check the SPIR-V magic (0x07230203) before reporting.
  */
         ShaderReflection ReflectSPIRV(const std::vector<uint8_t>& spirvCode);
 

@@ -185,6 +185,21 @@ namespace SparkEditor
         const FrameProfileData* GetCurrentFrame() const;
 
         /**
+     * @brief Whether at least one frame with a non-zero delta has been recorded
+     *
+     * Until this is true the profiler has no measurement, and the panel says so instead of printing 0 ms.
+     */
+        bool HasFrameSample() const { return m_hasFrameSample; }
+
+        /// @brief Mean frame time (ms) over the analysis window, 0 until a sample lands.
+        float GetAverageFrameTimeMs() const { return m_avgFrameTime; }
+
+        /// @brief 50th/95th/99th percentile frame time (ms) over the analysis window.
+        float GetP50FrameTimeMs() const { return m_p50FrameTime; }
+        float GetP95FrameTimeMs() const { return m_p95FrameTime; }
+        float GetP99FrameTimeMs() const { return m_p99FrameTime; }
+
+        /**
      * @brief Get frame data by index
      * @param frameIndex Frame index (0 = most recent)
      * @return Pointer to frame data, or nullptr if not available
@@ -307,7 +322,7 @@ namespace SparkEditor
         /**
      * @brief Update frame profiling data
      */
-        void UpdateFrameData();
+        void UpdateFrameData(float deltaTime);
 
         /**
      * @brief Analyze performance for bottlenecks
@@ -375,6 +390,17 @@ namespace SparkEditor
         std::vector<std::unique_ptr<FrameProfileData>> m_frameHistory; ///< Historical frame data
         std::unique_ptr<FrameProfileData> m_currentFrame;              ///< Current frame data
         int m_currentFrameNumber = 0;                                  ///< Current frame number
+        bool m_hasFrameSample = false;                                 ///< Set once a non-zero delta arrives
+
+        // Aggregates over the analysis window. These are display values derived from m_frameHistory; they are
+        // deliberately NOT written back into m_currentFrame, which holds the measurement for this frame only.
+        float m_avgFrameTime = 0.0f; ///< Mean frame time (ms)
+        float m_avgFps = 0.0f;       ///< Mean FPS
+        float m_minFrameTime = 0.0f; ///< Fastest frame in the window (ms)
+        float m_maxFrameTime = 0.0f; ///< Slowest frame in the window (ms)
+        float m_p50FrameTime = 0.0f; ///< Median frame time (ms)
+        float m_p95FrameTime = 0.0f; ///< 95th percentile frame time (ms)
+        float m_p99FrameTime = 0.0f; ///< 99th percentile frame time (ms)
 
         // CPU profiling
         std::vector<std::unique_ptr<CPUProfileSample>> m_activeCPUSamples; ///< Currently active CPU samples

@@ -5,22 +5,122 @@
 
 #include "ReplayPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Core/EngineContext.h"
+#include "Engine/Replay/ReplaySystem.h"
 #include "Utils/LogMacros.h"
+#include <algorithm>
+#include <filesystem>
 #include <imgui.h>
-#include <iostream>
 
 namespace SparkEditor
 {
 
     ReplayPanel::ReplayPanel() : EditorPanel("Replay", "replay_panel") {}
 
+    Spark::ReplaySystem& ReplayPanel::System() const
+    {
+        if (auto* context = ::EngineContext::Get())
+        {
+            if (auto* replay = context->GetReplay())
+            {
+                return *replay;
+            }
+        }
+        return Spark::ReplaySystem::GetInstance();
+    }
+
     bool ReplayPanel::Initialize()
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "ReplayPanel initialized");
+        RefreshReplayFiles(m_replayDirectory);
+        m_playbackSpeed = System().GetPlaybackSpeed();
         return true;
     }
 
-    void ReplayPanel::Update(float /*deltaTime*/) {}
+    void ReplayPanel::Update(float deltaTime)
+    {
+        if (IsDrivingPlayback())
+        {
+            System().UpdatePlayback(deltaTime);
+        }
+        m_scrubPosition = System().GetPlaybackTime();
+    }
+
+    bool ReplayPanel::IsDrivingPlayback() const
+    {
+        return ::EngineContext::Get() == nullptr;
+    }
+
+    void ReplayPanel::StartRecording()
+    {
+        System().StartRecording();
+    }
+
+    void ReplayPanel::StopRecording()
+    {
+        System().StopRecording();
+    }
+
+    bool ReplayPanel::IsRecording() const
+    {
+        return System().IsRecording();
+    }
+
+    size_t ReplayPanel::GetCapturedFrameCount() const
+    {
+        return System().GetFrameCount();
+    }
+
+    float ReplayPanel::GetDuration() const
+    {
+        return System().GetDuration();
+    }
+
+    bool ReplayPanel::LoadReplayFile(const std::string& filePath)
+    {
+        const bool loaded = System().LoadFromFile(filePath);
+        if (!loaded)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "ReplayPanel: failed to load replay '%s'", filePath.c_str());
+        }
+        m_scrubPosition = System().GetPlaybackTime();
+        return loaded;
+    }
+
+    size_t ReplayPanel::RefreshReplayFiles(const std::string& directory)
+    {
+        m_replayDirectory = directory;
+        m_replayFiles.clear();
+        m_selectedReplay = -1;
+
+        namespace fs = std::filesystem;
+        std::error_code ec;
+        if (!fs::exists(directory, ec) || ec)
+        {
+            return 0;
+        }
+
+        for (const auto& entry : fs::directory_iterator(directory, ec))
+        {
+            if (ec)
+                break;
+            if (!entry.is_regular_file() || entry.path().extension() != ".replay")
+                continue;
+
+            ReplayFileInfo info;
+            info.path = entry.path().string();
+            info.name = entry.path().filename().string();
+            std::error_code sizeEc;
+            info.fileSizeBytes = fs::file_size(entry.path(), sizeEc);
+            if (sizeEc)
+                info.fileSizeBytes = 0;
+            m_replayFiles.push_back(std::move(info));
+        }
+
+        std::sort(m_replayFiles.begin(), m_replayFiles.end(),
+                  [](const ReplayFileInfo& a, const ReplayFileInfo& b) { return a.name < b.name; });
+        return m_replayFiles.size();
+    }
 
     void ReplayPanel::Render()
     {
@@ -59,81 +159,94 @@ namespace SparkEditor
 
     void ReplayPanel::RenderTransportControls()
     {
-        // Transport buttons
+        Spark::ReplaySystem& replay = System();
+        const float duration = replay.GetDuration();
+        const Spark::PlaybackState state = replay.GetPlaybackState();
+
+        ImGui::BeginDisabled(duration <= 0.0f);
+
         if (ImGui::Button(ICON_FA_BACKWARD "##rewind"))
-            m_playbackPosition = 0.0f;
+            replay.SeekTo(0.0f);
         ImGui::SameLine();
 
-        if (m_isPlaying && !m_isPaused)
+        if (state == Spark::PlaybackState::Playing)
         {
             if (ImGui::Button(ICON_FA_PAUSE "##pause"))
-                m_isPaused = true;
+                replay.PausePlayback();
         }
         else
         {
             if (ImGui::Button(ICON_FA_PLAY "##play"))
             {
-                m_isPlaying = true;
-                m_isPaused = false;
+                if (state == Spark::PlaybackState::Paused)
+                    replay.ResumePlayback();
+                else
+                    replay.StartPlayback();
             }
         }
         ImGui::SameLine();
 
         if (ImGui::Button(ICON_FA_STOP "##stop"))
-        {
-            m_isPlaying = false;
-            m_isPaused = false;
-            m_playbackPosition = 0.0f;
-        }
+            replay.StopPlayback();
         ImGui::SameLine();
 
         if (ImGui::Button(ICON_FA_STEP_FORWARD "##step"))
-        {
-            m_playbackPosition += 1.0f / 60.0f; // Step one frame at 60fps
-        }
+            replay.SeekTo(replay.GetPlaybackTime() + 1.0f / 60.0f);
 
-        // Timeline scrubber
+        ImGui::EndDisabled();
+
         ImGui::Separator();
-        if (m_replayDuration > 0.0f)
+        if (duration > 0.0f)
         {
-            ImGui::SliderFloat("Position", &m_playbackPosition, 0.0f, m_replayDuration, "%.2f s");
+            if (ImGui::SliderFloat("Position", &m_scrubPosition, 0.0f, duration, "%.2f s"))
+                replay.SeekTo(m_scrubPosition);
         }
         else
         {
-            ImGui::TextDisabled("No replay loaded.");
+            ImGui::TextDisabled("No replay loaded. Load a file from the Files tab.");
         }
 
-        // Speed control
-        ImGui::SliderFloat("Speed", &m_playbackSpeed, 0.1f, 4.0f, "%.1fx");
+        if (ImGui::SliderFloat("Speed", &m_playbackSpeed, 0.1f, 4.0f, "%.1fx"))
+            replay.SetPlaybackSpeed(m_playbackSpeed);
     }
 
     void ReplayPanel::RenderRecordingControls()
     {
-        if (m_isRecording)
+        if (IsRecording())
         {
             ImGui::TextColored(ImVec4(1.0f, 0.2f, 0.2f, 1.0f), ICON_FA_CIRCLE " RECORDING");
             if (ImGui::Button(ICON_FA_STOP " Stop Recording"))
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Editor, "ReplayPanel: recording stopped");
-                m_isRecording = false;
+                StopRecording();
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "ReplayPanel: recording stopped (%zu frame(s) captured)",
+                               GetCapturedFrameCount());
             }
         }
         else
         {
             if (ImGui::Button(ICON_FA_CIRCLE " Start Recording"))
             {
+                StartRecording();
                 SPARK_LOG_INFO(Spark::LogCategory::Editor, "ReplayPanel: recording started");
-                m_isRecording = true;
             }
         }
 
         ImGui::Separator();
-        ImGui::TextDisabled("Recording captures entity transforms, events,");
-        ImGui::TextDisabled("and input state each frame during Play mode.");
+        ImGui::Text("Frames captured: %zu", GetCapturedFrameCount());
+        ImGui::Text("Duration: %.2f s", GetDuration());
+        ImGui::Separator();
+        ImGui::TextDisabled("Frames are submitted by the running game session.");
+        ImGui::TextDisabled("A session that never submits frames records nothing,");
+        ImGui::TextDisabled("and the frame count above stays at zero.");
     }
 
     void ReplayPanel::RenderReplayBrowser()
     {
+        ImGui::Text("Directory: %s", m_replayDirectory.c_str());
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_REFRESH " Rescan"))
+            RefreshReplayFiles(m_replayDirectory);
+
         if (m_replayFiles.empty())
         {
             ImGui::TextDisabled("No replay files found.");
@@ -141,34 +254,35 @@ namespace SparkEditor
             return;
         }
 
-        if (ImGui::BeginTable("ReplayFileTable", 4,
+        if (ImGui::BeginTable("ReplayFileTable", 2,
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
         {
             ImGui::TableSetupColumn("Name");
-            ImGui::TableSetupColumn("Scene");
-            ImGui::TableSetupColumn("Duration", ImGuiTableColumnFlags_WidthFixed, 80);
-            ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 80);
+            ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 90);
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < static_cast<int>(m_replayFiles.size()); ++i)
             {
-                auto& file = m_replayFiles[i];
+                const ReplayFileInfo& file = m_replayFiles[i];
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
 
-                bool selected = (m_selectedReplay == i);
-                if (ImGui::Selectable(file.name, selected, ImGuiSelectableFlags_SpanAllColumns))
+                const bool selected = (m_selectedReplay == i);
+                if (ImGui::Selectable(file.name.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns))
                     m_selectedReplay = i;
 
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted(file.sceneName);
-                ImGui::TableNextColumn();
-                ImGui::Text("%.1f s", file.duration);
-                ImGui::TableNextColumn();
-                ImGui::Text("%d KB", file.fileSizeKB);
+                ImGui::Text("%.1f KB", static_cast<double>(file.fileSizeBytes) / 1024.0);
             }
             ImGui::EndTable();
         }
+
+        ImGui::BeginDisabled(m_selectedReplay < 0);
+        if (ImGui::Button(ICON_FA_DOWNLOAD " Load Selected") && m_selectedReplay >= 0)
+        {
+            LoadReplayFile(m_replayFiles[static_cast<size_t>(m_selectedReplay)].path);
+        }
+        ImGui::EndDisabled();
     }
 
 } // namespace SparkEditor

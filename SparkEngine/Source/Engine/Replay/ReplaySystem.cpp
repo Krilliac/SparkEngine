@@ -10,6 +10,7 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <utility>
 
 namespace Spark
 {
@@ -45,6 +46,7 @@ namespace Spark
         m_data.duration = 0.0f;
         m_frameCounter = 0;
         m_lastRecordTime = -1.0f;
+        m_captureTime = 0.0f;
         m_recording = true;
     }
 
@@ -81,6 +83,24 @@ namespace Spark
         m_data.frames.push_back(std::move(frame));
         m_lastRecordTime = timestamp;
         m_data.duration = timestamp;
+    }
+
+    void ReplaySystem::RecordFrameTick(const std::vector<ReplayEntityState>& entities, float deltaSeconds)
+    {
+        float timestamp = 0.0f;
+        {
+            // m_mutex is not recursive, so resolve the timestamp and release it
+            // before handing the frame to RecordFrame.
+            std::lock_guard lock(m_mutex);
+            if (!m_recording)
+                return;
+            // m_lastRecordTime is negative until the first frame of a recording
+            // is stored, which is exactly "StartRecording has just run": the
+            // first tick timestamps at zero, every later tick advances by dt.
+            m_captureTime = (m_lastRecordTime < 0.0f) ? 0.0f : m_captureTime + deltaSeconds;
+            timestamp = m_captureTime;
+        }
+        RecordFrame(entities, timestamp);
     }
 
     void ReplaySystem::RecordEvent(const ReplayEvent& event)
@@ -193,6 +213,12 @@ namespace Spark
     {
         std::lock_guard lock(m_mutex);
         return m_data.duration;
+    }
+
+    size_t ReplaySystem::GetFrameCount() const
+    {
+        std::lock_guard lock(m_mutex);
+        return m_data.frames.size();
     }
 
     const ReplayFrame* ReplaySystem::GetCurrentFrame() const
@@ -308,7 +334,9 @@ namespace Spark
             str.resize(len);
             if (len > 0)
                 file.read(str.data(), len);
-            return file.good() || file.eof();
+            // A short read leaves failbit set: a truncated file must be rejected,
+            // not accepted with a partially filled string.
+            return static_cast<bool>(file);
         }
 
     } // anonymous namespace
@@ -396,16 +424,19 @@ namespace Spark
             return false;
         }
 
-        file.read(reinterpret_cast<char*>(&m_data.version), sizeof(m_data.version));
+        // Parse into a local ReplayData and commit only on full success, so a
+        // truncated or corrupt file cannot leave m_data half-overwritten.
+        ReplayData loaded;
+        file.read(reinterpret_cast<char*>(&loaded.version), sizeof(loaded.version));
         if (!file)
             return false;
 
         // Metadata
-        if (!ReadString(file, m_data.mapName))
+        if (!ReadString(file, loaded.mapName))
             return false;
-        if (!ReadString(file, m_data.gameMode))
+        if (!ReadString(file, loaded.gameMode))
             return false;
-        file.read(reinterpret_cast<char*>(&m_data.duration), sizeof(m_data.duration));
+        file.read(reinterpret_cast<char*>(&loaded.duration), sizeof(loaded.duration));
         if (!file)
             return false;
 
@@ -415,11 +446,10 @@ namespace Spark
         if (!file || frameCount > kMaxFrameCount)
             return false;
 
-        m_data.frames.clear();
-        m_data.frames.resize(frameCount);
+        loaded.frames.resize(frameCount);
         for (uint32_t f = 0; f < frameCount; ++f)
         {
-            auto& frame = m_data.frames[f];
+            auto& frame = loaded.frames[f];
             file.read(reinterpret_cast<char*>(&frame.timestamp), sizeof(frame.timestamp));
             file.read(reinterpret_cast<char*>(&frame.frameNumber), sizeof(frame.frameNumber));
 
@@ -450,11 +480,10 @@ namespace Spark
         if (!file || eventCount > kMaxEventCount)
             return false;
 
-        m_data.events.clear();
-        m_data.events.resize(eventCount);
+        loaded.events.resize(eventCount);
         for (uint32_t i = 0; i < eventCount; ++i)
         {
-            auto& event = m_data.events[i];
+            auto& event = loaded.events[i];
             file.read(reinterpret_cast<char*>(&event.timestamp), sizeof(event.timestamp));
             if (!ReadString(file, event.type))
                 return false;
@@ -465,7 +494,8 @@ namespace Spark
                 return false;
         }
 
-        // Reset playback state
+        // Commit and reset playback state
+        m_data = std::move(loaded);
         m_playbackState = PlaybackState::Stopped;
         m_playbackTime = 0.0f;
         m_currentFrameIndex = 0;

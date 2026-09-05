@@ -393,6 +393,29 @@ namespace Spark
         }
     }
 
+    bool GameMode::RestorePlayerScore(const std::string& name, int kills, int deaths, int totalScore)
+    {
+        if (name.empty() || kills < 0 || deaths < 0)
+        {
+            return false;
+        }
+
+        // A quickload into a fresh session may run before the player joined the match.
+        AddPlayer(name);
+
+        auto it = m_playerScores.find(name);
+        if (it == m_playerScores.end())
+        {
+            return false;
+        }
+
+        it->second.kills = kills;
+        it->second.deaths = deaths;
+        it->second.totalScore = totalScore;
+        it->second.currentStreak = 0;
+        return true;
+    }
+
     // === Spawn Points ===
 
     void GameMode::AddSpawnPoint(const SpawnPoint& spawn)

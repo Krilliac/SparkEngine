@@ -79,7 +79,7 @@ These are **guidelines for when to pause and think**, not absolute rules. A clea
 - **Naming**: PascalCase classes/methods, camelCase locals, `m_` prefix members, `UPPER_SNAKE` macros
 - **Headers**: `#pragma once`, forward-declare where possible
 - **Style**: Allman braces, 4-space indent, 120-col limit (see `.clang-format`)
-- **Zero warnings**: `/W4` on MSVC, `-Wall -Wextra` on GCC/Clang
+- **Warnings**: root MSVC flags are `/W3 /MP /bigobj` (CMakeLists.txt; no `/W4`, no `/WX`), GCC/Clang use `-Wall -Wextra`; CI does not fail on warnings. Keep new code warning-free at those levels -- a zero-warning build is a goal, not an enforced gate
 - **Service locator**: Use `EngineContext::Get()->GetX()` for subsystem access. Engine-lifetime ownership lives in the `EngineRuntime` struct (Core-internal; `Core/EngineRuntime.h`) — do not introduce new file-scope `g_*` subsystem globals
 - **Cross-platform types**: `Core/Platform.h` (DirectXMath stubs on Linux)
 
@@ -119,7 +119,7 @@ SparkEngine/Source/Engine/Editor/        — Engine-side editor utilities
 SparkEngine/Source/Engine/VR/            — VR headset/controller/tracking (OpenXR-ready stub, wired in)
 SparkEngine/Source/Utils/                — Console, Logger, Profiler, Assert
 SparkEditor/Source/Communication/        — CollaborativeEditSession (multi-user editing)
-SparkEditor/Source/                      — ImGui editor (22 subsystems, 65 specialized panels)
+SparkEditor/Source/                      — ImGui editor (22 subsystems, 64 specialized panels)
 GameModules/                             — Game module directory (auto-discovered by CMake, 11 modules)
 GameModules/SparkGame/Source/            — Base game module (DLL)
 GameModules/SparkGameFPS/Source/         — FPS game module (DLL)
@@ -134,7 +134,7 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 6992 test definitions across 577 files, CTest
+Tests/                                   — 7269 test definitions across 602 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
@@ -307,13 +307,16 @@ To reproduce CI failures locally, see `wiki/development/CI-Reproducible-Builds.m
 | `build-linux-msan` | ubuntu-24.04 | Clang + libc++ | Debug | MSan + ignorelist, `continue-on-error` |
 | `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
-| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `continue-on-error` |
+| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error` |
 | `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov, per-subsystem thresholds |
-| `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
-| `todo-count` | ubuntu-24.04 | — | — | threshold: 20 |
+| `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job; individual diagnostics advisory |
+| `todo-count` | ubuntu-24.04 | — | — | warn-only above 20 |
+| `build-windows-shipping` | windows-latest | MSVC v143 | MinSizeRel | `windows-shipping` preset, module-profile lifecycle |
 
-`build-windows-vs2026`, `build-linux-mingw-wine`, `build-macos`, and `clang-tidy` use `continue-on-error` — failures are warnings, not blockers.
+`build-linux-msan`, `build-windows-vs2026`, `build-linux-mingw-wine` (manual `workflow_dispatch` only), and `build-macos` are job-level `continue-on-error` — failures are warnings, not blockers. `clang-tidy` is a blocking dependency of `required-ci-gate` (its configure/compile failures block; individual diagnostics are advisory).
+
+**No branch protection is active on `Working`** (verified 2026-09-05: `branches/Working/protection` is 404, all five rulesets `enforcement=disabled`). `required-ci-gate` is therefore a post-hoc publication gate consumed by `release.yml` / `site-data-publish.yml` / `trusted-ci-aggregate.yml`, not a merge gate — tracked as `CI-100`. Do not present a green check list as proof the required set was enforced.
 
 ## Documentation
 

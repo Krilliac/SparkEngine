@@ -75,6 +75,8 @@ struct TestRegistrar
 
 extern int g_assertionsPassed;
 extern int g_assertionsFailed;
+extern int g_assertionsWaived;
+extern int g_assertionsNoCrash;
 extern int g_testsWarned;
 extern std::string g_currentTest;
 
@@ -100,6 +102,50 @@ struct TestSkip
 }
 
 #define SKIP_TEST(reason) SkipTest(std::string(reason))
+
+// ============================================================================
+// Outcome classification — shared by the runner (TestMain.cpp) and by its own
+// regression tests, so the rule that decides [ OK ] / [ EMPTY ] / [ WARN ] /
+// [ FAILED ] / [ SKIP ] can be exercised directly instead of only through a
+// full suite run.
+// ============================================================================
+
+enum class TestOutcome
+{
+    Passed,
+    Empty,  ///< Ran to completion without executing a single assertion
+    Warned, ///< Failed, but the failure was waived (per-assertion or whole-test)
+    Failed,
+    Skipped
+};
+
+struct TestOutcomeInputs
+{
+    int assertionsRun = 0;              ///< Passed + failed + waived assertions in this test
+    int waivedAssertions = 0;           ///< EXPECT_WARN_ONLY assertions that were false
+    bool hardFailure = false;           ///< At least one non-waived assertion failed
+    bool skipRequested = false;         ///< SKIP_TEST was reached
+    bool matchedWarningPattern = false; ///< Test name matches a TestWarnings.h entry
+    bool warnIsError = false;           ///< --warn-is-error
+    bool emptyIsError = false;          ///< --empty-is-error
+};
+
+inline TestOutcome ClassifyTestOutcome(const TestOutcomeInputs& inputs)
+{
+    // --warn-is-error promotes per-assertion waivers back to hard failures.
+    const bool failed = inputs.hardFailure || (inputs.warnIsError && inputs.waivedAssertions > 0);
+    if (inputs.skipRequested && !failed)
+        return TestOutcome::Skipped;
+    if (!inputs.warnIsError && ((inputs.matchedWarningPattern && failed) || (inputs.waivedAssertions > 0 && !failed)))
+        return TestOutcome::Warned;
+    if (failed)
+        return TestOutcome::Failed;
+    // A test that executed no assertions could only have failed by crashing, so
+    // it must never be indistinguishable from a test that actually checked something.
+    if (inputs.assertionsRun == 0)
+        return inputs.emptyIsError ? TestOutcome::Failed : TestOutcome::Empty;
+    return TestOutcome::Passed;
+}
 
 #define TEST(name)                                                                                                     \
     void test_##name();                                                                                                \
@@ -147,6 +193,45 @@ struct TestSkip
     } while (0)
 
 #define EXPECT_FALSE(expr) EXPECT_TRUE(!(expr))
+
+// ============================================================================
+// Per-assertion flaky waiver.
+//
+// A failure here is recorded as WAIVED, never as a failure: the runner reports
+// the test as [ WARN ] but every OTHER assertion in the same test stays strict.
+// Prefer this over a whole-test entry in TestWarnings.h whenever only one
+// measurement in a test is environment-sensitive — a name-pattern entry there
+// waives the entire test, including assertions that are not flaky at all.
+// --warn-is-error promotes waivers back to hard failures.
+// ============================================================================
+
+#define EXPECT_WARN_ONLY(expr, reason)                                                                                 \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if (expr)                                                                                                      \
+        {                                                                                                              \
+            g_assertionsPassed++;                                                                                      \
+        }                                                                                                              \
+        else                                                                                                           \
+        {                                                                                                              \
+            g_assertionsWaived++;                                                                                      \
+            std::cerr << "  WAIVED: " << #expr << " was false - " << (reason) << " (" << __FILE__ << ":" << __LINE__   \
+                      << ")\n";                                                                                        \
+        }                                                                                                              \
+    } while (0)
+
+// Declares that reaching this line without crashing IS the assertion. Counts as
+// a passing assertion (so the test is not empty) but is tallied separately, so
+// the suite summary and Tools/test_source_census.py can report how much of the
+// pass headline only proves absence of a crash. Use it instead of the
+// indistinguishable-from-a-typo EXPECT_TRUE(true).
+#define EXPECT_NO_CRASH(reason)                                                                                        \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        static_cast<void>(reason);                                                                                     \
+        g_assertionsPassed++;                                                                                          \
+        g_assertionsNoCrash++;                                                                                         \
+    } while (0)
 
 #define EXPECT_EQ(a, b)                                                                                                \
     do                                                                                                                 \

@@ -9,9 +9,20 @@ Complete reference for SparkEngine settings, console commands, and console varia
 SparkEngine loads settings from an INI file at startup.
 
 **Location** (searched in order):
-1. `Resources/Config/settings.ini` (relative to executable)
-2. `../Resources/Config/settings.ini` (one level up, common in dev builds)
-3. Falls back to defaults if not found
+1. The per-user copy, `%LOCALAPPDATA%/SparkEngine/Config/settings.ini` (`$XDG_CONFIG_HOME` or `~/.config/SparkEngine` on POSIX), whenever one exists or the install tree's `Resources/Config` is not writable
+2. `Resources/Config/settings.ini` (relative to executable) -- the development and portable-install location
+3. `../Resources/Config/settings.ini` (one level up, common in dev builds)
+4. Falls back to defaults if not found
+
+### Per-user data directories
+
+`Spark::UserPaths` anchors the runtime's writable data per user: `Saves/`, `Logs/`
+(rotating `SparkEngine_<timestamp>.log`), `spark_trace.json`, and `ShaderCache/`
+live under `%LOCALAPPDATA%/SparkEngine` (POSIX: `$XDG_DATA_HOME` or
+`~/.local/share/SparkEngine`). `Data/*.spk` is resolved beside the executable
+first and the working directory second. A development run with no per-user
+directory available falls back to the old CWD-relative locations. SparkEditor
+writes its crash dumps and logs under its per-user editor data directory as well.
 
 **Format:**
 
@@ -164,6 +175,8 @@ settings_reset                        # Reset everything to defaults
 | `MaxBlurRadius` | 32.0 | Maximum blur radius in pixels |
 
 ### Dynamic Quality Scaler
+
+> **Not wired (2026-09):** `DynamicQualityScaler` is no longer initialized by the lifecycle and has no per-frame producer, so these keys are parsed but nothing scales quality until a renderer consumer exists.
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -324,6 +337,7 @@ Per-category overrides (set to empty string to inherit `GlobalLevel`):
 | `engine_subsystems` | `engine_subsystems` | List all active subsystems and their status |
 | `metrics` | `metrics` | Comprehensive system metrics |
 | `asset_list` | `asset_list` | List all loaded assets |
+| `log_path` | `log_path` | Print the log file this run opened and its size, or report that no log file could be opened this run |
 
 ### Settings
 
@@ -414,10 +428,10 @@ Per-category overrides (set to empty string to inherit `GlobalLevel`):
 
 | Command | Usage | Description |
 |---------|-------|-------------|
-| `save_list` | `save_list` | List save slots |
+| `save_list` | `save_list` | List save slots (reads the `SaveSystem` reached through the engine context) |
 | `save_info` | `save_info <slot>` | Save slot details |
-| `quicksave` | `quicksave` | Quick save |
-| `quickload` | `quickload` | Quick load |
+| `quicksave` | `quicksave` | Writes slot `fps_quicksave`: the ECS world plus the FPS local profile (progression XP/level, class, weapon, kills/deaths/score, playtime, health, armor). Prints the real result; answers `Save system unavailable...` when the engine context exposes no `SaveSystem` or `World` |
+| `quickload` | `quickload` | Loads slot `fps_quicksave` and restores the profile through the real XP curve; same availability rule as `quicksave` |
 
 ### Modules & Hot-Reload
 

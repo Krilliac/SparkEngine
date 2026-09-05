@@ -351,6 +351,9 @@ namespace Spark
         std::string GetCurrentFilePath() const { return m_currentFilePath; }
         size_t GetCurrentFileSize() const { return m_currentFileSize; }
 
+        /// True when the log file was opened successfully and is accepting writes.
+        bool IsOpen() const { return m_initialized; }
+
       private:
         bool OpenFile();
         void RotateFiles();
@@ -425,6 +428,54 @@ namespace Spark
          * @brief Remove all sinks
          */
         void ClearSinks();
+
+        /**
+         * @brief Number of sinks currently installed.
+         *
+         * Lets a caller that latched "sinks installed" (the engine lifecycle does
+         * this once per process) tell whether something has since called
+         * ClearSinks() or InstallDefaultSinks() behind it, instead of trusting the
+         * latch and handing out a log path nothing is writing to.
+         */
+        size_t GetSinkCount() const;
+
+        /**
+         * @brief Which destinations InstallDefaultSinks() should install
+         */
+        struct SinkSetup
+        {
+            bool enableStderr = true; ///< stderr, plus OutputDebugStringA on Windows
+            bool enableFile = true;   ///< Rotating timestamped file under file.directory
+            FileSink::Config file{};  ///< Directory/prefix/rotation for the file sink
+        };
+
+        /**
+         * @brief Replace every sink with the engine's standard destination set
+         *
+         * One call so that every entry point (windowed, headless, editor, tools)
+         * ends up with the same destinations. Without the file and console sinks
+         * the engine's SPARK_LOG_* output reaches stderr only, which a wWinMain
+         * process does not have.
+         *
+         * The Logger is a leaf utility that standalone tools (SparkShaderCompiler,
+         * probes) compile without the console subsystem, so the SimpleConsole
+         * bridge is supplied by the caller: pass std::make_unique<ConsoleSink>()
+         * from code that links SparkConsole.cpp, or nullptr to install none.
+         *
+         * @param setup       Which stderr/file destinations to install (pass
+         *                    SinkSetup{} for the defaults; the parameter has no
+         *                    default argument because GCC and Clang reject a
+         *                    nested-struct default member initializer used
+         *                    inside its enclosing class)
+         * @param consoleSink Optional sink that feeds SparkConsole.exe; installed
+         *                    last so it sees exactly what the file sink sees
+         * @return Path of the log file that was opened, or an empty string when
+         *         no file sink was requested or the file could not be created.
+         *         Those two cases are indistinguishable in the return value, so a
+         *         requested-but-failed file sink additionally logs a warning
+         *         through the sinks this call just installed.
+         */
+        std::string InstallDefaultSinks(const SinkSetup& setup, std::unique_ptr<ILogSink> consoleSink = nullptr);
 
         // ---- Filtering ----
 
@@ -589,7 +640,7 @@ namespace Spark
 
         // Sinks
         std::vector<std::unique_ptr<ILogSink>> m_sinks;
-        std::mutex m_sinkMutex;
+        mutable std::mutex m_sinkMutex; ///< mutable: GetSinkCount() is const
 
         // Async queue
         std::queue<LogMessage> m_messageQueue;

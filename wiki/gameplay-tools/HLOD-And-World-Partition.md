@@ -4,6 +4,8 @@ Hierarchical Level of Detail (HLOD) generation and world partition grid for effi
 
 **Source:** `SparkEngine/Source/Engine/HLOD/HLODSystem.h`
 
+> **Not wired (2026-09):** `HLODSystem` is no longer initialized by the gameplay lifecycle and has no per-frame producer or renderer consumer. The API below describes the class; nothing in the shipped engine drives it. See [Stub and Abandoned Features](../advanced/Stub-and-Abandoned-Features.md).
+
 ## Overview
 
 The HLOD system addresses two core problems in large-world rendering: draw call reduction at distance and memory management through spatial streaming. It combines hierarchical LOD generation (merging nearby entities into simplified proxy meshes) with a uniform world partition grid that loads and unloads cells based on viewer distance.
