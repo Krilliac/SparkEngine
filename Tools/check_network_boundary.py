@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -773,21 +774,83 @@ NON_SHIPPED_TOP_LEVEL = {
 NON_SHIPPED_FIRST_PARTY_SOURCES = frozenset({"tools/gvisor-wine-shim.c"})
 
 
+def _is_inventory_candidate(root: Path, path: Path) -> bool:
+    """True when *path* is shipped first-party source the inventory must account for."""
+
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return False
+    parts = relative.parts
+    if len(parts) < 2:
+        # Only files inside a top-level directory can belong to a shipped tree.
+        return False
+    if parts[0].lower() in NON_SHIPPED_TOP_LEVEL:
+        return False
+    if path.suffix.lower() not in SOURCE_SUFFIXES:
+        return False
+    lowered = {part.lower() for part in parts}
+    return not lowered.intersection({"thirdparty", "third_party", "build", "generated", "tests"})
+
+
+def _tracked_inventory_candidates(root: Path) -> Optional[list[Path]]:
+    """Shipped first-party sources known to git, or None when the tree is not a checkout.
+
+    The inventory answers "does the repository ship source the guard has not
+    reviewed?", so it must judge the committed tree.  Walking the working
+    directory instead made every stray local build or playtest directory a
+    finding, which is why the guard was red on an otherwise clean baseline.
+    """
+
+    if not (root / ".git").exists():
+        return None
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z", "--cached"],
+            capture_output=True,
+            check=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    entries = completed.stdout.decode("utf-8", errors="replace").split("\0")
+    # An empty list is returned as an empty list, never as None: "git listed
+    # nothing" and "this is not a checkout" are different facts and the caller
+    # has to be able to tell them apart.
+    return [root / entry for entry in entries if entry]
+
+
 def _inventory_coverage_findings(root: Path, roots: Sequence[Path]) -> list[Finding]:
     """Reject shipped first-party source that falls outside the explicit roots."""
 
     findings: list[Finding] = []
     resolved_roots = tuple(path.resolve() for path in roots if path.is_dir())
-    for child in sorted(root.iterdir()):
-        if not child.is_dir() or child.name.lower() in NON_SHIPPED_TOP_LEVEL:
+    candidates = _tracked_inventory_candidates(root)
+    if candidates is None:
+        # Not a git checkout (exported tarball, vendored copy): fall back to the
+        # working-directory walk, which is the stricter of the two.
+        candidates = [path for path in root.rglob("*") if path.is_file()]
+    elif not candidates:
+        # git succeeded and named no tracked file. There is then no population
+        # to judge, and "no findings" would be manufactured rather than
+        # measured - exactly the shape a sparse checkout, a wrong --work-tree,
+        # or a git that stops enumerating would take. Fail loudly instead.
+        return [
+            Finding(
+                root,
+                1,
+                "git listed no tracked files: the network inventory has no population to judge",
+            )
+        ]
+    for path in sorted(candidates):
+        if not _is_inventory_candidate(root, path):
             continue
-        for path in _source_files((child,)):
-            relative = path.relative_to(root).as_posix()
-            if relative in NON_SHIPPED_FIRST_PARTY_SOURCES:
-                continue
-            resolved = path.resolve()
-            if not any(resolved.is_relative_to(source_root) for source_root in resolved_roots):
-                findings.append(Finding(path, 1, "first-party source is outside the explicit network inventory"))
+        relative = path.relative_to(root).as_posix()
+        if relative in NON_SHIPPED_FIRST_PARTY_SOURCES:
+            continue
+        resolved = path.resolve()
+        if not any(resolved.is_relative_to(source_root) for source_root in resolved_roots):
+            findings.append(Finding(path, 1, "first-party source is outside the explicit network inventory"))
     return findings
 
 

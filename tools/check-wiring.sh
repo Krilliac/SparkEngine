@@ -19,6 +19,19 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SRC="$PROJECT_ROOT/SparkEngine/Source"
 EDITOR_SRC="$PROJECT_ROOT/SparkEditor/Source"
 
+# rg is absent on Windows Git Bash and on plain CI images. The reference lookup
+# below suppressed its errors with 2>/dev/null, so a missing rg reported every
+# class as unwired. Resolve the searcher once and fail closed when neither tool
+# is available.
+if command -v rg >/dev/null 2>&1; then
+    spark_class_is_referenced() { rg -q -w "$1" "$SRC" "$EDITOR_SRC" --glob '*.cpp'; }
+elif command -v grep >/dev/null 2>&1; then
+    spark_class_is_referenced() { grep -rqw --include='*.cpp' -- "$1" "$SRC" "$EDITOR_SRC"; }
+else
+    echo "ERROR: neither rg nor grep is available; the wiring guard cannot run" >&2
+    exit 2
+fi
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -76,7 +89,7 @@ while IFS= read -r line; do
     CHECKED=$((CHECKED + 1))
 
     # Check if class is referenced in any .cpp file (instantiated or called)
-    if rg -q -w "$classname" "$SRC" "$EDITOR_SRC" --glob '*.cpp' 2>/dev/null; then
+    if spark_class_is_referenced "$classname"; then
         continue  # Class is referenced somewhere — likely wired in
     fi
 
