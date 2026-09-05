@@ -154,10 +154,12 @@ TEST(AudioECSBinding_PlayOnAwakeWithUnknownSoundStaysUnbound)
 
 TEST(AudioECSBinding_PlayOnAwakeBindsAuthoredComponentToLiveSource)
 {
-    // Linux/macOS builds carry no-op audio stubs: Initialize() succeeds but no
-    // sound can be loaded, so the live-source binding cannot be exercised there.
-    if (!AudioEngine::IsAudioBackendAvailable())
-        SKIP_TEST("no audio backend on this platform (XAudio2 is Windows-only; stubs are no-ops)");
+#ifndef _WIN32
+    // Live-source binding rides on XAudio2 voices. Linux/macOS build the XAudio2
+    // shim over miniaudio (or no-op stubs): Initialize() succeeds there but
+    // LoadSound fails (observed on macOS CI), so the binding cannot be exercised.
+    SKIP_TEST("XAudio2 voice semantics are Windows-only; the non-Windows audio shim cannot load sounds");
+#endif
 
     AudioEngine engine;
     if (FAILED(engine.Initialize(2)))

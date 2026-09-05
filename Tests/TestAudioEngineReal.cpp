@@ -135,11 +135,13 @@ TEST(AudioEngineReal_FormatsCompatibleRejectsDifferentWaveFormats)
 
 TEST(AudioEngineReal_PooledVoiceIsRebuiltForANewSoundFormat)
 {
-    // Linux/macOS builds carry no-op audio stubs: Initialize() succeeds but no
-    // sound can be loaded or played, so the XAudio2 semantics under test do not
-    // exist there. Skip explicitly instead of failing on the first LoadSound.
-    if (!AudioEngine::IsAudioBackendAvailable())
-        SKIP_TEST("no audio backend on this platform (XAudio2 is Windows-only; stubs are no-ops)");
+#ifndef _WIN32
+    // The pooled-voice format rebuild is XAudio2 behaviour. Linux/macOS build the
+    // XAudio2 shim over miniaudio (or no-op stubs): Initialize() succeeds there
+    // but LoadSound fails (observed on macOS CI), so the path under test does not
+    // exist. Skip explicitly instead of failing on the first LoadSound.
+    SKIP_TEST("XAudio2 voice semantics are Windows-only; the non-Windows audio shim cannot load sounds");
+#endif
 
     AudioEngine engine;
     if (FAILED(engine.Initialize(1)))
@@ -211,8 +213,9 @@ TEST(AudioEngineReal_CategoryVolumeExcludesMasterAndTracksBuses)
 
 TEST(AudioEngineReal_LiveSourcesFollowCategoryVolumeChanges)
 {
-    if (!AudioEngine::IsAudioBackendAvailable())
-        SKIP_TEST("no audio backend on this platform (XAudio2 is Windows-only; stubs are no-ops)");
+#ifndef _WIN32
+    SKIP_TEST("XAudio2 voice semantics are Windows-only; the non-Windows audio shim cannot load sounds");
+#endif
 
     AudioEngine engine;
     if (FAILED(engine.Initialize(2)))
@@ -375,8 +378,9 @@ TEST(AudioEngineReal_DistanceAttenuationHonorsAuthoredRange)
 
 TEST(AudioEngineReal_RecycledSourceInvalidatesAnOlderHandle)
 {
-    if (!AudioEngine::IsAudioBackendAvailable())
-        SKIP_TEST("no audio backend on this platform (XAudio2 is Windows-only; stubs are no-ops)");
+#ifndef _WIN32
+    SKIP_TEST("XAudio2 voice semantics are Windows-only; the non-Windows audio shim cannot load sounds");
+#endif
 
     AudioEngine engine;
     if (FAILED(engine.Initialize(1)))
