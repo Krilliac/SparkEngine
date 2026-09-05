@@ -266,7 +266,38 @@ namespace SparkEditor
      */
         void ProcessPendingLogEntries();
 
+        /**
+     * @brief Move everything the engine Logger sink captured into the display
+     */
+        void DrainEngineLogQueue();
+
+        /**
+     * @brief Handle Up/Down history recall and Tab completion for the input box
+     */
+        int HandleCommandInputCallback(ImGuiInputTextCallbackData* data);
+
       private:
+        /**
+     * @brief Hand-off buffer between the engine Logger's thread and Update()
+     *
+     * Spark::Logger owns its sinks and exposes only AddSink and ClearSinks --
+     * there is no targeted removal -- so the Spark::CallbackSink that
+     * Initialize() installs lives until the whole sink list is cleared or the
+     * process exits, which outlasts this panel. Its lambda therefore captures a
+     * shared_ptr to this queue rather than `this`: the queue is kept alive by
+     * the sink, so after the panel is gone the sink still appends safely,
+     * bounded by MAX_PENDING_ENGINE_LOGS and dropping the overflow. Initialize()
+     * guards on this pointer rather than on m_isInitialized so a
+     * Shutdown/Initialize cycle reuses the one sink instead of stacking another.
+     */
+        struct PendingEngineLogs
+        {
+            std::mutex mutex;
+            std::vector<LogEntry> entries;
+        };
+        static constexpr size_t MAX_PENDING_ENGINE_LOGS = 4096;
+        std::shared_ptr<PendingEngineLogs> m_pendingEngineLogs;
+
         // Log display
         std::vector<LogEntry> m_logEntries;    ///< All received log entries.
         std::vector<size_t> m_filteredIndices; ///< Indices of entries that pass the active filter.
@@ -280,15 +311,20 @@ namespace SparkEditor
         int m_historyIndex = -1;                                    ///< Arrow-key position in command history.
         std::vector<std::string> m_completionSuggestions;           ///< Tab-completion candidates.
         int m_completionIndex = -1;                                 ///< Current tab-completion selection.
+        std::string m_completionPrefix;                             ///< Text the suggestion list was built from.
 
         // Filtering
-        ConsoleFilter m_filter;      ///< Active filter configuration.
-        std::string m_searchBuffer;  ///< Text in the search input field.
+        ConsoleFilter m_filter; ///< Active filter configuration.
+        /// Editable text of the search input. ImGui edits this buffer in place,
+        /// so it must persist across frames: a per-frame buffer re-seeded from
+        /// m_filter.searchPattern discards the widget's own edit state (cursor,
+        /// selection, undo) on every frame. It is the only writer of
+        /// m_filter.searchPattern, so the two never need re-syncing.
+        char m_searchBuffer[256] = {};
         bool m_filterChanged = true; ///< True when filter needs reapplication.
 
         // UI state
         bool m_showFilterControls = false; ///< Whether the filter panel is expanded.
-        bool m_showContextMenu = false;    ///< Whether the right-click context menu is open.
         bool m_scrollToBottom = false;     ///< Request to scroll to the newest entry next frame.
         bool m_commandInputActive = false; ///< Whether the command input field has focus.
         ImVec2 m_lastWindowSize;           ///< Cached window size for layout calculations.

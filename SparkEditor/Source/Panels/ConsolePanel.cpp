@@ -25,6 +25,8 @@
 #include "../Core/EditorLogger.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include "Utils/LogMacros.h"
+#include "Utils/Logger.h"
+#include "Utils/SparkConsole.h"
 
 namespace SparkEditor
 {
@@ -33,6 +35,26 @@ namespace SparkEditor
     static bool s_showExportDialog = false;
     static char s_exportPathBuffer[512] = "console_export.txt";
     static int s_exportFormatIndex = 0; // 0 = txt, 1 = csv
+
+    // Map an engine Spark::LogLevel onto the editor's display severity.
+    static LogLevel TranslateEngineLogLevel(Spark::LogLevel level)
+    {
+        switch (level)
+        {
+        case Spark::LogLevel::Trace:
+            return LogLevel::TRACE;
+        case Spark::LogLevel::Debug:
+            return LogLevel::DEBUG;
+        case Spark::LogLevel::Warn:
+            return LogLevel::WARNING;
+        case Spark::LogLevel::Error:
+            return LogLevel::ERROR_;
+        case Spark::LogLevel::Fatal:
+            return LogLevel::CRITICAL;
+        default:
+            return LogLevel::INFO;
+        }
+    }
 
     // Local helper to convert LogLevel to string
     static const char* LogLevelToString(LogLevel level)
@@ -82,6 +104,29 @@ namespace SparkEditor
             return true;
         }
         RegisterBuiltInCommands();
+
+        // Subscribe to the engine Logger. Without this the panel titled
+        // "Engine Console" only ever echoed commands typed into it.
+        // Guarded on the queue, not on m_isInitialized: a Shutdown/Initialize
+        // cycle must not install a second sink (the Logger cannot remove one).
+        if (!m_pendingEngineLogs)
+        {
+            m_pendingEngineLogs = std::make_shared<PendingEngineLogs>();
+            Spark::Logger::Get().AddSink(std::make_unique<Spark::CallbackSink>(
+                [queue = m_pendingEngineLogs](const Spark::LogMessage& message)
+                {
+                    std::lock_guard<std::mutex> lock(queue->mutex);
+                    if (queue->entries.size() >= MAX_PENDING_ENGINE_LOGS)
+                        return;
+                    LogEntry entry(TranslateEngineLogLevel(message.level),
+                                   std::string(Spark::LogCategoryToString(message.category)), message.message);
+                    entry.file = message.file;
+                    entry.line = message.line;
+                    entry.function = message.function;
+                    queue->entries.push_back(std::move(entry));
+                }));
+        }
+
         m_isInitialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Console panel initialized");
         return true;
@@ -91,9 +136,17 @@ namespace SparkEditor
     {
         if (!m_isInitialized)
             return;
+
+        // Pull both feeds before filtering, so entries that arrived this frame
+        // are visible this frame.
+        ProcessPendingLogEntries();
+        DrainEngineLogQueue();
+
         if (m_filterChanged)
         {
-            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Console filter updated");
+            // Deliberately silent: this panel is now a Logger sink, so logging
+            // here would append an entry, set m_filterChanged again, and spin
+            // one self-produced log line per frame forever.
             UpdateFilteredEntries();
             m_filterChanged = false;
         }
@@ -115,7 +168,8 @@ namespace SparkEditor
 
     void ConsolePanel::Render()
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        // No per-frame trace here: this panel is a Logger sink, so a trace-level
+        // entry every frame would fill its own display in Debug builds.
         if (!BeginPanel())
         {
             EndPanel();
@@ -124,6 +178,9 @@ namespace SparkEditor
         RenderCommandInput();
         RenderFilterControls();
         RenderLogDisplay();
+        // Clear / Copy All / Export... / Reset Filters. Defined but never called
+        // before, which made the export dialog below unreachable from the UI.
+        RenderContextMenu();
 
         // Export dialog (modal popup for file save)
         if (s_showExportDialog)
@@ -201,8 +258,24 @@ namespace SparkEditor
         historyEntry.command = commandLine;
         historyEntry.timestamp = std::chrono::system_clock::now();
 
+        auto& engineConsole = Spark::SimpleConsole::GetInstance();
         auto it = m_commands.find(command);
-        if (it != m_commands.end())
+        const bool routeToEngine =
+            (it != m_commands.end() && it->second.isEngineCommand) || (it == m_commands.end() &&
+                                                                       engineConsole.HasCommand(command));
+
+        if (routeToEngine)
+        {
+            // ConsoleCommand::isEngineCommand used to be inert and
+            // m_engineCommandCounter never moved off zero. Dispatch through the
+            // engine console; its own output arrives via the Logger sink.
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Engine console command executed: %s", command.c_str());
+            historyEntry.wasSuccessful = engineConsole.ExecuteCommand(commandLine);
+            historyEntry.result = historyEntry.wasSuccessful ? "Dispatched to engine: " + command
+                                                             : "Engine rejected command: " + command;
+            m_engineCommandCounter++;
+        }
+        else if (it != m_commands.end())
         {
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Console command executed: %s", command.c_str());
             historyEntry.result = it->second.handler(args);
@@ -364,20 +437,88 @@ namespace SparkEditor
                 m_scrollToBottom = false;
             }
 
-            if (ImGui::IsWindowHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
-            {
-                m_showContextMenu = true;
-            }
         }
         ImGui::EndChild();
+    }
+
+    int ConsolePanel::HandleCommandInputCallback(ImGuiInputTextCallbackData* data)
+    {
+        if (data->EventFlag == ImGuiInputTextFlags_CallbackHistory)
+        {
+            if (m_commandHistory.empty())
+                return 0;
+
+            const int lastIndex = static_cast<int>(m_commandHistory.size()) - 1;
+            if (data->EventKey == ImGuiKey_UpArrow)
+            {
+                if (m_historyIndex < 0)
+                {
+                    m_currentCommand.assign(data->Buf, static_cast<size_t>(data->BufTextLen));
+                    m_historyIndex = lastIndex;
+                }
+                else if (m_historyIndex > 0)
+                {
+                    --m_historyIndex;
+                }
+            }
+            else if (data->EventKey == ImGuiKey_DownArrow)
+            {
+                if (m_historyIndex < 0)
+                    return 0;
+                if (m_historyIndex < lastIndex)
+                {
+                    ++m_historyIndex;
+                }
+                else
+                {
+                    // Past the newest entry: restore what the user was typing.
+                    m_historyIndex = -1;
+                    data->DeleteChars(0, data->BufTextLen);
+                    data->InsertChars(0, m_currentCommand.c_str());
+                    return 0;
+                }
+            }
+
+            data->DeleteChars(0, data->BufTextLen);
+            data->InsertChars(0, m_commandHistory[static_cast<size_t>(m_historyIndex)].command.c_str());
+            return 0;
+        }
+
+        if (data->EventFlag == ImGuiInputTextFlags_CallbackCompletion)
+        {
+            const std::string prefix(data->Buf, static_cast<size_t>(data->BufTextLen));
+            if (m_completionIndex < 0 || m_completionSuggestions.empty() || prefix != m_completionPrefix)
+            {
+                m_completionPrefix = prefix;
+                m_completionSuggestions = GetCompletionSuggestions(prefix);
+                std::sort(m_completionSuggestions.begin(), m_completionSuggestions.end());
+                m_completionIndex = -1;
+            }
+            if (m_completionSuggestions.empty())
+                return 0;
+
+            m_completionIndex = (m_completionIndex + 1) % static_cast<int>(m_completionSuggestions.size());
+            const std::string& suggestion = m_completionSuggestions[static_cast<size_t>(m_completionIndex)];
+            data->DeleteChars(0, data->BufTextLen);
+            data->InsertChars(0, suggestion.c_str());
+            return 0;
+        }
+
+        return 0;
     }
 
     void ConsolePanel::RenderCommandInput()
     {
         // Simple command input at top
         ImGui::SetNextItemWidth(-60);
-        bool submitted =
-            ImGui::InputText("##CmdInput", m_commandBuffer, COMMAND_BUFFER_SIZE, ImGuiInputTextFlags_EnterReturnsTrue);
+        const ImGuiInputTextFlags inputFlags = ImGuiInputTextFlags_EnterReturnsTrue |
+                                               ImGuiInputTextFlags_CallbackHistory |
+                                               ImGuiInputTextFlags_CallbackCompletion;
+        bool submitted = ImGui::InputText(
+            "##CmdInput", m_commandBuffer, COMMAND_BUFFER_SIZE, inputFlags,
+            [](ImGuiInputTextCallbackData* data)
+            { return static_cast<ConsolePanel*>(data->UserData)->HandleCommandInputCallback(data); },
+            this);
         ImGui::SameLine();
         if (ImGui::Button("Run") || submitted)
         {
@@ -389,6 +530,11 @@ namespace SparkEditor
                 LogEntry resultEntry(LogLevel::INFO, "Console", result);
                 AddLogEntry(resultEntry);
                 m_commandBuffer[0] = '\0';
+                m_currentCommand.clear();
+                m_historyIndex = -1;
+                m_completionIndex = -1;
+                m_completionPrefix.clear();
+                m_completionSuggestions.clear();
             }
         }
     }
@@ -412,6 +558,18 @@ namespace SparkEditor
             ImGui::SameLine();
             if (ImGui::Checkbox("All##Categories", &m_filter.enableAllCategories))
             {
+                m_filterChanged = true;
+            }
+
+            // The search pattern was already honoured by UpdateFilteredEntries;
+            // it simply had no way in.
+            ImGui::Text("Search:");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::InputTextWithHint("##ConsoleSearch", "filter log text", m_searchBuffer,
+                                         sizeof(m_searchBuffer)))
+            {
+                m_filter.searchPattern = m_searchBuffer;
                 m_filterChanged = true;
             }
 
@@ -483,7 +641,6 @@ namespace SparkEditor
                 m_filterChanged = true;
             }
 
-            m_showContextMenu = false;
             ImGui::EndPopup();
         }
     }
@@ -824,6 +981,25 @@ namespace SparkEditor
             AddLogEntry(memoryLogs[i]);
         }
         m_lastPolledLogIndex = currentCount;
+    }
+
+    void ConsolePanel::DrainEngineLogQueue()
+    {
+        if (!m_pendingEngineLogs)
+            return;
+
+        std::vector<LogEntry> pending;
+        {
+            std::lock_guard<std::mutex> lock(m_pendingEngineLogs->mutex);
+            if (m_pendingEngineLogs->entries.empty())
+                return;
+            pending.swap(m_pendingEngineLogs->entries);
+        }
+
+        for (const LogEntry& entry : pending)
+        {
+            AddLogEntry(entry);
+        }
     }
 
 } // namespace SparkEditor

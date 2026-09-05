@@ -31,12 +31,15 @@ int main(int argc, char* argv[])
     }
 
 #ifdef SPARK_PLATFORM_WINDOWS
+    // Everything a human reads goes to the console screen buffer. In engine-pipe
+    // mode STD_OUTPUT_HANDLE is the command pipe: configuring or printing to it
+    // would silently fail and, worse, feed this text to the engine as commands.
+    // Resolve the display handle first — it is what attaches a console at all.
+    HANDLE hConsole = ConsoleApp::DisplayHandle();
+
     // Set console title and properties
     SetConsoleTitleW(L"Spark Engine Debug Console");
     SetConsoleOutputCP(CP_UTF8);
-
-    // Configure console buffer size for lots of scrollback
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_SCREEN_BUFFER_INFO csbi{};
     if (GetConsoleScreenBufferInfo(hConsole, &csbi))
     {
@@ -51,12 +54,23 @@ int main(int argc, char* argv[])
         mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
         SetConsoleMode(hConsole, mode);
     }
-#endif // SPARK_PLATFORM_WINDOWS
 
-    std::wcout << L"Spark Engine Console v1.0.0" << std::endl;
-    std::wcout << L"Waiting for engine connection..." << std::endl;
-    std::wcout << L"Type 'help' for available commands" << std::endl;
-    std::wcout << L"========================================" << std::endl;
+    ConsoleApp::WriteDisplay(L"Spark Engine Console v1.0.0\n"
+                             L"Waiting for engine connection...\n"
+                             L"Type 'help' for available commands\n"
+                             L"========================================\n");
+#else
+    // Narrow std::cerr, matching ConsoleApp.cpp's POSIX branch: stdout is the
+    // engine's command queue, so human-facing text goes to stderr. It must be
+    // the same stream *orientation* too -- the first insertion fixes stderr as
+    // byte- or wide-oriented, and every later insertion of the other width
+    // silently writes nothing. Printing this banner through std::wcerr made the
+    // whole narrow-std::cerr display path in ConsoleApp.cpp go dark.
+    std::cerr << "Spark Engine Console v1.0.0" << std::endl;
+    std::cerr << "Waiting for engine connection..." << std::endl;
+    std::cerr << "Type 'help' for available commands" << std::endl;
+    std::cerr << "========================================" << std::endl;
+#endif // SPARK_PLATFORM_WINDOWS
 
     try
     {
@@ -66,8 +80,8 @@ int main(int argc, char* argv[])
     catch (const std::exception& e)
     {
         std::cerr << "Console error: " << e.what() << std::endl;
-        std::wcout << L"Press any key to continue..." << std::endl;
 #ifdef SPARK_PLATFORM_WINDOWS
+        ConsoleApp::WriteDisplay(L"Press any key to continue...\n");
         if (HasInteractiveConsoleInput())
         {
             std::ignore = _getch();
@@ -78,8 +92,8 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    std::wcout << L"Console application finished. Press any key to exit..." << std::endl;
 #ifdef SPARK_PLATFORM_WINDOWS
+    ConsoleApp::WriteDisplay(L"Console application finished. Press any key to exit...\n");
     if (HasInteractiveConsoleInput())
     {
         std::ignore = _getch();

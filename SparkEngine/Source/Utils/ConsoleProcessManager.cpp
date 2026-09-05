@@ -14,12 +14,14 @@
 #include "Validate.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <sstream>
 #include <thread>
 #include <chrono>
+#include <utility>
 
 #if defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
 #include <signal.h>
@@ -45,6 +47,19 @@ namespace Spark
         return ConsoleProcessManager::GetInstance();
     }
 
+    namespace
+    {
+        /// Set at the end of the constructor, cleared at the top of the destructor.
+        /// See ConsoleProcessManager::IsInstanceAlive() for why the destroyed
+        /// window matters: GetInstance() keeps returning the dead object.
+        std::atomic<bool> g_instanceAlive{false};
+    } // namespace
+
+    bool ConsoleProcessManager::IsInstanceAlive()
+    {
+        return g_instanceAlive.load(std::memory_order_acquire);
+    }
+
     // =========================================================================
     // Construction / destruction
     // =========================================================================
@@ -52,7 +67,11 @@ namespace Spark
     ConsoleProcessManager::ConsoleProcessManager()
         : m_commandRegistry(std::make_unique<CommandRegistry>()), m_consoleThread(), m_shouldStopThread(false)
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "ConsoleProcessManager constructed");
+        // Deliberately silent. SimpleConsole::Log() reaches QueueEngineLog(), and
+        // SimpleConsole is where the Logger's ConsoleSink writes — so this
+        // singleton can be constructed on demand from inside Logger's sink
+        // dispatch, which holds a non-recursive mutex. Logging here would
+        // re-enter Logger::Log on the same thread and deadlock.
 
         // Register default commands
         m_commandRegistry->RegisterCommand(
@@ -137,10 +156,17 @@ namespace Spark
                 return "Invalid mode. Use: on, off, true, false, 1, or 0";
             },
             "Enable/disable crash dumps for assertions", "assert_mode <on|off>");
+
+        // Last: everything a QueueEngineLog() caller touches is now constructed.
+        g_instanceAlive.store(true, std::memory_order_release);
     }
 
     ConsoleProcessManager::~ConsoleProcessManager()
     {
+        // First: stop new mirror traffic before any member is torn down. Static
+        // destruction order runs this before SimpleConsole's, and SimpleConsole
+        // keeps logging until its own destructor.
+        g_instanceAlive.store(false, std::memory_order_release);
         Shutdown();
     }
 
@@ -163,6 +189,48 @@ namespace Spark
     }
 
     // =========================================================================
+    // Executable resolution
+    // =========================================================================
+
+    // Resolve the console executable from the running binary's canonical
+    // directory only (or its bin child). The launcher working directory can be a
+    // project or package root that the user opened, so a SparkConsole.exe dropped
+    // there must never be executed — the crash reporter enforces the same rule.
+    std::string ConsoleProcessManager::ResolveConsoleExecutable(const std::string& executableDirectory,
+                                                               const std::string& fileName)
+    {
+        namespace fs = std::filesystem;
+        if (executableDirectory.empty() || fileName.empty())
+            return {};
+
+        std::error_code error;
+        const fs::path canonicalDirectory = fs::canonical(executableDirectory, error);
+        if (error || !fs::is_directory(canonicalDirectory, error) || error)
+            return {};
+
+        const std::array<fs::path, 2> candidates = {canonicalDirectory / fileName,
+                                                    canonicalDirectory / "bin" / fileName};
+        for (const fs::path& candidate : candidates)
+        {
+            error.clear();
+            if (!fs::is_regular_file(candidate, error) || error)
+                continue;
+
+            // canonical() resolves symlinks and reparse points: a planted link
+            // that points outside the trusted directory fails the parent check.
+            const fs::path canonicalCandidate = fs::canonical(candidate, error);
+            if (error)
+                continue;
+
+            const fs::path parent = canonicalCandidate.parent_path();
+            if (parent == canonicalDirectory || parent == canonicalDirectory / "bin")
+                return canonicalCandidate.string();
+        }
+
+        return {};
+    }
+
+    // =========================================================================
     // Initialize / Shutdown
     // =========================================================================
 
@@ -172,18 +240,27 @@ namespace Spark
         if (m_initialized)
             return true;
 
+#if defined(SPARK_BUILD_SHIPPING) && !defined(SPARK_CONSOLE_IN_SHIPPING)
+        // ENABLE_CONSOLE_IN_SHIPPING=OFF: Shipping builds never spawn the external
+        // console; logging stays on the Logger sinks.
+        m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "SparkConsole disabled in this Shipping build");
+        return true;
+#else
         SPARK_LOG_INFO(Spark::LogCategory::Core, "ConsoleProcessManager::Initialize starting");
 
         std::string consoleBaseName = WStrToStr(consolePath);
         if (consoleBaseName.empty())
             consoleBaseName = "SparkConsole";
 
-        // Determine executable directory
-        std::string executableDir = ".";
+        // Determine executable directory. An empty result means "unknown", never
+        // the working directory — see ResolveConsoleExecutable.
+        std::string executableDir;
 #ifdef SPARK_PLATFORM_WINDOWS
         wchar_t currentDir[MAX_PATH];
-        GetModuleFileNameW(NULL, currentDir, MAX_PATH);
-        executableDir = std::filesystem::path(currentDir).parent_path().string();
+        const DWORD moduleNameLength = GetModuleFileNameW(NULL, currentDir, MAX_PATH);
+        if (moduleNameLength > 0 && moduleNameLength < MAX_PATH)
+            executableDir = std::filesystem::path(currentDir).parent_path().string();
 #elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
         char exePath[PATH_MAX];
         ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
@@ -200,24 +277,7 @@ namespace Spark
         std::string ext;
 #endif
 
-        std::vector<std::string> searchPaths = {
-            consoleBaseName + ext,
-            executableDir + "/" + consoleBaseName + ext,
-            executableDir + "/../SparkConsole/" + consoleBaseName + ext,
-            "bin/Debug/" + consoleBaseName + ext,
-            "bin/Release/" + consoleBaseName + ext,
-            "./" + consoleBaseName + ext,
-        };
-
-        std::string actualPath;
-        for (const auto& path : searchPaths)
-        {
-            if (std::filesystem::exists(path))
-            {
-                actualPath = path;
-                break;
-            }
-        }
+        const std::string actualPath = ResolveConsoleExecutable(executableDir, consoleBaseName + ext);
 
         if (actualPath.empty())
         {
@@ -241,6 +301,7 @@ namespace Spark
             }
         }
         return success;
+#endif
     }
 
     void ConsoleProcessManager::Shutdown()
@@ -264,7 +325,12 @@ namespace Spark
             if (m_process->IsRunning())
                 m_process->Kill();
         }
-        m_process.reset();
+        {
+            // QueueEngineLog()/Log() test m_process under this mutex, and both
+            // run on threads this shutdown does not join.
+            std::lock_guard<std::mutex> lock(m_messageMutex);
+            m_process.reset();
+        }
         m_initialized = false;
     }
 
@@ -283,11 +349,38 @@ namespace Spark
         std::cerr << formatted << "\n";
 #endif
 
-        if (m_consoleRunning && m_process)
+        if (m_consoleRunning)
         {
             std::lock_guard<std::mutex> lock(m_messageMutex);
-            m_messageQueue.push(formatted);
+            EnqueueForConsole(std::move(formatted));
         }
+    }
+
+    void ConsoleProcessManager::QueueEngineLog(const std::string& message, const std::string& type)
+    {
+        if (!m_consoleRunning)
+            return;
+
+        std::lock_guard<std::mutex> lock(m_messageMutex);
+        EnqueueForConsole("[" + type + "] " + message);
+    }
+
+    void ConsoleProcessManager::EnqueueForConsole(std::string line)
+    {
+        // Caller holds m_messageMutex. m_process is read here, under the same
+        // mutex Shutdown() takes to reset it.
+        if (!m_process)
+            return;
+
+        if (m_messageQueue.size() >= kMaxQueuedMessages)
+        {
+            // Drop-oldest: the newest lines describe why the child stopped
+            // draining. ProcessQueuedMessages() reports the count once the pipe
+            // accepts data again.
+            m_messageQueue.pop();
+            ++m_droppedMessages;
+        }
+        m_messageQueue.push(std::move(line));
     }
 
     void ConsoleProcessManager::LogCrash(const std::string& crashInfo)
@@ -413,11 +506,20 @@ namespace Spark
     void ConsoleProcessManager::ProcessQueuedMessages()
     {
         std::queue<std::string> messagesToSend;
+        uint64_t dropped = 0;
         {
             std::lock_guard<std::mutex> lock(m_messageMutex);
-            if (m_messageQueue.empty())
+            if (m_messageQueue.empty() && m_droppedMessages == 0)
                 return;
             messagesToSend.swap(m_messageQueue);
+            dropped = std::exchange(m_droppedMessages, static_cast<uint64_t>(0));
+        }
+        if (dropped > 0)
+        {
+            // One notice per burst, not one per dropped line — the same shape
+            // SimpleConsole uses for its duplicate-suppression notice.
+            WriteToConsole("[WARN] SparkConsole mirror dropped " + std::to_string(dropped) +
+                           " log line(s): outgoing queue full (" + std::to_string(kMaxQueuedMessages) + ")");
         }
         while (!messagesToSend.empty())
         {

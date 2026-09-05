@@ -196,6 +196,64 @@ namespace Spark
         m_sinks.clear();
     }
 
+    size_t Logger::GetSinkCount() const
+    {
+        std::lock_guard<std::mutex> lock(m_sinkMutex);
+        return m_sinks.size();
+    }
+
+    std::string Logger::InstallDefaultSinks(const SinkSetup& setup, std::unique_ptr<ILogSink> consoleSink)
+    {
+        // Open the file before taking the sink lock: OpenFile() touches the
+        // filesystem and must not block other threads' Log() calls.
+        std::unique_ptr<FileSink> fileSink;
+        std::string logFilePath;
+        if (setup.enableFile)
+        {
+            fileSink = std::make_unique<FileSink>(setup.file);
+            if (fileSink->IsOpen())
+            {
+                logFilePath = fileSink->GetCurrentFilePath();
+            }
+            else
+            {
+                fileSink.reset();
+            }
+        }
+
+        const bool fileRequestedButUnavailable = setup.enableFile && logFilePath.empty();
+
+        {
+            std::lock_guard<std::mutex> lock(m_sinkMutex);
+            m_sinks.clear();
+            if (setup.enableStderr)
+            {
+                m_sinks.push_back(std::make_unique<StderrSink>());
+            }
+            if (fileSink)
+            {
+                m_sinks.push_back(std::move(fileSink));
+            }
+            if (consoleSink)
+            {
+                m_sinks.push_back(std::move(consoleSink));
+            }
+        }
+
+        // "Not requested" and "could not be created" both return an empty path,
+        // and callers store that as the engine log path and carry on believing a
+        // log file exists. Say so out loud, through the sinks just installed.
+        if (fileRequestedButUnavailable)
+        {
+            LogFormatted(LogLevel::Warn, LogCategory::Core, __FILE__, __LINE__, __func__,
+                         "Logger: file sink requested but no log file could be opened under '%s' — this run's log "
+                         "lives only in stderr/console output",
+                         setup.file.directory.c_str());
+        }
+
+        return logFilePath;
+    }
+
     // ============================================================================
     // Filtering
     // ============================================================================

@@ -23,7 +23,8 @@
  *   Spark::FreezeDetector::GetInstance().Stop();
  * @endcode
  *
- * @note Active in Debug and Release builds. Compiled to no-ops in SPARK_SHIPPING.
+ * @note Active in Debug, Development and Release builds. Compiled to no-ops when
+ * SPARK_BUILD_SHIPPING is defined (the MinSizeRel configuration).
  * @see CrashHandler.h, ThreadDebugger.h
  */
 
@@ -185,7 +186,7 @@ namespace Spark
 // Convenience macros — active in Debug + Release, no-op in Shipping
 // ============================================================================
 
-#if !defined(SPARK_SHIPPING)
+#if !defined(SPARK_BUILD_SHIPPING)
 
 /// @brief Signal main-loop liveness to the freeze detector
 #define SPARK_HEARTBEAT() Spark::FreezeDetector::GetInstance().Heartbeat()

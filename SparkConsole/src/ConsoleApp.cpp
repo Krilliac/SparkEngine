@@ -78,8 +78,8 @@ static bool LinuxIsStdinPipe()
 
 // ---------------------------------------------------------------------------
 // Console version — single-sourced. The narrow and wide forms must stay in
-// sync; they exist only because the banner is emitted through std::wcout while
-// the command results are narrow std::string.
+// sync; they exist only because the banner is written wide (WriteConsoleW to
+// the display handle) while command results are narrow std::string.
 // ---------------------------------------------------------------------------
 namespace
 {
@@ -87,10 +87,53 @@ namespace
     constexpr const wchar_t* kConsoleVersionW = L"2.0.0";
 } // namespace
 
+#ifdef SPARK_PLATFORM_WINDOWS
+HANDLE ConsoleApp::DisplayHandle()
+{
+    static HANDLE displayHandle = []() -> HANDLE
+    {
+        // The engine launches us with CaptureStdout() and no CREATE_NEW_CONSOLE,
+        // and it is a wWinMain process, so we inherit a pipe for stdout and no
+        // console at all. Make our own window, then talk to it directly.
+        if (GetConsoleWindow() == nullptr)
+        {
+            AllocConsole();
+        }
+
+        HANDLE screenBuffer = CreateFileW(L"CONOUT$", GENERIC_READ | GENERIC_WRITE,
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                                          FILE_ATTRIBUTE_NORMAL, nullptr);
+        return screenBuffer != INVALID_HANDLE_VALUE ? screenBuffer : GetStdHandle(STD_OUTPUT_HANDLE);
+    }();
+    return displayHandle;
+}
+
+void ConsoleApp::WriteDisplay(const std::wstring& text)
+{
+    DWORD written = 0;
+    WriteConsoleW(DisplayHandle(), text.c_str(), static_cast<DWORD>(text.size()), &written, nullptr);
+}
+
+void ConsoleApp::ClearDisplay()
+{
+    const HANDLE display = DisplayHandle();
+    CONSOLE_SCREEN_BUFFER_INFO info{};
+    if (!GetConsoleScreenBufferInfo(display, &info))
+        return;
+
+    const DWORD cellCount = static_cast<DWORD>(info.dwSize.X) * static_cast<DWORD>(info.dwSize.Y);
+    const COORD origin{0, 0};
+    DWORD written = 0;
+    FillConsoleOutputCharacterW(display, L' ', cellCount, origin, &written);
+    FillConsoleOutputAttribute(display, info.wAttributes, cellCount, origin, &written);
+    SetConsoleCursorPosition(display, origin);
+}
+#endif // SPARK_PLATFORM_WINDOWS
+
 ConsoleApp::ConsoleApp(bool enginePipeRequested)
     : m_running(true), m_enginePipeRequested(enginePipeRequested),
 #ifdef SPARK_PLATFORM_WINDOWS
-      m_consoleOutput(GetStdHandle(STD_OUTPUT_HANDLE)), m_consoleInput(GetStdHandle(STD_INPUT_HANDLE))
+      m_consoleOutput(DisplayHandle()), m_consoleInput(GetStdHandle(STD_INPUT_HANDLE))
 #else
       m_consoleOutput(STDOUT_FILENO), m_consoleInput(STDIN_FILENO)
 #endif
@@ -118,12 +161,13 @@ ConsoleApp::~ConsoleApp()
 void ConsoleApp::PrintBanner()
 {
 #ifdef SPARK_PLATFORM_WINDOWS
-    [[maybe_unused]] int rc_ = system("cls"); // Intentional: side-effect only
-    std::wcout << L"========================================" << std::endl;
-    std::wcout << L"   Spark Engine Console v" << kConsoleVersionW << std::endl;
-    std::wcout << L"   Type 'help' for commands, 'history' to recall" << std::endl;
-    std::wcout << L"========================================" << std::endl;
-    std::wcout << std::endl;
+    // stdout is the engine's command channel (see the Linux note below); the
+    // engine used to execute every one of these banner lines as a command.
+    ClearDisplay();
+    WriteDisplay(L"========================================\n");
+    WriteDisplay(std::wstring(L"   Spark Engine Console v") + kConsoleVersionW + L"\n");
+    WriteDisplay(L"   Type 'help' for commands, 'history' to recall\n");
+    WriteDisplay(L"========================================\n\n");
 #else
     // On Linux the subprocess's stdout is wired straight into the engine's
     // ConsoleProcessManager command queue. Writing the banner to stdout would
@@ -163,7 +207,7 @@ void ConsoleApp::PollPipeModeInput(std::string& input, int& noInputCounter, bool
                                    std::atomic<bool>& keyboardThreadRunning)
 {
 #ifdef SPARK_PLATFORM_WINDOWS
-    HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE hConsoleOut = DisplayHandle();
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     GetConsoleScreenBufferInfo(hConsoleOut, &csbi);
 
@@ -263,7 +307,7 @@ void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& k
                     input.clear();
                 }
 #ifdef SPARK_PLATFORM_WINDOWS
-                HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
+                HANDLE hConsoleOut = DisplayHandle();
                 WriteConsoleW(hConsoleOut, L"\n", 1, NULL, NULL);
 #else
                 std::cout << std::endl;
@@ -495,7 +539,7 @@ void ConsoleApp::HandleBackspaceKey(std::string& input)
     {
         input.pop_back();
 #ifdef SPARK_PLATFORM_WINDOWS
-        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        HANDLE hOut = DisplayHandle();
         WriteConsoleW(hOut, L"\b \b", 3, NULL, NULL);
 #else
         std::cout << "\b \b" << std::flush;
@@ -507,7 +551,7 @@ void ConsoleApp::HandlePrintableChar(std::string& input, char ch)
 {
     input += ch;
 #ifdef SPARK_PLATFORM_WINDOWS
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE hOut = DisplayHandle();
     wchar_t wch = static_cast<wchar_t>(ch);
     WriteConsoleW(hOut, &wch, 1, NULL, NULL);
 #else
@@ -540,7 +584,7 @@ void ConsoleApp::PrintLog(const std::wstring& msg)
     auto time_t = std::chrono::system_clock::to_time_t(now);
 
 #ifdef SPARK_PLATFORM_WINDOWS
-    HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE hConsoleOut = DisplayHandle();
 
     // Format timestamp
     std::wstringstream timeStr;
@@ -576,7 +620,7 @@ void ConsoleApp::PrintDuplicateSkipNotice(int skippedCount)
     auto currentTime = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(currentTime);
 #ifdef SPARK_PLATFORM_WINDOWS
-    HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE hConsoleOut = DisplayHandle();
     SetConsoleTextAttribute(hConsoleOut, FOREGROUND_RED | FOREGROUND_GREEN);
 
     std::wstringstream skipMsg;
@@ -629,7 +673,7 @@ void ConsoleApp::PrintEngineLog(const std::wstring& msg)
     auto time_t = std::chrono::system_clock::to_time_t(currentTime);
 
 #ifdef SPARK_PLATFORM_WINDOWS
-    HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE hConsoleOut = DisplayHandle();
 
     std::wstringstream fullMsg;
     fullMsg << L"[" << std::put_time(std::localtime(&time_t), L"%H:%M:%S") << L"] ENGINE: " << msg << L"\n";
@@ -655,7 +699,7 @@ void ConsoleApp::PrintResult(const std::string& result)
     if (!result.empty())
     {
 #ifdef SPARK_PLATFORM_WINDOWS
-        HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        HANDLE hConsoleOut = DisplayHandle();
 
         SetConsoleTextAttribute(hConsoleOut, FOREGROUND_GREEN | FOREGROUND_BLUE);
 
@@ -782,36 +826,33 @@ void ConsoleApp::RegisterCoreCommands()
                                       [this](const std::vector<std::string>& args) -> std::string
                                       {
 #ifdef SPARK_PLATFORM_WINDOWS
-                                          [[maybe_unused]] int rc_ = system("cls"); // Intentional: side-effect only
+                                          // Display only: stdout carries commands to the engine.
+                                          ClearDisplay();
+                                          const HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+                                          const bool connected = GetFileType(hStdin) == FILE_TYPE_PIPE;
 
-                                          HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
-                                          DWORD fileType = GetFileType(hStdin);
+                                          WriteDisplay(L"========================================\n");
+                                          WriteDisplay(std::wstring(L"   Spark Engine Console v") +
+                                                       kConsoleVersionW + L"\n");
+                                          WriteDisplay(L"   Console Refreshed\n");
+                                          WriteDisplay(L"========================================\n\n");
+                                          WriteDisplay(connected ? L"Connected to Spark Engine via pipe\n"
+                                                                 : L"Running in standalone mode\n");
+                                          WriteDisplay(L"Type 'help' for available commands\n");
+                                          WriteDisplay(L"Type 'info' to test engine connection\n\n");
 #else
             [[maybe_unused]] int rc_ = system("clear"); // Intentional: side-effect only
+
+            std::cerr << "========================================\n";
+            std::cerr << "   Spark Engine Console v" << kConsoleVersion << "\n";
+            std::cerr << "   Console Refreshed\n";
+            std::cerr << "========================================\n\n";
+            std::cerr << (LinuxIsStdinPipe() ? "Connected to Spark Engine via pipe\n"
+                                             : "Running in standalone mode\n");
+            std::cerr << "Type 'help' for available commands\n";
+            std::cerr << "Type 'info' to test engine connection\n\n";
+            std::cerr.flush();
 #endif
-
-                                          std::wcout << L"========================================" << std::endl;
-                                          std::wcout << L"   Spark Engine Console v" << kConsoleVersionW << std::endl;
-                                          std::wcout << L"   Console Refreshed" << std::endl;
-                                          std::wcout << L"========================================" << std::endl;
-                                          std::wcout << std::endl;
-
-#ifdef SPARK_PLATFORM_WINDOWS
-                                          if (fileType == FILE_TYPE_PIPE)
-                                              std::wcout << L"Connected to Spark Engine via pipe" << std::endl;
-                                          else
-                                              std::wcout << L"Running in standalone mode" << std::endl;
-#else
-            if (LinuxIsStdinPipe())
-                std::wcout << L"Connected to Spark Engine via pipe" << std::endl;
-            else
-                std::wcout << L"Running in standalone mode" << std::endl;
-#endif
-
-                                          std::wcout << L"Type 'help' for available commands" << std::endl;
-                                          std::wcout << L"Type 'info' to test engine connection" << std::endl;
-                                          std::wcout << std::endl;
-                                          std::wcout.flush();
 
                                           return "";
                                       });
@@ -962,19 +1003,14 @@ void ConsoleApp::RegisterDiagnosticCommands()
     m_commandRegistry.RegisterCommand("refresh", "Refresh console display", "refresh",
                                       [this](const std::vector<std::string>& args) -> std::string
                                       {
-                                          std::wcout << std::endl;
 #ifdef SPARK_PLATFORM_WINDOWS
                                           SetConsoleColor(FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-#else
-                                          std::cout << ANSI_CYAN;
-#endif
-                                          std::wcout << L"Console display refreshed." << std::endl;
-#ifdef SPARK_PLATFORM_WINDOWS
+                                          WriteDisplay(L"\nConsole display refreshed.\n");
                                           SetConsoleColor(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
 #else
-                                          std::cout << ANSI_RESET;
+                                          std::cerr << "\n" << ANSI_CYAN << "Console display refreshed." << ANSI_RESET
+                                                    << std::endl;
 #endif
-                                          std::wcout.flush();
                                           return "";
                                       });
 

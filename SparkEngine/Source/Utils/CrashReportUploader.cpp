@@ -80,8 +80,15 @@ std::string ComputeStackHash(const std::string& logContent, int maxFrames)
         // Detect stack frame lines by common patterns
         bool isFrame = false;
 
+        // Pattern: "  FRAME <symbol> +0x<disp>" — the marker the engine's own
+        // producers emit (CrashHandler SymStackTrace / CaptureStackTraceString).
+        // It is checked first and deliberately explicit: the heuristics below
+        // matched no line this engine has ever written, which is why every
+        // Windows crash used to hash to "" and open a fresh GitHub issue.
+        if (line.find(kStackFrameMarker) != std::string::npos)
+            isFrame = true;
         // Pattern: "  #N " (GCC/backtrace style)
-        if (line.find("  #") != std::string::npos)
+        else if (line.find("  #") != std::string::npos)
             isFrame = true;
         // Pattern: lines starting with "0x" (Windows symbol output)
         else if (line.starts_with("0x") || line.starts_with("  0x"))
@@ -233,6 +240,30 @@ static bool CheckHttpResponse(CURL* c, const char* operation)
     return false;
 }
 
+// ============================================================================
+// Transfer bounds
+// ============================================================================
+
+/// Ceiling on one complete crash-report request.
+static constexpr long kUploadTimeoutSeconds = 30;
+/// A transfer moving fewer than this many bytes/s for kUploadStallSeconds is dead.
+static constexpr long kUploadLowSpeedBytesPerSecond = 512;
+static constexpr long kUploadStallSeconds = 15;
+/// Largest crash archive that is read into the crashing process's memory and posted.
+static constexpr uintmax_t kMaxAttachmentBytes = 32ull * 1024 * 1024;
+
+// Bound a libcurl handle in time, not only at connect. The upload runs on the
+// crashing thread inside HandleCrashInternal: with CURLOPT_CONNECTTIMEOUT alone,
+// an endpoint that accepts the connection and then stalls leaves
+// curl_easy_perform blocked forever, so the process neither reports nor exits.
+static void ApplyTransferBounds(CURL* handle, const CrashConfig& cfg)
+{
+    curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT, static_cast<long>(cfg.connectTimeoutSeconds));
+    curl_easy_setopt(handle, CURLOPT_TIMEOUT, kUploadTimeoutSeconds);
+    curl_easy_setopt(handle, CURLOPT_LOW_SPEED_LIMIT, kUploadLowSpeedBytesPerSecond);
+    curl_easy_setopt(handle, CURLOPT_LOW_SPEED_TIME, kUploadStallSeconds);
+}
+
 // Build standard GitHub API headers. Caller must free with curl_slist_free_all().
 static struct curl_slist* BuildGitHubHeaders(const std::string& token, const char* contentType)
 {
@@ -284,7 +315,7 @@ static int FindDuplicateIssue(const CrashConfig& cfg, const std::string& stackHa
     curl_easy_setopt(c, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, GitHubWriteCallback);
     curl_easy_setopt(c, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, static_cast<long>(cfg.connectTimeoutSeconds));
+    ApplyTransferBounds(c, cfg);
     curl_easy_setopt(c, CURLOPT_NOPROGRESS, 1L);
 
     CURLcode res = curl_easy_perform(c);
@@ -345,7 +376,7 @@ static bool AddDuplicateComment(const CrashConfig& cfg, int issueNumber, const s
     curl_easy_setopt(c, CURLOPT_POSTFIELDS, json.c_str());
     curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, GitHubWriteCallback);
     curl_easy_setopt(c, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, static_cast<long>(cfg.connectTimeoutSeconds));
+    ApplyTransferBounds(c, cfg);
     curl_easy_setopt(c, CURLOPT_NOPROGRESS, 1L);
 
     CURLcode res = curl_easy_perform(c);
@@ -490,7 +521,7 @@ bool UploadCrashToGitHub(const CrashConfig& cfg, const std::string& logContent, 
             curl_easy_setopt(c, CURLOPT_POSTFIELDS, releaseJson.c_str());
             curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, GitHubWriteCallback);
             curl_easy_setopt(c, CURLOPT_WRITEDATA, &releaseResponse);
-            curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, static_cast<long>(cfg.connectTimeoutSeconds));
+            ApplyTransferBounds(c, cfg);
             curl_easy_setopt(c, CURLOPT_NOPROGRESS, 1L);
 
             CURLcode res = curl_easy_perform(c);
@@ -522,7 +553,19 @@ bool UploadCrashToGitHub(const CrashConfig& cfg, const std::string& logContent, 
 
                     // Read zip into memory
                     std::ifstream zipFile(zipPath, std::ios::binary | std::ios::ate);
-                    if (zipFile.is_open())
+                    if (zipFile.is_open() && static_cast<uintmax_t>(zipFile.tellg()) > kMaxAttachmentBytes)
+                    {
+                        // The buffer lives on the crashing process's heap and the
+                        // POST is bounded by kUploadTimeoutSeconds; an oversized
+                        // archive cannot make either budget, so refuse it here
+                        // rather than fail slowly with the report already lost.
+                        SPARK_LOG_WARN(Spark::LogCategory::Core,
+                                       "CrashReportUploader: attachment %s is larger than the %llu byte limit — "
+                                       "issue created without it",
+                                       zipPath.c_str(), static_cast<unsigned long long>(kMaxAttachmentBytes));
+                        zipFile.close();
+                    }
+                    else if (zipFile.is_open())
                     {
                         auto fileSize = zipFile.tellg();
                         zipFile.seekg(0, std::ios::beg);
@@ -543,7 +586,7 @@ bool UploadCrashToGitHub(const CrashConfig& cfg, const std::string& logContent, 
                             curl_easy_setopt(c2, CURLOPT_POSTFIELDSIZE, static_cast<long>(fileSize));
                             curl_easy_setopt(c2, CURLOPT_WRITEFUNCTION, GitHubWriteCallback);
                             curl_easy_setopt(c2, CURLOPT_WRITEDATA, &assetResponse);
-                            curl_easy_setopt(c2, CURLOPT_CONNECTTIMEOUT, static_cast<long>(cfg.connectTimeoutSeconds));
+                            ApplyTransferBounds(c2, cfg);
                             curl_easy_setopt(c2, CURLOPT_NOPROGRESS, 1L);
 
                             CURLcode res2 = curl_easy_perform(c2);
@@ -615,7 +658,7 @@ bool UploadCrashToGitHub(const CrashConfig& cfg, const std::string& logContent, 
     curl_easy_setopt(c, CURLOPT_POSTFIELDS, issueJson.c_str());
     curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, GitHubWriteCallback);
     curl_easy_setopt(c, CURLOPT_WRITEDATA, &issueResponse);
-    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, static_cast<long>(cfg.connectTimeoutSeconds));
+    ApplyTransferBounds(c, cfg);
     curl_easy_setopt(c, CURLOPT_NOPROGRESS, 1L);
 
     CURLcode res = curl_easy_perform(c);
@@ -726,7 +769,7 @@ bool UploadCrashToProxy(const CrashConfig& cfg, const std::string& logContent, c
     curl_easy_setopt(c, CURLOPT_MIMEPOST, mime);
     curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, GitHubWriteCallback);
     curl_easy_setopt(c, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, static_cast<long>(cfg.connectTimeoutSeconds));
+    ApplyTransferBounds(c, cfg);
     curl_easy_setopt(c, CURLOPT_NOPROGRESS, 1L);
 
     CURLcode res = curl_easy_perform(c);
@@ -768,7 +811,7 @@ bool UploadCrashFile(const CrashConfig& cfg, const std::string& url, const std::
     curl_mime_filedata(part, filePath.c_str());
     curl_easy_setopt(c, CURLOPT_URL, url.c_str());
     curl_easy_setopt(c, CURLOPT_MIMEPOST, mime);
-    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, static_cast<long>(cfg.connectTimeoutSeconds));
+    ApplyTransferBounds(c, cfg);
     CURLcode res = curl_easy_perform(c);
     bool httpOk = CheckHttpResponse(c, "file upload");
     curl_mime_free(mime);
@@ -842,7 +885,7 @@ bool UploadCrashToDropbox(const CrashConfig& cfg, const std::string& logContent,
     curl_easy_setopt(c, CURLOPT_MIMEPOST, mime);
     curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, GitHubWriteCallback);
     curl_easy_setopt(c, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, static_cast<long>(cfg.connectTimeoutSeconds));
+    ApplyTransferBounds(c, cfg);
     curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(c, CURLOPT_NOPROGRESS, 1L);
 
@@ -912,7 +955,7 @@ bool UploadCrashToFTP(const CrashConfig& cfg, const std::string& zipPath)
     curl_easy_setopt(c, CURLOPT_URL, ftpUrl.c_str());
     curl_easy_setopt(c, CURLOPT_UPLOAD, 1L);
     curl_easy_setopt(c, CURLOPT_INFILESIZE_LARGE, static_cast<curl_off_t>(fileSize));
-    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, static_cast<long>(cfg.connectTimeoutSeconds));
+    ApplyTransferBounds(c, cfg);
     curl_easy_setopt(c, CURLOPT_NOPROGRESS, 1L);
 
     // Use a read callback to provide file data
@@ -1054,7 +1097,7 @@ bool UploadCrashToEmail(const CrashConfig& cfg, const std::string& logContent, c
     curl_easy_setopt(c, CURLOPT_READFUNCTION, SmtpReadCallback);
     curl_easy_setopt(c, CURLOPT_READDATA, &payload);
     curl_easy_setopt(c, CURLOPT_UPLOAD, 1L);
-    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, static_cast<long>(cfg.connectTimeoutSeconds));
+    ApplyTransferBounds(c, cfg);
     curl_easy_setopt(c, CURLOPT_NOPROGRESS, 1L);
 
     CURLcode res = curl_easy_perform(c);
@@ -1155,7 +1198,7 @@ bool UploadCrashReport(const CrashConfig& cfg, const std::string& logContent, co
         curl_easy_setopt(c, CURLOPT_MIMEPOST, mime);
         curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, GitHubWriteCallback);
         curl_easy_setopt(c, CURLOPT_WRITEDATA, &response);
-        curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, static_cast<long>(cfg.connectTimeoutSeconds));
+        ApplyTransferBounds(c, cfg);
         curl_easy_setopt(c, CURLOPT_NOPROGRESS, 1L);
 
         CURLcode res = curl_easy_perform(c);

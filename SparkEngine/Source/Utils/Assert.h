@@ -26,8 +26,16 @@
  *
  * ## Crash handler integration
  *
- * All assertion failures call TriggerCrashHandler() before aborting, which
- * allows the crash handler to generate a minidump if configured to do so.
+ * Every assertion failure calls TriggerCrashHandler(), which honours the
+ * CrashConfig::triggerCrashOnAssert developer toggle. A failure that is not
+ * suppressed additionally calls TriggerCrashReport() immediately before
+ * abort(): the process does not survive, abort() raises no exception the
+ * unhandled-exception filter can see, so that report is the only artifact a
+ * fatal assertion leaves behind.
+ *
+ * Both calls are safe together because crash reporting is idempotent: the first
+ * entry point to reach the report writer owns it, and the second returns without
+ * writing a second dump, archive, upload or dialog sequence.
  *
  * @see CrashHandler.h, DEBUG_BREAK
  */
@@ -94,6 +102,7 @@
 
 // Forward declarations
 void TriggerCrashHandler(const char* assertMsg);
+void TriggerCrashReport(const char* reason);
 
 /**
  * @brief Core assertion failure handling functions

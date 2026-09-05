@@ -13,6 +13,7 @@
 #include "Process.h"
 
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -41,12 +42,42 @@ namespace Spark
       public:
         static ConsoleProcessManager& GetInstance();
 
+        /**
+         * @brief Attempt to bring up the external console subprocess.
+         *
+         * @return true when initialization completed without error — which
+         *         covers three distinct outcomes: the child launched, no trusted
+         *         console executable was found, or the console is compiled out of
+         *         this Shipping build. It is NOT a statement that a console is
+         *         running; ask IsConsoleRunning() for that.
+         */
         bool Initialize(const std::wstring& consolePath = L"SparkConsole");
         void Shutdown();
 
         void Log(const std::wstring& message, const std::wstring& type = L"INFO");
         void LogCrash(const std::string& crashInfo);
+
+        /**
+         * @brief Queue an already-reported engine log line for the console window.
+         *
+         * Unlike Log(), this does not echo to the debugger or stderr: the caller
+         * is the Logger's SimpleConsole bridge and the Logger's StderrSink has
+         * already written that copy. Never log through SimpleConsole from here —
+         * that would recurse.
+         */
+        void QueueEngineLog(const std::string& message, const std::string& type);
         void ProcessCommands();
+
+        /**
+         * @brief Whether the process-wide instance is constructed and not yet destroyed.
+         *
+         * Both this manager and SimpleConsole are function-local statics, so the
+         * one constructed last is destroyed first. SimpleConsole::Log() mirrors
+         * into QueueEngineLog(), and a SPARK_LOG_* emitted during static teardown
+         * would otherwise reach a destroyed object — GetInstance() hands back the
+         * storage regardless. Callers outside this class must test this first.
+         */
+        static bool IsInstanceAlive();
 
         /// Route the built-in quit command into the active platform loop.
         /// Headless loops use an atomic request; windowed loops post WM_QUIT.
@@ -57,6 +88,20 @@ namespace Spark
                              const std::string& description = "", const std::string& usage = "");
 
         bool IsConsoleRunning() const { return m_consoleRunning; }
+
+        /**
+         * @brief Resolve the console executable from a trusted directory only.
+         *
+         * Searches the canonical @p executableDirectory and its @c bin child and
+         * nothing else — never the working directory, which for a launcher- or
+         * editor-started engine is a user project root where a planted
+         * SparkConsole.exe would otherwise be launched with the user's privileges.
+         *
+         * @return Canonical path of the executable, or an empty string when no
+         *         trusted candidate exists.
+         */
+        static std::string ResolveConsoleExecutable(const std::string& executableDirectory,
+                                                    const std::string& fileName);
 
       private:
         ConsoleProcessManager();
@@ -72,6 +117,10 @@ namespace Spark
         void ConsoleThreadMain();
         void ProcessQueuedMessages();
 
+        /// Append one outgoing line, dropping the oldest past kMaxQueuedMessages.
+        /// @note The caller must already hold m_messageMutex.
+        void EnqueueForConsole(std::string line);
+
         std::optional<Process> m_process; ///< The SparkConsole subprocess (piped stdin/stdout).
 
         std::unique_ptr<CommandRegistry> m_commandRegistry; ///< Registered console commands and their handlers.
@@ -83,8 +132,16 @@ namespace Spark
         std::atomic<bool> m_shouldStopThread{false}; ///< Signal for the console thread to exit its loop.
         std::atomic<bool> m_threadStarted{false};    ///< Set by console thread once it begins its run loop.
 
-        std::mutex m_messageMutex;              ///< Guards m_messageQueue (log output to child).
+        /// Cap on outgoing log lines held for the child. The only drain is the
+        /// console thread's blocking pipe write, so a child that stops reading
+        /// its stdin would otherwise grow this queue by one entry per engine log
+        /// line for the life of the process. Over the cap the oldest line is
+        /// dropped and counted; the count is reported once when the queue drains.
+        static constexpr size_t kMaxQueuedMessages = 4096;
+
+        std::mutex m_messageMutex;              ///< Guards m_messageQueue, m_droppedMessages and m_process teardown.
         std::queue<std::string> m_messageQueue; ///< Outgoing log messages queued for the child process.
+        uint64_t m_droppedMessages = 0;         ///< Lines dropped since the last drop notice (guarded by m_messageMutex).
 
         std::mutex m_commandMutex;                      ///< Guards m_commandQueue (commands from child).
         std::queue<std::string> m_commandQueue;         ///< Incoming commands read from the child process.
