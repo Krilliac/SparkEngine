@@ -323,9 +323,8 @@ int main(int argc, char** argv)
                   << " internalLinkedRejected="
                   << (!internalManifestLinkAvailable || !throughInternalManifestLink.Succeeded())
                   << " hardLinkedRejected=" << (!hardLinkAvailable || !throughHardLinkedManifest.Succeeded()) << "\n"
-                  << "unnormalizedEscapeRejected=" << escapeRejected
-                  << " normalizedInsideAccepted=" << insideAccepted << " insideError='"
-                  << insideResult.error << "'\n"
+                  << "unnormalizedEscapeRejected=" << escapeRejected << " normalizedInsideAccepted=" << insideAccepted
+                  << " insideError='" << insideResult.error << "'\n"
                   << "containment: unnormalizedEscapeCaught=" << unnormalizedEscapeCaught
                   << " unnormalizedInsideAccepted=" << unnormalizedInsideAccepted
                   << " plainChildAccepted=" << plainChildAccepted << " siblingRejected=" << siblingRejected

@@ -156,8 +156,7 @@ namespace Spark::AssetPipeline
         {
 #if defined(_WIN32)
             std::wstring text = path.lexically_normal().wstring();
-            std::transform(text.begin(), text.end(), text.begin(),
-                           [](wchar_t character)
+            std::transform(text.begin(), text.end(), text.begin(), [](wchar_t character)
                            { return static_cast<wchar_t>(std::towlower(static_cast<std::wint_t>(character))); });
             return std::filesystem::path(std::move(text));
 #else

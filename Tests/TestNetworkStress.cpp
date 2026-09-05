@@ -47,7 +47,7 @@ class RawUDPSender
         if (m_socket == INVALID_SOCKET)
             return false;
 
-        // Non-blocking
+            // Non-blocking
 #ifdef SPARK_PLATFORM_WINDOWS
         u_long nonBlocking = 1;
         ioctlsocket(m_socket, FIONBIO, &nonBlocking);
