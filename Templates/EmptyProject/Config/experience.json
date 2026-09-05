@@ -4,7 +4,7 @@
   "experience": "Provide an empty editor canvas and an unmistakable graphical runtime success state without adding gameplay assumptions.",
   "expectedEditorState": "Scenes/Default.sparkscene contains zero entities.",
   "expectedGraphicalRun": "A neutral lit floor, origin cube, camera, and starter HUD emblem render instead of a blank white client area.",
-  "expectedNullGraphicsRun": "The template owns zero entities and the lifecycle counter advances while unpaused.",
+  "expectedNullGraphicsRun": "The template owns the same preview entities as a graphical run and no HUD sprite, and the lifecycle counter advances while unpaused.",
   "stablePreviewEntities": [
     "Preview Ground",
     "Preview Origin",
@@ -13,8 +13,8 @@
   ],
   "acceptance": [
     "The editor default scene remains empty.",
-    "A graphics-enabled runtime selects Scenes/RuntimePreview.sparkscene.",
-    "A null-graphics runtime selects the empty default scene and owns no entities.",
+    "Every runtime, graphical or headless, selects Scenes/RuntimePreview.sparkscene; only the HUD sprite is graphics-gated.",
+    "Scenes/Default.sparkscene is the editor authoring scene only and is never a runtime candidate.",
     "Pause and resume stop and restart the lifecycle counter.",
     "Unload removes every preview and HUD entity created by the module."
   ]

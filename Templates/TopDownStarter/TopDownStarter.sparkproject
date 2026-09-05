@@ -2,7 +2,7 @@
   "projectFileVersion": 1,
   "name": "TopDownStarter",
   "version": "0.3.0",
-  "description": "A top-down arena skirmish with pursuit combat, an energy upgrade, pan/zoom camera, live HUD feedback, and restart.",
+  "description": "A top-down arena skirmish with bounded movement, pan/zoom follow camera, pursuing enemy combat, energy upgrade, live HUD feedback, and restart.",
   "engineVersion": "1.0.0",
   "template": "top-down",
   "defaultScene": "Scenes/Skirmish.sparkscene",

@@ -2,7 +2,7 @@
   "projectFileVersion": 1,
   "name": "EmptyProject",
   "version": "0.2.0",
-  "description": "A minimal editable project whose empty authoring scene stays blank while graphical runs use an explicit starter preview.",
+  "description": "A minimal editable project whose empty authoring scene stays blank while the module drives an explicit runtime preview scene.",
   "engineVersion": "1.0.0",
   "template": "empty",
   "defaultScene": "Scenes/Default.sparkscene",

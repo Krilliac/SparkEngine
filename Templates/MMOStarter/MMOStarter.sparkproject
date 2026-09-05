@@ -2,7 +2,7 @@
   "projectFileVersion": 1,
   "name": "MMOStarter",
   "version": "0.3.0",
-  "description": "A bounded MMO frontier slice with faction choice, a capture objective, pursuing bot combat, chat, and fair respawn.",
+  "description": "A bounded MMO frontier slice with local session setup, faction choice, capture objective, pursuing bot combat, chat, respawn, and spawn protection.",
   "engineVersion": "1.0.0",
   "template": "mmo",
   "defaultScene": "Scenes/Frontier.sparkscene",

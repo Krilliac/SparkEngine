@@ -1,7 +1,7 @@
 {
   "name": "EmptyProject",
   "identity": "empty",
-  "description": "A minimal editable project whose empty authoring scene stays blank while graphical runs use an explicit starter preview.",
+  "description": "A minimal editable project whose empty authoring scene stays blank while the module drives an explicit runtime preview scene.",
   "genre": "General",
   "gameModule": "EmptyProject",
   "defaultScene": "Scenes/Default.sparkscene",
