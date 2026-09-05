@@ -10,31 +10,31 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 320157 |
-| **SparkEditor/Source** | 102138 |
-| **GameModules** | 141912 |
+| **SparkEngine/Source** | 320227 |
+| **SparkEditor/Source** | 102118 |
+| **GameModules** | 142529 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2506 |
-| **Tests** | 171838 |
-| **SparkConsole/src** | 1704 |
+| **Tests** | 180227 |
+| **SparkConsole/src** | 1701 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~763498** |
+| **Total C++ (excl. ThirdParty)** | **~772560** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1044 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1523 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1048 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1553 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 575 |
+| Test-bearing implementation files (.cpp/.mm) | 602 |
 | Wiki pages (.md) | 198 |
 
 ### Largest Top-Level Source Section
 
-Graphics contains 121067 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 121056 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -42,12 +42,12 @@ Graphics contains 121067 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 121067 | 37.8% |
-| Engine (all subsystems) | 88946 | 27.7% |
-| Utils | 45889 | 14.3% |
-| Core | 30895 | 9.6% |
+| Graphics | 121056 | 37.8% |
+| Engine (all subsystems) | 88943 | 27.7% |
+| Utils | 45892 | 14.3% |
+| Core | 30887 | 9.6% |
 | Physics | 10799 | 3.3% |
-| Audio | 6886 | 2.1% |
+| Audio | 6884 | 2.1% |
 | Input | 3953 | 1.2% |
 | SceneManager | 2241 | 0.6% |
 | Enums | 1423 | 0.4% |
@@ -58,7 +58,7 @@ Graphics contains 121067 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines |
 |-----------|------:|
-| Networking | 15148 |
+| Networking | 15147 |
 | AI | 13490 |
 | ECS | 8497 |
 | Gameplay | 7911 |
@@ -66,11 +66,11 @@ Graphics contains 121067 lines, or 37% of `SparkEngine/Source`. This is a source
 | Scripting | 5093 |
 | SaveSystem | 3711 |
 | UI | 2522 |
-| Streaming | 2124 |
+| Streaming | 2123 |
 | Editor | 1737 |
 | Cinematic | 1652 |
 | World | 1604 |
-| Modding | 1580 |
+| Modding | 1579 |
 | Dialogue | 1425 |
 | Persistence | 1318 |
 | 2D | 1015 |
@@ -103,14 +103,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 102138 |
+| Total editor lines | 102118 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 575 |
-| TEST() definitions | 6999 |
+| Test files | 602 |
+| TEST() definitions | 7269 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -161,10 +161,10 @@ inventory is implementation evidence, not support certification.
 | `OpenGLDevice.cpp` | 2160 |
 | `VulkanDevice.cpp` | 1991 |
 | `ModuleManager.cpp` | 1949 |
-| `D3D11Device.cpp` | 1904 |
-| `EngineSettings.cpp` | 1850 |
+| `D3D11Device.cpp` | 1902 |
+| `EngineSettings.cpp` | 1849 |
 | `NetworkConnection.cpp` | 1680 |
-| `GameplayLifecycleShared.cpp` | 1654 |
+| `GameplayLifecycleShared.cpp` | 1652 |
 | `PostProcessingPipeline.cpp` | 1602 |
 
 ### SparkEngine .h Files (by line count)
@@ -173,7 +173,7 @@ inventory is implementation evidence, not support certification.
 |------|------:|
 | `RenderGraph.h` | 1427 |
 | `Telemetry.h` | 1412 |
-| `JsonUtils.h` | 1317 |
+| `JsonUtils.h` | 1318 |
 | `GraphicsEngine.h` | 1277 |
 | `EngineSettings.h` | 1152 |
 | `NetworkManager.h` | 941 |
@@ -187,13 +187,13 @@ inventory is implementation evidence, not support certification.
 | File | Lines |
 |------|------:|
 | `ProjectManager.cpp` | 2586 |
-| `EditorUI.cpp` | 2333 |
+| `EditorUI.cpp` | 2330 |
 | `JSONSceneSerializer.cpp` | 2010 |
 | `VisualScriptPanel.cpp` | 1773 |
 | `CollaborativeEditSession.cpp` | 1696 |
 | `BuildPipeline.cpp` | 1659 |
 | `HierarchyPanel.cpp` | 1651 |
-| `PerformanceProfiler.cpp` | 1607 |
+| `PerformanceProfiler.cpp` | 1606 |
 | `EditorTheme.cpp` | 1589 |
 | `ProjectSettingsPanel.cpp` | 1519 |
 
