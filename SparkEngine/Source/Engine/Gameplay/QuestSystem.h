@@ -9,7 +9,9 @@
  * - Per-entity quest state tracking (active, completed, failed)
  * - Objective progress reporting by type (kill, collect, talk, etc.)
  * - Prerequisite quest chains
- * - Item and XP rewards on completion
+ * - Item rewards granted on completion (through InventorySystem when no policy is
+ *   installed, otherwise by the policy); XP is policy-owned, the engine has no XP sink
+ * - QuestCompletedEvent published on the global EventBus for every completion
  * - Console integration for debugging
  *
  * ## Usage
@@ -186,7 +188,17 @@ namespace Spark::Gameplay
         [[nodiscard]] bool IsQuestComplete(uint32_t entityId, uint32_t questId) const;
 
         /// @brief Mark a quest as completed (call after verifying IsQuestComplete)
-        void CompleteQuest(uint32_t entityId, uint32_t questId);
+        ///
+        /// When no policy is installed the definition's item rewards are granted through
+        /// InventorySystem *before* the completion is committed: a reward that cannot be
+        /// delivered (full inventory) is rolled back, the quest stays Active, and this
+        /// returns false so the caller can retry rather than lose the reward. On success
+        /// the state flips to Completed and QuestCompletedEvent is published on the
+        /// global EventBus.
+        ///
+        /// @return true when the quest was completed; false when it was not active or
+        ///         the declared rewards could not be delivered.
+        bool CompleteQuest(uint32_t entityId, uint32_t questId);
 
         // -- Queries --
 
