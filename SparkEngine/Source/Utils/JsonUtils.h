@@ -350,7 +350,8 @@ namespace Spark::Json
          */
         inline bool ScanWithinLimits(std::string_view json, const JsonLimits& limits, const char** outError)
         {
-            const auto fail = [outError](const char* msg) {
+            const auto fail = [outError](const char* msg)
+            {
                 if (outError)
                     *outError = msg;
                 return false;

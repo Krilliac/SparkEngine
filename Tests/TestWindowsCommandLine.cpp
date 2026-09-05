@@ -74,10 +74,9 @@ TEST(WindowsCommandLine_ParsesWholeNumericTokensOnly)
 
     // Trailing garbage and non-numeric values are rejected rather than silently
     // read as a partial number (the old `std::stoi(substr(pos))` accepted both).
-    EXPECT_FALSE(Spark::Platform::FindWindowsCommandLineNumber<long long>(L"-test-frames 12x", L"-test-frames")
-                     .has_value());
     EXPECT_FALSE(
-        Spark::Platform::FindWindowsCommandLineNumber<long long>(L"-threads abc", L"-threads").has_value());
+        Spark::Platform::FindWindowsCommandLineNumber<long long>(L"-test-frames 12x", L"-test-frames").has_value());
+    EXPECT_FALSE(Spark::Platform::FindWindowsCommandLineNumber<long long>(L"-threads abc", L"-threads").has_value());
     EXPECT_FALSE(
         Spark::Platform::FindWindowsCommandLineNumber<long long>(L"-test-frames", L"-test-frames").has_value());
 }

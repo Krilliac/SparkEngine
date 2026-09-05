@@ -237,10 +237,8 @@ namespace
         if (bytecode.size() < 4)
             return false;
 
-        const bool isDXBC =
-            bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'B' && bytecode[3] == 'C';
-        const bool isDXIL =
-            bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'I' && bytecode[3] == 'L';
+        const bool isDXBC = bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'B' && bytecode[3] == 'C';
+        const bool isDXIL = bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'I' && bytecode[3] == 'L';
         return isDXBC || isDXIL;
     }
 

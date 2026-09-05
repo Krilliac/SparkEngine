@@ -103,8 +103,8 @@ namespace Spark::Streaming
             // '../../../../Users/<name>/.ssh/id_rsa' and absolute paths out of the
             // parsed manifest, with a log line rather than silently.
             bool entriesTruncated = false;
-            const auto addPath = [&manifest, &entriesTruncated](std::vector<std::string>& target,
-                                                                const std::string& value)
+            const auto addPath =
+                [&manifest, &entriesTruncated](std::vector<std::string>& target, const std::string& value)
             {
                 if (manifest.TotalAssetCount() >= MAX_SCENE_MANIFEST_ENTRIES)
                 {
@@ -195,8 +195,7 @@ namespace Spark::Streaming
             if (fileSize > MAX_SCENE_MANIFEST_BYTES)
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Scene, "SceneManifest: '%s' is %llu bytes, above the %zu limit",
-                               filePath.c_str(), static_cast<unsigned long long>(fileSize),
-                               MAX_SCENE_MANIFEST_BYTES);
+                               filePath.c_str(), static_cast<unsigned long long>(fileSize), MAX_SCENE_MANIFEST_BYTES);
                 return {};
             }
 

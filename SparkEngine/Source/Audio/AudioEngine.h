@@ -793,16 +793,16 @@ class AudioEngine
         uint32_t inputSampleRate = 0;         ///< Sample rate the voice was created with
     };
 
-    IXAudio2* m_xAudio2;                             ///< Main XAudio2 engine interface
-    IXAudio2MasteringVoice* m_masterVoice;           ///< XAudio2 mastering voice for final output
-    std::vector<SubmixVoiceRecord> m_submixVoices;   ///< Created submix voices for cleanup/recovery
-    Spark::Audio::AudioMixer* m_mixer;                ///< Non-owning mix bus provider (may be null)
-    bool m_deviceLost;                                ///< Output device reported invalidated
-    float m_deviceRecoveryTimer;                      ///< Seconds since the last recovery attempt
-    float m_masterVolume;                             ///< Current master volume level
-    float m_sfxVolume;                                ///< Current sound effects volume level
-    float m_musicVolume;                              ///< Current music volume level
-    size_t m_maxSources;                              ///< Maximum number of simultaneous sources
+    IXAudio2* m_xAudio2;                           ///< Main XAudio2 engine interface
+    IXAudio2MasteringVoice* m_masterVoice;         ///< XAudio2 mastering voice for final output
+    std::vector<SubmixVoiceRecord> m_submixVoices; ///< Created submix voices for cleanup/recovery
+    Spark::Audio::AudioMixer* m_mixer;             ///< Non-owning mix bus provider (may be null)
+    bool m_deviceLost;                             ///< Output device reported invalidated
+    float m_deviceRecoveryTimer;                   ///< Seconds since the last recovery attempt
+    float m_masterVolume;                          ///< Current master volume level
+    float m_sfxVolume;                             ///< Current sound effects volume level
+    float m_musicVolume;                           ///< Current music volume level
+    size_t m_maxSources;                           ///< Maximum number of simultaneous sources
 
     std::vector<std::unique_ptr<AudioSource>> m_audioSources;                     ///< Pool of all audio sources
     std::vector<AudioSource*> m_availableSources;                                 ///< Pool of available sources

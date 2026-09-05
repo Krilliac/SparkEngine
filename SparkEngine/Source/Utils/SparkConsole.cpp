@@ -436,8 +436,8 @@ namespace Spark
         if (!m_initialized.load(std::memory_order_acquire))
             return 0;
         std::lock_guard<std::mutex> lock(m_commandMutex);
-        const size_t removed = std::erase_if(m_commands, [&ownerId](const auto& entry)
-                                             { return entry.second.ownerId == ownerId; });
+        const size_t removed =
+            std::erase_if(m_commands, [&ownerId](const auto& entry) { return entry.second.ownerId == ownerId; });
         m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
         return removed;
     }

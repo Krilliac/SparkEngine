@@ -1109,8 +1109,7 @@ namespace SparkEditor
         // export was fabricated.
         m_currentFrame->frameTime = deltaTime * 1000.0f;
         m_currentFrame->fps = m_currentFrame->frameTime > 0.0f ? 1000.0f / m_currentFrame->frameTime : 0.0f;
-        m_currentFrame->targetFrameTime =
-            m_config.targetFrameRate > 0.0f ? 1000.0f / m_config.targetFrameRate : 16.67f;
+        m_currentFrame->targetFrameTime = m_config.targetFrameRate > 0.0f ? 1000.0f / m_config.targetFrameRate : 16.67f;
         m_currentFrame->isPerformanceTarget = m_currentFrame->frameTime <= m_currentFrame->targetFrameTime;
         if (m_currentFrame->frameTime > 0.0f)
             m_hasFrameSample = true;

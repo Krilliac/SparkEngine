@@ -1254,8 +1254,8 @@ namespace SparkEditor
             for (int i = 0; i <= kRingSegments; i++)
             {
                 const float t = (2.0f * 3.14159265358979f * static_cast<float>(i)) / static_cast<float>(kRingSegments);
-                const XMVECTOR offset = XMVectorAdd(XMVectorScale(u, ringRadius * std::cos(t)),
-                                                    XMVectorScale(v, ringRadius * std::sin(t)));
+                const XMVECTOR offset =
+                    XMVectorAdd(XMVectorScale(u, ringRadius * std::cos(t)), XMVectorScale(v, ringRadius * std::sin(t)));
                 XMFLOAT3 point;
                 XMStoreFloat3(&point, XMVectorAdd(XMLoadFloat3(&basis.worldPosition), offset));
                 if (!basis.Project(point, ringPoints[axis][i]))
@@ -1334,8 +1334,8 @@ namespace SparkEditor
                 const XMFLOAT3 toCamera = {basis.cameraPosition.x - basis.worldPosition.x,
                                            basis.cameraPosition.y - basis.worldPosition.y,
                                            basis.cameraPosition.z - basis.worldPosition.z};
-                const float facing = worldAxis[axis].x * toCamera.x + worldAxis[axis].y * toCamera.y +
-                                     worldAxis[axis].z * toCamera.z;
+                const float facing =
+                    worldAxis[axis].x * toCamera.x + worldAxis[axis].y * toCamera.y + worldAxis[axis].z * toCamera.z;
                 float degrees = XMConvertToDegrees(deltaScreen) * (facing > 0.0f ? -1.0f : 1.0f);
                 if (m_snapEnabled)
                 {
@@ -1351,8 +1351,7 @@ namespace SparkEditor
         {
             // Commit the whole drag as one undoable command (the live preview above
             // already wrote the new value; the command records both endpoints).
-            SceneEditTools::CommitEntityRotation(*m_world, m_gizmoDragEntity, m_dragStartRotation,
-                                                 transform->rotation);
+            SceneEditTools::CommitEntityRotation(*m_world, m_gizmoDragEntity, m_dragStartRotation, transform->rotation);
             m_gizmoDragging = false;
             m_gizmoDragAxis = -1;
             m_gizmoDragEntity = entt::null;
@@ -1423,8 +1422,8 @@ namespace SparkEditor
                 continue;
             }
             screenDirs[i] = ImVec2(dx / len, dy / len);
-            ends[i] = ImVec2(basis.center.x + screenDirs[i].x * kAxisPixels,
-                             basis.center.y + screenDirs[i].y * kAxisPixels);
+            ends[i] =
+                ImVec2(basis.center.x + screenDirs[i].x * kAxisPixels, basis.center.y + screenDirs[i].y * kAxisPixels);
 
             const float dist = PointToSegmentDistance(mouse, basis.center, ends[i]);
             if (dist < bestDist)

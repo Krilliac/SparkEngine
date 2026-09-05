@@ -81,8 +81,7 @@ TEST(CrashRedaction_ProfilePathAndAccountNameAreRemoved)
     const std::string log = "Faulting Module   : C:\\Users\\jane\\AppData\\Local\\Spark\\SparkEngine.exe\n"
                             "Config            : C:\\Users\\jane\\Documents\\Spark\\settings.ini\n"
                             "Machine           : JANE-DESKTOP\n";
-    const std::string redacted =
-        Spark::CrashHandlerDetail::RedactCrashText(log, MakeTestRedactionContext());
+    const std::string redacted = Spark::CrashHandlerDetail::RedactCrashText(log, MakeTestRedactionContext());
 
     EXPECT_TRUE(redacted.find("jane") == std::string::npos);
     EXPECT_TRUE(redacted.find("JANE-DESKTOP") == std::string::npos);
@@ -94,8 +93,7 @@ TEST(CrashRedaction_ProfilePathAndAccountNameAreRemoved)
 TEST(CrashRedaction_MatchesRegardlessOfCaseOrSeparator)
 {
     const std::string log = "Module: c:/users/JANE/appdata/local/Spark/SparkEngine.exe\n";
-    const std::string redacted =
-        Spark::CrashHandlerDetail::RedactCrashText(log, MakeTestRedactionContext());
+    const std::string redacted = Spark::CrashHandlerDetail::RedactCrashText(log, MakeTestRedactionContext());
     EXPECT_STR_CONTAINS(redacted, "%LOCALAPPDATA%");
     EXPECT_TRUE(redacted.find("JANE") == std::string::npos);
 }
@@ -106,8 +104,7 @@ TEST(CrashRedaction_SystemPathsAndDiagnosticsSurvive)
     // not shred anything that identifies nobody.
     const std::string log = "Faulting Module   : C:\\Windows\\System32\\ntdll.dll\n"
                             "  FRAME Spark::Renderer::Draw +0x42\n";
-    const std::string redacted =
-        Spark::CrashHandlerDetail::RedactCrashText(log, MakeTestRedactionContext());
+    const std::string redacted = Spark::CrashHandlerDetail::RedactCrashText(log, MakeTestRedactionContext());
     EXPECT_EQ(redacted, log);
 }
 
@@ -136,10 +133,7 @@ namespace
             _putenv_s(m_name, "");
         }
 
-        ~ScopedClearedEnvironmentVariable()
-        {
-            _putenv_s(m_name, m_wasSet ? m_value.c_str() : "");
-        }
+        ~ScopedClearedEnvironmentVariable() { _putenv_s(m_name, m_wasSet ? m_value.c_str() : ""); }
 
         ScopedClearedEnvironmentVariable(const ScopedClearedEnvironmentVariable&) = delete;
         ScopedClearedEnvironmentVariable& operator=(const ScopedClearedEnvironmentVariable&) = delete;
@@ -242,9 +236,9 @@ TEST(CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot)
 
     CrashConfig config;
     config.dumpPrefix = L"SparkTestCrash";
-    config.captureScreenshot = false;  // no swap chain in the test process
-    config.captureSystemInfo = false;  // no DXGI enumeration
-    config.captureAllThreads = false;  // no suspending the test runner's threads
+    config.captureScreenshot = false; // no swap chain in the test process
+    config.captureSystemInfo = false; // no DXGI enumeration
+    config.captureAllThreads = false; // no suspending the test runner's threads
     config.zipBeforeUpload = false;
     config.enableCrashReporting = false; // never upload from a test
     config.requireConsent = false;

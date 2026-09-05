@@ -406,8 +406,7 @@ namespace SparkEditor
 
                 for (const auto& [typeName, score] : matchingTypes)
                 {
-                    if (!Spark::ComponentFactory::Get().HasComponent(typeName, m_world,
-                                                                     static_cast<uint32_t>(entity)))
+                    if (!Spark::ComponentFactory::Get().HasComponent(typeName, m_world, static_cast<uint32_t>(entity)))
                     {
                         continue;
                     }

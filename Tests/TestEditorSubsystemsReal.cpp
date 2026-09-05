@@ -262,8 +262,7 @@ TEST(EditorSubsystemsReal_TerrainSaveAndLoadShareOneDefaultLocation)
     EXPECT_STR_CONTAINS(defaultPath, "Assets/Terrains/");
     EXPECT_STR_CONTAINS(defaultPath, ".sparkterrain");
     // Illegal filename characters are replaced rather than producing an unreachable nested path.
-    EXPECT_EQ(SparkEditor::TerrainEditor::DefaultTerrainPath("a/b"),
-              std::string("Assets/Terrains/a_b.sparkterrain"));
+    EXPECT_EQ(SparkEditor::TerrainEditor::DefaultTerrainPath("a/b"), std::string("Assets/Terrains/a_b.sparkterrain"));
 }
 
 TEST(EditorSubsystemsReal_TerrainSaveCreatesItsParentDirectory)
@@ -286,8 +285,7 @@ namespace
 {
     const SparkEditor::SceneObject* FindObject(const SparkEditor::SceneFile& scene, uint64_t id)
     {
-        auto it = std::find_if(scene.objects.begin(), scene.objects.end(),
-                               [id](const SparkEditor::SceneObject& obj)
+        auto it = std::find_if(scene.objects.begin(), scene.objects.end(), [id](const SparkEditor::SceneObject& obj)
                                { return static_cast<uint64_t>(obj.id) == id; });
         return it == scene.objects.end() ? nullptr : &(*it);
     }
@@ -321,8 +319,8 @@ TEST(EditorSubsystemsReal_PrefabInstantiationMaterializesRotationAndComponents)
     EXPECT_NEAR(obj->transform.rotation.w, 0.7071f, 0.001f);
 
     // Camera, RigidBody and Collider must reach the instance, not just Transform.
-    EXPECT_TRUE(std::find(obj->componentTypes.begin(), obj->componentTypes.end(),
-                          SparkEditor::ComponentType::CAMERA) != obj->componentTypes.end());
+    EXPECT_TRUE(std::find(obj->componentTypes.begin(), obj->componentTypes.end(), SparkEditor::ComponentType::CAMERA) !=
+                obj->componentTypes.end());
     EXPECT_TRUE(std::find(obj->componentTypes.begin(), obj->componentTypes.end(),
                           SparkEditor::ComponentType::RIGID_BODY) != obj->componentTypes.end());
     EXPECT_TRUE(std::find(obj->componentTypes.begin(), obj->componentTypes.end(),

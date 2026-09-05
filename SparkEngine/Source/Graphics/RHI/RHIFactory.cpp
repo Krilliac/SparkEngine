@@ -580,10 +580,9 @@ namespace Spark
                 if (extension == ".cso")
                 {
                     const bool isDirect3DBytecode =
-                        bytecode.size() >= 4 && ((bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'B' &&
-                                                  bytecode[3] == 'C') ||
-                                                 (bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'I' &&
-                                                  bytecode[3] == 'L'));
+                        bytecode.size() >= 4 &&
+                        ((bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'B' && bytecode[3] == 'C') ||
+                         (bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'I' && bytecode[3] == 'L'));
                     if (!isDirect3DBytecode)
                     {
                         SPARK_LOG_WARN(Spark::LogCategory::Graphics,

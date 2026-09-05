@@ -665,9 +665,9 @@ namespace SparkEditor
                 m_renameFocusPending = false;
             }
 
-            const bool committed = ImGui::InputText("##WorldRename", m_renameBuffer, sizeof(m_renameBuffer),
-                                                    ImGuiInputTextFlags_EnterReturnsTrue |
-                                                        ImGuiInputTextFlags_AutoSelectAll);
+            const bool committed =
+                ImGui::InputText("##WorldRename", m_renameBuffer, sizeof(m_renameBuffer),
+                                 ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
             const bool cancelled = ImGui::IsKeyPressed(ImGuiKey_Escape);
             if (committed)
             {

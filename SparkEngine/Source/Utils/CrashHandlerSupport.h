@@ -262,8 +262,8 @@ namespace Spark::CrashHandlerDetail
         {
             const unsigned char textChar = static_cast<unsigned char>(text[position + i]);
             const unsigned char needleChar = static_cast<unsigned char>(needle[i]);
-            const bool bothSeparators = (textChar == '\\' || textChar == '/') &&
-                                        (needleChar == '\\' || needleChar == '/');
+            const bool bothSeparators =
+                (textChar == '\\' || textChar == '/') && (needleChar == '\\' || needleChar == '/');
             if (bothSeparators)
                 continue;
             if (std::tolower(textChar) != std::tolower(needleChar))
@@ -401,8 +401,7 @@ namespace Spark::CrashHandlerDetail
                 return;
             for (const auto& existing : context.pathTokens)
             {
-                if (MatchesIgnoringCaseAndSeparators(existing.first, 0, path) &&
-                    existing.first.size() == path.size())
+                if (MatchesIgnoringCaseAndSeparators(existing.first, 0, path) && existing.first.size() == path.size())
                     return;
             }
             context.pathTokens.emplace_back(std::move(path), std::string(token));

@@ -475,8 +475,8 @@ namespace Spark::Graphics
                     {
                         // No baseline timestamp means CheckForChanges could not tell a
                         // change from a stat failure; leave the file unwatched and say so.
-                        Spark::SimpleConsole::GetInstance().LogWarning(
-                            "Shader scan skipped '" + entryPath.string() + "': " + timeEc.message());
+                        Spark::SimpleConsole::GetInstance().LogWarning("Shader scan skipped '" + entryPath.string() +
+                                                                       "': " + timeEc.message());
                     }
                     else
                     {
@@ -649,15 +649,15 @@ namespace Spark::Graphics
         }
 
         // -- State --
-        std::map<std::string, ShaderFileInfo> m_watchedFiles;                         ///< Shader name -> file info.
-        std::vector<std::string> m_watchDirectories;                                  ///< Watched root directories.
-        std::set<std::string> m_watchDirectorySet;                                    ///< Canonical keys of the above.
+        std::map<std::string, ShaderFileInfo> m_watchedFiles; ///< Shader name -> file info.
+        std::vector<std::string> m_watchDirectories;          ///< Watched root directories.
+        std::set<std::string> m_watchDirectorySet;            ///< Canonical keys of the above.
         Spark::RHI::GraphicsBackend m_targetBackend = Spark::RHI::GraphicsBackend::Auto; ///< Reload compile target.
-        float m_pollInterval = 0.5f;                                                  ///< Seconds between polls.
-        float m_timeSinceLastPoll = 0.0f;                                             ///< Accumulator for polling.
-        std::vector<std::function<void(const ShaderReloadEvent&)>> m_reloadCallbacks; ///< Reload event subscribers.
-        bool m_enabled = false;                                                       ///< Whether polling is active.
-        uint32_t m_reloadCount = 0;                                                   ///< Total successful reloads.
+        float m_pollInterval = 0.5f;                                                     ///< Seconds between polls.
+        float m_timeSinceLastPoll = 0.0f;                                                ///< Accumulator for polling.
+        std::vector<std::function<void(const ShaderReloadEvent&)>> m_reloadCallbacks;    ///< Reload event subscribers.
+        bool m_enabled = false;                                                          ///< Whether polling is active.
+        uint32_t m_reloadCount = 0;                                                      ///< Total successful reloads.
         mutable std::mutex m_compiledShaderMutex;                      ///< Protects compiled shader maps.
         std::map<std::string, std::vector<uint8_t>> m_compiledShaders; ///< Active compiled binaries.
         std::map<std::string, uint64_t> m_shaderSwapGenerations;       ///< Atomic swap generation counter.

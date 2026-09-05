@@ -123,8 +123,8 @@ TEST(SecurityParsers_JsonParseBoundedEnforcesTheCallerBudget)
     EXPECT_STR_CONTAINS(error, "depth");
 
     // Over the node budget.
-    EXPECT_FALSE(Spark::Json::ParseBounded("[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]", manifestLimits, &value,
-                                           &error));
+    EXPECT_FALSE(
+        Spark::Json::ParseBounded("[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]", manifestLimits, &value, &error));
     EXPECT_STR_CONTAINS(error, "node");
 }
 
@@ -318,8 +318,7 @@ TEST(SecurityParsers_ZeroByteOverrideWinsThePriorityContest)
     vfs.Unmount("securityparsers_mod");
     vfs.Mount("securityparsers_engine", std::make_unique<Spark::LocalFileProvider>(engineRoot.string()),
               Spark::ENGINE_PRIORITY);
-    vfs.Mount("securityparsers_mod", std::make_unique<Spark::LocalFileProvider>(modRoot.string()),
-              Spark::MOD_PRIORITY);
+    vfs.Mount("securityparsers_mod", std::make_unique<Spark::LocalFileProvider>(modRoot.string()), Spark::MOD_PRIORITY);
 
     // Before the fix an empty read was treated as a failure and the walk fell
     // through to the engine copy, silently inverting the mount priority.
@@ -447,10 +446,10 @@ TEST(SecurityParsers_AnimationChannelDesyncAbandonsWholeFile)
     const std::string clipName = "walk";
     AppendRaw(file, static_cast<uint32_t>(clipName.size()));
     file.insert(file.end(), clipName.begin(), clipName.end());
-    AppendRaw(file, 1.0f);                     // duration
-    AppendRaw(file, 30.0f);                    // ticksPerSecond
-    file.push_back(uint8_t{1});                // loop
-    AppendRaw(file, static_cast<uint32_t>(1)); // channelCount
+    AppendRaw(file, 1.0f);                              // duration
+    AppendRaw(file, 30.0f);                             // ticksPerSecond
+    file.push_back(uint8_t{1});                         // loop
+    AppendRaw(file, static_cast<uint32_t>(1));          // channelCount
     AppendRaw(file, static_cast<uint32_t>(0x00010000)); // hostile boneNameLen
 
     // Trailing bytes that a desynced reader would happily decode as clip 1.

@@ -1001,8 +1001,8 @@ namespace Spark::Net
             return result;
         }
 
-        const float directionLengthSq = rayDirection.x * rayDirection.x + rayDirection.y * rayDirection.y +
-                                        rayDirection.z * rayDirection.z;
+        const float directionLengthSq =
+            rayDirection.x * rayDirection.x + rayDirection.y * rayDirection.y + rayDirection.z * rayDirection.z;
         if (directionLengthSq < MIN_HIT_DIRECTION_LENGTH_SQ)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Network, "ValidateHit: rejected degenerate ray direction");

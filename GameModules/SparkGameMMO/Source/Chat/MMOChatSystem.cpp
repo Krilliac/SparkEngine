@@ -76,13 +76,12 @@ namespace MMO
 
         // Register the module's OWN type, leaving the engine's built-in
         // ChatMessage schema untouched (see kMMOChatMessageType above).
-        netMgr->GetPacketValidator().RegisterSchema(kMMOChatMessageType,
-                                                    {.minPayloadSize = 1,
-                                                     .maxPayloadSize = 1024,
-                                                     .requiresAuth = true,
-                                                     .allowedFromClient = true,
-                                                     .allowedFromServer = true,
-                                                     .stringFieldOffset = 1});
+        netMgr->GetPacketValidator().RegisterSchema(kMMOChatMessageType, {.minPayloadSize = 1,
+                                                                          .maxPayloadSize = 1024,
+                                                                          .requiresAuth = true,
+                                                                          .allowedFromClient = true,
+                                                                          .allowedFromServer = true,
+                                                                          .stringFieldOffset = 1});
 
         netMgr->RegisterHandler(kMMOChatMessageType,
                                 [this, netMgr](const Spark::Net::NetworkMessage& netMsg)

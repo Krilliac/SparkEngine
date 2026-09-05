@@ -144,8 +144,7 @@ namespace SparkEditor
 
     bool SaveSystemPanel::RenameSlot(const std::string& slotName, const std::string& newSlotName)
     {
-        if (newSlotName.empty() || newSlotName == slotName ||
-            newSlotName.find_first_of("/\\") != std::string::npos)
+        if (newSlotName.empty() || newSlotName == slotName || newSlotName.find_first_of("/\\") != std::string::npos)
         {
             return false;
         }
@@ -193,8 +192,8 @@ namespace SparkEditor
         ::World* world = context ? context->GetWorld() : nullptr;
         if (!world)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor,
-                           "SaveSystemPanel: no running game World to load save '%s' into", slotName.c_str());
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "SaveSystemPanel: no running game World to load save '%s' into",
+                           slotName.c_str());
             return false;
         }
 
@@ -299,8 +298,7 @@ namespace SparkEditor
     void SaveSystemPanel::RenderSlotActions()
     {
         const SaveSlotInfo slot = m_slots[static_cast<size_t>(m_selectedSlot)];
-        ImGui::Text("Selected: %s (%.1f KB)", slot.slotName.c_str(),
-                    static_cast<double>(slot.fileSizeBytes) / 1024.0);
+        ImGui::Text("Selected: %s (%.1f KB)", slot.slotName.c_str(), static_cast<double>(slot.fileSizeBytes) / 1024.0);
 
         if (m_renaming)
         {

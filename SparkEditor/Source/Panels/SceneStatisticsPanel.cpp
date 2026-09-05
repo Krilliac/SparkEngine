@@ -104,8 +104,7 @@ namespace SparkEditor
                 ++m_totalEntities;
                 for (const std::string& typeName : typeNames)
                 {
-                    if (Spark::ComponentFactory::Get().HasComponent(typeName, m_world,
-                                                                    static_cast<uint32_t>(entity)))
+                    if (Spark::ComponentFactory::Get().HasComponent(typeName, m_world, static_cast<uint32_t>(entity)))
                     {
                         ++m_componentCounts[typeName];
                     }

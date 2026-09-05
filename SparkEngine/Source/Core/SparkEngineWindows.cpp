@@ -536,8 +536,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         if (ShouldShowWindowsFatalDialog())
             MessageBoxW(nullptr, L"RegisterClassExW failed", L"Fatal Error", MB_ICONERROR);
         else
-            SPARK_LOG_ERROR(Spark::LogCategory::Core,
-                            "RegisterClassExW failed during automated windowed startup");
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "RegisterClassExW failed during automated windowed startup");
         return -1;
     }
 
@@ -567,9 +566,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     ApplyRuntimeWindowCaption();
 
     const size_t initializedModules =
-        GetEngineRuntime().moduleManager
-            ? GetEngineRuntime().moduleManager->GetInitializedModuleCount()
-            : 0;
+        GetEngineRuntime().moduleManager ? GetEngineRuntime().moduleManager->GetInitializedModuleCount() : 0;
 
     // Keep the ordinary windowed teardown path authoritative even when an
     // explicitly required module failed to initialize. Posting WM_QUIT with a
@@ -594,10 +591,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     if (requireGame)
     {
         const ModuleManager::LifecycleEvidence evidence = ModuleManager::GetLastTeardownLifecycleEvidence();
-        WriteCommandOutput(std::format(
-            "SPARK_MODULE_LIFECYCLE initialized={} updated={} fixed={} rendered={} unloaded={} faults={}\n",
-            evidence.initialized, evidence.updated, evidence.fixedUpdated, evidence.rendered, evidence.unloaded,
-            evidence.faults));
+        WriteCommandOutput(
+            std::format("SPARK_MODULE_LIFECYCLE initialized={} updated={} fixed={} rendered={} unloaded={} faults={}\n",
+                        evidence.initialized, evidence.updated, evidence.fixedUpdated, evidence.rendered,
+                        evidence.unloaded, evidence.faults));
     }
 
     return requiredGameMissing ? 2 : loopExitCode;

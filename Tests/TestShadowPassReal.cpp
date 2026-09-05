@@ -80,8 +80,8 @@ TEST(ShadowPass_NoDeviceIssuesNoDrawCalls)
     const std::vector<GraphicsEngine::MeshDrawCommand> drawList = engine.GetDrawList();
     EXPECT_EQ(drawList.size(), static_cast<size_t>(1));
 
-    const uint32_t draws = Spark::Graphics::RenderShadowCasterDepth(engine, drawList, XMMatrixIdentity(),
-                                                                    XMMatrixIdentity());
+    const uint32_t draws =
+        Spark::Graphics::RenderShadowCasterDepth(engine, drawList, XMMatrixIdentity(), XMMatrixIdentity());
     EXPECT_EQ(draws, 0u);
 }
 
@@ -124,8 +124,8 @@ TEST(ShadowPass_OnlyShadowCastersAreDrawn)
     // castShadows had no reader anywhere in the engine before the depth pass
     // existed; the pass must honour it. Two of the three commands cast shadows
     // and all three are bindable, so exactly two draws must be submitted.
-    const uint32_t draws = Spark::Graphics::RenderShadowCasterDepth(engine, drawList, XMMatrixIdentity(),
-                                                                    XMMatrixIdentity());
+    const uint32_t draws =
+        Spark::Graphics::RenderShadowCasterDepth(engine, drawList, XMMatrixIdentity(), XMMatrixIdentity());
     EXPECT_EQ(draws, 2u);
 
     engine.Shutdown();

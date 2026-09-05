@@ -130,8 +130,7 @@ namespace
 
     std::filesystem::path WriteTempVertexShader()
     {
-        std::filesystem::path path =
-            std::filesystem::temp_directory_path() / "SparkTests_D3D11ContractsReal_VS.hlsl";
+        std::filesystem::path path = std::filesystem::temp_directory_path() / "SparkTests_D3D11ContractsReal_VS.hlsl";
         std::ofstream out(path, std::ios::trunc);
         out << "float4 main(float3 pos : POSITION) : SV_Position\n"
             << "{\n"

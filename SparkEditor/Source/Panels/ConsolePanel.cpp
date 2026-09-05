@@ -260,9 +260,8 @@ namespace SparkEditor
 
         auto& engineConsole = Spark::SimpleConsole::GetInstance();
         auto it = m_commands.find(command);
-        const bool routeToEngine =
-            (it != m_commands.end() && it->second.isEngineCommand) || (it == m_commands.end() &&
-                                                                       engineConsole.HasCommand(command));
+        const bool routeToEngine = (it != m_commands.end() && it->second.isEngineCommand) ||
+                                   (it == m_commands.end() && engineConsole.HasCommand(command));
 
         if (routeToEngine)
         {
@@ -271,8 +270,8 @@ namespace SparkEditor
             // engine console; its own output arrives via the Logger sink.
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Engine console command executed: %s", command.c_str());
             historyEntry.wasSuccessful = engineConsole.ExecuteCommand(commandLine);
-            historyEntry.result = historyEntry.wasSuccessful ? "Dispatched to engine: " + command
-                                                             : "Engine rejected command: " + command;
+            historyEntry.result =
+                historyEntry.wasSuccessful ? "Dispatched to engine: " + command : "Engine rejected command: " + command;
             m_engineCommandCounter++;
         }
         else if (it != m_commands.end())
@@ -436,7 +435,6 @@ namespace SparkEditor
                 ImGui::SetScrollHereY(1.0f);
                 m_scrollToBottom = false;
             }
-
         }
         ImGui::EndChild();
     }
@@ -515,10 +513,8 @@ namespace SparkEditor
                                                ImGuiInputTextFlags_CallbackHistory |
                                                ImGuiInputTextFlags_CallbackCompletion;
         bool submitted = ImGui::InputText(
-            "##CmdInput", m_commandBuffer, COMMAND_BUFFER_SIZE, inputFlags,
-            [](ImGuiInputTextCallbackData* data)
-            { return static_cast<ConsolePanel*>(data->UserData)->HandleCommandInputCallback(data); },
-            this);
+            "##CmdInput", m_commandBuffer, COMMAND_BUFFER_SIZE, inputFlags, [](ImGuiInputTextCallbackData* data)
+            { return static_cast<ConsolePanel*>(data->UserData)->HandleCommandInputCallback(data); }, this);
         ImGui::SameLine();
         if (ImGui::Button("Run") || submitted)
         {
@@ -566,8 +562,7 @@ namespace SparkEditor
             ImGui::Text("Search:");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(-1.0f);
-            if (ImGui::InputTextWithHint("##ConsoleSearch", "filter log text", m_searchBuffer,
-                                         sizeof(m_searchBuffer)))
+            if (ImGui::InputTextWithHint("##ConsoleSearch", "filter log text", m_searchBuffer, sizeof(m_searchBuffer)))
             {
                 m_filter.searchPattern = m_searchBuffer;
                 m_filterChanged = true;

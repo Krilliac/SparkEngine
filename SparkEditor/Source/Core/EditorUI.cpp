@@ -1986,8 +1986,7 @@ namespace SparkEditor
             if (auto* search = dynamic_cast<SearchPanel*>(searchIt->second.get()))
             {
                 search->SetWorld(m_world.get());
-                search->SetSelectionHandler([this](uint32_t id)
-                                            { SetSelectedEntity(static_cast<::EntityID>(id)); });
+                search->SetSelectionHandler([this](uint32_t id) { SetSelectedEntity(static_cast<::EntityID>(id)); });
                 const std::string projectPath = ProjectManager::GetActiveProjectPath();
                 if (!projectPath.empty())
                     search->SetAssetRoot(projectPath + "/Assets");
@@ -2000,8 +1999,7 @@ namespace SparkEditor
         if (placementIt != m_panels.end())
         {
             if (auto* placement = dynamic_cast<ObjectPlacementPanel*>(placementIt->second.get()))
-                placement->SetEntityCreator([this](const std::string& name)
-                                            { return CreateDocumentEntity(name); });
+                placement->SetEntityCreator([this](const std::string& name) { return CreateDocumentEntity(name); });
         }
 
         // Inspector reads EditorUI::GetWorld()/GetSelectedEntity() live each
@@ -2268,7 +2266,6 @@ namespace SparkEditor
                 console.LogSuccess("EditorUI wired to Inspector panel (World-backed ECS inspector)");
             }
         }
-
     }
 #endif
     void EditorUI::HandleKeyboardShortcuts()

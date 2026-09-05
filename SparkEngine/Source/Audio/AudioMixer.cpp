@@ -103,8 +103,8 @@ namespace Spark::Audio
 
     bool AudioMixer::IsAudibleUnderSolo(const std::string& busName) const
     {
-        const bool anySolo = std::any_of(m_buses.begin(), m_buses.end(),
-                                         [](const auto& entry) { return entry.second.bus.solo; });
+        const bool anySolo =
+            std::any_of(m_buses.begin(), m_buses.end(), [](const auto& entry) { return entry.second.bus.solo; });
         if (!anySolo)
         {
             return true;

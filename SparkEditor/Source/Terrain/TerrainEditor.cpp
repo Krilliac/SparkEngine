@@ -50,8 +50,7 @@ namespace SparkEditor
 
         void WriteString(std::ofstream& file, const std::string& value)
         {
-            const auto length =
-                static_cast<uint32_t>(std::min<size_t>(value.size(), Format::kMaxStringLength));
+            const auto length = static_cast<uint32_t>(std::min<size_t>(value.size(), Format::kMaxStringLength));
             WriteU32(file, length);
             if (length > 0)
                 file.write(value.data(), static_cast<std::streamsize>(length));
@@ -217,9 +216,8 @@ namespace SparkEditor
         reader.ReadF32(terrain->heightmap.scale);
         reader.ReadF32(terrain->heightmap.minHeight);
         reader.ReadF32(terrain->heightmap.maxHeight);
-        if (reader.Failed() || hmWidth < Format::kMinHeightmapResolution ||
-            hmWidth > Format::kMaxHeightmapResolution || hmHeight < Format::kMinHeightmapResolution ||
-            hmHeight > Format::kMaxHeightmapResolution)
+        if (reader.Failed() || hmWidth < Format::kMinHeightmapResolution || hmWidth > Format::kMaxHeightmapResolution ||
+            hmHeight < Format::kMinHeightmapResolution || hmHeight > Format::kMaxHeightmapResolution)
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Rejected terrain heightmap %dx%d in %s", hmWidth, hmHeight,
                             filePath.c_str());

@@ -299,7 +299,7 @@ namespace Spark
               private:
                 /// Owning reference for deferred contexts; empty for the immediate context.
                 ComPtr<ID3D11DeviceContext> m_ownedContext;
-                ID3D11DeviceContext* m_context = nullptr;       ///< Immediate: parent device. Deferred: m_ownedContext
+                ID3D11DeviceContext* m_context = nullptr; ///< Immediate: parent device. Deferred: m_ownedContext
                 bool m_isImmediate;
                 ComPtr<ID3D11CommandList> m_recordedCommands;   ///< Result of FinishCommandList on a deferred list
                 IRHIPipelineState* m_currentPipeline = nullptr; ///< Last bound PSO for redundant bind elimination

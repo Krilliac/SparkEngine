@@ -393,8 +393,8 @@ namespace Spark::Animation
                 if (!file.good())
                 {
                     SPARK_LOG_WARN(LogCategory::Animation,
-                                   "LoadAnimations: '%s' is truncated inside channel %u of clip %u",
-                                   filepath.c_str(), ch, c);
+                                   "LoadAnimations: '%s' is truncated inside channel %u of clip %u", filepath.c_str(),
+                                   ch, c);
                     aborted = true;
                     break;
                 }

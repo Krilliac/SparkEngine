@@ -141,7 +141,7 @@ namespace Spark
 
         std::mutex m_messageMutex;              ///< Guards m_messageQueue, m_droppedMessages and m_process teardown.
         std::queue<std::string> m_messageQueue; ///< Outgoing log messages queued for the child process.
-        uint64_t m_droppedMessages = 0;         ///< Lines dropped since the last drop notice (guarded by m_messageMutex).
+        uint64_t m_droppedMessages = 0; ///< Lines dropped since the last drop notice (guarded by m_messageMutex).
 
         std::mutex m_commandMutex;                      ///< Guards m_commandQueue (commands from child).
         std::queue<std::string> m_commandQueue;         ///< Incoming commands read from the child process.

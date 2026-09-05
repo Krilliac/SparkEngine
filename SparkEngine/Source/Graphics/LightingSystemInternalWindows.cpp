@@ -320,9 +320,8 @@ void LightingSystem::UpdateShadowMaps(const XMMATRIX& viewMatrix, const XMMATRIX
             // depth pass and the shadow constant buffer both rely on is
             // lightMatrix * shadowMatrix == the light view-projection.
             it->second->lightMatrix = CalculateLightMatrix(*light, viewMatrix, projNear, projFar);
-            it->second->shadowMatrix = (light->GetType() == LightType::Directional)
-                                           ? XMMatrixIdentity()
-                                           : light->GetShadowMatrix();
+            it->second->shadowMatrix =
+                (light->GetType() == LightType::Directional) ? XMMatrixIdentity() : light->GetShadowMatrix();
         }
     }
 }

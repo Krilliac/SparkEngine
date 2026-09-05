@@ -444,9 +444,9 @@ namespace Spark
          */
         struct SinkSetup
         {
-            bool enableStderr = true;  ///< stderr, plus OutputDebugStringA on Windows
-            bool enableFile = true;    ///< Rotating timestamped file under file.directory
-            FileSink::Config file{};   ///< Directory/prefix/rotation for the file sink
+            bool enableStderr = true; ///< stderr, plus OutputDebugStringA on Windows
+            bool enableFile = true;   ///< Rotating timestamped file under file.directory
+            FileSink::Config file{};  ///< Directory/prefix/rotation for the file sink
         };
 
         /**
@@ -462,7 +462,11 @@ namespace Spark
          * bridge is supplied by the caller: pass std::make_unique<ConsoleSink>()
          * from code that links SparkConsole.cpp, or nullptr to install none.
          *
-         * @param setup       Which stderr/file destinations to install
+         * @param setup       Which stderr/file destinations to install (pass
+         *                    SinkSetup{} for the defaults; the parameter has no
+         *                    default argument because GCC and Clang reject a
+         *                    nested-struct default member initializer used
+         *                    inside its enclosing class)
          * @param consoleSink Optional sink that feeds SparkConsole.exe; installed
          *                    last so it sees exactly what the file sink sees
          * @return Path of the log file that was opened, or an empty string when
@@ -471,8 +475,7 @@ namespace Spark
          *         requested-but-failed file sink additionally logs a warning
          *         through the sinks this call just installed.
          */
-        std::string InstallDefaultSinks(const SinkSetup& setup = SinkSetup{},
-                                        std::unique_ptr<ILogSink> consoleSink = nullptr);
+        std::string InstallDefaultSinks(const SinkSetup& setup, std::unique_ptr<ILogSink> consoleSink = nullptr);
 
         // ---- Filtering ----
 

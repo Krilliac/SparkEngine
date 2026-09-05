@@ -630,9 +630,8 @@ namespace Spark::Core::Lifecycle
         if (auto* input = ctx->GetInput())
         {
             Spark::Input::InputActionSystem::GetInstance().SetKeyStateProviders(
-                [input](int key) { return input->IsKeyDown(key); },
-                [input](int key) { return input->WasKeyPressed(key); },
-                [input](int key) { return input->WasKeyReleased(key); });
+                [input](int key) { return input->IsKeyDown(key); }, [input](int key)
+                { return input->WasKeyPressed(key); }, [input](int key) { return input->WasKeyReleased(key); });
         }
         Spark::Build::GamePackager::GetInstance().Initialize();
         Spark::OnlineServices::OnlineServiceManager::GetInstance().Initialize();
@@ -1061,12 +1060,11 @@ namespace Spark::Core::Lifecycle
                     if (!onExitEvent.empty())
                         Spark::Gameplay::EventResponseSystem::GetInstance().FireCustomEvent(onExitEvent, entityID);
                 };
-                const uint32_t triggerID =
-                    (volume.shape == TriggerVolumeComponent::Shape::AABB)
-                        ? triggers.CreateAABBTrigger(transform.position, volume.halfExtents, std::move(onEnter),
-                                                     std::move(onExit))
-                        : triggers.CreateSphereTrigger(transform.position, volume.radius, std::move(onEnter),
-                                                       std::move(onExit));
+                const uint32_t triggerID = (volume.shape == TriggerVolumeComponent::Shape::AABB)
+                                               ? triggers.CreateAABBTrigger(transform.position, volume.halfExtents,
+                                                                            std::move(onEnter), std::move(onExit))
+                                               : triggers.CreateSphereTrigger(transform.position, volume.radius,
+                                                                              std::move(onEnter), std::move(onExit));
                 volume.runtimeTriggerID = triggerID;
 
                 BridgedTriggerVolume record;
@@ -1138,8 +1136,8 @@ namespace Spark::Core::Lifecycle
             state.position = transform.position;
             // Transform::rotation is Euler degrees (pitch, yaw, roll).
             const XMVECTOR q = XMQuaternionRotationRollPitchYaw(XMConvertToRadians(transform.rotation.x),
-                                                                 XMConvertToRadians(transform.rotation.y),
-                                                                 XMConvertToRadians(transform.rotation.z));
+                                                                XMConvertToRadians(transform.rotation.y),
+                                                                XMConvertToRadians(transform.rotation.z));
             XMStoreFloat4(&state.rotation, q);
             if (const auto* rb = reg.try_get<RigidBodyComponent>(entity))
                 state.velocity = rb->linearVelocity;

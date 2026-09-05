@@ -270,13 +270,13 @@ namespace Spark::Net
         // Text check — a schema that declares a string-field offset gets its text
         // fields decoded and screened here. Without this the declaration is inert
         // and rejectedBadString reads as "checked, none found" forever.
-        if (schema.stringFieldOffset != NO_STRING_FIELDS && !ValidateStringFields(msg.payload, schema.stringFieldOffset))
+        if (schema.stringFieldOffset != NO_STRING_FIELDS &&
+            !ValidateStringFields(msg.payload, schema.stringFieldOffset))
         {
             m_stats.totalRejected++;
             m_stats.rejectedBadString++;
             return {false, PacketViolation::BadString,
-                    std::format("Message type {} carries malformed or unsafe text",
-                                static_cast<uint16_t>(msg.type))};
+                    std::format("Message type {} carries malformed or unsafe text", static_cast<uint16_t>(msg.type))};
         }
 
         SPARK_VERIFY_CHECKPOINT("packet_validation_entry");
@@ -295,8 +295,7 @@ namespace Spark::Net
             if (payload.size() - pos < sizeof(uint16_t))
                 return false;
 
-            const size_t length =
-                static_cast<size_t>(payload[pos]) | (static_cast<size_t>(payload[pos + 1]) << 8);
+            const size_t length = static_cast<size_t>(payload[pos]) | (static_cast<size_t>(payload[pos + 1]) << 8);
             pos += sizeof(uint16_t);
 
             if (length > payload.size() - pos)

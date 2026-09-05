@@ -148,8 +148,8 @@ void GraphicsEngine::LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& pr
                     m_lightingSystem->RenderShadowMaps(
                         [this, &shadowDrawList, &shadowDrawCalls](const XMMATRIX& lightView, const XMMATRIX& lightProj)
                         {
-                            shadowDrawCalls += Spark::Graphics::RenderShadowCasterDepth(*this, shadowDrawList,
-                                                                                        lightView, lightProj);
+                            shadowDrawCalls +=
+                                Spark::Graphics::RenderShadowCasterDepth(*this, shadowDrawList, lightView, lightProj);
                         });
 
                     std::lock_guard<std::mutex> lock(m_metricsMutex);

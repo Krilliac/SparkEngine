@@ -72,9 +72,8 @@ TEST(ConsoleProcess_PlantedBinaryInWorkingDirectoryIsNotResolved)
         // project folder. Nothing in it may be launched.
         WorkingDirectoryGuard workingDirectory(plantedDirectory);
         EXPECT_TRUE(fs::exists(kConsoleFileName));
-        EXPECT_TRUE(
-            Spark::ConsoleProcessManager::ResolveConsoleExecutable(trustedDirectory.string(), kConsoleFileName)
-                .empty());
+        EXPECT_TRUE(Spark::ConsoleProcessManager::ResolveConsoleExecutable(trustedDirectory.string(), kConsoleFileName)
+                        .empty());
         // An unknown executable directory must not silently fall back to ".".
         EXPECT_TRUE(Spark::ConsoleProcessManager::ResolveConsoleExecutable(std::string{}, kConsoleFileName).empty());
     }

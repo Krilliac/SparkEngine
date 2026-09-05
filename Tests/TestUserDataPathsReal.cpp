@@ -192,8 +192,7 @@ TEST(UserDataPaths_ResolveSaveDirectoryUsesThePerUserDirectoryWithNoLegacySaves)
     const ScopedEnvironmentVariable envOverride(UserDataRootVariable, root.string());
     const ScopedWorkingDirectory cwdOverride(cwd);
 
-    const std::filesystem::path expected =
-        Spark::UserPaths::NarrowSafeDirectory(Spark::UserPaths::GetUserSavesDir());
+    const std::filesystem::path expected = Spark::UserPaths::NarrowSafeDirectory(Spark::UserPaths::GetUserSavesDir());
     if (expected.empty())
     {
         SKIP_TEST("Platform supplied no narrow-safe per-user saves location for this process");
@@ -234,8 +233,7 @@ TEST(UserDataPaths_ResolveSaveDirectoryMigratesLegacyWorkingDirectorySaves)
 
     const ScopedWorkingDirectory cwdOverride(cwd);
 
-    const std::filesystem::path expected =
-        Spark::UserPaths::NarrowSafeDirectory(Spark::UserPaths::GetUserSavesDir());
+    const std::filesystem::path expected = Spark::UserPaths::NarrowSafeDirectory(Spark::UserPaths::GetUserSavesDir());
     if (expected.empty())
     {
         SKIP_TEST("Platform supplied no narrow-safe per-user saves location for this process");

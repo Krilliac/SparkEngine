@@ -100,9 +100,8 @@ HANDLE ConsoleApp::DisplayHandle()
             AllocConsole();
         }
 
-        HANDLE screenBuffer = CreateFileW(L"CONOUT$", GENERIC_READ | GENERIC_WRITE,
-                                          FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
-                                          FILE_ATTRIBUTE_NORMAL, nullptr);
+        HANDLE screenBuffer = CreateFileW(L"CONOUT$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                          nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
         return screenBuffer != INVALID_HANDLE_VALUE ? screenBuffer : GetStdHandle(STD_OUTPUT_HANDLE);
     }();
     return displayHandle;
@@ -822,24 +821,23 @@ void ConsoleApp::RegisterCoreCommands()
                                           }
                                       });
 
-    m_commandRegistry.RegisterCommand("clear", "Clear the console screen and refresh display", "clear",
-                                      [this](const std::vector<std::string>& args) -> std::string
-                                      {
+    m_commandRegistry.RegisterCommand(
+        "clear", "Clear the console screen and refresh display", "clear",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
 #ifdef SPARK_PLATFORM_WINDOWS
-                                          // Display only: stdout carries commands to the engine.
-                                          ClearDisplay();
-                                          const HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
-                                          const bool connected = GetFileType(hStdin) == FILE_TYPE_PIPE;
+            // Display only: stdout carries commands to the engine.
+            ClearDisplay();
+            const HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+            const bool connected = GetFileType(hStdin) == FILE_TYPE_PIPE;
 
-                                          WriteDisplay(L"========================================\n");
-                                          WriteDisplay(std::wstring(L"   Spark Engine Console v") +
-                                                       kConsoleVersionW + L"\n");
-                                          WriteDisplay(L"   Console Refreshed\n");
-                                          WriteDisplay(L"========================================\n\n");
-                                          WriteDisplay(connected ? L"Connected to Spark Engine via pipe\n"
-                                                                 : L"Running in standalone mode\n");
-                                          WriteDisplay(L"Type 'help' for available commands\n");
-                                          WriteDisplay(L"Type 'info' to test engine connection\n\n");
+            WriteDisplay(L"========================================\n");
+            WriteDisplay(std::wstring(L"   Spark Engine Console v") + kConsoleVersionW + L"\n");
+            WriteDisplay(L"   Console Refreshed\n");
+            WriteDisplay(L"========================================\n\n");
+            WriteDisplay(connected ? L"Connected to Spark Engine via pipe\n" : L"Running in standalone mode\n");
+            WriteDisplay(L"Type 'help' for available commands\n");
+            WriteDisplay(L"Type 'info' to test engine connection\n\n");
 #else
             [[maybe_unused]] int rc_ = system("clear"); // Intentional: side-effect only
 
@@ -847,15 +845,14 @@ void ConsoleApp::RegisterCoreCommands()
             std::cerr << "   Spark Engine Console v" << kConsoleVersion << "\n";
             std::cerr << "   Console Refreshed\n";
             std::cerr << "========================================\n\n";
-            std::cerr << (LinuxIsStdinPipe() ? "Connected to Spark Engine via pipe\n"
-                                             : "Running in standalone mode\n");
+            std::cerr << (LinuxIsStdinPipe() ? "Connected to Spark Engine via pipe\n" : "Running in standalone mode\n");
             std::cerr << "Type 'help' for available commands\n";
             std::cerr << "Type 'info' to test engine connection\n\n";
             std::cerr.flush();
 #endif
 
-                                          return "";
-                                      });
+            return "";
+        });
 
     m_commandRegistry.RegisterCommand("echo", "Echo back the provided arguments", "echo <message>",
                                       [](const std::vector<std::string>& args) -> std::string

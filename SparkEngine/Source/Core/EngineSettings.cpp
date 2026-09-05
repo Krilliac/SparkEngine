@@ -959,15 +959,14 @@ namespace Spark::UserPaths
         }
 
         std::filesystem::copy(legacy, userSaves,
-                              std::filesystem::copy_options::recursive |
-                                  std::filesystem::copy_options::skip_existing,
+                              std::filesystem::copy_options::recursive | std::filesystem::copy_options::skip_existing,
                               error);
         if (error)
         {
             // Leave the marker off so the next launch retries; the player's saves
             // are still in the legacy directory and nothing has been lost.
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "Could not migrate saves from '%s': %s",
-                           legacy.string().c_str(), error.message().c_str());
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Could not migrate saves from '%s': %s", legacy.string().c_str(),
+                           error.message().c_str());
             return userSaves.string();
         }
 

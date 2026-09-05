@@ -150,8 +150,7 @@ namespace
     void WriteManifest(const std::filesystem::path& manifestPath, std::string_view modulePath)
     {
         std::ofstream manifest(manifestPath, std::ios::trunc);
-        manifest << "{\n  \"modules\": [\n    { \"name\": \"Fixture\", \"path\": \"" << modulePath
-                 << "\" }\n  ]\n}\n";
+        manifest << "{\n  \"modules\": [\n    { \"name\": \"Fixture\", \"path\": \"" << modulePath << "\" }\n  ]\n}\n";
     }
 } // namespace
 

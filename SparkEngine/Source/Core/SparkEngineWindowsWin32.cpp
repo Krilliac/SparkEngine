@@ -73,8 +73,7 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
     std::string sceneProjectRoot;
     // A module whose OnLoad failed keeps its entry (its DLL stays mapped) but
     // renders nothing, so the usable-module question is the initialized one.
-    bool haveModules =
-        GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules();
+    bool haveModules = GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules();
     if (!g_scenePath.empty() && !haveModules)
     {
         if (Spark::LoadWorld(g_sceneWorld, g_scenePath))
@@ -368,8 +367,7 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
         if (ShouldShowWindowsFatalDialog())
             MessageBoxW(nullptr, buf, L"Fatal Error", MB_ICONERROR);
         else
-            SPARK_LOG_ERROR(Spark::LogCategory::Core,
-                            "CreateWindowW failed during automated startup (error=0x%08lX)",
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "CreateWindowW failed during automated startup (error=0x%08lX)",
                             static_cast<unsigned long>(err));
         return FALSE;
     }

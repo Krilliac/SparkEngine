@@ -197,7 +197,7 @@ namespace Spark
     // project or package root that the user opened, so a SparkConsole.exe dropped
     // there must never be executed — the crash reporter enforces the same rule.
     std::string ConsoleProcessManager::ResolveConsoleExecutable(const std::string& executableDirectory,
-                                                               const std::string& fileName)
+                                                                const std::string& fileName)
     {
         namespace fs = std::filesystem;
         if (executableDirectory.empty() || fileName.empty())

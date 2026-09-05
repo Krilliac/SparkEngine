@@ -378,7 +378,7 @@ namespace SparkEditor
     }
 
     bool PrefabManager::SetInstanceOverride(uint64_t entityId, const std::string& componentType,
-                                           const std::string& propertyName, const PrefabPropertyValue& value)
+                                            const std::string& propertyName, const PrefabPropertyValue& value)
     {
         auto instanceIt = std::find_if(m_instances.begin(), m_instances.end(),
                                        [entityId](const PrefabInstance& inst) { return inst.entityId == entityId; });
@@ -438,11 +438,9 @@ namespace SparkEditor
             return false;
 
         auto& overrides = instanceIt->overrides;
-        const auto removed = std::remove_if(overrides.begin(), overrides.end(),
-                                            [&](const PrefabOverride& o) {
-                                                return o.componentType == componentType &&
-                                                       o.propertyName == propertyName;
-                                            });
+        const auto removed =
+            std::remove_if(overrides.begin(), overrides.end(), [&](const PrefabOverride& o)
+                           { return o.componentType == componentType && o.propertyName == propertyName; });
         if (removed == overrides.end())
             return false;
         overrides.erase(removed, overrides.end());

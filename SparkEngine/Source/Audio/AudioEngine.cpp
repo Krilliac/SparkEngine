@@ -36,10 +36,9 @@ namespace
 
 AudioEngine::AudioEngine()
     : m_xAudio2(nullptr), m_masterVoice(nullptr), m_mixer(nullptr), m_deviceLost(false), m_deviceRecoveryTimer(0.0f),
-      m_masterVolume(1.0f), m_sfxVolume(1.0f), m_musicVolume(1.0f),
-      m_maxSources(32), m_nextSourceID(1), m_listenerPosition(0.0f, 0.0f, 0.0f), m_listenerVelocity(0.0f, 0.0f, 0.0f),
-      m_listenerForward(0.0f, 0.0f, 1.0f), m_listenerUp(0.0f, 1.0f, 0.0f), m_dopplerScale(1.0f), m_distanceScale(1.0f),
-      m_3DEnabled(true)
+      m_masterVolume(1.0f), m_sfxVolume(1.0f), m_musicVolume(1.0f), m_maxSources(32), m_nextSourceID(1),
+      m_listenerPosition(0.0f, 0.0f, 0.0f), m_listenerVelocity(0.0f, 0.0f, 0.0f), m_listenerForward(0.0f, 0.0f, 1.0f),
+      m_listenerUp(0.0f, 1.0f, 0.0f), m_dopplerScale(1.0f), m_distanceScale(1.0f), m_3DEnabled(true)
 {
     // Initialize console-controlled settings to defaults
     m_settings.masterVolume = 1.0f;
@@ -1178,8 +1177,7 @@ bool AudioEngine::IsSourceLive(const AudioSource* source, uint32_t generation) c
     return false;
 }
 
-float AudioEngine::ComputeDistanceAttenuation(float distance, float minDistance, float maxDistance,
-                                              float distanceScale)
+float AudioEngine::ComputeDistanceAttenuation(float distance, float minDistance, float maxDistance, float distanceScale)
 {
     const float minRange = std::max(minDistance, 0.0f);
     if (distance <= minRange)

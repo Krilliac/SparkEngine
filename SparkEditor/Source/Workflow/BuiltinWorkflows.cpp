@@ -90,10 +90,8 @@ namespace SparkEditor
             }
 
             const std::filesystem::path buildDir = project / "build";
-            const int rc = RunWorkflowProcess(ctx, "cmake",
-                                              {"-S", project.string(), "-B", buildDir.string(),
-                                               "-DCMAKE_BUILD_TYPE=Release"},
-                                              5);
+            const int rc = RunWorkflowProcess(
+                ctx, "cmake", {"-S", project.string(), "-B", buildDir.string(), "-DCMAKE_BUILD_TYPE=Release"}, 5);
             ctx.Log("CMake configure exit: " + std::to_string(rc));
             return rc == 0;
         }

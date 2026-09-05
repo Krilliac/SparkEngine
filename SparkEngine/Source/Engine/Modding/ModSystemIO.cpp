@@ -22,8 +22,7 @@ namespace Spark
         /// dump. 64 KB matches DynamicPluginHost's kMaximumMetadataBytes; depth 16
         /// is far above the two levels these documents actually use.
         constexpr size_t MAX_MOD_JSON_BYTES = 64u * 1024u;
-        constexpr Json::JsonLimits MOD_JSON_LIMITS{
-            .maxBytes = MAX_MOD_JSON_BYTES, .maxDepth = 16u, .maxNodes = 4096u};
+        constexpr Json::JsonLimits MOD_JSON_LIMITS{.maxBytes = MAX_MOD_JSON_BYTES, .maxDepth = 16u, .maxNodes = 4096u};
 
         /// Read a manifest whole, refusing an oversized file from its directory
         /// entry BEFORE any of its bytes are pulled into memory. A mod directory is

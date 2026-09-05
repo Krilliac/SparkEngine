@@ -65,8 +65,7 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     wchar_t driverOverride[16] = {};
     const DWORD driverOverrideLength =
         GetEnvironmentVariableW(L"SPARK_D3D11_DRIVER", driverOverride, ARRAYSIZE(driverOverride));
-    const bool useWarp =
-        driverOverrideLength == 4 && _wcsicmp(driverOverride, L"warp") == 0;
+    const bool useWarp = driverOverrideLength == 4 && _wcsicmp(driverOverride, L"warp") == 0;
     if (driverOverrideLength != 0 && !useWarp)
     {
         SPARK_LOG_FATAL("Graphics",
@@ -88,14 +87,13 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     }
 
     HRESULT hr =
-        D3D11CreateDevice(nullptr, driverType, nullptr, createDeviceFlags, featureLevels,
-                          ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, &baseDevice, &featureLevel, &baseContext);
+        D3D11CreateDevice(nullptr, driverType, nullptr, createDeviceFlags, featureLevels, ARRAYSIZE(featureLevels),
+                          D3D11_SDK_VERSION, &baseDevice, &featureLevel, &baseContext);
 
     if (FAILED(hr))
     {
-        SPARK_LOG_FATAL("Graphics",
-                        "%s D3D11CreateDevice failed with HR=0x%08lX.%s",
-                        useWarp ? "WARP" : "Hardware", static_cast<long>(hr),
+        SPARK_LOG_FATAL("Graphics", "%s D3D11CreateDevice failed with HR=0x%08lX.%s", useWarp ? "WARP" : "Hardware",
+                        static_cast<long>(hr),
                         useWarp ? " The software-only lifecycle smoke cannot continue."
                                 : " Check GPU driver installation and DirectX 11 support.");
         return hr;
@@ -120,8 +118,8 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     default:
         break;
     }
-    SPARK_LOG_INFO("Graphics", "%s D3D11 device created -- Feature Level %s",
-                   useWarp ? "WARP software" : "Hardware", featureLevelStr);
+    SPARK_LOG_INFO("Graphics", "%s D3D11 device created -- Feature Level %s", useWarp ? "WARP software" : "Hardware",
+                   featureLevelStr);
 
     // Query for ID3D11Device1 interface
     hr = baseDevice.As(&m_device);

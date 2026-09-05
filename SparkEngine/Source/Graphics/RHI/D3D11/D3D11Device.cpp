@@ -1009,8 +1009,7 @@ namespace Spark
                 initData.pSysMem = effectiveDesc.initialData;
 
                 ComPtr<ID3D11Buffer> buffer;
-                HRESULT hr =
-                    m_device->CreateBuffer(&d3dDesc, effectiveDesc.initialData ? &initData : nullptr, &buffer);
+                HRESULT hr = m_device->CreateBuffer(&d3dDesc, effectiveDesc.initialData ? &initData : nullptr, &buffer);
                 if (FAILED(hr))
                 {
                     SPARK_LOG_ERROR(
@@ -1061,8 +1060,7 @@ namespace Spark
 
                 // effectiveDesc, not desc: a promoted Storage buffer must report Static so
                 // MapBuffer refuses it and UpdateBuffer takes the UpdateSubresource path.
-                return std::make_unique<D3D11Buffer>(effectiveDesc, std::move(buffer), std::move(srv),
-                                                     std::move(uav));
+                return std::make_unique<D3D11Buffer>(effectiveDesc, std::move(buffer), std::move(srv), std::move(uav));
             }
 
             namespace
