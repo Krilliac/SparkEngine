@@ -829,7 +829,7 @@
 | `ControlsSettings` | struct | Tests | [TestEngineSettingsParser.cpp:L147](../../Tests/TestEngineSettingsParser.cpp#L147) |  |
 | `ConversationState` | struct | SparkEngine | [DialogueSystem.h:L178](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.h#L178) | Runtime state of an active conversation. |
 | `CookLogEntry` | struct | SparkEditor | [DedicatedServerPanel.h:L195](../../SparkEditor/Source/Panels/DedicatedServerPanel.h#L195) |  |
-| `CookOutputLock` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L313](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L313) |  |
+| `CookOutputLock` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L312](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L312) |  |
 | `CookRecord` | struct | SparkAssetPipelineCore | [AssetCooker.h:L12](../../SparkAssetPipelineCore/include/SparkAssetPipelineCore/AssetCooker.h#L12) |  |
 | `CookRequest` | struct | SparkAssetPipelineCore | [AssetCooker.h:L20](../../SparkAssetPipelineCore/include/SparkAssetPipelineCore/AssetCooker.h#L20) |  |
 | `CookResult` | struct | SparkAssetPipelineCore | [AssetCooker.h:L29](../../SparkAssetPipelineCore/include/SparkAssetPipelineCore/AssetCooker.h#L29) |  |
@@ -1869,7 +1869,7 @@
 | `info` | struct | SparkEngine | [CrashHandler.cpp:L409](../../SparkEngine/Source/Utils/CrashHandler.cpp#L409) |  |
 | `info` | struct | SparkEngine | [CrashHandler.cpp:L496](../../SparkEngine/Source/Utils/CrashHandler.cpp#L496) |  |
 | `info` | struct | SparkGateway | [GatewaySecurity.cpp:L310](../../SparkGateway/src/GatewaySecurity.cpp#L310) |  |
-| `information` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L404](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L404) |  |
+| `information` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L403](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L403) |  |
 | `information` | struct | SparkEditor | [ProjectManager.cpp:L701](../../SparkEditor/Source/Core/ProjectManager.cpp#L701) |  |
 | `information` | struct | SparkEngine | [DynamicPluginHost.cpp:L230](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L230) |  |
 | `information` | struct | SparkEngine | [DynamicPluginHost.cpp:L316](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L316) |  |
@@ -3611,7 +3611,7 @@
 | `ScopedCurrentPath` | class | SparkCrashReporter | [CrashReporterManifestTests.cpp:L38](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L38) |  |
 | `ScopedCurrentPath` | class | Tests | [TestRuntimePackage.cpp:L15](../../Tests/TestRuntimePackage.cpp#L15) |  |
 | `ScopedCurrentPath` | class | Tests | [TestTemplatesCompile.cpp:L49](../../Tests/TestTemplatesCompile.cpp#L49) |  |
-| `ScopedDirectoryCleanup` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L432](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L432) |  |
+| `ScopedDirectoryCleanup` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L431](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L431) |  |
 | `ScopedDirectoryCleanup` | class | SparkEditor | [BuildPipeline.cpp:L250](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L250) |  |
 | `ScopedEntity` | struct | SparkEngine | [ConnectionScope.h:L52](../../SparkEngine/Source/Engine/Networking/ConnectionScope.h#L52) |  |
 | `ScopedEntity` | struct | Tests | [TestConnectionScope.cpp:L23](../../Tests/TestConnectionScope.cpp#L23) |  |
@@ -3917,7 +3917,7 @@
 | `SoundEffectFactory` | class | SparkEngine | [SoundEffect.h:L210](../../SparkEngine/Source/Audio/SoundEffect.h#L210) |  |
 | `SoundEntry` | struct | Tests | [TestAudioEngine.cpp:L37](../../Tests/TestAudioEngine.cpp#L37) |  |
 | `SoundPlayedEvent` | struct | SparkEngine | [EventSystem.h:L251](../../SparkEngine/Source/Engine/Events/EventSystem.h#L251) | Fired when a sound begins playing. |
-| `SourceEntry` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L829](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L829) |  |
+| `SourceEntry` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L828](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L828) |  |
 | `SourceVertex` | struct | Tests | [TestGPUSkinning.cpp:L14](../../Tests/TestGPUSkinning.cpp#L14) |  |
 | `SparkBodyActivationListener` | class | SparkEngine | [PhysicsSystem.cpp:L281](../../SparkEngine/Source/Physics/PhysicsSystem.cpp#L281) |  |
 | `SparkBPLayerInterface` | class | SparkEngine | [PhysicsSystem.cpp:L74](../../SparkEngine/Source/Physics/PhysicsSystem.cpp#L74) |  |

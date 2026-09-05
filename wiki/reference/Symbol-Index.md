@@ -228,7 +228,7 @@
 | `AclFixtureError` | function | Tests | [TestGatewaySecurity.cpp:L267](../../Tests/TestGatewaySecurity.cpp#L267) |  |
 | `AclFixtureError` | function | Tests | [TestGatewaySecurity.cpp:L275](../../Tests/TestGatewaySecurity.cpp#L275) |  |
 | `AclFixtureResult` | enum | Tests | [TestGatewaySecurity.cpp:L42](../../Tests/TestGatewaySecurity.cpp#L42) |  |
-| `Acquire` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L343](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L343) |  |
+| `Acquire` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L342](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L342) |  |
 | `Acquire` | function | SparkEngine | [RenderTargetPool.h:L137](../../SparkEngine/Source/Graphics/RenderTargetPool.h#L137) | Acquire a render target matching the descriptor. |
 | `Acquire` | function | Tests | [TestExtendedSystems.cpp:L718](../../Tests/TestExtendedSystems.cpp#L718) |  |
 | `Acquire` | function | Tests | [TestObjectPool.cpp:L23](../../Tests/TestObjectPool.cpp#L23) |  |
@@ -2062,7 +2062,7 @@
 | `At` | function | SparkEngine | [LagCompensation.h:L109](../../SparkEngine/Source/Engine/Networking/LagCompensation.h#L109) |  |
 | `ATOM` | alias | SparkEngine | [PlatformTypes.h:L124](../../SparkEngine/Source/Core/PlatformTypes.h#L124) |  |
 | `AtomicReplace` | function | GameModules | [TFSavePaths.h:L281](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L281) |  |
-| `AtomicReplace` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L239](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L239) |  |
+| `AtomicReplace` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L238](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L238) |  |
 | `AtomicReplace` | function | SparkEditor | [RegionMapDataSource.cpp:L87](../../SparkEditor/Source/Panels/RegionMapDataSource.cpp#L87) |  |
 | `AtomicSharedPtr` | function | SparkEngine | [AtomicSharedPtr.h:L38](../../SparkEngine/Source/Utils/AtomicSharedPtr.h#L38) |  |
 | `AtomicWriteState` | function | SparkDaemon | [OrchestratorIdentity.cpp:L127](../../SparkDaemon/src/OrchestratorIdentity.cpp#L127) |  |
@@ -2974,7 +2974,7 @@
 | `buffer` | function | GameModules | [TFSocialSystemWire.cpp:L102](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemWire.cpp#L102) |  |
 | `buffer` | function | GameModules | [TFSocialSystemWire.cpp:L134](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemWire.cpp#L134) |  |
 | `buffer` | function | GameModules | [TFSavePaths.h:L305](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L305) |  |
-| `buffer` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L719](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L719) |  |
+| `buffer` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L718](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L718) |  |
 | `buffer` | function | SparkBuild | [DownloadSecurity.cpp:L168](../../SparkBuild/src/DownloadSecurity.cpp#L168) |  |
 | `buffer` | function | SparkBuild | [Downloader.cpp:L194](../../SparkBuild/src/Downloader.cpp#L194) |  |
 | `buffer` | function | SparkEditor | [EngineInterface.cpp:L340](../../SparkEditor/Source/Communication/EngineInterface.cpp#L340) |  |
@@ -4938,7 +4938,7 @@
 | `ComputeEffectiveStats` | function | GameModules | [RPGCharacterSystem.h:L130](../../GameModules/SparkGameRPG/Source/Character/RPGCharacterSystem.h#L130) |  |
 | `ComputeFaceQuadric` | function | SparkEngine | [LODGenerator.h:L147](../../SparkEngine/Source/Graphics/LODGenerator.h#L147) | Compute a face quadric from three vertex positions |
 | `ComputeFileChecksum` | function | SparkEditor | [AssetProcessors.cpp:L184](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp#L184) |  |
-| `ComputeFileSha256` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L710](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L710) |  |
+| `ComputeFileSha256` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L709](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L709) |  |
 | `ComputeFogFactor` | function | SparkEngine | [FogSystem.cpp:L100](../../SparkEngine/Source/Graphics/FogSystem.cpp#L100) |  |
 | `ComputeFogFactor` | function | SparkEngine | [FogSystem.h:L247](../../SparkEngine/Source/Graphics/FogSystem.h#L247) | Compute fog factor for a fragment at given distance from camera |
 | `ComputeForwardFromRotation` | function | SparkEngine | [ParallelPerception.h:L219](../../SparkEngine/Source/Engine/AI/ParallelPerception.h#L219) | Compute forward direction from Euler rotation angles. |
@@ -5940,11 +5940,11 @@
 | `ConvertVertexFormat` | function | SparkEngine | [D3D12Device.h:L192](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L192) |  |
 | `ConvertVertexFormat` | function | SparkEngine | [MetalDevice.h:L525](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L525) |  |
 | `ConvertVertexFormat` | function | SparkEngine | [VulkanDevice.h:L485](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L485) |  |
-| `CookAssets` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L748](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L748) |  |
+| `CookAssets` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L747](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L747) |  |
 | `cookColor` | function | SparkEditor | [DedicatedServerPanel.cpp:L486](../../SparkEditor/Source/Panels/DedicatedServerPanel.cpp#L486) |  |
-| `CookFile` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L735](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L735) |  |
+| `CookFile` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L734](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L734) |  |
 | `CookLogEntry` | struct | SparkEditor | [DedicatedServerPanel.h:L195](../../SparkEditor/Source/Panels/DedicatedServerPanel.h#L195) |  |
-| `CookOutputLock` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L313](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L313) |  |
+| `CookOutputLock` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L312](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L312) |  |
 | `CookRecord` | struct | SparkAssetPipelineCore | [AssetCooker.h:L12](../../SparkAssetPipelineCore/include/SparkAssetPipelineCore/AssetCooker.h#L12) |  |
 | `CookRequest` | struct | SparkAssetPipelineCore | [AssetCooker.h:L20](../../SparkAssetPipelineCore/include/SparkAssetPipelineCore/AssetCooker.h#L20) |  |
 | `CookResult` | struct | SparkAssetPipelineCore | [AssetCooker.h:L29](../../SparkAssetPipelineCore/include/SparkAssetPipelineCore/AssetCooker.h#L29) |  |
@@ -5961,7 +5961,7 @@
 | `CopyDirectoryContents` | function | SparkEditor | [BuildPipeline.cpp:L343](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L343) |  |
 | `CopyField` | function | GameModules | [TFOutfitSystemInternal.h:L40](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystemInternal.h#L40) |  |
 | `CopyFixtureImage` | function | Tests | [TestModuleLifecycleReal.cpp:L124](../../Tests/TestModuleLifecycleReal.cpp#L124) | Copy the compatible ABI fixture (and its mandatory sidecar) into @p destination. |
-| `CopyGenerationFile` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L472](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L472) |  |
+| `CopyGenerationFile` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L471](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L471) |  |
 | `CopyMemory` | macro | SparkEngine | [PlatformTypes.h:L407](../../SparkEngine/Source/Core/PlatformTypes.h#L407) |  |
 | `CopyName` | function | GameModules | [TFSocialSystemInternal.h:L44](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemInternal.h#L44) |  |
 | `CopyProbeData` | function | SparkEngine | [DDGIProbeSystem.h:L216](../../SparkEngine/Source/Graphics/DDGIProbeSystem.h#L216) | Copy SH data from source probe to destination probe (border clamping) |
@@ -6322,7 +6322,7 @@
 | `CreateGameSystems` | function | SparkEngine | [ECSIntegration.h:L52](../../SparkEngine/Source/Engine/ECS/ECSIntegration.h#L52) |  |
 | `CreateGBufferTargets` | function | SparkEngine | [RenderTarget.h:L282](../../SparkEngine/Source/Graphics/RenderTarget.h#L282) |  |
 | `CreateGearConstraint` | function | SparkEngine | [PhysicsSystem.h:L285](../../SparkEngine/Source/Physics/PhysicsSystem.h#L285) | Create a gear constraint coupling rotation of two hinge constraints. |
-| `CreateGenerationDirectory` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L453](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L453) |  |
+| `CreateGenerationDirectory` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L452](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L452) |  |
 | `CreateGPUBuffers` | function | SparkEngine | [ClusteredLightCulling.h:L142](../../SparkEngine/Source/Graphics/ClusteredLightCulling.h#L142) | Create GPU structured buffers for cluster light counts and light index lists |
 | `CreateGPUBuffers` | function | SparkEngine | [TerrainRenderer.h:L307](../../SparkEngine/Source/Graphics/TerrainRenderer.h#L307) | Create or update GPU buffers for a terrain. |
 | `CreateGPUBuffers` | function | SparkEngine | [WaterRenderer.h:L206](../../SparkEngine/Source/Graphics/WaterRenderer.h#L206) | Create GPU vertex and index buffers from the first water plane's mesh. |
@@ -9495,8 +9495,8 @@
 | `EscapeAngelScriptString` | function | SparkEngine | [VisualScriptCompiler.cpp:L96](../../SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.cpp#L96) |  |
 | `EscapeAngelScriptString` | function | SparkEngine | [VisualScriptCompiler.cpp:L920](../../SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.cpp#L920) |  |
 | `EscapeCppString` | function | SparkEditor | [ProjectManager.cpp:L884](../../SparkEditor/Source/Core/ProjectManager.cpp#L884) |  |
-| `EscapeJson` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L266](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L266) |  |
-| `EscapeJson` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L532](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L532) |  |
+| `EscapeJson` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L265](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L265) |  |
+| `EscapeJson` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L531](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L531) |  |
 | `EscapeJson` | function | SparkEditor | [EditorWindowManager.cpp:L77](../../SparkEditor/Source/Core/EditorWindowManager.cpp#L77) |  |
 | `EscapeJson` | function | SparkEditor | [EditorWindowManager.cpp:L79](../../SparkEditor/Source/Core/EditorWindowManager.cpp#L79) |  |
 | `EscapeJson` | function | SparkEditor | [EditorWindowManager.cpp:L85](../../SparkEditor/Source/Core/EditorWindowManager.cpp#L85) |  |
@@ -10395,7 +10395,7 @@
 | `File` | function | GameModules | [TFSavePaths.h:L242](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L242) |  |
 | `file` | function | GameModules | [OWPersistence.inl:L131](../../GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl#L131) |  |
 | `file` | function | GameModules | [OWPersistence.inl:L219](../../GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl#L219) |  |
-| `file` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L712](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L712) |  |
+| `file` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L711](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L711) |  |
 | `file` | function | SparkBuild | [Config.cpp:L437](../../SparkBuild/src/Config.cpp#L437) |  |
 | `file` | function | SparkBuild | [Config.cpp:L564](../../SparkBuild/src/Config.cpp#L564) |  |
 | `file` | function | SparkBuild | [Config.cpp:L732](../../SparkBuild/src/Config.cpp#L732) |  |
@@ -17639,7 +17639,7 @@
 | `HashPathKey` | function | SparkEngine | [NavMesh.h:L229](../../SparkEngine/Source/Engine/AI/NavMesh.h#L229) |  |
 | `HashPathKey` | function | Tests | [TestPathCache.cpp:L29](../../Tests/TestPathCache.cpp#L29) |  |
 | `HashPosition` | function | SparkEngine | [NeuralRadianceCache.h:L156](../../SparkEngine/Source/Graphics/Neural/NeuralRadianceCache.h#L156) | Compute hash for a 3D position at a given resolution level. |
-| `HashRecords` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L613](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L613) |  |
+| `HashRecords` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L612](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L612) |  |
 | `HashSampling` | function | SparkEngine | [MaterialSystem.h:L562](../../SparkEngine/Source/Graphics/MaterialSystem.h#L562) |  |
 | `HashSampling` | function | Tests | [TestMaterialSystemEdgeCases.cpp:L180](../../Tests/TestMaterialSystemEdgeCases.cpp#L180) |  |
 | `HashSaveBody` | function | GameModules | [OWPersistence.inl:L71](../../GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl#L71) |  |
@@ -18539,7 +18539,7 @@
 | `info` | struct | SparkEngine | [CrashHandler.cpp:L496](../../SparkEngine/Source/Utils/CrashHandler.cpp#L496) |  |
 | `info` | struct | SparkGateway | [GatewaySecurity.cpp:L310](../../SparkGateway/src/GatewaySecurity.cpp#L310) |  |
 | `Info` | function | SparkSDK | [ILogger.h:L59](../../SparkSDK/Include/Spark/ILogger.h#L59) | Log an informational message |
-| `information` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L404](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L404) |  |
+| `information` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L403](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L403) |  |
 | `information` | struct | SparkEditor | [ProjectManager.cpp:L701](../../SparkEditor/Source/Core/ProjectManager.cpp#L701) |  |
 | `information` | struct | SparkEngine | [DynamicPluginHost.cpp:L230](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L230) |  |
 | `information` | struct | SparkEngine | [DynamicPluginHost.cpp:L316](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L316) |  |
@@ -19916,8 +19916,8 @@
 | `IsConsoleRunning` | function | SparkEngine | [ConsoleProcessManager.h:L90](../../SparkEngine/Source/Utils/ConsoleProcessManager.h#L90) |  |
 | `IsConstructed` | function | Tests | [TestSparkGameRTS.cpp:L88](../../Tests/TestSparkGameRTS.cpp#L88) |  |
 | `IsContactShadowsEnabled` | function | SparkEngine | [ScreenSpaceEffects.h:L290](../../SparkEngine/Source/Graphics/ScreenSpaceEffects.h#L290) |  |
-| `IsContained` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L169](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L169) |  |
-| `IsContained` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L954](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L954) |  |
+| `IsContained` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L168](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L168) |  |
+| `IsContained` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L953](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L953) |  |
 | `IsContained` | function | SparkCooker | [main.cpp:L70](../../SparkCooker/src/main.cpp#L70) |  |
 | `IsContainedBy` | function | SparkEngine | [ProjectAssetPath.cpp:L102](../../SparkEngine/Source/Graphics/ProjectAssetPath.cpp#L102) |  |
 | `IsContainedByProject` | function | SparkEditor | [AssetBrowserPanel.h:L112](../../SparkEditor/Source/Panels/AssetBrowserPanel.h#L112) |  |
@@ -20193,7 +20193,7 @@
 | `IsLevelActive` | function | GameModules | [PlatformerLevelSystem.h:L142](../../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h#L142) | Complete the active level when the player reaches its projected goal trigger. |
 | `IsLifecycleSubsystemType` | function | SparkEngine | [EngineContext.h:L584](../../SparkEngine/Source/Core/EngineContext.h#L584) |  |
 | `IsLightCullingEnabled` | function | SparkEngine | [LightingSystem.h:L354](../../SparkEngine/Source/Graphics/LightingSystem.h#L354) |  |
-| `IsLinkLike` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L182](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L182) |  |
+| `IsLinkLike` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L181](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L181) |  |
 | `IsLinkLike` | function | SparkCooker | [main.cpp:L76](../../SparkCooker/src/main.cpp#L76) |  |
 | `IsLinkOrReparsePoint` | function | SparkEditor | [ProjectManager.cpp:L856](../../SparkEditor/Source/Core/ProjectManager.cpp#L856) |  |
 | `IsLiveEditingEnabled` | function | SparkEngine | [PlayModeManager.h:L256](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L256) |  |
@@ -20298,7 +20298,7 @@
 | `IsPanelVisible` | function | SparkEditor | [EditorUI.h:L141](../../SparkEditor/Source/Core/EditorUI.h#L141) |  |
 | `IsPanelVisible` | function | Tests | [TestEditorLayoutManager.cpp:L70](../../Tests/TestEditorLayoutManager.cpp#L70) |  |
 | `IsPassEnabled` | function | Tests | [TestPostProcessingPipeline.cpp:L153](../../Tests/TestPostProcessingPipeline.cpp#L153) |  |
-| `IsPathContained` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L952](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L952) |  |
+| `IsPathContained` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L951](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L951) |  |
 | `IsPathInsideRoot` | function | SparkEditor | [ProjectManager.cpp:L600](../../SparkEditor/Source/Core/ProjectManager.cpp#L600) |  |
 | `IsPathWithin` | function | SparkEditor | [BuildPipeline.cpp:L434](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L434) |  |
 | `IsPathWithin` | function | SparkEditor | [EditorLaunchContext.h:L71](../../SparkEditor/Source/Utils/EditorLaunchContext.h#L71) |  |
@@ -20511,7 +20511,7 @@
 | `IsUnlocked` | function | GameModules | [TFProgressionSystemMeta.cpp:L333](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemMeta.cpp#L333) |  |
 | `IsUnlockedInternal` | function | GameModules | [TFProgressionSystem.h:L249](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.h#L249) |  |
 | `IsUnlockedInternal` | function | GameModules | [TFProgressionSystemMeta.cpp:L41](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemMeta.cpp#L41) |  |
-| `IsUnsafeOutputLink` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L196](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L196) |  |
+| `IsUnsafeOutputLink` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L195](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L195) |  |
 | `IsUnsupportedAclFixtureError` | function | Tests | [TestGatewaySecurity.cpp:L49](../../Tests/TestGatewaySecurity.cpp#L49) |  |
 | `IsUnsupportedAclFixtureError` | function | Tests | [TestGatewaySecurity.cpp:L58](../../Tests/TestGatewaySecurity.cpp#L58) |  |
 | `IsUsableIndirectArgsBuffer` | function | SparkEngine | [D3D11Device.cpp:L620](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp#L620) |  |
@@ -20681,7 +20681,7 @@
 | `ItemStack` | struct | GameModules | [MMOInventorySystem.h:L42](../../GameModules/SparkGameMMO/Source/Inventory/MMOInventorySystem.h#L42) | A stack of items in a single inventory slot |
 | `ItemStack` | struct | Tests | [TestGameplayStress.cpp:L27](../../Tests/TestGameplayStress.cpp#L27) |  |
 | `ItemStack` | struct | Tests | [TestInventorySystem.cpp:L33](../../Tests/TestInventorySystem.cpp#L33) |  |
-| `iterator` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L851](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L851) |  |
+| `iterator` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L850](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L850) |  |
 | `iterator` | function | SparkCooker | [main.cpp:L146](../../SparkCooker/src/main.cpp#L146) |  |
 | `iterator` | function | SparkEditor | [EditorPluginDiscovery.h:L97](../../SparkEditor/Source/Core/EditorPluginDiscovery.h#L97) |  |
 | `iterator` | function | SparkEngine | [ModuleManager.cpp:L1181](../../SparkEngine/Source/Core/ModuleManager.cpp#L1181) |  |
@@ -23477,7 +23477,7 @@
 | `MakeSource` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L46](../../Tests/TestShaderDiskCachePhaseV.cpp#L46) |  |
 | `MakeSpecies` | function | Tests | [TestFoliageSystem.cpp:L20](../../Tests/TestFoliageSystem.cpp#L20) |  |
 | `MakeSpoolConfig` | function | Tests | [TestTelemetrySpool.cpp:L141](../../Tests/TestTelemetrySpool.cpp#L141) |  |
-| `MakeStagePath` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L229](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L229) |  |
+| `MakeStagePath` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L228](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L228) |  |
 | `MakeStraightChainLocals` | function | Tests | [Test_tests_inversekinematics.cpp:L76](../../Tests/harden/Test_tests_inversekinematics.cpp#L76) |  |
 | `MakeString` | function | GameModules | [MMOPersistenceSystem.cpp:L39](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp#L39) |  |
 | `MakeTacticalPoint` | function | Tests | [TestCoverageAI.cpp:L58](../../Tests/TestCoverageAI.cpp#L58) |  |
@@ -29276,7 +29276,7 @@
 | `Publish` | function | Tests | [TestEventSystem.cpp:L45](../../Tests/TestEventSystem.cpp#L45) |  |
 | `PublishCrashManifest` | function | SparkEngine | [CrashHandler.cpp:L672](../../SparkEngine/Source/Utils/CrashHandler.cpp#L672) |  |
 | `PublishCrashManifest` | function | SparkEngine | [CrashHandler.cpp:L779](../../SparkEngine/Source/Utils/CrashHandler.cpp#L779) |  |
-| `PublishGeneration` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L545](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L545) |  |
+| `PublishGeneration` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L544](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L544) |  |
 | `PublishHealth` | function | SparkGateway | [GatewayApplication.h:L88](../../SparkGateway/src/GatewayApplication.h#L88) |  |
 | `PublishHealth` | function | SparkServer | [ServerApplication.h:L102](../../SparkServer/src/ServerApplication.h#L102) |  |
 | `PublishStandalonePresence` | function | SparkEditor | [CollaborativeEditSession.h:L347](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L347) |  |
@@ -30882,7 +30882,7 @@
 | `RegressionDetail` | struct | SparkEngine | [BenchmarkFramework.h:L41](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L41) |  |
 | `relative` | function | GameModules | [FPSAssetPaths.cpp:L107](../../GameModules/SparkGameFPS/Source/Game/FPSAssetPaths.cpp#L107) |  |
 | `Release` | function | GameModules | [TFCrypto.cpp:L60](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp#L60) |  |
-| `Release` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L446](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L446) |  |
+| `Release` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L445](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L445) |  |
 | `Release` | function | SparkCrashReporter | [CrashReporterApp.cpp:L577](../../SparkCrashReporter/src/CrashReporterApp.cpp#L577) |  |
 | `Release` | function | SparkDaemon | [OrchestratorIdentity.h:L38](../../SparkDaemon/src/OrchestratorIdentity.h#L38) |  |
 | `Release` | function | SparkEditor | [BuildPipeline.cpp:L265](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L265) |  |
@@ -34112,8 +34112,8 @@
 | `ScopedCurrentPath` | function | Tests | [TestRuntimePackage.cpp:L18](../../Tests/TestRuntimePackage.cpp#L18) |  |
 | `ScopedCurrentPath` | class | Tests | [TestTemplatesCompile.cpp:L49](../../Tests/TestTemplatesCompile.cpp#L49) |  |
 | `ScopedCurrentPath` | function | Tests | [TestTemplatesCompile.cpp:L52](../../Tests/TestTemplatesCompile.cpp#L52) |  |
-| `ScopedDirectoryCleanup` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L432](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L432) |  |
-| `ScopedDirectoryCleanup` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L435](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L435) |  |
+| `ScopedDirectoryCleanup` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L431](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L431) |  |
+| `ScopedDirectoryCleanup` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L434](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L434) |  |
 | `ScopedDirectoryCleanup` | class | SparkEditor | [BuildPipeline.cpp:L250](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L250) |  |
 | `ScopedDirectoryCleanup` | function | SparkEditor | [BuildPipeline.cpp:L253](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L253) |  |
 | `ScopedEntity` | struct | SparkEngine | [ConnectionScope.h:L52](../../SparkEngine/Source/Engine/Networking/ConnectionScope.h#L52) |  |
@@ -37749,7 +37749,7 @@
 | `SourceDataDirectory` | function | Tests | [TestRegionMapDataSource.cpp:L24](../../Tests/TestRegionMapDataSource.cpp#L24) |  |
 | `sourceDirectory` | function | Tests | [TestGPUDrivenRendererD3D11.cpp:L81](../../Tests/TestGPUDrivenRendererD3D11.cpp#L81) |  |
 | `sourceDirectory` | function | Tests | [TestGPUDrivenRendererD3D11.cpp:L110](../../Tests/TestGPUDrivenRendererD3D11.cpp#L110) |  |
-| `SourceEntry` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L829](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L829) |  |
+| `SourceEntry` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L828](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L828) |  |
 | `sourcePath` | function | SparkEditor | [AssetProcessors.cpp:L256](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp#L256) |  |
 | `sourcePath` | function | SparkEditor | [AssetProcessors.cpp:L359](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp#L359) |  |
 | `sourcePath` | function | SparkEditor | [AssetProcessors.cpp:L407](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp#L407) |  |
@@ -38826,8 +38826,8 @@
 | `StackFrame` | struct | SparkEngine | [StackTrace.h:L54](../../SparkEngine/Source/Utils/StackTrace.h#L54) | Single frame in a captured stack trace |
 | `StackTrace` | class | SparkEngine | [Logger.h:L64](../../SparkEngine/Source/Utils/Logger.h#L64) |  |
 | `StackTrace` | class | SparkEngine | [StackTrace.h:L92](../../SparkEngine/Source/Utils/StackTrace.h#L92) | Captured stack trace with symbol resolution |
-| `StageAndCookFile` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L624](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L624) |  |
-| `StageAndCookFile` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L745](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L745) |  |
+| `StageAndCookFile` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L623](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L623) |  |
+| `StageAndCookFile` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L744](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L744) |  |
 | `StageBuiltFPSStarterTemplateRoot` | function | Tests | [TestEditorProjectMaterializationReal.cpp:L69](../../Tests/TestEditorProjectMaterializationReal.cpp#L69) |  |
 | `StagedFile` | struct | SparkEngine | [SparkPakWriter.h:L57](../../SparkEngine/Source/Core/SparkPakWriter.h#L57) | Number of files staged for writing. |
 | `stagedOutputCleanup` | function | SparkEditor | [BuildPipeline.cpp:L959](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L959) |  |
@@ -39120,13 +39120,13 @@
 | `std::filesystem::is_directory` | method | GameModules | [FPSAssetPaths.cpp:L90](../../GameModules/SparkGameFPS/Source/Game/FPSAssetPaths.cpp#L90) |  |
 | `std::filesystem::is_directory` | method | SparkEditor | [EditorLaunchContext.h:L174](../../SparkEditor/Source/Utils/EditorLaunchContext.h#L174) |  |
 | `std::filesystem::is_regular_file` | method | GameModules | [Main.cpp:L217](../../GameModules/SparkGameVisualScript/Source/Core/Main.cpp#L217) |  |
-| `std::filesystem::is_regular_file` | method | SparkAssetPipelineCore | [AssetCooker.cpp:L201](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L201) |  |
+| `std::filesystem::is_regular_file` | method | SparkAssetPipelineCore | [AssetCooker.cpp:L200](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L200) |  |
 | `std::filesystem::is_regular_file` | method | SparkLauncher | [LauncherProcess.cpp:L95](../../SparkLauncher/src/LauncherProcess.cpp#L95) |  |
 | `std::filesystem::is_symlink` | method | SparkLauncher | [LauncherProcess.cpp:L101](../../SparkLauncher/src/LauncherProcess.cpp#L101) |  |
 | `std::filesystem::path` | method | GameModules | [FPSAssetPaths.cpp:L26](../../GameModules/SparkGameFPS/Source/Game/FPSAssetPaths.cpp#L26) |  |
 | `std::filesystem::path` | method | GameModules | [TFSavePaths.h:L314](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L314) |  |
 | `std::filesystem::path` | method | GameModules | [OWPersistence.inl:L293](../../GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl#L293) |  |
-| `std::filesystem::path` | method | SparkAssetPipelineCore | [AssetCooker.cpp:L162](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L162) |  |
+| `std::filesystem::path` | method | SparkAssetPipelineCore | [AssetCooker.cpp:L161](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L161) |  |
 | `std::filesystem::path` | method | SparkCrashReporter | [CrashReporterApp.cpp:L527](../../SparkCrashReporter/src/CrashReporterApp.cpp#L527) |  |
 | `std::filesystem::path` | method | SparkEditor | [EditorUI.cpp:L98](../../SparkEditor/Source/Core/EditorUI.cpp#L98) |  |
 | `std::filesystem::path` | method | SparkEditor | [EditorUI.cpp:L100](../../SparkEditor/Source/Core/EditorUI.cpp#L100) |  |
@@ -39915,7 +39915,7 @@
 | `Str` | function | Tests | [TestTFDataTables.cpp:L78](../../Tests/TestTFDataTables.cpp#L78) |  |
 | `StrapParams` | function | GameModules | [TFViewModelInternal.h:L164](../../GameModules/SparkGameMMOFPS/Source/Game/TFViewModelInternal.h#L164) |  |
 | `stream` | function | GameModules | [Main.cpp:L231](../../GameModules/SparkGameVisualScript/Source/Core/Main.cpp#L231) |  |
-| `stream` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L521](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L521) |  |
+| `stream` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L520](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L520) |  |
 | `stream` | function | SparkAssetPipelineCore | [AssetCookerTests.cpp:L23](../../SparkAssetPipelineCore/tests/AssetCookerTests.cpp#L23) |  |
 | `stream` | function | SparkBuild | [SparkBuild.cpp:L344](../../SparkBuild/src/SparkBuild.cpp#L344) |  |
 | `stream` | function | SparkEditor | [SparkEngineIntegration.cpp:L925](../../SparkEditor/Source/Integration/SparkEngineIntegration.cpp#L925) |  |
@@ -45056,7 +45056,7 @@
 | `ValidateOrThrow` | function | SparkEngine | [EnumUtils.h:L321](../../SparkEngine/Source/Enums/EnumUtils.h#L321) | Validate and throw exception on invalid value |
 | `ValidateOutfitName` | function | GameModules | [TFOutfitSystem.h:L185](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h#L185) |  |
 | `ValidateOutfitTag` | function | GameModules | [TFOutfitSystem.h:L186](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h#L186) |  |
-| `ValidateOutputTarget` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L205](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L205) |  |
+| `ValidateOutputTarget` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L204](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L204) |  |
 | `ValidatePayload` | function | SparkEditor | [SceneComponentCodec.cpp:L37](../../SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp#L37) |  |
 | `ValidatePayload` | function | SparkEditor | [SceneComponentCodec.cpp:L57](../../SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp#L57) |  |
 | `ValidatePayload` | function | SparkEditor | [SceneComponentCodec.cpp:L65](../../SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp#L65) |  |
@@ -46637,7 +46637,7 @@
 | `WriteLog` | function | SparkEditor | [EditorLogger.h:L130](../../SparkEditor/Source/Core/EditorLogger.h#L130) | Console output target |
 | `WriteLog` | function | SparkEditor | [EditorLogger.h:L142](../../SparkEditor/Source/Core/EditorLogger.h#L142) | File output target |
 | `WriteLog` | function | SparkEditor | [EditorLogger.h:L158](../../SparkEditor/Source/Core/EditorLogger.h#L158) | Memory buffer target for UI display |
-| `WriteManifest` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L511](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L511) |  |
+| `WriteManifest` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L510](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L510) |  |
 | `WriteManifest` | function | SparkCrashReporter | [CrashReporterApp.cpp:L1090](../../SparkCrashReporter/src/CrashReporterApp.cpp#L1090) |  |
 | `WriteManifest` | function | SparkCrashReporter | [CrashReporterApp.h:L75](../../SparkCrashReporter/src/CrashReporterApp.h#L75) |  |
 | `WriteManifest` | function | Tests | [TestModuleLifecycleReal.cpp:L150](../../Tests/TestModuleLifecycleReal.cpp#L150) |  |
