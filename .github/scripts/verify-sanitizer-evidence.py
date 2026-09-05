@@ -1763,17 +1763,25 @@ def published_main(argv: list[str]) -> int:
             errors.append("metadata completion timestamp is invalid")
 
     stats = strict_json(payloads.get("stats", b""), label="statistics", errors=errors)
+    # Key set and count semantics mirror summarize-test-results.py exactly
+    # (test-run-sanitizer-tests.sh proves the parity): the summarizer reports
+    # duplicateCases (lane-merge collisions), flaky (flakyFailure outcomes and
+    # flaky=true properties, the current shape only) and empty, and its
+    # `passed` excludes flaky outcomes because a tolerated failure is not a pass.
     stats_obj = require_exact_keys(
         stats,
         {
             "schemaVersion",
             "reports",
+            "duplicateCases",
             "tests",
             "executed",
             "passed",
             "failures",
             "errors",
             "skipped",
+            "flaky",
+            "empty",
             "durationSeconds",
             "slowest",
         },
@@ -1789,13 +1797,20 @@ def published_main(argv: list[str]) -> int:
                 - junit.get("failures", 0)
                 - junit.get("errors", 0)
                 - junit.get("skipped", 0)
+                - junit.get("flakyOutcomes", 0)
             ) if junit else None,
             "failures": junit.get("failures"),
             "errors": junit.get("errors"),
             "skipped": junit.get("skipped"),
+            "flaky": junit.get("flakyOutcomes"),
+            "empty": junit.get("empty"),
         }
         if not exact_json_value(stats_obj.get("schemaVersion"), 1):
             errors.append("statistics schemaVersion must be 1")
+        # The JUnit walk above already rejects a duplicated testcase identity, so
+        # strictly verified single-lane evidence can only summarize to zero merges.
+        if not exact_json_value(stats_obj.get("duplicateCases"), 0):
+            errors.append("statistics duplicateCases must be 0 for strictly verified JUnit evidence")
         for key, expected in expected_counts.items():
             if not exact_json_value(stats_obj.get(key), expected):
                 errors.append(f"statistics {key} does not match strict JUnit evidence")

@@ -312,13 +312,33 @@ emit_runtime_excerpt() {
     if [[ -n "$token" ]]; then
         echo "::stop-commands::$token"
     fi
-    {
-        for runtime_file in "${excerpt_files[@]}"; do
-            printf -- '--- %s ---\n' "${runtime_file##*/}"
-            head -n "$RUNTIME_EXCERPT_LINES" -- "$runtime_file"
-        done
-    } 2>/dev/null | head -c "$RUNTIME_EXCERPT_BYTES"
-    printf '\n'
+    # Python rather than `head -n | head -c`: a multi-megabyte single-line
+    # report made the byte-capping consumer close the pipe early, the producer
+    # died with SIGPIPE, and pipefail turned the whole runner into exit 141
+    # (exit 1 on the CI runner) for a case that must classify as a verification
+    # failure (exit 70). Bounded per line and per byte with no pipeline.
+    "$PYTHON_BIN" - "$RUNTIME_EXCERPT_LINES" "$RUNTIME_EXCERPT_BYTES" "${excerpt_files[@]}" <<'PY' || true
+import sys
+max_lines, budget = int(sys.argv[1]), int(sys.argv[2])
+out = sys.stdout.buffer
+for path in sys.argv[3:]:
+    header = ("--- " + path.replace("\\", "/").rsplit("/", 1)[-1] + " ---\n").encode()
+    chunk = header[:budget]
+    out.write(chunk)
+    budget -= len(chunk)
+    if budget <= 0:
+        break
+    with open(path, "rb") as stream:
+        for index, line in enumerate(stream):
+            if index >= max_lines or budget <= 0:
+                break
+            chunk = line[:budget]
+            out.write(chunk)
+            budget -= len(chunk)
+    if budget <= 0:
+        break
+out.write(b"\n")
+PY
     if [[ -n "$token" ]]; then
         echo "::$token::"
     fi
