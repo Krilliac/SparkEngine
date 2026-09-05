@@ -72,6 +72,11 @@ namespace SparkEditor
         ~EditorApplication();
 
         bool Initialize(const EditorConfig& config);
+
+        /// @brief Absolute path of the persisted window layout
+        /// (<editor data directory>/window_layout.json). Shared by the
+        /// platform Initialize/Shutdown paths.
+        static std::string WindowLayoutFilePath();
         int Run();
         void Shutdown();
 

@@ -9,8 +9,8 @@
 #include "BuildPipeline.h"
 #include "DedicatedServerProcessController.h"
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
-#include <iostream>
 
 #include <imgui.h>
 
@@ -102,12 +102,7 @@ namespace SparkEditor
     // Construction / Lifecycle
     // ============================================================================
 
-    DedicatedServerPanel::DedicatedServerPanel() : EditorPanel("Dedicated Server", "dedicated_server_panel")
-    {
-        m_mapRotation.push_back("dm_warehouse");
-        m_mapRotation.push_back("dm_rooftops");
-        m_mapRotation.push_back("dm_compound");
-    }
+    DedicatedServerPanel::DedicatedServerPanel() : EditorPanel("Dedicated Server", "dedicated_server_panel") {}
 
     DedicatedServerPanel::~DedicatedServerPanel() = default;
 
@@ -163,16 +158,6 @@ namespace SparkEditor
             if (!snapshot.error.empty() &&
                 (m_pieServerLog.empty() || m_pieServerLog.back() != "[Editor] " + snapshot.error))
                 m_pieServerLog.push_back("[Editor] " + snapshot.error);
-        }
-
-        // Update server browser scan
-        if (m_isScanning)
-        {
-            m_scanTimer -= deltaTime;
-            if (m_scanTimer <= 0.0f)
-            {
-                m_isScanning = false;
-            }
         }
     }
 
@@ -338,7 +323,9 @@ namespace SparkEditor
 
     void DedicatedServerPanel::RenderMapRotationTab()
     {
-        ImGui::Text(ICON_FA_MAP " Map Rotation");
+        ImGui::Text(ICON_FA_MAP " Map List");
+        ImGui::TextDisabled("SparkServer runs one map per launch. This list is the pick-list for the");
+        ImGui::TextDisabled("Map field on the PIE Server tab; the server does not cycle it.");
         ImGui::Separator();
 
         // Map list
@@ -671,24 +658,17 @@ namespace SparkEditor
         ImGui::Text(ICON_FA_GLOBE " LAN Server Browser");
         ImGui::Separator();
 
-        // Refresh button
-        if (!m_isScanning)
+        // Refresh button. There is no LAN discovery transport, so this only
+        // re-reads the locally launched PIE server.
+        if (ImGui::Button(ICON_FA_REFRESH " Refresh", ImVec2(120, 30)))
         {
-            if (ImGui::Button(ICON_FA_REFRESH " Scan LAN", ImVec2(120, 30)))
-            {
-                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Scanning LAN for servers");
-                RefreshServerBrowser();
-            }
-        }
-        else
-        {
-            ImGui::BeginDisabled();
-            ImGui::Button(ICON_FA_SPINNER " Scanning...", ImVec2(120, 30));
-            ImGui::EndDisabled();
+            RefreshServerBrowser();
         }
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Found %d server(s)",
+        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%d server(s) listed",
                            static_cast<int>(m_discoveredServers.size()));
+        ImGui::TextDisabled("No LAN discovery transport exists: only a server launched from this");
+        ImGui::TextDisabled("editor is listed, and joining needs a client transport that is not wired.");
 
         ImGui::Separator();
 
@@ -735,10 +715,14 @@ namespace SparkEditor
                 ImGui::TableSetColumnIndex(5);
                 char joinBtnId[32];
                 snprintf(joinBtnId, sizeof(joinBtnId), "Join##%d", i);
+                ImGui::BeginDisabled();
                 if (ImGui::SmallButton(joinBtnId))
                 {
                     ConnectToServer(server);
                 }
+                ImGui::EndDisabled();
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    ImGui::SetTooltip("Unavailable: no editor client transport is wired.");
             }
 
             ImGui::EndTable();
@@ -772,6 +756,11 @@ namespace SparkEditor
                 }
             }
             ConnectToServer(direct);
+        }
+
+        if (!m_connectStatus.empty())
+        {
+            ImGui::TextColored(ImVec4(0.9f, 0.5f, 0.3f, 1.0f), "%s", m_connectStatus.c_str());
         }
     }
 
@@ -1008,11 +997,11 @@ namespace SparkEditor
 
     void DedicatedServerPanel::RefreshServerBrowser()
     {
-        m_isScanning = true;
-        m_scanTimer = 2.0f; // 2 second scan
+        // There is no discovery socket: the only server this editor can see is one
+        // it launched itself. The list is rebuilt immediately, with no scan delay
+        // that would suggest a network search is happening.
         m_discoveredServers.clear();
 
-        // If we have a PIE server running, add it to the list
         if (m_pieServerRunning)
         {
             DiscoveredServer local;
@@ -1020,7 +1009,7 @@ namespace SparkEditor
             local.map = m_pieConfig.mapName;
             local.address = "127.0.0.1";
             local.port = m_pieConfig.port;
-            local.currentPlayers = 0;
+            local.currentPlayers = GetReportedPlayerCount();
             local.maxPlayers = m_pieConfig.maxPlayers;
             local.gameMode = m_pieConfig.gameMode;
             local.ping = 0.0f;
@@ -1029,11 +1018,45 @@ namespace SparkEditor
         }
     }
 
+    int DedicatedServerPanel::GetReportedPlayerCount() const
+    {
+        if (!m_serverProcess)
+            return -1;
+
+        const std::string healthJson = m_serverProcess->GetSnapshot().healthJson;
+        const std::string key = "\"players\":";
+        const size_t keyPos = healthJson.find(key);
+        if (keyPos == std::string::npos)
+            return -1;
+
+        size_t cursor = keyPos + key.size();
+        while (cursor < healthJson.size() && std::isspace(static_cast<unsigned char>(healthJson[cursor])))
+            ++cursor;
+
+        int players = 0;
+        bool anyDigit = false;
+        while (cursor < healthJson.size() && std::isdigit(static_cast<unsigned char>(healthJson[cursor])))
+        {
+            players = players * 10 + (healthJson[cursor] - '0');
+            anyDigit = true;
+            ++cursor;
+        }
+        return anyDigit ? players : -1;
+    }
+
     void DedicatedServerPanel::ConnectToServer(const DiscoveredServer& server)
     {
+        // There is no editor client transport, so this can never connect. Say so every time: gating the
+        // message on m_pieServerRunning made Direct Connect produce no log line and no UI feedback at
+        // all when no PIE server was running, which looks exactly like a successful connect.
+        const std::string target = server.address + ":" + std::to_string(server.port);
+        m_connectStatus = "Cannot connect to " + target + ": no editor client transport is wired.";
         if (m_pieServerRunning)
-            m_pieServerLog.push_back("[Editor] Client connect requested for " + server.address + ":" +
-                                     std::to_string(server.port) + "; no editor client transport is wired");
+        {
+            m_pieServerLog.push_back("[Editor] Client connect requested for " + target +
+                                     "; no editor client transport is wired");
+        }
+        SPARK_LOG_WARN(Spark::LogCategory::Editor, "%s", m_connectStatus.c_str());
     }
 
     // ============================================================================
@@ -1069,7 +1092,11 @@ namespace SparkEditor
         int upSecs = static_cast<int>(m_pieServerUptime) % 60;
         ImGui::Text("Uptime: %d:%02d", upMins, upSecs);
         ImGui::Text("Tick Rate: %.0f Hz", m_pieConfig.tickRate);
-        ImGui::Text("Players: 0/%d", m_pieConfig.maxPlayers);
+        const int reportedPlayers = GetReportedPlayerCount();
+        if (reportedPlayers >= 0)
+            ImGui::Text("Players: %d/%d", reportedPlayers, m_pieConfig.maxPlayers);
+        else
+            ImGui::TextDisabled("Players: no health report yet");
 
         ImGui::NextColumn();
 

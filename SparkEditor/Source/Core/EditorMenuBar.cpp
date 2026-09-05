@@ -729,7 +729,7 @@ namespace SparkEditor
                                       ImVec4(pillBg.x + 0.06f, pillBg.y + 0.06f, pillBg.z + 0.06f, 1.0f));
             }
             if (ImGui::Button(icon, btnDim))
-                m_currentTool = tool;
+                SetTransformTool(tool);
             ImGui::PopStyleColor(2);
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("%s", tooltip);

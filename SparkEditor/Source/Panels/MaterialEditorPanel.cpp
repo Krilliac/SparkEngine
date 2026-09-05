@@ -20,6 +20,8 @@
 #include <imgui.h>
 #include <iostream>
 #include <algorithm>
+#include <array>
+#include <filesystem>
 #include <fstream>
 
 namespace SparkEditor
@@ -38,26 +40,66 @@ namespace SparkEditor
 
         SetIcon(ICON_FA_PALETTE);
 
-        // Register available shaders
-        m_availableShaders = {
-            {"Standard PBR", "Shaders/StandardPBR.hlsl", "Physically-based rendering with metallic workflow"},
-            {"Standard Specular", "Shaders/StandardSpecular.hlsl", "PBR with specular/glossiness workflow"},
-            {"Unlit", "Shaders/Unlit.hlsl", "No lighting calculations, flat color or texture"},
-            {"Transparent", "Shaders/Transparent.hlsl", "Alpha-blended transparent surfaces"},
-            {"Emissive", "Shaders/Emissive.hlsl", "Self-illuminating materials with bloom support"},
-            {"Toon", "Shaders/Toon.hlsl", "Cel-shaded cartoon-style rendering"},
-            {"Glass", "Shaders/Glass.hlsl", "Refractive glass with fresnel and tint"},
-            {"Terrain", "Shaders/Terrain.hlsl", "Multi-layer splatmap terrain blending"},
-            {"Water", "Shaders/Water.hlsl", "Animated water surface with reflections"},
-            {"Particle", "Shaders/Particle.hlsl", "Particle system material with soft blending"},
-            {"Skybox", "Shaders/Skybox.hlsl", "Cubemap-based sky rendering"},
-            {"Decal", "Shaders/Decal.hlsl", "Projected decal material"},
-        };
+        PopulateAvailableShaders();
 
         LoadDefaultMaterials();
 
         m_isInitialized = true;
         return true;
+    }
+
+    void MaterialEditorPanel::PopulateAvailableShaders()
+    {
+        m_availableShaders.clear();
+
+        // Enumerate the shader tree that actually ships instead of advertising fixed filenames. The staged
+        // layout puts shaders next to the executable (bin/<config>/Shaders); a source-tree run finds them
+        // under SparkEngine/Shaders. Every entry therefore names a file the engine can load.
+        const std::array<std::filesystem::path, 2> roots = {std::filesystem::path("Shaders"),
+                                                            std::filesystem::path("SparkEngine/Shaders")};
+        for (const auto& root : roots)
+        {
+            std::error_code rootError;
+            if (!std::filesystem::is_directory(root, rootError) || rootError)
+                continue;
+
+            std::error_code walkError;
+            std::filesystem::recursive_directory_iterator it(
+                root, std::filesystem::directory_options::skip_permission_denied, walkError);
+            const std::filesystem::recursive_directory_iterator end;
+            for (; !walkError && it != end; it.increment(walkError))
+            {
+                std::error_code entryError;
+                if (!it->is_regular_file(entryError) || entryError)
+                    continue;
+                if (it->path().extension() != ".hlsl")
+                    continue;
+
+                ShaderInfo info;
+                info.name = it->path().stem().string();
+                info.path = it->path().generic_string();
+                info.description = it->path().parent_path().generic_string();
+                m_availableShaders.push_back(std::move(info));
+            }
+
+            if (!m_availableShaders.empty())
+                break;
+        }
+
+        std::sort(m_availableShaders.begin(), m_availableShaders.end(),
+                  [](const ShaderInfo& a, const ShaderInfo& b) { return a.name < b.name; });
+
+        if (m_availableShaders.empty())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                           "Material Editor found no .hlsl files under Shaders/ or SparkEngine/Shaders; the shader "
+                           "picker will be empty");
+        }
+        else
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Material Editor found %zu shader(s)",
+                           m_availableShaders.size());
+        }
     }
 
     void MaterialEditorPanel::Update(float deltaTime)
@@ -435,32 +477,45 @@ namespace SparkEditor
             ImGui::Separator();
             ImGui::InputText("Name", newMaterialName, sizeof(newMaterialName));
 
-            if (ImGui::BeginCombo("Shader", m_availableShaders[selectedShaderIndex].name.c_str()))
+            // The shader list is enumerated from disk, so it can legitimately be empty.
+            if (m_availableShaders.empty())
             {
-                for (int i = 0; i < static_cast<int>(m_availableShaders.size()); ++i)
+                ImGui::TextWrapped("No shaders found under Shaders/ or SparkEngine/Shaders.");
+            }
+            else
+            {
+                if (selectedShaderIndex >= static_cast<int>(m_availableShaders.size()))
+                    selectedShaderIndex = 0;
+
+                if (ImGui::BeginCombo("Shader", m_availableShaders[selectedShaderIndex].name.c_str()))
                 {
-                    bool isSelected = (i == selectedShaderIndex);
-                    if (ImGui::Selectable(m_availableShaders[i].name.c_str(), isSelected))
+                    for (int i = 0; i < static_cast<int>(m_availableShaders.size()); ++i)
                     {
-                        selectedShaderIndex = i;
+                        bool isSelected = (i == selectedShaderIndex);
+                        if (ImGui::Selectable(m_availableShaders[i].name.c_str(), isSelected))
+                        {
+                            selectedShaderIndex = i;
+                        }
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::SetTooltip("%s", m_availableShaders[i].description.c_str());
+                        }
+                        if (isSelected)
+                        {
+                            ImGui::SetItemDefaultFocus();
+                        }
                     }
-                    if (ImGui::IsItemHovered())
-                    {
-                        ImGui::SetTooltip("%s", m_availableShaders[i].description.c_str());
-                    }
-                    if (isSelected)
-                    {
-                        ImGui::SetItemDefaultFocus();
-                    }
+                    ImGui::EndCombo();
                 }
-                ImGui::EndCombo();
             }
 
+            ImGui::BeginDisabled(m_availableShaders.empty());
             if (ImGui::Button("Create", ImVec2(120, 0)))
             {
                 CreateMaterial(newMaterialName, m_availableShaders[selectedShaderIndex].path);
                 ImGui::CloseCurrentPopup();
             }
+            ImGui::EndDisabled();
             ImGui::SameLine();
             if (ImGui::Button("Cancel", ImVec2(120, 0)))
             {

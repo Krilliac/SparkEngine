@@ -338,46 +338,65 @@ namespace SparkEditor
 
     namespace
     {
-        constexpr std::array<std::string_view, 2> kEmptyFeatures = {"minimal", "scene-editing"};
-        constexpr std::array<std::string_view, 6> kFirstPersonFeatures = {"movement", "mouselook", "weapons",
-                                                                          "damage",   "hud",       "restart"};
-        constexpr std::array<std::string_view, 5> kThirdPersonFeatures = {"movement", "orbit-camera", "jump", "pickup",
-                                                                          "goal"};
-        constexpr std::array<std::string_view, 6> kTopDownFeatures = {"movement", "pan-zoom-camera", "collision",
-                                                                      "enemy",    "pickup",          "restart"};
-        constexpr std::array<std::string_view, 4> kBlank3DFeatures = {"primitive", "ground", "lighting", "fly-camera"};
-        constexpr std::array<std::string_view, 7> kMmoFeatures = {
-            "local-client-server", "character", "faction", "capture-point", "bot", "chat", "respawn"};
-        constexpr std::array<std::string_view, 8> kPlatformerFeatures = {
-            "movement", "jump", "double-jump", "collectibles", "hazard", "checkpoint", "finish", "restart"};
-        constexpr std::array<std::string_view, 7> kRpgFeatures = {"movement", "dialogue", "quest",    "inventory",
-                                                                  "combat",   "reward",   "save-load"};
+        // Editor-facing template metadata. Identity, description, genre, default scene,
+        // package directory and feature list are the same values the package ships in
+        // its Templates/<Package>/template.json; TestEditorProjectMaterializationReal
+        // fails when the two drift. Display name, icon and sceneOnly are editor-only.
+        constexpr std::array<std::string_view, 3> kEmptyFeatures = {"minimal", "scene-editing",
+                                                                    "intentional-runtime-preview"};
+        constexpr std::array<std::string_view, 8> kFirstPersonFeatures = {
+            "movement", "mouselook", "weapons", "damage", "hud", "restart", "mouse-capture", "authored-training-range"};
+        constexpr std::array<std::string_view, 8> kThirdPersonFeatures = {
+            "movement", "sprint", "orbit-camera", "camera-reset", "jump", "pickup", "objective-hud", "portal-goal"};
+        constexpr std::array<std::string_view, 8> kTopDownFeatures = {
+            "movement",       "pan-zoom-camera",     "collision", "enemy-pursuit", "timed-enemy-attacks",
+            "energy-upgrade", "combat-feedback-hud", "restart"};
+        constexpr std::array<std::string_view, 7> kBlank3DFeatures = {
+            "primitive", "ground", "lighting", "fly-camera", "primitive-gallery", "composition-study", "runtime-hud"};
+        constexpr std::array<std::string_view, 9> kMmoFeatures = {
+            "local-client-server",   "character", "faction", "capture-point",
+            "pursuing-training-bot", "chat",      "respawn", "spawn-protection",
+            "camera-follow"};
+        constexpr std::array<std::string_view, 9> kPlatformerFeatures = {"movement",   "jump",         "double-jump",
+                                                                         "sprint",     "collectibles", "hazard",
+                                                                         "checkpoint", "gated-finish", "restart"};
+        constexpr std::array<std::string_view, 9> kRpgFeatures = {"movement",      "dialogue", "quest",
+                                                                  "inventory",     "combat",   "quest-hud",
+                                                                  "camera-follow", "reward",   "save-load"};
 
         constexpr std::array<ProjectTemplateDescriptor, 8> kProjectTemplates = {{
             {ProjectTemplate::Blank3D, "blank-3d", "Blank 3D",
-             "A ready-to-edit 3D scene with a visible primitive, ground, lighting, and fly camera.", "[3D]", "Blank3D",
-             "Scenes/Default.sparkscene", "General", kBlank3DFeatures, true},
+             "A ready-to-edit 3D composition study with a primitive gallery, two-light rig, camera HUD, and six-axis "
+             "fly controls.",
+             "[3D]", "Blank3D", "Scenes/Default.sparkscene", "General", kBlank3DFeatures, true},
             {ProjectTemplate::FirstPerson, "first-person", "First Person",
-             "A compact first-person game with movement, weapons, a damageable target, HUD, and restart loop.", "[FP]",
-             "FPSStarter", "Scenes/Arena.sparkscene", "FPS", kFirstPersonFeatures, false},
+             "A playable first-person training range with authored arena props, hitscan combat, a live HUD, reloads, "
+             "and round reset.",
+             "[FP]", "FPSStarter", "Scenes/Arena.sparkscene", "FPS", kFirstPersonFeatures, false},
             {ProjectTemplate::ThirdPerson, "third-person", "Third Person",
-             "A third-person adventure slice with orbit camera, jumping, a pickup, and a goal.", "[TP]",
-             "ThirdPersonStarter", "Scenes/Adventure.sparkscene", "Adventure", kThirdPersonFeatures, false},
+             "A polished third-person wayfinding slice with camera-relative movement, sprinting, orbit and reset "
+             "controls, a crystal objective, and a portal goal.",
+             "[TP]", "ThirdPersonStarter", "Scenes/Adventure.sparkscene", "Adventure", kThirdPersonFeatures, false},
             {ProjectTemplate::TopDown, "top-down", "Top Down",
-             "A top-down action slice with pan/zoom camera, collision, an enemy, a pickup, and restart.", "[TD]",
-             "TopDownStarter", "Scenes/Skirmish.sparkscene", "Action", kTopDownFeatures, false},
+             "A top-down arena skirmish with bounded movement, pan/zoom follow camera, pursuing enemy combat, energy "
+             "upgrade, live HUD feedback, and restart.",
+             "[TD]", "TopDownStarter", "Scenes/Skirmish.sparkscene", "Action", kTopDownFeatures, false},
             {ProjectTemplate::Platformer, "platformer", "Platformer",
-             "A complete platformer level with double jump, collectibles, hazards, checkpoint, finish, and restart.",
+             "A polished side-view platformer challenge with double jump, collectibles, hazards, checkpoint recovery, "
+             "sprinting, and a gated finish.",
              "[PL]", "PlatformerKit", "Scenes/Level01.sparkscene", "Platformer", kPlatformerFeatures, false},
             {ProjectTemplate::RPG, "rpg", "RPG",
-             "A village RPG slice with dialogue, quest, inventory, combat, reward, and save/load.", "[RPG]",
-             "RPGStarter", "Scenes/Village.sparkscene", "RPG", kRpgFeatures, false},
+             "A complete village RPG quest with bounded exploration, dialogue, relic inventory, reactive combat, "
+             "objective HUD, reward, and save/load.",
+             "[RPG]", "RPGStarter", "Scenes/Village.sparkscene", "RPG", kRpgFeatures, false},
             {ProjectTemplate::MMO, "mmo", "MMO",
-             "A bounded local client/server sample with character setup, faction objective, bot, chat, and respawn.",
+             "A bounded MMO frontier slice with local session setup, faction choice, capture objective, pursuing bot "
+             "combat, chat, respawn, and spawn protection.",
              "[MMO]", "MMOStarter", "Scenes/Frontier.sparkscene", "MMO", kMmoFeatures, false},
             {ProjectTemplate::Empty, "empty", "Empty",
-             "A truthful empty project with an editable world and no bundled art or gameplay assumptions.", "[ ]",
-             "EmptyProject", "Scenes/Default.sparkscene", "General", kEmptyFeatures, true},
+             "A minimal editable project whose empty authoring scene stays blank while the module drives an explicit "
+             "runtime preview scene.",
+             "[ ]", "EmptyProject", "Scenes/Default.sparkscene", "General", kEmptyFeatures, true},
         }};
 
         static_assert(kProjectTemplates.size() == 8);
@@ -1418,15 +1437,64 @@ namespace SparkEditor
                 std::cerr << "Template copy requires a link-free source and an empty owned destination.\n";
                 return false;
             }
-            for (const auto& source : fs::directory_iterator(sourceRoot))
+            // A package built in place carries build output, a prebuilt module in
+            // dist/, logs and saves. Those must never become part of a materialized
+            // project - the engine's directory discovery would treat a stale dist/
+            // module as a load candidate. This mirrors the EXCLUDE_REGEXES the
+            // Templates install rule in CMakeLists.txt already applies.
+            static const std::set<std::string> excludedEntryNames = {"dist",
+                                                                     "Binaries",
+                                                                     "Intermediate",
+                                                                     "Saved",
+                                                                     "Saves",
+                                                                     "Logs",
+                                                                     "Screenshots",
+                                                                     "TestScreenshots",
+                                                                     "Temp",
+                                                                     ".vs",
+                                                                     ".cache",
+                                                                     "CMakeFiles",
+                                                                     "__pycache__",
+                                                                     ".pytest_cache",
+                                                                     "CMakeCache.txt",
+                                                                     "cmake_install.cmake",
+                                                                     "CTestTestfile.cmake",
+                                                                     "compile_commands.json",
+                                                                     "install_manifest.txt",
+                                                                     "exec_audit.log",
+                                                                     "spark_trace.json",
+                                                                     "mmo_data.db"};
+
+            for (auto it = fs::recursive_directory_iterator(sourceRoot); it != fs::recursive_directory_iterator(); ++it)
             {
-                fs::copy(source.path(), destinationRoot / source.path().filename(),
-                         fs::copy_options::recursive | fs::copy_options::overwrite_existing);
+                const std::string entryName = PathToUtf8(it->path().filename());
+                const bool isDirectory = it->is_directory();
+
+                // The "build" prefix rule applies to DIRECTORIES only. Applied to every entry it also
+                // dropped template files such as build.ps1, build.py or build_notes.md from every
+                // materialized project, with no diagnostic.
+                if ((isDirectory && entryName.starts_with("build")) ||
+                    Spark::ContainerUtils::Contains(excludedEntryNames, entryName))
+                {
+                    if (isDirectory)
+                        it.disable_recursion_pending();
+                    continue;
+                }
+
+                const fs::path destination = destinationRoot / fs::relative(it->path(), sourceRoot);
+                if (isDirectory)
+                    fs::create_directories(destination);
+                else
+                    fs::copy_file(it->path(), destination, fs::copy_options::overwrite_existing);
             }
 
-            // Text file extensions that should have their template name rewritten
-            static const std::set<std::string> textExtensions = {
-                ".h", ".hpp", ".cpp", ".c", ".txt", ".json", ".cmake", ".md", ".py", ".sparkproject", ".sparkscene"};
+            // Text file extensions that should have their template name rewritten.
+            // `.ini` carries the package token in the dedicated-server and gateway
+            // service configs, so a project created as MyGame must not keep the
+            // template's server name, MOTD and gateway world name.
+            static const std::set<std::string> textExtensions = {".h",   ".hpp",  ".cpp",          ".c",
+                                                                 ".txt", ".json", ".cmake",        ".md",
+                                                                 ".py",  ".ini",  ".sparkproject", ".sparkscene"};
 
             // Templates are shipped as real, compilable game modules named after
             // their directory (e.g. `Templates/FPSStarter` uses `FPSStarterModule`,
@@ -1951,9 +2019,47 @@ namespace SparkEditor
         return true;
     }
 
+    const std::string& ProjectManager::ResolvedTemplateRoot() const
+    {
+        if (!m_templateRootResolved)
+        {
+            m_resolvedTemplateRoot = ResolveTemplateRoot(m_engineRoot);
+            m_templateRootResolved = true;
+        }
+        return m_resolvedTemplateRoot;
+    }
+
     bool ProjectManager::SaveProjectFile()
     {
         std::string filePath = GetProjectFilePath();
+
+        // Template packages are read-only source. Opening one to look at it must
+        // never rewrite its checked-in <Package>.sparkproject - that dirties the
+        // package's lastModified field and makes shipped template metadata
+        // nondeterministic. Every writer funnels through here, so one refusal
+        // covers SaveProject(), scene selection, and any future caller.
+        std::error_code guardEc;
+        fs::path guardCandidate = fs::weakly_canonical(PathFromUtf8(filePath), guardEc);
+        if (guardEc)
+        {
+            // A canonicalization failure is exactly the case where the path cannot be proven safe, so
+            // the guard must not be skipped. Fall back to the lexically normalized absolute path;
+            // ResolveTemplateRoot() already returns a canonical root, so the comparison still holds for
+            // any path that actually names a file under it.
+            std::error_code absoluteEc;
+            const fs::path absolutePath = fs::absolute(PathFromUtf8(filePath), absoluteEc);
+            guardCandidate = (absoluteEc ? PathFromUtf8(filePath) : absolutePath).lexically_normal();
+        }
+
+        if (const std::string& templateRoot = ResolvedTemplateRoot();
+            !templateRoot.empty() && IsPathInsideRoot(PathFromUtf8(templateRoot), guardCandidate))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                           "Refusing to write '%s': it belongs to the read-only template package root '%s'. "
+                           "Create a project from the template instead of editing the package in place.",
+                           filePath.c_str(), templateRoot.c_str());
+            return false;
+        }
 
         try
         {

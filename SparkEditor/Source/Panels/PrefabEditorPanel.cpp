@@ -262,13 +262,25 @@ namespace SparkEditor
         }
         ImGui::Spacing();
 
-        // Component editors
+        // Component editors. Removal is deferred until after the loop so the
+        // vector is not mutated while it is being iterated.
+        m_componentToRemove.clear();
         auto& components = prefab->GetComponents();
         for (size_t i = 0; i < components.size(); ++i)
         {
             ImGui::PushID(static_cast<int>(i));
             RenderComponentEditor(components[i]);
             ImGui::PopID();
+        }
+
+        if (!m_componentToRemove.empty())
+        {
+            if (prefab->RemoveComponent(m_componentToRemove))
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "PrefabEditorPanel: removed component '%s' from '%s'",
+                               m_componentToRemove.c_str(), prefab->GetName().c_str());
+            }
+            m_componentToRemove.clear();
         }
 
         // Add component button
@@ -304,11 +316,7 @@ namespace SparkEditor
         {
             if (component.typeName != "Transform" && ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
             {
-                // Mark for removal (handled after iteration)
-            }
-            if (ImGui::MenuItem(ICON_FA_COPY " Copy Component"))
-            {
-                // Copy component data to clipboard
+                m_componentToRemove = component.typeName;
             }
             ImGui::EndPopup();
         }

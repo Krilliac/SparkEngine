@@ -11,16 +11,52 @@
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/TerrainComponents.h"
 #include "Engine/ECS/Components/CoreComponents.h"
+#include "Graphics/TerrainRenderer.h"
 
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 
 using namespace DirectX;
 namespace SparkEditor
 {
+
+    namespace
+    {
+        namespace Format = Spark::Graphics::SparkTerrain;
+
+        void WriteU8(std::ofstream& file, uint8_t value)
+        {
+            file.write(reinterpret_cast<const char*>(&value), sizeof(value));
+        }
+
+        void WriteU32(std::ofstream& file, uint32_t value)
+        {
+            file.write(reinterpret_cast<const char*>(&value), sizeof(value));
+        }
+
+        void WriteI32(std::ofstream& file, int32_t value)
+        {
+            file.write(reinterpret_cast<const char*>(&value), sizeof(value));
+        }
+
+        void WriteF32(std::ofstream& file, float value)
+        {
+            file.write(reinterpret_cast<const char*>(&value), sizeof(value));
+        }
+
+        void WriteString(std::ofstream& file, const std::string& value)
+        {
+            const auto length =
+                static_cast<uint32_t>(std::min<size_t>(value.size(), Format::kMaxStringLength));
+            WriteU32(file, length);
+            if (length > 0)
+                file.write(value.data(), static_cast<std::streamsize>(length));
+        }
+    } // namespace
 
     TerrainEditor::TerrainEditor() : EditorPanel("Terrain Editor", "terrain_editor") {}
 
@@ -123,6 +159,8 @@ namespace SparkEditor
 
         m_undoStack.clear();
         m_redoStack.clear();
+        m_terrainFilePath.clear();
+        RefreshPathBuffers();
         UpdateTerrainMesh();
         UpdateTerrainCollision();
         SetModified(true);
@@ -138,68 +176,183 @@ namespace SparkEditor
             return false;
         }
 
+        Format::Reader reader(file);
+
         uint32_t magic = 0;
-        file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-        if (magic != 0x53504B54) // 'SPKT'
+        uint32_t version = 0;
+        reader.ReadU32(magic);
+        reader.ReadU32(version);
+        if (reader.Failed() || magic != Format::kMagic)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Not a .sparkterrain file: %s", filePath.c_str());
             return false;
+        }
+        if (version != Format::kVersion)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Unsupported .sparkterrain version %u (expected %u): %s",
+                            version, Format::kVersion, filePath.c_str());
+            return false;
+        }
 
         auto terrain = std::make_unique<TerrainData>();
 
-        uint32_t nameLen = 0;
-        file.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
-        if (nameLen > 4096)
+        reader.ReadString(terrain->name);
+        reader.ReadF32(terrain->size);
+        reader.ReadF32(terrain->position.x);
+        reader.ReadF32(terrain->position.y);
+        reader.ReadF32(terrain->position.z);
+
+        int32_t lodLevels = 4;
+        uint8_t generateCollider = 1;
+        reader.ReadI32(lodLevels);
+        reader.ReadF32(terrain->lodBias);
+        reader.ReadU8(generateCollider);
+        terrain->lodLevels = lodLevels;
+        terrain->generateCollider = (generateCollider != 0);
+
+        int32_t hmWidth = 0;
+        int32_t hmHeight = 0;
+        reader.ReadI32(hmWidth);
+        reader.ReadI32(hmHeight);
+        reader.ReadF32(terrain->heightmap.scale);
+        reader.ReadF32(terrain->heightmap.minHeight);
+        reader.ReadF32(terrain->heightmap.maxHeight);
+        if (reader.Failed() || hmWidth < Format::kMinHeightmapResolution ||
+            hmWidth > Format::kMaxHeightmapResolution || hmHeight < Format::kMinHeightmapResolution ||
+            hmHeight > Format::kMaxHeightmapResolution)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Rejected terrain heightmap %dx%d in %s", hmWidth, hmHeight,
+                            filePath.c_str());
             return false;
-        terrain->name.resize(nameLen);
-        file.read(terrain->name.data(), nameLen);
+        }
+        terrain->heightmap.width = hmWidth;
+        terrain->heightmap.height = hmHeight;
 
-        file.read(reinterpret_cast<char*>(&terrain->size), sizeof(float));
-        file.read(reinterpret_cast<char*>(&terrain->position), sizeof(XMFLOAT3));
-        file.read(reinterpret_cast<char*>(&terrain->lodLevels), sizeof(int));
-        file.read(reinterpret_cast<char*>(&terrain->lodBias), sizeof(float));
-        file.read(reinterpret_cast<char*>(&terrain->generateCollider), sizeof(bool));
-
-        file.read(reinterpret_cast<char*>(&terrain->heightmap.width), sizeof(int));
-        file.read(reinterpret_cast<char*>(&terrain->heightmap.height), sizeof(int));
-        file.read(reinterpret_cast<char*>(&terrain->heightmap.scale), sizeof(float));
-        file.read(reinterpret_cast<char*>(&terrain->heightmap.minHeight), sizeof(float));
-        file.read(reinterpret_cast<char*>(&terrain->heightmap.maxHeight), sizeof(float));
-
-        size_t heightCount = static_cast<size_t>(terrain->heightmap.width) * terrain->heightmap.height;
-        terrain->heightmap.heights.resize(heightCount);
-        file.read(reinterpret_cast<char*>(terrain->heightmap.heights.data()),
-                  static_cast<std::streamsize>(heightCount * sizeof(float)));
+        const uint64_t heightCount = static_cast<uint64_t>(hmWidth) * static_cast<uint64_t>(hmHeight);
+        if (heightCount * sizeof(float) > reader.Remaining())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Truncated terrain heightmap in %s", filePath.c_str());
+            return false;
+        }
+        terrain->heightmap.heights.resize(static_cast<size_t>(heightCount));
+        reader.ReadBytes(terrain->heightmap.heights.data(), heightCount * sizeof(float));
 
         uint32_t layerCount = 0;
-        file.read(reinterpret_cast<char*>(&layerCount), sizeof(layerCount));
-        for (uint32_t i = 0; i < layerCount && i < 64; ++i)
+        reader.ReadU32(layerCount);
+        if (reader.Failed() || layerCount > Format::kMaxTextureLayers)
         {
-            uint32_t lnameLen = 0;
-            file.read(reinterpret_cast<char*>(&lnameLen), sizeof(lnameLen));
-            if (lnameLen > 4096)
-                break;
-            std::string lname(lnameLen, '\0');
-            file.read(lname.data(), lnameLen);
-            terrain->AddTextureLayer(lname);
-        }
-
-        file.read(reinterpret_cast<char*>(&terrain->splatmapResolution), sizeof(int));
-        size_t splatSize = static_cast<size_t>(terrain->splatmapResolution) * terrain->splatmapResolution * 4;
-        terrain->splatmaps.resize(splatSize);
-        if (splatSize > 0)
-        {
-            file.read(reinterpret_cast<char*>(terrain->splatmaps.data()), static_cast<std::streamsize>(splatSize));
-        }
-
-        if (!file.good())
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Rejected terrain layer count %u in %s", layerCount,
+                            filePath.c_str());
             return false;
+        }
+        for (uint32_t i = 0; i < layerCount && !reader.Failed(); ++i)
+        {
+            std::string layerName;
+            reader.ReadString(layerName);
+            TerrainTextureLayer* layer = terrain->AddTextureLayer(layerName);
+            if (!layer)
+                return false;
+            reader.ReadString(layer->diffuseTexture);
+            reader.ReadString(layer->normalTexture);
+            reader.ReadString(layer->maskTexture);
+            reader.ReadF32(layer->tiling.x);
+            reader.ReadF32(layer->tiling.y);
+            reader.ReadF32(layer->offset.x);
+            reader.ReadF32(layer->offset.y);
+            reader.ReadF32(layer->opacity);
+            reader.ReadF32(layer->metallic);
+            reader.ReadF32(layer->roughness);
+            reader.ReadF32(layer->normalStrength);
+        }
+
+        int32_t splatRes = 0;
+        reader.ReadI32(splatRes);
+        if (reader.Failed() || splatRes < 0 || splatRes > Format::kMaxSplatmapResolution)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Rejected terrain splatmap resolution %d in %s", splatRes,
+                            filePath.c_str());
+            return false;
+        }
+        terrain->splatmapResolution = splatRes;
+        const uint64_t splatSize = static_cast<uint64_t>(splatRes) * static_cast<uint64_t>(splatRes) * 4u;
+        if (splatSize > reader.Remaining())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Truncated terrain splatmap in %s", filePath.c_str());
+            return false;
+        }
+        terrain->splatmaps.resize(static_cast<size_t>(splatSize));
+        reader.ReadBytes(terrain->splatmaps.data(), splatSize);
+
+        uint32_t detailMeshCount = 0;
+        reader.ReadU32(detailMeshCount);
+        if (reader.Failed() || detailMeshCount > Format::kMaxDetailMeshes)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Rejected terrain detail mesh count %u in %s", detailMeshCount,
+                            filePath.c_str());
+            return false;
+        }
+        terrain->detailInstances.resize(detailMeshCount);
+        for (uint32_t i = 0; i < detailMeshCount && !reader.Failed(); ++i)
+        {
+            auto mesh = std::make_unique<TerrainDetailMesh>();
+            reader.ReadString(mesh->name);
+            reader.ReadString(mesh->meshPath);
+            reader.ReadString(mesh->materialPath);
+            reader.ReadF32(mesh->density);
+            reader.ReadF32(mesh->viewDistance);
+
+            uint32_t instanceCount = 0;
+            reader.ReadU32(instanceCount);
+            if (reader.Failed() || instanceCount > Format::kMaxDetailInstancesPerMesh)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Rejected terrain detail instance count %u in %s",
+                                instanceCount, filePath.c_str());
+                return false;
+            }
+            const uint64_t instanceBytes = static_cast<uint64_t>(instanceCount) * sizeof(XMFLOAT3);
+            if (instanceBytes > reader.Remaining())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Truncated terrain detail instances in %s",
+                                filePath.c_str());
+                return false;
+            }
+            auto& instances = terrain->detailInstances[i];
+            instances.resize(instanceCount);
+            if (instanceCount > 0)
+                reader.ReadBytes(instances.data(), instanceBytes);
+
+            terrain->detailMeshes.push_back(std::move(mesh));
+        }
+
+        if (reader.Failed())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to parse terrain file: %s", filePath.c_str());
+            return false;
+        }
 
         m_currentTerrain = std::move(terrain);
+        m_terrainFilePath = filePath;
         m_undoStack.clear();
         m_redoStack.clear();
+        RefreshPathBuffers();
         UpdateTerrainMesh();
         UpdateTerrainCollision();
         SetModified(false);
         return true;
+    }
+
+    std::string TerrainEditor::DefaultTerrainPath(const std::string& terrainName)
+    {
+        std::string safeName;
+        safeName.reserve(terrainName.size());
+        for (char c : terrainName)
+            safeName.push_back((c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' ||
+                                c == '>' || c == '|')
+                                   ? '_'
+                                   : c);
+        if (safeName.empty())
+            safeName = "terrain";
+        return "Assets/Terrains/" + safeName + ".sparkterrain";
     }
 
     bool TerrainEditor::SaveTerrain(const std::string& filePath)
@@ -209,6 +362,91 @@ namespace SparkEditor
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving terrain '%s' to: %s", m_currentTerrain->name.c_str(),
                        filePath.c_str());
+
+        // The readers enforce the SparkTerrain limits and read exactly width*height heights and
+        // splatRes*splatRes*4 splat bytes. Writing anything else produces a file that saves cleanly
+        // and can never be loaded, so the same limits are enforced here, before a byte is written.
+        const TerrainHeightmap& heightmap = m_currentTerrain->heightmap;
+        if (heightmap.width < Format::kMinHeightmapResolution || heightmap.width > Format::kMaxHeightmapResolution ||
+            heightmap.height < Format::kMinHeightmapResolution || heightmap.height > Format::kMaxHeightmapResolution)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Refusing to save terrain: heightmap %dx%d is outside the supported range [%d, %d]",
+                            heightmap.width, heightmap.height, Format::kMinHeightmapResolution,
+                            Format::kMaxHeightmapResolution);
+            return false;
+        }
+
+        const uint64_t expectedHeights =
+            static_cast<uint64_t>(heightmap.width) * static_cast<uint64_t>(heightmap.height);
+        if (static_cast<uint64_t>(heightmap.heights.size()) != expectedHeights)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Refusing to save terrain: heightmap holds %zu samples but declares %dx%d",
+                            heightmap.heights.size(), heightmap.width, heightmap.height);
+            return false;
+        }
+
+        if (m_currentTerrain->textureLayers.size() > Format::kMaxTextureLayers)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Refusing to save terrain: %zu texture layers exceeds the format limit of %u",
+                            m_currentTerrain->textureLayers.size(), Format::kMaxTextureLayers);
+            return false;
+        }
+
+        if (m_currentTerrain->splatmapResolution < 0 ||
+            m_currentTerrain->splatmapResolution > Format::kMaxSplatmapResolution)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Refusing to save terrain: splatmap resolution %d is outside [0, %d]",
+                            m_currentTerrain->splatmapResolution, Format::kMaxSplatmapResolution);
+            return false;
+        }
+
+        const uint64_t expectedSplatBytes = static_cast<uint64_t>(m_currentTerrain->splatmapResolution) *
+                                            static_cast<uint64_t>(m_currentTerrain->splatmapResolution) * 4u;
+        if (static_cast<uint64_t>(m_currentTerrain->splatmaps.size()) != expectedSplatBytes)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Refusing to save terrain: splatmap holds %zu bytes but resolution %d requires %llu",
+                            m_currentTerrain->splatmaps.size(), m_currentTerrain->splatmapResolution,
+                            static_cast<unsigned long long>(expectedSplatBytes));
+            return false;
+        }
+
+        if (m_currentTerrain->detailMeshes.size() > Format::kMaxDetailMeshes)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Refusing to save terrain: %zu detail meshes exceeds the format limit of %u",
+                            m_currentTerrain->detailMeshes.size(), Format::kMaxDetailMeshes);
+            return false;
+        }
+
+        for (const auto& instances : m_currentTerrain->detailInstances)
+        {
+            if (instances.size() > Format::kMaxDetailInstancesPerMesh)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                                "Refusing to save terrain: %zu detail instances exceeds the format limit of %u",
+                                instances.size(), Format::kMaxDetailInstancesPerMesh);
+                return false;
+            }
+        }
+
+        const std::filesystem::path target(filePath);
+        if (target.has_parent_path() && !target.parent_path().empty())
+        {
+            std::error_code createError;
+            std::filesystem::create_directories(target.parent_path(), createError);
+            if (createError)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create terrain directory '%s': %s",
+                                target.parent_path().string().c_str(), createError.message().c_str());
+                return false;
+            }
+        }
+
         std::ofstream file(filePath, std::ios::binary);
         if (!file.is_open())
         {
@@ -216,52 +454,93 @@ namespace SparkEditor
             return false;
         }
 
-        uint32_t magic = 0x53504B54; // 'SPKT'
-        file.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
+        WriteU32(file, Format::kMagic);
+        WriteU32(file, Format::kVersion);
 
-        auto nameLen = static_cast<uint32_t>(m_currentTerrain->name.size());
-        file.write(reinterpret_cast<const char*>(&nameLen), sizeof(nameLen));
-        file.write(m_currentTerrain->name.data(), nameLen);
+        WriteString(file, m_currentTerrain->name);
+        WriteF32(file, m_currentTerrain->size);
+        WriteF32(file, m_currentTerrain->position.x);
+        WriteF32(file, m_currentTerrain->position.y);
+        WriteF32(file, m_currentTerrain->position.z);
+        WriteI32(file, m_currentTerrain->lodLevels);
+        WriteF32(file, m_currentTerrain->lodBias);
+        WriteU8(file, m_currentTerrain->generateCollider ? 1u : 0u);
 
-        file.write(reinterpret_cast<const char*>(&m_currentTerrain->size), sizeof(float));
-        file.write(reinterpret_cast<const char*>(&m_currentTerrain->position), sizeof(XMFLOAT3));
-        file.write(reinterpret_cast<const char*>(&m_currentTerrain->lodLevels), sizeof(int));
-        file.write(reinterpret_cast<const char*>(&m_currentTerrain->lodBias), sizeof(float));
-        file.write(reinterpret_cast<const char*>(&m_currentTerrain->generateCollider), sizeof(bool));
+        WriteI32(file, m_currentTerrain->heightmap.width);
+        WriteI32(file, m_currentTerrain->heightmap.height);
+        WriteF32(file, m_currentTerrain->heightmap.scale);
+        WriteF32(file, m_currentTerrain->heightmap.minHeight);
+        WriteF32(file, m_currentTerrain->heightmap.maxHeight);
 
-        file.write(reinterpret_cast<const char*>(&m_currentTerrain->heightmap.width), sizeof(int));
-        file.write(reinterpret_cast<const char*>(&m_currentTerrain->heightmap.height), sizeof(int));
-        file.write(reinterpret_cast<const char*>(&m_currentTerrain->heightmap.scale), sizeof(float));
-        file.write(reinterpret_cast<const char*>(&m_currentTerrain->heightmap.minHeight), sizeof(float));
-        file.write(reinterpret_cast<const char*>(&m_currentTerrain->heightmap.maxHeight), sizeof(float));
+        // Exactly width*height floats: validated above, so the container and the header agree.
+        if (expectedHeights > 0)
+        {
+            file.write(reinterpret_cast<const char*>(heightmap.heights.data()),
+                       static_cast<std::streamsize>(expectedHeights * sizeof(float)));
+        }
 
-        size_t heightCount = m_currentTerrain->heightmap.heights.size();
-        file.write(reinterpret_cast<const char*>(m_currentTerrain->heightmap.heights.data()),
-                   static_cast<std::streamsize>(heightCount * sizeof(float)));
-
-        auto layerCount = static_cast<uint32_t>(m_currentTerrain->textureLayers.size());
-        file.write(reinterpret_cast<const char*>(&layerCount), sizeof(layerCount));
+        WriteU32(file, static_cast<uint32_t>(m_currentTerrain->textureLayers.size()));
         for (const auto& layer : m_currentTerrain->textureLayers)
         {
-            auto lnameLen = static_cast<uint32_t>(layer->name.size());
-            file.write(reinterpret_cast<const char*>(&lnameLen), sizeof(lnameLen));
-            file.write(layer->name.data(), lnameLen);
+            WriteString(file, layer->name);
+            WriteString(file, layer->diffuseTexture);
+            WriteString(file, layer->normalTexture);
+            WriteString(file, layer->maskTexture);
+            WriteF32(file, layer->tiling.x);
+            WriteF32(file, layer->tiling.y);
+            WriteF32(file, layer->offset.x);
+            WriteF32(file, layer->offset.y);
+            WriteF32(file, layer->opacity);
+            WriteF32(file, layer->metallic);
+            WriteF32(file, layer->roughness);
+            WriteF32(file, layer->normalStrength);
         }
 
-        file.write(reinterpret_cast<const char*>(&m_currentTerrain->splatmapResolution), sizeof(int));
-        if (!m_currentTerrain->splatmaps.empty())
+        WriteI32(file, m_currentTerrain->splatmapResolution);
+        // Exactly splatRes*splatRes*4 bytes: validated above.
+        if (expectedSplatBytes > 0)
         {
             file.write(reinterpret_cast<const char*>(m_currentTerrain->splatmaps.data()),
-                       static_cast<std::streamsize>(m_currentTerrain->splatmaps.size()));
+                       static_cast<std::streamsize>(expectedSplatBytes));
         }
 
+        WriteU32(file, static_cast<uint32_t>(m_currentTerrain->detailMeshes.size()));
+        for (size_t i = 0; i < m_currentTerrain->detailMeshes.size(); ++i)
+        {
+            const auto& mesh = m_currentTerrain->detailMeshes[i];
+            WriteString(file, mesh->name);
+            WriteString(file, mesh->meshPath);
+            WriteString(file, mesh->materialPath);
+            WriteF32(file, mesh->density);
+            WriteF32(file, mesh->viewDistance);
+
+            const std::vector<XMFLOAT3> empty;
+            const std::vector<XMFLOAT3>& instances =
+                i < m_currentTerrain->detailInstances.size() ? m_currentTerrain->detailInstances[i] : empty;
+            WriteU32(file, static_cast<uint32_t>(instances.size()));
+            if (!instances.empty())
+            {
+                file.write(reinterpret_cast<const char*>(instances.data()),
+                           static_cast<std::streamsize>(instances.size() * sizeof(XMFLOAT3)));
+            }
+        }
+
+        file.flush();
+        if (!file.good())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Terrain write failed: %s", filePath.c_str());
+            return false;
+        }
+
+        m_terrainFilePath = filePath;
+        RefreshPathBuffers();
         SetModified(false);
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Terrain saved to: %s (heightmap=%dx%d, layers=%zu, splatmap=%d)",
                        filePath.c_str(), m_currentTerrain->heightmap.width, m_currentTerrain->heightmap.height,
                        m_currentTerrain->textureLayers.size(), m_currentTerrain->splatmapResolution);
 
-        return file.good();
+        return true;
     }
 
     void TerrainEditor::PlaceDetailMeshes(int detailIndex, const XMFLOAT4& region, float density)
@@ -497,11 +776,12 @@ namespace SparkEditor
         tc.splatmap = m_currentTerrain->splatmaps;
         tc.splatmapResolution = m_currentTerrain->splatmapResolution;
 
-        // Copy texture layer paths
+        // Copy texture layer diffuse paths. The component field is a texture path, not a display name:
+        // pushing layer->name here made the runtime try to resolve textures called "Grass" or "New Layer".
         tc.textureLayerPaths.clear();
         for (const auto& layer : m_currentTerrain->textureLayers)
         {
-            tc.textureLayerPaths.push_back(layer->name);
+            tc.textureLayerPaths.push_back(layer->diffuseTexture);
         }
 
         // Mark dirty so TerrainSystem will push to ClipmapTerrain and rebuild meshes

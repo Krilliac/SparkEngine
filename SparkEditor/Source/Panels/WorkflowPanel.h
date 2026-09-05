@@ -40,6 +40,7 @@ namespace SparkEditor
         void RenderWorkflowList();
         void RenderActiveWorkflow();
         void RenderLogOutput();
+        void RenderConfirmationModal();
 
         void RunWorkflow(const EditorWorkflow& workflow);
 
@@ -51,6 +52,13 @@ namespace SparkEditor
         uint32_t m_currentStep = 0;
         uint32_t m_totalSteps = 0;
         std::vector<std::string> m_log;
+
+        /// @brief Name of a destructive workflow awaiting explicit confirmation.
+        std::string m_pendingConfirmWorkflow;
+        /// Whether the confirmation popup has been opened for m_pendingConfirmWorkflow. Without this
+        /// the panel re-opened the popup every frame after ImGui closed it (Escape), making it
+        /// impossible to dismiss with anything but the Cancel button.
+        bool m_confirmModalOpen = false;
     };
 
 } // namespace SparkEditor

@@ -36,7 +36,6 @@
 #include "../Panels/MaterialEditorPanel.h"
 #include "../Panels/BasicMaterialEditorPanel.h"
 #include "../Panels/PlayModeToolbarPanel.h"
-#include "../Panels/PostProcessingPanel.h"
 #include "../Panels/DialogueEditorPanel.h"
 #include "../Panels/AIDebugPanel.h"
 #include "../Panels/AIEditorPanel.h"
@@ -174,7 +173,6 @@ namespace SparkEditor
         tryRegister("BasicMaterialEditor", [&] { return std::make_shared<BasicMaterialEditorPanel>(); });
         tryRegister("TerrainEditor", [&] { return std::make_shared<TerrainEditor>(); });
 
-        tryRegister("PostProcessing", [&] { return std::make_shared<PostProcessingPanel>(); });
         tryRegister("DialogueEditor", [&] { return std::make_shared<DialogueEditorPanel>(); });
         tryRegister("AIEditor", [&] { return std::make_shared<AIEditorPanel>(); });
         tryRegister("AIDebug", [&] { return std::make_shared<AIDebugPanel>(); });

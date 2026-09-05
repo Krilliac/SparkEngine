@@ -67,13 +67,21 @@ namespace SparkEditor
 
         void Render() override
         {
+            // Without BeginPanel the widgets below land in ImGui's implicit fallback
+            // window instead of a dockable, titled panel like every other editor panel.
+            if (!BeginPanel())
+            {
+                EndPanel();
+                return;
+            }
+
             auto& csg = Spark::LevelDesign::CSGSystem::GetInstance();
-            // ImGui widgets call into the public API below. Placeholder
-            // implementation — live editor testing provides the real UI.
             RenderBrushCreation(csg);
             RenderBrushList(csg);
             RenderBuildControls(csg);
             RenderStatistics();
+
+            EndPanel();
         }
 
         void Shutdown() override { m_brushIds.clear(); }

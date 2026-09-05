@@ -177,9 +177,19 @@ namespace SparkEditor
 
         if (ImGui::Button(ICON_FA_SAVE " Save"))
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Project settings saved");
-            settings.Save();
-            m_modified = false;
+            // Save() reports whether the atomic write actually landed; a read-only or
+            // locked settings file must keep the dirty flag and surface the failure.
+            if (settings.Save())
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Project settings saved");
+                m_saveError.clear();
+                m_modified = false;
+            }
+            else
+            {
+                m_saveError = "Failed to save project settings (see log)";
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "%s", m_saveError.c_str());
+            }
         }
 
         ImGui::SameLine();
@@ -194,6 +204,12 @@ namespace SparkEditor
         {
             ImGui::SameLine();
             ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), ICON_FA_EXCLAMATION_TRIANGLE " Unsaved changes");
+        }
+
+        if (!m_saveError.empty())
+        {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1, 0.35f, 0.3f, 1), ICON_FA_EXCLAMATION_TRIANGLE " %s", m_saveError.c_str());
         }
     }
 

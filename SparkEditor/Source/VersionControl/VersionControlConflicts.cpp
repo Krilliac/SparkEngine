@@ -21,9 +21,11 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
+        if (IsOptionLike(filePath))
+            return {false, "File path may not start with '-': " + filePath, "", -1, 0.0f, {}};
+
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Locking file: %s", filePath.c_str());
-        std::string cmd = "git lfs lock \"" + filePath + "\"";
-        VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
+        VCSOperationResult result = ExecuteGit({"lfs", "lock", filePath}, m_repositoryInfo->path);
         if (result.success)
         {
             std::lock_guard<std::mutex> lock(m_statusMutex);
@@ -37,8 +39,10 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
-        std::string cmd = "git lfs unlock \"" + filePath + "\"";
-        VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
+        if (IsOptionLike(filePath))
+            return {false, "File path may not start with '-': " + filePath, "", -1, 0.0f, {}};
+
+        VCSOperationResult result = ExecuteGit({"lfs", "unlock", filePath}, m_repositoryInfo->path);
         if (result.success)
         {
             RefreshStatus();
@@ -55,14 +59,16 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return false;
 
+        if (IsOptionLike(conflict.filePath))
+            return false;
+
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Resolving merge conflict: %s (resolution=%s)",
                        conflict.filePath.c_str(), resolution.c_str());
         conflict.resolution = resolution;
         conflict.isResolved = true;
 
         // Stage the resolved file
-        std::string cmd = "git add \"" + conflict.filePath + "\"";
-        VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
+        VCSOperationResult result = ExecuteGit({"add", "--", conflict.filePath}, m_repositoryInfo->path);
         if (result.success)
         {
             // Remove from conflicts list

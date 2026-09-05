@@ -23,6 +23,11 @@ namespace SparkEditor
 
     ScriptDebugPanel::ScriptDebugPanel() : EditorPanel("Script Debugger", "ScriptDebugger") {}
 
+    ScriptDebugPanel::~ScriptDebugPanel()
+    {
+        ScriptDebugPanel::Shutdown();
+    }
+
     bool ScriptDebugPanel::Initialize()
     {
         s_activeDebugPanel = this;
@@ -77,7 +82,17 @@ namespace SparkEditor
         EndPanel();
     }
 
-    void ScriptDebugPanel::Shutdown() {}
+    void ScriptDebugPanel::Shutdown()
+    {
+        // The engine holds a raw function pointer that dispatches through s_activeDebugPanel;
+        // leaving it installed past our lifetime dereferences freed memory on the next trace.
+        if (s_activeDebugPanel == this)
+        {
+            ASSetDebugTraceCallback(nullptr);
+            s_activeDebugPanel = nullptr;
+        }
+        m_isInitialized = false;
+    }
 
     void ScriptDebugPanel::RenderToolbar()
     {

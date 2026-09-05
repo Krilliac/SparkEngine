@@ -17,6 +17,7 @@
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <iostream>
 
 namespace SparkEditor
@@ -208,7 +209,7 @@ namespace SparkEditor
                 // tracking the mouse outside the panel.
                 if (m_showGizmos)
                 {
-                    RenderTranslateGizmo(imagePos.x, imagePos.y, viewportSize.x, viewportSize.y, viewportHovered);
+                    RenderTransformGizmo(imagePos.x, imagePos.y, viewportSize.x, viewportSize.y, viewportHovered);
                 }
 #else
                 (void)imagePos;
@@ -273,7 +274,15 @@ namespace SparkEditor
 
     void SceneViewPanel::Shutdown()
     {
-        std::cout << "Shutting down Scene View panel\n";
+        // SelectionManager is a singleton that outlives the panels (EditorUI clears
+        // m_panels well before SelectionManager::Shutdown), so the callback capturing
+        // `this` must be removed here or a later selection change touches freed memory.
+        if (m_selectionMgrCallbackId != 0)
+        {
+            SelectionManager::GetInstance().RemoveCallback(m_selectionMgrCallbackId);
+            m_selectionMgrCallbackId = 0;
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Scene View panel shut down");
     }
 
     bool SceneViewPanel::HandleEvent(const std::string& eventType, void* eventData)
@@ -308,7 +317,29 @@ namespace SparkEditor
             if (active)
                 ImGui::PushStyleColor(ImGuiCol_Button, accentBlue);
             if (ImGui::Button(icon, btnDim))
-                m_gizmoMode = mode;
+            {
+                // EditorUI owns the tool selection (main toolbar, W/E/R, command
+                // palette); publish through it so every surface stays in sync.
+                if (m_selectionSink)
+                {
+                    switch (mode)
+                    {
+                    case GizmoMode::Move:
+                        m_selectionSink->SetTransformTool(EditorUI::TransformTool::Move);
+                        break;
+                    case GizmoMode::Rotate:
+                        m_selectionSink->SetTransformTool(EditorUI::TransformTool::Rotate);
+                        break;
+                    case GizmoMode::Scale:
+                        m_selectionSink->SetTransformTool(EditorUI::TransformTool::Scale);
+                        break;
+                    }
+                }
+                else
+                {
+                    SetGizmoMode(mode);
+                }
+            }
             if (active)
                 ImGui::PopStyleColor();
             if (ImGui::IsItemHovered())
@@ -835,20 +866,87 @@ namespace SparkEditor
             const float ey = point.y - (a.y + t * dy);
             return std::sqrt(ex * ex + ey * ey);
         }
+
+        /// Screen-space frame shared by the three transform gizmos.
+        struct GizmoScreenBasis
+        {
+            ImVec2 center{};
+            DirectX::XMFLOAT3 worldPosition{};
+            DirectX::XMFLOAT3 cameraPosition{};
+            float pixelsPerMeter = 0.0f;
+            std::function<bool(const DirectX::XMFLOAT3&, ImVec2&)> Project;
+        };
+
+        /// Project the entity's world origin and measure the on-screen size of one metre.
+        /// Returns false when the entity is behind the camera (nothing sensible to draw).
+        bool ComputeGizmoScreenBasis(const entt::registry& registry, const ::Transform& transform,
+                                     const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj, float imgX,
+                                     float imgY, float imgW, float imgH, GizmoScreenBasis& basis)
+        {
+            using namespace DirectX;
+
+            XMStoreFloat3(&basis.worldPosition,
+                          XMVector3TransformCoord(XMVectorZero(), transform.GetWorldMatrix(registry)));
+
+            const XMMATRIX invView = XMMatrixInverse(nullptr, view);
+            XMStoreFloat3(&basis.cameraPosition, invView.r[3]);
+
+            basis.Project = [imgX, imgY, imgW, imgH, proj, view](const XMFLOAT3& point, ImVec2& out) -> bool
+            {
+                const XMVECTOR projected = XMVector3Project(XMLoadFloat3(&point), imgX, imgY, imgW, imgH, 0.0f, 1.0f,
+                                                            proj, view, XMMatrixIdentity());
+                XMFLOAT3 stored;
+                XMStoreFloat3(&stored, projected);
+                out = ImVec2(stored.x, stored.y);
+                return stored.z > 0.0f && stored.z < 1.0f;
+            };
+
+            if (!basis.Project(basis.worldPosition, basis.center))
+            {
+                return false;
+            }
+
+            // Pixels spanned by one world metre along the camera-right axis, so the
+            // rotation rings keep a stable on-screen radius at any camera distance.
+            XMFLOAT3 cameraRight;
+            XMStoreFloat3(&cameraRight, XMVector3Normalize(invView.r[0]));
+            const XMFLOAT3 rightTip = {basis.worldPosition.x + cameraRight.x, basis.worldPosition.y + cameraRight.y,
+                                       basis.worldPosition.z + cameraRight.z};
+            ImVec2 rightScreen;
+            basis.Project(rightTip, rightScreen);
+            const float dx = rightScreen.x - basis.center.x;
+            const float dy = rightScreen.y - basis.center.y;
+            basis.pixelsPerMeter = std::sqrt(dx * dx + dy * dy);
+            return basis.pixelsPerMeter > 1e-3f;
+        }
     } // namespace
 
-    void SceneViewPanel::RenderTranslateGizmo(float imgX, float imgY, float imgW, float imgH, bool viewportHovered)
+    void SceneViewPanel::RenderTransformGizmo(float imgX, float imgY, float imgW, float imgH, bool viewportHovered)
     {
-        using namespace DirectX;
-
-        // Translation-only for W9 — Rotate/Scale toolbar modes keep their
-        // existing (no-op) behavior in the viewport.
-        if (m_gizmoMode != GizmoMode::Move || imgW <= 0.0f || imgH <= 0.0f)
+        if (imgW <= 0.0f || imgH <= 0.0f)
         {
             m_gizmoDragging = false;
             m_gizmoDragAxis = -1;
             return;
         }
+
+        switch (m_gizmoMode)
+        {
+        case GizmoMode::Move:
+            RenderTranslateGizmo(imgX, imgY, imgW, imgH, viewportHovered);
+            break;
+        case GizmoMode::Rotate:
+            RenderRotateGizmo(imgX, imgY, imgW, imgH, viewportHovered);
+            break;
+        case GizmoMode::Scale:
+            RenderScaleGizmo(imgX, imgY, imgW, imgH, viewportHovered);
+            break;
+        }
+    }
+
+    void SceneViewPanel::RenderTranslateGizmo(float imgX, float imgY, float imgW, float imgH, bool viewportHovered)
+    {
+        using namespace DirectX;
 
         const ::EntityID selected = GetSelectedWorldEntity();
         if (m_gizmoDragging && selected != m_gizmoDragEntity)
@@ -1014,8 +1112,7 @@ namespace SparkEditor
                     SceneEditTools::WorldDeltaToParentLocal(registry, *transform, worldDeltaVec);
 
                 // Live preview mutation; the single undo step is committed on
-                // release (same snapshot-at-drag-begin pattern GizmoSystem
-                // uses for the legacy SceneFile path).
+                // release from the snapshot captured at drag start.
                 transform->position = {m_dragStartLocalPos.x + localDelta.x, m_dragStartLocalPos.y + localDelta.y,
                                        m_dragStartLocalPos.z + localDelta.z};
             }
@@ -1064,6 +1161,354 @@ namespace SparkEditor
             m_gizmoDragEntity = entt::null;
         }
     }
+
+    void SceneViewPanel::RenderRotateGizmo(float imgX, float imgY, float imgW, float imgH, bool viewportHovered)
+    {
+        using namespace DirectX;
+
+        const ::EntityID selected = GetSelectedWorldEntity();
+        if (m_gizmoDragging && selected != m_gizmoDragEntity)
+        {
+            m_gizmoDragging = false;
+            m_gizmoDragAxis = -1;
+        }
+        if (selected == entt::null)
+        {
+            return;
+        }
+
+        entt::registry& registry = m_world->GetRegistry();
+        ::Transform* transform = registry.try_get<::Transform>(selected);
+        if (!transform)
+        {
+            return;
+        }
+
+        XMMATRIX view;
+        XMMATRIX proj;
+        ComputeCameraMatrices(view, proj);
+
+        GizmoScreenBasis basis;
+        if (!ComputeGizmoScreenBasis(registry, *transform, view, proj, imgX, imgY, imgW, imgH, basis))
+        {
+            return;
+        }
+
+        // Exact rotation axes of the stored Euler triple. Transform::GetLocalMatrix
+        // composes Rz(roll) * Rx(pitch) * Ry(yaw), so in parent space the yaw axis is
+        // world Y, the pitch axis is X rotated by yaw, and the roll axis is Z rotated
+        // by pitch then yaw. Dragging a ring therefore edits exactly the component the
+        // ring is drawn for, with no Euler decomposition.
+        const XMFLOAT3& euler = m_gizmoDragging ? m_dragStartRotation : transform->rotation;
+        const XMMATRIX yawMtx = XMMatrixRotationY(XMConvertToRadians(euler.y));
+        const XMMATRIX pitchYawMtx = XMMatrixRotationX(XMConvertToRadians(euler.x)) * yawMtx;
+        XMVECTOR axisParent[3] = {XMVector3TransformNormal(XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f), yawMtx),
+                                  XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f),
+                                  XMVector3TransformNormal(XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f), pitchYawMtx)};
+
+        // Lift the parent-space axes into world space so the rings match what the
+        // viewport shows for parented entities.
+        XMMATRIX parentRotation = XMMatrixIdentity();
+        if (transform->parent != entt::null && registry.valid(transform->parent))
+        {
+            if (const ::Transform* parentTransform = registry.try_get<::Transform>(transform->parent))
+            {
+                XMVECTOR parentScale;
+                XMVECTOR parentQuat;
+                XMVECTOR parentTranslation;
+                if (XMMatrixDecompose(&parentScale, &parentQuat, &parentTranslation,
+                                      parentTransform->GetWorldMatrix(registry)))
+                {
+                    parentRotation = XMMatrixRotationQuaternion(parentQuat);
+                }
+            }
+        }
+
+        constexpr int kRingSegments = 48;
+        constexpr float kRingRadiusPixels = 76.0f;
+        constexpr float kHitPixels = 7.0f;
+        constexpr float kRotationSnapDegrees = 15.0f;
+        const ImU32 kAxisColors[3] = {IM_COL32(230, 80, 80, 255), IM_COL32(80, 220, 80, 255),
+                                      IM_COL32(90, 110, 255, 255)};
+        const float ringRadius = kRingRadiusPixels / basis.pixelsPerMeter;
+
+        ImVec2 ringPoints[3][kRingSegments + 1];
+        bool ringVisible[3] = {false, false, false};
+        XMFLOAT3 worldAxis[3];
+        const ImVec2 mouse = ImGui::GetIO().MousePos;
+        int hover = -1;
+        float bestDist = kHitPixels;
+
+        for (int axis = 0; axis < 3; axis++)
+        {
+            const XMVECTOR axisWorldV = XMVector3Normalize(XMVector3TransformNormal(axisParent[axis], parentRotation));
+            XMStoreFloat3(&worldAxis[axis], axisWorldV);
+
+            // Any unit vector not parallel to the axis spans the ring plane with its cross products.
+            const XMVECTOR seed = std::abs(worldAxis[axis].y) > 0.9f ? XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f)
+                                                                     : XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+            const XMVECTOR u = XMVector3Normalize(XMVector3Cross(axisWorldV, seed));
+            const XMVECTOR v = XMVector3Cross(axisWorldV, u);
+
+            bool visible = true;
+            for (int i = 0; i <= kRingSegments; i++)
+            {
+                const float t = (2.0f * 3.14159265358979f * static_cast<float>(i)) / static_cast<float>(kRingSegments);
+                const XMVECTOR offset = XMVectorAdd(XMVectorScale(u, ringRadius * std::cos(t)),
+                                                    XMVectorScale(v, ringRadius * std::sin(t)));
+                XMFLOAT3 point;
+                XMStoreFloat3(&point, XMVectorAdd(XMLoadFloat3(&basis.worldPosition), offset));
+                if (!basis.Project(point, ringPoints[axis][i]))
+                {
+                    visible = false;
+                    break;
+                }
+            }
+            ringVisible[axis] = visible;
+            if (!visible)
+            {
+                continue;
+            }
+
+            for (int i = 0; i < kRingSegments; i++)
+            {
+                const float dist = PointToSegmentDistance(mouse, ringPoints[axis][i], ringPoints[axis][i + 1]);
+                if (dist < bestDist)
+                {
+                    bestDist = dist;
+                    hover = axis;
+                }
+            }
+        }
+
+        if (!m_gizmoDragging)
+        {
+            m_gizmoHoverAxis = viewportHovered ? hover : -1;
+        }
+
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        for (int axis = 0; axis < 3; axis++)
+        {
+            if (!ringVisible[axis])
+            {
+                continue;
+            }
+            const bool active = m_gizmoDragging && m_gizmoDragAxis == axis;
+            const bool hovered = !m_gizmoDragging && m_gizmoHoverAxis == axis;
+            const ImU32 color =
+                active ? IM_COL32(255, 230, 60, 255) : (hovered ? IM_COL32(255, 255, 255, 255) : kAxisColors[axis]);
+            drawList->AddPolyline(ringPoints[axis], kRingSegments + 1, color, 2.5f);
+        }
+        drawList->AddCircleFilled(basis.center, 3.5f, IM_COL32(255, 255, 255, 200));
+
+        if (!m_gizmoDragging && viewportHovered && m_gizmoHoverAxis >= 0 &&
+            ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            m_gizmoDragging = true;
+            m_gizmoDragAxis = m_gizmoHoverAxis;
+            m_gizmoDragEntity = selected;
+            m_dragStartRotation = transform->rotation;
+            m_dragStartScale = transform->scale;
+            m_dragStartScreenAngle = std::atan2(mouse.y - basis.center.y, mouse.x - basis.center.x);
+        }
+
+        if (!m_gizmoDragging)
+        {
+            return;
+        }
+
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+        {
+            const int axis = m_gizmoDragAxis;
+            if (axis >= 0 && axis < 3)
+            {
+                const float current = std::atan2(mouse.y - basis.center.y, mouse.x - basis.center.x);
+                float deltaScreen = current - m_dragStartScreenAngle;
+                while (deltaScreen > 3.14159265358979f)
+                    deltaScreen -= 2.0f * 3.14159265358979f;
+                while (deltaScreen < -3.14159265358979f)
+                    deltaScreen += 2.0f * 3.14159265358979f;
+
+                // ImGui's Y axis points down, so a right-handed rotation about an axis
+                // aimed at the camera reads as a decreasing screen angle.
+                const XMFLOAT3 toCamera = {basis.cameraPosition.x - basis.worldPosition.x,
+                                           basis.cameraPosition.y - basis.worldPosition.y,
+                                           basis.cameraPosition.z - basis.worldPosition.z};
+                const float facing = worldAxis[axis].x * toCamera.x + worldAxis[axis].y * toCamera.y +
+                                     worldAxis[axis].z * toCamera.z;
+                float degrees = XMConvertToDegrees(deltaScreen) * (facing > 0.0f ? -1.0f : 1.0f);
+                if (m_snapEnabled)
+                {
+                    degrees = std::round(degrees / kRotationSnapDegrees) * kRotationSnapDegrees;
+                }
+
+                XMFLOAT3 rotation = m_dragStartRotation;
+                (&rotation.x)[axis] += degrees;
+                transform->rotation = rotation;
+            }
+        }
+        else
+        {
+            // Commit the whole drag as one undoable command (the live preview above
+            // already wrote the new value; the command records both endpoints).
+            SceneEditTools::CommitEntityRotation(*m_world, m_gizmoDragEntity, m_dragStartRotation,
+                                                 transform->rotation);
+            m_gizmoDragging = false;
+            m_gizmoDragAxis = -1;
+            m_gizmoDragEntity = entt::null;
+        }
+    }
+
+    void SceneViewPanel::RenderScaleGizmo(float imgX, float imgY, float imgW, float imgH, bool viewportHovered)
+    {
+        using namespace DirectX;
+
+        const ::EntityID selected = GetSelectedWorldEntity();
+        if (m_gizmoDragging && selected != m_gizmoDragEntity)
+        {
+            m_gizmoDragging = false;
+            m_gizmoDragAxis = -1;
+        }
+        if (selected == entt::null)
+        {
+            return;
+        }
+
+        entt::registry& registry = m_world->GetRegistry();
+        ::Transform* transform = registry.try_get<::Transform>(selected);
+        if (!transform)
+        {
+            return;
+        }
+
+        XMMATRIX view;
+        XMMATRIX proj;
+        ComputeCameraMatrices(view, proj);
+
+        GizmoScreenBasis basis;
+        if (!ComputeGizmoScreenBasis(registry, *transform, view, proj, imgX, imgY, imgW, imgH, basis))
+        {
+            return;
+        }
+
+        constexpr float kAxisPixels = 70.0f;
+        constexpr float kHandlePixels = 5.0f;
+        constexpr float kHitPixels = 8.0f;
+        constexpr float kPixelsPerDoubling = 120.0f; ///< Drag distance that doubles the axis scale.
+        constexpr float kMinScale = 0.001f;
+        constexpr float kScaleSnap = 0.1f;
+        const XMFLOAT3 kAxisDirs[3] = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+        const ImU32 kAxisColors[3] = {IM_COL32(230, 80, 80, 255), IM_COL32(80, 220, 80, 255),
+                                      IM_COL32(90, 110, 255, 255)};
+
+        ImVec2 ends[3];
+        ImVec2 screenDirs[3];
+        int hover = -1;
+        float bestDist = kHitPixels;
+        const ImVec2 mouse = ImGui::GetIO().MousePos;
+
+        for (int i = 0; i < 3; i++)
+        {
+            const XMFLOAT3 tip = {basis.worldPosition.x + kAxisDirs[i].x, basis.worldPosition.y + kAxisDirs[i].y,
+                                  basis.worldPosition.z + kAxisDirs[i].z};
+            ImVec2 tipScreen;
+            basis.Project(tip, tipScreen);
+            const float dx = tipScreen.x - basis.center.x;
+            const float dy = tipScreen.y - basis.center.y;
+            const float len = std::sqrt(dx * dx + dy * dy);
+            if (len < 1e-3f)
+            {
+                ends[i] = basis.center;
+                screenDirs[i] = ImVec2(0.0f, 0.0f);
+                continue;
+            }
+            screenDirs[i] = ImVec2(dx / len, dy / len);
+            ends[i] = ImVec2(basis.center.x + screenDirs[i].x * kAxisPixels,
+                             basis.center.y + screenDirs[i].y * kAxisPixels);
+
+            const float dist = PointToSegmentDistance(mouse, basis.center, ends[i]);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                hover = i;
+            }
+        }
+
+        if (!m_gizmoDragging)
+        {
+            m_gizmoHoverAxis = viewportHovered ? hover : -1;
+        }
+
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        for (int i = 0; i < 3; i++)
+        {
+            if (screenDirs[i].x == 0.0f && screenDirs[i].y == 0.0f)
+            {
+                continue;
+            }
+            const bool active = m_gizmoDragging && m_gizmoDragAxis == i;
+            const bool hovered = !m_gizmoDragging && m_gizmoHoverAxis == i;
+            const ImU32 color =
+                active ? IM_COL32(255, 230, 60, 255) : (hovered ? IM_COL32(255, 255, 255, 255) : kAxisColors[i]);
+            drawList->AddLine(basis.center, ends[i], color, 2.5f);
+            // Box handle marks scale (as opposed to the translate gizmo's arrowhead).
+            drawList->AddRectFilled(ImVec2(ends[i].x - kHandlePixels, ends[i].y - kHandlePixels),
+                                    ImVec2(ends[i].x + kHandlePixels, ends[i].y + kHandlePixels), color);
+        }
+        drawList->AddCircleFilled(basis.center, 3.5f, IM_COL32(255, 255, 255, 200));
+
+        if (!m_gizmoDragging && viewportHovered && m_gizmoHoverAxis >= 0 &&
+            ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            m_gizmoDragging = true;
+            m_gizmoDragAxis = m_gizmoHoverAxis;
+            m_gizmoDragEntity = selected;
+            m_dragStartScale = transform->scale;
+            m_dragStartRotation = transform->rotation;
+            m_dragStartMouseX = mouse.x;
+            m_dragStartMouseY = mouse.y;
+        }
+
+        if (!m_gizmoDragging)
+        {
+            return;
+        }
+
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+        {
+            const int axis = m_gizmoDragAxis;
+            if (axis >= 0 && axis < 3 && (screenDirs[axis].x != 0.0f || screenDirs[axis].y != 0.0f))
+            {
+                const float mouseDx = mouse.x - m_dragStartMouseX;
+                const float mouseDy = mouse.y - m_dragStartMouseY;
+                const float alongPixels = mouseDx * screenDirs[axis].x + mouseDy * screenDirs[axis].y;
+                // Exponential response keeps the drag symmetric: the same pixel distance
+                // in each direction doubles or halves the axis scale.
+                const float factor = std::pow(2.0f, alongPixels / kPixelsPerDoubling);
+
+                XMFLOAT3 scale = m_dragStartScale;
+                float& component = (&scale.x)[axis];
+                component *= factor;
+                if (m_snapEnabled)
+                {
+                    component = std::round(component / kScaleSnap) * kScaleSnap;
+                }
+                if (std::abs(component) < kMinScale)
+                {
+                    component = component < 0.0f ? -kMinScale : kMinScale;
+                }
+                transform->scale = scale;
+            }
+        }
+        else
+        {
+            SceneEditTools::CommitEntityScale(*m_world, m_gizmoDragEntity, m_dragStartScale, transform->scale);
+            m_gizmoDragging = false;
+            m_gizmoDragAxis = -1;
+            m_gizmoDragEntity = entt::null;
+        }
+    }
+
 #endif
 
 } // namespace SparkEditor

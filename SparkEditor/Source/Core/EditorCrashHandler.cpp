@@ -179,11 +179,28 @@ namespace SparkEditor
 
     EditorCrashHandler::~EditorCrashHandler()
     {
-#ifndef _WIN32
+#ifdef _WIN32
+        // The POSIX branch already restored its handlers here; the Windows filter did not, so on any
+        // path that never reaches Shutdown() (early exit, a failure between Initialize and Shutdown, a
+        // tool that only calls Initialize) the filter survived into static destruction still pointing at
+        // ExceptionFilter, which then dereferenced this destroyed object through s_instance.
+        if (m_filterInstalled)
+        {
+            SetUnhandledExceptionFilter(m_previousFilter);
+            m_previousFilter = nullptr;
+            m_filterInstalled = false;
+        }
+#else
         RestorePosixSignalHandlers();
         CloseEmergencyCrashLog();
         g_handlingFatalSignal = 0;
 #endif
+        // The filter reads s_instance; this object is going away, so no later crash may reach it.
+        if (s_instance == this)
+        {
+            s_instance = nullptr;
+        }
+
         // Ensure safe shutdown
         m_shouldStopAutoSave = true;
 
@@ -213,7 +230,22 @@ namespace SparkEditor
         m_initialized = true;
         m_sessionStartTime = std::chrono::steady_clock::now();
 
-#ifndef _WIN32
+#ifdef _WIN32
+        // Without this the whole Windows crash path below (ExceptionFilter ->
+        // HandleCrashInternal -> dump/log/recovery.json) is unreachable and the
+        // editor dies through the default OS handler with nothing written.
+        std::error_code directoryError;
+        std::filesystem::create_directories(m_crashDirectory, directoryError);
+        if (directoryError)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "EditorCrashHandler: cannot create crash directory '%s': %s",
+                            m_crashDirectory.c_str(), directoryError.message().c_str());
+            m_initialized = false;
+            return false;
+        }
+        m_previousFilter = SetUnhandledExceptionFilter(&EditorCrashHandler::ExceptionFilter);
+        m_filterInstalled = true;
+#else
         // Open the emergency record before installing handlers. A fatal-signal
         // callback may only use async-signal-safe operations, so it cannot
         // create directories, allocate C++ objects, lock mutexes, or run the
@@ -291,7 +323,14 @@ namespace SparkEditor
 
         m_initialized = false;
         m_logger = nullptr;
-#ifndef _WIN32
+#ifdef _WIN32
+        if (m_filterInstalled)
+        {
+            SetUnhandledExceptionFilter(m_previousFilter);
+            m_previousFilter = nullptr;
+            m_filterInstalled = false;
+        }
+#else
         RestorePosixSignalHandlers();
         CloseEmergencyCrashLog();
 #endif

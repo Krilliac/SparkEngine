@@ -59,7 +59,7 @@ namespace SparkEditor
     {
       public:
         ScriptDebugPanel();
-        ~ScriptDebugPanel() override = default;
+        ~ScriptDebugPanel() override;
 
         bool Initialize() override;
         void Update(float deltaTime) override;

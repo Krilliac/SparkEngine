@@ -36,6 +36,15 @@ namespace SparkEditor
     class SceneViewPanel : public EditorPanel
     {
       public:
+        /// @brief Viewport transform tool. The toolbar buttons, the W/E/R hotkeys and
+        /// the command palette all drive this one value through SetGizmoMode().
+        enum class GizmoMode
+        {
+            Move,
+            Rotate,
+            Scale
+        };
+
         /**
      * @brief Constructor
      */
@@ -122,6 +131,29 @@ namespace SparkEditor
         /// @brief Set collaborative session for peer visualization in viewport
         void SetCollabSession(CollaborativeEditSession* session) { m_collabSession = session; }
 
+        /// @brief Select the active viewport transform tool. Cancels any in-flight drag
+        /// so a mode switch mid-drag cannot commit a command for the wrong tool.
+        void SetGizmoMode(GizmoMode mode)
+        {
+            if (m_gizmoMode == mode)
+                return;
+            m_gizmoMode = mode;
+            m_gizmoDragging = false;
+            m_gizmoDragAxis = -1;
+            m_gizmoHoverAxis = -1;
+            m_gizmoDragEntity = entt::null;
+        }
+
+        GizmoMode GetGizmoMode() const { return m_gizmoMode; }
+
+#ifdef _WIN32
+        /// @brief Counts measured by the last RenderWorldBasic() call in this viewport.
+        /// SceneStatisticsPanel publishes these as the editor's render statistics; without
+        /// them it can only say "Preview — not connected", because nothing else in the
+        /// editor measures what the viewport actually submitted.
+        const Spark::WorldBasicRenderStats& GetLastRenderStats() const { return m_lastRenderStats; }
+#endif
+
       private:
         void RenderToolbar();
         void RenderSceneContent();
@@ -138,7 +170,11 @@ namespace SparkEditor
         void AlignSelectedEntityToGround();
 #ifdef _WIN32
         void ComputeCameraMatrices(DirectX::XMMATRIX& view, DirectX::XMMATRIX& proj) const;
+        /// Dispatches to the translate/rotate/scale gizmo for the active tool mode.
+        void RenderTransformGizmo(float imgX, float imgY, float imgW, float imgH, bool viewportHovered);
         void RenderTranslateGizmo(float imgX, float imgY, float imgW, float imgH, bool viewportHovered);
+        void RenderRotateGizmo(float imgX, float imgY, float imgW, float imgH, bool viewportHovered);
+        void RenderScaleGizmo(float imgX, float imgY, float imgW, float imgH, bool viewportHovered);
 #endif
 
       private:
@@ -197,13 +233,7 @@ namespace SparkEditor
         };
         RenderMode m_renderMode = RenderMode::Shaded;
 
-        // Gizmo mode
-        enum class GizmoMode
-        {
-            Move,
-            Rotate,
-            Scale
-        };
+        // Gizmo mode (the enum is declared public — EditorUI drives it).
         GizmoMode m_gizmoMode = GizmoMode::Move;
 
         // Collaborative peer visualization
@@ -232,6 +262,9 @@ namespace SparkEditor
         ::EntityID m_gizmoDragEntity = entt::null;
         DirectX::XMFLOAT3 m_dragStartLocalPos = {0.0f, 0.0f, 0.0f};
         DirectX::XMFLOAT3 m_dragStartWorldPos = {0.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT3 m_dragStartRotation = {0.0f, 0.0f, 0.0f}; ///< Euler degrees at rotate-drag start.
+        DirectX::XMFLOAT3 m_dragStartScale = {1.0f, 1.0f, 1.0f};    ///< Local scale at scale-drag start.
+        float m_dragStartScreenAngle = 0.0f; ///< Mouse angle around the gizmo centre at rotate-drag start.
         float m_dragStartMouseX = 0.0f;
         float m_dragStartMouseY = 0.0f;
     };

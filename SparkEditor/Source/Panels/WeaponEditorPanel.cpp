@@ -7,13 +7,12 @@
 
 #include "WeaponEditorPanel.h"
 #include "../Core/EditorIcons.h"
-#include "../../../SparkEngine/Source/Utils/Validate.h"
-#include <imgui.h>
-#include <iostream>
-#include <cstdio>
-#include <cmath>
-#include <algorithm>
 #include "Utils/LogMacros.h"
+#include "Utils/Validate.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <imgui.h>
 
 namespace SparkEditor
 {
@@ -43,6 +42,7 @@ namespace SparkEditor
             {"Minigun", 13, 12.0f, 3000.0f, 200, 6.0f, 500.0f, 0.55f, 35.0f, false},
             {"Crossbow", 14, 90.0f, 80.0f, 1, 2.0f, 200.0f, 0.92f, 45.0f, false},
         };
+        m_baseline = m_weapons;
 
         return true;
     }
@@ -60,26 +60,18 @@ namespace SparkEditor
         if (BeginPanel())
         {
             // Toolbar
-            if (ImGui::Button(ICON_FA_SAVE " Save All"))
-            {
-                SaveAllWeapons();
-            }
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Save all weapon configurations");
-            ImGui::SameLine();
             if (ImGui::Button(ICON_FA_UNDO " Reset"))
             {
-                if (m_selectedWeapon >= 0 && m_selectedWeapon < (int)m_weapons.size())
-                {
-                    m_weapons[m_selectedWeapon].isModified = false;
-                }
+                ResetSelectedWeapon();
             }
             if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Reset selected weapon to defaults");
+                ImGui::SetTooltip("Restore the selected weapon's starting values");
             ImGui::SameLine();
             ImGui::Checkbox("Compare", &m_showComparison);
             ImGui::SameLine();
             ImGui::Checkbox("DPS Chart", &m_showDPSChart);
+            ImGui::TextDisabled("Balance calculator: these rows are not read or written by any game");
+            ImGui::TextDisabled("module, and edits are not persisted.");
             ImGui::Separator();
 
             // Layout: left list, right properties
@@ -463,18 +455,18 @@ namespace SparkEditor
         ImGui::EndChild();
     }
 
-    void WeaponEditorPanel::SaveAllWeapons()
+    bool WeaponEditorPanel::ResetSelectedWeapon()
     {
-        int savedCount = 0;
-        for (auto& w : m_weapons)
+        if (m_selectedWeapon < 0 || m_selectedWeapon >= static_cast<int>(m_weapons.size()) ||
+            m_weapons.size() != m_baseline.size())
         {
-            if (w.isModified)
-            {
-                w.isModified = false;
-                savedCount++;
-            }
+            return false;
         }
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saved %d modified weapon configuration(s)", savedCount);
+
+        const size_t index = static_cast<size_t>(m_selectedWeapon);
+        m_weapons[index] = m_baseline[index];
+        m_weapons[index].isModified = false;
+        return true;
     }
 
 } // namespace SparkEditor
