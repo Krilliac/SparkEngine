@@ -407,9 +407,11 @@ TEST(AudioEngineReal_DeviceLossIsDetectableRatherThanSilentFailure)
 {
     // XAUDIO2_E_DEVICE_INVALIDATED (0x88960004) is what every voice call returns
     // once the output device disappears; treating it as a generic failure is what
-    // left the engine permanently silent while only logging warnings.
-    EXPECT_TRUE(AudioEngine::IsDeviceLostResult(XAUDIO2_E_DEVICE_INVALIDATED));
-    EXPECT_TRUE(AudioEngine::IsDeviceLostResult(static_cast<HRESULT>(0x88960004L)));
+    // left the engine permanently silent while only logging warnings. The value is
+    // spelled out because this test also compiles on Linux, where xaudio2.h and
+    // its macro do not exist; the classifier under test is platform-neutral.
+    constexpr HRESULT kXAudio2DeviceInvalidated = static_cast<HRESULT>(0x88960004L);
+    EXPECT_TRUE(AudioEngine::IsDeviceLostResult(kXAudio2DeviceInvalidated));
     EXPECT_FALSE(AudioEngine::IsDeviceLostResult(static_cast<HRESULT>(0)));
     EXPECT_FALSE(AudioEngine::IsDeviceLostResult(static_cast<HRESULT>(0x80004005L)));
     // XAUDIO2_E_INVALID_CALL is a caller bug, not a vanished device: reporting it
