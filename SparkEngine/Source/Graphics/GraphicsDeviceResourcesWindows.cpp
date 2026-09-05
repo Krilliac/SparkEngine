@@ -46,11 +46,12 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
 
+    // Feature level 11_0 is the floor: every shader this renderer compiles targets
+    // Shader Model 5.0 (vs_5_0/ps_5_0), which a FL10.x device cannot create. Listing
+    // 10_x only converted a clean device-creation failure into a black screen later.
     D3D_FEATURE_LEVEL featureLevels[] = {
         D3D_FEATURE_LEVEL_11_1,
         D3D_FEATURE_LEVEL_11_0,
-        D3D_FEATURE_LEVEL_10_1,
-        D3D_FEATURE_LEVEL_10_0,
     };
 
     D3D_FEATURE_LEVEL featureLevel;

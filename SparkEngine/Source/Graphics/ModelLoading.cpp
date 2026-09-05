@@ -25,23 +25,27 @@
 // RENDERING HELPERS (cross-platform with platform guards)
 // ============================================================================
 
-void AssetPipeline::BindMesh(std::string_view meshPath)
+bool AssetPipeline::BindMesh(std::string_view meshPath)
 {
 #ifdef SPARK_PLATFORM_WINDOWS
     if (!m_context)
     {
-        return;
+        return false;
     }
 
     std::lock_guard<std::mutex> lock(m_assetsMutex);
 
+    // Every failure below clears the bound mesh: leaving the previous one in
+    // place would make DrawBoundMesh silently rasterize the wrong geometry
+    // with this command's transform, and the caller could not tell.
     auto it = m_assets.find(meshPath);
     if (it == m_assets.end() || !it->second || !it->second->IsLoaded())
     {
         SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
                        "BindMesh: asset '%.*s' is missing or not yet loaded", static_cast<int>(meshPath.size()),
                        meshPath.data());
-        return;
+        m_boundMeshAsset = nullptr;
+        return false;
     }
 
     auto* meshAsset = dynamic_cast<MeshAsset*>(it->second.get());
@@ -50,7 +54,8 @@ void AssetPipeline::BindMesh(std::string_view meshPath)
         SPARK_LOG_ONCE(Spark::LogLevel::Error, Spark::LogCategory::Graphics,
                        "BindMesh: asset '%.*s' is not a MeshAsset (wrong type for path)",
                        static_cast<int>(meshPath.size()), meshPath.data());
-        return;
+        m_boundMeshAsset = nullptr;
+        return false;
     }
 
     ID3D11Buffer* vertexBuffer = meshAsset->GetVertexBuffer();
@@ -60,7 +65,8 @@ void AssetPipeline::BindMesh(std::string_view meshPath)
         SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
                        "BindMesh: mesh '%.*s' has no GPU vertex/index buffers (CPU-only load?)",
                        static_cast<int>(meshPath.size()), meshPath.data());
-        return;
+        m_boundMeshAsset = nullptr;
+        return false;
     }
 
     constexpr UINT stride = sizeof(MeshAssetData::Vertex);
@@ -72,6 +78,7 @@ void AssetPipeline::BindMesh(std::string_view meshPath)
     // Mirror the non-Windows path and remember the bound mesh — lets
     // DrawBoundMesh draw the right one without re-scanning m_assets.
     m_boundMeshAsset = meshAsset;
+    return true;
 #else
     // Non-Windows: drive the `IRHICommandList` off the shared bridge.
     // m_context is a D3D11 stub and unused here; instead we look up the
@@ -85,22 +92,22 @@ void AssetPipeline::BindMesh(std::string_view meshPath)
 
     auto& rhi = Spark::Graphics::Detail::GetRHI();
     if (!rhi.initialized)
-        return;
+        return false;
 
     Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
     if (!cmd)
-        return;
+        return false;
 
     MeshAsset* meshAsset = nullptr;
     {
         std::lock_guard<std::mutex> lock(m_assetsMutex);
         auto it = m_assets.find(meshPath);
         if (it == m_assets.end() || !it->second || !it->second->IsLoaded())
-            return;
+            return false;
         meshAsset = dynamic_cast<MeshAsset*>(it->second.get());
     }
     if (!meshAsset)
-        return;
+        return false;
 
     Spark::RHI::IRHIBuffer* vb = meshAsset->GetRHIVertexBuffer();
     Spark::RHI::IRHIBuffer* ib = meshAsset->GetRHIIndexBuffer();
@@ -110,13 +117,14 @@ void AssetPipeline::BindMesh(std::string_view meshPath)
         // (e.g. async load happened before the bridge was up). Leave the
         // bound pointer null so DrawBoundMesh skips. Consumers that care
         // can retry via BuildRHIBuffersForMesh.
-        return;
+        return false;
     }
 
     cmd->SetVertexBuffer(vb, /*slot=*/0, /*offset=*/0);
     cmd->SetIndexBuffer(ib, /*offset=*/0);
     cmd->SetPrimitiveTopology(Spark::RHI::RHIPrimitiveTopology::TriangleList);
     m_boundMeshAsset = meshAsset;
+    return true;
 #endif
 }
 
@@ -206,30 +214,14 @@ void AssetPipeline::DrawBoundMesh()
         return;
     }
 
-    // Prefer the explicit bound-mesh pointer; fall back to the legacy
-    // "first loaded mesh" scan so existing Windows call sites that never
-    // set m_boundMeshAsset still behave.
+    // Draw exactly what BindMesh bound, or nothing. There used to be a
+    // "first loaded mesh in m_assets" fallback here; it turned a failed bind
+    // into a draw of unrelated geometry (with this command's transform) that
+    // no caller could detect. Every Windows call site pairs BindMesh with
+    // DrawBoundMesh, so a null bound mesh means the bind failed.
     if (m_boundMeshAsset && m_boundMeshAsset->GetIndexCount() > 0)
     {
         m_context->DrawIndexed(m_boundMeshAsset->GetIndexCount(), 0, 0);
-        return;
-    }
-
-    std::lock_guard<std::mutex> lock(m_assetsMutex);
-
-    for (const auto& [path, asset] : m_assets)
-    {
-        if (!asset || asset->GetType() != AssetType::Mesh || !asset->IsLoaded())
-        {
-            continue;
-        }
-
-        auto* meshAsset = dynamic_cast<MeshAsset*>(asset.get());
-        if (meshAsset && meshAsset->GetIndexCount() > 0)
-        {
-            m_context->DrawIndexed(meshAsset->GetIndexCount(), 0, 0);
-            return;
-        }
     }
 #else
     // Non-Windows: draw the mesh that BindMesh recorded via the RHI

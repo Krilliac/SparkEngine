@@ -149,6 +149,7 @@ void LightingSystem::Update(float deltaTime, const XMMATRIX& viewMatrix, const X
     m_lightDataArray.clear();
     m_lightDataArray.reserve(m_lights.size());
 
+    uint32_t lightIndex = 0;
     for (const auto& light : m_lights)
     {
         if (light && light->IsEnabled())
@@ -159,11 +160,34 @@ void LightingSystem::Update(float deltaTime, const XMMATRIX& viewMatrix, const X
             if (light->GetCastShadows())
             {
                 m_metrics.shadowCastingLights++;
+
+                // Reserve this light's tile in the cached shadow atlas. Nothing
+                // used to call RequestShadow, so the allocator reported an empty
+                // atlas every frame no matter how many shadow casters existed.
+                // Lights carry no static flag yet, so every request is dynamic —
+                // the atlas tracks occupancy, it does not skip any render.
+                Spark::Graphics::ShadowUpdateRequest shadowRequest;
+                shadowRequest.lightId = lightIndex;
+                shadowRequest.priority = light->GetIntensity();
+                shadowRequest.isStatic = false;
+                const XMFLOAT3& lightPosition = light->GetPosition();
+                const XMFLOAT3& lightDirection = light->GetDirection();
+                shadowRequest.posX = lightPosition.x;
+                shadowRequest.posY = lightPosition.y;
+                shadowRequest.posZ = lightPosition.z;
+                shadowRequest.dirX = lightDirection.x;
+                shadowRequest.dirY = lightDirection.y;
+                shadowRequest.dirZ = lightDirection.z;
+                shadowRequest.range = light->GetRange();
+                shadowRequest.spotAngle = light->GetSpotAngle();
+                m_shadowCache.RequestShadow(shadowRequest);
             }
 
             // Mark light as clean after processing
             light->SetClean();
         }
+
+        ++lightIndex;
     }
 
     // Perform frustum-based light culling if enabled
@@ -357,9 +381,14 @@ void LightingSystem::RenderShadowMaps(std::function<void(const XMMATRIX&, const 
     ComPtr<ID3D11DepthStencilView> originalDSV;
     m_context->OMGetRenderTargets(1, &originalRTV, &originalDSV);
 
-    // Render standard shadow maps for each shadow-casting light
+    // Render standard shadow maps for each shadow-casting light. `lightIndex`
+    // is the same identity LightingSystem::Update hands to the cached shadow
+    // atlas, so MarkRendered below closes the request/render loop.
+    uint32_t lightIndex = 0;
     for (const auto& light : m_lights)
     {
+        const uint32_t currentLightIndex = lightIndex++;
+
         if (!light || !light->IsEnabled() || !light->GetCastShadows())
         {
             continue;
@@ -434,10 +463,15 @@ void LightingSystem::RenderShadowMaps(std::function<void(const XMMATRIX&, const 
             }
             else
             {
-                // Standard shadow map: use the stored light/shadow matrices
+                // Standard shadow map: use the stored light/shadow matrices. UpdateShadowMaps
+                // guarantees lightMatrix * shadowMatrix is the light view-projection, so a
+                // directional light (whose lightMatrix is already combined) has an identity
+                // projection here and the depth pass never applies a second projection.
                 renderCallback(shadowMap.lightMatrix, shadowMap.shadowMatrix);
                 m_metrics.shadowMapUpdates++;
             }
+
+            m_shadowCache.MarkRendered(currentLightIndex);
         }
         catch (...)
         {

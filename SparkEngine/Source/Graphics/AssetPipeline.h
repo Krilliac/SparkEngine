@@ -335,6 +335,16 @@ class AssetCache
         size_t accessCount;
     };
 
+    /// Sum of GetMemoryUsage() over the cached entries. Caller holds m_mutex.
+    size_t CurrentMemoryLocked() const;
+    /// Drop the least recently accessed entry. Caller holds m_mutex.
+    void EvictLRULocked();
+
+    // Non-recursive on purpose. AddAsset() used to call the public
+    // GetCurrentMemory()/EvictLRU() while already holding this lock; MSVC's STL
+    // reports that re-lock as system_error(resource_deadlock_would_occur), so
+    // every synchronous AssetPipeline::LoadAsset() that reached the cache
+    // threw. Internal callers use the *Locked helpers above instead.
     mutable std::mutex m_mutex;
     std::unordered_map<std::string, CacheEntry> m_cache;
     size_t m_maxMemory;
@@ -414,8 +424,15 @@ class AssetPipeline
     // Rendering helpers (bind asset for drawing via graphics context)
     // string_view overloads are hot-path friendly: no temporary std::string is
     // constructed for lookup when the map uses transparent hashing (see m_assets).
-    void BindMesh(std::string_view meshPath);
+    /// Bind the mesh at @p meshPath for drawing.
+    /// @return true when the GPU vertex/index buffers were actually bound. On
+    ///         false the bound-mesh pointer is cleared, so a following
+    ///         DrawBoundMesh() draws nothing instead of rasterizing whatever was
+    ///         bound before. Callers that count draws must check this.
+    bool BindMesh(std::string_view meshPath);
     void BindMaterial(std::string_view materialPath);
+    /// Draw the mesh recorded by the last successful BindMesh(). No-op when the
+    /// last bind failed or nothing was ever bound.
     void DrawBoundMesh();
 
     // Non-Windows: uploads the freshly-loaded CPU-side mesh data

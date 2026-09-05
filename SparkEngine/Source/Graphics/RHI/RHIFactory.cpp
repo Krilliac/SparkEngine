@@ -17,6 +17,8 @@
 
 // Backend headers (conditionally included)
 #ifdef _WIN32
+#include <d3dcompiler.h>
+#include <wrl/client.h>
 #include "D3D11/D3D11Device.h"
 #ifndef SPARK_NO_D3D12
 #include "D3D12/D3D12Device.h"
@@ -285,6 +287,119 @@ namespace Spark
         // SHADER COMPILATION
         // ============================================================================
 
+#ifdef _WIN32
+        namespace
+        {
+            /// Profile prefix for the d3dcompiler shader profiles ("vs_5_0", ...).
+            /// Returns nullptr for stages d3dcompiler_47 cannot express (ray
+            /// tracing needs DXC lib_6_3, which is not integrated).
+            const char* GetD3DProfilePrefix(RHIShaderStage stage)
+            {
+                switch (stage)
+                {
+                case RHIShaderStage::Vertex:
+                    return "vs";
+                case RHIShaderStage::Pixel:
+                    return "ps";
+                case RHIShaderStage::Geometry:
+                    return "gs";
+                case RHIShaderStage::Hull:
+                    return "hs";
+                case RHIShaderStage::Domain:
+                    return "ds";
+                case RHIShaderStage::Compute:
+                    return "cs";
+                default:
+                    return nullptr;
+                }
+            }
+
+            /// Copy an ID3DBlob's payload as a NUL-terminated diagnostic string.
+            std::string BlobToText(ID3DBlob* blob)
+            {
+                if (blob == nullptr || blob->GetBufferSize() == 0)
+                    return {};
+
+                std::string text(static_cast<const char*>(blob->GetBufferPointer()), blob->GetBufferSize());
+                const size_t terminator = text.find('\0');
+                if (terminator != std::string::npos)
+                    text.resize(terminator);
+                return text;
+            }
+
+            /// Compile HLSL to DXBC with d3dcompiler_47. This is the only shader
+            /// compiler integrated into the engine; every other target fails closed.
+            ShaderCompileResult CompileHLSLToDXBC(const std::string& sourceCode, const ShaderCompileOptions& options)
+            {
+                ShaderCompileResult result;
+
+                const char* profilePrefix = GetD3DProfilePrefix(options.stage);
+                if (profilePrefix == nullptr)
+                {
+                    result.errorMessage = "d3dcompiler cannot compile ray tracing shaders "
+                                          "(requires DXC lib_6_3, not integrated)";
+                    return result;
+                }
+
+                // D3D12 accepts SM 5.1 through d3dcompiler; D3D11 caps at SM 5.0.
+                const std::string profile =
+                    std::string(profilePrefix) + (options.targetBackend == GraphicsBackend::D3D12 ? "_5_1" : "_5_0");
+
+                // Defines arrive as "NAME" or "NAME=VALUE". Fill the storage first so
+                // no c_str() taken below can be invalidated by a later reallocation.
+                std::vector<std::string> defineStorage;
+                defineStorage.reserve(options.defines.size() * 2);
+                for (const auto& define : options.defines)
+                {
+                    const size_t equals = define.find('=');
+                    defineStorage.push_back(equals == std::string::npos ? define : define.substr(0, equals));
+                    defineStorage.push_back(equals == std::string::npos ? std::string("1") : define.substr(equals + 1));
+                }
+
+                std::vector<D3D_SHADER_MACRO> macros;
+                macros.reserve(defineStorage.size() / 2 + 1);
+                for (size_t i = 0; i + 1 < defineStorage.size(); i += 2)
+                    macros.push_back({defineStorage[i].c_str(), defineStorage[i + 1].c_str()});
+                macros.push_back({nullptr, nullptr});
+
+                UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
+                flags |= options.optimizationEnabled ? D3DCOMPILE_OPTIMIZATION_LEVEL3 : D3DCOMPILE_SKIP_OPTIMIZATION;
+                if (options.debugInfoEnabled)
+                    flags |= D3DCOMPILE_DEBUG;
+
+                Microsoft::WRL::ComPtr<ID3DBlob> codeBlob;
+                Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+                const HRESULT hr =
+                    D3DCompile(sourceCode.data(), sourceCode.size(),
+                               options.sourceFile.empty() ? nullptr : options.sourceFile.c_str(), macros.data(),
+                               D3D_COMPILE_STANDARD_FILE_INCLUDE, options.entryPoint.c_str(), profile.c_str(), flags, 0,
+                               codeBlob.GetAddressOf(), errorBlob.GetAddressOf());
+
+                if (FAILED(hr) || !codeBlob)
+                {
+                    result.errorMessage = BlobToText(errorBlob.Get());
+                    if (result.errorMessage.empty())
+                        result.errorMessage = "D3DCompile failed for profile " + profile;
+                    return result;
+                }
+
+                result.warningMessage = BlobToText(errorBlob.Get());
+                if (!options.includePaths.empty())
+                {
+                    result.warningMessage += "\n-I search paths are not applied: the d3dcompiler include handler "
+                                             "resolves #include relative to the source file and the working directory";
+                }
+
+                const auto* bytes = static_cast<const uint8_t*>(codeBlob->GetBufferPointer());
+                result.bytecode.assign(bytes, bytes + codeBlob->GetBufferSize());
+                result.success = !result.bytecode.empty();
+                if (!result.success)
+                    result.errorMessage = "D3DCompile produced an empty blob for profile " + profile;
+                return result;
+            }
+        } // namespace
+#endif // _WIN32
+
         ShaderCompileResult CompileShader(const ShaderCompileOptions& options)
         {
             ShaderCompileResult result;
@@ -361,35 +476,53 @@ namespace Spark
                 return result;
             }
 
-            // Same language - passthrough
-            if (source == target && source != ShaderLanguage::SPIRV)
+            // HLSL in, HLSL out means "compile for a Direct3D backend". Copying the
+            // source bytes through would produce a .cso that is only text, so this
+            // path must reach a real compiler or fail — it must never report success
+            // for bytes nothing has parsed.
+            if (source == ShaderLanguage::HLSL && target == ShaderLanguage::HLSL)
+            {
+#ifdef _WIN32
+                return CompileHLSLToDXBC(sourceCode, options);
+#else
+                result.errorMessage = "HLSL compilation requires d3dcompiler (Windows only); "
+                                      "no HLSL compiler is integrated on this platform";
+                return result;
+#endif
+            }
+
+            // GLSL passthrough: the OpenGL driver compiles source text at load
+            // time, so for that backend the text is the artifact.
+            if (source == ShaderLanguage::GLSL && target == ShaderLanguage::GLSL)
             {
                 result.bytecode.assign(sourceCode.begin(), sourceCode.end());
                 result.success = true;
                 return result;
             }
 
-            // Cross-compilation paths
+            // Cross-compilation paths — none of these has a compiler integrated,
+            // so each reports the missing dependency by name instead of failing
+            // with an empty reason.
             if (source == ShaderLanguage::HLSL && target == ShaderLanguage::SPIRV)
             {
                 result.bytecode = CrossCompileHLSLtoSPIRV(sourceCode, options.stage, options.entryPoint);
                 result.success = !result.bytecode.empty();
+                if (!result.success)
+                    result.errorMessage = "HLSL->SPIR-V cross-compilation requires DXC (dxcompiler.dll); "
+                                          "not integrated";
             }
             else if (source == ShaderLanguage::HLSL && target == ShaderLanguage::GLSL)
             {
-                std::string glsl = CrossCompileHLSLtoGLSL(sourceCode, options.stage, options.entryPoint);
-                result.bytecode.assign(glsl.begin(), glsl.end());
-                result.success = !glsl.empty();
+                result.errorMessage = "HLSL->GLSL cross-compilation requires SPIRV-Cross; not integrated "
+                                      "(CrossCompileHLSLtoGLSL performs keyword substitution only and does not "
+                                      "produce compilable GLSL)";
             }
             else if (source == ShaderLanguage::GLSL && target == ShaderLanguage::SPIRV)
             {
                 result.bytecode = CompileGLSLtoSPIRV(sourceCode, options.stage, options.entryPoint);
                 result.success = !result.bytecode.empty();
-            }
-            else if (source == ShaderLanguage::GLSL && target == ShaderLanguage::GLSL)
-            {
-                result.bytecode.assign(sourceCode.begin(), sourceCode.end());
-                result.success = true;
+                if (!result.success)
+                    result.errorMessage = "GLSL->SPIR-V compilation requires glslang; not integrated";
             }
             else
             {
@@ -433,6 +566,34 @@ namespace Spark
 
         bool SaveCompiledShader(const std::string& filePath, const std::vector<uint8_t>& bytecode)
         {
+            if (bytecode.empty())
+                return false;
+
+            // A .cso must contain Direct3D bytecode. Refusing anything else keeps a
+            // failed or passthrough compile from shipping source text under a name
+            // the runtime and the packagers treat as compiled output.
+            if (filePath.size() >= 4)
+            {
+                std::string extension = filePath.substr(filePath.size() - 4);
+                std::transform(extension.begin(), extension.end(), extension.begin(),
+                               [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+                if (extension == ".cso")
+                {
+                    const bool isDirect3DBytecode =
+                        bytecode.size() >= 4 && ((bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'B' &&
+                                                  bytecode[3] == 'C') ||
+                                                 (bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'I' &&
+                                                  bytecode[3] == 'L'));
+                    if (!isDirect3DBytecode)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                       "SaveCompiledShader: refusing to write '%s': payload is not DXBC/DXIL",
+                                       filePath.c_str());
+                        return false;
+                    }
+                }
+            }
+
             std::ofstream file(filePath, std::ios::binary);
             if (!file.is_open())
                 return false;

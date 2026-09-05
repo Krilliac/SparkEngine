@@ -16,6 +16,7 @@
 #include "../RHIDevice.h"
 #include "../RHIDeviceBase.h"
 #include "../RHIResources.h"
+#include "../RHIValidationLayer.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11_1.h>
@@ -42,8 +43,10 @@ namespace Spark
             class D3D11Buffer : public IRHIBuffer
             {
               public:
-                D3D11Buffer(const RHIBufferDesc& desc, ComPtr<ID3D11Buffer> buffer);
-                ~D3D11Buffer() override = default;
+                D3D11Buffer(const RHIBufferDesc& desc, ComPtr<ID3D11Buffer> buffer,
+                            ComPtr<ID3D11ShaderResourceView> srv = nullptr,
+                            ComPtr<ID3D11UnorderedAccessView> uav = nullptr);
+                ~D3D11Buffer() override;
 
                 const std::string& GetDebugName() const override { return m_desc.debugName; }
                 void SetDebugName(const std::string& name) override { m_desc.debugName = name; }
@@ -56,9 +59,17 @@ namespace Spark
 
                 ID3D11Buffer* GetD3D11Buffer() const { return m_buffer.Get(); }
 
+                /// @brief Structured-buffer SRV, or nullptr when the buffer was not created with Structured usage.
+                ID3D11ShaderResourceView* GetD3D11SRV() const { return m_srv.Get(); }
+
+                /// @brief Read/write UAV, or nullptr when the buffer was not created with Storage usage.
+                ID3D11UnorderedAccessView* GetD3D11UAV() const { return m_uav.Get(); }
+
               private:
                 RHIBufferDesc m_desc;
                 ComPtr<ID3D11Buffer> m_buffer;
+                ComPtr<ID3D11ShaderResourceView> m_srv;
+                ComPtr<ID3D11UnorderedAccessView> m_uav;
             };
 
             class D3D11Texture : public IRHITexture
@@ -68,7 +79,7 @@ namespace Spark
                              ComPtr<ID3D11ShaderResourceView> srv = nullptr,
                              ComPtr<ID3D11RenderTargetView> rtv = nullptr,
                              ComPtr<ID3D11DepthStencilView> dsv = nullptr);
-                ~D3D11Texture() override = default;
+                ~D3D11Texture() override;
 
                 const std::string& GetDebugName() const override { return m_desc.debugName; }
                 void SetDebugName(const std::string& name) override { m_desc.debugName = name; }
@@ -204,6 +215,14 @@ namespace Spark
                 uint32_t GetHeight() const override { return m_desc.height; }
                 uint32_t GetCurrentBufferIndex() const override { return 0; }
 
+                /**
+                 * @brief True once DXGI creation and back-buffer view creation both succeeded.
+                 *
+                 * The constructor cannot report failure, so D3D11Device::CreateSwapChain
+                 * uses this to return nullptr instead of a live-but-unusable object.
+                 */
+                bool IsValid() const { return m_swapChain != nullptr && m_backBuffer != nullptr; }
+
               private:
                 bool CreateBackBufferViews();
 
@@ -220,7 +239,12 @@ namespace Spark
             class D3D11CommandList : public IRHICommandList
             {
               public:
+                /// @brief Wrap the device's immediate context (non-owning).
                 D3D11CommandList(ID3D11DeviceContext* context, bool isImmediate);
+
+                /// @brief Take ownership of a deferred context created by D3D11Device.
+                explicit D3D11CommandList(ComPtr<ID3D11DeviceContext> deferredContext);
+
                 ~D3D11CommandList() override = default;
 
                 void Begin() override;
@@ -263,9 +287,21 @@ namespace Spark
                 void EndEvent() override;
                 void SetMarker(const char* name) override;
 
+                /// @brief True when this list wraps the device's immediate context.
+                bool IsImmediate() const { return m_isImmediate; }
+
+                /// @brief Command list recorded by End() on a deferred list; nullptr until then.
+                ID3D11CommandList* GetRecordedCommandList() const { return m_recordedCommands.Get(); }
+
+                /// @brief Drop the recorded command list after D3D11Device::ExecuteCommandList submitted it.
+                void ReleaseRecordedCommandList() { m_recordedCommands.Reset(); }
+
               private:
-                ID3D11DeviceContext* m_context = nullptr; ///< Non-owning; lifetime tied to parent D3D11Device
+                /// Owning reference for deferred contexts; empty for the immediate context.
+                ComPtr<ID3D11DeviceContext> m_ownedContext;
+                ID3D11DeviceContext* m_context = nullptr;       ///< Immediate: parent device. Deferred: m_ownedContext
                 bool m_isImmediate;
+                ComPtr<ID3D11CommandList> m_recordedCommands;   ///< Result of FinishCommandList on a deferred list
                 IRHIPipelineState* m_currentPipeline = nullptr; ///< Last bound PSO for redundant bind elimination
             };
 

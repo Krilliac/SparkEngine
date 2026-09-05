@@ -303,16 +303,26 @@ void LightingSystem::UpdateShadowMaps(const XMMATRIX& viewMatrix, const XMMATRIX
 
                 if (cascade < m_csmShadowMap->cascades.size())
                 {
+                    // CalculateLightMatrix already returns view * projection for a directional
+                    // light, so the projection slot stays identity (see ShadowMap in
+                    // LightingSystem.h: lightMatrix * shadowMatrix is the light view-projection).
                     m_csmShadowMap->cascades[cascade].lightMatrix = cascadeLightMatrix;
-                    m_csmShadowMap->cascades[cascade].shadowMatrix = light->GetShadowMatrix();
+                    m_csmShadowMap->cascades[cascade].shadowMatrix = XMMatrixIdentity();
                 }
             }
         }
         else
         {
-            // Standard shadow map: calculate tight-fitting light matrix
+            // Standard shadow map: calculate tight-fitting light matrix.
+            // For directional lights CalculateLightMatrix returns a combined view * projection,
+            // so the projection slot must stay identity; every other light type stores a
+            // view-only matrix here and its own projection in shadowMatrix. The invariant the
+            // depth pass and the shadow constant buffer both rely on is
+            // lightMatrix * shadowMatrix == the light view-projection.
             it->second->lightMatrix = CalculateLightMatrix(*light, viewMatrix, projNear, projFar);
-            it->second->shadowMatrix = light->GetShadowMatrix();
+            it->second->shadowMatrix = (light->GetType() == LightType::Directional)
+                                           ? XMMatrixIdentity()
+                                           : light->GetShadowMatrix();
         }
     }
 }
