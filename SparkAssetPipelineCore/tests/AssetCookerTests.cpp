@@ -235,6 +235,55 @@ int main(int argc, char** argv)
     const bool concurrentPassed = childAResult == 0 && childBResult == 0 && !concurrentFirst.empty() &&
                                   concurrentFirst == concurrentSecond && std::filesystem::exists(concurrentManifest);
 
+    // Containment is decided on NORMALIZED paths. lexically_relative does not
+    // normalize, so <root>/a/../../escaped.json used to relativize to
+    // "a/../../escaped.json", whose FIRST component is "a" - an escape that a
+    // check inspecting only the front accepts. IsContained lives in an anonymous
+    // namespace, so it is exercised here through the public manifest target.
+    // These two cases cook into their OWN output root: a successful cook publishes
+    // by renaming a fresh generation over the output root, so sharing `output`
+    // here would delete the artifacts the assertions below still describe.
+    const auto traversalOutput = root / "traversal-output";
+    const auto unnormalizedEscape = traversalOutput / "a" / ".." / ".." / "escaped.json";
+    const auto escapeResult = Spark::AssetPipeline::CookAssets({source, traversalOutput, unnormalizedEscape, false});
+    const bool escapeRejected = !escapeResult.Succeeded() && !std::filesystem::exists(root / "escaped.json");
+
+    // The mirror case: a path that only *looks* like traversal but normalizes back
+    // inside the root must still be accepted, or the fix would be a denial of
+    // service dressed up as a security check.
+    const auto normalizedInside = traversalOutput / "a" / ".." / "inside-manifest.json";
+    const auto insideResult = Spark::AssetPipeline::CookAssets({source, traversalOutput, normalizedInside, false});
+    const bool insideAccepted =
+        insideResult.Succeeded() && std::filesystem::is_regular_file(traversalOutput / "inside-manifest.json");
+
+    // The two CookAssets cases above cannot distinguish the normalization fix: the
+    // cooker runs std::filesystem::absolute(...).lexically_normal() on the manifest
+    // candidate BEFORE containment is decided, so the un-normalized form never
+    // reaches the predicate and the pre-fix code rejected it just the same. Drive the
+    // predicate directly with inputs that are NOT already lexically normal, so these
+    // assertions can actually fail if the normalization is removed.
+    const std::filesystem::path containmentRoot = std::filesystem::path("C:/Build/Out").make_preferred();
+    const bool unnormalizedEscapeCaught =
+        !Spark::AssetPipeline::IsPathContained(containmentRoot / "a" / ".." / ".." / "escaped.json", containmentRoot);
+    const bool unnormalizedInsideAccepted =
+        Spark::AssetPipeline::IsPathContained(containmentRoot / "a" / ".." / "inside.json", containmentRoot);
+    const bool plainChildAccepted =
+        Spark::AssetPipeline::IsPathContained(containmentRoot / "nested" / "asset.bin", containmentRoot);
+    const bool siblingRejected = !Spark::AssetPipeline::IsPathContained(
+        std::filesystem::path("C:/Build/Outside/x.bin").make_preferred(), containmentRoot);
+#if defined(_WIN32)
+    // NTFS is case-insensitive while std::filesystem::path equality is not, so a
+    // differently-cased spelling of the same output root (a different CLI flag, a
+    // config file, a normalised-drive shell) used to relativize to an escaping
+    // "../../build/out/..." form and reject a legitimate target.
+    const bool caseInsensitiveAccepted = Spark::AssetPipeline::IsPathContained(
+        std::filesystem::path("C:/build/out/manifest.json").make_preferred(), containmentRoot);
+#else
+    const bool caseInsensitiveAccepted = true;
+#endif
+    const bool containmentPassed = unnormalizedEscapeCaught && unnormalizedInsideAccepted && plainChildAccepted &&
+                                   siblingRejected && caseInsensitiveAccepted;
+
     const auto asset = std::find_if(first.records.begin(), first.records.end(),
                                     [](const auto& record) { return record.path == "nested/asset.txt"; });
     const bool passed =
@@ -255,7 +304,8 @@ int main(int argc, char** argv)
         (!hardLinkAvailable ||
          (!throughHardLinkedManifest.Succeeded() && internalManifestBytes == "preserve-internal")) &&
         !wrongDigestAccepted && directBytes == "old bytes" && unicodePassed && controlFilenamePassed &&
-        aliasedOutputPassed && concurrentPassed && std::filesystem::is_regular_file(output / "nested" / "asset.txt");
+        aliasedOutputPassed && concurrentPassed && escapeRejected && insideAccepted && containmentPassed &&
+        std::filesystem::is_regular_file(output / "nested" / "asset.txt");
     if (!passed)
     {
         std::cerr << "Asset cooker deterministic/incremental contract failed\n"
@@ -273,6 +323,13 @@ int main(int argc, char** argv)
                   << " internalLinkedRejected="
                   << (!internalManifestLinkAvailable || !throughInternalManifestLink.Succeeded())
                   << " hardLinkedRejected=" << (!hardLinkAvailable || !throughHardLinkedManifest.Succeeded()) << "\n"
+                  << "unnormalizedEscapeRejected=" << escapeRejected
+                  << " normalizedInsideAccepted=" << insideAccepted << " insideError='"
+                  << insideResult.error << "'\n"
+                  << "containment: unnormalizedEscapeCaught=" << unnormalizedEscapeCaught
+                  << " unnormalizedInsideAccepted=" << unnormalizedInsideAccepted
+                  << " plainChildAccepted=" << plainChildAccepted << " siblingRejected=" << siblingRejected
+                  << " caseInsensitiveAccepted=" << caseInsensitiveAccepted << "\n"
                   << "unicode=" << unicodePassed << " control=" << controlFilenamePassed
                   << " aliasedOutput=" << aliasedOutputPassed << " children=" << childAResult << ',' << childBResult
                   << " concurrentFirst='" << concurrentFirst << "' concurrentSecond='" << concurrentSecond

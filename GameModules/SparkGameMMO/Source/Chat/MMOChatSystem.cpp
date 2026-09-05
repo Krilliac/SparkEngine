@@ -22,6 +22,21 @@
 
 namespace MMO
 {
+#ifdef ENABLE_NETWORKING
+    namespace
+    {
+        /// This module's chat payload is `uint8 channel` followed by two NetBuffer
+        /// strings (sender, text). The engine's built-in MessageType::ChatMessage
+        /// declares a single string at offset 0, so the module used to re-register
+        /// the BUILT-IN type's schema with stringFieldOffset = 1 — a process-wide
+        /// change to a shared type that was never restored on Shutdown, so every
+        /// other user of ChatMessage (and the engine itself after this module
+        /// unloaded) kept validating against the MMO layout. A module-owned layout
+        /// gets a module-owned message type in the UserDefined range instead.
+        constexpr Spark::Net::MessageType kMMOChatMessageType =
+            static_cast<Spark::Net::MessageType>(static_cast<uint16_t>(Spark::Net::MessageType::UserDefined) + 1u);
+    } // namespace
+#endif
 
     bool MMOChatSystem::Initialize(Spark::IEngineContext* context)
     {
@@ -59,7 +74,17 @@ namespace MMO
         if (!netMgr)
             return;
 
-        netMgr->RegisterHandler(Spark::Net::MessageType::ChatMessage,
+        // Register the module's OWN type, leaving the engine's built-in
+        // ChatMessage schema untouched (see kMMOChatMessageType above).
+        netMgr->GetPacketValidator().RegisterSchema(kMMOChatMessageType,
+                                                    {.minPayloadSize = 1,
+                                                     .maxPayloadSize = 1024,
+                                                     .requiresAuth = true,
+                                                     .allowedFromClient = true,
+                                                     .allowedFromServer = true,
+                                                     .stringFieldOffset = 1});
+
+        netMgr->RegisterHandler(kMMOChatMessageType,
                                 [this, netMgr](const Spark::Net::NetworkMessage& netMsg)
                                 {
                                     if (netMsg.payload.size() < 2)
@@ -136,7 +161,7 @@ namespace MMO
             buf.WriteString(text);
 
             Spark::Net::NetworkMessage netMsg;
-            netMsg.type = Spark::Net::MessageType::ChatMessage;
+            netMsg.type = kMMOChatMessageType;
             netMsg.channel = Spark::Net::ChannelType::ReliableOrdered;
             netMsg.payload = std::vector<uint8_t>(buf.GetData().begin(), buf.GetData().end());
 
@@ -172,7 +197,7 @@ namespace MMO
             // NetworkManager currently has one handler slot per message type and
             // no unregister API. Replace the DLL-owned callback before unload so
             // hot reload cannot invoke a lambda whose code/data have been freed.
-            netMgr->RegisterHandler(Spark::Net::MessageType::ChatMessage, [](const Spark::Net::NetworkMessage&) {});
+            netMgr->RegisterHandler(kMMOChatMessageType, [](const Spark::Net::NetworkMessage&) {});
         }
 #endif
         m_history.clear();

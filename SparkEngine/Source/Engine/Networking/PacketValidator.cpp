@@ -123,7 +123,7 @@ namespace Spark::Net
                                                   .requiresAuth = true,
                                                   .allowedFromClient = true,
                                                   .allowedFromServer = true,
-                                                  .sanitizeStrings = true});
+                                                  .stringFieldOffset = 0});
 
         RegisterSchema(MessageType::GameStateSync, {.minPayloadSize = 4,
                                                     .maxPayloadSize = 4096,
@@ -267,8 +267,49 @@ namespace Spark::Net
         }
         SPARK_BRANCH_GUARD_END("packet_direction_check")
 
+        // Text check — a schema that declares a string-field offset gets its text
+        // fields decoded and screened here. Without this the declaration is inert
+        // and rejectedBadString reads as "checked, none found" forever.
+        if (schema.stringFieldOffset != NO_STRING_FIELDS && !ValidateStringFields(msg.payload, schema.stringFieldOffset))
+        {
+            m_stats.totalRejected++;
+            m_stats.rejectedBadString++;
+            return {false, PacketViolation::BadString,
+                    std::format("Message type {} carries malformed or unsafe text",
+                                static_cast<uint16_t>(msg.type))};
+        }
+
         SPARK_VERIFY_CHECKPOINT("packet_validation_entry");
         return {true, PacketViolation::None, ""};
+    }
+
+    bool PacketValidator::ValidateStringFields(const std::vector<uint8_t>& payload, size_t offset) const
+    {
+        if (offset > payload.size())
+            return false;
+
+        size_t pos = offset;
+        while (pos < payload.size())
+        {
+            // NetBuffer::WriteString writes a uint16 little-endian length prefix.
+            if (payload.size() - pos < sizeof(uint16_t))
+                return false;
+
+            const size_t length =
+                static_cast<size_t>(payload[pos]) | (static_cast<size_t>(payload[pos + 1]) << 8);
+            pos += sizeof(uint16_t);
+
+            if (length > payload.size() - pos)
+                return false;
+
+            const std::string field(reinterpret_cast<const char*>(payload.data() + pos), length);
+            if (!ValidateString(field))
+                return false;
+
+            pos += length;
+        }
+
+        return true;
     }
 
     bool PacketValidator::ValidateString(const std::string& str) const
@@ -278,9 +319,13 @@ namespace Spark::Net
             return false;
         }
 
-        // Reject strings with control characters (except newline and tab)
-        for (char c : str)
+        // Reject strings with control characters (except newline and tab).
+        // The byte must be read UNSIGNED: `char` is signed on MSVC, so every
+        // UTF-8 continuation byte (>= 0x80) compares as negative, and screening
+        // would reject every non-ASCII chat line as a control character.
+        for (const char rawByte : str)
         {
+            const auto c = static_cast<unsigned char>(rawByte);
             if (c < 0x20 && c != '\n' && c != '\t' && c != '\r')
             {
                 return false;
@@ -304,8 +349,14 @@ namespace Spark::Net
         }
 
         // Remove control characters except newline, tab, carriage return
+        // Unsigned for the same reason as ValidateString: a signed char would
+        // classify every UTF-8 continuation byte as a control character.
         std::erase_if(str,
-                      [](char c) -> bool { return (c < 0x20 && c != '\n' && c != '\t' && c != '\r') || c == 0x7F; });
+                      [](const char ch) -> bool
+                      {
+                          const auto c = static_cast<unsigned char>(ch);
+                          return (c < 0x20 && c != '\n' && c != '\t' && c != '\r') || c == 0x7F;
+                      });
     }
 
     // ========================================================================

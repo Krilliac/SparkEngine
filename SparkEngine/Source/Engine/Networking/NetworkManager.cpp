@@ -17,6 +17,7 @@
 #include "../../Utils/SecureMemory.h"
 #include "../../Utils/Validate.h"
 #include <sstream>
+#include <cmath>
 #include <cstring>
 #include <algorithm>
 #include <thread>
@@ -31,6 +32,22 @@
 using namespace DirectX;
 namespace Spark::Net
 {
+
+    namespace
+    {
+        /// Rewinding further than the lag compensator keeps history for is not a
+        /// legitimate request. This is only the fallback ceiling on halfRTT; the
+        /// authoritative window is the compensator's own GetMaxHistoryDuration(),
+        /// which SetMaxHistoryDuration can change at runtime.
+        constexpr float MAX_LAG_COMPENSATION_SECONDS = 1.0f;
+
+        /// Hard ceiling on a client-declared hitscan range. Without it a client can
+        /// ask for 1e30 and reach every entity in the rewound snapshot.
+        constexpr float MAX_HIT_VALIDATION_DISTANCE = 10000.0f;
+
+        /// A ray direction shorter than this cannot be normalized meaningfully.
+        constexpr float MIN_HIT_DIRECTION_LENGTH_SQ = 1e-12f;
+    } // namespace
 
     NetworkMessage::NetworkMessage(NetworkMessage&& other) noexcept
         : type(other.type), channel(other.channel), senderID(other.senderID), sequence(other.sequence),
@@ -405,6 +422,13 @@ namespace Spark::Net
         outMsg.senderID = buf.ReadUint32();
         outMsg.sequence = buf.ReadUint32();
         outMsg.timestamp = buf.ReadFloat();
+        // The wire timestamp feeds lag compensation and interpolation. A NaN here
+        // poisons every comparison downstream, so refuse the packet at the boundary.
+        if (!std::isfinite(outMsg.timestamp))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Rejected packet with non-finite timestamp");
+            return false;
+        }
         uint32_t payloadLen = buf.ReadUint32();
 
         if (payloadLen > length || buf.GetReadPosition() > length - payloadLen)
@@ -964,7 +988,56 @@ namespace Spark::Net
     {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         HitValidationResult result;
-        float rewindTime = clientTimestamp - halfRTT;
+
+        // Every scalar below is client-supplied. Unchecked, a client can pass
+        // maxDistance = 1e30 to reach anything in the rewound snapshot, NaN to make
+        // every comparison false (a silent no-hit), or a halfRTT of its choosing to
+        // rewind arbitrarily far. This is the classic lag-compensation abuse surface.
+        if (!std::isfinite(clientTimestamp) || !std::isfinite(halfRTT) || !std::isfinite(maxDistance) ||
+            !std::isfinite(rayOrigin.x) || !std::isfinite(rayOrigin.y) || !std::isfinite(rayOrigin.z) ||
+            !std::isfinite(rayDirection.x) || !std::isfinite(rayDirection.y) || !std::isfinite(rayDirection.z))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "ValidateHit: rejected non-finite hit request");
+            return result;
+        }
+
+        const float directionLengthSq = rayDirection.x * rayDirection.x + rayDirection.y * rayDirection.y +
+                                        rayDirection.z * rayDirection.z;
+        if (directionLengthSq < MIN_HIT_DIRECTION_LENGTH_SQ)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "ValidateHit: rejected degenerate ray direction");
+            return result;
+        }
+
+        halfRTT = std::clamp(halfRTT, 0.0f, MAX_LAG_COMPENSATION_SECONDS);
+        maxDistance = std::clamp(maxDistance, 0.0f, MAX_HIT_VALIDATION_DISTANCE);
+
+        const float rewindTime = clientTimestamp - halfRTT;
+
+        // clientTimestamp is client-supplied too, and clamping halfRTT alone does not
+        // bound it. RewindToTime falls back to "whichever snapshot we have" when the
+        // target lies outside the retained history, so an unbounded timestamp still
+        // lets a client select the oldest or newest snapshot at will — a shot fired
+        // against a world state the client never saw. Bound the rewind target against
+        // the server's own newest snapshot and the compensator's retained window.
+        float newestServerTime = 0.0f;
+        if (!m_lagCompensator.GetNewestSnapshotTime(newestServerTime))
+            return result;
+
+        // The retained window is the compensator's own setting (SetMaxHistoryDuration
+        // is public), not a duplicated constant: anything older than this simply is
+        // not in the history any more.
+        const float configuredWindow = m_lagCompensator.GetMaxHistoryDuration();
+        const float historyWindow = std::isfinite(configuredWindow) ? (std::max)(0.0f, configuredWindow) : 0.0f;
+        const float oldestValidTime = newestServerTime - historyWindow;
+        if (rewindTime > newestServerTime || rewindTime < oldestValidTime)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "ValidateHit: rejected out-of-window rewind target %.3f (server window [%.3f, %.3f])",
+                           static_cast<double>(rewindTime), static_cast<double>(oldestValidTime),
+                           static_cast<double>(newestServerTime));
+            return result;
+        }
 
         // Rewind to the client's perceived time
         HistorySnapshot rewoundSnapshot;
