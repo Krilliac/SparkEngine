@@ -5,8 +5,12 @@
 
 #include "FPSLocalProfile.h"
 
+#include <cctype>
+#include <cerrno>
 #include <charconv>
+#include <cstdlib>
 #include <string>
+#include <type_traits>
 
 namespace Spark
 {
@@ -15,6 +19,38 @@ namespace Spark
         std::string Key(const char* field)
         {
             return std::string(FPSLocalProfile::kKeyPrefix) + field;
+        }
+
+        /// @brief Parse the whole of @p text as a T; false on any trailing or leading junk.
+        template <typename T> bool ParseWhole(const std::string& text, T& outValue)
+        {
+            if constexpr (std::is_floating_point_v<T>)
+            {
+                // libc++ (Clang on Linux and macOS) still has no floating-point
+                // std::from_chars -- the overload is deleted -- so parse through
+                // strtod with the same strictness: the entire string, no leading
+                // whitespace (strtod would skip it), and no range error. The
+                // writer uses std::to_string, which formats under the same C
+                // locale strtod reads, so the decimal separator agrees.
+                if (text.empty() || std::isspace(static_cast<unsigned char>(text.front())) != 0)
+                    return false;
+                errno = 0;
+                char* end = nullptr;
+                const double value = std::strtod(text.c_str(), &end);
+                if (end != text.c_str() + text.size() || errno == ERANGE)
+                    return false;
+                outValue = static_cast<T>(value);
+                return true;
+            }
+            else
+            {
+                T parsed{};
+                const auto result = std::from_chars(text.data(), text.data() + text.size(), parsed);
+                if (result.ec != std::errc{} || result.ptr != text.data() + text.size())
+                    return false;
+                outValue = parsed;
+                return true;
+            }
         }
 
         /// @brief Parse one required field; reports the key that failed.
@@ -32,8 +68,7 @@ namespace Spark
 
             const std::string& text = entry->second;
             T parsed{};
-            const auto result = std::from_chars(text.data(), text.data() + text.size(), parsed);
-            if (result.ec != std::errc{} || result.ptr != text.data() + text.size())
+            if (!ParseWhole(text, parsed))
             {
                 outError = "unparseable value for '" + key + "': '" + text + "'";
                 return false;
