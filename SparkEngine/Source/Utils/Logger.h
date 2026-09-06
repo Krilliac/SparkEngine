@@ -440,6 +440,16 @@ namespace Spark
         size_t GetSinkCount() const;
 
         /**
+         * @brief Path of the file sink the last InstallDefaultSinks() opened, or
+         *        empty when none was installed or the sinks have since been
+         *        cleared/replaced.
+         *
+         * This is the truth signal for "is the engine log file still being
+         * written": a sink count says nothing about which sinks those are.
+         */
+        std::string GetInstalledLogFilePath() const;
+
+        /**
          * @brief Which destinations InstallDefaultSinks() should install
          */
         struct SinkSetup
@@ -640,7 +650,8 @@ namespace Spark
 
         // Sinks
         std::vector<std::unique_ptr<ILogSink>> m_sinks;
-        mutable std::mutex m_sinkMutex; ///< mutable: GetSinkCount() is const
+        std::string m_installedLogFilePath; ///< File opened by InstallDefaultSinks(); cleared with the sinks
+        mutable std::mutex m_sinkMutex;     ///< mutable: GetSinkCount() is const
 
         // Async queue
         std::queue<LogMessage> m_messageQueue;

@@ -2,6 +2,7 @@
 // FileSink and ConsoleSink. Exercises production types only; no reimplementation.
 
 #include "TestFramework.h"
+#include "ScopedLoggerBaseline.h"
 #include "Utils/Logger.h"
 #include "Utils/ConsoleSink.h"
 #include "Utils/SparkConsole.h"
@@ -34,6 +35,7 @@ namespace
 
 TEST(LoggerSinks_InstallDefaultSinksWritesEngineLogToFile)
 {
+    ScopedLoggerBaseline loggerBaseline;
     namespace fs = std::filesystem;
     const fs::path logDirectory = MakeUniqueLogDirectory();
 
@@ -70,6 +72,7 @@ TEST(LoggerSinks_InstallDefaultSinksWritesEngineLogToFile)
 
 TEST(LoggerSinks_FileSinkCanBeDeclined)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.ClearSinks();
     logger.Initialize(false);
@@ -86,6 +89,7 @@ TEST(LoggerSinks_FileSinkCanBeDeclined)
 
 TEST(LoggerSinks_FileSinkFailureIsAnnouncedNotSilentlyEmpty)
 {
+    ScopedLoggerBaseline loggerBaseline;
     namespace fs = std::filesystem;
 
     // A regular file where the sink wants a directory: create_directories() and
@@ -146,6 +150,7 @@ TEST(LoggerSinks_FileSinkFailureIsAnnouncedNotSilentlyEmpty)
 
 TEST(LoggerSinks_InstallDefaultSinksBridgesToSimpleConsole)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& console = Spark::SimpleConsole::GetInstance();
     const bool consoleWasInitialized = console.IsInitialized();
     if (!consoleWasInitialized)

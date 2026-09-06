@@ -397,6 +397,12 @@ TEST(LoadTest_FullEngine_3000Frames)
     if (!world || !eventBus)
         return;
 
+    // The load tests share one static World. Under CI's shuffled order another
+    // load test may have run first and legitimately left entities behind, so the
+    // leak check below compares against this test's own starting count, like
+    // every other load test in this file, instead of assuming an empty world.
+    const size_t baselineEntities = world->GetEntityCount();
+
     // Subscribe to load events
     int eventsReceived = 0;
     auto handle = eventBus->Subscribe<LoadTestEvent>([&](const LoadTestEvent&) { eventsReceived++; });
@@ -651,8 +657,9 @@ TEST(LoadTest_FullEngine_3000Frames)
     // Memory should not have leaked significantly (generous for ASan shadow memory)
     EXPECT_TRUE(memGrowthKB < 102400);
 
-    // Entity count should be back to baseline
-    EXPECT_EQ(world->GetEntityCount(), static_cast<size_t>(0));
+    // Entity count should be back to this test's baseline (every entity it
+    // created was destroyed; entities owned by earlier tests are not its leak).
+    EXPECT_EQ(world->GetEntityCount(), baselineEntities);
 
     handle.Unsubscribe();
 }

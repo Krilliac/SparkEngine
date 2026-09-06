@@ -203,9 +203,10 @@ namespace Spark::Core::Lifecycle
             // The latch alone is not proof: the Logger is a process-wide
             // singleton that anything (an editor panel, a tool, a test) can
             // ClearSinks() or Shutdown() behind this flag. Trusting the latch
-            // then hands out a log path nothing is writing to, so re-check the
-            // Logger itself and reinstall when it has been torn down.
-            if (logger.IsInitialized() && logger.GetSinkCount() > 0)
+            // then hands out a log path nothing is writing to, so ask the Logger
+            // whether the file sink this call opened is still installed (a sink
+            // count would accept a lone stderr sink) and reinstall otherwise.
+            if (logger.IsInitialized() && logger.GetInstalledLogFilePath() == runtime.engineLogPath)
                 return runtime.engineLogPath;
             runtime.logSinksInstalled = false;
             runtime.engineLogPath.clear();

@@ -167,7 +167,10 @@ namespace Spark::Graphics
             if (!m_initialized)
                 return {};
 
-            // Check in-memory cache (thread-safe)
+            // Check in-memory cache (thread-safe). The statistics live under the
+            // same mutex: CompileAsync fans Compile() out to std::async threads, and
+            // the unlocked `misses++` that used to sit here was a data race
+            // ThreadSanitizer reported from the cross-compiler tests.
             uint64_t hash = HashSource(source);
             CrossCompileCacheKey cacheKey = {hash, target, source.stage};
             {
@@ -178,8 +181,8 @@ namespace Spark::Graphics
                     m_cacheStats.hits++;
                     return it->second;
                 }
+                m_cacheStats.misses++;
             }
-            m_cacheStats.misses++;
 
             // Compile (no lock held — compilation is the slow path)
             CompiledShaderBlob result;
@@ -283,7 +286,11 @@ namespace Spark::Graphics
             float hitRate() const { return (hits + misses > 0) ? static_cast<float>(hits) / (hits + misses) : 0.0f; }
         };
 
-        CacheStats GetCacheStats() const { return m_cacheStats; }
+        CacheStats GetCacheStats() const
+        {
+            std::lock_guard lock(m_cacheMutex);
+            return m_cacheStats;
+        }
 
         /** @brief Clear the compilation cache */
         void ClearCache()
@@ -302,8 +309,8 @@ namespace Spark::Graphics
 
         std::string Console_GetStatus() const
         {
-            return "ShaderCrossCompiler: " + std::to_string(m_cache.size()) + " cached compilations" +
-                   " (hit rate: " + std::to_string(m_cacheStats.hitRate() * 100.0f) + "%)\n";
+            return "ShaderCrossCompiler: " + std::to_string(GetCacheSize()) + " cached compilations" +
+                   " (hit rate: " + std::to_string(GetCacheStats().hitRate() * 100.0f) + "%)\n";
         }
 
       private:

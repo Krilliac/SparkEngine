@@ -1,6 +1,7 @@
 // TestLogger.cpp - Tests for the unified logging system
 
 #include "TestFramework.h"
+#include "ScopedLoggerBaseline.h"
 #include "Utils/Logger.h"
 #include <vector>
 
@@ -59,6 +60,7 @@ TEST(Logger_StringToLogCategory)
 
 TEST(Logger_GlobalLevelFiltering)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.Initialize(false); // sync mode
 
@@ -82,6 +84,7 @@ TEST(Logger_GlobalLevelFiltering)
 
 TEST(Logger_CategoryLevelFiltering)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.Initialize(false);
 
@@ -109,6 +112,7 @@ TEST(Logger_CategoryLevelFiltering)
 
 TEST(Logger_CallbackSinkReceivesMessages)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.ClearSinks();
     logger.Initialize(false); // sync mode
@@ -135,6 +139,7 @@ TEST(Logger_CallbackSinkReceivesMessages)
 
 TEST(Logger_CallbackSinkFilteredByLevel)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.ClearSinks();
     logger.Initialize(false);
@@ -174,6 +179,7 @@ TEST(Logger_CallbackSinkFilteredByLevel)
 
 TEST(Logger_MultipleSinks)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.ClearSinks();
     logger.Initialize(false);
@@ -202,6 +208,7 @@ TEST(Logger_MultipleSinks)
 
 TEST(Logger_StackTraceLevelConfiguration)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.Initialize(false);
 

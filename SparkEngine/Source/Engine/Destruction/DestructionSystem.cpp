@@ -11,6 +11,20 @@
 #include <cmath>
 #include <sstream>
 
+namespace
+{
+    /// Look up an entity's DestructibleComponent without tripping World's
+    /// invalid-entity contract. Damage arrives with caller-supplied ids (gameplay,
+    /// network, stress tests); an id that no longer names a live entity is simply
+    /// "nothing destructible here", not an assertion.
+    Spark::DestructibleComponent* FindDestructible(World* world, entt::entity entity)
+    {
+        if (!world || !world->GetRegistry().valid(entity))
+            return nullptr;
+        return world->GetComponent<Spark::DestructibleComponent>(entity);
+    }
+} // namespace
+
 namespace Spark
 {
 
@@ -126,7 +140,7 @@ namespace Spark
         if (m_world)
         {
             auto entId = static_cast<entt::entity>(entityId);
-            auto* destComp = m_world->GetComponent<DestructibleComponent>(entId);
+            auto* destComp = FindDestructible(m_world, entId);
             if (destComp)
             {
                 patternName = destComp->patternName;
@@ -223,7 +237,7 @@ namespace Spark
         if (m_world)
         {
             auto entId = static_cast<entt::entity>(entityId);
-            if (auto* destComp = m_world->GetComponent<DestructibleComponent>(entId))
+            if (auto* destComp = FindDestructible(m_world, entId))
             {
                 destComp->health = 0.0f;
                 destComp->damageThreshold = 0.0f;

@@ -194,12 +194,19 @@ namespace Spark
     {
         std::lock_guard<std::mutex> lock(m_sinkMutex);
         m_sinks.clear();
+        m_installedLogFilePath.clear();
     }
 
     size_t Logger::GetSinkCount() const
     {
         std::lock_guard<std::mutex> lock(m_sinkMutex);
         return m_sinks.size();
+    }
+
+    std::string Logger::GetInstalledLogFilePath() const
+    {
+        std::lock_guard<std::mutex> lock(m_sinkMutex);
+        return m_installedLogFilePath;
     }
 
     std::string Logger::InstallDefaultSinks(const SinkSetup& setup, std::unique_ptr<ILogSink> consoleSink)
@@ -238,6 +245,7 @@ namespace Spark
             {
                 m_sinks.push_back(std::move(consoleSink));
             }
+            m_installedLogFilePath = logFilePath;
         }
 
         // "Not requested" and "could not be created" both return an empty path,
