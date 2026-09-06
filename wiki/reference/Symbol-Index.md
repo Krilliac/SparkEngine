@@ -50,8 +50,8 @@
 | `a` | function | GameModules | [TFVehicleHUD.cpp:L204](../../GameModules/SparkGameMMOFPS/Source/UI/TFVehicleHUD.cpp#L204) |  |
 | `a` | function | Tests | [TestBitFlags.cpp:L85](../../Tests/TestBitFlags.cpp#L85) |  |
 | `a` | function | Tests | [TestEditorAutomation.cpp:L77](../../Tests/TestEditorAutomation.cpp#L77) |  |
-| `a` | function | Tests | [TestEditorSubsystems.cpp:L2506](../../Tests/TestEditorSubsystems.cpp#L2506) |  |
-| `a` | function | Tests | [TestEditorSubsystems.cpp:L2516](../../Tests/TestEditorSubsystems.cpp#L2516) |  |
+| `a` | function | Tests | [TestEditorSubsystems.cpp:L2505](../../Tests/TestEditorSubsystems.cpp#L2505) |  |
+| `a` | function | Tests | [TestEditorSubsystems.cpp:L2515](../../Tests/TestEditorSubsystems.cpp#L2515) |  |
 | `a` | function | Tests | [TestServerMockClient.cpp:L557](../../Tests/TestServerMockClient.cpp#L557) |  |
 | `a` | function | Tests | [TestServerMockClient.cpp:L1023](../../Tests/TestServerMockClient.cpp#L1023) |  |
 | `a` | function | Tests | [TestServerMockClient.cpp:L1040](../../Tests/TestServerMockClient.cpp#L1040) |  |
@@ -1174,7 +1174,7 @@
 | `Append` | function | SparkEngine | [AsyncDatabase.h:L106](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L106) | A batch of queries executed atomically (all-or-nothing). |
 | `Append` | function | Tests | [TestAsyncDatabase.cpp:L162](../../Tests/TestAsyncDatabase.cpp#L162) |  |
 | `append` | function | Tests | [TestCoverageScripting.cpp:L120](../../Tests/TestCoverageScripting.cpp#L120) |  |
-| `append` | function | Tests | [TestEditorSubsystems.cpp:L1343](../../Tests/TestEditorSubsystems.cpp#L1343) |  |
+| `append` | function | Tests | [TestEditorSubsystems.cpp:L1342](../../Tests/TestEditorSubsystems.cpp#L1342) |  |
 | `AppendAdmissionText` | function | SparkGateway | [GatewayAreaControl.cpp:L1120](../../SparkGateway/src/GatewayAreaControl.cpp#L1120) |  |
 | `AppendAdmissionText` | function | SparkGateway | [GatewayAreaControl.cpp:L1149](../../SparkGateway/src/GatewayAreaControl.cpp#L1149) |  |
 | `AppendAdmissionValue` | function | SparkGateway | [GatewayAreaControl.cpp:L1131](../../SparkGateway/src/GatewayAreaControl.cpp#L1131) |  |
@@ -2344,8 +2344,8 @@
 | `AxisBinding` | struct | Tests | [TestInputSystem.cpp:L40](../../Tests/TestInputSystem.cpp#L40) |  |
 | `AxisIntersectResult` | struct | Tests | [TestGizmoMath.cpp:L69](../../Tests/TestGizmoMath.cpp#L69) |  |
 | `b` | function | Tests | [TestBitFlags.cpp:L86](../../Tests/TestBitFlags.cpp#L86) |  |
-| `b` | function | Tests | [TestEditorSubsystems.cpp:L2507](../../Tests/TestEditorSubsystems.cpp#L2507) |  |
-| `b` | function | Tests | [TestEditorSubsystems.cpp:L2517](../../Tests/TestEditorSubsystems.cpp#L2517) |  |
+| `b` | function | Tests | [TestEditorSubsystems.cpp:L2506](../../Tests/TestEditorSubsystems.cpp#L2506) |  |
+| `b` | function | Tests | [TestEditorSubsystems.cpp:L2516](../../Tests/TestEditorSubsystems.cpp#L2516) |  |
 | `b` | function | Tests | [TestUUID.cpp:L42](../../Tests/TestUUID.cpp#L42) |  |
 | `b` | function | Tests | [TestUUID.cpp:L54](../../Tests/TestUUID.cpp#L54) |  |
 | `b` | function | Tests | [TestUUID.cpp:L115](../../Tests/TestUUID.cpp#L115) |  |
@@ -2589,7 +2589,7 @@
 | `Bind` | function | SparkEngine | [Shader.h:L242](../../SparkEngine/Source/Graphics/Shader.h#L242) | Vertex shader resource |
 | `Bind` | function | SparkEngine | [Shader.h:L259](../../SparkEngine/Source/Graphics/Shader.h#L259) | Pixel shader resource |
 | `Bind` | function | SparkEngine | [TextureSystem.h:L174](../../SparkEngine/Source/Graphics/TextureSystem.h#L174) |  |
-| `bind` | function | Tests | [TestNetworkManagerIntegration.cpp:L238](../../Tests/TestNetworkManagerIntegration.cpp#L238) |  |
+| `bind` | function | Tests | [TestNetworkManagerIntegration.cpp:L237](../../Tests/TestNetworkManagerIntegration.cpp#L237) |  |
 | `BindAction` | function | SparkEngine | [GamepadInput.h:L379](../../SparkEngine/Source/Input/GamepadInput.h#L379) |  |
 | `BindAction` | function | SparkEngine | [GamepadInput.h:L393](../../SparkEngine/Source/Input/GamepadInput.h#L393) |  |
 | `BindAction` | function | Tests | [TestGamepadInputProcessing.cpp:L261](../../Tests/TestGamepadInputProcessing.cpp#L261) |  |
@@ -2610,12 +2610,12 @@
 | `BindKey` | function | GameModules | [TFKeybinds.h:L75](../../GameModules/SparkGameMMOFPS/Source/UI/TFKeybinds.h#L75) |  |
 | `BindKey` | function | SparkEngine | [InputActionSystem.h:L204](../../SparkEngine/Source/Input/InputActionSystem.h#L204) | Bind a key to an action |
 | `BindLightingData` | function | SparkEngine | [LightingSystem.h:L301](../../SparkEngine/Source/Graphics/LightingSystem.h#L301) | Bind lighting data to shaders |
-| `BindLoopbackEphemeral` | function | Tests | [TestNetworkManagerIntegration.cpp:L232](../../Tests/TestNetworkManagerIntegration.cpp#L232) |  |
+| `BindLoopbackEphemeral` | function | Tests | [TestNetworkManagerIntegration.cpp:L231](../../Tests/TestNetworkManagerIntegration.cpp#L231) |  |
 | `BindMaterial` | function | SparkEngine | [AssetPipeline.h:L433](../../SparkEngine/Source/Graphics/AssetPipeline.h#L433) |  |
 | `BindMaterial` | function | SparkEngine | [MaterialSystem.h:L356](../../SparkEngine/Source/Graphics/MaterialSystem.h#L356) |  |
 | `BindMaterial` | function | SparkEngine | [MaterialSystem.h:L357](../../SparkEngine/Source/Graphics/MaterialSystem.h#L357) |  |
 | `BindMesh` | function | SparkEngine | [AssetPipeline.h:L432](../../SparkEngine/Source/Graphics/AssetPipeline.h#L432) |  |
-| `bindMode` | function | Tests | [TestNetworkManagerIntegration.cpp:L1100](../../Tests/TestNetworkManagerIntegration.cpp#L1100) |  |
+| `bindMode` | function | Tests | [TestNetworkManagerIntegration.cpp:L1099](../../Tests/TestNetworkManagerIntegration.cpp#L1099) |  |
 | `bindMode` | function | Tests | [TestSparkServerApplication.cpp:L273](../../Tests/TestSparkServerApplication.cpp#L273) |  |
 | `bindMode` | function | Tests | [TestSparkServerApplication.cpp:L289](../../Tests/TestSparkServerApplication.cpp#L289) |  |
 | `bindMode` | function | Tests | [TestSparkServerApplication.cpp:L307](../../Tests/TestSparkServerApplication.cpp#L307) |  |
@@ -2871,7 +2871,7 @@
 | `BoundingSphere` | struct | SparkEngine | [MeshClusterSystem.h:L45](../../SparkEngine/Source/Graphics/MeshClusterSystem.h#L45) |  |
 | `BoundingSphere` | struct | SparkEngine | [CollisionSystem.h:L75](../../SparkEngine/Source/Physics/CollisionSystem.h#L75) | Bounding sphere for collision detection |
 | `BoundingSphere::Transform` | method | SparkEngine | [CollisionSystem.cpp:L54](../../SparkEngine/Source/Physics/CollisionSystem.cpp#L54) |  |
-| `BoundPort` | function | Tests | [TestNetworkManagerIntegration.cpp:L241](../../Tests/TestNetworkManagerIntegration.cpp#L241) |  |
+| `BoundPort` | function | Tests | [TestNetworkManagerIntegration.cpp:L240](../../Tests/TestNetworkManagerIntegration.cpp#L240) |  |
 | `BoundsCheckFailed` | function | SparkEngine | [SparkError.h:L130](../../SparkEngine/Source/Utils/SparkError.h#L130) |  |
 | `BoundsForModel` | function | SparkEditor | [DecorLayoutEditorPanel.h:L123](../../SparkEditor/Source/Panels/DecorLayoutEditorPanel.h#L123) |  |
 | `Box` | struct | Tests | [TestPhysicsStress.cpp:L98](../../Tests/TestPhysicsStress.cpp#L98) |  |
@@ -3202,7 +3202,7 @@
 | `BuildTypeToString` | function | SparkBuild | [Config.h:L75](../../SparkBuild/src/Config.h#L75) |  |
 | `BuildUnlockTable` | function | GameModules | [ProgressionSystem.h:L149](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L149) |  |
 | `BuildViewRay` | function | GameModules | [TFWeaponSystem.h:L179](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystem.h#L179) |  |
-| `BuildWireMessage` | function | Tests | [TestNetworkManagerIntegration.cpp:L295](../../Tests/TestNetworkManagerIntegration.cpp#L295) |  |
+| `BuildWireMessage` | function | Tests | [TestNetworkManagerIntegration.cpp:L294](../../Tests/TestNetworkManagerIntegration.cpp#L294) |  |
 | `BuildWorkerJobs` | function | SparkCooker | [main.cpp:L129](../../SparkCooker/src/main.cpp#L129) |  |
 | `BuildWorldMatrix` | function | SparkEngine | [FoliageRenderer.h:L298](../../SparkEngine/Source/Graphics/FoliageRenderer.h#L298) | Build a row-major world matrix for a FoliageInstance. |
 | `Bullet` | class | GameModules | [Bullet.h:L49](../../GameModules/SparkGameFPS/Source/Projectiles/Bullet.h#L49) |  |
@@ -3252,18 +3252,18 @@
 | `c` | function | Tests | [TestCooldownReal.cpp:L79](../../Tests/TestCooldownReal.cpp#L79) |  |
 | `c` | function | Tests | [TestEditorSubsystems.cpp:L105](../../Tests/TestEditorSubsystems.cpp#L105) |  |
 | `c` | function | Tests | [TestEditorSubsystems.cpp:L114](../../Tests/TestEditorSubsystems.cpp#L114) |  |
-| `c` | function | Tests | [TestEditorSubsystems.cpp:L2526](../../Tests/TestEditorSubsystems.cpp#L2526) |  |
-| `c` | function | Tests | [TestEditorSubsystems.cpp:L2534](../../Tests/TestEditorSubsystems.cpp#L2534) |  |
-| `c` | function | Tests | [TestEditorSubsystems.cpp:L2542](../../Tests/TestEditorSubsystems.cpp#L2542) |  |
-| `c` | function | Tests | [TestEditorSubsystems.cpp:L2550](../../Tests/TestEditorSubsystems.cpp#L2550) |  |
+| `c` | function | Tests | [TestEditorSubsystems.cpp:L2525](../../Tests/TestEditorSubsystems.cpp#L2525) |  |
+| `c` | function | Tests | [TestEditorSubsystems.cpp:L2533](../../Tests/TestEditorSubsystems.cpp#L2533) |  |
+| `c` | function | Tests | [TestEditorSubsystems.cpp:L2541](../../Tests/TestEditorSubsystems.cpp#L2541) |  |
+| `c` | function | Tests | [TestEditorSubsystems.cpp:L2549](../../Tests/TestEditorSubsystems.cpp#L2549) |  |
 | `c` | function | Tests | [TestUUID.cpp:L43](../../Tests/TestUUID.cpp#L43) |  |
 | `cache` | function | SparkEngine | [MeshOptimizer.h:L127](../../SparkEngine/Source/Graphics/MeshOptimizer.h#L127) |  |
 | `cache` | function | SparkEngine | [MeshOptimizer.h:L436](../../SparkEngine/Source/Graphics/MeshOptimizer.h#L436) |  |
-| `cache` | function | Tests | [TestAssetPipelineIntegration.cpp:L129](../../Tests/TestAssetPipelineIntegration.cpp#L129) |  |
-| `cache` | function | Tests | [TestAssetPipelineIntegration.cpp:L138](../../Tests/TestAssetPipelineIntegration.cpp#L138) |  |
-| `cache` | function | Tests | [TestAssetPipelineIntegration.cpp:L146](../../Tests/TestAssetPipelineIntegration.cpp#L146) |  |
-| `cache` | function | Tests | [TestAssetPipelineIntegration.cpp:L153](../../Tests/TestAssetPipelineIntegration.cpp#L153) |  |
-| `cache` | function | Tests | [TestAssetPipelineIntegration.cpp:L160](../../Tests/TestAssetPipelineIntegration.cpp#L160) |  |
+| `cache` | function | Tests | [TestAssetPipelineIntegration.cpp:L128](../../Tests/TestAssetPipelineIntegration.cpp#L128) |  |
+| `cache` | function | Tests | [TestAssetPipelineIntegration.cpp:L137](../../Tests/TestAssetPipelineIntegration.cpp#L137) |  |
+| `cache` | function | Tests | [TestAssetPipelineIntegration.cpp:L145](../../Tests/TestAssetPipelineIntegration.cpp#L145) |  |
+| `cache` | function | Tests | [TestAssetPipelineIntegration.cpp:L152](../../Tests/TestAssetPipelineIntegration.cpp#L152) |  |
+| `cache` | function | Tests | [TestAssetPipelineIntegration.cpp:L159](../../Tests/TestAssetPipelineIntegration.cpp#L159) |  |
 | `cache` | function | Tests | [TestAssetPipelineReal.cpp:L201](../../Tests/TestAssetPipelineReal.cpp#L201) |  |
 | `cache` | function | Tests | [TestAssetPipelineReal.cpp:L209](../../Tests/TestAssetPipelineReal.cpp#L209) |  |
 | `cache` | function | Tests | [TestAssetPipelineReal.cpp:L217](../../Tests/TestAssetPipelineReal.cpp#L217) |  |
@@ -4439,8 +4439,8 @@
 | `cmakeInput` | function | Tests | [TestEditorSubsystems.cpp:L1044](../../Tests/TestEditorSubsystems.cpp#L1044) |  |
 | `cmakeText` | function | Tests | [TestEditorSubsystems.cpp:L1008](../../Tests/TestEditorSubsystems.cpp#L1008) |  |
 | `cmakeText` | function | Tests | [TestEditorSubsystems.cpp:L1045](../../Tests/TestEditorSubsystems.cpp#L1045) |  |
-| `cmakeText` | function | Tests | [TestEditorSubsystems.cpp:L1329](../../Tests/TestEditorSubsystems.cpp#L1329) |  |
-| `cmakeText` | function | Tests | [TestEditorSubsystems.cpp:L1358](../../Tests/TestEditorSubsystems.cpp#L1358) |  |
+| `cmakeText` | function | Tests | [TestEditorSubsystems.cpp:L1328](../../Tests/TestEditorSubsystems.cpp#L1328) |  |
+| `cmakeText` | function | Tests | [TestEditorSubsystems.cpp:L1357](../../Tests/TestEditorSubsystems.cpp#L1357) |  |
 | `cmd` | function | SparkEditor | [ConsolePanel.cpp:L521](../../SparkEditor/Source/Panels/ConsolePanel.cpp#L521) |  |
 | `cmd` | function | Tests | [TestEditorCommands.cpp:L204](../../Tests/TestEditorCommands.cpp#L204) |  |
 | `cmd` | function | Tests | [TestEditorCommands.cpp:L219](../../Tests/TestEditorCommands.cpp#L219) |  |
@@ -5837,7 +5837,7 @@
 | `Contains` | function | Tests | [TestPhysicsComponents.cpp:L181](../../Tests/TestPhysicsComponents.cpp#L181) |  |
 | `Contains` | function | Tests | [TestPhysicsStress.cpp:L127](../../Tests/TestPhysicsStress.cpp#L127) |  |
 | `Contains` | function | Tests | [TestPortalCulling.cpp:L31](../../Tests/TestPortalCulling.cpp#L31) |  |
-| `ContainsBytes` | function | Tests | [TestNetworkManagerIntegration.cpp:L289](../../Tests/TestNetworkManagerIntegration.cpp#L289) |  |
+| `ContainsBytes` | function | Tests | [TestNetworkManagerIntegration.cpp:L288](../../Tests/TestNetworkManagerIntegration.cpp#L288) |  |
 | `ContainsName` | function | GameModules | [TFSocialSystemServer.cpp:L35](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemServer.cpp#L35) |  |
 | `ContainsPlayer` | function | GameModules | [VehicleSystem.h:L201](../../GameModules/SparkGameFPS/Source/Game/VehicleSystem.h#L201) | Check if a specific player is in this vehicle |
 | `ContainsPoint` | function | SparkEditor | [LevelStreamingTypes.h:L104](../../SparkEditor/Source/LevelStreaming/LevelStreamingTypes.h#L104) | Check if point is within tile bounds |
@@ -5873,7 +5873,7 @@
 | `ContestedPulseAlphaMul` | function | GameModules | [TFCaptureFx.cpp:L89](../../GameModules/SparkGameMMOFPS/Source/Game/TFCaptureFx.cpp#L89) |  |
 | `context` | function | Tests | [TestGameModulePlatformerARPG.cpp:L537](../../Tests/TestGameModulePlatformerARPG.cpp#L537) |  |
 | `context` | function | Tests | [TestModuleABI.cpp:L669](../../Tests/TestModuleABI.cpp#L669) |  |
-| `context` | function | Tests | [TestOpenWorldModule.cpp:L955](../../Tests/TestOpenWorldModule.cpp#L955) |  |
+| `context` | function | Tests | [TestOpenWorldModule.cpp:L954](../../Tests/TestOpenWorldModule.cpp#L954) |  |
 | `ContextEventBus` | function | Tests | [TestEngineWiringReal.cpp:L59](../../Tests/TestEngineWiringReal.cpp#L59) |  |
 | `Continent` | struct | SparkEditor | [RegionMapEditorPanel.h:L60](../../SparkEditor/Source/Panels/RegionMapEditorPanel.h#L60) |  |
 | `ContinentDef` | struct | GameModules | [TFDataTables.h:L131](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.h#L131) |  |
@@ -10533,8 +10533,8 @@
 | `file` | function | Tests | [TestConsoleProcessPipeReal.cpp:L30](../../Tests/TestConsoleProcessPipeReal.cpp#L30) |  |
 | `file` | function | Tests | [TestEditorProjectMaterializationReal.cpp:L52](../../Tests/TestEditorProjectMaterializationReal.cpp#L52) |  |
 | `file` | function | Tests | [TestEditorProjectMaterializationReal.cpp:L58](../../Tests/TestEditorProjectMaterializationReal.cpp#L58) |  |
-| `file` | function | Tests | [TestEditorSubsystems.cpp:L1384](../../Tests/TestEditorSubsystems.cpp#L1384) |  |
-| `file` | function | Tests | [TestEditorSubsystems.cpp:L2242](../../Tests/TestEditorSubsystems.cpp#L2242) |  |
+| `file` | function | Tests | [TestEditorSubsystems.cpp:L1383](../../Tests/TestEditorSubsystems.cpp#L1383) |  |
+| `file` | function | Tests | [TestEditorSubsystems.cpp:L2241](../../Tests/TestEditorSubsystems.cpp#L2241) |  |
 | `File` | function | Tests | [TestEditorSubsystemsReal.cpp:L61](../../Tests/TestEditorSubsystemsReal.cpp#L61) |  |
 | `file` | function | Tests | [TestEngineSettingsReal.cpp:L239](../../Tests/TestEngineSettingsReal.cpp#L239) |  |
 | `file` | function | Tests | [TestEngineSettingsReal.cpp:L248](../../Tests/TestEngineSettingsReal.cpp#L248) |  |
@@ -18499,7 +18499,7 @@
 | `in` | function | SparkEditor | [VersionControlConflicts.cpp:L244](../../SparkEditor/Source/VersionControl/VersionControlConflicts.cpp#L244) |  |
 | `in` | function | SparkInstaller | [InstallState.cpp:L50](../../SparkInstaller/src/InstallState.cpp#L50) |  |
 | `in` | function | SparkLauncher | [LauncherApp.cpp:L31](../../SparkLauncher/src/LauncherApp.cpp#L31) |  |
-| `in` | function | Tests | [TestEditorSubsystems.cpp:L1543](../../Tests/TestEditorSubsystems.cpp#L1543) |  |
+| `in` | function | Tests | [TestEditorSubsystems.cpp:L1542](../../Tests/TestEditorSubsystems.cpp#L1542) |  |
 | `in` | function | Tests | [TestEditorSubsystemsReal.cpp:L205](../../Tests/TestEditorSubsystemsReal.cpp#L205) |  |
 | `in` | function | Tests | [TestTFOnboarding.cpp:L482](../../Tests/TestTFOnboarding.cpp#L482) |  |
 | `InboundCommand` | struct | SparkEngine | [RemoteDebugSystem.h:L153](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L153) |  |
@@ -19221,9 +19221,9 @@
 | `input` | function | Tests | [TestCpuNeuralInference.cpp:L288](../../Tests/TestCpuNeuralInference.cpp#L288) |  |
 | `input` | function | Tests | [TestCpuNeuralInference.cpp:L324](../../Tests/TestCpuNeuralInference.cpp#L324) |  |
 | `input` | function | Tests | [TestCpuNeuralInference.cpp:L380](../../Tests/TestCpuNeuralInference.cpp#L380) |  |
-| `input` | function | Tests | [TestEditorSubsystems.cpp:L1328](../../Tests/TestEditorSubsystems.cpp#L1328) |  |
-| `input` | function | Tests | [TestEditorSubsystems.cpp:L1334](../../Tests/TestEditorSubsystems.cpp#L1334) |  |
-| `input` | function | Tests | [TestEditorSubsystems.cpp:L1357](../../Tests/TestEditorSubsystems.cpp#L1357) |  |
+| `input` | function | Tests | [TestEditorSubsystems.cpp:L1327](../../Tests/TestEditorSubsystems.cpp#L1327) |  |
+| `input` | function | Tests | [TestEditorSubsystems.cpp:L1333](../../Tests/TestEditorSubsystems.cpp#L1333) |  |
+| `input` | function | Tests | [TestEditorSubsystems.cpp:L1356](../../Tests/TestEditorSubsystems.cpp#L1356) |  |
 | `input` | function | Tests | [TestLauncherProcess.cpp:L73](../../Tests/TestLauncherProcess.cpp#L73) |  |
 | `input` | function | Tests | [TestModuleABI.cpp:L464](../../Tests/TestModuleABI.cpp#L464) |  |
 | `input` | function | Tests | [TestNeuralPostProcessing.cpp:L182](../../Tests/TestNeuralPostProcessing.cpp#L182) |  |
@@ -19715,7 +19715,7 @@
 | `inX` | function | Tests | [TestFastNoise2SIMD.cpp:L392](../../Tests/TestFastNoise2SIMD.cpp#L392) |  |
 | `inX` | function | Tests | [TestFastNoise2SIMD.cpp:L464](../../Tests/TestFastNoise2SIMD.cpp#L464) |  |
 | `ioctlsocket` | function | GameModules | [TFLanDiscoveryInternal.h:L53](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryInternal.h#L53) |  |
-| `ioctlsocket` | function | Tests | [TestNetworkManagerIntegration.cpp:L258](../../Tests/TestNetworkManagerIntegration.cpp#L258) |  |
+| `ioctlsocket` | function | Tests | [TestNetworkManagerIntegration.cpp:L257](../../Tests/TestNetworkManagerIntegration.cpp#L257) |  |
 | `IODebugger` | class | SparkEngine | [IODebugger.h:L84](../../SparkEngine/Source/Utils/IODebugger.h#L84) | Singleton I/O debugger for file operation tracking and bottleneck detection |
 | `IOFileStats` | struct | SparkEngine | [IODebugger.h:L55](../../SparkEngine/Source/Utils/IODebugger.h#L55) | Aggregated I/O statistics for a single file path |
 | `IOHotSpot` | struct | SparkEngine | [IODebugger.h:L73](../../SparkEngine/Source/Utils/IODebugger.h#L73) | I/O hotspot entry by call site |
@@ -23238,7 +23238,7 @@
 | `LookupCharacterStat` | function | GameModules | [RPGGameplayBridge.cpp:L291](../../GameModules/SparkGameRPG/Source/Gameplay/RPGGameplayBridge.cpp#L291) |  |
 | `LookupContinentEndpoint` | function | GameModules | [TFTravelSystem.h:L140](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystem.h#L140) |  |
 | `LookupFeatures` | function | SparkEngine | [NeuralRadianceCache.h:L159](../../SparkEngine/Source/Graphics/Neural/NeuralRadianceCache.h#L159) | Look up features from hash grid for a position. |
-| `loopbackMode` | function | Tests | [TestNetworkManagerIntegration.cpp:L1130](../../Tests/TestNetworkManagerIntegration.cpp#L1130) |  |
+| `loopbackMode` | function | Tests | [TestNetworkManagerIntegration.cpp:L1129](../../Tests/TestNetworkManagerIntegration.cpp#L1129) |  |
 | `LoopMode` | enum | SparkEngine | [TweenSystem.h:L65](../../SparkEngine/Source/Engine/Tween/TweenSystem.h#L65) | Loop behavior for a tween. |
 | `LoopMode` | enum | Tests | [TestSplineMath.cpp:L121](../../Tests/TestSplineMath.cpp#L121) |  |
 | `LoopType` | enum | SparkEngine | [Tween.h:L247](../../SparkEngine/Source/Utils/Tween.h#L247) | How a tween behaves when it reaches the end. |
@@ -24838,7 +24838,7 @@
 | `ModuleSha256` | class | SparkEngine | [ModuleManager.cpp:L166](../../SparkEngine/Source/Core/ModuleManager.cpp#L166) |  |
 | `ModuleStem` | function | SparkLauncher | [LauncherProcess.cpp:L109](../../SparkLauncher/src/LauncherProcess.cpp#L109) |  |
 | `moduleText` | function | Tests | [TestEditorSubsystems.cpp:L1047](../../Tests/TestEditorSubsystems.cpp#L1047) |  |
-| `moduleText` | function | Tests | [TestEditorSubsystems.cpp:L1335](../../Tests/TestEditorSubsystems.cpp#L1335) |  |
+| `moduleText` | function | Tests | [TestEditorSubsystems.cpp:L1334](../../Tests/TestEditorSubsystems.cpp#L1334) |  |
 | `Momentum` | function | Tests | [TestPhysicsComponents.cpp:L151](../../Tests/TestPhysicsComponents.cpp#L151) |  |
 | `Momentum` | function | Tests | [TestPhysicsStress.cpp:L69](../../Tests/TestPhysicsStress.cpp#L69) |  |
 | `mono` | function | Tests | [TestHRTFProcessor.cpp:L121](../../Tests/TestHRTFProcessor.cpp#L121) |  |
@@ -25372,7 +25372,7 @@
 | `NetworkManager::UpdateRTTEstimate` | method | SparkEngine | [NetworkManager.cpp:L945](../../SparkEngine/Source/Engine/Networking/NetworkManager.cpp#L945) |  |
 | `NetworkManager::ValidateHit` | method | SparkEngine | [NetworkManager.cpp:L985](../../SparkEngine/Source/Engine/Networking/NetworkManager.cpp#L985) |  |
 | `NetworkManagerClientIdTestAccess` | struct | Tests | [TestNetworkManagerIntegration.cpp:L33](../../Tests/TestNetworkManagerIntegration.cpp#L33) |  |
-| `NetworkManagerClientIdTestAccess::DeserializeMessageForTest` | method | Tests | [TestNetworkManagerIntegration.cpp:L1163](../../Tests/TestNetworkManagerIntegration.cpp#L1163) |  |
+| `NetworkManagerClientIdTestAccess::DeserializeMessageForTest` | method | Tests | [TestNetworkManagerIntegration.cpp:L1162](../../Tests/TestNetworkManagerIntegration.cpp#L1162) |  |
 | `NetworkManagerEndpointLifecycleTestAccess` | struct | Tests | [TestNetworkManagerEdgeCases.cpp:L31](../../Tests/TestNetworkManagerEdgeCases.cpp#L31) |  |
 | `NetworkManagerRuntimeAdapter` | class | SparkEngine | [NetworkManagerRuntimeAdapter.h:L15](../../SparkEngine/Source/Engine/Networking/NetworkManagerRuntimeAdapter.h#L15) |  |
 | `NetworkManagerRuntimeAdapter` | function | SparkEngine | [NetworkManagerRuntimeAdapter.h:L18](../../SparkEngine/Source/Engine/Networking/NetworkManagerRuntimeAdapter.h#L18) |  |
@@ -25704,7 +25704,7 @@
 | `NtCreateFileFn` | alias | SparkEngine | [CrashHandler.cpp:L223](../../SparkEngine/Source/Utils/CrashHandler.cpp#L223) |  |
 | `NTEXHeader` | struct | SparkEngine | [NeuralTextureFormat.h:L37](../../SparkEngine/Source/Graphics/Neural/NeuralTextureFormat.h#L37) | Binary header for .ntex files. |
 | `ntohs` | function | SparkEngine | [NetworkConnection.cpp:L1579](../../SparkEngine/Source/Engine/Networking/NetworkConnection.cpp#L1579) |  |
-| `ntohs` | function | Tests | [TestNetworkManagerIntegration.cpp:L251](../../Tests/TestNetworkManagerIntegration.cpp#L251) |  |
+| `ntohs` | function | Tests | [TestNetworkManagerIntegration.cpp:L250](../../Tests/TestNetworkManagerIntegration.cpp#L250) |  |
 | `Null` | function | SparkEngine | [UUID.h:L66](../../SparkEngine/Source/Utils/UUID.h#L66) |  |
 | `Null` | function | SparkEngine | [UUID.h:L86](../../SparkEngine/Source/Utils/UUID.h#L86) |  |
 | `Null` | function | SparkEngine | [UUID.h:L94](../../SparkEngine/Source/Utils/UUID.h#L94) |  |
@@ -26705,8 +26705,8 @@
 | `OwnedEditorProcess::Clear` | method | SparkEditor | [EditorProcessLaunch.cpp:L103](../../SparkEditor/Source/Utils/EditorProcessLaunch.cpp#L103) |  |
 | `OwnedEditorProcess::Poll` | method | SparkEditor | [EditorProcessLaunch.cpp:L82](../../SparkEditor/Source/Utils/EditorProcessLaunch.cpp#L82) |  |
 | `OwnedEditorProcess::Stop` | method | SparkEditor | [EditorProcessLaunch.cpp:L92](../../SparkEditor/Source/Utils/EditorProcessLaunch.cpp#L92) |  |
-| `owner` | function | Tests | [TestEditorSubsystems.cpp:L1955](../../Tests/TestEditorSubsystems.cpp#L1955) |  |
-| `owner` | function | Tests | [TestEditorSubsystems.cpp:L2010](../../Tests/TestEditorSubsystems.cpp#L2010) |  |
+| `owner` | function | Tests | [TestEditorSubsystems.cpp:L1954](../../Tests/TestEditorSubsystems.cpp#L1954) |  |
+| `owner` | function | Tests | [TestEditorSubsystems.cpp:L2009](../../Tests/TestEditorSubsystems.cpp#L2009) |  |
 | `OwnerColor` | function | SparkEditor | [RegionMapEditorCanvas.cpp:L45](../../SparkEditor/Source/Panels/RegionMapEditorCanvas.cpp#L45) |  |
 | `OwnerMatchesCurrentProcessUser` | function | SparkGateway | [GatewaySecurity.cpp:L112](../../SparkGateway/src/GatewaySecurity.cpp#L112) |  |
 | `OwnerOf` | function | GameModules | [TFRegionSystem.h:L84](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionSystem.h#L84) |  |
@@ -30006,7 +30006,7 @@
 | `reader` | function | Tests | [TestFreezeSystem.cpp:L152](../../Tests/TestFreezeSystem.cpp#L152) |  |
 | `reader` | function | Tests | [TestFreezeSystem.cpp:L189](../../Tests/TestFreezeSystem.cpp#L189) |  |
 | `reader` | function | Tests | [TestNetworkManagerEdgeCases.cpp:L628](../../Tests/TestNetworkManagerEdgeCases.cpp#L628) |  |
-| `reader` | function | Tests | [TestNetworkManagerIntegration.cpp:L1026](../../Tests/TestNetworkManagerIntegration.cpp#L1026) |  |
+| `reader` | function | Tests | [TestNetworkManagerIntegration.cpp:L1025](../../Tests/TestNetworkManagerIntegration.cpp#L1025) |  |
 | `reader` | function | Tests | [TestSceneSnapshotSerializer.cpp:L26](../../Tests/TestSceneSnapshotSerializer.cpp#L26) |  |
 | `reader` | function | Tests | [TestSceneSnapshotSerializer.cpp:L40](../../Tests/TestSceneSnapshotSerializer.cpp#L40) |  |
 | `reader` | function | Tests | [TestSceneSnapshotSerializer.cpp:L53](../../Tests/TestSceneSnapshotSerializer.cpp#L53) |  |
@@ -30255,8 +30255,8 @@
 | `Receive` | function | Tests | [TestServerMockClient.cpp:L189](../../Tests/TestServerMockClient.cpp#L189) |  |
 | `Receive` | function | Tests | [TestServerMockClient.cpp:L434](../../Tests/TestServerMockClient.cpp#L434) |  |
 | `ReceiveAvailableIncomingForTest` | function | Tests | [TestNetworkManagerIntegration.cpp:L79](../../Tests/TestNetworkManagerIntegration.cpp#L79) |  |
-| `receiveBuffer` | function | Tests | [TestNetworkManagerIntegration.cpp:L699](../../Tests/TestNetworkManagerIntegration.cpp#L699) |  |
-| `ReceiveDatagrams` | function | Tests | [TestNetworkManagerIntegration.cpp:L265](../../Tests/TestNetworkManagerIntegration.cpp#L265) |  |
+| `receiveBuffer` | function | Tests | [TestNetworkManagerIntegration.cpp:L698](../../Tests/TestNetworkManagerIntegration.cpp#L698) |  |
+| `ReceiveDatagrams` | function | Tests | [TestNetworkManagerIntegration.cpp:L264](../../Tests/TestNetworkManagerIntegration.cpp#L264) |  |
 | `ReceiveExactUntil` | function | SparkGateway | [GatewayAreaControl.cpp:L58](../../SparkGateway/src/GatewayAreaControl.cpp#L58) |  |
 | `ReceiveFrameUntil` | function | SparkGateway | [GatewayAreaControl.cpp:L167](../../SparkGateway/src/GatewayAreaControl.cpp#L167) |  |
 | `ReceiveMessage` | function | Tests | [TestNetworkManagerOrchestration.cpp:L256](../../Tests/TestNetworkManagerOrchestration.cpp#L256) |  |
@@ -30281,7 +30281,7 @@
 | `Reconcile` | function | SparkEngine | [ClientPrediction.h:L141](../../SparkEngine/Source/Engine/Networking/ClientPrediction.h#L141) | Receive authoritative server state and reconcile. |
 | `ReconcileFromServer` | function | GameModules | [TFClientNet.h:L161](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.h#L161) |  |
 | `ReconcileToAuthoritativeState` | function | GameModules | [MultiplayerSystem.h:L365](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L365) |  |
-| `reconnectMode` | function | Tests | [TestNetworkManagerIntegration.cpp:L1183](../../Tests/TestNetworkManagerIntegration.cpp#L1183) |  |
+| `reconnectMode` | function | Tests | [TestNetworkManagerIntegration.cpp:L1182](../../Tests/TestNetworkManagerIntegration.cpp#L1182) |  |
 | `Record` | function | GameModules | [TFPerfCounters.h:L103](../../GameModules/SparkGameMMOFPS/Source/Utils/TFPerfCounters.h#L103) |  |
 | `Record` | struct | SparkEditor | [ServiceTopologyController.h:L81](../../SparkEditor/Source/Panels/ServiceTopologyController.h#L81) |  |
 | `Record` | function | Tests | [TestAdversarialEngine.cpp:L1706](../../Tests/TestAdversarialEngine.cpp#L1706) |  |
@@ -32252,8 +32252,8 @@
 | `Request` | function | SparkEditor | [EditorUI.h:L70](../../SparkEditor/Source/Core/EditorUI.h#L70) |  |
 | `Request` | function | SparkEngine | [DaemonClient.h:L89](../../SparkEngine/Source/Utils/DaemonClient.h#L89) |  |
 | `Request` | function | Tests | [TestGatewaySecurity.cpp:L32](../../Tests/TestGatewaySecurity.cpp#L32) |  |
-| `request` | function | Tests | [TestNetworkManagerIntegration.cpp:L1286](../../Tests/TestNetworkManagerIntegration.cpp#L1286) |  |
-| `request` | function | Tests | [TestNetworkManagerIntegration.cpp:L1481](../../Tests/TestNetworkManagerIntegration.cpp#L1481) |  |
+| `request` | function | Tests | [TestNetworkManagerIntegration.cpp:L1285](../../Tests/TestNetworkManagerIntegration.cpp#L1285) |  |
+| `request` | function | Tests | [TestNetworkManagerIntegration.cpp:L1480](../../Tests/TestNetworkManagerIntegration.cpp#L1480) |  |
 | `RequestApplicationStop` | function | SparkGateway | [main.cpp:L27](../../SparkGateway/src/main.cpp#L27) |  |
 | `RequestApplicationStop` | function | SparkServer | [main.cpp:L23](../../SparkServer/src/main.cpp#L23) |  |
 | `RequestCreateProject` | function | SparkEditor | [EditorUI.h:L186](../../SparkEditor/Source/Core/EditorUI.h#L186) |  |
@@ -34144,8 +34144,8 @@
 | `ScopedModuleEnvironment` | class | Tests | [TestModuleLifecycleReal.cpp:L74](../../Tests/TestModuleLifecycleReal.cpp#L74) | A SPARK_MODULE_ABI_ |
 | `ScopedNativeHandle` | class | SparkCrashReporter | [CrashReporterApp.cpp:L546](../../SparkCrashReporter/src/CrashReporterApp.cpp#L546) |  |
 | `ScopedNativeHandle` | function | SparkCrashReporter | [CrashReporterApp.cpp:L558](../../SparkCrashReporter/src/CrashReporterApp.cpp#L558) |  |
-| `ScopedNetworkBindMode` | class | Tests | [TestNetworkManagerIntegration.cpp:L192](../../Tests/TestNetworkManagerIntegration.cpp#L192) |  |
-| `ScopedNetworkBindMode` | function | Tests | [TestNetworkManagerIntegration.cpp:L195](../../Tests/TestNetworkManagerIntegration.cpp#L195) |  |
+| `ScopedNetworkBindMode` | class | Tests | [TestNetworkManagerIntegration.cpp:L191](../../Tests/TestNetworkManagerIntegration.cpp#L191) |  |
+| `ScopedNetworkBindMode` | function | Tests | [TestNetworkManagerIntegration.cpp:L194](../../Tests/TestNetworkManagerIntegration.cpp#L194) |  |
 | `ScopedNetworkBindMode` | class | Tests | [TestSparkServerApplication.cpp:L21](../../Tests/TestSparkServerApplication.cpp#L21) |  |
 | `ScopedNetworkBindMode` | function | Tests | [TestSparkServerApplication.cpp:L24](../../Tests/TestSparkServerApplication.cpp#L24) |  |
 | `ScopedNoGPUBackends` | class | Tests | [TestD3D11DeviceContractsReal.cpp:L44](../../Tests/TestD3D11DeviceContractsReal.cpp#L44) |  |
@@ -34611,9 +34611,9 @@
 | `SendTagTableTo` | function | GameModules | [TFOutfitSystem.h:L231](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h#L231) |  |
 | `SendThrow` | function | GameModules | [TFGrenadeSystem.h:L249](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystem.h#L249) |  |
 | `SendTo` | function | Tests | [TestNetworkMMOIntegration.cpp:L82](../../Tests/TestNetworkMMOIntegration.cpp#L82) |  |
-| `sendto` | function | Tests | [TestNetworkManagerIntegration.cpp:L414](../../Tests/TestNetworkManagerIntegration.cpp#L414) |  |
-| `sendto` | function | Tests | [TestNetworkManagerIntegration.cpp:L889](../../Tests/TestNetworkManagerIntegration.cpp#L889) |  |
-| `sendto` | function | Tests | [TestNetworkManagerIntegration.cpp:L966](../../Tests/TestNetworkManagerIntegration.cpp#L966) |  |
+| `sendto` | function | Tests | [TestNetworkManagerIntegration.cpp:L413](../../Tests/TestNetworkManagerIntegration.cpp#L413) |  |
+| `sendto` | function | Tests | [TestNetworkManagerIntegration.cpp:L888](../../Tests/TestNetworkManagerIntegration.cpp#L888) |  |
+| `sendto` | function | Tests | [TestNetworkManagerIntegration.cpp:L965](../../Tests/TestNetworkManagerIntegration.cpp#L965) |  |
 | `SendTo` | function | Tests | [TestNetworkStress.cpp:L85](../../Tests/TestNetworkStress.cpp#L85) |  |
 | `SendTo` | function | Tests | [TestServerLiveMockClient.cpp:L91](../../Tests/TestServerLiveMockClient.cpp#L91) |  |
 | `SendToAll` | function | SparkEngine | [INetworkRuntime.h:L34](../../SparkEngine/Source/Engine/Networking/INetworkRuntime.h#L34) |  |
@@ -35857,7 +35857,7 @@
 | `SetNonBlocking` | function | GameModules | [TFLanDiscoveryInternal.h:L50](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryInternal.h#L50) |  |
 | `SetNonBlocking` | function | GameModules | [TFLanDiscoveryInternal.h:L82](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryInternal.h#L82) |  |
 | `SetNonBlocking` | function | SparkEngine | [ProcessLinux.cpp:L80](../../SparkEngine/Source/Utils/ProcessLinux.cpp#L80) |  |
-| `SetNonBlocking` | function | Tests | [TestNetworkManagerIntegration.cpp:L254](../../Tests/TestNetworkManagerIntegration.cpp#L254) |  |
+| `SetNonBlocking` | function | Tests | [TestNetworkManagerIntegration.cpp:L253](../../Tests/TestNetworkManagerIntegration.cpp#L253) |  |
 | `SetNormalColor` | function | SparkEngine | [UISystem.h:L229](../../SparkEngine/Source/Engine/UI/UISystem.h#L229) |  |
 | `SetNormalGuide` | function | SparkEngine | [DenoiserInterface.h:L101](../../SparkEngine/Source/Graphics/DenoiserInterface.h#L101) |  |
 | `SetNormalGuide` | function | SparkEngine | [DenoiserInterface.h:L151](../../SparkEngine/Source/Graphics/DenoiserInterface.h#L151) |  |
@@ -39089,7 +39089,7 @@
 | `std::any_of` | method | SparkEngine | [BenchmarkFrameworkBaseline.cpp:L202](../../SparkEngine/Source/Utils/BenchmarkFrameworkBaseline.cpp#L202) |  |
 | `std::any_of` | method | SparkEngine | [GoldenImageTest.h:L292](../../SparkEngine/Source/Utils/GoldenImageTest.h#L292) | Check if any results contain regressions. |
 | `std::any_of` | method | SparkEngine | [InvalidStateDetector.h:L158](../../SparkEngine/Source/Utils/InvalidStateDetector.h#L158) | Remove all registered rules (including the engine defaults). |
-| `std::any_of` | method | Tests | [TestEditorSubsystems.cpp:L1735](../../Tests/TestEditorSubsystems.cpp#L1735) |  |
+| `std::any_of` | method | Tests | [TestEditorSubsystems.cpp:L1734](../../Tests/TestEditorSubsystems.cpp#L1734) |  |
 | `std::async` | method | SparkEngine | [ShaderCrossCompiler.h:L257](../../SparkEngine/Source/Graphics/ShaderCrossCompiler.h#L257) | Compile a shader asynchronously. |
 | `std::atoi` | method | SparkEditor | [VisualScriptPanel.cpp:L1325](../../SparkEditor/Source/Panels/VisualScriptPanel.cpp#L1325) |  |
 | `std::bad_any_cast` | method | SparkEngine | [RenderGraphBlackboard.h:L77](../../SparkEngine/Source/Graphics/RenderGraphBlackboard.h#L77) |  |
@@ -39126,8 +39126,8 @@
 | `std::fabs` | method | Tests | [TestNetQuantize.cpp:L38](../../Tests/TestNetQuantize.cpp#L38) |  |
 | `std::filesystem::current_path` | method | SparkEngine | [SparkEngineLinuxInit.cpp:L62](../../SparkEngine/Source/Core/SparkEngineLinuxInit.cpp#L62) |  |
 | `std::filesystem::current_path` | method | SparkEngine | [SparkEngineMacOS.cpp:L102](../../SparkEngine/Source/Core/SparkEngineMacOS.cpp#L102) |  |
-| `std::filesystem::equivalent` | method | Tests | [TestEditorSubsystems.cpp:L1366](../../Tests/TestEditorSubsystems.cpp#L1366) |  |
-| `std::filesystem::equivalent` | method | Tests | [TestEditorSubsystems.cpp:L1416](../../Tests/TestEditorSubsystems.cpp#L1416) |  |
+| `std::filesystem::equivalent` | method | Tests | [TestEditorSubsystems.cpp:L1365](../../Tests/TestEditorSubsystems.cpp#L1365) |  |
+| `std::filesystem::equivalent` | method | Tests | [TestEditorSubsystems.cpp:L1415](../../Tests/TestEditorSubsystems.cpp#L1415) |  |
 | `std::filesystem::exists` | method | SparkEditor | [EditorCrashHandler.cpp:L560](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L560) |  |
 | `std::filesystem::exists` | method | SparkEditor | [VersionControlSystem.cpp:L89](../../SparkEditor/Source/VersionControl/VersionControlSystem.cpp#L89) |  |
 | `std::filesystem::exists` | method | SparkEditor | [VersionControlSystem.cpp:L160](../../SparkEditor/Source/VersionControl/VersionControlSystem.cpp#L160) |  |
@@ -39353,8 +39353,8 @@
 | `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1636](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1636) |  |
 | `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1638](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1638) |  |
 | `std::runtime_error` | method | Tests | [TestAIStress.cpp:L51](../../Tests/TestAIStress.cpp#L51) |  |
-| `std::runtime_error` | method | Tests | [TestEditorSubsystems.cpp:L1699](../../Tests/TestEditorSubsystems.cpp#L1699) |  |
-| `std::runtime_error` | method | Tests | [TestEditorSubsystems.cpp:L1705](../../Tests/TestEditorSubsystems.cpp#L1705) |  |
+| `std::runtime_error` | method | Tests | [TestEditorSubsystems.cpp:L1698](../../Tests/TestEditorSubsystems.cpp#L1698) |  |
+| `std::runtime_error` | method | Tests | [TestEditorSubsystems.cpp:L1704](../../Tests/TestEditorSubsystems.cpp#L1704) |  |
 | `std::runtime_error` | method | Tests | [TestFaultIsolation.cpp:L342](../../Tests/TestFaultIsolation.cpp#L342) |  |
 | `std::runtime_error` | method | Tests | [TestRenderGraph.cpp:L672](../../Tests/TestRenderGraph.cpp#L672) |  |
 | `std::runtime_error` | method | Tests | [TestScopeGuard.cpp:L103](../../Tests/TestScopeGuard.cpp#L103) |  |
@@ -39417,8 +39417,8 @@
 | `std::setprecision` | method | Tests | [TestEngineLoadTest.cpp:L1102](../../Tests/TestEngineLoadTest.cpp#L1102) |  |
 | `std::setprecision` | method | Tests | [TestEngineLoadTest.cpp:L1142](../../Tests/TestEngineLoadTest.cpp#L1142) |  |
 | `std::setprecision` | method | Tests | [TestEngineLoadTest.cpp:L1143](../../Tests/TestEngineLoadTest.cpp#L1143) |  |
-| `std::setprecision` | method | Tests | [TestEngineLoadTest.cpp:L1769](../../Tests/TestEngineLoadTest.cpp#L1769) |  |
-| `std::setprecision` | method | Tests | [TestEngineLoadTest.cpp:L1770](../../Tests/TestEngineLoadTest.cpp#L1770) |  |
+| `std::setprecision` | method | Tests | [TestEngineLoadTest.cpp:L1773](../../Tests/TestEngineLoadTest.cpp#L1773) |  |
+| `std::setprecision` | method | Tests | [TestEngineLoadTest.cpp:L1774](../../Tests/TestEngineLoadTest.cpp#L1774) |  |
 | `std::setprecision` | method | Tests | [TestEngineMonitor.cpp:L172](../../Tests/TestEngineMonitor.cpp#L172) |  |
 | `std::setprecision` | method | Tests | [TestEngineMonitor.cpp:L174](../../Tests/TestEngineMonitor.cpp#L174) |  |
 | `std::setprecision` | method | Tests | [TestEngineMonitor.cpp:L175](../../Tests/TestEngineMonitor.cpp#L175) |  |
@@ -39601,9 +39601,9 @@
 | `std::string` | method | Tests | [TestDaemonFoundation.cpp:L42](../../Tests/TestDaemonFoundation.cpp#L42) |  |
 | `std::string` | method | Tests | [TestDaemonLifecycle.cpp:L48](../../Tests/TestDaemonLifecycle.cpp#L48) |  |
 | `std::string` | method | Tests | [TestDayNightCycle.cpp:L100](../../Tests/TestDayNightCycle.cpp#L100) |  |
-| `std::string` | method | Tests | [TestEditorSubsystems.cpp:L1544](../../Tests/TestEditorSubsystems.cpp#L1544) |  |
-| `std::string` | method | Tests | [TestEditorSubsystems.cpp:L2243](../../Tests/TestEditorSubsystems.cpp#L2243) |  |
-| `std::string` | method | Tests | [TestEditorSubsystems.cpp:L2709](../../Tests/TestEditorSubsystems.cpp#L2709) |  |
+| `std::string` | method | Tests | [TestEditorSubsystems.cpp:L1543](../../Tests/TestEditorSubsystems.cpp#L1543) |  |
+| `std::string` | method | Tests | [TestEditorSubsystems.cpp:L2242](../../Tests/TestEditorSubsystems.cpp#L2242) |  |
+| `std::string` | method | Tests | [TestEditorSubsystems.cpp:L2708](../../Tests/TestEditorSubsystems.cpp#L2708) |  |
 | `std::string` | method | Tests | [TestEngineWiringReal.cpp:L72](../../Tests/TestEngineWiringReal.cpp#L72) |  |
 | `std::string` | method | Tests | [TestFileUtilsReal.cpp:L16](../../Tests/TestFileUtilsReal.cpp#L16) |  |
 | `std::string` | method | Tests | [TestGatewayAreaControl.cpp:L40](../../Tests/TestGatewayAreaControl.cpp#L40) |  |

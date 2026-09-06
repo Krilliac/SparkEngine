@@ -3624,7 +3624,7 @@
 | `ScopedMinimumFileSizeLimit` | class | Tests | [Test_persistence_SaveSystem.cpp:L40](../../Tests/harden/Test_persistence_SaveSystem.cpp#L40) |  |
 | `ScopedModuleEnvironment` | class | Tests | [TestModuleLifecycleReal.cpp:L74](../../Tests/TestModuleLifecycleReal.cpp#L74) | A SPARK_MODULE_ABI_ |
 | `ScopedNativeHandle` | class | SparkCrashReporter | [CrashReporterApp.cpp:L546](../../SparkCrashReporter/src/CrashReporterApp.cpp#L546) |  |
-| `ScopedNetworkBindMode` | class | Tests | [TestNetworkManagerIntegration.cpp:L192](../../Tests/TestNetworkManagerIntegration.cpp#L192) |  |
+| `ScopedNetworkBindMode` | class | Tests | [TestNetworkManagerIntegration.cpp:L191](../../Tests/TestNetworkManagerIntegration.cpp#L191) |  |
 | `ScopedNetworkBindMode` | class | Tests | [TestSparkServerApplication.cpp:L21](../../Tests/TestSparkServerApplication.cpp#L21) |  |
 | `ScopedNoGPUBackends` | class | Tests | [TestD3D11DeviceContractsReal.cpp:L44](../../Tests/TestD3D11DeviceContractsReal.cpp#L44) |  |
 | `ScopedProfileTimer` | class | SparkEngine | [Profiler.h:L153](../../SparkEngine/Source/Utils/Profiler.h#L153) | Scoped CPU timer - automatically records start/end |
