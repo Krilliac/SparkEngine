@@ -1,8 +1,12 @@
 name: Build SparkEngine
 
 on:
+  # Topic branches (claude/**, codex/**, feature/**) are covered by the
+  # pull_request trigger only. Listing them under push queued the whole
+  # matrix twice per push (push + pull_request) and nothing downstream
+  # consumed the push copy: every workflow_run consumer filters to Working.
   push:
-    branches: [ main, develop, Working, 'feature/**', 'claude/**', 'release/**' ]
+    branches: [ main, develop, Working, 'release/**' ]
   pull_request:
     branches: [ main, develop, Working ]
   workflow_dispatch:

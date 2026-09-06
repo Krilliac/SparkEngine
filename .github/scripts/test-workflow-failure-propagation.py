@@ -1014,8 +1014,8 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             1,
         )
         mutations["path filter"] = self.build.replace(
-            "  push:\n    branches: [ main, develop, Working, 'feature/**', 'claude/**', 'release/**' ]",
-            "  push:\n    branches: [ main, develop, Working, 'feature/**', 'claude/**', 'release/**' ]\n    paths-ignore: ['**']",
+            "  push:\n    branches: [ main, develop, Working, 'release/**' ]",
+            "  push:\n    branches: [ main, develop, Working, 'release/**' ]\n    paths-ignore: ['**']",
             1,
         )
         mutations["conditional aggregate"] = self.build.replace(

@@ -5,8 +5,10 @@ name: "CodeQL Advanced"
 
 on:
   workflow_dispatch:
+  # Topic branches (claude/**, codex/**, feature/**) are analyzed through
+  # the pull_request trigger only; the push copy duplicated every analysis.
   push:
-    branches: [ main, develop, Working, 'feature/**', 'claude/**' ]
+    branches: [ main, develop, Working ]
   pull_request:
     branches: [ main, develop, Working ]
   schedule:

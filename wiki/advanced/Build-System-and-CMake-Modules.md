@@ -431,7 +431,7 @@ See the [Documentation Index](../../docs/README.md) and the [Doc Tooling page](.
 
 ### build.yml
 
-Runs on pushes to `main`, `develop`, `Working`, `feature/**`, `claude/**`, and `release/**`; pull requests targeting `main`, `develop`, or `Working`; and manual dispatch.
+Runs on pushes to `main`, `develop`, `Working`, and `release/**`; pull requests targeting `main`, `develop`, or `Working`; and manual dispatch. Topic branches (`claude/**`, `codex/**`, `feature/**`) are covered by the pull-request trigger only, so a push to one of them no longer queues the matrix a second time.
 
 #### CI Job Matrix
 

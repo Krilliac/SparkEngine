@@ -5309,8 +5309,6 @@
             "main",
             "develop",
             "Working",
-            "feature/**",
-            "claude/**",
             "release/**"
           ]
         },
